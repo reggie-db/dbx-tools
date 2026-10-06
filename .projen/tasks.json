@@ -255,7 +255,8 @@
         {
           "exec": "bun install"
         }
-      ]
+      ],
+      "condition": "node -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\""
     },
     "install:ci": {
       "name": "install:ci",
@@ -264,7 +265,8 @@
         {
           "exec": "bun install --frozen-lockfile"
         }
-      ]
+      ],
+      "condition": "node -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\""
     },
     "openapi": {
       "name": "openapi",

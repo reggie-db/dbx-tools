@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import { runRelease } from "../tasks/release.ts";
+import { parseReleaseTagAnnotation } from "../src/release-options.ts";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -42,6 +43,52 @@ function fixture(): { remote: string; root: string } {
 }
 
 describe("direct release tags", () => {
+  it("carries task selections through the pushed annotation and skips optional checks", async () => {
+    const { remote, root } = fixture();
+    try {
+      await runRelease({
+        root,
+        branch: "main",
+        prefix: "v",
+        remote: "origin",
+        publish: "pypi",
+        docs: false,
+        validation: false,
+        validationTasks: ["missing-task"],
+        install: "never",
+        localPublish: false,
+      });
+      const annotation = git(remote, "for-each-ref", "--format=%(contents)", "refs/tags/v1.0.1");
+      assert.deepEqual(parseReleaseTagAnnotation(annotation), {
+        npm: false,
+        pypi: true,
+        docs: false,
+        validation: false,
+      });
+      const output = join(root, "actions-output");
+      execFileSync(
+        process.execPath,
+        [
+          resolve(import.meta.dirname, "../tasks/release-options.ts"),
+          "--tag",
+          "v1.0.1",
+          "--output",
+          output,
+        ],
+        { cwd: root },
+      );
+      assert.equal(
+        readFileSync(output, "utf8"),
+        "npm=false\npypi=true\ndocs=false\nvalidation=false\n",
+      );
+      assert.equal(
+        git(root, "rev-parse", "v1.0.1^{commit}"),
+        git(remote, "rev-parse", "refs/heads/main"),
+      );
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
   it("commits the local bump, pushes main, and pushes an annotated tag", async () => {
     const { remote, root } = fixture();
     try {

@@ -106,18 +106,35 @@ describe("DBXToolsPythonWorkspace", () => {
     const release = readWorkflow(outdir);
     assert.equal(release.jobs["build-python"], undefined);
     const publishCore = release.jobs["publish-pypi-core"]!;
-    assert.equal(publishCore.needs, "verify-context");
-    assert.equal(publishCore.env?.BUN_VERSION, "1.3.14");
-    assert.equal(workflowStep(publishCore, "Restore Bun cache").uses, "actions/cache/restore@v5");
-    assert.deepEqual(workflowStep(publishCore, "Setup uv").with, {
+    assert.equal(publishCore.needs, "build-release");
+    assert.equal(publishCore.env?.BUN_VERSION, undefined);
+    const build = release.jobs["build-release"]!;
+    assert.deepEqual(workflowStep(build, "Setup uv").with, {
       "enable-cache": true,
       "cache-dependency-glob": "**/pyproject.toml",
     });
-    assert.equal(workflowStep(publishCore, "Save Bun cache").uses, "actions/cache/save@v5");
+    assert.equal(workflowStep(build, "Save Bun cache").uses, "actions/cache/save@v5");
     assert.ok(
-      workflowStep(publishCore, "Build fixture-core distributions").run?.includes(
-        "tasks/publish-python.ts",
-      ),
+      workflowStep(build, "Build Python distributions").run?.includes("--package-directories"),
+    );
+    assert.ok(
+      workflowStep(build, "Build Python distributions").run?.includes('--package "core" "app"'),
+    );
+    assert.deepEqual(workflowStep(publishCore, "Download fixture-core distributions").with, {
+      name: "release-python-core",
+      path: "dist/core",
+    });
+    for (const job of Object.values(release.jobs)) {
+      if (!job.environment || job.environment.name === "github-pages") continue;
+      assert.equal(job.steps.length, 2);
+      assert.equal(job.steps[0]?.uses, "actions/download-artifact@v4");
+      assert.equal(job.steps[1]?.uses, "pypa/gh-action-pypi-publish@release/v1");
+    }
+    assert.equal(
+      Object.values(release.jobs)
+        .flatMap((job) => job.steps)
+        .filter((entry) => entry.name === "Restore Bun cache").length,
+      1,
     );
     assert.deepEqual(release.jobs["publish-pypi-core"]?.environment, {
       name: "pypi-fixture-core",
@@ -134,11 +151,12 @@ describe("DBXToolsPythonWorkspace", () => {
       url: "https://pypi.org/project/fixture-app/",
     });
     assert.deepEqual(release.jobs["publish-pypi-app"]?.needs, [
-      "verify-context",
+      "build-release",
       "publish-pypi-core",
     ]);
-    assert.deepEqual(release.jobs["build-docs"]?.needs, [
-      "verify-context",
+    assert.equal(release.jobs["build-docs"], undefined);
+    assert.deepEqual(release.jobs["deploy-docs"]?.needs, [
+      "build-release",
       "publish-node",
       "publish-pypi-core",
       "publish-pypi-app",

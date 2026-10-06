@@ -2,7 +2,7 @@
 /** Run the configured release transaction. */
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { publishLocalRelease } from "./local-publish.ts";
 import { assertReleaseVersion } from "./release-version.ts";
 import {
@@ -11,6 +11,15 @@ import {
   taskCommandSucceeds,
 } from "../../src/_task-command.ts";
 import { readWorkspaceVersion } from "../../src/workspace-version.ts";
+import {
+  RELEASE_INSTALL_MODES,
+  RELEASE_PUBLISH_TARGETS,
+  releasePublishesLocally,
+  releaseStepSelection,
+  releaseTagAnnotation,
+  type ReleaseInstallMode,
+  type ReleaseSelectionOptions,
+} from "../../src/release-options.ts";
 
 const logger = log.logger("projen:release");
 
@@ -87,23 +96,34 @@ function prepareReleaseBranch(options: {
   runTaskCommand(root, "git", ["push", remote, `HEAD:${branch}`]);
 }
 
-export async function runRelease(options: {
-  readonly root: string;
-  readonly branch: string;
-  readonly bump?: boolean;
-  readonly prefix: string;
-  readonly remote: string;
-  readonly localPublish?: boolean;
-  readonly pythonRoot?: string;
-  readonly validationTasks?: readonly string[];
-}): Promise<string> {
+export async function runRelease(
+  options: ReleaseSelectionOptions & {
+    readonly root: string;
+    readonly branch: string;
+    readonly bump?: boolean;
+    readonly prefix: string;
+    readonly remote: string;
+    readonly localPublish?: boolean;
+    readonly localRegistry?: string;
+    readonly localPypi?: string;
+    readonly install?: ReleaseInstallMode;
+    readonly pythonRoot?: string;
+    readonly validationTasks?: readonly string[];
+  },
+): Promise<string> {
   const { branch, prefix, remote, root } = options;
+  const selection = releaseStepSelection(options);
+  const install = options.install ?? "auto";
+
+  if (install === "always") runTaskCommand(root, "bun", ["install", "--frozen-lockfile"]);
 
   prepareReleaseBranch({ branch, remote, root });
 
   runTaskCommand(root, "git", ["fetch", remote, branch, "--tags"]);
   if (options.bump ?? true) {
-    runTaskCommand(root, "bun", ["run", "bump"]);
+    runTaskCommand(root, "bun", ["run", "bump"], {
+      env: { ...process.env, DBX_TOOLS_RELEASE_INSTALL: install === "auto" ? "auto" : "never" },
+    });
   }
 
   const version = readWorkspaceVersion(root);
@@ -115,7 +135,7 @@ export async function runRelease(options: {
   }
 
   runTaskCommand(root, "bun", ["run", "version:check"]);
-  for (const task of options.validationTasks ?? []) {
+  for (const task of selection.validation ? (options.validationTasks ?? []) : []) {
     runTaskCommand(root, "bun", ["run", task]);
   }
   const status = captureTaskCommand(
@@ -145,7 +165,13 @@ export async function runRelease(options: {
     );
   }
 
-  runTaskCommand(root, "git", ["tag", "--annotate", tag, "--message", tag]);
+  runTaskCommand(root, "git", [
+    "tag",
+    "--annotate",
+    tag,
+    "--message",
+    releaseTagAnnotation(tag, selection),
+  ]);
   try {
     runTaskCommand(root, "git", ["push", "--atomic", remote, `HEAD:${branch}`, `refs/tags/${tag}`]);
   } catch (error) {
@@ -157,10 +183,10 @@ export async function runRelease(options: {
   // Restore local deploys: when a non-standard (loopback) npm or uv registry is
   // configured, publish the freshly tagged version to it directly. Detection and
   // publishing are owned by local-publish.ts; this no-ops on standard registries.
-  if (options.localPublish ?? true) {
+  if ((options.localPublish ?? true) && releasePublishesLocally(options.publish)) {
     await publishLocalRelease({
-      localPypi: "auto",
-      localRegistry: "auto",
+      localPypi: options.pypi === false ? "false" : (options.localPypi ?? "auto"),
+      localRegistry: options.npm === false ? "false" : (options.localRegistry ?? "auto"),
       pythonRoot: options.pythonRoot ?? "packages/py",
       root,
       version,
@@ -170,8 +196,11 @@ export async function runRelease(options: {
   return tag;
 }
 
-export async function main(): Promise<void> {
-  await new Command()
+/** Build the release task's native parser without executing git or registry operations. */
+export function createReleaseCommand(): Command {
+  return new Command()
+    .name("release")
+    .description("Prepare an annotated release and select its build and publication steps")
     .option("--root <path>", "repository root")
     .option("--branch <name>", "release branch", "main")
     .option("--prefix <prefix>", "release tag prefix", "v")
@@ -184,18 +213,43 @@ export async function main(): Promise<void> {
       [],
     )
     .option("--no-bump", "use an existing synchronized local version bump")
+    .addOption(
+      new Option("--publish <target>", "publication scope")
+        .choices([...RELEASE_PUBLISH_TARGETS])
+        .default("auto"),
+    )
+    .addOption(
+      new Option("--install <mode>", "local workspace dependency installation")
+        .choices([...RELEASE_INSTALL_MODES])
+        .default("auto"),
+    )
+    .option("--no-npm", "skip npm build and publication, including local npm publication")
+    .option("--no-pypi", "skip Python build and publication, including local Python publication")
+    .option("--docs", "build and deploy docs for a selected scope")
+    .option("--no-docs", "skip documentation build and deployment")
+    .option(
+      "--no-validation",
+      "skip optional release validation tasks; version/source checks remain mandatory",
+    )
     .option("--no-local-publish", "skip publishing to configured local registries")
+    .option("--local-registry <auto|false|url>", "local npm registry selection", "auto")
+    .option("--local-pypi <auto|false|url>", "local devpi registry selection", "auto")
     .action(
-      async (options: {
-        root?: string;
-        branch: string;
-        bump: boolean;
-        prefix: string;
-        remote: string;
-        pythonRoot: string;
-        localPublish: boolean;
-        validate: string[];
-      }) => {
+      async (
+        options: ReleaseSelectionOptions & {
+          root?: string;
+          branch: string;
+          bump: boolean;
+          prefix: string;
+          remote: string;
+          pythonRoot: string;
+          localPublish: boolean;
+          localRegistry: string;
+          localPypi: string;
+          install: ReleaseInstallMode;
+          validate: string[];
+        },
+      ) => {
         await runRelease({
           root: options.root ?? projectUtils.root() ?? process.cwd(),
           branch: options.branch,
@@ -204,9 +258,21 @@ export async function main(): Promise<void> {
           remote: options.remote,
           pythonRoot: options.pythonRoot,
           localPublish: options.localPublish,
+          localRegistry: options.localRegistry,
+          localPypi: options.localPypi,
+          install: options.install,
+          publish: options.publish,
+          npm: options.npm,
+          pypi: options.pypi,
+          docs: options.docs,
+          validation: options.validation,
           validationTasks: options.validate,
         });
       },
-    )
-    .parseAsync();
+    );
+}
+
+/** Execute the native release task parser. */
+export async function main(): Promise<void> {
+  await createReleaseCommand().parseAsync();
 }

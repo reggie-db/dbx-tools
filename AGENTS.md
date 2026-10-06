@@ -64,8 +64,10 @@ Primary ownership:
 ## Releases
 
 - `bun run bump` increments `VERSION` locally and synchronizes generated package versions.
-- Run `bun run release` with no arguments from any branch. It commits and pushes pending branch changes, safely fast-forwards `main` when needed, then calls `bump`, commits the synchronized changes, pushes `main`, creates an annotated `vX.Y.Z` tag, and pushes the tag. It fails instead of creating a merge commit when `main` cannot fast-forward. Use `--no-bump` only for an existing synchronized bump.
+- Run `bun run release` from any branch; without flags it retains all default steps. It commits and pushes pending branch changes, safely fast-forwards `main` when needed, then calls `bump`, commits the synchronized changes, pushes `main`, creates an annotated `vX.Y.Z` tag, and pushes the tag. It fails instead of creating a merge commit when `main` cannot fast-forward. Use `--no-bump` only for an existing synchronized bump.
 - `.github/workflows/release.yml` runs only for `v*` tag pushes and verifies the tagged commit exactly equals `origin/main` before publishing Node, Python, and docs.
+- The release workflow installs dependencies and validates/builds all release artifacts in one job. Install validation prerequisites before running validation tasks. Registry jobs only download and publish those artifacts; they must not restore dependency caches, install workspace dependencies, or rebuild packages. Keep per-package Python environments and publish dependency ordering.
+- Release task flags may select publication targets, documentation, optional validation, local registry publication, and local dependency installation. Preserve unflagged defaults. Store CI selections in the annotated release tag, not a mutable repository setting; version and immutable-source verification remain mandatory.
 - There is no release PR, GitHub Release, manual stage recovery, Cargo/native publication, or alternate release entrypoint.
 - Preserve local application/deployment flows and local npm/Python publication helpers.
 

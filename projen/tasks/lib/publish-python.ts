@@ -94,6 +94,8 @@ export function buildPythonProjects(options: {
   readonly allowEmpty?: boolean;
   readonly output: string;
   readonly packages?: readonly string[];
+  /** Place each package's artifacts in its directory beneath output. */
+  readonly packageDirectories?: boolean;
   readonly root: string;
   readonly version: string;
 }): void {
@@ -136,9 +138,15 @@ export function buildPythonProjects(options: {
           version: options.version,
         }),
       );
-      runTaskCommand(root, "uv", ["build", "--out-dir", output, packageRoot]);
+      const packageOutput = options.packageDirectories ? join(output, project.directory) : output;
+      runTaskCommand(root, "uv", ["build", "--out-dir", packageOutput, packageRoot]);
+      if (pythonDistributionPaths(packageOutput).length === 0) {
+        throw new Error(`No Python distributions found for ${project.name}`);
+      }
     }
-    const distributions = pythonDistributionPaths(output);
+    const distributions = options.packageDirectories
+      ? projects.flatMap((project) => pythonDistributionPaths(join(output, project.directory)))
+      : pythonDistributionPaths(output);
     if (distributions.length === 0) {
       throw new Error(`No Python distributions found in ${output}`);
     }
@@ -157,6 +165,10 @@ export async function main(): Promise<void> {
     .option("--root <path>", "Python workspace package root", "packages/py")
     .option("--package <directory...>", "Build only selected package directories")
     .option("--output <path>", "Build distributions into a directory without publishing")
+    .option(
+      "--package-directories",
+      "Keep each package's distributions in its own output directory",
+    )
     .option("--dry-run", "build and inspect distributions without uploading")
     .action(
       (
@@ -165,6 +177,7 @@ export async function main(): Promise<void> {
           dryRun?: boolean;
           indexUrl?: string;
           package?: string[];
+          packageDirectories?: boolean;
           publishUrl?: string;
           root: string;
           output?: string;
@@ -174,6 +187,7 @@ export async function main(): Promise<void> {
           buildPythonProjects({
             output: options.output,
             packages: options.package,
+            packageDirectories: options.packageDirectories,
             root: options.root,
             version,
           });

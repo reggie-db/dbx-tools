@@ -49,19 +49,23 @@ const root = new project.DBXToolsNodeProject({
   github: true,
   githubOptions: { pullRequestLint: false },
   buildWorkflow: false,
+  releaseSetupSteps: [
+    {
+      name: "Setup Python",
+      uses: "actions/setup-python@v6",
+      if: "${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' || steps.release.outputs.pypi == 'true' }}",
+      with: { "python-version": "3.11" },
+    },
+    {
+      name: "Install CLI documentation parser",
+      if: "${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' }}",
+      run: "python -m pip install -r docs/requirements.txt",
+    },
+  ],
   releaseDocs: {
     siteUrl: "https://docs.dbx.tools",
     base: "/",
     prepareSteps: [
-      {
-        name: "Setup Python",
-        uses: "actions/setup-python@v6",
-        with: { "python-version": "3.11" },
-      },
-      {
-        name: "Install CLI documentation parser",
-        run: "python -m pip install -r docs/requirements.txt",
-      },
       {
         name: "Validate generated CLI references",
         run: "bun test docs/scripts/cli-reference.test.mjs && bun docs/scripts/sync-cli-readmes.mjs --check",

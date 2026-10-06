@@ -64,6 +64,8 @@ Repository policy stays in the consuming `.projenrc.ts`:
   preparation. Omit it when the workspace has no standard Python packages.
 - `releaseValidationTasks` names repository tasks that must pass in tag CI
   before release artifacts are built and published.
+- `releaseSetupSteps` installs any extra validation/build prerequisites in the
+  shared release job before the validation tasks run.
 - `pullRequestTitlePolicy` configures semantic title types and scope policy.
   Omit it or pass `false` to disable the title job.
 - `workflowCacheIgnorePaths` excludes generated output trees that may contain
@@ -380,16 +382,44 @@ list, so a new package is covered without a re-synth. Work from the root:
 | `bun run version:check` | verify every generated version against `VERSION`    |
 | `bun run release`       | run the configured release transaction              |
 
-Run exactly `bun run release` from any branch. Pending changes are committed and
+Run `bun run release` from any branch. Pending changes are committed and
 the current branch is pushed first. A non-`main` branch then fast-forwards
 `main`; the command fails without creating a merge commit if either branch has
 diverged. From `main`, it calls the existing `bump` task, commits the generated
 version changes, pushes `main`, and pushes the matching annotated `vX.Y.Z` tag.
 Pass `--no-bump` only to release an existing synchronized local bump. The tag
-workflow verifies that the tag points at the exact `origin/main` commit,
-publishes npm and PyPI directly from that checkout, then builds and deploys
-documentation. Local npm and Python registry publication remains available
+workflow verifies that the tag points at the exact `origin/main` commit. One
+`build-release` job restores the Bun cache and installs workspace dependencies,
+runs validation, packs the npm archives, builds all Python distributions, and
+builds the documentation site. Install validation prerequisites through
+`releaseSetupSteps`; `releaseDocs.prepareSteps` runs after validation.
+
+Publication jobs download the resulting artifacts rather than rebuilding the
+workspace. Each Python package retains its own publishing environment and waits
+for its package dependencies to publish. The npm job uses the bundled archive
+publisher without a checkout or workspace install. Pages deploys the already
+built site after registry publication succeeds. Local npm and Python registry publication remains available
 through the direct local publication tooling.
+
+The default release still publishes npm, Python, and docs, then publishes to
+configured local registries automatically. Select a scope or disable individual
+steps for one run without changing the Projen definition:
+
+```sh
+bun run release --publish pypi --no-docs
+bun run release --no-npm --no-local-publish
+bun run release --publish local --install never
+bun run release --local-registry false --local-pypi auto
+```
+
+`--install auto` keeps Projen's normal local dependency-install behavior;
+`always` performs a frozen install first, and `never` uses dependencies already
+installed while still regenerating versioned sources. `--no-validation` skips
+optional task checks locally and in CI, not version or immutable-source checks.
+`--no-docs` skips building and deploying the site, not package README validation.
+Scopes select artifacts, not the normal commit and tag-push transaction.
+The annotated tag records CI step selections, so publishing a selected scope does
+not change the next release's defaults. Local registry URLs stay local.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
@@ -402,7 +432,7 @@ invokes, so there is no second place to run the same thing:
   edit/compile loop to one package.
 - `build` / `package` - a complete compile/test/pack lifecycle when invoked in
   one package. Release preparation validates through the root's filtered tasks,
-  and publication concurrently uploads archives that were each packed and
+  and publication uploads archives that were each packed and
   validated once with lifecycle scripts disabled. The package phase also packs
   with `--ignore-scripts` because its build already compiled; `prepack` remains
   available for a standalone publish that did not run `build` first.
@@ -421,3 +451,40 @@ from the root instead.
 Projen-owned and reproduce it exactly across JavaScript and Python packages.
 Release jobs publish the generated workspace inventory in dependency-safe
 workflow order without introducing another version owner.
+
+<!-- cli-reference:start -->
+
+## Command Reference
+
+### `release`
+
+```text
+Usage: release [options]
+
+Prepare an annotated release and select its build and publication steps
+
+Options:
+  --root <path>                      repository root
+  --branch <name>                    release branch (default: "main")
+  --prefix <prefix>                  release tag prefix (default: "v")
+  --remote <name>                    git remote (default: "origin")
+  --python-root <path>               Python package root for local publish (default: "packages/py")
+  --validate <task>                  task to run before pushing (default: [])
+  --no-bump                          use an existing synchronized local version bump
+  --publish <target>                 publication scope (choices: "auto", "npm", "pypi", "local",
+                                     "none", default: "auto")
+  --install <mode>                   local workspace dependency installation (choices: "auto",
+                                     "always", "never", default: "auto")
+  --no-npm                           skip npm build and publication, including local npm publication
+  --no-pypi                          skip Python build and publication, including local Python
+                                     publication
+  --docs                             build and deploy docs for a selected scope
+  --no-docs                          skip documentation build and deployment
+  --no-validation                    skip optional release validation tasks; version/source checks
+                                     remain mandatory
+  --no-local-publish                 skip publishing to configured local registries
+  --local-registry <auto|false|url>  local npm registry selection (default: "auto")
+  --local-pypi <auto|false|url>      local devpi registry selection (default: "auto")
+```
+
+<!-- cli-reference:end -->

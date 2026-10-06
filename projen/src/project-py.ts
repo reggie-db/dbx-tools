@@ -2,16 +2,15 @@
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, javascript, python } from "projen";
-import { JobPermission } from "projen/lib/github/workflows-model";
-import { BUN_VERSION } from "./bun-workflow.ts";
+import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { PythonNodeBundle, type PythonNodeBindingsOptions } from "./python-node-bundle.ts";
-import { RELEASE_VERSION, releaseSourceSteps } from "./release-context.ts";
 import {
   refreshReleaseDocsDependencies,
   releaseCondition,
+  releaseBuildSteps,
   releaseTagPattern,
   tryReleaseWorkflow,
   uvSetupStep,
@@ -401,16 +400,45 @@ export class DBXToolsPythonWorkspace extends Component {
     if (!workflow) {
       throw new Error("Python release requires the root dbx-tools release mode");
     }
+    const build = workflow.getJob("build-release") as Job | undefined;
+    if (!build) throw new Error("Python release requires the shared release build job");
+    const pythonSteps: JobStep[] = [
+      uvSetupStep(),
+      {
+        name: "Build Python distributions",
+        env: { RELEASE_VERSION: "${{ steps.release.outputs.release_version }}" },
+        run: [
+          'bun node_modules/@dbx-tools/projen/tasks/publish-python.ts "$RELEASE_VERSION"',
+          `--root ${JSON.stringify(this.repository.root)}`,
+          `--package ${allPublications.map((publication) => JSON.stringify(publication.directory)).join(" ")}`,
+          "--output .release/python --package-directories",
+        ].join(" \\\n  "),
+      },
+      ...allPublications.map((publication) => ({
+        name: `Upload ${publication.distribution} distributions`,
+        uses: "actions/upload-artifact@v4",
+        with: {
+          name: `release-python-${publication.directory}`,
+          path: `.release/python/${publication.directory}`,
+          "if-no-files-found": "error",
+        },
+      })),
+    ];
+    workflow.updateJob("build-release", {
+      ...build,
+      steps: [...build.steps, ...releaseBuildSteps("pypi", pythonSteps)],
+    });
     for (const publication of allPublications) {
       const dependencyJobs = (publication.dependencies ?? []).map(
         (dependency) => `publish-pypi-${dependency}`,
       );
       workflow.addJob(`publish-pypi-${publication.directory}`, {
         if: releaseCondition([
-          "needs.verify-context.result == 'success'",
+          "needs.build-release.result == 'success'",
+          "needs.build-release.outputs.pypi == 'true'",
           ...dependencyJobs.map((job) => `needs['${job}'].result == 'success'`),
         ]),
-        needs: ["verify-context", ...dependencyJobs],
+        needs: ["build-release", ...dependencyJobs],
         environment: {
           name: publication.environment,
           url:
@@ -420,20 +448,14 @@ export class DBXToolsPythonWorkspace extends Component {
         runsOn: ["ubuntu-latest"],
         permissions: { idToken: JobPermission.WRITE },
         timeoutMinutes: 10,
-        env: { BUN_VERSION },
         steps: [
-          ...releaseSourceSteps(),
-          ...project.renderWorkflowSetup({ mutable: false }),
-          uvSetupStep(),
           {
-            name: `Build ${publication.distribution} distributions`,
-            env: { RELEASE_VERSION },
-            run: [
-              'bun node_modules/@dbx-tools/projen/tasks/publish-python.ts "$RELEASE_VERSION"',
-              `--root ${JSON.stringify(this.repository.root)}`,
-              `--package ${JSON.stringify(publication.directory)}`,
-              `--output dist/${publication.directory}`,
-            ].join(" \\\n  "),
+            name: `Download ${publication.distribution} distributions`,
+            uses: "actions/download-artifact@v4",
+            with: {
+              name: `release-python-${publication.directory}`,
+              path: `dist/${publication.directory}`,
+            },
           },
           {
             name: `Publish ${publication.distribution} to PyPI`,

@@ -573,6 +573,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releasePythonRoot?: string;
     /** Repository task names run during local release preparation before publication. */
     readonly releaseValidationTasks?: readonly string[];
+    /** Release build prerequisites installed before repository validation tasks. */
+    readonly releaseSetupSteps?: readonly JobStep[];
     /** Set to `false` to omit normal npm workspace publication. */
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
@@ -1365,6 +1367,7 @@ function initProject(
       docs: options.releaseDocs,
       pythonRoot: options.releasePythonRoot,
       validationTasks: options.releaseValidationTasks,
+      setupSteps: options.releaseSetupSteps,
     });
   }
 }

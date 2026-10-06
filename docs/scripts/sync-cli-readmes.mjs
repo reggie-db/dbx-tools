@@ -51,6 +51,13 @@ references.push({
   readme: path.join(root, "packages/py/graphiti/README.md"),
   reference: pythonReferences.full,
 });
+const { createReleaseCommand } = await import(
+  pathToFileURL(path.join(root, "projen/tasks/release.ts")).href
+);
+references.push({
+  readme: path.join(root, "projen/README.md"),
+  reference: commanderReference(createReleaseCommand()),
+});
 
 const stale = [];
 for (const { readme, reference } of references) {

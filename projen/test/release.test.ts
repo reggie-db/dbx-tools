@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -23,15 +23,21 @@ before(() => {
     outdir,
     github: true,
     buildWorkflow: true,
+    releaseSetupSteps: [
+      {
+        name: "Setup Python",
+        uses: "actions/setup-python@v6",
+        with: { "python-version": "3.11" },
+      },
+      {
+        name: "Install CLI documentation parser",
+        run: "python -m pip install -r docs/requirements.txt",
+      },
+    ],
     releaseDocs: {
       siteUrl: "https://docs.example.com",
       base: "/fixture/",
       prepareSteps: [
-        {
-          name: "Setup Python",
-          uses: "actions/setup-python@v6",
-          with: { "python-version": "3.11" },
-        },
         { name: "Validate public source documentation", run: "bun tools/check-docs.ts" },
         { name: "Generate docs from READMEs", run: "bun tools/sync-docs.ts" },
       ],
@@ -76,14 +82,26 @@ describe("unified release workflow", () => {
     });
     assert.deepEqual(release.permissions, { contents: "read" });
 
-    const verifyJob = release.jobs["verify-context"]!;
+    const verifyJob = release.jobs["build-release"]!;
     assert.deepEqual(verifyJob.permissions, { contents: "read" });
-    assert.equal(verifyJob.outputs?.build_mode, undefined);
     assert.equal(step(verifyJob, "Checkout release source").with?.["fetch-depth"], 0);
     const verify = step(verifyJob, "Verify release context");
     assert.equal(verify.env?.RELEASE_TAG, "${{ github.ref_name }}");
     assert.ok(verify.run?.includes("tasks/release-version.ts"));
     assert.equal(step(verifyJob, "Setup Bun").uses, "oven-sh/setup-bun@v2");
+    const names = verifyJob.steps.map((candidate) => candidate.name);
+    assert.ok(
+      names.indexOf("Install CLI documentation parser") <
+        names.indexOf("Validate docs:check-readmes"),
+    );
+    assert.equal(step(verifyJob, "Restore Bun cache").uses, "actions/cache/restore@v5");
+    assert.ok(step(verifyJob, "Build npm archives").run?.includes("--output .release/npm"));
+    assert.ok(step(verifyJob, "Build npm archives").run?.includes("bun run compile"));
+    assert.ok(step(verifyJob, "Build npm archives").run?.includes("--skip-compile"));
+    assert.ok(
+      step(verifyJob, "Build npm archives").run?.includes("--outfile=.release/npm/publish-npm.mjs"),
+    );
+    assert.equal(step(verifyJob, "Upload npm archives").with?.name, "release-npm");
     assert.equal(
       verifyJob.steps.some((candidate) => candidate.name === "Setup uv"),
       false,
@@ -99,7 +117,7 @@ describe("unified release workflow", () => {
 
   it("publishes npm through the shared authenticated driver", () => {
     const job = release.jobs["publish-node"]!;
-    assert.equal(job.if, "${{ success() }}");
+    assert.ok(job.if?.includes("outputs.npm == 'true'"));
     assert.deepEqual(job.permissions, { contents: "read", "id-token": "write" });
     assert.equal(job.env?.BUN_VERSION, "1.3.14");
     assert.deepEqual(step(job, "Setup Node.js").with, {
@@ -108,8 +126,22 @@ describe("unified release workflow", () => {
       "package-manager-cache": false,
     });
     assert.equal(step(job, "Install npm CLI").run, "npm install --global npm@11.4.2");
-    assert.equal(step(job, "Restore Bun cache").uses, "actions/cache/restore@v5");
-    assert.equal(step(job, "Save Bun cache").uses, "actions/cache/save@v5");
+    assert.equal(job.needs, "build-release");
+    for (const name of [
+      "Restore Bun cache",
+      "Save Bun cache",
+      "Install dependencies",
+      "Checkout release commit",
+    ]) {
+      assert.equal(
+        job.steps.some((candidate) => candidate.name === name),
+        false,
+      );
+    }
+    assert.deepEqual(step(job, "Download npm archives").with, {
+      name: "release-npm",
+      path: ".release/npm",
+    });
     assert.equal(
       job.steps.some((candidate) => candidate.name === "Checkout npm recovery automation"),
       false,
@@ -125,19 +157,19 @@ describe("unified release workflow", () => {
     assert.equal(publish.env?.ACCEPT_STAGED, undefined);
     assert.equal(publish.env?.NPM_BOOTSTRAP, undefined);
     assert.equal(publish.env?.DRY_RUN, undefined);
-    assert.ok(publish.run?.includes("tasks/publish.ts"));
+    assert.ok(publish.run?.includes(".release/npm/publish-npm.mjs --directory .release/npm"));
+    assert.equal(
+      publish.env?.RELEASE_VERSION,
+      "${{ needs.build-release.outputs.release_version }}",
+    );
     assert.doesNotMatch(publish.run ?? "", /release-automation|ACCEPT_STAGED/);
   });
 
   it("builds and selectively deploys docs in the same workflow", () => {
-    const build = release.jobs["build-docs"]!;
-    assert.equal(build.if, "${{ success() }}");
-    assert.deepEqual(build.needs, ["verify-context", "publish-node"]);
-    assert.deepEqual(build.permissions, {
-      contents: "read",
-      pages: "write",
-      "id-token": "write",
-    });
+    const build = release.jobs["build-release"]!;
+    assert.equal(build.if, undefined);
+    assert.equal(build.needs, undefined);
+    assert.deepEqual(build.permissions, { contents: "read" });
     assert.equal(build.env?.DOCS_SITE_URL, "https://docs.example.com");
     assert.equal(build.env?.DOCS_BASE, "/fixture/");
     const stepNames = build.steps.map((candidate) => candidate.name);
@@ -153,7 +185,10 @@ describe("unified release workflow", () => {
     });
 
     const deploy = release.jobs["deploy-docs"]!;
-    assert.equal(deploy.if, "${{ success() }}");
+    assert.deepEqual(deploy.needs, ["build-release", "publish-node"]);
+    assert.equal(release.jobs["build-docs"], undefined);
+    assert.ok(deploy.if?.includes("outputs.docs == 'true'"));
+    assert.ok(deploy.if?.includes("needs['publish-node'].result == 'skipped'"));
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
       url: "${{ steps.deployment.outputs.page_url }}",
@@ -291,7 +326,7 @@ describe("optional Node release stage", () => {
       });
       project.synth();
       const workflow = readWorkflow(disabledOutdir, "release");
-      assert.ok(workflow.jobs["verify-context"]);
+      assert.ok(workflow.jobs["build-release"]);
       assert.equal(workflow.jobs["publish-node"], undefined);
       assert.equal(workflow.jobs["build-docs"], undefined);
     } finally {
@@ -365,12 +400,12 @@ describe("optional Node release stage", () => {
       project.synth();
 
       const workflow = readWorkflow(fixedOutdir);
-      assert.ok(workflow.jobs["verify-context"]);
-      assert.equal(workflow.jobs["publish-node"]?.needs, "verify-context");
-      assert.deepEqual(workflow.jobs["build-docs"]?.needs, ["verify-context", "publish-node"]);
-      assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
-      assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_BASE, "/");
-      assert.equal(workflow.jobs["deploy-docs"]?.needs, "build-docs");
+      assert.ok(workflow.jobs["build-release"]);
+      assert.equal(workflow.jobs["publish-node"]?.needs, "build-release");
+      assert.equal(workflow.jobs["build-docs"], undefined);
+      assert.equal(workflow.jobs["build-release"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
+      assert.equal(workflow.jobs["build-release"]?.env?.DOCS_BASE, "/");
+      assert.deepEqual(workflow.jobs["deploy-docs"]?.needs, ["build-release", "publish-node"]);
       assert.equal("release-please" in workflow.jobs, false);
       assert.equal("release-plan" in workflow.jobs, false);
       assert.equal("publish-github-release" in workflow.jobs, false);
