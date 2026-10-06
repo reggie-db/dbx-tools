@@ -34,7 +34,7 @@ export function buildProgram(
       .showHelpAfterError()
       .version(PACKAGE_VERSION, "-v, --version"),
     FalkorDBOptionsSchema,
-    { scope: [] },
+    { prefix: "FALKORDB" },
   );
   return program.action(async () => {
     await dependencies.run(parseArgs(program, FalkorDBOptionsSchema));

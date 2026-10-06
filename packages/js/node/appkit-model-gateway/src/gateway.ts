@@ -73,14 +73,15 @@ export class ModelGateway {
     headers: Headers,
     signal: AbortSignal,
   ): Promise<Response> {
-    const requestedModel = requiredModel(body.model);
+    const sanitizedBody = sanitizeInferenceBody(body);
+    const requestedModel = requiredModel(sanitizedBody.model);
     logger.debug("resolving request", {
       clientProtocol: protocol,
       model: requestedModel,
       originator: headers.get("originator") ?? undefined,
-      stream: body.stream === true,
+      stream: sanitizedBody.stream === true,
     });
-    const features = requestedFeatures(body);
+    const features = requestedFeatures(sanitizedBody);
     const target = await this.registry.resolve(requestedModel, {
       ...(protocol === "openai-embeddings" ? { modelClass: ModelClass.Embedding } : {}),
       ...(features.tools ? { requiresTools: true } : {}),
@@ -99,11 +100,11 @@ export class ModelGateway {
       upstreamProtocol: route.upstreamProtocol,
     });
 
-    const adapted = adaptInferenceReasoning(target.id, body);
+    const adapted = adaptInferenceReasoning(target.id, sanitizedBody);
     let response = await this.forward(route, adapted.body, headers, signal);
     const retryBody = await learnAndAdaptReasoningRetry({
       model: target.id,
-      body,
+      body: sanitizedBody,
       response,
       previousWireEffort: adapted.wireEffort,
     });
@@ -143,6 +144,16 @@ export class ModelGateway {
     }
     return fetchDatabricks({ route, body, headers, signal });
   }
+}
+
+/** Remove an explicit null temperature while preserving omitted and numeric values. */
+export function sanitizeInferenceBody(
+  body: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  if (body.temperature !== null) return body;
+  const sanitized = { ...body };
+  delete sanitized.temperature;
+  return sanitized;
 }
 
 function requiredModel(value: unknown): string {

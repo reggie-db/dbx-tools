@@ -7,13 +7,13 @@
  * decls - reacting to our own output would loop), exits on a watcher error chokidar
  * cannot recover from ({@link FATAL_WATCH_ERROR_CODES}), and shuts down on SIGINT. Callers
  * pass the paths to watch and an `onBatch` handler; the concern-specific glue - which
- * barrels to rebuild, when to regenerate openapi, when to re-synth - lives in the task
- * that owns it (`tasks/barrels.ts`, `tasks/openapi.ts`, `tasks/projenrc.ts`), each
- * forwarding here rather than duplicating the watch machinery.
+ * barrels to rebuild or when to re-synth - lives in the task that owns it
+ * (`tasks/barrels.ts` or `tasks/projenrc.ts`), each forwarding here rather than
+ * duplicating the watch machinery.
  *
  * `watchRoots()` is the one shared input - the package roots where every
- * watchable source file lives - so the barrels and openapi watchers don't each
- * recompute it. {@link watchFiles} owns the chokidar wiring; this is thin glue.
+ * watchable source file lives. {@link watchFiles} owns the chokidar wiring; this
+ * is thin glue.
  */
 import { isAbsolute, resolve } from "node:path";
 import { watch as pathWatch } from "@dbx-tools/path";

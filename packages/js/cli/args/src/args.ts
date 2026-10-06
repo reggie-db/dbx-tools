@@ -22,6 +22,8 @@ export interface CliArgMeta {
   readonly env?: string | readonly string[];
   /** Set false to resolve the field from config without generating a Commander flag. */
   readonly flag?: boolean;
+  /** Set false to keep schema and configured defaults out of generated help. */
+  readonly helpDefault?: boolean;
 }
 
 /** Zod defaults or concrete option values serialized by {@link serializeArgs}. */
@@ -60,10 +62,12 @@ export function addArgs<T extends z.ZodRawShape>(
     const sourced = configValue(field, envKeys, options);
     const fallback = sourced ?? field.fallback;
     const option = new Option(flags, field.description);
-    Object.defineProperty(option, "schemaHelpDefault", { value: field.fallback });
+    Object.defineProperty(option, "schemaHelpDefault", {
+      value: field.helpDefault === false ? undefined : field.fallback,
+    });
     if (envName) option.env(envName);
     if (field.choices && field.choices.length > 0) option.choices(field.choices);
-    if (fallback !== undefined) {
+    if (fallback !== undefined && field.helpDefault !== false) {
       const address = listenAddress(fallback);
       option.default(fallback, address ? sharedOptions.formatListenAddress(address) : undefined);
     }
@@ -132,6 +136,7 @@ function fields(schema: z.ZodObject<z.ZodRawShape>): Field[] {
       fallback: json.default,
       env: json.env,
       flag: json.flag,
+      helpDefault: json.helpDefault,
     };
   });
 }
@@ -190,7 +195,12 @@ function scalarArgument(key: string, value: unknown): string {
 }
 
 function listenAddress(value: unknown): sharedOptions.ListenAddress | undefined {
-  return object.isRecord(value) && typeof value.host === "string" && typeof value.port === "number"
-    ? { host: value.host, port: value.port }
-    : undefined;
+  if (!object.isRecord(value)) return undefined;
+  if (value.scheme === "tcp" && typeof value.host === "string" && typeof value.port === "number") {
+    return { scheme: "tcp", host: value.host, port: value.port };
+  }
+  if (value.scheme === "unix" && typeof value.path === "string") {
+    return { scheme: "unix", path: value.path };
+  }
+  return undefined;
 }

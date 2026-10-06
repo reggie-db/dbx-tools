@@ -3,11 +3,16 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "lib": [
-      "ES2022",
+      "ESNext",
       "DOM",
       "DOM.Iterable"
     ],
-    "noEmit": true
+    "noEmit": true,
+    "target": "ESNext",
+    "types": [
+      "node",
+      "bun"
+    ]
   },
   "include": [
     "*.ts"

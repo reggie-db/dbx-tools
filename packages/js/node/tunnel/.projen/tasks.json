@@ -86,6 +86,9 @@
       "description": "Prepare the project for compilation",
       "steps": [
         {
+          "exec": "bunx tsc --build assets/tsconfig.json"
+        },
+        {
           "exec": "bun assets/build-login-client.ts"
         }
       ]

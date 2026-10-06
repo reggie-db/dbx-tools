@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { z } from "zod";
 import {
   DatabricksEnvironmentNamesSchema,
   DatabricksOptionsSchema,
@@ -10,6 +11,8 @@ import {
   normalizedUrlSchema,
   parseOpts,
   serializeOpts,
+  serializeOptsEnvironment,
+  subnameOpts,
   tcpPortOrZeroSchema,
   tcpPortSchema,
 } from "../src/options.ts";
@@ -36,11 +39,44 @@ describe("shared option schemas", () => {
 
   it("parses and formats listener addresses", () => {
     const schema = listenAddressSchema({ port: 4000, loopback: true });
-    assert.deepEqual(schema.parse(4444), { host: "localhost", port: 4444 });
-    assert.deepEqual(schema.parse(":4444"), { host: "localhost", port: 4444 });
-    assert.deepEqual(schema.parse("LOCALHOST:4444"), { host: "localhost", port: 4444 });
-    assert.equal(formatListenAddress({ host: "::1", port: 4444 }), "[::1]:4444");
+    assert.deepEqual(schema.parse(4444), { scheme: "tcp", host: "localhost", port: 4444 });
+    assert.deepEqual(schema.parse(":4444"), {
+      scheme: "tcp",
+      host: "localhost",
+      port: 4444,
+    });
+    assert.deepEqual(schema.parse("tcp://LOCALHOST:4444"), {
+      scheme: "tcp",
+      host: "localhost",
+      port: 4444,
+    });
+    assert.equal(
+      formatListenAddress({ scheme: "tcp", host: "::1", port: 4444 }),
+      "tcp://[::1]:4444",
+    );
     assert.throws(() => schema.parse("0.0.0.0:4444"), /loopback/);
+  });
+
+  it("parses Unix listeners and allows overriding the default scheme", () => {
+    const schema = listenAddressSchema({
+      port: 6379,
+      scheme: "unix",
+      schemes: ["tcp", "unix"],
+      withDefault: false,
+    });
+    assert.deepEqual(schema.parse("/tmp/falkordb.sock"), {
+      scheme: "unix",
+      path: "/tmp/falkordb.sock",
+    });
+    assert.deepEqual(schema.parse("unix:///tmp/falkordb.sock"), {
+      scheme: "unix",
+      path: "/tmp/falkordb.sock",
+    });
+    assert.deepEqual(schema.parse("tcp://127.0.0.1:6379"), {
+      scheme: "tcp",
+      host: "127.0.0.1",
+      port: 6379,
+    });
   });
 
   it("normalizes URL and bare-host inputs", () => {
@@ -83,6 +119,46 @@ describe("shared option schemas", () => {
     assert.deepEqual(JSON.parse(serializeOpts(schema, values, "env")), {
       DATABRICKS_CONFIG_PROFILE: "PROFILE",
       DATABRICKS_HOST: "https://workspace.example.com",
+    });
+  });
+
+  it("serializes typed options into process environment strings", () => {
+    const schema = z.object({
+      port: z.number().meta({ env: "PORT" }),
+      enabled: z.boolean().meta({ env: "ENABLED" }),
+      values: z.array(z.string()).meta({ env: "VALUES" }),
+    });
+
+    assert.deepEqual(
+      serializeOptsEnvironment(schema, {
+        port: 8000,
+        enabled: true,
+        values: ["one", "two"],
+      }),
+      {
+        PORT: "8000",
+        ENABLED: "true",
+        VALUES: "one,two",
+      },
+    );
+  });
+
+  it("subnames reusable option fields without replacing their schemas", () => {
+    const schema = subnameOpts(
+      z.object({
+        dataDir: z.string().meta({ env: "FALKORDB_DATA_DIR" }),
+      }),
+      "falkor",
+    );
+
+    assert.deepEqual(schema.parse({ falkorDataDir: "/data" }), {
+      falkorDataDir: "/data",
+    });
+    assert.deepEqual(JSON.parse(serializeOpts(schema, { falkorDataDir: "/data" }, "flag")), {
+      "--falkor-data-dir": "/data",
+    });
+    assert.deepEqual(serializeOptsEnvironment(schema, { falkorDataDir: "/data" }), {
+      FALKORDB_DATA_DIR: "/data",
     });
   });
 });

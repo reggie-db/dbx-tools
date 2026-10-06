@@ -8,7 +8,7 @@ import type { VolumeEntry, VolumeStorage } from "../src/persistence/volume.ts";
 
 describe("DurableFalkorDB integration", () => {
   test("removes the process and socket while preserving the local RDB", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "durable-falkor-close-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "durable falkor close-"));
     const database = await DurableFalkorDB.open({
       dataDir,
       snapshotSeconds: 1,

@@ -61,7 +61,6 @@ export function buildProgram(
       .description("Run or manage the AppKit Databricks model gateway")
       .version(version, "-v, --version"),
     ModelGatewayCliOptionsSchema,
-    { scope: [] },
   ).action(async () => {
     const options = modelGatewayOptions(program);
     if (options.runtimeInfo) {

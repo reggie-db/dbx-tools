@@ -26,7 +26,6 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@babel/preset-typescript": "7.28.5",
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit-model-gateway": "workspace:^",
     "@dbx-tools/cli-args": "workspace:^",
@@ -34,10 +33,7 @@
     "@dbx-tools/databricks": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-model-gateway": "workspace:^",
-    "@mlflow/core": "0.4.0",
-    "@vitejs/plugin-react": "5.1.1",
-    "commander": "catalog:",
-    "esbuild": "0.28.2"
+    "commander": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

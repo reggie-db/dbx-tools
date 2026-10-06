@@ -22,11 +22,12 @@ after(() => {
 });
 
 describe("recordedRoots", () => {
-  it("returns configured package roots without widening to packages", () => {
+  it("returns configured package roots and extra workspace member roots", () => {
     const project = new DBXToolsNodeProject({
       name: "fixture",
       outdir,
       packageRoots: ["packages/js"],
+      extraWorkspaceMembers: ["tooling"],
       defaultTagMixins: false,
       github: false,
     });
@@ -37,6 +38,6 @@ describe("recordedRoots", () => {
       dbxToolsConfig?: { packageRoots?: string[] };
     };
     assert.deepEqual(manifest.dbxToolsConfig?.packageRoots, ["packages/js"]);
-    assert.deepEqual(recordedRoots(outdir), ["packages/js"]);
+    assert.deepEqual(recordedRoots(outdir), ["packages/js", "tooling"]);
   });
 });

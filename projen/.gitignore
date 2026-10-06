@@ -36,6 +36,7 @@ jspm_packages/
 /lib
 /dist/
 !/shims/python-node/tsconfig.json
+!/shims/python-node/**
 !/tsconfig.projen.json
 !/.projenrc.js
 !/.projenrc.ts

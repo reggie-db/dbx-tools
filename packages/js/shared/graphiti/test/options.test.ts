@@ -1,67 +1,61 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  graphitiEnvironment,
-  graphitiGatewayHealthUrl,
+  graphitiOptionsEnvironment,
   graphitiOptionsFromEnvironment,
   resolveGraphitiOptions,
-  serializeGraphitiOptions,
 } from "../src/options.ts";
 
 describe("Graphiti options", () => {
-  it("applies the shared local gateway and model defaults", () => {
+  it("applies the shared model defaults", () => {
     const options = resolveGraphitiOptions();
 
-    assert.equal(options.manageModelGateway, true);
-    assert.equal(options.modelGatewayUrl, "http://127.0.0.1:4400/v1");
     assert.equal(options.model, "databricks-gpt-5-nano");
+    assert.equal(options.temperature, 1);
     assert.equal(options.embedderModel, "databricks-gte-large-en");
     assert.equal(options.embedderDimensions, 1024);
-    assert.equal(options.openAiApiKey, "not-required");
+    assert.deepEqual(options.listen, {
+      scheme: "tcp",
+      host: "127.0.0.1",
+      port: 7272,
+    });
   });
 
-  it("normalizes external gateway values without duplicating environment policy", () => {
+  it("normalizes model values without duplicating environment policy", () => {
     const options = resolveGraphitiOptions({
-      modelGatewayUrl: " https://models.example/v1/ ",
-      manageModelGateway: false,
       model: "  gpt  ",
     });
 
-    assert.equal(options.modelGatewayUrl, "https://models.example/v1");
     assert.equal(options.model, "gpt");
-    assert.equal(options.openAiApiKey, "not-required");
-  });
-
-  it("produces the provider environment and health URL from the same owner", () => {
-    const input = { modelGatewayPort: 4500, embedderDimensions: 768 };
-    const environment = graphitiEnvironment(input);
-
-    assert.equal(environment.OPENAI_API_URL, "http://127.0.0.1:4500/v1");
-    assert.equal(environment.EMBEDDER_DIMENSIONS, "768");
-    assert.equal(graphitiGatewayHealthUrl(input), "http://127.0.0.1:4500/api/healthz");
-    assert.deepEqual(JSON.parse(serializeGraphitiOptions(input)), resolveGraphitiOptions(input));
-  });
-
-  it("rejects colliding Graphiti and managed gateway ports", () => {
-    assert.throws(() => resolveGraphitiOptions({ graphitiPort: 8000, modelGatewayPort: 8000 }));
   });
 
   it("parses environment names without reading process state", () => {
     assert.deepEqual(
       graphitiOptionsFromEnvironment({
         DATABRICKS_CONFIG_PROFILE: "PROFILE",
+        TEMPERATURE: "0.25",
         GRAPHITI_HOME: "/graphiti",
-        MODEL_GATEWAY_PORT: "4500",
-        MANAGE_MODEL_GATEWAY: "false",
-        FALKORDB_DATA_DIR: "/graphiti/falkor",
+        GRAPHITI_LISTEN: "tcp://localhost:8100",
       }),
       {
         profile: "PROFILE",
+        temperature: 0.25,
         graphitiHome: "/graphiti",
-        modelGatewayPort: 4500,
-        manageModelGateway: false,
-        falkorDataDir: "/graphiti/falkor",
+        listen: { scheme: "tcp", host: "localhost", port: 8100 },
       },
     );
+  });
+
+  it("serializes the resolved configuration as one process environment", () => {
+    const environment = graphitiOptionsEnvironment({
+      profile: "PROFILE",
+      listen: "tcp://localhost:8100",
+    });
+
+    assert.equal(environment.DATABRICKS_CONFIG_PROFILE, "PROFILE");
+    assert.equal(environment.MODEL_NAME, "databricks-gpt-5-nano");
+    assert.equal(environment.EMBEDDER_MODEL, "databricks-gte-large-en");
+    assert.equal(environment.GRAPHITI_LISTEN, "tcp://localhost:8100");
+    assert.ok(Object.values(environment).every((value) => typeof value === "string"));
   });
 });

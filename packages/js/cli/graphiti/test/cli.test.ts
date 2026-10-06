@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
-import { GRAPHITI_DEFAULTS } from "@dbx-tools/shared-graphiti";
+import { GraphitiOptionsSchema as RuntimeGraphitiOptionsSchema } from "@dbx-tools/graphiti/options";
+import type { GraphitiRuntimeOptions } from "@dbx-tools/graphiti/runtime";
 import { PACKAGE_VERSION } from "../index.ts";
 import { buildProgram, graphitiServiceDefinition } from "../src/cli.ts";
-import type { GraphitiRuntimeOptions } from "../src/runtime.ts";
+import { GRAPHITI_DEFAULTS, GraphitiOptionsSchema } from "../src/options.ts";
 
 describe("Graphiti CLI", () => {
+  it("exposes the exact shared Graphiti option schema", () => {
+    assert.equal(GraphitiOptionsSchema, RuntimeGraphitiOptionsSchema);
+  });
+
   it("constructs without starting Graphiti", () => {
     const program = buildProgram();
     const help = program.helpInformation();
@@ -21,30 +26,19 @@ describe("Graphiti CLI", () => {
     assert.match(help, /MODEL_NAME/);
     assert.match(help, /--graphiti-home <value>/);
     assert.match(help, /GRAPHITI_HOME/);
-    assert.match(help, /--no-manage-model-gateway/);
+    assert.doesNotMatch(help, /model-gateway/);
     assert.doesNotMatch(help, /--graphiti-args/);
   });
 
-  it("forwards Python arguments unchanged with the selected profile", async () => {
+  it("passes shared options unchanged with the selected profile", async () => {
     let received: GraphitiRuntimeOptions | undefined;
     await buildProgram("dbx graphiti", {
       async run(options) {
         received = options;
       },
-    }).parseAsync(
-      [
-        "--python",
-        "/path with spaces/python",
-        "--profile",
-        "GRAPHITI-PROFILE",
-        "--model",
-        "my-model",
-      ],
-      { from: "user" },
-    );
+    }).parseAsync(["--profile", "GRAPHITI-PROFILE", "--model", "my-model"], { from: "user" });
     assert.deepEqual(received, {
       ...GRAPHITI_DEFAULTS,
-      python: "/path with spaces/python",
       profile: "GRAPHITI-PROFILE",
       model: "my-model",
     });
@@ -52,41 +46,20 @@ describe("Graphiti CLI", () => {
 
   it("defines the owning Node CLI command using the shared service package", () => {
     const definition = graphitiServiceDefinition({
-      python: "python3",
       profile: "GRAPHITI-PROFILE",
     });
     assert.equal(definition.packageName, "@dbx-tools/cli-graphiti");
     assert.equal(definition.command?.executable, undefined);
-    assert.ok(definition.command?.arguments?.includes("--python"));
-    assert.ok(definition.command?.arguments?.includes("python3"));
+    assert.deepEqual(definition.pythonPackage, {
+      name: "dbx-tools-graphiti",
+      python: "3.11",
+    });
     assert.ok(definition.command?.arguments?.includes("GRAPHITI-PROFILE"));
-  });
-
-  it("uses the Python environment setting unless a CLI option overrides it", async () => {
-    const previous = process.env.PYTHON;
-    const selected: string[] = [];
-    process.env.PYTHON = "/virtual/environment/python";
-    try {
-      const dependencies = {
-        async run(options: GraphitiRuntimeOptions) {
-          selected.push(options.python!);
-        },
-      };
-      await buildProgram("dbx graphiti", dependencies).parseAsync([], { from: "user" });
-      await buildProgram("dbx graphiti", dependencies).parseAsync(["--python", "python-custom"], {
-        from: "user",
-      });
-      assert.deepEqual(selected, ["/virtual/environment/python", "python-custom"]);
-    } finally {
-      if (previous === undefined) delete process.env.PYTHON;
-      else process.env.PYTHON = previous;
-    }
   });
 
   it("persists options through shared install without starting foreground", async () => {
     let definition: CliServiceDefinition | undefined;
     let installed = false;
-    let prepared: string | undefined;
     const lifecycle: CliServiceLifecycle = {
       async install(options) {
         installed = options?.start === false;
@@ -103,9 +76,6 @@ describe("Graphiti CLI", () => {
       async run() {
         assert.fail("must not start foreground during installation");
       },
-      async prepare(python) {
-        prepared = python;
-      },
       service: {
         create(value) {
           definition = value;
@@ -113,23 +83,10 @@ describe("Graphiti CLI", () => {
         },
         write() {},
       },
-    }).parseAsync(
-      [
-        "service",
-        "install",
-        "--no-start",
-        "--python",
-        "python-custom",
-        "--profile",
-        "GRAPHITI-PROFILE",
-      ],
-      { from: "user" },
-    );
+    }).parseAsync(["service", "install", "--no-start", "--profile", "GRAPHITI-PROFILE"], {
+      from: "user",
+    });
     assert.equal(installed, true);
-    assert.equal(prepared, "python-custom");
-    assert.deepEqual(
-      definition,
-      graphitiServiceDefinition({ python: "python-custom", profile: "GRAPHITI-PROFILE" }),
-    );
+    assert.deepEqual(definition, graphitiServiceDefinition({ profile: "GRAPHITI-PROFILE" }));
   });
 });

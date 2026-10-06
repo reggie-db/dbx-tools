@@ -30,9 +30,6 @@
       "description": "Only compile",
       "steps": [
         {
-          "exec": "bun -e 'import { rm } from \"node:fs/promises\"; await rm(\"lib\", { recursive: true, force: true })'"
-        },
-        {
           "execArgs": [
             "tsc",
             "--build"

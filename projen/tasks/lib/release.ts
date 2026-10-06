@@ -115,7 +115,7 @@ export async function runRelease(
   const selection = releaseStepSelection(options);
   const install = options.install ?? "auto";
 
-  if (install === "always") runTaskCommand(root, "bun", ["install", "--frozen-lockfile"]);
+  if (install === "always") runTaskCommand(root, "bun", ["install"]);
 
   prepareReleaseBranch({ branch, remote, root });
 

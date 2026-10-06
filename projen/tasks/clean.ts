@@ -1,4 +1,5 @@
 #!/usr/bin/env -S bun
+/** Interactively remove generated files and installed dependency directories. */
 import { relative } from "node:path";
 import { log, stringUtils } from "@dbx-tools/shared-core";
 import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean.ts";

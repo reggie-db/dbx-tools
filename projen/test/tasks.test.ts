@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -145,8 +145,16 @@ describe("workspace validation tasks", () => {
     assert.equal(condition, "");
   });
 
-  it("does not register tasks for missing engine scripts", () => {
-    const engineProjenrc = readFileSync(join(import.meta.dirname, "..", ".projenrc.ts"), "utf8");
-    assert.doesNotMatch(engineProjenrc, /tasks\/demo\.ts/);
+  it("registers only executable engine task entrypoints", () => {
+    const packagePrefix = "node_modules/@dbx-tools/projen/";
+    const engineRoot = join(import.meta.dirname, "..");
+    for (const task of Object.values(tasks.root.tasks)) {
+      for (const step of task.steps ?? []) {
+        const entrypoint = step.execArgs?.find((argument) => argument.startsWith(packagePrefix));
+        if (!entrypoint) continue;
+        const sourcePath = join(engineRoot, entrypoint.slice(packagePrefix.length));
+        assert.equal(existsSync(sourcePath), true, `missing task entrypoint ${sourcePath}`);
+      }
+    }
   });
 });

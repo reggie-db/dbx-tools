@@ -10,16 +10,16 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/cli-args` - Bind Zod object fields to Commander flags, environment bindings, layered local config, help defaults, and service arguments. Source: `packages/js/cli/args`.
 - `@dbx-tools/cli-auth` - Sign in to Databricks, inspect a profile, and obtain access tokens for scripts and local tools. The commands support user OAuth, service-principal credentials, and personal access token profiles through dbx auth. Source: `packages/js/cli/auth`.
 - `@dbx-tools/cli-falkor-db` - Run an embedded FalkorDB database in the foreground with its active graph on local disk. Redis creates RDB snapshots only after configured writes, and the CLI can stream completed snapshots to a Databricks Unity Catalog Volume. Source: `packages/js/cli/falkor-db`.
-- `@dbx-tools/cli-graphiti` - Run Graphiti graph memory against Databricks-hosted chat and embedding models. The launcher owns durable embedded FalkorDB, the optional model-gateway process, the pinned Python Graphiti MCP adapter, and desktop-service lifecycle. Source: `packages/js/cli/graphiti`.
+- `@dbx-tools/cli-graphiti` - Run Graphiti graph memory against Databricks-hosted chat and embedding models. The CLI layers foreground execution and desktop-service commands on the @dbx-tools/graphiti Node runtime, which owns model discovery, authentication, durable embedded FalkorDB, and process supervision. Source: `packages/js/cli/graphiti`.
 - `@dbx-tools/cli-lakebase-proxy` - Connect PostgreSQL tools and local applications to Databricks Lakebase through a stable loopback address. The proxy discovers the requested Lakebase resource, uses your selected Databricks profile, and creates short-lived database credentials without putting a Lakebase password in local configuration. Source: `packages/js/cli/lakebase-proxy`.
 - `@dbx-tools/cli-model-gateway` - Expose Databricks-hosted models on a local OpenAI-compatible endpoint for Codex, SDKs, and development tools. The CLI discovers models from the selected workspace and can run temporarily in a terminal or continuously as a current-user service. Source: `packages/js/cli/model-gateway`.
-- `@dbx-tools/cli-service` - Add desktop-service installation, lifecycle commands, and a tray menu to a Commander CLI. Users can keep your command running after their terminal closes and manage it through the same service commands on macOS, Linux, and Windows. Source: `packages/js/cli/service`.
+- `@dbx-tools/cli-service` - Add desktop-service installation, lifecycle commands, optional uv-managed Python dependencies, and a tray menu to a Commander CLI. Users can keep your command running after their terminal closes and manage it through the same service commands on macOS, Linux, and Windows. Source: `packages/js/cli/service`.
 - `@dbx-tools/cli-tunnel` - Share an existing local process through a public Portr or FRP URL protected by email one-time codes and passkeys. Approved users can reach your app without adding authentication or tunnel handling to the wrapped process. Source: `packages/js/cli/tunnel`.
 
 ## Node and AppKit
 
 - `@dbx-tools/appkit` - Node-side helpers for Databricks AppKit apps. Source: `packages/js/node/appkit`.
-- `@dbx-tools/appkit-graphiti` - Run Graphiti beside an AppKit server, publish a user-scoped MCP surface, and reuse the same Node-owned FalkorDB and model-gateway runtime as the standalone CLI. Source: `packages/js/node/appkit-graphiti`.
+- `@dbx-tools/appkit-graphiti` - Run Graphiti beside an AppKit server, publish a user-scoped MCP surface, and reuse the same Node-owned FalkorDB and direct model-routing runtime as the standalone CLI. Source: `packages/js/node/appkit-graphiti`.
 - `@dbx-tools/appkit-mastra` - AppKit plugin and server-side toolkit for hosting Mastra agents inside a Databricks App. Source: `packages/js/node/appkit-mastra`.
 - `@dbx-tools/appkit-model-gateway` - Give OpenAI-, Anthropic-, and Codex-compatible clients one endpoint for the models available in a Databricks workspace. The AppKit plugin discovers the workspace catalogue, exposes familiar model APIs, and chooses a compatible Databricks route for each request. Source: `packages/js/node/appkit-model-gateway`.
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
@@ -32,6 +32,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/falkor-db` - Run FalkorDB inside a Node.js or Bun process while keeping the active graph on fast local disk. Redis creates RDB files only after configured graph changes; the package detects completed saves and can copy them to durable storage such as a Databricks Unity Catalog Volume. Source: `packages/js/node/falkor-db`.
 - `@dbx-tools/fs` - Node local-disk FileSystem implementation of the @dbx-tools/shared-fs contract. Built on BaseFileSystem, so this package only owns host separator conversion (toBackendPath), Node I/O, symlink containment (preparePath), and errno mapping. Source: `packages/js/node/fs`.
 - `@dbx-tools/genie` - Server-side Databricks Genie chat drivers. Source: `packages/js/node/genie`.
+- `@dbx-tools/graphiti` - Run Graphiti from Node without coupling lifecycle control to a CLI or AppKit plugin. Callers provide the shared typed Graphiti options and receive one runtime handle for completion and shutdown. Source: `packages/js/node/graphiti`.
 - `@dbx-tools/lakebase` - Resolve a Databricks Lakebase target into the host, database, and user a PostgreSQL client needs, then request a short-lived database credential. The package gives Node and Bun applications one profile-aware path from a project name or resource URL to connection-ready values. Source: `packages/js/node/lakebase`.
 - `@dbx-tools/model` - Workspace-aware Databricks Model Serving selection. Source: `packages/js/node/model`.
 - `@dbx-tools/path` - Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching. Source: `packages/js/node/path`.
@@ -42,7 +43,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 
 ## Python
 
-- `dbx-tools-graphiti` - Internal Python adapter for the Node-owned dbx-tools Graphiti runtime. The package loads the pinned upstream Graphiti 0.29.3 MCP source, resolves shared Databricks model settings through generated PythonMonkey bindings, and connects Graphiti to the private FalkorDB Unix socket supplied by Node. Source: `packages/py/graphiti`.
+- `dbx-tools-graphiti` - Run Graphiti's REST and MCP applications together in one FastAPI process. The package composes the upstream routers, service initialization, MCP tools, and MCP session manager without copying their implementations. Source: `packages/py/graphiti`.
 
 ## Shared Contracts
 
@@ -52,7 +53,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/shared-email-template` - Universal React Email presentation shared by dbx-tools server and browser email surfaces. Source: `packages/js/shared/email-template`.
 - `@dbx-tools/shared-fs` - Browser-safe filesystem contract and abstract base for rooted storage backends. Source: `packages/js/shared/fs`.
 - `@dbx-tools/shared-genie` - Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers. Source: `packages/js/shared/genie`.
-- `@dbx-tools/shared-graphiti` - Use the browser-safe Graphiti option contract from Node, AppKit, browser tools, or generated language bindings. This package owns defaults, validation, environment parsing, and model-gateway ownership rules so every runtime accepts the same configuration. Source: `packages/js/shared/graphiti`.
+- `@dbx-tools/shared-graphiti` - Use the browser-safe Graphiti option contract from Node, AppKit, browser tools, or other JavaScript callers. This package owns defaults, validation, and environment parsing so every Node runtime accepts the same configuration. Source: `packages/js/shared/graphiti`.
 - `@dbx-tools/shared-mastra` - Browser-safe contract for the AppKit Mastra plugin. Source: `packages/js/shared/mastra`.
 - `@dbx-tools/shared-model` - Browser-safe model-selection contracts generated from the canonical model owner. Source: `packages/js/shared/model`.
 - `@dbx-tools/shared-model-gateway` - Discover the models exposed by a dbx-tools model gateway from browser, edge, or shared application code. The package validates successful and error responses at the network boundary and provides the protocol contracts needed to build model pickers without importing Node or AppKit runtime code. Source: `packages/js/shared/model-gateway`.

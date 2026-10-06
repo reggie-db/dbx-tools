@@ -71,60 +71,55 @@ export const normalizedUrlSchema = z
 
 const databricksText = (description: string) =>
   z.string().trim().min(1).optional().describe(description);
+const databricksOptionMeta = (env: string, flag = true) => ({
+  env,
+  flag,
+  helpDefault: false,
+});
 
 export const DatabricksOptionsSchema = z
   .object({
-    profile: databricksText("Databricks CLI profile.").meta({
-      env: databricksEnvironmentNames.profile,
-    }),
+    profile: databricksText("Databricks CLI profile.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.profile),
+    ),
     host: normalizedUrlSchema
       .optional()
       .describe("Databricks host.")
-      .meta({ env: databricksEnvironmentNames.host, flag: false }),
-    accountId: databricksText("Databricks account ID.").meta({
-      env: databricksEnvironmentNames.accountId,
-      flag: false,
-    }),
-    workspaceId: databricksText("Databricks workspace ID.").meta({
-      env: databricksEnvironmentNames.workspaceId,
-      flag: false,
-    }),
-    configFile: databricksText("Databricks CLI config file.").meta({
-      env: databricksEnvironmentNames.configFile,
-      flag: false,
-    }),
-    clientId: databricksText("Databricks OAuth client ID.").meta({
-      env: databricksEnvironmentNames.clientId,
-      flag: false,
-    }),
-    clientSecret: databricksText("Databricks OAuth client secret.").meta({
-      env: databricksEnvironmentNames.clientSecret,
-      flag: false,
-    }),
-    accessToken: databricksText("Databricks access token.").meta({
-      env: databricksEnvironmentNames.accessToken,
-      flag: false,
-    }),
-    groupId: databricksText("Databricks group ID.").meta({
-      env: databricksEnvironmentNames.groupId,
-      flag: false,
-    }),
-    authType: databricksText("Databricks authentication type.").meta({
-      env: databricksEnvironmentNames.authType,
-      flag: false,
-    }),
-    appName: databricksText("Databricks App name.").meta({
-      env: databricksEnvironmentNames.appName,
-      flag: false,
-    }),
-    appPort: tcpPortSchema.optional().describe("Databricks App port.").meta({
-      env: databricksEnvironmentNames.appPort,
-      flag: false,
-    }),
-    lakebaseEndpoint: databricksText("Lakebase endpoint.").meta({
-      env: databricksEnvironmentNames.lakebaseEndpoint,
-      flag: false,
-    }),
+      .meta(databricksOptionMeta(databricksEnvironmentNames.host, false)),
+    accountId: databricksText("Databricks account ID.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.accountId, false),
+    ),
+    workspaceId: databricksText("Databricks workspace ID.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.workspaceId, false),
+    ),
+    configFile: databricksText("Databricks CLI config file.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.configFile, false),
+    ),
+    clientId: databricksText("Databricks OAuth client ID.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.clientId, false),
+    ),
+    clientSecret: databricksText("Databricks OAuth client secret.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.clientSecret, false),
+    ),
+    accessToken: databricksText("Databricks access token.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.accessToken, false),
+    ),
+    groupId: databricksText("Databricks group ID.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.groupId, false),
+    ),
+    authType: databricksText("Databricks authentication type.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.authType, false),
+    ),
+    appName: databricksText("Databricks App name.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.appName, false),
+    ),
+    appPort: tcpPortSchema
+      .optional()
+      .describe("Databricks App port.")
+      .meta(databricksOptionMeta(databricksEnvironmentNames.appPort, false)),
+    lakebaseEndpoint: databricksText("Lakebase endpoint.").meta(
+      databricksOptionMeta(databricksEnvironmentNames.lakebaseEndpoint, false),
+    ),
   })
   .strict()
   .describe("Common Databricks CLI, SDK, Apps, and Lakebase options.");
@@ -133,6 +128,11 @@ export type DatabricksOptions = z.input<typeof DatabricksOptionsSchema>;
 
 /** Key format emitted by {@link serializeOpts}. */
 export type OptionSerializationFormat = "flag" | "env";
+
+/** Prefix every option field while retaining its owning Zod field schemas. */
+export type SubnamedOptionShape<T extends z.ZodRawShape, Prefix extends string> = {
+  [Key in keyof T as Key extends string ? `${Prefix}${Capitalize<Key>}` : never]: T[Key];
+};
 
 interface OptionProperty {
   readonly key: string;
@@ -147,6 +147,41 @@ export function serializeOpts<T extends z.ZodRawShape>(
   values: z.input<z.ZodObject<T>>,
   format: OptionSerializationFormat,
 ): string {
+  return JSON.stringify(serializedOpts(schema, values, format), null, 2);
+}
+
+/** Serialize complete parsed options as a process environment map. */
+export function serializeOptsEnvironment<T extends z.ZodRawShape>(
+  schema: z.ZodObject<T>,
+  values: z.input<z.ZodObject<T>>,
+): Readonly<Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries(serializedOpts(schema, values, "env")).map(([key, value]) => [
+      key,
+      environmentOptionValue(value),
+    ]),
+  );
+}
+
+/** Prefix a reusable option schema so composed CLI flags render as `--<prefix>-<field>`. */
+export function subnameOpts<T extends z.ZodRawShape, Prefix extends string>(
+  schema: z.ZodObject<T>,
+  prefix: Prefix,
+): z.ZodObject<SubnamedOptionShape<T, Prefix>> {
+  const shape = Object.fromEntries(
+    Object.entries(schema.shape).map(([key, field]) => [
+      `${prefix}${key.charAt(0).toUpperCase()}${key.slice(1)}`,
+      field,
+    ]),
+  );
+  return z.object(shape).strict() as z.ZodObject<SubnamedOptionShape<T, Prefix>>;
+}
+
+function serializedOpts<T extends z.ZodRawShape>(
+  schema: z.ZodObject<T>,
+  values: z.input<z.ZodObject<T>>,
+  format: OptionSerializationFormat,
+): Readonly<Record<string, unknown>> {
   const parsed = schema.parse(values) as Readonly<Record<string, unknown>>;
   const entries = optionProperties(schema).flatMap((property) => {
     if (format === "flag" && property.flag === false) return [];
@@ -158,7 +193,7 @@ export function serializeOpts<T extends z.ZodRawShape>(
     const value = parsed[property.key];
     return value === undefined ? [] : [[key, serializedOptionValue(value)] as const];
   });
-  return JSON.stringify(Object.fromEntries(entries), null, 2);
+  return Object.fromEntries(entries);
 }
 
 const optionalText = (description: string, env: string) =>
@@ -192,67 +227,153 @@ export function parseOpts<T extends z.ZodRawShape>(
   ) as Partial<z.output<z.ZodObject<T>>>;
 }
 
-/** Host and TCP port returned by {@link listenAddressSchema}. */
-export interface ListenAddress {
+/** Supported listener transport schemes. */
+export type ListenScheme = "tcp" | "unix";
+
+/** TCP listener returned by {@link listenAddressSchema}. */
+export interface TcpListenAddress {
+  readonly scheme: "tcp";
   readonly host: string;
   readonly port: number;
 }
+
+/** Unix-domain listener returned by {@link listenAddressSchema}. */
+export interface UnixListenAddress {
+  readonly scheme: "unix";
+  readonly path: string;
+}
+
+/** Transport-aware listener address. */
+export type ListenAddress = TcpListenAddress | UnixListenAddress;
 
 /** Defaults and validation policy for {@link listenAddressSchema}. */
 export interface ListenAddressOptions {
   readonly port: number;
   readonly host?: string;
   readonly loopback?: boolean;
+  readonly scheme?: ListenScheme;
+  readonly schemes?: readonly ListenScheme[];
+  readonly withDefault?: boolean;
 }
 
-/** Build a listener address schema accepting a port, `:port`, `host:port`, or object. */
-export function listenAddressSchema(options: ListenAddressOptions) {
-  const defaults: ListenAddress = {
+/** Raw listener input accepted before transport-aware normalization. */
+export type ListenAddressInput = ListenAddress | string | number | undefined;
+
+export function listenAddressSchema(
+  options: ListenAddressOptions & {
+    readonly schemes: readonly ["tcp", "unix"];
+    readonly withDefault: false;
+  },
+): z.ZodType<ListenAddress, unknown>;
+
+export function listenAddressSchema(
+  options: ListenAddressOptions & { readonly schemes: readonly ["tcp", "unix"] },
+): z.ZodDefault<z.ZodType<ListenAddress, unknown>>;
+
+export function listenAddressSchema(
+  options: ListenAddressOptions & { readonly withDefault: false },
+): z.ZodType<TcpListenAddress, unknown>;
+
+export function listenAddressSchema(
+  options: ListenAddressOptions,
+): z.ZodDefault<z.ZodType<TcpListenAddress, unknown>>;
+
+/** Build a transport-aware listener schema. Bare addresses use the configured default scheme. */
+export function listenAddressSchema(
+  options: ListenAddressOptions,
+): z.ZodType<ListenAddress, unknown> | z.ZodDefault<z.ZodType<ListenAddress, unknown>> {
+  const defaults: TcpListenAddress = {
+    scheme: "tcp",
     host: options.host ?? "localhost",
     port: options.port,
   };
-  return z
+  const allowed = new Set<ListenScheme>(options.schemes ?? ["tcp"]);
+  const schema = z
     .preprocess(
-      (value) => parseListenAddress(value, defaults),
-      z
-        .object({
-          host: z.string().trim().toLowerCase().min(1).default(defaults.host),
-          port: tcpPortOrZeroSchema.default(defaults.port),
-        })
-        .strict()
-        .refine(
-          (address) => !options.loopback || isLoopbackHost(address.host),
-          "Listener host must be loopback.",
-        ),
+      (value) => parseListenAddress(value, defaults, options.scheme ?? "tcp"),
+      z.discriminatedUnion("scheme", [
+        z
+          .object({
+            scheme: z.literal("tcp"),
+            host: z.string().trim().toLowerCase().min(1).default(defaults.host),
+            port: tcpPortOrZeroSchema.default(defaults.port),
+          })
+          .strict(),
+        z
+          .object({
+            scheme: z.literal("unix"),
+            path: z.string().trim().min(1),
+          })
+          .strict(),
+      ]),
     )
-    .default(defaults)
-    .describe("Listener host and port.");
+    .refine((address) => allowed.has(address.scheme), "Listener scheme is not allowed.")
+    .refine(
+      (address) => address.scheme !== "tcp" || !options.loopback || isLoopbackHost(address.host),
+      "Listener host must be loopback.",
+    )
+    .describe("TCP or Unix-domain listener address.") as z.ZodType<ListenAddress, unknown>;
+  return options.withDefault === false ? schema : schema.default(defaults);
 }
 
-/** Render a listener address as `host:port`, with IPv6 hosts bracketed. */
+/** Render a listener address as a `tcp://` or `unix://` URL. */
 export function formatListenAddress(address: ListenAddress): string {
+  if (address.scheme === "unix") {
+    return `unix://${address.path.startsWith("/") ? "" : "/"}${address.path}`;
+  }
   const host = address.host.includes(":") ? `[${address.host}]` : address.host;
-  return `${host}:${address.port}`;
+  return `tcp://${host}:${address.port}`;
 }
 
-function parseListenAddress(value: unknown, defaults: ListenAddress): unknown {
-  if (typeof value === "number") return { host: defaults.host, port: value };
+function parseListenAddress(
+  value: unknown,
+  defaults: TcpListenAddress,
+  defaultScheme: ListenScheme,
+): unknown {
+  if (isRecord(value) && value.scheme === undefined) {
+    if (typeof value.host === "string" && value.port !== undefined) {
+      return { ...value, scheme: "tcp" };
+    }
+    if (typeof value.path === "string") {
+      return { ...value, scheme: "unix" };
+    }
+  }
+  if (typeof value === "number") {
+    return defaultScheme === "tcp"
+      ? { scheme: "tcp", host: defaults.host, port: value }
+      : { scheme: "unix", path: String(value) };
+  }
   if (typeof value !== "string") return value;
   const text = value.trim();
-  if (/^\d+$/.test(text)) return { host: defaults.host, port: text };
-  if (/^:\d+$/.test(text)) return { host: defaults.host, port: text.slice(1) };
-  const bracketed = text.match(/^\[([^\]]+)\](?::(\d+))?$/);
-  if (bracketed) {
-    return { host: bracketed[1], port: bracketed[2] ?? defaults.port };
+  if (text.startsWith("unix://")) {
+    const path = text.slice("unix://".length);
+    return { scheme: "unix", path: path.startsWith("/") ? path : `/${path}` };
   }
-  const separator = text.lastIndexOf(":");
-  if (separator > 0 && !text.slice(0, separator).includes(":")) {
+  const tcp = text.startsWith("tcp://") ? text.slice("tcp://".length) : text;
+  if (defaultScheme === "unix" && !text.startsWith("tcp://")) {
+    return { scheme: "unix", path: text };
+  }
+  if (/^\d+$/.test(tcp)) return { scheme: "tcp", host: defaults.host, port: tcp };
+  if (/^:\d+$/.test(tcp)) {
+    return { scheme: "tcp", host: defaults.host, port: tcp.slice(1) };
+  }
+  const bracketed = tcp.match(/^\[([^\]]+)\](?::(\d+))?$/);
+  if (bracketed) {
     return {
-      host: text.slice(0, separator),
-      port: text.slice(separator + 1),
+      scheme: "tcp",
+      host: bracketed[1],
+      port: bracketed[2] ?? defaults.port,
     };
   }
-  return { host: text || defaults.host, port: defaults.port };
+  const separator = tcp.lastIndexOf(":");
+  if (separator > 0 && !tcp.slice(0, separator).includes(":")) {
+    return {
+      scheme: "tcp",
+      host: tcp.slice(0, separator),
+      port: tcp.slice(separator + 1),
+    };
+  }
+  return { scheme: "tcp", host: tcp || defaults.host, port: defaults.port };
 }
 
 function optionProperties(schema: z.ZodObject<z.ZodRawShape>): OptionProperty[] {
@@ -275,10 +396,21 @@ function optionProperties(schema: z.ZodObject<z.ZodRawShape>): OptionProperty[] 
 }
 
 function serializedOptionValue(value: unknown): unknown {
-  if (isRecord(value) && typeof value.host === "string" && typeof value.port === "number") {
-    return formatListenAddress({ host: value.host, port: value.port });
+  if (isRecord(value) && value.scheme === "tcp") {
+    if (typeof value.host === "string" && typeof value.port === "number") {
+      return formatListenAddress({ scheme: "tcp", host: value.host, port: value.port });
+    }
+  }
+  if (isRecord(value) && value.scheme === "unix" && typeof value.path === "string") {
+    return formatListenAddress({ scheme: "unix", path: value.path });
   }
   return value;
+}
+
+function environmentOptionValue(value: unknown): string {
+  if (Array.isArray(value)) return value.map(String).join(",");
+  if (typeof value === "object" && value !== null) return JSON.stringify(value);
+  return String(value);
 }
 
 function optionValues<T extends z.ZodRawShape>(

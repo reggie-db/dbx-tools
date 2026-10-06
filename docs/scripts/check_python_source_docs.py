@@ -17,18 +17,37 @@ class Finding:
     name: str
 
 
+def module_description(module: ast.Module) -> str | None:
+    """Return a conventional docstring or the description immediately after imports."""
+
+    description = ast.get_docstring(module)
+    if description is not None:
+        return description
+    for statement in module.body:
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            continue
+        if (
+            isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and isinstance(statement.value.value, str)
+        ):
+            return statement.value.value
+        return None
+    return None
+
+
 def collect_undocumented(root: Path) -> list[Finding]:
     """Return undocumented handwritten Python declarations under package sources."""
 
     findings: list[Finding] = []
     for source in sorted((root / "packages" / "py").glob("*/src/**/*.py")):
         if any(
-            part in {"generated", "_generated", "_upstream", "__pycache__"}
+            part in {"generated", "_generated", "__pycache__"}
             for part in source.parts
         ):
             continue
         module = ast.parse(source.read_text(), filename=str(source))
-        if source.name != "__init__.py" and ast.get_docstring(module) is None:
+        if source.name != "__init__.py" and module_description(module) is None:
             findings.append(Finding(source, 1, "<module>"))
         for declaration in module.body:
             if not isinstance(declaration, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):

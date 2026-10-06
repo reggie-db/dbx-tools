@@ -1,3 +1,7 @@
+/**
+ * Composable, runtime-safe predicates for selecting Projen projects by type,
+ * package identity, tags, and repository path.
+ */
 import { relative } from "node:path";
 import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
 import {
@@ -19,9 +23,9 @@ import type { DBXToolsProject } from "./project.ts";
  *
  * Uses projen's own `Project.isProject` rather than `instanceof`. It tests for
  * `Symbol.for("projen.Project")`, which every `Project` constructor stamps on
- * itself, so it still matches when a construct came from a SECOND resolved copy
- * of projen - the engine pins its own `projen` dependency separately from the
- * consuming root's, which is exactly the case `instanceof` fails silently.
+ * itself, so it still matches if an invalid consumer install resolves a second
+ * Projen copy despite the engine's peer dependency. An `instanceof` guard would
+ * silently reject that construct before the install problem can be diagnosed.
  */
 export function isProject(): Predicate<IConstruct, Project> {
   return predicate.create((c: IConstruct): c is Project => Project.isProject(c));

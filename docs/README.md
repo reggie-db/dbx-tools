@@ -36,20 +36,17 @@ history belong in contributor instructions, not package product guides.
 
 CLI READMEs end with command references derived from their parsers. Commander
 provides the exact help text for every visible subcommand, including global
-options, defaults, choices, and environment variables. Cyclopts generates the
-Python Graphiti reference and the options forwarded by the Bun launcher.
-Built-in help commands and flags are excluded.
+options, defaults, choices, and environment variables. Built-in help commands
+and flags are excluded.
 
 ```sh
-python3 -m pip install -r docs/requirements.txt
 bun run docs:cli
 bun run docs:check-readmes
 ```
 
-The generator uses the repository's `.venv/bin/python` when available, or
-`PYTHON` / `python3`. Edit descriptions and options in the owning parser, then
-regenerate. Keep task-oriented guidance outside the `cli-reference` markers;
-do not edit generated sections or maintain separate flag tables. Documentation
+Edit descriptions and options in the owning parser, then regenerate. Keep
+task-oriented guidance outside the `cli-reference` markers; do not edit
+generated sections or maintain separate flag tables. Documentation
 validation and the release docs workflow reject stale references.
 
 ## Docs site

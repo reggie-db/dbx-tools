@@ -1,9 +1,9 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
-import { Component, License, TextFile, type Project, javascript, python } from "projen";
+import { Component, License, TextFile, type Project, github, javascript, python } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
-import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
+import { LICENSE, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { PythonNodeBundle, type PythonNodeBindingsOptions } from "./python-node-bundle.ts";
@@ -29,17 +29,17 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly directory: string;
   readonly name?: string;
   readonly module?: string;
-  /** Python import root. Defaults to `generated-src` for generated packages, otherwise `src`. */
+  /** Python source root passed to uv_build. Defaults to `src`. */
   readonly moduleRoot?: string;
   readonly description: string;
   readonly dependencies?: readonly string[];
   /** Workspace package directories rendered as standalone Git dependencies. */
   readonly internalDependencies?: readonly string[];
   readonly scripts?: Readonly<Record<string, string>>;
+  /** GitHub environment used to publish this distribution to PyPI. */
+  readonly releaseEnvironment?: string;
   /** One or more build-time Node packages embedded through PythonMonkey. */
   readonly nodeBindings?: OneOrMany<PythonNodeBindingsOptions>;
-  /** Generated source files excluded from strict static analysis. Package-relative. */
-  readonly generatedSources?: readonly string[];
 }
 
 interface ResolvedPythonPackageOptions extends PythonPackageOptions {
@@ -59,8 +59,6 @@ export interface DBXToolsPythonProjectOptions extends DBXToolsProjectOptions {
 
 /** Python release workflow configuration. */
 export interface PythonReleaseOptions {
-  /** GitHub environment by Python distribution name. Defaults to `pypi-<name>`. */
-  readonly environments?: Readonly<Record<string, string>>;
   readonly environmentUrl?: string;
 }
 
@@ -90,8 +88,6 @@ export interface DBXToolsPythonWorkspaceOptions {
   /** Repository-relative paths Ruff must not lint or format. */
   readonly ruffExcludes?: readonly string[];
   readonly ruffPerFileIgnores?: Readonly<Record<string, readonly string[]>>;
-  /** Generated Python implementation files Pyrefly should resolve but not type-check. */
-  readonly pyreflyProjectExcludes?: readonly string[];
   readonly interpreterPath?: string | false;
   readonly release?: boolean | PythonReleaseOptions;
 }
@@ -102,6 +98,72 @@ const DEFAULT_DEV_DEPENDENCIES = [
   "pyyaml>=6.0,<7",
   "ruff>=0.12,<1",
 ] as const;
+const DEFAULT_RUFF_TARGET = "py310";
+const RELEASE_SETUP_CONDITION =
+  "${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' || steps.release.outputs.pypi == 'true' }}";
+
+/** Convert Ruff's `py311` target spelling to the setup-python `3.11` spelling. */
+function pythonVersionFromRuffTarget(target: string): string {
+  const match = /^py(\d)(\d{1,2})$/.exec(target);
+  if (!match) throw new Error(`Cannot derive a workflow Python version from Ruff target ${target}`);
+  return `${match[1]}.${match[2]}`;
+}
+
+/** Python and uv setup steps, optionally gated by a workflow expression. */
+function pythonSetupSteps(pythonVersion: string, condition?: string): JobStep[] {
+  return [
+    {
+      name: "Setup Python",
+      uses: github.ActionRefs.ACTIONS_SETUP_PYTHON,
+      ...(condition ? { if: condition } : {}),
+      with: { "python-version": pythonVersion },
+    },
+    {
+      ...uvSetupStep(),
+      ...(condition ? { if: condition } : {}),
+    },
+  ];
+}
+
+/** Materialize Projen's lazily rendered native build steps before extending them. */
+function resolvedJobSteps(job: Job): JobStep[] {
+  const steps = (job as unknown as { steps: JobStep[] | (() => JobStep[]) }).steps;
+  return typeof steps === "function" ? steps() : steps;
+}
+
+function missingSetupSteps(job: Job, setupSteps: readonly JobStep[]): JobStep[] {
+  const actionName = (step: JobStep): string | undefined => step.uses?.split("@", 1)[0];
+  const existing = new Set(resolvedJobSteps(job).map(actionName));
+  return setupSteps.filter((step) => !existing.has(actionName(step)));
+}
+
+/**
+ * Ensure Python and uv are available before validation, docs, and packaging.
+ *
+ * The Python workspace owns these prerequisites. Existing action steps are
+ * reused so repository-specific setup can override a version without causing a
+ * duplicate installation.
+ */
+function withPythonBuildSetup(job: Job, pythonVersion: string): Job {
+  const setupSteps = missingSetupSteps(
+    job,
+    pythonSetupSteps(pythonVersion, RELEASE_SETUP_CONDITION),
+  );
+  if (setupSteps.length === 0) return job;
+  const steps = resolvedJobSteps(job);
+  const verificationIndex = steps.findIndex((step) => step.name === "Verify release context");
+  const validationIndex = steps.findIndex((step) => step.name?.startsWith("Validate "));
+  const insertionIndex =
+    verificationIndex >= 0
+      ? verificationIndex + 1
+      : validationIndex < 0
+        ? steps.length
+        : validationIndex;
+  return {
+    ...job,
+    steps: [...steps.slice(0, insertionIndex), ...setupSteps, ...steps.slice(insertionIndex)],
+  };
+}
 
 /** Repository-relative path for a Python package directory. */
 export function pythonPackagePath(repository: PythonRepositoryOptions, directory: string): string {
@@ -131,7 +193,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
       authorEmail: "",
       version: options.version,
       description: pkg.description,
-      license: DBX_TOOLS_LICENSE,
+      license: LICENSE,
       github: false,
       sample: false,
       pytest: false,
@@ -171,7 +233,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
         },
       },
     });
-    new License(this, { spdx: DBX_TOOLS_LICENSE });
+    new License(this, { spdx: LICENSE });
     this.packageOptions = pkg;
     if (!(this.packagingManager instanceof python.Uv)) {
       throw new Error(`Expected uv packaging for ${pkg.name}`);
@@ -202,12 +264,19 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
 /**
  * Generates a root uv workspace, projen-native Python member projects, Python
  * tasks, editor interpreter selection, and an optional publishing workflow.
+ *
+ * Native `PythonProject` and `PyprojectTomlFile` continue to own each package
+ * and TOML rendering. This component owns only the unsupported remainder:
+ * attaching several uv members to an existing JavaScript root and adding their
+ * dependency-ordered artifacts to the repository's shared tag release.
  */
 export class DBXToolsPythonWorkspace extends Component {
   readonly packages: readonly DBXToolsPythonProject[];
   readonly repository: Required<PythonRepositoryOptions>;
   readonly requiresPython: string;
   readonly version: string;
+  /** Exact Python version used by the shared release build. */
+  readonly workflowPythonVersion: string;
   readonly file: python.PyprojectTomlFile;
 
   constructor(project: javascript.NodeProject, options: DBXToolsPythonWorkspaceOptions) {
@@ -250,6 +319,9 @@ export class DBXToolsPythonWorkspace extends Component {
     }));
     const resolvedOptions = { ...options, packages };
     this.requiresPython = options.requiresPython ?? ">=3.10";
+    this.workflowPythonVersion = pythonVersionFromRuffTarget(
+      options.ruffTarget ?? DEFAULT_RUFF_TARGET,
+    );
     this.version = readWorkspaceVersion(project.outdir);
     this.file = this.emitWorkspace(project, resolvedOptions, scope);
     this.packages = packages.map(
@@ -285,10 +357,11 @@ export class DBXToolsPythonWorkspace extends Component {
       `${this.repository.root}/**/dist/`,
     );
     this.addTasks(project, resolvedOptions);
+    this.addBuildWorkflowSetup(project);
 
     const configuredReleaseOptions = options.release === true ? {} : options.release || {};
     const releaseOptions = { ...configuredReleaseOptions };
-    this.addTrustedPublisherInstructionsTask(project, releaseOptions);
+    this.addTrustedPublisherInstructionsTask(project);
 
     const interpreterPath = options.interpreterPath ?? "${workspaceFolder}/.venv/bin/python";
     if (interpreterPath !== false) {
@@ -338,7 +411,7 @@ export class DBXToolsPythonWorkspace extends Component {
           },
         },
         ruff: {
-          "target-version": options.ruffTarget ?? "py310",
+          "target-version": options.ruffTarget ?? DEFAULT_RUFF_TARGET,
           "line-length": 100,
           lint: {
             "per-file-ignores": perFileIgnores,
@@ -360,18 +433,6 @@ export class DBXToolsPythonWorkspace extends Component {
     if (ruffExcludes.length) {
       file.addOverride("tool.ruff.exclude", [...new Set(ruffExcludes)]);
     }
-    file.addOverride("tool.pyrefly.ignore-errors-in-generated-code", true);
-    const projectExcludes = [
-      ...(options.pyreflyProjectExcludes ?? []),
-      ...options.packages.flatMap((pkg) =>
-        [...(pkg.generatedSources ?? []), ...pythonNodeGeneratedSources(pkg)].map(
-          (source) => `${this.repository.root}/${pkg.directory}/${source}`,
-        ),
-      ),
-    ];
-    if (projectExcludes.length) {
-      file.addOverride("tool.pyrefly.project-excludes", [...new Set(projectExcludes)]);
-    }
     file.addOverride(
       "tool.uv.sources",
       Object.fromEntries(options.packages.map((pkg) => [pkg.name, { workspace: true }])),
@@ -390,10 +451,11 @@ export class DBXToolsPythonWorkspace extends Component {
       exec: "uv run pytest",
       description: "Run Python workspace tests",
     });
-    project.addTask("py:lint", {
+    const lint = project.addTask("py:lint", {
       exec: `uv run ruff check ${lintPaths.join(" ")}`,
       description: "Lint Python workspace packages",
     });
+    lint.exec(`uv run ruff format --check ${lintPaths.join(" ")}`);
     project.addTask("py:format", {
       exec: `uv run ruff format ${lintPaths.join(" ")}`,
       description: "Format Python workspace packages",
@@ -404,19 +466,37 @@ export class DBXToolsPythonWorkspace extends Component {
     });
   }
 
+  /** Add Python prerequisites to Projen's native build workflow when enabled. */
+  private addBuildWorkflowSetup(project: javascript.NodeProject): void {
+    const workflow = project.buildWorkflow?.workflow;
+    const jobId = project.buildWorkflowJobId;
+    if (!workflow || !jobId) return;
+    const job = workflow.getJob(jobId) as Job | undefined;
+    if (!job) return;
+    const setupSteps = missingSetupSteps(job, pythonSetupSteps(this.workflowPythonVersion));
+    if (setupSteps.length === 0) return;
+    const steps = resolvedJobSteps(job);
+    const buildIndex = steps.findIndex((step) => step.name === "build");
+    const insertionIndex = buildIndex < 0 ? steps.length : buildIndex;
+    workflow.updateJob(jobId, {
+      ...job,
+      steps: [...steps.slice(0, insertionIndex), ...setupSteps, ...steps.slice(insertionIndex)],
+    });
+  }
+
   private addReleaseWorkflow(project: javascript.NodeProject, options: PythonReleaseOptions): void {
     if (!project.github || !isDBXToolsJavaScriptProject()(project)) return;
-    const publications = this.publications(options);
+    const publications = this.publications();
     const allPublications = publications;
     if (allPublications.length === 0) return;
     const workflow = tryReleaseWorkflow(project);
     if (!workflow) {
       throw new Error("Python release requires the root dbx-tools release mode");
     }
-    const build = workflow.getJob("build-release") as Job | undefined;
-    if (!build) throw new Error("Python release requires the shared release build job");
+    const configuredBuild = workflow.getJob("build-release") as Job | undefined;
+    if (!configuredBuild) throw new Error("Python release requires the shared release build job");
+    const build = withPythonBuildSetup(configuredBuild, this.workflowPythonVersion);
     const pythonSteps: JobStep[] = [
-      uvSetupStep(),
       {
         name: "Build Python distributions",
         env: { RELEASE_VERSION: "${{ steps.release.outputs.release_version }}" },
@@ -429,7 +509,7 @@ export class DBXToolsPythonWorkspace extends Component {
       },
       ...allPublications.map((publication) => ({
         name: `Upload ${publication.distribution} distributions`,
-        uses: "actions/upload-artifact@v4",
+        uses: github.ActionRefs.ACTIONS_UPLOAD_ARTIFACT,
         with: {
           name: `release-python-${publication.directory}`,
           path: `.release/python/${publication.directory}`,
@@ -464,7 +544,7 @@ export class DBXToolsPythonWorkspace extends Component {
         steps: [
           {
             name: `Download ${publication.distribution} distributions`,
-            uses: "actions/download-artifact@v4",
+            uses: github.ActionRefs.ACTIONS_DOWNLOAD_ARTIFACT,
             with: {
               name: `release-python-${publication.directory}`,
               path: `dist/${publication.directory}`,
@@ -475,7 +555,6 @@ export class DBXToolsPythonWorkspace extends Component {
             uses: "pypa/gh-action-pypi-publish@release/v1",
             with: {
               "packages-dir": `dist/${publication.directory}`,
-              "skip-existing": true,
             },
           },
         ],
@@ -484,22 +563,18 @@ export class DBXToolsPythonWorkspace extends Component {
     refreshReleaseDocsDependencies(project);
   }
 
-  private publications(options: PythonReleaseOptions): readonly PythonPublication[] {
+  private publications(): readonly PythonPublication[] {
     return this.packages.map((pkg) => ({
       directory: pkg.packageOptions.directory,
       distribution: pkg.packageOptions.name,
-      environment:
-        options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
+      environment: pkg.packageOptions.releaseEnvironment ?? `pypi-${pkg.packageOptions.name}`,
       dependencies: pkg.packageOptions.internalDependencies,
     }));
   }
 
-  private addTrustedPublisherInstructionsTask(
-    project: javascript.NodeProject,
-    options: PythonReleaseOptions,
-  ): void {
+  private addTrustedPublisherInstructionsTask(project: javascript.NodeProject): void {
     const repository = this.githubRepository();
-    const publications = this.publications(options);
+    const publications = this.publications();
     const releaseTag =
       isDBXToolsJavaScriptProject()(project) && tryReleaseWorkflow(project)
         ? releaseTagPattern(project)
@@ -579,7 +654,7 @@ export class DBXToolsPythonWorkspace extends Component {
       lines: stringUtils.dedent(
         // ============================================================================
         /*js*/`
-          #!/usr/bin/env node
+          #!/usr/bin/env bun
           import { parseArgs } from "node:util";
 
           const { values } = parseArgs({
@@ -600,7 +675,7 @@ export class DBXToolsPythonWorkspace extends Component {
     });
     project.root.addTask("pypiTrustedPublisherInstructions", {
       description: "Print system-browser instructions for PyPI trusted publishers",
-      exec: `node ${helper}`,
+      exec: `bun ${helper}`,
       receiveArgs: true,
     });
   }

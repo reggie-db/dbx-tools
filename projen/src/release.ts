@@ -1,4 +1,15 @@
-/** Unified default-branch release workflow generation. */
+/**
+ * Unified annotated-tag release workflow generation.
+ *
+ * Projen's native `Release` owns a different lifecycle: it calculates versions
+ * from commits, generates changelogs and GitHub Releases, and publishes Publib's
+ * ecosystem-specific artifact tree from branch workflows. This repository
+ * instead creates one reviewed `VERSION` commit and annotated `v*` tag locally,
+ * requires that tag to equal `origin/main`, omits GitHub Releases, and builds
+ * npm, Python, and documentation artifacts once before isolated publication
+ * jobs download them. `DBXToolsRelease` therefore remains separate while native
+ * workflow and project primitives own the YAML model and setup steps.
+ */
 import { stringUtils } from "@dbx-tools/shared-core";
 import { Component, github } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
@@ -40,6 +51,8 @@ export interface DBXToolsReleaseOptions {
   readonly validationTasks?: readonly string[];
   /** Repository prerequisites installed before release validation and artifact builds. */
   readonly setupSteps?: readonly JobStep[];
+  /** Repository-specific synthesis commands run before the root Projen synthesis check. */
+  readonly synthesisCommands?: readonly string[];
 }
 
 /** Locate the unified workflow when release generation is enabled. */
@@ -76,12 +89,12 @@ export function nodeReleaseSetupSteps(): readonly JobStep[] {
   return [
     {
       name: "Setup Bun",
-      uses: "oven-sh/setup-bun@v2",
+      uses: github.ActionRefs.OVEN_SH_SETUP_BUN,
       with: { "bun-version": BUN_VERSION },
     },
     {
       name: "Setup Node.js",
-      uses: "actions/setup-node@v6",
+      uses: github.ActionRefs.ACTIONS_SETUP_NODE,
       with: {
         "node-version": NODE_VERSION,
         "registry-url": NPM_REGISTRY_URL,
@@ -140,7 +153,6 @@ function releaseBuildJob(
     permissions: { contents: JobPermission.READ },
     timeoutMinutes: 60,
     env: {
-      BUN_VERSION,
       CI: "true",
       ...(options.docs
         ? { DOCS_SITE_URL: options.docs.siteUrl, DOCS_BASE: options.docs.base ?? "/" }
@@ -162,7 +174,7 @@ function releaseBuildJob(
           fetchDepth: 0,
         },
       }),
-      ...project.renderWorkflowSetup({ mutable: false }),
+      ...project.renderWorkflowSetup({ mutable: true }),
       {
         name: "Verify release context",
         id: "release",
@@ -192,6 +204,15 @@ function releaseBuildJob(
           // ============================================================================
         ),
       },
+      {
+        name: "Verify generated sources",
+        run: [
+          ...(options.synthesisCommands ?? []),
+          "bunx projen",
+          "git diff --ignore-space-at-eol --exit-code",
+        ].join("\n"),
+      },
+      { name: "Verify workspace versions", run: "bun run version:check" },
       ...(options.setupSteps ?? []),
       ...releaseBuildSteps(
         "validation",
@@ -214,7 +235,7 @@ function releaseBuildJob(
             },
             {
               name: "Upload npm archives",
-              uses: "actions/upload-artifact@v4",
+              uses: github.ActionRefs.ACTIONS_UPLOAD_ARTIFACT,
               with: { name: "release-npm", path: ".release/npm", "if-no-files-found": "error" },
             },
           ])),
@@ -243,11 +264,11 @@ function nodePublishJob(): Job {
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
     timeoutMinutes: 30,
-    env: { BUN_VERSION, CI: "true" },
+    env: { CI: "true" },
     steps: [
       {
         name: "Download npm archives",
-        uses: "actions/download-artifact@v4",
+        uses: github.ActionRefs.ACTIONS_DOWNLOAD_ARTIFACT,
         with: { name: "release-npm", path: ".release/npm" },
       },
       ...nodeReleaseSetupSteps(),
@@ -295,7 +316,7 @@ export class DBXToolsRelease extends Component {
     super(project);
     project.addGitIgnore(".release/");
     const installCondition =
-      "node -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\"";
+      "bun -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\"";
     project.package.installTask.addCondition(installCondition);
     project.package.installCiTask.addCondition(installCondition);
     const tagPrefix = options.tagPrefix ?? "v";

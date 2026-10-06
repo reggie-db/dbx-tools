@@ -74,16 +74,16 @@ dbx auth [options] [command]
 
 #### Options
 
-| Option                        | Description                                                                                                    |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `--profile <value>`           | Databricks CLI profile. (env: DATABRICKS_CONFIG_PROFILE)                                                       |
-| `--scopes <value>`            | OAuth scopes. (default: [], env: SCOPES)                                                                       |
-| `--target <value>`            | OAuth target. (choices: "workspace", "account", "unified", env: TARGET)                                        |
-| `--lock-timeout-ms <value>`   | Credential lock timeout in milliseconds. (default: 0, env: LOCK_TIMEOUT_MS)                                    |
-| `--login-timeout-ms <value>`  | Browser login timeout in milliseconds. (default: 900000, env: LOGIN_TIMEOUT_MS)                                |
-| `--refresh-buffer-ms <value>` | Token refresh buffer in milliseconds. (default: 300000, env: REFRESH_BUFFER_MS)                                |
-| `--prefer-user-to-machine`    | Prefer a matching user profile over selected machine credentials. (default: true, env: PREFER_USER_TO_MACHINE) |
-| `--no-prefer-user-to-machine` | Disable prefer a matching user profile over selected machine credentials.                                      |
+| Option                        | Description                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `--profile <value>`           | Databricks CLI profile. (env: DATABRICKS_CONFIG_PROFILE)                                                                 |
+| `--scopes <value>`            | OAuth scopes. (default: [], env: DBX_TOOLS_SCOPES)                                                                       |
+| `--target <value>`            | OAuth target. (choices: "workspace", "account", "unified", env: DBX_TOOLS_TARGET)                                        |
+| `--lock-timeout-ms <value>`   | Credential lock timeout in milliseconds. (default: 0, env: DBX_TOOLS_LOCK_TIMEOUT_MS)                                    |
+| `--login-timeout-ms <value>`  | Browser login timeout in milliseconds. (default: 900000, env: DBX_TOOLS_LOGIN_TIMEOUT_MS)                                |
+| `--refresh-buffer-ms <value>` | Token refresh buffer in milliseconds. (default: 300000, env: DBX_TOOLS_REFRESH_BUFFER_MS)                                |
+| `--prefer-user-to-machine`    | Prefer a matching user profile over selected machine credentials. (default: true, env: DBX_TOOLS_PREFER_USER_TO_MACHINE) |
+| `--no-prefer-user-to-machine` | Disable prefer a matching user profile over selected machine credentials.                                                |
 
 #### Commands
 
@@ -113,12 +113,12 @@ dbx auth token [options]
 
 #### Options
 
-| Option               | Description                                                                 |
-| -------------------- | --------------------------------------------------------------------------- |
-| `--force-refresh`    | Refresh the token before returning it. (default: false, env: FORCE_REFRESH) |
-| `--no-force-refresh` | Disable refresh the token before returning it.                              |
-| `--login`            | Log in when credentials are missing or invalid. (default: true, env: LOGIN) |
-| `--no-login`         | Disable log in when credentials are missing or invalid.                     |
+| Option               | Description                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| `--force-refresh`    | Refresh the token before returning it. (default: false, env: DBX_TOOLS_FORCE_REFRESH) |
+| `--no-force-refresh` | Disable refresh the token before returning it.                                        |
+| `--login`            | Log in when credentials are missing or invalid. (default: true, env: DBX_TOOLS_LOGIN) |
+| `--no-login`         | Disable log in when credentials are missing or invalid.                               |
 
 ### `dbx auth profile`
 

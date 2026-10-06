@@ -21,7 +21,6 @@
   "devDependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/projen": "workspace:^",
-    "@dbx-tools/test-polyglot": "workspace:^",
     "@types/node": "catalog:",
     "typescript": "^5.9.3",
     "vitest": "catalog:"

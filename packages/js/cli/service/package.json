@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/cli-service",
-  "description": "Cross-platform service lifecycle and system tray menus for CLIs",
+  "description": "Cross-platform service lifecycle, uv Python runtimes, and system tray menus for CLIs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",

@@ -8,7 +8,6 @@ const result = await Bun.build({
   format: "iife",
   minify: true,
   target: "browser",
-  write: false,
 });
 
 if (!result.success || result.outputs.length !== 1) {

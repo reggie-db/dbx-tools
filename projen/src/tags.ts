@@ -34,7 +34,7 @@ const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   types: ["node"],
 };
 
-/** The DOM-capable lib list shared by the browser tags (`ui`, `openapi`). */
+/** DOM-capable libraries shared by browser packages. */
 const DOM_LIB = ["ES2022", "DOM", "DOM.Iterable"];
 
 function removeNodeTypes(project: javascript.NodeProject): void {
@@ -163,15 +163,11 @@ export const PACKAGE_TAG_MIXINS = {
     addPackageFiles(p, "bin");
   }),
   server: create(projectPredicate.hasTag("server"), (p) => {
-    // A Node/Express service. tsoa's decorators (@Route/@Get/...) also drive
-    // the `openapi` task (spec + client); experimentalDecorators lets them
-    // type-check. `dev`/`start` run the app's `src/server.ts` with tsx.
-    p.addDeps("express@catalog:", "tsoa@catalog:");
+    // A Node/Express service. `dev` and `start` run `src/server.ts` directly
+    // through Bun, while package compilation remains native TypeScript.
+    p.addDeps("express@catalog:");
     p.addDevDeps("@types/node@catalog:", "@types/express@catalog:");
-    applyCompilerOptions(p, {
-      ...NODE_COMPILER_OPTIONS,
-      experimentalDecorators: true,
-    });
+    applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
     // bun runs the server `.ts` directly (native TS, no tsx). `--watch` restarts
     // on change - the tsx-watch replacement.
     (p.tasks.tryFind("dev") ?? p.addTask("dev")).reset("bun --watch src/server.ts");
@@ -184,12 +180,6 @@ export const PACKAGE_TAG_MIXINS = {
   shared: create(projectPredicate.hasTag("shared"), (p) => {
     removeNodeTypes(p);
     applyCompilerOptions(p, AGNOSTIC_COMPILER_OPTIONS);
-  }),
-  openapi: create(projectPredicate.hasTag("openapi"), (p) => {
-    removeNodeTypes(p);
-    p.addDeps("openapi-fetch@catalog:");
-    applyCompilerOptions(p, { target: "ES2022", lib: [...DOM_LIB], types: [] });
-    addPackageFiles(p, "openapi.json");
   }),
 } satisfies Record<string, ConstructsMixin>;
 

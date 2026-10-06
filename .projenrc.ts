@@ -1,10 +1,8 @@
 /**
- * projen definition. `new DBXToolsNodeProject(...)` constructs the monorepo root
- * and, from its `packageRoots`, scans + attaches a
- * `DBXToolsTypeScriptProject` per `src`-bearing package folder at any depth under
- * `packages/js/`. The engine itself is dogfooded as a normal auto-discovered `cli`
- * package at `packages/js/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
- * it from the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
+ * `DBXToolsNodeProject` discovers source packages under `packages/js` and
+ * `packages/example`. The published CLI at `packages/js/cli/dbx-tools` resolves
+ * to `@dbx-tools/cli`; the self-synthesizing `@dbx-tools/projen` engine lives in
+ * `projen/` and joins the Bun workspace through `extraWorkspaceMembers`.
  *
  * The runnable sample app lives under `packages/example/` and is synthesized as
  * part of this workspace alongside the published packages it consumes.
@@ -17,16 +15,17 @@
  */
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { bunWorkflow, project, projectJs, workspaceVersion } from "@dbx-tools/projen";
-import { Component, DependencyType, javascript, TextFile } from "projen";
+import { bunWorkflow, project, projectJs } from "@dbx-tools/projen";
+import { Component, javascript } from "projen";
 
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
 const PYTHON_ROOT = "packages/py";
+const GRAPHITI_COMMIT = "2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066";
 
 /** Copy canonical branding into published package trees after synthesis. */
 class BrandPackageAssets extends Component {
-  /** Refresh crate-local and UI package brand copies after generated manifests are available. */
+  /** Refresh package-local brand copies after generated manifests are available. */
   public override postSynthesize(): void {
     execFileSync("bun", [resolve(this.project.outdir, "branding/generate-package-assets.mjs")], {
       stdio: "inherit",
@@ -42,31 +41,74 @@ const root = new project.DBXToolsNodeProject({
   scope: SCOPE,
   // `packages/js` is the JavaScript product tree; `packages/example` holds the
   // runnable demo app as `workspace:^` source siblings of the packages it uses.
-  packageRoots: ["packages/js", "packages/test", "packages/example"],
-  resolvePackageName: (pkg, defaultPackageName) =>
-    pkg.relPath === "cli/dbx-tools" ? `@${SCOPE}/cli` : defaultPackageName,
-  packageTagPaths: { polyglot: ["node"] },
+  packageRoots: ["packages/js", "packages/example"],
+  resolvePackageOptions: (pkg, defaults) => {
+    if (pkg.memberPath === "packages/js/cli/dbx-tools") {
+      return { ...defaults, name: `@${SCOPE}/cli` };
+    }
+    if (pkg.memberPath === "packages/example/server/appkit-demo") {
+      return {
+        ...defaults,
+        name: `@${SCOPE}/demo-appkit-server`,
+        entrypoint: "src/server.ts",
+        publishable: false,
+      };
+    }
+    if (pkg.memberPath === "packages/example/app/appkit-demo") {
+      return { ...defaults, name: `@${SCOPE}/demo-appkit-app`, publishable: false };
+    }
+    return defaults;
+  },
+  // Product runtime pins are known at construction and belong to the native
+  // workspace options. Late catalog mutation is reserved for package mixins.
+  catalog: {
+    marked: "^18.0.5",
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "@mastra/core": "1.71.0",
+    "@mastra/ai-sdk": "1.10.5",
+    "@mastra/express": "1.5.15",
+    "@mastra/fastembed": "1.3.2",
+    "@mastra/mcp": "2.1.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@mastra/memory": "1.32.1",
+    "@mastra/observability": "1.18.1",
+    "@mastra/otel-bridge": "1.5.11",
+    "@mastra/pg": "1.27.1",
+    "@pydantic/monty": "0.0.23",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/core": "2.11.0",
+    "@opentelemetry/sdk-trace-base": "2.8.0",
+    "@opentelemetry/sdk-trace-node": "2.8.0",
+    "http-proxy-3": "^1.23.1",
+    "better-auth": "1.7.6",
+    "@better-auth/passkey": "1.7.6",
+    "@simplewebauthn/browser": "13.3.0",
+    "better-call": "1.4.0",
+    "env-paths": "^4.0.0",
+    "cacache": "^21.0.1",
+    "tailwindcss": "^4.3.2",
+    "tw-animate-css": "^1.4.0",
+    "lucide-react": "^0.554.0",
+    "react-router-dom": "^7.6.2",
+    "streamdown": "^2.5.0",
+    "@mastra/client-js": "1.50.0",
+    "vitest": "3.2.4",
+    "@tanstack/react-table": "^8.21.3",
+    "ai": "^5.0.0",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.2",
+    "shiki": "^3.0.0",
+    "sql-formatter": "^15.6.9",
+    "systray2": "^2.1.4",
+    "adaptivecards": "^3.0.5",
+  },
   github: true,
-  githubOptions: { pullRequestLint: false },
-  buildWorkflow: false,
-  releaseSetupSteps: [
-    {
-      name: "Setup Python",
-      uses: "actions/setup-python@v6",
-      if: "${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' || steps.release.outputs.pypi == 'true' }}",
-      with: { "python-version": "3.11" },
-    },
-    {
-      name: "Install CLI documentation parser",
-      if: "${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' }}",
-      run: "python -m pip install -r docs/requirements.txt",
-    },
-    {
-      name: "Setup validation uv",
-      uses: "astral-sh/setup-uv@v7",
-      if: "${{ steps.release.outputs.validation == 'true' || steps.release.outputs.pypi == 'true' }}",
-    },
-  ],
+  githubOptions: { mergify: false, pullRequestLint: false },
+  autoMerge: false,
+  buildWorkflow: true,
+  buildWorkflowOptions: { mutableInstall: true },
+  releaseSynthesisCommands: ["bun --cwd projen .projenrc.ts"],
   releaseDocs: {
     siteUrl: "https://docs.dbx.tools",
     base: "/",
@@ -96,12 +138,14 @@ const root = new project.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
-  releaseValidationTasks: ["docs:check-source", "docs:check-readmes", "py:lint", "py:test"],
+  releaseValidationTasks: ["test", "docs:check-source", "docs:check-readmes"],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:^` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
-  syncResynthPaths: ["branding/brand.yaml", "branding/assets"],
+  // This root consumes the workspace-local engine source, so generator edits
+  // must resynthesize the product tree just like root configuration changes.
+  syncResynthPaths: ["branding/brand.yaml", "branding/assets", "projen/src"],
   // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
   // workspace, so it links from source via `workspace:^`. `.projenrc.ts` imports it
   // by source path either way.
@@ -109,9 +153,11 @@ const root = new project.DBXToolsNodeProject({
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/projen@workspace:^",
+    "commander@catalog:",
+    "concurrently@^10.0.3",
+    "yaml@^2.9.0",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
-    "ts-to-zod@5.1.0",
     "zod@catalog:",
   ],
 });
@@ -120,14 +166,14 @@ const sourceDocs = root.addTask("docs:check-source", {
   description: "Reject new undocumented public TypeScript exports",
 });
 sourceDocs.exec("bun docs/scripts/check-source-docs.mjs");
+root.testTask.exec("bun test docs/scripts");
 
 const readmeDocs = root.addTask("docs:check-readmes", {
   description: "Validate and generate documentation from package READMEs",
 });
-readmeDocs.exec("bun test docs/scripts/cli-reference.test.mjs");
 readmeDocs.exec("bun docs/scripts/sync-cli-readmes.mjs --check");
 readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
-readmeDocs.exec("bun docs/scripts/generate-agent-skill.mjs");
+readmeDocs.exec("bun docs/scripts/generate-agent-skill.mjs --check");
 
 root.addTask("docs:cli", {
   description: "Update package README command references from their CLI parsers",
@@ -156,95 +202,11 @@ root.gitignore.addPatterns(
   ".home/",
   ".kanna/",
   "**/.logs/",
-  "!projen/shims/python-node/",
-  "!projen/shims/python-node/**",
 );
-
-// ---------------------------------------------------------------------------
-// pnpm workspace: build-script allowances + version overrides
-// ---------------------------------------------------------------------------
-root.pnpmWorkspace?.allowBuild("@google/genai");
-// Catalog pins for the app add-on runtime deps (not engine toolchain): the
-// email add-on's markdown renderer and the Mastra agent framework the tools
-// build on.
-root.pnpmWorkspace?.addCatalog("marked", "^18.0.5");
-root.pnpmWorkspace?.addCatalog("@react-email/components", "^1.0.12");
-root.pnpmWorkspace?.addCatalog("@react-email/render", "^2.1.0");
-root.pnpmWorkspace?.addCatalog("@mastra/core", "1.71.0");
-root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "1.10.5");
-root.pnpmWorkspace?.addCatalog("@mastra/express", "1.5.15");
-root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "1.3.2");
-root.pnpmWorkspace?.addCatalog("@mastra/mcp", "2.1.0");
-root.pnpmWorkspace?.addCatalog("@modelcontextprotocol/sdk", "^1.29.0");
-root.pnpmWorkspace?.addCatalog("@mastra/memory", "1.32.1");
-root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.18.1");
-root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.11");
-root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.27.1");
-root.pnpmWorkspace?.addCatalog("@pydantic/monty", "0.0.23");
-root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
-root.pnpmWorkspace?.addCatalog("@opentelemetry/core", "2.11.0");
-root.pnpmWorkspace?.addCatalog("@opentelemetry/sdk-trace-base", "2.8.0");
-root.pnpmWorkspace?.addCatalog("@opentelemetry/sdk-trace-node", "2.8.0");
-// The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
-// pulls it, but the pin belongs with the other add-on runtime deps.
-root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
-root.pnpmWorkspace?.addCatalog("better-auth", "1.7.6");
-root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "1.7.6");
-root.pnpmWorkspace?.addCatalog("@simplewebauthn/browser", "13.3.0");
-root.pnpmWorkspace?.addCatalog("better-call", "1.4.0");
-root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
-root.pnpmWorkspace?.addCatalog("cacache", "^21.0.1");
-
-// Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
-// v4 + the Mastra chat-UI deps). These only load in ui/app-tagged (browser)
-// packages. Tailwind is compiled by `bun-plugin-tailwind` (engine catalog
-// default), so no `@tailwindcss/vite` pin. (`@databricks/appkit-ui` is already an
-// engine DEFAULT_CATALOG entry; `@mastra/ai-sdk` is pinned above.)
-root.pnpmWorkspace?.addCatalog("tailwindcss", "^4.3.2");
-root.pnpmWorkspace?.addCatalog("tw-animate-css", "^1.4.0");
-root.pnpmWorkspace?.addCatalog("lucide-react", "^0.554.0");
-root.pnpmWorkspace?.addCatalog("react-router-dom", "^7.6.2");
-root.pnpmWorkspace?.addCatalog("streamdown", "^2.5.0");
-root.pnpmWorkspace?.addCatalog("@mastra/client-js", "1.50.0");
-root.pnpmWorkspace?.addCatalog("vitest", "3.2.4");
-root.pnpmWorkspace?.addCatalog("@tanstack/react-table", "^8.21.3");
-root.pnpmWorkspace?.addCatalog("ai", "^5.0.0");
-root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
-root.pnpmWorkspace?.addCatalog("echarts-for-react", "^3.0.2");
-root.pnpmWorkspace?.addCatalog("shiki", "^3.0.0");
-root.pnpmWorkspace?.addCatalog("sql-formatter", "^15.6.9");
-root.pnpmWorkspace?.addCatalog("systray2", "^2.1.4");
-// The Adaptive Cards JavaScript renderer, used by the `ui-teams` package to
-// render Teams cards in the browser. Browser-only (loaded in ui-tagged code).
-root.pnpmWorkspace?.addCatalog("adaptivecards", "^3.0.5");
 
 // ---------------------------------------------------------------------------
 // Per-package dependency rules (selected by package name + tag)
 // ---------------------------------------------------------------------------
-
-project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
-  p.package.addField("name", `@${SCOPE}/test-polyglot`);
-  p.package.addField("private", true);
-  p.package.addField(
-    "description",
-    "Cross-runtime parity tests for dbx-tools JavaScript and Python packages",
-  );
-  p.addDeps("bun_python@github:codehz/bun_python#3fae2f3e72fa1bbcb998894ad61e72cfd809671b");
-  projectJs.applyCompilerOptions(p, {
-    types: ["node", "bun"],
-    // bun_python ships TypeScript source with unused private fields and one
-    // intentional switch fallthrough, so the private harness cannot tighten
-    // these checks beyond its runtime dependency.
-    noFallthroughCasesInSwitch: false,
-    noUnusedLocals: false,
-  });
-});
-
-for (const identifierName of ["shared-core", "appkit", "postgres"]) {
-  project.applyToProjects(root, { identifierName }, (p) => {
-    p.deps.addDependency("@dbx-tools/test-polyglot@workspace:^", DependencyType.TEST);
-  });
-}
 
 // shared-core: the dependency-light, browser-safe base every package builds on.
 // Its logger uses only platform console/stderr surfaces so browser bundlers do
@@ -284,7 +246,7 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
 
 // node-auth: dependency-light Databricks authentication lifecycle. The
 // package uses only platform APIs plus node-core's portable file-lock lease so
-// Python/FFI consumers can reuse the same engine without an SDK dependency.
+// CLI and Node consumers can reuse the same engine without an SDK dependency.
 project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
   p.package.addField(
     "description",
@@ -299,9 +261,6 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
     "zod@catalog:",
   );
   p.addDevDeps("@types/ini@^4.1.1");
-  p.compileTask.prependExec(
-    'bun -e \'import { rm } from "node:fs/promises"; await rm("lib", { recursive: true, force: true })\'',
-  );
 });
 
 // node-appkit: the base for Node-side AppKit helpers and the legacy SDK
@@ -372,9 +331,6 @@ project.applyToProjects(root, { identifierName: "cli-args", tags: "cli" }, (p) =
 project.applyToProjects(root, { identifierName: "cli-model-gateway", tags: "cli" }, (p) => {
   p.package.addField("description", "Foreground and system-tray AppKit model-gateway CLI");
   p.addDeps(
-    "@babel/preset-typescript@7.28.5",
-    "@mlflow/core@0.4.0",
-    "@vitejs/plugin-react@5.1.1",
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit-model-gateway@workspace:^",
     "@dbx-tools/cli-args@workspace:^",
@@ -382,7 +338,6 @@ project.applyToProjects(root, { identifierName: "cli-model-gateway", tags: "cli"
     "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-model-gateway@workspace:^",
-    "esbuild@0.28.2",
   );
   p.package.addBin({ "dbx-model-gateway": "./bin/dbx-model-gateway.ts" });
 });
@@ -393,23 +348,26 @@ project.applyToProjects(root, { identifierName: "cli-graphiti", tags: "cli" }, (
     "Node-supervised Graphiti foreground CLI and desktop service",
   );
   p.addDeps(
-    "@dbx-tools/cli-model-gateway@workspace:^",
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/falkor-db@workspace:^",
-    "@dbx-tools/shared-graphiti@workspace:^",
+    "@dbx-tools/graphiti@workspace:^",
   );
   p.package.addBin({ "dbx-graphiti": "./bin/dbx-graphiti.ts" });
-  new TextFile(p, "src/_python-runtime.ts", {
-    lines: [
-      "// GENERATED by projen - DO NOT EDIT.",
-      `export const GRAPHITI_PYTHON_VERSION = ${JSON.stringify(
-        workspaceVersion.readWorkspaceVersion(root.outdir),
-      )};`,
-      "",
-    ],
-  });
+});
+
+// node-graphiti: typed Graphiti lifecycle and FalkorDB ownership. PythonMonkey
+// remains an internal implementation detail for model routing and authentication.
+project.applyToProjects(root, { identifierName: "graphiti", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "Option-driven Graphiti lifecycle with model routing and durable FalkorDB",
+  );
+  p.addDeps(
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/falkor-db@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-graphiti@workspace:^",
+  );
 });
 
 project.applyToProjects(root, { identifierName: "cli-falkor-db", tags: "cli" }, (p) => {
@@ -422,7 +380,6 @@ project.applyToProjects(root, { identifierName: "cli-falkor-db", tags: "cli" }, 
     "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/falkor-db@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "zod@catalog:",
   );
   p.package.addBin({ "dbx-falkor-db": "./bin/dbx-falkor-db.ts" });
 });
@@ -540,6 +497,7 @@ project.applyToProjects(root, { identifierName: "falkor-db", tags: "node" }, (p)
     "falkordb@^6.6.0",
     "falkordblite@0.3.0",
     "redis@6.3.0",
+    "zod@catalog:",
   );
   p.package.addField("optionalDependencies", {
     "@falkordblite/darwin-arm64": "8.2.3-falkordb.4.16.3",
@@ -602,8 +560,8 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
   p.addDevDeps("@types/express@catalog:", "@types/html-to-text@^9", "@types/json-schema@^7");
 });
 
-// node-appkit-graphiti: AppKit lifecycle and user-scoped MCP publication for
-// the Node-supervised Graphiti stack.
+// node-appkit-graphiti: AppKit lifecycle and user-scoped MCP publication over
+// the reusable node-graphiti runtime.
 project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
   p.package.addField(
     "description",
@@ -613,9 +571,8 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-graphiti@workspace:^",
+    "@dbx-tools/graphiti@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/cli-graphiti@workspace:^",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
     "zod@catalog:",
@@ -781,9 +738,6 @@ project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "n
     "openai@^6.16.0",
     "vitest@catalog:",
   );
-  p.compileTask.prependExec(
-    'bun -e \'import { rm } from "node:fs/promises"; await rm("lib", { recursive: true, force: true })\'',
-  );
   p.tasks.tryFind("post-compile")?.exec("bun scripts/copy-manifest.ts");
   projectJs.addPackageFiles(p, "dist/plugins");
 });
@@ -919,8 +873,8 @@ project.applyToProjects(root, { identifierName: "shared-mastra", tags: "shared" 
 
 // shared-genie: browser-safe Genie wire contracts + the high-level chat event
 // vocabulary and detectors. `src/dashboards.ts` is GENERATED here by the engine's
-// synth-time codegen from the Databricks SDK `.d.ts` (the `codegen.inputs` field
-// below names the input); `src/genie-model.ts` extends those schemas with the
+// synth-time codegen from the Databricks SDK `.d.ts` (the typed codegen input
+// below names the source); `src/genie-model.ts` extends those schemas with the
 // fields Genie ships on the wire that the SDK does not type yet.
 //
 // The generated schemas live HERE rather than in a package of their own: shared-genie
@@ -935,9 +889,9 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
   );
   p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
   p.addDevDeps("@databricks/sdk-experimental@catalog:");
-  p.package.addField("codegen", {
-    inputs: ["node_modules/@databricks/sdk-experimental/dist/apis/dashboards/model.d.ts"],
-  });
+  p.dbxToolsConfig.codegenInputs.push(
+    "node_modules/@databricks/sdk-experimental/dist/apis/dashboards/model.d.ts",
+  );
 });
 
 // The projen engine (`@dbx-tools/projen`) lives in `projen/`, now a member of
@@ -950,7 +904,7 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 project.applyToProjects(root, { identifierName: "cli-service", tags: "cli" }, (p) => {
   p.package.addField(
     "description",
-    "Cross-platform service lifecycle and system tray menus for CLIs",
+    "Cross-platform service lifecycle, uv Python runtimes, and system tray menus for CLIs",
   );
   p.addDeps(
     "@dbx-tools/cli-args@workspace:^",
@@ -976,7 +930,6 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "description",
     "The dbx CLI for workspace lifecycle, AppKit environment, Databricks OAuth, and gated tunnels",
   );
-  p.package.file.readonly = false;
   p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbx: "./bin/dbx-tools.ts" });
   p.addDeps(
     "@clack/prompts@catalog:",
@@ -1063,19 +1016,22 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "http-proxy-3@catalog:",
     "zod@catalog:",
   );
-  p.tasks.tryFind("pre-compile")?.exec("bun assets/build-login-client.ts");
   p.addDevDeps(`@types/bun@${bunWorkflow.BUN_VERSION}`);
   if (p instanceof project.DBXToolsTypeScriptProject && p.tsconfig) {
     new javascript.TypescriptConfig(p, {
       fileName: "assets/tsconfig.json",
       extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([p.tsconfig]),
       compilerOptions: {
-        lib: ["ES2022", "DOM", "DOM.Iterable"],
+        lib: ["ESNext", "DOM", "DOM.Iterable"],
         noEmit: true,
+        target: "ESNext",
+        types: ["node", "bun"],
       },
       include: ["*.ts"],
     });
   }
+  p.tasks.tryFind("pre-compile")?.exec("bunx tsc --build assets/tsconfig.json");
+  p.tasks.tryFind("pre-compile")?.exec("bun assets/build-login-client.ts");
   // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
   // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
   // `--insecure` mode) needs no mail transport, so it is an optional peer rather
@@ -1126,7 +1082,7 @@ project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p)
     "./assets/logo-light.svg": "./src/generated/logo-light.svg",
     "./assets/logo-dark.svg": "./src/generated/logo-dark.svg",
   });
-  p.tasks.tryFind("pre-compile")?.exec("bun ../../../branding/generate-package-assets.mjs");
+  p.tasks.tryFind("pre-compile")?.exec("bun ../../../../branding/generate-package-assets.mjs");
 });
 
 // ui-email: the React surface for the email add-on - an Approve/Deny approval
@@ -1267,56 +1223,59 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 
 // packages/example/server/appkit-demo: the AppKit server. `server` tag supplies
 // express + the `bun --watch`/`bun` dev/start tasks.
-project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "server" }, (p) => {
-  p.package.addField("name", "@dbx-tools/demo-appkit-server");
-  // A private runnable app, not an importable library: entry is `src/server.ts`.
-  p.package.addField("private", true);
-  p.package.addField("main", "src/server.ts");
-  p.package.addField("exports", { "./package.json": "./package.json" });
-  p.addDeps(
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/appkit-graphiti@workspace:^",
-    "@dbx-tools/appkit-mastra@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/databricks@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
-    "@dbx-tools/email@workspace:^",
-    "@dbx-tools/appkit-web-search@workspace:^",
-    "@dbx-tools/teams@workspace:^",
-    "@dbx-tools/search@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    // The tunnel library: the server registers `tunnelInterceptor()` on its own
-    // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
-    // runs the server directly rather than through a wrapper bin.
-    "@dbx-tools/tunnel@workspace:^",
-    "@databricks/appkit@catalog:",
-    "@mastra/core@catalog:",
-    "@mastra/ai-sdk@catalog:",
-    "@mastra/express@catalog:",
-    "@mastra/fastembed@catalog:",
-    "@mastra/mcp@catalog:",
-    "@mastra/memory@catalog:",
-    "@mastra/observability@catalog:",
-    "@mastra/otel-bridge@catalog:",
-    "@mastra/pg@catalog:",
-    "@opentelemetry/api@catalog:",
-    "zod@catalog:",
-    "compression@^1.8.1",
-    "pg@^8.22.0",
-    "fuse.js@^7.4.2",
-  );
-  p.addDevDeps(
-    "@dbx-tools/projen@workspace:^",
-    "@types/compression@^1.8.1",
-    "@types/pg@^8",
-    "@types/json-schema@^7",
-  );
-});
+project.applyToProjects(
+  root,
+  { path: "packages/example/server/appkit-demo", tags: "server" },
+  (p) => {
+    // A private runnable app, not an importable library: entry is `src/server.ts`.
+    p.package.addField("private", true);
+    p.package.addField("exports", { "./package.json": "./package.json" });
+    projectJs.applyCompilerOptions(p, { rootDir: "." });
+    projectJs.applyIncludes(p, "stage-deploy.ts");
+    p.addDeps(
+      "@dbx-tools/appkit@workspace:^",
+      "@dbx-tools/appkit-graphiti@workspace:^",
+      "@dbx-tools/appkit-mastra@workspace:^",
+      "@dbx-tools/core@workspace:^",
+      "@dbx-tools/databricks@workspace:^",
+      "@dbx-tools/postgres@workspace:^",
+      "@dbx-tools/email@workspace:^",
+      "@dbx-tools/appkit-web-search@workspace:^",
+      "@dbx-tools/teams@workspace:^",
+      "@dbx-tools/search@workspace:^",
+      "@dbx-tools/shared-core@workspace:^",
+      // The tunnel library: the server registers `tunnelInterceptor()` on its own
+      // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
+      // runs the server directly rather than through a wrapper bin.
+      "@dbx-tools/tunnel@workspace:^",
+      "@databricks/appkit@catalog:",
+      "@mastra/core@catalog:",
+      "@mastra/ai-sdk@catalog:",
+      "@mastra/express@catalog:",
+      "@mastra/fastembed@catalog:",
+      "@mastra/mcp@catalog:",
+      "@mastra/memory@catalog:",
+      "@mastra/observability@catalog:",
+      "@mastra/otel-bridge@catalog:",
+      "@mastra/pg@catalog:",
+      "@opentelemetry/api@catalog:",
+      "zod@catalog:",
+      "compression@^1.8.1",
+      "pg@^8.22.0",
+      "fuse.js@^7.4.2",
+    );
+    p.addDevDeps(
+      "@dbx-tools/projen@workspace:^",
+      "@types/compression@^1.8.1",
+      "@types/pg@^8",
+      "@types/json-schema@^7",
+    );
+  },
+);
 
 // packages/example/app/appkit-demo: the React client. `app` tag supplies react +
 // the bun dev server / `bun build` (Tailwind via bun-plugin-tailwind).
-project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }, (p) => {
-  p.package.addField("name", "@dbx-tools/demo-appkit-app");
+project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: "app" }, (p) => {
   p.package.addField("private", true);
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
@@ -1339,29 +1298,36 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
-const pythonNodeBindingDependencies = ["httpx>=0.28,<1", "pythonmonkey>=1.3,<2"];
 const pythonPackages: project.PythonPackageOptions[] = [
   {
     directory: "graphiti",
-    description: "Pinned Graphiti MCP adapter for Node-owned FalkorDB and model-gateway",
-    internalDependencies: [],
+    description: "Combined Graphiti REST and MCP FastAPI service",
     dependencies: [
-      ...pythonNodeBindingDependencies,
-      "graphiti-core[falkordb]==0.29.3",
-      "mcp>=1.27.2,<2",
-      "openai>=2.41.0",
-      "pydantic-settings>=2,<3",
-      "pyyaml>=6.0.3,<7",
-      "typing-extensions>=4",
+      `graph-service @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_COMMIT}#subdirectory=server`,
+      `mcp-server @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_COMMIT}#subdirectory=mcp_server`,
+      "httpx>=0.28,<1",
+      "pythonmonkey>=1.3,<2",
+      "uvicorn>=0.44",
     ],
     nodeBindings: [
       {
-        package: "@dbx-tools/model",
+        package: "@dbx-tools/shared-core",
         modules: ["bindings"],
       },
       {
-        package: "@dbx-tools/shared-graphiti",
+        package: "@dbx-tools/shared-model",
+      },
+      {
+        package: "@dbx-tools/graphiti",
         modules: ["options"],
+      },
+      {
+        package: "@dbx-tools/auth",
+        modules: ["bindings"],
+      },
+      {
+        package: "@dbx-tools/model",
+        modules: ["bindings"],
       },
     ],
   },
@@ -1371,17 +1337,17 @@ new project.DBXToolsPythonWorkspace(root, {
   root: PYTHON_ROOT,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
-  // Graphiti supports Python 3.11 through the current Python 3 release line.
-  requiresPython: ">=3.11,<4",
-  ruffTarget: "py311",
+  requiresPython: ">=3.10,<4",
+  ruffTarget: "py310",
   // This workspace uses two trusted corporate indexes. The first can lag the
   // local devpi index, so uv must consider the pinned version from both.
   indexStrategy: "unsafe-best-match",
   lintPaths: ["packages/py"],
-  ruffExcludes: ["packages/py/graphiti/src/dbx_tools/graphiti/_upstream"],
-  pyreflyProjectExcludes: ["packages/py/graphiti/src/dbx_tools/graphiti/_upstream/**"],
   release: true,
 });
+for (const task of ["py:lint", "py:test"]) {
+  root.testTask.spawn(root.tasks.tryFind(task)!);
+}
 new BrandPackageAssets(root);
 
 // ---------------------------------------------------------------------------
@@ -1394,20 +1360,17 @@ new BrandPackageAssets(root);
 // `@dbx-tools/cli` installs (`dbx-tools` + the short `dbx` alias). bun runs the
 // `.ts` entry directly.
 for (const task of [SCOPE, "dbx"]) {
+  const command = "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts";
   root.addTask(task, {
-    exec: "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
+    exec: command,
     receiveArgs: true,
   });
-  root.package.file.addOverride(
-    `scripts.${task}`,
-    "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
-  );
+  root.setScript(task, command);
 }
 
-// Run the demo server, client, and local Python bus emitter together. The emitter
-// is a development-only process and is not referenced by app.yaml/databricks.yml.
-// Both JavaScript apps are workspace members, so there is no nested projen synth
-// or registry install - just their bun dev tasks.
+// Build the demo client, then run the AppKit server with the shared local
+// environment. Both JavaScript apps are workspace members, so there is no nested
+// projen synth or registry install.
 // `.env` is the committed-shape local secret file; `.env.local` optionally
 // overlays it. Both `--env-file` flags are missing-file tolerant under bun, so
 // a laptop with only `.env` still supplies the email plugin's SMTP settings.
@@ -1417,7 +1380,7 @@ root.addTask("demo", {
     BUN_CONFIG_ELIDE_LINES: "0",
   },
   exec: "bun scripts/run-demo.ts",
-  description: "Run the local demo server, client, and Python bus emitter",
+  description: "Build the demo client and run the local AppKit server",
 });
 
 // The generated release workflow publishes every npm workspace member,

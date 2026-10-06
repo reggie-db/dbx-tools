@@ -126,7 +126,7 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
         ...dependencyOverrides,
         'project.applyToProjects(rootProject, { path: "modules/example" }, (pkg) => {',
         '  pkg.addDeps("zod@^4.1.5");',
-        '  pkg.package.addField("codegen", { inputs: ["fixtures/model.ts=model"] });',
+        '  pkg.dbxToolsConfig.codegenInputs.push("fixtures/model.ts=model");',
         "});",
         'if (!(rootProject instanceof Project)) throw new Error("consumer and engine resolved different Projen runtimes");',
         "rootProject.synth();",
@@ -140,9 +140,13 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
     );
 
     run(consumer, ["install", "--force"], environment);
+    assert.equal(
+      existsSync(join(consumer, "node_modules/@dbx-tools/projen/shims/python-node/bootstrap.ts")),
+      true,
+    );
     run(unrelatedCwd, [join(consumer, ".projenrc.ts")], environment);
     const firstManifest = readFileSync(join(consumer, "modules/example/package.json"), "utf8");
-    assert.match(firstManifest, /"codegen"/);
+    assert.match(firstManifest, /"codegenInputs"/);
     const firstBarrel = readFileSync(join(consumer, "modules/example/index.ts"), "utf8");
     assert.equal(existsSync(join(consumer, "modules/example/src/model.ts")), true);
     run(unrelatedCwd, [join(consumer, ".projenrc.ts")], environment);

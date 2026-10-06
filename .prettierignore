@@ -41,6 +41,7 @@ packages/py/graphiti/pyproject.toml
 .eslintrc.json
 .gitattributes
 .github/pull_request_template.md
+.github/workflows/build.yml
 .github/workflows/release.yml
 .gitignore
 .prettierignore
@@ -62,7 +63,6 @@ build.ts
 dev.ts
 package.json
 test/tsconfig.json
-src/_python-runtime.ts
 assets/tsconfig.json
 **/src/generated/**
 packages/example/app/appkit-demo/index.ts
@@ -91,6 +91,7 @@ packages/js/node/email/index.ts
 packages/js/node/falkor-db/index.ts
 packages/js/node/fs/index.ts
 packages/js/node/genie/index.ts
+packages/js/node/graphiti/index.ts
 packages/js/node/lakebase/index.ts
 packages/js/node/model/index.ts
 packages/js/node/path/index.ts
@@ -118,5 +119,4 @@ packages/js/ui/email/index.ts
 packages/js/ui/mastra/index.ts
 packages/js/ui/search/index.ts
 packages/js/ui/teams/index.ts
-packages/test/polyglot/index.ts
 projen/index.ts

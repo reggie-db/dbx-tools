@@ -54,16 +54,20 @@ describe("PythonNodeBundle", () => {
       join(targetDirectory, "index.ts"),
       [
         'import { basename } from "node:path";',
+        'import { createInterface } from "node:readline";',
         'export const preserved = "original";',
         "export function fileName(value: string): string { return basename(value); }",
+        'export function hasReadline(): boolean { return typeof createInterface === "function"; }',
         'export function replaced(): string { return "original"; }',
         'export async function createSession(): Promise<string> { return "session"; }',
         "export async function token(login?: boolean): Promise<string> { return String(login); }",
         "export interface RetryOptions { attempts?: number; }",
+        "export type PrefixedOptions = { [Key in keyof RetryOptions as `prefixed${Capitalize<Key & string>}`]?: RetryOptions[Key] };",
         "export interface SessionOptions { host?: string; workspaceId?: string; scopes?: string[]; headers?: Record<string, string>; retry?: RetryOptions; }",
-        "export interface SessionResult { class: string; workspaceId?: string; }",
+        "export interface SessionResult { class: string; workspaceId?: string; status?: { deprecated: boolean }; }",
         'export const SessionOptions = { defaults: () => ({ scopes: ["default"] }) };',
         "export function createConfigured(options: SessionOptions = {}): SessionOptions { return options; }",
+        "export function createPrefixed(options: PrefixedOptions = {}): PrefixedOptions { return options; }",
         'export function sessionResult(): SessionResult { return { class: "chat-fast" }; }',
       ].join("\n"),
     );
@@ -93,12 +97,17 @@ describe("PythonNodeBundle", () => {
     const bindingsPath = join(generated, "index.py");
     const packagePath = join(generated, "__init__.py");
     assert.match(readFileSync(runtimePath, "utf8"), /override/);
+    assert.match(readFileSync(runtimePath, "utf8"), /function createInterface/);
 
     const bindings = readFileSync(bindingsPath, "utf8");
     assert.match(bindings, /async def create_session\(\) -> str:/);
     assert.doesNotMatch(bindings, /pm\.eval|json\.loads/);
     assert.match(bindings, /async def token\(\n    login: bool \| object = _MISSING,\n\) -> str:/);
     assert.match(bindings, /class SessionOptions:/);
+    assert.match(bindings, /class PrefixedOptions:/);
+    assert.match(bindings, /prefixed_attempts: int \| float \| None/);
+    assert.match(bindings, /class PrefixedOptionsResponse\(TypedDict\):/);
+    assert.match(bindings, /prefixedAttempts: NotRequired\[int \| float\]/);
     assert.match(bindings, /workspace_id: str \| None/);
     assert.match(bindings, /headers: dict\[str, str\] \| None/);
     assert.match(bindings, /retry: RetryOptions \| None/);
@@ -111,6 +120,10 @@ describe("PythonNodeBundle", () => {
     assert.match(bindings, /class SessionOptionsResponse\(TypedDict\):/);
     assert.match(bindings, /SessionResultResponse = TypedDict\(/);
     assert.match(bindings, /"class": str,/);
+    assert.ok(
+      bindings.indexOf("class SessionResultStatusResultResponse") <
+        bindings.indexOf("SessionResultResponse = TypedDict"),
+    );
     assert.doesNotMatch(bindings, /\*\*kwargs/);
     assert.match(bindings, /def replaced\(\) -> str:/);
     assert.match(

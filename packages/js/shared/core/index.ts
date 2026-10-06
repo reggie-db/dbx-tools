@@ -5,6 +5,7 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-core";
 export const PACKAGE_VERSION = "0.9.43";
 export * as asyncUtils from "./src/async-utils.ts";
+export * as bindings from "./src/bindings.ts";
 export * as brandUtils from "./src/brand-utils.ts";
 export * as environmentUtils from "./src/environment-utils.ts";
 export * as errorUtils from "./src/error-utils.ts";
@@ -32,7 +33,7 @@ export type { LogLevel, Logger } from "./src/log.ts";
 export type { UrlLike, IpVersion, ParsedIp, Cidr, UrlBuilder, ParseEmailsOptions } from "./src/net.ts";
 export type { Sequence, Container, Collection, OneOrMany, NameLike, NonFunctionKeys, SerializablePrimitive, SerializableValue, ToNumberOptions, ToDateOptions, ToDurationOptions, DeepEqualComparator } from "./src/object.ts";
 export { DatabricksEnvironmentNamesSchema, databricksEnvironmentNames, MAX_TCP_PORT, tcpPortSchema, tcpPortOrZeroSchema, normalizedUrlSchema, DatabricksOptionsSchema, LakebaseOptionsSchema } from "./src/options.ts";
-export type { DatabricksEnvironmentNames, DatabricksOptions, OptionSerializationFormat, LakebaseOptions, OptionValueMap, ListenAddress, ListenAddressOptions } from "./src/options.ts";
+export type { DatabricksEnvironmentNames, DatabricksOptions, OptionSerializationFormat, SubnamedOptionShape, LakebaseOptions, OptionValueMap, ListenScheme, TcpListenAddress, UnixListenAddress, ListenAddress, ListenAddressOptions, ListenAddressInput } from "./src/options.ts";
 export type { PatternOptions } from "./src/pattern.ts";
 export type { PredicateFunction, TypePredicateFunction, PredicateInput, Predicate } from "./src/predicate.ts";
 export type { TokenizeOptions, KeyOptions, IdentifierOptions, DedentOptions, Description } from "./src/string-utils.ts";

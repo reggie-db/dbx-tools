@@ -44,6 +44,9 @@ const project = new typescript.TypeScriptProject({
   buildWorkflow: false,
   release: false,
   entrypoint: "index.ts",
+  entrypointTypes: "index.ts",
+  repository: "git+https://github.com/reggie-db/dbx-tools.git",
+  repositoryDirectory: "projen",
   tsconfig: {
     compilerOptions: {
       rootDir: ".",
@@ -77,28 +80,16 @@ const project = new typescript.TypeScriptProject({
     "constructs@^10.6.0",
     "is-identifier@^1",
     "node-stdlib-browser@^1.3.1",
-    "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
     "semver@^7.7.3",
     "smol-toml@1.8.0",
     "ts-to-zod@^5.1.0",
     "typescript@^5.9.3",
     "yaml@^2.9.0",
+    "zod@^4.3.6",
   ],
   peerDeps: [`projen@${PROJEN_VERSION}`],
-  devDeps: [
-    "@types/node@^24.6.0",
-    "@types/semver@^7.7.1",
-    // Deliberately NOT a runtime dep. The engine only ever loads tsoa lazily, from
-    // `generateOpenapi`, which returns before touching it unless some package has
-    // tsoa controllers - and a package can only have those if it carries the
-    // `server` tag, which adds `tsoa@catalog:` to that package itself. So every
-    // workspace that can reach the require already installed tsoa, while one that
-    // cannot would be paying 179 packages (and a deprecated glob@10) for a module
-    // it never loads. Here it is a devDep so the engine's own openapi run and its
-    // `typeof import("tsoa")` types still resolve, without shipping it.
-    "tsoa@^6.6.0",
-  ],
+  devDeps: ["@types/node@^24.6.0", "@types/semver@^7.7.1"],
 });
 new javascript.TypescriptConfig(project, {
   fileName: "shims/python-node/tsconfig.json",
@@ -114,24 +105,20 @@ new javascript.TypescriptConfig(project, {
   },
   include: ["*.ts"],
 });
+// PythonMonkey shims are engine source. The package owner keeps the complete
+// tree trackable so consuming repositories need no root ignore exceptions.
+project.gitignore.include("/shims/python-node/**");
 project.deps.removeDependency("constructs", DependencyType.BUILD);
 project.deps.removeDependency("typescript", DependencyType.BUILD);
 
 // Preserve the version read from the shared workspace VERSION. The TypeScriptProject
-// constructor's `version` option is ignored when `release: false`, so write the
-// generated manifest field explicitly.
-project.package.addField("version", PACKAGE_VERSION);
-project.package.addField("repository", {
-  type: "git",
-  url: "git+https://github.com/reggie-db/dbx-tools.git",
-  directory: "projen",
-});
+// constructor's `version` option is ignored when `release: false`, so use the
+// native package version API.
+project.package.addVersion(PACKAGE_VERSION);
 
 // This package is consumed as TS source; publish the source subpaths, not a
 // compiled `lib/`.
 project.package.addField("type", "module");
-project.package.addField("main", "index.ts");
-project.package.addField("types", "index.ts");
 project.package.addField("exports", {
   ".": "./index.ts",
   "./release-packaging": "./tasks/lib/publish-npm.ts",
@@ -144,9 +131,10 @@ project.package.addField("exports", {
 // to say exactly that - it takes precedence over projen's generated `.npmignore`
 // (which excludes `/src/`), so `index.ts` (re-exports `./src/*`), the `src/`
 // modules, and the `tasks/` scripts a consumer runs as `bun <engine>/tasks/*.ts`
-// are all present. Without it the published `index.ts` imports a missing
-// `./src/barrels` and synth dies with ERR_MODULE_NOT_FOUND.
-project.package.addField("files", ["index.ts", "src", "tasks"]);
+// are all present. PythonMonkey generation also resolves its build-time
+// compatibility shims from the installed engine package. Without this allowlist
+// the public entrypoint or binding generator imports missing files.
+project.package.addField("files", ["index.ts", "src", "tasks", "shims/python-node"]);
 
 // Keep `.projenrc.ts`/`projenrc/` out of the published tarball.
 project.npmignore?.exclude(".projenrc.ts", "projenrc/");
@@ -157,9 +145,5 @@ const projenrc = new typescript.ProjenrcTs(project, {
 if (project.tsconfig) projenrc.tsconfig.addExtends(project.tsconfig);
 projenrc.tsconfig.removeInclude("**/*.ts");
 project.defaultTask?.reset("bun .projenrc.ts");
-project.addTask("test:external-consumer", {
-  description: "Pack the engine and validate an isolated consumer lifecycle",
-  exec: "bun test test/packed-consumer.test.ts",
-});
 project.testTask.exec("bun test test");
 project.synth();

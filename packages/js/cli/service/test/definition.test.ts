@@ -23,6 +23,7 @@ describe("CLI service definition", () => {
       packageName: "@example/gateway",
       version: "1.2.3",
       icon: "/opt/example/icon.png",
+      pythonPackage: { name: "example-runtime" },
       command: {
         entrypoint: "/opt/example/src/example.ts",
         arguments: ["serve"],
@@ -37,6 +38,10 @@ describe("CLI service definition", () => {
     });
 
     assert.equal(definition.command?.arguments?.[0], "serve");
+    assert.deepEqual(definition.pythonPackage, {
+      name: "example-runtime",
+      python: "3.11",
+    });
     assert.equal(definition.menu?.[0]?.type, "url");
   });
 

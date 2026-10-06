@@ -150,7 +150,7 @@
     },
     "demo": {
       "name": "demo",
-      "description": "Run the local demo server, client, and Python bus emitter",
+      "description": "Build the demo client and run the local AppKit server",
       "env": {
         "NODE_ENV": "development",
         "BUN_CONFIG_ELIDE_LINES": "0"
@@ -166,16 +166,13 @@
       "description": "Validate and generate documentation from package READMEs",
       "steps": [
         {
-          "exec": "bun test docs/scripts/cli-reference.test.mjs"
-        },
-        {
           "exec": "bun docs/scripts/sync-cli-readmes.mjs --check"
         },
         {
           "exec": "bun docs/scripts/sync-readmes.mjs"
         },
         {
-          "exec": "bun docs/scripts/generate-agent-skill.mjs"
+          "exec": "bun docs/scripts/generate-agent-skill.mjs --check"
         }
       ]
     },
@@ -225,7 +222,6 @@
             "--no-error-on-unmatched-pattern",
             "$@",
             "packages/js",
-            "packages/test",
             "packages/example",
             "projen"
           ],
@@ -288,28 +284,17 @@
           "exec": "bun install"
         }
       ],
-      "condition": "node -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\""
+      "condition": "bun -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\""
     },
     "install:ci": {
       "name": "install:ci",
       "description": "Install project dependencies using frozen lockfile",
       "steps": [
         {
-          "exec": "bun install --frozen-lockfile"
+          "exec": "bun install"
         }
       ],
-      "condition": "node -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\""
-    },
-    "openapi": {
-      "name": "openapi",
-      "steps": [
-        {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/openapi.ts"
-          ]
-        }
-      ]
+      "condition": "bun -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\""
     },
     "package": {
       "name": "package",
@@ -347,6 +332,9 @@
       "steps": [
         {
           "exec": "uv run ruff check packages/py"
+        },
+        {
+          "exec": "uv run ruff format --check packages/py"
         }
       ]
     },
@@ -373,7 +361,7 @@
       "description": "Print system-browser instructions for PyPI trusted publishers",
       "steps": [
         {
-          "exec": "node .projen/pypi-trusted-publisher-instructions.mjs",
+          "exec": "bun .projen/pypi-trusted-publisher-instructions.mjs",
           "receiveArgs": true
         }
       ]
@@ -393,13 +381,11 @@
             "--python-root",
             "packages/py",
             "--validate",
+            "test",
+            "--validate",
             "docs:check-source",
             "--validate",
-            "docs:check-readmes",
-            "--validate",
-            "py:lint",
-            "--validate",
-            "py:test"
+            "docs:check-readmes"
           ],
           "receiveArgs": true
         }
@@ -425,7 +411,16 @@
           "spawn": "eslint"
         },
         {
+          "exec": "bun test docs/scripts"
+        },
+        {
           "spawn": "graphiti:python-runtime:check"
+        },
+        {
+          "spawn": "py:lint"
+        },
+        {
+          "spawn": "py:test"
         },
         {
           "exec": "bun run --filter '*' test"

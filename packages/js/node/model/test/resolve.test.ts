@@ -29,8 +29,8 @@ function chat(name: string): ServingEndpointSummary {
 }
 
 /** An embedding endpoint - classified into ModelClass.Embedding by task. */
-function embedding(name: string): ServingEndpointSummary {
-  return { name, task: EMBEDDING_TASK };
+function embedding(name: string, dimension?: number): ServingEndpointSummary {
+  return { name, task: EMBEDDING_TASK, ...(dimension ? { dimension } : {}) };
 }
 
 const OPUS_8 = "databricks-claude-opus-4-8";
@@ -416,6 +416,38 @@ describe("lookupModels", () => {
       modelClass: ModelClass.Embedding,
     });
     assert.deepEqual(names(ranked), [GTE, BGE]); // no chat model leaks in
+  });
+
+  it("returns the best ranked embedding model matching dimension filters", () => {
+    const ranked = lookupModels(
+      [embedding("databricks-gte-large-en-v2", 1024), embedding(GTE, 1024), embedding(BGE, 768)],
+      {
+        modelClass: ModelClass.Embedding,
+        dimension: 1024,
+        limit: 1,
+      },
+    );
+    assert.deepEqual(names(ranked), ["databricks-gte-large-en-v2"]);
+  });
+
+  it("combines exact name, task, dimension range, and feature filters", () => {
+    const endpoint = {
+      ...embedding(GTE, 1024),
+      reasoningEfforts: ["low", "high"] as const,
+    };
+    assert.deepEqual(
+      names(
+        lookupModels([endpoint, embedding(BGE, 768)], {
+          name: GTE,
+          modelClass: ModelClass.Embedding,
+          task: EMBEDDING_TASK,
+          minDimension: 1000,
+          maxDimension: 1100,
+          reasoningEffort: "high",
+        }),
+      ),
+      [GTE],
+    );
   });
 
   it("treats a chat class as a ceiling: that band and below, never above", () => {

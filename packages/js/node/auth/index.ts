@@ -4,6 +4,7 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth";
 export const PACKAGE_VERSION = "0.9.43";
+export * as bindings from "./src/bindings.ts";
 export * as client from "./src/client.ts";
 export * as config from "./src/config.ts";
 export * as profile from "./src/profile.ts";

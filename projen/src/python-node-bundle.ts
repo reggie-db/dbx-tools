@@ -1,3 +1,9 @@
+/**
+ * Projen task wiring for pyproject-driven PythonMonkey runtime generation.
+ *
+ * Type extraction and bundle emission remain in the executable generator; this
+ * component owns only typed configuration and generate/check task registration.
+ */
 import { Component, type Project, type Task } from "projen";
 import { taskCommand } from "./project-js.ts";
 

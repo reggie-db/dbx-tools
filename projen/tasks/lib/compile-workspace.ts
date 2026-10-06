@@ -1,9 +1,12 @@
 #!/usr/bin/env -S bun
-/** Compile source-first workspace packages in a few TypeScript processes. */
+/** Batch package type-checks and run package-owned compile lifecycles. */
 import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
+import { log } from "@dbx-tools/shared-core";
+
+const logger = log.logger("projen:compile");
 
 interface PackageManifest {
   readonly name?: string;
@@ -13,8 +16,14 @@ interface PackageManifest {
 
 interface TaskManifest {
   readonly tasks?: {
+    readonly "pre-compile"?: {
+      readonly steps?: Array<{ readonly exec?: string; readonly execArgs?: string[] }>;
+    };
     readonly compile?: {
-      readonly steps?: Array<{ readonly execArgs?: string[] }>;
+      readonly steps?: Array<{ readonly exec?: string; readonly execArgs?: string[] }>;
+    };
+    readonly "post-compile"?: {
+      readonly steps?: Array<{ readonly exec?: string; readonly execArgs?: string[] }>;
     };
   };
 }
@@ -40,6 +49,10 @@ function plainTypeScriptBuild(steps: unknown): boolean {
   );
 }
 
+function hasSteps(steps: unknown): boolean {
+  return Array.isArray(steps) && steps.length > 0;
+}
+
 /** Read the root's concrete workspace paths on every run, including newly added members. */
 export function compilePlan(root: string): CompilePlan {
   const workspace = readJson<PackageManifest>(join(root, "package.json"));
@@ -51,14 +64,13 @@ export function compilePlan(root: string): CompilePlan {
     const script = manifest.scripts?.compile;
     if (!script) continue;
     const taskPath = join(directory, ".projen", "tasks.json");
-    const steps = existsSync(taskPath)
-      ? readJson<TaskManifest>(taskPath).tasks?.compile?.steps
-      : undefined;
+    const tasks = existsSync(taskPath) ? readJson<TaskManifest>(taskPath).tasks : undefined;
+    const plainCompile = plainTypeScriptBuild(tasks?.compile?.steps);
     if (
       script === "projen compile" &&
-      !manifest.scripts?.precompile &&
-      !manifest.scripts?.postcompile &&
-      plainTypeScriptBuild(steps)
+      plainCompile &&
+      !hasSteps(tasks?.["pre-compile"]?.steps) &&
+      !hasSteps(tasks?.["post-compile"]?.steps)
     ) {
       typescriptConfigs.push(join(directory, "tsconfig.json"));
     } else {
@@ -78,9 +90,7 @@ export async function main(): Promise<void> {
     const batchCount = Math.min(4, availableParallelism(), plan.typescriptConfigs.length);
     const batches = Array.from({ length: batchCount }, () => [] as string[]);
     plan.typescriptConfigs.forEach((config, index) => batches[index % batchCount]!.push(config));
-    console.log(
-      `Type-checking ${plan.typescriptConfigs.length} workspaces in ${batchCount} batches`,
-    );
+    logger.info(`type-checking ${plan.typescriptConfigs.length} workspaces in ${batchCount} batches`);
     for (const [index, batch] of batches.entries()) {
       jobs.push({
         name: `TypeScript batch ${index + 1}`,
@@ -96,24 +106,36 @@ export async function main(): Promise<void> {
   for (const pkg of plan.customPackages) {
     jobs.push({
       name: pkg.name,
-      result: exec.spawn("bun", ["run", "compile"], {
-        cwd: pkg.directory,
-        stdin: "ignore",
-        stdout: (line) => console.log(`${pkg.name}: ${line.replace(emoji, "")}`),
-        stderr: (line) => console.error(`${pkg.name}: ${line.replace(emoji, "")}`),
-      }),
+      result: compileCustomPackage(pkg),
     });
   }
   const results = await Promise.allSettled(jobs.map((job) => job.result));
   let failed = false;
   for (const [index, result] of results.entries()) {
     if (result.status === "rejected") {
-      console.error(`${jobs[index]!.name} compile failed:`, result.reason);
+      logger.error(`${jobs[index]!.name} compile failed:`, result.reason);
       failed = true;
     } else if (result.value.exitCode !== 0) {
-      console.error(`${jobs[index]!.name} compile exited with ${result.value.exitCode}`);
+      logger.error(`${jobs[index]!.name} compile exited with ${result.value.exitCode}`);
       failed = true;
     }
   }
   if (failed) process.exitCode = 1;
+}
+
+async function compileCustomPackage(pkg: {
+  readonly name: string;
+  readonly directory: string;
+}): Promise<exec.ExecResult> {
+  let result: exec.ExecResult | undefined;
+  for (const task of ["pre-compile", "compile", "post-compile"]) {
+    result = await exec.spawn("bun", ["run", task], {
+      cwd: pkg.directory,
+      stdin: "ignore",
+      stdout: (line) => logger.info(`${pkg.name}: ${line.replace(emoji, "")}`),
+      stderr: (line) => logger.error(`${pkg.name}: ${line.replace(emoji, "")}`),
+    });
+    if (result.exitCode !== 0) return result;
+  }
+  return result!;
 }

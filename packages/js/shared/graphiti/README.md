@@ -1,9 +1,8 @@
 # @dbx-tools/shared-graphiti
 
 Use the browser-safe Graphiti option contract from Node, AppKit, browser tools,
-or generated language bindings. This package owns defaults, validation,
-environment parsing, and model-gateway ownership rules so every runtime accepts
-the same configuration.
+or other JavaScript callers. This package owns defaults, validation, and
+environment parsing so every Node runtime accepts the same configuration.
 
 ## Resolve Runtime Options
 
@@ -17,45 +16,21 @@ const options = resolveGraphitiOptions({
 });
 ```
 
-The result includes stable listener, model, embedding, gateway, and structured
-output defaults. Supplying `modelGatewayUrl` selects an existing gateway unless
-`manageModelGateway` explicitly opts back into local ownership.
+The result includes stable listener, model, embedding, and structured-output
+defaults. The Node Graphiti runtime composes separately owned FalkorDB options;
+route details are intentionally not part of this browser-safe contract.
 
-## Serialize A Child Runtime
+## Parse Environment Options
 
-Use the shared serializer when a Node host starts the Python Graphiti runtime:
-
-```ts
-import {
-  GRAPHITI_OPTIONS_ENV,
-  serializeGraphitiOptions,
-} from "@dbx-tools/shared-graphiti/options";
-
-const environment = {
-  [GRAPHITI_OPTIONS_ENV]: serializeGraphitiOptions({
-    profile: "MY-PROFILE",
-    falkorDataDir: "/var/lib/agent-memory",
-  }),
-};
-```
-
-The Python binding consumes this exact validated record. Do not add parallel
-environment parsing or option types in a CLI, AppKit plugin, or language
-runtime.
-
-## Build Provider Environment
-
-Use `graphitiEnvironment` to derive the OpenAI-compatible variables expected by
-Graphiti without duplicating model, embedding, key, or structured-output
-mapping:
+Resolve supported environment names without reading global process state:
 
 ```ts
-import { graphitiEnvironment } from "@dbx-tools/shared-graphiti/options";
+import { graphitiOptionsFromEnvironment } from "@dbx-tools/shared-graphiti/options";
 
-const environment = graphitiEnvironment({
-  modelGatewayUrl: "http://127.0.0.1:4000/v1",
-  manageModelGateway: false,
-  model: "databricks-gpt-5",
+const options = graphitiOptionsFromEnvironment({
+  DATABRICKS_CONFIG_PROFILE: "MY-PROFILE",
+  GRAPHITI_LISTEN: "tcp://127.0.0.1:7272",
+  GRAPHITI_HOME: "/var/lib/agent-memory",
 });
 ```
 

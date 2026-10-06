@@ -42,6 +42,10 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./bindings": {
+        "types": "./lib/src/bindings.d.ts",
+        "default": "./lib/src/bindings.js"
+      },
       "./client": {
         "types": "./lib/src/client.d.ts",
         "default": "./lib/src/client.js"
@@ -67,6 +71,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./bindings": "./src/bindings.ts",
     "./client": "./src/client.ts",
     "./config": "./src/config.ts",
     "./profile": "./src/profile.ts",

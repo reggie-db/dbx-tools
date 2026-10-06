@@ -48,6 +48,7 @@ describe("DBXToolsPythonWorkspace", () => {
           directory: "app",
           description: "Fixture app",
           internalDependencies: ["core"],
+          releaseEnvironment: "production-pypi",
         },
       ],
       dependencies: ["fixture-app"],
@@ -57,7 +58,7 @@ describe("DBXToolsPythonWorkspace", () => {
       ruffExcludes: ["python/packages/app/src/fixture/app/_upstream"],
       lintPaths: ["python"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
-      release: { environments: { "fixture-app": "production-pypi" } },
+      release: true,
     });
 
     project.synth();
@@ -66,7 +67,6 @@ describe("DBXToolsPythonWorkspace", () => {
     const workspaceMetadata = parse(workspace) as {
       project: { dependencies: string[]; "requires-python": string };
       tool: {
-        pyrefly: { "ignore-errors-in-generated-code": boolean; "project-excludes": string[] };
         ruff: { exclude: string[] };
         uv: {
           "index-strategy": string;
@@ -83,7 +83,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.deepEqual(workspaceMetadata.tool.ruff.exclude, [
       "python/packages/app/src/fixture/app/_upstream",
     ]);
-    assert.match(workspace, /\[tool\.pyrefly\]\s+ignore-errors-in-generated-code = true/);
+    assert.doesNotMatch(workspace, /\[tool\.pyrefly\]/);
     const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8");
     assert.match(gitignore, /^\.venv\/$/m);
     assert.match(gitignore, /^python\/packages\/\*\*\/dist\/$/m);
@@ -108,12 +108,17 @@ describe("DBXToolsPythonWorkspace", () => {
       /python\/packages/,
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
+    const validation = readWorkflow(outdir, "build");
+    assert.match(workflowStep(validation.jobs.build!, "Setup Python").uses ?? "", /setup-python@/);
+    assert.equal(workflowStep(validation.jobs.build!, "Setup uv").uses, "astral-sh/setup-uv@v7");
     const release = readWorkflow(outdir);
     assert.equal(release.jobs["build-python"], undefined);
     const publishCore = release.jobs["publish-pypi-core"]!;
     assert.equal(publishCore.needs, "build-release");
     assert.equal(publishCore.env?.BUN_VERSION, undefined);
     const build = release.jobs["build-release"]!;
+    assert.match(workflowStep(build, "Setup Python").uses ?? "", /^actions\/setup-python@/);
+    assert.deepEqual(workflowStep(build, "Setup Python").with, { "python-version": "3.12" });
     assert.equal(workflowStep(build, "Setup uv").uses, "astral-sh/setup-uv@v7");
     assert.equal(workflowStep(build, "Setup uv").with, undefined);
     assert.ok(
@@ -129,7 +134,7 @@ describe("DBXToolsPythonWorkspace", () => {
     for (const job of Object.values(release.jobs)) {
       if (!job.environment || job.environment.name === "github-pages") continue;
       assert.equal(job.steps.length, 2);
-      assert.equal(job.steps[0]?.uses, "actions/download-artifact@v4");
+      assert.match(job.steps[0]?.uses ?? "", /^actions\/download-artifact@/);
       assert.equal(job.steps[1]?.uses, "pypa/gh-action-pypi-publish@release/v1");
     }
     assert.deepEqual(release.jobs["publish-pypi-core"]?.environment, {
@@ -161,7 +166,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.equal("workflow_run" in release.on, false);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
     const instructionsCommand = instructionsTask?.steps?.[0]?.exec;
-    assert.equal(instructionsCommand, "node .projen/pypi-trusted-publisher-instructions.mjs");
+    assert.equal(instructionsCommand, "bun .projen/pypi-trusted-publisher-instructions.mjs");
     const helper = join(outdir, ".projen/pypi-trusted-publisher-instructions.mjs");
     const result = spawnSync(process.execPath, [helper, "--secretFile", "/run/secrets/pypi.json"], {
       encoding: "utf8",

@@ -100,7 +100,6 @@ export function buildProgram(
       .description("Authenticate to Databricks with user or machine OAuth")
       .showHelpAfterError(),
     AuthCliOptionsSchema,
-    { scope: [] },
   );
   const options = (): AuthCliOptions => parseArgs(program, AuthCliOptionsSchema);
 
@@ -116,7 +115,6 @@ export function buildProgram(
   const tokenCommand = addArgs(
     program.command("token").description("Return a valid access token, logging in when needed"),
     TokenCommandOptionsSchema,
-    { scope: [] },
   );
   tokenCommand.action(async () => {
     const tokenOptions = parseArgs(tokenCommand, TokenCommandOptionsSchema);

@@ -132,6 +132,23 @@ class ceiling logic as `selectModel()`. Classification, fuzzy scoring,
 family-version order, and variant preference are implemented directly in this
 package and require no native binding.
 
+Filter before ranking when a caller needs a specific runtime shape. For example,
+select the best 1,024-dimensional embedding endpoint:
+
+```ts
+const [embedding] = await resolve.searchModels(client, host, {
+  modelClass: "embedding",
+  dimension: 1024,
+  limit: 1,
+});
+```
+
+Search filters compose: use `name` for an exact endpoint, `search` for fuzzy
+name and label matching, `modelClass` for class-aware ranking, `task` for an
+exact serving task, `dimension` or `minDimension`/`maxDimension` for embedding
+shape, `reasoningEffort` for supported reasoning levels, and `requiresTools`
+for complete tool-call support.
+
 ## Work With A Held Catalogue
 
 When you already have endpoint summaries, use the pure resolver functions from
@@ -226,8 +243,8 @@ a property of the model (see `isResponsesOnly()` and `responsesUpstreamUrl()`),
 so a hard-coded string in one package silently diverges when that routing
 changes. `isResponsesOnly()` covers Codex and GPT 5.4+ endpoints, which reject
 tool-bearing Chat Completions, while keeping GPT-OSS on its supported Chat path.
-The TypeScript helper owns this policy, so Node consumers and generated Python
-bindings share one version threshold without loading a native library.
+The TypeScript helper owns this policy so every Node consumer shares one version
+threshold without loading a native library.
 
 ## Read Published Model Metadata
 

@@ -43,7 +43,6 @@ export function buildProgram(
       .version(PACKAGE_VERSION)
       .enablePositionalOptions(),
     LakebaseProxyOptionsSchema,
-    { scope: [] },
   ).action(async () => {
     const proxy = new LakebaseProxy(parseArgs(program, LakebaseProxyOptionsSchema));
     await proxy.listen();
@@ -54,7 +53,6 @@ export function buildProgram(
   const urlCommand = addArgs(
     program.command("url").description("Format a local PostgreSQL URL for a Lakebase target"),
     LakebaseProxyUrlOptionsSchema,
-    { scope: [] },
   ).action(() => {
     const options = parseArgs(urlCommand, LakebaseProxyUrlOptionsSchema);
     const target = options.target ?? options.lakebaseEndpoint!;
@@ -65,7 +63,7 @@ export function buildProgram(
     return lakebaseProxyServiceDefinition(parseArgs(installCommand, LakebaseProxyOptionsSchema));
   }, dependencies.service);
   installCommand = serviceCommand.commands.find((command) => command.name() === "install")!;
-  addArgs(installCommand, LakebaseProxyOptionsSchema, { scope: [] });
+  addArgs(installCommand, LakebaseProxyOptionsSchema);
   program.addCommand(serviceCommand);
   return program;
 }

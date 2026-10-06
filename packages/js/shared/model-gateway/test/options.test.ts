@@ -9,7 +9,7 @@ import {
 describe("model-gateway options", () => {
   it("owns shared server defaults", () => {
     assert.deepEqual(MODEL_GATEWAY_DEFAULTS, {
-      listen: { host: "localhost", port: 4000 },
+      listen: { scheme: "tcp", host: "localhost", port: 4000 },
       bodyLimit: "100mb",
     });
     assert.deepEqual(resolveModelGatewayOptions(), MODEL_GATEWAY_DEFAULTS);
@@ -22,7 +22,7 @@ describe("model-gateway options", () => {
         profile: " PROFILE ",
       }),
       {
-        listen: { host: "localhost", port: 4400 },
+        listen: { scheme: "tcp", host: "localhost", port: 4400 },
         profile: "PROFILE",
         bodyLimit: "100mb",
         runtimeInfo: false,

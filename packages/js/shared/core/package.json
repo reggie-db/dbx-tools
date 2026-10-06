@@ -19,7 +19,6 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@dbx-tools/test-polyglot": "workspace:^",
     "typescript": "^5.9.3"
   },
   "dependencies": {
@@ -39,6 +38,10 @@
       "./async-utils": {
         "types": "./lib/src/async-utils.d.ts",
         "default": "./lib/src/async-utils.js"
+      },
+      "./bindings": {
+        "types": "./lib/src/bindings.d.ts",
+        "default": "./lib/src/bindings.js"
       },
       "./brand-utils": {
         "types": "./lib/src/brand-utils.d.ts",
@@ -118,6 +121,7 @@
   "exports": {
     ".": "./index.ts",
     "./async-utils": "./src/async-utils.ts",
+    "./bindings": "./src/bindings.ts",
     "./brand-utils": "./src/brand-utils.ts",
     "./environment-utils": "./src/environment-utils.ts",
     "./error-utils": "./src/error-utils.ts",

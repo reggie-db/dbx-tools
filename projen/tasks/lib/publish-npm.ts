@@ -22,6 +22,7 @@ import { runTaskCommand } from "../../src/_task-command.ts";
 const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 const logger = log.logger("projen:publish-npm");
 
+/** Registry and archive identity used to verify idempotent npm publication. */
 export interface NpmReleaseIdentity {
   readonly access?: "public" | "restricted";
   readonly contentDigest?: string;
@@ -41,6 +42,7 @@ interface NpmArchiveManifest {
   readonly version?: string;
 }
 
+/** Transform applied to a packed npm manifest before archive verification. */
 export type NpmArchiveManifestTransform = (
   manifest: NpmArchiveManifest,
 ) => Readonly<Record<string, unknown>>;
@@ -143,6 +145,7 @@ function registryUrl(registry: string, name: string, version: string): string {
   return `${registry.replace(/\/$/, "")}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
 }
 
+/** Verify that registry metadata represents the exact locally packed release. */
 export function npmReleaseMatches(
   local: NpmReleaseIdentity,
   published: NpmReleaseIdentity | undefined,
@@ -173,6 +176,7 @@ export function npmReleaseMatches(
   return true;
 }
 
+/** Read one published npm release identity, or `undefined` when it is absent. */
 export async function publishedNpmRelease(
   name: string,
   version: string,
@@ -232,6 +236,7 @@ function readNpmArchiveManifest(path: string): NpmArchiveManifest {
   return JSON.parse(result.stdout) as NpmArchiveManifest;
 }
 
+/** Read and hash the release identity embedded in an npm archive. */
 export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
   const manifest = readNpmArchiveManifest(path);
   if (!manifest.name || !manifest.version) {
@@ -326,6 +331,7 @@ export function npmArchiveContentDigest(path: string): string {
   }
 }
 
+/** Pack one workspace package and optionally transform only its archived manifest. */
 export function packNpmPackage(
   directory: string,
   destination: string,
@@ -404,6 +410,7 @@ export function packNpmPackage(
   }
 }
 
+/** Publish dependency-ordered npm archives, skipping only exact registry matches. */
 export async function publishNpmArchives(options: {
   readonly directory: string;
   readonly dryRun?: boolean;
@@ -443,6 +450,7 @@ export async function publishNpmArchives(options: {
   }
 }
 
+/** Parse npm archive publication options and execute the publisher. */
 export async function main(): Promise<void> {
   const program = new Command();
   program

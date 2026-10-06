@@ -106,6 +106,7 @@ export type ServingEndpointSummary = z.infer<typeof ServingEndpointSummarySchema
 
 export const ModelQuerySchema = z
   .object({
+    name: z.string().optional().describe("Exact serving endpoint name to retain."),
     search: z
       .string()
       .optional()
@@ -117,6 +118,28 @@ export const ModelQuerySchema = z
       .boolean()
       .optional()
       .describe("When true, only endpoints that accept tools are returned."),
+    task: z.string().optional().describe("Exact Databricks serving task to retain."),
+    dimension: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Exact embedding vector dimension to retain."),
+    minDimension: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Minimum embedding vector dimension to retain."),
+    maxDimension: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Maximum embedding vector dimension to retain."),
+    reasoningEffort: ReasoningEffortSchema.optional().describe(
+      "Reasoning effort that a retained endpoint must accept.",
+    ),
     includeDeprecated: z
       .boolean()
       .optional()

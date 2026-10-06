@@ -1,8 +1,9 @@
 # @dbx-tools/cli-graphiti
 
 Run Graphiti graph memory against Databricks-hosted chat and embedding models.
-The launcher owns durable embedded FalkorDB, the optional model-gateway
-process, the pinned Python Graphiti MCP adapter, and desktop-service lifecycle.
+The CLI layers foreground execution and desktop-service commands on the
+`@dbx-tools/graphiti` Node runtime, which owns model discovery, authentication,
+durable embedded FalkorDB, and process supervision.
 
 ## Install
 
@@ -12,9 +13,9 @@ Install the CLI with Bun:
 bun add --global @dbx-tools/cli-graphiti
 ```
 
-Graphiti requires Python 3.11 or newer and a Databricks profile that can access
-the selected model endpoints. The launcher prepares the matching Python runtime
-and pinned Graphiti dependencies on first use.
+Graphiti requires uv and a Databricks profile that can access the selected model
+endpoints. Desktop service installation manages its isolated runtime
+automatically.
 
 ## Start Graphiti
 
@@ -45,16 +46,8 @@ dbx graphiti \
   --embedder-model databricks-gte-large-en
 ```
 
-By default, the launcher starts a private model gateway for Graphiti. To use an
-existing OpenAI-compatible gateway instead:
-
-```sh
-dbx graphiti \
-  --model-gateway-url http://127.0.0.1:4000/v1 \
-  --no-manage-model-gateway
-```
-
-Use `--openai-api-key` when the external gateway requires one.
+The runtime resolves the selected routes and refreshes Databricks headers for
+model requests.
 
 ## Persist Graph Writes
 
@@ -83,8 +76,9 @@ dbx graphiti service status
 ```
 
 Use `start`, `stop`, `restart`, and `uninstall` to manage the installed service.
-Re-run `service install` after upgrading the package so the compiled runtime is
-updated.
+The shared service installer lets uv provision the matching runtime beside the
+compiled Node service. Re-run `service install` after upgrading the package.
+uv must be available on `PATH` during installation.
 
 ## Use With AppKit
 
@@ -105,39 +99,27 @@ Commander parser. Built-in help flags are intentionally omitted.
 Run Graphiti or manage its current-user desktop service
 
 ```sh
-dbx graphiti [options] [command] [args...]
+dbx graphiti [options] [command]
 ```
-
-#### Arguments
-
-| Argument | Description                                           |
-| -------- | ----------------------------------------------------- |
-| `args`   | arguments forwarded to the pinned Graphiti MCP server |
 
 #### Options
 
 | Option                                  | Description                                                                                                               |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `-v, --version`                         | output the version number                                                                                                 |
-| `--python <value>`                      | Python executable used to run the matching Graphiti package. (default: "python3", env: PYTHON)                            |
 | `--profile <value>`                     | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                          |
 | `--graphiti-home <value>`               | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
 | `--model <value>`                       | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
+| `--temperature <value>`                 | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                 |
 | `--embedder-model <value>`              | Fuzzy embedding-model name or endpoint identifier. (default: "databricks-gte-large-en", env: EMBEDDER_MODEL)              |
 | `--embedder-dimensions <value>`         | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
-| `--model-gateway-url <value>`           | Existing OpenAI-compatible model gateway base URL, including /v1. (env: MODEL_GATEWAY_URL)                                |
-| `--model-gateway-host <value>`          | Listener host for a locally managed model gateway. (default: "127.0.0.1", env: MODEL_GATEWAY_HOST)                        |
-| `--model-gateway-port <value>`          | Listener port for a locally managed model gateway. (default: 4400, env: MODEL_GATEWAY_PORT)                               |
-| `--model-gateway-command <value>`       | Command used to start a locally managed model gateway. (env: MODEL_GATEWAY_COMMAND)                                       |
-| `--manage-model-gateway`                | Whether Graphiti starts and stops a local model gateway. (env: MANAGE_MODEL_GATEWAY)                                      |
-| `--no-manage-model-gateway`             | Disable whether graphiti starts and stops a local model gateway.                                                          |
-| `--open-ai-api-key <value>`             | API key used only with an externally managed OpenAI-compatible endpoint. (env: OPENAI_API_KEY)                            |
 | `--structured-output-mode <value>`      | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
-| `--graphiti-host <value>`               | Graphiti MCP listener host. (default: "127.0.0.1", env: GRAPHITI_HOST)                                                    |
-| `--graphiti-port <value>`               | Graphiti MCP listener port. (default: 8000, env: GRAPHITI_PORT)                                                           |
-| `--falkor-data-dir <value>`             | Local directory containing the active FalkorDB RDB. (env: FALKORDB_DATA_DIR)                                              |
-| `--falkor-snapshot-seconds <value>`     | Seconds between change-aware FalkorDB snapshot checks. (default: 300, env: FALKOR_SNAPSHOT_SECONDS)                       |
-| `--falkor-snapshot-min-changes <value>` | Minimum writes required before FalkorDB creates an RDB snapshot. (default: 1, env: FALKOR_SNAPSHOT_MIN_CHANGES)           |
+| `--listen <value>`                      | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                             |
+| `--falkor-data-dir <value>`             | Active local FalkorDB directory. (env: FALKORDB_DATA_DIR)                                                                 |
+| `--falkor-listen <value>`               | FalkorDB listener used by Graphiti. (default: tcp://127.0.0.1:6379, env: FALKORDB_LISTEN)                                 |
+| `--falkor-database <value>`             | Default graph name for consumers. (default: "default_db", env: FALKORDB_DATABASE)                                         |
+| `--falkor-snapshot-seconds <value>`     | Redis snapshot interval in seconds. (default: 300, env: FALKORDB_SNAPSHOT_SECONDS)                                        |
+| `--falkor-snapshot-min-changes <value>` | Writes required before an interval saves. (default: 1, env: FALKORDB_SNAPSHOT_MIN_CHANGES)                                |
 
 #### Commands
 
@@ -174,10 +156,10 @@ dbx graphiti service install [options]
 
 #### Options
 
-| Option       | Description                                                       |
-| ------------ | ----------------------------------------------------------------- |
-| `--start`    | Start the service after installation. (default: true, env: START) |
-| `--no-start` | Disable start the service after installation.                     |
+| Option       | Description                                                                 |
+| ------------ | --------------------------------------------------------------------------- |
+| `--start`    | Start the service after installation. (default: true, env: DBX_TOOLS_START) |
+| `--no-start` | Disable start the service after installation.                               |
 
 ### `dbx graphiti service start`
 

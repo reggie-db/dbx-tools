@@ -9,11 +9,10 @@
  * (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so a published package whose
  * entry point is `index.ts` is unloadable by anything that is not a bundler.
  *
- * pnpm resolves both at once. It substitutes `publishConfig`'s `main`/`types`/
- * `bin`/`exports` into the manifest at pack time and drops `publishConfig`
- * itself, so the workspace keeps its source entry points while the tarball
- * advertises the compiled ones. Nothing here changes how the repo builds or
- * type-checks; it only changes what `pnpm pack` writes.
+ * `publishConfig` records the compiled `main`/`types`/`bin`/`exports` tree while
+ * the workspace keeps its source entry points. The release packer applies that
+ * record inside each archive because Bun does not perform npm's publishConfig
+ * substitution itself. The checkout remains source-first.
  *
  * Two compiler options make the emitted tree loadable, both native `tsc`:
  *
@@ -56,14 +55,18 @@ export const COMPILED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
  * Everything does EXCEPT the `ui` tag, and the exclusion is about consumers
  * rather than convenience. The problem being solved is that Node cannot load raw
  * TypeScript - but a browser package is never loaded by Node. UI packages reach
- * their consumer through Vite, which reads their source happily, and they export
- * `./styles.css` plus raw SVG assets that `tsc` does not copy and could not
- * rewrite. Compiling them would mean a real asset pipeline (Vite library mode)
- * to solve a problem they do not have.
+ * their consumer through a browser bundler, which reads their source, and they
+ * export `./styles.css` plus raw SVG assets that `tsc` does not copy and could
+ * not rewrite. Compiling them would require an asset-aware library pipeline to
+ * solve a problem they do not have.
  */
 export function publishesCompiled(pkg: javascript.NodeProject): boolean {
   if (!(pkg instanceof typescript.TypeScriptProject) || !pkg.parent) return false;
-  return isDBXToolsJavaScriptProject()(pkg) && !pkg.dbxToolsConfig.tags.includes("ui");
+  return (
+    isDBXToolsJavaScriptProject()(pkg) &&
+    pkg.dbxToolsConfig.publishable &&
+    !pkg.dbxToolsConfig.tags.includes("ui")
+  );
 }
 
 /** The `./lib/...` stem of a source path, or `undefined` if it is not TypeScript. */

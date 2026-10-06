@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { GRAPHITI_DEFAULTS } from "@dbx-tools/shared-graphiti";
+import { GRAPHITI_DEFAULTS } from "@dbx-tools/graphiti/options";
 import { resolveGraphitiConfig } from "../src/config.ts";
 
 const originalEnv = { ...process.env };
@@ -15,15 +15,7 @@ describe("resolveGraphitiConfig", () => {
 
     assert.deepEqual(resolveGraphitiConfig(), {
       ...GRAPHITI_DEFAULTS,
-      graphitiPort: 0,
-      modelGatewayPort: 0,
+      listen: { scheme: "tcp", host: "127.0.0.1", port: 0 },
     });
-  });
-
-  it("rejects colliding ports", () => {
-    assert.throws(
-      () => resolveGraphitiConfig({ graphitiPort: 8000, modelGatewayPort: 8000 }),
-      /ports must be distinct/,
-    );
   });
 });

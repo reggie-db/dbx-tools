@@ -8,5 +8,3 @@ export * as cli from "./src/cli.ts";
 export * as options from "./src/options.ts";
 export * as runtime from "./src/runtime.ts";
 export type { FalkorDBCliDependencies } from "./src/cli.ts";
-export { FalkorDBOptionsSchema } from "./src/options.ts";
-export type { FalkorDBOptions } from "./src/options.ts";

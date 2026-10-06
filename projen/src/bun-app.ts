@@ -11,8 +11,8 @@
  *   imports `index.html` and serves the SPA with React hot module reloading.
  * - {@link BunBuildFile} - `build.ts`: a Databricks-safe `Bun.build()` production
  *   bundle of `index.html` (the `bun-plugin-tailwind` plugin must run through the
- *   JS API, NOT the `bun build` CLI, which does not load it), plus Vite-compatible
- *   staging of an optional `public/` directory.
+ *   JS API, NOT the `bun build` CLI, which does not load it), plus copying an
+ *   optional `public/` directory.
  *
  * The dev and build scripts support unmanaged `bun-dev.override.ts` and
  * `bun-build.override.ts` modules beside them. Each script imports the override's

@@ -73,7 +73,6 @@ Once the workspace is initialized, use its tasks directly:
 bun run sync
 bun run sync -- --watch
 bun run barrels
-bun run openapi
 ```
 
 See [`@dbx-tools/projen`](../../../../projen) for workspace configuration and

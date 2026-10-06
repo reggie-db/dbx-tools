@@ -9,11 +9,9 @@ import { repoRoot } from "./packages.ts";
  * Re-run projen synth by executing `.projenrc.ts` with the CURRENT runtime (no
  * projen network re-exec).
  *
- * The TypeScript loader is chosen by which runtime is running: bun executes
- * `.ts` natively, while node needs `--import tsx`. Passing `--import tsx` to bun
- * fails outright (`Cannot find module './cjs/index.cjs'`), which is what broke
- * `sync` once the repo moved onto bun - `process.execPath` is bun here, so the
- * flag was aimed at the one runtime that cannot take it.
+ * dbx-tools tasks are Bun entrypoints, so the current runtime executes the
+ * TypeScript definition directly. A Node fallback would require an additional
+ * loader that no generated task or supported workflow uses.
  *
  * `post: true` runs the full flow - projen's post-synth `bun install` AND the
  * post-synth barrels component - which is what the one-shot `sync` task
@@ -33,6 +31,5 @@ export function runSynth(options: { post?: boolean } = {}): void {
   if (options.post) delete env.PROJEN_DISABLE_POST;
   else env.PROJEN_DISABLE_POST = "true";
   const projenrc = join(repoRoot, ".projenrc.ts");
-  const args = process.versions.bun ? [projenrc] : ["--import", "tsx", projenrc];
-  runTaskCommand(repoRoot, process.execPath, args, { env });
+  runTaskCommand(repoRoot, process.execPath, [projenrc], { env });
 }

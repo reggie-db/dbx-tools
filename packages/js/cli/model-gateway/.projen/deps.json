@@ -11,11 +11,6 @@
       "type": "build"
     },
     {
-      "name": "@babel/preset-typescript",
-      "version": "7.28.5",
-      "type": "runtime"
-    },
-    {
       "name": "@databricks/appkit",
       "version": "catalog:",
       "type": "runtime"
@@ -51,23 +46,8 @@
       "type": "runtime"
     },
     {
-      "name": "@mlflow/core",
-      "version": "0.4.0",
-      "type": "runtime"
-    },
-    {
-      "name": "@vitejs/plugin-react",
-      "version": "5.1.1",
-      "type": "runtime"
-    },
-    {
       "name": "commander",
       "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "esbuild",
-      "version": "0.28.2",
       "type": "runtime"
     }
   ],

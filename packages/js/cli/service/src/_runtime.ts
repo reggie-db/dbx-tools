@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import * as exec from "@dbx-tools/core/exec";
@@ -39,6 +39,39 @@ export async function installServiceRuntime(
     stdout: "capture",
     stderr: "capture",
   });
+}
+
+/** Create a clean uv environment and install one exact Python package. */
+export async function installServicePythonPackage(
+  uvExecutable: string,
+  directory: string,
+  packageSpecifier: string,
+  python: string,
+  platform: NodeJS.Platform,
+): Promise<string> {
+  await rm(directory, { recursive: true, force: true });
+  await exec.spawn(
+    uvExecutable,
+    ["venv", "--managed-python", "--no-project", "--python", python, directory],
+    {
+      check: true,
+      stdin: "ignore",
+      stdout: "capture",
+      stderr: "capture",
+    },
+  );
+  const executable = join(directory, platform === "win32" ? "Scripts/python.exe" : "bin/python");
+  await exec.spawn(
+    uvExecutable,
+    ["pip", "install", "--python", executable, "--upgrade", packageSpecifier],
+    {
+      check: true,
+      stdin: "ignore",
+      stdout: "capture",
+      stderr: "capture",
+    },
+  );
+  return executable;
 }
 
 async function readOptionalRecord(path: string): Promise<Record<string, unknown>> {

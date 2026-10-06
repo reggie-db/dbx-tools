@@ -49,7 +49,6 @@ export function buildEnvCommand(name = "env"): Command {
   const command = addArgs(
     new Command(name).description("Run AppKit auto-config and print new/changed env vars."),
     EnvCommandOptionsSchema,
-    { scope: [] },
   );
   return command.action(async () => {
     await writeEnvExport(parseArgs(command, EnvCommandOptionsSchema));

@@ -29,6 +29,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { materializeWorkspaceManifest } from "@dbx-tools/projen/release-packaging";
 import { parse, stringify } from "yaml";
 
 const serverDir = dirname(fileURLToPath(import.meta.url));
@@ -49,49 +50,31 @@ if (pkg.version !== version) {
   );
 }
 
-// The root catalog: `catalog:` specifiers resolve to these concrete versions.
+const workspaceManifest = JSON.parse(
+  readFileSync(join(repoRoot, "package.json"), "utf8"),
+) as Record<string, unknown>;
 const rootWorkspace = parse(readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8")) as {
-  catalog?: Record<string, string>;
   allowBuilds?: Record<string, boolean>;
 };
-const catalog = rootWorkspace.catalog ?? {};
 const allowBuilds = rootWorkspace.allowBuilds ?? {};
-
-/** Resolve every `catalog:`/`workspace:*` specifier to a concrete, npm-installable one. */
-function resolveDeps(deps: Record<string, string> | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [name, spec] of Object.entries(deps ?? {})) {
-    if (spec.startsWith("workspace:")) {
-      out[name] = name.startsWith("@dbx-tools/") ? version : spec.replace("workspace:", "");
-    } else if (spec === "catalog:") {
-      const resolved = catalog[name];
-      if (!resolved) throw new Error(`no catalog entry for ${name}`);
-      out[name] = resolved;
-    } else {
-      out[name] = spec;
-    }
-  }
-  return out;
+const overrides = workspaceManifest.overrides as Record<string, unknown> | undefined;
+const bunVersion = overrides?.bun;
+if (typeof bunVersion !== "string" || !bunVersion) {
+  throw new Error("root package.json has no Bun version override");
 }
-
-const deployPkg = {
-  name: "dbx-tools-demo-app",
-  version,
-  private: true,
-  type: "module",
-  // Runtime deps only, all resolved to npm-installable specifiers. `bun` is added
-  // so the platform's pnpm install fetches the runtime the command runs (`bun
-  // src/launch.ts`). The public tunnel is `@dbx-tools/tunnel`, already a normal
-  // dependency of the server (resolved through `resolveDeps` above), consumed
-  // in-process via `tunnelInterceptor()` - no wrapper bin to inject.
-  dependencies: {
-    ...resolveDeps(pkg.dependencies as Record<string, string>),
-    bun: "1.3.14",
+const deployPkg = materializeWorkspaceManifest(
+  {
+    name: "dbx-tools-demo-app",
+    version,
+    private: true,
+    type: "module",
+    dependencies: {
+      ...(pkg.dependencies as Record<string, string>),
+      bun: bunVersion,
+    },
   },
-  // Keep the ambient TS types the server's imported `@dbx-tools/*` SOURCE needs at
-  // runtime type-strip (bun runs .ts directly), resolved off the catalog too.
-  devDependencies: resolveDeps(pkg.devDependencies as Record<string, string>),
-};
+  workspaceManifest,
+);
 
 // pnpm-workspace.yaml: no members (single-package deploy), but `allowBuilds` so
 // pnpm 10+ runs the postinstalls the build needs (esbuild, unrs-resolver, bun,

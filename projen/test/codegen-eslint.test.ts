@@ -23,9 +23,7 @@ function synthIgnorePatterns(): string[] {
     outdir: "packages/shared/generated",
     name: "@fixture/generated",
   });
-  pkg.package.addField("codegen", {
-    inputs: ["node_modules/some-sdk/dist/apis/dashboards/model.d.ts"],
-  });
+  pkg.dbxToolsConfig.codegenInputs.push("node_modules/some-sdk/dist/apis/dashboards/model.d.ts");
   root.synth();
 
   const raw = readFileSync(join(outdir, ".eslintrc.json"), "utf8").replace(/^\s*\/\/.*$/gm, "");

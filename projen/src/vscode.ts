@@ -33,7 +33,7 @@ export function configureVsCode(scope: javascript.NodeProject): void {
         {
           label: "sync",
           detail:
-            "projen sync --watch - projenrc (.projenrc.ts + syncResynthPaths re-synth) + barrels + openapi watchers",
+            "projen sync --watch - projenrc (.projenrc.ts + syncResynthPaths re-synth) + barrel watcher",
           type: "shell",
           command: "bun run sync -- --watch",
           isBackground: true,

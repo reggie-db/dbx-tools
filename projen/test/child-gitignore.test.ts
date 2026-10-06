@@ -1,10 +1,7 @@
 /**
- * A CHILD's `.gitignore` carries ONLY custom patterns (post-construction
- * `addPatterns`, or the `gitignore`/`gitIgnoreOptions.ignorePatterns` options) -
- * never the NodeProject defaults the root already provides - and is not emitted
- * at all when nothing custom was added. The root keeps its full default file.
- * Also guards the projen quirk that seeded this: IgnoreFile ALIASES the
- * `ignorePatterns` array it is handed, so the caller's options must stay pristine.
+ * Projen owns each child `.gitignore`, including native defaults and custom
+ * patterns. The engine only protects the caller's options from Projen's mutable
+ * array alias.
  */
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -54,21 +51,22 @@ after(() => {
 });
 
 describe("child .gitignore", () => {
-  it("keeps only the custom patterns added after construction", () => {
+  it("keeps native defaults and custom patterns added after construction", () => {
     const lines = read("packages/with-custom/.gitignore");
     assert.ok(lines.includes("/generated-artifacts/"));
-    // None of the NodeProject defaults leak in - custom + marker is all there is.
-    assert.ok(!lines.includes("node_modules/"));
-    assert.equal(lines.filter((l) => !l.startsWith("#")).length, 1);
+    assert.ok(lines.includes("node_modules/"));
   });
 
-  it("is not emitted at all without custom patterns", () => {
-    assert.ok(!existsSync(join(outdir, "packages/no-custom/.gitignore")));
+  it("emits native defaults without custom patterns", () => {
+    assert.ok(existsSync(join(outdir, "packages/no-custom/.gitignore")));
+    assert.ok(read("packages/no-custom/.gitignore").includes("node_modules/"));
   });
 
-  it("keeps only the patterns seeded through the standard projen options", () => {
+  it("keeps patterns seeded through the standard Projen options", () => {
     const lines = read("packages/via-options/.gitignore").filter((l) => !l.startsWith("#"));
-    assert.deepEqual(lines.sort(), ["/from-gitignore-opt/", "/seeded-via-options/"]);
+    assert.ok(lines.includes("/from-gitignore-opt/"));
+    assert.ok(lines.includes("/seeded-via-options/"));
+    assert.ok(lines.includes("node_modules/"));
   });
 
   it("leaves the caller's ignorePatterns array unmutated", () => {

@@ -70,6 +70,10 @@ describe("pnpm-workspace.yaml", () => {
     assert.match(yaml, /^ {2}"@databricks\/appkit-ui": 0\.81\.0$/m);
   });
 
+  it("does not expose engine-only or removed tooling through the product catalog", () => {
+    assert.doesNotMatch(yaml, /^ {2}(?:openapi-fetch|tsoa|concurrently):/m);
+  });
+
   it("keeps a DOTTED package name one catalog key", () => {
     // Guards the reason pins are set as plain object keys rather than through
     // projen's `file.addOverride("catalog.<name>", ...)`, which SPLITS its path

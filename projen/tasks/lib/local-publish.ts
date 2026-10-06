@@ -3,7 +3,6 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log, net } from "@dbx-tools/shared-core";
-import { Command } from "commander";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
 import { runTaskCommandAsync } from "../../src/_task-command.ts";
 
@@ -92,31 +91,4 @@ export async function publishLocalRelease(
   await Promise.all(publishes);
   logger.success(`published local workspace ${options.version}`);
   return { npm: Boolean(localRegistry), python: Boolean(localPypi) };
-}
-
-export async function main(): Promise<void> {
-  await new Command()
-    .requiredOption("--version <version>", "release version")
-    .option("--root <path>", "repository root")
-    .option("--python-root <path>", "Python package root", "packages/py")
-    .option("--local-registry <url>", "local npm registry", "auto")
-    .option("--local-pypi <url>", "local devpi index", "auto")
-    .action(
-      async (options: {
-        version: string;
-        root?: string;
-        pythonRoot: string;
-        localRegistry: string;
-        localPypi: string;
-      }) => {
-        await publishLocalRelease({
-          localPypi: options.localPypi,
-          localRegistry: options.localRegistry,
-          pythonRoot: options.pythonRoot,
-          root: options.root ?? projectUtils.root() ?? process.cwd(),
-          version: options.version,
-        });
-      },
-    )
-    .parseAsync();
 }

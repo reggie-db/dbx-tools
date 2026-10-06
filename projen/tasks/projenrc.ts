@@ -1,4 +1,5 @@
 #!/usr/bin/env -S bun
+/** Resynthesize when the root definition or configured generator inputs change. */
 import { resolve } from "node:path";
 import { log } from "@dbx-tools/shared-core";
 import { repoRoot, syncResynthPaths } from "../src/packages.ts";

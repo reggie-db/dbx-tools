@@ -27,11 +27,8 @@
   },
   "dependencies": {
     "@dbx-tools/cli-args": "workspace:^",
-    "@dbx-tools/cli-model-gateway": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
-    "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/falkor-db": "workspace:^",
-    "@dbx-tools/shared-graphiti": "workspace:^",
+    "@dbx-tools/graphiti": "workspace:^",
     "commander": "catalog:"
   },
   "main": "index.ts",
@@ -52,9 +49,9 @@
         "types": "./lib/src/cli.d.ts",
         "default": "./lib/src/cli.js"
       },
-      "./runtime": {
-        "types": "./lib/src/runtime.d.ts",
-        "default": "./lib/src/runtime.js"
+      "./options": {
+        "types": "./lib/src/options.d.ts",
+        "default": "./lib/src/options.js"
       },
       "./package.json": "./package.json"
     }
@@ -70,12 +67,13 @@
   "exports": {
     ".": "./index.ts",
     "./cli": "./src/cli.ts",
-    "./runtime": "./src/runtime.ts",
+    "./options": "./src/options.ts",
     "./package.json": "./package.json"
   },
   "files": [
     "index.ts",
     "src",
+    "exports.ts",
     "bin",
     "lib"
   ],

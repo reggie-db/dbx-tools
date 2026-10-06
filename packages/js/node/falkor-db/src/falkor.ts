@@ -4,12 +4,14 @@
  * This module owns the reusable lifecycle: restore before process start, a
  * private Unix socket, Redis change-aware RDB policy, completed-snapshot
  * observation, and `NOSAVE` shutdown. Applications should reuse
- * {@link DurableFalkorDB} rather than spawning Redis, exposing a TCP port, or
- * attaching backup logic around FalkorDBLite themselves.
+ * {@link DurableFalkorDB} rather than spawning Redis or attaching backup logic
+ * around FalkorDBLite themselves. TCP remains opt-in and loopback-only at the
+ * CLI boundary.
  *
  * @module
  */
 
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -47,6 +49,10 @@ export interface DurableFalkorDBOptions extends Pick<
 > {
   /** Local active-database directory. Defaults to `FALKORDB_DATA_DIR`. */
   dataDir?: string;
+  /** Deterministic private Unix socket path. Defaults to a random path under `dataDir`. */
+  socketPath?: string;
+  /** Optional loopback TCP port. Defaults to zero, which disables TCP. */
+  port?: number;
   /** Redis snapshot interval. Defaults to `FALKORDB_SNAPSHOT_SECONDS` or 300. */
   snapshotSeconds?: number;
   /** Minimum writes in an interval. Defaults to `FALKORDB_SNAPSHOT_MIN_CHANGES` or 1. */
@@ -92,22 +98,31 @@ export class DurableFalkorDB {
     await persistence.restore();
 
     const binaries = resolveBinaries(options);
+    const socketPath =
+      options.socketPath ??
+      join(
+        tmpdir(),
+        options.port !== undefined
+          ? `dbx-tools-falkor-${options.port}-${createHash("sha256").update(dataDir).digest("hex").slice(0, 12)}.sock`
+          : `dbx-tools-falkor-${randomBytes(8).toString("hex")}.sock`,
+      );
     const config = new ConfigGenerator({
-      dbDir: dataDir,
-      falkordbModulePath: binaries.modulePath,
+      dbDir: redisConfigArgument(dataDir),
+      falkordbModulePath: redisConfigArgument(binaries.modulePath),
+      unixSocketPath: redisConfigArgument(socketPath),
+      port: options.port ?? 0,
       maxMemory: options.maxMemory,
       logLevel: options.logLevel,
-      logFile: options.logFile,
+      logFile: options.logFile ? redisConfigArgument(options.logFile) : undefined,
       additionalConfig: {
         ...options.redisConfig,
-        port: "0",
         save: `${snapshotSeconds} ${snapshotMinChanges}`,
       },
     });
     const server = new ServerManager({
       redisServerPath: binaries.redisServerPath,
       config: config.generate(),
-      socketPath: config.getSocketPath(),
+      socketPath,
       startupTimeoutMs: options.timeout,
       inheritStdio: options.inheritStdio,
     });
@@ -231,6 +246,10 @@ function positiveInteger(value: number | string, name: string): number {
     throw new TypeError(`${name} must be a positive integer`);
   }
   return parsed;
+}
+
+function redisConfigArgument(value: string): string {
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 export type { Graph } from "falkordb";

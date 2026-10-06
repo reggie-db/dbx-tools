@@ -1,3 +1,4 @@
+/** Resolve active uv indexes and writable loopback devpi publication targets. */
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
@@ -5,8 +6,11 @@ import { net } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
 import { captureTaskCommand } from "../../src/_task-command.ts";
 
+/** Paired Python package index and upload endpoints for a local registry. */
 export interface LocalPythonRegistry {
+  /** PEP 503 package index URL used for dependency resolution. */
   readonly indexUrl: string;
+  /** Registry upload URL used for publication. */
   readonly publishUrl: string;
 }
 

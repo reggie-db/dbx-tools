@@ -36,22 +36,17 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-graphiti",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/core",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/shared-core",
+      "name": "@dbx-tools/graphiti",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/shared-graphiti",
+      "name": "@dbx-tools/shared-core",
       "version": "workspace:^",
       "type": "runtime"
     },

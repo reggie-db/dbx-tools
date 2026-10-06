@@ -8,7 +8,7 @@ instead of calling `glob`, `minimatch`, or Chokidar directly when results should
 agree with package discovery, generation, docs, cleanup, or watch workflows.
 
 Import this package when Node code needs consistent glob behavior across CLI,
-projen, barrel generation, OpenAPI generation, or docs tooling.
+projen, barrel generation, codegen, or docs tooling.
 
 Key features:
 

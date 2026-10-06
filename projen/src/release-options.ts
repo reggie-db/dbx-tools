@@ -8,6 +8,7 @@
  * @module
  */
 import { json } from "@dbx-tools/shared-core";
+import { z } from "zod";
 
 /** Publication scopes accepted by the release task; auto preserves normal publication. */
 export const RELEASE_PUBLISH_TARGETS = ["auto", "npm", "pypi", "local", "none"] as const;
@@ -22,12 +23,19 @@ export const RELEASE_INSTALL_MODES = ["auto", "always", "never"] as const;
 export type ReleaseInstallMode = (typeof RELEASE_INSTALL_MODES)[number];
 
 /** CI steps selected by an immutable release annotation. */
-export interface ReleaseStepSelection {
-  readonly npm: boolean;
-  readonly pypi: boolean;
-  readonly docs: boolean;
-  readonly validation: boolean;
-}
+export const ReleaseStepSelectionSchema = z
+  .object({
+    npm: z.boolean().describe("Build and publish npm artifacts."),
+    pypi: z.boolean().describe("Build and publish Python artifacts."),
+    docs: z.boolean().describe("Build and deploy documentation."),
+    validation: z.boolean().describe("Run repository validation tasks."),
+  })
+  .strict()
+  .readonly()
+  .describe("Immutable CI steps recorded in an annotated release tag.");
+
+/** CI steps selected by an immutable release annotation. */
+export type ReleaseStepSelection = z.infer<typeof ReleaseStepSelectionSchema>;
 
 /** Flags consumed by the shared release-selection policy. */
 export interface ReleaseSelectionOptions {
@@ -63,17 +71,9 @@ export function parseReleaseTagAnnotation(annotation: string): ReleaseStepSelect
   if (selections.length === 0) return releaseStepSelection();
   if (selections.length !== 1) throw new Error("Release tag contains multiple step selections");
   const value = json.parseRecord(selections[0]!.slice(ANNOTATION_MARKER.length));
-  if (
-    !value ||
-    Object.keys(value).length !== 4 ||
-    typeof value.npm !== "boolean" ||
-    typeof value.pypi !== "boolean" ||
-    typeof value.docs !== "boolean" ||
-    typeof value.validation !== "boolean"
-  ) {
-    throw new Error("Invalid release tag step selection");
-  }
-  return { npm: value.npm, pypi: value.pypi, docs: value.docs, validation: value.validation };
+  const parsed = ReleaseStepSelectionSchema.safeParse(value);
+  if (!parsed.success) throw new Error("Invalid release tag step selection");
+  return parsed.data;
 }
 
 /** Whether the selected release should inspect and publish configured local registries. */

@@ -4,21 +4,20 @@ Projen engine for Bun-first dbx-tools workspaces.
 
 Import this package from `.projenrc.ts` when a repository should discover
 packages from the filesystem and generate manifests, tsconfigs,
-barrels, OpenAPI clients, codegen outputs, and release tasks.
+barrels, codegen outputs, and release tasks.
 
 Key features:
 
 - Filesystem package discovery: every `src`-bearing folder under configured
   workspace roots becomes a TypeScript package.
 - Tag-driven runtime defaults for shared libraries, Node packages, CLIs,
-  servers, OpenAPI clients, and React/browser UI packages.
+  servers, and React/browser UI packages.
 - Generated package manifests, tsconfigs, package-root barrels, Bun app configs,
   VS Code settings, and a committed `pnpm-workspace.yaml` retained for
   Databricks Apps deployment.
 - Extensible mixin system so repositories can add deps, tasks, or generated
   files based on package predicates.
-- OpenAPI client generation from tsoa controllers and zod schema generation from
-  `.d.ts` inputs.
+- Zod schema generation from `.d.ts` inputs.
 - Read-only generated-file ownership, cleanup, and watch-loop helpers.
 
 ## Define A Workspace Root
@@ -66,8 +65,8 @@ Repository policy stays in the consuming `.projenrc.ts`:
   before release artifacts are built and published.
 - `releaseSetupSteps` installs any extra validation/build prerequisites in the
   shared release job before the validation tasks run.
-- `pullRequestTitlePolicy` configures semantic title types and scope policy.
-  Omit it or pass `false` to disable the title job.
+- `releaseSynthesisCommands` runs repository-specific synth owners before the
+  root synthesis and clean-diff release check.
 - `extraWorkspaceMembers` declares self-synthesizing tooling packages outside
   `packageRoots`. Their version, generated entrypoint, formatting, linting, and
   workspace membership are derived from that declaration.
@@ -226,7 +225,7 @@ parameter to `Project`). Drop to `mixin.create(predicate, fn)` +
 `project.with(...)` only when you need a predicate the filters cannot express.
 
 Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
-`ui`, and `openapi`. Repo-specific mixins layer package-specific dependencies,
+and `ui`. Repo-specific mixins layer package-specific dependencies,
 scripts, and generated files on top.
 
 AppKit 0.81's `appkitServerConfig()` is the preferred tsdown preset for a
@@ -270,12 +269,19 @@ codegen.generateCodegen();
 barrels.generateBarrels();
 ```
 
-`generateCodegen()` reads `package.json` `codegen.inputs` and writes generated
-schema modules. They are written read-only, and the root ESLint task runs with
-an explicit separate fix task, so each generated module is added to
-`ignorePatterns` at synth - named individually via `codegen.codegenModulePaths()`,
-never as a blanket `<package>/src/**`. A codegen package may hold hand-written
-modules beside its generated ones, and those must stay linted.
+Add declaration inputs through the owning package's typed config:
+
+```ts
+pkg.dbxToolsConfig.codegenInputs.push("node_modules/example/model.d.ts");
+```
+
+`generateCodegen()` reads the serialized `dbxToolsConfig.codegenInputs` and
+writes generated schema modules. They are written read-only, and the root
+ESLint task runs with an explicit separate fix task, so each generated module is
+added to `ignorePatterns` at synth - named individually via
+`codegen.codegenModulePaths()`, never as a blanket `<package>/src/**`. A codegen
+package may hold hand-written modules beside its generated ones, and those must
+stay linted.
 
 `generateBarrels()` writes package-root `index.ts` barrels with module
 namespaces, flat unique type exports, and `PACKAGE_IDENTIFIER`, returning the
@@ -287,17 +293,6 @@ read-only bit included, so concurrent writers never collide over it. Every
 package is attempted even if one fails; the failures are re-thrown together as an
 `AggregateError` naming each package, rather than the first one abandoning the
 rest of the sweep.
-
-## Generate OpenAPI Clients
-
-```ts
-import { openapi } from "@dbx-tools/projen";
-
-const packages = await openapi.generateOpenapi();
-```
-
-OpenAPI generation scans packages for tsoa controllers, emits `openapi.json`,
-generates TypeScript schemas, and adds an `openapi-fetch` client.
 
 ## Configure pnpm Catalogs
 
@@ -349,7 +344,6 @@ file contract as the CLI.
 - `pnpmWorkspace` - generated pnpm workspace file and catalog model.
 - `barrels` / `moduleExports` - public entrypoint generation.
 - `codegen` - `.d.ts` to zod schema generation.
-- `openapi` - tsoa/OpenAPI package generation.
 - `bunApp` / `tsconfig` / `vscode` - generated support files/components.
 - `generated` / `clean` / `watch` / `scaffold` - read-only file ownership,
   cleanup, watchers, and synth orchestration.
@@ -357,17 +351,17 @@ file contract as the CLI.
 - `engineRoot` - engine package root resolution for bootstrapped repos.
 
 The engine registers its commands as projen tasks on the workspace root, so run
-them with `bun run <task>` - `sync` (add `--watch`), `barrels`, `openapi`, and
-`clean`.
+them with `bun run <task>` - `sync` (add `--watch`), `barrels`, and `clean`.
 [`@dbx-tools/cli`](../packages/js/cli/dbx-tools) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
 
 ## Run Tasks From The ROOT
 
-Every repo-wide task lives on the root. `compile` batches ordinary TypeScript
-packages in up to four `tsc --build` processes and runs custom compile tasks alongside them;
-`test` delegates with `bun run --filter '*'`. Both read the current workspace
-list, so a new package is covered without a re-synth. Work from the root:
+Every repo-wide task lives on the root. `compile` batches package tsconfigs in
+up to four `tsc --build` processes and runs package-owned compile lifecycles
+alongside them; `test` delegates with `bun run --filter '*'`. Both read the
+current workspace list, so a new package is covered without a re-synth. Work
+from the root:
 
 | Task                    | What it does                                        |
 | ----------------------- | --------------------------------------------------- |
@@ -411,7 +405,7 @@ bun run release --local-registry false --local-pypi auto
 ```
 
 `--install auto` keeps Projen's normal local dependency-install behavior;
-`always` performs a frozen install first, and `never` uses dependencies already
+`always` performs a manifest-resolved install first, and `never` uses dependencies already
 installed while still regenerating versioned sources. `--no-validation` skips
 optional task checks locally and in CI, not version or immutable-source checks.
 `--no-docs` skips building and deploying the site, not package README validation.
@@ -424,8 +418,8 @@ invokes, so there is no second place to run the same thing:
 
 - `compile` / `test` - what the root's `--filter '*'` delegation calls.
 - `prepack` - standalone-publish safety that compiles one package before packing
-  (27 of 33 members; the workspace release driver compiles them from the root
-  and publishes with lifecycle scripts disabled).
+  when that package has a compiled publication surface; the workspace release
+  driver compiles from the root and publishes with lifecycle scripts disabled.
 - `watch` - a single-package `tsc --build -w`, for narrowing a long
   edit/compile loop to one package.
 - `build` / `package` - a complete compile/test/pack lifecycle when invoked in

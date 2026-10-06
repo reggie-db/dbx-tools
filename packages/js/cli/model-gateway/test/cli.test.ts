@@ -76,7 +76,7 @@ describe("model gateway CLI", () => {
 
     assert.deepEqual(definition?.command?.arguments, [
       "--listen",
-      "localhost:4401",
+      "tcp://localhost:4401",
       "--profile",
       "SERVICE-PROFILE",
       "--body-limit",
@@ -103,7 +103,7 @@ describe("model gateway CLI", () => {
 
     assert.deepEqual(calls, [
       {
-        listen: { host: "localhost", port: 4410 },
+        listen: { scheme: "tcp", host: "localhost", port: 4410 },
         profile: "MODEL-PROFILE",
         bodyLimit: "100mb",
       },

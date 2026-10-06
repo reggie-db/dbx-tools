@@ -12,13 +12,13 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { ignore, match } from "@dbx-tools/path";
 import { object, stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
-import { Component, IgnoreFile, Project, javascript, typescript } from "projen";
+import { Component, LogLevel, Project, javascript, typescript } from "projen";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
 import { generateBarrels } from "./barrels.ts";
 
 import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
-import { BUN_VERSION, bunSetupStep } from "./bun-workflow.ts";
+import { BUN_VERSION } from "./bun-workflow.ts";
 import { codegenModulePaths, generateCodegen } from "./codegen.ts";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
 import { resolvePkgRoot } from "./engine-root.ts";
@@ -52,6 +52,8 @@ export interface DBXToolsJavaScriptProject extends DBXToolsProject, javascript.N
   readonly dbxToolsConfig: DBXToolsConfig;
   /** npm scope (the `@scope` in `@scope/pkg`), without the leading `@`. */
   readonly scope: string;
+  /** Branch that the repository's tag release must match. */
+  readonly releaseBranch: string;
 
   /**
    * The `pnpm-workspace.yaml` catalog / member / build-allowance state - only a
@@ -251,11 +253,8 @@ export function projectRepositoryUrl(project: javascript.NodeProject): string | 
 }
 
 /** Resolve the branch release workflows use for a generated project. */
-export function projectReleaseBranch(project: javascript.NodeProject): string {
-  return (
-    (project as javascript.NodeProject & { readonly releaseBranch?: string }).releaseBranch ??
-    "main"
-  );
+export function projectReleaseBranch(project: DBXToolsJavaScriptProject): string {
+  return project.releaseBranch;
 }
 
 /**
@@ -367,19 +366,21 @@ const PRETTIER_SETTINGS: javascript.PrettierSettings = {
 export { PROJEN_VERSION } from "./projen-version.ts";
 
 /** SPDX license shared by generated JavaScript and Python packages. */
-export const DBX_TOOLS_LICENSE = "Apache-2.0";
+export const LICENSE = "Apache-2.0";
 
 /**
  * The engine's opinionated `NodeProject` defaults. A caller's own options override
  * these (they are spread AFTER this). Root-only concerns key off `options.parent`,
  * NOT the class: only the tree ROOT (no parent) turns on projen's built-in Prettier
  * (the `prettier` devDep + `.prettierrc.json` + `.prettierignore`), so a child package
- * inherits the root's config rather than emitting its own. `name`/`defaultReleaseBranch`
- * are resolved/applied by the caller.
+ * inherits the root's config rather than emitting its own. Projen's informational
+ * status messages are hidden by default while task output, warnings, and errors
+ * remain visible. `name`/`defaultReleaseBranch` are resolved/applied by the caller.
  */
 function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
   const isRoot = options.parent === undefined;
   return {
+    logging: { level: LogLevel.WARN },
     // Bun owns install/run/build/test locally and in CI. projen renders
     // `bun install`/`bunx` and a native `trustedDependencies` field from this.
     // The engine still emits `pnpm-workspace.yaml` itself (see
@@ -408,7 +409,7 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     // workflow opts in per run through `npm_config_provenance`, so local publishes
     // to Verdaccio still work without a CI OIDC provider. See
     // {@link DBXToolsRelease}.
-    ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
+    ...(isRoot || options.publishable === false ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
     workflowPackageCache: false,
     // The root build validates the whole workspace and must not also pack every
     // member into unused `dist/js` tarballs. Child projects keep projen's package
@@ -455,9 +456,8 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
 /**
  * `gitIgnoreOptions` with its `ignorePatterns` array CLONED, for handing to a
  * projen `Project` constructor: projen's IgnoreFile ALIASES the array it is given
- * (every later addPatterns call mutates it), so the throwaway default-laden
- * `.gitignore` gets a copy - {@link swapChildGitignore} re-reads the caller's
- * pristine array to seed a child's fresh one. Spread AFTER `...options`.
+ * and every later `addPatterns` call mutates it. The caller's typed options must
+ * remain unchanged while Projen owns and extends the generated ignore file.
  */
 function copiedGitIgnoreOptions(
   options: DBXToolsJavaScriptProjectOptions,
@@ -514,11 +514,20 @@ function validateReleaseOptions(options: DBXToolsJavaScriptProjectOptions): void
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export type DBXToolsReleaseMode = "dbx-tools" | "disabled";
 
+/** Native constructor fields resolved for one filesystem-discovered package. */
+export interface DiscoveredTypeScriptPackageOptions {
+  readonly name: string;
+  readonly description?: string;
+  readonly entrypoint?: string;
+  readonly publishable?: boolean;
+}
+
 type SupportedWorkflowOptions = Pick<
   ReleaseProjectOptions,
   "postBuildSteps" | "workflowContainerImage" | "workflowRunsOn" | "workflowRunsOnGroup"
 >;
 
+/** Options shared by discovered package roots and standalone JavaScript projects. */
 export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
   Partial<
     Omit<javascript.NodeProjectOptions, keyof ReleaseProjectOptions | "release" | "releaseToNpm">
@@ -546,8 +555,11 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      * disable. Defaults to `"node"`.
      */
     readonly omitRelativePrefix?: OneOrMany<string>;
-    /** Resolve a discovered package name before its project is constructed. */
-    readonly resolvePackageName?: (pkg: DiscoveredPackage, defaultPackageName: string) => string;
+    /** Resolve native constructor fields before a discovered package is constructed. */
+    readonly resolvePackageOptions?: (
+      pkg: DiscoveredPackage,
+      defaults: DiscoveredTypeScriptPackageOptions,
+    ) => DiscoveredTypeScriptPackageOptions;
     /**
      * Maps a path token / relPath / glob to tag(s), unioned into a package's
      * path-derived tags. Defaults to an identity map over the known tag names; a
@@ -573,6 +585,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releaseValidationTasks?: readonly string[];
     /** Release build prerequisites installed before repository validation tasks. */
     readonly releaseSetupSteps?: readonly JobStep[];
+    /** Repository-specific synthesis commands run before release source verification. */
+    readonly releaseSynthesisCommands?: readonly string[];
     /** Set to `false` to omit normal npm workspace publication. */
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
@@ -656,15 +670,6 @@ export class DBXToolsNodeProject
     initProject(this, options);
   }
 
-  public override renderWorkflowSetup(options?: javascript.RenderWorkflowSetupOptions): JobStep[] {
-    const steps = super.renderWorkflowSetup(options);
-    if (this.parent) return steps;
-    return [
-      bunSetupStep() as JobStep,
-      ...steps.filter((step) => !step.uses?.startsWith("oven-sh/setup-bun@")),
-    ];
-  }
-
   public override preSynthesize(): void {
     prepareRootSynthesis(this, this.rootInstallOnly);
     super.preSynthesize();
@@ -677,11 +682,11 @@ export class DBXToolsNodeProject
  * Root-owned workspace install policy.
  *
  * Every projen child has its own `NodePackage` post-synth hook, which otherwise
- * runs `bun install` against the same root workspace once per package. Clear the
- * child install tasks and suppress the package hook's install call and trigger
- * log while leaving dependency resolution and the root's real install/install:ci
- * tasks intact. Applied in root `preSynthesize` so manually attached late
- * children are included and repeated synths remain idempotent.
+ * runs the install task against the same root workspace once per package. Clear
+ * the public child install tasks while leaving dependency resolution and the
+ * root's real install/install:ci tasks intact. Applied in root `preSynthesize`
+ * so manually attached late children are included and repeated synths remain
+ * idempotent.
  */
 export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
   (construct: IConstruct): construct is DBXToolsNodeProject | DBXToolsTypeScriptProject =>
@@ -690,12 +695,6 @@ export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
   (child) => {
     child.package.installTask.reset();
     child.package.installCiTask.reset();
-    const nodePackage = child.package as unknown as {
-      installDependencies(trigger: unknown): void;
-      logInstallTrigger(trigger: unknown): void;
-    };
-    nodePackage.installDependencies = () => {};
-    nodePackage.logInstallTrigger = () => {};
   },
 );
 
@@ -823,10 +822,9 @@ class GeneratedSource extends Component {
   public override preSynthesize(): void {
     const root = resolve(this.project.outdir);
     for (const subproject of this.project.subprojects) {
-      if (!(subproject instanceof javascript.NodeProject)) continue;
-      const codegen = subproject.package.manifest.codegen as { inputs?: string[] } | undefined;
+      if (!(subproject instanceof DBXToolsTypeScriptProject)) continue;
       const packagePath = toPosix(relative(root, subproject.outdir));
-      const modules = codegenModulePaths(codegen?.inputs ?? []);
+      const modules = codegenModulePaths(subproject.dbxToolsConfig.codegenInputs);
       for (const module of modules) {
         this.project.annotateGenerated(`/${packagePath}/${module}`);
       }
@@ -859,10 +857,10 @@ class GeneratedSource extends Component {
  *
  * projen gives a monorepo root empty `compile`/`test` tasks - a child's tasks
  * are the child's business - so `bun run build` at the root type-checked nothing
- * and ran no package tests. Compilation groups ordinary `tsc --build` members
- * into a few TypeScript processes and runs custom compile tasks alongside them. Tests
- * still use Bun's filtered workspace fan-out. Both read the current workspace
- * list from `package.json`, so a newly added member needs no re-synth.
+ * and ran no package tests. Compilation groups ordinary package tsconfigs into
+ * a few TypeScript processes and runs custom package lifecycles alongside them.
+ * Tests still use Bun's filtered workspace fan-out. Both read the current
+ * workspace list from `package.json`, so a newly added member needs no re-synth.
  *
  * `*` matches every workspace MEMBER and never the root itself, so the test
  * task delegating to it cannot recurse. Members declared outside the scanned
@@ -884,35 +882,9 @@ class WorkspaceValidationTasks extends Component {
 }
 
 /**
- * Apply bounded, read-only, supersedable defaults to validation workflows.
- *
- * Projen otherwise leaves jobs at GitHub's six-hour ceiling. Missing workflows
- * are a no-op, so roots that keep the engine defaults (`github`/build workflow
- * off) do not gain new files.
- */
-class WorkflowDefaults extends Component {
-  public override preSynthesize(): void {
-    const build = this.project.tryFindObjectFile(".github/workflows/build.yml");
-    build?.addOverride("on.pull_request.types", ["opened", "synchronize", "reopened", "closed"]);
-    build?.addOverride(
-      "jobs.build.if",
-      "${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}",
-    );
-    for (const job of ["build", "self-mutation"]) {
-      build?.addOverride(`jobs.${job}.timeout-minutes`, 30);
-    }
-    build?.addOverride("permissions", { contents: "read" });
-    build?.addOverride("concurrency", {
-      group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
-      "cancel-in-progress": true,
-    });
-  }
-}
-
-/**
- * Ignore each `codegen`-declaring package's `src/` from the root ESLint config.
+ * Ignore each codegen-declaring package's generated modules from root ESLint.
  * Those modules are read-only (ts-to-zod); lint `--fix` otherwise EACCES-crashes
- * on them. Runs in `preSynthesize` so mixin-added `codegen.inputs` are visible.
+ * on them. Runs in `preSynthesize` so mixin-added typed config is visible.
  */
 class EslintIgnoreCodegen extends Component {
   public override preSynthesize(): void {
@@ -920,16 +892,15 @@ class EslintIgnoreCodegen extends Component {
     if (!eslint) return;
     const rootAbs = resolve(this.project.outdir);
     for (const sub of this.project.subprojects) {
-      if (!(sub instanceof javascript.NodeProject)) continue;
-      const codegen = sub.package.manifest.codegen as { inputs?: string[] } | undefined;
-      if (!codegen?.inputs?.length) continue;
+      if (!(sub instanceof DBXToolsTypeScriptProject)) continue;
+      if (sub.dbxToolsConfig.codegenInputs.length === 0) continue;
       const rel = toPosix(relative(rootAbs, sub.outdir));
       // Ignore the generated MODULES, not the package's whole `src/`. A codegen
       // package may hold hand-written modules next to its generated ones
       // (shared-genie generates `dashboards.ts` beside a hand-written
       // `genie-model.ts`), and a blanket `src/**` would silently stop linting
       // them - the failure mode being invisible, since ESLint just reports less.
-      for (const module of codegenModulePaths(codegen.inputs)) {
+      for (const module of codegenModulePaths(sub.dbxToolsConfig.codegenInputs)) {
         eslint.addIgnorePattern(`${rel}/${module}`);
       }
     }
@@ -950,11 +921,10 @@ class PrettierIgnoreGenerated extends Component {
     prettier.addIgnorePattern("**/src/generated/**");
     const rootAbs = resolve(this.project.outdir);
     for (const sub of this.project.subprojects) {
-      if (!(sub instanceof javascript.NodeProject)) continue;
+      if (!(sub instanceof DBXToolsTypeScriptProject)) continue;
       const rel = toPosix(relative(rootAbs, sub.outdir));
       prettier.addIgnorePattern(`${rel}/index.ts`);
-      const codegen = sub.package.manifest.codegen as { inputs?: string[] } | undefined;
-      for (const module of codegenModulePaths(codegen?.inputs ?? [])) {
+      for (const module of codegenModulePaths(sub.dbxToolsConfig.codegenInputs)) {
         prettier.addIgnorePattern(`${rel}/${module}`);
       }
     }
@@ -1070,7 +1040,6 @@ function resolveTags(p: DiscoveredPackage, tagPaths: Record<string, string[]>): 
 /** Register the native projen tasks on the monorepo root. */
 function registerRootTasks(project: javascript.NodeProject): void {
   project.addTask("barrels", { execArgs: taskCommand("barrels.ts") });
-  project.addTask("openapi", { execArgs: taskCommand("openapi.ts") });
   project.addTask("clean", { execArgs: taskCommand("clean.ts"), receiveArgs: true });
   project.addTask("sync", {
     execArgs: taskCommand("sync.ts"),
@@ -1117,12 +1086,8 @@ function initProject(
         execArgs: [...packageStep.execArgs, "--ignore-scripts"],
       });
     }
-    // Only a ROOT configures the workspace; a child just swaps its default-laden
-    // `.gitignore` for a fresh one that carries package-specific patterns only.
-    swapChildGitignore(project, options);
     return;
   }
-  project.package.file.readonly = false;
 
   if (project instanceof DBXToolsNodeProject) {
     project.rootTsconfig = new DBXToolsRootTsconfig(project);
@@ -1138,7 +1103,6 @@ function initProject(
   // a plain `bun` exec rather than any wrapper: the default task is spawned by
   // nested installs/synths, and a wrapper that exported `npm_config_*` broke them.
   project.defaultTask?.reset("bun .projenrc.ts");
-  project.buildWorkflow?.workflow.file?.addOverride("jobs.build.env.BUN_VERSION", BUN_VERSION);
 
   // Pin bun's hoisted linker workspace-wide (see RootBunfigFile) so a peer dep
   // resolves to one copy and singletons/types stay coherent.
@@ -1150,6 +1114,9 @@ function initProject(
   if (selfDep) project.addDevDeps(selfDep);
   project.addDevDeps(...DEV_DEPS_ROOT);
   configureRootPackage(project);
+  // Workspaces generated by this engine intentionally do not track local-registry
+  // lockfiles, so the CI-named install task must resolve from manifests as well.
+  project.package.installCiTask.reset("bun install");
   const roots = options.packageRoots ?? DEFAULT_PACKAGE_ROOTS;
   project.dbxToolsConfig.packageRoots = [...roots];
   if (options.syncResynthPaths?.length) {
@@ -1181,7 +1148,6 @@ function initProject(
   project.gitignore.addPatterns(".env", ".env.*", "!.env.example", "!.env.sample", ".idea/*");
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
-    project.annotateGenerated(`/${root}/openapi/**`);
     project.annotateGenerated(`/${root}/**/src/generated/**`);
   }
   for (const member of project.extraWorkspaceMembers) {
@@ -1211,11 +1177,9 @@ function initProject(
     description: "Fix ESLint issues across the codebase",
     exec: "bun run eslint -- --fix",
   });
-  // Generated read-only outputs (barrels, openapi clients, app scripts, codegen).
-  // ESLint --fix cannot rewrite them; they are stamped by the barrel generator /
-  // openapi / codegen / projen.
+  // Generated read-only outputs (barrels, app scripts, and codegen). ESLint
+  // --fix cannot rewrite files owned by the barrel generator, codegen, or projen.
   for (const root of roots) {
-    eslint.addIgnorePattern(`${root}/openapi/**`);
     eslint.addIgnorePattern(`${root}/**/index.ts`);
   }
   eslint.addIgnorePattern("**/src/generated/**");
@@ -1227,14 +1191,11 @@ function initProject(
   // them to a project. ESLint still cannot parse them.
   eslint.addIgnorePattern("**/dev.ts");
   eslint.addIgnorePattern("**/build.ts");
-  // A deploy-staging helper that lives at a package root (outside any `src/**`
-  // tsconfig), same parse-resolution problem as the bun app scripts above.
-  eslint.addIgnorePattern("**/stage-deploy.ts");
   for (const override of BUN_APP_OVERRIDES) {
     eslint.addIgnorePattern(`**/${override}`);
   }
-  // Codegen packages declare `codegen.inputs` via mixins after construction; ignore
-  // their `src/` once manifests are known (preSynthesize), same reason as openapi.
+  // Codegen inputs may be added by mixins after construction; ignore their
+  // generated modules once typed package configuration is final.
   new EslintIgnoreCodegen(project);
   eslint.addRules({
     "import/no-relative-packages": "error",
@@ -1261,7 +1222,11 @@ function initProject(
   // cross-package imports.
   const tsResolver = eslint.config?.settings?.["import/resolver"]?.typescript;
   if (tsResolver) {
-    tsResolver.project = ["tsconfig.json", ...roots.map((r) => `${r}/**/tsconfig.json`)];
+    tsResolver.project = [
+      "tsconfig.json",
+      ...roots.map((r) => `${r}/**/tsconfig.json`),
+      ...project.extraWorkspaceMembers.map((member) => `${member}/tsconfig.json`),
+    ];
   }
 
   const enabledTagMixins = resolveEnabledTagMixins(options.defaultTagMixins);
@@ -1295,10 +1260,13 @@ function initProject(
       continue;
     }
     const defaultPackageName = packageNameFor(project.scope, p.relPath, omitPrefixes);
+    const packageOptions =
+      options.resolvePackageOptions?.(p, { name: defaultPackageName }) ??
+      ({ name: defaultPackageName } satisfies DiscoveredTypeScriptPackageOptions);
     new DBXToolsTypeScriptProject({
       parent: project,
       outdir: p.memberPath,
-      name: options.resolvePackageName?.(p, defaultPackageName) ?? defaultPackageName,
+      ...packageOptions,
       tags,
     });
   }
@@ -1315,7 +1283,6 @@ function initProject(
   }
 
   new WorkspaceValidationTasks(project);
-  new WorkflowDefaults(project);
   new PrettierIgnoreGenerated(project);
   new GeneratedSource(project);
 
@@ -1329,54 +1296,9 @@ function initProject(
       pythonRoot: options.releasePythonRoot,
       validationTasks: options.releaseValidationTasks,
       setupSteps: options.releaseSetupSteps,
+      synthesisCommands: options.releaseSynthesisCommands,
     });
   }
-}
-
-/**
- * A child's `.gitignore`, tracking whether any pattern was ever added so an
- * untouched (empty) file can be dropped at presynth. `exclude`/`include` and
- * constructor `ignorePatterns` all funnel through {@link addPatterns}, so the flag
- * sees every route - but seed patterns must be added AFTER construction (see
- * {@link swapChildGitignore}) because class fields initialize after `super()`.
- */
-class ChildGitignore extends IgnoreFile {
-  /** True once any pattern landed (custom patterns => the file is emitted). */
-  public hasPatterns = false;
-
-  public override addPatterns(...patterns: string[]): void {
-    if (patterns.length) this.hasPatterns = true;
-    super.addPatterns(...patterns);
-  }
-}
-
-/**
- * Swap a CHILD's default `.gitignore` - pre-populated by `NodeProject` with the
- * same defaults the root already carries (git applies the root's file to the whole
- * tree) - for a FRESH {@link ChildGitignore}. Caller-supplied patterns
- * (`gitignore` / `gitIgnoreOptions.ignorePatterns`) are re-seeded, and later
- * `project.gitignore.addPatterns(...)` calls (tag/user mixins) land here too, so a
- * package CAN carry package-specific ignores without inheriting the root noise.
- * Left empty, the file is dropped by {@link preSynthesizeProject}. Safe because
- * projen only writes gitignore defaults at construction time (`addDefaultGitIgnore`,
- * yarn-berry config), never during synth.
- */
-function swapChildGitignore(
-  project: javascript.NodeProject,
-  options: DBXToolsJavaScriptProjectOptions,
-): void {
-  project.tryRemoveFile(".gitignore");
-  const fresh = new ChildGitignore(project, ".gitignore", {
-    ...options.gitIgnoreOptions,
-    // Re-added below so the custom-pattern flag sees them (not clobbered by the
-    // subclass field initializer running after super()).
-    ignorePatterns: undefined,
-  });
-  const seeds = [...(options.gitignore ?? []), ...(options.gitIgnoreOptions?.ignorePatterns ?? [])];
-  if (seeds.length) fresh.addPatterns(...seeds);
-  // `Project.gitignore` is readonly only at compile time; rebind it so every
-  // subsequent `project.gitignore.*` call reaches the fresh file.
-  (project as { gitignore: IgnoreFile }).gitignore = fresh;
 }
 
 function preSynthesizeProject(project: javascript.NodeProject): void {
@@ -1400,19 +1322,5 @@ function preSynthesizeProject(project: javascript.NodeProject): void {
     // only. Runs here rather than in the constructor so the tags have already
     // installed their `exports` layouts for it to mirror.
     if (p instanceof javascript.NodeProject) applyCompiledPublish(p);
-    // A child's `.gitignore` survives ONLY when it carries custom patterns (see
-    // swapChildGitignore). `.gitattributes` is always dropped - the root's
-    // annotateGenerated globs cover the children. Runs once from the root's
-    // preSynthesize and again from each child's own; both passes agree, so the
-    // second is a no-op.
-    const keepGitignore = p.gitignore instanceof ChildGitignore && p.gitignore.hasPatterns;
-    for (const path of keepGitignore ? [".gitattributes"] : [".gitignore", ".gitattributes"]) {
-      if (p.tryRemoveFile(path)) {
-        const rootPath = resolve(p.outdir, path);
-        if (existsSync(rootPath)) {
-          p.logger.info(`Removed ${rootPath} from ${p.name}`);
-        }
-      }
-    }
   }
 }

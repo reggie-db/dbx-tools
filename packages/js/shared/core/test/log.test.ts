@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
 import { log } from "../index.ts";
+import { logActiveLevel, logLevelEnabled } from "../src/bindings.ts";
 
 describe("log", () => {
   it("keeps the shared logger free of optional bare imports", async () => {
@@ -16,5 +17,19 @@ describe("log", () => {
 
     assert.equal(typeof logger.success, "function");
     assert.equal(typeof logger.start, "function");
+  });
+
+  it("exposes the active threshold through binding-safe functions", () => {
+    const originalLevel = process.env.LOG_LEVEL;
+    process.env.LOG_LEVEL = "warn";
+
+    try {
+      assert.equal(logActiveLevel(), "warn");
+      assert.equal(logLevelEnabled("info"), false);
+      assert.equal(logLevelEnabled("error"), true);
+    } finally {
+      if (originalLevel === undefined) delete process.env.LOG_LEVEL;
+      else process.env.LOG_LEVEL = originalLevel;
+    }
   });
 });

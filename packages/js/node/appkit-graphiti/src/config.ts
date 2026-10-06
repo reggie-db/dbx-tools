@@ -1,9 +1,8 @@
 /**
  * AppKit integration for the shared Graphiti option contract.
  *
- * `@dbx-tools/shared-graphiti` owns option fields, validation, defaults, and
- * environment names. This module adds only AppKit-specific automatic port
- * allocation sentinels.
+ * `@dbx-tools/graphiti` composes Graphiti and subnamed FalkorDB option fields.
+ * This module adds only the AppKit-specific automatic port allocation sentinel.
  *
  * @module
  */
@@ -13,7 +12,7 @@ import {
   graphitiOptionsFromEnvironment,
   type GraphitiOptions,
   type ResolvedGraphitiOptions,
-} from "@dbx-tools/shared-graphiti";
+} from "@dbx-tools/graphiti/options";
 import type { JSONSchema7 } from "json-schema";
 import { z } from "zod";
 
@@ -27,17 +26,14 @@ export type ResolvedGraphitiPluginConfig = BasePluginConfig & ResolvedGraphitiOp
 export const GRAPHITI_CONFIG_SCHEMA = z.toJSONSchema(GraphitiOptionsSchema) as JSONSchema7;
 
 /** Merge explicit plugin config over shared environment names. */
-export function resolveGraphitiConfig(config: GraphitiPluginConfig = {}): GraphitiOptions {
+export function resolveGraphitiConfig(
+  config: GraphitiPluginConfig = {},
+): ResolvedGraphitiPluginConfig {
   const environment = graphitiOptionsFromEnvironment(process.env);
   const resolved = GraphitiOptionsSchema.parse({
     ...environment,
     ...config,
-    graphitiPort: config.graphitiPort ?? environment.graphitiPort ?? 0,
-    modelGatewayPort: config.modelGatewayPort ?? environment.modelGatewayPort ?? 0,
+    listen: config.listen ?? environment.listen ?? { scheme: "tcp", host: "127.0.0.1", port: 0 },
   });
-  const ports = [resolved.graphitiPort, resolved.modelGatewayPort].filter(Boolean);
-  if (new Set(ports).size !== ports.length) {
-    throw new Error("Graphiti sidecar ports must be distinct");
-  }
-  return resolved;
+  return resolved as ResolvedGraphitiPluginConfig;
 }

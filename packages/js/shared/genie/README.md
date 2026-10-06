@@ -125,9 +125,10 @@ Most consumers want `genieModel` instead - those schemas are these shapes widene
 with the fields Genie actually sends. Reach for `dashboards` only when the
 unwidened SDK shape is the contract you mean.
 
-The module is generated at synth time and is read-only: the `codegen.inputs`
-field in `package.json` names the input declaration file. To change what is
-generated, change that input and re-synth; never hand-edit `src/dashboards.ts`.
+The module is generated at synth time and is read-only: the
+`dbxToolsConfig.codegenInputs` field in `package.json` names the input
+declaration file. To change what is generated, change that input and re-synth;
+never hand-edit `src/dashboards.ts`.
 The SDK itself is a dev dependency, so importing this package pulls in zod only.
 
 ## Modules

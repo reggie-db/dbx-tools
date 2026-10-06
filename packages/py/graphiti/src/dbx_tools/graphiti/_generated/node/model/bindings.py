@@ -13,106 +13,317 @@ from .._runtime import invoke_positioned_sync as _invoke_positioned_sync
 
 
 @dataclass(kw_only=True)
-class ResolveModelRouteOptions:
+class ModelAuthOptions:
     profile: str | None = field(
         default=None,
         metadata={"javascript_name": "profile"},
     )
-    model: str | None = field(
+
+
+@dataclass(kw_only=True)
+class ModelClientOptions:
+    auth: ModelAuthOptions | None = field(
         default=None,
-        metadata={"javascript_name": "model"},
+        metadata={"javascript_name": "auth"},
     )
-    fuzzy: bool | None = field(
+    cache_ttl_ms: int | float | None = field(
         default=None,
-        metadata={"javascript_name": "fuzzy"},
+        metadata={"javascript_name": "cacheTtlMs"},
     )
-    threshold: int | float | None = field(
+    hydrate_metadata: bool | None = field(
         default=None,
-        metadata={"javascript_name": "threshold"},
-    )
-    requires_tools: bool | None = field(
-        default=None,
-        metadata={"javascript_name": "requiresTools"},
-    )
-    model_class: str | None = field(
-        default=None,
-        metadata={"javascript_name": "modelClass"},
-    )
-    fallbacks: list[str] | None = field(
-        default=None,
-        metadata={"javascript_name": "fallbacks"},
-    )
-    live_only: bool | None = field(
-        default=None,
-        metadata={"javascript_name": "liveOnly"},
-    )
-    protocol: str | None = field(
-        default=None,
-        metadata={"javascript_name": "protocol"},
-    )
-    refresh: bool | None = field(
-        default=None,
-        metadata={"javascript_name": "refresh"},
-    )
-    login: bool | None = field(
-        default=None,
-        metadata={"javascript_name": "login"},
+        metadata={"javascript_name": "hydrateMetadata"},
     )
 
 
-class ResolvedModelRouteResponse(TypedDict):
-    modelId: str
-    endpointName: NotRequired[str]
-    endpointTask: NotRequired[str]
-    endpointDimension: NotRequired[int | float]
-    source: str
-    protocol: str
-    host: str
-    apiBase: str
-    url: str
-    headers: dict[str, str]
-    metadata: ResolveModelRouteReturnMetadataResultResponse
+class CreateModelClientReturnListModelsReturnProfileResultResponse(TypedDict):
+    quality: NotRequired[int | float]
+    speed: NotRequired[int | float]
+    cost: NotRequired[int | float]
 
 
-class ResolveModelRouteReturnMetadataCapabilitiesResultResponse(TypedDict):
+class CreateModelClientReturnListModelsReturnStatusResultResponse(TypedDict):
+    deprecated: bool
+
+
+CreateModelClientReturnListModelsReturnResultResponse = TypedDict(
+    "CreateModelClientReturnListModelsReturnResultResponse",
+    {
+        "name": str,
+        "displayName": NotRequired[str],
+        "family": NotRequired[str],
+        "task": NotRequired[str],
+        "state": NotRequired[str],
+        "description": NotRequired[str],
+        "supportsTools": NotRequired[bool | None],
+        "profile": NotRequired[CreateModelClientReturnListModelsReturnProfileResultResponse],
+        "class": NotRequired[str | None],
+        "serviceNames": NotRequired[dict[str, str]],
+        "modelServiceName": NotRequired[str],
+        "reasoningEfforts": NotRequired[list[str]],
+        "status": NotRequired[CreateModelClientReturnListModelsReturnStatusResultResponse],
+        "dimension": NotRequired[int | float],
+    },
+)
+
+
+class CreateModelClientReturnMetadataModelProfileResultResponse(TypedDict):
+    quality: NotRequired[int | float]
+    speed: NotRequired[int | float]
+    cost: NotRequired[int | float]
+
+
+class CreateModelClientReturnMetadataModelStatusResultResponse(TypedDict):
+    deprecated: bool
+
+
+CreateModelClientReturnMetadataModelResultResponse = TypedDict(
+    "CreateModelClientReturnMetadataModelResultResponse",
+    {
+        "name": str,
+        "displayName": NotRequired[str],
+        "family": NotRequired[str],
+        "task": NotRequired[str],
+        "state": NotRequired[str],
+        "description": NotRequired[str],
+        "supportsTools": NotRequired[bool | None],
+        "profile": NotRequired[CreateModelClientReturnMetadataModelProfileResultResponse],
+        "class": NotRequired[str | None],
+        "serviceNames": NotRequired[dict[str, str]],
+        "modelServiceName": NotRequired[str],
+        "reasoningEfforts": NotRequired[list[str]],
+        "status": NotRequired[CreateModelClientReturnMetadataModelStatusResultResponse],
+        "dimension": NotRequired[int | float],
+    },
+)
+
+
+class CreateModelClientReturnMetadataReturnCapabilitiesResultResponse(TypedDict):
     responses: bool
     imageInput: bool
     applyPatch: bool
     webSearch: bool
 
 
-class ResolveModelRouteReturnMetadataRateLimitsResultResponse(TypedDict):
+class CreateModelClientReturnMetadataReturnRateLimitsResultResponse(TypedDict):
     inputTokensPerMinute: int | float | None
     outputTokensPerMinute: int | float | None
     queriesPerHour: int | float | None
 
 
-class ResolveModelRouteReturnMetadataResultResponse(TypedDict):
-    status: ResolveModelRouteReturnMetadataStatusResultResponse
-    capabilities: ResolveModelRouteReturnMetadataCapabilitiesResultResponse
-    rateLimits: NotRequired[ResolveModelRouteReturnMetadataRateLimitsResultResponse]
-
-
-class ResolveModelRouteReturnMetadataStatusResultResponse(TypedDict):
+class CreateModelClientReturnMetadataReturnStatusResultResponse(TypedDict):
     deprecated: bool
 
 
+class CreateModelClientReturnMetadataReturnResultResponse(TypedDict):
+    status: CreateModelClientReturnMetadataReturnStatusResultResponse
+    capabilities: CreateModelClientReturnMetadataReturnCapabilitiesResultResponse
+    rateLimits: NotRequired[CreateModelClientReturnMetadataReturnRateLimitsResultResponse]
 
-async def resolve_model_route(
-    options: ResolveModelRouteOptions | dict[str, Any] | None | object = _MISSING,
-) -> ResolvedModelRouteResponse:
+
+class CreateModelClientReturnRouteReturnEndpointProfileResultResponse(TypedDict):
+    quality: NotRequired[int | float]
+    speed: NotRequired[int | float]
+    cost: NotRequired[int | float]
+
+
+class CreateModelClientReturnRouteReturnEndpointStatusResultResponse(TypedDict):
+    deprecated: bool
+
+
+CreateModelClientReturnRouteReturnEndpointResultResponse = TypedDict(
+    "CreateModelClientReturnRouteReturnEndpointResultResponse",
+    {
+        "name": str,
+        "displayName": NotRequired[str],
+        "family": NotRequired[str],
+        "task": NotRequired[str],
+        "state": NotRequired[str],
+        "description": NotRequired[str],
+        "supportsTools": NotRequired[bool | None],
+        "profile": NotRequired[CreateModelClientReturnRouteReturnEndpointProfileResultResponse],
+        "class": NotRequired[str | None],
+        "serviceNames": NotRequired[dict[str, str]],
+        "modelServiceName": NotRequired[str],
+        "reasoningEfforts": NotRequired[list[str]],
+        "status": NotRequired[CreateModelClientReturnRouteReturnEndpointStatusResultResponse],
+        "dimension": NotRequired[int | float],
+    },
+)
+
+
+class CreateModelClientReturnRouteReturnMetadataCapabilitiesResultResponse(TypedDict):
+    responses: bool
+    imageInput: bool
+    applyPatch: bool
+    webSearch: bool
+
+
+class CreateModelClientReturnRouteReturnMetadataRateLimitsResultResponse(TypedDict):
+    inputTokensPerMinute: int | float | None
+    outputTokensPerMinute: int | float | None
+    queriesPerHour: int | float | None
+
+
+class CreateModelClientReturnRouteReturnMetadataStatusResultResponse(TypedDict):
+    deprecated: bool
+
+
+class CreateModelClientReturnRouteReturnMetadataResultResponse(TypedDict):
+    status: CreateModelClientReturnRouteReturnMetadataStatusResultResponse
+    capabilities: CreateModelClientReturnRouteReturnMetadataCapabilitiesResultResponse
+    rateLimits: NotRequired[CreateModelClientReturnRouteReturnMetadataRateLimitsResultResponse]
+
+
+class CreateModelClientReturnSearchModelsQueryResultResponse(TypedDict):
+    name: NotRequired[str]
+    search: NotRequired[str]
+    modelClass: NotRequired[str | None]
+    requiresTools: NotRequired[bool | None]
+    task: NotRequired[str]
+    dimension: NotRequired[int | float]
+    minDimension: NotRequired[int | float]
+    maxDimension: NotRequired[int | float]
+    reasoningEffort: NotRequired[str | None]
+    includeDeprecated: NotRequired[bool | None]
+    limit: NotRequired[int | float]
+    threshold: NotRequired[int | float]
+
+
+class CreateModelClientReturnSearchModelsReturnEndpointProfileResultResponse(TypedDict):
+    quality: NotRequired[int | float]
+    speed: NotRequired[int | float]
+    cost: NotRequired[int | float]
+
+
+class CreateModelClientReturnSearchModelsReturnEndpointStatusResultResponse(TypedDict):
+    deprecated: bool
+
+
+CreateModelClientReturnSearchModelsReturnEndpointResultResponse = TypedDict(
+    "CreateModelClientReturnSearchModelsReturnEndpointResultResponse",
+    {
+        "name": str,
+        "displayName": NotRequired[str],
+        "family": NotRequired[str],
+        "task": NotRequired[str],
+        "state": NotRequired[str],
+        "description": NotRequired[str],
+        "supportsTools": NotRequired[bool | None],
+        "profile": NotRequired[CreateModelClientReturnSearchModelsReturnEndpointProfileResultResponse],
+        "class": NotRequired[str | None],
+        "serviceNames": NotRequired[dict[str, str]],
+        "modelServiceName": NotRequired[str],
+        "reasoningEfforts": NotRequired[list[str]],
+        "status": NotRequired[CreateModelClientReturnSearchModelsReturnEndpointStatusResultResponse],
+        "dimension": NotRequired[int | float],
+    },
+)
+
+
+class CreateModelClientReturnSearchModelsReturnResultResponse(TypedDict):
+    endpoint: CreateModelClientReturnSearchModelsReturnEndpointResultResponse
+    modelClass: str
+    score: NotRequired[int | float]
+
+
+class ModelClientStatusResponse(TypedDict):
+    profile: NotRequired[str]
+    host: str
+    principal: str
+    workspaceId: NotRequired[str]
+    cacheTtlMs: int | float
+
+
+class ModelRouteInputResponse(TypedDict):
+    refresh: NotRequired[bool | None]
+    protocol: NotRequired[str | None]
+    login: NotRequired[bool | None]
+    explicit: NotRequired[str]
+    fuzzy: NotRequired[bool | None]
+    threshold: NotRequired[int | float]
+    requiresTools: NotRequired[bool | None]
+    modelClass: NotRequired[str | None]
+    fallbacks: NotRequired[list[str]]
+    liveOnly: NotRequired[bool | None]
+
+
+class ModelRouteResponse(TypedDict):
+    modelId: str
+    endpoint: NotRequired[CreateModelClientReturnRouteReturnEndpointResultResponse]
+    source: str
+    protocol: str
+    host: str
+    apiBase: str
+    url: str
+    headers: dict[str, str]
+    metadata: CreateModelClientReturnRouteReturnMetadataResultResponse
+
+
+class ModelClient(Protocol):
+    async def list_models(
+        self,
+        refresh: bool = ...,
+    ) -> list[CreateModelClientReturnListModelsReturnResultResponse]: ...
+
+    async def search_models(
+        self,
+        query: CreateModelClientReturnSearchModelsQueryResultResponse = ...,
+        refresh: bool = ...,
+    ) -> list[CreateModelClientReturnSearchModelsReturnResultResponse]: ...
+
+    async def route(
+        self,
+        input: ModelRouteInputResponse = ...,
+    ) -> ModelRouteResponse: ...
+
+    async def metadata(
+        self,
+        model: str | CreateModelClientReturnMetadataModelResultResponse,
+    ) -> CreateModelClientReturnMetadataReturnResultResponse: ...
+
+    async def status(
+        self,
+    ) -> ModelClientStatusResponse: ...
+
+
+async def create_model_client(
+    options: ModelClientOptions | dict[str, Any] | None | object = _MISSING,
+) -> ModelClient:
     arguments: list[tuple[int, Any]] = []
     if options is not _MISSING:
         arguments.append((0, options))
-    return await _invoke_positioned("model__bindings", "resolveModelRoute", arguments)
+    return await _invoke_positioned("model__bindings", "createModelClient", arguments)
 
 
 __all__ = [
-    "ResolveModelRouteOptions",
-    "ResolveModelRouteReturnMetadataCapabilitiesResultResponse",
-    "ResolveModelRouteReturnMetadataRateLimitsResultResponse",
-    "ResolveModelRouteReturnMetadataResultResponse",
-    "ResolveModelRouteReturnMetadataStatusResultResponse",
-    "ResolvedModelRouteResponse",
-    "resolve_model_route",
+    "CreateModelClientReturnListModelsReturnProfileResultResponse",
+    "CreateModelClientReturnListModelsReturnResultResponse",
+    "CreateModelClientReturnListModelsReturnStatusResultResponse",
+    "CreateModelClientReturnMetadataModelProfileResultResponse",
+    "CreateModelClientReturnMetadataModelResultResponse",
+    "CreateModelClientReturnMetadataModelStatusResultResponse",
+    "CreateModelClientReturnMetadataReturnCapabilitiesResultResponse",
+    "CreateModelClientReturnMetadataReturnRateLimitsResultResponse",
+    "CreateModelClientReturnMetadataReturnResultResponse",
+    "CreateModelClientReturnMetadataReturnStatusResultResponse",
+    "CreateModelClientReturnRouteReturnEndpointProfileResultResponse",
+    "CreateModelClientReturnRouteReturnEndpointResultResponse",
+    "CreateModelClientReturnRouteReturnEndpointStatusResultResponse",
+    "CreateModelClientReturnRouteReturnMetadataCapabilitiesResultResponse",
+    "CreateModelClientReturnRouteReturnMetadataRateLimitsResultResponse",
+    "CreateModelClientReturnRouteReturnMetadataResultResponse",
+    "CreateModelClientReturnRouteReturnMetadataStatusResultResponse",
+    "CreateModelClientReturnSearchModelsQueryResultResponse",
+    "CreateModelClientReturnSearchModelsReturnEndpointProfileResultResponse",
+    "CreateModelClientReturnSearchModelsReturnEndpointResultResponse",
+    "CreateModelClientReturnSearchModelsReturnEndpointStatusResultResponse",
+    "CreateModelClientReturnSearchModelsReturnResultResponse",
+    "ModelAuthOptions",
+    "ModelClient",
+    "ModelClientOptions",
+    "ModelClientStatusResponse",
+    "ModelRouteInputResponse",
+    "ModelRouteResponse",
+    "create_model_client",
 ]

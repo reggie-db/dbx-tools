@@ -47,14 +47,15 @@ function fixtureTool(name: string) {
 }
 
 describe("GraphitiPlugin routes", () => {
-  it("delegates runtime startup to the Graphiti CLI instead of owning service dependencies", () => {
+  it("delegates runtime startup to the Node Graphiti owner", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as {
       dependencies?: Record<string, string>;
     };
 
-    assert.equal(manifest.dependencies?.["@dbx-tools/cli-graphiti"], "workspace:^");
+    assert.equal(manifest.dependencies?.["@dbx-tools/graphiti"], "workspace:^");
+    assert.equal(manifest.dependencies?.["@dbx-tools/cli-graphiti"], undefined);
     assert.equal(manifest.dependencies?.["@dbx-tools/cli-service"], undefined);
     assert.equal(manifest.dependencies?.["@dbx-tools/cli-model-gateway"], undefined);
     assert.equal(manifest.dependencies?.["@dbx-tools/rust-binary"], undefined);
@@ -158,7 +159,7 @@ describe("GraphitiPlugin routes", () => {
     );
     Object.assign(plugin, {
       startup,
-      resolved: { graphitiPort: 4101 },
+      resolved: { listen: { scheme: "tcp", host: "127.0.0.1", port: 4101 } },
       mcp: { listTools: async () => discovered },
     });
     let ready = false;
@@ -222,7 +223,9 @@ describe("GraphitiPlugin routes", () => {
       return true;
     }) as typeof process.kill;
     try {
-      const plugin = new GraphitiPlugin({ graphitiPort: 48123 });
+      const plugin = new GraphitiPlugin({
+        listen: { scheme: "tcp", host: "127.0.0.1", port: 48123 },
+      });
       plugin.setup();
       const startup = (plugin as unknown as { startup: Promise<void> }).startup;
       await assert.rejects(startup, /must differ/);

@@ -37,8 +37,8 @@
         "project": [
           "tsconfig.json",
           "packages/js/**/tsconfig.json",
-          "packages/test/**/tsconfig.json",
-          "packages/example/**/tsconfig.json"
+          "packages/example/**/tsconfig.json",
+          "projen/tsconfig.json"
         ],
         "alwaysTryTypes": true
       }
@@ -53,17 +53,12 @@
     "node_modules/",
     "*.generated.ts",
     "coverage",
-    "packages/js/openapi/**",
     "packages/js/**/index.ts",
-    "packages/test/openapi/**",
-    "packages/test/**/index.ts",
-    "packages/example/openapi/**",
     "packages/example/**/index.ts",
     "**/src/generated/**",
     "projen/index.ts",
     "**/dev.ts",
     "**/build.ts",
-    "**/stage-deploy.ts",
     "**/bun-dev.override.ts",
     "**/bun-build.override.ts",
     "packages/js/shared/genie/src/dashboards.ts"

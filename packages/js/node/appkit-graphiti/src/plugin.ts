@@ -20,10 +20,10 @@ import type {
   ToolProvider,
 } from "@databricks/appkit/beta";
 import { appkit as dbxAppkit, identity as appkitIdentity, toolkitEntries } from "@dbx-tools/appkit";
-import { startGraphitiRuntime, type GraphitiRuntime } from "@dbx-tools/cli-graphiti/runtime";
 import { configUtils } from "@dbx-tools/core";
+import { resolveGraphitiOptions } from "@dbx-tools/graphiti/options";
+import { startGraphitiRuntime, type GraphitiRuntime } from "@dbx-tools/graphiti/runtime";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
-import { resolveGraphitiOptions } from "@dbx-tools/shared-graphiti";
 import { createTool, type Tool } from "@mastra/core/tools";
 import { MCPClient, MCPServer } from "@mastra/mcp";
 import type express from "express";
@@ -102,15 +102,16 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
 
   private async startSidecars(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
-    const [graphitiPort, modelGatewayPort] = await distinctPorts(
+    if (configured.listen.scheme !== "tcp") {
+      throw new Error("AppKit Graphiti requires a TCP listener");
+    }
+    const [graphitiPort] = await distinctPorts(
       configUtils.port(undefined, "DATABRICKS_APP_PORT", 8000, configUtils.ENV_ONLY),
-      configured.graphitiPort ?? 0,
-      configured.modelGatewayPort ?? 0,
+      configured.listen.port,
     );
     const resolved = resolveGraphitiOptions({
       ...configured,
-      graphitiPort,
-      modelGatewayPort,
+      listen: { ...configured.listen, port: graphitiPort },
     });
     this.resolved = resolved;
     this.runtime = await startGraphitiRuntime(resolved);
@@ -122,8 +123,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     this.mcpServerSweep = setInterval(() => this.closeIdleMcpServers(), MCP_SERVER_SWEEP_MS);
     this.mcpServerSweep.unref();
     this.logger.info("sidecars launched", {
-      graphitiPort: resolved.graphitiPort,
-      modelGatewayPort: resolved.modelGatewayPort,
+      graphitiPort: resolved.listen.port,
       mcpPath: MCP_PATH,
     });
   }
@@ -210,9 +210,9 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     await this.startup;
     if (!this.resolved) throw new Error("Graphiti sidecars did not launch");
     this.mcp ??= new MCPClient({
-      id: `appkit-graphiti-${this.resolved.graphitiPort}`,
+      id: `appkit-graphiti-${this.resolved.listen.port}`,
       servers: {
-        graphiti: { url: new URL(`http://127.0.0.1:${this.resolved.graphitiPort}/mcp`) },
+        graphiti: { url: new URL(`http://127.0.0.1:${this.resolved.listen.port}/mcp`) },
       },
     });
     const deadline = Date.now() + MCP_TOOL_DISCOVERY_TIMEOUT_MS;
@@ -288,7 +288,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     await Promise.allSettled([
       ...[...this.mcpServers.values()].map(({ server }) => server.close()),
       this.mcp?.disconnect(),
-      this.runtime?.close(),
+      this.runtime?.stop(),
     ]);
     this.mcpServers.clear();
     this.mcp = undefined;
@@ -398,13 +398,9 @@ async function availablePort(): Promise<number> {
   });
 }
 
-async function distinctPorts(
-  appPort: number,
-  graphitiPort: number,
-  modelGatewayPort: number,
-): Promise<[number, number]> {
+async function distinctPorts(appPort: number, graphitiPort: number): Promise<[number]> {
   const ports = [appPort];
-  for (const configuredPort of [graphitiPort, modelGatewayPort]) {
+  for (const configuredPort of [graphitiPort]) {
     if (configuredPort && ports.includes(configuredPort)) {
       throw new ConfigurationError("Graphiti sidecar ports must differ from DATABRICKS_APP_PORT");
     }
@@ -412,5 +408,5 @@ async function distinctPorts(
     while (ports.includes(port)) port = await availablePort();
     ports.push(port);
   }
-  return ports.slice(1) as [number, number];
+  return ports.slice(1) as [number];
 }

@@ -2,7 +2,7 @@
  * Package discovery + shared filesystem helpers.
  *
  * Terminology (Bit-style): a **tag** names a target environment
- * (React/Vite, Node, agnostic, ...); a workspace **package** is a folder with a
+ * (React/Bun, Node, agnostic, ...); a workspace **package** is a folder with a
  * `src/` holding at least one module file (`.ts`/`.tsx`/`.js`/`.jsx`). "Scope" is
  * reserved for the npm `@scope/` in package identifiers (e.g. `@dbx-tools/ui-app`).
  *
@@ -20,7 +20,7 @@
  * path relative to the root, reading NO manifest. {@link recordedPackages} reads
  * the recorded members from `pnpm-workspace.yaml` - the SOURCE OF TRUTH - and
  * augments each with the `name` and `tags` read back from its own `package.json`
- * (post-synth: barrels, watch, openapi), which is authoritative and so reflects any
+ * (post-synth: barrels and watch), which is authoritative and so reflects any
  * synth-time name override or resolved tag set.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -29,6 +29,7 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
 import { json, object, stringUtils } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
+import { DBXToolsConfigDataSchema, type DBXToolsConfigData } from "./dbx-tools-config.ts";
 import { isGenerated } from "./generated.ts";
 
 /** Resolve the nearest package/projenrc root at call time. */
@@ -255,16 +256,18 @@ export function readPackageManifest(dir: string): Record<string, unknown> | unde
   }
 }
 
-/** A package's `dbxToolsConfig` object, or `undefined` when absent. */
-export function readDbxToolsConfig(dir: string): Record<string, unknown> | undefined {
+/** A package's validated `dbxToolsConfig` object, or `undefined` when absent. */
+export function readDbxToolsConfig(dir: string): DBXToolsConfigData | undefined {
   const config = readPackageManifest(dir)?.dbxToolsConfig;
-  return object.isRecord(config) ? config : undefined;
+  if (config === undefined) return undefined;
+  const parsed = DBXToolsConfigDataSchema.safeParse(config);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** Read `<dir>/package.json`'s `dbxToolsConfig.tags` (`undefined` if absent). */
 function readManifestTags(dir: string): string[] | undefined {
   const tags = readDbxToolsConfig(dir)?.tags;
-  return Array.isArray(tags) ? (tags as string[]) : undefined;
+  return tags ? [...tags] : undefined;
 }
 
 /**
@@ -280,7 +283,7 @@ export function syncResynthPaths(projectRoot: string = resolveRepoRoot()): strin
 /**
  * The recorded workspace members from `pnpm-workspace.yaml` (the source of truth),
  * each augmented with the `tags` read back from its `package.json`. This is what
- * every post-synth command (barrels, watch, openapi) uses: the manifest is
+ * every post-synth command (barrels and watch) uses: the manifest is
  * authoritative, so it reflects the resolved tag set.
  * Sorted by path.
  */
@@ -333,18 +336,18 @@ export function workspaceDependencyDirectories(
 }
 
 /**
- * The configured roots recorded in the root manifest. Older workspaces without
- * that field fall back to the distinct first segment of every recorded member,
- * unioned with the defaults.
+ * The configured package roots plus the first segment of every recorded member.
+ * The member union includes self-synthesizing extra workspace members; older
+ * manifests without configured roots fall back to {@link DEFAULT_PACKAGE_ROOTS}.
  */
 export function recordedRoots(projectRoot: string = resolveRepoRoot()): string[] {
   const configured = readDbxToolsConfig(projectRoot)?.packageRoots;
-  if (Array.isArray(configured)) {
-    const roots = stringUtils.parseList(configured.map((root) => String(root)));
-    if (roots.length) return roots;
-  }
-  const roots = new Set<string>(DEFAULT_PACKAGE_ROOTS);
+  const configuredRoots = Array.isArray(configured)
+    ? stringUtils.parseList(configured.map((root) => String(root)))
+    : [];
+  const roots = new Set<string>(configuredRoots.length ? configuredRoots : DEFAULT_PACKAGE_ROOTS);
   for (const member of readRecordedMembers(projectRoot)) {
+    if (configuredRoots.some((root) => member === root || member.startsWith(`${root}/`))) continue;
     const pkg = packageOfMember(projectRoot, member);
     if (pkg) roots.add(pkg.root);
   }

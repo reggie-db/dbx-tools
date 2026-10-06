@@ -8,6 +8,7 @@ describe("FalkorDB CLI", () => {
     const help = buildProgram().helpInformation();
 
     assert.match(help, /--data-dir/);
+    assert.match(help, /--listen/);
     assert.match(help, /--snapshot-seconds/);
     assert.match(help, /--volume/);
     assert.match(help, /--force-backup-on-shutdown/);
@@ -26,6 +27,8 @@ describe("FalkorDB CLI", () => {
       [
         "--data-dir",
         "/tmp/graph",
+        "--listen",
+        "tcp://127.0.0.1:6379",
         "--snapshot-seconds",
         "60",
         "--snapshot-min-changes",
@@ -57,6 +60,8 @@ describe("FalkorDB CLI", () => {
     assert.deepEqual(calls, [
       {
         dataDir: "/tmp/graph",
+        listen: { scheme: "tcp", host: "127.0.0.1", port: 6379 },
+        database: "default_db",
         snapshotSeconds: 60,
         snapshotMinChanges: 2,
         volume: "/Volumes/main/default/state/falkor",
@@ -72,6 +77,20 @@ describe("FalkorDB CLI", () => {
         inheritStdio: true,
       },
     ]);
+  });
+
+  it("accepts a private Unix listener", async () => {
+    const calls: Parameters<FalkorDBCliDependencies["run"]>[0][] = [];
+    await buildProgram("dbx falkor-db", {
+      async run(options) {
+        calls.push(options);
+      },
+    }).parseAsync(["--listen", "unix:///tmp/falkordb.sock"], { from: "user" });
+
+    assert.deepEqual(calls[0]?.listen, {
+      scheme: "unix",
+      path: "/tmp/falkordb.sock",
+    });
   });
 
   it("allows an ambient profile without Volume storage", async () => {

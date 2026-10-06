@@ -8,6 +8,7 @@ import { parse } from "smol-toml";
 import { runTaskCommand } from "./_task-command.ts";
 import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
 
+/** Resolved function replacement consumed while generating one PythonMonkey bundle. */
 export interface ResolvedPythonNodeFunctionOverride {
   readonly handlerExport: string;
   readonly handlerFile: string;
@@ -15,6 +16,7 @@ export interface ResolvedPythonNodeFunctionOverride {
   readonly targetModule: string;
 }
 
+/** Fully resolved pyproject binding configuration consumed by the runtime generator. */
 export interface ResolvedPythonNodeBindings {
   readonly bindingDirectory: string;
   readonly bindingName: string;

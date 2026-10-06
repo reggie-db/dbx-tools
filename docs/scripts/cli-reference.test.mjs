@@ -67,7 +67,6 @@ describe("parser-owned CLI references", () => {
       "--profile <value>",
       "--model <value>",
       "--embedder-model <value>",
-      "--model-gateway-url <value>",
       "--graphiti-port <value>",
       "--falkor-data-dir <value>",
       "--falkor-snapshot-seconds <value>",

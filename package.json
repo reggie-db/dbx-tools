@@ -24,7 +24,6 @@
     "format": "projen format",
     "graphiti:python-runtime": "projen graphiti:python-runtime",
     "graphiti:python-runtime:check": "projen graphiti:python-runtime:check",
-    "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
@@ -48,6 +47,8 @@
     "@types/node": "^24.6.0",
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
+    "commander": "catalog:",
+    "concurrently": "^10.0.3",
     "constructs": "^10.0.0",
     "eslint": "^9",
     "eslint-config-prettier": "^10.1.8",
@@ -56,8 +57,8 @@
     "eslint-plugin-prettier": "^5.5.6",
     "prettier": "^3.9.4",
     "projen": "^0.103.27",
-    "ts-to-zod": "5.1.0",
     "typescript": "^5.9.3",
+    "yaml": "^2.9.0",
     "zod": "catalog:"
   },
   "overrides": {
@@ -68,7 +69,6 @@
   "trustedDependencies": [
     "@databricks/appkit",
     "@databricks/appkit-ui",
-    "@google/genai",
     "bun",
     "esbuild",
     "onnxruntime-node",
@@ -79,12 +79,12 @@
   "dbxToolsConfig": {
     "packageRoots": [
       "packages/js",
-      "packages/test",
       "packages/example"
     ],
     "syncResynthPaths": [
       "branding/brand.yaml",
-      "branding/assets"
+      "branding/assets",
+      "projen/src"
     ]
   },
   "type": "module",
@@ -116,6 +116,7 @@
     "packages/js/node/falkor-db",
     "packages/js/node/fs",
     "packages/js/node/genie",
+    "packages/js/node/graphiti",
     "packages/js/node/lakebase",
     "packages/js/node/model",
     "packages/js/node/path",
@@ -142,7 +143,6 @@
     "packages/js/ui/mastra",
     "packages/js/ui/search",
     "packages/js/ui/teams",
-    "packages/test/polyglot",
     "projen"
   ],
   "catalog": {
@@ -158,9 +158,6 @@
     "typescript": "^5.9.3",
     "commander": "^15.0.0",
     "@clack/prompts": "^1.7.0",
-    "openapi-fetch": "^0.17.0",
-    "tsoa": "^6.6.0",
-    "concurrently": "^10.0.3",
     "@databricks/appkit": "0.81.0",
     "@databricks/appkit-ui": "0.81.0",
     "@databricks/sdk-experimental": "^0.17.0",

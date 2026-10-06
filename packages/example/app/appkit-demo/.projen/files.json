@@ -1,5 +1,6 @@
 {
   "files": [
+    ".gitattributes",
     ".gitignore",
     ".projen/deps.json",
     ".projen/files.json",

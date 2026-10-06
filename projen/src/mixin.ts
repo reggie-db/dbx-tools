@@ -38,10 +38,6 @@ export function create(
 ): ConstructsMixin {
   return {
     supports,
-    applyTo: (construct: IConstruct): void => {
-      if (supports(construct)) {
-        (applyTo as (construct: IConstruct) => void)(construct);
-      }
-    },
+    applyTo: applyTo as (construct: IConstruct) => void,
   };
 }

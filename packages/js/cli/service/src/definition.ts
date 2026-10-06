@@ -82,6 +82,30 @@ export const CliServiceMenuItemSchema = z.discriminatedUnion("type", [
 /** A typed custom item inserted between the default service title and Quit item. */
 export type CliServiceMenuItem = z.infer<typeof CliServiceMenuItemSchema>;
 
+/** Python package installed into a service-owned uv environment. */
+export const CliServicePythonPackageSchema = z
+  .object({
+    name: z.string().min(1).describe("Python distribution name installed by uv."),
+    version: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Python distribution version. Defaults to the service package version."),
+    python: z
+      .string()
+      .min(1)
+      .default("3.11")
+      .describe("Python version request passed to uv when creating the environment."),
+  })
+  .readonly()
+  .describe("Python runtime package installed with uv for a managed service.");
+
+/** Python package installed into a service-owned uv environment. */
+export type CliServicePythonPackage = z.infer<typeof CliServicePythonPackageSchema>;
+
+/** Python package input accepted before the default Python version is applied. */
+export type CliServicePythonPackageInput = z.input<typeof CliServicePythonPackageSchema>;
+
 /** Complete serializable definition consumed by the lifecycle manager and tray host. */
 export const CliServiceDefinitionSchema = z
   .object({
@@ -96,6 +120,9 @@ export const CliServiceDefinitionSchema = z
     icon: z.string().min(1),
     isTemplateIcon: z.boolean().optional(),
     dataDirectory: z.string().min(1).optional(),
+    pythonPackage: CliServicePythonPackageSchema.optional().describe(
+      "Python runtime package installed into a service-owned uv environment.",
+    ),
     command: CliServiceCommandSchema.optional(),
     menu: z.array(CliServiceMenuItemSchema).readonly().optional(),
   })
@@ -107,9 +134,18 @@ export type CliServiceDefinition = z.infer<typeof CliServiceDefinitionSchema>;
 /** Package-derived service fields plus caller-owned icon, process, and menu options. */
 export type CliServiceDefinitionOptions = Omit<
   CliServiceDefinition,
-  "packageName" | "id" | "name" | "version" | "icon" | "isTemplateIcon" | "command"
+  | "packageName"
+  | "id"
+  | "name"
+  | "version"
+  | "icon"
+  | "isTemplateIcon"
+  | "pythonPackage"
+  | "command"
 > &
   Partial<Pick<CliServiceDefinition, "id" | "name" | "version" | "icon" | "isTemplateIcon">> & {
+    /** Python package installed into a service-owned uv environment. */
+    readonly pythonPackage?: CliServicePythonPackageInput;
     /** Service process command with optional schema or object-backed options. */
     readonly command?: CliServiceCommandInput;
   };

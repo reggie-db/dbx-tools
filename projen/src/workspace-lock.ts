@@ -6,6 +6,7 @@ import { log } from "@dbx-tools/shared-core";
 const MUTATION_LOCK_SCOPE = "dbx-tools-workspace-mutation";
 const logger = log.logger("projen:workspace-lock");
 
+/** Optional preflight used before and after acquiring the workspace mutation lock. */
 export interface WorkspaceMutationLockOptions {
   /**
    * When this returns false, skip both the lock and the callback. After the

@@ -182,16 +182,16 @@ and typed per-turn Mastra request context without owning authentication.
 | Genie streaming and schemas    | [`@dbx-tools/genie`](packages/js/node/genie), [`@dbx-tools/shared-genie`](packages/js/shared/genie)                                                                                                                         |
 | Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model)                                                                                                                         |
 | Local model gateway            | [`@dbx-tools/appkit-model-gateway`](packages/js/node/appkit-model-gateway), [`@dbx-tools/shared-model-gateway`](packages/js/shared/model-gateway), [`@dbx-tools/cli-model-gateway`](packages/js/cli/model-gateway)          |
-| Databricks runtime utilities   | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/databricks`](packages/js/node/databricks)                                                                                                                        |
-| Lakebase parsing and discovery | [`@dbx-tools/lakebase`](packages/js/node/lakebase), [`@dbx-tools/cli-lakebase-proxy`](packages/js/cli/lakebase-proxy)                                                                                                    |
+| Databricks runtime utilities   | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/databricks`](packages/js/node/databricks)                                                                                                                          |
+| Lakebase parsing and discovery | [`@dbx-tools/lakebase`](packages/js/node/lakebase), [`@dbx-tools/cli-lakebase-proxy`](packages/js/cli/lakebase-proxy)                                                                                                       |
 | Databricks OAuth tokens        | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/cli-auth`](packages/js/cli/auth)                                                                                                                                   |
 | Public tunnel + access gate    | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
 | Passwordless authentication    | [`@dbx-tools/auth-gate`](packages/js/node/auth-gate), [`@dbx-tools/shared-auth`](packages/js/shared/auth), [`@dbx-tools/ui-auth`](packages/js/ui/auth)                                                                      |
-| Configuration and local locks  | [`@dbx-tools/core`](packages/js/node/core)                                                                                                                                                                                |
+| Configuration and local locks  | [`@dbx-tools/core`](packages/js/node/core)                                                                                                                                                                                  |
 | Email workflows                | [`@dbx-tools/email`](packages/js/node/email), [`@dbx-tools/shared-email-template`](packages/js/shared/email-template), [`@dbx-tools/shared-email`](packages/js/shared/email), [`@dbx-tools/ui-email`](packages/js/ui/email) |
 | Web search and fetch           | [`@dbx-tools/appkit-web-search`](packages/js/node/appkit-web-search)                                                                                                                                                        |
-| Graphiti AppKit sidecar        | [`@dbx-tools/appkit-graphiti`](packages/js/node/appkit-graphiti), [`dbx-tools-graphiti`](packages/py/graphiti)                                                                                                              |
-| Postgres locks and message bus | [`@dbx-tools/postgres`](packages/js/node/postgres)                                                                                                                                                                        |
+| Graphiti runtime and AppKit    | [`@dbx-tools/graphiti`](packages/js/node/graphiti), [`@dbx-tools/appkit-graphiti`](packages/js/node/appkit-graphiti), [`dbx-tools-graphiti`](packages/py/graphiti)                                                          |
+| Postgres locks and message bus | [`@dbx-tools/postgres`](packages/js/node/postgres)                                                                                                                                                                          |
 | AI Search extensions           | [`@dbx-tools/search`](packages/js/node/search), [`@dbx-tools/shared-search`](packages/js/shared/search), [`@dbx-tools/ui-search`](packages/js/ui/search)                                                                    |
 | Teams chat and cards           | [`@dbx-tools/teams`](packages/js/node/teams), [`@dbx-tools/shared-teams`](packages/js/shared/teams), [`@dbx-tools/ui-teams`](packages/js/ui/teams)                                                                          |
 | React/AppKit UI                | [`@dbx-tools/ui-appkit`](packages/js/ui/appkit), [`@dbx-tools/ui-mastra`](packages/js/ui/mastra), [`@dbx-tools/ui-auth`](packages/js/ui/auth), [`@dbx-tools/ui-email`](packages/js/ui/email)                                |
@@ -217,9 +217,9 @@ The Python packages support Python 3.11 through the Python 3 release line.
 
 The root uv workspace contains only the internal Graphiti adapter:
 
-| Package                                      | Purpose                                                                                                                                   |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dbx-tools-graphiti`](packages/py/graphiti) | Adapts the bundled Graphiti MCP application to Node-owned FalkorDB, shared model resolution, and the common Graphiti option contract. |
+| Package                                      | Purpose                                                                                                              |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [`dbx-tools-graphiti`](packages/py/graphiti) | Adapts the bundled Graphiti MCP application to Node-owned FalkorDB and direct Node-resolved Databricks model routes. |
 
 ### Load One Brand File
 
@@ -345,7 +345,7 @@ barrels, generated schemas, and examples stay consistent. That tooling is not
 the main product surface of the repo, but it is documented for contributors:
 
 - [`@dbx-tools/projen`](projen) documents the projen engine,
-  package discovery, generated files, mixins, OpenAPI generation, and codegen.
+  package discovery, generated files, mixins, and codegen.
 - [`dbx-tools`](packages/js/cli/dbx-tools) documents the contributor CLI.
 
 Useful contributor commands:

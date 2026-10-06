@@ -34,8 +34,9 @@ export function rankEndpoints(
   query: ModelQuery = {},
   options: NativeRankingOptions = {},
 ): RankedModel[] {
-  const originalByName = new Map(endpoints.map((endpoint) => [endpoint.name, endpoint]));
-  const normalized = endpoints.map((endpoint) => ({
+  const filtered = endpoints.filter((endpoint) => matchesModelQuery(endpoint, query));
+  const originalByName = new Map(filtered.map((endpoint) => [endpoint.name, endpoint]));
+  const normalized = filtered.map((endpoint) => ({
     ...endpoint,
     ...(options.modelClass ? { class: options.modelClass } : {}),
     ...(options.task ? { task: options.task } : {}),
@@ -50,13 +51,14 @@ export function rankEndpoints(
       }
     : classifyEndpoints(normalized);
   const requestedClass = options.modelClass ?? query.modelClass;
+  const includeDeprecated = query.includeDeprecated ?? options.includeDeprecated ?? false;
   const eligible = requestedClass ? classesAtOrBelow(requestedClass) : CHAT_CLASS_ORDER;
   const candidates: RankedModel[] = [];
   const search = query.search?.trim();
   if (search && requestedClass === undefined) {
     const classByName = classifyEndpointClasses(normalized);
     for (const endpoint of normalized) {
-      if (!options.includeDeprecated && endpoint.status?.deprecated) continue;
+      if (!includeDeprecated && endpoint.status?.deprecated) continue;
       const capabilities = endpointCapabilities(endpoint);
       if (!capabilities.chat || (query.requiresTools && !capabilities.tools)) continue;
       candidates.push({
@@ -67,7 +69,7 @@ export function rankEndpoints(
   } else {
     for (const modelClass of eligible) {
       for (const endpoint of classified[modelClass]) {
-        if (!options.includeDeprecated && endpoint.status?.deprecated) continue;
+        if (!includeDeprecated && endpoint.status?.deprecated) continue;
         if (query.requiresTools && !endpointCapabilities(endpoint).tools) continue;
         candidates.push({ endpoint, modelClass });
       }
@@ -123,6 +125,28 @@ export function rankEndpoints(
     endpoint: originalByName.get(result.endpoint.name) ?? result.endpoint,
   }));
   return query.limit === undefined ? restored : restored.slice(0, Math.max(0, query.limit));
+}
+
+function matchesModelQuery(endpoint: ServingEndpointSummary, query: ModelQuery): boolean {
+  if (query.name !== undefined && endpoint.name !== query.name) return false;
+  if (query.task !== undefined && endpoint.task !== query.task) return false;
+  if (
+    query.reasoningEffort !== undefined &&
+    !endpoint.reasoningEfforts?.includes(query.reasoningEffort)
+  ) {
+    return false;
+  }
+  if (
+    query.dimension !== undefined ||
+    query.minDimension !== undefined ||
+    query.maxDimension !== undefined
+  ) {
+    if (endpoint.dimension === undefined) return false;
+    if (query.dimension !== undefined && endpoint.dimension !== query.dimension) return false;
+    if (query.minDimension !== undefined && endpoint.dimension < query.minDimension) return false;
+    if (query.maxDimension !== undefined && endpoint.dimension > query.maxDimension) return false;
+  }
+  return true;
 }
 
 /** Classify chat and embedding endpoints through the TypeScript-owned policy. */

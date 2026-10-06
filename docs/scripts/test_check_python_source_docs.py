@@ -17,9 +17,6 @@ class CheckPythonSourceDocsTest(unittest.TestCase):
             generated = source / "_generated"
             generated.mkdir()
             (generated / "client.py").write_text("class Generated:\n    pass\n")
-            upstream = source / "_upstream"
-            upstream.mkdir()
-            (upstream / "client.py").write_text("class Upstream:\n    pass\n")
 
             findings = collect_undocumented(root)
 
@@ -27,6 +24,21 @@ class CheckPythonSourceDocsTest(unittest.TestCase):
                 [(finding.line, finding.name) for finding in findings],
                 [(1, "<module>"), (1, "Client"), (2, "Client.close")],
             )
+
+    def test_accepts_a_module_description_after_imports(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "packages" / "py" / "example" / "src" / "example"
+            source.mkdir(parents=True)
+            (source / "client.py").write_text(
+                "from pathlib import Path\n\n"
+                '"""Documented after imports."""\n\n'
+                "def load() -> Path:\n"
+                '    """Load a path."""\n'
+                '    return Path(".")\n'
+            )
+
+            self.assertEqual(collect_undocumented(root), [])
 
 
 if __name__ == "__main__":

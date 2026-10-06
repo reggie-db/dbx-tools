@@ -1,4 +1,8 @@
 #!/usr/bin/env -S bun
+/**
+ * Build selected uv workspace packages from isolated publication copies and
+ * optionally publish the resulting distributions.
+ */
 import {
   chmodSync,
   cpSync,

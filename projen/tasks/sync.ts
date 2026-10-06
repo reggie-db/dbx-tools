@@ -1,4 +1,5 @@
 #!/usr/bin/env -S bun
+/** Synthesize once or supervise the focused Projen and barrel watch loops. */
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
@@ -46,8 +47,8 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     // Watch: one initial full synth to bring the tree up to date, then focused
     // watchers under `concurrently`. The projenrc watcher is the intelligent stand-in
     // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts` or
-    // a configured `syncResynthPaths` entry changes, while barrels/openapi keep generated
-    // OUTPUT fresh on source edits with no full synth.
+    // a configured `syncResynthPaths` entry changes, while the barrel watcher keeps
+    // generated package exports fresh on source edits with no full synth.
     //
     // VS Code auto-runs this on folder open, so from here down nothing is allowed to be
     // fatal: errors are logged and retried, and only a stop signal ends the task.
@@ -67,11 +68,10 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     const watchers = [
       watcher("projenrc.ts", "projenrc", "magenta"),
       watcher("barrels.ts", "barrels", "cyan", "--watch"),
-      watcher("openapi.ts", "openapi", "green", "--watch"),
     ];
     const { result } = concurrently(watchers, {
       prefix: "name",
-      // No `killOthersOn`: one watcher falling over is no reason to tear the other two
+      // No `killOthersOn`: one watcher falling over is no reason to tear the other
       // down. `-1` is concurrently's spelling for "restart forever", so a crashed
       // watcher comes back instead of silently leaving its outputs stale.
       restartTries: -1,

@@ -22,6 +22,13 @@ export async function runFalkorDB(options: FalkorDBOptions): Promise<void> {
   const storage = options.volume ? await volumeStorage(options.volume, options.profile) : undefined;
   const database = await DurableFalkorDB.open({
     ...(options.dataDir ? { dataDir: options.dataDir } : {}),
+    ...(options.listen?.scheme === "unix" ? { socketPath: options.listen.path } : {}),
+    ...(options.listen?.scheme === "tcp"
+      ? {
+          port: options.listen.port,
+          redisConfig: { bind: options.listen.host },
+        }
+      : {}),
     snapshotSeconds: options.snapshotSeconds,
     snapshotMinChanges: options.snapshotMinChanges,
     ...(storage ? { storage } : {}),

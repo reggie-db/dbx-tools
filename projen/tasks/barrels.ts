@@ -1,4 +1,5 @@
 #!/usr/bin/env -S bun
+/** Generate package barrels once or keep affected barrels current in watch mode. */
 import { sep } from "node:path";
 import { parseArgs } from "node:util";
 import { log, object, stringUtils } from "@dbx-tools/shared-core";
@@ -11,12 +12,9 @@ const logger = log.logger("projen:barrels");
 /** The recorded package dir that owns `abs`, if any (for a targeted barrel rebuild). */
 function ownerPackageDir(
   abs: string,
-  packages: readonly { readonly dir: string; readonly tags: readonly string[] }[],
+  packages: readonly { readonly dir: string }[],
 ): string | undefined {
-  // The OpenAPI task rebuilds generated-client barrels after writing its files.
-  return packages.find(
-    ({ dir, tags }) => !tags.includes("openapi") && (abs === dir || abs.startsWith(dir + sep)),
-  )?.dir;
+  return packages.find(({ dir }) => abs === dir || abs.startsWith(dir + sep))?.dir;
 }
 
 function changedBarrelTargets(changed: readonly string[]): object.Sequence<string> {

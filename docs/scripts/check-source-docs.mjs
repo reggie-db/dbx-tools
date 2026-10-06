@@ -18,7 +18,11 @@ const GENERATED_PATHS = [
 ];
 
 function discoverPackages(root) {
-  return walk(path.join(root, "packages", "js"), [], ["dist", "lib"])
+  return [
+    ...walk(path.join(root, "packages", "js"), [], ["dist", "lib"]),
+    path.join(root, "projen", "package.json"),
+  ]
+    .filter((file) => fs.existsSync(file))
     .filter((file) => path.basename(file) === "package.json")
     .map((manifest) => ({ manifest, value: JSON.parse(fs.readFileSync(manifest, "utf8")) }))
     .filter(({ value }) => value.private !== true)

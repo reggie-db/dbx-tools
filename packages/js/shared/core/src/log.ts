@@ -319,7 +319,7 @@ function parseLogLevel(raw: unknown): LogLevel | undefined {
 }
 
 /** Active threshold from `process.env.LOG_LEVEL`, default {@link DEFAULT_LEVEL}. */
-function activeLevel(): LogLevel {
+export function activeLevel(): LogLevel {
   return parseLogLevel(globalProcess?.env?.LOG_LEVEL) ?? DEFAULT_LEVEL;
 }
 

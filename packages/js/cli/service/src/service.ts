@@ -3,7 +3,8 @@
  *
  * This module owns current-user service compilation and lifecycle across
  * consuming CLIs. Reuse {@link CliService} rather than adding product-specific
- * installers, startup registration, runtime directories, or control sockets.
+ * installers, uv Python environments, startup registration, runtime
+ * directories, or control sockets.
  *
  * @module
  */
@@ -26,7 +27,11 @@ import {
   resolveServicePaths,
   type ServiceRuntimeContext,
 } from "./_paths.ts";
-import { externalRuntimePackages, installServiceRuntime } from "./_runtime.ts";
+import {
+  externalRuntimePackages,
+  installServicePythonPackage,
+  installServiceRuntime,
+} from "./_runtime.ts";
 import { installStartup, removeStartup, type ServiceLaunch } from "./_startup.ts";
 import {
   CliServiceDefinitionSchema,
@@ -54,6 +59,15 @@ export type CliServiceRuntimeInstaller = (
   dependencies: Readonly<Record<string, string>>,
 ) => Promise<void>;
 
+/** Install a Python package into a service-owned uv environment. */
+export type CliServicePythonInstaller = (
+  uvExecutable: string,
+  directory: string,
+  packageSpecifier: string,
+  python: string,
+  platform: NodeJS.Platform,
+) => Promise<string>;
+
 /** Host runtime overrides for tests, embedded distributions, and nonstandard homes. */
 export interface CliServiceRuntimeOptions {
   /** Operating system used for configuration and startup registration. */
@@ -68,10 +82,14 @@ export interface CliServiceRuntimeOptions {
   readonly globalHomeDirectory?: string;
   /** Package-provided Bun executable override. */
   readonly bunExecutable?: string;
+  /** uv executable used for managed Python package environments. */
+  readonly uvExecutable?: string;
   /** Standalone compiler override. */
   readonly compile?: CliServiceCompiler;
   /** External runtime dependency installer override. */
   readonly installRuntime?: CliServiceRuntimeInstaller;
+  /** Python package installer override. */
+  readonly installPython?: CliServicePythonInstaller;
   /** System-tray host source entrypoint override. */
   readonly hostEntrypoint?: string;
   /** systray2 native executable override. */
@@ -119,8 +137,10 @@ export class CliService implements CliServiceLifecycle {
   private readonly runtime: ServiceRuntimeContext;
   private readonly globalHomeDirectory: string;
   private readonly bunExecutable: string;
+  private readonly uvExecutable: string;
   private readonly compiler: CliServiceCompiler;
   private readonly runtimeInstaller: CliServiceRuntimeInstaller;
+  private readonly pythonInstaller: CliServicePythonInstaller;
   private readonly hostEntrypoint: string;
   private readonly trayExecutable: string;
 
@@ -142,11 +162,13 @@ export class CliService implements CliServiceLifecycle {
     this.globalHomeDirectory =
       options.globalHomeDirectory ?? join(this.runtime.homeDirectory, ".dbx-tools");
     this.bunExecutable = options.bunExecutable ?? resolveBunExecutable();
+    this.uvExecutable = options.uvExecutable ?? "uv";
     this.compiler =
       options.compile ??
       ((entrypoint, output, workingDirectory, external) =>
         compileWithBun(this.bunExecutable, entrypoint, output, workingDirectory, external));
     this.runtimeInstaller = options.installRuntime ?? installServiceRuntime;
+    this.pythonInstaller = options.installPython ?? installServicePythonPackage;
     this.hostEntrypoint = options.hostEntrypoint ?? resolveHostEntrypoint();
     this.trayExecutable = options.trayExecutable ?? resolveTrayExecutable(this.runtime.platform);
   }
@@ -162,7 +184,7 @@ export class CliService implements CliServiceLifecycle {
       Object.fromEntries(Object.entries(dependencies).filter(([name]) => external.has(name))),
     );
     const paths = resolveServicePaths(this.definition, this.runtime);
-    const installedDefinition = await this.installDefinition(owner);
+    const installedDefinition = await this.installDefinition(owner, paths.directory);
     const host = await this.ensureCompiledBinary(
       this.binaryName(installedDefinition, "service"),
       this.hostEntrypoint,
@@ -270,13 +292,39 @@ export class CliService implements CliServiceLifecycle {
     };
   }
 
-  private async installDefinition(owner: ServicePackage): Promise<CliServiceDefinition> {
+  private async installDefinition(
+    owner: ServicePackage,
+    directory: string,
+  ): Promise<CliServiceDefinition> {
     const definition = CliServiceDefinitionSchema.parse({
       ...this.definition,
       version: this.definition.version ?? owner.version,
     });
+    if (!definition.version) throw new Error(`${definition.name} has no installable version`);
+    const pythonPackage = definition.pythonPackage
+      ? {
+          ...definition.pythonPackage,
+          version: definition.pythonPackage.version ?? definition.version,
+        }
+      : undefined;
+    const pythonEnvironment: Record<string, string> = {};
+    if (pythonPackage) {
+      pythonEnvironment.PYTHON = await this.pythonInstaller(
+        this.uvExecutable,
+        join(directory, "python"),
+        `${pythonPackage.name}==${pythonPackage.version}`,
+        pythonPackage.python,
+        this.runtime.platform,
+      );
+    }
     const command = definition.command
-      ? await this.installCommand(definition, owner, definition.command, "command")
+      ? await this.installCommand(
+          definition,
+          owner,
+          definition.command,
+          "command",
+          pythonEnvironment,
+        )
       : undefined;
     const menu: CliServiceMenuItem[] = [];
     for (const [index, item] of (definition.menu ?? []).entries()) {
@@ -289,6 +337,7 @@ export class CliService implements CliServiceLifecycle {
                 owner,
                 item.command,
                 `menu-${index + 1}`,
+                pythonEnvironment,
               ),
             }
           : item,
@@ -296,6 +345,7 @@ export class CliService implements CliServiceLifecycle {
     }
     return CliServiceDefinitionSchema.parse({
       ...definition,
+      ...(pythonPackage ? { pythonPackage } : {}),
       ...(command ? { command } : {}),
       ...(menu.length > 0 ? { menu } : {}),
     });
@@ -306,8 +356,15 @@ export class CliService implements CliServiceLifecycle {
     owner: ServicePackage,
     command: CliServiceCommand,
     purpose: string,
+    runtimeEnvironment: Readonly<Record<string, string>>,
   ): Promise<CliServiceCommand> {
-    if (command.executable) return command;
+    const environment = { ...command.environment, ...runtimeEnvironment };
+    if (command.executable) {
+      return {
+        ...command,
+        ...(Object.keys(environment).length > 0 ? { environment } : {}),
+      };
+    }
     const entrypoint = command.entrypoint ?? owner.bin(command.binName);
     const installed = await this.ensureCompiledBinary(
       this.binaryName(definition, purpose),
@@ -318,7 +375,7 @@ export class CliService implements CliServiceLifecycle {
     return {
       executable: installed.path,
       ...(command.arguments ? { arguments: command.arguments } : {}),
-      ...(command.environment ? { environment: command.environment } : {}),
+      ...(Object.keys(environment).length > 0 ? { environment } : {}),
       cwd: command.cwd ?? this.globalHomeDirectory,
     };
   }

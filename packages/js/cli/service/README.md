@@ -1,8 +1,9 @@
 # @dbx-tools/cli-service
 
-Add desktop-service installation, lifecycle commands, and a tray menu to a
-Commander CLI. Users can keep your command running after their terminal closes
-and manage it through the same `service` commands on macOS, Linux, and Windows.
+Add desktop-service installation, lifecycle commands, optional uv-managed
+Python dependencies, and a tray menu to a Commander CLI. Users can keep your
+command running after their terminal closes and manage it through the same
+`service` commands on macOS, Linux, and Windows.
 
 ## Add Service Commands
 
@@ -28,6 +29,22 @@ Use `command.binName` when the package has multiple executable entries. Set
 `command.executable` to run an existing external program instead of compiling a
 package entrypoint. Managed commands default `NODE_ENV` to `production`; an
 explicit `command.environment.NODE_ENV` overrides it.
+
+Set `pythonPackage` when the compiled service command needs a Python runtime:
+
+```ts
+defineService(import.meta.url, {
+  pythonPackage: { name: "example-runtime" },
+  command: { arguments: ["serve"] },
+});
+```
+
+During installation, the service creates an isolated uv environment under its
+data directory, installs the Python distribution at the service version, and
+sets `PYTHON` to that environment's interpreter. `pythonPackage.python` selects
+the Python version uv manages and defaults to `3.11`. uv must be available on
+`PATH` during installation. Uninstalling the service removes the environment
+with the rest of the service-owned data.
 
 `command.options` accepts either a concrete option object or a Zod object
 schema. Objects serialize their current values. Schemas parse `{}` and serialize
@@ -115,10 +132,10 @@ Install the service for the current user and start it
 
 #### Options
 
-| Option       | Description                                                       |
-| ------------ | ----------------------------------------------------------------- |
-| `--start`    | Start the service after installation. (default: true, env: START) |
-| `--no-start` | Disable start the service after installation.                     |
+| Option       | Description                                                                 |
+| ------------ | --------------------------------------------------------------------------- |
+| `--start`    | Start the service after installation. (default: true, env: DBX_TOOLS_START) |
+| `--no-start` | Disable start the service after installation.                               |
 
 ### `<cli> service start`
 

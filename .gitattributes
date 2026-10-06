@@ -4,6 +4,7 @@
 /.eslintrc.json linguist-generated linguist-language=JSON-with-Comments
 /.gitattributes linguist-generated
 /.github/pull_request_template.md linguist-generated
+/.github/workflows/build.yml linguist-generated
 /.github/workflows/release.yml linguist-generated
 /.gitignore linguist-generated
 /.prettierignore linguist-generated
@@ -22,15 +23,10 @@
 /package.json linguist-generated
 /packages/example/**/index.ts linguist-generated
 /packages/example/**/src/generated/** linguist-generated
-/packages/example/openapi/** linguist-generated
 /packages/js/**/index.ts linguist-generated
 /packages/js/**/src/generated/** linguist-generated
-/packages/js/openapi/** linguist-generated
 /packages/js/shared/genie/src/dashboards.ts linguist-generated
 /packages/py/graphiti/pyproject.toml linguist-generated
-/packages/test/**/index.ts linguist-generated
-/packages/test/**/src/generated/** linguist-generated
-/packages/test/openapi/** linguist-generated
 /pnpm-workspace.yaml linguist-generated
 /projen/index.ts linguist-generated
 /pyproject.toml linguist-generated

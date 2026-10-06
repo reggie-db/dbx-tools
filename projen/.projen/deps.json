@@ -16,11 +16,6 @@
       "type": "build"
     },
     {
-      "name": "tsoa",
-      "version": "^6.6.0",
-      "type": "build"
-    },
-    {
       "name": "projen",
       "version": "^0.103.27",
       "type": "peer"
@@ -71,11 +66,6 @@
       "type": "runtime"
     },
     {
-      "name": "openapi-typescript",
-      "version": "^7.13.0",
-      "type": "runtime"
-    },
-    {
       "name": "oxc-parser",
       "version": "^0.90.0",
       "type": "runtime"
@@ -103,6 +93,11 @@
     {
       "name": "yaml",
       "version": "^2.9.0",
+      "type": "runtime"
+    },
+    {
+      "name": "zod",
+      "version": "^4.3.6",
       "type": "runtime"
     }
   ],

@@ -166,15 +166,6 @@
         }
       ]
     },
-    "test:external-consumer": {
-      "name": "test:external-consumer",
-      "description": "Pack the engine and validate an isolated consumer lifecycle",
-      "steps": [
-        {
-          "exec": "bun test test/packed-consumer.test.ts"
-        }
-      ]
-    },
     "upgrade": {
       "name": "upgrade",
       "description": "upgrade dependencies",
@@ -192,7 +183,6 @@
             "@types/node",
             "@types/semver",
             "projen",
-            "tsoa",
             "@clack/prompts",
             "@dbx-tools/core",
             "@dbx-tools/path",
@@ -202,13 +192,13 @@
             "constructs",
             "is-identifier",
             "node-stdlib-browser",
-            "openapi-typescript",
             "oxc-parser",
             "semver",
             "smol-toml",
             "ts-to-zod",
             "typescript",
-            "yaml"
+            "yaml",
+            "zod"
           ]
         },
         {

@@ -178,11 +178,9 @@ $ PROJEN_DISABLE_POST=true bun .projenrc.ts
 exit=0
 ```
 
-Affects every `runSynth({ post: true })` caller — `tasks/projenrc.ts`,
-`tasks/openapi.ts`, `tasks/sync.ts`. Observable downstream as `bun run openapi`
-generating the spec correctly and then failing on its follow-up re-synth; `bunx
-projen` afterwards works, so it is recoverable but noisy, and a CI step that checks
-exit codes will fail on it.
+Affects every `runSynth({ post: true })` caller, including
+`tasks/projenrc.ts` and `tasks/sync.ts`. The former OpenAPI caller has since
+been removed with the unused generator.
 
 **Suggested fix:** spawn bun with no loader when running under bun — e.g. key off
 `process.versions.bun`, or resolve the runner explicitly instead of trusting

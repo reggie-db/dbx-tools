@@ -28,10 +28,9 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:^",
-    "@dbx-tools/cli-graphiti": "workspace:^",
     "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/graphiti": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
-    "@dbx-tools/shared-graphiti": "workspace:^",
     "@mastra/core": "catalog:",
     "@mastra/mcp": "catalog:",
     "zod": "catalog:"

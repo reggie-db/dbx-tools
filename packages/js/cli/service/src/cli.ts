@@ -55,7 +55,6 @@ export function buildServiceCommand(
   const install = addArgs(
     command.command("install").description("Install the service for the current user and start it"),
     CliServiceInstallOptionsSchema,
-    { scope: [] },
   );
   install.action(async () => {
     const options = parseArgs(install, CliServiceInstallOptionsSchema);

@@ -1,8 +1,6 @@
 export {
-  graphitiEnvironment,
-  graphitiGatewayHealthUrl,
   graphitiOptionOverrides,
+  graphitiOptionsEnvironment,
   graphitiOptionsFromEnvironment,
   resolveGraphitiOptions,
-  serializeGraphitiOptions,
 } from "./src/options.ts";

@@ -5,6 +5,7 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/falkor-db";
 export const PACKAGE_VERSION = "0.9.43";
 export * as falkor from "./src/falkor.ts";
+export * as options from "./src/options.ts";
 export * as persistenceManager from "./src/persistence/manager.ts";
 export * as persistenceManifest from "./src/persistence/manifest.ts";
 export * as persistenceRedisInfo from "./src/persistence/redis-info.ts";
@@ -12,6 +13,8 @@ export * as persistenceSnapshot from "./src/persistence/snapshot.ts";
 export * as persistenceVolume from "./src/persistence/volume.ts";
 export { DurableFalkorDB } from "./src/falkor.ts";
 export type { DurableFalkorDBOptions } from "./src/falkor.ts";
+export { FalkorDBOptionsSchema } from "./src/options.ts";
+export type { FalkorDBOptions } from "./src/options.ts";
 export { FalkorPersistenceManager } from "./src/persistence/manager.ts";
 export type { FalkorPersistenceOptions, FalkorPersistenceStatus } from "./src/persistence/manager.ts";
 export { LATEST_MANIFEST_PATH, SNAPSHOT_DIRECTORY } from "./src/persistence/manifest.ts";

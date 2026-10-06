@@ -76,9 +76,6 @@ const DEFAULT_CATALOG: Catalog = {
   typescript: "^5.9.3",
   commander: "^15.0.0",
   "@clack/prompts": "^1.7.0",
-  "openapi-fetch": "^0.17.0",
-  tsoa: "^6.6.0",
-  concurrently: "^10.0.3",
   "@databricks/appkit": "0.81.0",
   "@databricks/appkit-ui": "0.81.0",
   "@databricks/sdk-experimental": "^0.17.0",
@@ -141,7 +138,7 @@ const DEFAULT_WORKSPACE_YAML: javascript.PnpmWorkspaceYamlOptions = {
 export interface DBXToolsPNPMWorkspaceOptions {
   /** Initial `catalog:` registry. Defaults to {@link DEFAULT_CATALOG}. */
   readonly catalog?: Catalog;
-  /** Initial build allowances, merged over `{ esbuild: true }`. */
+  /** Initial build allowances merged over the engine's reviewed defaults. */
   readonly allowBuilds?: AllowBuilds;
 }
 

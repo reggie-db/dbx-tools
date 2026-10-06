@@ -49,7 +49,7 @@ describe("addArgs", () => {
         .string()
         .optional()
         .describe("Databricks profile")
-        .meta({ env: "DATABRICKS_CONFIG_PROFILE" }),
+        .meta({ env: "DATABRICKS_CONFIG_PROFILE", helpDefault: false }),
       host: z
         .string()
         .optional()
@@ -58,7 +58,7 @@ describe("addArgs", () => {
     });
     const previousProfile = process.env.DATABRICKS_CONFIG_PROFILE;
     const previous = process.env.DATABRICKS_HOST;
-    delete process.env.DATABRICKS_CONFIG_PROFILE;
+    process.env.DATABRICKS_CONFIG_PROFILE = "SENSITIVE-PROFILE";
     process.env.DATABRICKS_HOST = "https://workspace.example.com";
     try {
       const command = addArgs(new Command("demo").exitOverride(), configured, {
@@ -67,9 +67,11 @@ describe("addArgs", () => {
       });
       const help = command.helpInformation();
       assert.match(help, /DATABRICKS_CONFIG_PROFILE/);
+      assert.doesNotMatch(help, /SENSITIVE-PROFILE/);
       assert.doesNotMatch(help, /--host/);
       await command.parseAsync([], { from: "user" });
       assert.deepEqual(parseArgs(command, configured), {
+        profile: "SENSITIVE-PROFILE",
         host: "https://workspace.example.com",
       });
     } finally {
@@ -111,7 +113,7 @@ describe("parseArgs", () => {
       listen: sharedOptions.listenAddressSchema({ port: 4000 }),
     });
     assert.deepEqual(await parse(configured, isolated, ["--listen", ":4400"]), {
-      listen: { host: "localhost", port: 4400 },
+      listen: { scheme: "tcp", host: "localhost", port: 4400 },
     });
   });
 });
@@ -128,12 +130,21 @@ describe("serializeArgs", () => {
   it("serializes scalars, booleans, arrays, and listener addresses", () => {
     assert.deepEqual(
       serializeArgs({
-        listen: { host: "localhost", port: 4400 },
+        listen: { scheme: "tcp", host: "localhost", port: 4400 },
         debug: true,
         managed: false,
         tags: ["one", "two"],
       }),
-      ["--listen", "localhost:4400", "--debug", "--no-managed", "--tags", "one", "--tags", "two"],
+      [
+        "--listen",
+        "tcp://localhost:4400",
+        "--debug",
+        "--no-managed",
+        "--tags",
+        "one",
+        "--tags",
+        "two",
+      ],
     );
   });
 });

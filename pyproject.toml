@@ -3,7 +3,7 @@
 [project]
 name = "dbx-tools-python-workspace"
 version = "0.9.43"
-requires-python = ">=3.11,<4"
+requires-python = ">=3.10,<4"
 dependencies = [ "dbx-tools-graphiti" ]
 
 [dependency-groups]
@@ -15,12 +15,9 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py310"
 line-length = 100
-exclude = [
-  "packages/py/graphiti/src/dbx_tools/graphiti/_upstream",
-  "packages/py/graphiti/src/dbx_tools/graphiti/_generated/**"
-]
+exclude = [ "packages/py/graphiti/src/dbx_tools/graphiti/_generated/**" ]
 
   [tool.ruff.lint]
   per-file-ignores = { }
@@ -38,10 +35,3 @@ index-strategy = "unsafe-best-match"
 
 [tool.uv.sources.dbx-tools-graphiti]
 workspace = true
-
-[tool.pyrefly]
-ignore-errors-in-generated-code = true
-project-excludes = [
-  "packages/py/graphiti/src/dbx_tools/graphiti/_upstream/**",
-  "packages/py/graphiti/src/dbx_tools/graphiti/_generated/**"
-]

@@ -1,8 +1,8 @@
 # `@dbx-tools/appkit-graphiti`
 
 Run Graphiti beside an AppKit server, publish a user-scoped MCP surface, and
-reuse the same Node-owned FalkorDB and model-gateway runtime as the standalone
-CLI.
+reuse the same Node-owned FalkorDB and direct model-routing runtime as the
+standalone CLI.
 
 ## Register The Plugin
 
@@ -20,9 +20,10 @@ await appkit.createApp({
 });
 ```
 
-The plugin starts durable embedded FalkorDB, an optional managed model gateway,
-and the pinned Python MCP adapter. All sidecars remain loopback-only. AppKit
-publishes the constrained MCP endpoint at `/api/graphiti/mcp`.
+The plugin resolves direct Databricks model routes, starts durable embedded
+FalkorDB and the application-installed Python MCP adapter, and brokers refreshed
+headers for the adapter on loopback. AppKit publishes the constrained MCP
+endpoint at `/api/graphiti/mcp`.
 
 ## Add Agent Tools
 
@@ -41,21 +42,18 @@ constrained to the derived group.
 
 ## Configure Sidecars
 
-Plugin config uses the shared `@dbx-tools/shared-graphiti` schema. Common fields
-include:
+Plugin config uses the composed `@dbx-tools/graphiti/options` schema. Common
+fields include:
 
-- `graphitiPort` / `GRAPHITI_PORT`: internal MCP listener; a free loopback port
-  is selected automatically when omitted;
-- `modelGatewayPort` / `MODEL_GATEWAY_PORT`: managed gateway listener; a distinct
-  free loopback port is selected automatically;
-- `python` / `PYTHON`: Python executable, default `python3`;
+- `listen` / `GRAPHITI_LISTEN`: internal MCP listener; a free loopback port is
+  selected automatically when omitted;
 - `falkorDataDir` / `FALKORDB_DATA_DIR`: local active RDB directory;
 - `falkorSnapshotSeconds`: change-aware RDB interval, default 300 seconds;
 - `falkorSnapshotMinChanges`: minimum writes before a snapshot, default 1.
 
 The package owns AppKit routing and app-scoped supervision only. Python process
 launch and the reusable Graphiti runtime belong to
-`@dbx-tools/cli-graphiti/runtime`; FalkorDB durability belongs to
+`@dbx-tools/graphiti/runtime`; FalkorDB durability belongs to
 `@dbx-tools/falkor-db`.
 
 ## Operational Limits

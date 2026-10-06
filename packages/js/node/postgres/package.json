@@ -20,7 +20,6 @@
   },
   "devDependencies": {
     "@databricks/appkit": "catalog:",
-    "@dbx-tools/test-polyglot": "workspace:^",
     "@types/node": "catalog:",
     "@types/pg": "^8",
     "typescript": "^5.9.3"

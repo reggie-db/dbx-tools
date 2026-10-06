@@ -1,4 +1,8 @@
 #!/usr/bin/env -S bun
+/**
+ * Generate a shared PythonMonkey runtime and typed Python wrappers from each
+ * package's serialized node-binding configuration.
+ */
 import {
   existsSync,
   mkdirSync,
@@ -10,7 +14,7 @@ import {
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import type { BunPlugin } from "bun";
 import stdLibBrowser from "node-stdlib-browser";
 import ts from "typescript";
@@ -22,6 +26,8 @@ import {
   type ResolvedPythonNodeBindings,
   type ResolvedPythonNodeFunctionOverride,
 } from "../../src/python-node-bindings.ts";
+
+const logger = log.logger("projen:python-node-bindings");
 
 type FunctionOverride = ResolvedPythonNodeFunctionOverride;
 
@@ -180,6 +186,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     ["fs/promises", resolve(shimRoot, "fs-promises.ts")],
     ["os", resolve(shimRoot, "os.ts")],
     ["process", resolve(shimRoot, "process.ts")],
+    ["readline", resolve(shimRoot, "readline.ts")],
   ]);
   const bridgeSource = [
     "export const __pythonGet = (target, name) => target[name];",
@@ -316,7 +323,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       target: "browser",
     });
     if (!result.success) {
-      for (const message of result.logs) console.error(message);
+      for (const message of result.logs) logger.error(message);
       throw new Error(`Could not bundle ${config.entrypoint}`);
     }
     if (result.outputs.length !== 1) {
@@ -438,7 +445,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       .map((name) => `    ${JSON.stringify(name)},`)
       .join("\n");
     const dataclasses = records.map(pythonDataclass).join("\n\n\n");
-    const responseTypes = responses.map(pythonResponse).join("\n\n\n");
+    const responseTypes = orderPythonResponses(responses).map(pythonResponse).join("\n\n\n");
     const protocolTypes = protocols.map(pythonProtocol).join("\n\n\n");
     const wrappers = functions
       .map(({ async, javascriptName, pythonName, parameters, returnType }) =>
@@ -524,6 +531,39 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     readonly name: string;
     readonly required: boolean;
     readonly type: string;
+  }
+
+  /**
+   * Emit nested response types before the responses that reference them.
+   *
+   * Functional TypedDict declarations evaluate their field types immediately,
+   * unlike class annotations protected by `from __future__ import annotations`.
+   */
+  function orderPythonResponses(responses: readonly PythonResponse[]): PythonResponse[] {
+    const ordered: PythonResponse[] = [];
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+
+    const visit = (response: PythonResponse): void => {
+      if (visited.has(response.name) || visiting.has(response.name)) return;
+      visiting.add(response.name);
+      for (const dependency of responses) {
+        if (
+          dependency.name !== response.name &&
+          response.fields.some(({ type }) =>
+            new RegExp(`\\b${dependency.name}\\b`).test(type),
+          )
+        ) {
+          visit(dependency);
+        }
+      }
+      visiting.delete(response.name);
+      visited.add(response.name);
+      ordered.push(response);
+    };
+
+    for (const response of responses) visit(response);
+    return ordered;
   }
 
   interface PythonProtocol {
@@ -658,10 +698,8 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     const placeholder: PythonRecord = { name, fields: [] };
     records.set(name, placeholder);
     const fields = checker.getPropertiesOfType(type).map((property) => {
-      const declaration = property.valueDeclaration ?? property.declarations?.[0];
-      if (!declaration) throw new Error(`${path}.${property.name} has no TypeScript declaration`);
       const propertyType = withoutUndefined(
-        checker.getTypeOfSymbolAtLocation(property, declaration),
+        resolvedPropertyType(checker, type, property, `${path}.${property.name}`),
       );
       return {
         javascriptName: property.name,
@@ -782,13 +820,15 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       );
     }
     const properties = checker.getPropertiesOfType(type).filter(publicProperty);
-    const methods = properties.filter((property) => {
-      const declaration = property.valueDeclaration ?? property.declarations?.[0];
-      return Boolean(
-        declaration &&
-        checker.getTypeOfSymbolAtLocation(property, declaration).getCallSignatures().length,
-      );
-    });
+    const methods = properties.filter(
+      (property) =>
+        resolvedPropertyType(
+          checker,
+          type,
+          property,
+          `${path}.${property.name}`,
+        ).getCallSignatures().length > 0,
+    );
     if (methods.length > 0) {
       const name = pythonObjectName(type, path, "Result");
       if (protocols.has(name)) return name;
@@ -847,14 +887,14 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       const protocolProperties = properties
         .filter(({ name }) => !methodNames.has(name))
         .map((property) => {
-          const declaration = property.valueDeclaration ?? property.declarations?.[0];
-          if (!declaration) throw new Error(`${path}.${property.name} has no declaration`);
           return {
             name: pythonFunctionName(property.name),
             required: !(property.flags & ts.SymbolFlags.Optional),
             type: pythonReturnType(
               checker,
-              withoutUndefined(checker.getTypeOfSymbolAtLocation(property, declaration)),
+              withoutUndefined(
+                resolvedPropertyType(checker, type, property, `${path}.${property.name}`),
+              ),
               responses,
               protocols,
               `${path}.${property.name}`,
@@ -868,14 +908,14 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     if (responses.has(name)) return name;
     responses.set(name, { name, fields: [] });
     const fields = properties.map((property) => {
-      const declaration = property.valueDeclaration ?? property.declarations?.[0];
-      if (!declaration) throw new Error(`${path}.${property.name} has no TypeScript declaration`);
       return {
         name: property.name,
         required: !(property.flags & ts.SymbolFlags.Optional),
         type: pythonReturnType(
           checker,
-          withoutUndefined(checker.getTypeOfSymbolAtLocation(property, declaration)),
+          withoutUndefined(
+            resolvedPropertyType(checker, type, property, `${path}.${property.name}`),
+          ),
           responses,
           protocols,
           `${path}.${property.name}`,
@@ -908,10 +948,26 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   }
 
   function publicProperty(property: ts.Symbol): boolean {
+    if (!property.declarations?.length) return true;
     return (property.declarations ?? []).some((declaration) => {
       const flags = ts.getCombinedModifierFlags(declaration as ts.Declaration);
       return !(flags & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected));
     });
+  }
+
+  function resolvedPropertyType(
+    checker: ts.TypeChecker,
+    owner: ts.Type,
+    property: ts.Symbol,
+    path: string,
+  ): ts.Type {
+    const location =
+      property.valueDeclaration ??
+      property.declarations?.[0] ??
+      owner.aliasSymbol?.declarations?.[0] ??
+      owner.getSymbol()?.declarations?.[0];
+    if (!location) throw new Error(`${path} has no TypeScript type location`);
+    return checker.getTypeOfSymbolAtLocation(property, location);
   }
 
   function pythonObjectName(type: ts.Type, path: string, suffix: string): string {
@@ -1096,7 +1152,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   function writeGenerated(output: string, contents: string, kind: string): void {
     const destination = relative(root, output);
     if (existsSync(output) && readFileSync(output, "utf8") === contents) {
-      if (values.check) console.log(`verified ${destination}`);
+      if (values.check) logger.info(`verified ${destination}`);
       return;
     }
     if (values.check) {
@@ -1106,7 +1162,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     makeWritable(output);
     writeFileSync(output, contents);
     makeReadonly(output);
-    console.log(`generated ${destination}`);
+    logger.info(`generated ${destination}`);
   }
 }
 

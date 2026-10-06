@@ -1,9 +1,9 @@
 /**
  * Browser-safe Graphiti configuration shared by every runtime.
  *
- * This module owns the Graphiti option schema, defaults, environment mapping,
- * and derived gateway settings. CLIs, AppKit integrations, and generated
- * bindings should pass this configuration through rather than recreating it.
+ * This module owns the Graphiti option schema, defaults, and environment
+ * mapping. Node launches the Python runtime with this environment unchanged;
+ * PythonMonkey owns model routing and authentication.
  *
  * @module
  */
@@ -11,88 +11,56 @@
 import { options } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
-/** Environment variable carrying one serialized {@link GraphitiOptions} object. */
-export const GRAPHITI_OPTIONS_ENV = "DBX_GRAPHITI_OPTIONS";
-
 const graphitiText = (description: string) => z.string().trim().min(1).describe(description);
-const graphitiPort = (description: string) => options.tcpPortOrZeroSchema.describe(description);
 
 export const GraphitiOptionsSchema = z
   .object({
-    python: graphitiText("Python executable used to run the matching Graphiti package.").default(
-      "python3",
-    ),
     profile: options.DatabricksOptionsSchema.shape.profile.describe(
       "Databricks profile used for model discovery and authentication.",
     ),
-    graphitiHome: graphitiText("Application-owned Graphiti runtime directory.").optional(),
+    graphitiHome: graphitiText("Application-owned Graphiti runtime directory.")
+      .optional()
+      .meta({ env: "GRAPHITI_HOME" }),
     model: graphitiText("Fuzzy chat-model name or endpoint identifier.")
       .default("databricks-gpt-5-nano")
       .meta({ env: "MODEL_NAME" }),
-    embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.").default(
-      "databricks-gte-large-en",
-    ),
+    temperature: z.coerce
+      .number<number>()
+      .min(0)
+      .max(2)
+      .default(1)
+      .describe("Sampling temperature forwarded to the Graphiti LLM client.")
+      .meta({ env: "TEMPERATURE" }),
+    embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.")
+      .default("gte-large-en")
+      .meta({ env: "EMBEDDER_MODEL" }),
     embedderDimensions: z.coerce
       .number<number>()
       .int()
       .positive()
       .default(1024)
-      .describe("Embedding vector dimensions expected by Graphiti."),
-    modelGatewayUrl: options.normalizedUrlSchema
-      .optional()
-      .describe("Existing OpenAI-compatible model gateway base URL, including /v1.")
-      .meta({ env: ["MODEL_GATEWAY_URL", "OPENAI_API_URL"] }),
-    modelGatewayHost: graphitiText("Listener host for a locally managed model gateway.").default(
-      "127.0.0.1",
-    ),
-    modelGatewayPort: graphitiPort("Listener port for a locally managed model gateway.").default(
-      4400,
-    ),
-    modelGatewayCommand: graphitiText(
-      "Command used to start a locally managed model gateway.",
-    ).optional(),
-    manageModelGateway: z
-      .boolean()
-      .optional()
-      .describe("Whether Graphiti starts and stops a local model gateway."),
-    openAiApiKey: graphitiText(
-      "API key used only with an externally managed OpenAI-compatible endpoint.",
-    )
-      .optional()
-      .meta({ env: "OPENAI_API_KEY" }),
+      .describe("Embedding vector dimensions expected by Graphiti.")
+      .meta({ env: "EMBEDDER_DIMENSIONS" }),
     structuredOutputMode: graphitiText(
       "Structured-output mode forwarded to Graphiti's OpenAI provider.",
     )
       .default("json_object")
       .meta({ env: "LLM_STRUCTURED_OUTPUT_MODE" }),
-    graphitiHost: graphitiText("Graphiti MCP listener host.").default("127.0.0.1"),
-    graphitiPort: graphitiPort("Graphiti MCP listener port.").default(8000),
-    falkorDataDir: graphitiText("Local directory containing the active FalkorDB RDB.")
-      .optional()
-      .meta({ env: "FALKORDB_DATA_DIR" }),
-    falkorSnapshotSeconds: z.coerce
-      .number<number>()
-      .int()
-      .positive()
-      .default(300)
-      .describe("Seconds between change-aware FalkorDB snapshot checks."),
-    falkorSnapshotMinChanges: z.coerce
-      .number<number>()
-      .int()
-      .positive()
-      .default(1)
-      .describe("Minimum writes required before FalkorDB creates an RDB snapshot."),
-    graphitiArgs: z
-      .array(z.string())
-      .default([])
-      .describe("Arguments forwarded to the pinned upstream Graphiti MCP server."),
+    listen: options
+      .listenAddressSchema({
+        host: "127.0.0.1",
+        loopback: true,
+        port: 7272,
+      })
+      .describe("Graphiti HTTP listener.")
+      .meta({ env: "GRAPHITI_LISTEN" }),
   })
   .strict()
-  .describe("Graphiti options accepted by JavaScript, Python, and generated bindings.");
+  .describe("Graphiti options accepted by Node, CLI, AppKit, and browser callers.");
 
-/** Graphiti options represented as Commander flags rather than positional arguments. */
-export const GraphitiCliOptionsSchema = GraphitiOptionsSchema.omit({ graphitiArgs: true }).describe(
-  "Graphiti options represented as Commander flags rather than positional arguments.",
+/** Graphiti options represented as Commander flags. */
+export const GraphitiCliOptionsSchema = GraphitiOptionsSchema.describe(
+  "Graphiti options represented as Commander flags.",
 );
 
 export type GraphitiOptions = z.input<typeof GraphitiOptionsSchema>;
@@ -117,41 +85,15 @@ export function graphitiOptionOverrides(value: unknown): GraphitiOptions {
   return Object.fromEntries(keys.map((key) => [key, parsed[key]])) as GraphitiOptions;
 }
 
-export const ResolvedGraphitiOptionsSchema = GraphitiOptionsSchema.transform((options, context) => {
-  const manageModelGateway = options.manageModelGateway ?? options.modelGatewayUrl === undefined;
-  const modelGatewayUrl = (
-    options.modelGatewayUrl ?? `http://${options.modelGatewayHost}:${options.modelGatewayPort}/v1`
-  ).replace(/\/$/, "");
-  if (
-    options.manageModelGateway !== false &&
-    options.graphitiPort &&
-    options.modelGatewayPort &&
-    options.graphitiPort === options.modelGatewayPort
-  ) {
-    context.addIssue({
-      code: "custom",
-      message: "graphitiPort and modelGatewayPort must be distinct",
-      path: ["modelGatewayPort"],
-    });
-  }
-  return {
-    ...options,
-    modelGatewayUrl,
-    manageModelGateway,
-    openAiApiKey: options.openAiApiKey ?? "not-required",
-  };
-}).describe("Graphiti options after defaults and gateway ownership are resolved.");
+export const ResolvedGraphitiOptionsSchema = GraphitiOptionsSchema.describe(
+  "Graphiti options after shared defaults are resolved.",
+);
 
 export type ResolvedGraphitiOptions = z.output<typeof ResolvedGraphitiOptionsSchema>;
 
 /** Apply shared defaults and validate cross-runtime invariants. */
 export function resolveGraphitiOptions(options: GraphitiOptions = {}): ResolvedGraphitiOptions {
   return ResolvedGraphitiOptionsSchema.parse(options);
-}
-
-/** Serialize resolved options for the internal Python runtime boundary. */
-export function serializeGraphitiOptions(options: GraphitiOptions = {}): string {
-  return JSON.stringify(resolveGraphitiOptions(options));
 }
 
 /** Parse Graphiti option overrides from an explicit environment record. */
@@ -161,26 +103,9 @@ export function graphitiOptionsFromEnvironment(
   return options.parseOpts(GraphitiOptionsSchema, null, environment);
 }
 
-/** Return the managed model gateway health endpoint. */
-export function graphitiGatewayHealthUrl(options: GraphitiOptions = {}): string {
-  return `${resolveGraphitiOptions(options).modelGatewayUrl.replace(/\/v1$/, "")}/api/healthz`;
-}
-
-/** Return Graphiti provider environment variables from resolved shared options. */
-export function graphitiEnvironment(options: GraphitiOptions = {}): Record<string, string> {
-  const resolved = resolveGraphitiOptions(options);
-  return {
-    OPENAI_API_URL: resolved.modelGatewayUrl,
-    OPENAI_API_KEY: resolved.openAiApiKey,
-    LLM__PROVIDERS__OPENAI__API_URL: resolved.modelGatewayUrl,
-    LLM__PROVIDERS__OPENAI__API_KEY: resolved.openAiApiKey,
-    MODEL_NAME: resolved.model,
-    EMBEDDER_MODEL: resolved.embedderModel,
-    EMBEDDER__PROVIDERS__OPENAI__API_URL: resolved.modelGatewayUrl,
-    EMBEDDER__PROVIDERS__OPENAI__API_KEY: resolved.openAiApiKey,
-    EMBEDDER_DIMENSIONS: String(resolved.embedderDimensions),
-    EMBEDDER__DIMENSIONS: String(resolved.embedderDimensions),
-    EMBEDDING_DIM: String(resolved.embedderDimensions),
-    LLM_STRUCTURED_OUTPUT_MODE: resolved.structuredOutputMode,
-  };
+/** Serialize one Graphiti configuration for the Python process environment. */
+export function graphitiOptionsEnvironment(
+  value: GraphitiOptions = {},
+): Readonly<Record<string, string>> {
+  return options.serializeOptsEnvironment(GraphitiOptionsSchema, value);
 }

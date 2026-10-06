@@ -81,6 +81,14 @@ before(() => {
   cli.dbxToolsConfig.tags.push("cli");
   cli.package.addBin({ tool: "./bin/tool.ts" });
 
+  const privateApp = new DBXToolsTypeScriptProject({
+    parent: root,
+    outdir: "packages/app/private",
+    name: "@fixture/private-app",
+    publishable: false,
+  });
+  privateApp.package.addField("private", true);
+
   root.synth();
 });
 
@@ -135,6 +143,12 @@ describe("compiled publish surface", () => {
       "./styles.css": "./src/styles.css",
     });
     assert.ok(!(ui.files ?? []).includes("lib"), "nothing compiled to ship");
+  });
+
+  it("does not add publication machinery to private packages", () => {
+    const packageManifest = manifest("packages/app/private");
+    assert.equal(packageManifest.publishConfig, undefined);
+    assert.ok(!packageManifest.files.includes("lib"));
   });
 
   it("compiles the package-root barrel, which projen's default rootDir excludes", () => {

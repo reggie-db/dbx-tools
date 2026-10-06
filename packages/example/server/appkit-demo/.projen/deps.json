@@ -171,11 +171,6 @@
       "type": "runtime"
     },
     {
-      "name": "tsoa",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "zod",
       "version": "catalog:",
       "type": "runtime"

@@ -27,6 +27,7 @@ packages:
   - packages/js/node/falkor-db
   - packages/js/node/fs
   - packages/js/node/genie
+  - packages/js/node/graphiti
   - packages/js/node/lakebase
   - packages/js/node/model
   - packages/js/node/path
@@ -53,7 +54,6 @@ packages:
   - packages/js/ui/mastra
   - packages/js/ui/search
   - packages/js/ui/teams
-  - packages/test/polyglot
   - projen
 catalog:
   react: ~19.2.4
@@ -68,9 +68,6 @@ catalog:
   typescript: ^5.9.3
   commander: ^15.0.0
   "@clack/prompts": ^1.7.0
-  openapi-fetch: ^0.17.0
-  tsoa: ^6.6.0
-  concurrently: ^10.0.3
   "@databricks/appkit": 0.81.0
   "@databricks/appkit-ui": 0.81.0
   "@databricks/sdk-experimental": ^0.17.0
@@ -127,4 +124,3 @@ allowBuilds:
   unrs-resolver: true
   bun: true
   onnxruntime-node: true
-  "@google/genai": true

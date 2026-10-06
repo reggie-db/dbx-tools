@@ -1,20 +1,20 @@
 /**
  * Codegen generator (ts-to-zod based).
  *
- * Scans every package whose `package.json` declares a `codegen`
- * field and turns the listed upstream `.d.ts` inputs into read-only `src/`
+ * Scans every package whose `dbxToolsConfig.codegenInputs` declares upstream
+ * `.d.ts` inputs and turns them into read-only `src/`
  * modules of zod schemas plus matching inferred TypeScript types. Each input
  * emits one `src/<name>.ts` (schemas + `export type X = z.infer<typeof
  * xSchema>` lines); the barrel generator then namespaces it into the package's
  * root barrel like any other `src/` module (`sdkModel.dashboards.genieMessageSchema`).
  *
  * The single source of truth for "which packages get generated content, from
- * which inputs" is each consumer's own `package.json`:
+ * which inputs" is the typed config serialized into each package manifest:
  *
  *   {
  *     "name": "@dbx-tools/shared-sdk-model",
- *     "codegen": {
- *       "inputs": [
+ *     "dbxToolsConfig": {
+ *       "codegenInputs": [
  *         "node_modules/@databricks/sdk-experimental/dist/apis/dashboards/model.d.ts"
  *       ]
  *     }
@@ -46,18 +46,23 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
-import { log, object } from "@dbx-tools/shared-core";
+import { log } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";
 import { lazyRequire } from "./_lazy-require.ts";
 import { header, makeReadonly, makeWritable } from "./generated.ts";
-import { readPackageManifest, recordedPackages, resolveRepoRoot } from "./packages.ts";
+import {
+  readDbxToolsConfig,
+  readPackageManifest,
+  recordedPackages,
+  resolveRepoRoot,
+} from "./packages.ts";
 
 const logger = log.logger("projen:codegen");
 
 /** Do-not-edit banner stamped on every generated codegen module. */
 const HEADER = header({
   tool: "projen synth (codegen: ts-to-zod)",
-  source: "the upstream .d.ts declared in package.json codegen.inputs",
+  source: "the upstream .d.ts declared in dbxToolsConfig.codegenInputs",
 });
 
 interface CodegenInput {
@@ -77,11 +82,9 @@ function sourceLabel(source: string): string {
   return source.startsWith(nodeModulesPrefix) ? source.slice(nodeModulesPrefix.length) : source;
 }
 
-/** Read a package's `package.json` `codegen.inputs`, or `undefined` if absent. */
+/** Read a package's serialized `dbxToolsConfig.codegenInputs`, or `undefined` if absent. */
 function codegenInputs(dir: string): string[] | undefined {
-  const codegen = readPackageManifest(dir)?.codegen;
-  if (!object.isRecord(codegen)) return undefined;
-  const inputs = codegen.inputs;
+  const inputs = readDbxToolsConfig(dir)?.codegenInputs;
   return Array.isArray(inputs) && inputs.length > 0 ? (inputs as string[]) : undefined;
 }
 
@@ -100,7 +103,7 @@ function parseInputArg(value: string): CodegenInput {
 }
 
 /**
- * The `src/` modules a set of `codegen.inputs` specs will emit, as package-relative
+ * The `src/` modules a set of codegen input specs will emit, as package-relative
  * posix paths - WITHOUT resolving or reading any input.
  *
  * This exists so callers that only need to know WHICH files are generated (the
@@ -344,9 +347,9 @@ function generatePackage(
 }
 
 /**
- * Regenerate the `generated/` tree for every package declaring a
- * `codegen` field. Returns the package dirs it wrote so the caller can rebuild
- * their barrels. `ts-to-zod` + `typescript` are lazy-loaded.
+ * Regenerate source modules for every package declaring `dbxToolsConfig.codegenInputs`.
+ * Returns the package dirs it wrote so the caller can rebuild their barrels.
+ * `ts-to-zod` and `typescript` are lazy-loaded.
  */
 export function generateCodegen(
   projectRoot: string = resolveRepoRoot(),
@@ -365,7 +368,7 @@ export function generateCodegen(
   // than printing a line about work that was never asked for. `debug` keeps it
   // reachable when someone is actually chasing why codegen produced nothing.
   if (targets.length === 0) {
-    logger.debug("no packages declare a `codegen` field");
+    logger.debug("no packages declare dbxToolsConfig.codegenInputs");
     return [];
   }
 

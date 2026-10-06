@@ -1,43 +1,56 @@
 # `dbx-tools-graphiti`
 
-Internal Python adapter for the Node-owned dbx-tools Graphiti runtime. The
-package loads the pinned upstream Graphiti `0.29.3` MCP source, resolves shared
-Databricks model settings through generated PythonMonkey bindings, and connects
-Graphiti to the private FalkorDB Unix socket supplied by Node.
+Run Graphiti's REST and MCP applications together in one FastAPI process.
+The package composes the upstream routers, service initialization, MCP tools,
+and MCP session manager without copying their implementations.
 
-## Run Through The Owning CLI
+Both upstream packages resolve from the same Graphiti commit:
 
-Install and invoke the JavaScript owner:
+- `graph-service` from `server/`
+- `mcp-server` from `mcp_server/`
+
+## Run
 
 ```sh
-bun add --global @dbx-tools/cli-graphiti
-dbx-graphiti --profile MY-PROFILE
+UVICORN_HOST=0.0.0.0 \
+UVICORN_PORT=8000 \
+uv run uvicorn dbx_tools.graphiti.main:app
 ```
 
-The Node launcher installs the matching Python package when needed, starts
-durable embedded FalkorDB and the optional model gateway, then runs this adapter.
-The default MCP endpoint is `http://127.0.0.1:8000/mcp/`.
+From the repository root, the local launcher starts the FalkorDB CLI first,
+waits for its loopback TCP listener, and then starts Uvicorn:
 
-## Understand The Boundary
+```sh
+DATABRICKS_CONFIG_PROFILE=<profile> \
+MODEL_NAME=databricks-gpt-5-nano \
+bash scripts/run-graphiti-python.sh
+```
 
-This package does not own a second CLI schema, database process, persistence
-policy, model gateway, desktop service, or AppKit lifecycle. Its generated
-bindings consume the Zod contract from `@dbx-tools/shared-graphiti` and model
-selection from `@dbx-tools/model`.
+The combined application exposes:
 
-Upstream publishes `graphiti-core` but not the MCP application. This wheel
-bundles the pinned MCP source tree so runtime downloads and tool bootstrapping
-are unnecessary. `_upstream/SOURCE.json` records the exact upstream tag, source
-path, and file hashes used by the package tests. Graph database durability and
-process supervision remain Node-owned.
+- FastAPI documentation at `/docs`
+- OpenAPI at `/openapi.json`
+- REST health and Graphiti routes, including `/healthcheck`, `/search`, and
+  ingestion endpoints
+- Streamable HTTP MCP at `/mcp/`
 
-## Use With AppKit
+Configure Graphiti through the environment and YAML settings supported by the
+two upstream applications.
 
-Use [`@dbx-tools/appkit-graphiti`](../../js/node/appkit-graphiti) when Graphiti
-runs beside an AppKit server. It reuses the Node runtime, publishes user-scoped
-memory tools, and forwards the app's private identities without creating a
-parallel Python service owner.
+## Databricks Model Resolution
 
-Direct Python callers should treat `dbx_tools.graphiti.cli` and generated Node
-bindings as internal runtime boundaries. Start Graphiti through the JavaScript
-CLI or AppKit plugin.
+The process creates one generated auth client and one generated model client at
+startup. It resolves the fuzzy chat model, ranks embedding endpoints by the
+configured name, embedding class, and dimensions, then resolves both endpoint
+routes. REST and MCP reuse the same Graphiti model clients, while the auth client
+injects refreshed Databricks headers into every model request.
+
+## Composition Boundary
+
+`dbx_tools.graphiti.main` owns only the combined FastAPI lifespan and route
+mounting. It initializes the upstream REST application through
+`initialize_graphiti()`, initializes the existing MCP services without invoking
+their CLI parser, and runs the mounted MCP session manager in the parent
+lifespan. Shared Graphiti environment options are parsed through the generated
+`graphiti_options_from_environment()` binding and mapped into both upstream
+settings objects before initialization.

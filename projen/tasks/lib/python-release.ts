@@ -22,6 +22,7 @@ const directSibling = (
   return directory === sibling.directory || directory.endsWith(`/${sibling.directory}`);
 };
 
+/** Parse the publication identity and private flag from one Python manifest. */
 export function pythonProjectInfo(
   source: string,
   toml: { parse(source: string): unknown },
@@ -41,6 +42,7 @@ export function pythonProjectInfo(
   };
 }
 
+/** Project sibling dependencies and the release version into an isolated manifest copy. */
 export function preparePythonProjectForPublication(
   source: string,
   options: {

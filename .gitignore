@@ -28,6 +28,7 @@ jspm_packages/
 *.tgz
 .yarn-integrity
 .cache
+!/.github/workflows/build.yml
 !/.github/pull_request_template.md
 !/.prettierignore
 !/.prettierrc.json
@@ -89,8 +90,6 @@ jspm_packages/
 .home/
 .kanna/
 **/.logs/
-!projen/shims/python-node/
-!projen/shims/python-node/**
 !/pyproject.toml
 !/packages/py/graphiti/pyproject.toml
 .venv/

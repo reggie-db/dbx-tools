@@ -163,7 +163,6 @@ export function buildProgram(name = "dbx tunnel"): Command {
       .name(name)
       .description("Front a command with a public tunnel and passwordless auth"),
     TunnelOptionsSchema,
-    { scope: [] },
   );
 
   // `run` is the DEFAULT action as well as a named subcommand, preserving the old
@@ -178,7 +177,6 @@ export function buildProgram(name = "dbx tunnel"): Command {
   const runCommand = addArgs(
     program.command("run").description("Wrap a command (the default action)"),
     TunnelOptionsSchema,
-    { scope: [] },
   );
   runCommand
     .argument("<command...>", "the command to wrap, after `--`")
@@ -192,7 +190,6 @@ export function buildProgram(name = "dbx tunnel"): Command {
   const statusCommand = addArgs(
     program.command("status").description("Resolve the configuration and print it"),
     TunnelOptionsSchema,
-    { scope: [] },
   );
   statusCommand.action(() => {
     const resolved = resolveTunnelOptions(parseArgs(statusCommand, TunnelOptionsSchema));

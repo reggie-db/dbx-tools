@@ -19,6 +19,7 @@ describe("CLI service lifecycle", () => {
     await writeFile(trayExecutable, "#!/bin/sh\nexit 0\n");
     await chmod(trayExecutable, 0o755);
     const compiled: string[] = [];
+    const pythonInstalls: unknown[] = [];
     const service = new CliService(
       {
         id: "com.example.gateway",
@@ -27,6 +28,7 @@ describe("CLI service lifecycle", () => {
         version: "1.2.3",
         icon: join(root, "icon.png"),
         dataDirectory,
+        pythonPackage: { name: "example-runtime", python: "3.12" },
         command: {
           entrypoint: commandEntrypoint,
           arguments: ["--port", "4401"],
@@ -39,6 +41,7 @@ describe("CLI service lifecycle", () => {
         environment: { XDG_CONFIG_HOME: join(root, "config") },
         globalHomeDirectory,
         bunExecutable: "/opt/bun",
+        uvExecutable: "/opt/uv",
         hostEntrypoint,
         trayExecutable,
         async compile(entrypoint, output) {
@@ -47,6 +50,10 @@ describe("CLI service lifecycle", () => {
           await chmod(output, 0o755);
         },
         async installRuntime() {},
+        async installPython(uv, directory, packageSpecifier, python, platform) {
+          pythonInstalls.push({ uv, directory, packageSpecifier, python, platform });
+          return join(directory, "bin/python");
+        },
       },
     );
 
@@ -57,14 +64,33 @@ describe("CLI service lifecycle", () => {
       await readFile(join(dataDirectory, "service.json"), "utf8"),
     ) as {
       id: string;
-      command: { executable: string; entrypoint?: string };
+      pythonPackage: { name: string; version: string; python: string };
+      command: { executable: string; entrypoint?: string; environment: Record<string, string> };
     };
     assert.equal(configuration.id, "com.example.gateway");
+    assert.deepEqual(configuration.pythonPackage, {
+      name: "example-runtime",
+      version: "1.2.3",
+      python: "3.12",
+    });
     assert.equal(configuration.command.entrypoint, undefined);
     assert.equal(
       configuration.command.executable,
       join(globalHomeDirectory, "bin", "example-gateway-command"),
     );
+    assert.equal(
+      configuration.command.environment.PYTHON,
+      join(dataDirectory, "python/bin/python"),
+    );
+    assert.deepEqual(pythonInstalls, [
+      {
+        uv: "/opt/uv",
+        directory: join(dataDirectory, "python"),
+        packageSpecifier: "example-runtime==1.2.3",
+        python: "3.12",
+        platform: "linux",
+      },
+    ]);
     assert.deepEqual(compiled, [commandEntrypoint, hostEntrypoint]);
     const startup = await readFile(
       join(root, "config", "autostart", "com.example.gateway.desktop"),

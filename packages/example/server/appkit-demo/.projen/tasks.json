@@ -93,15 +93,6 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
     },
-    "prepack": {
-      "name": "prepack",
-      "description": "Compile before packing the published tarball",
-      "steps": [
-        {
-          "spawn": "compile"
-        }
-      ]
-    },
     "start": {
       "name": "start",
       "steps": [

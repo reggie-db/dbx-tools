@@ -2,35 +2,27 @@
  * Commander-owned Graphiti CLI and shared current-user service definition.
  *
  * This module owns every user-facing Graphiti command. The shared Graphiti Zod
- * schema owns its options, environment names, defaults, and validation for both
- * this CLI and the generated Python binding.
+ * schema owns its options, environment names, defaults, and validation. The
+ * Node Graphiti package owns runtime and Python interaction.
  *
  * @module
  */
 import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args/args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
+import { runGraphiti, type GraphitiRuntimeOptions } from "@dbx-tools/graphiti/runtime";
+import { Command } from "commander";
 import {
   GraphitiCliOptionsSchema,
   GraphitiOptionsSchema,
-  resolveGraphitiOptions,
   type GraphitiOptions,
-} from "@dbx-tools/shared-graphiti";
-import { Command } from "commander";
+} from "./options.ts";
 import { PACKAGE_VERSION } from "../index.ts";
-import {
-  ensureGraphitiModelGateway,
-  ensureGraphitiPython,
-  runGraphiti,
-  type GraphitiRuntimeOptions,
-} from "./runtime.ts";
 
 /** Injectable runtime and service lifecycle boundaries for CLI callers. */
 export interface GraphitiCliDependencies {
-  /** Run the Node-supervised Graphiti stack. */
+  /** Run the Graphiti stack through the Node runtime owner. */
   run(options: GraphitiRuntimeOptions): Promise<void>;
-  /** Ensure the matching Python package before service installation. */
-  readonly prepare?: (python: string) => Promise<void>;
   /** Shared service command dependencies for tests and embedding. */
   readonly service?: CliServiceCliDependencies;
 }
@@ -42,14 +34,10 @@ export type GraphitiServiceOptions = GraphitiOptions;
 export function graphitiServiceDefinition(
   options: GraphitiServiceOptions = {},
 ): CliServiceDefinition {
-  const parsed = GraphitiOptionsSchema.parse({
-    ...options,
-    modelGatewayCommand: options.modelGatewayCommand ?? ensureGraphitiModelGateway(),
-  });
-  const { graphitiArgs, ...cliOptions } = parsed;
   return defineService(import.meta.url, {
+    pythonPackage: { name: "dbx-tools-graphiti" },
     command: {
-      arguments: [...serializeArgs(cliOptions), ...graphitiArgs],
+      arguments: serializeArgs(GraphitiOptionsSchema.parse(options)),
     },
   });
 }
@@ -65,19 +53,10 @@ export function buildProgram(
       .description("Run Graphiti or manage its current-user desktop service")
       .version(PACKAGE_VERSION, "-v, --version"),
     GraphitiCliOptionsSchema,
-    { scope: [] },
-  )
-    .argument("[args...]", "arguments forwarded to the pinned Graphiti MCP server")
-    .action(async (args: string[]) => {
-      await dependencies.run(graphitiOptions(program, args));
-    });
-
-  program.hook("preAction", async (_command, action) => {
-    if (action.name() === "install") {
-      const options = graphitiOptions(program);
-      await (dependencies.prepare ?? ensureGraphitiPython)(resolveGraphitiOptions(options).python);
-    }
+  ).action(async () => {
+    await dependencies.run(graphitiOptions(program));
   });
+
   program.addCommand(
     buildServiceCommand(
       () => graphitiServiceDefinition(graphitiOptions(program)),
@@ -87,9 +66,6 @@ export function buildProgram(
   return program;
 }
 
-function graphitiOptions(command: Command, graphitiArgs: readonly string[] = []): GraphitiOptions {
-  return GraphitiOptionsSchema.parse({
-    ...parseArgs(command, GraphitiCliOptionsSchema),
-    graphitiArgs: [...graphitiArgs],
-  });
+function graphitiOptions(command: Command): GraphitiOptions {
+  return GraphitiOptionsSchema.parse(parseArgs(command, GraphitiCliOptionsSchema));
 }

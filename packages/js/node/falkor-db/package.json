@@ -27,7 +27,8 @@
     "@dbx-tools/shared-core": "workspace:^",
     "falkordb": "^6.6.0",
     "falkordblite": "0.3.0",
-    "redis": "6.3.0"
+    "redis": "6.3.0",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -44,6 +45,10 @@
         "types": "./lib/src/falkor.d.ts",
         "default": "./lib/src/falkor.js"
       },
+      "./options": {
+        "types": "./lib/src/options.d.ts",
+        "default": "./lib/src/options.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -58,6 +63,7 @@
   "exports": {
     ".": "./index.ts",
     "./falkor": "./src/falkor.ts",
+    "./options": "./src/options.ts",
     "./package.json": "./package.json"
   },
   "files": [

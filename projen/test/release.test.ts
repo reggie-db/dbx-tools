@@ -22,7 +22,6 @@ before(() => {
     name: "release-fixture",
     outdir,
     github: true,
-    buildWorkflow: true,
     releaseSetupSteps: [
       {
         name: "Setup Python",
@@ -49,15 +48,6 @@ before(() => {
     },
     releasePythonRoot: "python/packages",
     releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
-    githubOptions: {
-      pullRequestLint: true,
-      pullRequestLintOptions: {
-        semanticTitleOptions: {
-          types: ["feature", "maintenance"],
-          requireScope: true,
-        },
-      },
-    },
   });
   project.synth();
   release = readWorkflow(outdir, "release");
@@ -84,10 +74,15 @@ describe("unified release workflow", () => {
     const verifyJob = release.jobs["build-release"]!;
     assert.deepEqual(verifyJob.permissions, { contents: "read" });
     assert.equal(step(verifyJob, "Checkout release source").with?.["fetch-depth"], 0);
+    assert.equal(step(verifyJob, "Install dependencies").run, "bun install");
     const verify = step(verifyJob, "Verify release context");
     assert.equal(verify.env?.RELEASE_TAG, "${{ github.ref_name }}");
     assert.ok(verify.run?.includes("tasks/release-version.ts"));
-    assert.equal(step(verifyJob, "Setup Bun").uses, "oven-sh/setup-bun@v2");
+    assert.match(step(verifyJob, "Verify generated sources").run ?? "", /bunx projen/);
+    assert.match(step(verifyJob, "Verify generated sources").run ?? "", /git diff/);
+    assert.equal(step(verifyJob, "Verify workspace versions").run, "bun run version:check");
+    assert.match(step(verifyJob, "Setup bun").uses ?? "", /^oven-sh\/setup-bun@/);
+    assert.deepEqual(step(verifyJob, "Setup bun").with, { "bun-version": "1.3.14" });
     const names = verifyJob.steps.map((candidate) => candidate.name);
     assert.ok(
       names.indexOf("Install CLI documentation parser") <
@@ -117,7 +112,8 @@ describe("unified release workflow", () => {
     const job = release.jobs["publish-node"]!;
     assert.ok(job.if?.includes("outputs.npm == 'true'"));
     assert.deepEqual(job.permissions, { contents: "read", "id-token": "write" });
-    assert.equal(job.env?.BUN_VERSION, "1.3.14");
+    assert.equal(job.env?.BUN_VERSION, undefined);
+    assert.deepEqual(step(job, "Setup Bun").with, { "bun-version": "1.3.14" });
     assert.deepEqual(step(job, "Setup Node.js").with, {
       "node-version": "24",
       "registry-url": "https://registry.npmjs.org",
@@ -198,7 +194,6 @@ describe("unified release workflow", () => {
     for (const file of ["node-release.yml", "python-release.yml", "docs.yml"]) {
       assert.equal(existsSync(join(outdir, ".github", "workflows", file)), false);
     }
-    assert.equal(existsSync(join(outdir, ".github/workflows/pull-request-lint.yml")), true);
   });
 });
 
@@ -251,33 +246,6 @@ describe("release task contracts", () => {
     assert.doesNotMatch(driver, /--stamp-only|pm", "pkg", "set/);
     assert.ok(driver.includes("workspace manifests do not match release ${version}; run projen"));
     assert.doesNotMatch(driver, /bun\.lock|lockfileMatchesManifestVersions/);
-  });
-});
-
-describe("generated workflow safety", () => {
-  for (const name of ["build"]) {
-    it(`${name} is read-only and cancels superseded runs`, () => {
-      const workflow = readWorkflow(outdir, name);
-      assert.deepEqual(workflow.permissions, { contents: "read" });
-      assert.deepEqual(workflow.concurrency, {
-        group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
-        "cancel-in-progress": true,
-      });
-    });
-  }
-
-  it("keeps CI separate from release", () => {
-    const build = readWorkflow(outdir, "build");
-    assert.deepEqual(workflowTrigger(build, "pull_request"), {
-      types: ["opened", "synchronize", "reopened", "closed"],
-    });
-    assert.equal("push" in build.on, false);
-    assert.equal(
-      build.jobs.build?.if,
-      "${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}",
-    );
-    assert.equal(step(build.jobs.build!, "build").run, "bunx projen build");
-    assert.equal(existsSync(join(outdir, ".github/workflows/pull-request-lint.yml")), true);
   });
 });
 

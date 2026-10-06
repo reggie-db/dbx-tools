@@ -3,10 +3,10 @@
  *
  * The repo-root `VERSION` file holds one plain `x.y.z` string that every
  * generated manifest copies at synth: the root and `projen/` package.json, every
- * JS member, every Python `pyproject.toml`, the generated openapi packages, and
- * the example apps. Synth only READS this file (defaulting to {@link
- * DEFAULT_VERSION} when it is absent on a fresh tree); it never rewrites it, so an
- * ordinary `bunx projen` cannot move a package version up or down.
+ * JavaScript member, every Python `pyproject.toml`, and the example apps. Synth
+ * only READS this file (defaulting to {@link DEFAULT_VERSION} when it is absent
+ * on a fresh tree); it never rewrites it, so an ordinary `bunx projen` cannot
+ * move a package version up or down.
  *
  * Only the pure `bump` task changes the number. It increments the checked-in
  * file while release preparation owns the surrounding Git transaction.
