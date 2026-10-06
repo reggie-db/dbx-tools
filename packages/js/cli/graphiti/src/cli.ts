@@ -9,7 +9,7 @@
  */
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { PACKAGE_VERSION } from "../index.ts";
 import {
   ensureGraphitiModelGateway,
@@ -61,8 +61,12 @@ export function buildProgram(
     .name(name)
     .description("Run Graphiti or manage its current-user desktop service")
     .version(PACKAGE_VERSION, "-v, --version")
-    .option("--python <python>", "Python executable", process.env.PYTHON ?? "python3")
-    .option("--profile <profile>", "explicit Databricks profile")
+    .addOption(
+      new Option("--python <python>", "Python executable used to run Graphiti")
+        .env("PYTHON")
+        .default("python3"),
+    )
+    .option("--profile <profile>", "Databricks profile used for model requests")
     .argument("[args...]", "arguments forwarded to the Python Graphiti start command")
     .allowUnknownOption()
     .allowExcessArguments()

@@ -54,6 +54,8 @@ Primary ownership:
 ## Documentation
 
 - Keep the root `README.md` focused on Databricks developer value.
+- Write package READMEs for users: outcomes, runnable workflows, configuration, and operational limits. Keep development policies and implementation-history explanations out of product guides.
+- Generate CLI command and option references from the owning parser's help or documentation API, including subcommands and forwarded options. Exclude built-in help commands and flags; do not maintain parallel option tables or hand-edit generated README sections.
 - Put detailed workspace/generator guidance in `projen/README.md`.
 - Track active technical debt under `docs/enhancements/YYYY-MM-DD-*.md`; move completed or abandoned plans to `docs/archived/enhancements`.
 - Do not mention predecessor repositories or migrations in public docs.

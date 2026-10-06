@@ -166,6 +166,12 @@
       "description": "Validate and generate documentation from package READMEs",
       "steps": [
         {
+          "exec": "bun test docs/scripts/cli-reference.test.mjs"
+        },
+        {
+          "exec": "bun docs/scripts/sync-cli-readmes.mjs --check"
+        },
+        {
           "exec": "bun docs/scripts/sync-readmes.mjs"
         }
       ]
@@ -176,6 +182,15 @@
       "steps": [
         {
           "exec": "bun docs/scripts/check-source-docs.mjs"
+        }
+      ]
+    },
+    "docs:cli": {
+      "name": "docs:cli",
+      "description": "Update package README command references from their CLI parsers",
+      "steps": [
+        {
+          "exec": "bun docs/scripts/sync-cli-readmes.mjs"
         }
       ]
     },

@@ -1,27 +1,12 @@
 # @dbx-tools/cli-service
 
-Product-agnostic system-tray service lifecycle for Node and Bun CLIs. A
-consuming Commander program gets `service install`, `start`, `stop`, `restart`,
-`status`, and `uninstall` commands from one typed definition.
+Add desktop-service installation, lifecycle commands, and a tray menu to a
+Commander CLI. Users can keep your command running after their terminal closes
+and manage it through the same `service` commands on macOS, Linux, and Windows.
 
-This is the shared owner for current-user CLI services. Product CLIs should
-provide a service definition and reuse this lifecycle instead of implementing
-their own installers, startup registration, tray host, runtime layout, or
-control channel.
-
-The resident `systray2` host can manage a foreground command and display a
-system tray icon. Its default menu contains:
-
-- `<program name> - <version>`
-- `Quit`
-
-Custom menu items can open an external URL, run a command, or add a separator.
-
-## Usage
+## Add Service Commands
 
 ```ts
-import { fileURLToPath } from "node:url";
-
 import { buildServiceCommand } from "@dbx-tools/cli-service/cli";
 import { defineService } from "@dbx-tools/cli-service/definition";
 import { Command } from "commander";
@@ -30,44 +15,123 @@ const program = new Command("example");
 program.addCommand(
   buildServiceCommand(
     defineService(import.meta.url, {
-      icon: fileURLToPath(new URL("../assets/icon.png", import.meta.url)),
-      command: {
-        arguments: ["serve"],
-      },
-      menu: [
-        {
-          type: "url",
-          label: "Models",
-          url: "http://127.0.0.1:4400/v1/models",
-        },
-      ],
+      command: { arguments: ["serve"] },
+      menu: [{ type: "url", label: "Open App", url: "http://127.0.0.1:4400" }],
     }),
   ),
 );
+await program.parseAsync(process.argv);
 ```
 
-`defineService()` accepts an owning module's `import.meta.url` or a package name.
-It derives package name, version, service ID, display name, and a single default
-bin from the package manifest. Package names resolve from installed packages
-first and then from current monorepo workspace manifests. Override `version`,
-`id`, `name`, or `command.binName` only when those defaults are not appropriate.
+`defineService` uses the owning package's name, version, and default executable.
+Use `command.binName` when the package has multiple executable entries. Set
+`command.executable` to run an existing external program instead of compiling a
+package entrypoint.
 
-`service install` uses the package's Bun dependency to compile the tray host and
-each package bin or explicit command entrypoint. Standalone executables are
-installed under `~/.dbx-tools/bin` through `@dbx-tools/core/bin`. Direct
-third-party package dependencies are derived from the owner manifest and
-installed under `~/.dbx-tools/node_modules`; callers do not maintain an external
-package list. systray2's native helper is installed under
-`~/.dbx-tools/bin/traybin`. Startup therefore does not require a globally
-installed Node or Bun runtime. Set `command.executable` only for an already-built
-external program that should not be compiled.
+## Install And Manage The Service
 
-macOS installs a per-user LaunchAgent, Linux installs an XDG autostart desktop
-entry, and Windows installs a current-user Startup command. Start, stop, and
-status use a local socket or named pipe rather than process-name matching.
+For the example program above:
 
-## Publication
+```sh
+example service install
+example service status
+example service stop
+example service start
+example service restart
+example service uninstall
+```
 
-This package is public because generated package output is compiled with `tsc`,
-not bundled into consuming CLIs. A private workspace package would leave a
-published CLI with an unavailable runtime dependency.
+Installation starts the service by default. Pass `--no-start` to install without
+launching it. `status` reports installation and process state as JSON.
+
+The service belongs to the current user. Login startup uses a LaunchAgent on
+macOS, an XDG autostart entry on Linux, and a Startup command on Windows. Package
+entrypoints are compiled with Bun into `~/.dbx-tools/bin`.
+
+`restart` stops and starts the installed executable; it does not rebuild it.
+Re-run `install` after upgrading a consuming package to replace compiled
+executables and update the saved configuration.
+
+## Customize The Tray Menu
+
+The default tray menu shows the program name and version and offers `Quit`.
+Add URL, command, or separator items through the service definition. Custom
+command items can select a package binary or an external executable just like
+the main service command.
+
+Use this package when adding service support to another CLI so users get the
+same installation, lifecycle commands, and tray behavior. The generated
+reference uses `<cli>` as a placeholder for the consuming program's name.
+
+<!-- cli-reference:start -->
+
+## Command Reference
+
+### `<cli> service`
+
+```text
+Usage: <cli> service [command]
+
+Install and manage the desktop service
+
+Commands:
+  install [options]  Install the service for the current user and start it
+  start              Start the installed service
+  stop               Stop the running service
+  restart            Restart the installed service
+  status             Print service installation and process state as JSON
+  uninstall          Stop and remove the service for the current user
+```
+
+### `<cli> service install`
+
+```text
+Usage: <cli> service install [options]
+
+Install the service for the current user and start it
+
+Options:
+  --no-start  install without starting the service
+```
+
+### `<cli> service start`
+
+```text
+Usage: <cli> service start
+
+Start the installed service
+```
+
+### `<cli> service stop`
+
+```text
+Usage: <cli> service stop
+
+Stop the running service
+```
+
+### `<cli> service restart`
+
+```text
+Usage: <cli> service restart
+
+Restart the installed service
+```
+
+### `<cli> service status`
+
+```text
+Usage: <cli> service status
+
+Print service installation and process state as JSON
+```
+
+### `<cli> service uninstall`
+
+```text
+Usage: <cli> service uninstall
+
+Stop and remove the service for the current user
+```
+
+<!-- cli-reference:end -->

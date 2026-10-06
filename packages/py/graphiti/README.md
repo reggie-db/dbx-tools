@@ -1,89 +1,58 @@
-# `dbx-tools-graphiti`
+# dbx-tools-graphiti
 
-Native launcher for [Graphiti](https://github.com/getzep/graphiti) with local
-Neo4j and `dbx-model-gateway` processes configured for Databricks Model Serving. It runs
-directly on the host without Docker, Podman, or another container runtime.
+Run Graphiti's MCP memory service with local Neo4j and Databricks-hosted models.
+The launcher prepares the backend and model gateway, keeps their lifecycles
+aligned, and can journal graph writes to Postgres for recovery across restarts.
 
-Install from PyPI:
+## Start The Memory Service
 
-```bash
+Install the Python package and make the model gateway executable available:
+
+```sh
 uv add dbx-tools-graphiti
+bun add --global @dbx-tools/cli-model-gateway
+uv run python -m dbx_tools.graphiti start --profile MY-PROFILE
 ```
 
-Or install the current `main` branch:
+Use a Databricks profile that can access the selected models. In a Databricks
+App, the runtime can use the app's service-principal credentials instead.
 
-```bash
-uv add "dbx-tools-graphiti @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/graphiti"
+The MCP endpoint defaults to `http://127.0.0.1:8000/mcp/`. The first start
+prepares Java, Neo4j, and the Graphiti environment and may take several minutes;
+later starts reuse the installed assets. Keep the terminal open for foreground
+operation. Ctrl-C stops Graphiti, its managed model gateway, and Neo4j together.
+
+For a Bun launcher or an installed desktop service, use
+[`@dbx-tools/cli-graphiti`](../../js/cli/graphiti).
+
+## Select Models Or Reuse A Gateway
+
+```sh
+uv run python -m dbx_tools.graphiti start --profile MY-PROFILE --model databricks-gpt-5
+uv run python -m dbx_tools.graphiti start --model-gateway-url http://127.0.0.1:4000/v1 --no-manage-model-gateway
 ```
 
-## Key features
+Use `--embedder-model` and `--embedder-dimensions` together when changing the
+embedding model. The generated reference lists all model and gateway options
+and their environment-variable equivalents.
 
-- launches upstream Graphiti's HTTP MCP server at `http://127.0.0.1:8000/mcp/`;
-- runs Neo4j Community 5.26 as a native background process;
-- starts `dbx-model-gateway` with an optional profile override, resolved local
-  Databricks authentication, or ambient Databricks App authentication;
-- supervises Graphiti and the managed model gateway with Honcho so they share one
-  lifecycle, receive SIGTERM as process groups, and receive SIGKILL after
-  Honcho's bounded shutdown grace if needed;
-- journals attempted graph mutations to Postgres and reconstructs an
-  ephemeral graph backend during startup;
-- defaults to `databricks-gpt-5-nano` and the 1024-dimensional
-  `databricks-gte-large-en` embedding model;
-- reuses executables from `PATH` and installs missing Java 21, uv, Neo4j, and
-  Graphiti source through mise;
-- pins Graphiti and Neo4j versions for repeatable local environments;
-- caches downloads, Python dependencies, Neo4j data, credentials, and logs;
-- needs no caller-owned `config.yaml` and does not vendor Graphiti code.
+Arguments after `--` are forwarded to the upstream Graphiti server:
 
-## Quick start
-
-Outside a Databricks App, configure a working Databricks CLI profile. A
-Databricks App uses its ambient service-principal authentication. The launcher
-installs mise when needed, handles Java, the model gateway, Graphiti, and Neo4j, and
-installs `uv` only when it is not already available:
-
-```bash
-uv run dbx-graphiti start
+```sh
+uv run python -m dbx_tools.graphiti start --profile MY-PROFILE -- --port 9000 --group-id my-agent
 ```
 
-The launcher passes an explicit `--profile` to managed children. Without that
-flag, dbx-tools auth owns default profile and ambient App authentication.
+## Run In The Background
 
-The first run downloads about 120 MB of Neo4j plus the pinned Graphiti release,
-creates Graphiti's `uv` environment, generates a local Neo4j password, starts
-the model gateway and Neo4j, and then runs Graphiti in the foreground. Later runs reuse
-the installed assets.
-
-Honcho stops the sibling process when Graphiti or the managed model gateway exits. On
-Ctrl-C or SIGTERM it forwards SIGTERM to each child process group, waits up to
-five seconds, then sends SIGKILL to any remaining group. The launcher stops
-Neo4j after Honcho finishes.
-
-For background operation:
-
-```bash
-uv run dbx-graphiti up
-uv run dbx-graphiti status
-uv run dbx-graphiti down
+```sh
+uv run python -m dbx_tools.graphiti up --profile MY-PROFILE
+uv run python -m dbx_tools.graphiti status
+uv run python -m dbx_tools.graphiti down
 ```
 
-## Commands
-
-- `start` starts Neo4j, then runs Graphiti and the managed model gateway under Honcho in
-  the foreground. Missing prerequisites are installed on demand. This is the
-  default.
-- `up` starts all three services in the background.
-- `down` signals the Honcho supervisor, which stops Graphiti and the managed
-  model gateway before the launcher stops Neo4j.
-- `status` prints process state, model selection, and the MCP URL as JSON.
-- `env` prints resolved database, proxy, and model settings as JSON. Its output
-  includes the Neo4j password and must be treated as secret.
-
-Arguments after `--` are forwarded to upstream Graphiti:
-
-```bash
-uv run dbx-graphiti start -- --port 9000 --group-id my-agent
-```
+`status` prints process state, selected models, and the MCP URL as JSON.
+`down` stops the background stack. Use `env` to inspect resolved connection
+settings, but treat its output as secret because it includes the Neo4j password.
 
 ## Postgres persistence
 
@@ -259,3 +228,101 @@ for its complete API.
 - `proxy`: loopback Caddy process used by the AppKit plugin;
 - `persistence`: delegating graph driver and Postgres write-ahead journal;
 - `supervisor`: detached `up` entry point.
+
+<!-- cli-reference:start -->
+
+## Command Reference
+
+### Python Graphiti Commands
+
+```text
+Usage: dbx-graphiti COMMAND
+
+Run Graphiti MCP with a local native Neo4j backend (no containers).
+
+Commands:
+  down: Stop Graphiti, the model gateway, and Neo4j.
+  env: Print resolved runtime settings, including the Neo4j password.
+  start: Start Neo4j, the model gateway, and Graphiti.
+  status: Show native process status.
+  up: Start Neo4j, the model gateway, and Graphiti in the background.
+  --version: Display application version.
+```
+
+### start
+
+```console
+python -m dbx_tools.graphiti start [ARGS]
+```
+
+Start Neo4j, the model gateway, and Graphiti.
+
+**Parameters**:
+
+- `PROFILE, --profile`: Databricks profile used by the managed model gateway.
+- `MODEL, --model`: Model used to extract and query graph memory. _[env: MODEL_NAME]_
+- `EMBEDDER-MODEL, --embedder-model`: Embedding model used to index graph memory. _[env: EMBEDDER_MODEL]_
+- `EMBEDDER-DIMENSIONS, --embedder-dimensions`: Number of dimensions returned by the embedding model. _[env: EMBEDDER_DIMENSIONS]_
+- `MODEL-GATEWAY-URL, --model-gateway-url`: Existing OpenAI-compatible gateway URL, including /v1. _[env: MODEL_GATEWAY_URL]_
+- `MODEL-GATEWAY-HOST, --model-gateway-host`: Host for the locally managed model gateway. _[env: MODEL_GATEWAY_HOST]_
+- `MODEL-GATEWAY-PORT, --model-gateway-port`: Port for the locally managed model gateway. _[env: MODEL_GATEWAY_PORT]_
+- `MODEL-GATEWAY-COMMAND, --model-gateway-command`: Command used to launch the managed model gateway. _[env: MODEL_GATEWAY_COMMAND]_
+- `MANAGE-MODEL-GATEWAY, --manage-model-gateway, --no-manage-model-gateway`: Start and stop a local model gateway with Graphiti; disable to use an existing gateway. _[env: MANAGE_MODEL_GATEWAY]_
+
+### up
+
+```console
+python -m dbx_tools.graphiti up [ARGS]
+```
+
+Start Neo4j, the model gateway, and Graphiti in the background.
+
+**Parameters**:
+
+- `PROFILE, --profile`: Databricks profile used by the managed model gateway.
+- `MODEL, --model`: Model used to extract and query graph memory. _[env: MODEL_NAME]_
+- `EMBEDDER-MODEL, --embedder-model`: Embedding model used to index graph memory. _[env: EMBEDDER_MODEL]_
+- `EMBEDDER-DIMENSIONS, --embedder-dimensions`: Number of dimensions returned by the embedding model. _[env: EMBEDDER_DIMENSIONS]_
+- `MODEL-GATEWAY-URL, --model-gateway-url`: Existing OpenAI-compatible gateway URL, including /v1. _[env: MODEL_GATEWAY_URL]_
+- `MODEL-GATEWAY-HOST, --model-gateway-host`: Host for the locally managed model gateway. _[env: MODEL_GATEWAY_HOST]_
+- `MODEL-GATEWAY-PORT, --model-gateway-port`: Port for the locally managed model gateway. _[env: MODEL_GATEWAY_PORT]_
+- `MODEL-GATEWAY-COMMAND, --model-gateway-command`: Command used to launch the managed model gateway. _[env: MODEL_GATEWAY_COMMAND]_
+- `MANAGE-MODEL-GATEWAY, --manage-model-gateway, --no-manage-model-gateway`: Start and stop a local model gateway with Graphiti; disable to use an existing gateway. _[env: MANAGE_MODEL_GATEWAY]_
+
+### down
+
+```console
+python -m dbx_tools.graphiti down
+```
+
+Stop Graphiti, the model gateway, and Neo4j.
+
+### status
+
+```console
+python -m dbx_tools.graphiti status
+```
+
+Show native process status.
+
+### env
+
+```console
+python -m dbx_tools.graphiti env [ARGS]
+```
+
+Print resolved runtime settings, including the Neo4j password.
+
+**Parameters**:
+
+- `PROFILE, --profile`: Databricks profile used by the managed model gateway.
+- `MODEL, --model`: Model used to extract and query graph memory. _[env: MODEL_NAME]_
+- `EMBEDDER-MODEL, --embedder-model`: Embedding model used to index graph memory. _[env: EMBEDDER_MODEL]_
+- `EMBEDDER-DIMENSIONS, --embedder-dimensions`: Number of dimensions returned by the embedding model. _[env: EMBEDDER_DIMENSIONS]_
+- `MODEL-GATEWAY-URL, --model-gateway-url`: Existing OpenAI-compatible gateway URL, including /v1. _[env: MODEL_GATEWAY_URL]_
+- `MODEL-GATEWAY-HOST, --model-gateway-host`: Host for the locally managed model gateway. _[env: MODEL_GATEWAY_HOST]_
+- `MODEL-GATEWAY-PORT, --model-gateway-port`: Port for the locally managed model gateway. _[env: MODEL_GATEWAY_PORT]_
+- `MODEL-GATEWAY-COMMAND, --model-gateway-command`: Command used to launch the managed model gateway. _[env: MODEL_GATEWAY_COMMAND]_
+- `MANAGE-MODEL-GATEWAY, --manage-model-gateway, --no-manage-model-gateway`: Start and stop a local model gateway with Graphiti; disable to use an existing gateway. _[env: MANAGE_MODEL_GATEWAY]_
+
+<!-- cli-reference:end -->

@@ -1,39 +1,61 @@
 # @dbx-tools/cli
 
-The `dbx` CLI for workspace lifecycle, AppKit env, Databricks OAuth, and a
-gated public tunnel.
+Use one CLI to authenticate with Databricks, connect local PostgreSQL tools to
+Lakebase, serve Databricks models to coding agents, run graph memory, and share
+applications through a gated public URL.
 
-Available commands:
+## Install And Connect
 
-| Command              | What it does                                                             |
-| -------------------- | ------------------------------------------------------------------------ |
-| `dbx dev`            | Bootstrap or repair a dbx-tools workspace, then forward to projen.       |
-| `dbx appkit env`     | Print the environment an AppKit app resolves, as eval-able shell output. |
-| `dbx auth`           | Generate U2M or M2M OAuth tokens with secure credential storage.         |
-| `dbx tunnel`         | Front any command with a public portr tunnel and an email-OTP gate.      |
-| `dbx lakebase-proxy` | Run the loopback PostgreSQL proxy for Databricks Lakebase.               |
+```sh
+bun add --global @dbx-tools/cli
+dbx auth login --profile MY-PROFILE
+dbx auth status --profile MY-PROFILE
+```
 
-Key features:
+`dbx-tools` is an alias for `dbx`. Choose a configured Databricks profile for
+workspace commands; the examples use `MY-PROFILE` as a placeholder.
 
-- Bootstrap path that scaffolds bun/projen into an empty or partially-set-up
-  folder, including the initial install and synth.
-- Toolchain repair for a cloned repo whose generated files and `node_modules`
-  are gitignored.
-- Transparent forwarding to projen for any task once the workspace is ready.
-- Custom-registry forcing that survives bun's own resolution rules, applied only
-  when the effective registry is not npmjs.
-- Importable CLI/root/bun helpers for tests and thin wrapper commands.
+## Serve Models To Local Tools
 
-Every feature group lives in its own package:
-[`@dbx-tools/cli-appkit-env`](../appkit-env),
-[`@dbx-tools/cli-auth`](../auth), and
-[`@dbx-tools/cli-tunnel`](../tunnel). Each package is imported LAZILY, only once
-its name is matched, so `dbx dev` never pays to load AppKit, OAuth, SMTP, or
-X.509 code. Run
-`dbx <group> --help` for a group's own flags; each forwards `--help` to the child
-program rather than answering it at the root.
+```sh
+dbx model-gateway --profile MY-PROFILE --port 4000
+```
 
-The Lakebase proxy command runs the pure Node implementation.
+Point an OpenAI-compatible client at `http://127.0.0.1:4000/v1`. See
+[model gateway](../model-gateway#command-reference) for all options and desktop
+service commands.
+
+## Connect To Lakebase
+
+```sh
+dbx lakebase-proxy --profile MY-PROFILE --port 5432
+```
+
+Connect your PostgreSQL client to the loopback listener. See
+[Lakebase proxy](../lakebase-proxy#command-reference) for target selection,
+connection URLs, and service commands.
+
+## Add Memory Or Share An App
+
+```sh
+dbx graphiti --profile MY-PROFILE
+dbx tunnel --allow example.com -- bun src/server.ts
+```
+
+[Graphiti](../graphiti#command-reference) provides graph memory for agents.
+[Tunnel](../tunnel#command-reference) adds a public URL with passwordless access
+to an existing process. Each guide includes setup requirements and a generated
+command reference.
+
+## Export AppKit Configuration
+
+```sh
+eval "$(dbx appkit env --quiet)"
+```
+
+Use the resolved AppKit environment before starting another process. See
+[AppKit environment](../appkit-env#command-reference) for JSON and Windows
+output, and [authentication](../auth#command-reference) for token commands.
 
 ## Bootstrap A Workspace
 
@@ -41,97 +63,119 @@ The Lakebase proxy command runs the pure Node implementation.
 dbx dev sync
 ```
 
-In an empty folder this creates the minimum bun/projen structure needed for
-`@dbx-tools/projen`, installs the toolchain, and runs the first synth. In a
-freshly cloned repo it seeds the missing toolchain and synthesizes. This is the
-case projen cannot handle on its own, because there are no tasks to run yet.
+In an empty folder, this creates and initializes a Bun/Projen workspace. In a
+cloned workspace, it installs missing tooling before running the requested task.
+Arguments after `dev` are forwarded to Projen.
 
-The three cases `dbx dev` dispatches on, in order:
-
-| Workspace state                           | What happens                                                                                                                                          |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No `.projenrc.ts`                         | Full bootstrap: scaffold, install, initial synth.                                                                                                     |
-| `.projenrc.ts` but no installed toolchain | Seed the toolchain, run the initial synth, then install. Task args are not forwarded, because the tasks they name do not exist until the first synth. |
-| Established workspace                     | Ensure deps, bring the engine up to this CLI's version, forward the args to projen.                                                                   |
-
-Everything after `dev` is forwarded verbatim, flags included - `dbx dev sync
---watch` runs the `sync` task with `--watch`. `dev` is an explicit subcommand
-rather than the bare root action so a projen task name can never collide with a
-sibling command group.
-
-## After Bootstrap, Use The Projen Tasks
-
-The engine registers its commands as projen tasks on the workspace root, so run
-them directly instead of going through this CLI:
+Once the workspace is initialized, use its tasks directly:
 
 ```sh
-bun run sync             # one-shot full synth
-bun run sync -- --watch  # projenrc + barrels + openapi watchers
-bun run barrels          # rebuild every package-root index.ts barrel
-bun run openapi          # generate the openapi packages from tsoa controllers
-bun run clean            # remove generated (read-only) files; -y to skip the picker
+bun run sync
+bun run sync -- --watch
+bun run barrels
+bun run openapi
 ```
 
-`dbx dev <task>` still works and forwards to the same projen task, but the
-`bun run` form is the documented one for an established workspace.
+See [`@dbx-tools/projen`](../../../../projen) for workspace configuration and
+generation. The command reference below lists the top-level groups; each linked
+package guide documents that group's complete options and subcommands.
 
-## Resolve AppKit Env
+<!-- cli-reference:start -->
 
-```sh
-eval "$(dbx appkit env --quiet)"
+## Command Reference
+
+### `dbx`
+
+```text
+Usage: dbx [command]
+
+Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and local proxies
+
+Commands:
+  dev [projenArgs...]       Bootstrap or repair a dbx-tools workspace, then forward to projen
+  appkit [args...]          AppKit helpers (env: print the environment an AppKit app resolves)
+  auth [args...]            Authenticate to Databricks and manage OAuth tokens
+  tunnel [args...]          Run a public portr tunnel with an email-OTP gate
+  lakebase-proxy [args...]  Run the Node Databricks Lakebase PostgreSQL proxy
+  model-gateway [args...]   Run the foreground AppKit Databricks model gateway
+  graphiti [args...]        Run Graphiti or manage its current-user desktop service
 ```
 
-See [`@dbx-tools/cli-appkit-env`](../appkit-env) for output formats and
-configuration behavior.
+### `dbx dev`
 
-## Authenticate With Databricks User OAuth
+```text
+Usage: dbx dev [projenArgs...]
 
-```sh
-dbx auth login --profile my-workspace
-dbx auth token --profile my-workspace
-dbx auth status --profile my-workspace
+Bootstrap or repair a dbx-tools workspace, then forward to projen
+
+Arguments:
+  projenArgs  projen task and arguments (e.g. sync --watch)
 ```
 
-The auth command uses `@dbx-tools/auth` for preferred U2M browser OAuth, M2M
-client credentials, refresh, locking, and file or memory
-storage. See [`@dbx-tools/cli-auth`](../auth) for the complete command and
-option surface.
+### `dbx appkit`
 
-## Put A Gated Public URL In Front Of A Command
+```text
+Usage: dbx appkit [args...]
 
-```sh
-dbx tunnel status --allow databricks.com
-dbx tunnel --allow databricks.com -- bun src/server.ts
+AppKit helpers (env: print the environment an AppKit app resolves)
+
+Arguments:
+  args  arguments forwarded to appkit
 ```
 
-`dbx tunnel` claims the public port, moves the wrapped command to a private
-loopback port, and reverse-proxies between them so an email one-time-code gate
-sits in front of traffic the command never has to know about. The command does
-not have to be a Node server - anything that honors `PORT` /
-`DATABRICKS_APP_PORT` works. An AppKit app should prefer the in-process plugin
-path instead; see [`@dbx-tools/cli-tunnel`](../tunnel) for that comparison, the
-full flag table, and the request flow.
+### `dbx auth`
 
-## Use The CLI Internals
+```text
+Usage: dbx auth [args...]
 
-```ts
-import { cli, root, bun } from "@dbx-tools/cli";
+Authenticate to Databricks and manage OAuth tokens
 
-await cli.prepareAndRunProjen(["sync"]);
-const workspaceRoot = await root.findWorkspaceRoot();
-bun.runProjen(["barrels"], workspaceRoot);
+Arguments:
+  args  arguments forwarded to auth
 ```
 
-Importing internals is mainly useful for tests or wrapper scripts; most users
-should run the `dbx` bin.
+### `dbx tunnel`
 
-## Modules
+```text
+Usage: dbx tunnel [args...]
 
-- `cli` - the root commander program (`buildProgram()`, `runCli()`) and the
-  `dev` implementation `prepareAndRunProjen()`.
-- `bootstrap` - empty-workspace bootstrap, toolchain seeding, and the initial synth.
-- `root` - workspace-root detection and bootstrap/install checks.
-- `bun` - bun discovery, workspace install, registry forcing, and projen delegation.
+Run a public portr tunnel with an email-OTP gate
 
-The reusable project classes and generators live in
-[`@dbx-tools/projen`](../../../../projen).
+Arguments:
+  args  arguments forwarded to tunnel
+```
+
+### `dbx lakebase-proxy`
+
+```text
+Usage: dbx lakebase-proxy [args...]
+
+Run the Node Databricks Lakebase PostgreSQL proxy
+
+Arguments:
+  args  arguments forwarded to lakebase-proxy
+```
+
+### `dbx model-gateway`
+
+```text
+Usage: dbx model-gateway [args...]
+
+Run the foreground AppKit Databricks model gateway
+
+Arguments:
+  args  arguments forwarded to model-gateway
+```
+
+### `dbx graphiti`
+
+```text
+Usage: dbx graphiti [args...]
+
+Run Graphiti or manage its current-user desktop service
+
+Arguments:
+  args  arguments forwarded to graphiti
+```
+
+<!-- cli-reference:end -->

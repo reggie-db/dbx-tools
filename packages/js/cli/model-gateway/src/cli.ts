@@ -76,7 +76,7 @@ export function buildProgram(
     .description("Run or manage the AppKit Databricks model gateway")
     .option("--host <host>", "loopback host to bind", DEFAULT_HOST)
     .option("--port <port>", "HTTP port", parsePort, DEFAULT_PORT)
-    .option("--profile <profile>", "Databricks profile resolved by @dbx-tools/auth")
+    .option("--profile <profile>", "Databricks profile used for model discovery and requests")
     .option("--runtime-info", "print runtime implementation metadata")
     .version(version, "-v, --version")
     .action(async (options: ModelGatewayCliOptions) => {

@@ -35,6 +35,9 @@ The installed service remembers the port and profile. Its tray menu opens the
 active `/v1/models` response and provides a clean quit action. `service status`
 prints installation and process state as JSON.
 
+`service restart` relaunches the installed executable. Re-run `service install`
+after upgrading the CLI to rebuild that executable and update its saved options.
+
 ## Connection Behavior
 
 The gateway binds to loopback only; valid hosts are `127.0.0.1`, `::1`, and
@@ -51,3 +54,143 @@ For embedded AppKit use, protocol support, and request compatibility, see
 [`@dbx-tools/appkit-model-gateway`](../../node/appkit-model-gateway). Browser-safe
 model discovery lives in
 [`@dbx-tools/shared-model-gateway`](../../shared/model-gateway).
+
+<!-- cli-reference:start -->
+
+## Command Reference
+
+### `dbx model-gateway`
+
+```text
+Usage: dbx model-gateway [options] [command]
+
+Run or manage the AppKit Databricks model gateway
+
+Options:
+  --host <host>        loopback host to bind (default: "127.0.0.1")
+  --port <port>        HTTP port (default: 4000)
+  --profile <profile>  Databricks profile used for model discovery and requests
+  --runtime-info       print runtime implementation metadata
+  -v, --version        output the version number
+
+Commands:
+  service              Install and manage the desktop service
+```
+
+### `dbx model-gateway service`
+
+```text
+Usage: dbx model-gateway service [command]
+
+Install and manage the desktop service
+
+Global Options:
+  --host <host>        loopback host to bind (default: "127.0.0.1")
+  --port <port>        HTTP port (default: 4000)
+  --profile <profile>  Databricks profile used for model discovery and requests
+  --runtime-info       print runtime implementation metadata
+  -v, --version        output the version number
+
+Commands:
+  install [options]    Install the service for the current user and start it
+  start                Start the installed service
+  stop                 Stop the running service
+  restart              Restart the installed service
+  status               Print service installation and process state as JSON
+  uninstall            Stop and remove the service for the current user
+```
+
+### `dbx model-gateway service install`
+
+```text
+Usage: dbx model-gateway service install [options]
+
+Install the service for the current user and start it
+
+Options:
+  --no-start           install without starting the service
+
+Global Options:
+  --host <host>        loopback host to bind (default: "127.0.0.1")
+  --port <port>        HTTP port (default: 4000)
+  --profile <profile>  Databricks profile used for model discovery and requests
+  --runtime-info       print runtime implementation metadata
+  -v, --version        output the version number
+```
+
+### `dbx model-gateway service start`
+
+```text
+Usage: dbx model-gateway service start
+
+Start the installed service
+
+Global Options:
+  --host <host>        loopback host to bind (default: "127.0.0.1")
+  --port <port>        HTTP port (default: 4000)
+  --profile <profile>  Databricks profile used for model discovery and requests
+  --runtime-info       print runtime implementation metadata
+  -v, --version        output the version number
+```
+
+### `dbx model-gateway service stop`
+
+```text
+Usage: dbx model-gateway service stop
+
+Stop the running service
+
+Global Options:
+  --host <host>        loopback host to bind (default: "127.0.0.1")
+  --port <port>        HTTP port (default: 4000)
+  --profile <profile>  Databricks profile used for model discovery and requests
+  --runtime-info       print runtime implementation metadata
+  -v, --version        output the version number
+```
+
+### `dbx model-gateway service restart`
+
+```text
+Usage: dbx model-gateway service restart
+
+Restart the installed service
+
+Global Options:
+  --host <host>        loopback host to bind (default: "127.0.0.1")
+  --port <port>        HTTP port (default: 4000)
+  --profile <profile>  Databricks profile used for model discovery and requests
+  --runtime-info       print runtime implementation metadata
+  -v, --version        output the version number
+```
+
+### `dbx model-gateway service status`
+
+```text
+Usage: dbx model-gateway service status
+
+Print service installation and process state as JSON
+
+Global Options:
+  --host <host>        loopback host to bind (default: "127.0.0.1")
+  --port <port>        HTTP port (default: 4000)
+  --profile <profile>  Databricks profile used for model discovery and requests
+  --runtime-info       print runtime implementation metadata
+  -v, --version        output the version number
+```
+
+### `dbx model-gateway service uninstall`
+
+```text
+Usage: dbx model-gateway service uninstall
+
+Stop and remove the service for the current user
+
+Global Options:
+  --host <host>        loopback host to bind (default: "127.0.0.1")
+  --port <port>        HTTP port (default: 4000)
+  --profile <profile>  Databricks profile used for model discovery and requests
+  --runtime-info       print runtime implementation metadata
+  -v, --version        output the version number
+```
+
+<!-- cli-reference:end -->

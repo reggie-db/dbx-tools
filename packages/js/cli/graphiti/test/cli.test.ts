@@ -56,6 +56,27 @@ describe("Graphiti CLI", () => {
     assert.match(definition.command?.environment?.MODEL_GATEWAY_COMMAND ?? "", /dbx-model-gateway/);
   });
 
+  it("uses the Python environment setting unless a CLI option overrides it", async () => {
+    const previous = process.env.PYTHON;
+    const selected: string[] = [];
+    process.env.PYTHON = "/virtual/environment/python";
+    try {
+      const dependencies = {
+        async start(options: GraphitiRuntimeOptions) {
+          selected.push(options.python!);
+        },
+      };
+      await buildProgram("dbx graphiti", dependencies).parseAsync([], { from: "user" });
+      await buildProgram("dbx graphiti", dependencies).parseAsync(["--python", "python-custom"], {
+        from: "user",
+      });
+      assert.deepEqual(selected, ["/virtual/environment/python", "python-custom"]);
+    } finally {
+      if (previous === undefined) delete process.env.PYTHON;
+      else process.env.PYTHON = previous;
+    }
+  });
+
   it("persists options through shared install without starting foreground", async () => {
     let definition: CliServiceDefinition | undefined;
     let installed = false;

@@ -146,8 +146,8 @@ def test_honcho_child_preserves_argv_without_a_shell() -> None:
 def test_cli_strips_argument_separator(monkeypatch) -> None:
     start = Mock(return_value=123)
     monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "DEFAULT")
-    monkeypatch.setattr("dbx_tools.graphiti.cli.Runtime.start", start)
-    monkeypatch.setattr("dbx_tools.graphiti.cli.Runtime.status", Mock(return_value={}))
+    monkeypatch.setattr("dbx_tools.graphiti.runtime.Runtime.start", start)
+    monkeypatch.setattr("dbx_tools.graphiti.runtime.Runtime.status", Mock(return_value={}))
 
     main(
         [

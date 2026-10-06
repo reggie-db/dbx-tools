@@ -123,7 +123,7 @@ resources:
           # Auth's unqualified migrations then target the locked-down `public`
           # schema and crash the app with `permission denied for schema public`.
           # Mastra memory and search still use the bound Lakebase project.
-          - name: AUTH_STORAGE
+          - name: TUNNEL_AUTH_STORAGE
             value: sqlite
           # The Lakebase search provider provisions its own schema. PostgreSQL
           # `public` is intentionally not writable by the app service principal,

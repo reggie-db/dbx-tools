@@ -58,6 +58,14 @@ const root = new project.DBXToolsNodeProject({
         uses: "actions/setup-python@v6",
         with: { "python-version": "3.11" },
       },
+      {
+        name: "Install CLI documentation parser",
+        run: "python -m pip install -r docs/requirements.txt",
+      },
+      {
+        name: "Validate generated CLI references",
+        run: "bun test docs/scripts/cli-reference.test.mjs && bun docs/scripts/sync-cli-readmes.mjs --check",
+      },
       { name: "Configure Pages", uses: "actions/configure-pages@v5" },
       {
         name: "Validate public source documentation",
@@ -123,7 +131,14 @@ sourceDocs.exec("bun docs/scripts/check-source-docs.mjs");
 const readmeDocs = root.addTask("docs:check-readmes", {
   description: "Validate and generate documentation from package READMEs",
 });
+readmeDocs.exec("bun test docs/scripts/cli-reference.test.mjs");
+readmeDocs.exec("bun docs/scripts/sync-cli-readmes.mjs --check");
 readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
+
+root.addTask("docs:cli", {
+  description: "Update package README command references from their CLI parsers",
+  exec: "bun docs/scripts/sync-cli-readmes.mjs",
+});
 
 // ---------------------------------------------------------------------------
 // JavaScript and Python lockfiles stay UNTRACKED

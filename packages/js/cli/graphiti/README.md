@@ -1,55 +1,72 @@
 # @dbx-tools/cli-graphiti
 
-Run the Python Graphiti stack from Bun, or install it as a current-user desktop
-service using the shared dbx-tools service lifecycle.
-
-This package owns the matching Python runtime bootstrap and foreground model
-gateway command resolution. AppKit integrations reuse these modules rather than
-maintaining their own installers. Python owns Graphiti, Neo4j, persistence, and
-backend supervision; `@dbx-tools/cli-service` owns compilation, startup entries,
-tray hosting, control channels, and install/start/stop/restart/status/uninstall.
+Give agents persistent graph memory by running Graphiti with local Neo4j and
+Databricks-hosted models. Start the stack in a terminal for development, or
+install it as a desktop service that runs independently of your terminal.
 
 ## Start Graphiti
 
-Install `@dbx-tools/cli-graphiti` with Bun and provide a Python environment with
-pip and access to your configured Python package registry:
+You need Bun, Python 3.11 or newer with pip, and a Databricks profile that can
+access your chosen models:
 
 ```sh
-bun add @dbx-tools/cli-graphiti
-bunx dbx-graphiti --python python3 --profile MY-PROFILE
+bun add --global @dbx-tools/cli-graphiti
+dbx-graphiti --python python3 --profile MY-PROFILE
 ```
 
-The umbrella CLI exposes the same command as `dbx graphiti`. The launcher checks
-the installed `dbx-tools-graphiti` version and installs the matching version when
-needed. Missing pip fails explicitly; it never downloads a bootstrap script or
-bypasses your configured registry.
+The launcher installs the matching `dbx-tools-graphiti` Python package when
+needed. The first start also prepares Neo4j and the Graphiti environment; later
+starts reuse them. Keep the terminal open while the foreground stack runs.
 
-Python start options are forwarded unchanged:
+If you already use the [`dbx` CLI](../dbx-tools), run the same stack with:
 
 ```sh
-bunx dbx-graphiti --profile MY-PROFILE --model databricks-gpt-5
+dbx graphiti --profile MY-PROFILE
 ```
 
-## Manage the desktop service
+The Graphiti MCP endpoint is `http://127.0.0.1:8000/mcp/` by default. See the
+[Python runtime guide](../../../py/graphiti) for persistence and connection setup.
+
+## Choose Models
+
+Pass Graphiti's model options through the launcher:
 
 ```sh
-dbx graphiti service install --python python3 --profile MY-PROFILE
+dbx graphiti --profile MY-PROFILE --model databricks-gpt-5
+dbx graphiti --profile MY-PROFILE --embedder-model databricks-gte-large-en --embedder-dimensions 1024
+```
+
+To reuse an existing model gateway instead of starting another one:
+
+```sh
+dbx graphiti --model-gateway-url http://127.0.0.1:4000/v1 --no-manage-model-gateway
+```
+
+The generated reference includes both launcher options and the Python options
+it forwards.
+
+## Run As A Desktop Service
+
+```sh
+dbx graphiti service install --python /absolute/path/to/python3 --profile MY-PROFILE
 dbx graphiti service status
-dbx graphiti service restart
 dbx graphiti service stop
+dbx graphiti service start
 dbx graphiti service uninstall
 ```
 
-Install bootstraps the matching Python version and persists the Python executable,
-profile, and resolved foreground model-gateway command. The shared service host
-launches Python directly through its existing executable contract; it does not
-bundle Graphiti or introduce another supervisor. Use an absolute Python path
-when the login environment does not include your Python installation on `PATH`.
-Restart relaunches that runtime; reinstall after changing local source or versions.
-Other Python settings use their existing environment variables. AppKit apps keep
-their app-scoped sidecar supervision and do not install a desktop service.
+Installation starts the service and saves its Python executable and Databricks
+profile. Use an absolute Python path if Python is available only in your shell
+or virtual environment. `status` prints installation and process state as JSON.
 
-## Reuse runtime bootstrap
+`service restart` relaunches the installed runtime. Re-run `service install`
+after upgrading the package to update that runtime. Model overrides in the
+foreground examples are not service-install options.
+
+## Embed The Launcher
+
+Applications that manage their own process lifecycle can reuse the runtime
+helpers without installing a desktop service:
 
 ```ts
 import { ensureGraphitiPython, ensureGraphitiModelGateway } from "@dbx-tools/cli-graphiti/runtime";
@@ -58,6 +75,155 @@ await ensureGraphitiPython("python3");
 const command = ensureGraphitiModelGateway();
 ```
 
-`runtime` owns bootstrap and foreground execution. `cli` owns Commander mounting
-and the Graphiti service definition. Import those owners instead of copying
-Python installation or package-bin resolution into another package.
+AppKit applications should use
+[`@dbx-tools/appkit-graphiti`](../../node/appkit-graphiti) for app-scoped memory
+tools and sidecar lifecycle.
+
+<!-- cli-reference:start -->
+
+## Command Reference
+
+### `dbx graphiti`
+
+```text
+Usage: dbx graphiti [options] [command] [args...]
+
+Run Graphiti or manage its current-user desktop service
+
+Arguments:
+  args                 arguments forwarded to the Python Graphiti start command
+
+Options:
+  -v, --version        output the version number
+  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
+  --profile <profile>  Databricks profile used for model requests
+
+Commands:
+  service              Install and manage the desktop service
+```
+
+### `dbx graphiti service`
+
+```text
+Usage: dbx graphiti service [command]
+
+Install and manage the desktop service
+
+Global Options:
+  -v, --version        output the version number
+  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
+  --profile <profile>  Databricks profile used for model requests
+
+Commands:
+  install [options]    Install the service for the current user and start it
+  start                Start the installed service
+  stop                 Stop the running service
+  restart              Restart the installed service
+  status               Print service installation and process state as JSON
+  uninstall            Stop and remove the service for the current user
+```
+
+### `dbx graphiti service install`
+
+```text
+Usage: dbx graphiti service install [options]
+
+Install the service for the current user and start it
+
+Options:
+  --no-start           install without starting the service
+
+Global Options:
+  -v, --version        output the version number
+  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
+  --profile <profile>  Databricks profile used for model requests
+```
+
+### `dbx graphiti service start`
+
+```text
+Usage: dbx graphiti service start
+
+Start the installed service
+
+Global Options:
+  -v, --version        output the version number
+  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
+  --profile <profile>  Databricks profile used for model requests
+```
+
+### `dbx graphiti service stop`
+
+```text
+Usage: dbx graphiti service stop
+
+Stop the running service
+
+Global Options:
+  -v, --version        output the version number
+  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
+  --profile <profile>  Databricks profile used for model requests
+```
+
+### `dbx graphiti service restart`
+
+```text
+Usage: dbx graphiti service restart
+
+Restart the installed service
+
+Global Options:
+  -v, --version        output the version number
+  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
+  --profile <profile>  Databricks profile used for model requests
+```
+
+### `dbx graphiti service status`
+
+```text
+Usage: dbx graphiti service status
+
+Print service installation and process state as JSON
+
+Global Options:
+  -v, --version        output the version number
+  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
+  --profile <profile>  Databricks profile used for model requests
+```
+
+### `dbx graphiti service uninstall`
+
+```text
+Usage: dbx graphiti service uninstall
+
+Stop and remove the service for the current user
+
+Global Options:
+  -v, --version        output the version number
+  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
+  --profile <profile>  Databricks profile used for model requests
+```
+
+### Forwarded Graphiti Options
+
+#### start
+
+```console
+dbx graphiti [ARGS]
+```
+
+Start Neo4j, the model gateway, and Graphiti.
+
+**Parameters**:
+
+- `PROFILE, --profile`: Databricks profile used by the managed model gateway.
+- `MODEL, --model`: Model used to extract and query graph memory. _[env: MODEL_NAME]_
+- `EMBEDDER-MODEL, --embedder-model`: Embedding model used to index graph memory. _[env: EMBEDDER_MODEL]_
+- `EMBEDDER-DIMENSIONS, --embedder-dimensions`: Number of dimensions returned by the embedding model. _[env: EMBEDDER_DIMENSIONS]_
+- `MODEL-GATEWAY-URL, --model-gateway-url`: Existing OpenAI-compatible gateway URL, including /v1. _[env: MODEL_GATEWAY_URL]_
+- `MODEL-GATEWAY-HOST, --model-gateway-host`: Host for the locally managed model gateway. _[env: MODEL_GATEWAY_HOST]_
+- `MODEL-GATEWAY-PORT, --model-gateway-port`: Port for the locally managed model gateway. _[env: MODEL_GATEWAY_PORT]_
+- `MODEL-GATEWAY-COMMAND, --model-gateway-command`: Command used to launch the managed model gateway. _[env: MODEL_GATEWAY_COMMAND]_
+- `MANAGE-MODEL-GATEWAY, --manage-model-gateway, --no-manage-model-gateway`: Start and stop a local model gateway with Graphiti; disable to use an existing gateway. _[env: MANAGE_MODEL_GATEWAY]_
+
+<!-- cli-reference:end -->
