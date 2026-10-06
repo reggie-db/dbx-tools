@@ -175,6 +175,7 @@ const readmeDocs = root.addTask("docs:check-readmes", {
 readmeDocs.exec("bun docs/scripts/sync-cli-readmes.mjs --check");
 readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
 readmeDocs.exec("bun docs/scripts/generate-agent-skill.mjs --check");
+root.tasks.tryFind("bump")?.exec("bun docs/scripts/generate-agent-skill.mjs");
 
 root.addTask("docs:cli", {
   description: "Update package README command references from their CLI parsers",

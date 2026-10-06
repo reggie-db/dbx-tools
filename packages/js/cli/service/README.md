@@ -132,10 +132,10 @@ Install the service for the current user and start it
 
 #### Options
 
-| Option       | Description                                                                 |
-| ------------ | --------------------------------------------------------------------------- |
-| `--start`    | Start the service after installation. (default: true, env: DBX_TOOLS_START) |
-| `--no-start` | Disable start the service after installation.                               |
+| Option       | Description                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| `--start`    | Start the service after installation. (default: true, env: START) |
+| `--no-start` | Disable start the service after installation.                     |
 
 ### `<cli> service start`
 

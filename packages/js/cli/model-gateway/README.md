@@ -72,10 +72,10 @@ dbx model-gateway [options] [command]
 | Option                 | Description                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------------ |
 | `-v, --version`        | output the version number                                                                  |
-| `--listen <value>`     | Loopback listener address. (default: tcp://localhost:4000, env: DBX_TOOLS_LISTEN)          |
+| `--listen <value>`     | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                    |
 | `--profile <value>`    | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE) |
-| `--body-limit <value>` | Maximum JSON request body size. (default: "100mb", env: DBX_TOOLS_BODY_LIMIT)              |
-| `--runtime-info`       | Print runtime implementation metadata. (default: false, env: DBX_TOOLS_RUNTIME_INFO)       |
+| `--body-limit <value>` | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                        |
+| `--runtime-info`       | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                 |
 | `--no-runtime-info`    | Disable print runtime implementation metadata.                                             |
 
 #### Commands
@@ -113,10 +113,10 @@ dbx model-gateway service install [options]
 
 #### Options
 
-| Option       | Description                                                                 |
-| ------------ | --------------------------------------------------------------------------- |
-| `--start`    | Start the service after installation. (default: true, env: DBX_TOOLS_START) |
-| `--no-start` | Disable start the service after installation.                               |
+| Option       | Description                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| `--start`    | Start the service after installation. (default: true, env: START) |
+| `--no-start` | Disable start the service after installation.                     |
 
 ### `dbx model-gateway service start`
 

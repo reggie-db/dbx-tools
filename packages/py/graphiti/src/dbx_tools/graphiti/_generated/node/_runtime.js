@@ -59053,7 +59053,7 @@ var package_default = {
       "./package.json": "./package.json"
     }
   },
-  version: "0.9.44",
+  version: "0.9.45",
   types: "index.ts",
   dbxToolsConfig: {
     tags: [

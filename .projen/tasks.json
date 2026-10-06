@@ -49,6 +49,9 @@
             "node_modules/@dbx-tools/projen/tasks/bump.ts"
           ],
           "receiveArgs": true
+        },
+        {
+          "exec": "bun docs/scripts/generate-agent-skill.mjs"
         }
       ]
     },

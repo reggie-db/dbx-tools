@@ -93,7 +93,7 @@ dbx tunnel [options] [command] [command...]
 | ------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
 | `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
-| `--subdomain <value>`           | Portr subdomain. (env: DBX_TOOLS_SUBDOMAIN)                                                     |
+| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
 | `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
 | `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
 | `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
@@ -107,7 +107,7 @@ dbx tunnel [options] [command] [command...]
 | `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
 | `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
 | `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
-| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: DBX_TOOLS_BIND_HOSTS)                                  |
+| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
 | `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
 | `--no-insecure`                 | Disable run without an authentication gate.                                                     |
 | `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |
@@ -145,7 +145,7 @@ dbx tunnel run [options] <command...>
 | ------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
 | `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
-| `--subdomain <value>`           | Portr subdomain. (env: DBX_TOOLS_SUBDOMAIN)                                                     |
+| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
 | `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
 | `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
 | `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
@@ -159,7 +159,7 @@ dbx tunnel run [options] <command...>
 | `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
 | `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
 | `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
-| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: DBX_TOOLS_BIND_HOSTS)                                  |
+| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
 | `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
 | `--no-insecure`                 | Disable run without an authentication gate.                                                     |
 | `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |
@@ -183,7 +183,7 @@ dbx tunnel status [options]
 | ------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
 | `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
-| `--subdomain <value>`           | Portr subdomain. (env: DBX_TOOLS_SUBDOMAIN)                                                     |
+| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
 | `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
 | `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
 | `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
@@ -197,7 +197,7 @@ dbx tunnel status [options]
 | `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
 | `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
 | `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
-| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: DBX_TOOLS_BIND_HOSTS)                                  |
+| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
 | `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
 | `--no-insecure`                 | Disable run without an authentication gate.                                                     |
 | `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |

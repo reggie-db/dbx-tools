@@ -159,7 +159,8 @@ function envArgName(field: Field, envKeys: readonly string[], options: CliArgsOp
     envKeys.find((key) => key === key.toUpperCase() && /[A-Z]/.test(key)) ??
     envKeys.at(-1) ??
     "";
-  return configUtils.name(canonical, options);
+  // Help shows the unscoped name; configUtils still reads DBX_TOOLS_ aliases.
+  return configUtils.name(canonical, { ...options, scope: [] });
 }
 
 function configValue(

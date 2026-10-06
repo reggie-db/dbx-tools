@@ -73,29 +73,29 @@ dbx falkor-db [options]
 
 #### Options
 
-| Option                                   | Description                                                                                                                    |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `-v, --version`                          | output the version number                                                                                                      |
-| `--data-dir <value>`                     | Active local FalkorDB directory. (env: FALKORDB_DATA_DIR)                                                                      |
-| `--listen <value>`                       | Optional TCP or Unix-domain listener. (env: FALKORDB_LISTEN)                                                                   |
-| `--database <value>`                     | Default graph name for consumers. (default: "default_db", env: FALKORDB_DATABASE)                                              |
-| `--snapshot-seconds <value>`             | Redis snapshot interval in seconds. (default: 300, env: FALKORDB_SNAPSHOT_SECONDS)                                             |
-| `--snapshot-min-changes <value>`         | Writes required before an interval saves. (default: 1, env: FALKORDB_SNAPSHOT_MIN_CHANGES)                                     |
-| `--volume <value>`                       | Durable Unity Catalog Volume directory. (env: DBX_TOOLS_FALKORDB_VOLUME)                                                       |
-| `--profile <value>`                      | Exact Databricks profile used for Volume access. (env: DATABRICKS_CONFIG_PROFILE)                                              |
-| `--retention <value>`                    | Durable snapshots retained. (default: 5, env: DBX_TOOLS_FALKORDB_RETENTION)                                                    |
-| `--backup-poll-seconds <value>`          | Completed-RDB polling interval in seconds. (default: 10, env: DBX_TOOLS_FALKORDB_BACKUP_POLL_SECONDS)                          |
-| `--stale-backup-warning-seconds <value>` | Seconds before warning that changed data lacks a recent durable backup. (env: DBX_TOOLS_FALKORDB_STALE_BACKUP_WARNING_SECONDS) |
-| `--force-backup-on-shutdown`             | Force a dirty RDB and durable upload before shutdown. (default: false, env: DBX_TOOLS_FALKORDB_FORCE_BACKUP_ON_SHUTDOWN)       |
-| `--no-force-backup-on-shutdown`          | Disable force a dirty rdb and durable upload before shutdown.                                                                  |
-| `--shutdown-timeout-seconds <value>`     | Shutdown backup timeout in seconds. (default: 30, env: DBX_TOOLS_FALKORDB_SHUTDOWN_TIMEOUT_SECONDS)                            |
-| `--redis-server-path <value>`            | Custom redis-server executable. (env: DBX_TOOLS_FALKORDB_REDIS_SERVER_PATH)                                                    |
-| `--module-path <value>`                  | Custom FalkorDB module. (env: DBX_TOOLS_FALKORDB_MODULE_PATH)                                                                  |
-| `--max-memory <value>`                   | Redis memory limit such as 256mb. (env: DBX_TOOLS_FALKORDB_MAX_MEMORY)                                                         |
-| `--redis-log-level <value>`              | Redis log level. (choices: "debug", "verbose", "notice", "warning", env: DBX_TOOLS_FALKORDB_REDIS_LOG_LEVEL)                   |
-| `--redis-log-file <value>`               | Redis log file. (env: DBX_TOOLS_FALKORDB_REDIS_LOG_FILE)                                                                       |
-| `--startup-timeout-seconds <value>`      | Embedded server startup timeout in seconds. (default: 10, env: DBX_TOOLS_FALKORDB_STARTUP_TIMEOUT_SECONDS)                     |
-| `--inherit-stdio`                        | Inherit redis-server stdout and stderr. (default: false, env: DBX_TOOLS_FALKORDB_INHERIT_STDIO)                                |
-| `--no-inherit-stdio`                     | Disable inherit redis-server stdout and stderr.                                                                                |
+| Option                                   | Description                                                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `-v, --version`                          | output the version number                                                                                            |
+| `--data-dir <value>`                     | Active local FalkorDB directory. (env: FALKORDB_DATA_DIR)                                                            |
+| `--listen <value>`                       | Optional TCP or Unix-domain listener. (env: FALKORDB_LISTEN)                                                         |
+| `--database <value>`                     | Default graph name for consumers. (default: "default_db", env: FALKORDB_DATABASE)                                    |
+| `--snapshot-seconds <value>`             | Redis snapshot interval in seconds. (default: 300, env: FALKORDB_SNAPSHOT_SECONDS)                                   |
+| `--snapshot-min-changes <value>`         | Writes required before an interval saves. (default: 1, env: FALKORDB_SNAPSHOT_MIN_CHANGES)                           |
+| `--volume <value>`                       | Durable Unity Catalog Volume directory. (env: FALKORDB_VOLUME)                                                       |
+| `--profile <value>`                      | Exact Databricks profile used for Volume access. (env: DATABRICKS_CONFIG_PROFILE)                                    |
+| `--retention <value>`                    | Durable snapshots retained. (default: 5, env: FALKORDB_RETENTION)                                                    |
+| `--backup-poll-seconds <value>`          | Completed-RDB polling interval in seconds. (default: 10, env: FALKORDB_BACKUP_POLL_SECONDS)                          |
+| `--stale-backup-warning-seconds <value>` | Seconds before warning that changed data lacks a recent durable backup. (env: FALKORDB_STALE_BACKUP_WARNING_SECONDS) |
+| `--force-backup-on-shutdown`             | Force a dirty RDB and durable upload before shutdown. (default: false, env: FALKORDB_FORCE_BACKUP_ON_SHUTDOWN)       |
+| `--no-force-backup-on-shutdown`          | Disable force a dirty rdb and durable upload before shutdown.                                                        |
+| `--shutdown-timeout-seconds <value>`     | Shutdown backup timeout in seconds. (default: 30, env: FALKORDB_SHUTDOWN_TIMEOUT_SECONDS)                            |
+| `--redis-server-path <value>`            | Custom redis-server executable. (env: FALKORDB_REDIS_SERVER_PATH)                                                    |
+| `--module-path <value>`                  | Custom FalkorDB module. (env: FALKORDB_MODULE_PATH)                                                                  |
+| `--max-memory <value>`                   | Redis memory limit such as 256mb. (env: FALKORDB_MAX_MEMORY)                                                         |
+| `--redis-log-level <value>`              | Redis log level. (choices: "debug", "verbose", "notice", "warning", env: FALKORDB_REDIS_LOG_LEVEL)                   |
+| `--redis-log-file <value>`               | Redis log file. (env: FALKORDB_REDIS_LOG_FILE)                                                                       |
+| `--startup-timeout-seconds <value>`      | Embedded server startup timeout in seconds. (default: 10, env: FALKORDB_STARTUP_TIMEOUT_SECONDS)                     |
+| `--inherit-stdio`                        | Inherit redis-server stdout and stderr. (default: false, env: FALKORDB_INHERIT_STDIO)                                |
+| `--no-inherit-stdio`                     | Disable inherit redis-server stdout and stderr.                                                                      |
 
 <!-- cli-reference:end -->

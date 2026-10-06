@@ -13,6 +13,8 @@ describe("FalkorDB CLI", () => {
     assert.match(help, /--volume/);
     assert.match(help, /--force-backup-on-shutdown/);
     assert.match(help, /FALKORDB_DATA_DIR/);
+    assert.match(help, /FALKORDB_VOLUME/);
+    assert.doesNotMatch(help, /DBX_TOOLS_FALKORDB_VOLUME/);
     assert.match(help, /DATABRICKS_CONFIG_PROFILE/);
     assert.doesNotMatch(help, /\bservice\b/);
   });

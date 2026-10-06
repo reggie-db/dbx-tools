@@ -26,6 +26,8 @@ describe("Graphiti CLI", () => {
     assert.match(help, /MODEL_NAME/);
     assert.match(help, /--graphiti-home <value>/);
     assert.match(help, /GRAPHITI_HOME/);
+    assert.match(help, /FALKOR_VOLUME/);
+    assert.doesNotMatch(help, /DBX_TOOLS_FALKOR_VOLUME/);
     assert.doesNotMatch(help, /model-gateway/);
     assert.doesNotMatch(help, /--graphiti-args/);
   });
