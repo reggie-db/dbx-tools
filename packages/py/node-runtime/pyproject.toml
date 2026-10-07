@@ -8,7 +8,7 @@ readme = "README.md"
 requires-python = ">=3.10,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
-dependencies = [ ]
+dependencies = [ "databricks-sdk>=0.40,<1" ]
 
   [project.urls]
   Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/node-runtime"

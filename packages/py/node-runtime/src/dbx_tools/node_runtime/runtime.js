@@ -10521,7 +10521,13 @@ if (!python)
 function evaluate(source) {
   return python.eval(source);
 }
+function evaluatePython(source) {
+  return evaluate(source);
+}
 var toThread = evaluate("__import__('asyncio').to_thread");
+function runPythonInThread(operation, ...args) {
+  return toThread(operation, ...args);
+}
 var osPath = {
   basename: evaluate("__import__('os').path.basename"),
   dirname: evaluate("__import__('os').path.dirname"),
@@ -10762,6 +10768,32 @@ function cloneStructured(value, seen = new Map) {
     return clone;
   }
   throw new TypeError(`PythonMonkey structuredClone does not support ${value.constructor.name}`);
+}
+
+// packages/py/node-runtime/shims/databricks-runtime-auth.ts
+var createWorkspaceClient = evaluatePython("lambda: __import__('databricks.sdk', fromlist=['WorkspaceClient']).WorkspaceClient()");
+var isDatabricksRuntime = evaluatePython("lambda: bool(__import__('os').environ.get('DATABRICKS_RUNTIME_VERSION'))");
+var runtimeMetadata = evaluatePython("lambda client: {'host': client.config.host, 'workspaceId': client.config.workspace_id, 'principal': client.config.client_id or client.config.username or client.config.auth_type}");
+var configuredToken = evaluatePython("lambda client: client.config.token");
+var authenticationHeaders = evaluatePython("lambda client: dict(client.config.authenticate())");
+async function databricksRuntimeAuthClient() {
+  if (!isDatabricksRuntime())
+    return;
+  const client = await runPythonInThread(createWorkspaceClient);
+  const metadata = await runPythonInThread(runtimeMetadata, client);
+  return {
+    host: metadata.host,
+    ...metadata.workspaceId ? { workspaceId: metadata.workspaceId } : {},
+    ...metadata.principal ? { principal: metadata.principal } : {},
+    async token() {
+      const token = await runPythonInThread(configuredToken, client);
+      return typeof token === "string" && token.trim() ? token : undefined;
+    },
+    async authenticate() {
+      const headers = await runPythonInThread(authenticationHeaders, client);
+      return Object.fromEntries(Object.entries(headers).map(([name, value]) => [name, String(value)]));
+    }
+  };
 }
 
 // packages/py/node-runtime/shims/node___child_process.ts
@@ -11314,7 +11346,11 @@ var modules = Object.freeze({
   "node:readline": exports_node___readline,
   readline: exports_node___readline
 });
-var runtime = current ?? Object.freeze({ abiVersion: ABI_VERSION, modules });
+var runtime = current ?? Object.freeze({
+  abiVersion: ABI_VERSION,
+  databricksRuntimeAuthClient,
+  modules
+});
 globals2[RUNTIME_KEY] = runtime;
 var __pythonRuntimeAbiVersion = ABI_VERSION;
 var __pythonRuntime = runtime;

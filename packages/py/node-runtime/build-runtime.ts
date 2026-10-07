@@ -86,6 +86,7 @@ function runtimeEntry(): string {
   });
   return [
     `import ${JSON.stringify(resolve(shimRoot, "bootstrap.ts"))};`,
+    `import { databricksRuntimeAuthClient } from ${JSON.stringify(resolve(shimRoot, "databricks-runtime-auth.ts"))};`,
     ...moduleImports.map(
       ({ ident, file }) => `import * as ${ident} from ${JSON.stringify(resolve(shimRoot, file))};`,
     ),
@@ -100,7 +101,11 @@ function runtimeEntry(): string {
     "const modules = Object.freeze({",
     ...moduleKeys,
     "});",
-    "const runtime = current ?? Object.freeze({ abiVersion: ABI_VERSION, modules });",
+    "const runtime = current ?? Object.freeze({",
+    "  abiVersion: ABI_VERSION,",
+    "  databricksRuntimeAuthClient,",
+    "  modules,",
+    "});",
     "globals[RUNTIME_KEY] = runtime;",
     "export const __pythonRuntimeAbiVersion = ABI_VERSION;",
     "export const __pythonRuntime = runtime;",

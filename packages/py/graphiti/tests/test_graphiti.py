@@ -1,10 +1,14 @@
 import asyncio
+import base64
+import importlib
 import json
+import time
 
 import pytest
 from dbx_tools.graphiti import main
 from dbx_tools.graphiti import runtime as graphiti_runtime
 from dbx_tools.graphiti._generated.node import _runtime as node_runtime
+from dbx_tools.graphiti._generated.node.auth.bindings import create_auth_client
 from dbx_tools.graphiti._generated.node.shared_graphiti.options import GraphitiOptions
 from dbx_tools.graphiti.options import normalize_graphiti_options
 
@@ -94,6 +98,71 @@ def test_generated_runtime_uses_shared_node_runtime() -> None:
     runtime = node_runtime.get_runtime()
 
     assert runtime.module("shared_core__bindings") is not None
+
+
+@pytest.mark.asyncio
+async def test_generated_auth_uses_workspace_client_in_databricks_runtime(monkeypatch) -> None:
+    def encode(value: dict[str, object]) -> str:
+        return base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode()
+
+    access_token = (
+        f"{encode({'alg': 'none'})}."
+        f"{encode({'exp': int(time.time()) + 3600, 'scope': 'all-apis sql'})}.signature"
+    )
+    authentications: list[str] = []
+    clients: list[object] = []
+
+    class Config:
+        auth_type = "runtime"
+        client_id = None
+        host = "https://workspace.example.com"
+        token = None
+        username = "runtime-user"
+        workspace_id = "workspace-id"
+
+        def authenticate(self) -> dict[str, str]:
+            authentications.append("authenticate")
+            return {
+                "Authorization": f"Bearer {access_token}",
+                "X-Runtime-Header": "runtime-value",
+            }
+
+    class WorkspaceClient:
+        config = Config()
+
+        def __init__(self) -> None:
+            clients.append(self)
+
+    monkeypatch.setenv("DATABRICKS_RUNTIME_VERSION", "serverless")
+    databricks_sdk = importlib.import_module("databricks.sdk")
+    monkeypatch.setattr(databricks_sdk, "WorkspaceClient", WorkspaceClient)
+
+    auth = await create_auth_client()
+    assert auth.host == "https://workspace.example.com"
+    assert auth.auth_type == "runtime"
+    assert auth.principal == "runtime-user"
+    assert auth.workspace_id == "workspace-id"
+    assert (await auth.token())["accessToken"] == access_token
+    assert await auth.headers() == {
+        "authorization": f"Bearer {access_token}",
+        "x-databricks-workspace-id": "workspace-id",
+        "x-runtime-header": "runtime-value",
+    }
+    assert authentications == ["authenticate"]
+
+    assert (await auth.token({"refresh": True}))["accessToken"] == access_token
+    assert authentications == ["authenticate", "authenticate"]
+    assert len(clients) == 1
+
+    explicit = await create_auth_client(
+        {
+            "accessToken": "explicit-token",
+            "authType": "pat",
+            "host": "https://explicit.example.com",
+        }
+    )
+    assert (await explicit.token())["accessToken"] == "explicit-token"
+    assert len(clients) == 1
 
 
 def test_upstream_openai_credentials_use_a_scoped_placeholder(monkeypatch) -> None:

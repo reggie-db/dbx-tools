@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { databricksAuthClientInfoSchema } from "../src/client.ts";
+import { RUNTIME_AUTH_TYPE, databricksAuthClientInfoSchema } from "../src/client.ts";
 import { authTypeSchema, targetKindSchema } from "../src/config-schema.ts";
 import { AuthType, TargetKind } from "../src/config.ts";
 import {
@@ -65,6 +65,14 @@ describe("browser-safe Databricks auth schemas", () => {
       ...CONFIG,
       profile: undefined,
     });
+    assert.equal(
+      databricksAuthClientInfoSchema.parse({
+        ...CONFIG,
+        authType: RUNTIME_AUTH_TYPE,
+      }).authType,
+      RUNTIME_AUTH_TYPE,
+    );
+    assert.throws(() => authTypeSchema.parse(RUNTIME_AUTH_TYPE));
     assert.equal("accessToken" in databricksAuthClientInfoSchema.parse(CONFIG), false);
   });
 });

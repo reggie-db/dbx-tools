@@ -16401,7 +16401,7 @@ var require_path_browserify = __commonJS((exports2, module2) => {
       }
       return _format("/", pathObject);
     },
-    parse: function parse(path) {
+    parse: function parse2(path) {
       assertPath(path);
       var ret = { root: "", dir: "", base: "", ext: "", name: "" };
       if (path.length === 0)
@@ -16959,7 +16959,7 @@ var require_events = __commonJS((exports2, module2) => {
     }
     return this;
   };
-  function _listeners(target, type, unwrap2) {
+  function _listeners(target, type, unwrap3) {
     var events = target._events;
     if (events === undefined)
       return [];
@@ -16967,8 +16967,8 @@ var require_events = __commonJS((exports2, module2) => {
     if (evlistener === undefined)
       return [];
     if (typeof evlistener === "function")
-      return unwrap2 ? [evlistener.listener || evlistener] : [evlistener];
-    return unwrap2 ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
+      return unwrap3 ? [evlistener.listener || evlistener] : [evlistener];
+    return unwrap3 ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
   }
   EventEmitter.prototype.listeners = function listeners(type) {
     return _listeners(this, type, true);
@@ -24912,7 +24912,7 @@ var require_lib = __commonJS((exports2, module2) => {
       this.hashes = this.algorithms.map(crypto2.createHash);
     }
     #getOptions() {
-      this.sri = this.opts?.integrity ? parse7(this.opts?.integrity, this.opts) : null;
+      this.sri = this.opts?.integrity ? parse8(this.opts?.integrity, this.opts) : null;
       this.expectedSize = this.opts?.size;
       if (!this.sri) {
         this.algorithm = null;
@@ -24953,7 +24953,7 @@ var require_lib = __commonJS((exports2, module2) => {
       if (!this.goodSri) {
         this.#getOptions();
       }
-      const newSri = parse7(this.hashes.map((h, i) => {
+      const newSri = parse8(this.hashes.map((h, i) => {
         return `${this.algorithms[i]}-${h.digest("base64")}${this.optString}`;
       }).join(" "), this.opts);
       const match = this.goodSri && newSri.match(this.sri, this.opts);
@@ -25021,7 +25021,7 @@ var require_lib = __commonJS((exports2, module2) => {
       return this.toString();
     }
     match(integrity, opts) {
-      const other = parse7(integrity, opts);
+      const other = parse8(integrity, opts);
       if (!other) {
         return false;
       }
@@ -25100,13 +25100,13 @@ var require_lib = __commonJS((exports2, module2) => {
     }
     concat(integrity, opts) {
       const other = typeof integrity === "string" ? integrity : stringify4(integrity, opts);
-      return parse7(`${this.toString(opts)} ${other}`, opts);
+      return parse8(`${this.toString(opts)} ${other}`, opts);
     }
     hexDigest() {
-      return parse7(this, { single: true }).hexDigest();
+      return parse8(this, { single: true }).hexDigest();
     }
     merge(integrity, opts) {
-      const other = parse7(integrity, opts);
+      const other = parse8(integrity, opts);
       for (const algo in other) {
         if (this[algo]) {
           if (!this[algo].find((hash) => other[algo].find((otherhash) => hash.digest === otherhash.digest))) {
@@ -25118,7 +25118,7 @@ var require_lib = __commonJS((exports2, module2) => {
       }
     }
     match(integrity, opts) {
-      const other = parse7(integrity, opts);
+      const other = parse8(integrity, opts);
       if (!other) {
         return false;
       }
@@ -25137,8 +25137,8 @@ var require_lib = __commonJS((exports2, module2) => {
       return null;
     }
   }
-  module2.exports.parse = parse7;
-  function parse7(sri, opts) {
+  module2.exports.parse = parse8;
+  function parse8(sri, opts) {
     if (!sri) {
       return null;
     }
@@ -25174,7 +25174,7 @@ var require_lib = __commonJS((exports2, module2) => {
     if (obj.algorithm && obj.digest) {
       return Hash.prototype.toString.call(obj, opts);
     } else if (typeof obj === "string") {
-      return stringify4(parse7(obj, opts), opts);
+      return stringify4(parse8(obj, opts), opts);
     } else {
       return Integrity.prototype.toString.call(obj, opts);
     }
@@ -25182,7 +25182,7 @@ var require_lib = __commonJS((exports2, module2) => {
   module2.exports.fromHex = fromHex;
   function fromHex(hexDigest, algorithm, opts) {
     const optString = getOptString(opts?.options);
-    return parse7(`${algorithm}-${Buffer.from(hexDigest, "hex").toString("base64")}${optString}`, opts);
+    return parse8(`${algorithm}-${Buffer.from(hexDigest, "hex").toString("base64")}${optString}`, opts);
   }
   module2.exports.fromData = fromData;
   function fromData(data2, opts) {
@@ -25218,7 +25218,7 @@ var require_lib = __commonJS((exports2, module2) => {
   }
   module2.exports.checkData = checkData;
   function checkData(data2, sri, opts) {
-    sri = parse7(sri, opts);
+    sri = parse8(sri, opts);
     if (!sri || !Object.keys(sri).length) {
       if (opts?.error) {
         throw Object.assign(new Error("No valid integrity hashes to check against"), {
@@ -25230,7 +25230,7 @@ var require_lib = __commonJS((exports2, module2) => {
     }
     const algorithm = sri.pickAlgorithm(opts);
     const digest = crypto2.createHash(algorithm).update(data2).digest("base64");
-    const newSri = parse7({ algorithm, digest });
+    const newSri = parse8({ algorithm, digest });
     const match = newSri.match(sri, opts);
     opts = opts || {};
     if (match || !opts.error) {
@@ -25258,7 +25258,7 @@ var require_lib = __commonJS((exports2, module2) => {
   function checkStream(stream, sri, opts) {
     opts = opts || Object.create(null);
     opts.integrity = sri;
-    sri = parse7(sri, opts);
+    sri = parse8(sri, opts);
     if (!sri || !Object.keys(sri).length) {
       return Promise.reject(Object.assign(new Error("No valid integrity hashes to check against"), {
         code: "EINTEGRITY"
@@ -25770,7 +25770,7 @@ var require_semver = __commonJS((exports2, module2) => {
 // node_modules/semver/functions/parse.js
 var require_parse3 = __commonJS((exports2, module2) => {
   var SemVer = require_semver();
-  var parse7 = (version, options, throwErrors = false) => {
+  var parse8 = (version, options, throwErrors = false) => {
     if (version instanceof SemVer) {
       return version;
     }
@@ -25783,14 +25783,14 @@ var require_parse3 = __commonJS((exports2, module2) => {
       throw er;
     }
   };
-  module2.exports = parse7;
+  module2.exports = parse8;
 });
 
 // node_modules/semver/functions/valid.js
 var require_valid = __commonJS((exports2, module2) => {
-  var parse7 = require_parse3();
+  var parse8 = require_parse3();
   var valid = (version, options) => {
-    const v = parse7(version, options);
+    const v = parse8(version, options);
     return v ? v.version : null;
   };
   module2.exports = valid;
@@ -25798,9 +25798,9 @@ var require_valid = __commonJS((exports2, module2) => {
 
 // node_modules/semver/functions/clean.js
 var require_clean = __commonJS((exports2, module2) => {
-  var parse7 = require_parse3();
+  var parse8 = require_parse3();
   var clean = (version, options) => {
-    const s = parse7(version.trim().replace(/^[=v]+/, ""), options);
+    const s = parse8(version.trim().replace(/^[=v]+/, ""), options);
     return s ? s.version : null;
   };
   module2.exports = clean;
@@ -25826,10 +25826,10 @@ var require_inc = __commonJS((exports2, module2) => {
 
 // node_modules/semver/functions/diff.js
 var require_diff = __commonJS((exports2, module2) => {
-  var parse7 = require_parse3();
+  var parse8 = require_parse3();
   var diff = (version1, version2) => {
-    const v1 = parse7(version1, null, true);
-    const v2 = parse7(version2, null, true);
+    const v1 = parse8(version1, null, true);
+    const v2 = parse8(version2, null, true);
     const comparison = v1.compare(v2);
     if (comparison === 0) {
       return null;
@@ -25888,9 +25888,9 @@ var require_patch = __commonJS((exports2, module2) => {
 
 // node_modules/semver/functions/prerelease.js
 var require_prerelease = __commonJS((exports2, module2) => {
-  var parse7 = require_parse3();
+  var parse8 = require_parse3();
   var prerelease = (version, options) => {
-    const parsed = parse7(version, options);
+    const parsed = parse8(version, options);
     return parsed && parsed.prerelease.length ? parsed.prerelease : null;
   };
   module2.exports = prerelease;
@@ -26034,7 +26034,7 @@ var require_cmp = __commonJS((exports2, module2) => {
 // node_modules/semver/functions/coerce.js
 var require_coerce2 = __commonJS((exports2, module2) => {
   var SemVer = require_semver();
-  var parse7 = require_parse3();
+  var parse8 = require_parse3();
   var { safeRe: re, t } = require_re();
   var coerce = (version, options) => {
     if (version instanceof SemVer) {
@@ -26069,14 +26069,14 @@ var require_coerce2 = __commonJS((exports2, module2) => {
     const patch = match[4] || "0";
     const prerelease = options.includePrerelease && match[5] ? `-${match[5]}` : "";
     const build = options.includePrerelease && match[6] ? `+${match[6]}` : "";
-    return parse7(`${major}.${minor}.${patch}${prerelease}${build}`, options);
+    return parse8(`${major}.${minor}.${patch}${prerelease}${build}`, options);
   };
   module2.exports = coerce;
 });
 
 // node_modules/semver/functions/truncate.js
 var require_truncate = __commonJS((exports2, module2) => {
-  var parse7 = require_parse3();
+  var parse8 = require_parse3();
   var constants = require_constants();
   var SemVer = require_semver();
   var truncate = (version, truncation, options) => {
@@ -26088,7 +26088,7 @@ var require_truncate = __commonJS((exports2, module2) => {
   };
   var cloneInputVersion = (version, options) => {
     const versionStringToParse = version instanceof SemVer ? version.version : version;
-    return parse7(versionStringToParse, options);
+    return parse8(versionStringToParse, options);
   };
   var doTruncation = (version, truncation) => {
     if (isPrerelease(truncation)) {
@@ -26340,16 +26340,16 @@ var require_range2 = __commonJS((exports2, module2) => {
   };
   var replaceTilde = (comp, options) => {
     const r = options.loose ? re[t.TILDELOOSE] : re[t.TILDE];
-    const z8 = options.includePrerelease ? "-0" : "";
+    const z9 = options.includePrerelease ? "-0" : "";
     return comp.replace(r, (_, M, m, p, pr) => {
       debug("tilde", comp, _, M, m, p, pr);
       let ret;
       if (isX(M)) {
         ret = "";
       } else if (isX(m)) {
-        ret = `>=${M}.0.0${z8} <${+M + 1}.0.0-0`;
+        ret = `>=${M}.0.0${z9} <${+M + 1}.0.0-0`;
       } else if (isX(p)) {
-        ret = `>=${M}.${m}.0${z8} <${M}.${+m + 1}.0-0`;
+        ret = `>=${M}.${m}.0${z9} <${M}.${+m + 1}.0-0`;
       } else if (pr) {
         debug("replaceTilde pr", pr);
         ret = `>=${M}.${m}.${p}-${pr} <${M}.${+m + 1}.0-0`;
@@ -26366,19 +26366,19 @@ var require_range2 = __commonJS((exports2, module2) => {
   var replaceCaret = (comp, options) => {
     debug("caret", comp, options);
     const r = options.loose ? re[t.CARETLOOSE] : re[t.CARET];
-    const z8 = options.includePrerelease ? "-0" : "";
+    const z9 = options.includePrerelease ? "-0" : "";
     return comp.replace(r, (_, M, m, p, pr) => {
       debug("caret", comp, _, M, m, p, pr);
       let ret;
       if (isX(M)) {
         ret = "";
       } else if (isX(m)) {
-        ret = `>=${M}.0.0${z8} <${+M + 1}.0.0-0`;
+        ret = `>=${M}.0.0${z9} <${+M + 1}.0.0-0`;
       } else if (isX(p)) {
         if (M === "0") {
-          ret = `>=${M}.${m}.0${z8} <${M}.${+m + 1}.0-0`;
+          ret = `>=${M}.${m}.0${z9} <${M}.${+m + 1}.0-0`;
         } else {
-          ret = `>=${M}.${m}.0${z8} <${+M + 1}.0.0-0`;
+          ret = `>=${M}.${m}.0${z9} <${+M + 1}.0.0-0`;
         }
       } else if (pr) {
         debug("replaceCaret pr", pr);
@@ -27084,7 +27084,7 @@ var require_semver2 = __commonJS((exports2, module2) => {
   var constants = require_constants();
   var SemVer = require_semver();
   var identifiers = require_identifiers();
-  var parse7 = require_parse3();
+  var parse8 = require_parse3();
   var valid = require_valid();
   var clean = require_clean();
   var inc = require_inc();
@@ -27123,7 +27123,7 @@ var require_semver2 = __commonJS((exports2, module2) => {
   var simplifyRange = require_simplify();
   var subset = require_subset();
   module2.exports = {
-    parse: parse7,
+    parse: parse8,
     valid,
     clean,
     inc,
@@ -29174,11 +29174,11 @@ var require_parse4 = __commonJS((exports2, module2) => {
 // node_modules/qs/lib/index.js
 var require_lib2 = __commonJS((exports2, module2) => {
   var stringify4 = require_stringify();
-  var parse7 = require_parse4();
+  var parse8 = require_parse4();
   var formats = require_formats();
   module2.exports = {
     formats,
-    parse: parse7,
+    parse: parse8,
     stringify: stringify4
   };
 });
@@ -29325,7 +29325,7 @@ function encodePathChars(filepath) {
   }
   return filepath;
 }
-var import_punycode, import_qs, punycode, protocolPattern, portPattern, simplePathPattern, delims, unwise, autoEscape, nonHostChars, hostEndingChars, hostnameMaxLen = 255, hostnamePartPattern, hostnamePartStart, unsafeProtocol, hostlessProtocol, slashedProtocol, querystring, parse7, resolve$1, resolveObject, format2, Url_1, _globalThis, formatImport, parseImport, resolveImport, UrlImport, URL2, URLSearchParams2, percentRegEx, backslashRegEx, newlineRegEx, carriageReturnRegEx, tabRegEx, CHAR_FORWARD_SLASH = 47, domainToASCII = function domainToASCII2(domain) {
+var import_punycode, import_qs, punycode, protocolPattern, portPattern, simplePathPattern, delims, unwise, autoEscape, nonHostChars, hostEndingChars, hostnameMaxLen = 255, hostnamePartPattern, hostnamePartStart, unsafeProtocol, hostlessProtocol, slashedProtocol, querystring, parse8, resolve$1, resolveObject, format2, Url_1, _globalThis, formatImport, parseImport, resolveImport, UrlImport, URL2, URLSearchParams2, percentRegEx, backslashRegEx, newlineRegEx, carriageReturnRegEx, tabRegEx, CHAR_FORWARD_SLASH = 47, domainToASCII = function domainToASCII2(domain) {
   if (typeof domain === "undefined") {
     throw new TypeError('The "domain" argument must be specified');
   }
@@ -29880,7 +29880,7 @@ var init_url = __esm(() => {
       this.hostname = host;
     }
   };
-  parse7 = urlParse;
+  parse8 = urlParse;
   resolve$1 = urlResolve;
   resolveObject = urlResolveObject;
   format2 = urlFormat;
@@ -29906,7 +29906,7 @@ var init_url = __esm(() => {
     }
   }(Object);
   formatImport = format2;
-  parseImport = parse7;
+  parseImport = parse8;
   resolveImport = resolve$1;
   UrlImport = Url_1;
   URL2 = _globalThis.URL;
@@ -29971,7 +29971,7 @@ var require_polyfill = __commonJS((exports2, module2) => {
     dirname,
     isAbsolute: isAbsolute2,
     join,
-    parse: parse8,
+    parse: parse9,
     resolve: resolve3,
     sep,
     toNamespacedPath
@@ -30076,7 +30076,7 @@ var require_polyfill = __commonJS((exports2, module2) => {
   async function checkParentPaths(src, srcStat, dest) {
     const srcParent = resolve3(dirname(src));
     const destParent = resolve3(dirname(dest));
-    if (destParent === srcParent || destParent === parse8(destParent).root) {
+    if (destParent === srcParent || destParent === parse9(destParent).root) {
       return;
     }
     let destStat;
@@ -31198,7 +31198,7 @@ var require_index_min = __commonJS((exports2) => {
       return this.#S;
     }
     constructor(t) {
-      let { max: e = 0, ttl: i, ttlResolution: s = 1, ttlAutopurge: n, updateAgeOnGet: o, updateAgeOnHas: l, allowStale: h, dispose: r, onInsert: c, disposeAfter: w, noDisposeOnSet: _, noUpdateTTL: d, maxSize: p = 0, maxEntrySize: f = 0, sizeCalculation: y, fetchMethod: a, memoMethod: S, noDeleteOnFetchRejection: F, noDeleteOnStaleGet: b, allowStaleOnFetchRejection: m, allowStaleOnFetchAbort: A, ignoreFetchAbort: z8, backgroundFetchSize: x = 1, perf: v } = t;
+      let { max: e = 0, ttl: i, ttlResolution: s = 1, ttlAutopurge: n, updateAgeOnGet: o, updateAgeOnHas: l, allowStale: h, dispose: r, onInsert: c, disposeAfter: w, noDisposeOnSet: _, noUpdateTTL: d, maxSize: p = 0, maxEntrySize: f = 0, sizeCalculation: y, fetchMethod: a, memoMethod: S, noDeleteOnFetchRejection: F, noDeleteOnStaleGet: b, allowStaleOnFetchRejection: m, allowStaleOnFetchAbort: A, ignoreFetchAbort: z9, backgroundFetchSize: x = 1, perf: v } = t;
       if (this.backgroundFetchSize = x, v !== undefined && typeof v?.now != "function")
         throw new TypeError("perf option must have a now() method if specified");
       if (this.#w = v ?? N.defaultPerf, e !== 0 && !T(e))
@@ -31216,7 +31216,7 @@ var require_index_min = __commonJS((exports2) => {
         throw new TypeError("memoMethod must be a function if defined");
       if (this.#j = S, a !== undefined && typeof a != "function")
         throw new TypeError("fetchMethod must be a function if specified");
-      if (this.#x = a, this.#U = !!a, this.#s = new Map, this.#i = Array.from({ length: e }).fill(undefined), this.#t = Array.from({ length: e }).fill(undefined), this.#l = new E(e), this.#u = new E(e), this.#a = 0, this.#h = 0, this.#y = L.create(e), this.#n = 0, this.#b = 0, typeof r == "function" && (this.#m = r), typeof c == "function" && (this.#W = c), typeof w == "function" ? (this.#S = w, this.#r = []) : (this.#S = undefined, this.#r = undefined), this.#T = !!this.#m, this.#R = !!this.#W, this.#f = !!this.#S, this.noDisposeOnSet = !!_, this.noUpdateTTL = !!d, this.noDeleteOnFetchRejection = !!F, this.allowStaleOnFetchRejection = !!m, this.allowStaleOnFetchAbort = !!A, this.ignoreFetchAbort = !!z8, this.maxEntrySize !== 0) {
+      if (this.#x = a, this.#U = !!a, this.#s = new Map, this.#i = Array.from({ length: e }).fill(undefined), this.#t = Array.from({ length: e }).fill(undefined), this.#l = new E(e), this.#u = new E(e), this.#a = 0, this.#h = 0, this.#y = L.create(e), this.#n = 0, this.#b = 0, typeof r == "function" && (this.#m = r), typeof c == "function" && (this.#W = c), typeof w == "function" ? (this.#S = w, this.#r = []) : (this.#S = undefined, this.#r = undefined), this.#T = !!this.#m, this.#R = !!this.#W, this.#f = !!this.#S, this.noDisposeOnSet = !!_, this.noUpdateTTL = !!d, this.noDeleteOnFetchRejection = !!F, this.allowStaleOnFetchRejection = !!m, this.allowStaleOnFetchAbort = !!A, this.ignoreFetchAbort = !!z9, this.maxEntrySize !== 0) {
         if (this.#c !== 0 && !T(this.#c))
           throw new TypeError("maxSize must be a positive integer if specified");
         if (!T(this.maxEntrySize))
@@ -31600,8 +31600,8 @@ var require_index_min = __commonJS((exports2) => {
         let A = this.#p(b);
         if (!y && !A)
           return a && (a.fetch = "hit"), this.#M(b), s && this.#D(b), a && this.#E(a, b), m;
-        let z8 = this.#G(t, b, F, f), v = z8.__staleWhileFetching !== undefined && i;
-        return a && (a.fetch = A ? "stale" : "refresh", v && A && (a.returnedStale = true)), v ? z8.__staleWhileFetching : z8.__returned = z8;
+        let z9 = this.#G(t, b, F, f), v = z9.__staleWhileFetching !== undefined && i;
+        return a && (a.fetch = A ? "stale" : "refresh", v && A && (a.returnedStale = true)), v ? z9.__staleWhileFetching : z9.__returned = z9;
       }
     }
     forceFetch(t, e = {}) {
@@ -35969,9 +35969,9 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
     };
     ee.Ignore = Ae;
   });
-  var Fs = R((z8) => {
-    Object.defineProperty(z8, "__esModule", { value: true });
-    z8.Processor = z8.SubWalks = z8.MatchRecord = z8.HasWalkedCache = undefined;
+  var Fs = R((z9) => {
+    Object.defineProperty(z9, "__esModule", { value: true });
+    z9.Processor = z9.SubWalks = z9.MatchRecord = z9.HasWalkedCache = undefined;
     var Ds = H(), se = class n {
       store;
       constructor(t = new Map) {
@@ -35988,7 +35988,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         i ? i.add(e.globString()) : this.store.set(s, new Set([e.globString()]));
       }
     };
-    z8.HasWalkedCache = se;
+    z9.HasWalkedCache = se;
     var ie = class {
       store = new Map;
       add(t, e, s) {
@@ -35999,7 +35999,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         return [...this.store.entries()].map(([t, e]) => [t, !!(e & 2), !!(e & 1)]);
       }
     };
-    z8.MatchRecord = ie;
+    z9.MatchRecord = ie;
     var re = class {
       store = new Map;
       add(t, e) {
@@ -36021,7 +36021,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         return [...this.store.keys()].filter((t) => t.canReaddir());
       }
     };
-    z8.SubWalks = re;
+    z9.SubWalks = re;
     var Me = class n {
       hasWalkedCache;
       matches = new ie;
@@ -36111,7 +36111,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         t.isNamed(e) && (s ? this.subwalks.add(t, s) : this.matches.add(t, i, false));
       }
     };
-    z8.Processor = Me;
+    z9.Processor = Me;
   });
   var Ls = R((X) => {
     Object.defineProperty(X, "__esModule", { value: true });
@@ -38466,10 +38466,144 @@ function isDatabricksAppEnv(source = runtimeEnvironment()) {
     return false;
   }
 }
+// packages/js/shared/core/src/http.ts
+function forEachHeaderValue(input, headerName, consumer) {
+  const headers = unwrap(input);
+  if (!headers)
+    return;
+  const target = headerName.toLowerCase();
+  if (isHeaders(headers)) {
+    if (target === "set-cookie") {
+      for (const value2 of headers.getSetCookie())
+        consumer(value2);
+      return;
+    }
+    const value = headers.get(headerName);
+    if (value !== null)
+      consumer(value);
+    return;
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    if (value == null || key.toLowerCase() !== target)
+      continue;
+    if (Array.isArray(value)) {
+      for (const item of value)
+        consumer(item);
+    } else {
+      consumer(value);
+    }
+  }
+}
+function isHeaders(value) {
+  return typeof value === "object" && value !== null && typeof value.get === "function" && typeof value.getSetCookie === "function";
+}
+function isWrapped(input) {
+  const headers = input.headers;
+  return headers != null && typeof headers === "object" && !Array.isArray(headers);
+}
+function unwrap(input) {
+  if (input == null)
+    return null;
+  if (isHeaders(input))
+    return input;
+  if (isWrapped(input))
+    return input.headers;
+  return input;
+}
+// packages/js/shared/core/src/json.ts
+function parse(text, fallback) {
+  if (typeof text !== "string" || text.trim().length === 0)
+    return fallback;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
+}
+function parseRecord(text) {
+  const parsed = parse(text);
+  return isRecord(parsed) ? parsed : undefined;
+}
 // packages/js/shared/core/src/pattern.ts
 var log = logger("shared/pattern");
 // packages/js/shared/core/src/token.ts
+var BEARER_PREFIX_REGEX = /^bearer\s+/i;
+var SPLIT_REGEX = /\s+|\s*,\s*/;
 var log2 = logger("shared/token");
+var ACCESS_TOKEN_HEADER = "x-forwarded-access-token";
+function decodeJwtSegment(segment) {
+  const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  try {
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return;
+  }
+}
+function getAccessTokenPayload(input, headerName = ACCESS_TOKEN_HEADER) {
+  let accessTokenPayload;
+  if (!(typeof input === "string")) {
+    if (headerName) {
+      forEachHeaderValue(input, headerName, (value) => {
+        for (const [payloadKey, payloadValue] of Object.entries(getAccessTokenPayload(value))) {
+          if (!accessTokenPayload || !(payloadKey in accessTokenPayload)) {
+            if (!accessTokenPayload)
+              accessTokenPayload = {};
+            accessTokenPayload[payloadKey] = payloadValue;
+          }
+        }
+      });
+    }
+  } else {
+    input = input.trim();
+    if (input) {
+      const match = BEARER_PREFIX_REGEX.exec(input);
+      if (match) {
+        const endIndex = match.index + match[0].length;
+        input = input.slice(endIndex);
+      }
+      const parts = input.split(".", 4);
+      if (parts.length === 2 || parts.length === 3) {
+        accessTokenPayload = parseRecord(decodeJwtSegment(parts[1]));
+      }
+    }
+  }
+  if (!accessTokenPayload)
+    accessTokenPayload = {};
+  log2.debug("getAccessTokenPayload", { accessTokenPayload });
+  return accessTokenPayload;
+}
+function getAccessTokenScopes(input, headerName) {
+  const payload = getAccessTokenPayload(input, headerName);
+  let accessTokenScopes = iterateClaims(payload.scope);
+  if (isLevelEnabled("debug")) {
+    accessTokenScopes = Array.from(accessTokenScopes);
+    log2.debug("getAccessTokenScopes", { accessTokenScopes });
+  }
+  return accessTokenScopes;
+}
+function* iterateClaims(input, distinct2 = true) {
+  const seen = distinct2 ? new Set : undefined;
+  function* visit(value) {
+    if (typeof value === "string") {
+      for (const claim of value.split(SPLIT_REGEX)) {
+        const token = claim.trim();
+        if (!token || seen?.has(token)) {
+          continue;
+        }
+        seen?.add(token);
+        yield token;
+      }
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        yield* visit(item);
+      }
+    }
+  }
+  yield* visit(input);
+}
 // packages/js/shared/graphiti/src/options.ts
 var import_zod4 = __toESM(require_zod(), 1);
 var graphitiText = (description) => import_zod4.z.string().trim().min(1).describe(description);
@@ -40789,6 +40923,142 @@ class MemoryCredentialStore {
   }
 }
 
+// packages/js/shared/auth/src/client.ts
+var import_zod7 = __toESM(require_zod(), 1);
+var RUNTIME_AUTH_TYPE = "runtime";
+var databricksAuthClientInfoSchema = import_zod7.z.object({
+  profile: import_zod7.z.string().min(1).optional(),
+  host: exports_options.normalizedUrlSchema,
+  accountId: import_zod7.z.string().min(1).optional(),
+  workspaceId: import_zod7.z.string().min(1).optional(),
+  target: targetKindSchema,
+  authType: authTypeSchema.or(import_zod7.z.literal(RUNTIME_AUTH_TYPE)),
+  principal: import_zod7.z.string().min(1)
+});
+
+// packages/js/node/auth/src/runtime-auth.ts
+var MINIMUM_RUNTIME_TOKEN_TTL_MS = 60000;
+var RUNTIME_PRINCIPAL = "runtime";
+async function _databricksRuntimeAuthClient() {
+  const runtime = globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")];
+  return runtime?.databricksRuntimeAuthClient?.();
+}
+function createDatabricksRuntimeAuthClient(runtime, options) {
+  const lifecycleOptions = {
+    ...AUTH_DEFAULTS,
+    ...options.auth
+  };
+  const provider = new DatabricksRuntimeTokenProvider(runtime, lifecycleOptions.refreshBufferMs);
+  const lifecycle = new TokenLifecycle(runtimeCacheKey(runtime), provider, new MemoryCredentialStore, lifecycleOptions);
+  return new DefaultDatabricksRuntimeAuthClient(runtime, provider, lifecycle);
+}
+function runtimeCacheKey(runtime) {
+  return [
+    RUNTIME_AUTH_TYPE,
+    normalizeHost(runtime.host, RUNTIME_PRINCIPAL),
+    runtime.workspaceId ?? "",
+    runtime.principal ?? ""
+  ].join(":");
+}
+function normalizedHeaders(headers) {
+  return Object.fromEntries(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]));
+}
+function runtimeToken(headers, refreshBufferMs, configuredToken) {
+  const authorization = headers[DEFAULT_ACCESS_TOKEN_HEADER];
+  const match = authorization?.trim().match(/^(\S+)\s+(.+)$/);
+  const accessToken = match?.[2]?.trim() || configuredToken?.trim();
+  if (!accessToken) {
+    throw new AuthError("oauth", "Databricks Python runtime authentication did not provide an access token");
+  }
+  const payload = getAccessTokenPayload(accessToken);
+  const jwtExpiry = typeof payload.exp === "number" && Number.isFinite(payload.exp) ? new Date(payload.exp * 1000).toISOString() : undefined;
+  const expiry = jwtExpiry ?? new Date(Date.now() + Math.max(refreshBufferMs * 2, MINIMUM_RUNTIME_TOKEN_TTL_MS)).toISOString();
+  return {
+    accessToken,
+    tokenType: match?.[1] || "Bearer",
+    ...expiry ? { expiry } : {},
+    scopes: [...getAccessTokenScopes(accessToken)]
+  };
+}
+
+class DatabricksRuntimeTokenProvider {
+  runtime;
+  refreshBufferMs;
+  #accessToken;
+  #headers;
+  constructor(runtime, refreshBufferMs) {
+    this.runtime = runtime;
+    this.refreshBufferMs = refreshBufferMs;
+  }
+  authenticate() {
+    return this.acquire();
+  }
+  login() {
+    return this.acquire();
+  }
+  refresh() {
+    return this.acquire();
+  }
+  canAuthenticateSilently() {
+    return true;
+  }
+  headers(token) {
+    if (this.#accessToken === token.accessToken && this.#headers) {
+      return { ...this.#headers };
+    }
+    return {
+      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`
+    };
+  }
+  clear() {
+    this.#accessToken = undefined;
+    this.#headers = undefined;
+  }
+  async acquire() {
+    const headers = normalizedHeaders(await this.runtime.authenticate());
+    const token = runtimeToken(headers, this.refreshBufferMs, await this.runtime.token());
+    this.#accessToken = token.accessToken;
+    this.#headers = {
+      ...headers,
+      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`
+    };
+    return token;
+  }
+}
+
+class DefaultDatabricksRuntimeAuthClient {
+  provider;
+  lifecycle;
+  profile = undefined;
+  host;
+  accountId = undefined;
+  workspaceId;
+  target = TargetKind.Workspace;
+  authType = RUNTIME_AUTH_TYPE;
+  principal;
+  constructor(runtime, provider, lifecycle) {
+    this.provider = provider;
+    this.lifecycle = lifecycle;
+    this.host = normalizeHost(runtime.host, RUNTIME_PRINCIPAL);
+    this.workspaceId = runtime.workspaceId;
+    this.principal = runtime.principal || RUNTIME_PRINCIPAL;
+  }
+  token(options = {}) {
+    return options.refresh ? this.lifecycle.forceRefresh(options.login ?? true) : this.lifecycle.tokenWithLogin(options.login);
+  }
+  async headers(options = {}) {
+    const headers = this.provider.headers(await this.token(options));
+    if (this.workspaceId && headers[WORKSPACE_ID_HEADER] === undefined) {
+      headers[WORKSPACE_ID_HEADER] = this.workspaceId;
+    }
+    return headers;
+  }
+  async logout() {
+    await this.lifecycle.logout();
+    this.provider.clear();
+  }
+}
+
 // packages/js/node/auth/src/client.ts
 var logger8 = authLogger("databricks");
 
@@ -40858,6 +41128,16 @@ class DefaultAuthClient {
   }
 }
 async function createAuthClient(options = {}, dependencies = {}) {
+  if (usesDefaultCredentialSource(options)) {
+    const runtime = await _databricksRuntimeAuthClient();
+    if (runtime) {
+      logger8.debug("selected Databricks Python runtime authentication", {
+        host: runtime.host,
+        hasWorkspaceId: Boolean(runtime.workspaceId)
+      });
+      return createDatabricksRuntimeAuthClient(runtime, options);
+    }
+  }
   return createResolvedAuth(options, dependencies);
 }
 async function createResolvedAuth(options, dependencies) {
@@ -40992,6 +41272,9 @@ function cliEnvironment(profile, configFile) {
 function stringValue2(value) {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
+function usesDefaultCredentialSource(options) {
+  return Object.values(options).every((value) => value === undefined);
+}
 // packages/js/node/model/src/bindings.ts
 var exports_bindings3 = {};
 __export(exports_bindings3, {
@@ -41023,108 +41306,108 @@ function toProfileSummary(profile) {
 }
 
 // packages/js/shared/model/src/contracts.ts
-var import_zod7 = __toESM(require_zod(), 1);
-var ModelClassSchema = import_zod7.z.enum(["chat-thinking", "chat-balanced", "chat-fast", "embedding"]).describe("Intent-oriented Databricks Model Serving endpoint class.");
+var import_zod8 = __toESM(require_zod(), 1);
+var ModelClassSchema = import_zod8.z.enum(["chat-thinking", "chat-balanced", "chat-fast", "embedding"]).describe("Intent-oriented Databricks Model Serving endpoint class.");
 var ModelClass = {
   ChatThinking: "chat-thinking",
   ChatBalanced: "chat-balanced",
   ChatFast: "chat-fast",
   Embedding: "embedding"
 };
-var ReasoningEffortSchema = import_zod7.z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).describe("Reasoning effort value accepted by compatible model endpoints.");
-var ModelProfileSchema = import_zod7.z.object({
-  quality: import_zod7.z.number().optional().describe("Relative quality score for ranking."),
-  speed: import_zod7.z.number().optional().describe("Relative speed score for ranking."),
-  cost: import_zod7.z.number().optional().describe("Relative cost score for ranking.")
+var ReasoningEffortSchema = import_zod8.z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).describe("Reasoning effort value accepted by compatible model endpoints.");
+var ModelProfileSchema = import_zod8.z.object({
+  quality: import_zod8.z.number().optional().describe("Relative quality score for ranking."),
+  speed: import_zod8.z.number().optional().describe("Relative speed score for ranking."),
+  cost: import_zod8.z.number().optional().describe("Relative cost score for ranking.")
 }).describe("Relative quality, speed, and cost scores for an endpoint.");
-var ModelStatusSchema = import_zod7.z.object({
-  deprecated: import_zod7.z.boolean().default(false).describe("True when the model should no longer be selected by default.")
+var ModelStatusSchema = import_zod8.z.object({
+  deprecated: import_zod8.z.boolean().default(false).describe("True when the model should no longer be selected by default.")
 }).describe("Model retirement status.");
-var ServingEndpointSummarySchema = import_zod7.z.object({
-  name: import_zod7.z.string().describe("Serving endpoint invoke id."),
-  displayName: import_zod7.z.string().optional().describe("Human-readable label when the workspace provides one."),
-  family: import_zod7.z.string().optional().describe("Detected model family used for grouping and sort order."),
-  task: import_zod7.z.string().optional().describe("Databricks serving task reported for the endpoint."),
-  state: import_zod7.z.string().optional().describe("Serving endpoint lifecycle state."),
-  description: import_zod7.z.string().optional().describe("Workspace-provided endpoint description."),
-  supportsTools: import_zod7.z.boolean().optional().describe("True when the endpoint accepts tool calls."),
+var ServingEndpointSummarySchema = import_zod8.z.object({
+  name: import_zod8.z.string().describe("Serving endpoint invoke id."),
+  displayName: import_zod8.z.string().optional().describe("Human-readable label when the workspace provides one."),
+  family: import_zod8.z.string().optional().describe("Detected model family used for grouping and sort order."),
+  task: import_zod8.z.string().optional().describe("Databricks serving task reported for the endpoint."),
+  state: import_zod8.z.string().optional().describe("Serving endpoint lifecycle state."),
+  description: import_zod8.z.string().optional().describe("Workspace-provided endpoint description."),
+  supportsTools: import_zod8.z.boolean().optional().describe("True when the endpoint accepts tool calls."),
   profile: ModelProfileSchema.optional().describe("Relative quality, speed, and cost scores."),
   class: ModelClassSchema.optional().describe("Intent-oriented class assigned to this endpoint."),
-  serviceNames: import_zod7.z.record(import_zod7.z.string(), import_zod7.z.string()).optional().describe("Provider-specific service name aliases keyed by protocol."),
-  modelServiceName: import_zod7.z.string().optional().describe("Canonical model-service name used for metadata lookup."),
-  reasoningEfforts: import_zod7.z.array(ReasoningEffortSchema).optional().describe("Reasoning effort values this endpoint accepts."),
+  serviceNames: import_zod8.z.record(import_zod8.z.string(), import_zod8.z.string()).optional().describe("Provider-specific service name aliases keyed by protocol."),
+  modelServiceName: import_zod8.z.string().optional().describe("Canonical model-service name used for metadata lookup."),
+  reasoningEfforts: import_zod8.z.array(ReasoningEffortSchema).optional().describe("Reasoning effort values this endpoint accepts."),
   status: ModelStatusSchema.optional().describe("Retirement status for this endpoint."),
-  dimension: import_zod7.z.number().optional().describe("Embedding vector size when the endpoint is an embedding model.")
+  dimension: import_zod8.z.number().optional().describe("Embedding vector size when the endpoint is an embedding model.")
 }).describe("Browser-safe normalized Model Serving endpoint metadata.");
-var ModelQuerySchema = import_zod7.z.object({
-  name: import_zod7.z.string().optional().describe("Exact serving endpoint name to retain."),
-  search: import_zod7.z.string().optional().describe("Free-text query matched against endpoint names and labels."),
+var ModelQuerySchema = import_zod8.z.object({
+  name: import_zod8.z.string().optional().describe("Exact serving endpoint name to retain."),
+  search: import_zod8.z.string().optional().describe("Free-text query matched against endpoint names and labels."),
   modelClass: ModelClassSchema.optional().describe("Restrict results to this intent-oriented class."),
-  requiresTools: import_zod7.z.boolean().optional().describe("When true, only endpoints that accept tools are returned."),
-  task: import_zod7.z.string().optional().describe("Exact Databricks serving task to retain."),
-  dimension: import_zod7.z.number().int().positive().optional().describe("Exact embedding vector dimension to retain."),
-  minDimension: import_zod7.z.number().int().positive().optional().describe("Minimum embedding vector dimension to retain."),
-  maxDimension: import_zod7.z.number().int().positive().optional().describe("Maximum embedding vector dimension to retain."),
+  requiresTools: import_zod8.z.boolean().optional().describe("When true, only endpoints that accept tools are returned."),
+  task: import_zod8.z.string().optional().describe("Exact Databricks serving task to retain."),
+  dimension: import_zod8.z.number().int().positive().optional().describe("Exact embedding vector dimension to retain."),
+  minDimension: import_zod8.z.number().int().positive().optional().describe("Minimum embedding vector dimension to retain."),
+  maxDimension: import_zod8.z.number().int().positive().optional().describe("Maximum embedding vector dimension to retain."),
   reasoningEffort: ReasoningEffortSchema.optional().describe("Reasoning effort that a retained endpoint must accept."),
-  includeDeprecated: import_zod7.z.boolean().optional().describe("When true, retired endpoints remain in the result set."),
-  limit: import_zod7.z.number().int().min(1).max(50).optional().describe("Maximum number of ranked results to return."),
-  threshold: import_zod7.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1.")
+  includeDeprecated: import_zod8.z.boolean().optional().describe("When true, retired endpoints remain in the result set."),
+  limit: import_zod8.z.number().int().min(1).max(50).optional().describe("Maximum number of ranked results to return."),
+  threshold: import_zod8.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1.")
 }).describe("Browser-safe model catalogue search and ranking controls.");
-var RankedModelSchema = import_zod7.z.object({
+var RankedModelSchema = import_zod8.z.object({
   endpoint: ServingEndpointSummarySchema.describe("Normalized endpoint chosen for this result."),
   modelClass: ModelClassSchema.describe("Class used to rank this result."),
-  score: import_zod7.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
+  score: import_zod8.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
 }).describe("One ranked model-search result.");
-var EndpointCapabilitiesSchema = import_zod7.z.object({
-  chat: import_zod7.z.boolean().describe("True when the endpoint can serve chat completions."),
-  embedding: import_zod7.z.boolean().describe("True when the endpoint can serve embeddings."),
-  tools: import_zod7.z.boolean().describe("True when the endpoint accepts tool calls.")
+var EndpointCapabilitiesSchema = import_zod8.z.object({
+  chat: import_zod8.z.boolean().describe("True when the endpoint can serve chat completions."),
+  embedding: import_zod8.z.boolean().describe("True when the endpoint can serve embeddings."),
+  tools: import_zod8.z.boolean().describe("True when the endpoint accepts tool calls.")
 }).describe("Capabilities derived from one normalized serving endpoint.");
-var FamilyClassSchema = import_zod7.z.object({
+var FamilyClassSchema = import_zod8.z.object({
   class: ModelClassSchema.describe("Fallback class for an unscored recognized family."),
-  rank: import_zod7.z.number().min(0).describe("Relative rank among family fallbacks, starting at 0.")
+  rank: import_zod8.z.number().min(0).describe("Relative rank among family fallbacks, starting at 0.")
 }).describe("Fallback class and rank for an unscored recognized model family.");
-var ModelCapabilitiesSchema = import_zod7.z.object({
-  responses: import_zod7.z.boolean().describe("True when the model supports the Responses API."),
-  imageInput: import_zod7.z.boolean().describe("True when the model accepts image inputs."),
-  applyPatch: import_zod7.z.boolean().describe("True when the model supports the apply-patch tool."),
-  webSearch: import_zod7.z.boolean().describe("True when the model supports web search.")
+var ModelCapabilitiesSchema = import_zod8.z.object({
+  responses: import_zod8.z.boolean().describe("True when the model supports the Responses API."),
+  imageInput: import_zod8.z.boolean().describe("True when the model accepts image inputs."),
+  applyPatch: import_zod8.z.boolean().describe("True when the model supports the apply-patch tool."),
+  webSearch: import_zod8.z.boolean().describe("True when the model supports web search.")
 }).describe("Documented capabilities resolved for one model identity.");
-var ModelRateLimitsSchema = import_zod7.z.object({
-  inputTokensPerMinute: import_zod7.z.number().int().min(0).nullable().describe("Published input tokens per minute, or null when unpublished."),
-  outputTokensPerMinute: import_zod7.z.number().int().min(0).nullable().describe("Published output tokens per minute, or null when unpublished."),
-  queriesPerHour: import_zod7.z.number().int().min(0).nullable().describe("Published queries per hour, or null when unpublished.")
+var ModelRateLimitsSchema = import_zod8.z.object({
+  inputTokensPerMinute: import_zod8.z.number().int().min(0).nullable().describe("Published input tokens per minute, or null when unpublished."),
+  outputTokensPerMinute: import_zod8.z.number().int().min(0).nullable().describe("Published output tokens per minute, or null when unpublished."),
+  queriesPerHour: import_zod8.z.number().int().min(0).nullable().describe("Published queries per hour, or null when unpublished.")
 }).describe("Published pay-per-token limits for one model.");
-var ModelMetadataSchema = import_zod7.z.object({
+var ModelMetadataSchema = import_zod8.z.object({
   status: ModelStatusSchema.describe("Retirement status for this model identity."),
   capabilities: ModelCapabilitiesSchema.describe("Documented capabilities for this model identity."),
   rateLimits: ModelRateLimitsSchema.optional().describe("Published rate limits when available.")
 }).describe("Combined retirement, capability, and rate-limit metadata.");
-var ResolvedModelSchema = import_zod7.z.object({
-  modelId: import_zod7.z.string().describe("Resolved serving endpoint or model identifier."),
-  matched: import_zod7.z.boolean().describe("True when the identifier matched a catalogue entry."),
-  score: import_zod7.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
+var ResolvedModelSchema = import_zod8.z.object({
+  modelId: import_zod8.z.string().describe("Resolved serving endpoint or model identifier."),
+  matched: import_zod8.z.boolean().describe("True when the identifier matched a catalogue entry."),
+  score: import_zod8.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
 }).describe("Result of resolving a fuzzy model identifier.");
-var ResolveModelOptionsSchema = import_zod7.z.object({
-  threshold: import_zod7.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
-  requiresTools: import_zod7.z.boolean().optional().describe("When true, only tool-capable endpoints may match.")
+var ResolveModelOptionsSchema = import_zod8.z.object({
+  threshold: import_zod8.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
+  requiresTools: import_zod8.z.boolean().optional().describe("When true, only tool-capable endpoints may match.")
 }).describe("Pure controls for fuzzy endpoint resolution.");
-var ScoredEndpointSchema = import_zod7.z.object({
+var ScoredEndpointSchema = import_zod8.z.object({
   endpoint: ServingEndpointSummarySchema.describe("Candidate serving endpoint."),
-  score: import_zod7.z.number().min(0).max(1).describe("Fuzzy-match distance in the range 0 to 1.")
+  score: import_zod8.z.number().min(0).max(1).describe("Fuzzy-match distance in the range 0 to 1.")
 }).describe("One endpoint paired with its fuzzy-match distance.");
-var ResolveModelInputSchema = import_zod7.z.object({
-  explicit: import_zod7.z.string().optional().describe("Exact model id or display name supplied by the caller."),
-  fuzzy: import_zod7.z.boolean().optional().describe("When true, unmatched explicit values may fuzzy-match."),
-  threshold: import_zod7.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
-  requiresTools: import_zod7.z.boolean().optional().describe("When true, only tool-capable endpoints may be selected."),
+var ResolveModelInputSchema = import_zod8.z.object({
+  explicit: import_zod8.z.string().optional().describe("Exact model id or display name supplied by the caller."),
+  fuzzy: import_zod8.z.boolean().optional().describe("When true, unmatched explicit values may fuzzy-match."),
+  threshold: import_zod8.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
+  requiresTools: import_zod8.z.boolean().optional().describe("When true, only tool-capable endpoints may be selected."),
   modelClass: ModelClassSchema.optional().describe("Preferred intent-oriented class when no explicit model matches."),
-  fallbacks: import_zod7.z.array(import_zod7.z.string()).optional().describe("Ordered model ids tried after class selection fails."),
-  liveOnly: import_zod7.z.boolean().optional().describe("When true, skip endpoints that are not currently ready.")
+  fallbacks: import_zod8.z.array(import_zod8.z.string()).optional().describe("Ordered model ids tried after class selection fails."),
+  liveOnly: import_zod8.z.boolean().optional().describe("When true, skip endpoints that are not currently ready.")
 }).describe("Caller intent used to resolve one model from a catalogue.");
-var ResolvedModelSelectionSchema = import_zod7.z.object({
-  modelId: import_zod7.z.string().describe("Selected serving endpoint identifier."),
-  source: import_zod7.z.enum(["explicit", "fuzzy-match", "class", "fallback"]).describe("Policy branch that selected this model.")
+var ResolvedModelSelectionSchema = import_zod8.z.object({
+  modelId: import_zod8.z.string().describe("Selected serving endpoint identifier."),
+  source: import_zod8.z.enum(["explicit", "fuzzy-match", "class", "fallback"]).describe("Policy branch that selected this model.")
 }).describe("Selected model identifier and the policy branch that selected it.");
 
 // node_modules/fuse.js/dist/fuse.mjs
@@ -42085,7 +42368,7 @@ var isExpression = (query) => !!(query[LogicalOperator.AND] || query[LogicalOper
 var isPath = (query) => !!query[KeyType.PATH];
 var isLeaf = (query) => !isArray(query) && isObject(query) && !isExpression(query);
 var convertToExplicit = (query) => ({ [LogicalOperator.AND]: Object.keys(query).map((key) => ({ [key]: query[key] })) });
-function parse(query, options, { auto = true } = {}) {
+function parse2(query, options, { auto = true } = {}) {
   const next = (query2) => {
     if (isString(query2)) {
       const obj = {
@@ -42627,7 +42910,7 @@ var Fuse = class {
     return results;
   }
   _searchLogical(query) {
-    const expression = parse(query, this.options);
+    const expression = parse2(query, this.options);
     const keys = this._normalizedKeys();
     const evaluate = (node, item, idx) => {
       if (!("children" in node)) {
@@ -42814,7 +43097,7 @@ Fuse.match = function(pattern, text2, options) {
     ...options
   }).searchIn(text2);
 };
-Fuse.parseQuery = parse;
+Fuse.parseQuery = parse2;
 register(ExtendedSearch);
 register(TokenSearch);
 Fuse.use = function(...plugins) {
@@ -47519,7 +47802,7 @@ var attributeRules = {
 var whitespace = new Set([9, 10, 12, 13, 32]);
 var ZERO = 48;
 var NINE = 57;
-function parse3(formula) {
+function parse4(formula) {
   formula = formula.trim().toLowerCase();
   if (formula === "even") {
     return [2, 0];
@@ -47592,7 +47875,7 @@ function compile(parsed) {
 
 // node_modules/nth-check/lib/esm/index.js
 function nthCheck(formula) {
-  return compile(parse3(formula));
+  return compile(parse4(formula));
 }
 
 // node_modules/css-select/lib/esm/pseudo-selectors/filters.js
@@ -48659,7 +48942,7 @@ __export(exports_manipulation, {
   wrapInner: () => wrapInner,
   wrapAll: () => wrapAll,
   wrap: () => wrap,
-  unwrap: () => unwrap,
+  unwrap: () => unwrap2,
   toString: () => toString2,
   text: () => text3,
   replaceWith: () => replaceWith,
@@ -48680,7 +48963,7 @@ __export(exports_manipulation, {
 
 // node_modules/cheerio/dist/browser/parse.js
 function getParse(parser) {
-  return function parse4(content, options, isDocument3, context) {
+  return function parse5(content, options, isDocument3, context) {
     if (typeof Buffer !== "undefined" && Buffer.isBuffer(content)) {
       content = content.toString();
     }
@@ -48858,7 +49141,7 @@ var wrapInner = _wrap((el, elInsertLocation, wrapperDom) => {
   update(el.children, elInsertLocation);
   update(wrapperDom, el);
 });
-function unwrap(selector) {
+function unwrap2(selector) {
   this.parent(selector).not("body").each((_, el) => {
     this._make(el).replaceWith(el.children);
   });
@@ -49079,7 +49362,7 @@ function setCss(el, prop2, value, idx) {
 function getCss(el, prop2) {
   if (!el || !isTag2(el))
     return;
-  const styles = parse4(el.attribs["style"]);
+  const styles = parse5(el.attribs["style"]);
   if (typeof prop2 === "string") {
     return styles[prop2];
   }
@@ -49097,7 +49380,7 @@ function getCss(el, prop2) {
 function stringify3(obj) {
   return Object.keys(obj).reduce((str, prop2) => `${str}${str ? " " : ""}${prop2}: ${obj[prop2]};`, "");
 }
-function parse4(styles) {
+function parse5(styles) {
   styles = (styles || "").trim();
   if (!styles)
     return {};
@@ -49205,13 +49488,13 @@ Cheerio.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
 Object.assign(Cheerio.prototype, exports_attributes, exports_traversing, exports_manipulation, exports_css, exports_forms, exports_extract);
 
 // node_modules/cheerio/dist/browser/load.js
-function getLoad(parse5, render3) {
+function getLoad(parse6, render3) {
   return function load(content, options, isDocument3 = true) {
     if (content == null) {
       throw new Error("cheerio.load() expects a string");
     }
     const internalOpts = flattenOptions(options);
-    const initialRoot = parse5(content, internalOpts, isDocument3, null);
+    const initialRoot = parse6(content, internalOpts, isDocument3, null);
 
     class LoadedCheerio extends Cheerio {
       _make(selector, context) {
@@ -49220,7 +49503,7 @@ function getLoad(parse5, render3) {
         return cheerio;
       }
       _parse(content2, options2, isDocument4, context) {
-        return parse5(content2, options2, isDocument4, context);
+        return parse6(content2, options2, isDocument4, context);
       }
       _render(dom) {
         return render3(dom, this.options);
@@ -49230,13 +49513,13 @@ function getLoad(parse5, render3) {
       if (selector && isCheerio(selector))
         return selector;
       const options2 = flattenOptions(opts, internalOpts);
-      const r = typeof root2 === "string" ? [parse5(root2, options2, false, null)] : ("length" in root2) ? root2 : [root2];
+      const r = typeof root2 === "string" ? [parse6(root2, options2, false, null)] : ("length" in root2) ? root2 : [root2];
       const rootInstance = isCheerio(r) ? r : new LoadedCheerio(r, null, options2);
       rootInstance._root = rootInstance;
       if (!selector) {
         return new LoadedCheerio(undefined, rootInstance, options2);
       }
-      const elements = typeof selector === "string" && isHtml(selector) ? parse5(selector, options2, false, null).children : isNode(selector) ? [selector] : Array.isArray(selector) ? selector : undefined;
+      const elements = typeof selector === "string" && isHtml(selector) ? parse6(selector, options2, false, null).children : isNode(selector) ? [selector] : Array.isArray(selector) ? selector : undefined;
       const instance = new LoadedCheerio(elements, rootInstance, options2);
       if (elements) {
         return instance;
@@ -49245,7 +49528,7 @@ function getLoad(parse5, render3) {
         throw new TypeError("Unexpected type of selector");
       }
       let search2 = selector;
-      const searchContext = context ? typeof context === "string" ? isHtml(context) ? new LoadedCheerio([parse5(context, options2, false, null)], rootInstance, options2) : (search2 = `${context} ${search2}`, rootInstance) : isCheerio(context) ? context : new LoadedCheerio(Array.isArray(context) ? context : [context], rootInstance, options2) : rootInstance;
+      const searchContext = context ? typeof context === "string" ? isHtml(context) ? new LoadedCheerio([parse6(context, options2, false, null)], rootInstance, options2) : (search2 = `${context} ${search2}`, rootInstance) : isCheerio(context) ? context : new LoadedCheerio(Array.isArray(context) ? context : [context], rootInstance, options2) : rootInstance;
       if (!searchContext)
         return instance;
       return searchContext.find(search2);
@@ -56883,7 +57166,7 @@ function serializeDocumentTypeNode(node2, { treeAdapter }) {
 }
 
 // node_modules/parse5/dist/index.js
-function parse5(html3, options) {
+function parse6(html3, options) {
   return Parser2.parse(html3, options);
 }
 function parseFragment(fragmentContext, html3, options) {
@@ -57105,7 +57388,7 @@ function parseWithParse5(content, options, isDocument3, context) {
   if (options.scriptingEnabled !== false) {
     options.scriptingEnabled = true;
   }
-  return isDocument3 ? parse5(content, options) : parseFragment(context, content, options);
+  return isDocument3 ? parse6(content, options) : parseFragment(context, content, options);
 }
 var renderOpts = { treeAdapter: adapter };
 function renderWithParse5(dom) {
@@ -57125,8 +57408,8 @@ function renderWithParse5(dom) {
 }
 
 // node_modules/cheerio/dist/browser/load-parse.js
-var parse6 = getParse((content, options, isDocument3, context) => options._useHtmlParser2 ? parseDocument(content, options) : parseWithParse5(content, options, isDocument3, context));
-var load = getLoad(parse6, (dom, options) => options._useHtmlParser2 ? esm_default(dom, options) : renderWithParse5(dom));
+var parse7 = getParse((content, options, isDocument3, context) => options._useHtmlParser2 ? parseDocument(content, options) : parseWithParse5(content, options, isDocument3, context));
+var load = getLoad(parse7, (dom, options) => options._useHtmlParser2 ? esm_default(dom, options) : renderWithParse5(dom));
 // packages/js/node/model/src/reasoning-translation.ts
 var ReasoningLevel = {
   Low: "low",

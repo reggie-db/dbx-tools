@@ -15,6 +15,7 @@ import {
   DEFAULT_ACCESS_TOKEN_HEADER,
   WORKSPACE_ID_HEADER,
 } from "./config.ts";
+import { _databricksRuntimeAuthClient, createDatabricksRuntimeAuthClient } from "./runtime-auth.ts";
 
 const logger = authLogger("databricks");
 
@@ -126,6 +127,16 @@ export async function createAuthClient(
   options: DatabricksAuthOptions = {},
   dependencies: DatabricksAuthDependencies = {},
 ): Promise<AuthClient> {
+  if (usesDefaultCredentialSource(options)) {
+    const runtime = await _databricksRuntimeAuthClient();
+    if (runtime) {
+      logger.debug("selected Databricks Python runtime authentication", {
+        host: runtime.host,
+        hasWorkspaceId: Boolean(runtime.workspaceId),
+      });
+      return createDatabricksRuntimeAuthClient(runtime, options);
+    }
+  }
   return createResolvedAuth(options, dependencies);
 }
 
@@ -288,4 +299,8 @@ function cliEnvironment(profile: DatabricksProfile, configFile: string): Record<
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function usesDefaultCredentialSource(options: DatabricksAuthOptions): boolean {
+  return Object.values(options).every((value) => value === undefined);
 }

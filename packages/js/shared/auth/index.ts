@@ -13,7 +13,7 @@ export * as profile from "./src/profile.ts";
 export { AUTH_BASE_PATH, SESSION_COOKIE_NAME, authRequestSchema, authRequestResultSchema, authVerifySchema, authVerifyResultSchema, authLogoutResultSchema, authStatusSchema } from "./src/auth.ts";
 export type { AuthRequest, AuthRequestResult, AuthVerify, AuthVerifyResult, AuthLogoutResult, AuthStatus } from "./src/auth.ts";
 export type { PasskeyOperation } from "./src/browser.ts";
-export { databricksAuthClientInfoSchema } from "./src/client.ts";
+export { RUNTIME_AUTH_TYPE, databricksAuthClientInfoSchema } from "./src/client.ts";
 export type { DatabricksAuthClientInfo } from "./src/client.ts";
 export { AuthType, TargetKind } from "./src/config.ts";
 export { authTypeSchema, targetKindSchema } from "./src/config-schema.ts";

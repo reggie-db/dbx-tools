@@ -1272,6 +1272,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
   {
     directory: "node-runtime",
     description: "Shared PythonMonkey runtime and lazy Node.js bootstrap",
+    dependencies: ["databricks-sdk>=0.40,<1"],
     nodeRuntime: true,
     scripts: {
       "dbx-tools-node-runtime": "dbx_tools.node_runtime.__main__:main",

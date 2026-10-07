@@ -103,7 +103,7 @@ export interface PythonRuntimeHost {
   };
 }
 
-type PythonFunction = (...args: any[]) => any;
+export type PythonFunction = (...args: any[]) => any;
 
 const python = (globalThis as typeof globalThis & { python?: PythonBridge }).python;
 if (!python) throw new Error("PythonMonkey globalThis.python is unavailable");
@@ -112,7 +112,18 @@ function evaluate<T extends PythonFunction>(source: string): T {
   return python!.eval(source) as T;
 }
 
+/** Evaluate one Python callable through the active PythonMonkey bridge. */
+export function evaluatePython<T extends PythonFunction>(source: string): T {
+  return evaluate<T>(source);
+}
+
 const toThread = evaluate<PythonFunction>("__import__('asyncio').to_thread");
+
+/** Run a blocking Python callable outside the active asyncio event-loop thread. */
+export function runPythonInThread<T>(operation: PythonFunction, ...args: unknown[]): Promise<T> {
+  return toThread(operation, ...args) as Promise<T>;
+}
+
 const osPath = {
   basename: evaluate<PythonFunction>("__import__('os').path.basename"),
   dirname: evaluate<PythonFunction>("__import__('os').path.dirname"),

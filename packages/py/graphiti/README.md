@@ -63,13 +63,14 @@ Use the same resolved option names without starting Uvicorn:
 ```python
 from dbx_tools.graphiti.runtime import GraphitiRuntime
 
-async with GraphitiRuntime.from_options(
-    {
-        "profile": "MY-PROFILE",
-    }
-) as runtime:
+async with GraphitiRuntime.from_options() as runtime:
     graphiti = runtime.graphiti
 ```
+
+In a Databricks notebook or Job, omitted auth options use the Python SDK's
+default `WorkspaceClient`. Graphiti receives the runtime host and refreshed
+authentication headers without copying credentials into environment variables.
+Pass `profile` only when selecting an explicit profile instead.
 
 The base package is suitable for Lakebase, external PostgreSQL, Spark
 notebooks, and serverless notebook Jobs:

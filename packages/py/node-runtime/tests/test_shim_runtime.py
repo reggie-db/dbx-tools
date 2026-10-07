@@ -44,3 +44,12 @@ def test_bundle_ids_and_abi_are_fail_closed() -> None:
         load_bundle(FIXTURES / "second.js", bundle_id="stable")
     with pytest.raises(RuntimeError, match="requires runtime ABI 2"):
         load_bundle(FIXTURES / "second.js", bundle_id="future", abi_version=2)
+
+
+@pytest.mark.asyncio
+async def test_runtime_auth_is_absent_outside_databricks(monkeypatch) -> None:
+    monkeypatch.delenv("DATABRICKS_RUNTIME_VERSION", raising=False)
+
+    runtime = get_runtime()["__pythonRuntime"]
+
+    assert await runtime["databricksRuntimeAuthClient"]() is None

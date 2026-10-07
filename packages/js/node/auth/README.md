@@ -5,8 +5,9 @@ Node.js and Bun.
 
 The package resolves profile configuration, selects PAT, M2M, CLI U2M, App
 service-principal, or App OBO authentication, and coordinates token acquisition
-in process memory. It does not own workspace HTTP APIs or construct Databricks
-SDK clients.
+in process memory. Generated Python bindings can also accept authentication from
+the shared Python runtime. The Node package does not own workspace HTTP APIs or
+construct Databricks SDK clients.
 
 ## Features
 
@@ -14,9 +15,11 @@ SDK clients.
 - Secret-free configured profile enumeration.
 - CLI-backed U2M token and login commands.
 - Direct PAT, M2M, App service-principal, and request-scoped App OBO tokens.
+- Automatic Python SDK runtime authentication for empty binding options.
 - Check-lock-recheck token acquisition and explicit token refresh.
 - Authentication headers with the resolved workspace ID when available.
-- No SDK, generic HTTP client, executable installer, or persistent token cache.
+- No JavaScript SDK, generic HTTP client, executable installer, or persistent
+  token cache.
 
 CLI-backed U2M requires an available `databricks` executable or an explicit
 `DATABRICKS_CLI_PATH`. The Databricks CLI remains responsible for its own login
@@ -38,6 +41,11 @@ const profiles = profile.listProfiles();
 `x-databricks-workspace-id` when the selected profile has a workspace ID. Pass
 `{ login: false }` to token or authentication acquisition to disable
 interactive login. Pass `{ refresh: true }` to bypass a reusable cached token.
+
+When this package runs through a generated Python binding in a Databricks
+notebook or Job, `createAuthClient()` with no profile or credential options uses
+the Python SDK's default `WorkspaceClient`. Explicit options continue through
+the normal profile, PAT, M2M, CLI, or App paths.
 
 Browser and UI code should import auth-type values, target values, profile
 summaries, profile selections, and client-configuration schemas from

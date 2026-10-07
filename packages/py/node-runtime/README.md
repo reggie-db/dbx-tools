@@ -44,6 +44,12 @@ Otherwise the first generated binding load performs the same initialization
 through `ensure_pythonmonkey()`. Generated dbx-tools bindings use
 PythonMonkey's standard `pythonmonkey.require` loader after installation.
 
+The package also installs the Databricks SDK for Python. In notebooks and Jobs,
+its shared runtime exposes the SDK's default `WorkspaceClient` authentication to
+generated Node auth bindings. Empty auth options use that runtime credential
+source automatically. Explicit profiles, hosts, and credentials continue
+through the normal Node auth providers.
+
 The package also owns a shared PythonMonkey host under `shims/`. A shim path
 encodes its specifier: `___` becomes `:`, `__` becomes `/`, and every other
 character stays as written (`node___fs__promises.ts` becomes `node:fs/promises`).
