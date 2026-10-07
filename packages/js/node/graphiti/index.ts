@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/graphiti";
-export const PACKAGE_VERSION = "0.9.47";
+export const PACKAGE_VERSION = "0.9.48";
 export * as options from "./src/options.ts";
 export * as runtime from "./src/runtime.ts";
 export type { GraphitiRuntimeOptions, GraphitiRuntime } from "./src/runtime.ts";

@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-model-gateway";
-export const PACKAGE_VERSION = "0.9.47";
+export const PACKAGE_VERSION = "0.9.48";
 export * as client from "./src/client.ts";
 export * as contracts from "./src/contracts.ts";
 export * as models from "./src/models.ts";
