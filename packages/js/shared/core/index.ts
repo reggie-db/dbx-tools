@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-core";
-export const PACKAGE_VERSION = "0.9.56";
+export const PACKAGE_VERSION = "0.9.57";
 export * as asyncUtils from "./src/async-utils.ts";
 export * as bindings from "./src/bindings.ts";
 export * as brandUtils from "./src/brand-utils.ts";
