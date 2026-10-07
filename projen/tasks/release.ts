@@ -161,6 +161,7 @@ export async function runRelease(
     );
   }
 
+  runTaskCommand(root, "git", ["push", remote, `HEAD:${branch}`]);
   runTaskCommand(root, "git", [
     "tag",
     "--annotate",
@@ -169,7 +170,7 @@ export async function runRelease(
     releaseTagAnnotation(tag, selection),
   ]);
   try {
-    runTaskCommand(root, "git", ["push", "--atomic", remote, `HEAD:${branch}`, `refs/tags/${tag}`]);
+    runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);
   } catch (error) {
     runTaskCommand(root, "git", ["tag", "--delete", tag]);
     throw error;

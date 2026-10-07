@@ -1392,6 +1392,7 @@ new project.DBXToolsPythonWorkspace(root, {
   devDependencies: [
     "nodejs-wheel>=22.20,<23",
     "pythonmonkey==1.3.2",
+    "tomli>=2,<3; python_version < '3.11'",
   ],
   requiresPython: ">=3.10,<4",
   ruffTarget: "py310",
