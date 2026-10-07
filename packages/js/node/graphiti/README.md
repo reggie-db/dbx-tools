@@ -20,6 +20,10 @@ const runtime = await startGraphitiRuntime({
 await runtime.stop();
 ```
 
+Use `graphitiOpenApi()` to read the Python-owned API contract without starting
+the database runtime. AppKit uses this to register direct tools before the
+sidecar warms.
+
 `runtime.result` resolves when the supervised runtime exits. Calling `stop()`
 forwards SIGTERM, allows bounded Python cleanup, and escalates the process group
 only when graceful shutdown exceeds its deadline.
@@ -44,4 +48,4 @@ database instead.
 
 Use this package from Node applications that need Graphiti lifecycle control.
 Use `@dbx-tools/cli-graphiti` for Commander and desktop-service commands, or
-`@dbx-tools/appkit-graphiti` for AppKit MCP publication and user scoping.
+`@dbx-tools/appkit-graphiti` for direct AppKit tool publication and user scoping.

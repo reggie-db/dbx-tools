@@ -1,7 +1,7 @@
 # `@dbx-tools/appkit-graphiti`
 
-Run Graphiti beside an AppKit server, publish a user-scoped MCP surface, and
-reuse the same unified Python runtime as the standalone CLI.
+Run Graphiti beside an AppKit server, publish direct user-scoped memory tools,
+and reuse the same unified Python runtime as the standalone CLI.
 
 ## Register The Plugin
 
@@ -19,13 +19,14 @@ await appkit.createApp({
 });
 ```
 
-The plugin starts the application-installed Python runtime, which owns model
-routing and durable embedded storage. AppKit publishes the constrained MCP
-endpoint at `/api/graphiti/mcp`.
+The plugin reads the Python runtime's OpenAPI document before registration, then
+starts the application-installed runtime that owns model routing and durable
+embedded storage. Tool calls use direct loopback HTTP instead of MCP discovery
+and transport.
 
 ## Add Agent Tools
 
-Expose the discovered Graphiti tools to an AppKit Mastra agent:
+Expose the OpenAPI-derived Graphiti tools to an AppKit Mastra agent:
 
 ```ts
 async tools(plugins) {
@@ -42,7 +43,7 @@ constrained to the derived group.
 
 Plugin config uses the shared Graphiti schema. Common fields include:
 
-- `listen` / `GRAPHITI_LISTEN`: internal MCP listener; a free loopback port is
+- `listen` / `GRAPHITI_LISTEN`: internal HTTP listener; a free loopback port is
   selected automatically when omitted;
 - `graphitiHome` / `GRAPHITI_HOME`: persistent embedded PostgreSQL directory;
 - `databaseUrl` / `DATABASE_URL`: optional external PostgreSQL URL or Lakebase
@@ -55,6 +56,7 @@ driver and PostgreSQL lifecycle.
 
 ## Operational Limits
 
-Agent registration waits up to 60 seconds for MCP tool discovery. Startup
-failure, an incomplete scoped tool set, or missing upstream descriptions and
-schemas fails registration. PostgreSQL owns graph durability and recovery.
+OpenAPI extraction must publish every scoped operation before AppKit setup
+completes. Tool execution waits up to 60 seconds for the Graphiti healthcheck.
+Startup failure or an incomplete tool contract fails registration. PostgreSQL
+owns graph durability and recovery.

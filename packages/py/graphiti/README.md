@@ -13,9 +13,8 @@ Both upstream surfaces come from the same Graphiti commit:
 ## Run
 
 ```sh
-UVICORN_HOST=0.0.0.0 \
-UVICORN_PORT=8000 \
-uv run uvicorn dbx_tools.graphiti.main:app
+GRAPHITI_LISTEN=tcp://0.0.0.0:8000 \
+uv run python -m dbx_tools.graphiti
 ```
 
 From the repository root, the local launcher starts the unified runtime:
@@ -32,10 +31,22 @@ The combined application exposes:
 - OpenAPI at `/openapi.json`
 - REST health and Graphiti routes, including `/healthcheck`, `/search`, and
   ingestion endpoints
+- direct tool operations under `/tools/*`
 - Streamable HTTP MCP at `/mcp/`
 
 Configure Graphiti through the shared environment contract used by the Node
 runtime and CLI.
+
+The package also provides an environment-configured server entry point and a
+schema-only command:
+
+```bash
+python -m dbx_tools.graphiti
+python -m dbx_tools.graphiti docs
+```
+
+`docs` writes the OpenAPI JSON document to stdout and exits without starting the
+database runtime.
 
 ## Databricks Model Resolution
 

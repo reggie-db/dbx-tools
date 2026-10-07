@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { createMockRouter } from "@databricks/appkit/testing";
+import type { GraphitiToolContract } from "../src/_openapi.ts";
+import { graphitiToolContracts } from "../src/_openapi.ts";
 import { GraphitiPlugin } from "../src/plugin.ts";
 
 const SCOPED_TOOL_NAMES = [
@@ -15,39 +16,60 @@ const SCOPED_TOOL_NAMES = [
   "summarize_saga",
 ] as const;
 
-function fixtureTool(name: string) {
-  const parameters = {
-    type: "object",
-    properties: {
-      episode_body: { type: "string", description: "Memory content" },
-    },
-    required: ["episode_body"],
-    additionalProperties: false,
-  } as const;
+function fixtureContract(name: string): GraphitiToolContract {
   return {
-    description: `Upstream description for ${name}`,
-    inputSchema: {
-      "~standard": {
-        version: 1,
-        vendor: "test",
-        validate: (value: unknown) =>
-          typeof value === "object" &&
-          value !== null &&
-          typeof (value as { episode_body?: unknown }).episode_body === "string"
-            ? { value }
-            : { issues: [{ message: "episode_body is required" }] },
-        jsonSchema: {
-          input: () => parameters,
-          output: () => parameters,
+    path: `/tools/${name}`,
+    definition: {
+      name,
+      description: `Upstream description for ${name}`,
+      parameters: {
+        type: "object",
+        properties: {
+          episode_body: { type: "string", description: "Memory content" },
         },
+        required: ["episode_body"],
+        additionalProperties: false,
       },
     },
-    execute: async (args: unknown) => args,
   };
 }
 
-describe("GraphitiPlugin routes", () => {
-  it("delegates runtime startup to the Node Graphiti owner", () => {
+function fixtureOpenApi(): string {
+  return JSON.stringify({
+    paths: {
+      "/tools/add_memory": {
+        post: {
+          operationId: "add_memory",
+          summary: "Add Memory",
+          description: "Add an episode to memory.",
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/add_memoryRequest" },
+              },
+            },
+          },
+        },
+      },
+    },
+    components: {
+      schemas: {
+        add_memoryRequest: {
+          type: "object",
+          properties: {
+            episode_body: { type: "string", description: "Memory content" },
+            group_id: { anyOf: [{ type: "string" }, { type: "null" }] },
+            uuid: { anyOf: [{ type: "string" }, { type: "null" }] },
+          },
+          required: ["episode_body"],
+        },
+      },
+    },
+  });
+}
+
+describe("GraphitiPlugin", () => {
+  it("delegates runtime startup to the Node Graphiti owner without Mastra MCP", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as {
@@ -55,79 +77,56 @@ describe("GraphitiPlugin routes", () => {
     };
 
     assert.equal(manifest.dependencies?.["@dbx-tools/graphiti"], "workspace:^");
+    assert.equal(manifest.dependencies?.["@mastra/mcp"], undefined);
+    assert.equal(manifest.dependencies?.["@mastra/core"], undefined);
     assert.equal(manifest.dependencies?.["@dbx-tools/cli-graphiti"], undefined);
-    assert.equal(manifest.dependencies?.["@dbx-tools/cli-service"], undefined);
-    assert.equal(manifest.dependencies?.["@dbx-tools/cli-model-gateway"], undefined);
-    assert.equal(manifest.dependencies?.["@dbx-tools/rust-binary"], undefined);
-    assert.equal(manifest.dependencies?.["@dbx-tools/cli"], undefined);
   });
 
-  it("does not block AppKit setup while sidecars warm", async () => {
+  it("derives tool descriptions and schemas from OpenAPI", () => {
+    const contracts = graphitiToolContracts(
+      fixtureOpenApi(),
+      ["add_memory"],
+      new Set(["group_id", "uuid"]),
+    );
+
+    assert.equal(contracts.add_memory?.definition.description, "Add an episode to memory.");
+    assert.deepEqual(contracts.add_memory?.definition.parameters, {
+      type: "object",
+      properties: {
+        episode_body: { type: "string", description: "Memory content" },
+      },
+      required: ["episode_body"],
+    });
+  });
+
+  it("loads tool contracts before scheduling non-blocking sidecar warmup", async () => {
     const plugin = new GraphitiPlugin({});
     let release!: () => void;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
     });
-    Object.assign(plugin, { startSidecars: () => pending });
+    const events: string[] = [];
+    Object.assign(plugin, {
+      loadToolContracts: async () => {
+        events.push("contracts");
+      },
+      startSidecar: () => {
+        events.push("sidecar");
+        return pending;
+      },
+    });
 
     await plugin.setup();
+
+    assert.deepEqual(events, ["contracts", "sidecar"]);
     release();
   });
 
-  it("registers the MCP transport on the AppKit server", () => {
-    const { router, handlers } = createMockRouter();
-    const plugin = new GraphitiPlugin({});
-
-    plugin.injectRoutes(router);
-
-    assert.deepEqual(Object.keys(handlers), ["GET:/mcp", "POST:/mcp", "DELETE:/mcp"]);
-    assert.deepEqual(plugin.getEndpoints(), {
-      getMcp: "/api/graphiti/mcp",
-      postMcp: "/api/graphiti/mcp",
-      deleteMcp: "/api/graphiti/mcp",
-    });
-    assert.deepEqual([...plugin.getSkipBodyParsingPaths()], []);
-  });
-
-  it("overrides model-supplied memory scope with the Mastra resource id", async () => {
+  it("builds toolkit entries from OpenAPI contracts", async () => {
     const plugin = new GraphitiPlugin({});
     Object.assign(plugin, {
-      mcpTools: {
-        add_memory: {
-          execute: async (args: unknown) => args,
-        },
-      },
+      toolContracts: { add_memory: fixtureContract("add_memory") },
     });
-
-    const first = (await plugin.executeAgentTool(
-      "add_memory",
-      {
-        episode_body: "private",
-        group_id: "shared",
-        previous_episode_uuids: ["another-users-episode"],
-        uuid: "caller-selected",
-      },
-      undefined,
-      { resourceId: "user-a" },
-    )) as Record<string, unknown>;
-    const second = (await plugin.executeAgentTool("add_memory", {}, undefined, {
-      resourceId: "user-a",
-    })) as Record<string, unknown>;
-    const other = (await plugin.executeAgentTool("add_memory", {}, undefined, {
-      resourceId: "user-b",
-    })) as Record<string, unknown>;
-
-    assert.match(first.group_id as string, /^user_/);
-    assert.equal(first.group_id, second.group_id);
-    assert.notEqual(first.group_id, other.group_id);
-    assert.equal(first.uuid, undefined);
-    assert.equal(first.previous_episode_uuids, undefined);
-  });
-
-  it("builds toolkit entries from discovered descriptions and schemas", async () => {
-    const plugin = new GraphitiPlugin({});
-    const tool = fixtureTool("add_memory");
-    Object.assign(plugin, { mcpTools: { add_memory: tool } });
 
     const toolkit = await plugin.toolkit({
       only: ["add_memory"],
@@ -136,55 +135,56 @@ describe("GraphitiPlugin routes", () => {
 
     assert.deepEqual(Object.keys(toolkit), ["remember"]);
     assert.equal(toolkit.remember?.def.description, "Upstream description for add_memory");
-    assert.deepEqual(toolkit.remember?.def.parameters, {
-      type: "object",
-      properties: {
-        episode_body: { type: "string", description: "Memory content" },
-      },
-      required: ["episode_body"],
-      additionalProperties: false,
-    });
-    const validation = await tool.inputSchema["~standard"].validate({});
-    assert.deepEqual(validation, { issues: [{ message: "episode_body is required" }] });
+    assert.equal(toolkit.remember?.annotations?.effect, "write");
   });
 
-  it("waits for sidecar startup before discovering MCP tools", async () => {
+  it("overrides model-supplied memory scope before direct HTTP execution", async () => {
     const plugin = new GraphitiPlugin({});
-    let release!: () => void;
-    const startup = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const discovered = Object.fromEntries(
-      SCOPED_TOOL_NAMES.map((name) => [`graphiti_${name}`, fixtureTool(name)]),
-    );
+    const requests: Record<string, unknown>[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
     Object.assign(plugin, {
-      startup,
+      startup: Promise.resolve(),
       resolved: { listen: { scheme: "tcp", host: "127.0.0.1", port: 4101 } },
-      mcp: { listTools: async () => discovered },
+      toolContracts: { add_memory: fixtureContract("add_memory") },
     });
-    let ready = false;
-    const pending = plugin.toolkit().then((toolkit) => {
-      ready = true;
-      return toolkit;
-    });
+    try {
+      await plugin.executeAgentTool(
+        "add_memory",
+        {
+          episode_body: "private",
+          group_id: "shared",
+          previous_episode_uuids: ["another-users-episode"],
+          uuid: "caller-selected",
+        },
+        undefined,
+        { resourceId: "user-a" },
+      );
+      await plugin.executeAgentTool("add_memory", {}, undefined, { resourceId: "user-a" });
+      await plugin.executeAgentTool("add_memory", {}, undefined, { resourceId: "user-b" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
 
-    await Promise.resolve();
-    assert.equal(ready, false);
-    release();
-    const toolkit = await pending;
-    assert.equal(Object.keys(toolkit).length, SCOPED_TOOL_NAMES.length);
+    assert.match(requests[0]?.group_id as string, /^user_/);
+    assert.equal(requests[0]?.group_id, requests[1]?.group_id);
+    assert.notEqual(requests[0]?.group_id, requests[2]?.group_id);
+    assert.equal(requests[0]?.uuid, undefined);
+    assert.equal(requests[0]?.previous_episode_uuids, undefined);
   });
 
-  it("propagates sidecar startup failure to toolkit registration", async () => {
+  it("cancels tool execution while sidecar startup is pending", async () => {
     const plugin = new GraphitiPlugin({});
-    Object.assign(plugin, { startup: Promise.reject(new Error("sidecar unavailable")) });
-
-    await assert.rejects(plugin.toolkit(), /sidecar unavailable/);
-  });
-
-  it("cancels tool execution while sidecar discovery is pending", async () => {
-    const plugin = new GraphitiPlugin({});
-    Object.assign(plugin, { startup: new Promise<void>(() => {}) });
+    Object.assign(plugin, {
+      startup: new Promise<void>(() => {}),
+      toolContracts: { add_memory: fixtureContract("add_memory") },
+    });
     const controller = new AbortController();
     const pending = plugin.executeAgentTool("add_memory", {}, controller.signal, {
       resourceId: "user-a",
@@ -198,11 +198,9 @@ describe("GraphitiPlugin routes", () => {
   it("rejects Graphiti tools without a group-scoped operation", async () => {
     const plugin = new GraphitiPlugin({});
     Object.assign(plugin, {
-      mcpTools: {
-        delete_episode: {
-          execute: async (args: unknown) => args,
-        },
-      },
+      startup: Promise.resolve(),
+      resolved: { listen: { scheme: "tcp", host: "127.0.0.1", port: 4101 } },
+      toolContracts: { delete_episode: fixtureContract("delete_episode") },
     });
 
     await assert.rejects(
@@ -215,25 +213,23 @@ describe("GraphitiPlugin routes", () => {
 
   it("rejects a sidecar port that collides with the AppKit listener", async () => {
     const previous = process.env.DATABRICKS_APP_PORT;
-    const kill = process.kill;
-    const signals: NodeJS.Signals[] = [];
     process.env.DATABRICKS_APP_PORT = "48123";
-    process.kill = ((_pid: number, signal: NodeJS.Signals) => {
-      signals.push(signal);
-      return true;
-    }) as typeof process.kill;
     try {
       const plugin = new GraphitiPlugin({
         listen: { scheme: "tcp", host: "127.0.0.1", port: 48123 },
       });
-      plugin.setup();
-      const startup = (plugin as unknown as { startup: Promise<void> }).startup;
-      await assert.rejects(startup, /must differ/);
-      assert.deepEqual(signals, ["SIGTERM"]);
+      const startSidecar = (plugin as unknown as { startSidecar(): Promise<void> }).startSidecar;
+      await assert.rejects(startSidecar.call(plugin), /must differ/);
     } finally {
-      process.kill = kill;
       if (previous === undefined) delete process.env.DATABRICKS_APP_PORT;
       else process.env.DATABRICKS_APP_PORT = previous;
     }
+  });
+
+  it("requires every configured scoped tool in the OpenAPI contract", () => {
+    assert.throws(
+      () => graphitiToolContracts(fixtureOpenApi(), SCOPED_TOOL_NAMES, new Set()),
+      /missing tool operation: add_triplet/,
+    );
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/appkit-graphiti",
-  "description": "AppKit process plugin for the Python dbx-tools Graphiti MCP runtime",
+  "description": "AppKit process plugin for direct Python dbx-tools Graphiti tools",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -19,7 +19,6 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/express": "catalog:",
     "@types/json-schema": "^7",
     "@types/node": "catalog:",
     "typescript": "^5.9.3",
@@ -31,8 +30,6 @@
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/graphiti": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
-    "@mastra/core": "catalog:",
-    "@mastra/mcp": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",

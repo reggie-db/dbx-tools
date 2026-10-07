@@ -34,7 +34,7 @@ def _route_paths(routes) -> set[str]:
     return paths
 
 
-def test_app_composes_rest_and_mcp_routes() -> None:
+def test_app_composes_rest_mcp_and_direct_tool_routes() -> None:
     paths = _route_paths(main.app.routes)
 
     assert {
@@ -44,8 +44,20 @@ def test_app_composes_rest_and_mcp_routes() -> None:
         "/openapi.json",
     }.issubset(paths)
     assert any(path.startswith("/search") for path in paths)
+    assert {f"/tools/{name}" for name in main._TOOL_NAMES}.issubset(paths)
     assert "/" in _route_paths(main.mcp_app.routes)
     assert main.app.dependency_overrides[main.get_graphiti] is main._get_graphiti_with_runtime
+
+    openapi = main.app.openapi()
+    assert {
+        openapi["paths"][f"/tools/{name}"]["post"]["operationId"] for name in main._TOOL_NAMES
+    } == set(main._TOOL_NAMES)
+    add_memory_schema = openapi["components"]["schemas"]["add_memoryRequest"]
+    assert add_memory_schema["properties"]["episode_body"]["description"].startswith(
+        "The content of the episode"
+    )
+    assert add_memory_schema["properties"]["source"]["default"] == "text"
+    assert {"name", "episode_body"}.issubset(add_memory_schema["required"])
 
 
 def test_load_graphiti_options_uses_generated_environment_parser(monkeypatch) -> None:

@@ -1,17 +1,11 @@
 /**
- * AppKit plugin that supervises Graphiti and republishes user-scoped MCP tools.
+ * AppKit plugin that supervises Graphiti and publishes direct user-scoped tools.
  *
  * @module
  */
 import { createHash } from "node:crypto";
 import { createServer } from "node:net";
-import {
-  ConfigurationError,
-  Plugin,
-  toPlugin,
-  type IAppRouter,
-  type PluginManifest,
-} from "@databricks/appkit";
+import { ConfigurationError, Plugin, toPlugin, type PluginManifest } from "@databricks/appkit";
 import type {
   AgentToolDefinition,
   ToolkitEntry,
@@ -19,14 +13,16 @@ import type {
   ToolAnnotations,
   ToolProvider,
 } from "@databricks/appkit/beta";
-import { appkit as dbxAppkit, identity as appkitIdentity, toolkitEntries } from "@dbx-tools/appkit";
+import { appkit as dbxAppkit, toolkitEntries } from "@dbx-tools/appkit";
 import { configUtils } from "@dbx-tools/core";
 import { resolveGraphitiOptions } from "@dbx-tools/graphiti/options";
-import { startGraphitiRuntime, type GraphitiRuntime } from "@dbx-tools/graphiti/runtime";
+import {
+  graphitiOpenApi,
+  startGraphitiRuntime,
+  type GraphitiRuntime,
+} from "@dbx-tools/graphiti/runtime";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
-import { createTool, type Tool } from "@mastra/core/tools";
-import { MCPClient, MCPServer } from "@mastra/mcp";
-import type express from "express";
+import { graphitiToolContracts, type GraphitiToolContract } from "./_openapi.ts";
 import {
   GRAPHITI_CONFIG_SCHEMA,
   resolveGraphitiConfig,
@@ -34,11 +30,8 @@ import {
   type ResolvedGraphitiPluginConfig,
 } from "./config.ts";
 
-const MCP_PATH = "/api/graphiti/mcp";
-const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
-const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
-const MCP_TOOL_DISCOVERY_TIMEOUT_MS = 60_000;
-const MCP_TOOL_DISCOVERY_RETRY_MS = 250;
+const STARTUP_TIMEOUT_MS = 60_000;
+const STARTUP_RETRY_MS = 250;
 const SCOPED_TOOL_FIELDS = {
   add_memory: "group_id",
   add_triplet: "group_id",
@@ -49,6 +42,7 @@ const SCOPED_TOOL_FIELDS = {
   search_nodes: "group_ids",
   summarize_saga: "group_id",
 } as const;
+const TOOL_NAMES = Object.keys(SCOPED_TOOL_FIELDS);
 const WRITE_TOOLS = new Set(["add_memory", "add_triplet", "build_communities", "summarize_saga"]);
 const UNSCOPED_ARGUMENTS = [
   "center_node_uuid",
@@ -58,39 +52,32 @@ const UNSCOPED_ARGUMENTS = [
   "target_node_uuid",
   "uuid",
 ] as const;
+const HIDDEN_TOOL_ARGUMENTS = new Set(["group_id", "group_ids", ...UNSCOPED_ARGUMENTS]);
 
-interface UserMcpServer {
-  lastUsed: number;
-  server: MCPServer;
-}
-
-/** AppKit plugin that runs Graphiti sidecars and publishes user-scoped memory tools. */
+/** AppKit plugin that runs Graphiti and publishes user-scoped memory tools. */
 export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements ToolProvider {
   static manifest: PluginManifest<"graphiti"> = {
     name: "graphiti",
     displayName: "Graphiti",
     description:
-      "Runs the dbx-tools Graphiti MCP sidecar with PostgreSQL graph storage and " +
-      "publishes user-scoped tools through the App's single port.",
+      "Runs the dbx-tools Graphiti sidecar with PostgreSQL graph storage and publishes " +
+      "direct user-scoped memory tools.",
     stability: "beta",
     resources: { required: [], optional: [] },
     config: { schema: GRAPHITI_CONFIG_SCHEMA },
   };
 
   private readonly logger = log.logger(this);
-  private mcp?: MCPClient;
-  private mcpServers = new Map<string, UserMcpServer>();
-  private mcpServerSweep?: NodeJS.Timeout;
-  private mcpTools: Record<string, Tool> = {};
   private resolved?: ResolvedGraphitiPluginConfig;
   private runtime?: GraphitiRuntime;
   private setupComplete = false;
   private startup?: Promise<void>;
   private stopping = false;
-  private toolsReady?: Promise<void>;
+  private toolContracts: Record<string, GraphitiToolContract> = {};
 
   override async setup(): Promise<void> {
-    this.startup = this.startSidecars();
+    await this.loadToolContracts();
+    this.startup = this.startSidecar();
     void this.startup.catch((error: unknown) => {
       if (this.stopping) return;
       this.logger.error("background startup failed", { error });
@@ -100,7 +87,15 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     this.logger.info("background startup scheduled");
   }
 
-  private async startSidecars(): Promise<void> {
+  private async loadToolContracts(): Promise<void> {
+    this.toolContracts = graphitiToolContracts(
+      await graphitiOpenApi(),
+      TOOL_NAMES,
+      HIDDEN_TOOL_ARGUMENTS,
+    );
+  }
+
+  private async startSidecar(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
     if (configured.listen.scheme !== "tcp") {
       throw new Error("AppKit Graphiti requires a TCP listener");
@@ -120,53 +115,23 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
       () => this.onSupervisorExit(),
       (error) => this.onSupervisorExit(error),
     );
-    this.mcpServerSweep = setInterval(() => this.closeIdleMcpServers(), MCP_SERVER_SWEEP_MS);
-    this.mcpServerSweep.unref();
-    this.logger.info("sidecars launched", {
-      graphitiPort: resolved.listen.port,
-      mcpPath: MCP_PATH,
-    });
-  }
-
-  override injectRoutes(router: IAppRouter): void {
-    for (const method of ["get", "post", "delete"] as const) {
-      this.route(router, {
-        name: `${method}Mcp`,
-        method,
-        path: "/mcp",
-        handler: (request, response) => this.forwardMcp(request, response),
-      });
-    }
-  }
-
-  override abortActiveOperations(): void {
-    super.abortActiveOperations();
-    void this.mcp?.disconnect();
+    await this.waitUntilReady();
+    this.logger.info("sidecar ready", { graphitiPort: resolved.listen.port });
   }
 
   async shutdown(): Promise<void> {
-    await this.stopSidecars();
-  }
-
-  override exports() {
-    return { mcpPath: MCP_PATH };
+    await this.stopSidecar();
   }
 
   async toolkit(options?: ToolkitOptions): Promise<Record<string, ToolkitEntry>> {
-    await this.ensureMcpTools();
     return toolkitEntries.entries("graphiti", this.getAgentTools(), options);
   }
 
   getAgentTools(): AgentToolDefinition[] {
-    return Object.entries(this.mcpTools).map(([name, tool]) => {
-      const annotations = toolAnnotations(name);
-      return {
-        name,
-        description: requiredToolDescription(name, tool),
-        parameters: requiredToolSchema(name, tool),
-        annotations,
-      };
-    });
+    return Object.values(this.toolContracts).map(({ definition }) => ({
+      ...definition,
+      annotations: toolAnnotations(definition.name),
+    }));
   }
 
   async executeAgentTool(
@@ -175,103 +140,44 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     signal?: AbortSignal,
     context?: { resourceId?: string },
   ): Promise<unknown> {
-    await this.ensureMcpTools(signal);
-    const tool = this.mcpTools[name];
-    if (!tool?.execute) throw new Error(`Unknown Graphiti tool: ${name}`);
-    const userId = context?.resourceId ?? executionContextUserId();
-    return tool.execute(scopedArguments(name, args, userScope(userId)), {
-      abortSignal: signal,
-    } as never);
-  }
-
-  private async forwardMcp(request: express.Request, response: express.Response): Promise<void> {
-    await this.ensureMcpTools();
-    const userId = appkitIdentity.requestUserId(request) ?? executionContextUserId();
-    const server = this.mcpServer(userId);
-    await server.startHTTP({
-      url: new URL(request.originalUrl, "http://app.local"),
-      httpPath: MCP_PATH,
-      req: request,
-      res: response,
-    });
-  }
-
-  private async ensureMcpTools(signal?: AbortSignal): Promise<void> {
-    if (Object.keys(this.mcpTools).length > 0) return;
-    this.toolsReady ??= this.discoverMcpTools().catch((error: unknown) => {
-      this.toolsReady = undefined;
-      throw error;
-    });
-    await abortable(this.toolsReady, signal);
-  }
-
-  private async discoverMcpTools(): Promise<void> {
+    const contract = this.toolContracts[name];
+    if (!contract) throw new Error(`Unknown Graphiti tool: ${name}`);
     if (!this.startup) throw new Error("Graphiti sidecar startup has not been scheduled");
-    await this.startup;
-    if (!this.resolved) throw new Error("Graphiti sidecars did not launch");
-    this.mcp ??= new MCPClient({
-      id: `appkit-graphiti-${this.resolved.listen.port}`,
-      servers: {
-        graphiti: { url: new URL(`http://127.0.0.1:${this.resolved.listen.port}/mcp`) },
+    await abortable(this.startup, signal);
+    if (!this.resolved) throw new Error("Graphiti sidecar did not launch");
+    const userId = context?.resourceId ?? executionContextUserId();
+    const response = await fetch(
+      `http://127.0.0.1:${this.resolved.listen.port}${contract.path}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(scopedArguments(name, args, userScope(userId))),
+        signal,
       },
-    });
-    const deadline = Date.now() + MCP_TOOL_DISCOVERY_TIMEOUT_MS;
+    );
+    if (!response.ok) {
+      throw new Error(`Graphiti tool ${name} failed with HTTP ${response.status}: ${await response.text()}`);
+    }
+    return response.json();
+  }
+
+  private async waitUntilReady(): Promise<void> {
+    if (!this.resolved) throw new Error("Graphiti sidecar did not launch");
+    const url = `http://127.0.0.1:${this.resolved.listen.port}/healthcheck`;
+    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
     let lastError: unknown;
     while (!this.stopping && Date.now() < deadline) {
       try {
-        const discovered = await this.mcp.listTools();
-        const tools = Object.fromEntries(
-          Object.entries(discovered)
-            .map(([name, tool]) => [name.replace(/^graphiti_/, ""), tool as Tool] as const)
-            .filter(([name]) => name in SCOPED_TOOL_FIELDS),
-        );
-        const missing = Object.keys(SCOPED_TOOL_FIELDS).filter((name) => !tools[name]);
-        if (missing.length > 0) {
-          throw new Error(`Graphiti did not publish required scoped tools: ${missing.join(", ")}`);
-        }
-        for (const [name, tool] of Object.entries(tools)) {
-          requiredToolDescription(name, tool);
-          requiredToolSchema(name, tool);
-        }
-        this.mcpTools = tools;
-        return;
+        const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+        if (response.ok) return;
+        lastError = new Error(`Graphiti healthcheck returned HTTP ${response.status}`);
       } catch (error) {
         lastError = error;
-        await asyncUtils.sleep(MCP_TOOL_DISCOVERY_RETRY_MS);
       }
+      await asyncUtils.sleep(STARTUP_RETRY_MS);
     }
-    if (this.stopping) throw new Error("Graphiti stopped before MCP tools were ready");
-    throw new Error("Graphiti MCP tool discovery timed out", { cause: lastError });
-  }
-
-  private mcpServer(userId: string): MCPServer {
-    const existing = this.mcpServers.get(userId);
-    if (existing) {
-      existing.lastUsed = Date.now();
-      return existing.server;
-    }
-    const scope = userScope(userId);
-    const tools = Object.fromEntries(
-      Object.entries(this.mcpTools).map(([name, tool]) => [
-        name,
-        createTool({
-          id: name,
-          description: tool.description ?? name,
-          ...(tool.inputSchema ? { inputSchema: tool.inputSchema as never } : {}),
-          execute: (args: unknown, context: unknown) => {
-            if (!tool.execute) throw new Error(`Graphiti tool cannot execute: ${name}`);
-            return tool.execute(scopedArguments(name, args, scope), context as never);
-          },
-        }),
-      ]),
-    );
-    const server = new MCPServer({
-      name: "Graphiti",
-      version: "1.0.0",
-      tools,
-    });
-    this.mcpServers.set(userId, { lastUsed: Date.now(), server });
-    return server;
+    if (this.stopping) throw new Error("Graphiti stopped before becoming ready");
+    throw new Error("Graphiti sidecar readiness timed out", { cause: lastError });
   }
 
   private onSupervisorExit(error?: unknown): void {
@@ -280,33 +186,12 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     process.kill(process.pid, "SIGTERM");
   }
 
-  private async stopSidecars(): Promise<void> {
+  private async stopSidecar(): Promise<void> {
     if (this.stopping) return;
     this.stopping = true;
-    if (this.mcpServerSweep) clearInterval(this.mcpServerSweep);
-    this.mcpServerSweep = undefined;
-    await Promise.allSettled([
-      ...[...this.mcpServers.values()].map(({ server }) => server.close()),
-      this.mcp?.disconnect(),
-      this.runtime?.stop(),
-    ]);
-    this.mcpServers.clear();
-    this.mcp = undefined;
-    this.mcpTools = {};
-    this.toolsReady = undefined;
+    await this.runtime?.stop();
     this.runtime = undefined;
     this.startup = undefined;
-  }
-
-  private closeIdleMcpServers(): void {
-    const cutoff = Date.now() - MCP_SERVER_IDLE_MS;
-    for (const [userId, entry] of this.mcpServers) {
-      if (entry.lastUsed >= cutoff) continue;
-      this.mcpServers.delete(userId);
-      void entry.server.close().catch((error) => {
-        this.logger.warn("idle MCP server close failed", { error });
-      });
-    }
   }
 }
 
@@ -338,29 +223,6 @@ function toolAnnotations(name: string): ToolAnnotations {
     effect: WRITE_TOOLS.has(name) ? "write" : "read",
     requiresUserContext: true,
   };
-}
-
-function requiredToolDescription(name: string, tool: Tool): string {
-  const description = tool.description?.trim();
-  if (!description) throw new Error(`Graphiti tool ${name} did not publish a description`);
-  return description;
-}
-
-function requiredToolSchema(name: string, tool: Tool): AgentToolDefinition["parameters"] {
-  const schema = tool.inputSchema as
-    | {
-        "~standard"?: {
-          jsonSchema?: {
-            input(options: { target: "draft-07" }): unknown;
-          };
-        };
-      }
-    | undefined;
-  const parameters = schema?.["~standard"]?.jsonSchema?.input({ target: "draft-07" });
-  if (!object.isRecord(parameters)) {
-    throw new Error(`Graphiti tool ${name} did not publish a JSON input schema`);
-  }
-  return parameters as AgentToolDefinition["parameters"];
 }
 
 function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {

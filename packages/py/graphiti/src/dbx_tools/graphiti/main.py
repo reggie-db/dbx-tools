@@ -1,11 +1,15 @@
 import logging
 import os
+import re
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
+from inspect import Parameter, getdoc, signature
+from typing import Any, get_type_hints
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from graphiti_core import Graphiti
+from pydantic import BaseModel, Field, create_model
 
 from ._generated.node.shared_core.bindings import log_level_enabled
 from ._generated.node.shared_graphiti.options import graphiti_options_from_environment
@@ -27,6 +31,16 @@ _QUIET_LOGGERS = (
     "mcp.server.streamable_http",
 )
 _UPSTREAM_OPENAI_PLACEHOLDER_KEY = "managed"
+_TOOL_NAMES = (
+    "add_memory",
+    "add_triplet",
+    "build_communities",
+    "get_episodes",
+    "get_status",
+    "search_memory_facts",
+    "search_nodes",
+    "summarize_saga",
+)
 
 
 def _configure_dependency_logging() -> None:
@@ -181,6 +195,69 @@ app.include_router(retrieve.router)
 app.include_router(ingest.router)
 app.mount("/mcp", mcp_app)
 app.dependency_overrides[get_graphiti] = _get_graphiti_with_runtime
+
+
+def _tool_request_model(name: str, function: Any) -> type[BaseModel]:
+    """Derive a request model from the upstream tool function signature."""
+    hints = get_type_hints(function)
+    descriptions = _parameter_descriptions(function)
+    fields: dict[str, tuple[Any, Any]] = {}
+    for parameter in signature(function).parameters.values():
+        annotation = hints.get(parameter.name, Any)
+        default = ... if parameter.default is Parameter.empty else parameter.default
+        fields[parameter.name] = (
+            annotation,
+            Field(default=default, description=descriptions.get(parameter.name)),
+        )
+    return create_model(f"{name}Request", **fields)
+
+
+def _parameter_descriptions(function: Any) -> dict[str, str]:
+    """Extract Google-style ``Args`` prose for OpenAPI request properties."""
+    doc = getdoc(function) or ""
+    lines = doc.splitlines()
+    try:
+        start = next(index for index, line in enumerate(lines) if line.strip() == "Args:") + 1
+    except StopIteration:
+        return {}
+    descriptions: dict[str, list[str]] = {}
+    current: str | None = None
+    parameter_line = re.compile(r"^\s{4}([A-Za-z_]\w*)(?:\s*\([^)]*\))?:\s*(.*)$")
+    for line in lines[start:]:
+        if line and not line.startswith(" "):
+            break
+        match = parameter_line.match(line)
+        if match:
+            current = match.group(1)
+            descriptions[current] = [match.group(2).strip()]
+            continue
+        if current and line.strip():
+            descriptions[current].append(line.strip())
+    return {name: " ".join(part for part in parts if part) for name, parts in descriptions.items()}
+
+
+def _register_tool_route(name: str) -> None:
+    """Publish one upstream Graphiti tool as a direct JSON endpoint."""
+    function = getattr(graphiti_mcp, name)
+    request_model = _tool_request_model(name, function)
+    response_model = get_type_hints(function).get("return", Any)
+
+    async def endpoint(request: BaseModel) -> Any:
+        return await function(**request.model_dump())
+
+    endpoint.__name__ = f"{name}_endpoint"
+    endpoint.__annotations__ = {"request": request_model, "return": response_model}
+    app.post(
+        f"/tools/{name}",
+        operation_id=name,
+        summary=name.replace("_", " ").title(),
+        description=function.__doc__,
+        response_model=response_model,
+    )(endpoint)
+
+
+for _tool_name in _TOOL_NAMES:
+    _register_tool_route(_tool_name)
 
 
 @app.get("/healthcheck")

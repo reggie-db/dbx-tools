@@ -532,12 +532,12 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
   p.addDevDeps("@types/express@catalog:", "@types/html-to-text@^9", "@types/json-schema@^7");
 });
 
-// node-appkit-graphiti: AppKit lifecycle and user-scoped MCP publication over
-// the reusable node-graphiti runtime.
+// node-appkit-graphiti: AppKit lifecycle and direct user-scoped Graphiti tools
+// over the reusable node-graphiti runtime.
 project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "AppKit process plugin for the Python dbx-tools Graphiti MCP runtime",
+    "AppKit process plugin for direct Python dbx-tools Graphiti tools",
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
@@ -545,11 +545,9 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/graphiti@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "@mastra/core@catalog:",
-    "@mastra/mcp@catalog:",
     "zod@catalog:",
   );
-  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "vitest@catalog:");
+  p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
 });
 
 // node-postgres: connection-correct Postgres utilities shared by packages.

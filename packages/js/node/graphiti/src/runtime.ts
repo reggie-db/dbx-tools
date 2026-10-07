@@ -34,9 +34,25 @@ function _runtimeEnvironment(options: ResolvedGraphitiOptions): NodeJS.ProcessEn
   return {
     ...process.env,
     ...graphitiOptionsEnvironment(options),
-    UVICORN_HOST: options.listen.host,
-    UVICORN_PORT: String(options.listen.port),
   };
+}
+
+async function _pythonArgs(...args: string[]): Promise<string[]> {
+  const python = process.env.PYTHON;
+  const packageArgs = python
+    ? []
+    : ["--with", `dbx-tools-graphiti==${(await import("../index.ts")).PACKAGE_VERSION}`];
+  return ["run", "--no-project", ...packageArgs, "--python", python ?? "python3", "python", ...args];
+}
+
+/** Read the Graphiti OpenAPI document without starting its database runtime. */
+export async function graphitiOpenApi(): Promise<string> {
+  const result = await exec.spawn("uv", await _pythonArgs("-m", "dbx_tools.graphiti", "docs"), {
+    check: true,
+    stdout: "capture",
+    stderr: "capture",
+  });
+  return result.stdout;
 }
 
 /** Start one Graphiti runtime from the shared typed options. */
@@ -44,25 +60,9 @@ export async function startGraphitiRuntime(
   options: GraphitiRuntimeOptions = {},
 ): Promise<GraphitiRuntime> {
   const resolved = resolveGraphitiOptions(options);
-  const python = process.env.PYTHON;
-  // Managed services supply their uv interpreter; foreground runs resolve the
-  // lockstep Python distribution through uv's cached package environment.
-  const packageArgs = python
-    ? []
-    : ["--with", `dbx-tools-graphiti==${(await import("../index.ts")).PACKAGE_VERSION}`];
   const child = exec.spawn(
     "uv",
-    [
-      "run",
-      "--no-project",
-      ...packageArgs,
-      "--python",
-      python ?? "python3",
-      "python",
-      "-m",
-      "uvicorn",
-      "dbx_tools.graphiti.main:app",
-    ],
+    await _pythonArgs("-m", "dbx_tools.graphiti"),
     {
       detached: process.platform !== "win32",
       env: _runtimeEnvironment(resolved),
