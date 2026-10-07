@@ -1389,9 +1389,13 @@ new project.DBXToolsPythonWorkspace(root, {
   root: PYTHON_ROOT,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
+  devDependencies: [
+    "nodejs-wheel>=22.20,<23",
+    "pythonmonkey==1.3.2",
+  ],
   requiresPython: ">=3.10,<4",
   ruffTarget: "py310",
-  workflowPythonVersion: "3.11",
+  workflowPythonVersion: "3.10",
   // This workspace uses two trusted corporate indexes. The first can lag the
   // local devpi index, so uv must consider the pinned version from both.
   indexStrategy: "unsafe-best-match",

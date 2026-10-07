@@ -6,7 +6,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, NotRequired, Protocol, TypedDict
+from typing import Any, Protocol, TypedDict
+
+from typing_extensions import NotRequired
 
 from .._runtime import MISSING as _MISSING
 from .._runtime import invoke_positioned as _invoke_positioned

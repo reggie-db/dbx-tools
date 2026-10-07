@@ -1,7 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
-from typing import Self
 
 import httpx
 from graphiti_core import Graphiti
@@ -10,6 +9,7 @@ from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 from openai import AsyncOpenAI
+from typing_extensions import Self
 
 from ._generated.node.auth.bindings import AuthClient, create_auth_client
 from ._generated.node.model.bindings import ModelClient, create_model_client

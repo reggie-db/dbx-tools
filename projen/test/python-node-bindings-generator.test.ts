@@ -125,6 +125,8 @@ describe("Python Node task components", () => {
     assert.doesNotMatch(readFileSync(runtimePath, "utf8"), /function createInterface/);
 
     const bindings = readFileSync(bindingsPath, "utf8");
+    assert.match(bindings, /from typing_extensions import NotRequired/);
+    assert.doesNotMatch(bindings, /from typing import .*NotRequired/);
     assert.match(bindings, /async def create_session\(\) -> str:/);
     assert.doesNotMatch(bindings, /pm\.eval|json\.loads/);
     assert.match(bindings, /async def token\(\n    login: bool \| object = _MISSING,\n\) -> str:/);

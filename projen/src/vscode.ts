@@ -17,12 +17,28 @@ export function configureVsCode(scope: javascript.NodeProject): void {
     "javascript.preferences.importModuleSpecifier": "non-relative",
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+    },
+    "[python]": {
+      "editor.defaultFormatter": "charliermarsh.ruff",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.ruff": "explicit",
+      },
+    },
+    "notebook.formatOnSave.enabled": true,
+    "notebook.defaultFormatter": "charliermarsh.ruff",
     "files.watcherExclude": {
       "**/node_modules/**": true,
       "**/dist/**": true,
     },
   });
-  editor.extensions.addRecommendations("esbenp.prettier-vscode");
+  editor.extensions.addRecommendations(
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "charliermarsh.ruff",
+  );
 
   new JsonFile(scope, ".vscode/tasks.json", {
     marker: false,
