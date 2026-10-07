@@ -32,6 +32,60 @@ it("does not acquire the lock when check fails before wait", async () => {
   }
 });
 
+it("logs prolonged waits every five seconds until acquisition", async () => {
+  const root = mkdtempSync(join(tmpdir(), "dbx-tools-workspace-lock-"));
+  let release!: () => void;
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+  const holder = withWorkspaceMutationLock(root, async () => {
+    markStarted();
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  });
+  await started;
+
+  const originalWrite = process.stderr.write;
+  const originalSetInterval = globalThis.setInterval;
+  let output = "";
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    output += chunk.toString();
+    return true;
+  }) as typeof process.stderr.write;
+  // Accelerate only the wait logger; the file lock continues using its normal timeout polling.
+  globalThis.setInterval = ((callback: () => void) =>
+    originalSetInterval(callback, 20)) as typeof setInterval;
+  let waiter: Promise<unknown> | undefined;
+  try {
+    waiter = withWorkspaceMutationLock(root, () => undefined);
+    await asyncUtils.sleep(10);
+    assert.doesNotMatch(output, /waiting for workspace mutation lock/);
+
+    await asyncUtils.sleep(55);
+    const waiting = output.match(/waiting for workspace mutation lock/g) ?? [];
+    const elapsed = output.match(/elapsedMs:\s*\d+/g) ?? [];
+    assert.ok(waiting.length >= 2, output);
+    assert.equal(elapsed.length, waiting.length, output);
+
+    release();
+    await Promise.all([holder, waiter]);
+    const acquiredOutput = output;
+    await asyncUtils.sleep(25);
+    assert.equal(output, acquiredOutput);
+  } finally {
+    release();
+    try {
+      await Promise.all([holder, waiter]);
+    } finally {
+      process.stderr.write = originalWrite;
+      globalThis.setInterval = originalSetInterval;
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
 it("re-checks after acquire and skips the callback when work is gone", async () => {
   const root = mkdtempSync(join(tmpdir(), "dbx-tools-workspace-lock-"));
   let needed = true;

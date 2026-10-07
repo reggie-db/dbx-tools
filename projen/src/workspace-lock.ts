@@ -4,6 +4,7 @@ import * as fileLock from "@dbx-tools/core/file-lock";
 import { log } from "@dbx-tools/shared-core";
 
 const MUTATION_LOCK_SCOPE = "dbx-tools-workspace-mutation";
+const WAIT_LOG_INTERVAL_MS = 5_000;
 const logger = log.logger("projen:workspace-lock");
 
 /** Optional preflight used before and after acquiring the workspace mutation lock. */
@@ -33,17 +34,34 @@ export async function withWorkspaceMutationLock<T>(
   if (check && !(await check())) {
     return undefined;
   }
-  return fileLock.withFileLock(
-    [MUTATION_LOCK_SCOPE, repository],
-    async () => {
-      if (check && !(await check())) {
-        return undefined;
-      }
-      return callback();
-    },
-    {
-      backends: process.platform === "win32" ? ["file"] : ["flock", "file"],
-      onWait: () => logger.info("waiting for workspace mutation lock", { repository }),
-    },
-  );
+  let waitLogTimer: ReturnType<typeof setInterval> | undefined;
+  try {
+    return await fileLock.withFileLock(
+      [MUTATION_LOCK_SCOPE, repository],
+      async () => {
+        if (check && !(await check())) {
+          return undefined;
+        }
+        return callback();
+      },
+      {
+        backends: process.platform === "win32" ? ["file"] : ["flock", "file"],
+        onWait: () => {
+          if (waitLogTimer) return;
+          const startedAt = Date.now();
+          waitLogTimer = setInterval(
+            () =>
+              logger.info("waiting for workspace mutation lock", {
+                repository,
+                elapsedMs: Date.now() - startedAt,
+              }),
+            WAIT_LOG_INTERVAL_MS,
+          );
+          waitLogTimer.unref?.();
+        },
+      },
+    );
+  } finally {
+    if (waitLogTimer) clearInterval(waitLogTimer);
+  }
 }
