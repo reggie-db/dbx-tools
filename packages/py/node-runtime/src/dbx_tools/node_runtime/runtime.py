@@ -9,7 +9,7 @@ from typing import Any
 
 from .bootstrap import ensure_pythonmonkey
 
-__doc__ = """Process-wide PythonMonkey host for generated Node binding bundles."""
+"""Process-wide PythonMonkey host for generated Node binding bundles."""
 
 RUNTIME_ABI_VERSION = 1
 MISSING = object()

@@ -18,6 +18,8 @@ from pathlib import Path
 from threading import RLock
 from types import ModuleType
 
+"""Install and load the locked PythonMonkey runtime in managed Python environments."""
+
 _LOCK_DIRECTORY_ENVIRONMENT = "DBX_TOOLS_NODE_RUNTIME_LOCK_DIRECTORY"
 _NODEJS_WHEEL_REQUIREMENT = "nodejs-wheel>=22.20,<23"
 _PYTHONMONKEY_VERSION = "1.3.2"

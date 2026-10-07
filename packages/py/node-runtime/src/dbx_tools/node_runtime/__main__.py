@@ -6,6 +6,8 @@ from typing import Any
 
 from .bootstrap import ensure_pythonmonkey
 
+"""Command-line entrypoint for preparing PythonMonkey and executing CommonJS files."""
+
 
 def _run_javascript(runtime: Any, path: Path) -> Any:
     resolved = path.expanduser().resolve()
