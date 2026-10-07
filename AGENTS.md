@@ -42,7 +42,7 @@ Primary ownership:
 - `packages/js/node/tunnel` and `packages/js/node/auth-gate` own tunnel transport, gate, and storage schemas and resolution. `packages/js/cli/tunnel` composes their fields with wrapper-only options.
 - `packages/js/node/postgres` owns advisory locks and the Postgres topic bus. Do not recreate Python counterparts; Python integrations should consume Node-owned behavior through generated PythonMonkey bindings when needed.
 - `packages/js/node/appkit*`, `packages/js/shared/*`, and `packages/js/ui/*` own AppKit integrations and browser-safe contracts/UI. Before changing AppKit-facing APIs, inspect `bunx @databricks/appkit docs` and installed AppKit `.d.ts` files.
-- `projen/shims/python-node` owns the trace-driven Node compatibility layer used by PythonMonkey bundles. Only shim Node built-ins actually imported by a bundle.
+- `packages/py/node-runtime` owns the trace-driven Node compatibility layer and shared `runtime.js` used by PythonMonkey bundles. Projen generates only package-specific bundles and thin Python adapters that import this runtime; it must not own or publish shim sources. Only shim Node built-ins actually imported by a bundle.
 
 ## Code And Generation Rules
 

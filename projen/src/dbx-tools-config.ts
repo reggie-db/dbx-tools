@@ -38,6 +38,11 @@ export const DBXToolsConfigDataSchema = z
       .readonly()
       .optional()
       .describe("Additional paths that trigger watcher resynthesis."),
+    syncWatchTasks: z
+      .array(z.string().min(1))
+      .readonly()
+      .optional()
+      .describe("Projen tasks supervised by `sync --watch`."),
   })
   .strict()
   .readonly()
@@ -58,6 +63,8 @@ export class DBXToolsConfig {
   publishable: boolean;
   /** Additional repository paths that trigger watcher resynthesis. */
   syncResynthPaths?: string[];
+  /** Projen tasks supervised by `sync --watch`. */
+  readonly syncWatchTasks: string[] = [];
 
   constructor(
     readonly project: javascript.NodeProject,
@@ -82,6 +89,9 @@ export class DBXToolsConfig {
       ...(!this.publishable ? { publishable: false } : {}),
       ...(this.packageRoots?.length ? { packageRoots: this.packageRoots } : {}),
       ...(this.syncResynthPaths?.length ? { syncResynthPaths: this.syncResynthPaths } : {}),
+      ...(this.syncWatchTasks.length
+        ? { syncWatchTasks: [...new Set(this.syncWatchTasks)] }
+        : {}),
     });
   }
 }

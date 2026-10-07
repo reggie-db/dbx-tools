@@ -1,3 +1,4 @@
+import builtins
 from pathlib import Path
 
 import pytest
@@ -102,3 +103,17 @@ async def test_local_postgres_url_is_used_without_lakebase(monkeypatch) -> None:
 
     assert runtime.dsn == address
     assert runtime.connection_options == {}
+
+
+def test_embedded_mode_names_the_optional_extra_when_missing(monkeypatch, tmp_path: Path) -> None:
+    original_import = builtins.__import__
+
+    def missing_embedded(name, *args, **kwargs):
+        if name == "embedded_postgres":
+            raise ImportError("missing embedded runtime")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", missing_embedded)
+
+    with pytest.raises(RuntimeError, match=r"dbx-tools-graphiti\[dev\]"):
+        database._open_embedded_server(tmp_path / "postgres")

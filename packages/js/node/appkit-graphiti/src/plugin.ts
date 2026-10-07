@@ -30,20 +30,28 @@ import {
   type ResolvedGraphitiPluginConfig,
 } from "./config.ts";
 
-const STARTUP_TIMEOUT_MS = 60_000;
 const STARTUP_RETRY_MS = 250;
 const SCOPED_TOOL_FIELDS = {
   add_memory: "group_id",
+  add_memory_sync: "group_id",
   add_triplet: "group_id",
   build_communities: "group_ids",
   get_episodes: "group_ids",
+  get_queue_status: "group_id",
   get_status: undefined,
   search_memory_facts: "group_ids",
   search_nodes: "group_ids",
   summarize_saga: "group_id",
+  wait_for_memory_queue: "group_id",
 } as const;
 const TOOL_NAMES = Object.keys(SCOPED_TOOL_FIELDS);
-const WRITE_TOOLS = new Set(["add_memory", "add_triplet", "build_communities", "summarize_saga"]);
+const WRITE_TOOLS = new Set([
+  "add_memory",
+  "add_memory_sync",
+  "add_triplet",
+  "build_communities",
+  "summarize_saga",
+]);
 const UNSCOPED_ARGUMENTS = [
   "center_node_uuid",
   "previous_episode_uuids",
@@ -163,7 +171,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
   private async waitUntilReady(): Promise<void> {
     if (!this.resolved) throw new Error("Graphiti sidecar did not launch");
     const url = `http://127.0.0.1:${this.resolved.listen.port}/healthcheck`;
-    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+    const deadline = Date.now() + this.resolved.startupTimeoutMs;
     let lastError: unknown;
     while (!this.stopping && Date.now() < deadline) {
       try {

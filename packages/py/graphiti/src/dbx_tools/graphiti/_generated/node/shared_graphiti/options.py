@@ -42,6 +42,10 @@ class GraphitiOptions:
         default=None,
         metadata={"javascript_name": "structuredOutputMode"},
     )
+    startup_timeout_ms: int | float | None = field(
+        default=None,
+        metadata={"javascript_name": "startupTimeoutMs"},
+    )
     listen: Any | None = field(
         default=None,
         metadata={"javascript_name": "listen"},
@@ -60,6 +64,7 @@ class GraphitiOptionsResponse(TypedDict):
     embedderModel: NotRequired[str]
     embedderDimensions: NotRequired[int | float]
     structuredOutputMode: NotRequired[str]
+    startupTimeoutMs: NotRequired[int | float]
     listen: NotRequired[Any]
     databaseUrl: NotRequired[str]
 
@@ -76,6 +81,7 @@ class ResolvedGraphitiOptionsResponse(TypedDict):
     embedderModel: str
     embedderDimensions: int | float
     structuredOutputMode: str
+    startupTimeoutMs: int | float
     listen: TcpListenAddressResponse
     profile: NotRequired[str]
     graphitiHome: NotRequired[str]

@@ -154,6 +154,7 @@ const root = new project.DBXToolsNodeProject({
     "@dbx-tools/projen@workspace:^",
     "commander@catalog:",
     "concurrently@^10.0.3",
+    "whatwg-url@14.2.0",
     "yaml@^2.9.0",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
@@ -1269,10 +1270,17 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
 // ---------------------------------------------------------------------------
 const pythonPackages: project.PythonPackageOptions[] = [
   {
+    directory: "node-runtime",
+    description: "Shared PythonMonkey runtime and lazy Node.js bootstrap",
+    nodeRuntime: true,
+    scripts: {
+      "dbx-tools-node-runtime": "dbx_tools.node_runtime.__main__:main",
+    },
+  },
+  {
     directory: "graphiti",
     description: "Unified Graphiti REST, MCP, model routing, and PostgreSQL graph runtime",
     dependencies: [
-      "embedded-postgres>=18.6.3,<19",
       "fastapi>=0.115,<1",
       "graphiti-core==0.30.2",
       "httpx>=0.28,<1",
@@ -1281,11 +1289,13 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "platformdirs>=4,<5",
       "post-graph>=0.7,<1",
       "pydantic-settings>=2,<3",
-      "pythonmonkey>=1.3,<2",
       "pyyaml>=6,<7",
       "typing-extensions>=4,<5",
       "uvicorn>=0.44",
     ],
+    optionalDependencies: {
+      dev: ["embedded-postgres>=18.6.3,<19"],
+    },
     sync: [
       {
         name: "postgraph",
@@ -1293,8 +1303,6 @@ const pythonPackages: project.PythonPackageOptions[] = [
           "postgraph-driver @ git+https://github.com/crajah/graphiti.git@4f6d7bc31dd9a84053d4094b382485044448d9c8#subdirectory=graphiti_core/driver",
         include: ["postgraph_driver.py", "record_parsers.py", "postgraph/**/*.py"],
         replace: {
-          "graphiti_core.driver.postgraph":
-            "dbx_tools.graphiti._generated.sync.postgraph.postgraph",
           "GraphProvider.POSTGRAPH": '"postgraph"',
           "        embedding_dim: int | None = None,\n    ):":
             "        embedding_dim: int | None = None,\n        connection_options: dict[str, Any] | None = None,\n    ):",
@@ -1308,10 +1316,6 @@ const pythonPackages: project.PythonPackageOptions[] = [
         name: "graphiti_server",
         source: `graph-service @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_COMMIT}#subdirectory=server`,
         include: ["graph_service/**/*.py"],
-        replace: {
-          "from graph_service.":
-            "from dbx_tools.graphiti._generated.sync.graphiti_server.graph_service.",
-        },
       },
       {
         name: "graphiti_mcp",
@@ -1324,10 +1328,18 @@ const pythonPackages: project.PythonPackageOptions[] = [
           "utils/**/*.py",
         ],
         replace: {
-          "from config.": "from dbx_tools.graphiti._generated.sync.graphiti_mcp.config.",
-          "from models.": "from dbx_tools.graphiti._generated.sync.graphiti_mcp.models.",
-          "from services.": "from dbx_tools.graphiti._generated.sync.graphiti_mcp.services.",
-          "from utils.": "from dbx_tools.graphiti._generated.sync.graphiti_mcp.utils.",
+          "        self._queue_workers: dict[str, bool] = {}\n        # Store the graphiti client after initialization":
+            "        self._queue_workers: dict[str, bool] = {}\n        self._worker_tasks: dict[str, asyncio.Task[None]] = {}\n        self._queue_errors: dict[str, list[Exception]] = {}\n        # Store the graphiti client after initialization",
+          "            asyncio.create_task(self._process_episode_queue(group_id))":
+            "            self._worker_tasks[group_id] = asyncio.create_task(self._process_episode_queue(group_id))",
+          "                    logger.error(\n                        f'Error processing queued episode for group_id {group_id}: {str(e)}'\n                    )":
+            "                    logger.error(\n                        f'Error processing queued episode for group_id {group_id}: {str(e)}'\n                    )\n                    self._queue_errors.setdefault(group_id, []).append(e)",
+          "            self._queue_workers[group_id] = False\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')":
+            "            self._queue_workers[group_id] = False\n            self._worker_tasks.pop(group_id, None)\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')",
+          "    def get_queue_size(self, group_id: str) -> int:\n":
+            "    async def wait_until_idle(self, group_id: str | None = None) -> None:\n        \"\"\"Wait until queued and in-flight episode work completes.\"\"\"\n        group_ids = (\n            [group_id]\n            if group_id is not None and group_id in self._episode_queues\n            else list(self._episode_queues)\n            if group_id is None\n            else []\n        )\n        await asyncio.gather(*(self._episode_queues[key].join() for key in group_ids))\n        errors = [\n            error\n            for key in group_ids\n            for error in self._queue_errors.pop(key, [])\n        ]\n        if errors:\n            raise RuntimeError(f'Queued episode processing failed: {errors[0]}') from errors[0]\n\n    async def close(self) -> None:\n        \"\"\"Drain episode work and stop idle queue workers.\"\"\"\n        error: Exception | None = None\n        try:\n            await self.wait_until_idle()\n        except Exception as caught:\n            error = caught\n        tasks = list(self._worker_tasks.values())\n        for task in tasks:\n            task.cancel()\n        if tasks:\n            await asyncio.gather(*tasks, return_exceptions=True)\n        self._worker_tasks.clear()\n        self._queue_workers.clear()\n        self._queue_errors.clear()\n        if error is not None:\n            raise error\n\n    def get_queue_size(self, group_id: str) -> int:\n",
+          "uuid (str, optional): Optional UUID for the episode":
+            "uuid (str, optional): UUID of an existing episode to update; omit it to create a new episode",
         },
       },
     ],

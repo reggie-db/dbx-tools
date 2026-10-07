@@ -249,49 +249,6 @@
         }
       ]
     },
-    "graphiti:python-runtime": {
-      "name": "graphiti:python-runtime",
-      "description": "Generate Node bindings for Python package graphiti",
-      "steps": [
-        {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
-            "--project",
-            "packages/py/graphiti"
-          ]
-        }
-      ]
-    },
-    "graphiti:python-runtime:check": {
-      "name": "graphiti:python-runtime:check",
-      "description": "Verify generated Node bindings for Python package graphiti",
-      "steps": [
-        {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
-            "--project",
-            "packages/py/graphiti",
-            "--check"
-          ]
-        }
-      ]
-    },
-    "graphiti:python-runtime:watch": {
-      "name": "graphiti:python-runtime:watch",
-      "description": "Watch and regenerate Node bindings for Python package graphiti",
-      "steps": [
-        {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts",
-            "--project",
-            "packages/py/graphiti"
-          ]
-        }
-      ]
-    },
     "graphiti:python-sync": {
       "name": "graphiti:python-sync",
       "description": "Synchronize generated Git sources for dbx-tools-graphiti",
@@ -353,6 +310,12 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation",
       "steps": [
+        {
+          "spawn": "python-node-runtime"
+        },
+        {
+          "spawn": "python-node-bindings"
+        },
         {
           "spawn": "graphiti:python-sync"
         }
@@ -416,6 +379,82 @@
         }
       ]
     },
+    "python-node-bindings": {
+      "name": "python-node-bindings",
+      "description": "Generate every configured Python Node binding",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts"
+          ]
+        }
+      ]
+    },
+    "python-node-bindings:check": {
+      "name": "python-node-bindings:check",
+      "description": "Verify every configured Python Node binding is current",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
+            "--check"
+          ]
+        }
+      ]
+    },
+    "python-node-bindings:watch": {
+      "name": "python-node-bindings:watch",
+      "description": "Watch and regenerate affected Python Node bindings",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts"
+          ]
+        }
+      ]
+    },
+    "python-node-runtime": {
+      "name": "python-node-runtime",
+      "description": "Build the shared PythonMonkey Node runtime",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "packages/py/node-runtime/build-runtime.ts"
+          ]
+        }
+      ]
+    },
+    "python-node-runtime:check": {
+      "name": "python-node-runtime:check",
+      "description": "Verify the shared PythonMonkey Node runtime is current",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "packages/py/node-runtime/build-runtime.ts",
+            "--check"
+          ]
+        }
+      ]
+    },
+    "python-node-runtime:watch": {
+      "name": "python-node-runtime:watch",
+      "description": "Watch and rebuild the shared PythonMonkey Node runtime",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-runtime-watch.ts",
+            "--project",
+            "packages/py/node-runtime"
+          ]
+        }
+      ]
+    },
     "release": {
       "name": "release",
       "description": "Run bump, commit it, and push an annotated release tag",
@@ -464,7 +503,10 @@
           "exec": "bun test docs/scripts"
         },
         {
-          "spawn": "graphiti:python-runtime:check"
+          "spawn": "python-node-runtime:check"
+        },
+        {
+          "spawn": "python-node-bindings:check"
         },
         {
           "spawn": "graphiti:python-sync:check"

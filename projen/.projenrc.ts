@@ -91,23 +91,6 @@ const project = new typescript.TypeScriptProject({
   peerDeps: [`projen@${PROJEN_VERSION}`],
   devDeps: ["@types/node@^24.6.0", "@types/semver@^7.7.1"],
 });
-new javascript.TypescriptConfig(project, {
-  fileName: "shims/python-node/tsconfig.json",
-  compilerOptions: {
-    target: "ES2022",
-    module: "ESNext",
-    moduleResolution: javascript.TypeScriptModuleResolution.BUNDLER,
-    lib: ["ES2022", "DOM"],
-    types: ["node"],
-    noEmit: true,
-    skipLibCheck: true,
-    strict: false,
-  },
-  include: ["*.ts"],
-});
-// PythonMonkey shims are engine source. The package owner keeps the complete
-// tree trackable so consuming repositories need no root ignore exceptions.
-project.gitignore.include("/shims/python-node/**");
 project.deps.removeDependency("constructs", DependencyType.BUILD);
 project.deps.removeDependency("typescript", DependencyType.BUILD);
 
@@ -131,10 +114,9 @@ project.package.addField("exports", {
 // to say exactly that - it takes precedence over projen's generated `.npmignore`
 // (which excludes `/src/`), so `index.ts` (re-exports `./src/*`), the `src/`
 // modules, and the `tasks/` scripts a consumer runs as `bun <engine>/tasks/*.ts`
-// are all present. PythonMonkey generation also resolves its build-time
-// compatibility shims from the installed engine package. Without this allowlist
-// the public entrypoint or binding generator imports missing files.
-project.package.addField("files", ["index.ts", "src", "tasks", "shims/python-node"]);
+// are all present. Runtime shims belong to the standalone Python package, not
+// the generator.
+project.package.addField("files", ["index.ts", "src", "tasks"]);
 
 // Keep `.projenrc.ts`/`projenrc/` out of the published tarball.
 project.npmignore?.exclude(".projenrc.ts", "projenrc/");

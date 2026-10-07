@@ -22,9 +22,6 @@
     "eslint": "projen eslint",
     "eslint:fix": "projen eslint:fix",
     "format": "projen format",
-    "graphiti:python-runtime": "projen graphiti:python-runtime",
-    "graphiti:python-runtime:check": "projen graphiti:python-runtime:check",
-    "graphiti:python-runtime:watch": "projen graphiti:python-runtime:watch",
     "graphiti:python-sync": "projen graphiti:python-sync",
     "graphiti:python-sync:check": "projen graphiti:python-sync:check",
     "package": "projen package",
@@ -36,6 +33,12 @@
     "py:sync": "projen py:sync",
     "py:test": "projen py:test",
     "pypiTrustedPublisherInstructions": "projen pypiTrustedPublisherInstructions",
+    "python-node-bindings": "projen python-node-bindings",
+    "python-node-bindings:check": "projen python-node-bindings:check",
+    "python-node-bindings:watch": "projen python-node-bindings:watch",
+    "python-node-runtime": "projen python-node-runtime",
+    "python-node-runtime:check": "projen python-node-runtime:check",
+    "python-node-runtime:watch": "projen python-node-runtime:watch",
     "release": "projen release",
     "sync": "projen sync",
     "test": "projen test",
@@ -61,6 +64,7 @@
     "prettier": "^3.9.4",
     "projen": "^0.103.27",
     "typescript": "^5.9.3",
+    "whatwg-url": "14.2.0",
     "yaml": "^2.9.0",
     "zod": "catalog:"
   },
@@ -88,6 +92,10 @@
       "branding/brand.yaml",
       "branding/assets",
       "projen/src"
+    ],
+    "syncWatchTasks": [
+      "python-node-runtime:watch",
+      "python-node-bindings:watch"
     ]
   },
   "type": "module",

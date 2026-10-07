@@ -32,14 +32,17 @@ export interface ResolvedPythonNodeBindings {
   readonly workspaceDirectories: readonly string[];
 }
 
-/** Standard PythonMonkey host adapters shipped with the binding generator. */
-export const PYTHON_NODE_SHIM_ROOT = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../shims/python-node",
-);
+/** Options for repository-wide Python Node binding generation. */
+export interface GeneratePythonNodeBindingsOptions {
+  /** Verify generated output without changing it. */
+  readonly check?: boolean;
+}
 
-/** Regenerate every pyproject-configured Node binding in a repository. */
-export function generatePythonNodeBindings(projectRoot: string = resolveRepoRoot()): void {
+/** Generate or verify every pyproject-configured Node binding in a repository. */
+export function generatePythonNodeBindings(
+  projectRoot: string = resolveRepoRoot(),
+  options: GeneratePythonNodeBindingsOptions = {},
+): void {
   const task = resolve(dirname(fileURLToPath(import.meta.url)), "../tasks/python-node-bindings.ts");
   const configuredProjects = pythonNodeBindingProjects(projectRoot);
   const directories = new Set<string>();
@@ -48,14 +51,36 @@ export function generatePythonNodeBindings(projectRoot: string = resolveRepoRoot
       directories.add(relative(projectRoot, join(config.moduleDirectory, "_generated", "node")));
     }
   }
-  for (const directory of existingBindingDirectories(projectRoot)) {
-    if (!directories.has(directory)) {
-      rmSync(resolve(projectRoot, directory), { recursive: true, force: true });
-    }
+  const stale = existingBindingDirectories(projectRoot).filter(
+    (directory) => !directories.has(directory),
+  );
+  if (stale.length > 0 && options.check) {
+    throw new Error(
+      `Generated Node binding directories are stale:\n${stale.map((directory) => `  ${directory}`).join("\n")}`,
+    );
+  }
+  for (const directory of stale) {
+    rmSync(resolve(projectRoot, directory), { recursive: true, force: true });
   }
   for (const project of configuredProjects) {
-    runTaskCommand(projectRoot, "bun", [task, "--root", projectRoot, "--project", project]);
+    runTaskCommand(projectRoot, "bun", [
+      task,
+      "--root",
+      projectRoot,
+      "--project",
+      project,
+      ...(options.check ? ["--check"] : []),
+    ]);
   }
+}
+
+/** Resolve every configured binding in a repository. */
+export function resolveAllPythonNodeBindings(
+  projectRoot: string = resolveRepoRoot(),
+): ResolvedPythonNodeBindings[] {
+  return pythonNodeBindingProjects(projectRoot).flatMap((project) =>
+    resolvePythonNodeBindings(projectRoot, project),
+  );
 }
 
 /** Repository-relative Python projects that configure generated Node bindings. */
@@ -165,7 +190,6 @@ export function pythonNodeBindingWatchInputs(config: ResolvedPythonNodeBindings)
   return [
     config.pyproject,
     ...config.workspaceDirectories,
-    PYTHON_NODE_SHIM_ROOT,
     ...config.functionOverrides.map(({ handlerFile }) => handlerFile),
   ];
 }

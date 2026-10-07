@@ -1,14 +1,18 @@
+"""Resolve external Lakebase targets or own persistent embedded PostgreSQL."""
+
 from __future__ import annotations
 
 import asyncio
 import ipaddress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlencode, urlsplit
 
-import embedded_postgres
 from platformdirs import user_data_path
+
+if TYPE_CHECKING:
+    import embedded_postgres
 
 from ._generated.node.lakebase.bindings import (
     LakebaseClient,
@@ -17,8 +21,6 @@ from ._generated.node.lakebase.bindings import (
     parse_address,
 )
 from .options import ResolvedGraphitiOptionsResponse
-
-"""Resolve external Lakebase targets or own persistent embedded PostgreSQL."""
 
 _DATABASE_DIRECTORY = "postgres"
 _DEFAULT_DATABASE = "postgres"
@@ -95,6 +97,13 @@ async def _start_lakebase_database(
 
 def _open_embedded_server(path: Path) -> embedded_postgres.PostgresServer:
     """Open a counted embedded PostgreSQL handle for deterministic cleanup."""
+    try:
+        import embedded_postgres
+    except ImportError as error:
+        raise RuntimeError(
+            "Embedded Graphiti storage requires dbx-tools-graphiti[dev]; "
+            "configure databaseUrl for Lakebase or external PostgreSQL instead"
+        ) from error
     return embedded_postgres.get_server(path, cleanup_mode="stop").__enter__()
 
 

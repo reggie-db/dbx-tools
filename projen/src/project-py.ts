@@ -3,10 +3,19 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, github, javascript, python } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
+import { PYTHON_GENERATED_PACKAGE } from "./generated.ts";
 import { LICENSE, projectRepositoryUrl, taskCommand } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
-import { PythonNodeBundle, type PythonNodeBindingsOptions } from "./python-node-bundle.ts";
+import {
+  PythonNodeBindings,
+  type PythonNodeBindingsOptions,
+} from "./python-node-bindings-component.ts";
+import {
+  PYTHON_NODE_RUNTIME_DISTRIBUTION,
+  PYTHON_NODE_RUNTIME_MODULE,
+  PythonNodeRuntime,
+} from "./python-node-runtime.ts";
 import {
   refreshReleaseDocsDependencies,
   releaseCondition,
@@ -33,6 +42,8 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly moduleRoot?: string;
   readonly description: string;
   readonly dependencies?: readonly string[];
+  /** Named PEP 621 optional dependency groups emitted under `project.optional-dependencies`. */
+  readonly optionalDependencies?: Readonly<Record<string, readonly string[]>>;
   /** Development dependencies emitted only in this package's dependency group. */
   readonly devDependencies?: readonly string[];
   /** Workspace package directories rendered as standalone Git dependencies. */
@@ -40,6 +51,8 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly scripts?: Readonly<Record<string, string>>;
   /** GitHub environment used to publish this distribution to PyPI. */
   readonly releaseEnvironment?: string;
+  /** Mark this package as the shared PythonMonkey runtime and Node shim owner. */
+  readonly nodeRuntime?: boolean;
   /** One or more build-time Node packages embedded through PythonMonkey. */
   readonly nodeBindings?: OneOrMany<PythonNodeBindingsOptions>;
   /** Pinned Git source subsets synchronized into this package's generated tree. */
@@ -52,7 +65,17 @@ export interface PythonSourceSyncOptions {
   readonly source: string;
   readonly include?: readonly string[];
   readonly exclude?: readonly string[];
+  /** Literal text patches applied to each synchronized `.py` file before import localization. */
   readonly replace?: Readonly<Record<string, string>>;
+  /**
+   * Rewrite absolute imports of synchronized modules to the generated package they now
+   * live in, using the Python AST. `true` detects every top-level synchronized module,
+   * importable either bare (`config.schema`) or under the source subdirectory's dotted
+   * path (`graphiti_core.driver.postgraph`). A list names the upstream modules to rewrite
+   * instead, and each entry must match at least one import. Defaults to `true` when the
+   * sync `name` is a Python identifier; set `false` to keep upstream imports unchanged.
+   */
+  readonly localizeImports?: boolean | readonly string[];
 }
 
 interface ResolvedPythonPackageOptions extends PythonPackageOptions {
@@ -231,6 +254,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
           licenseFiles: ["LICENSE"],
           requiresPython: options.requiresPython,
           dependencies: [...(pkg.dependencies ?? [])],
+          optionalDependencies: pkg.optionalDependencies,
           scripts: pkg.scripts,
           urls: {
             Source: `${options.repository.url.replace(/\.git$/, "")}/tree/${options.repository.ref}/${pythonPackagePath(options.repository, pkg.directory)}`,
@@ -271,7 +295,13 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
       );
     }
     if (pkg.sync?.length) {
-      this.uv.file.addOverride("tool.dbx_tools.sync", [...pkg.sync]);
+      this.uv.file.addOverride(
+        "tool.dbx_tools.sync",
+        pkg.sync.map(({ localizeImports, ...sync }) => ({
+          ...sync,
+          ...(localizeImports === undefined ? {} : { localize_imports: localizeImports }),
+        })),
+      );
     }
     this.uv.file.readonly = true;
 
@@ -324,28 +354,64 @@ export class DBXToolsPythonWorkspace extends Component {
       name: pkg.name ?? `${scope}-${stringUtils.toSlug(pkg.directory)}`,
       module: pkg.module ?? pythonModuleName(scope, pkg.directory),
     }));
+    const configuredNodeRuntimes = packageIdentities.filter(({ nodeRuntime }) => nodeRuntime);
+    if (configuredNodeRuntimes.length > 1) {
+      throw new Error("A Python workspace can configure only one shared Node runtime package");
+    }
+    const configuredNodeRuntime = configuredNodeRuntimes[0];
+    if (
+      configuredNodeRuntime &&
+      (configuredNodeRuntime.name !== PYTHON_NODE_RUNTIME_DISTRIBUTION ||
+        configuredNodeRuntime.module !== PYTHON_NODE_RUNTIME_MODULE)
+    ) {
+      throw new Error(
+        `The shared Node runtime package must use distribution ${PYTHON_NODE_RUNTIME_DISTRIBUTION} ` +
+          `and module ${PYTHON_NODE_RUNTIME_MODULE}`,
+      );
+    }
+    this.version = readWorkspaceVersion(project.outdir);
     const packagesByDirectory = new Map(packageIdentities.map((pkg) => [pkg.directory, pkg]));
-    const packages = packageIdentities.map((pkg) => ({
-      ...pkg,
-      dependencies: [
+    const nodeRuntimePackage = configuredNodeRuntime;
+    const packages = packageIdentities.map((pkg) => {
+      const usesNodeRuntime = pythonNodeBindings(pkg).length > 0;
+      const internalDependencies = [
+        ...new Set([
+          ...(pkg.internalDependencies ?? []),
+          ...(usesNodeRuntime &&
+          nodeRuntimePackage &&
+          nodeRuntimePackage.directory !== pkg.directory
+            ? [nodeRuntimePackage.directory]
+            : []),
+        ]),
+      ];
+      const dependencies = [
         ...(pkg.dependencies ?? []),
-        ...(pkg.internalDependencies ?? []).map((directory) => {
+        ...internalDependencies.map((directory) => {
           const dependency = packagesByDirectory.get(directory);
           if (!dependency) {
             throw new Error(
               `Python package ${pkg.directory} references unknown internal package ${directory}`,
             );
           }
-          return dependency.name;
+          return usesNodeRuntime && dependency.name === PYTHON_NODE_RUNTIME_DISTRIBUTION
+            ? `${dependency.name}==${this.version}`
+            : dependency.name;
         }),
-      ],
-    }));
+        ...(usesNodeRuntime && !nodeRuntimePackage
+          ? [`${PYTHON_NODE_RUNTIME_DISTRIBUTION}==${this.version}`]
+          : []),
+      ];
+      return {
+        ...pkg,
+        dependencies: [...new Set(dependencies)],
+        internalDependencies,
+      };
+    });
     const resolvedOptions = { ...options, packages };
     this.requiresPython = options.requiresPython ?? ">=3.10";
     this.workflowPythonVersion =
       options.workflowPythonVersion ??
       pythonVersionFromRuffTarget(options.ruffTarget ?? DEFAULT_RUFF_TARGET);
-    this.version = readWorkspaceVersion(project.outdir);
     this.file = this.emitWorkspace(project, resolvedOptions, scope);
     this.packages = packages.map(
       (pkg) =>
@@ -357,13 +423,19 @@ export class DBXToolsPythonWorkspace extends Component {
           version: this.version,
         }),
     );
-    for (const pkg of this.packages) {
-      const bindings = pythonNodeBindings(pkg.packageOptions);
-      if (bindings.length === 0) continue;
-      new PythonNodeBundle(project, {
-        name: pkg.packageOptions.directory,
-        projectDirectory: pythonPackagePath(this.repository, pkg.packageOptions.directory),
+    const syncWatchTasks: string[] = [];
+    if (configuredNodeRuntime) {
+      const runtime = new PythonNodeRuntime(project, {
+        projectDirectory: pythonPackagePath(this.repository, configuredNodeRuntime.directory),
       });
+      syncWatchTasks.push(runtime.watchTask.name);
+    }
+    if (this.packages.some((pkg) => pythonNodeBindings(pkg.packageOptions).length > 0)) {
+      const bindings = new PythonNodeBindings(project);
+      syncWatchTasks.push(bindings.watchTask.name);
+    }
+    if (syncWatchTasks.length && isDBXToolsJavaScriptProject()(project)) {
+      project.dbxToolsConfig.syncWatchTasks.push(...syncWatchTasks);
     }
     for (const pkg of this.packages) {
       if (!pkg.packageOptions.sync?.length) continue;
@@ -681,7 +753,6 @@ export class DBXToolsPythonWorkspace extends Component {
           `- Repository name: ${repository.name}`,
           "- Workflow name: release.yml",
           `- Environment name: ${publication.environment}`,
-          `- GitHub environment tag: ${releaseTag}`,
           "",
         ];
       }),
@@ -759,5 +830,5 @@ function pythonNodeGeneratedSources(pkg: ResolvedPythonPackageOptions): string[]
   if (bindings.length === 0) return [];
   const moduleRoot = pkg.moduleRoot ?? "src";
   const moduleDirectory = `${moduleRoot}/${pkg.module.replaceAll(".", "/")}`;
-  return [`${moduleDirectory}/_generated/**`];
+  return [`${moduleDirectory}/${PYTHON_GENERATED_PACKAGE}/**`];
 }

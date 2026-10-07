@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 
+import { installAbortGlobals } from "./abort.ts";
 import { PythonHeaders } from "./headers.ts";
 import { installPythonGlobals, pythonHost } from "./host.ts";
 
@@ -9,41 +10,18 @@ installPythonGlobals();
 
 const globals = globalThis as typeof globalThis & {
   AbortController?: typeof AbortController;
+  AbortSignal?: typeof AbortSignal;
   Headers?: typeof Headers;
   Request?: typeof Request;
   Response?: typeof Response;
   structuredClone?: typeof structuredClone;
   TextDecoder?: typeof TextDecoder;
   TextEncoder?: typeof TextEncoder;
+  URL?: typeof URL;
+  URLSearchParams?: typeof URLSearchParams;
   fetch?: typeof fetch;
 };
-globals.AbortController ??= class AbortController {
-  readonly signal: AbortSignal;
-  readonly #listeners = new Set<() => void>();
-
-  constructor() {
-    this.signal = {
-      aborted: false,
-      addEventListener: (name: string, listener: EventListenerOrEventListenerObject) => {
-        if (name === "abort") {
-          this.#listeners.add(
-            typeof listener === "function"
-              ? () => listener(new Event("abort"))
-              : () => listener.handleEvent(new Event("abort")),
-          );
-        }
-      },
-      removeEventListener: () => {},
-    } as AbortSignal;
-  }
-
-  abort(): void {
-    if (this.signal.aborted) return;
-    Object.defineProperty(this.signal, "aborted", { value: true });
-    for (const listener of this.#listeners) listener();
-    this.#listeners.clear();
-  }
-} as typeof AbortController;
+installAbortGlobals(globals);
 
 globals.Headers ??= PythonHeaders as unknown as typeof Headers;
 
@@ -93,6 +71,9 @@ globals.TextDecoder ??= class TextDecoder {
     return decodeURIComponent(escape(encoded));
   }
 } as typeof TextDecoder;
+const { URL: WhatwgURL, URLSearchParams: WhatwgURLSearchParams } = require("whatwg-url") as typeof import("whatwg-url");
+globals.URL ??= WhatwgURL as unknown as typeof URL;
+globals.URLSearchParams ??= WhatwgURLSearchParams as unknown as typeof URLSearchParams;
 globals.fetch ??= (async (input: string | URL | Request, init: RequestInit = {}) => {
   const request = typeof input === "object" && "url" in input ? input : undefined;
   const headers = init.headers ?? request?.headers;

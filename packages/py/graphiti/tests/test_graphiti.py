@@ -1,8 +1,10 @@
+import asyncio
 import json
 
 import pytest
 from dbx_tools.graphiti import main
 from dbx_tools.graphiti import runtime as graphiti_runtime
+from dbx_tools.graphiti._generated.node import _runtime as node_runtime
 from dbx_tools.graphiti._generated.node.shared_graphiti.options import GraphitiOptions
 from dbx_tools.graphiti.options import normalize_graphiti_options
 
@@ -57,6 +59,7 @@ def test_app_composes_rest_mcp_and_direct_tool_routes() -> None:
         "The content of the episode"
     )
     assert add_memory_schema["properties"]["source"]["default"] == "text"
+    assert "existing episode" in add_memory_schema["properties"]["uuid"]["description"]
     assert {"name", "episode_body"}.issubset(add_memory_schema["required"])
 
 
@@ -85,6 +88,12 @@ def test_normalize_graphiti_options_accepts_input_and_resolved_values() -> None:
     assert resolved["model"] == "chat-model"
     assert "databaseUrl" not in resolved
     assert normalize_graphiti_options(resolved) == resolved
+
+
+def test_generated_runtime_uses_shared_node_runtime() -> None:
+    runtime = node_runtime.get_runtime()
+
+    assert runtime.module("shared_core__bindings") is not None
 
 
 def test_upstream_openai_credentials_use_a_scoped_placeholder(monkeypatch) -> None:
@@ -272,3 +281,140 @@ async def test_healthcheck() -> None:
 
     assert response.status_code == 200
     assert json.loads(response.body) == {"status": "healthy"}
+
+
+@pytest.mark.asyncio
+async def test_synchronous_add_memory_waits_for_persistence() -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+    calls: list[dict[str, object]] = []
+
+    class Graphiti:
+        async def add_episode(self, **kwargs) -> None:
+            calls.append(kwargs)
+            started.set()
+            await release.wait()
+
+    class Runtime:
+        graphiti = Graphiti()
+
+    class Service:
+        entity_types = {"entity": object}
+        edge_types = {"edge": object}
+        edge_type_map = {("entity", "entity"): ["edge"]}
+
+    main.app.state.runtime = Runtime()
+    main.graphiti_mcp.graphiti_service = Service()
+    main.graphiti_mcp.config = main.GraphitiConfig()
+
+    pending = asyncio.create_task(
+        main.add_memory_sync(
+            name="durable memory",
+            episode_body="The memory survives a fresh runtime.",
+            group_id="notebook-validation",
+        )
+    )
+    await started.wait()
+    assert not pending.done()
+
+    release.set()
+    response = await pending
+
+    assert response["message"].startswith("Episode 'durable memory' persisted")
+    assert calls[0]["group_id"] == "notebook-validation"
+    assert calls[0]["episode_body"] == "The memory survives a fresh runtime."
+
+
+@pytest.mark.asyncio
+async def test_queue_monitoring_waits_for_in_flight_work() -> None:
+    released = asyncio.Event()
+
+    class Queue:
+        async def wait_until_idle(self, group_id) -> None:
+            assert group_id == "notebook-validation"
+            await released.wait()
+
+        def get_queue_size(self, group_id) -> int:
+            assert group_id == "notebook-validation"
+            return 0
+
+        def is_worker_running(self, group_id) -> bool:
+            assert group_id == "notebook-validation"
+            return True
+
+    main.graphiti_mcp.queue_service = Queue()
+    main.graphiti_mcp.config = main.GraphitiConfig()
+
+    pending = asyncio.create_task(main.wait_for_memory_queue("notebook-validation"))
+    await asyncio.sleep(0)
+    assert not pending.done()
+    released.set()
+
+    response = await pending
+    assert response.group_id == "notebook-validation"
+    assert response.pending == 0
+    assert response.worker_running is True
+
+
+@pytest.mark.asyncio
+async def test_queue_monitoring_surfaces_processing_errors() -> None:
+    class Graphiti:
+        async def add_episode(self, **kwargs) -> None:
+            raise ValueError(f"cannot persist {kwargs['name']}")
+
+    queue = main.QueueService()
+    await queue.initialize(Graphiti())
+    await queue.add_episode(
+        group_id="notebook-validation",
+        name="broken memory",
+        content="This write must fail visibly.",
+        source_description="test",
+        episode_type=main.graphiti_mcp.EpisodeType.text,
+        entity_types=None,
+        uuid=None,
+    )
+
+    with pytest.raises(RuntimeError, match="cannot persist broken memory"):
+        await queue.wait_until_idle("notebook-validation")
+
+    await queue.close()
+
+
+@pytest.mark.asyncio
+async def test_runtime_status_uses_postgraph_native_probe() -> None:
+    queries: list[str] = []
+
+    class Client:
+        async def _fetch(self, query):
+            queries.append(query)
+            return [{"ok": 1}]
+
+    class Driver:
+        provider = "postgraph"
+        client = Client()
+
+    class Graphiti:
+        driver = Driver()
+
+    class Runtime:
+        graphiti = Graphiti()
+
+    main.app.state.ready = True
+    main.app.state.runtime = Runtime()
+
+    response = await main.runtime_status()
+
+    assert response["status"] == "ok"
+    assert "postgraph" in response["message"]
+    assert queries == ["SELECT 1 AS ok"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_status_reports_unready_runtime() -> None:
+    main.app.state.ready = False
+    main.app.state.runtime = None
+
+    response = await main.runtime_status()
+
+    assert response["status"] == "error"
+    assert response["message"] == "Graphiti runtime is not ready"

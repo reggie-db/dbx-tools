@@ -90,6 +90,7 @@ jspm_packages/
 .kanna/
 **/.logs/
 !/pyproject.toml
+!/packages/py/node-runtime/pyproject.toml
 !/packages/py/graphiti/pyproject.toml
 .venv/
 .pytest_cache/

@@ -1,6 +1,6 @@
 import { Readable, Writable } from "node:stream";
 
-import * as promises from "./fs-promises.ts";
+import * as promises from "./node___fs__promises.ts";
 import { pythonHost } from "./host.ts";
 
 type Callback<T = undefined> = (error: Error | null, value?: T) => void;

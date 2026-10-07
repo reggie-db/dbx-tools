@@ -150,8 +150,16 @@ jobs:
         run: |-
           bun node_modules/@dbx-tools/projen/tasks/publish-python.ts "$RELEASE_VERSION" \
             --root "packages/py" \
-            --package "graphiti" \
+            --package "node-runtime" "graphiti" \
             --output .release/python --package-directories
+      - name: Upload dbx-tools-node-runtime distributions
+        id: upload_dbx-tools-node-runtime_distributions
+        if: ${{ success() && steps.release.outputs.pypi == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-python-node-runtime
+          path: .release/python/node-runtime
+          if-no-files-found: error
       - name: Upload dbx-tools-graphiti distributions
         id: upload_dbx-tools-graphiti_distributions
         if: ${{ success() && steps.release.outputs.pypi == 'true' }}
@@ -204,6 +212,7 @@ jobs:
     needs:
       - build-release
       - publish-node
+      - publish-pypi-node-runtime
       - publish-pypi-graphiti
     runs-on: ubuntu-latest
     permissions:
@@ -212,21 +221,45 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['publish-node'].result == 'success' || needs['publish-node'].result == 'skipped') && (needs['publish-pypi-graphiti'].result == 'success' || needs['publish-pypi-graphiti'].result == 'skipped') }}
+    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['publish-node'].result == 'success' || needs['publish-node'].result == 'skipped') && (needs['publish-pypi-node-runtime'].result == 'success' || needs['publish-pypi-node-runtime'].result == 'skipped') && (needs['publish-pypi-graphiti'].result == 'success' || needs['publish-pypi-graphiti'].result == 'skipped') }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
     timeout-minutes: 15
-  publish-pypi-graphiti:
+  publish-pypi-node-runtime:
     needs: build-release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-node-runtime
+      url: https://pypi.org/project/dbx-tools-node-runtime/
+    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') }}
+    steps:
+      - name: Download dbx-tools-node-runtime distributions
+        id: download_dbx-tools-node-runtime_distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: release-python-node-runtime
+          path: dist/node-runtime
+      - name: Publish dbx-tools-node-runtime to PyPI
+        id: publish_dbx-tools-node-runtime_to_pypi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/node-runtime
+    timeout-minutes: 10
+  publish-pypi-graphiti:
+    needs:
+      - build-release
+      - publish-pypi-node-runtime
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-graphiti
       url: https://pypi.org/project/dbx-tools-graphiti/
-    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') }}
+    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') && (needs['publish-pypi-node-runtime'].result == 'success') }}
     steps:
       - name: Download dbx-tools-graphiti distributions
         id: download_dbx-tools-graphiti_distributions

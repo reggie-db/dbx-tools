@@ -226,6 +226,32 @@ describe("GraphitiPlugin", () => {
     }
   });
 
+  it("uses the configured sidecar startup budget", async () => {
+    const plugin = new GraphitiPlugin({ startupTimeoutMs: 5 });
+    const originalFetch = globalThis.fetch;
+    const originalNow = Date.now;
+    let nowCalls = 0;
+    globalThis.fetch = (async () => {
+      throw new Error("not ready");
+    }) as typeof fetch;
+    Date.now = () => (nowCalls++ === 0 ? 100 : 106);
+    Object.assign(plugin, {
+      resolved: {
+        startupTimeoutMs: 5,
+        listen: { scheme: "tcp", host: "127.0.0.1", port: 4101 },
+      },
+    });
+    try {
+      const waitUntilReady = (
+        plugin as unknown as { waitUntilReady(): Promise<void> }
+      ).waitUntilReady;
+      await assert.rejects(waitUntilReady.call(plugin), /readiness timed out/);
+    } finally {
+      Date.now = originalNow;
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("requires every configured scoped tool in the OpenAPI contract", () => {
     assert.throws(
       () => graphitiToolContracts(fixtureOpenApi(), SCOPED_TOOL_NAMES, new Set()),

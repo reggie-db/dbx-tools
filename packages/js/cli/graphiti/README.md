@@ -108,18 +108,19 @@ dbx graphiti [options] [command]
 
 #### Options
 
-| Option                             | Description                                                                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `-v, --version`                    | output the version number                                                                                                 |
-| `--profile <value>`                | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                          |
-| `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
-| `--model <value>`                  | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
-| `--temperature <value>`            | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                 |
-| `--embedder-model <value>`         | Fuzzy embedding-model name or endpoint identifier. (default: "gte-large-en", env: EMBEDDER_MODEL)                         |
-| `--embedder-dimensions <value>`    | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
-| `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
-| `--listen <value>`                 | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                             |
-| `--database-url <value>`           | PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL. (env: DATABASE_URL)                     |
+| Option                             | Description                                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `-v, --version`                    | output the version number                                                                                                            |
+| `--profile <value>`                | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                                     |
+| `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                                   |
+| `--model <value>`                  | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                                    |
+| `--temperature <value>`            | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                            |
+| `--embedder-model <value>`         | Fuzzy embedding-model name or endpoint identifier. (default: "gte-large-en", env: EMBEDDER_MODEL)                                    |
+| `--embedder-dimensions <value>`    | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                                          |
+| `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE)            |
+| `--startup-timeout-ms <value>`     | Maximum milliseconds allowed for the Graphiti runtime to become ready. (default: 180000, env: DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS) |
+| `--listen <value>`                 | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                                        |
+| `--database-url <value>`           | PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL. (env: DATABASE_URL)                                |
 
 #### Commands
 

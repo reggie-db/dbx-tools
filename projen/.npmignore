@@ -12,7 +12,6 @@ dist
 /.vscode/
 /.idea/
 tsconfig.tsbuildinfo
-/shims/python-node/tsconfig.json
 .projenrc.ts
 projenrc/
 /.projenrc.ts

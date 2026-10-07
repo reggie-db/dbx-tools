@@ -18,6 +18,8 @@ class QueueService:
         self._episode_queues: dict[str, asyncio.Queue] = {}
         # Dictionary to track if a worker is running for each group_id
         self._queue_workers: dict[str, bool] = {}
+        self._worker_tasks: dict[str, asyncio.Task[None]] = {}
+        self._queue_errors: dict[str, list[Exception]] = {}
         # Store the graphiti client after initialization
         self._graphiti_client: Any = None
 
@@ -42,7 +44,7 @@ class QueueService:
 
         # Start a worker for this queue if one isn't already running
         if not self._queue_workers.get(group_id, False):
-            asyncio.create_task(self._process_episode_queue(group_id))
+            self._worker_tasks[group_id] = asyncio.create_task(self._process_episode_queue(group_id))
 
         return self._episode_queues[group_id].qsize()
 
@@ -68,6 +70,7 @@ class QueueService:
                     logger.error(
                         f'Error processing queued episode for group_id {group_id}: {str(e)}'
                     )
+                    self._queue_errors.setdefault(group_id, []).append(e)
                 finally:
                     # Mark the task as done regardless of success/failure
                     self._episode_queues[group_id].task_done()
@@ -77,7 +80,44 @@ class QueueService:
             logger.error(f'Unexpected error in queue worker for group_id {group_id}: {str(e)}')
         finally:
             self._queue_workers[group_id] = False
+            self._worker_tasks.pop(group_id, None)
             logger.info(f'Stopped episode queue worker for group_id: {group_id}')
+
+    async def wait_until_idle(self, group_id: str | None = None) -> None:
+        """Wait until queued and in-flight episode work completes."""
+        group_ids = (
+            [group_id]
+            if group_id is not None and group_id in self._episode_queues
+            else list(self._episode_queues)
+            if group_id is None
+            else []
+        )
+        await asyncio.gather(*(self._episode_queues[key].join() for key in group_ids))
+        errors = [
+            error
+            for key in group_ids
+            for error in self._queue_errors.pop(key, [])
+        ]
+        if errors:
+            raise RuntimeError(f'Queued episode processing failed: {errors[0]}') from errors[0]
+
+    async def close(self) -> None:
+        """Drain episode work and stop idle queue workers."""
+        error: Exception | None = None
+        try:
+            await self.wait_until_idle()
+        except Exception as caught:
+            error = caught
+        tasks = list(self._worker_tasks.values())
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._worker_tasks.clear()
+        self._queue_workers.clear()
+        self._queue_errors.clear()
+        if error is not None:
+            raise error
 
     def get_queue_size(self, group_id: str) -> int:
         """Get the current queue size for a group_id."""

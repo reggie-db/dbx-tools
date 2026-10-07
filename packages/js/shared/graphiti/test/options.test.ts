@@ -14,6 +14,7 @@ describe("Graphiti options", () => {
     assert.equal(options.temperature, 1);
     assert.equal(options.embedderModel, "gte-large-en");
     assert.equal(options.embedderDimensions, 1024);
+    assert.equal(options.startupTimeoutMs, 180_000);
     assert.deepEqual(options.listen, {
       scheme: "tcp",
       host: "127.0.0.1",
@@ -34,12 +35,14 @@ describe("Graphiti options", () => {
       graphitiOptionsFromEnvironment({
         DATABRICKS_CONFIG_PROFILE: "PROFILE",
         TEMPERATURE: "0.25",
+        DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS: "240000",
         GRAPHITI_HOME: "/graphiti",
         GRAPHITI_LISTEN: "tcp://localhost:8100",
       }),
       {
         profile: "PROFILE",
         temperature: 0.25,
+        startupTimeoutMs: 240_000,
         graphitiHome: "/graphiti",
         listen: { scheme: "tcp", host: "localhost", port: 8100 },
       },
@@ -55,8 +58,14 @@ describe("Graphiti options", () => {
     assert.equal(environment.DATABRICKS_CONFIG_PROFILE, "PROFILE");
     assert.equal(environment.MODEL_NAME, "databricks-gpt-5-nano");
     assert.equal(environment.EMBEDDER_MODEL, "gte-large-en");
+    assert.equal(environment.DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS, "180000");
     assert.equal(environment.GRAPHITI_LISTEN, "tcp://localhost:8100");
     assert.equal(environment.DATABASE_URL, undefined);
     assert.ok(Object.values(environment).every((value) => typeof value === "string"));
+  });
+
+  it("rejects non-positive startup budgets", () => {
+    assert.throws(() => resolveGraphitiOptions({ startupTimeoutMs: 0 }));
+    assert.throws(() => resolveGraphitiOptions({ startupTimeoutMs: -1 }));
   });
 });

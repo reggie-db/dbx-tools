@@ -18,4 +18,19 @@ describe("resolveGraphitiConfig", () => {
       listen: { scheme: "tcp", host: "127.0.0.1", port: 0 },
     });
   });
+
+  it("preserves AppKit base configuration without parsing it as Graphiti options", () => {
+    const resolved = resolveGraphitiConfig({
+      name: "memory",
+      host: "appkit.internal",
+      telemetry: { traces: true },
+      streamConfig: { maxEventSize: 1024 },
+    });
+
+    assert.equal(resolved.name, "memory");
+    assert.equal(resolved.host, "appkit.internal");
+    assert.deepEqual(resolved.telemetry, { traces: true });
+    assert.deepEqual(resolved.streamConfig, { maxEventSize: 1024 });
+    assert.equal(resolved.startupTimeoutMs, 180_000);
+  });
 });

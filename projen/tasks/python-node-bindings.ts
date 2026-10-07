@@ -13,8 +13,10 @@ import stdLibBrowser from "node-stdlib-browser";
 import ts from "typescript";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
 import { publicFunctionExports, publicNamespaceExports } from "../src/module-exports.ts";
+import { resolveRepoRoot } from "../src/packages.ts";
+import { PYTHON_NODE_RUNTIME_MODULE } from "../src/python-node-runtime.ts";
 import {
-  PYTHON_NODE_SHIM_ROOT,
+  generatePythonNodeBindings,
   resolvePythonNodeBindings,
   type ResolvedPythonNodeBindings,
   type ResolvedPythonNodeFunctionOverride,
@@ -81,11 +83,15 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       root: { type: "string" },
     },
   });
-  if (!values.project) throw new Error("Expected --project <python-project-directory>");
+  const root = values.root ? resolve(values.root) : resolveRepoRoot();
+  if (!values.project) {
+    if (values.binding !== undefined || values.module !== undefined) {
+      throw new Error("--binding and --module require --project");
+    }
+    generatePythonNodeBindings(root, { check: values.check });
+    return;
+  }
 
-  const root = values.root
-    ? resolve(values.root)
-    : resolve(dirname(fileURLToPath(import.meta.url)), "../..");
   const configs = resolvePythonNodeBindings(root, values.project).map(discoverBindingModules);
   if (configs.length > 1 && configs.some(({ modules }) => modules.length === 0)) {
     throw new Error(
@@ -161,21 +167,21 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     functionsByPythonName.set(functionName.pythonName, functionName.javascriptName);
   }
 
-  const shimRoot = PYTHON_NODE_SHIM_ROOT;
   const overridesByModule = groupOverrides(
     configs.flatMap(({ functionOverrides }) => functionOverrides),
   );
   const shimEntry = "dbx-tools:python-entry";
   const functionOverrideNamespace = "dbx-tools-function-override";
-  const shimAliases = new Map([
-    ["child_process", resolve(shimRoot, "child-process.ts")],
-    ["crypto", resolve(shimRoot, "crypto.ts")],
-    ["fs", resolve(shimRoot, "fs.ts")],
-    ["fs/promises", resolve(shimRoot, "fs-promises.ts")],
-    ["os", resolve(shimRoot, "os.ts")],
-    ["process", resolve(shimRoot, "process.ts")],
-    ["readline", resolve(shimRoot, "readline.ts")],
+  const runtimeBuiltins = new Set([
+    "child_process",
+    "crypto",
+    "fs",
+    "fs/promises",
+    "os",
+    "process",
+    "readline",
   ]);
+  const runtimeBuiltinNamespace = "dbx-tools-node-runtime-builtin";
   const bridgeSource = [
     "export const __pythonGet = (target, name) => target[name];",
     "export const __pythonInvokePositioned = (fn, entries) => {",
@@ -240,12 +246,18 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
         namespace: "dbx-tools-python",
       }));
       build.onLoad({ filter: /.*/, namespace: "dbx-tools-python" }, () => ({
-        contents: [
-          `import ${JSON.stringify(resolve(shimRoot, "bootstrap.ts"))};`,
-          bridgeSource,
-          ...runtimeExports,
-        ].join("\n"),
+        contents: [bridgeSource, ...runtimeExports].join("\n"),
         loader: "ts",
+      }));
+      build.onLoad({ filter: /.*/, namespace: runtimeBuiltinNamespace }, ({ path }) => ({
+        contents: [
+          'const runtime = globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")];',
+          "if (!runtime) throw new Error('dbx-tools-node-runtime was not loaded before its generated bundle');",
+          `const builtin = runtime.modules[${JSON.stringify(`node:${path}`)}] ?? runtime.modules[${JSON.stringify(path)}];`,
+          `if (!builtin) throw new Error(${JSON.stringify(`dbx-tools-node-runtime does not provide ${path}`)});`,
+          "module.exports = builtin;",
+        ].join("\n"),
+        loader: "js",
       }));
       build.onLoad({ filter: /.*/, namespace: functionOverrideNamespace }, ({ path }) => {
         const overrides = overridesByModule.get(path);
@@ -272,8 +284,9 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
           return { path, namespace: functionOverrideNamespace };
         }
         const moduleName = path.replace(/^node:/, "");
-        const shim = shimAliases.get(moduleName) ?? shimAliases.get(path);
-        if (shim) return { path: shim };
+        if (runtimeBuiltins.has(moduleName)) {
+          return { path: moduleName, namespace: runtimeBuiltinNamespace };
+        }
         const standard = standardAliases[moduleName];
         return standard
           ? { path: Bun.resolveSync(standard, dirname(fileURLToPath(import.meta.url))) }
@@ -1172,112 +1185,19 @@ function pythonRuntimeLoader(source: string): string {
     "",
     "from __future__ import annotations",
     "",
-    "import asyncio",
-    "import inspect",
-    "from dataclasses import fields, is_dataclass",
     "from pathlib import Path",
-    "from threading import Lock",
     "from typing import Any",
     "",
-    "import pythonmonkey as pm",
-    "import pythonmonkey.require",
+    `from ${PYTHON_NODE_RUNTIME_MODULE} import MISSING, RuntimeBundle, load_bundle`,
     "",
-    "_RUNTIME: Any | None = None",
-    "_LOCK = Lock()",
-    "MISSING = object()",
+    "_RUNTIME: RuntimeBundle | None = None",
     "",
     "",
-    "def _load_runtime() -> Any:",
-    "    try:",
-    "        asyncio.get_running_loop()",
-    "    except RuntimeError:",
-    "        async def load() -> Any:",
-    '            return pm.require(str(Path(__file__).with_name("_runtime.js")))',
-    "",
-    "        return asyncio.run(load())",
-    '    return pm.require(str(Path(__file__).with_name("_runtime.js")))',
-    "",
-    "",
-    "def get_runtime() -> Any:",
+    "def get_runtime() -> RuntimeBundle:",
     "    global _RUNTIME",
     "    if _RUNTIME is None:",
-    "        with _LOCK:",
-    "            if _RUNTIME is None:",
-    "                _RUNTIME = _load_runtime()",
+    '        _RUNTIME = load_bundle(Path(__file__).with_name("_runtime.js"), bundle_id=__name__)',
     "    return _RUNTIME",
-    "",
-    "",
-    "def _module(name: str) -> Any:",
-    '    return get_runtime()["__pythonModule"](name)',
-    "",
-    "",
-    "def _snake_to_camel(name: str) -> str:",
-    '    head, *tail = name.split("_")',
-    '    return head + "".join(part[:1].upper() + part[1:] for part in tail)',
-    "",
-    "",
-    "def _to_javascript(value: Any) -> Any:",
-    "    if isinstance(value, _NodeObject):",
-    "        return value._target",
-    "    if is_dataclass(value) and not isinstance(value, type):",
-    "        return {",
-    '            item.metadata.get("javascript_name", item.name): _to_javascript(field_value)',
-    "            for item in fields(value)",
-    "            if (field_value := getattr(value, item.name)) is not None",
-    "        }",
-    "    if isinstance(value, dict):",
-    "        return {key: _to_javascript(item) for key, item in value.items()}",
-    "    if isinstance(value, (list, tuple)):",
-    "        return [_to_javascript(item) for item in value]",
-    "    return value",
-    "",
-    "",
-    "def _from_javascript(value: Any) -> Any:",
-    "    if isinstance(value, str):",
-    '        return value.encode("utf-8").decode("utf-8")',
-    "    if value is None or isinstance(value, (int, float, bool)):",
-    "        return value",
-    '    kind = get_runtime()["__pythonKind"](value)',
-    '    if kind == "instance":',
-    "        return _NodeObject(value)",
-    '    if kind == "array":',
-    "        return [_from_javascript(item) for item in value]",
-    '    if kind == "record":',
-    "        return {str(key): _from_javascript(item) for key, item in value.items()}",
-    "    return value",
-    "",
-    "",
-    "async def _resolve(value: Any) -> Any:",
-    "    if inspect.isawaitable(value):",
-    "        value = await value",
-    "    return _from_javascript(value)",
-    "",
-    "",
-    "class _NodeObject:",
-    "    def __init__(self, target: Any) -> None:",
-    "        self._target = target",
-    "",
-    "    def __getattr__(self, name: str) -> Any:",
-    "        javascript_name = _snake_to_camel(name)",
-    '        value = get_runtime()["__pythonGet"](self._target, javascript_name)',
-    "        if not callable(value):",
-    "            return _from_javascript(value)",
-    "",
-    "        async def invoke(*args: Any) -> Any:",
-    '            result = await get_runtime()["__pythonInvokeMethod"](',
-    "                self._target,",
-    "                javascript_name,",
-    "                [_to_javascript(arg) for arg in args],",
-    "            )",
-    '            if result["ok"]:',
-    '                return _from_javascript(result["value"])',
-    '            error = result["error"]',
-    "            message = f\"{error['name']}: {error['message']}\"",
-    '            if error.get("stack"):',
-    "                message = f\"{message}\\n{error['stack']}\"",
-    "            raise RuntimeError(message)",
-    "",
-    "        return invoke",
     "",
     "",
     "async def invoke_positioned(",
@@ -1285,12 +1205,7 @@ function pythonRuntimeLoader(source: string): string {
     "    name: str,",
     "    arguments: list[tuple[int, Any]],",
     ") -> Any:",
-    "    return await _resolve(",
-    '        get_runtime()["__pythonInvokePositioned"](',
-    "            _module(module)[name],",
-    "            [[index, _to_javascript(value)] for index, value in arguments],",
-    "        ),",
-    "    )",
+    "    return await get_runtime().invoke_positioned(module, name, arguments)",
     "",
     "",
     "def invoke_positioned_sync(",
@@ -1298,12 +1213,7 @@ function pythonRuntimeLoader(source: string): string {
     "    name: str,",
     "    arguments: list[tuple[int, Any]],",
     ") -> Any:",
-    "    return _from_javascript(",
-    '        get_runtime()["__pythonInvokePositioned"](',
-    "            _module(module)[name],",
-    "            [[index, _to_javascript(value)] for index, value in arguments],",
-    "        ),",
-    "    )",
+    "    return get_runtime().invoke_positioned_sync(module, name, arguments)",
     "",
   ].join("\n");
 }

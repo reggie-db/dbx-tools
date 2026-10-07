@@ -16,6 +16,8 @@ import { parse } from "smol-toml";
 import { readWorkflow, workflowStep } from "./workflow.ts";
 import { DBXToolsNodeProject, DBXToolsPythonWorkspace } from "../src/project.ts";
 import { generatePythonNodeBindings } from "../src/python-node-bindings.ts";
+import { PYTHON_NODE_RUNTIME_DISTRIBUTION } from "../src/python-node-runtime.ts";
+import { DEFAULT_VERSION } from "../src/workspace-version.ts";
 
 let outdir: string;
 
@@ -29,6 +31,57 @@ after(() => {
 });
 
 describe("DBXToolsPythonWorkspace", () => {
+  it("requires an explicitly marked canonical shared Node runtime", () => {
+    const validationOutdir = mkdtempSync(join(tmpdir(), "project-py-runtime-validation-"));
+    try {
+      const project = new DBXToolsNodeProject({
+        name: "fixture",
+        outdir: validationOutdir,
+        defaultTagMixins: false,
+        repository: "https://github.com/example/fixture.git",
+      });
+      assert.throws(
+        () =>
+          new DBXToolsPythonWorkspace(project, {
+            packages: [
+              {
+                directory: "runtime",
+                description: "Invalid runtime owner",
+                nodeRuntime: true,
+              },
+            ],
+          }),
+        /must use distribution dbx-tools-node-runtime and module dbx_tools\.node_runtime/,
+      );
+    } finally {
+      rmSync(validationOutdir, { recursive: true, force: true });
+    }
+  });
+
+  it("allows only one shared Node runtime owner", () => {
+    const validationOutdir = mkdtempSync(join(tmpdir(), "project-py-runtime-count-"));
+    try {
+      const project = new DBXToolsNodeProject({
+        name: "fixture",
+        outdir: validationOutdir,
+        defaultTagMixins: false,
+        repository: "https://github.com/example/fixture.git",
+      });
+      assert.throws(
+        () =>
+          new DBXToolsPythonWorkspace(project, {
+            packages: [
+              { directory: "runtime-one", description: "One", nodeRuntime: true },
+              { directory: "runtime-two", description: "Two", nodeRuntime: true },
+            ],
+          }),
+        /only one shared Node runtime package/,
+      );
+    } finally {
+      rmSync(validationOutdir, { recursive: true, force: true });
+    }
+  });
+
   it("reuses project.vscode and emits a configurable uv workspace", () => {
     const project = new DBXToolsNodeProject({
       name: "fixture",
@@ -56,6 +109,9 @@ describe("DBXToolsPythonWorkspace", () => {
           directory: "app",
           description: "Fixture app",
           devDependencies: ["types-app>=1"],
+          optionalDependencies: {
+            dev: ["embedded-postgres>=18,<19"],
+          },
           internalDependencies: ["core"],
           releaseEnvironment: "production-pypi",
         },
@@ -108,6 +164,8 @@ describe("DBXToolsPythonWorkspace", () => {
       /Apache License/,
     );
     assert.match(app, /dependencies = \[\s*"fixture-core"\s*\]/);
+    assert.match(app, /\[project\.optional-dependencies\]/);
+    assert.match(app, /embedded-postgres>=18,<19/);
     assert.match(app, /\[dependency-groups\]/);
     assert.match(app, /"types-app>=1"/);
     assert.doesNotMatch(
@@ -209,7 +267,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /Do not visit GitHub or use the GitHub API or CLI/);
     assert.match(instructions, /Every required GitHub owner, repository, workflow, environment/);
     assert.match(instructions, /supplied deployment tag policy value is v\*/);
-    assert.match(instructions, /GitHub environment tag: v\*/);
+    assert.doesNotMatch(instructions, /GitHub environment tag:/);
     assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
     assert.match(instructions, /Reuse an existing PyPI tab in the system browser/);
@@ -255,9 +313,16 @@ describe("DBXToolsPythonWorkspace", () => {
         packageRoots: ["packages/js"],
         repository: "https://github.com/example/fixture.git",
       });
-      new DBXToolsPythonWorkspace(project, {
+      const pythonWorkspace = new DBXToolsPythonWorkspace(project, {
         root: "python/packages",
         packages: [
+          {
+            directory: "node-runtime",
+            name: PYTHON_NODE_RUNTIME_DISTRIBUTION,
+            module: "dbx_tools.node_runtime",
+            description: "Fixture shared Node runtime",
+            nodeRuntime: true,
+          },
           {
             directory: "auth",
             description: "Fixture auth bindings",
@@ -280,12 +345,17 @@ describe("DBXToolsPythonWorkspace", () => {
           },
         ],
       });
+      const authPackage = pythonWorkspace.packages.find(
+        ({ packageOptions }) => packageOptions.directory === "auth",
+      );
+      assert.deepEqual(authPackage?.packageOptions.internalDependencies, ["node-runtime"]);
 
       project.synth();
       generatePythonNodeBindings(bindingsOutdir);
 
       const packagePyproject = join(bindingsOutdir, "python/packages/auth/pyproject.toml");
       const pyproject = parse(readFileSync(packagePyproject, "utf8")) as {
+        project: { dependencies: string[] };
         tool: {
           dbx_tools: {
             node_bindings: Array<{
@@ -297,6 +367,11 @@ describe("DBXToolsPythonWorkspace", () => {
           uv: { "build-backend": { "module-root": string } };
         };
       };
+      assert.ok(
+        pyproject.project.dependencies.includes(
+          `${PYTHON_NODE_RUNTIME_DISTRIBUTION}==${DEFAULT_VERSION}`,
+        ),
+      );
       assert.deepEqual(pyproject.tool.dbx_tools.node_bindings, [
         {
           package: "@fixture/auth",
@@ -346,6 +421,15 @@ describe("DBXToolsPythonWorkspace", () => {
         ).mode & 0o222,
         0,
       );
+      const runtimeLoader = readFileSync(
+        join(bindingsOutdir, "python/packages/auth/src/fixture/auth/_generated/node/_runtime.py"),
+        "utf8",
+      );
+      assert.match(
+        runtimeLoader,
+        /from dbx_tools\.node_runtime import MISSING, RuntimeBundle, load_bundle/,
+      );
+      assert.doesNotMatch(runtimeLoader, /pythonmonkey|class _NodeObject/);
       assert.equal(
         existsSync(
           join(
@@ -355,9 +439,16 @@ describe("DBXToolsPythonWorkspace", () => {
         ),
         true,
       );
-      assert.ok(project.tasks.tryFind("auth:python-runtime"));
-      assert.ok(project.tasks.tryFind("auth:python-runtime:check"));
-      assert.ok(project.tasks.tryFind("auth:python-runtime:watch"));
+      assert.ok(project.tasks.tryFind("python-node-bindings"));
+      assert.ok(project.tasks.tryFind("python-node-bindings:check"));
+      assert.ok(project.tasks.tryFind("python-node-bindings:watch"));
+      assert.ok(project.tasks.tryFind("python-node-runtime"));
+      assert.ok(project.tasks.tryFind("python-node-runtime:check"));
+      assert.ok(project.tasks.tryFind("python-node-runtime:watch"));
+      assert.deepEqual(project.dbxToolsConfig.syncWatchTasks, [
+        "python-node-runtime:watch",
+        "python-node-bindings:watch",
+      ]);
       rmSync(packagePyproject);
       generatePythonNodeBindings(bindingsOutdir);
       assert.equal(

@@ -136,6 +136,13 @@ new project.DBXToolsPythonWorkspace(root, {
   root: "packages/py",
   packages: [
     {
+      directory: "node-runtime",
+      name: "dbx-tools-node-runtime",
+      module: "dbx_tools.node_runtime",
+      description: "Shared PythonMonkey runtime and lazy Node.js bootstrap",
+      nodeRuntime: true,
+    },
+    {
       directory: "postgres",
       description: "Python bindings for example Postgres helpers",
       nodeBindings: [
@@ -180,18 +187,40 @@ types with typed async methods, and primitives, arrays, maps, promises, and
 optional values retain their corresponding Python annotations.
 
 The generator resolves portable Node built-ins through standard browser
-polyfills. Python-host-backed adapters for process execution, files, crypto,
-OS values, and process state are included automatically, so packages do not
-configure a shim directory.
+polyfills. Generated bundles proxy Python-host-backed built-ins to
+`dbx-tools-node-runtime`, which owns the process, file, crypto, OS, abort,
+headers, and runtime bootstrap shims. Packages do not configure or copy a shim
+directory, and their generated Python loader imports the shared runtime package.
 
-The workspace creates `<name>:python-runtime`, `<name>:python-runtime:check`,
-and `<name>:python-runtime:watch`. The focused watcher regenerates a Python
-project when its bound Node package, a transitive workspace dependency, its
-binding configuration, a function override, or a shared shim changes.
-`bun run sync --watch` supervises this watcher alongside Projen and barrel
-generation. Full synthesis regenerates bindings and removes stale
-`_generated/node` trees by reconciling them with the current `pyproject.toml`
-files, including the resynthesis triggered by a `.projenrc.ts` change.
+`nodeRuntime: true` identifies the one workspace package that owns
+`build-runtime.ts`, `shims/`, the generated `runtime.js`, PythonMonkey bootstrap,
+and bundle loading. Its distribution and module must be
+`dbx-tools-node-runtime` and `dbx_tools.node_runtime`. Packages with
+`nodeBindings` automatically depend on that workspace member. When the workspace
+does not publish the runtime itself, they receive the matching external
+`dbx-tools-node-runtime` dependency instead.
+
+The workspace creates one repository-wide binding lifecycle:
+
+- `python-node-bindings` generates every configured bridge.
+- `python-node-bindings:check` verifies generated files and fails on stale
+  `_generated/node` directories.
+- `python-node-bindings:watch` watches all configured bridges and regenerates
+  only Python projects affected by a Node package, transitive workspace
+  dependency, binding manifest, or function override change.
+
+When a runtime owner is configured, the workspace also creates one shared
+runtime lifecycle:
+
+- `python-node-runtime` runs the package-owned `build-runtime.ts`.
+- `python-node-runtime:check` verifies the committed `runtime.js`.
+- `python-node-runtime:watch` watches `build-runtime.ts` and `shims/` and runs
+  the same package-owned builder.
+
+`bun run sync --watch` supervises both generic watchers alongside the existing
+`projenrc` and `barrels` watchers. No per-Python-package watcher tasks are
+created. Full synthesis regenerates every binding and reconciles stale
+`_generated/node` trees with the current `pyproject.toml` files.
 Built-in shims can make ordinary Node imports work under PythonMonkey.
 `functionOverrides` replaces named exports only in the generated runtime, so the
 Node package does not gain Python callbacks or alternate source files. A
@@ -215,7 +244,7 @@ subset of a Git repository instead of exposing a direct URL dependency:
       include: ["driver.py", "operations/**/*.py"],
       exclude: ["**/test_*.py"],
       replace: {
-        "from driver.": "from example.service._generated.sync.upstream_driver.",
+        "DEFAULT_TIMEOUT = 30": "DEFAULT_TIMEOUT = 120",
       },
     },
   ],
@@ -225,8 +254,18 @@ subset of a Git repository instead of exposing a direct URL dependency:
 Each source is written beneath
 `<python-module>/_generated/sync/<name-or-owner-repository-hash>`. The generated
 package task parses pip-style Git sources, filters files with the configured
-globs, verifies every replacement matched, records the options and resolved
-commit in `.sync.json`, and recursively marks the result read-only.
+globs, applies and verifies every literal `replace` patch, records the options
+and resolved commit in `.sync.json`, and recursively marks the result read-only.
+
+Do not hard-code the generated package path in `replace`. `localizeImports`
+(on by default for identifier names) parses each file with the Python AST and
+rewrites absolute imports of synchronized modules, whether upstream imports them
+bare (`from operations.base import X`) or under the subdirectory's dotted path
+(`from src.driver.operations.base import X`). It also rewrites constant
+`__import__` and `importlib.import_module` arguments. Pass a list of upstream
+module names to rewrite only those (each must match), or `false` to keep upstream
+imports. The import prefix comes from the same constants as the output path, so
+renaming the module or generated directory flows through without config edits.
 
 Synchronization uses a check-lock-check sequence and an atomic directory
 replacement. A current pinned commit performs no network request. Branches and
@@ -390,7 +429,8 @@ file contract as the CLI.
 - `engineRoot` - engine package root resolution for bootstrapped repos.
 
 The engine registers its commands as projen tasks on the workspace root, so run
-them with `bun run <task>` - `sync` (add `--watch`), `barrels`, and `clean`.
+them with `bun run <task>` - `sync` (add `--watch`), `barrels`, `clean`, and the
+configured `python-node-bindings:*` and `python-node-runtime:*` lifecycles.
 [`@dbx-tools/cli`](../packages/js/cli/dbx-tools) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
 

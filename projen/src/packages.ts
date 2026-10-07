@@ -280,6 +280,12 @@ export function syncResynthPaths(projectRoot: string = resolveRepoRoot()): strin
   return Array.isArray(paths) ? stringUtils.parseList(paths.map((p) => String(p))) : [];
 }
 
+/** Projen task names supervised as focused processes by `sync --watch`. */
+export function syncWatchTasks(projectRoot: string = resolveRepoRoot()): string[] {
+  const tasks = readDbxToolsConfig(projectRoot)?.syncWatchTasks;
+  return Array.isArray(tasks) ? stringUtils.parseList(tasks.map((task) => String(task))) : [];
+}
+
 /**
  * The recorded workspace members from `pnpm-workspace.yaml` (the source of truth),
  * each augmented with the `tags` read back from its `package.json`. This is what

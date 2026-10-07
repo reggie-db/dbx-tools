@@ -1,0 +1,77 @@
+# `dbx-tools-node-runtime`
+
+Run PythonMonkey-based packages in managed Python environments that do not
+provide system Node.js or npm.
+
+`pythonmonkey` depends on `pminit`, whose wheel build executes npm inside pip's
+isolated build environment. `nodejs-wheel` exposes Python console launchers,
+but those launchers cannot import `nodejs_wheel` from that isolated process.
+On first use, this package installs the locked runtime into the active Python
+environment. It reuses npm when npm is already on `PATH`. Otherwise it installs
+`nodejs-wheel>=22.20,<23` into the active environment and creates direct shell
+launchers to the packaged Node binary and npm CLI. It then installs
+`pythonmonkey==1.3.2` normally so `pminit` can build with those launchers.
+
+An existing npm executable or installed `nodejs-wheel` package is reused without
+enforcing an exact Node wheel version. The range applies only when the runtime
+must install `nodejs-wheel` itself.
+
+Both installations use a check-lock-check sequence scoped to the active Python
+environment. Concurrent processes wait for the same install, then recheck the
+environment instead of installing a second copy. The lock files contain no
+runtime packages. Set `DBX_TOOLS_NODE_RUNTIME_LOCK_DIRECTORY` only when the
+default per-user lock directory is unsuitable.
+
+Install the package normally:
+
+```python
+%pip install dbx-tools-node-runtime
+```
+
+Prewarm the runtime explicitly when desired:
+
+```sh
+dbx-tools-node-runtime
+```
+
+The same project script can execute a CommonJS file through the lazy runtime:
+
+```sh
+dbx-tools-node-runtime ./hello.js
+```
+
+Otherwise the first generated binding load performs the same initialization
+through `ensure_pythonmonkey()`. Generated dbx-tools bindings use
+PythonMonkey's standard `pythonmonkey.require` loader after installation.
+
+The package also owns a shared PythonMonkey host under `shims/`. A shim path
+encodes its specifier: `___` becomes `:`, `__` becomes `/`, and every other
+character stays as written (`node___fs__promises.ts` becomes `node:fs/promises`).
+Files whose derived name has no scheme, including `bootstrap.ts`, are support
+modules rather than runtime registry entries. Duplicate derived specifiers or
+registry aliases fail the build.
+
+`build-runtime.ts` bundles the bootstrap and shims into
+`src/dbx_tools/node_runtime/runtime.js`. It adds a generated-file header, avoids
+rewriting unchanged output, and leaves the committed artifact read-only. Build
+or verify it directly with:
+
+```sh
+bun packages/py/node-runtime/build-runtime.ts
+bun packages/py/node-runtime/build-runtime.ts --check
+```
+
+In a `@dbx-tools/projen` Python workspace, mark this package with
+`nodeRuntime: true`. Projen then exposes repository-wide tasks rather than
+package-specific tasks:
+
+```sh
+bun run python-node-runtime
+bun run python-node-runtime:check
+bun run python-node-runtime:watch
+```
+
+`bun run sync --watch` supervises `python-node-runtime:watch` with the shared
+Python binding, barrel, and Projen configuration watchers. Projen owns only this
+task lifecycle; the builder, shims, generated runtime, lazy installation, and
+PythonMonkey loading remain in this package.

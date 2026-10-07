@@ -143,6 +143,11 @@ span attributes; custom OTel attributes do not become MLflow trace tags.
 
 ## Acceptance status
 
+Deployed-app acceptance remains intentionally deferred because the example and
+RaceTrac app deployments were explicitly skipped on October 7, 2026. Keep this
+enhancement active until an existing deployment can provide both checks or a
+later deployment is approved.
+
 - [x] A local incoming-`traceparent` test with `OTEL_PROPAGATORS=none` exports
       exactly one span whose parent is null.
 - [x] The local root span contains non-empty `mlflow.spanInputs` and

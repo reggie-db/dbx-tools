@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import {
   affectedPythonNodeBindingProjects,
+  generatePythonNodeBindings,
   type ResolvedPythonNodeBindings,
 } from "../src/python-node-bindings.ts";
 
 const ROOT = join(tmpdir(), "python-node-binding-watch");
+const temporaryDirectories: string[] = [];
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 /** Minimal resolved binding fixture for affected-project selection. */
 function binding(
@@ -58,5 +67,22 @@ describe("affectedPythonNodeBindingProjects", () => {
       affectedPythonNodeBindingProjects(ROOT, configs, [join(ROOT, "README.md")]),
       [],
     );
+  });
+});
+
+describe("generatePythonNodeBindings", () => {
+  it("fails check mode when an unconfigured generated directory remains", () => {
+    const root = mkdtempSync(join(tmpdir(), "python-node-binding-check-"));
+    temporaryDirectories.push(root);
+    const stale = join(root, "python/pkg/src/fixture/_generated/node");
+    mkdirSync(stale, { recursive: true });
+    writeFileSync(join(stale, "stale.py"), "stale = True\n");
+
+    assert.throws(
+      () => generatePythonNodeBindings(root, { check: true }),
+      /Generated Node binding directories are stale/,
+    );
+    generatePythonNodeBindings(root);
+    assert.throws(() => writeFileSync(join(stale, "still-present"), ""), /ENOENT/);
   });
 });

@@ -26,6 +26,7 @@
 /packages/js/**/src/generated/** linguist-generated
 /packages/js/shared/genie/src/dashboards.ts linguist-generated
 /packages/py/graphiti/pyproject.toml linguist-generated
+/packages/py/node-runtime/pyproject.toml linguist-generated
 /pnpm-workspace.yaml linguist-generated
 /projen/index.ts linguist-generated
 /pyproject.toml linguist-generated

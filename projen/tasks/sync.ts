@@ -1,9 +1,9 @@
 #!/usr/bin/env -S bun
-/** Synthesize once or supervise the focused Projen and barrel watch loops. */
+/** Synthesize once or supervise Projen, barrels, and registered focused watchers. */
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
-import { repoRoot } from "../src/packages.ts";
+import { repoRoot, syncWatchTasks } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
 import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
@@ -36,6 +36,15 @@ function watcher(script: string, name: string, prefixColor: string, ...args: str
   };
 }
 
+/** One Projen task registered by a component as a focused sync watcher. */
+function taskWatcher(task: string) {
+  return {
+    command: ["bun", "run", JSON.stringify(task)].join(" "),
+    name: task.replace(/:watch$/, ""),
+    prefixColor: "yellow",
+  };
+}
+
 export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
   if (!args.includes("--watch")) {
     // One-shot: full synth (+install + barrels via the post-synth component). This is
@@ -48,7 +57,9 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     // watchers under `concurrently`. The projenrc watcher is the intelligent stand-in
     // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts` or
     // a configured `syncResynthPaths` entry changes, while the barrel watcher keeps
-    // generated package exports fresh on source edits with no full synth.
+    // generated package exports fresh on source edits with no full synth. Components
+    // can register other repository-wide watchers, such as Python Node bindings and
+    // the shared Python Node runtime, through the generated dbxToolsConfig record.
     //
     // VS Code auto-runs this on folder open, so from here down nothing is allowed to be
     // fatal: errors are logged and retried, and only a stop signal ends the task.
@@ -68,6 +79,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     const watchers = [
       watcher("projenrc.ts", "projenrc", "magenta"),
       watcher("barrels.ts", "barrels", "cyan", "--watch"),
+      ...syncWatchTasks().map(taskWatcher),
     ];
     const { result } = concurrently(watchers, {
       prefix: "name",

@@ -37,6 +37,7 @@
 **/*-lock.yaml
 **/*-lock.yml
 **/*.lock
+packages/py/node-runtime/pyproject.toml
 packages/py/graphiti/pyproject.toml
 .eslintrc.json
 .gitattributes

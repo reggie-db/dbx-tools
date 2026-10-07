@@ -16,7 +16,8 @@ import { afterEach, describe, it } from "node:test";
 import { Project } from "projen";
 
 import { publicFunctionExports } from "../src/module-exports.ts";
-import { PythonNodeBundle } from "../src/python-node-bundle.ts";
+import { PythonNodeBindings } from "../src/python-node-bindings-component.ts";
+import { PythonNodeRuntime } from "../src/python-node-runtime.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -26,31 +27,48 @@ afterEach(() => {
   }
 });
 
-describe("PythonNodeBundle", () => {
-  it("generates convention-based build, check, and watch tasks", () => {
+describe("Python Node task components", () => {
+  it("registers one repository-wide binding and runtime lifecycle", () => {
     const project = new Project({ name: "fixture" });
-    const bundle = new PythonNodeBundle(project, {
-      name: "auth",
-      projectDirectory: "packages/py/auth",
+    const bindings = new PythonNodeBindings(project);
+    const runtime = new PythonNodeRuntime(project, {
+      projectDirectory: "packages/py/node-runtime",
     });
 
-    assert.deepEqual(bundle.buildTask.steps[0]?.execArgs, [
+    assert.deepEqual(bindings.buildTask.steps[0]?.execArgs, [
       "bun",
       "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
-      "--project",
-      "packages/py/auth",
     ]);
-    assert.deepEqual(bundle.checkTask.steps[0]?.execArgs, [
-      ...bundle.buildTask.steps[0]!.execArgs!,
+    assert.deepEqual(bindings.checkTask.steps[0]?.execArgs, [
+      ...bindings.buildTask.steps[0]!.execArgs!,
       "--check",
     ]);
-    assert.deepEqual(bundle.watchTask.steps[0]?.execArgs, [
+    assert.deepEqual(bindings.watchTask.steps[0]?.execArgs, [
       "bun",
       "node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts",
-      "--project",
-      "packages/py/auth",
     ]);
-    assert.ok(project.testTask.steps.some((step) => step.spawn === bundle.checkTask.name));
+    assert.deepEqual(runtime.buildTask.steps[0]?.execArgs, [
+      "bun",
+      "packages/py/node-runtime/build-runtime.ts",
+    ]);
+    assert.deepEqual(runtime.checkTask.steps[0]?.execArgs, [
+      ...runtime.buildTask.steps[0]!.execArgs!,
+      "--check",
+    ]);
+    assert.deepEqual(runtime.watchTask.steps[0]?.execArgs, [
+      "bun",
+      "node_modules/@dbx-tools/projen/tasks/python-node-runtime-watch.ts",
+      "--project",
+      "packages/py/node-runtime",
+    ]);
+    assert.deepEqual(project.preCompileTask.steps.map(({ spawn }) => spawn).filter(Boolean), [
+      bindings.buildTask.name,
+      runtime.buildTask.name,
+    ]);
+    assert.deepEqual(project.testTask.steps.map(({ spawn }) => spawn).filter(Boolean), [
+      bindings.checkTask.name,
+      runtime.checkTask.name,
+    ]);
   });
 
   it("discovers re-exported functions and generates Python wrappers", () => {
@@ -103,7 +121,8 @@ describe("PythonNodeBundle", () => {
     const bindingsPath = join(generated, "index.py");
     const packagePath = join(generated, "__init__.py");
     assert.match(readFileSync(runtimePath, "utf8"), /override/);
-    assert.match(readFileSync(runtimePath, "utf8"), /function createInterface/);
+    assert.match(readFileSync(runtimePath, "utf8"), /@dbx-tools\/node-runtime\/runtime/);
+    assert.doesNotMatch(readFileSync(runtimePath, "utf8"), /function createInterface/);
 
     const bindings = readFileSync(bindingsPath, "utf8");
     assert.match(bindings, /async def create_session\(\) -> str:/);
@@ -136,7 +155,11 @@ describe("PythonNodeBundle", () => {
       bindings,
       /await _invoke_positioned\("fixture_entry", "createSession", arguments\)/,
     );
-    assert.match(readFileSync(runtimeLoaderPath, "utf8"), /class _NodeObject:/);
+    assert.match(
+      readFileSync(runtimeLoaderPath, "utf8"),
+      /from dbx_tools\.node_runtime import MISSING, RuntimeBundle, load_bundle/,
+    );
+    assert.doesNotMatch(readFileSync(runtimeLoaderPath, "utf8"), /class _NodeObject:/);
     assert.match(
       readFileSync(runtimePath, "utf8"),
       /Reflect\.apply\(target\[name\], target, args\)/,
@@ -146,6 +169,25 @@ describe("PythonNodeBundle", () => {
 
     const check = runBindingTask(directory, "--check");
     assert.equal(check.exitCode, 0, check.stderr.toString());
+  });
+
+  it("discovers every configured project when --project is omitted", () => {
+    const directory = temporaryDirectory();
+    const targetDirectory = packageDirectory(directory, "fixture-target");
+    writeFileSync(
+      join(targetDirectory, "index.ts"),
+      "export function value(): string { return 'global'; }\n",
+    );
+    writeFixturePyproject(directory, ['package = "fixture-target"']);
+
+    const result = runRepositoryBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+    assert.equal(
+      existsSync(
+        join(directory, "python/src/fixture/runtime/_generated/node/fixture_target/index.py"),
+      ),
+      true,
+    );
   });
 
   it("always generates bindings beneath the Python package generated tree", () => {
@@ -291,7 +333,10 @@ describe("PythonNodeBundle", () => {
       /async def load_config\(/,
     );
     assert.equal(existsSync(join(generated, "fixture_first/constants.py")), false);
-    assert.ok(readFileSync(join(generated, "_runtime.py"), "utf8").includes("_LOCK = Lock()"));
+    assert.match(
+      readFileSync(join(generated, "_runtime.py"), "utf8"),
+      /load_bundle\(Path\(__file__\)\.with_name\("_runtime\.js"\), bundle_id=__name__\)/,
+    );
     assert.ok(readFileSync(join(generated, "_runtime.js"), "utf8").length > 0);
     assert.equal(existsSync(join(generated, "fixture_first/_runtime.js")), false);
     assert.equal(existsSync(join(generated, "fixture_second/_runtime.js")), false);
@@ -489,8 +534,24 @@ function runBindingTask(
   };
 }
 
+function runRepositoryBindingTask(
+  root: string,
+  ...args: string[]
+): { exitCode: number; stderr: Buffer; stdout: Buffer } {
+  const result = spawnSync(
+    "bun",
+    [join(import.meta.dirname, "../tasks/python-node-bindings.ts"), "--root", root, ...args],
+    { encoding: "buffer" },
+  );
+  return {
+    exitCode: result.status ?? 1,
+    stderr: result.stderr ?? Buffer.alloc(0),
+    stdout: result.stdout ?? Buffer.alloc(0),
+  };
+}
+
 function temporaryDirectory(): string {
-  const directory = mkdtempSync(join(tmpdir(), "python-node-bundle-"));
+  const directory = mkdtempSync(join(tmpdir(), "python-node-bindings-"));
   temporaryDirectories.push(directory);
   return directory;
 }

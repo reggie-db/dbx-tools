@@ -20,8 +20,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import * as exec from "@dbx-tools/core/exec";
 import { withFileLock } from "@dbx-tools/core/file-lock";
 import { parse } from "smol-toml";
+import { PYTHON_GENERATED_PACKAGE, PYTHON_SYNC_PACKAGE } from "../src/generated.ts";
+
+/** AST rewriter that points absolute imports of synchronized modules at their generated package. */
+const LOCALIZER = join(import.meta.dirname, "python-localize-imports.py");
 
 interface SyncConfig {
   readonly name?: string;
@@ -29,6 +34,7 @@ interface SyncConfig {
   readonly include?: readonly string[];
   readonly exclude?: readonly string[];
   readonly replace?: Readonly<Record<string, string>>;
+  readonly localize_imports?: boolean | readonly string[];
 }
 
 interface SyncManifest {
@@ -63,21 +69,33 @@ export async function main(args: readonly string[] = process.argv.slice(2)): Pro
   const moduleName = build?.["module-name"];
   if (!moduleName) throw new Error(`${project}/pyproject.toml has no uv module-name`);
   const moduleRoot = resolve(project, build?.["module-root"] ?? "src");
-  const generatedRoot = join(moduleRoot, ...moduleName.split("."), "_generated", "sync");
-  for (const config of configs) await synchronize(config, generatedRoot, { check, force });
+  // The import package and the output directory derive from the same segments.
+  const generatedPackage = [moduleName, PYTHON_GENERATED_PACKAGE, PYTHON_SYNC_PACKAGE].join(".");
+  const generatedRoot = join(moduleRoot, ...generatedPackage.split("."));
+  for (const config of configs) {
+    await synchronize(config, generatedRoot, generatedPackage, { check, force });
+  }
 }
 
 async function synchronize(
   config: SyncConfig,
   generatedRoot: string,
+  generatedPackage: string,
   options: { readonly check: boolean; readonly force: boolean },
 ): Promise<void> {
   const source = parseSource(config.source);
   const name = config.name ?? defaultName(source);
   const target = join(generatedRoot, name);
+  const localize = localizedModules(config, name);
+  const importPackage = `${generatedPackage}.${name}`;
   const optionsHash = hash({
     exclude: [...(config.exclude ?? [])].sort(),
     include: [...(config.include ?? ["**/*"])].sort(),
+    localize: localize && {
+      localizer: hash(readFileSync(LOCALIZER, "utf8")),
+      modules: [...localize].sort(),
+      package: importPackage,
+    },
     name,
     replace: config.replace ?? {},
     source: config.source,
@@ -110,7 +128,13 @@ async function synchronize(
       return;
     }
     if (options.check) throw new Error(`Generated Python sync is stale: ${target}`);
-    replaceTarget(config, source, target, { optionsHash, resolvedCommit });
+    replaceTarget(
+      config,
+      source,
+      target,
+      localize && { modules: localize, package: importPackage },
+      { optionsHash, resolvedCommit },
+    );
   });
 }
 
@@ -118,6 +142,7 @@ function replaceTarget(
   config: SyncConfig,
   source: ParsedSource,
   target: string,
+  localize: { readonly modules: readonly string[]; readonly package: string } | undefined,
   manifest: Omit<SyncManifest, "source">,
 ): void {
   const temporary = mkdtempSync(join(tmpdir(), "dbx-tools-python-sync-"));
@@ -168,6 +193,7 @@ function replaceTarget(
         `Python sync replacements did not match ${source.repository}: ${missing.join(", ")}`,
       );
     }
+    if (localize) localizeImports(staging, source, localize.package, localize.modules);
     const license = join(checkout, "LICENSE");
     if (existsSync(license)) cpSync(license, join(staging, "LICENSE.upstream"));
     writeFileSync(
@@ -181,6 +207,62 @@ function replaceTarget(
     makeReadonly(target);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Upstream modules whose imports are rewritten: empty to detect every synchronized
+ * module, or `undefined` when localization is off. A sync whose name is not a Python
+ * identifier is not importable as a package, so it only localizes when asked to.
+ */
+function localizedModules(config: SyncConfig, name: string): readonly string[] | undefined {
+  const option = config.localize_imports;
+  if (option === false) return undefined;
+  if (Array.isArray(option) && option.length === 0) {
+    throw new Error(`Python sync ${name} lists no localize_imports modules; use false instead`);
+  }
+  if (!PYTHON_IDENTIFIER.test(name)) {
+    if (option === undefined) return undefined;
+    throw new Error(`Python sync name ${name} must be a Python identifier to localize imports`);
+  }
+  return Array.isArray(option) ? option : [];
+}
+
+const PYTHON_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function localizeImports(
+  staging: string,
+  source: ParsedSource,
+  importPackage: string,
+  modules: readonly string[],
+): void {
+  // Upstream code may import its modules under the subdirectory's dotted path.
+  const segments = (source.subdirectory ?? "").split("/").filter(Boolean);
+  const sourcePackage = segments.every((segment) => PYTHON_IDENTIFIER.test(segment))
+    ? segments.join(".")
+    : "";
+  // Captured stderr carries the localizer's reason into the thrown error.
+  const { stdout } = exec.spawnSync(
+    "uv",
+    [
+      "run",
+      "--no-project",
+      "--quiet",
+      "python",
+      LOCALIZER,
+      staging,
+      importPackage,
+      sourcePackage,
+      ...modules,
+    ],
+    { cwd: staging, stdout: "capture", stderr: "capture", stdin: "ignore", check: true },
+  );
+  const counts = JSON.parse(stdout ?? "{}") as Record<string, number>;
+  const missing = modules.filter((module) => !counts[module]);
+  if (missing.length > 0) {
+    throw new Error(
+      `Python sync localize_imports did not match ${source.repository}: ${missing.join(", ")}`,
+    );
   }
 }
 

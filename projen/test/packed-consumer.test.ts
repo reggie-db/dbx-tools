@@ -140,10 +140,14 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
     );
 
     run(consumer, ["install", "--force"], environment);
-    assert.equal(
-      existsSync(join(consumer, "node_modules/@dbx-tools/projen/shims/python-node/bootstrap.ts")),
-      true,
-    );
+    assert.equal(existsSync(join(consumer, "node_modules/@dbx-tools/projen/shims")), false);
+    for (const task of ["python-node-bindings-watch.ts", "python-node-runtime-watch.ts"]) {
+      assert.equal(
+        existsSync(join(consumer, "node_modules/@dbx-tools/projen/tasks", task)),
+        true,
+        `packed engine omitted ${task}`,
+      );
+    }
     run(unrelatedCwd, [join(consumer, ".projenrc.ts")], environment);
     const firstManifest = readFileSync(join(consumer, "modules/example/package.json"), "utf8");
     assert.match(firstManifest, /"codegenInputs"/);

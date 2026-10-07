@@ -46,6 +46,13 @@ export const GraphitiOptionsSchema = z
     )
       .default("json_object")
       .meta({ env: "LLM_STRUCTURED_OUTPUT_MODE" }),
+    startupTimeoutMs: z.coerce
+      .number<number>()
+      .int()
+      .positive()
+      .default(180_000)
+      .describe("Maximum milliseconds allowed for the Graphiti runtime to become ready.")
+      .meta({ env: "DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS" }),
     listen: options
       .listenAddressSchema({
         host: "127.0.0.1",

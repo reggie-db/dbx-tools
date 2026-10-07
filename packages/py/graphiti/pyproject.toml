@@ -9,7 +9,6 @@ requires-python = ">=3.10,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
 dependencies = [
-  "embedded-postgres>=18.6.3,<19",
   "fastapi>=0.115,<1",
   "graphiti-core==0.30.2",
   "httpx>=0.28,<1",
@@ -18,14 +17,17 @@ dependencies = [
   "platformdirs>=4,<5",
   "post-graph>=0.7,<1",
   "pydantic-settings>=2,<3",
-  "pythonmonkey>=1.3,<2",
   "pyyaml>=6,<7",
   "typing-extensions>=4,<5",
-  "uvicorn>=0.44"
+  "uvicorn>=0.44",
+  "dbx-tools-node-runtime==0.9.51"
 ]
 
   [project.urls]
   Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/graphiti"
+
+  [project.optional-dependencies]
+  dev = [ "embedded-postgres>=18.6.3,<19" ]
 
 [build-system]
 requires = [ "uv_build>=0.11.28,<0.12.0" ]
@@ -68,7 +70,6 @@ include = [
 ]
 
   [tool.dbx_tools.sync.replace]
-  "graphiti_core.driver.postgraph" = "dbx_tools.graphiti._generated.sync.postgraph.postgraph"
   "GraphProvider.POSTGRAPH" = '"postgraph"'
   "        embedding_dim: int | None = None,\n    ):" = """
         embedding_dim: int | None = None,
@@ -84,9 +85,6 @@ name = "graphiti_server"
 source = "graph-service @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=server"
 include = [ "graph_service/**/*.py" ]
 
-  [tool.dbx_tools.sync.replace]
-  "from graph_service." = "from dbx_tools.graphiti._generated.sync.graphiti_server.graph_service."
-
 [[tool.dbx_tools.sync]]
 name = "graphiti_mcp"
 source = "mcp-server @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=mcp_server/src"
@@ -99,7 +97,58 @@ include = [
 ]
 
   [tool.dbx_tools.sync.replace]
-  "from config." = "from dbx_tools.graphiti._generated.sync.graphiti_mcp.config."
-  "from models." = "from dbx_tools.graphiti._generated.sync.graphiti_mcp.models."
-  "from services." = "from dbx_tools.graphiti._generated.sync.graphiti_mcp.services."
-  "from utils." = "from dbx_tools.graphiti._generated.sync.graphiti_mcp.utils."
+  "        self._queue_workers: dict[str, bool] = {}\n        # Store the graphiti client after initialization" = """
+        self._queue_workers: dict[str, bool] = {}
+        self._worker_tasks: dict[str, asyncio.Task[None]] = {}
+        self._queue_errors: dict[str, list[Exception]] = {}
+        # Store the graphiti client after initialization"""
+  "            asyncio.create_task(self._process_episode_queue(group_id))" = "            self._worker_tasks[group_id] = asyncio.create_task(self._process_episode_queue(group_id))"
+  "                    logger.error(\n                        f'Error processing queued episode for group_id {group_id}: {str(e)}'\n                    )" = """
+                    logger.error(
+                        f'Error processing queued episode for group_id {group_id}: {str(e)}'
+                    )
+                    self._queue_errors.setdefault(group_id, []).append(e)"""
+  "            self._queue_workers[group_id] = False\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')" = """
+            self._queue_workers[group_id] = False
+            self._worker_tasks.pop(group_id, None)
+            logger.info(f'Stopped episode queue worker for group_id: {group_id}')"""
+  "    def get_queue_size(self, group_id: str) -> int:\n" = """
+    async def wait_until_idle(self, group_id: str | None = None) -> None:
+        \"""Wait until queued and in-flight episode work completes.\"""
+        group_ids = (
+            [group_id]
+            if group_id is not None and group_id in self._episode_queues
+            else list(self._episode_queues)
+            if group_id is None
+            else []
+        )
+        await asyncio.gather(*(self._episode_queues[key].join() for key in group_ids))
+        errors = [
+            error
+            for key in group_ids
+            for error in self._queue_errors.pop(key, [])
+        ]
+        if errors:
+            raise RuntimeError(f'Queued episode processing failed: {errors[0]}') from errors[0]
+
+    async def close(self) -> None:
+        \"""Drain episode work and stop idle queue workers.\"""
+        error: Exception | None = None
+        try:
+            await self.wait_until_idle()
+        except Exception as caught:
+            error = caught
+        tasks = list(self._worker_tasks.values())
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._worker_tasks.clear()
+        self._queue_workers.clear()
+        self._queue_errors.clear()
+        if error is not None:
+            raise error
+
+    def get_queue_size(self, group_id: str) -> int:
+"""
+  "uuid (str, optional): Optional UUID for the episode" = "uuid (str, optional): UUID of an existing episode to update; omit it to create a new episode"

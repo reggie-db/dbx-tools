@@ -71,16 +71,59 @@ async with GraphitiRuntime.from_options(
     graphiti = runtime.graphiti
 ```
 
-When `databaseUrl` is omitted, the runtime starts bundled PostgreSQL with
-pgvector and persists it under `graphitiHome`, or the platform data directory
-when no home is configured. The owned PostgreSQL process stops with the
-runtime, while its data remains for the next start.
+The base package is suitable for Lakebase, external PostgreSQL, Spark
+notebooks, and serverless notebook Jobs:
+
+```bash
+uv add dbx-tools-graphiti
+```
+
+Graphiti depends on `dbx-tools-node-runtime`. A normal pip installation is
+sufficient on Databricks serverless compute even when Node.js and npm are not
+installed:
+
+```python
+%pip install dbx-tools-graphiti
+```
+
+The shared runtime reuses system npm when available. Otherwise its first binding
+load installs a compatible `nodejs-wheel`, creates direct build launchers, and
+installs PythonMonkey into the active Python environment. Generated Graphiti
+bindings import that runtime instead of carrying their own PythonMonkey loader
+or Node shim copies.
+
+For Python callers that omit `databaseUrl`, install the optional embedded
+runtime:
+
+```bash
+uv add 'dbx-tools-graphiti[dev]'
+```
+
+Embedded mode starts bundled PostgreSQL with pgvector and persists it under
+`graphitiHome`, or the platform data directory when no home is configured. The
+owned PostgreSQL process stops with the runtime, while its data remains for the
+next start. Node, CLI, and AppKit launchers select the extra automatically only
+when no external database is configured.
 
 Pass a regular PostgreSQL URL to use an existing database. A passwordless
 non-local URL, Lakebase resource path, or Lakebase project name is resolved by
 the generated Node Lakebase client. It injects a fresh short-lived credential
 whenever the asyncpg pool opens a physical connection, without persisting that
 credential in the URL.
+
+## Memory Writes
+
+`add_memory` queues a write and returns immediately. Call
+`wait_for_memory_queue` before stopping a short-lived runtime when the caller
+needs queued work to be durable. Queue processing errors are re-raised by the
+wait operation instead of being reported as an empty successful queue.
+
+Use `add_memory_sync` when the request itself must wait for persistence. Both
+forms remain available; queued writes are not forced to become synchronous.
+`get_queue_status` reports the pending count and worker state.
+
+When creating an episode, omit `uuid` and use the generated episode UUID from
+subsequent retrieval. A supplied `uuid` selects an existing episode to update.
 
 ## Composition Boundary
 

@@ -9,7 +9,9 @@
 import type { BasePluginConfig } from "@databricks/appkit";
 import {
   GraphitiOptionsSchema,
+  graphitiOptionOverrides,
   graphitiOptionsFromEnvironment,
+  resolveGraphitiOptions,
   type GraphitiOptions,
   type ResolvedGraphitiOptions,
 } from "@dbx-tools/graphiti/options";
@@ -30,10 +32,15 @@ export function resolveGraphitiConfig(
   config: GraphitiPluginConfig = {},
 ): ResolvedGraphitiPluginConfig {
   const environment = graphitiOptionsFromEnvironment(process.env);
-  const resolved = GraphitiOptionsSchema.parse({
+  const overrides = graphitiOptionOverrides(config);
+  const resolved = resolveGraphitiOptions({
     ...environment,
-    ...config,
-    listen: config.listen ?? environment.listen ?? { scheme: "tcp", host: "127.0.0.1", port: 0 },
+    ...overrides,
+    listen: overrides.listen ?? environment.listen ?? {
+      scheme: "tcp",
+      host: "127.0.0.1",
+      port: 0,
+    },
   });
-  return resolved as ResolvedGraphitiPluginConfig;
+  return { ...config, ...resolved } as ResolvedGraphitiPluginConfig;
 }
