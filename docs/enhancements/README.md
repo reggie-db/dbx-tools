@@ -13,6 +13,9 @@ date and final status.
 ## Active plans
 
 - [Promote Mastra chat turns as MLflow root traces with input and output](2026-10-05-mlflow-root-chat-input-output.md)
+- [PythonMonkey AbortSignal runtime compatibility](2026-10-07-pythonmonkey-abort-signal-runtime.md)
+  owns the generated-runtime fix required for Graphiti in Python, Spark
+  notebooks, Lakeflow Jobs, and Databricks Apps.
 
 ## Cross-repository suggestions
 
