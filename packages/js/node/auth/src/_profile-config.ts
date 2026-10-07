@@ -106,14 +106,29 @@ export function parseDatabricksConfig(source: string): IniConfig {
     if (!name.trim() || !object.isRecord(value)) {
       throw new AuthError("config", "Databricks configuration values must belong to a profile");
     }
-    const section = new Map<string, string>();
-    for (const [key, entry] of Object.entries(value)) {
-      if (entry === undefined || entry === null) continue;
-      section.set(key.trim().toLowerCase(), String(entry).trim());
-    }
-    config.set(name.trim(), section);
+    _appendConfigSections(config, [name.trim()], value);
   }
   return config;
+}
+
+function _appendConfigSections(
+  config: IniConfig,
+  path: readonly string[],
+  value: Record<string, unknown>,
+): void {
+  const section = new Map<string, string>();
+  let nested = false;
+  for (const [key, entry] of Object.entries(value)) {
+    if (object.isRecord(entry)) {
+      nested = true;
+      _appendConfigSections(config, [...path, key], entry);
+    } else if (entry !== undefined && entry !== null) {
+      section.set(key.trim().toLowerCase(), String(entry).trim());
+    }
+  }
+  if (section.size || !nested) {
+    config.set(path.join("."), section);
+  }
 }
 
 export function loadRawProfile(config: IniConfig | undefined, name: string): RawProfile {

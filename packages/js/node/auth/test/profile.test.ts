@@ -33,6 +33,14 @@ describe("Databricks profile resolution", () => {
     assert.equal(config.get("DEFAULT")?.get("token"), "value=with=equals");
   });
 
+  it("preserves dots in Databricks profile names", () => {
+    const name = "oauth.cloud.databricks.com-workspace";
+    const config = parseDatabricksConfig(`[${name}]\nhost=https://example.cloud.databricks.com\n`);
+
+    assert.equal(config.get(name)?.get("host"), "https://example.cloud.databricks.com");
+    assert.equal(config.has("oauth"), false);
+  });
+
   it("prefers one matching CLI profile over an implicit M2M default", async () => {
     await withConfig(
       `[__settings__]\ndefault_profile = service\n\n[service]\nhost = https://example.cloud.databricks.com\nclient_id = service-id\nclient_secret = secret\n\n[user]\nhost = https://example.cloud.databricks.com\nauth_type = databricks-cli\n`,
