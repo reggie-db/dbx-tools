@@ -212,6 +212,7 @@ def _pip_install(
     environment: Mapping[str, str] | None = None,
     only_binary: Sequence[str] = (),
 ) -> None:
+    _ensure_pip()
     command = [
         sys.executable,
         "-m",
@@ -237,6 +238,25 @@ def _pip_install(
             f"into {sys.prefix}:\n{result.stdout}"
         )
     importlib.invalidate_caches()
+
+
+def _ensure_pip() -> None:
+    """Install CPython's bundled pip when the active environment omits it."""
+    if importlib.util.find_spec("pip") is not None:
+        return
+    command = [sys.executable, "-m", "ensurepip", "--upgrade"]
+    result = subprocess.run(
+        command,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    importlib.invalidate_caches()
+    if result.returncode != 0 or importlib.util.find_spec("pip") is None:
+        raise RuntimeError(
+            f"Could not install pip into {sys.prefix} with ensurepip:\n{result.stdout}"
+        )
 
 
 def _npm_available() -> bool:

@@ -30,6 +30,9 @@ Install the package normally:
 %pip install dbx-tools-node-runtime
 ```
 
+If the active environment was created without pip, the first runtime
+installation uses CPython's bundled `ensurepip` before installing PythonMonkey.
+
 Prewarm the runtime explicitly when desired:
 
 ```sh

@@ -48,6 +48,7 @@ def test_pip_install_targets_the_active_environment(monkeypatch: pytest.MonkeyPa
         calls.append(command)
         return subprocess.CompletedProcess(command, 0, stdout="")
 
+    monkeypatch.setattr(bootstrap.importlib.util, "find_spec", lambda _: object())
     monkeypatch.setattr(bootstrap.subprocess, "run", run)
 
     bootstrap._pip_install("example==1.0", only_binary=("example",))
@@ -66,6 +67,37 @@ def test_pip_install_targets_the_active_environment(monkeypatch: pytest.MonkeyPa
         ]
     ]
     assert "--target" not in calls[0]
+
+
+def test_pip_install_bootstraps_pip_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+    pip_checks = iter([None, object()])
+    original_find_spec = bootstrap.importlib.util.find_spec
+
+    def find_spec(name: str):
+        return next(pip_checks) if name == "pip" else original_find_spec(name)
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="")
+
+    monkeypatch.setattr(bootstrap.importlib.util, "find_spec", find_spec)
+    monkeypatch.setattr(bootstrap.subprocess, "run", run)
+
+    bootstrap._pip_install("example==1.0")
+
+    assert calls == [
+        [sys.executable, "-m", "ensurepip", "--upgrade"],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--no-input",
+            "example==1.0",
+        ],
+    ]
 
 
 def test_nodejs_wheel_is_skipped_when_npm_is_on_path(
