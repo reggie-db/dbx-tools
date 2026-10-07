@@ -256,6 +256,7 @@ void (async () => {
 
     const dir = await mkdtemp(join(tmpdir(), "dbx-file-lock-"));
     try {
+      if (!(await flockAvailable(dir))) return;
       let backend: FileLockBackend | undefined;
       await withFileLock("flock-check", () => undefined, {
         dir,
@@ -275,6 +276,7 @@ void (async () => {
 
     const dir = await mkdtemp(join(tmpdir(), "dbx-file-lock-"));
     try {
+      if (!(await flockAvailable(dir))) return;
       let release!: () => void;
       const first = withFileLock(
         "held-flock",
@@ -305,6 +307,18 @@ void (async () => {
     }
   });
 });
+
+async function flockAvailable(dir: string): Promise<boolean> {
+  try {
+    await withFileLock("flock-probe", () => undefined, { dir, backends: ["flock"] });
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message === "withFileLock: no lock backend available") {
+      return false;
+    }
+    throw error;
+  }
+}
 
 describe("acquireFileLock", () => {
   it("returns an idempotent explicit lease", async () => {

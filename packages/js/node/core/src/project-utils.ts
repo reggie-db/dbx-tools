@@ -128,7 +128,7 @@ export function root(cwd?: string): string | undefined {
     current = dirname(current);
   }
   const boundaries = new Set(
-    [npmRoot(resolved), gitRoot(resolved)]
+    [npmBoundary(resolved), gitRoot(resolved)]
       .filter((path): path is string => path !== undefined)
       .map((path) => resolve(path)),
   );
@@ -159,6 +159,15 @@ export function root(cwd?: string): string | undefined {
     }
     current = parent;
   }
+}
+
+function npmBoundary(cwd: string): string | undefined {
+  const candidate = npmRoot(cwd);
+  if (!candidate) return undefined;
+  const resolved = resolve(candidate);
+  if (fileStatSync(join(resolved, "package.json"))?.isFile()) return resolved;
+  if (fileStatSync(join(resolved, "node_modules"))?.isDirectory()) return resolved;
+  return undefined;
 }
 
 /**

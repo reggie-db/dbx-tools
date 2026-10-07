@@ -15,7 +15,7 @@
  * @module
  */
 
-import { lakebase } from "@databricks/appkit";
+import { lakebase, type WorkspaceClient } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import { authStorage } from "@dbx-tools/auth-gate";
 import { email } from "@dbx-tools/email";
@@ -23,10 +23,14 @@ import { object } from "@dbx-tools/shared-core";
 import { authGate, type AuthGateApi, type AuthGateConfig } from "@dbx-tools/tunnel";
 
 /** Boot the gate app and return the handlers the proxy authenticates against. */
-export async function startGateApp(config: AuthGateConfig): Promise<AuthGateApi> {
+export async function startGateApp(
+  config: AuthGateConfig,
+  client?: WorkspaceClient,
+): Promise<AuthGateApi> {
   // No `server()` plugin: nothing here listens. `plugins` order matters - `email`
   // registers its transport before `authGate` looks for a sibling to send with.
   const plugins = await appkit.createApp({
+    client,
     plugins: [
       ...(authStorage.shouldUseLakebase(config) ? [lakebase()] : []),
       ...(config.sendCode ? [] : [email()]),

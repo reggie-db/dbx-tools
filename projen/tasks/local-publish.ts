@@ -33,6 +33,11 @@ export interface LocalPublishResult {
   readonly python: boolean;
 }
 
+/** Resolve a sibling release task after task implementations are flattened. */
+export function localPublishTaskPath(task: "publish.ts" | "publish-python.ts"): string {
+  return fileURLToPath(new URL(task, import.meta.url));
+}
+
 /** Build and publish the current workspace directly to local registries. */
 export async function publishLocalRelease(
   options: LocalPublishOptions,
@@ -54,7 +59,7 @@ export async function publishLocalRelease(
   }
 
   if (localRegistry) {
-    const publishNpmScript = fileURLToPath(new URL("../publish.ts", import.meta.url));
+    const publishNpmScript = localPublishTaskPath("publish.ts");
     logger.info(`building and publishing npm workspace to ${localRegistry}`);
     publishes.push(
       runTaskCommandAsync(root, process.execPath, [
@@ -67,7 +72,7 @@ export async function publishLocalRelease(
   }
 
   if (localPypi) {
-    const publishPythonScript = fileURLToPath(new URL("../publish-python.ts", import.meta.url));
+    const publishPythonScript = localPublishTaskPath("publish-python.ts");
     logger.info(`building and publishing Python workspace to ${localPypi.publishUrl}`);
     publishes.push(
       runTaskCommandAsync(root, process.execPath, [
