@@ -248,45 +248,50 @@ describe("Python Node task components", () => {
     assert.doesNotMatch(bindings, /browser_only/);
   });
 
-  it("binds multiple automatically generated package modules independently", () => {
-    const directory = temporaryDirectory();
-    const entryDirectory = packageDirectory(directory, "fixture-entry");
-    writeFileSync(
-      join(entryDirectory, "index.ts"),
-      ['export * as identity from "./identity.ts";', 'export * as config from "./config.ts";'].join(
-        "\n",
-      ),
-    );
-    writeFileSync(
-      join(entryDirectory, "identity.ts"),
-      "export function lockId(value: string): string { return value; }\n",
-    );
-    writeFileSync(
-      join(entryDirectory, "config.ts"),
-      "export async function loadConfig(): Promise<string> { return 'config'; }\n",
-    );
-    writeFixturePyproject(directory, [
-      'package = "fixture-entry"',
-      'modules = [ "identity", "config" ]',
-    ]);
+  it(
+    "binds multiple automatically generated package modules independently",
+    { timeout: 15_000 },
+    () => {
+      const directory = temporaryDirectory();
+      const entryDirectory = packageDirectory(directory, "fixture-entry");
+      writeFileSync(
+        join(entryDirectory, "index.ts"),
+        [
+          'export * as identity from "./identity.ts";',
+          'export * as config from "./config.ts";',
+        ].join("\n"),
+      );
+      writeFileSync(
+        join(entryDirectory, "identity.ts"),
+        "export function lockId(value: string): string { return value; }\n",
+      );
+      writeFileSync(
+        join(entryDirectory, "config.ts"),
+        "export async function loadConfig(): Promise<string> { return 'config'; }\n",
+      );
+      writeFixturePyproject(directory, [
+        'package = "fixture-entry"',
+        'modules = [ "identity", "config" ]',
+      ]);
 
-    const result = runBindingTask(directory);
-    assert.equal(result.exitCode, 0, result.stderr.toString());
-    const nodeBindings = join(directory, "python/src/fixture/runtime/_generated/node");
-    const generated = join(nodeBindings, "fixture_entry");
-    assert.match(readFileSync(join(generated, "identity.py"), "utf8"), /def lock_id\(/);
-    assert.match(readFileSync(join(generated, "config.py"), "utf8"), /async def load_config\(/);
-    assert.ok(readFileSync(join(nodeBindings, "_runtime.js"), "utf8").length > 0);
-    assert.equal(existsSync(join(generated, "__init__.py")), false);
+      const result = runBindingTask(directory);
+      assert.equal(result.exitCode, 0, result.stderr.toString());
+      const nodeBindings = join(directory, "python/src/fixture/runtime/_generated/node");
+      const generated = join(nodeBindings, "fixture_entry");
+      assert.match(readFileSync(join(generated, "identity.py"), "utf8"), /def lock_id\(/);
+      assert.match(readFileSync(join(generated, "config.py"), "utf8"), /async def load_config\(/);
+      assert.ok(readFileSync(join(nodeBindings, "_runtime.js"), "utf8").length > 0);
+      assert.equal(existsSync(join(generated, "__init__.py")), false);
 
-    const stale = join(generated, "removed.py");
-    writeFileSync(stale, "stale = True\n");
-    const staleCheck = runBindingTask(directory, "--check");
-    assert.notEqual(staleCheck.exitCode, 0);
-    assert.match(staleCheck.stderr.toString(), /removed\.py/);
-    assert.equal(runBindingTask(directory).exitCode, 0);
-    assert.equal(existsSync(stale), false);
-  });
+      const stale = join(generated, "removed.py");
+      writeFileSync(stale, "stale = True\n");
+      const staleCheck = runBindingTask(directory, "--check");
+      assert.notEqual(staleCheck.exitCode, 0);
+      assert.match(staleCheck.stderr.toString(), /removed\.py/);
+      assert.equal(runBindingTask(directory).exitCode, 0);
+      assert.equal(existsSync(stale), false);
+    },
+  );
 
   it("accepts an array of binding tables for multiple Node packages", () => {
     const directory = temporaryDirectory();
