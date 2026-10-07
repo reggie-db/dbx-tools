@@ -381,19 +381,26 @@ export function resolveDatabricksProfile(
   environment: Environment = process.env,
 ): DatabricksProfile {
   const inApp = environmentUtils.isDatabricksAppEnv({ ...environment });
-  const environmentProfile = stringUtils.trimToUndefined(environment.DATABRICKS_CONFIG_PROFILE);
-  const explicitProfile = Boolean(
-    stringUtils.trimToUndefined(options.profile) ?? environmentProfile,
+  const configPath = resolveConfigFile(options.configFile, environment);
+  const config = loadConfig(options.configFile, false, environment);
+  const optionProfile = stringUtils.trimToUndefined(options.profile);
+  const configuredEnvironmentProfile = stringUtils.trimToUndefined(
+    environment.DATABRICKS_CONFIG_PROFILE,
   );
-  const requestToken = requestOboToken(options.requestHeaders, options.accessTokenHeader);
-  const explicitAuthType =
-    options.authType ??
-    (!inApp && !explicitProfile ? parseAuthType(environment.DATABRICKS_AUTH_TYPE) : undefined);
+  const environmentProfile =
+    configuredEnvironmentProfile && config?.has(configuredEnvironmentProfile)
+      ? configuredEnvironmentProfile
+      : undefined;
   const appServicePrincipal = [
     environment.DATABRICKS_HOST,
     environment.DATABRICKS_CLIENT_ID,
     environment.DATABRICKS_CLIENT_SECRET,
   ].every((value) => Boolean(stringUtils.trimToUndefined(value)));
+  const explicitProfile = Boolean(optionProfile ?? environmentProfile);
+  const requestToken = requestOboToken(options.requestHeaders, options.accessTokenHeader);
+  const explicitAuthType =
+    options.authType ??
+    (!inApp && !explicitProfile ? parseAuthType(environment.DATABRICKS_AUTH_TYPE) : undefined);
   const selectedAuthType =
     !inApp || explicitProfile || explicitAuthType
       ? explicitAuthType
@@ -406,9 +413,7 @@ export function resolveDatabricksProfile(
     selectedAuthType === AuthType.AppOnBehalfOf ||
     selectedAuthType === AuthType.AppServicePrincipal;
   const ignoreAmbientCredentials = explicitProfile && !appAuth;
-  const configPath = resolveConfigFile(options.configFile, environment);
-  const config = loadConfig(options.configFile, false, environment);
-  const requestedName = stringUtils.trimToUndefined(options.profile) ?? environmentProfile;
+  const requestedName = optionProfile ?? environmentProfile;
   const profileName = resolveProfileName(
     requestedName,
     explicitProfile,
@@ -425,12 +430,13 @@ export function resolveDatabricksProfile(
   ].some((value) => Boolean(stringUtils.trimToUndefined(value)));
   const selectedProfile =
     explicitProfile || (!ambientCredentials && config?.has(profileName)) ? profileName : undefined;
-  const configured = loadRawProfile(config, profileName);
+  const configured = selectedProfile ? loadRawProfile(config, profileName) : {};
+  const credentialName = selectedProfile ?? "ambient";
   const ambient = (name: keyof NodeJS.ProcessEnv): string | undefined =>
     ignoreAmbientCredentials ? undefined : stringUtils.trimToUndefined(environment[name]);
   const host = normalizeHost(
     options.host ?? ambient("DATABRICKS_HOST") ?? configured.host,
-    profileName,
+    credentialName,
   );
   const accountId =
     stringUtils.trimToUndefined(options.accountId) ??
@@ -463,7 +469,7 @@ export function resolveDatabricksProfile(
     authType === AuthType.DatabricksCli
       ? (clientIdValue ?? DEFAULT_CLIENT_ID)
       : authType === AuthType.OAuthM2M || authType === AuthType.AppServicePrincipal
-        ? (clientIdValue ?? missing(profileName, "client_id"))
+        ? (clientIdValue ?? missing(credentialName, "client_id"))
         : (clientIdValue ?? "");
   const scopes = options.scopes?.length
     ? stringUtils.parseList(options.scopes)
@@ -476,9 +482,9 @@ export function resolveDatabricksProfile(
   const principal =
     authType === AuthType.OAuthM2M || authType === AuthType.AppServicePrincipal
       ? clientId
-      : profileName;
+      : credentialName;
   const cacheKey = credentialCacheKey({
-    name: profileName,
+    name: credentialName,
     host,
     accountId,
     workspaceId,
@@ -489,7 +495,7 @@ export function resolveDatabricksProfile(
     accessToken,
   });
   logger.debug("resolved Databricks profile", {
-    profile: profileName,
+    profile: credentialName,
     host,
     authType,
     target,
@@ -503,7 +509,7 @@ export function resolveDatabricksProfile(
     configPath,
   });
   return {
-    name: profileName,
+    name: credentialName,
     ...(selectedProfile ? { selectedProfile } : {}),
     host,
     ...(accountId ? { accountId } : {}),

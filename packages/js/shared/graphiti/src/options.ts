@@ -67,7 +67,11 @@ export const GraphitiOptionsSchema = z
       .min(1)
       .optional()
       .describe("PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL.")
-      .meta({ env: "DATABASE_URL", helpDefault: false }),
+      .meta({ env: ["LAKEBASE_ENDPOINT", "DATABASE_URL"], helpDefault: false }),
+    databaseSchema: graphitiText("PostgreSQL schema used for Lakebase graph tables.")
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Database schema must be a PostgreSQL identifier.")
+      .default("dbx_tools_graphiti")
+      .meta({ env: "GRAPHITI_DATABASE_SCHEMA" }),
   })
   .strict()
   .describe("Graphiti options accepted by Node, CLI, AppKit, and browser callers.");

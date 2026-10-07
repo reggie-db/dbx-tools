@@ -82,12 +82,12 @@ class PGGraphMaintenanceOperations(GraphMaintenanceOperations):
 
         for vt in VERTEX_TABLES:
             vdim = embedding_dim if vt in ('entity_nodes', 'community_nodes') else None
-            with suppress(TableExistsError, Exception):
+            with suppress(TableExistsError):
                 await client.create_vertex_table(vt, vector_dim=vdim)
 
         for edef in EDGE_DEFS:
             vdim = embedding_dim if edef.get('vector') else None
-            with suppress(TableExistsError, Exception):
+            with suppress(TableExistsError):
                 await client.create_edge_table(
                     edef['name'],
                     from_vertex_table=edef['from'],
@@ -98,12 +98,10 @@ class PGGraphMaintenanceOperations(GraphMaintenanceOperations):
                 )
 
         for stmt in _tsvector_ddl():
-            with suppress(Exception):
-                await client._execute(stmt)
+            await client._execute(stmt)
 
         for stmt in _extra_index_ddl():
-            with suppress(Exception):
-                await client._execute(stmt)
+            await client._execute(stmt)
 
     async def build_indices_and_constraints_raw(self, _conn) -> None:
         pass

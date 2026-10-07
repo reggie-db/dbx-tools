@@ -15,6 +15,7 @@ describe("Graphiti options", () => {
     assert.equal(options.embedderModel, "gte-large-en");
     assert.equal(options.embedderDimensions, 1024);
     assert.equal(options.startupTimeoutMs, 180_000);
+    assert.equal(options.databaseSchema, "dbx_tools_graphiti");
     assert.deepEqual(options.listen, {
       scheme: "tcp",
       host: "127.0.0.1",
@@ -36,6 +37,7 @@ describe("Graphiti options", () => {
         DATABRICKS_CONFIG_PROFILE: "PROFILE",
         TEMPERATURE: "0.25",
         DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS: "240000",
+        GRAPHITI_DATABASE_SCHEMA: "graphiti_memory",
         GRAPHITI_HOME: "/graphiti",
         GRAPHITI_LISTEN: "tcp://localhost:8100",
       }),
@@ -43,9 +45,26 @@ describe("Graphiti options", () => {
         profile: "PROFILE",
         temperature: 0.25,
         startupTimeoutMs: 240_000,
+        databaseSchema: "graphiti_memory",
         graphitiHome: "/graphiti",
         listen: { scheme: "tcp", host: "localhost", port: 8100 },
       },
+    );
+  });
+
+  it("prefers the Lakebase endpoint over the generic database URL", () => {
+    assert.equal(
+      graphitiOptionsFromEnvironment({
+        LAKEBASE_ENDPOINT: "projects/example/branches/production/endpoints/primary",
+        DATABASE_URL: "postgresql://fallback.example/graphiti",
+      }).databaseUrl,
+      "projects/example/branches/production/endpoints/primary",
+    );
+    assert.equal(
+      graphitiOptionsFromEnvironment({
+        DATABASE_URL: "postgresql://fallback.example/graphiti",
+      }).databaseUrl,
+      "postgresql://fallback.example/graphiti",
     );
   });
 
@@ -59,6 +78,7 @@ describe("Graphiti options", () => {
     assert.equal(environment.MODEL_NAME, "databricks-gpt-5-nano");
     assert.equal(environment.EMBEDDER_MODEL, "gte-large-en");
     assert.equal(environment.DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS, "180000");
+    assert.equal(environment.GRAPHITI_DATABASE_SCHEMA, "dbx_tools_graphiti");
     assert.equal(environment.GRAPHITI_LISTEN, "tcp://localhost:8100");
     assert.equal(environment.DATABASE_URL, undefined);
     assert.ok(Object.values(environment).every((value) => typeof value === "string"));
@@ -67,5 +87,9 @@ describe("Graphiti options", () => {
   it("rejects non-positive startup budgets", () => {
     assert.throws(() => resolveGraphitiOptions({ startupTimeoutMs: 0 }));
     assert.throws(() => resolveGraphitiOptions({ startupTimeoutMs: -1 }));
+  });
+
+  it("rejects database schema values that require SQL quoting", () => {
+    assert.throws(() => resolveGraphitiOptions({ databaseSchema: "graphiti-memory" }));
   });
 });

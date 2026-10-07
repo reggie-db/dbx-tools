@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlencode, urlsplit
 
+import asyncpg
 from platformdirs import user_data_path
 
 if TYPE_CHECKING:
@@ -54,7 +55,11 @@ async def _start_database(
         return await _start_embedded_database(options.get("graphitiHome"))
     if not _uses_lakebase_credentials(address):
         return _DatabaseRuntime(dsn=address)
-    return await _start_lakebase_database(address, options.get("profile"))
+    return await _start_lakebase_database(
+        address,
+        options.get("profile"),
+        options["databaseSchema"],
+    )
 
 
 async def _start_embedded_database(home: str | None) -> _DatabaseRuntime:
@@ -80,6 +85,7 @@ async def _start_embedded_database(home: str | None) -> _DatabaseRuntime:
 async def _start_lakebase_database(
     address: str,
     profile: str | None,
+    schema: str,
 ) -> _DatabaseRuntime:
     """Resolve Lakebase coordinates and mint a credential for each new pool connection."""
     client = create_lakebase_client({"profile": profile}) if profile else create_lakebase_client()
@@ -88,11 +94,42 @@ async def _start_lakebase_database(
     async def password() -> str:
         return await client.generate_database_credential(resolved["endpoint"])
 
+    dsn = _lakebase_dsn(resolved)
+    connection = await asyncpg.connect(dsn, password=await password())
+    try:
+        await connection.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+        extension_schema = await _ensure_vector_extension(connection, schema)
+    finally:
+        await connection.close()
+
+    search_path = [schema]
+    if extension_schema != schema:
+        search_path.append(extension_schema)
+    search_path.append("public")
     return _DatabaseRuntime(
-        dsn=_lakebase_dsn(resolved),
-        connection_options={"password": password},
+        dsn=dsn,
+        connection_options={
+            "password": password,
+            "server_settings": {"search_path": ", ".join(search_path)},
+        },
         _lakebase=client,
     )
+
+
+async def _ensure_vector_extension(connection: asyncpg.Connection, schema: str) -> str:
+    """Install vector in the Graphiti schema or locate its database-wide installation."""
+    query = (
+        "SELECT quote_ident(n.nspname) FROM pg_extension e "
+        "JOIN pg_namespace n ON n.oid = e.extnamespace "
+        "WHERE e.extname = 'vector'"
+    )
+    extension_schema = await connection.fetchval(query)
+    if extension_schema is None:
+        await connection.execute(f'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA "{schema}"')
+        extension_schema = await connection.fetchval(query)
+    if extension_schema is None:
+        raise RuntimeError("PostgreSQL vector extension installation did not complete")
+    return extension_schema
 
 
 def _open_embedded_server(path: Path) -> embedded_postgres.PostgresServer:

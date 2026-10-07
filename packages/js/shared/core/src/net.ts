@@ -24,6 +24,9 @@ const URL_SCHEME_PREFIX = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)/;
 const URL_PATH_SEGMENT_TRIM = /^\/+|\/+$/g;
 const URL_SCHEME_SEPARATOR = "://";
 
+/** Highest valid TCP port number. */
+export const MAX_TCP_PORT = 65_535;
+
 /** Total bit width of an address of each {@link IpVersion}. */
 const IP_BITS: Readonly<Record<IpVersion, number>> = { 4: 32, 6: 128 };
 const IPV4_OCTET = /^\d{1,3}$/;

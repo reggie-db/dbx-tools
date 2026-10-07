@@ -11,6 +11,7 @@ import {
   parseDatabricksConfig,
   resolveDatabricksProfile,
 } from "../src/_profile-config.ts";
+import { resolveProfile } from "../src/profile.ts";
 
 async function withConfig(source: string, action: (path: string) => void | Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), "dbx-tools-auth-profile-"));
@@ -39,6 +40,27 @@ describe("Databricks profile resolution", () => {
 
     assert.equal(config.get(name)?.get("host"), "https://example.cloud.databricks.com");
     assert.equal(config.has("oauth"), false);
+  });
+
+  it("returns null instead of manufacturing DEFAULT when no profile exists", async () => {
+    await withConfig("", (configFile) => {
+      assert.equal(resolveProfile({ configFile }), null);
+    });
+  });
+
+  it("returns null when the selected profile is incomplete", async () => {
+    await withConfig("[DEFAULT]\nauth_type=pat\ntoken=unused\n", (configFile) => {
+      assert.equal(resolveProfile({ configFile, profile: "DEFAULT" }), null);
+    });
+  });
+
+  it("discovers a configured DEFAULT profile automatically", async () => {
+    await withConfig(
+      "[DEFAULT]\nhost=https://example.cloud.databricks.com\nauth_type=databricks-cli\n",
+      (configFile) => {
+        assert.equal(resolveProfile({ configFile })?.name, "DEFAULT");
+      },
+    );
   });
 
   it("prefers one matching CLI profile over an implicit M2M default", async () => {
@@ -145,5 +167,24 @@ describe("Databricks profile resolution", () => {
     );
     assert.equal(profile.authType, AuthType.AppOnBehalfOf);
     assert.equal(profile.accessToken, "request-token");
+  });
+
+  it("ignores a nonexistent inherited environment profile", () => {
+    const profile = resolveDatabricksProfile(
+      {},
+      {
+        DATABRICKS_CONFIG_FILE: join(tmpdir(), "dbx-tools-auth-missing-machine-profile"),
+        DATABRICKS_CONFIG_PROFILE: "DEFAULT",
+        DATABRICKS_HOST: "https://example.cloud.databricks.com",
+        DATABRICKS_CLIENT_ID: "app-id",
+        DATABRICKS_CLIENT_SECRET: "app-secret",
+      },
+    );
+
+    assert.equal(profile.authType, AuthType.OAuthM2M);
+    assert.equal(profile.name, "ambient");
+    assert.equal(profile.selectedProfile, undefined);
+    assert.equal(profile.host, "https://example.cloud.databricks.com");
+    assert.equal(profile.clientId, "app-id");
   });
 });

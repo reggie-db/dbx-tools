@@ -30,9 +30,10 @@ export type { ExecutionResult, Executor, ExecutionFailure, RunOptions } from "./
 export type { MemoizeOptions } from "./src/function-utils.ts";
 export type { HeaderLike } from "./src/http.ts";
 export type { LogLevel, Logger } from "./src/log.ts";
+export { MAX_TCP_PORT } from "./src/net.ts";
 export type { UrlLike, IpVersion, ParsedIp, Cidr, UrlBuilder, ParseEmailsOptions } from "./src/net.ts";
 export type { Sequence, Container, Collection, OneOrMany, NameLike, NonFunctionKeys, SerializablePrimitive, SerializableValue, ToNumberOptions, ToDateOptions, ToDurationOptions, DeepEqualComparator } from "./src/object.ts";
-export { DatabricksEnvironmentNamesSchema, databricksEnvironmentNames, MAX_TCP_PORT, tcpPortSchema, tcpPortOrZeroSchema, normalizedUrlSchema, DatabricksOptionsSchema, LakebaseOptionsSchema } from "./src/options.ts";
+export { DatabricksEnvironmentNamesSchema, databricksEnvironmentNames, tcpPortSchema, tcpPortOrZeroSchema, normalizedUrlSchema, DatabricksOptionsSchema, LakebaseOptionsSchema } from "./src/options.ts";
 export type { DatabricksEnvironmentNames, DatabricksOptions, OptionSerializationFormat, LakebaseOptions, OptionValueMap, ListenScheme, TcpListenAddress, UnixListenAddress, ListenAddress, ListenAddressOptions, ListenAddressInput } from "./src/options.ts";
 export type { PatternOptions } from "./src/pattern.ts";
 export type { PredicateFunction, TypePredicateFunction, PredicateInput, Predicate } from "./src/predicate.ts";

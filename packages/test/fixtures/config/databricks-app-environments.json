@@ -9,6 +9,14 @@
     "detected": true
   },
   {
+    "name": "valid app environment without app name",
+    "environment": {
+      "DATABRICKS_HOST": "https://workspace.example.com",
+      "DATABRICKS_APP_PORT": "8000"
+    },
+    "detected": true
+  },
+  {
     "name": "maximum port",
     "environment": {
       "DATABRICKS_APP_NAME": "demo",

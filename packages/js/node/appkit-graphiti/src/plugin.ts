@@ -15,7 +15,7 @@ import type {
 } from "@databricks/appkit/beta";
 import { appkit as dbxAppkit, toolkitEntries } from "@dbx-tools/appkit";
 import { configUtils } from "@dbx-tools/core";
-import { resolveGraphitiOptions } from "@dbx-tools/graphiti/options";
+import { graphitiOptionOverrides, resolveGraphitiOptions } from "@dbx-tools/graphiti/options";
 import {
   graphitiOpenApi,
   startGraphitiRuntime,
@@ -113,7 +113,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
       configured.listen.port,
     );
     const resolved = resolveGraphitiOptions({
-      ...configured,
+      ...graphitiOptionOverrides(configured),
       listen: { ...configured.listen, port: graphitiPort },
     });
     this.resolved = resolved;
@@ -136,10 +136,13 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
   }
 
   getAgentTools(): AgentToolDefinition[] {
-    return Object.values(this.toolContracts).map(({ definition }) => ({
-      ...definition,
-      annotations: toolAnnotations(definition.name),
-    }));
+    const names = new Set(Object.keys(this.toolContracts));
+    return Object.entries(this.toolContracts)
+      .filter(([name]) => !hasUnsuffixedTool(name, names))
+      .map(([, { definition }]) => ({
+        ...definition,
+        annotations: toolAnnotations(definition.name),
+      }));
   }
 
   async executeAgentTool(
@@ -196,7 +199,11 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
   private async stopSidecar(): Promise<void> {
     if (this.stopping) return;
     this.stopping = true;
-    await this.runtime?.stop();
+    const startup = this.startup;
+    const runtime = this.runtime;
+    await runtime?.stop();
+    await startup?.catch(() => undefined);
+    if (this.runtime !== runtime) await this.runtime?.stop();
     this.runtime = undefined;
     this.startup = undefined;
   }
@@ -230,6 +237,12 @@ function toolAnnotations(name: string): ToolAnnotations {
     effect: WRITE_TOOLS.has(name) ? "write" : "read",
     requiresUserContext: true,
   };
+}
+
+/** Whether a synchronous tool has an equivalent non-blocking operation. */
+function hasUnsuffixedTool(name: string, names: ReadonlySet<string>): boolean {
+  const suffix = name.endsWith("_sync") ? "_sync" : name.endsWith("sync") ? "sync" : undefined;
+  return suffix ? names.has(name.slice(0, -suffix.length)) : false;
 }
 
 function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {

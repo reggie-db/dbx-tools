@@ -54,6 +54,10 @@ class GraphitiOptions:
         default=None,
         metadata={"javascript_name": "databaseUrl"},
     )
+    database_schema: str | None = field(
+        default=None,
+        metadata={"javascript_name": "databaseSchema"},
+    )
 
 
 class GraphitiOptionsResponse(TypedDict):
@@ -67,6 +71,7 @@ class GraphitiOptionsResponse(TypedDict):
     startupTimeoutMs: NotRequired[int | float]
     listen: NotRequired[Any]
     databaseUrl: NotRequired[str]
+    databaseSchema: NotRequired[str]
 
 
 class TcpListenAddressResponse(TypedDict):
@@ -83,6 +88,7 @@ class ResolvedGraphitiOptionsResponse(TypedDict):
     structuredOutputMode: str
     startupTimeoutMs: int | float
     listen: TcpListenAddressResponse
+    databaseSchema: str
     profile: NotRequired[str]
     graphitiHome: NotRequired[str]
     databaseUrl: NotRequired[str]

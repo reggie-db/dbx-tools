@@ -9,6 +9,7 @@ requires-python = ">=3.10,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
 dependencies = [
+  "asyncpg>=0.30,<1",
   "fastapi>=0.115,<1",
   "graphiti-core==0.30.2",
   "httpx>=0.28,<1",
@@ -18,7 +19,7 @@ dependencies = [
   "post-graph>=0.7,<1",
   "pydantic-settings>=2,<3",
   "pyyaml>=6,<7",
-  "typing-extensions>=4.15,<5",
+  "typing-extensions>=4,<5",
   "uvicorn>=0.44",
   "dbx-tools-node-runtime==0.9.54"
 ]
@@ -70,6 +71,8 @@ include = [
 ]
 
   [tool.dbx_tools.sync.replace]
+  "import asyncio\n" = ""
+  "from contextlib import asynccontextmanager, suppress" = "from contextlib import asynccontextmanager"
   "GraphProvider.POSTGRAPH" = '"postgraph"'
   "        embedding_dim: int | None = None,\n    ):" = """
         embedding_dim: int | None = None,
@@ -79,6 +82,15 @@ include = [
         self._embedding_dim = embedding_dim or EMBEDDING_DIM
         self._connection_options = connection_options or {}"""
   "            self._client = AsyncPostGraph(dsn=self._dsn)" = "            self._client = AsyncPostGraph(dsn=self._dsn, **self._connection_options)"
+  "        self._init_task: asyncio.Task | None = None\n        try:\n            loop = asyncio.get_running_loop()\n            self._init_task = loop.create_task(self._init())\n        except RuntimeError:\n            pass\n\n    async def _init(self):\n        await self._ensure_client()\n        await self.build_indices_and_constraints()\n\n" = ""
+  "        if self._init_task is not None and not self._init_task.done():\n            self._init_task.cancel()\n            with suppress(asyncio.CancelledError):\n                await self._init_task\n" = ""
+  "with suppress(TableExistsError, Exception):" = "with suppress(TableExistsError):"
+  "        for stmt in _tsvector_ddl():\n            with suppress(Exception):\n                await client._execute(stmt)" = """
+        for stmt in _tsvector_ddl():
+            await client._execute(stmt)"""
+  "        for stmt in _extra_index_ddl():\n            with suppress(Exception):\n                await client._execute(stmt)" = """
+        for stmt in _extra_index_ddl():
+            await client._execute(stmt)"""
 
 [[tool.dbx_tools.sync]]
 name = "graphiti_server"

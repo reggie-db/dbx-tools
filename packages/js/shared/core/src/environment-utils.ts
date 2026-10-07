@@ -1,5 +1,5 @@
+import { MAX_TCP_PORT } from "./net.ts";
 import { toBoolean } from "./object.ts";
-import { MAX_TCP_PORT } from "./options.ts";
 
 function runtimeEnvironment(): Record<string, string | undefined> {
   return (
@@ -11,7 +11,7 @@ function runtimeEnvironment(): Record<string, string | undefined> {
   );
 }
 
-/** Detect a Databricks App runtime from its required name, host, and port. */
+/** Detect a Databricks App runtime from its required host and App-specific port. */
 export function isDatabricksAppEnv(
   source: Record<string, string | undefined> = runtimeEnvironment(),
 ): boolean {
@@ -20,7 +20,7 @@ export function isDatabricksAppEnv(
   const name = source.DATABRICKS_APP_NAME?.trim();
   const host = source.DATABRICKS_HOST?.trim();
   const port = source.DATABRICKS_APP_PORT?.trim();
-  if (!name || /\$\{[^}]+\}/.test(name) || !host || !port || !/^\d+$/.test(port)) return false;
+  if ((name && /\$\{[^}]+\}/.test(name)) || !host || !port || !/^\d+$/.test(port)) return false;
   const parsedPort = Number(port);
   if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > MAX_TCP_PORT) return false;
   try {

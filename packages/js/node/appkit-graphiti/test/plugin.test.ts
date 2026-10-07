@@ -122,6 +122,31 @@ describe("GraphitiPlugin", () => {
     release();
   });
 
+  it("stops a runtime assigned while startup is pending", async () => {
+    const plugin = new GraphitiPlugin({});
+    let releaseStartup!: () => void;
+    let stops = 0;
+    const startup = new Promise<void>((resolve) => {
+      releaseStartup = () => {
+        Object.assign(plugin, {
+          runtime: {
+            stop: async () => {
+              stops += 1;
+            },
+          },
+        });
+        resolve();
+      };
+    });
+    Object.assign(plugin, { startup });
+
+    const shutdown = plugin.shutdown();
+    releaseStartup();
+    await shutdown;
+
+    assert.equal(stops, 1);
+  });
+
   it("builds toolkit entries from OpenAPI contracts", async () => {
     const plugin = new GraphitiPlugin({});
     Object.assign(plugin, {
@@ -136,6 +161,22 @@ describe("GraphitiPlugin", () => {
     assert.deepEqual(Object.keys(toolkit), ["remember"]);
     assert.equal(toolkit.remember?.def.description, "Upstream description for add_memory");
     assert.equal(toolkit.remember?.annotations?.effect, "write");
+  });
+
+  it("hides synchronous tools when a non-blocking counterpart exists", () => {
+    const plugin = new GraphitiPlugin({});
+    Object.assign(plugin, {
+      toolContracts: {
+        add_memory: fixtureContract("add_memory"),
+        add_memory_sync: fixtureContract("add_memory_sync"),
+        orphan_sync: fixtureContract("orphan_sync"),
+      },
+    });
+
+    assert.deepEqual(
+      plugin.getAgentTools().map(({ name }) => name),
+      ["add_memory", "orphan_sync"],
+    );
   });
 
   it("overrides model-supplied memory scope before direct HTTP execution", async () => {

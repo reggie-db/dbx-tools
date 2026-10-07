@@ -5,9 +5,11 @@
  */
 
 import { z } from "zod";
-import { isLoopbackHost, urlBuilder } from "./net.ts";
+import { isLoopbackHost, MAX_TCP_PORT, urlBuilder } from "./net.ts";
 import { isRecord, toBoolean } from "./object.ts";
 import { parseList, toIdentifierWithOptions, toSlug } from "./string-utils.ts";
+
+export { MAX_TCP_PORT } from "./net.ts";
 
 const environmentName = <T extends string>(name: T, description: string) =>
   z.literal(name).default(name).describe(description);
@@ -41,9 +43,6 @@ export type DatabricksEnvironmentNames = z.output<typeof DatabricksEnvironmentNa
 
 /** Canonical Databricks environment names derived from the owning schema. */
 export const databricksEnvironmentNames = Object.freeze(DatabricksEnvironmentNamesSchema.parse({}));
-
-/** Highest valid TCP port number. */
-export const MAX_TCP_PORT = 65_535;
 
 export const tcpPortSchema = z.coerce
   .number<number>()

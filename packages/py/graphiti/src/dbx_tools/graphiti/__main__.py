@@ -20,7 +20,9 @@ def main(argv: list[str] | None = None) -> None:
     listen = load_graphiti_options()["listen"]
     if listen["scheme"] != "tcp":
         raise SystemExit("Graphiti requires a TCP listener")
-    uvicorn.run(app, host=listen["host"], port=int(listen["port"]))
+    # PythonMonkey promise callbacks require the standard asyncio scheduler;
+    # Uvicorn's automatic uvloop selection can crash during generated calls.
+    uvicorn.run(app, host=listen["host"], port=int(listen["port"]), loop="asyncio")
 
 
 if __name__ == "__main__":

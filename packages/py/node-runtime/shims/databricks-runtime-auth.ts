@@ -1,6 +1,7 @@
 import { evaluatePython, type PythonFunction, runPythonInThread } from "./host";
 
 import type { DatabricksRuntimeAuthClient } from "@dbx-tools/auth/runtime-auth";
+import { isDatabricksAppEnv as isDatabricksAppRuntime } from "@dbx-tools/shared-core/environment-utils";
 
 interface PythonRuntimeMetadata {
   host: string;
@@ -10,9 +11,6 @@ interface PythonRuntimeMetadata {
 
 const createWorkspaceClient = evaluatePython<PythonFunction>(
   "lambda: __import__('databricks.sdk', fromlist=['WorkspaceClient']).WorkspaceClient()",
-);
-const isDatabricksRuntime = evaluatePython<PythonFunction>(
-  "lambda: bool(__import__('os').environ.get('DATABRICKS_RUNTIME_VERSION'))",
 );
 const runtimeMetadata = evaluatePython<PythonFunction>(
   "lambda client: {'host': client.config.host, 'workspaceId': getattr(client.config, 'workspace_id', None), 'principal': getattr(client.config, 'client_id', None) or getattr(client.config, 'username', None) or getattr(client.config, 'auth_type', None)}",
@@ -26,7 +24,9 @@ const authenticationHeaders = evaluatePython<PythonFunction>(
 export async function databricksRuntimeAuthClient(): Promise<
   DatabricksRuntimeAuthClient | undefined
 > {
-  if (!isDatabricksRuntime()) return undefined;
+  if (isDatabricksAppRuntime(process.env) || !process.env.DATABRICKS_RUNTIME_VERSION?.trim()) {
+    return undefined;
+  }
 
   const client = await runPythonInThread<unknown>(createWorkspaceClient);
   const metadata = await runPythonInThread<PythonRuntimeMetadata>(runtimeMetadata, client);

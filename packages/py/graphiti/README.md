@@ -110,7 +110,13 @@ Pass a regular PostgreSQL URL to use an existing database. A passwordless
 non-local URL, Lakebase resource path, or Lakebase project name is resolved by
 the generated Node Lakebase client. It injects a fresh short-lived credential
 whenever the asyncpg pool opens a physical connection, without persisting that
-credential in the URL.
+credential in the URL. Lakebase mode provisions and uses the
+`databaseSchema` schema, which defaults to `dbx_tools_graphiti`, because
+application identities do not receive write access to `public`. Set
+`GRAPHITI_DATABASE_SCHEMA` when multiple identities share one database. If the
+database has no `vector` extension, Graphiti installs it in that schema. When
+the database already has its single allowed `vector` installation, Graphiti
+discovers that extension schema for type resolution without moving it.
 
 ## Memory Writes
 

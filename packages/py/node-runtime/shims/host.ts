@@ -318,7 +318,7 @@ const host: PythonRuntimeHost = {
 };
 
 export function installPythonGlobals(): void {
-  const globals = globalThis as typeof globalThis & {
+  const globals = globalThis as unknown as {
     global?: typeof globalThis;
     self?: typeof globalThis;
     window?: typeof globalThis;
@@ -327,22 +327,28 @@ export function installPythonGlobals(): void {
   globals.global = globalThis;
   globals.self = globalThis;
   globals.window = globalThis;
-  globals.process ??= {
-    arch: String(evaluate<PythonFunction>("__import__('platform').machine")())
-      .replace("aarch64", "arm64")
-      .replace("x86_64", "x64"),
-    argv: [],
-    browser: true,
-    cwd: evaluate<PythonFunction>("__import__('os').getcwd"),
-    env: evaluate<PythonFunction>("lambda: dict(__import__('os').environ)")(),
-    nextTick: (callback: (...args: unknown[]) => void, ...args: unknown[]) =>
-      Promise.resolve().then(() => callback(...args)),
-    platform: { Darwin: "darwin", Linux: "linux", Windows: "win32" }[
-      String(evaluate<PythonFunction>("__import__('platform').system")())
-    ],
-    version: "v22.0.0",
-    versions: {},
-  };
+  const processGlobals: Record<string, unknown> = (globals.process ??= {});
+  processGlobals.arch ??= String(evaluate<PythonFunction>("__import__('platform').machine")())
+    .replace("aarch64", "arm64")
+    .replace("x86_64", "x64");
+  processGlobals.argv ??= [];
+  processGlobals.browser ??= true;
+  processGlobals.cwd ??= evaluate<PythonFunction>("__import__('os').getcwd");
+  // PythonMonkey may preinstall a partial process shim. Python remains the
+  // environment owner, so refresh env even when the process object exists.
+  const environment = evaluate<PythonFunction>(
+    "lambda: dict(__import__('os').environ)",
+  )() as Record<string, unknown>;
+  processGlobals.env = Object.fromEntries(
+    Object.entries(environment).map(([name, value]) => [name, String(value)]),
+  );
+  processGlobals.nextTick ??= (callback: (...args: unknown[]) => void, ...args: unknown[]) =>
+    Promise.resolve().then(() => callback(...args));
+  processGlobals.platform ??= { Darwin: "darwin", Linux: "linux", Windows: "win32" }[
+    String(evaluate<PythonFunction>("__import__('platform').system")())
+  ];
+  processGlobals.version ??= "v22.0.0";
+  processGlobals.versions ??= {};
 }
 
 installPythonGlobals();

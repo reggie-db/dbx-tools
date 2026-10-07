@@ -37968,31 +37968,13 @@ function parseBrandContext(input = {}) {
   return BrandContextSchema.parse(input);
 }
 var defaultBrandContext = parseBrandContext();
-// packages/js/shared/core/src/options.ts
-var exports_options = {};
-__export(exports_options, {
-  tcpPortSchema: () => tcpPortSchema,
-  tcpPortOrZeroSchema: () => tcpPortOrZeroSchema,
-  serializeOptsEnvironment: () => serializeOptsEnvironment,
-  serializeOpts: () => serializeOpts,
-  parseOpts: () => parseOpts,
-  normalizedUrlSchema: () => normalizedUrlSchema,
-  listenAddressSchema: () => listenAddressSchema,
-  formatListenAddress: () => formatListenAddress,
-  databricksEnvironmentNames: () => databricksEnvironmentNames,
-  MAX_TCP_PORT: () => MAX_TCP_PORT,
-  LakebaseOptionsSchema: () => LakebaseOptionsSchema,
-  DatabricksOptionsSchema: () => DatabricksOptionsSchema,
-  DatabricksEnvironmentNamesSchema: () => DatabricksEnvironmentNamesSchema
-});
-var import_zod3 = __toESM(require_zod(), 1);
-
 // packages/js/shared/core/src/net.ts
 var LOCAL_HOST_URL = new URL("http://localhost");
 var URL_SCHEME_DEFAULT = "https";
 var URL_SCHEME_PREFIX = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)/;
 var URL_PATH_SEGMENT_TRIM = /^\/+|\/+$/g;
 var URL_SCHEME_SEPARATOR = "://";
+var MAX_TCP_PORT = 65535;
 var IP_BITS = { 4: 32, 6: 128 };
 var IPV4_OCTET = /^\d{1,3}$/;
 var IPV6_HEXTET = /^[0-9a-fA-F]{1,4}$/;
@@ -38206,7 +38188,105 @@ function hextetsToValue(hextets) {
   return value;
 }
 
+// packages/js/shared/core/src/environment-utils.ts
+function runtimeEnvironment() {
+  return globalThis.process?.env ?? {};
+}
+function isDatabricksAppEnv(source = runtimeEnvironment()) {
+  const override = toBoolean(source.DBX_TOOLS_DATABRICKS_APP_ENV);
+  if (override !== undefined)
+    return override;
+  const name = source.DATABRICKS_APP_NAME?.trim();
+  const host = source.DATABRICKS_HOST?.trim();
+  const port = source.DATABRICKS_APP_PORT?.trim();
+  if (name && /\$\{[^}]+\}/.test(name) || !host || !port || !/^\d+$/.test(port))
+    return false;
+  const parsedPort = Number(port);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > MAX_TCP_PORT)
+    return false;
+  try {
+    const url = new URL(host);
+    return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+// packages/js/shared/core/src/http.ts
+function forEachHeaderValue(input, headerName, consumer) {
+  const headers = unwrap(input);
+  if (!headers)
+    return;
+  const target = headerName.toLowerCase();
+  if (isHeaders(headers)) {
+    if (target === "set-cookie") {
+      for (const value2 of headers.getSetCookie())
+        consumer(value2);
+      return;
+    }
+    const value = headers.get(headerName);
+    if (value !== null)
+      consumer(value);
+    return;
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    if (value == null || key.toLowerCase() !== target)
+      continue;
+    if (Array.isArray(value)) {
+      for (const item of value)
+        consumer(item);
+    } else {
+      consumer(value);
+    }
+  }
+}
+function isHeaders(value) {
+  return typeof value === "object" && value !== null && typeof value.get === "function" && typeof value.getSetCookie === "function";
+}
+function isWrapped(input) {
+  const headers = input.headers;
+  return headers != null && typeof headers === "object" && !Array.isArray(headers);
+}
+function unwrap(input) {
+  if (input == null)
+    return null;
+  if (isHeaders(input))
+    return input;
+  if (isWrapped(input))
+    return input.headers;
+  return input;
+}
+// packages/js/shared/core/src/json.ts
+function parse(text, fallback) {
+  if (typeof text !== "string" || text.trim().length === 0)
+    return fallback;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
+}
+function parseRecord(text) {
+  const parsed = parse(text);
+  return isRecord(parsed) ? parsed : undefined;
+}
 // packages/js/shared/core/src/options.ts
+var exports_options = {};
+__export(exports_options, {
+  tcpPortSchema: () => tcpPortSchema,
+  tcpPortOrZeroSchema: () => tcpPortOrZeroSchema,
+  serializeOptsEnvironment: () => serializeOptsEnvironment,
+  serializeOpts: () => serializeOpts,
+  parseOpts: () => parseOpts,
+  normalizedUrlSchema: () => normalizedUrlSchema,
+  listenAddressSchema: () => listenAddressSchema,
+  formatListenAddress: () => formatListenAddress,
+  databricksEnvironmentNames: () => databricksEnvironmentNames,
+  MAX_TCP_PORT: () => MAX_TCP_PORT,
+  LakebaseOptionsSchema: () => LakebaseOptionsSchema,
+  DatabricksOptionsSchema: () => DatabricksOptionsSchema,
+  DatabricksEnvironmentNamesSchema: () => DatabricksEnvironmentNamesSchema
+});
+var import_zod3 = __toESM(require_zod(), 1);
 var environmentName = (name, description) => import_zod3.z.literal(name).default(name).describe(description);
 var DatabricksEnvironmentNamesSchema = import_zod3.z.object({
   profile: environmentName("DATABRICKS_CONFIG_PROFILE", "Databricks CLI profile environment."),
@@ -38224,7 +38304,6 @@ var DatabricksEnvironmentNamesSchema = import_zod3.z.object({
   lakebaseEndpoint: environmentName("LAKEBASE_ENDPOINT", "Lakebase endpoint environment.")
 }).strict().describe("Canonical Databricks CLI, SDK, Apps, and Lakebase environment names.");
 var databricksEnvironmentNames = Object.freeze(DatabricksEnvironmentNamesSchema.parse({}));
-var MAX_TCP_PORT = 65535;
 var tcpPortSchema = import_zod3.z.coerce.number().int().min(1).max(MAX_TCP_PORT).describe("TCP port from 1 through 65535.");
 var tcpPortOrZeroSchema = import_zod3.z.coerce.number().int().min(0).max(MAX_TCP_PORT).describe("TCP port from 0 through 65535, where zero requests automatic allocation.");
 var normalizedUrlSchema = import_zod3.z.string().trim().min(1).refine((value) => urlBuilder(value) !== undefined, {
@@ -38442,88 +38521,6 @@ function normalizeUrl(value) {
   const normalized = url.toString();
   return url.pathname === "/" && !url.search && !url.hash ? normalized.slice(0, -1) : normalized;
 }
-
-// packages/js/shared/core/src/environment-utils.ts
-function runtimeEnvironment() {
-  return globalThis.process?.env ?? {};
-}
-function isDatabricksAppEnv(source = runtimeEnvironment()) {
-  const override = toBoolean(source.DBX_TOOLS_DATABRICKS_APP_ENV);
-  if (override !== undefined)
-    return override;
-  const name = source.DATABRICKS_APP_NAME?.trim();
-  const host = source.DATABRICKS_HOST?.trim();
-  const port = source.DATABRICKS_APP_PORT?.trim();
-  if (!name || /\$\{[^}]+\}/.test(name) || !host || !port || !/^\d+$/.test(port))
-    return false;
-  const parsedPort = Number(port);
-  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > MAX_TCP_PORT)
-    return false;
-  try {
-    const url = new URL(host);
-    return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
-  } catch {
-    return false;
-  }
-}
-// packages/js/shared/core/src/http.ts
-function forEachHeaderValue(input, headerName, consumer) {
-  const headers = unwrap(input);
-  if (!headers)
-    return;
-  const target = headerName.toLowerCase();
-  if (isHeaders(headers)) {
-    if (target === "set-cookie") {
-      for (const value2 of headers.getSetCookie())
-        consumer(value2);
-      return;
-    }
-    const value = headers.get(headerName);
-    if (value !== null)
-      consumer(value);
-    return;
-  }
-  for (const [key, value] of Object.entries(headers)) {
-    if (value == null || key.toLowerCase() !== target)
-      continue;
-    if (Array.isArray(value)) {
-      for (const item of value)
-        consumer(item);
-    } else {
-      consumer(value);
-    }
-  }
-}
-function isHeaders(value) {
-  return typeof value === "object" && value !== null && typeof value.get === "function" && typeof value.getSetCookie === "function";
-}
-function isWrapped(input) {
-  const headers = input.headers;
-  return headers != null && typeof headers === "object" && !Array.isArray(headers);
-}
-function unwrap(input) {
-  if (input == null)
-    return null;
-  if (isHeaders(input))
-    return input;
-  if (isWrapped(input))
-    return input.headers;
-  return input;
-}
-// packages/js/shared/core/src/json.ts
-function parse(text, fallback) {
-  if (typeof text !== "string" || text.trim().length === 0)
-    return fallback;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return fallback;
-  }
-}
-function parseRecord(text) {
-  const parsed = parse(text);
-  return isRecord(parsed) ? parsed : undefined;
-}
 // packages/js/shared/core/src/pattern.ts
 var log = logger("shared/pattern");
 // packages/js/shared/core/src/token.ts
@@ -38621,7 +38618,8 @@ var GraphitiOptionsSchema = import_zod4.z.object({
     loopback: true,
     port: 7272
   }).describe("Graphiti HTTP listener.").meta({ env: "GRAPHITI_LISTEN" }),
-  databaseUrl: import_zod4.z.string().trim().min(1).optional().describe("PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL.").meta({ env: "DATABASE_URL", helpDefault: false })
+  databaseUrl: import_zod4.z.string().trim().min(1).optional().describe("PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL.").meta({ env: ["LAKEBASE_ENDPOINT", "DATABASE_URL"], helpDefault: false }),
+  databaseSchema: graphitiText("PostgreSQL schema used for Lakebase graph tables.").regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Database schema must be a PostgreSQL identifier.").default("dbx_tools_graphiti").meta({ env: "GRAPHITI_DATABASE_SCHEMA" })
 }).strict().describe("Graphiti options accepted by Node, CLI, AppKit, and browser callers.");
 var GraphitiCliOptionsSchema = GraphitiOptionsSchema.describe("Graphiti options represented as Commander flags.");
 var GRAPHITI_DEFAULTS = Object.freeze(GraphitiOptionsSchema.parse({}));
@@ -39644,21 +39642,23 @@ function listDatabricksProfiles(configFile, refresh = false, environment = proce
 }
 function resolveDatabricksProfile(options, environment = process.env) {
   const inApp = isDatabricksAppEnv({ ...environment });
-  const environmentProfile = trimToUndefined(environment.DATABRICKS_CONFIG_PROFILE);
-  const explicitProfile = Boolean(trimToUndefined(options.profile) ?? environmentProfile);
-  const requestToken = requestOboToken(options.requestHeaders, options.accessTokenHeader);
-  const explicitAuthType = options.authType ?? (!inApp && !explicitProfile ? parseAuthType(environment.DATABRICKS_AUTH_TYPE) : undefined);
+  const configPath = resolveConfigFile(options.configFile, environment);
+  const config = loadConfig(options.configFile, false, environment);
+  const optionProfile = trimToUndefined(options.profile);
+  const configuredEnvironmentProfile = trimToUndefined(environment.DATABRICKS_CONFIG_PROFILE);
+  const environmentProfile = configuredEnvironmentProfile && config?.has(configuredEnvironmentProfile) ? configuredEnvironmentProfile : undefined;
   const appServicePrincipal = [
     environment.DATABRICKS_HOST,
     environment.DATABRICKS_CLIENT_ID,
     environment.DATABRICKS_CLIENT_SECRET
   ].every((value) => Boolean(trimToUndefined(value)));
+  const explicitProfile = Boolean(optionProfile ?? environmentProfile);
+  const requestToken = requestOboToken(options.requestHeaders, options.accessTokenHeader);
+  const explicitAuthType = options.authType ?? (!inApp && !explicitProfile ? parseAuthType(environment.DATABRICKS_AUTH_TYPE) : undefined);
   const selectedAuthType = !inApp || explicitProfile || explicitAuthType ? explicitAuthType : requestToken ? AuthType.AppOnBehalfOf : appServicePrincipal ? AuthType.AppServicePrincipal : undefined;
   const appAuth = selectedAuthType === AuthType.AppOnBehalfOf || selectedAuthType === AuthType.AppServicePrincipal;
   const ignoreAmbientCredentials = explicitProfile && !appAuth;
-  const configPath = resolveConfigFile(options.configFile, environment);
-  const config = loadConfig(options.configFile, false, environment);
-  const requestedName = trimToUndefined(options.profile) ?? environmentProfile;
+  const requestedName = optionProfile ?? environmentProfile;
   const profileName = resolveProfileName(requestedName, explicitProfile, config, options.preferUserToMachine ?? true);
   const ambientCredentials = [
     options.accessToken,
@@ -39669,9 +39669,10 @@ function resolveDatabricksProfile(options, environment = process.env) {
     environment.DATABRICKS_CLIENT_SECRET
   ].some((value) => Boolean(trimToUndefined(value)));
   const selectedProfile = explicitProfile || !ambientCredentials && config?.has(profileName) ? profileName : undefined;
-  const configured = loadRawProfile(config, profileName);
+  const configured = selectedProfile ? loadRawProfile(config, profileName) : {};
+  const credentialName = selectedProfile ?? "ambient";
   const ambient = (name) => ignoreAmbientCredentials ? undefined : trimToUndefined(environment[name]);
-  const host = normalizeHost(options.host ?? ambient("DATABRICKS_HOST") ?? configured.host, profileName);
+  const host = normalizeHost(options.host ?? ambient("DATABRICKS_HOST") ?? configured.host, credentialName);
   const accountId = trimToUndefined(options.accountId) ?? ambient("DATABRICKS_ACCOUNT_ID") ?? trimToUndefined(configured.accountId);
   const workspaceId = trimToUndefined(options.workspaceId) ?? ambient("DATABRICKS_WORKSPACE_ID") ?? trimToUndefined(configured.workspaceId);
   const clientIdValue = trimToUndefined(options.clientId) ?? ambient("DATABRICKS_CLIENT_ID") ?? trimToUndefined(configured.clientId);
@@ -39679,13 +39680,13 @@ function resolveDatabricksProfile(options, environment = process.env) {
   const accessToken = selectedAuthType === AuthType.AppOnBehalfOf ? requestToken : trimToUndefined(options.accessToken) ?? ambient("DATABRICKS_TOKEN") ?? trimToUndefined(configured.accessToken);
   const configuredAuthType = selectedAuthType ?? parseAuthType(ambient("DATABRICKS_AUTH_TYPE")) ?? parseAuthType(configured.authType);
   const authType = resolveAuthType(configuredAuthType, clientIdValue, clientSecret, accessToken);
-  const clientId = authType === AuthType.DatabricksCli ? clientIdValue ?? DEFAULT_CLIENT_ID : authType === AuthType.OAuthM2M || authType === AuthType.AppServicePrincipal ? clientIdValue ?? missing(profileName, "client_id") : clientIdValue ?? "";
+  const clientId = authType === AuthType.DatabricksCli ? clientIdValue ?? DEFAULT_CLIENT_ID : authType === AuthType.OAuthM2M || authType === AuthType.AppServicePrincipal ? clientIdValue ?? missing(credentialName, "client_id") : clientIdValue ?? "";
   const scopes = options.scopes?.length ? parseList(options.scopes) : parseList(configured.scopes?.split(",") ?? ["all-apis"]);
   const target = options.target ? parseTarget(options.target) : inferTarget(host, accountId);
   const groupId = trimToUndefined(options.groupId) ?? ambient("DATABRICKS_GROUP_ID") ?? trimToUndefined(configured.groupId);
-  const principal = authType === AuthType.OAuthM2M || authType === AuthType.AppServicePrincipal ? clientId : profileName;
+  const principal = authType === AuthType.OAuthM2M || authType === AuthType.AppServicePrincipal ? clientId : credentialName;
   const cacheKey = credentialCacheKey({
-    name: profileName,
+    name: credentialName,
     host,
     accountId,
     workspaceId,
@@ -39696,7 +39697,7 @@ function resolveDatabricksProfile(options, environment = process.env) {
     accessToken
   });
   logger5.debug("resolved Databricks profile", {
-    profile: profileName,
+    profile: credentialName,
     host,
     authType,
     target,
@@ -39710,7 +39711,7 @@ function resolveDatabricksProfile(options, environment = process.env) {
     configPath
   });
   return {
-    name: profileName,
+    name: credentialName,
     ...selectedProfile ? { selectedProfile } : {},
     host,
     ...accountId ? { accountId } : {},
@@ -41297,7 +41298,21 @@ __export(exports_profile, {
   listProfiles: () => listProfiles
 });
 function resolveProfile(options = {}) {
-  return toProfileSummary(resolveDatabricksProfile(options));
+  const configured = listDatabricksProfiles(options.configFile);
+  if (configured.length === 0)
+    return null;
+  const environment = options.configFile ? { DATABRICKS_CONFIG_FILE: options.configFile } : process.env;
+  try {
+    const resolved = resolveDatabricksProfile(options, environment);
+    if (!resolved.selectedProfile || !configured.some(({ name }) => name === resolved.selectedProfile)) {
+      return null;
+    }
+    return toProfileSummary(resolved);
+  } catch (error) {
+    if (error instanceof AuthError && error.kind === "config")
+      return null;
+    throw error;
+  }
 }
 function listProfiles(options = {}) {
   return listDatabricksProfiles(options.configFile, options.refresh);

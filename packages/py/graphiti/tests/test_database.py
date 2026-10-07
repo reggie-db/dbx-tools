@@ -7,6 +7,11 @@ from dbx_tools.graphiti import database
 """Validate embedded PostgreSQL ownership and Lakebase credential injection."""
 
 
+async def _connect(calls, connection, dsn, options):
+    calls.append(("connect", dsn, options))
+    return connection
+
+
 @pytest.mark.asyncio
 async def test_missing_database_starts_persistent_embedded_postgres(
     monkeypatch,
@@ -49,6 +54,17 @@ async def test_missing_database_starts_persistent_embedded_postgres(
 async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) -> None:
     calls: list[object] = []
 
+    class Connection:
+        async def execute(self, query: str) -> None:
+            calls.append(query)
+
+        async def fetchval(self, query: str) -> str:
+            calls.append(query)
+            return "extensions"
+
+        async def close(self) -> None:
+            calls.append("closed")
+
     class Client:
         async def resolve(self, target):
             calls.append(target)
@@ -72,13 +88,27 @@ async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) 
         "create_lakebase_client",
         lambda options=None: calls.append(options) or Client(),
     )
+    monkeypatch.setattr(
+        database.asyncpg,
+        "connect",
+        lambda dsn, **options: _connect(calls, Connection(), dsn, options),
+    )
 
-    runtime = await database._start_database({"databaseUrl": "project", "profile": "PROFILE"})
+    runtime = await database._start_database(
+        {
+            "databaseUrl": "project",
+            "databaseSchema": "graphiti_memory",
+            "profile": "PROFILE",
+        }
+    )
     password = runtime.connection_options["password"]
 
     assert callable(password)
-    assert await password() == "token-3"
-    assert await password() == "token-4"
+    assert await password() == "token-8"
+    assert await password() == "token-9"
+    assert runtime.connection_options["server_settings"] == {
+        "search_path": "graphiti_memory, extensions, public"
+    }
     assert runtime.dsn == (
         "postgresql://user%40example.com@primary.example:5432/databricks_postgres?sslmode=require"
     )
@@ -86,7 +116,54 @@ async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) 
         {"profile": "PROFILE"},
         {"project": "project"},
         "projects/project/branches/branch/endpoints/primary",
+        (
+            "connect",
+            "postgresql://user%40example.com@primary.example:5432/databricks_postgres?sslmode=require",
+            {"password": "token-3"},
+        ),
+        'CREATE SCHEMA IF NOT EXISTS "graphiti_memory"',
+        (
+            "SELECT quote_ident(n.nspname) FROM pg_extension e "
+            "JOIN pg_namespace n ON n.oid = e.extnamespace "
+            "WHERE e.extname = 'vector'"
+        ),
+        "closed",
         "projects/project/branches/branch/endpoints/primary",
+        "projects/project/branches/branch/endpoints/primary",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_missing_vector_extension_is_installed_in_graphiti_schema() -> None:
+    calls: list[str] = []
+    schemas = iter([None, "graphiti_memory"])
+
+    class Connection:
+        async def fetchval(self, query: str):
+            calls.append(query)
+            return next(schemas)
+
+        async def execute(self, query: str) -> None:
+            calls.append(query)
+
+    extension_schema = await database._ensure_vector_extension(
+        Connection(),
+        "graphiti_memory",
+    )
+
+    assert extension_schema == "graphiti_memory"
+    assert calls == [
+        (
+            "SELECT quote_ident(n.nspname) FROM pg_extension e "
+            "JOIN pg_namespace n ON n.oid = e.extnamespace "
+            "WHERE e.extname = 'vector'"
+        ),
+        'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA "graphiti_memory"',
+        (
+            "SELECT quote_ident(n.nspname) FROM pg_extension e "
+            "JOIN pg_namespace n ON n.oid = e.extnamespace "
+            "WHERE e.extname = 'vector'"
+        ),
     ]
 
 

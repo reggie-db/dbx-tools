@@ -181,7 +181,7 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
     "about the data the space covers. Reserve direct (no-tool)",
     "answers for pure meta-questions about your own behaviour or",
     "the conversation itself.",
-    "Graphiti MCP memory tools are also available. Use them when the user",
+    "Graphiti memory tools are also available. Use them when the user",
     "asks to save, retrieve, or manage durable knowledge and preferences.",
     "",
     GENIE_INSTRUCTIONS,

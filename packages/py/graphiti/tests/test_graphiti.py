@@ -3,13 +3,21 @@ import base64
 import importlib
 import json
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
+import pythonmonkey
+from dbx_tools.graphiti import __main__ as graphiti_command
 from dbx_tools.graphiti import main
 from dbx_tools.graphiti import runtime as graphiti_runtime
 from dbx_tools.graphiti._generated.node import _runtime as node_runtime
 from dbx_tools.graphiti._generated.node.auth.bindings import create_auth_client
 from dbx_tools.graphiti._generated.node.shared_graphiti.options import GraphitiOptions
+from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.graph_ops import (
+    PGGraphMaintenanceOperations,
+)
+from dbx_tools.graphiti._generated.sync.postgraph.postgraph_driver import PostGraphDriver
 from dbx_tools.graphiti.options import normalize_graphiti_options
 
 """Validate the wrapper-owned composition without re-testing upstream Graphiti."""
@@ -24,6 +32,7 @@ def _resolved_options():
         "structuredOutputMode": "json_object",
         "listen": {"scheme": "tcp", "host": "127.0.0.1", "port": 8100.0},
         "databaseUrl": "postgresql://localhost:5433/graphiti",
+        "databaseSchema": "dbx_tools_graphiti",
     }
 
 
@@ -38,6 +47,22 @@ def _route_paths(routes) -> set[str]:
             nested = getattr(getattr(route, "original_router", None), "routes", ())
         paths.update(_route_paths(nested))
     return paths
+
+
+@contextmanager
+def _node_environment(**values: str | None) -> Iterator[None]:
+    read = pythonmonkey.eval("(name) => process.env[name]")
+    update = pythonmonkey.eval(
+        "(name, value) => value === null ? delete process.env[name] : process.env[name] = value"
+    )
+    previous = {name: read(name) for name in values}
+    try:
+        for name, value in values.items():
+            update(name, value)
+        yield
+    finally:
+        for name, value in previous.items():
+            update(name, value)
 
 
 def test_app_composes_rest_mcp_and_direct_tool_routes() -> None:
@@ -100,6 +125,42 @@ def test_generated_runtime_uses_shared_node_runtime() -> None:
     assert runtime.module("shared_core__bindings") is not None
 
 
+def test_postgraph_driver_defers_schema_initialization_to_graphiti_runtime() -> None:
+    driver = PostGraphDriver(dsn="postgresql://localhost/graphiti")
+
+    assert not hasattr(driver, "_init_task")
+    assert driver._client is None
+
+
+@pytest.mark.asyncio
+async def test_postgraph_schema_initialization_surfaces_creation_failures() -> None:
+    class Client:
+        async def create_vertex_table(self, *_args, **_kwargs) -> None:
+            raise RuntimeError("schema is not writable")
+
+    operations = PGGraphMaintenanceOperations(768)
+    with pytest.raises(RuntimeError, match="schema is not writable"):
+        await operations.build_indices_and_constraints_pg(Client(), 768)
+
+
+def test_command_uses_standard_asyncio_loop(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        graphiti_command,
+        "load_graphiti_options",
+        lambda: {"listen": {"scheme": "tcp", "host": "127.0.0.1", "port": 8100}},
+    )
+    monkeypatch.setattr(
+        graphiti_command.uvicorn,
+        "run",
+        lambda _app, **options: calls.append(options),
+    )
+
+    graphiti_command.main([])
+
+    assert calls == [{"host": "127.0.0.1", "port": 8100, "loop": "asyncio"}]
+
+
 @pytest.mark.asyncio
 async def test_generated_auth_uses_workspace_client_in_databricks_runtime(monkeypatch) -> None:
     def encode(value: dict[str, object]) -> str:
@@ -136,21 +197,26 @@ async def test_generated_auth_uses_workspace_client_in_databricks_runtime(monkey
     databricks_sdk = importlib.import_module("databricks.sdk")
     monkeypatch.setattr(databricks_sdk, "WorkspaceClient", WorkspaceClient)
 
-    auth = await create_auth_client()
-    assert auth.host == "https://workspace.example.com"
-    assert auth.auth_type == "runtime"
-    assert auth.principal == "runtime-user"
-    assert auth.workspace_id is None
-    assert (await auth.token())["accessToken"] == access_token
-    assert await auth.headers() == {
-        "authorization": f"Bearer {access_token}",
-        "x-runtime-header": "runtime-value",
-    }
-    assert authentications == ["authenticate"]
+    with _node_environment(
+        DBX_TOOLS_DATABRICKS_APP_ENV="false",
+        DATABRICKS_APP_PORT=None,
+        DATABRICKS_RUNTIME_VERSION="serverless",
+    ):
+        auth = await create_auth_client()
+        assert auth.host == "https://workspace.example.com"
+        assert auth.auth_type == "runtime"
+        assert auth.principal == "runtime-user"
+        assert auth.workspace_id is None
+        assert (await auth.token())["accessToken"] == access_token
+        assert await auth.headers() == {
+            "authorization": f"Bearer {access_token}",
+            "x-runtime-header": "runtime-value",
+        }
+        assert authentications == ["authenticate"]
 
-    assert (await auth.token({"refresh": True}))["accessToken"] == access_token
-    assert authentications == ["authenticate", "authenticate"]
-    assert len(clients) == 1
+        assert (await auth.token({"refresh": True}))["accessToken"] == access_token
+        assert authentications == ["authenticate", "authenticate"]
+        assert len(clients) == 1
 
 
 def test_upstream_openai_credentials_use_a_scoped_placeholder(monkeypatch) -> None:

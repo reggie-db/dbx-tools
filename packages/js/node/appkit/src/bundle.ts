@@ -50,7 +50,7 @@ export function resolveConfigValue(
 
 function resolvedProfile(): string | undefined {
   try {
-    return authProfile.resolveProfile().name;
+    return authProfile.resolveProfile()?.name;
   } catch {
     return undefined;
   }

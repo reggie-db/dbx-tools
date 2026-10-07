@@ -36,6 +36,40 @@ describe("automatic database configuration policy", () => {
     }
   });
 
+  it("removes an unusable DEFAULT profile from complete machine credentials", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "dbx-tools-appkit-profile-"));
+    const configFile = join(directory, "databrickscfg");
+    const previous = {
+      app: process.env.DBX_TOOLS_DATABRICKS_APP_ENV,
+      configFile: process.env.DATABRICKS_CONFIG_FILE,
+      profile: process.env.DATABRICKS_CONFIG_PROFILE,
+      host: process.env.DATABRICKS_HOST,
+      clientId: process.env.DATABRICKS_CLIENT_ID,
+      clientSecret: process.env.DATABRICKS_CLIENT_SECRET,
+    };
+    writeFileSync(configFile, "[DEFAULT]\nauth_type=pat\ntoken=unused\n");
+    try {
+      process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "false";
+      process.env.DATABRICKS_CONFIG_FILE = configFile;
+      process.env.DATABRICKS_HOST = "https://workspace.example.com";
+      process.env.DATABRICKS_CLIENT_ID = "app-id";
+      process.env.DATABRICKS_CLIENT_SECRET = "app-secret";
+      process.env.DATABRICKS_CONFIG_PROFILE = "DEFAULT";
+
+      await autoConfigure({ autoConfigure: false });
+
+      assert.equal(process.env.DATABRICKS_CONFIG_PROFILE, undefined);
+    } finally {
+      restore("DBX_TOOLS_DATABRICKS_APP_ENV", previous.app);
+      restore("DATABRICKS_CONFIG_FILE", previous.configFile);
+      restore("DATABRICKS_CONFIG_PROFILE", previous.profile);
+      restore("DATABRICKS_HOST", previous.host);
+      restore("DATABRICKS_CLIENT_ID", previous.clientId);
+      restore("DATABRICKS_CLIENT_SECRET", previous.clientSecret);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("skips an unconfigured app with no native database demand", () => {
     assert.deepEqual(resolveAutoConfigurePolicy(["server"], undefined), {
       mode: "provision",

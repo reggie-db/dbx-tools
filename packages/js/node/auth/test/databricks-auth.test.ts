@@ -53,7 +53,7 @@ describe("Databricks provider construction", () => {
         workspaceId: undefined,
         target: TargetKind.Workspace,
         authType: AuthType.PersonalAccessToken,
-        principal: "DEFAULT",
+        principal: "ambient",
       });
     } finally {
       for (const [name, value] of Object.entries(environment)) {
@@ -254,7 +254,9 @@ describe("Databricks provider construction", () => {
         },
         {
           environment: {
-            ...APP_ENV,
+            DATABRICKS_APP_PORT: "8000",
+            DATABRICKS_CONFIG_FILE: "/tmp/dbx-tools-auth-app-test-missing",
+            DATABRICKS_CONFIG_PROFILE: "DEFAULT",
             DATABRICKS_HOST: `http://127.0.0.1:${address.port}`,
             DATABRICKS_CLIENT_ID: "app-id",
             DATABRICKS_CLIENT_SECRET: "app-secret",

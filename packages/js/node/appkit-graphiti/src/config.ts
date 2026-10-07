@@ -7,6 +7,7 @@
  * @module
  */
 import type { BasePluginConfig } from "@databricks/appkit";
+import { profile as authProfile } from "@dbx-tools/auth";
 import {
   GraphitiOptionsSchema,
   graphitiOptionOverrides,
@@ -32,6 +33,9 @@ export function resolveGraphitiConfig(
   config: GraphitiPluginConfig = {},
 ): ResolvedGraphitiPluginConfig {
   const environment = graphitiOptionsFromEnvironment(process.env);
+  if (environment.profile && !authProfile.resolveProfile({ profile: environment.profile })) {
+    environment.profile = undefined;
+  }
   const overrides = graphitiOptionOverrides(config);
   const resolved = resolveGraphitiOptions({
     ...environment,

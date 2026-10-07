@@ -37,7 +37,9 @@ async tools(plugins) {
 The plugin hashes the AppKit user or Mastra resource id into a private Graphiti
 group. It overwrites caller-supplied group fields, removes UUID arguments that
 could reference another user's graph, and exposes only operations that can be
-constrained to the derived group.
+constrained to the derived group. When both blocking and non-blocking forms
+exist, the toolkit omits the `sync` or `_sync` form so agents use queued
+indexing.
 
 ## Configure Sidecars
 
@@ -46,8 +48,9 @@ Plugin config uses the shared Graphiti schema. Common fields include:
 - `listen` / `GRAPHITI_LISTEN`: internal HTTP listener; a free loopback port is
   selected automatically when omitted;
 - `graphitiHome` / `GRAPHITI_HOME`: persistent embedded PostgreSQL directory;
-- `databaseUrl` / `DATABASE_URL`: optional external PostgreSQL URL or Lakebase
-  target.
+- `databaseUrl` / `LAKEBASE_ENDPOINT` or `DATABASE_URL`: optional external
+  PostgreSQL URL or Lakebase target;
+- `databaseSchema` / `GRAPHITI_DATABASE_SCHEMA`: Lakebase graph schema.
 
 The package owns AppKit routing and app-scoped supervision only. Python process
 launch and the reusable Graphiti runtime belong to
@@ -57,6 +60,7 @@ driver and PostgreSQL lifecycle.
 ## Operational Limits
 
 OpenAPI extraction must publish every scoped operation before AppKit setup
-completes. Tool execution waits up to 60 seconds for the Graphiti healthcheck.
-Startup failure or an incomplete tool contract fails registration. PostgreSQL
-owns graph durability and recovery.
+completes. Tool execution waits for the configured `startupTimeoutMs`, which
+defaults to 180 seconds, while the Graphiti healthcheck becomes ready. Startup
+failure or an incomplete tool contract terminates the app. PostgreSQL owns graph
+durability and recovery.

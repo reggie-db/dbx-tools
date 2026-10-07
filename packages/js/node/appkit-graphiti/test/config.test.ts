@@ -33,4 +33,11 @@ describe("resolveGraphitiConfig", () => {
     assert.deepEqual(resolved.streamConfig, { maxEventSize: 1024 });
     assert.equal(resolved.startupTimeoutMs, 180_000);
   });
+
+  it("omits environment profiles that auth cannot resolve", () => {
+    process.env.DATABRICKS_CONFIG_FILE = "/tmp/dbx-tools-graphiti-missing-profile";
+    process.env.DATABRICKS_CONFIG_PROFILE = "DEFAULT";
+
+    assert.equal(resolveGraphitiConfig().profile, undefined);
+  });
 });

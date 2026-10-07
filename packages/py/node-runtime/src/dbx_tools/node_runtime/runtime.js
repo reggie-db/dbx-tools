@@ -4198,7 +4198,7 @@ var require_URLSearchParams = __commonJS((exports2) => {
     }
     const ctorRegistry = utils.initCtorRegistry(globalObject);
 
-    class URLSearchParams {
+    class URLSearchParams2 {
       constructor() {
         const args = [];
         {
@@ -4477,7 +4477,7 @@ var require_URLSearchParams = __commonJS((exports2) => {
         return esValue[implSymbol]["size"];
       }
     }
-    Object.defineProperties(URLSearchParams.prototype, {
+    Object.defineProperties(URLSearchParams2.prototype, {
       append: { enumerable: true },
       delete: { enumerable: true },
       get: { enumerable: true },
@@ -4492,9 +4492,9 @@ var require_URLSearchParams = __commonJS((exports2) => {
       forEach: { enumerable: true },
       size: { enumerable: true },
       [Symbol.toStringTag]: { value: "URLSearchParams", configurable: true },
-      [Symbol.iterator]: { value: URLSearchParams.prototype.entries, configurable: true, writable: true }
+      [Symbol.iterator]: { value: URLSearchParams2.prototype.entries, configurable: true, writable: true }
     });
-    ctorRegistry[interfaceName] = URLSearchParams;
+    ctorRegistry[interfaceName] = URLSearchParams2;
     ctorRegistry["URLSearchParams Iterator"] = Object.create(ctorRegistry["%IteratorPrototype%"], {
       [Symbol.toStringTag]: {
         configurable: true,
@@ -4521,7 +4521,7 @@ var require_URLSearchParams = __commonJS((exports2) => {
     Object.defineProperty(globalObject, interfaceName, {
       configurable: true,
       writable: true,
-      value: URLSearchParams
+      value: URLSearchParams2
     });
   };
   var Impl = require_URLSearchParams_impl();
@@ -4531,7 +4531,7 @@ var require_URLSearchParams = __commonJS((exports2) => {
 var require_URL_impl = __commonJS((exports2) => {
   var usm = require_url_state_machine();
   var urlencoded = require_urlencoded();
-  var URLSearchParams = require_URLSearchParams();
+  var URLSearchParams2 = require_URLSearchParams();
   exports2.implementation = class URLImpl {
     constructor(globalObject, [url, base]) {
       let parsedBase = null;
@@ -4547,7 +4547,7 @@ var require_URL_impl = __commonJS((exports2) => {
       }
       const query = parsedURL.query !== null ? parsedURL.query : "";
       this._url = parsedURL;
-      this._query = URLSearchParams.createImpl(globalObject, [query], { doNotStripQMark: true });
+      this._query = URLSearchParams2.createImpl(globalObject, [query], { doNotStripQMark: true });
       this._query._url = this;
     }
     static parse(globalObject, input, base) {
@@ -4780,7 +4780,7 @@ var require_URL = __commonJS((exports2) => {
     }
     const ctorRegistry = utils.initCtorRegistry(globalObject);
 
-    class URL {
+    class URL2 {
       constructor(url) {
         if (arguments.length < 1) {
           throw new globalObject.TypeError(`Failed to construct 'URL': 1 argument required, but only ${arguments.length} present.`);
@@ -5067,7 +5067,7 @@ var require_URL = __commonJS((exports2) => {
         return Impl.implementation.canParse(...args);
       }
     }
-    Object.defineProperties(URL.prototype, {
+    Object.defineProperties(URL2.prototype, {
       toJSON: { enumerable: true },
       href: { enumerable: true },
       toString: { enumerable: true },
@@ -5084,18 +5084,18 @@ var require_URL = __commonJS((exports2) => {
       hash: { enumerable: true },
       [Symbol.toStringTag]: { value: "URL", configurable: true }
     });
-    Object.defineProperties(URL, { parse: { enumerable: true }, canParse: { enumerable: true } });
-    ctorRegistry[interfaceName] = URL;
+    Object.defineProperties(URL2, { parse: { enumerable: true }, canParse: { enumerable: true } });
+    ctorRegistry[interfaceName] = URL2;
     Object.defineProperty(globalObject, interfaceName, {
       configurable: true,
       writable: true,
-      value: URL
+      value: URL2
     });
     if (globalNames.includes("Window")) {
       Object.defineProperty(globalObject, "webkitURL", {
         configurable: true,
         writable: true,
-        value: URL
+        value: URL2
       });
     }
   };
@@ -5104,20 +5104,20 @@ var require_URL = __commonJS((exports2) => {
 
 // node_modules/whatwg-url/webidl2js-wrapper.js
 var require_webidl2js_wrapper = __commonJS((exports2) => {
-  var URL = require_URL();
-  var URLSearchParams = require_URLSearchParams();
-  exports2.URL = URL;
-  exports2.URLSearchParams = URLSearchParams;
+  var URL2 = require_URL();
+  var URLSearchParams2 = require_URLSearchParams();
+  exports2.URL = URL2;
+  exports2.URLSearchParams = URLSearchParams2;
 });
 
 // node_modules/whatwg-url/index.js
 var require_whatwg_url = __commonJS((exports2) => {
-  var { URL, URLSearchParams } = require_webidl2js_wrapper();
+  var { URL: URL2, URLSearchParams: URLSearchParams2 } = require_webidl2js_wrapper();
   var urlStateMachine = require_url_state_machine();
   var percentEncoding = require_percent_encoding();
   var sharedGlobalObject = { Array, Object, Promise, String, TypeError };
-  URL.install(sharedGlobalObject, ["Window"]);
-  URLSearchParams.install(sharedGlobalObject, ["Window"]);
+  URL2.install(sharedGlobalObject, ["Window"]);
+  URLSearchParams2.install(sharedGlobalObject, ["Window"]);
   exports2.URL = sharedGlobalObject.URL;
   exports2.URLSearchParams = sharedGlobalObject.URLSearchParams;
   exports2.parseURL = urlStateMachine.parseURL;
@@ -6518,7 +6518,7 @@ var require_for_each = __commonJS((exports2, module2) => {
   function isArray(x) {
     return toStr.call(x) === "[object Array]";
   }
-  module2.exports = function forEach(list, iterator, thisArg) {
+  module2.exports = function forEach2(list, iterator, thisArg) {
     if (!isCallable(iterator)) {
       throw new TypeError("iterator must be a function");
     }
@@ -6701,7 +6701,7 @@ var require_call_bind = __commonJS((exports2, module2) => {
 
 // node_modules/which-typed-array/index.js
 var require_which_typed_array = __commonJS((exports2, module2) => {
-  var forEach = require_for_each();
+  var forEach2 = require_for_each();
   var availableTypedArrays = require_available_typed_arrays();
   var callBind = require_call_bind();
   var callBound = require_call_bound();
@@ -6722,7 +6722,7 @@ var require_which_typed_array = __commonJS((exports2, module2) => {
   };
   var cache = { __proto__: null };
   if (hasToStringTag && gOPD && getProto) {
-    forEach(typedArrays, function(typedArray) {
+    forEach2(typedArrays, function(typedArray) {
       var arr = new g[typedArray];
       if (Symbol.toStringTag in arr && getProto) {
         var proto = getProto(arr);
@@ -6738,7 +6738,7 @@ var require_which_typed_array = __commonJS((exports2, module2) => {
       }
     });
   } else {
-    forEach(typedArrays, function(typedArray) {
+    forEach2(typedArrays, function(typedArray) {
       var arr = new g[typedArray];
       var fn = arr.slice || arr.set;
       if (fn) {
@@ -6749,7 +6749,7 @@ var require_which_typed_array = __commonJS((exports2, module2) => {
   }
   function tryTypedArrays(value) {
     var found = false;
-    forEach(cache, function(getter, typedArray) {
+    forEach2(cache, function(getter, typedArray) {
       if (!found) {
         try {
           if ("$" + getter(value) === typedArray) {
@@ -6762,7 +6762,7 @@ var require_which_typed_array = __commonJS((exports2, module2) => {
   }
   function trySlices(value) {
     var found = false;
-    forEach(cache, function(getter, name) {
+    forEach2(cache, function(getter, name) {
       if (!found) {
         try {
           getter(value);
@@ -7733,7 +7733,7 @@ var require_buffer_list = __commonJS((exports2, module2) => {
       }
     }, {
       key: "concat",
-      value: function concat(n) {
+      value: function concat2(n) {
         if (this.length === 0)
           return Buffer2.alloc(0);
         var ret = Buffer2.allocUnsafe(n >>> 0);
@@ -10673,17 +10673,17 @@ function installPythonGlobals() {
   globals.global = globalThis;
   globals.self = globalThis;
   globals.window = globalThis;
-  globals.process ??= {
-    arch: String(evaluate("__import__('platform').machine")()).replace("aarch64", "arm64").replace("x86_64", "x64"),
-    argv: [],
-    browser: true,
-    cwd: evaluate("__import__('os').getcwd"),
-    env: evaluate("lambda: dict(__import__('os').environ)")(),
-    nextTick: (callback, ...args) => Promise.resolve().then(() => callback(...args)),
-    platform: { Darwin: "darwin", Linux: "linux", Windows: "win32" }[String(evaluate("__import__('platform').system")())],
-    version: "v22.0.0",
-    versions: {}
-  };
+  const processGlobals = globals.process ??= {};
+  processGlobals.arch ??= String(evaluate("__import__('platform').machine")()).replace("aarch64", "arm64").replace("x86_64", "x64");
+  processGlobals.argv ??= [];
+  processGlobals.browser ??= true;
+  processGlobals.cwd ??= evaluate("__import__('os').getcwd");
+  const environment = evaluate("lambda: dict(__import__('os').environ)")();
+  processGlobals.env = Object.fromEntries(Object.entries(environment).map(([name, value]) => [name, String(value)]));
+  processGlobals.nextTick ??= (callback, ...args) => Promise.resolve().then(() => callback(...args));
+  processGlobals.platform ??= { Darwin: "darwin", Linux: "linux", Windows: "win32" }[String(evaluate("__import__('platform').system")())];
+  processGlobals.version ??= "v22.0.0";
+  processGlobals.versions ??= {};
 }
 installPythonGlobals();
 function pythonHost() {
@@ -10739,12 +10739,19 @@ globals.URLSearchParams ??= WhatwgURLSearchParams;
 globals.fetch ??= async (input, init = {}) => {
   const request = typeof input === "object" && "url" in input ? input : undefined;
   const headers = init.headers ?? request?.headers;
-  const response = await pythonHost().http.fetch(request?.url ?? String(input), init.method ?? request?.method, headers ? Object.fromEntries(new Headers(headers).entries()) : undefined, typeof init.body === "string" ? init.body : undefined);
+  const response = await pythonHost().http.fetch(request?.url ?? String(input), init.method ?? request?.method, headers ? Object.fromEntries(new Headers(headers).entries()) : undefined, requestBody(init.body));
   return new Response(Uint8Array.from(response.body), {
     status: response.status,
     headers: response.headers
   });
 };
+function requestBody(body) {
+  if (typeof body === "string")
+    return body;
+  if (body instanceof URLSearchParams)
+    return body.toString();
+  return;
+}
 function cloneStructured(value, seen = new Map) {
   if (value === null || typeof value !== "object")
     return value;
@@ -10770,15 +10777,442 @@ function cloneStructured(value, seen = new Map) {
   throw new TypeError(`PythonMonkey structuredClone does not support ${value.constructor.name}`);
 }
 
+// packages/js/shared/core/src/net.ts
+var LOCAL_HOST_URL = new URL("http://localhost");
+var MAX_TCP_PORT = 65535;
+
+// packages/js/shared/core/src/object.ts
+function isCollection(value) {
+  return Array.isArray(value) || value instanceof Set || value instanceof Map;
+}
+function isEmpty(collection, options) {
+  function visit(value, seen) {
+    if (value == null) {
+      return true;
+    } else if (typeof value === "object") {
+      if (seen?.has(value))
+        return true;
+      seen?.add(value);
+      if (Array.isArray(value)) {
+        return value.length === 0 || (seen ? value.every((item) => visit(item, seen)) : false);
+      }
+      if (value instanceof Set) {
+        return value.size === 0 || (seen ? [...value].every((item) => visit(item, seen)) : false);
+      }
+      if (value instanceof Map) {
+        return value.size === 0 || (seen ? [...value.values()].every((item) => visit(item, seen)) : false);
+      }
+      const keys = Object.keys(value);
+      if (keys.length === 0) {
+        return true;
+      } else if (seen) {
+        return keys.every((key) => visit(value[key], seen));
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+  return visit(collection, options?.recursive ? new Set : undefined);
+}
+function values(source) {
+  return source instanceof Map ? source.values() : source;
+}
+function isContainer(value) {
+  return value != null && typeof value !== "string" && !(value instanceof String) && !(value instanceof RegExp) && typeof value !== "function" && typeof value[Symbol.iterator] === "function";
+}
+function sequenceSources(...sources) {
+  const sourceIterables = [];
+  for (const source of sources) {
+    if (source == null || isCollection(source) && isEmpty(source))
+      continue;
+    sourceIterables.push(isContainer(source) ? values(source) : [source]);
+  }
+  return sourceIterables;
+}
+function flattenValue(value, depth) {
+  if (depth > 0 && Array.isArray(value)) {
+    const nextDepth = Number.isFinite(depth) ? depth - 1 : depth;
+    return {
+      *[Symbol.iterator]() {
+        for (const item of value)
+          yield* flattenValue(item, nextDepth);
+      }
+    };
+  }
+  return [value];
+}
+function derive(source, fn) {
+  return sequence({
+    *[Symbol.iterator]() {
+      let index = 0;
+      for (const value of source)
+        yield* fn(value, index++);
+    }
+  });
+}
+function deriveOne(source, fn) {
+  return sequence({
+    *[Symbol.iterator]() {
+      let index = 0;
+      for (const value of source)
+        yield fn(value, index++);
+    }
+  });
+}
+function map(source, callback) {
+  return deriveOne(sequence(source), callback);
+}
+function filter(source, predicate) {
+  return derive(sequence(source), function* (value, index) {
+    if (predicate(value, index))
+      yield value;
+  });
+}
+function nonNull(...sources) {
+  return filter(sequence(...sources), (value) => value != null);
+}
+function flatMap(source, callback) {
+  return derive(sequence(source), function* (value, index) {
+    const result = callback(value, index);
+    if (Array.isArray(result))
+      yield* result;
+    else
+      yield result;
+  });
+}
+function flat(depth, ...sources) {
+  const src = sequence(...sources);
+  if (depth < 1)
+    return src;
+  return derive(src, (value) => flattenValue(value, depth));
+}
+function distinct(...sources) {
+  const src = sequence(...sources);
+  return sequence({
+    *[Symbol.iterator]() {
+      const seen = new Set;
+      for (const value of src) {
+        if (seen.has(value))
+          continue;
+        seen.add(value);
+        yield value;
+      }
+    }
+  });
+}
+function concat(source, ...items) {
+  const src = sequence(source);
+  if (items.length === 0)
+    return src;
+  return sequence({
+    *[Symbol.iterator]() {
+      yield* src;
+      for (const item of items) {
+        if (Array.isArray(item))
+          yield* item;
+        else
+          yield item;
+      }
+    }
+  });
+}
+function take(count, ...sources) {
+  if (count <= 0)
+    return emptySequence;
+  const src = sequence(...sources);
+  return sequence({
+    *[Symbol.iterator]() {
+      let taken = 0;
+      for (const value of src) {
+        yield value;
+        if (++taken >= count)
+          return;
+      }
+    }
+  });
+}
+function group(predicates, ...sources) {
+  const keys = Object.keys(predicates);
+  const buckets = new Map(keys.map((key) => [key, []]));
+  let index = 0;
+  for (const value of sequence(...sources)) {
+    const i = index++;
+    for (const key of keys) {
+      if (predicates[key](value, i)) {
+        buckets.get(key).push(value);
+        break;
+      }
+    }
+  }
+  const result = {};
+  for (const key of keys) {
+    result[key] = buckets.get(key);
+  }
+  return result;
+}
+function find(source, predicate) {
+  let index = 0;
+  for (const value of sequence(source)) {
+    if (predicate(value, index++))
+      return value;
+  }
+  return;
+}
+function findLast(source, predicate) {
+  let index = 0;
+  let match;
+  for (const value of sequence(source)) {
+    if (predicate(value, index++))
+      match = value;
+  }
+  return match;
+}
+function findIndex(source, predicate) {
+  let index = 0;
+  for (const value of sequence(source)) {
+    if (predicate(value, index))
+      return index;
+    index++;
+  }
+  return -1;
+}
+function findLastIndex(source, predicate) {
+  let index = 0;
+  let match = -1;
+  for (const value of sequence(source)) {
+    if (predicate(value, index))
+      match = index;
+    index++;
+  }
+  return match;
+}
+function some(source, predicate) {
+  let index = 0;
+  for (const value of sequence(source))
+    if (predicate(value, index++))
+      return true;
+  return false;
+}
+function every(source, predicate) {
+  let index = 0;
+  for (const value of sequence(source))
+    if (!predicate(value, index++))
+      return false;
+  return true;
+}
+function forEach(source, callback) {
+  let index = 0;
+  for (const value of sequence(source))
+    callback(value, index++);
+}
+function at(index, ...sources) {
+  const src = sequence(...sources);
+  if (index < 0)
+    return toArray(src).at(index);
+  let i = 0;
+  for (const value of src) {
+    if (i++ === index)
+      return value;
+  }
+  return;
+}
+function toArray(...sources) {
+  return [...sequence(...sources)];
+}
+
+class SequenceImpl {
+  source;
+  buffer;
+  iterator;
+  exhausted;
+  constructor(source, buffer, state = {}) {
+    this.source = source;
+    this.buffer = buffer;
+    this.exhausted = state.exhausted ?? false;
+  }
+  get caching() {
+    return this.buffer !== undefined;
+  }
+  pull() {
+    this.iterator ??= this.source[Symbol.iterator]();
+    return this.iterator.next();
+  }
+  *[Symbol.iterator]() {
+    if (!this.caching) {
+      if (this.exhausted)
+        return;
+      for (let next = this.pull();!next.done; next = this.pull()) {
+        yield next.value;
+      }
+      this.exhausted = true;
+    } else {
+      const buffer = this.buffer;
+      let index = 0;
+      for (;; ) {
+        if (index < buffer.length) {
+          yield buffer[index++];
+          continue;
+        }
+        if (this.exhausted)
+          return;
+        const next = this.pull();
+        if (next.done) {
+          this.exhausted = true;
+          return;
+        }
+        buffer.push(next.value);
+        yield next.value;
+        index++;
+      }
+    }
+  }
+  map(callback) {
+    return map(this, callback);
+  }
+  filter(predicate) {
+    return filter(this, predicate);
+  }
+  nonNull() {
+    return nonNull(this);
+  }
+  flatMap(callback) {
+    return flatMap(this, callback);
+  }
+  flat(depth = 1) {
+    return flat(depth, this);
+  }
+  distinct() {
+    return distinct(this);
+  }
+  concat(...items) {
+    return concat(this, ...items);
+  }
+  join(...sources) {
+    const sourceIterables = sequenceSources(this, ...sources);
+    return sourceIterables.length === 1 ? this : sequence(...sourceIterables);
+  }
+  take(count) {
+    return take(count, this);
+  }
+  group(predicates) {
+    return group(predicates, this);
+  }
+  cache() {
+    return this.caching ? this : new SequenceImpl(this, []);
+  }
+  find(predicate) {
+    return find(this, predicate);
+  }
+  findLast(predicate) {
+    return findLast(this, predicate);
+  }
+  findIndex(predicate) {
+    return findIndex(this, predicate);
+  }
+  findLastIndex(predicate) {
+    return findLastIndex(this, predicate);
+  }
+  some(predicate) {
+    return some(this, predicate);
+  }
+  every(predicate) {
+    return every(this, predicate);
+  }
+  forEach(callback) {
+    forEach(this, callback);
+  }
+  at(index) {
+    return at(index, this);
+  }
+  toArray() {
+    if (this.caching && this.exhausted)
+      return [...this.buffer];
+    return toArray(this);
+  }
+}
+var emptySequence = new SequenceImpl([], undefined, {
+  exhausted: true
+});
+function sequence(...sources) {
+  const sourceIterables = sequenceSources(...sources);
+  if (sourceIterables.length === 0)
+    return emptySequence;
+  if (sourceIterables.length === 1) {
+    const only = sourceIterables[0];
+    return only instanceof SequenceImpl ? only : new SequenceImpl(only, undefined);
+  }
+  return new SequenceImpl({
+    *[Symbol.iterator]() {
+      for (const source of sourceIterables)
+        yield* source;
+    }
+  }, undefined);
+}
+function toBoolean(value) {
+  if (typeof value === "boolean") {
+    return value;
+  } else if (typeof value === "string") {
+    value = value.trim().toLowerCase();
+    if (value === "true" || value == "t" || value === "on" || value === "1" || value === "yes" || value === "y") {
+      return true;
+    } else if (value === "false" || value == "f" || value === "off" || value === "0" || value === "no" || value === "n") {
+      return false;
+    }
+  } else if (typeof value === "number") {
+    if (value === 1)
+      return true;
+    else if (value === 0)
+      return false;
+  }
+  return;
+}
+var DURATION_UNITS = [
+  [1, ["ms", "msec", "millisecond", "milli"]],
+  [1000, ["s", "sec", "second"]],
+  [60000, ["m", "min", "minute"]],
+  [3600000, ["h", "hr", "hour"]],
+  [86400000, ["d", "day"]],
+  [604800000, ["w", "wk", "week"]],
+  [2592000000, ["mo", "mon", "month"]],
+  [31536000000, ["y", "yr", "year"]]
+];
+var DURATION_UNIT_MS = new Map(DURATION_UNITS.flatMap(([ms, aliases]) => aliases.map((alias) => [alias, ms])));
+
+// packages/js/shared/core/src/environment-utils.ts
+function runtimeEnvironment() {
+  return globalThis.process?.env ?? {};
+}
+function isDatabricksAppEnv(source = runtimeEnvironment()) {
+  const override = toBoolean(source.DBX_TOOLS_DATABRICKS_APP_ENV);
+  if (override !== undefined)
+    return override;
+  const name = source.DATABRICKS_APP_NAME?.trim();
+  const host2 = source.DATABRICKS_HOST?.trim();
+  const port = source.DATABRICKS_APP_PORT?.trim();
+  if (name && /\$\{[^}]+\}/.test(name) || !host2 || !port || !/^\d+$/.test(port))
+    return false;
+  const parsedPort = Number(port);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > MAX_TCP_PORT)
+    return false;
+  try {
+    const url = new URL(host2);
+    return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 // packages/py/node-runtime/shims/databricks-runtime-auth.ts
 var createWorkspaceClient = evaluatePython("lambda: __import__('databricks.sdk', fromlist=['WorkspaceClient']).WorkspaceClient()");
-var isDatabricksRuntime = evaluatePython("lambda: bool(__import__('os').environ.get('DATABRICKS_RUNTIME_VERSION'))");
 var runtimeMetadata = evaluatePython("lambda client: {'host': client.config.host, 'workspaceId': getattr(client.config, 'workspace_id', None), 'principal': getattr(client.config, 'client_id', None) or getattr(client.config, 'username', None) or getattr(client.config, 'auth_type', None)}");
 var configuredToken = evaluatePython("lambda client: client.config.token");
 var authenticationHeaders = evaluatePython("lambda client: dict(client.config.authenticate())");
 async function databricksRuntimeAuthClient() {
-  if (!isDatabricksRuntime())
+  if (isDatabricksAppEnv(process.env) || !process.env.DATABRICKS_RUNTIME_VERSION?.trim()) {
     return;
+  }
   const client = await runPythonInThread(createWorkspaceClient);
   const metadata = await runPythonInThread(runtimeMetadata, client);
   return {

@@ -71,7 +71,8 @@ globals.TextDecoder ??= class TextDecoder {
     return decodeURIComponent(escape(encoded));
   }
 } as typeof TextDecoder;
-const { URL: WhatwgURL, URLSearchParams: WhatwgURLSearchParams } = require("whatwg-url") as typeof import("whatwg-url");
+const { URL: WhatwgURL, URLSearchParams: WhatwgURLSearchParams } =
+  require("whatwg-url") as typeof import("whatwg-url");
 globals.URL ??= WhatwgURL as unknown as typeof URL;
 globals.URLSearchParams ??= WhatwgURLSearchParams as unknown as typeof URLSearchParams;
 globals.fetch ??= (async (input: string | URL | Request, init: RequestInit = {}) => {
@@ -81,13 +82,19 @@ globals.fetch ??= (async (input: string | URL | Request, init: RequestInit = {})
     request?.url ?? String(input),
     init.method ?? request?.method,
     headers ? Object.fromEntries(new Headers(headers).entries()) : undefined,
-    typeof init.body === "string" ? init.body : undefined,
+    requestBody(init.body),
   );
   return new Response(Uint8Array.from(response.body), {
     status: response.status,
     headers: response.headers,
   });
 }) as typeof fetch;
+
+function requestBody(body: BodyInit | null | undefined): string | undefined {
+  if (typeof body === "string") return body;
+  if (body instanceof URLSearchParams) return body.toString();
+  return undefined;
+}
 
 function cloneStructured(value: unknown, seen = new Map<object, unknown>()): unknown {
   if (value === null || typeof value !== "object") return value;

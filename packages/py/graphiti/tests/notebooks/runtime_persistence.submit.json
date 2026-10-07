@@ -1,0 +1,34 @@
+{
+  "run_name": "graphiti-pypi-persistence-v0.9.54",
+  "tasks": [
+    {
+      "task_key": "write_memory",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/reggie.pierce@databricks.com/.dbx-tools-tests/graphiti-pypi-persistence-v0.9.54/write_memory"
+      },
+      "environment_key": "runtime",
+      "timeout_seconds": 1200
+    },
+    {
+      "task_key": "read_memory",
+      "depends_on": [
+        {
+          "task_key": "write_memory"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/reggie.pierce@databricks.com/.dbx-tools-tests/graphiti-pypi-persistence-v0.9.54/read_memory"
+      },
+      "environment_key": "runtime",
+      "timeout_seconds": 1200
+    }
+  ],
+  "environments": [
+    {
+      "environment_key": "runtime",
+      "spec": {
+        "client": "4"
+      }
+    }
+  ]
+}

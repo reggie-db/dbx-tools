@@ -32,9 +32,9 @@ handle the topic bus, static delivery, deployment staging, and shared types.
 - `lakebase()` (AppKit) — backs Mastra Memory.
 - `graphiti()` from
   [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
-  the unified Python Graphiti runtime, then mounts its user-scoped transport at
-  `/api/graphiti/mcp` on the AppKit server.
-  Graphiti groups use the same per-user resource id as Mastra memory.
+  the unified Python Graphiti runtime and contributes its OpenAPI-derived,
+  user-scoped memory tools directly to the agents. Graphiti groups use the same
+  per-user resource id as Mastra memory.
 - `busDemo()` from `src/bus-demo.ts` — a `PostgresTopicBus` from
   [`@dbx-tools/postgres`](../../../js/node/postgres) on the Lakebase pool:
   `POST /api/bus-demo/messages` broadcasts, `GET /api/bus-demo/events` streams to
@@ -90,8 +90,8 @@ SMTP_HOST= SMTP_USER= SMTP_PASSWORD= EMAIL_OUTBOX_MODE=1 bun run demo
 The feature flags default to enabled, so normal demo and deployment behavior is
 unchanged.
 
-On shutdown, AppKit closes the per-user MCP servers and internal client.
-The Graphiti plugin forwards shutdown to Python, which closes the PostGraph
+On shutdown, AppKit invokes each plugin's bounded `shutdown()` hook. The
+Graphiti plugin stops its supervised Python runtime, which closes the PostGraph
 client pool before the process deadline.
 
 ## Deploy

@@ -107,6 +107,10 @@ resources:
           # import the already-installed dbx-tools-graphiti release.
           - name: PYTHON
             value: ./.venv/bin/python
+          - name: GRAPHITI_ENABLED
+            value: "true"
+          - name: GRAPHITI_DATABASE_SCHEMA
+            value: graphiti_memory
           # OTP gate allow-list (was the tunnel CLI's `--allow`). No subject /
           # brand-name override: the defaults are the conventional one-time-code
           # wording ("Your verification code") that iOS, Gmail, Outlook, and

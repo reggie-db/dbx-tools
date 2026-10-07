@@ -543,6 +543,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   p.addDeps(
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/auth@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/graphiti@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
@@ -1282,6 +1283,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
     directory: "graphiti",
     description: "Unified Graphiti REST, MCP, model routing, and PostgreSQL graph runtime",
     dependencies: [
+      "asyncpg>=0.30,<1",
       "fastapi>=0.115,<1",
       "graphiti-core==0.30.2",
       "httpx>=0.28,<1",
@@ -1291,7 +1293,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "post-graph>=0.7,<1",
       "pydantic-settings>=2,<3",
       "pyyaml>=6,<7",
-      "typing-extensions>=4.15,<5",
+      "typing-extensions>=4,<5",
       "uvicorn>=0.44",
     ],
     optionalDependencies: {
@@ -1304,6 +1306,9 @@ const pythonPackages: project.PythonPackageOptions[] = [
           "postgraph-driver @ git+https://github.com/crajah/graphiti.git@4f6d7bc31dd9a84053d4094b382485044448d9c8#subdirectory=graphiti_core/driver",
         include: ["postgraph_driver.py", "record_parsers.py", "postgraph/**/*.py"],
         replace: {
+          "import asyncio\n": "",
+          "from contextlib import asynccontextmanager, suppress":
+            "from contextlib import asynccontextmanager",
           "GraphProvider.POSTGRAPH": '"postgraph"',
           "        embedding_dim: int | None = None,\n    ):":
             "        embedding_dim: int | None = None,\n        connection_options: dict[str, Any] | None = None,\n    ):",
@@ -1311,6 +1316,15 @@ const pythonPackages: project.PythonPackageOptions[] = [
             "        self._embedding_dim = embedding_dim or EMBEDDING_DIM\n        self._connection_options = connection_options or {}",
           "            self._client = AsyncPostGraph(dsn=self._dsn)":
             "            self._client = AsyncPostGraph(dsn=self._dsn, **self._connection_options)",
+          "        self._init_task: asyncio.Task | None = None\n        try:\n            loop = asyncio.get_running_loop()\n            self._init_task = loop.create_task(self._init())\n        except RuntimeError:\n            pass\n\n    async def _init(self):\n        await self._ensure_client()\n        await self.build_indices_and_constraints()\n\n":
+            "",
+          "        if self._init_task is not None and not self._init_task.done():\n            self._init_task.cancel()\n            with suppress(asyncio.CancelledError):\n                await self._init_task\n":
+            "",
+          "with suppress(TableExistsError, Exception):": "with suppress(TableExistsError):",
+          "        for stmt in _tsvector_ddl():\n            with suppress(Exception):\n                await client._execute(stmt)":
+            "        for stmt in _tsvector_ddl():\n            await client._execute(stmt)",
+          "        for stmt in _extra_index_ddl():\n            with suppress(Exception):\n                await client._execute(stmt)":
+            "        for stmt in _extra_index_ddl():\n            await client._execute(stmt)",
         },
       },
       {

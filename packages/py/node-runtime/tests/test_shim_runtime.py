@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 
 import pytest
 from dbx_tools.node_runtime.runtime import (
@@ -13,7 +16,8 @@ from dbx_tools.node_runtime.runtime import (
 FIXTURES = Path(__file__).with_name("fixtures")
 
 
-def test_shared_runtime_and_bundle_registry() -> None:
+def test_shared_runtime_and_bundle_registry(monkeypatch) -> None:
+    monkeypatch.setenv("DBX_TOOLS_NODE_RUNTIME_ENV_TEST", "python-value")
     runtime = get_runtime()
     assert get_runtime() is runtime
     assert runtime["__pythonRuntimeAbiVersion"] == RUNTIME_ABI_VERSION
@@ -28,6 +32,7 @@ def test_shared_runtime_and_bundle_registry() -> None:
     assert second._exports["runtimeAbi"]() == RUNTIME_ABI_VERSION
     assert first._exports["abortGlobalsMatch"]() is True
     assert second._exports["abortGlobalsMatch"]() is True
+    assert first._exports["environmentValue"]("DBX_TOOLS_NODE_RUNTIME_ENV_TEST") == "python-value"
     assert first._exports["headersBehave"]() == {
         "accept": "application/json",
         "authorization": False,
@@ -53,3 +58,55 @@ async def test_runtime_auth_is_absent_outside_databricks(monkeypatch) -> None:
     runtime = get_runtime()["__pythonRuntime"]
 
     assert await runtime["databricksRuntimeAuthClient"]() is None
+
+
+@pytest.mark.asyncio
+async def test_runtime_auth_is_disabled_in_databricks_apps(monkeypatch) -> None:
+    monkeypatch.setenv("DATABRICKS_RUNTIME_VERSION", "apps")
+    monkeypatch.setenv("DATABRICKS_APP_NAME", "graphiti-demo")
+    monkeypatch.setenv("DATABRICKS_HOST", "https://workspace.example.com")
+    monkeypatch.setenv("DATABRICKS_APP_PORT", "8000")
+
+    runtime = get_runtime()["__pythonRuntime"]
+    fixture = load_bundle(FIXTURES / "first.js", bundle_id="first")
+    for name in (
+        "DATABRICKS_RUNTIME_VERSION",
+        "DATABRICKS_APP_NAME",
+        "DATABRICKS_HOST",
+        "DATABRICKS_APP_PORT",
+    ):
+        fixture._exports["setEnvironmentValue"](name, os.environ[name])
+
+    assert await runtime["databricksRuntimeAuthClient"]() is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_serializes_url_search_params() -> None:
+    received: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            length = int(self.headers["content-length"])
+            received.append(self.rfile.read(length).decode())
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *_: object) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        fixture = load_bundle(FIXTURES / "first.js", bundle_id="form")
+        response = await fixture._exports["postForm"](
+            f"http://127.0.0.1:{server.server_port}/token"
+        )
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+    assert response == "ok"
+    assert received == ["grant_type=client_credentials&scope=all-apis"]

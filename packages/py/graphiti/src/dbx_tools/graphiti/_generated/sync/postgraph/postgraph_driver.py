@@ -10,12 +10,11 @@ map to post-graph's ``embedding`` vector column; and Graphiti's
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
 from collections.abc import AsyncIterator, Coroutine
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from typing import Any
 
 try:
@@ -182,17 +181,6 @@ class PostGraphDriver(GraphDriver):
 
         self.graph_operations_interface = PostGraphOperationsInterface(self)
 
-        self._init_task: asyncio.Task | None = None
-        try:
-            loop = asyncio.get_running_loop()
-            self._init_task = loop.create_task(self._init())
-        except RuntimeError:
-            pass
-
-    async def _init(self):
-        await self._ensure_client()
-        await self.build_indices_and_constraints()
-
     async def _ensure_client(self) -> AsyncPostGraph:
         if self._client is None:
             self._client = AsyncPostGraph(dsn=self._dsn, **self._connection_options)
@@ -273,10 +261,6 @@ class PostGraphDriver(GraphDriver):
         return PostGraphDriverSession(self._client)
 
     async def close(self) -> None:
-        if self._init_task is not None and not self._init_task.done():
-            self._init_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._init_task
         if self._client is not None:
             await self._client.close()
             self._client = None

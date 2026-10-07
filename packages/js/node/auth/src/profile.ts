@@ -1,5 +1,6 @@
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth/profile";
 
+import { AuthError } from "./_errors.ts";
 import { listDatabricksProfiles, resolveDatabricksProfile } from "./_profile-config.ts";
 import type { DatabricksProfile } from "./_types.ts";
 import type { DatabricksAuthOptions } from "./config.ts";
@@ -10,9 +11,28 @@ export interface ListProfilesOptions {
   refresh?: boolean;
 }
 
-/** Resolve one selected profile without exposing credentials. */
-export function resolveProfile(options: DatabricksAuthOptions = {}): DatabricksProfileSummary {
-  return toProfileSummary(resolveDatabricksProfile(options));
+/** Resolve one configured profile without exposing credentials, or `null` when none exists. */
+export function resolveProfile(
+  options: DatabricksAuthOptions = {},
+): DatabricksProfileSummary | null {
+  const configured = listDatabricksProfiles(options.configFile);
+  if (configured.length === 0) return null;
+  const environment = options.configFile
+    ? { DATABRICKS_CONFIG_FILE: options.configFile }
+    : process.env;
+  try {
+    const resolved = resolveDatabricksProfile(options, environment);
+    if (
+      !resolved.selectedProfile ||
+      !configured.some(({ name }) => name === resolved.selectedProfile)
+    ) {
+      return null;
+    }
+    return toProfileSummary(resolved);
+  } catch (error) {
+    if (error instanceof AuthError && error.kind === "config") return null;
+    throw error;
+  }
 }
 
 /** List configured profiles without exposing credentials. */

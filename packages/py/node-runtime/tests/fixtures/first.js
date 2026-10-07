@@ -55,5 +55,17 @@ module.exports = {
       keys: [...headers.keys()],
     };
   },
+  environmentValue: (name) => process.env[name],
+  setEnvironmentValue: (name, value) => {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  },
+  postForm: async (url) => {
+    const response = await fetch(url, {
+      method: "POST",
+      body: new URLSearchParams({ grant_type: "client_credentials", scope: "all-apis" }),
+    });
+    return response.text();
+  },
   runtimeAbi: () => globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")].abiVersion,
 };

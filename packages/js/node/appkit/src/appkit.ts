@@ -36,7 +36,7 @@ import {
 // publishes this subpath for exactly that type.
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
 import { profile as authProfile } from "@dbx-tools/auth";
-import { asyncUtils, environmentUtils, log } from "@dbx-tools/shared-core";
+import { asyncUtils, log } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
 import { createSoftPersistentStorage } from "./_cache-storage.ts";
@@ -223,20 +223,13 @@ async function autoConfigureLakebase(
 
 function applyDefaultProfile(): string | undefined {
   const configured = process.env.DATABRICKS_CONFIG_PROFILE?.trim();
-  if (configured || environmentUtils.isDatabricksAppEnv()) return configured;
-  try {
-    const resolved = authProfile.resolveProfile();
-    process.env.DATABRICKS_CONFIG_PROFILE = resolved.name;
-    logger.debug("autoConfigure: selected default Databricks profile", {
-      profile: resolved.name,
-    });
-    return resolved.name;
-  } catch (error) {
-    logger.debug("autoConfigure: no default Databricks profile", {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  const resolved = authProfile.resolveProfile(configured ? { profile: configured } : {});
+  if (!resolved) {
+    delete process.env.DATABRICKS_CONFIG_PROFILE;
     return undefined;
   }
+  process.env.DATABRICKS_CONFIG_PROFILE = resolved.name;
+  return resolved.name;
 }
 
 /**
