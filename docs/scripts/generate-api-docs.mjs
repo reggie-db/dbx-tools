@@ -494,9 +494,12 @@ async function checkedSpawn(command, args, description, options = {}) {
 
 async function generatePythonPackageApi(pkg) {
   const output = path.join(apiRoot, pkg.slug, "index.md");
+  // Workspace uv Python: CI is 3.10 (no stdlib tomllib); `python3` has no tomli.
   await checkedSpawn(
-    "python3",
+    "uv",
     [
+      "run",
+      "python",
       path.join(root, "docs", "scripts", "generate_python_api.py"),
       "--package",
       pkg.dir,
