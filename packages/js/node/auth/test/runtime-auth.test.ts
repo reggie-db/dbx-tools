@@ -64,6 +64,15 @@ describe("Databricks runtime authentication", () => {
 
       await auth.token({ refresh: true });
       assert.equal(authentications, 2);
+
+      const explicit = await createAuthClient({
+        host: "https://explicit.example.com",
+        authType: "pat",
+        accessToken: "explicit-token",
+        configFile: "missing-runtime-auth-config",
+      });
+      assert.equal((await explicit.token()).accessToken, "explicit-token");
+      assert.equal(authentications, 2);
     } finally {
       if (previous === undefined) Reflect.deleteProperty(globalThis, runtimeKey);
       else Reflect.set(globalThis, runtimeKey, previous);

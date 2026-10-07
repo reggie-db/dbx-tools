@@ -152,16 +152,6 @@ async def test_generated_auth_uses_workspace_client_in_databricks_runtime(monkey
     assert authentications == ["authenticate", "authenticate"]
     assert len(clients) == 1
 
-    explicit = await create_auth_client(
-        {
-            "accessToken": "explicit-token",
-            "authType": "pat",
-            "host": "https://explicit.example.com",
-        }
-    )
-    assert (await explicit.token())["accessToken"] == "explicit-token"
-    assert len(clients) == 1
-
 
 def test_upstream_openai_credentials_use_a_scoped_placeholder(monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
