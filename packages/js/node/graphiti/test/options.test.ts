@@ -20,6 +20,6 @@ describe("Graphiti runtime options", () => {
     };
 
     const environment = graphitiOptionsEnvironment(values);
-    assert.equal(environment.DATABASE_URL, "postgresql://localhost:5433/graphiti");
+    assert.equal(environment.LAKEBASE_ENDPOINT, "postgresql://localhost:5433/graphiti");
   });
 });

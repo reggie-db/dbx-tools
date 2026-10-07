@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-graphiti"
-version = "0.9.54"
+version = "0.9.55"
 description = "Unified Graphiti REST, MCP, model routing, and PostgreSQL graph runtime"
 readme = "README.md"
 requires-python = ">=3.10,<4"
@@ -21,7 +21,7 @@ dependencies = [
   "pyyaml>=6,<7",
   "typing-extensions>=4,<5",
   "uvicorn>=0.44",
-  "dbx-tools-node-runtime==0.9.54"
+  "dbx-tools-node-runtime==0.9.55"
 ]
 
   [project.urls]

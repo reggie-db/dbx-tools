@@ -38,7 +38,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.9.54",
+  "version": "0.9.55",
   "dbxToolsConfig": {
     "tags": [
       "ui"

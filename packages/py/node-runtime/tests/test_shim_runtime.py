@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -16,8 +18,7 @@ from dbx_tools.node_runtime.runtime import (
 FIXTURES = Path(__file__).with_name("fixtures")
 
 
-def test_shared_runtime_and_bundle_registry(monkeypatch) -> None:
-    monkeypatch.setenv("DBX_TOOLS_NODE_RUNTIME_ENV_TEST", "python-value")
+def test_shared_runtime_and_bundle_registry() -> None:
     runtime = get_runtime()
     assert get_runtime() is runtime
     assert runtime["__pythonRuntimeAbiVersion"] == RUNTIME_ABI_VERSION
@@ -32,7 +33,6 @@ def test_shared_runtime_and_bundle_registry(monkeypatch) -> None:
     assert second._exports["runtimeAbi"]() == RUNTIME_ABI_VERSION
     assert first._exports["abortGlobalsMatch"]() is True
     assert second._exports["abortGlobalsMatch"]() is True
-    assert first._exports["environmentValue"]("DBX_TOOLS_NODE_RUNTIME_ENV_TEST") == "python-value"
     assert first._exports["headersBehave"]() == {
         "accept": "application/json",
         "authorization": False,
@@ -41,6 +41,25 @@ def test_shared_runtime_and_bundle_registry(monkeypatch) -> None:
     }
     assert first.invoke_positioned_sync("fixture", "add", [(0, 2), (1, 3)]) == 5
     assert second.invoke_positioned_sync("fixture", "multiply", [(0, 4), (1, 5)]) == 20
+
+
+def test_python_environment_is_available_at_runtime_start() -> None:
+    script = (
+        "import os; from pathlib import Path; "
+        "from dbx_tools.node_runtime.runtime import load_bundle; "
+        "bundle = load_bundle(Path(os.environ['DBX_TOOLS_NODE_RUNTIME_FIXTURE'])); "
+        "assert bundle.exports['environmentValue']"
+        "('DBX_TOOLS_NODE_RUNTIME_ENV_TEST') == 'python-value'"
+    )
+    subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        env={
+            **os.environ,
+            "DBX_TOOLS_NODE_RUNTIME_ENV_TEST": "python-value",
+            "DBX_TOOLS_NODE_RUNTIME_FIXTURE": str(FIXTURES / "first.js"),
+        },
+    )
 
 
 def test_bundle_ids_and_abi_are_fail_closed() -> None:
