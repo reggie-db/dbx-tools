@@ -3,6 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-args";
-export const PACKAGE_VERSION = "0.9.50";
+export const PACKAGE_VERSION = "0.9.51";
 export * as args from "./src/args.ts";
 export type { CliArgsOptions, CliArgMeta, ArgumentSource } from "./src/args.ts";

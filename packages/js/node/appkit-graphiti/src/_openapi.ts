@@ -25,7 +25,9 @@ const OpenApiOperationSchema = z
     operationId: z.string().describe("The stable operation identifier."),
     summary: z.string().optional().describe("The short operation summary."),
     description: z.string().optional().describe("The full operation description."),
-    requestBody: OpenApiRequestBodySchema.optional().describe("The optional operation request body."),
+    requestBody: OpenApiRequestBodySchema.optional().describe(
+      "The optional operation request body.",
+    ),
   })
   .describe("The OpenAPI fields required to publish an AppKit tool.");
 
@@ -123,7 +125,9 @@ function resolveReferences(
 }
 
 function referenceTarget(document: GraphitiOpenApi, reference: string): unknown {
-  if (!reference.startsWith("#/")) throw new Error(`Unsupported Graphiti OpenAPI reference: ${reference}`);
+  if (!reference.startsWith("#/")) {
+    throw new Error(`Unsupported Graphiti OpenAPI reference: ${reference}`);
+  }
   let current: unknown = document;
   for (const rawSegment of reference.slice(2).split("/")) {
     const segment = rawSegment.replaceAll("~1", "/").replaceAll("~0", "~");

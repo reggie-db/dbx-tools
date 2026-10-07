@@ -146,17 +146,16 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     await abortable(this.startup, signal);
     if (!this.resolved) throw new Error("Graphiti sidecar did not launch");
     const userId = context?.resourceId ?? executionContextUserId();
-    const response = await fetch(
-      `http://127.0.0.1:${this.resolved.listen.port}${contract.path}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(scopedArguments(name, args, userScope(userId))),
-        signal,
-      },
-    );
+    const response = await fetch(`http://127.0.0.1:${this.resolved.listen.port}${contract.path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(scopedArguments(name, args, userScope(userId))),
+      signal,
+    });
     if (!response.ok) {
-      throw new Error(`Graphiti tool ${name} failed with HTTP ${response.status}: ${await response.text()}`);
+      throw new Error(
+        `Graphiti tool ${name} failed with HTTP ${response.status}: ${await response.text()}`,
+      );
     }
     return response.json();
   }

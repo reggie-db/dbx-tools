@@ -42,7 +42,15 @@ async function _pythonArgs(...args: string[]): Promise<string[]> {
   const packageArgs = python
     ? []
     : ["--with", `dbx-tools-graphiti==${(await import("../index.ts")).PACKAGE_VERSION}`];
-  return ["run", "--no-project", ...packageArgs, "--python", python ?? "python3", "python", ...args];
+  return [
+    "run",
+    "--no-project",
+    ...packageArgs,
+    "--python",
+    python ?? "python3",
+    "python",
+    ...args,
+  ];
 }
 
 /** Read the Graphiti OpenAPI document without starting its database runtime. */
@@ -60,14 +68,10 @@ export async function startGraphitiRuntime(
   options: GraphitiRuntimeOptions = {},
 ): Promise<GraphitiRuntime> {
   const resolved = resolveGraphitiOptions(options);
-  const child = exec.spawn(
-    "uv",
-    await _pythonArgs("-m", "dbx_tools.graphiti"),
-    {
-      detached: process.platform !== "win32",
-      env: _runtimeEnvironment(resolved),
-    },
-  );
+  const child = exec.spawn("uv", await _pythonArgs("-m", "dbx_tools.graphiti"), {
+    detached: process.platform !== "win32",
+    env: _runtimeEnvironment(resolved),
+  });
   return managedRuntime(resolved, child);
 }
 

@@ -1,6 +1,6 @@
 # dbx-tools package catalog
 
-Generated from repository manifests and package READMEs for dbx-tools 0.9.50.
+Generated from repository manifests and package READMEs for dbx-tools 0.9.51.
 Inspect the installed manifest, README, exports, and source before relying on a capability.
 
 ## CLI Tools
@@ -18,7 +18,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 ## Node and AppKit
 
 - `@dbx-tools/appkit` - Node-side helpers for Databricks AppKit apps. Source: `packages/js/node/appkit`.
-- `@dbx-tools/appkit-graphiti` - Run Graphiti beside an AppKit server, publish a user-scoped MCP surface, and reuse the same unified Python runtime as the standalone CLI. Source: `packages/js/node/appkit-graphiti`.
+- `@dbx-tools/appkit-graphiti` - Run Graphiti beside an AppKit server, publish direct user-scoped memory tools, and reuse the same unified Python runtime as the standalone CLI. Source: `packages/js/node/appkit-graphiti`.
 - `@dbx-tools/appkit-mastra` - AppKit plugin and server-side toolkit for hosting Mastra agents inside a Databricks App. Source: `packages/js/node/appkit-mastra`.
 - `@dbx-tools/appkit-model-gateway` - Give OpenAI-, Anthropic-, and Codex-compatible clients one endpoint for the models available in a Databricks workspace. The AppKit plugin discovers the workspace catalogue, exposes familiar model APIs, and chooses a compatible Databricks route for each request. Source: `packages/js/node/appkit-model-gateway`.
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
