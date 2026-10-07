@@ -39,6 +39,18 @@ export function pythonDistributionPaths(directory: string): string[] {
     .map((file) => join(directory, file));
 }
 
+function removeTemporaryTree(root: string): void {
+  if (!existsSync(root)) return;
+  const makeWritable = (directory: string): void => {
+    chmodSync(directory, 0o700);
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) makeWritable(join(directory, entry.name));
+    }
+  };
+  makeWritable(root);
+  rmSync(root, { recursive: true, force: true });
+}
+
 function pythonProjects(root: string): PythonProjectFile[] {
   const packageFiles = readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -156,7 +168,7 @@ export function buildPythonProjects(options: {
     }
     runTaskCommand(process.cwd(), "uvx", ["twine", "check", ...distributions]);
   } finally {
-    rmSync(temporaryRoot, { recursive: true, force: true });
+    removeTemporaryTree(temporaryRoot);
   }
 }
 

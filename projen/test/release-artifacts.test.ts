@@ -9,6 +9,7 @@ import { pythonDistributionPaths } from "../tasks/publish-python.ts";
 describe("shared release artifacts", () => {
   it("builds all Python packages once into independent publication directories", () => {
     const root = mkdtempSync(join(tmpdir(), "release-python-artifacts-"));
+    const readOnlyDirectory = join(root, "packages", "app", "generated");
     try {
       const bin = join(root, "bin");
       mkdirSync(bin);
@@ -20,6 +21,10 @@ describe("shared release artifacts", () => {
           `[project]\nname = "fixture-${directory}"\nversion = "1.2.3"\n`,
         );
       }
+      mkdirSync(readOnlyDirectory);
+      writeFileSync(join(readOnlyDirectory, "generated.py"), "VALUE = 1\n");
+      chmodSync(join(readOnlyDirectory, "generated.py"), 0o444);
+      chmodSync(readOnlyDirectory, 0o555);
       writeFileSync(
         join(bin, "uv"),
         [
@@ -72,6 +77,7 @@ describe("shared release artifacts", () => {
         );
       }
     } finally {
+      chmodSync(readOnlyDirectory, 0o755);
       rmSync(root, { recursive: true, force: true });
     }
   });
