@@ -42,10 +42,7 @@ async function _pythonArgs(options: { dev?: boolean } = {}, ...args: string[]): 
   const extra = options.dev ? "[dev]" : "";
   const packageArgs = python
     ? []
-    : [
-        "--with",
-        `dbx-tools-graphiti${extra}==${(await import("../index.ts")).PACKAGE_VERSION}`,
-      ];
+    : ["--with", `dbx-tools-graphiti${extra}==${(await import("../index.ts")).PACKAGE_VERSION}`];
   return [
     "run",
     "--no-project",
@@ -59,15 +56,11 @@ async function _pythonArgs(options: { dev?: boolean } = {}, ...args: string[]): 
 
 /** Read the Graphiti OpenAPI document without starting its database runtime. */
 export async function graphitiOpenApi(): Promise<string> {
-  const result = await exec.spawn(
-    "uv",
-    await _pythonArgs({}, "-m", "dbx_tools.graphiti", "docs"),
-    {
-      check: true,
-      stdout: "capture",
-      stderr: "capture",
-    },
-  );
+  const result = await exec.spawn("uv", await _pythonArgs({}, "-m", "dbx_tools.graphiti", "docs"), {
+    check: true,
+    stdout: "capture",
+    stderr: "capture",
+  });
   return result.stdout;
 }
 

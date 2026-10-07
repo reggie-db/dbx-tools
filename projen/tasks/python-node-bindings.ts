@@ -14,13 +14,13 @@ import ts from "typescript";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
 import { publicFunctionExports, publicNamespaceExports } from "../src/module-exports.ts";
 import { resolveRepoRoot } from "../src/packages.ts";
-import { PYTHON_NODE_RUNTIME_MODULE } from "../src/python-node-runtime.ts";
 import {
   generatePythonNodeBindings,
   resolvePythonNodeBindings,
   type ResolvedPythonNodeBindings,
   type ResolvedPythonNodeFunctionOverride,
 } from "../src/python-node-bindings.ts";
+import { PYTHON_NODE_RUNTIME_MODULE } from "../src/python-node-runtime.ts";
 
 const logger = log.logger("projen:python-node-bindings");
 

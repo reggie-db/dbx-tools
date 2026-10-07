@@ -242,9 +242,8 @@ describe("GraphitiPlugin", () => {
       },
     });
     try {
-      const waitUntilReady = (
-        plugin as unknown as { waitUntilReady(): Promise<void> }
-      ).waitUntilReady;
+      const waitUntilReady = (plugin as unknown as { waitUntilReady(): Promise<void> })
+        .waitUntilReady;
       await assert.rejects(waitUntilReady.call(plugin), /readiness timed out/);
     } finally {
       Date.now = originalNow;

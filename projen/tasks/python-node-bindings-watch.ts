@@ -4,6 +4,7 @@ import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import { runTaskCommand } from "../src/_task-command.ts";
+import { repoRoot } from "../src/packages.ts";
 import {
   affectedPythonNodeBindingProjects,
   generatePythonNodeBindings,
@@ -11,7 +12,6 @@ import {
   resolveAllPythonNodeBindings,
   type ResolvedPythonNodeBindings,
 } from "../src/python-node-bindings.ts";
-import { repoRoot } from "../src/packages.ts";
 import { watchLoop, watchRoots } from "../src/watch.ts";
 import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 

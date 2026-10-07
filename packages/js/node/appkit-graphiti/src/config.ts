@@ -36,11 +36,12 @@ export function resolveGraphitiConfig(
   const resolved = resolveGraphitiOptions({
     ...environment,
     ...overrides,
-    listen: overrides.listen ?? environment.listen ?? {
-      scheme: "tcp",
-      host: "127.0.0.1",
-      port: 0,
-    },
+    listen: overrides.listen ??
+      environment.listen ?? {
+        scheme: "tcp",
+        host: "127.0.0.1",
+        port: 0,
+      },
   });
   return { ...config, ...resolved } as ResolvedGraphitiPluginConfig;
 }

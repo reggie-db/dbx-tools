@@ -89,9 +89,7 @@ export class DBXToolsConfig {
       ...(!this.publishable ? { publishable: false } : {}),
       ...(this.packageRoots?.length ? { packageRoots: this.packageRoots } : {}),
       ...(this.syncResynthPaths?.length ? { syncResynthPaths: this.syncResynthPaths } : {}),
-      ...(this.syncWatchTasks.length
-        ? { syncWatchTasks: [...new Set(this.syncWatchTasks)] }
-        : {}),
+      ...(this.syncWatchTasks.length ? { syncWatchTasks: [...new Set(this.syncWatchTasks)] } : {}),
     });
   }
 }
