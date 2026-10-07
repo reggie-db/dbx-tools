@@ -11,14 +11,13 @@
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readdir, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import * as bin from "@dbx-tools/core/bin";
-import * as exec from "@dbx-tools/core/exec";
-
+import { compileWithBun } from "./_compile.ts";
 import { readServiceDefinition, writeServiceDefinition } from "./_config.ts";
 import { requestServiceControl } from "./_control.ts";
 import { resolveServicePackage, type ServicePackage } from "./_package.ts";
@@ -463,59 +462,6 @@ function safeToken(value: string): string {
   const token = value.replace(/[^a-z0-9._-]+/gi, "-").replace(/^-+|-+$/g, "");
   if (!token) throw new TypeError(`invalid binary version: ${value}`);
   return token;
-}
-
-async function compileWithBun(
-  bunExecutable: string,
-  entrypoint: string,
-  output: string,
-  workingDirectory: string,
-  external: readonly string[] = [],
-): Promise<void> {
-  const before = await bunBuildArtifacts(workingDirectory);
-  try {
-    await exec.spawn(
-      bunExecutable,
-      [
-        "build",
-        entrypoint,
-        "--compile",
-        "--compile-autoload-package-json",
-        "--outfile",
-        output,
-        ...external.flatMap((dependency) => ["--external", dependency]),
-      ],
-      {
-        check: true,
-        cwd: workingDirectory,
-        env: {
-          ...process.env,
-          BUN_TMPDIR: dirname(output),
-          TMPDIR: dirname(output),
-        },
-        stdin: "ignore",
-        stdout: "capture",
-        stderr: "capture",
-      },
-    );
-  } finally {
-    for (const artifact of await bunBuildArtifacts(workingDirectory)) {
-      if (!before.has(artifact)) {
-        await rm(join(workingDirectory, artifact), {
-          recursive: true,
-          force: true,
-        });
-      }
-    }
-  }
-}
-
-async function bunBuildArtifacts(directory: string): Promise<Set<string>> {
-  return new Set(
-    (await readdir(directory))
-      .filter((name) => name.startsWith(".") && name.endsWith(".bun-build"))
-      .sort(),
-  );
 }
 
 async function waitForState(

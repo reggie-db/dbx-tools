@@ -79,11 +79,9 @@ export function publishPythonProjects(options: {
   readonly root: string;
   readonly version: string;
 }): void {
-  const root = resolve(options.root);
-  const workspace = projectUtils.root(root) ?? dirname(root);
-  const output = mkdtempSync(join(workspace, ".projen-python-publish-"));
+  const output = mkdtempSync(join(tmpdir(), "projen-python-publish-"));
   try {
-    buildPythonProjects({ ...options, output });
+    buildPythonProjectsInternal({ ...options, output }, true);
     runTaskCommand(
       process.cwd(),
       "uvx",
@@ -101,7 +99,7 @@ export function publishPythonProjects(options: {
       { env: { ...process.env, UV_DEFAULT_INDEX: options.indexUrl } },
     );
   } finally {
-    rmSync(output, { recursive: true, force: true });
+    removeTemporaryTree(output);
   }
 }
 
@@ -115,11 +113,21 @@ export function buildPythonProjects(options: {
   readonly root: string;
   readonly version: string;
 }): void {
+  buildPythonProjectsInternal(options, false);
+}
+
+function buildPythonProjectsInternal(
+  options: Parameters<typeof buildPythonProjects>[0],
+  allowOutputOutsideWorkspace: boolean,
+): void {
   const root = resolve(options.root);
   const output = resolve(options.output);
   const workspace = projectUtils.root(root) ?? dirname(root);
   const outputPath = relative(workspace, output);
-  if (!outputPath || outputPath.startsWith("..") || isAbsolute(outputPath)) {
+  if (
+    !allowOutputOutsideWorkspace &&
+    (!outputPath || outputPath.startsWith("..") || isAbsolute(outputPath))
+  ) {
     throw new Error("Python release output must be a non-root directory inside the workspace");
   }
   rmSync(output, { recursive: true, force: true });
