@@ -106,8 +106,7 @@ const root = new project.DBXToolsNodeProject({
   github: true,
   githubOptions: { mergify: false, pullRequestLint: false },
   autoMerge: false,
-  buildWorkflow: true,
-  buildWorkflowOptions: { mutableInstall: true },
+  buildWorkflow: false,
   releaseSynthesisCommands: ["bun --cwd projen .projenrc.ts"],
   releaseDocs: {
     siteUrl: "https://docs.dbx.tools",

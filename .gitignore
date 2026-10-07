@@ -28,7 +28,6 @@ jspm_packages/
 *.tgz
 .yarn-integrity
 .cache
-!/.github/workflows/build.yml
 !/.github/pull_request_template.md
 !/.prettierignore
 !/.prettierrc.json
