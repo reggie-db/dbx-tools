@@ -1291,7 +1291,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "post-graph>=0.7,<1",
       "pydantic-settings>=2,<3",
       "pyyaml>=6,<7",
-      "typing-extensions>=4,<5",
+      "typing-extensions>=4.15,<5",
       "uvicorn>=0.44",
     ],
     optionalDependencies: {

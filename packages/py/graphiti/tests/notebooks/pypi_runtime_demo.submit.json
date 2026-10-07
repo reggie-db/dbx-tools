@@ -1,0 +1,21 @@
+{
+  "run_name": "graphiti-pypi-runtime-demo-v0.9.54",
+  "tasks": [
+    {
+      "task_key": "pypi_runtime_demo",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/reggie.pierce@databricks.com/.dbx-tools-tests/graphiti-pypi-runtime-demo-v0.9.54/pypi_runtime_demo"
+      },
+      "environment_key": "runtime",
+      "timeout_seconds": 1200
+    }
+  ],
+  "environments": [
+    {
+      "environment_key": "runtime",
+      "spec": {
+        "client": "4"
+      }
+    }
+  ]
+}
