@@ -366,9 +366,10 @@ async def test_synchronous_add_memory_waits_for_persistence() -> None:
         graphiti = Graphiti()
 
     class Service:
-        entity_types = {"entity": object}
-        edge_types = {"edge": object}
-        edge_type_map = {("entity", "entity"): ["edge"]}
+        def __init__(self) -> None:
+            self.entity_types = {"entity": object}
+            self.edge_types = {"edge": object}
+            self.edge_type_map = {("entity", "entity"): ["edge"]}
 
     main.app.state.runtime = Runtime()
     main.graphiti_mcp.graphiti_service = Service()
