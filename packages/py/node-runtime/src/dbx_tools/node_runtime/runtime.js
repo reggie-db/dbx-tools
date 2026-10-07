@@ -10773,7 +10773,7 @@ function cloneStructured(value, seen = new Map) {
 // packages/py/node-runtime/shims/databricks-runtime-auth.ts
 var createWorkspaceClient = evaluatePython("lambda: __import__('databricks.sdk', fromlist=['WorkspaceClient']).WorkspaceClient()");
 var isDatabricksRuntime = evaluatePython("lambda: bool(__import__('os').environ.get('DATABRICKS_RUNTIME_VERSION'))");
-var runtimeMetadata = evaluatePython("lambda client: {'host': client.config.host, 'workspaceId': client.config.workspace_id, 'principal': client.config.client_id or client.config.username or client.config.auth_type}");
+var runtimeMetadata = evaluatePython("lambda client: {'host': client.config.host, 'workspaceId': getattr(client.config, 'workspace_id', None), 'principal': getattr(client.config, 'client_id', None) or getattr(client.config, 'username', None) or getattr(client.config, 'auth_type', None)}");
 var configuredToken = evaluatePython("lambda client: client.config.token");
 var authenticationHeaders = evaluatePython("lambda client: dict(client.config.authenticate())");
 async function databricksRuntimeAuthClient() {

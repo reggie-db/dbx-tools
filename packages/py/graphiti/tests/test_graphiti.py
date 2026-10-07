@@ -118,7 +118,6 @@ async def test_generated_auth_uses_workspace_client_in_databricks_runtime(monkey
         host = "https://workspace.example.com"
         token = None
         username = "runtime-user"
-        workspace_id = "workspace-id"
 
         def authenticate(self) -> dict[str, str]:
             authentications.append("authenticate")
@@ -141,11 +140,10 @@ async def test_generated_auth_uses_workspace_client_in_databricks_runtime(monkey
     assert auth.host == "https://workspace.example.com"
     assert auth.auth_type == "runtime"
     assert auth.principal == "runtime-user"
-    assert auth.workspace_id == "workspace-id"
+    assert auth.workspace_id is None
     assert (await auth.token())["accessToken"] == access_token
     assert await auth.headers() == {
         "authorization": f"Bearer {access_token}",
-        "x-databricks-workspace-id": "workspace-id",
         "x-runtime-header": "runtime-value",
     }
     assert authentications == ["authenticate"]

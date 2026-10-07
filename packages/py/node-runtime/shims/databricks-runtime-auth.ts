@@ -15,7 +15,7 @@ const isDatabricksRuntime = evaluatePython<PythonFunction>(
   "lambda: bool(__import__('os').environ.get('DATABRICKS_RUNTIME_VERSION'))",
 );
 const runtimeMetadata = evaluatePython<PythonFunction>(
-  "lambda client: {'host': client.config.host, 'workspaceId': client.config.workspace_id, 'principal': client.config.client_id or client.config.username or client.config.auth_type}",
+  "lambda client: {'host': client.config.host, 'workspaceId': getattr(client.config, 'workspace_id', None), 'principal': getattr(client.config, 'client_id', None) or getattr(client.config, 'username', None) or getattr(client.config, 'auth_type', None)}",
 );
 const configuredToken = evaluatePython<PythonFunction>("lambda client: client.config.token");
 const authenticationHeaders = evaluatePython<PythonFunction>(
