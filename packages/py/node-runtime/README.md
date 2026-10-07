@@ -22,6 +22,8 @@ environment instead of installing a second copy. The lock files contain no
 runtime packages. Set `DBX_TOOLS_NODE_RUNTIME_LOCK_DIRECTORY` only when the
 default per-user lock directory is unsuitable.
 
+## Install and run
+
 Install the package normally:
 
 ```python
@@ -56,6 +58,8 @@ character stays as written (`node___fs__promises.ts` becomes `node:fs/promises`)
 Files whose derived name has no scheme, including `bootstrap.ts`, are support
 modules rather than runtime registry entries. Duplicate derived specifiers or
 registry aliases fail the build.
+
+## Build and watch
 
 `build-runtime.ts` bundles the bootstrap and shims into
 `src/dbx_tools/node_runtime/runtime.js`. It adds a generated-file header, avoids
