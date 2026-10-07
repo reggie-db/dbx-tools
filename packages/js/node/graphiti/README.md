@@ -21,7 +21,8 @@ await runtime.stop();
 ```
 
 `runtime.result` resolves when the supervised runtime exits. Calling `stop()`
-terminates Graphiti and shuts down FalkorDB through its durability policy.
+forwards SIGTERM, allows bounded Python cleanup, and escalates the process group
+only when graceful shutdown exceeds its deadline.
 
 ## Run Until Exit
 
@@ -34,7 +35,10 @@ await runGraphiti({ profile: "MY-PROFILE" });
 ```
 
 Model selection, route resolution, authentication refresh, process supervision,
-and durable FalkorDB lifecycle remain internal to the runtime.
+PostGraph client lifecycle, and embedded PostgreSQL lifecycle remain internal
+to the runtime. Omit `databaseUrl` to persist bundled PostgreSQL beneath
+`graphitiHome`. A configured PostgreSQL URL or Lakebase target uses the external
+database instead.
 
 ## Embed The Runtime
 

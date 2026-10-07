@@ -50,7 +50,7 @@ export type { DBXToolsProjectLanguage, DBXToolsProjectOptions, DBXToolsProject, 
 export { PackageIdentifier, LICENSE, DBXToolsNodeProject, ROOT_INSTALL_ONLY_MIXIN, DBXToolsTypeScriptProject } from "./src/project-js.ts";
 export type { DBXToolsJavaScriptProject, DBXToolsReleaseMode, DiscoveredTypeScriptPackageOptions, DBXToolsJavaScriptProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
 export { DBXToolsPythonProject, DBXToolsPythonWorkspace } from "./src/project-py.ts";
-export type { PythonRepositoryOptions, PythonPackageOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
+export type { PythonRepositoryOptions, PythonPackageOptions, PythonSourceSyncOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
 export { PROJEN_VERSION } from "./src/projen-version.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
 export { PYTHON_NODE_SHIM_ROOT } from "./src/python-node-bindings.ts";

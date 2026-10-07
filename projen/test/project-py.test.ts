@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -324,6 +332,21 @@ describe("DBXToolsPythonWorkspace", () => {
         true,
       );
       assert.equal(
+        statSync(
+          join(
+            bindingsOutdir,
+            "python/packages/auth/src/fixture/auth/_generated/node/auth/client.py",
+          ),
+        ).mode & 0o222,
+        0,
+      );
+      assert.equal(
+        statSync(
+          join(bindingsOutdir, "python/packages/auth/src/fixture/auth/_generated/node/_runtime.js"),
+        ).mode & 0o222,
+        0,
+      );
+      assert.equal(
         existsSync(
           join(
             bindingsOutdir,
@@ -334,7 +357,7 @@ describe("DBXToolsPythonWorkspace", () => {
       );
       assert.ok(project.tasks.tryFind("auth:python-runtime"));
       assert.ok(project.tasks.tryFind("auth:python-runtime:check"));
-      assert.equal(project.tasks.tryFind("auth:python-runtime:watch"), undefined);
+      assert.ok(project.tasks.tryFind("auth:python-runtime:watch"));
       rmSync(packagePyproject);
       generatePythonNodeBindings(bindingsOutdir);
       assert.equal(

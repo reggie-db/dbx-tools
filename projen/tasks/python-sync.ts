@@ -1,0 +1,248 @@
+#!/usr/bin/env -S bun
+/**
+ * Synchronize pinned Git source subsets into Python generated package trees.
+ */
+
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { withFileLock } from "@dbx-tools/core/file-lock";
+import { parse } from "smol-toml";
+
+interface SyncConfig {
+  readonly name?: string;
+  readonly source: string;
+  readonly include?: readonly string[];
+  readonly exclude?: readonly string[];
+  readonly replace?: Readonly<Record<string, string>>;
+}
+
+interface SyncManifest {
+  readonly optionsHash: string;
+  readonly resolvedCommit: string;
+  readonly source: string;
+}
+
+interface ParsedSource {
+  readonly repository: string;
+  readonly reference: string;
+  readonly subdirectory?: string;
+}
+
+export async function main(args: readonly string[] = process.argv.slice(2)): Promise<void> {
+  const projectIndex = args.indexOf("--project");
+  if (projectIndex < 0 || !args[projectIndex + 1]) {
+    throw new Error("python-sync requires --project <directory>");
+  }
+  const project = resolve(args[projectIndex + 1]!);
+  const force = args.includes("--force");
+  const check = args.includes("--check");
+  const pyproject = parse(readFileSync(join(project, "pyproject.toml"), "utf8")) as {
+    tool?: {
+      uv?: { "build-backend"?: { "module-name"?: string; "module-root"?: string } };
+      dbx_tools?: { sync?: SyncConfig | SyncConfig[] };
+    };
+  };
+  const configured = pyproject.tool?.dbx_tools?.sync;
+  const configs = configured ? (Array.isArray(configured) ? configured : [configured]) : [];
+  const build = pyproject.tool?.uv?.["build-backend"];
+  const moduleName = build?.["module-name"];
+  if (!moduleName) throw new Error(`${project}/pyproject.toml has no uv module-name`);
+  const moduleRoot = resolve(project, build?.["module-root"] ?? "src");
+  const generatedRoot = join(moduleRoot, ...moduleName.split("."), "_generated", "sync");
+  for (const config of configs) await synchronize(config, generatedRoot, { check, force });
+}
+
+async function synchronize(
+  config: SyncConfig,
+  generatedRoot: string,
+  options: { readonly check: boolean; readonly force: boolean },
+): Promise<void> {
+  const source = parseSource(config.source);
+  const name = config.name ?? defaultName(source);
+  const target = join(generatedRoot, name);
+  const optionsHash = hash({
+    exclude: [...(config.exclude ?? [])].sort(),
+    include: [...(config.include ?? ["**/*"])].sort(),
+    name,
+    replace: config.replace ?? {},
+    source: config.source,
+  });
+  const initialManifest = readManifest(target);
+  if (
+    !options.force &&
+    initialManifest?.optionsHash === optionsHash &&
+    /^[a-f0-9]{40}$/i.test(source.reference) &&
+    initialManifest.resolvedCommit === source.reference.toLowerCase()
+  ) {
+    return;
+  }
+  const initialCommit = resolveCommit(source);
+  if (
+    !options.force &&
+    initialManifest?.optionsHash === optionsHash &&
+    initialManifest.resolvedCommit === initialCommit
+  ) {
+    return;
+  }
+  await withFileLock(["python-sync", target], async () => {
+    const resolvedCommit = resolveCommit(source);
+    const manifest = readManifest(target);
+    if (
+      !options.force &&
+      manifest?.optionsHash === optionsHash &&
+      manifest.resolvedCommit === resolvedCommit
+    ) {
+      return;
+    }
+    if (options.check) throw new Error(`Generated Python sync is stale: ${target}`);
+    replaceTarget(config, source, target, { optionsHash, resolvedCommit });
+  });
+}
+
+function replaceTarget(
+  config: SyncConfig,
+  source: ParsedSource,
+  target: string,
+  manifest: Omit<SyncManifest, "source">,
+): void {
+  const temporary = mkdtempSync(join(tmpdir(), "dbx-tools-python-sync-"));
+  const checkout = join(temporary, "checkout");
+  const staging = join(temporary, "staging");
+  try {
+    execFileSync("git", ["init", "--quiet", checkout]);
+    execFileSync("git", [
+      "-C",
+      checkout,
+      "fetch",
+      "--quiet",
+      "--depth=1",
+      source.repository,
+      source.reference,
+    ]);
+    execFileSync("git", ["-C", checkout, "checkout", "--quiet", "FETCH_HEAD"]);
+    const root = resolve(checkout, source.subdirectory ?? ".");
+    mkdirSync(staging, { recursive: true });
+    const included = new Set<string>();
+    const replacements = new Map(Object.keys(config.replace ?? {}).map((value) => [value, 0]));
+    for (const pattern of config.include ?? ["**/*"]) {
+      for (const relative of new Bun.Glob(pattern).scanSync({ cwd: root, onlyFiles: true })) {
+        included.add(relative);
+      }
+    }
+    const excluded = (config.exclude ?? []).map((pattern) => new Bun.Glob(pattern));
+    for (const relative of [...included].sort()) {
+      if (excluded.some((glob) => glob.match(relative))) continue;
+      const destination = join(staging, relative);
+      mkdirSync(dirname(destination), { recursive: true });
+      cpSync(join(root, relative), destination);
+      if (relative.endsWith(".py") && config.replace) {
+        let contents = readFileSync(destination, "utf8");
+        for (const [from, to] of Object.entries(config.replace)) {
+          const matches = contents.split(from).length - 1;
+          if (matches > 0) replacements.set(from, (replacements.get(from) ?? 0) + matches);
+          contents = contents.replaceAll(from, to);
+        }
+        writeFileSync(destination, contents);
+      }
+    }
+    const missing = [...replacements]
+      .filter(([, matches]) => matches === 0)
+      .map(([value]) => value);
+    if (missing.length > 0) {
+      throw new Error(
+        `Python sync replacements did not match ${source.repository}: ${missing.join(", ")}`,
+      );
+    }
+    const license = join(checkout, "LICENSE");
+    if (existsSync(license)) cpSync(license, join(staging, "LICENSE.upstream"));
+    writeFileSync(
+      join(staging, ".sync.json"),
+      `${JSON.stringify({ ...manifest, source: config.source }, null, 2)}\n`,
+    );
+    makeWritable(target);
+    rmSync(target, { recursive: true, force: true });
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(staging, target);
+    makeReadonly(target);
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
+}
+
+function parseSource(value: string): ParsedSource {
+  const match = /^(?:(.*?)\s+@\s+)?git\+(.+?)@([^#]+)(?:#subdirectory=(.+))?$/.exec(value);
+  if (!match) throw new Error(`Invalid pip Git source: ${value}`);
+  return {
+    repository: match[2]!,
+    reference: match[3]!,
+    ...(match[4] ? { subdirectory: match[4] } : {}),
+  };
+}
+
+function resolveCommit(source: ParsedSource): string {
+  if (/^[a-f0-9]{40}$/i.test(source.reference)) return source.reference.toLowerCase();
+  const output = execFileSync("git", ["ls-remote", source.repository, source.reference], {
+    encoding: "utf8",
+  }).trim();
+  const commit = output.split(/\s+/, 1)[0];
+  if (!commit) throw new Error(`Could not resolve ${source.reference} from ${source.repository}`);
+  return commit.toLowerCase();
+}
+
+function defaultName(source: ParsedSource): string {
+  const repository = basename(source.repository, ".git");
+  const owner = basename(dirname(source.repository));
+  return `${safeName(owner)}-${safeName(repository)}-${hash(source.repository).slice(0, 8)}`;
+}
+
+function safeName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function hash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function readManifest(target: string): SyncManifest | undefined {
+  const path = join(target, ".sync.json");
+  return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as SyncManifest) : undefined;
+}
+
+function makeWritable(path: string): void {
+  if (!existsSync(path)) return;
+  if (statSync(path).isDirectory()) {
+    chmodSync(path, 0o755);
+    for (const entry of readdirSync(path)) makeWritable(join(path, entry));
+  } else {
+    chmodSync(path, 0o644);
+  }
+}
+
+function makeReadonly(path: string): void {
+  if (statSync(path).isDirectory()) {
+    for (const entry of readdirSync(path)) makeReadonly(join(path, entry));
+    chmodSync(path, 0o555);
+  } else {
+    chmodSync(path, 0o444);
+  }
+}
+
+if (import.meta.main) await main();

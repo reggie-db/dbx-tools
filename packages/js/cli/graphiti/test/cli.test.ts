@@ -3,7 +3,6 @@ import { describe, it } from "node:test";
 import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
 import { GraphitiOptionsSchema as RuntimeGraphitiOptionsSchema } from "@dbx-tools/graphiti/options";
 import type { GraphitiRuntimeOptions } from "@dbx-tools/graphiti/runtime";
-import { GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES } from "@dbx-tools/shared-graphiti/upstream";
 import { PACKAGE_VERSION } from "../index.ts";
 import { buildProgram, graphitiServiceDefinition } from "../src/cli.ts";
 import { GRAPHITI_DEFAULTS, GraphitiOptionsSchema } from "../src/options.ts";
@@ -27,8 +26,8 @@ describe("Graphiti CLI", () => {
     assert.match(help, /MODEL_NAME/);
     assert.match(help, /--graphiti-home <value>/);
     assert.match(help, /GRAPHITI_HOME/);
-    assert.match(help, /FALKOR_VOLUME/);
-    assert.doesNotMatch(help, /DBX_TOOLS_FALKOR_VOLUME/);
+    assert.match(help, /DATABASE_URL/);
+    assert.doesNotMatch(help, /DBX_TOOLS_DATABASE_URL/);
     assert.doesNotMatch(help, /model-gateway/);
     assert.doesNotMatch(help, /--graphiti-args/);
   });
@@ -56,7 +55,7 @@ describe("Graphiti CLI", () => {
     assert.deepEqual(definition.pythonPackage, {
       name: "dbx-tools-graphiti",
       python: "3.11",
-      dependencies: [...GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES],
+      dependencies: [],
     });
     assert.ok(definition.command?.arguments?.includes("GRAPHITI-PROFILE"));
   });

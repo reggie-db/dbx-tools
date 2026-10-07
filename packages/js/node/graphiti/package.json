@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/graphiti",
-  "description": "Option-driven Graphiti lifecycle with model routing and durable FalkorDB",
+  "description": "Typed Graphiti options and bounded Python process supervision",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -24,10 +24,7 @@
   },
   "dependencies": {
     "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/falkor-db": "workspace:^",
-    "@dbx-tools/shared-core": "workspace:^",
-    "@dbx-tools/shared-graphiti": "workspace:^",
-    "zod": "catalog:"
+    "@dbx-tools/shared-graphiti": "workspace:^"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

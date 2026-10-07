@@ -2,6 +2,9 @@ import json
 
 import pytest
 from dbx_tools.graphiti import main
+from dbx_tools.graphiti import runtime as graphiti_runtime
+from dbx_tools.graphiti._generated.node.shared_graphiti.options import GraphitiOptions
+from dbx_tools.graphiti.options import normalize_graphiti_options
 
 """Validate the wrapper-owned composition without re-testing upstream Graphiti."""
 
@@ -14,10 +17,7 @@ def _resolved_options():
         "embedderDimensions": 768,
         "structuredOutputMode": "json_object",
         "listen": {"scheme": "tcp", "host": "127.0.0.1", "port": 8100.0},
-        "falkorListen": {"scheme": "tcp", "host": "127.0.0.1", "port": 6380.0},
-        "falkorDatabase": "graphiti",
-        "falkorSnapshotSeconds": 300,
-        "falkorSnapshotMinChanges": 1,
+        "databaseUrl": "postgresql://localhost:5433/graphiti",
     }
 
 
@@ -61,10 +61,18 @@ def test_load_graphiti_options_uses_generated_environment_parser(monkeypatch) ->
         return resolved
 
     monkeypatch.setattr(main, "graphiti_options_from_environment", parse)
-    monkeypatch.setattr(main, "resolve_graphiti_options", resolve)
+    monkeypatch.setattr(main, "normalize_graphiti_options", resolve)
 
     assert main.load_graphiti_options({"MODEL_NAME": "chat-model"}) is resolved
     assert calls == [{"MODEL_NAME": "chat-model"}, {"model": "chat-model"}]
+
+
+def test_normalize_graphiti_options_accepts_input_and_resolved_values() -> None:
+    resolved = normalize_graphiti_options(GraphitiOptions(model="chat-model"))
+
+    assert resolved["model"] == "chat-model"
+    assert "databaseUrl" not in resolved
+    assert normalize_graphiti_options(resolved) == resolved
 
 
 def test_upstream_openai_credentials_use_a_scoped_placeholder(monkeypatch) -> None:
@@ -79,19 +87,10 @@ def test_upstream_openai_credentials_use_a_scoped_placeholder(monkeypatch) -> No
         assert main.os.environ["OPENAI_API_KEY"] == "existing"
 
 
-def test_shared_options_map_to_both_upstream_settings() -> None:
+def test_shared_options_map_to_mcp_settings() -> None:
     options = _resolved_options()
 
-    mapped_rest = main.graph_service_settings(options)
     mapped_mcp = main.mcp_settings(options)
-
-    assert mapped_rest.model_name == "chat-model"
-    assert mapped_rest.embedding_model_name == "embedding-model"
-    assert mapped_rest.openai_base_url is None
-    assert mapped_rest.db_backend == "falkordb"
-    assert mapped_rest.falkordb_host == "127.0.0.1"
-    assert mapped_rest.falkordb_port == 6380
-    assert mapped_rest.falkordb_database == "graphiti"
     assert mapped_mcp.server.host == "127.0.0.1"
     assert mapped_mcp.server.port == 8100
     assert mapped_mcp.llm.model == "chat-model"
@@ -103,10 +102,6 @@ def test_shared_options_map_to_both_upstream_settings() -> None:
     assert mapped_mcp.embedder.providers.openai is not None
     assert mapped_mcp.embedder.providers.openai.api_url == "https://api.openai.com/v1"
     assert mapped_mcp.embedder.dimensions == 768
-    assert mapped_mcp.database.provider == "falkordb"
-    assert mapped_mcp.database.providers.falkordb is not None
-    assert mapped_mcp.database.providers.falkordb.uri == "redis://127.0.0.1:6380"
-    assert mapped_mcp.database.providers.falkordb.database == "graphiti"
 
 
 @pytest.mark.asyncio
@@ -146,10 +141,10 @@ async def test_runtime_clients_resolve_ranked_embedding_route(monkeypatch) -> No
         assert options is None
         return model
 
-    monkeypatch.setattr(main, "create_auth_client", create_auth)
-    monkeypatch.setattr(main, "create_model_client", create_model)
+    monkeypatch.setattr(graphiti_runtime, "create_auth_client", create_auth)
+    monkeypatch.setattr(graphiti_runtime, "create_model_client", create_model)
 
-    runtime = await main._create_runtime_clients(_resolved_options())
+    runtime = await graphiti_runtime.create_runtime_clients(_resolved_options())
     try:
         assert runtime.auth is auth
         assert runtime.model is model
@@ -192,7 +187,7 @@ async def test_route_auth_refreshes_headers_for_each_request() -> None:
             return {"authorization": f"Bearer token-{self.calls}"}
 
     auth = Auth()
-    route_auth = main._DatabricksRouteAuth(
+    route_auth = graphiti_runtime._DatabricksRouteAuth(
         auth,
         {
             "/chat/completions": "https://workspace.example/serving-endpoints/chat/completions",
@@ -213,7 +208,7 @@ async def test_route_auth_refreshes_headers_for_each_request() -> None:
         ),
     ):
         flow = route_auth.async_auth_flow(
-            main.httpx.Request("POST", f"https://workspace.example{path}")
+            graphiti_runtime.httpx.Request("POST", f"https://workspace.example{path}")
         )
         request = await anext(flow)
         assert request.url.path == routed_path
@@ -234,29 +229,23 @@ async def test_initialize_mcp_populates_upstream_services(monkeypatch) -> None:
             initialized.extend([config, semaphore_limit])
             self.semaphore = semaphore
 
-        async def initialize(self) -> None:
-            initialized.append("service")
-
-        async def get_client(self):
-            return client
-
     class Queue:
         async def initialize(self, value) -> None:
             initialized.extend(["queue", value])
 
-    config = object()
+    config = main.GraphitiConfig()
     monkeypatch.setattr(main.graphiti_mcp, "GraphitiService", Service)
     monkeypatch.setattr(main.graphiti_mcp, "SEMAPHORE_LIMIT", 7)
     monkeypatch.setattr(main, "QueueService", Queue)
     monkeypatch.setattr(
         main,
-        "_configure_graphiti_client",
+        "configure_graphiti_client",
         lambda value, clients: configured.extend([value, clients]),
     )
 
-    await main.initialize_mcp(config, runtime)
+    await main.initialize_mcp(config, client, runtime)
 
-    assert initialized == [config, 7, "service", "queue", client]
+    assert initialized == [config, 7, "queue", client]
     assert configured == [client, runtime]
     assert main.graphiti_mcp.config is config
     assert main.graphiti_mcp.graphiti_client is client
@@ -266,6 +255,7 @@ async def test_initialize_mcp_populates_upstream_services(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_healthcheck() -> None:
+    main.app.state.ready = True
     response = await main.healthcheck()
 
     assert response.status_code == 200

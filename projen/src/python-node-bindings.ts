@@ -1,6 +1,6 @@
 /** Shared pyproject-backed configuration for PythonMonkey Node bindings. */
 import { readFileSync, rmSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { find } from "@dbx-tools/path";
 import { object, stringUtils } from "@dbx-tools/shared-core";
@@ -58,7 +58,8 @@ export function generatePythonNodeBindings(projectRoot: string = resolveRepoRoot
   }
 }
 
-function pythonNodeBindingProjects(projectRoot: string): string[] {
+/** Repository-relative Python projects that configure generated Node bindings. */
+export function pythonNodeBindingProjects(projectRoot: string): string[] {
   return [
     ...find
       .findFiles("**/pyproject.toml", { cwd: projectRoot })
@@ -167,6 +168,35 @@ export function pythonNodeBindingWatchInputs(config: ResolvedPythonNodeBindings)
     PYTHON_NODE_SHIM_ROOT,
     ...config.functionOverrides.map(({ handlerFile }) => handlerFile),
   ];
+}
+
+/**
+ * Python projects whose generated runtimes depend on at least one changed path.
+ *
+ * The project list is computed once per watch batch and reused by the lock preflight
+ * and generator callback. This keeps unrelated edits on the no-lock fast path while
+ * ensuring each affected Python project is regenerated only once.
+ */
+export function affectedPythonNodeBindingProjects(
+  root: string,
+  configs: readonly ResolvedPythonNodeBindings[],
+  changed: readonly string[],
+): string[] {
+  const affected = new Set<string>();
+  for (const config of configs) {
+    const inputs = pythonNodeBindingWatchInputs(config);
+    if (changed.some((candidate) => inputs.some((input) => containsPath(root, input, candidate)))) {
+      affected.add(config.project);
+    }
+  }
+  return [...affected].sort();
+}
+
+/** Whether `candidate` is an input path or one of its descendants. */
+function containsPath(root: string, input: string, candidate: string): boolean {
+  const inputPath = resolve(root, input);
+  const candidatePath = resolve(root, candidate);
+  return candidatePath === inputPath || candidatePath.startsWith(`${inputPath}${sep}`);
 }
 
 function validateBindings(configs: readonly ResolvedPythonNodeBindings[]): void {

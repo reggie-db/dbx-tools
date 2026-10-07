@@ -35,9 +35,9 @@ describe("addArgs", () => {
     const help = addArgs(new Command("demo"), schema).helpInformation();
     assert.match(help, /DATABASE_URL/);
     assert.doesNotMatch(help, /DBX_TOOLS_DATABASE_URL/);
-    const prefixed = addArgs(new Command("demo"), schema, { prefix: "FALKORDB" }).helpInformation();
-    assert.match(prefixed, /FALKORDB_DATABASE_URL/);
-    assert.doesNotMatch(prefixed, /DBX_TOOLS_FALKORDB_DATABASE_URL/);
+    const prefixed = addArgs(new Command("demo"), schema, { prefix: "SERVICE" }).helpInformation();
+    assert.match(prefixed, /SERVICE_DATABASE_URL/);
+    assert.doesNotMatch(prefixed, /DBX_TOOLS_SERVICE_DATABASE_URL/);
   });
 
   it("renders layered dotenv values as help defaults", () => {

@@ -1,0 +1,5 @@
+{
+  "optionsHash": "94fe0cd76491adb6bba4e3f57447304c67dbe9bd115540ab2e3e9791e8fb2c76",
+  "resolvedCommit": "2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066",
+  "source": "graph-service @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=server"
+}

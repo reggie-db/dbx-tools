@@ -26,11 +26,6 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-falkor-db",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/cli-graphiti",
       "version": "workspace:^",
       "type": "runtime"

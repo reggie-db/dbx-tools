@@ -2,8 +2,8 @@
 
 Run Graphiti graph memory against Databricks-hosted chat and embedding models.
 The CLI layers foreground execution and desktop-service commands on the
-`@dbx-tools/graphiti` Node runtime, which owns model discovery, authentication,
-durable embedded FalkorDB, and process supervision.
+`@dbx-tools/graphiti` Node runtime, which maps options and supervises the unified
+Python Graphiti process.
 
 ## Install
 
@@ -15,7 +15,9 @@ bun add --global @dbx-tools/cli-graphiti
 
 Graphiti requires uv and a Databricks profile that can access the selected model
 endpoints. Desktop service installation manages its isolated runtime
-automatically.
+automatically. Foreground execution uses uv to resolve the lockstep
+`dbx-tools-graphiti` Python release unless `PYTHON` already selects a managed
+environment.
 
 ## Start Graphiti
 
@@ -31,7 +33,7 @@ The equivalent command through the combined dbx-tools CLI is:
 dbx graphiti --profile MY-PROFILE
 ```
 
-The default MCP endpoint is `http://127.0.0.1:8000/mcp/`. Stop the foreground
+The default MCP endpoint is `http://127.0.0.1:7272/mcp/`. Stop the foreground
 stack with `Ctrl-C`. Use the shared `service` commands for detached lifecycle.
 
 ## Choose Models
@@ -49,22 +51,24 @@ dbx graphiti \
 The runtime resolves the selected routes and refreshes Databricks headers for
 model requests.
 
-## Persist Graph Writes
+## Configure PostgreSQL
 
-FalkorDB writes the active graph to a local RDB under the configured Graphiti
-home directory. Snapshot creation is change-aware and uses the same durable
-runtime as `@dbx-tools/falkor-db`:
+Omit `--database-url` to start bundled PostgreSQL and persist it beneath
+`--graphiti-home`, or the platform data directory by default. The CLI owns that
+process and stops it with Graphiti.
+
+Use an existing PostgreSQL database when needed:
 
 ```sh
 dbx graphiti \
   --profile MY-PROFILE \
-  --falkor-data-dir ~/.local/share/my-agent-memory \
-  --falkor-snapshot-seconds 60
+  --database-url postgresql://localhost:5433/graphiti
 ```
 
-The launcher restores the local RDB before Graphiti starts and closes FalkorDB
-with `SHUTDOWN NOSAVE` after its change-aware persistence policy has completed.
-Use a separate data directory for each logical graph.
+The runtime closes the PostGraph client pool during graceful shutdown.
+Passwordless non-local URLs, Lakebase resource paths, and Lakebase project names
+use Node-owned Lakebase discovery and receive a fresh short-lived credential
+for each physical database connection.
 
 ## Install A Desktop Service
 
@@ -104,38 +108,18 @@ dbx graphiti [options] [command]
 
 #### Options
 
-| Option                                          | Description                                                                                                               |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `-v, --version`                                 | output the version number                                                                                                 |
-| `--profile <value>`                             | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                          |
-| `--graphiti-home <value>`                       | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
-| `--model <value>`                               | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
-| `--temperature <value>`                         | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                 |
-| `--embedder-model <value>`                      | Fuzzy embedding-model name or endpoint identifier. (default: "gte-large-en", env: EMBEDDER_MODEL)                         |
-| `--embedder-dimensions <value>`                 | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
-| `--structured-output-mode <value>`              | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
-| `--listen <value>`                              | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                             |
-| `--falkor-data-dir <value>`                     | Active local FalkorDB directory. (env: FALKORDB_DATA_DIR)                                                                 |
-| `--falkor-listen <value>`                       | FalkorDB listener used by Graphiti. (default: tcp://127.0.0.1:6379, env: FALKORDB_LISTEN)                                 |
-| `--falkor-database <value>`                     | Default graph name for consumers. (default: "default_db", env: FALKORDB_DATABASE)                                         |
-| `--falkor-snapshot-seconds <value>`             | Redis snapshot interval in seconds. (default: 300, env: FALKORDB_SNAPSHOT_SECONDS)                                        |
-| `--falkor-snapshot-min-changes <value>`         | Writes required before an interval saves. (default: 1, env: FALKORDB_SNAPSHOT_MIN_CHANGES)                                |
-| `--falkor-volume <value>`                       | Durable Unity Catalog Volume directory. (env: FALKOR_VOLUME)                                                              |
-| `--falkor-profile <value>`                      | Exact Databricks profile used for Volume access. (env: FALKORDB_PROFILE)                                                  |
-| `--falkor-retention <value>`                    | Durable snapshots retained. (default: 5, env: FALKOR_RETENTION)                                                           |
-| `--falkor-backup-poll-seconds <value>`          | Completed-RDB polling interval in seconds. (default: 10, env: FALKOR_BACKUP_POLL_SECONDS)                                 |
-| `--falkor-stale-backup-warning-seconds <value>` | Seconds before warning that changed data lacks a recent durable backup. (env: FALKOR_STALE_BACKUP_WARNING_SECONDS)        |
-| `--falkor-force-backup-on-shutdown`             | Force a dirty RDB and durable upload before shutdown. (default: false, env: FALKOR_FORCE_BACKUP_ON_SHUTDOWN)              |
-| `--no-falkor-force-backup-on-shutdown`          | Disable force a dirty rdb and durable upload before shutdown.                                                             |
-| `--falkor-shutdown-timeout-seconds <value>`     | Shutdown backup timeout in seconds. (default: 30, env: FALKOR_SHUTDOWN_TIMEOUT_SECONDS)                                   |
-| `--falkor-redis-server-path <value>`            | Custom redis-server executable. (env: FALKOR_REDIS_SERVER_PATH)                                                           |
-| `--falkor-module-path <value>`                  | Custom FalkorDB module. (env: FALKOR_MODULE_PATH)                                                                         |
-| `--falkor-max-memory <value>`                   | Redis memory limit such as 256mb. (env: FALKOR_MAX_MEMORY)                                                                |
-| `--falkor-redis-log-level <value>`              | Redis log level. (choices: "debug", "verbose", "notice", "warning", env: FALKOR_REDIS_LOG_LEVEL)                          |
-| `--falkor-redis-log-file <value>`               | Redis log file. (env: FALKOR_REDIS_LOG_FILE)                                                                              |
-| `--falkor-startup-timeout-seconds <value>`      | Embedded server startup timeout in seconds. (default: 10, env: FALKOR_STARTUP_TIMEOUT_SECONDS)                            |
-| `--falkor-inherit-stdio`                        | Inherit redis-server stdout and stderr. (default: false, env: FALKOR_INHERIT_STDIO)                                       |
-| `--no-falkor-inherit-stdio`                     | Disable inherit redis-server stdout and stderr.                                                                           |
+| Option                             | Description                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `-v, --version`                    | output the version number                                                                                                 |
+| `--profile <value>`                | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                          |
+| `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
+| `--model <value>`                  | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
+| `--temperature <value>`            | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                 |
+| `--embedder-model <value>`         | Fuzzy embedding-model name or endpoint identifier. (default: "gte-large-en", env: EMBEDDER_MODEL)                         |
+| `--embedder-dimensions <value>`    | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
+| `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
+| `--listen <value>`                 | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                             |
+| `--database-url <value>`           | PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL. (env: DATABASE_URL)                     |
 
 #### Commands
 

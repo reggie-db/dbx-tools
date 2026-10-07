@@ -6,6 +6,4 @@ export const PACKAGE_IDENTIFIER = "@dbx-tools/graphiti";
 export const PACKAGE_VERSION = "0.9.47";
 export * as options from "./src/options.ts";
 export * as runtime from "./src/runtime.ts";
-export { GraphitiOptionsSchema, GraphitiCliOptionsSchema, ResolvedGraphitiOptionsSchema, GRAPHITI_DEFAULTS } from "./src/options.ts";
-export type { GraphitiOptions, ResolvedGraphitiOptions } from "./src/options.ts";
 export type { GraphitiRuntimeOptions, GraphitiRuntime } from "./src/runtime.ts";

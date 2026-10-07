@@ -42,6 +42,10 @@
         "types": "./lib/src/address.d.ts",
         "default": "./lib/src/address.js"
       },
+      "./bindings": {
+        "types": "./lib/src/bindings.d.ts",
+        "default": "./lib/src/bindings.js"
+      },
       "./client": {
         "types": "./lib/src/client.d.ts",
         "default": "./lib/src/client.js"
@@ -60,6 +64,7 @@
   "exports": {
     ".": "./index.ts",
     "./address": "./src/address.ts",
+    "./bindings": "./src/bindings.ts",
     "./client": "./src/client.ts",
     "./package.json": "./package.json"
   },

@@ -184,16 +184,55 @@ polyfills. Python-host-backed adapters for process execution, files, crypto,
 OS values, and process state are included automatically, so packages do not
 configure a shim directory.
 
-The workspace creates `<name>:python-runtime` and
-`<name>:python-runtime:check`. Full synthesis regenerates bindings and removes
-stale `_generated/node` trees by reconciling them with the current
-`pyproject.toml` files, including the resynthesis triggered by a `.projenrc.ts`
-change.
+The workspace creates `<name>:python-runtime`, `<name>:python-runtime:check`,
+and `<name>:python-runtime:watch`. The focused watcher regenerates a Python
+project when its bound Node package, a transitive workspace dependency, its
+binding configuration, a function override, or a shared shim changes.
+`bun run sync --watch` supervises this watcher alongside Projen and barrel
+generation. Full synthesis regenerates bindings and removes stale
+`_generated/node` trees by reconciling them with the current `pyproject.toml`
+files, including the resynthesis triggered by a `.projenrc.ts` change.
 Built-in shims can make ordinary Node imports work under PythonMonkey.
 `functionOverrides` replaces named exports only in the generated runtime, so the
 Node package does not gain Python callbacks or alternate source files. A
 replacement may use a different export name through `handlerExport`; every
 other export continues to come from the original module.
+
+### Synchronize Pinned Python Sources
+
+Use a package's `sync` field when published Python code must include a reviewed
+subset of a Git repository instead of exposing a direct URL dependency:
+
+```ts
+{
+  directory: "service",
+  description: "Python service with synchronized upstream code",
+  sync: [
+    {
+      name: "upstream_driver",
+      source:
+        "driver @ git+https://github.com/example/project.git@0123456789abcdef0123456789abcdef01234567#subdirectory=src/driver",
+      include: ["driver.py", "operations/**/*.py"],
+      exclude: ["**/test_*.py"],
+      replace: {
+        "from driver.": "from example.service._generated.sync.upstream_driver.",
+      },
+    },
+  ],
+}
+```
+
+Each source is written beneath
+`<python-module>/_generated/sync/<name-or-owner-repository-hash>`. The generated
+package task parses pip-style Git sources, filters files with the configured
+globs, verifies every replacement matched, records the options and resolved
+commit in `.sync.json`, and recursively marks the result read-only.
+
+Synchronization uses a check-lock-check sequence and an atomic directory
+replacement. A current pinned commit performs no network request. Branches and
+tags use `git ls-remote` to detect upstream movement. Run the generated
+`<package>:python-sync:check` task in validation, or pass `--force` to refresh a
+current source intentionally.
 
 ## Customize Packages With Mixins
 

@@ -278,6 +278,49 @@
         }
       ]
     },
+    "graphiti:python-runtime:watch": {
+      "name": "graphiti:python-runtime:watch",
+      "description": "Watch and regenerate Node bindings for Python package graphiti",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts",
+            "--project",
+            "packages/py/graphiti"
+          ]
+        }
+      ]
+    },
+    "graphiti:python-sync": {
+      "name": "graphiti:python-sync",
+      "description": "Synchronize generated Git sources for dbx-tools-graphiti",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-sync.ts",
+            "--project",
+            "packages/py/graphiti"
+          ]
+        }
+      ]
+    },
+    "graphiti:python-sync:check": {
+      "name": "graphiti:python-sync:check",
+      "description": "Verify generated Git sources for dbx-tools-graphiti",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-sync.ts",
+            "--project",
+            "packages/py/graphiti",
+            "--check"
+          ]
+        }
+      ]
+    },
     "install": {
       "name": "install",
       "description": "Install project dependencies and update lockfile (non-frozen)",
@@ -308,7 +351,12 @@
     },
     "pre-compile": {
       "name": "pre-compile",
-      "description": "Prepare the project for compilation"
+      "description": "Prepare the project for compilation",
+      "steps": [
+        {
+          "spawn": "graphiti:python-sync"
+        }
+      ]
     },
     "py:build": {
       "name": "py:build",
@@ -417,6 +465,9 @@
         },
         {
           "spawn": "graphiti:python-runtime:check"
+        },
+        {
+          "spawn": "graphiti:python-sync:check"
         },
         {
           "spawn": "py:lint"

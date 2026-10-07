@@ -121,7 +121,7 @@ project.package.addVersion(PACKAGE_VERSION);
 project.package.addField("type", "module");
 project.package.addField("exports", {
   ".": "./index.ts",
-  "./release-packaging": "./tasks/lib/publish-npm.ts",
+  "./release-packaging": "./tasks/publish-npm.ts",
   "./package.json": "./package.json",
 });
 

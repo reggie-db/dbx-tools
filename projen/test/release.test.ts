@@ -221,10 +221,7 @@ describe("release task contracts", () => {
   });
 
   it("compiles before projecting publish configuration into archives", () => {
-    const driver = readFileSync(
-      join(import.meta.dirname, "..", "tasks", "lib", "publish.ts"),
-      "utf8",
-    );
+    const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.ok(
       driver.indexOf("compiling ${compiled.length}") <
         driver.indexOf("packNpmPackage(dir, packed, path, applyPublishConfig)"),
@@ -239,10 +236,7 @@ describe("release task contracts", () => {
   });
 
   it("publishes reviewed versions without repairing manifests", () => {
-    const driver = readFileSync(
-      join(import.meta.dirname, "..", "tasks", "lib", "publish.ts"),
-      "utf8",
-    );
+    const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.doesNotMatch(driver, /--stamp-only|pm", "pkg", "set/);
     assert.ok(driver.includes("workspace manifests do not match release ${version}; run projen"));
     assert.doesNotMatch(driver, /bun\.lock|lockfileMatchesManifestVersions/);

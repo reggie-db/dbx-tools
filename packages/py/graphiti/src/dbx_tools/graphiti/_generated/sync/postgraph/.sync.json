@@ -1,0 +1,5 @@
+{
+  "optionsHash": "e2321937ce18fae1e9248237e6c9914192d2971f21ce139ea979bbdd0571c0d6",
+  "resolvedCommit": "4f6d7bc31dd9a84053d4094b382485044448d9c8",
+  "source": "postgraph-driver @ git+https://github.com/crajah/graphiti.git@4f6d7bc31dd9a84053d4094b382485044448d9c8#subdirectory=graphiti_core/driver"
+}

@@ -16,9 +16,9 @@ const options = resolveGraphitiOptions({
 });
 ```
 
-The result includes stable listener, model, embedding, and structured-output
-defaults. The Node Graphiti runtime composes separately owned FalkorDB options;
-route details are intentionally not part of this browser-safe contract.
+The result includes stable listener, model, embedding, database durability, and
+structured-output defaults. Route and embedded-process details are intentionally
+not part of this browser-safe contract.
 
 ## Parse Environment Options
 

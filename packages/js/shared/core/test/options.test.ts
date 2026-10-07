@@ -12,8 +12,6 @@ import {
   parseOpts,
   serializeOpts,
   serializeOptsEnvironment,
-  namespaceOpts,
-  unnamespaceOpts,
   tcpPortOrZeroSchema,
   tcpPortSchema,
 } from "../src/options.ts";
@@ -65,13 +63,13 @@ describe("shared option schemas", () => {
       schemes: ["tcp", "unix"],
       withDefault: false,
     });
-    assert.deepEqual(schema.parse("/tmp/falkordb.sock"), {
+    assert.deepEqual(schema.parse("/tmp/database.sock"), {
       scheme: "unix",
-      path: "/tmp/falkordb.sock",
+      path: "/tmp/database.sock",
     });
-    assert.deepEqual(schema.parse("unix:///tmp/falkordb.sock"), {
+    assert.deepEqual(schema.parse("unix:///tmp/database.sock"), {
       scheme: "unix",
-      path: "/tmp/falkordb.sock",
+      path: "/tmp/database.sock",
     });
     assert.deepEqual(schema.parse("tcp://127.0.0.1:6379"), {
       scheme: "tcp",
@@ -141,29 +139,6 @@ describe("shared option schemas", () => {
         ENABLED: "true",
         VALUES: "one,two",
       },
-    );
-  });
-
-  it("namespaces reusable option fields without replacing their schemas", () => {
-    const schema = namespaceOpts(
-      z.object({
-        dataDir: z.string().meta({ env: "FALKORDB_DATA_DIR" }),
-      }),
-      "falkor",
-    );
-
-    assert.deepEqual(schema.parse({ falkorDataDir: "/data" }), {
-      falkorDataDir: "/data",
-    });
-    assert.deepEqual(JSON.parse(serializeOpts(schema, { falkorDataDir: "/data" }, "flag")), {
-      "--falkor-data-dir": "/data",
-    });
-    assert.deepEqual(serializeOptsEnvironment(schema, { falkorDataDir: "/data" }), {
-      FALKORDB_DATA_DIR: "/data",
-    });
-    assert.deepEqual(
-      unnamespaceOpts(z.object({ dataDir: z.string() }), { falkorDataDir: "/data" }, "falkor"),
-      { dataDir: "/data" },
     );
   });
 });

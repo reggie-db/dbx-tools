@@ -1,8 +1,8 @@
 /**
  * AppKit integration for the shared Graphiti option contract.
  *
- * `@dbx-tools/graphiti` composes Graphiti and namespaced FalkorDB option fields.
- * This module adds only the AppKit-specific automatic port allocation sentinel.
+ * `@dbx-tools/shared-graphiti` owns the complete option contract. This module
+ * adds only the AppKit-specific automatic port allocation sentinel.
  *
  * @module
  */

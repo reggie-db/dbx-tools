@@ -18,11 +18,10 @@ import { resolve } from "node:path";
 import { bunWorkflow, project, projectJs } from "@dbx-tools/projen";
 import { Component, javascript } from "projen";
 
-import { GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES } from "./packages/js/shared/graphiti/src/upstream.ts";
-
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
 const PYTHON_ROOT = "packages/py";
+const GRAPHITI_UPSTREAM_COMMIT = "2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066";
 
 /** Copy canonical branding into published package trees after synthesis. */
 class BrandPackageAssets extends Component {
@@ -365,38 +364,20 @@ project.applyToProjects(root, { identifierName: "cli-graphiti", tags: "cli" }, (
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/graphiti@workspace:^",
-    "@dbx-tools/shared-graphiti@workspace:^",
   );
   p.package.addBin({ "dbx-graphiti": "./bin/dbx-graphiti.ts" });
 });
 
-// node-graphiti: typed Graphiti lifecycle and FalkorDB ownership. PythonMonkey
-// remains an internal implementation detail for model routing and authentication.
+// node-graphiti: typed options and bounded Python process supervision.
 project.applyToProjects(root, { identifierName: "graphiti", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "Option-driven Graphiti lifecycle with model routing and durable FalkorDB",
+    "Typed Graphiti options and bounded Python process supervision",
   );
   p.addDeps(
     "@dbx-tools/core@workspace:^",
-    "@dbx-tools/falkor-db@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-graphiti@workspace:^",
-    "zod@catalog:",
   );
-});
-
-project.applyToProjects(root, { identifierName: "cli-falkor-db", tags: "cli" }, (p) => {
-  p.package.addField(
-    "description",
-    "Foreground embedded FalkorDB CLI with optional Databricks Volume backups",
-  );
-  p.addDeps(
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/falkor-db@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-  );
-  p.package.addBin({ "dbx-falkor-db": "./bin/dbx-falkor-db.ts" });
 });
 
 project.applyToProjects(root, { identifierName: "cli-lakebase-proxy", tags: "cli" }, (p) => {
@@ -496,28 +477,6 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
   p.addDeps("@dbx-tools/databricks@workspace:^", "@databricks/zerobus-ingest-sdk@^1.1.0");
 });
 
-// node-falkor-db: embedded FalkorDBLite with local RDB persistence and optional
-// change-aware durable snapshots in a Databricks Volume. The platform packages
-// are optional so package managers install only the matching native artifact;
-// falkordblite remains the owner of process/config primitives.
-project.applyToProjects(root, { identifierName: "falkor-db", tags: "node" }, (p) => {
-  p.package.addField(
-    "description",
-    "Embedded FalkorDBLite with change-aware durable backups to Databricks Volumes",
-  );
-  p.addDeps(
-    "@dbx-tools/databricks@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "falkordb@^6.6.0",
-    "falkordblite@0.3.0",
-    "redis@6.3.0",
-    "zod@catalog:",
-  );
-  p.package.addField("optionalDependencies", {
-    "@falkordblite/darwin-arm64": "8.2.3-falkordb.4.16.3",
-    "@falkordblite/linux-x64": "8.2.3-falkordb.4.16.3",
-  });
-});
 
 // node-email: server-side email add-on - SMTP transport (nodemailer) / local
 // outbox, React Email rendering, on-behalf-of sender
@@ -950,7 +909,6 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/cli-appkit-env@workspace:^",
     "@dbx-tools/cli-auth@workspace:^",
-    "@dbx-tools/cli-falkor-db@workspace:^",
     "@dbx-tools/cli-graphiti@workspace:^",
     "@dbx-tools/cli-lakebase-proxy@workspace:^",
     "@dbx-tools/cli-model-gateway@workspace:^",
@@ -1257,7 +1215,6 @@ project.applyToProjects(
       "@dbx-tools/teams@workspace:^",
       "@dbx-tools/search@workspace:^",
       "@dbx-tools/shared-core@workspace:^",
-      "@dbx-tools/shared-graphiti@workspace:^",
       // The tunnel library: the server registers `tunnelInterceptor()` on its own
       // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
       // runs the server directly rather than through a wrapper bin.
@@ -1316,13 +1273,67 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
 const pythonPackages: project.PythonPackageOptions[] = [
   {
     directory: "graphiti",
-    description: "Combined Graphiti REST and MCP FastAPI service",
+    description: "Unified Graphiti REST, MCP, model routing, and PostgreSQL graph runtime",
     dependencies: [
+      "embedded-postgres>=18.6.3,<19",
+      "fastapi>=0.115,<1",
+      "graphiti-core==0.30.2",
       "httpx>=0.28,<1",
+      "mcp>=2,<3",
+      "openai>=2.41,<3",
+      "platformdirs>=4,<5",
+      "post-graph>=0.7,<1",
+      "pydantic-settings>=2,<3",
       "pythonmonkey>=1.3,<2",
+      "pyyaml>=6,<7",
+      "typing-extensions>=4,<5",
       "uvicorn>=0.44",
     ],
-    devDependencies: GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES,
+    sync: [
+      {
+        name: "postgraph",
+        source:
+          "postgraph-driver @ git+https://github.com/crajah/graphiti.git@4f6d7bc31dd9a84053d4094b382485044448d9c8#subdirectory=graphiti_core/driver",
+        include: ["postgraph_driver.py", "record_parsers.py", "postgraph/**/*.py"],
+        replace: {
+          "graphiti_core.driver.postgraph":
+            "dbx_tools.graphiti._generated.sync.postgraph.postgraph",
+          "GraphProvider.POSTGRAPH": '"postgraph"',
+          "        embedding_dim: int | None = None,\n    ):":
+            "        embedding_dim: int | None = None,\n        connection_options: dict[str, Any] | None = None,\n    ):",
+          "        self._embedding_dim = embedding_dim or EMBEDDING_DIM":
+            "        self._embedding_dim = embedding_dim or EMBEDDING_DIM\n        self._connection_options = connection_options or {}",
+          "            self._client = AsyncPostGraph(dsn=self._dsn)":
+            "            self._client = AsyncPostGraph(dsn=self._dsn, **self._connection_options)",
+        },
+      },
+      {
+        name: "graphiti_server",
+        source: `graph-service @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_COMMIT}#subdirectory=server`,
+        include: ["graph_service/**/*.py"],
+        replace: {
+          "from graph_service.":
+            "from dbx_tools.graphiti._generated.sync.graphiti_server.graph_service.",
+        },
+      },
+      {
+        name: "graphiti_mcp",
+        source: `mcp-server @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_COMMIT}#subdirectory=mcp_server/src`,
+        include: [
+          "graphiti_mcp_server.py",
+          "config/**/*.py",
+          "models/**/*.py",
+          "services/**/*.py",
+          "utils/**/*.py",
+        ],
+        replace: {
+          "from config.": "from dbx_tools.graphiti._generated.sync.graphiti_mcp.config.",
+          "from models.": "from dbx_tools.graphiti._generated.sync.graphiti_mcp.models.",
+          "from services.": "from dbx_tools.graphiti._generated.sync.graphiti_mcp.services.",
+          "from utils.": "from dbx_tools.graphiti._generated.sync.graphiti_mcp.utils.",
+        },
+      },
+    ],
     nodeBindings: [
       {
         package: "@dbx-tools/shared-core",
@@ -1332,8 +1343,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
         package: "@dbx-tools/shared-model",
       },
       {
-        package: "@dbx-tools/graphiti",
-        modules: ["options"],
+        package: "@dbx-tools/shared-graphiti",
       },
       {
         package: "@dbx-tools/auth",
@@ -1341,6 +1351,10 @@ const pythonPackages: project.PythonPackageOptions[] = [
       },
       {
         package: "@dbx-tools/model",
+        modules: ["bindings"],
+      },
+      {
+        package: "@dbx-tools/lakebase",
         modules: ["bindings"],
       },
     ],

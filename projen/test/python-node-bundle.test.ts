@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe("PythonNodeBundle", () => {
-  it("generates convention-based build and check tasks", () => {
+  it("generates convention-based build, check, and watch tasks", () => {
     const project = new Project({ name: "fixture" });
     const bundle = new PythonNodeBundle(project, {
       name: "auth",
@@ -43,6 +43,12 @@ describe("PythonNodeBundle", () => {
     assert.deepEqual(bundle.checkTask.steps[0]?.execArgs, [
       ...bundle.buildTask.steps[0]!.execArgs!,
       "--check",
+    ]);
+    assert.deepEqual(bundle.watchTask.steps[0]?.execArgs, [
+      "bun",
+      "node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts",
+      "--project",
+      "packages/py/auth",
     ]);
     assert.ok(project.testTask.steps.some((step) => step.spawn === bundle.checkTask.name));
   });

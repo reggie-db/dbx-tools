@@ -29,7 +29,6 @@
     "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/graphiti": "workspace:^",
-    "@dbx-tools/shared-graphiti": "workspace:^",
     "commander": "catalog:",
     "zod": "catalog:"
   },

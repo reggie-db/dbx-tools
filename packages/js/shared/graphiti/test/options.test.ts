@@ -56,6 +56,7 @@ describe("Graphiti options", () => {
     assert.equal(environment.MODEL_NAME, "databricks-gpt-5-nano");
     assert.equal(environment.EMBEDDER_MODEL, "gte-large-en");
     assert.equal(environment.GRAPHITI_LISTEN, "tcp://localhost:8100");
+    assert.equal(environment.DATABASE_URL, undefined);
     assert.ok(Object.values(environment).every((value) => typeof value === "string"));
   });
 });

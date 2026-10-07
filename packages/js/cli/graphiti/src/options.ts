@@ -1,9 +1,8 @@
 /**
  * Graphiti CLI option surface.
  *
- * The Node Graphiti runtime composes Graphiti-owned fields with namespaced
- * FalkorDB-owned fields. This module exposes that exact surface without
- * creating parallel CLI policy.
+ * The Node Graphiti runtime owns the complete shared option contract. This
+ * module re-exports that surface without creating parallel CLI policy.
  *
  * @module
  */

@@ -1,14 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { options } from "@dbx-tools/shared-core";
-import {
-  GraphitiOptionsSchema,
-  graphitiOptionsEnvironment,
-  resolveGraphitiOptions,
-} from "../src/options.ts";
+import { graphitiOptionsEnvironment, resolveGraphitiOptions } from "../src/options.ts";
 
 describe("Graphiti runtime options", () => {
-  it("composes Graphiti and namespaced FalkorDB defaults", () => {
+  it("uses embedded PostgreSQL when no database is configured", () => {
     const resolved = resolveGraphitiOptions();
 
     assert.deepEqual(resolved.listen, {
@@ -16,27 +11,15 @@ describe("Graphiti runtime options", () => {
       host: "127.0.0.1",
       port: 7272,
     });
-    assert.deepEqual(resolved.falkorListen, {
-      scheme: "tcp",
-      host: "127.0.0.1",
-      port: 6379,
-    });
-    assert.equal(resolved.falkorSnapshotSeconds, 300);
+    assert.equal(resolved.databaseUrl, undefined);
   });
 
-  it("renders namespaced FalkorDB flags and owned environment names", () => {
+  it("serializes database-agnostic environment names", () => {
     const values = {
-      falkorDataDir: "/graphiti",
-      falkorListen: "tcp://127.0.0.1:6380",
+      databaseUrl: "postgresql://localhost:5433/graphiti",
     };
 
-    const flags = JSON.parse(
-      options.serializeOpts(GraphitiOptionsSchema, values, "flag"),
-    ) as Record<string, unknown>;
-    assert.equal(flags["--falkor-data-dir"], "/graphiti");
-    assert.equal(flags["--falkor-listen"], "tcp://127.0.0.1:6380");
     const environment = graphitiOptionsEnvironment(values);
-    assert.equal(environment.FALKORDB_DATA_DIR, "/graphiti");
-    assert.equal(environment.FALKORDB_LISTEN, "tcp://127.0.0.1:6380");
+    assert.equal(environment.DATABASE_URL, "postgresql://localhost:5433/graphiti");
   });
 });

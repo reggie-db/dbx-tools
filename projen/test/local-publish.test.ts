@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveLocalRegistry } from "../tasks/lib/local-publish.ts";
+import { resolveLocalRegistry } from "../tasks/local-publish.ts";
 
 describe("local release publication", () => {
   it("disables local npm publication explicitly", () => {

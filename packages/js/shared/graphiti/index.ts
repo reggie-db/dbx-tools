@@ -5,8 +5,6 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-graphiti";
 export const PACKAGE_VERSION = "0.9.47";
 export * as options from "./src/options.ts";
-export * as upstream from "./src/upstream.ts";
 export { GraphitiOptionsSchema, GraphitiCliOptionsSchema, GRAPHITI_DEFAULTS, ResolvedGraphitiOptionsSchema } from "./src/options.ts";
 export type { GraphitiOptions, ResolvedGraphitiOptions } from "./src/options.ts";
-export { GRAPHITI_UPSTREAM_COMMIT, GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES } from "./src/upstream.ts";
 export * from "./exports.ts";

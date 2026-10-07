@@ -212,6 +212,11 @@ export class LakebaseClient {
   }
 }
 
+/** Create one cached Lakebase discovery and credential client. */
+export function createLakebaseClient(options: DatabricksAuthOptions = {}): LakebaseClient {
+  return new LakebaseClient(options);
+}
+
 function selectProject(projects: object[]): string {
   const usable = projects
     .filter((value) => !isInactive(value))

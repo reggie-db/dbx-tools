@@ -16,23 +16,8 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/falkor-db",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
-      "name": "@dbx-tools/shared-core",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/shared-graphiti",
       "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
-      "name": "zod",
-      "version": "catalog:",
       "type": "runtime"
     }
   ],

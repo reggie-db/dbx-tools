@@ -40,10 +40,6 @@
         "types": "./lib/src/options.d.ts",
         "default": "./lib/src/options.js"
       },
-      "./upstream": {
-        "types": "./lib/src/upstream.d.ts",
-        "default": "./lib/src/upstream.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -58,7 +54,6 @@
   "exports": {
     ".": "./index.ts",
     "./options": "./src/options.ts",
-    "./upstream": "./src/upstream.ts",
     "./package.json": "./package.json"
   },
   "files": [

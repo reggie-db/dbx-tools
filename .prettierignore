@@ -71,7 +71,6 @@ packages/js/cli/appkit-env/index.ts
 packages/js/cli/args/index.ts
 packages/js/cli/auth/index.ts
 packages/js/cli/dbx-tools/index.ts
-packages/js/cli/falkor-db/index.ts
 packages/js/cli/graphiti/index.ts
 packages/js/cli/lakebase-proxy/index.ts
 packages/js/cli/model-gateway/index.ts
@@ -88,7 +87,6 @@ packages/js/node/core/index.ts
 packages/js/node/databricks/index.ts
 packages/js/node/databricks-zerobus/index.ts
 packages/js/node/email/index.ts
-packages/js/node/falkor-db/index.ts
 packages/js/node/fs/index.ts
 packages/js/node/genie/index.ts
 packages/js/node/graphiti/index.ts

@@ -3,7 +3,7 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, github, javascript, python } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
-import { LICENSE, projectRepositoryUrl } from "./project-js.ts";
+import { LICENSE, projectRepositoryUrl, taskCommand } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { PythonNodeBundle, type PythonNodeBindingsOptions } from "./python-node-bundle.ts";
@@ -42,6 +42,17 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly releaseEnvironment?: string;
   /** One or more build-time Node packages embedded through PythonMonkey. */
   readonly nodeBindings?: OneOrMany<PythonNodeBindingsOptions>;
+  /** Pinned Git source subsets synchronized into this package's generated tree. */
+  readonly sync?: readonly PythonSourceSyncOptions[];
+}
+
+/** One pip-style Git source synchronized into a generated Python package tree. */
+export interface PythonSourceSyncOptions {
+  readonly name?: string;
+  readonly source: string;
+  readonly include?: readonly string[];
+  readonly exclude?: readonly string[];
+  readonly replace?: Readonly<Record<string, string>>;
 }
 
 interface ResolvedPythonPackageOptions extends PythonPackageOptions {
@@ -259,6 +270,9 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
         rendered.length === 1 ? rendered[0] : rendered,
       );
     }
+    if (pkg.sync?.length) {
+      this.uv.file.addOverride("tool.dbx_tools.sync", [...pkg.sync]);
+    }
     this.uv.file.readonly = true;
 
     for (const path of [".gitattributes", ".gitignore"]) {
@@ -350,6 +364,21 @@ export class DBXToolsPythonWorkspace extends Component {
         name: pkg.packageOptions.directory,
         projectDirectory: pythonPackagePath(this.repository, pkg.packageOptions.directory),
       });
+    }
+    for (const pkg of this.packages) {
+      if (!pkg.packageOptions.sync?.length) continue;
+      const directory = pythonPackagePath(this.repository, pkg.packageOptions.directory);
+      const command = taskCommand("python-sync.ts", "--project", directory);
+      const sync = project.addTask(`${pkg.packageOptions.directory}:python-sync`, {
+        description: `Synchronize generated Git sources for ${pkg.packageOptions.name}`,
+        execArgs: command,
+      });
+      const check = project.addTask(`${pkg.packageOptions.directory}:python-sync:check`, {
+        description: `Verify generated Git sources for ${pkg.packageOptions.name}`,
+        execArgs: [...command, "--check"],
+      });
+      project.preCompileTask.spawn(sync);
+      project.testTask.spawn(check);
     }
     for (const pkg of this.packages) {
       const pyproject = `/${pythonPackagePath(this.repository, pkg.packageOptions.directory)}/pyproject.toml`;

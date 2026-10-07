@@ -9,7 +9,7 @@ import {
   parseUvIndexes,
   parseUvPublishUrls,
   resolveLocalPypi,
-} from "../tasks/lib/python-registry.ts";
+} from "../tasks/python-registry.ts";
 
 describe("local Python registry detection", () => {
   // devpiRegistry() consults the global uv config for an explicit publish-url,

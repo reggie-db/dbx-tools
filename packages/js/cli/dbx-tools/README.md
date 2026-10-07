@@ -99,7 +99,6 @@ dbx [command]
 | `appkit [args...]`         | AppKit helpers (env: print the environment an AppKit app resolves) |
 | `auth [args...]`           | Authenticate to Databricks and manage OAuth tokens                 |
 | `tunnel [args...]`         | Run a public portr tunnel with an email-OTP gate                   |
-| `falkor-db [args...]`      | Run embedded FalkorDB with optional Databricks Volume backups      |
 | `lakebase-proxy [args...]` | Run the Node Databricks Lakebase PostgreSQL proxy                  |
 | `model-gateway [args...]`  | Run the foreground AppKit Databricks model gateway                 |
 | `graphiti [args...]`       | Run Graphiti or manage its current-user desktop service            |
@@ -159,20 +158,6 @@ dbx tunnel [args...]
 | Argument | Description                   |
 | -------- | ----------------------------- |
 | `args`   | arguments forwarded to tunnel |
-
-### `dbx falkor-db`
-
-Run embedded FalkorDB with optional Databricks Volume backups
-
-```sh
-dbx falkor-db [args...]
-```
-
-#### Arguments
-
-| Argument | Description                      |
-| -------- | -------------------------------- |
-| `args`   | arguments forwarded to falkor-db |
 
 ### `dbx lakebase-proxy`
 

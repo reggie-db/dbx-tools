@@ -70,7 +70,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     name: "graphiti",
     displayName: "Graphiti",
     description:
-      "Runs the dbx-tools Graphiti MCP sidecar with durable embedded FalkorDB and " +
+      "Runs the dbx-tools Graphiti MCP sidecar with PostgreSQL graph storage and " +
       "publishes user-scoped tools through the App's single port.",
     stability: "beta",
     resources: { required: [], optional: [] },

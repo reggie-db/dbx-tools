@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { parse, stringify } from "smol-toml";
-import { preparePythonProjectForPublication } from "../tasks/lib/python-release.ts";
 import { buildPythonProjects, pythonDistributionPaths } from "../tasks/publish-python.ts";
+import { preparePythonProjectForPublication } from "../tasks/python-release.ts";
 
 describe("Python release packaging", () => {
   it("selects only publishable distributions", () => {

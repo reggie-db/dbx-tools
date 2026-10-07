@@ -129,11 +129,6 @@ export type DatabricksOptions = z.input<typeof DatabricksOptionsSchema>;
 /** Key format emitted by {@link serializeOpts}. */
 export type OptionSerializationFormat = "flag" | "env";
 
-/** Namespace every option field while retaining its owning Zod field schemas. */
-export type NamespacedOptionShape<T extends z.ZodRawShape, Prefix extends string> = {
-  [Key in keyof T as Key extends string ? `${Prefix}${Capitalize<Key>}` : never]: T[Key];
-};
-
 interface OptionProperty {
   readonly key: string;
   readonly type?: string;
@@ -161,35 +156,6 @@ export function serializeOptsEnvironment<T extends z.ZodRawShape>(
       environmentOptionValue(value),
     ]),
   );
-}
-
-/** Namespace a reusable option schema so composed CLI flags render as `--<namespace>-<field>`. */
-export function namespaceOpts<T extends z.ZodRawShape, Prefix extends string>(
-  schema: z.ZodObject<T>,
-  prefix: Prefix,
-): z.ZodObject<NamespacedOptionShape<T, Prefix>> {
-  const shape = Object.fromEntries(
-    Object.entries(schema.shape).map(([key, field]) => [namespacedOptionKey(prefix, key), field]),
-  );
-  return z.object(shape).strict() as z.ZodObject<NamespacedOptionShape<T, Prefix>>;
-}
-
-/** Parse namespaced option values back through their owning schema. */
-export function unnamespaceOpts<T extends z.ZodRawShape>(
-  schema: z.ZodObject<T>,
-  values: object,
-  prefix: string,
-): z.output<z.ZodObject<T>> {
-  const source = values as Readonly<Record<string, unknown>>;
-  return schema.parse(
-    Object.fromEntries(
-      Object.keys(schema.shape).map((key) => [key, source[namespacedOptionKey(prefix, key)]]),
-    ),
-  );
-}
-
-function namespacedOptionKey(prefix: string, key: string): string {
-  return `${prefix}${key.charAt(0).toUpperCase()}${key.slice(1)}`;
 }
 
 function serializedOpts<T extends z.ZodRawShape>(

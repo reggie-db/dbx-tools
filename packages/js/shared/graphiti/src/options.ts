@@ -54,6 +54,13 @@ export const GraphitiOptionsSchema = z
       })
       .describe("Graphiti HTTP listener.")
       .meta({ env: "GRAPHITI_LISTEN" }),
+    databaseUrl: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe("PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL.")
+      .meta({ env: "DATABASE_URL", helpDefault: false }),
   })
   .strict()
   .describe("Graphiti options accepted by Node, CLI, AppKit, and browser callers.");

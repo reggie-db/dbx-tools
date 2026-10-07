@@ -45,6 +45,7 @@ export interface PythonNodeBundleOptions {
 export class PythonNodeBundle extends Component {
   readonly buildTask: Task;
   readonly checkTask: Task;
+  readonly watchTask: Task;
 
   constructor(project: Project, options: PythonNodeBundleOptions) {
     super(project);
@@ -56,6 +57,10 @@ export class PythonNodeBundle extends Component {
     this.checkTask = project.addTask(`${options.name}:python-runtime:check`, {
       description: `Verify generated Node bindings for Python package ${options.name}`,
       execArgs: [...command, "--check"],
+    });
+    this.watchTask = project.addTask(`${options.name}:python-runtime:watch`, {
+      description: `Watch and regenerate Node bindings for Python package ${options.name}`,
+      execArgs: taskCommand("python-node-bindings-watch.ts", "--project", options.projectDirectory),
     });
     if (options.test ?? true) project.testTask.spawn(this.checkTask);
   }

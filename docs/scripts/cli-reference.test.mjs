@@ -67,9 +67,7 @@ describe("parser-owned CLI references", () => {
       "--model <value>",
       "--embedder-model <value>",
       "--listen <value>",
-      "--falkor-data-dir <value>",
-      "--falkor-listen <value>",
-      "--falkor-snapshot-seconds <value>",
+      "--database-url <value>",
     ]) {
       assert.ok(reference.includes(option), `missing ${option}`);
     }

@@ -1,10 +1,11 @@
 # `dbx-tools-graphiti`
 
-Run Graphiti's REST and MCP applications together in one FastAPI process.
-The package composes the upstream routers, service initialization, MCP tools,
-and MCP session manager without copying their implementations.
+Run Graphiti REST, MCP, model routing, and PostgreSQL-backed graph memory from
+one Python runtime. The build synchronizes the upstream REST and MCP source plus
+the pinned PostGraph driver from Graphiti PR 1777 into the generated package
+tree, so the published wheel has no direct Git dependencies.
 
-Both upstream packages resolve from the same Graphiti commit:
+Both upstream surfaces come from the same Graphiti commit:
 
 - `graph-service` from `server/`
 - `mcp-server` from `mcp_server/`
@@ -17,8 +18,7 @@ UVICORN_PORT=8000 \
 uv run uvicorn dbx_tools.graphiti.main:app
 ```
 
-From the repository root, the local launcher starts the FalkorDB CLI first,
-waits for its loopback TCP listener, and then starts Uvicorn:
+From the repository root, the local launcher starts the unified runtime:
 
 ```sh
 DATABRICKS_CONFIG_PROFILE=<profile> \
@@ -34,8 +34,8 @@ The combined application exposes:
   ingestion endpoints
 - Streamable HTTP MCP at `/mcp/`
 
-Configure Graphiti through the environment and YAML settings supported by the
-two upstream applications.
+Configure Graphiti through the shared environment contract used by the Node
+runtime and CLI.
 
 ## Databricks Model Resolution
 
@@ -45,12 +45,34 @@ configured name, embedding class, and dimensions, then resolves both endpoint
 routes. REST and MCP reuse the same Graphiti model clients, while the auth client
 injects refreshed Databricks headers into every model request.
 
+## Use From A Notebook
+
+Use the same resolved option names without starting Uvicorn:
+
+```python
+from dbx_tools.graphiti.runtime import GraphitiRuntime
+
+async with GraphitiRuntime.from_options(
+    {
+        "profile": "MY-PROFILE",
+    }
+) as runtime:
+    graphiti = runtime.graphiti
+```
+
+When `databaseUrl` is omitted, the runtime starts bundled PostgreSQL with
+pgvector and persists it under `graphitiHome`, or the platform data directory
+when no home is configured. The owned PostgreSQL process stops with the
+runtime, while its data remains for the next start.
+
+Pass a regular PostgreSQL URL to use an existing database. A passwordless
+non-local URL, Lakebase resource path, or Lakebase project name is resolved by
+the generated Node Lakebase client. It injects a fresh short-lived credential
+whenever the asyncpg pool opens a physical connection, without persisting that
+credential in the URL.
+
 ## Composition Boundary
 
-`dbx_tools.graphiti.main` owns only the combined FastAPI lifespan and route
-mounting. It initializes the upstream REST application through
-`initialize_graphiti()`, initializes the existing MCP services without invoking
-their CLI parser, and runs the mounted MCP session manager in the parent
-lifespan. Shared Graphiti environment options are parsed through the generated
-`graphiti_options_from_environment()` binding and mapped into both upstream
-settings objects before initialization.
+`dbx_tools.graphiti.main` adds FastAPI REST and MCP surfaces around the same
+importable runtime. Shared environment options are parsed through generated
+PythonMonkey bindings and mapped into both upstream settings objects.

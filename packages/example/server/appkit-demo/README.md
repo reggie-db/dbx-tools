@@ -32,8 +32,8 @@ handle the topic bus, static delivery, deployment staging, and shared types.
 - `lakebase()` (AppKit) — backs Mastra Memory.
 - `graphiti()` from
   [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
-  Node-owned durable FalkorDB and the Python Graphiti MCP adapter, then mounts
-  its user-scoped transport at `/api/graphiti/mcp` on the AppKit server.
+  the unified Python Graphiti runtime, then mounts its user-scoped transport at
+  `/api/graphiti/mcp` on the AppKit server.
   Graphiti groups use the same per-user resource id as Mastra memory.
 - `busDemo()` from `src/bus-demo.ts` — a `PostgresTopicBus` from
   [`@dbx-tools/postgres`](../../../js/node/postgres) on the Lakebase pool:
@@ -91,8 +91,8 @@ The feature flags default to enabled, so normal demo and deployment behavior is
 unchanged.
 
 On shutdown, AppKit closes the per-user MCP servers and internal client.
-The Graphiti plugin terminates its Python adapter and managed model gateway,
-then closes FalkorDB through the shared durable lifecycle.
+The Graphiti plugin forwards shutdown to Python, which closes the PostGraph
+client pool before the process deadline.
 
 ## Deploy
 
@@ -113,8 +113,8 @@ databricks bundle run demo_app --profile FEVM-REGGIE-PIERCE-AWS
 The staged app includes both `package.json` and `requirements.txt`. Databricks
 Apps installs the Node server and matching `dbx-tools-graphiti` Python release;
 the bundle sets `PYTHON=./.venv/bin/python` so the Graphiti plugin uses that
-Python 3.11 environment. The Python wheel includes the pinned upstream MCP
-source, while Node owns FalkorDB and process supervision.
+Python 3.11 environment. The Python wheel includes its pinned generated REST,
+MCP, and PostGraph sources; Node only supervises its process.
 Staging replaces each workspace dependency with the exact root version and writes
 the matching `dbx-tools-graphiti==<version>` requirement. The staged app expects
 that version to exist in npm and PyPI; local source changes are not bundled as
