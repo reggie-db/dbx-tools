@@ -2,6 +2,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import * as exec from "@dbx-tools/core/exec";
+import { object } from "@dbx-tools/shared-core";
 
 export function externalRuntimePackages(dependencies: Readonly<Record<string, string>>): string[] {
   return Object.keys(dependencies).filter((name) => !name.startsWith("@dbx-tools/"));
@@ -77,7 +78,7 @@ export async function installServicePythonPackage(
 async function readOptionalRecord(path: string): Promise<Record<string, unknown>> {
   try {
     const value: unknown = JSON.parse(await readFile(path, "utf8"));
-    if (!isRecord(value)) throw new Error(`JSON file is not an object: ${path}`);
+    if (!object.isRecord(value)) throw new Error(`JSON file is not an object: ${path}`);
     return value;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
@@ -86,14 +87,10 @@ async function readOptionalRecord(path: string): Promise<Record<string, unknown>
 }
 
 function stringRecord(value: unknown): Record<string, string> {
-  if (!isRecord(value)) return {};
+  if (!object.isRecord(value)) return {};
   return Object.fromEntries(
     Object.entries(value).filter(
       (entry): entry is [string, string] => typeof entry[1] === "string",
     ),
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

@@ -1,3 +1,4 @@
+import { stringUtils } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
 import { readUIMessageStream, type UIMessage } from "ai";
 import { useCallback } from "react";
@@ -11,7 +12,7 @@ import type { MastraStreamResponse } from "../support/mastra-client.ts";
 /** Read the MLflow trace id captured by the server on a stream response. */
 const readMlflowTraceId = (stream: unknown): string | undefined => {
   const headers = (stream as { headers?: { get?: (name: string) => string | null } })?.headers;
-  return headers?.get?.(feedback.MLFLOW_TRACE_ID_HEADER)?.trim() || undefined;
+  return stringUtils.trimToUndefined(headers?.get?.(feedback.MLFLOW_TRACE_ID_HEADER));
 };
 
 class StreamAborted extends Error {}

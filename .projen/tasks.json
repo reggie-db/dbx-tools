@@ -480,6 +480,15 @@
         }
       ]
     },
+    "shared-core:usage": {
+      "name": "shared-core:usage",
+      "description": "Report shared-core runtime export usage by caller kind",
+      "steps": [
+        {
+          "exec": "bun projen/tasks/shared-core-usage.ts"
+        }
+      ]
+    },
     "sync": {
       "name": "sync",
       "steps": [

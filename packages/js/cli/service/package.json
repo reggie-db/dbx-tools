@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/shared-core": "workspace:^",
     "bun": "1.3.14",
     "commander": "catalog:",
     "systray2": "catalog:",

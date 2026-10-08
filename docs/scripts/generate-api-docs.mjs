@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { asyncUtils } from "@dbx-tools/shared-core";
+import { asyncUtils, object } from "@dbx-tools/shared-core";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import {
   discoverJavaScriptPackages,
@@ -399,9 +399,11 @@ async function generatePackageApi(pkg, typedocBin) {
     process.execPath,
     [
       typedocBin,
-      ...[...new Set(pkg.entries.map((entry) => entry.file))].map((entry) =>
-        posix(path.relative(siteRoot, entry)),
-      ),
+      ...object
+        .sequence(pkg.entries.map((entry) => entry.file))
+        .distinct()
+        .map((entry) => posix(path.relative(siteRoot, entry)))
+        .toArray(),
       "--plugin",
       "typedoc-plugin-markdown",
       "--tsconfig",

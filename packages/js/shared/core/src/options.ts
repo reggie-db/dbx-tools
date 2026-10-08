@@ -162,7 +162,7 @@ export const DatabricksOptionsSchema = z
 
 export type DatabricksOptions = z.input<typeof DatabricksOptionsSchema>;
 
-/** Key format emitted by {@link serializeOpts}. */
+/** Key format used when serializing parsed options. */
 export type OptionSerializationFormat = "flag" | "env";
 
 interface OptionProperty {
@@ -170,15 +170,6 @@ interface OptionProperty {
   readonly type?: string;
   readonly env?: string | readonly string[];
   readonly flag?: boolean;
-}
-
-/** Serialize complete parsed options as JSON keyed by flags or environment names. */
-export function serializeOpts<T extends z.ZodRawShape>(
-  schema: z.ZodObject<T>,
-  values: z.input<z.ZodObject<T>>,
-  format: OptionSerializationFormat,
-): string {
-  return JSON.stringify(serializedOpts(schema, values, format), null, 2);
 }
 
 /** Serialize complete parsed options as a process environment map. */

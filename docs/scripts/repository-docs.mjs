@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { pattern } from "@dbx-tools/shared-core";
 
 /** Convert a filesystem path to repository-style POSIX separators. */
 export const posix = (value) => value.split(path.sep).join("/");
@@ -25,9 +26,7 @@ export function walk(dir, files = [], skip = []) {
 }
 
 /** Escape a literal string for interpolation into a regular expression. */
-export function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+export const escapeRegExp = pattern.escapeRegExp;
 
 /** Remove one leading Markdown H1 and its following blank space. */
 export function stripLeadingH1(markdown) {

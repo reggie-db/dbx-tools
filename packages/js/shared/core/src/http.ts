@@ -6,7 +6,7 @@
  * of those shapes. Dependency-free and browser-safe so it can run in
  * either a server or a client bundle.
  *
- * URL path matching lives in `./net.browser.ts` (`pathMatch`).
+ * URL path matching lives on `net.urlBuilder` (`pathMatches`).
  *
  * @module
  */

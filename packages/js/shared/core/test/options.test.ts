@@ -13,7 +13,6 @@ import {
   normalizedUrlSchema,
   parseOpts,
   postgresEnvironmentNames,
-  serializeOpts,
   serializeOptsEnvironment,
   tcpPortOrZeroSchema,
   tcpPortSchema,
@@ -124,18 +123,6 @@ describe("shared option schemas", () => {
       }),
       { lakebaseEndpoint: "projects/example" },
     );
-  });
-
-  it("serializes complete option JSON by flag or environment name", () => {
-    const schema = DatabricksOptionsSchema.pick({ profile: true, host: true });
-    const values = { profile: "PROFILE", host: "workspace.example.com" };
-    assert.deepEqual(JSON.parse(serializeOpts(schema, values, "flag")), {
-      "--profile": "PROFILE",
-    });
-    assert.deepEqual(JSON.parse(serializeOpts(schema, values, "env")), {
-      DATABRICKS_CONFIG_PROFILE: "PROFILE",
-      DATABRICKS_HOST: "https://workspace.example.com",
-    });
   });
 
   it("serializes typed options into process environment strings", () => {

@@ -567,7 +567,7 @@ function resolveDatabricksBasePath(
   client: WorkspaceClientLike | undefined,
 ): string | undefined {
   if (!client) return undefined;
-  if (options.databricksBasePath) return options.databricksBasePath.trim() || undefined;
+  if (options.databricksBasePath) return stringUtils.trimToUndefined(options.databricksBasePath);
   const email = stringUtils.trimToNull(options.userEmail);
   // A named user targets their personal Assistant tree (the "save a skill"
   // target); otherwise the shared workspace Assistant tree, which the built-in

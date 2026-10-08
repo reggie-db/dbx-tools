@@ -16,7 +16,7 @@ import {
   type DatabricksAuthOptions,
 } from "@dbx-tools/auth";
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
-import { log } from "@dbx-tools/shared-core";
+import { log, object, stringUtils } from "@dbx-tools/shared-core";
 
 import type { ParsedAddress } from "./address.ts";
 
@@ -205,7 +205,7 @@ export class LakebaseClient {
       const query = pageToken ? `${path}?page_token=${encodeURIComponent(pageToken)}` : path;
       const response = record(await client.request(query));
       const page = response[field];
-      if (Array.isArray(page)) values.push(...page.filter(isRecord));
+      if (Array.isArray(page)) values.push(...page.filter(object.isRecord));
       pageToken = text(response.next_page_token);
     } while (pageToken);
     return values;
@@ -361,22 +361,18 @@ function current<T>(entry: Timed<T> | undefined): T | undefined {
 }
 
 function record(value: unknown): Record<string, unknown> {
-  if (!isRecord(value)) throw new Error("Databricks API response is not an object");
+  if (!object.isRecord(value)) throw new Error("Databricks API response is not an object");
   return value;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function at(value: object, ...path: string[]): unknown {
   let current: unknown = value;
-  for (const key of path) current = isRecord(current) ? current[key] : undefined;
+  for (const key of path) current = object.isRecord(current) ? current[key] : undefined;
   return current;
 }
 
 function text(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  return stringUtils.trimToUndefined(value);
 }
 
 function number(value: unknown): number | undefined {

@@ -16,8 +16,8 @@
  * can be derived from it, and {@link NameLike}/{@link NonFunctionKeys} describe
  * object shapes.
  *
- * Iterable helpers: {@link generator} flattens mixed arguments; {@link sequence}
- * wraps source(s) in a lazy, `Array`-compatible {@link Sequence}. Every
+ * Iterable helpers: {@link sequence} wraps source(s) in a lazy, `Array`-compatible
+ * {@link Sequence}. Every
  * transform/terminal is a standalone function operating on plain {@link
  * Container}s (see {@link map}, {@link filter}, {@link group}, ...); the {@link
  * Sequence} methods are thin forwarders over them so the same logic backs both
@@ -773,31 +773,6 @@ export function sequence<T>(...sources: readonly SequenceSource<T>[]): Sequence<
     },
     undefined,
   );
-}
-
-/**
- * Flattens a mix of single items and iterables into one lazy {@link Generator}.
- *
- * Arguments are emitted in order: `null`/`undefined` are skipped, non-string
- * iterables (per {@link isContainer}) are yielded element-by-element, and
- * anything else (including strings) is yielded as a single item.
- *
- * @typeParam T - Element type produced by the generator.
- * @param items - Items and/or iterables to flatten, in order.
- * @returns A generator over the flattened elements.
- */
-export function* generator<T>(
-  ...items: readonly (T | Iterable<T> | null | undefined)[]
-): Generator<T> {
-  for (const item of items) {
-    if (item === null || item === undefined) {
-      continue;
-    } else if (isContainer(item)) {
-      yield* item;
-    } else {
-      yield item;
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------

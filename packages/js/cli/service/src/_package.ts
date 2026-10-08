@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import * as projectUtils from "@dbx-tools/core/project-utils";
+import { object } from "@dbx-tools/shared-core";
 
 export interface ServicePackage {
   readonly directory: string;
@@ -103,7 +104,7 @@ function servicePackage(manifestPath: string, expectedName?: string): ServicePac
       return resolveBin(directory, manifest.bin, name);
     },
     dependencies() {
-      const dependencies = isRecord(manifest.dependencies)
+      const dependencies = object.isRecord(manifest.dependencies)
         ? Object.keys(manifest.dependencies)
         : [];
       const require = createRequire(manifestPath);
@@ -126,7 +127,7 @@ function resolveBin(directory: string, value: unknown, name?: string): string {
     if (name) throw new Error(`package exposes one unnamed bin, not ${name}`);
     return resolve(directory, value);
   }
-  if (!isRecord(value)) throw new Error("package has no bin");
+  if (!object.isRecord(value)) throw new Error("package has no bin");
   if (name) {
     const target = value[name];
     if (typeof target !== "string") throw new Error(`package has no bin named ${name}`);
@@ -143,10 +144,6 @@ function resolveBin(directory: string, value: unknown, name?: string): string {
 
 function readRecord(path: string): Record<string, unknown> {
   const value: unknown = JSON.parse(readFileSync(path, "utf8"));
-  if (!isRecord(value)) throw new Error(`package manifest is not an object: ${path}`);
+  if (!object.isRecord(value)) throw new Error(`package manifest is not an object: ${path}`);
   return value;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

@@ -25,7 +25,7 @@
 
 import { ExecutionError } from "@databricks/appkit";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
-import { log, object, stringUtils } from "@dbx-tools/shared-core";
+import { asyncUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import type {
   SearchDocument,
   SearchHit,
@@ -139,7 +139,7 @@ export class LakebaseSearchBackend {
       for (let attempt = 0; attempt < 200; attempt += 1) {
         this.pool = this.poolSource.managedPool() ?? undefined;
         if (this.pool) return this.pool;
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await asyncUtils.sleep(50);
       }
       throw new ExecutionError("search (lakebase): managed pool did not initialize", {
         context: { operation: "connect" },

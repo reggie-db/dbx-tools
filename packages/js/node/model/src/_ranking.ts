@@ -1,3 +1,4 @@
+import { object, stringUtils } from "@dbx-tools/shared-core";
 import {
   ModelClass as ModelClassValues,
   type ModelClass as ModelClassType,
@@ -165,45 +166,49 @@ export function classifyEndpointClasses(
 export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpointSummary[] {
   const summaries = endpoints.flatMap((value) => {
     const endpoint = record(value);
-    const name = stringValue(endpoint.name);
+    const name = stringUtils.trimToUndefined(endpoint.name);
     if (!name) return [];
     const entities = arrayValue(record(endpoint.config).served_entities).map(record);
     const identities = [
       name,
       ...entities.flatMap((entity) =>
         [
-          stringValue(entity.entity_name),
-          stringValue(record(entity.foundation_model).name),
-          stringValue(record(entity.external_model).name),
+          stringUtils.trimToUndefined(entity.entity_name),
+          stringUtils.trimToUndefined(record(entity.foundation_model).name),
+          stringUtils.trimToUndefined(record(entity.external_model).name),
         ].filter((identity): identity is string => Boolean(identity)),
       ),
     ];
     const modelServiceName = entities
       .map(
         (entity) =>
-          stringValue(record(entity.foundation_model).name) ?? stringValue(entity.entity_name),
+          stringUtils.trimToUndefined(record(entity.foundation_model).name) ??
+          stringUtils.trimToUndefined(entity.entity_name),
       )
       .find(Boolean);
     const foundationModels = entities.map((entity) => record(entity.foundation_model));
     const family =
-      foundationModels.map((model) => stringValue(model.model_class)).find(Boolean) ??
-      identities.map(modelFamily).find(Boolean);
+      foundationModels
+        .map((model) => stringUtils.trimToUndefined(model.model_class))
+        .find(Boolean) ?? identities.map(modelFamily).find(Boolean);
     const reasoningEfforts =
       identities.map(modelReasoningEfforts).sort((left, right) => right.length - left.length)[0] ??
       [];
     const profile = entities.map(modelProfile).find(Boolean);
     const capabilitiesRecord = record(endpoint.capabilities);
     const foundationDescription = foundationModels
-      .map((model) => stringValue(model.description))
+      .map((model) => stringUtils.trimToUndefined(model.description))
       .find(Boolean);
-    const description = stringValue(endpoint.description) ?? foundationDescription;
+    const description = stringUtils.trimToUndefined(endpoint.description) ?? foundationDescription;
     const summary: ServingEndpointSummary = {
       name,
       displayName: toModelDisplayName(name, providedDisplayName(endpoint, entities)),
       ...(family ? { family } : {}),
-      ...(stringValue(endpoint.task) ? { task: stringValue(endpoint.task) } : {}),
-      ...(stringValue(record(endpoint.state).ready)
-        ? { state: stringValue(record(endpoint.state).ready) }
+      ...(stringUtils.trimToUndefined(endpoint.task)
+        ? { task: stringUtils.trimToUndefined(endpoint.task) }
+        : {}),
+      ...(stringUtils.trimToUndefined(record(endpoint.state).ready)
+        ? { state: stringUtils.trimToUndefined(record(endpoint.state).ready) }
         : {}),
       ...(description ? { description } : {}),
       supportsTools:
@@ -277,31 +282,25 @@ function providedDisplayName(
 ): string | undefined {
   for (const tag of arrayValue(endpoint.tags).map(record)) {
     if (!["display_name", "displayName", "name"].includes(String(tag.key))) continue;
-    const value = stringValue(tag.value);
+    const value = stringUtils.trimToUndefined(tag.value);
     if (value) return value;
   }
   return (
     entities
-      .map((entity) => stringValue(record(entity.foundation_model).display_name))
+      .map((entity) => stringUtils.trimToUndefined(record(entity.foundation_model).display_name))
       .find(Boolean) ??
-    entities.map((entity) => stringValue(record(entity.external_model).name)).find(Boolean)
+    entities
+      .map((entity) => stringUtils.trimToUndefined(record(entity.external_model).name))
+      .find(Boolean)
   );
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return object.isRecord(value) ? value : {};
 }
 
 function arrayValue(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
-}
-
-function stringValue(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed || undefined;
 }
 
 function finiteNumber(value: unknown): number | undefined {

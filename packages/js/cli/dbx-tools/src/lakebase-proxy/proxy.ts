@@ -4,7 +4,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import { LakebaseClient, requireAddress } from "@dbx-tools/lakebase";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
-import { log } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import { Client } from "pg";
 
 import { CancellationRegistry } from "./cancellation.ts";
@@ -115,7 +115,7 @@ export class LakebaseProxy {
       } catch (error) {
         throw new ProxyFailure(message(error), "3D000");
       }
-      const startupUser = startup.parameters.user?.trim() || undefined;
+      const startupUser = stringUtils.trimToUndefined(startup.parameters.user);
       let resolved;
       try {
         resolved = await this.client.resolve(target, startupUser);

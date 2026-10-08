@@ -2,7 +2,7 @@
 /** Keep every configured Python Node bridge current with one repository watcher. */
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { log } from "@dbx-tools/shared-core";
+import { log, object } from "@dbx-tools/shared-core";
 import { runTaskCommand } from "../src/_task-command.ts";
 import { repoRoot } from "../src/packages.ts";
 import {
@@ -41,7 +41,7 @@ function watchPaths(configs: readonly ResolvedPythonNodeBindings[]): string[] {
   const explicitInputs = configs
     .flatMap(pythonNodeBindingWatchInputs)
     .filter((input) => !covered.some((root) => containsPath(root, input)));
-  return [...new Set([...covered, ...explicitInputs])].sort();
+  return [...object.sequence(covered, explicitInputs).distinct()].sort();
 }
 
 function selection(

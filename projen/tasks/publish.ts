@@ -46,7 +46,7 @@
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { asyncUtils, log } from "@dbx-tools/shared-core";
+import { asyncUtils, log, object } from "@dbx-tools/shared-core";
 import {
   applyPublishConfig,
   npmReleaseMatches,
@@ -169,7 +169,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
         `${pkg.name ?? dirname(dir)} has invalid publishConfig.access ${String(access)}`,
       );
     }
-    const compiledTargets = [...new Set(compiledPublishTargets(pkg.publishConfig))];
+    const compiledTargets = [
+      ...object.sequence(compiledPublishTargets(pkg.publishConfig)).distinct(),
+    ];
     publishable.push({
       dir,
       name: pkg.name ?? dirname(dir),

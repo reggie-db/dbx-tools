@@ -11204,6 +11204,33 @@ function isDatabricksAppEnv(source = runtimeEnvironment()) {
   }
 }
 
+// packages/js/shared/core/src/string-utils.ts
+var TOKENIZE_DEFAULTS = {
+  distinct: false,
+  lowerCase: false,
+  capitalize: false,
+  omitUriScheme: false,
+  omitEmailDomain: false,
+  camelCase: true
+};
+var IDENTIFIER_DEFAULTS = {
+  ...TOKENIZE_DEFAULTS,
+  lowerCase: true,
+  maxLength: Infinity,
+  truncateStrategy: "hash",
+  truncateHashLength: 6,
+  delimiter: "-"
+};
+function trimToNull(value) {
+  if (typeof value !== "string")
+    return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+function trimToUndefined(value) {
+  return trimToNull(value) ?? undefined;
+}
+
 // packages/py/node-runtime/shims/databricks-runtime-auth.ts
 var createWorkspaceClient = evaluatePython("lambda: __import__('databricks.sdk', fromlist=['WorkspaceClient']).WorkspaceClient()");
 var runtimeMetadata = evaluatePython("lambda client: {'host': client.config.host, 'workspaceId': getattr(client.config, 'workspace_id', None), 'principal': getattr(client.config, 'client_id', None) or getattr(client.config, 'username', None) or getattr(client.config, 'auth_type', None)}");
@@ -11221,7 +11248,7 @@ async function databricksRuntimeAuthClient() {
     ...metadata.principal ? { principal: metadata.principal } : {},
     async token() {
       const token = await runPythonInThread(configuredToken, client);
-      return typeof token === "string" && token.trim() ? token : undefined;
+      return trimToUndefined(token);
     },
     async authenticate() {
       const headers = await runPythonInThread(authenticationHeaders, client);

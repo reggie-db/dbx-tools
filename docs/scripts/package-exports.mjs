@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { object } from "@dbx-tools/shared-core";
 import { posix } from "./repository-docs.mjs";
 
 const TYPESCRIPT_EXPORT = /\.(?:[cm]?ts|tsx)$/i;
 const CONDITION_PRIORITY = ["types", "bun", "browser", "node", "import", "default", "require"];
 
-const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 function orderedConditions(value) {
   const priority = new Map(CONDITION_PRIORITY.map((condition, index) => [condition, index]));
   return Object.entries(value).sort(([left], [right]) => {
@@ -20,7 +20,7 @@ function targetCandidates(value, context) {
   if (Array.isArray(value)) {
     return value.flatMap((candidate) => targetCandidates(candidate, context));
   }
-  if (isRecord(value)) {
+  if (object.isRecord(value)) {
     return orderedConditions(value).flatMap(([condition, candidate]) =>
       targetCandidates(candidate, `${context} condition ${condition}`),
     );
@@ -42,7 +42,7 @@ function insidePackage(packageDir, target, context) {
 }
 
 function exportMapEntries(exportsValue) {
-  if (isRecord(exportsValue)) {
+  if (object.isRecord(exportsValue)) {
     const keys = Object.keys(exportsValue);
     const subpathKeys = keys.filter((key) => key.startsWith("."));
     if (subpathKeys.length > 0) {

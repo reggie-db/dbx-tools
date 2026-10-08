@@ -135,7 +135,8 @@
       "name": "@dbx-tools/cli-service",
       "path": "packages/js/cli/service",
       "dependencies": [
-        "@dbx-tools/core"
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
         "@dbx-tools/cli",
@@ -398,6 +399,7 @@
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
         "@dbx-tools/cli",
+        "@dbx-tools/cli-service",
         "@dbx-tools/core",
         "@dbx-tools/databricks",
         "@dbx-tools/demo-appkit-app",

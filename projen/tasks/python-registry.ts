@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { net } from "@dbx-tools/shared-core";
+import { net, stringUtils } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
 import { captureTaskCommand } from "../src/_task-command.ts";
 
@@ -120,12 +120,6 @@ export function devpiRegistry(index: string): LocalPythonRegistry | undefined {
   };
 }
 
-/** Split a whitespace-separated index list (the pip/uv env-var form). */
-function splitIndexList(value: string | undefined): string[] {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed.split(/\s+/) : [];
-}
-
 /** Read a `pip config get <key>`, treating pip's literal "undefined" as unset. */
 function pipConfig(key: string): string | undefined {
   const out = captureTaskCommand(process.cwd(), "python", ["-m", "pip", "config", "get", key]);
@@ -153,8 +147,8 @@ export function activePythonIndexes(): string[] {
   // uv: env vars first (primary, then extras), then uv.toml's index blocks.
   add(process.env.UV_DEFAULT_INDEX);
   add(process.env.UV_INDEX_URL);
-  for (const url of splitIndexList(process.env.UV_INDEX)) add(url);
-  for (const url of splitIndexList(process.env.UV_EXTRA_INDEX_URL)) add(url);
+  for (const url of stringUtils.parseList(process.env.UV_INDEX)) add(url);
+  for (const url of stringUtils.parseList(process.env.UV_EXTRA_INDEX_URL)) add(url);
   const uvConfig = process.env.UV_CONFIG_FILE ?? resolve(homedir(), ".config/uv/uv.toml");
   if (existsSync(uvConfig)) {
     for (const url of parseUvIndexes(readFileSync(uvConfig, "utf8"))) add(url);
@@ -162,9 +156,9 @@ export function activePythonIndexes(): string[] {
 
   // pip: env vars (primary + extras), then `pip config` (index-url + extra-index-url).
   add(process.env.PIP_INDEX_URL);
-  for (const url of splitIndexList(process.env.PIP_EXTRA_INDEX_URL)) add(url);
+  for (const url of stringUtils.parseList(process.env.PIP_EXTRA_INDEX_URL)) add(url);
   add(pipConfig("global.index-url"));
-  for (const url of splitIndexList(pipConfig("global.extra-index-url"))) add(url);
+  for (const url of stringUtils.parseList(pipConfig("global.extra-index-url"))) add(url);
 
   return out;
 }

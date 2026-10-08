@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
-import { log } from "@dbx-tools/shared-core";
+import { log, object } from "@dbx-tools/shared-core";
 
 const logger = log.logger("projen:test");
 
@@ -148,7 +148,7 @@ function changedFiles(root: string, base?: string): string[] {
     stderr: "ignore",
     check: true,
   }).stdoutLines;
-  return [...new Set([...committed, ...working].filter(Boolean))].sort();
+  return [...object.sequence(committed, working).filter(Boolean).distinct()].sort();
 }
 
 function selectedTests(

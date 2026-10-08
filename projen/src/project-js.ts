@@ -275,7 +275,7 @@ export function projectReleaseBranch(project: DBXToolsJavaScriptProject): string
  */
 export function addPackageFiles(pkg: javascript.NodeProject, ...entries: string[]): void {
   const current = (pkg.package.manifest.files ?? []) as string[];
-  pkg.package.addField("files", [...new Set([...current, ...entries])]);
+  pkg.package.addField("files", [...object.sequence(current, entries).distinct()]);
 }
 
 /**
@@ -1282,7 +1282,7 @@ function initProject(
   // agnostic floor is set in the child's constructor; per-tag deps/tsconfig come from
   // the PACKAGE_TAG_MIXINS applied across the subtree below.
   for (const p of scanPackages(rootAbs, roots)) {
-    const tags = [...new Set([...p.tagCandidates, ...resolveTags(p, tagPaths)])];
+    const tags = [...object.sequence(p.tagCandidates, resolveTags(p, tagPaths)).distinct()];
     const found = existing.get(p.memberPath);
     if (found) {
       found.dbxToolsConfig.tags.push(...tags);
@@ -1301,7 +1301,7 @@ function initProject(
   }
 
   // The root project may itself carry tags (via a `""`/`"."` tag-path key).
-  const rootTags = [...new Set([...(tagPaths[""] ?? []), ...(tagPaths["."] ?? [])])];
+  const rootTags = [...object.sequence(tagPaths[""], tagPaths["."]).distinct()];
   if (rootTags.length) project.dbxToolsConfig.tags.push(...rootTags);
 
   // Apply per-tag mixins across the whole subtree now that every child exists

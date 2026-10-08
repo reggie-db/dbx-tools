@@ -336,8 +336,8 @@ const internal = cidr ? net.ipInCidr("10.1.2.3", cidr) : false;
 ```
 
 `net.urlBuilder()` is a forgiving URL builder for config and REST helpers.
-`net.pathMatch()` compares path prefixes on segment boundaries. IP/CIDR helpers
-parse IPv4 and IPv6 into a shared bigint comparison model.
+`urlBuilder(...).pathMatches()` compares path prefixes on segment boundaries.
+IP/CIDR helpers parse IPv4 and IPv6 into a shared bigint comparison model.
 
 ## Allow-List Patterns
 

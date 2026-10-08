@@ -17,6 +17,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import * as bin from "@dbx-tools/core/bin";
+import { asyncUtils } from "@dbx-tools/shared-core";
 import { compileWithBun } from "./_compile.ts";
 import { readServiceDefinition, writeServiceDefinition } from "./_config.ts";
 import { requestServiceControl } from "./_control.ts";
@@ -473,7 +474,7 @@ async function waitForState(
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
     if ((await read()) === expected) return;
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MILLISECONDS));
+    await asyncUtils.sleep(POLL_INTERVAL_MILLISECONDS);
   }
   throw new Error(message);
 }

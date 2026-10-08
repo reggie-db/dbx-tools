@@ -40,6 +40,7 @@
     "python-node-runtime:check": "projen python-node-runtime:check",
     "python-node-runtime:watch": "projen python-node-runtime:watch",
     "release": "projen release",
+    "shared-core:usage": "projen shared-core:usage",
     "sync": "projen sync",
     "test": "projen test",
     "test:all": "projen test:all",

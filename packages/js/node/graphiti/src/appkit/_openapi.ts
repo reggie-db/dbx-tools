@@ -1,4 +1,5 @@
 import type { AgentToolDefinition } from "@databricks/appkit/beta";
+import { object } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import { z } from "zod";
 
@@ -107,7 +108,7 @@ function resolveReferences(
   active: ReadonlySet<string> = new Set(),
 ): unknown {
   if (Array.isArray(value)) return value.map((item) => resolveReferences(document, item, active));
-  if (!isRecord(value)) return value;
+  if (!object.isRecord(value)) return value;
   const reference = typeof value.$ref === "string" ? value.$ref : undefined;
   if (reference) {
     if (active.has(reference)) throw new Error(`Cyclic Graphiti OpenAPI reference: ${reference}`);
@@ -131,7 +132,7 @@ function referenceTarget(document: GraphitiOpenApi, reference: string): unknown 
   let current: unknown = document;
   for (const rawSegment of reference.slice(2).split("/")) {
     const segment = rawSegment.replaceAll("~1", "/").replaceAll("~0", "~");
-    if (!isRecord(current) || !(segment in current)) {
+    if (!object.isRecord(current) || !(segment in current)) {
       throw new Error(`Unresolved Graphiti OpenAPI reference: ${reference}`);
     }
     current = current[segment];
@@ -141,7 +142,7 @@ function referenceTarget(document: GraphitiOpenApi, reference: string): unknown 
 
 function hideArguments(schema: JSONSchema7, hiddenArguments: ReadonlySet<string>): JSONSchema7 {
   const { properties: sourceProperties, required: sourceRequired, ...rest } = schema;
-  const properties = isRecord(sourceProperties) ? { ...sourceProperties } : undefined;
+  const properties = object.isRecord(sourceProperties) ? { ...sourceProperties } : undefined;
   if (properties) {
     for (const name of hiddenArguments) delete properties[name];
   }
@@ -151,8 +152,4 @@ function hideArguments(schema: JSONSchema7, hiddenArguments: ReadonlySet<string>
     ...(properties ? { properties } : {}),
     ...(required?.length ? { required } : {}),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

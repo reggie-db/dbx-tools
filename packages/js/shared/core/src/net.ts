@@ -42,7 +42,7 @@ const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // ────────────────────────────────────────────────────────────────
 
 /**
- * Anything {@link urlBuilder} (and {@link pathMatch}) know how to coerce
+ * Anything {@link urlBuilder} knows how to coerce
  * into a URL:
  *
  * - A string: a host, a full URL, or a path / query / hash fragment.
@@ -216,23 +216,6 @@ export function urlBuilder(input?: UrlLike): UrlBuilder | undefined {
   }
   const url = parseUrl(input);
   return url ? urlBuilder(url) : undefined;
-}
-
-/**
- * Convenience wrapper over {@link UrlBuilder.pathMatches}: coerce
- * `input` via {@link urlBuilder} and test its pathname against `path`.
- * Returns `false` for input that can't be parsed into a URL.
- *
- * @example
- * pathMatch("/api/cool?q=1", "/api");      // true
- * pathMatch("/apicool", "/api");           // false
- * pathMatch("https://host/api", "/api");   // true
- * pathMatch(request, "/api/v2");           // fetch Request
- */
-export function pathMatch(input: UrlLike, path: string): boolean {
-  const urlb = urlBuilder(input);
-  if (!urlb) return false;
-  return urlb.pathMatches(path);
 }
 
 /**

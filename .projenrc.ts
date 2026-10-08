@@ -200,6 +200,10 @@ root.addTask("ui:bundle-sizes", {
   description: "Report focused auth, email, and search browser bundle sizes",
   exec: "bun projen/tasks/ui-bundle-sizes.ts",
 });
+root.addTask("shared-core:usage", {
+  description: "Report shared-core runtime export usage by caller kind",
+  exec: "bun projen/tasks/shared-core-usage.ts",
+});
 
 // ---------------------------------------------------------------------------
 // JavaScript and Python lockfiles stay UNTRACKED
@@ -800,6 +804,7 @@ project.applyToProjects(root, { identifierName: "cli-service", tags: "cli" }, (p
   );
   p.addDeps(
     "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
     `bun@${bunWorkflow.BUN_VERSION}`,
     "systray2@catalog:",
   );

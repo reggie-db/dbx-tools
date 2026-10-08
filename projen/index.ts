@@ -29,6 +29,7 @@ export * as release from "./src/release.ts";
 export * as releaseContext from "./src/release-context.ts";
 export * as releaseOptions from "./src/release-options.ts";
 export * as scaffold from "./src/scaffold.ts";
+export * as sharedCoreUsage from "./src/shared-core-usage.ts";
 export * as tags from "./src/tags.ts";
 export * as tsconfig from "./src/tsconfig.ts";
 export * as vscode from "./src/vscode.ts";
@@ -65,6 +66,8 @@ export type { ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.t
 export { RELEASE_VERSION } from "./src/release-context.ts";
 export { RELEASE_PUBLISH_TARGETS, RELEASE_INSTALL_MODES, ReleaseStepSelectionSchema } from "./src/release-options.ts";
 export type { ReleasePublishTarget, ReleaseInstallMode, ReleaseStepSelection, ReleaseSelectionOptions } from "./src/release-options.ts";
+export { SHARED_CORE_BINDING_EXPORTS } from "./src/shared-core-usage.ts";
+export type { SharedCoreUsageKind, SharedCoreExportUsage } from "./src/shared-core-usage.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
 export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";

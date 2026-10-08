@@ -12,7 +12,7 @@ import {
 } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import { client as authClient, type AuthClient, type DatabricksAuthOptions } from "@dbx-tools/auth";
-import { functionUtils, net } from "@dbx-tools/shared-core";
+import { functionUtils, net, stringUtils } from "@dbx-tools/shared-core";
 
 /** Databricks workspace ids are a 10-20 digit run embedded in the host. */
 const WORKSPACE_ID_REGEX = /\d{10,20}/;
@@ -134,7 +134,7 @@ export async function getCurrentUserName(client?: WorkspaceClient): Promise<stri
 function readContextUserName(ctx: unknown): string | undefined {
   if (typeof ctx !== "object" || ctx === null || !("userName" in ctx)) return undefined;
   const value = (ctx as { userName?: unknown }).userName;
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  return stringUtils.trimToUndefined(value);
 }
 
 /**

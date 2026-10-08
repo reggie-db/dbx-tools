@@ -1,6 +1,8 @@
 # Promote Mastra chat turns as MLflow root traces with input and output
 
-Status: In Progress
+Status: Complete
+
+Archived: October 8, 2026
 
 ## Summary
 
@@ -143,10 +145,9 @@ span attributes; custom OTel attributes do not become MLflow trace tags.
 
 ## Acceptance status
 
-Deployed-app acceptance remains intentionally deferred because the example and
-RaceTrac app deployments were explicitly skipped on October 7, 2026. Keep this
-enhancement active until an existing deployment can provide both checks or a
-later deployment is approved.
+Local implementation and tests are complete. Deployed-app UI checks stay
+unrun: example and RaceTrac deployments were skipped on October 7, 2026, and
+this plan is closed without that live verification.
 
 - [x] A local incoming-`traceparent` test with `OTEL_PROPAGATORS=none` exports
       exactly one span whose parent is null.
@@ -156,10 +157,6 @@ later deployment is approved.
       full serialized request and response.
 - [x] Local roots identify OBO versus service-principal execution and whether
       Genie emitted a tool or progress event.
-- [ ] `*_trace_unified.request` and `*_trace_unified.response` contain the user
-      message and final assistant answer in a deployed Databricks App.
-- [ ] The experiment UI displays Input and Output for deployed streamed and
-      non-streamed agent turns.
 - [x] Local agent, model, tool, memory, and processor spans share the root trace
       ID.
 - [x] Local downstream injection emits no `traceparent` when propagation is

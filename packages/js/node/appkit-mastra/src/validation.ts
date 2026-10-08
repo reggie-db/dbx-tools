@@ -9,6 +9,7 @@
  *
  * @module
  */
+import { object } from "@dbx-tools/shared-core";
 
 /** The subset of a failed parse result these helpers read. */
 export interface SchemaIssues {
@@ -17,6 +18,11 @@ export interface SchemaIssues {
 
 /** Distinct dot-joined field paths a failed parse flagged. */
 export function invalidFields(error: SchemaIssues): string[] {
-  const fields = error.issues.map((issue) => issue.path.map(String).join(".")).filter(Boolean);
-  return [...new Set(fields)];
+  return [
+    ...object
+      .sequence(error.issues)
+      .map((issue) => issue.path.map(String).join("."))
+      .filter(Boolean)
+      .distinct(),
+  ];
 }

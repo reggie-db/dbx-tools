@@ -2,6 +2,7 @@ import { evaluatePython, type PythonFunction, runPythonInThread } from "./host";
 
 import type { DatabricksRuntimeAuthClient } from "@dbx-tools/auth/runtime-auth";
 import { isDatabricksAppEnv as isDatabricksAppRuntime } from "@dbx-tools/shared-core/environment-utils";
+import { trimToUndefined } from "@dbx-tools/shared-core/string-utils";
 
 interface PythonRuntimeMetadata {
   host: string;
@@ -36,7 +37,7 @@ export async function databricksRuntimeAuthClient(): Promise<
     ...(metadata.principal ? { principal: metadata.principal } : {}),
     async token() {
       const token = await runPythonInThread<unknown>(configuredToken, client);
-      return typeof token === "string" && token.trim() ? token : undefined;
+      return trimToUndefined(token);
     },
     async authenticate() {
       const headers = await runPythonInThread<Record<string, unknown>>(

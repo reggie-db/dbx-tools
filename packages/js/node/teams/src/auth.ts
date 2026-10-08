@@ -24,7 +24,7 @@
  * @module
  */
 
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 
 /**
@@ -203,7 +203,7 @@ const bearerToken = (authorization: string | undefined): string | null => {
   if (!authorization) return null;
   const [scheme, value] = authorization.split(/\s+/, 2);
   if (!value || scheme?.toLowerCase() !== "bearer") return null;
-  return value.trim() || null;
+  return stringUtils.trimToNull(value);
 };
 
 /** A cached Connector access token and the moment it stops being usable. */
