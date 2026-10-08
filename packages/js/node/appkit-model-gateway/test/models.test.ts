@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { ModelClass } from "@dbx-tools/shared-model";
 import type { ModelCapabilities, ModelTarget } from "@dbx-tools/shared-model-gateway";
 
-import { listModelsPayload } from "../src/models.ts";
+import { codexModelSlug, listModelsPayload } from "../src/models.ts";
 
 const CAPABILITIES: ModelCapabilities = {
   responses: false,
@@ -22,6 +22,13 @@ const CAPABILITIES: ModelCapabilities = {
 };
 
 describe("model gateway catalogue", () => {
+  it("derives Codex slugs from the model-service name when AI Gateway Codex is available", () => {
+    const gpt = target("gpt", { responses: true, openResponses: false, customTools: true });
+    const claude = target("claude", { anthropic: true, aiGatewayCodex: false });
+    assert.equal(codexModelSlug(gpt), "databricks/system.ai.gpt-test");
+    assert.equal(codexModelSlug(claude), "databricks/databricks-claude-test");
+  });
+
   it("publishes Codex models with a chat class, sorted by major family then display name", () => {
     const targets = [
       target("gpt", { responses: true, openResponses: false, customTools: true }),

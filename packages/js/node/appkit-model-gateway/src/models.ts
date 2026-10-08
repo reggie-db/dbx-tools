@@ -91,14 +91,19 @@ function openAiModel(target: ModelTarget): OpenAIModel {
   };
 }
 
-function codexModel(target: ModelTarget, priority: number): CodexModel {
+/** Codex `/v1/models` slug for a resolved gateway target. */
+export function codexModelSlug(target: ModelTarget): string {
   const model =
     target.capabilities.aiGatewayCodex && target.modelServiceName
       ? target.modelServiceName
       : target.id;
+  return `databricks/${model}`;
+}
+
+function codexModel(target: ModelTarget, priority: number): CodexModel {
   const efforts = target.reasoningEfforts;
   return {
-    slug: `databricks/${model}`,
+    slug: codexModelSlug(target),
     display_name: target.displayName,
     description: target.endpoint?.description ?? "Databricks model service",
     base_instructions: CODEX_BASE_INSTRUCTIONS,

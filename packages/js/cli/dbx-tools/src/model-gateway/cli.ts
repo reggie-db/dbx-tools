@@ -15,8 +15,8 @@ import {
 } from "@dbx-tools/shared-model-gateway/options";
 import { Command } from "commander";
 
-import { PACKAGE_VERSION } from "../../index.ts";
 import { startModelGateway } from "./server.ts";
+import { PACKAGE_VERSION } from "../../index.ts";
 
 /** Injectable foreground gateway boundary for CLI tests. */
 export interface ModelGatewayCliDependencies {
@@ -33,7 +33,11 @@ const DEFAULT_DEPENDENCIES: ModelGatewayCliDependencies = {
 export function modelGatewayServiceDefinition(
   options: ModelGatewayOptions = {},
 ): CliServiceDefinition {
-  const { runtimeInfo: _, ...resolved } = resolveModelGatewayCliOptions(options);
+  const {
+    runtimeInfo: _,
+    bearerToken: _bearerToken,
+    ...resolved
+  } = resolveModelGatewayCliOptions(options);
   const host = urlHost(resolved.listen.host);
   return defineService(import.meta.url, {
     id: "dbx-tools.cli-model-gateway",

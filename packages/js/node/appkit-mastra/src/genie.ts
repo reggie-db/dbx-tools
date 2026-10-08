@@ -59,6 +59,7 @@ import { chartPlannerRequestSchema, chartToolOutputSchema, prepareChart } from "
 import { MASTRA_USER_KEY, resolveUserKey } from "./config.ts";
 import type { MastraPluginConfig, User } from "./config.ts";
 import { fetchStatementData } from "./statement.ts";
+import { stampGenieToolSpan } from "./telemetry.ts";
 import { safeWriteProgress } from "./writer.ts";
 
 const logger = log.logger("mastra/genie");
@@ -428,6 +429,7 @@ function buildAskGenieTool(opts: {
     }),
     execute: async ({ question }, ctxRaw) => {
       const ctx = ctxRaw as ToolExecuteCtx;
+      stampGenieToolSpan();
       const { client, requestContext } = requireClient(ctx, toolId);
       const writer = ctx?.writer;
       const toolCallId = ctx?.agent?.toolCallId;

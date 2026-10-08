@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
@@ -57,6 +57,7 @@ describe("direct release tags", () => {
         validationTasks: ["missing-task"],
         install: "never",
         localPublish: false,
+        releaseNotes: false,
       });
       const annotation = git(remote, "for-each-ref", "--format=%(contents)", "refs/tags/v1.0.1");
       assert.deepEqual(parseReleaseTagAnnotation(annotation), {
@@ -99,6 +100,7 @@ describe("direct release tags", () => {
           prefix: "v",
           remote: "origin",
           localPublish: false,
+          releaseNotes: false,
         }),
         "v1.0.1",
       );
@@ -113,6 +115,42 @@ describe("direct release tags", () => {
         git(root, "rev-parse", "HEAD"),
       );
       assert.equal(readFileSync(join(root, "VERSION"), "utf8"), "1.0.1\n");
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
+
+  it("runs demo:deploy after tagging when requested", async () => {
+    const { remote, root } = fixture();
+    try {
+      writeFileSync(
+        join(root, "package.json"),
+        `${JSON.stringify(
+          {
+            name: "fixture",
+            private: true,
+            scripts: {
+              bump: "node bump.mjs",
+              "version:check": "true",
+              "demo:deploy": "touch demo-deployed",
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      git(root, "add", "package.json");
+      git(root, "commit", "-m", "add demo:deploy");
+      await runRelease({
+        root,
+        branch: "main",
+        prefix: "v",
+        remote: "origin",
+        localPublish: false,
+        demoDeploy: true,
+        releaseNotes: false,
+      });
+      assert.equal(readFileSync(join(root, "demo-deployed"), "utf8"), "");
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
     }
@@ -133,9 +171,37 @@ describe("direct release tags", () => {
           prefix: "v",
           remote: "origin",
           localPublish: false,
+          releaseNotes: false,
         }),
         "v1.0.1",
       );
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
+
+  it("commits Genie or fallback release notes with the version bump", async () => {
+    const { root } = fixture();
+    try {
+      git(root, "tag", "-a", "v1.0.0", "-m", "v1.0.0");
+      await runRelease({
+        root,
+        branch: "main",
+        prefix: "v",
+        remote: "origin",
+        localPublish: false,
+        writeReleaseNotes: ({ root: notesRoot, version }) => {
+          const dest = join(notesRoot, "docs", "releases", `v${version}.md`);
+          mkdirSync(join(notesRoot, "docs", "releases"), { recursive: true });
+          writeFileSync(dest, `# Release ${version}\n\nGenie notes.\n`);
+          return dest;
+        },
+      });
+      assert.equal(
+        readFileSync(join(root, "docs/releases/v1.0.1.md"), "utf8"),
+        "# Release 1.0.1\n\nGenie notes.\n",
+      );
+      assert.match(git(root, "ls-tree", "-r", "--name-only", "HEAD"), /docs\/releases\/v1.0.1.md/);
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
     }
@@ -153,6 +219,7 @@ describe("direct release tags", () => {
           prefix: "v",
           remote: "origin",
           localPublish: false,
+          releaseNotes: false,
         }),
         "v1.0.1",
       );
@@ -189,6 +256,7 @@ describe("direct release tags", () => {
             prefix: "v",
             remote: "origin",
             localPublish: false,
+            releaseNotes: false,
           }),
         /cannot safely merge feature into main/,
       );
@@ -210,7 +278,14 @@ describe("direct release tags", () => {
       git(root, "reset", "--hard", "HEAD~1");
       await assert.rejects(
         () =>
-          runRelease({ root, branch: "main", prefix: "v", remote: "origin", localPublish: false }),
+          runRelease({
+            root,
+            branch: "main",
+            prefix: "v",
+            remote: "origin",
+            localPublish: false,
+            releaseNotes: false,
+          }),
         /fast-forward/,
       );
     } finally {

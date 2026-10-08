@@ -690,6 +690,14 @@ project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "s
   );
 });
 
+project.applyToProjects(root, { identifierName: "shared-genie-code", tags: "shared" }, (p) => {
+  p.package.addField(
+    "description",
+    "Browser-safe managed Genie Code options and profile-model pairing contracts",
+  );
+  p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
+});
+
 project.applyToProjects(root, { identifierName: "shared-graphiti", tags: "shared" }, (p) => {
   p.package.addField(
     "description",
@@ -831,6 +839,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
   p.package.addBin({
     [SCOPE]: "./bin/dbx-tools.ts",
     dbx: "./bin/dbx-tools.ts",
+    "dbx-genie": "./bin/dbx-genie.ts",
     "dbx-graphiti": "./bin/dbx-graphiti.ts",
     "dbx-lakebase-proxy": "./bin/dbx-lakebase-proxy.ts",
     "dbx-model-gateway": "./bin/dbx-model-gateway.ts",
@@ -853,10 +862,14 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email@workspace:^",
+    "@dbx-tools/shared-genie-code@workspace:^",
     "@dbx-tools/shared-model-gateway@workspace:^",
     "@dbx-tools/tunnel@workspace:^",
+    "concurrently@^10.0.3",
+    "get-port@^7.1.0",
     "http-proxy-3@catalog:",
     "pg@^8.22.0",
+    "smol-toml@1.8.0",
   );
   p.addDevDeps("@types/pg@^8");
   project.addExports(p, {
@@ -866,6 +879,8 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "./auth/options": "./src/auth/options.ts",
     "./graphiti": "./src/graphiti/cli.ts",
     "./graphiti/options": "./src/graphiti/options.ts",
+    "./genie": "./src/genie-code/cli.ts",
+    "./genie/options": "./src/genie-code/options.ts",
     "./lakebase-proxy": "./src/lakebase-proxy/cli.ts",
     "./lakebase-proxy/options": "./src/lakebase-proxy/options.ts",
     "./model-gateway": "./src/model-gateway/cli.ts",
@@ -1306,6 +1321,10 @@ root.addTask("demo", {
   },
   exec: "bun scripts/run-demo.ts",
   description: "Build the demo client and run the local AppKit server",
+});
+root.addTask("demo:deploy", {
+  exec: "bun scripts/demo-deploy.ts",
+  description: "Stage and deploy the AppKit demo app to the FEVM workspace",
 });
 
 // The generated release workflow publishes every npm workspace member,

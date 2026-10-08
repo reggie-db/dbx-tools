@@ -74,7 +74,7 @@ export { STATEMENT_ROW_CAP } from "./src/statement.ts";
 export { TYPOGRAPHY_RULE } from "./src/style.ts";
 export { TITLE_INSTRUCTIONS } from "./src/summarize.ts";
 export type { SummarizeOptions } from "./src/summarize.ts";
-export { TRACE_IO_LIMIT, MLFLOW_SPAN_INPUTS_ATTR, MLFLOW_SPAN_OUTPUTS_ATTR, CHAT_MESSAGES_ATTR, CHAT_RESPONSE_ATTR, CHAT_IDENTITY_ATTR, CHAT_GENIE_USED_ATTR } from "./src/telemetry.ts";
+export { TRACE_IO_LIMIT, MLFLOW_SPAN_INPUTS_ATTR, MLFLOW_SPAN_OUTPUTS_ATTR, CHAT_MESSAGES_ATTR, CHAT_RESPONSE_ATTR, CHAT_IDENTITY_ATTR, CHAT_GENIE_USED_ATTR, MLFLOW_SPAN_TYPE_ATTR, GEN_AI_OPERATION_NAME_ATTR, MLFLOW_USER_ATTR, MLFLOW_SESSION_ATTR, MLFLOW_TRACE_TAG_PREFIX, MLFLOW_GENIE_TAG, MLFLOW_SPAN_TYPE_AGENT, MLFLOW_SPAN_TYPE_GENIE, MLFLOW_GENIE_TAG_ATTR } from "./src/telemetry.ts";
 export type { ChatTurnTelemetryOptions } from "./src/telemetry.ts";
 export type { SchemaIssues } from "./src/validation.ts";
 export { DEFAULT_SKILL_FOLDERS } from "./src/workspaces.ts";

@@ -28,7 +28,10 @@ function fakeAuth(calls: string[]): AuthClient {
       return TOKEN;
     },
     async headers() {
-      return { authorization: "Bearer access" };
+      return {
+        authorization: "Bearer access",
+        "x-databricks-org-id": "123",
+      };
     },
   };
 }
@@ -64,6 +67,27 @@ describe("auth CLI", () => {
         },
       ]);
     }
+  });
+
+  it("writes plain tokens and authentication headers without duplicating auth logic", async () => {
+    const tokenOutput: string[] = [];
+    await buildProgram("dbx auth", {
+      createAuthClient: async () => fakeAuth([]),
+      writeText: (value) => tokenOutput.push(value),
+    }).parseAsync(["token", "--format", "text"], { from: "user" });
+    assert.deepEqual(tokenOutput, ["access"]);
+
+    const headersOutput: unknown[] = [];
+    await buildProgram("dbx auth", {
+      createAuthClient: async () => fakeAuth([]),
+      writeJson: (value) => headersOutput.push(value),
+    }).parseAsync(["headers"], { from: "user" });
+    assert.deepEqual(headersOutput, [
+      {
+        authorization: "Bearer access",
+        "x-databricks-org-id": "123",
+      },
+    ]);
   });
 
   it("routes logout, profile, and status through AuthClient", async () => {

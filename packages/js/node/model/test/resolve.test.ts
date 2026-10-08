@@ -397,6 +397,12 @@ describe("lookupModels", () => {
     assert.deepEqual(names(ranked), ["databricks-gpt-5-6-sol", "databricks-gpt-5-6-luna"]);
   });
 
+  it("does not let GPT-OSS parameter size outrank hosted GPT for a family search", () => {
+    const oss = { ...chat("databricks-gpt-oss-120b"), supportsTools: true };
+    const ranked = lookupModels([oss, chat("databricks-gpt-5-6-sol")], { search: "gpt" });
+    assert.deepEqual(names(ranked), ["databricks-gpt-5-6-sol", "databricks-gpt-oss-120b"]);
+  });
+
   it("puts the newest GPT generation first for a family search", () => {
     const gptModels = [
       chat("databricks-gpt-5-6-sol"),

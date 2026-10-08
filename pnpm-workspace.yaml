@@ -32,6 +32,7 @@ packages:
   - packages/js/shared/email-template
   - packages/js/shared/fs
   - packages/js/shared/genie
+  - packages/js/shared/genie-code
   - packages/js/shared/graphiti
   - packages/js/shared/mastra
   - packages/js/shared/model

@@ -771,8 +771,12 @@ Mastra's own `mastra.agent_run.*` attributes sit on a child span that the view
 never reads. Text-only turns use raw prompt and answer previews, while
 `appkit.mastra.chat.messages` and `appkit.mastra.chat.response` retain the
 serialized envelopes. `appkit.mastra.identity.mode` records `obo` versus
-`service-principal`; `appkit.mastra.genie.used` records Genie activity. These
-custom values are searchable span attributes, not MLflow trace tags.
+`service-principal`. The experiment UI's User and Tags columns read the OTel
+attributes Databricks documents for inbound traces: `user.id` (forwarded email
+or user id), `session.id` (Mastra thread id), `mlflow.spanType` (`AGENT` on the
+root, `GENIE` on `ask_genie`), and `mlflow.trace.tag.genie=true` when the turn
+called Genie. `appkit.mastra.genie.used` remains as a searchable custom
+attribute.
 
 ```ts
 mastra({
@@ -782,7 +786,10 @@ mastra({
 ```
 
 `mlflow.logFeedback()` logs a human assessment against the active MLflow trace.
-The response header name and request/response schemas live in
+On Apps UC traces it reads the experiment's
+`mlflow.experiment.databricksTraceDestinationPath` tag (or the spans-table tag)
+so the assessment URI matches the row the experiment UI shows. The response
+header name and request/response schemas live in
 [`@dbx-tools/shared-mastra`](../../shared/mastra).
 
 ### Databricks Apps -> Unity Catalog (the supported path)
@@ -937,7 +944,8 @@ needs no extra wiring.
 | `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO), `service-principal`, or `auto` for the agents' Databricks calls.                                                            |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. On Apps, the telemetry sidecar injects these.                            |
 | `OTEL_PROPAGATORS`                                                  | Set to `none` on Databricks Apps. The plugin disables extraction and injection before serving requests while retaining local async span parenting. |
-| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset.                                                                          |
+| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset. Assessments read the experiment's UC trace destination tag.              |
+| `MLFLOW_UC_TRACE_PREFIX`                                            | Optional override for the UC table prefix. Omit to use the experiment tag.                                                                          |
 
 ## Configuration Reference
 

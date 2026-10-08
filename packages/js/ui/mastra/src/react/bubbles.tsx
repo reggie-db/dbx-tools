@@ -42,7 +42,11 @@ import type {
   ToolEvent,
 } from "./types.ts";
 import { copyText } from "../support/clipboard.ts";
-import { mergeToolEvents, toolEventsFromParts } from "../support/tool-events.ts";
+import {
+  genieReasoningText,
+  mergeToolEvents,
+  toolEventsFromParts,
+} from "../support/tool-events.ts";
 
 // User / assistant message bubbles plus the inline approval card and
 // the helpers that surface approval-gated tool calls out of a message's
@@ -344,9 +348,19 @@ export const AssistantBubble = ({
   feedbackValue,
   mlflowExperimentUrl,
 }: AssistantBubbleProps) => {
-  const reasoning = getReasoningText(message.parts);
+  const toolEvents = mergeToolEvents(toolEventsFromParts(message.parts), events);
+  const reasoning = [getReasoningText(message.parts), genieReasoningText(toolEvents)]
+    .filter(Boolean)
+    .join("\n\n");
   const isReasoningStreaming =
-    isLast && status === "streaming" && message.parts.at(-1)?.type === "reasoning";
+    isLast &&
+    status === "streaming" &&
+    (message.parts.at(-1)?.type === "reasoning" ||
+      toolEvents.some(
+        (event) =>
+          event.status === "running" &&
+          event.progress?.some((progress) => progress.type === "thinking"),
+      ));
   const textParts = message.parts.filter(
     (p): p is { type: "text"; text: string } => p.type === "text",
   );
@@ -382,7 +396,6 @@ export const AssistantBubble = ({
     collectPendingApprovals(message.parts),
     externalApprovals,
   );
-  const toolEvents = mergeToolEvents(toolEventsFromParts(message.parts), events);
 
   return (
     <Item className="items-start gap-3 border-none bg-transparent p-0">
@@ -405,14 +418,14 @@ export const AssistantBubble = ({
          */}
         {toolEvents.length > 0 && <ToolSessionPill events={toolEvents} />}
         {reasoning && (
-          <Collapsible defaultOpen={isReasoningStreaming}>
-            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ChevronDownIcon className="size-3" />
+          <Collapsible>
+            <CollapsibleTrigger className="group flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+              <ChevronDownIcon className="size-3 transition-transform group-data-[state=closed]:-rotate-90" />
               <span>{isReasoningStreaming ? "Thinking..." : "Thoughts"}</span>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="mt-1 border-l-2 border-border/60 pl-3 text-xs text-muted-foreground whitespace-pre-wrap">
-                {reasoning}
+              <div className="mt-1 border-l-2 border-border/60 pl-3 text-xs text-muted-foreground">
+                <ToolMarkdown>{reasoning}</ToolMarkdown>
               </div>
             </CollapsibleContent>
           </Collapsible>
@@ -480,6 +493,12 @@ export const AssistantBubble = ({
               </Tooltip>
             )}
             {onExport && <ExportMenu onExport={onExport} iconOnly tooltip="Export message" />}
+            {onFeedback && (
+              <FeedbackControls
+                onSubmit={onFeedback}
+                {...(feedbackValue ? { value: feedbackValue } : {})}
+              />
+            )}
             {mlflowExperimentUrl && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -496,12 +515,6 @@ export const AssistantBubble = ({
                 </TooltipTrigger>
                 <TooltipContent>Open MLflow experiment</TooltipContent>
               </Tooltip>
-            )}
-            {onFeedback && (
-              <FeedbackControls
-                onSubmit={onFeedback}
-                {...(feedbackValue ? { value: feedbackValue } : {})}
-              />
             )}
           </div>
         )}

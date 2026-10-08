@@ -69,6 +69,25 @@ export function captureTaskCommand(
   return result.exitCode === 0 ? (result.stdout?.trim() ?? "") : "";
 }
 
+/** Run a command with inherited output and return whether it exited successfully. */
+export function tryTaskCommand(
+  cwd: string,
+  command: string,
+  args: readonly string[],
+  options: TaskCommandOptions = {},
+): boolean {
+  return (
+    exec.spawnSync(executable(command), [...args], {
+      cwd,
+      env: options.env,
+      stdout: "inherit",
+      stderr: options.stderr ?? "inherit",
+      stdin: "ignore",
+      check: false,
+    }).exitCode === 0
+  );
+}
+
 /** Whether a quiet, non-interactive command exits successfully. */
 export function taskCommandSucceeds(
   cwd: string,

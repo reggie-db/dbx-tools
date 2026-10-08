@@ -59,8 +59,9 @@ export async function prepareAndRunProjen(projenArgs: string[], startDir?: strin
 /**
  * Mount `name` as a command that captures every following token verbatim and
  * hands it to the program `load()` resolves. `helpOption(false)` is what lets
- * `--help` through to the child instead of being answered here, and the child
- * program owns its own flags, so this wrapper never has to restate them.
+ * `--help` through to the child instead of being answered here, and
+ * `passThroughOptions()` keeps unknown flags in that token list so the child
+ * program owns them.
  */
 function addForwardedCommand(
   program: Command,
@@ -73,6 +74,7 @@ function addForwardedCommand(
     .description(description)
     .argument("[args...]", `arguments forwarded to ${name}`)
     .allowUnknownOption()
+    .passThroughOptions()
     .allowExcessArguments()
     .helpOption(false)
     .action(async (args: string[]) => {
@@ -88,6 +90,7 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     .description(
       "Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and local proxies",
     )
+    .enablePositionalOptions()
     .showHelpAfterError()
     .helpOption("-h, --help", `Show ${name} help`);
 
@@ -139,6 +142,13 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
 
   addForwardedCommand(
     program,
+    "genie",
+    "Run managed Genie Code through a local Databricks model gateway",
+    async () => (await import("./genie-code/cli.ts")).buildProgram,
+  );
+
+  addForwardedCommand(
+    program,
     "graphiti",
     "Run Graphiti or manage its current-user desktop service",
     async () => (await import("./graphiti/cli.ts")).buildProgram,
@@ -158,6 +168,7 @@ export async function buildDocumentationProgram(name: string = PROGRAM_NAMES[0])
     (await import("./tunnel/cli.ts")).buildProgram("tunnel"),
     (await import("./lakebase-proxy/cli.ts")).buildProgram("lakebase-proxy"),
     (await import("./model-gateway/cli.ts")).buildProgram("model-gateway"),
+    (await import("./genie-code/cli.ts")).buildProgram("genie"),
     (await import("./graphiti/cli.ts")).buildProgram("graphiti"),
   );
   return program;

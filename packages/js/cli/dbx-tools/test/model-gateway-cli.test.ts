@@ -23,6 +23,7 @@ describe("model gateway CLI", () => {
     assert.match(help, /PROFILE/);
     assert.match(help, /--body-limit <value>/);
     assert.match(help, /BODY_LIMIT/);
+    assert.doesNotMatch(help, /bearer-token/i);
     assert.match(help, /service/);
     assert.equal(started, false);
   });
@@ -92,6 +93,15 @@ describe("model gateway CLI", () => {
     ]);
   });
 
+  it("never serializes a bearer token into service arguments", () => {
+    const definition = modelGatewayServiceDefinition({
+      bearerToken: "secret",
+      profile: "SERVICE-PROFILE",
+    });
+
+    assert.doesNotMatch(definition.command?.arguments?.join(" ") ?? "", /secret|bearer/i);
+  });
+
   it("starts the foreground gateway with typed options", async () => {
     const calls: Parameters<ModelGatewayCliDependencies["start"]>[0][] = [];
     await buildProgram("dbx model-gateway", {
@@ -109,6 +119,35 @@ describe("model gateway CLI", () => {
         bodyLimit: "100mb",
       },
     ]);
+  });
+
+  it("reads the hidden bearer token only from the environment", async () => {
+    const previous = {
+      token: process.env.DBX_TOOLS_MODEL_GATEWAY_BEARER_TOKEN,
+      listen: process.env.LISTEN,
+    };
+    const calls: Parameters<ModelGatewayCliDependencies["start"]>[0][] = [];
+    process.env.DBX_TOOLS_MODEL_GATEWAY_BEARER_TOKEN = "environment-secret";
+    process.env.LISTEN = "tcp://127.0.0.1:4312";
+    try {
+      await buildProgram("dbx model-gateway", {
+        async start(options) {
+          calls.push(options);
+        },
+      }).parseAsync([], { from: "user" });
+    } finally {
+      if (previous.token === undefined) delete process.env.DBX_TOOLS_MODEL_GATEWAY_BEARER_TOKEN;
+      else process.env.DBX_TOOLS_MODEL_GATEWAY_BEARER_TOKEN = previous.token;
+      if (previous.listen === undefined) delete process.env.LISTEN;
+      else process.env.LISTEN = previous.listen;
+    }
+
+    assert.equal(calls[0]?.bearerToken, "environment-secret");
+    assert.deepEqual(calls[0]?.listen, {
+      scheme: "tcp",
+      host: "127.0.0.1",
+      port: 4312,
+    });
   });
 
   it("rejects public binds and invalid ports", async () => {

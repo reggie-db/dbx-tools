@@ -24,6 +24,20 @@ dbx model-gateway --profile MY-PROFILE --port 4000
 Point an OpenAI-compatible client at `http://127.0.0.1:4000/v1`. The generated
 command reference includes all gateway and desktop-service options.
 
+## Run Genie Code
+
+```sh
+dbx genie --profile MY-PROFILE --model gpt
+# Equivalent installed binary:
+dbx-genie --profile MY-PROFILE --model gpt
+```
+
+The command installs the pinned Genie Code package under `~/.dbx-tools`, writes
+one persistent home per exact profile-model pairing, and supervises an
+authenticated loopback model gateway. Unknown flags and extra arguments are
+forwarded to Genie Code. Use `--` only when a wrapper option such as `--model`
+must be sent to Genie instead.
+
 ## Connect To Lakebase
 
 ```sh
@@ -72,8 +86,8 @@ bun run barrels
 
 See [`@dbx-tools/projen`](../../../../projen) for workspace configuration and
 generation. Command implementations are available from `@dbx-tools/cli/appkit`,
-`/auth`, `/graphiti`, `/lakebase-proxy`, `/model-gateway`, and `/tunnel` when a
-Node caller needs to embed one parser.
+`/auth`, `/genie`, `/graphiti`, `/lakebase-proxy`, `/model-gateway`, and
+`/tunnel` when a Node caller needs to embed one parser.
 
 <!-- cli-reference:start -->
 
@@ -89,15 +103,16 @@ dbx [command]
 
 #### Commands
 
-| Command                         | Description                                                             |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| `dev [projenArgs...]`           | Bootstrap or repair a dbx-tools workspace, then forward to projen       |
-| `appkit`                        | AppKit helpers: resolve the environment an AppKit app would start with. |
-| `auth [options]`                | Authenticate to Databricks with user or machine OAuth                   |
-| `tunnel [options] [command...]` | Front a command with a public tunnel and passwordless auth              |
-| `lakebase-proxy [options]`      | Run a loopback PostgreSQL proxy for Databricks Lakebase                 |
-| `model-gateway [options]`       | Run or manage the AppKit Databricks model gateway                       |
-| `graphiti [options]`            | Run Graphiti or manage its current-user desktop service                 |
+| Command                          | Description                                                             |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `dev [projenArgs...]`            | Bootstrap or repair a dbx-tools workspace, then forward to projen       |
+| `appkit`                         | AppKit helpers: resolve the environment an AppKit app would start with. |
+| `auth [options]`                 | Authenticate to Databricks with user or machine OAuth                   |
+| `tunnel [options] [command...]`  | Front a command with a public tunnel and passwordless auth              |
+| `lakebase-proxy [options]`       | Run a loopback PostgreSQL proxy for Databricks Lakebase                 |
+| `model-gateway [options]`        | Run or manage the AppKit Databricks model gateway                       |
+| `genie [options] [genieArgs...]` | Run Genie Code through an authenticated local Databricks model gateway  |
+| `graphiti [options]`             | Run Graphiti or manage its current-user desktop service                 |
 
 ### `dbx dev`
 
@@ -170,6 +185,7 @@ auth [options] [command]
 | ----------------- | ------------------------------------------------------ |
 | `login`           | Force browser login and return an access token         |
 | `token [options]` | Return a valid access token, logging in when needed    |
+| `headers`         | Return current Databricks authentication headers       |
 | `profile`         | Print the configured or automatically detected profile |
 | `logout`          | Delete the stored credential for the selected profile  |
 | `status`          | Show the resolved authentication client configuration  |
@@ -192,12 +208,21 @@ auth token [options]
 
 #### Options
 
-| Option               | Description                                                                 |
-| -------------------- | --------------------------------------------------------------------------- |
-| `--force-refresh`    | Refresh the token before returning it. (default: false, env: FORCE_REFRESH) |
-| `--no-force-refresh` | Disable refresh the token before returning it.                              |
-| `--login`            | Log in when credentials are missing or invalid. (default: true, env: LOGIN) |
-| `--no-login`         | Disable log in when credentials are missing or invalid.                     |
+| Option               | Description                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--force-refresh`    | Refresh the token before returning it. (default: false, env: FORCE_REFRESH)                                        |
+| `--no-force-refresh` | Disable refresh the token before returning it.                                                                     |
+| `--login`            | Log in when credentials are missing or invalid. (default: true, env: LOGIN)                                        |
+| `--no-login`         | Disable log in when credentials are missing or invalid.                                                            |
+| `--format <value>`   | Output structured token metadata or only the access token. (choices: "json", "text", default: "json", env: FORMAT) |
+
+### `dbx auth headers`
+
+Return current Databricks authentication headers
+
+```sh
+auth headers
+```
 
 ### `dbx auth profile`
 
@@ -585,6 +610,28 @@ Stop and remove the service for the current user
 ```sh
 model-gateway service uninstall
 ```
+
+### `dbx genie`
+
+Run Genie Code through an authenticated local Databricks model gateway
+
+```sh
+genie [options] [genieArgs...]
+```
+
+#### Arguments
+
+| Argument    | Description                                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| `genieArgs` | arguments and unknown flags forwarded to Genie Code; wrapper options may be separated with -- |
+
+#### Options
+
+| Option                     | Description                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `--profile <value>`        | Databricks profile used by the model-gateway sidecar. (env: DATABRICKS_CONFIG_PROFILE)                       |
+| `--model <value>`          | Model name resolved by the model gateway. (default: "gpt", env: MODEL)                                       |
+| `--gateway-listen <value>` | Loopback listener allocated for the model-gateway sidecar. (default: tcp://127.0.0.1:0, env: GATEWAY_LISTEN) |
 
 ### `dbx graphiti`
 

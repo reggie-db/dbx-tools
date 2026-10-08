@@ -101,6 +101,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-genie-code",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-model-gateway",
       "version": "workspace:^",
       "type": "runtime"
@@ -116,6 +121,16 @@
       "type": "runtime"
     },
     {
+      "name": "concurrently",
+      "version": "^10.0.3",
+      "type": "runtime"
+    },
+    {
+      "name": "get-port",
+      "version": "^7.1.0",
+      "type": "runtime"
+    },
+    {
       "name": "http-proxy-3",
       "version": "catalog:",
       "type": "runtime"
@@ -123,6 +138,11 @@
     {
       "name": "pg",
       "version": "^8.22.0",
+      "type": "runtime"
+    },
+    {
+      "name": "smol-toml",
+      "version": "1.8.0",
       "type": "runtime"
     },
     {

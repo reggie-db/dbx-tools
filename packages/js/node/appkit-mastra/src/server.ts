@@ -276,6 +276,7 @@ export class MastraServer extends ExpressMastraServer {
    */
   configureMlflowTraceId(res: express.Response) {
     if (!this.feedbackEnabled || res.headersSent) return;
+    if (res.getHeader(feedback.MLFLOW_TRACE_ID_HEADER)) return;
     const traceId = trace.getActiveSpan()?.spanContext().traceId;
     if (!traceId || traceId === INVALID_TRACE_ID) return;
     res.setHeader(feedback.MLFLOW_TRACE_ID_HEADER, `tr-${traceId}`);

@@ -178,7 +178,7 @@ Useful options:
 - Feedback defaults to auto: thumbs, dislike, and comment controls appear when
   the server reports MLflow feedback is available and a turn produced a trace
   id. Set `enableFeedback={false}` to hide them. Viewers with `CAN_MANAGE` on
-  the experiment also get an experiment debug link beside copy and export.
+  the experiment also get an experiment debug link at the end of the action row.
 
 ## Place The Conversation List
 
@@ -341,8 +341,11 @@ The UI understands the extra events produced by
 - Native tool-call and tool-result payloads remain complete. Expanding a tool
   row reveals default-closed Request and Response viewers; large values scroll
   without string or collection truncation.
-- Genie writer events render as tool progress, including thinking text, SQL, row
-  counts, result summaries, and chart/data markers.
+- Genie `thinking` events stream into the assistant's collapsed Thoughts
+  panel. Intermediate answer attachments and query-result tables stay on tool
+  progress, not in Thoughts. Other writer events remain attached to tool
+  progress, including SQL, row counts, result summaries, and chart/data
+  markers.
 - `[chart:<id>]` markers long-poll the chart cache and render ECharts inline.
 - `[data:<id>]` markers fetch statement rows and render a sortable table with
   column toggles and CSV export.

@@ -90,7 +90,8 @@ export function isFoundationModelIdentity(name: string): boolean {
   return /^(?:databricks-|system\.ai\.)/i.test(name.trim());
 }
 
-function isOpenWeightsGpt(name: string): boolean {
+/** Return whether an identity is hosted GPT-OSS rather than a GPT generation. */
+export function isOpenWeightsGpt(name: string): boolean {
   return modelFamily(name) === "gpt" && /(?:^|[-_.])oss(?:[-_.]|$)/i.test(name);
 }
 

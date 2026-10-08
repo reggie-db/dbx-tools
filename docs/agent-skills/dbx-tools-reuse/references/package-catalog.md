@@ -45,6 +45,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/shared-email-template` - Universal React Email presentation shared by dbx-tools server and browser email surfaces. Source: `packages/js/shared/email-template`.
 - `@dbx-tools/shared-fs` - Browser-safe filesystem contract and abstract base for rooted storage backends. Source: `packages/js/shared/fs`.
 - `@dbx-tools/shared-genie` - Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers. Source: `packages/js/shared/genie`.
+- `@dbx-tools/shared-genie-code` - Browser-safe configuration for the managed Genie Code CLI and its local model-gateway sidecar. Source: `packages/js/shared/genie-code`.
 - `@dbx-tools/shared-graphiti` - Use the browser-safe Graphiti option contract from Node, AppKit, browser tools, or other JavaScript callers. This package owns defaults, validation, and environment parsing so every Node runtime accepts the same configuration. Source: `packages/js/shared/graphiti`.
 - `@dbx-tools/shared-mastra` - Browser-safe contract for the AppKit Mastra plugin. Source: `packages/js/shared/mastra`.
 - `@dbx-tools/shared-model` - Browser-safe model-selection contracts generated from the canonical model owner. Source: `packages/js/shared/model`.

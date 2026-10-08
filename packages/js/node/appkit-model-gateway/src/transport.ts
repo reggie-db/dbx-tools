@@ -7,6 +7,7 @@
 import { getExecutionContext } from "@databricks/appkit";
 import { workspaceClient } from "@dbx-tools/databricks";
 import { log } from "@dbx-tools/shared-core";
+import { openaiChat } from "@dbx-tools/shared-model";
 import { upstreamUrl, type GatewayRoute } from "@dbx-tools/shared-model-gateway";
 
 const logger = log.logger("appkit/model-gateway/transport");
@@ -60,7 +61,7 @@ export async function fetchDatabricks(request: DatabricksTransportRequest): Prom
   await client.config.authenticate(headers);
   const url = upstreamUrl(host, request.route);
   const startedAt = Date.now();
-  const body = JSON.stringify({ ...request.body, model: request.route.upstreamModel });
+  const body = JSON.stringify(directDatabricksRequestBody(request.route, request.body));
   logger.debug("sending upstream request", {
     model: request.route.upstreamModel,
     path: new URL(url).pathname,
@@ -117,6 +118,20 @@ export async function fetchDatabricks(request: DatabricksTransportRequest): Prom
     });
     throw error;
   }
+}
+
+/** Remove client compatibility fields rejected by direct Databricks protocols. */
+export function directDatabricksRequestBody(
+  route: Pick<GatewayRoute, "upstreamProtocol" | "upstreamModel">,
+  body: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = { ...body, model: route.upstreamModel };
+  if (route.upstreamProtocol === "databricks-chat") {
+    openaiChat.stripUnsupportedChatFields(sanitized);
+  } else {
+    delete sanitized.parallel_tool_calls;
+  }
+  return sanitized;
 }
 
 /** Copy only response headers that belong to the public model protocol. */

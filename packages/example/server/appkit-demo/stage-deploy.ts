@@ -25,7 +25,16 @@
  *
  * Run: `bun stage-deploy.ts` from the server package dir.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,7 +83,36 @@ const deployPkg = materializeWorkspaceManifest(
     },
   },
   workspaceManifest,
-);
+) as Record<string, unknown>;
+
+function stageWorkspacePackage(packageDir: string, destName: string): string {
+  const dest = join(outDir, "vendor", destName);
+  mkdirSync(dest, { recursive: true });
+  cpSync(packageDir, dest, {
+    recursive: true,
+    filter: (source) => {
+      const rel = source.slice(packageDir.length).replaceAll("\\", "/");
+      if (rel.includes("/node_modules") || rel === "/node_modules") return false;
+      if (rel === "/test" || rel.startsWith("/test/")) return false;
+      return !rel.endsWith(".tsbuildinfo");
+    },
+  });
+  const sourcePkg = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")) as Record<
+    string,
+    unknown
+  >;
+  chmodSync(dest, 0o755);
+  const destPkg = join(dest, "package.json");
+  if (existsSync(destPkg)) {
+    chmodSync(destPkg, 0o644);
+    unlinkSync(destPkg);
+  }
+  writeFileSync(
+    destPkg,
+    `${JSON.stringify(materializeWorkspaceManifest(sourcePkg, workspaceManifest), null, 2)}\n`,
+  );
+  return `file:./vendor/${destName}`;
+}
 
 // pnpm-workspace.yaml: no members (single-package deploy), but `allowBuilds` so
 // pnpm 10+ runs the postinstalls the build needs (esbuild, unrs-resolver, bun,
@@ -89,7 +127,17 @@ if (existsSync(join(serverDir, "shared"))) {
   cpSync(join(serverDir, "shared"), join(outDir, "shared"), { recursive: true });
 }
 if (existsSync(clientDist)) cpSync(clientDist, join(outDir, "client-dist"), { recursive: true });
-writeFileSync(join(outDir, "package.json"), `${JSON.stringify(deployPkg, null, 2)}\n`);
+const dependencies = {
+  ...((deployPkg.dependencies as Record<string, string> | undefined) ?? {}),
+  "@dbx-tools/appkit-mastra": stageWorkspacePackage(
+    resolve(repoRoot, "packages/js/node/appkit-mastra"),
+    "appkit-mastra",
+  ),
+};
+writeFileSync(
+  join(outDir, "package.json"),
+  `${JSON.stringify({ ...deployPkg, dependencies }, null, 2)}\n`,
+);
 writeFileSync(join(outDir, "pnpm-workspace.yaml"), stringify(deployWorkspace));
 writeFileSync(join(outDir, "requirements.txt"), `dbx-tools-graphiti==${version}\n`);
 cpSync(join(serverDir, "app.yaml"), join(outDir, "app.yaml"));
@@ -97,5 +145,6 @@ cpSync(join(serverDir, "databricks.yml"), join(outDir, "databricks.yml"));
 
 console.log(`staged deploy at ${outDir}`);
 console.log(`  @dbx-tools/* -> ${version}, catalog resolved, bun+pnpm-workspace added`);
+console.log(`  @dbx-tools/appkit-mastra -> file:./vendor/appkit-mastra`);
 console.log(`  dbx-tools-graphiti==${version} added as the Python sidecar`);
 console.log(`  app.yaml copied unchanged; databricks.yml owns deployed command/env overrides`);

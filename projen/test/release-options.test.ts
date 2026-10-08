@@ -10,9 +10,14 @@ import {
 import { releaseBuildSteps } from "../src/release.ts";
 import { createReleaseCommand } from "../tasks/release.ts";
 
-async function flags(
-  args: string[],
-): Promise<ReleaseSelectionOptions & { install: string; localPublish: boolean }> {
+async function flags(args: string[]): Promise<
+  ReleaseSelectionOptions & {
+    install: string;
+    localPublish: boolean;
+    demoDeploy?: boolean;
+    releaseNotes?: boolean;
+  }
+> {
   const command = createReleaseCommand().action(() => {});
   await command.parseAsync(args, { from: "user" });
   return command.opts();
@@ -29,6 +34,8 @@ describe("per-run release selection", () => {
     });
     assert.equal(options.install, "auto");
     assert.equal(options.localPublish, true);
+    assert.equal(options.demoDeploy, undefined);
+    assert.equal(options.releaseNotes, true);
     assert.equal(releaseTagAnnotation("v1.2.3", releaseStepSelection(options)), "v1.2.3");
     assert.equal(releasePublishesLocally(options.publish), true);
   });
@@ -85,7 +92,25 @@ describe("per-run release selection", () => {
     const annotation = releaseTagAnnotation("v1.2.3", selection);
     assert.deepEqual(parseReleaseTagAnnotation(annotation), selection);
     assert.deepEqual(parseReleaseTagAnnotation("v1.2.3\n"), releaseStepSelection());
-    assert.doesNotMatch(annotation, /registry|install|localhost/);
+    assert.doesNotMatch(annotation, /registry|install|localhost|demo|notes/);
+  });
+
+  it("opts into demo-app deploy without recording it in the annotated tag", async () => {
+    const options = await flags(["--demo-deploy"]);
+    assert.equal(options.demoDeploy, true);
+    assert.deepEqual(releaseStepSelection(options), {
+      npm: true,
+      pypi: true,
+      docs: true,
+      validation: true,
+    });
+    assert.equal(releaseTagAnnotation("v1.2.3", releaseStepSelection(options)), "v1.2.3");
+  });
+
+  it("opts out of release notes without recording it in the annotated tag", async () => {
+    const options = await flags(["--no-release-notes"]);
+    assert.equal(options.releaseNotes, false);
+    assert.equal(releaseTagAnnotation("v1.2.3", releaseStepSelection(options)), "v1.2.3");
   });
 
   it("rejects malformed or ambiguous policies rather than enabling unselected publication", () => {

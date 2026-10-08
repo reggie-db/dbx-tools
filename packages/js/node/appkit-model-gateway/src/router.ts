@@ -36,21 +36,16 @@ export function resolveRoute(input: ResolveRouteInput): GatewayRoute {
     rejectStatefulResponses(features);
     if (
       isCodexOriginator(input.originator) &&
-      targetsModelService(requestedModel, target) &&
-      target.capabilities.aiGatewayCodex &&
-      supportsDirectResponses(target, features)
+      canUseAiGatewayCodex(target, features) &&
+      !requestedServingEndpoint(requestedModel, target)
     ) {
       return directRoute(input, "databricks-ai-gateway-codex", target.modelServiceName!);
     }
     if (target.capabilities.responses && supportsDirectResponses(target, features)) {
       return directRoute(input, "databricks-responses", target.id);
     }
-    if (
-      target.capabilities.aiGatewayCodex &&
-      target.modelServiceName &&
-      supportsDirectResponses(target, features)
-    ) {
-      return directRoute(input, "databricks-ai-gateway-codex", target.modelServiceName);
+    if (canUseAiGatewayCodex(target, features)) {
+      return directRoute(input, "databricks-ai-gateway-codex", target.modelServiceName!);
     }
     if (target.capabilities.openResponses && supportsOpenResponses(target, features)) {
       return directRoute(input, "databricks-open-responses", target.id);
@@ -164,8 +159,14 @@ function rejectStatefulResponses(features: RequestedFeatures): void {
   if (unsupported.length > 0) throw new UnsupportedGatewayFeatureError(unsupported);
 }
 
-function targetsModelService(requestedModel: string, target: ModelTarget): boolean {
-  if (!target.modelServiceName) return false;
-  const unqualified = requestedModel.trim().replace(/^(?:dbx|databricks)\//i, "");
-  return unqualified === target.modelServiceName;
+function canUseAiGatewayCodex(target: ModelTarget, features: RequestedFeatures): boolean {
+  return (
+    Boolean(target.capabilities.aiGatewayCodex && target.modelServiceName) &&
+    supportsDirectResponses(target, features)
+  );
+}
+
+/** Serving-endpoint ids stay on Databricks Responses; aliases and model-service slugs use Codex. */
+function requestedServingEndpoint(requestedModel: string, target: ModelTarget): boolean {
+  return requestedModel.trim().replace(/^(?:dbx|databricks)\//i, "") === target.id;
 }

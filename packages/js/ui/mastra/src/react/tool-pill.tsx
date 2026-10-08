@@ -46,15 +46,8 @@ const runningLabelFor = (event: ToolEvent): string => {
 };
 
 /**
- * One Genie attachment's worth of progress: the reasoning thoughts
- * that landed on it, the SQL query if any, and the per-attachment
- * text response Genie produced (a "text" attachment carries prose;
- * a "query" attachment can co-emit prose via the same path).
- * Bucketing thinking + query + text together by `attachment_id`
- * keeps the rendered detail view aligned with the underlying wire
- * structure (data sourcing, description, steps, SQL, and the prose
- * interpretation all stay next to each other for the same query
- * instead of intermixing across queries).
+ * One Genie attachment's worth of SQL progress. Reasoning and intermediate
+ * text attachments render in the assistant bubble's Thoughts panel.
  *
  * The `key` is the wire `attachment_id` when Genie supplied one;
  * for the rare anonymous attachment (Genie's "main answer" text
@@ -65,21 +58,12 @@ const runningLabelFor = (event: ToolEvent): string => {
  */
 type AttachmentBucket = {
   key: string;
-  thinking: Extract<ToolProgress, { type: "thinking" }>[];
   /**
    * Genie emits one SQL string per query attachment. When it
    * rewrites the SQL mid-turn the later event supersedes the
    * earlier one (so the bucket always shows the final SQL).
    */
   query?: Extract<ToolProgress, { type: "query" }>;
-  /**
-   * Genie may emit one text snapshot per attachment (typed
-   * "text" attachments, plus prose that accompanies a query).
-   * Later snapshots supersede earlier ones - we render the final
-   * value, which matches how the SDK presents it on
-   * `attachment.text.content`.
-   */
-  text?: Extract<ToolProgress, { type: "text" }>;
 };
 
 /**
@@ -116,10 +100,8 @@ type MessageGroup = {
  * are resolved out-of-band via the chart cache; suggestions live at
  * message scope.
  *
- * `thinking` entries are de-duplicated server-side already
- * (`packages/js/shared/genie/src/event.ts` keys on
- * `(thought_type, content)` per attachment) so we can render them
- * verbatim without an extra dedupe pass here.
+ * Genie `thinking` and `text` entries render in the assistant bubble's
+ * consolidated Thoughts panel and are intentionally omitted here.
  *
  * `groups` preserves first-seen order so the rendered detail view
  * walks Genie sub-calls in the order the LLM dispatched them.
@@ -167,7 +149,7 @@ const summarizeProgress = (progress: ToolProgress[]): ToolDetailSummary => {
     const key = attachmentId ?? ANON_ATTACHMENT_KEY;
     let bucket = group.attachments.find((b) => b.key === key);
     if (!bucket) {
-      bucket = { key, thinking: [] };
+      bucket = { key };
       group.attachments.push(bucket);
     }
     return bucket;
@@ -184,8 +166,7 @@ const summarizeProgress = (progress: ToolProgress[]): ToolDetailSummary => {
         break;
       }
       case "thinking": {
-        const g = groupFor(p.message_id);
-        bucketFor(g, p.attachment_id).thinking.push(p);
+        // Reasoning is rendered once in the assistant bubble's Thoughts panel.
         break;
       }
       case "query": {
@@ -194,8 +175,7 @@ const summarizeProgress = (progress: ToolProgress[]): ToolDetailSummary => {
         break;
       }
       case "text": {
-        const g = groupFor(p.message_id);
-        bucketFor(g, p.attachment_id).text = p;
+        // Intermediate answers render in the assistant bubble's Thoughts panel.
         break;
       }
       case "error": {
@@ -234,31 +214,15 @@ const askGenieQuestion = (event: ToolEvent): string | undefined => {
 };
 
 /**
- * Strip Genie's `THOUGHT_TYPE_*` prefix and turn the remaining
- * upper-snake into a Title Cased label users can read at a glance.
- *
- * Examples:
- *   `THOUGHT_TYPE_DESCRIPTION`     -> `Description`
- *   `THOUGHT_TYPE_DATA_SOURCING`   -> `Data Sourcing`
- *   `THOUGHT_TYPE_UNDERSTANDING`   -> `Understanding`
- */
-const humanizeThoughtType = (kind: string): string =>
-  stringUtils.toLabel(kind.replace(/^THOUGHT_TYPE_/i, ""));
-
-/**
  * Genie attaches one of three payload kinds per attachment slot:
  * `query` (SQL), `text` (prose answer), or `suggested_questions`.
  * `isQueryAttachment` true means this bucket got a SQL query, so
- * it earns a numbered "Query N" card in the UI; prose-only or
- * thinking-only buckets render as plain markdown below the
- * numbered queries because labelling them "Query N" misleads
- * users into thinking Genie ran an extra query when it didn't.
+ * it earns a numbered "Query N" card in the UI.
  */
 const isQueryAttachment = (b: AttachmentBucket): boolean => Boolean(b.query);
 
-/** True when a bucket has any renderable content (thinking, SQL, or prose). */
-const isAttachmentRenderable = (b: AttachmentBucket): boolean =>
-  b.thinking.length > 0 || Boolean(b.query) || Boolean(b.text);
+/** True when a bucket has SQL not already shown in the Thoughts panel. */
+const isAttachmentRenderable = (b: AttachmentBucket): boolean => Boolean(b.query);
 
 /** True when a group has any renderable content (question, attachments, or errors). */
 const isGroupRenderable = (g: MessageGroup): boolean =>
@@ -275,13 +239,8 @@ const isGroupRenderable = (g: MessageGroup): boolean =>
  *   1. The LLM's sub-question for this Genie call, always
  *      visible, styled as a blockquote so it reads as provenance.
  *   2. One numbered "Query N" Collapsible per query attachment
- *      (or just "Query" when there's one). Opens to reveal
- *      reasoning thoughts, an inner SQL Collapsible, and any
- *      prose Genie attached directly to the query.
- *   3. One "Answer N" Collapsible per prose-only attachment
- *      (Genie's natural-language summary, follow-up questions).
- *      Opens to reveal thinking + the markdown body.
- *   4. Errors that landed under this `message_id`, always
+ *      (or just "Query" when there's one). Opens to reveal SQL.
+ *   3. Errors that landed under this `message_id`, always
  *      visible (red text - users need to see failures, not click
  *      to find them).
  *
@@ -297,12 +256,8 @@ const MessageGroupBody = ({
   omitQuestion?: boolean;
 }) => {
   const renderableAttachments = group.attachments.filter(isAttachmentRenderable);
-  // Split renderable attachments into the two visual lanes: numbered
-  // query cards vs flat prose. The partition preserves first-seen
-  // order within each lane so queries still render in the order
-  // Genie produced them and the prose still reads in dispatch order.
+  // Query cards remain attached to their originating Genie sub-call.
   const queryBuckets = renderableAttachments.filter(isQueryAttachment);
-  const proseBuckets = renderableAttachments.filter((b) => !isQueryAttachment(b));
   return (
     <div className="flex flex-col gap-1.5">
       {!omitQuestion && group.question && (
@@ -313,8 +268,8 @@ const MessageGroupBody = ({
       {queryBuckets.map((bucket, i) => (
         // Each query bucket is a single Collapsible (default
         // closed) so the expanded group reads as just the
-        // question + a short stack of "Query N" / "Answer" rows.
-        // Click any row to drill into its thinking + SQL + text.
+        // question + a short stack of "Query N" rows.
+        // Click any row to drill into its SQL.
         // SQL itself stays a nested Collapsible (default closed)
         // for the same reason: code is the heaviest content here,
         // and most readers only want a glance.
@@ -330,18 +285,6 @@ const MessageGroupBody = ({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="flex flex-col gap-2 px-2 pb-2 text-xs">
-              {bucket.thinking.length > 0 && (
-                <ul className="flex flex-col gap-1.5 border-l-2 border-border/60 pl-3 text-muted-foreground">
-                  {bucket.thinking.map((p, j) => (
-                    <li key={`think-${j}`} className="whitespace-pre-wrap break-words leading-snug">
-                      <span className="font-medium text-foreground/80">
-                        {humanizeThoughtType(p.thought_type)}:
-                      </span>{" "}
-                      {p.text}
-                    </li>
-                  ))}
-                </ul>
-              )}
               {bucket.query && (
                 <Collapsible className="rounded border border-border/60 bg-background/30">
                   <CollapsibleTrigger className="group flex w-full items-center gap-1 px-2 py-1 text-left text-muted-foreground hover:text-foreground">
@@ -360,38 +303,6 @@ const MessageGroupBody = ({
                   </CollapsibleContent>
                 </Collapsible>
               )}
-              {bucket.text && <ToolMarkdown>{bucket.text.text}</ToolMarkdown>}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      ))}
-      {proseBuckets.map((bucket, i) => (
-        // Prose-only attachments (Genie's natural-language answer
-        // and clarifying follow-up question attachments) get the
-        // same Collapsible treatment as queries. Label as "Answer"
-        // when there's only one prose bucket; multiple buckets
-        // (rare - typically interpretation + a follow-up question)
-        // get numbered so each row is addressable.
-        <Collapsible key={bucket.key} className="rounded border border-border/60 bg-background/40">
-          <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
-            <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
-            <span>{proseBuckets.length > 1 ? `Answer ${i + 1}` : "Answer"}</span>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="flex flex-col gap-1 px-2 pb-2">
-              {bucket.thinking.length > 0 && (
-                <ul className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-                  {bucket.thinking.map((p, j) => (
-                    <li key={`think-${j}`} className="whitespace-pre-wrap break-words leading-snug">
-                      <span className="font-medium text-foreground/80">
-                        {humanizeThoughtType(p.thought_type)}:
-                      </span>{" "}
-                      {p.text}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {bucket.text && <ToolMarkdown>{bucket.text.text}</ToolMarkdown>}
             </div>
           </CollapsibleContent>
         </Collapsible>
@@ -495,7 +406,7 @@ const hasExpandableDetails = (event: ToolEvent): boolean => {
  * the question text the central agent passed to Genie so users
  * can see each sub-question at a glance without expanding.
  *
- * Rows with extra wire detail (Genie SQL, thinking, prose
+ * Rows with extra wire detail (Genie SQL, prose
  * answers, errors) expand to reveal the per-attachment cards
  * built by {@link ToolProgressDetails}. Tools with no extra
  * detail (`get_statement`, `prepare_chart`) render as a flat

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { UIMessage } from "ai";
 
-import { mergeToolEvents, toolEventsFromParts } from "../src/support/tool-events.ts";
+import {
+  genieReasoningText,
+  mergeToolEvents,
+  toolEventsFromParts,
+} from "../src/support/tool-events.ts";
 
 describe("native persisted tool events", () => {
   it("projects complete native dynamic-tool input and output", () => {
@@ -91,6 +95,73 @@ describe("native persisted tool events", () => {
         },
       ]),
       [{ ...persisted[0], progress }],
+    );
+  });
+
+  it("collects Genie thinking for the assistant reasoning panel", () => {
+    assert.equal(
+      genieReasoningText([
+        {
+          id: "tool-1",
+          toolName: "ask_genie",
+          status: "running",
+          progress: [
+            {
+              type: "thinking",
+              space_id: "space-1",
+              conversation_id: "conversation-1",
+              message_id: "message-1",
+              attachment_id: "attachment-1",
+              thought_type: "THOUGHT_TYPE_DESCRIPTION",
+              text: "Finding the relevant sales data.",
+            },
+            {
+              type: "status",
+              space_id: "space-1",
+              conversation_id: "conversation-1",
+              message_id: "message-1",
+              status: "EXECUTING_QUERY",
+            },
+            {
+              type: "text",
+              space_id: "space-1",
+              conversation_id: "conversation-1",
+              message_id: "message-1",
+              attachment_id: "answer-1",
+              text: "Final intermediate answer.\n\n| store | sales |\n| --- | --- |\n| 1003 | 9407 |",
+            },
+            {
+              type: "thinking",
+              space_id: "space-1",
+              conversation_id: "conversation-1",
+              message_id: "message-1",
+              attachment_id: "attachment-1",
+              thought_type: "THOUGHT_TYPE_STEPS",
+              text: "Comparing the current period with last quarter.",
+            },
+          ],
+        },
+      ]),
+      "Finding the relevant sales data.\n\nComparing the current period with last quarter.",
+    );
+  });
+
+  it("drops markdown tables from Genie thinking text", () => {
+    assert.equal(
+      genieReasoningText([
+        {
+          id: "tool-1",
+          toolName: "ask_genie",
+          status: "running",
+          progress: [
+            {
+              type: "thinking",
+              text: "Sampling the view.\n\n| store | sales |\n| --- | --- |\n| 1003 | 9407 |\n\nBeer leads.",
+            },
+          ],
+        },
+      ]),
+      "Sampling the view.\n\nBeer leads.",
     );
   });
 });

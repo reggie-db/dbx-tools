@@ -2,6 +2,34 @@ import { GENIE_PROGRESS_PART_TYPE, GenieProgressPartDataSchema } from "@dbx-tool
 import { getToolOrDynamicToolName, isToolOrDynamicToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 
+/**
+ * Collect Genie `thinking` events for the assistant Thoughts panel.
+ *
+ * Intermediate `text` attachments stay out: Agent Mode often puts query
+ * result tables there, and those belong in tool progress / the final answer,
+ * not in reasoning.
+ */
+export function genieReasoningText(events: ToolEvent[]): string {
+  const sections: string[] = [];
+  for (const event of events) {
+    for (const progress of event.progress ?? []) {
+      if (progress.type !== "thinking") continue;
+      const text = stripMarkdownTables(progress.text).trim();
+      if (text) sections.push(text);
+    }
+  }
+  return sections.join("\n\n");
+}
+
+/** Drop markdown table rows so query samples never land in Thoughts. */
+function stripMarkdownTables(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !/^\s*\|/.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
 /** Project native AI SDK tool parts from persisted messages onto pill state. */
 export function toolEventsFromParts(parts: UIMessage["parts"]): ToolEvent[] {
   const events = parts.filter(isToolOrDynamicToolUIPart).map<ToolEvent>((part) => {

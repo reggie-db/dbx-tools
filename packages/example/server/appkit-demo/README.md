@@ -99,7 +99,18 @@ client pool before the process deadline.
 This package's `@dbx-tools/*` deps are `workspace:*` and its third-party deps are
 `catalog:`, neither of which resolves when the Databricks Apps platform installs
 the uploaded source. Staging reads the root `VERSION` file and converts every
-`@dbx-tools/*` dependency to that exact workspace version:
+`@dbx-tools/*` dependency to that exact workspace version.
+
+From the repository root, `bun run demo:deploy` compiles the client, stages
+the tree, and runs bundle validate/deploy/`demo_app` with
+`--profile FEVM-REGGIE-PIERCE-AWS`. Pass `--demo-deploy` on `bun run release`
+to do the same after tagging (off by default).
+
+```bash
+bun run demo:deploy
+```
+
+The same steps by hand:
 
 ```bash
 bun run --filter '@dbx-tools/demo-appkit-app' compile   # client build the server serves

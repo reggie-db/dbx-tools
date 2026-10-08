@@ -66,6 +66,24 @@ describe("model gateway routing", () => {
     assert.equal(route.translateResponse, false);
   });
 
+  it("uses the Unity Gateway Codex fast path for fuzzy Codex aliases", () => {
+    const target = fixtureTarget({
+      responses: true,
+      aiGatewayCodex: true,
+      customTools: true,
+    });
+    const route = resolveRoute({
+      clientProtocol: "openai-responses",
+      requestedModel: "gpt",
+      originator: "codex",
+      features: { ...NO_FEATURES, tools: true },
+      target,
+    });
+
+    assert.equal(route.upstreamProtocol, "databricks-ai-gateway-codex");
+    assert.equal(route.upstreamModel, target.modelServiceName);
+  });
+
   it("keeps endpoint-name Responses requests on the serving fast path", () => {
     const target = fixtureTarget({ responses: true, customTools: true });
     const route = resolveRoute({

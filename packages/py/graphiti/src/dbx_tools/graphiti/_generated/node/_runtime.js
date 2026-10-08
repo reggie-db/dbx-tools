@@ -44252,6 +44252,10 @@ function compareRanked(left, right) {
   const score = Math.round((left.score ?? 0) * 1000) - Math.round((right.score ?? 0) * 1000);
   if (score !== 0)
     return score;
+  const leftOss = isOpenWeightsGpt(left.endpoint.name);
+  const rightOss = isOpenWeightsGpt(right.endpoint.name);
+  if (leftOss !== rightOss)
+    return leftOss ? 1 : -1;
   const leftVersion = versionTuple(left.endpoint.name);
   const rightVersion = versionTuple(right.endpoint.name);
   for (let index = 0;index < 3; index += 1) {

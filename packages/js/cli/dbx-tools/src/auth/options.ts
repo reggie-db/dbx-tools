@@ -48,6 +48,10 @@ export const TokenCommandOptionsSchema = z
   .object({
     forceRefresh: z.boolean().default(false).describe("Refresh the token before returning it."),
     login: z.boolean().default(true).describe("Log in when credentials are missing or invalid."),
+    format: z
+      .enum(["json", "text"])
+      .default("json")
+      .describe("Output structured token metadata or only the access token."),
   })
   .strict()
   .describe("Options for returning a Databricks access token.");

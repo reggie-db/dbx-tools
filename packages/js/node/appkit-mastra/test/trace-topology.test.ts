@@ -11,6 +11,8 @@ import {
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
+import { feedback } from "@dbx-tools/shared-mastra";
+
 import { configureOtelPropagation } from "../src/observability.ts";
 import {
   CHAT_GENIE_USED_ATTR,
@@ -18,8 +20,16 @@ import {
   CHAT_MESSAGES_ATTR,
   CHAT_RESPONSE_ATTR,
   chatTurnTelemetryMiddleware,
+  GEN_AI_OPERATION_NAME_ATTR,
+  MLFLOW_GENIE_TAG_ATTR,
+  MLFLOW_SESSION_ATTR,
   MLFLOW_SPAN_INPUTS_ATTR,
   MLFLOW_SPAN_OUTPUTS_ATTR,
+  MLFLOW_SPAN_TYPE_AGENT,
+  MLFLOW_SPAN_TYPE_ATTR,
+  MLFLOW_SPAN_TYPE_GENIE,
+  MLFLOW_USER_ATTR,
+  stampGenieToolSpan,
 } from "../src/telemetry.ts";
 
 const INCOMING_TRACE_ID = "0123456789abcdef0123456789abcdef";
@@ -28,6 +38,9 @@ const INCOMING_TRACEPARENT = `00-${INCOMING_TRACE_ID}-${INCOMING_SPAN_ID}-01`;
 const ORIGINAL_PROPAGATORS = process.env.OTEL_PROPAGATORS;
 
 interface TestResponse {
+  headers: Record<string, string>;
+  headersSent: boolean;
+  setHeader(name: string, value: string): void;
   write(chunk: unknown): boolean;
   end(chunk?: unknown): TestResponse;
   json(body?: unknown): TestResponse;
@@ -36,7 +49,13 @@ interface TestResponse {
 
 function createResponse(): TestResponse {
   const closeListeners: (() => void)[] = [];
+  const headers: Record<string, string> = {};
   const response: TestResponse = {
+    headers,
+    headersSent: false,
+    setHeader(name: string, value: string) {
+      headers[name.toLowerCase()] = value;
+    },
     write() {
       return true;
     },
@@ -55,11 +74,21 @@ function createResponse(): TestResponse {
   return response;
 }
 
-function request(path: string, messages: unknown): Record<string, unknown> {
+function request(
+  path: string,
+  messages: unknown,
+  extras: { headers?: Record<string, string>; query?: Record<string, string> } = {},
+): Record<string, unknown> {
+  const headers = extras.headers ?? {};
   return {
     method: "POST",
     path,
     body: { messages },
+    headers,
+    query: extras.query ?? {},
+    header(name: string) {
+      return headers[name] ?? headers[name.toLowerCase()];
+    },
   };
 }
 
@@ -123,12 +152,22 @@ describe("chat trace topology", () => {
     const response = createResponse();
     context.with(rpcContext, () => {
       chatTurnTelemetryMiddleware(
-        request("/chat/support", [
-          { role: "user", parts: [{ type: "text", text: "hello" }] },
-        ]) as never,
+        request(
+          "/chat/support",
+          [{ role: "user", parts: [{ type: "text", text: "hello" }] }],
+          {
+            headers: {
+              "x-forwarded-email": "ada@example.com",
+              "x-mastra-thread-id": "thread-1",
+            },
+          },
+        ) as never,
         response as never,
         () => {
           assert.equal(trace.getActiveSpan(), root);
+          const genieSpan = tracer.startSpan("ask_genie", undefined, context.active());
+          stampGenieToolSpan(genieSpan);
+          genieSpan.end();
           endChildSpans(tracer, ["invoke_agent support", "model", "tool", "memory", "processor"]);
           response.write(
             'data: {"type":"data-genie-progress","data":{"event":{"type":"started"}}}\n\n',
@@ -151,6 +190,15 @@ describe("chat trace topology", () => {
     assert.match(String(exportedRoot.attributes[CHAT_RESPONSE_ATTR]), /root answer/);
     assert.equal(exportedRoot.attributes[CHAT_IDENTITY_ATTR], "service-principal");
     assert.equal(exportedRoot.attributes[CHAT_GENIE_USED_ATTR], true);
+    assert.equal(exportedRoot.attributes[MLFLOW_USER_ATTR], "ada@example.com");
+    assert.equal(exportedRoot.attributes[MLFLOW_SESSION_ATTR], "thread-1");
+    assert.equal(exportedRoot.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_AGENT);
+    assert.equal(exportedRoot.attributes[GEN_AI_OPERATION_NAME_ATTR], "invoke_agent");
+    assert.equal(exportedRoot.attributes[MLFLOW_GENIE_TAG_ATTR], "true");
+    const exportedGenie = spans.find((span) => span.name === "ask_genie");
+    assert.ok(exportedGenie);
+    assert.equal(exportedGenie.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_GENIE);
+    assert.equal(exportedGenie.attributes[MLFLOW_GENIE_TAG_ATTR], "true");
     assert.equal(spans.filter((span) => span.parentSpanContext === undefined).length, 1);
     assert.equal(
       spans.some((span) => span.name === "mastra.chat_turn"),
@@ -159,6 +207,10 @@ describe("chat trace topology", () => {
     assert.equal(
       spans.every((span) => span.spanContext().traceId === exportedRoot.spanContext().traceId),
       true,
+    );
+    assert.equal(
+      response.headers[feedback.MLFLOW_TRACE_ID_HEADER],
+      `tr-${exportedRoot.spanContext().traceId}`,
     );
   });
 
@@ -205,11 +257,18 @@ describe("chat trace topology", () => {
     assert.match(String(roots[0]?.attributes[CHAT_RESPONSE_ATTR]), /Hello/);
     assert.equal(roots[0]?.attributes[CHAT_IDENTITY_ATTR], "obo");
     assert.equal(roots[0]?.attributes[CHAT_GENIE_USED_ATTR], false);
+    assert.equal(roots[0]?.attributes[MLFLOW_GENIE_TAG_ATTR], undefined);
+    assert.equal(roots[0]?.attributes[MLFLOW_USER_ATTR], undefined);
+    assert.equal(roots[0]?.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_AGENT);
     assert.equal(
       spans.every((span) => span.spanContext().traceId === roots[0]?.spanContext().traceId),
       true,
     );
     assert.deepEqual(downstream, {});
+    assert.equal(
+      response.headers[feedback.MLFLOW_TRACE_ID_HEADER],
+      `tr-${roots[0]?.spanContext().traceId}`,
+    );
   });
 
   it("retains W3C parentage and injection when propagation is enabled", () => {

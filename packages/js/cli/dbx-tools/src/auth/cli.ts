@@ -123,9 +123,19 @@ export function buildProgram(
         ...(tokenOptions.login ? {} : { login: false }),
         ...(tokenOptions.forceRefresh ? { refresh: true } : {}),
       });
-      dependencies.writeJson(tokenJson(token));
+      if (tokenOptions.format === "text") dependencies.writeText(token.accessToken);
+      else dependencies.writeJson(tokenJson(token));
     });
   });
+
+  program
+    .command("headers")
+    .description("Return current Databricks authentication headers")
+    .action(async () => {
+      await withAuth(options(), dependencies, async ({ auth }) => {
+        dependencies.writeJson(await auth.headers());
+      });
+    });
 
   program
     .command("profile")

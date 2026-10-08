@@ -12,7 +12,11 @@ variables:
   warehouse_id:
     default: a2171589c3905bc7
   experiment_id:
-    default: "798709075143130"
+    default: "3223948959631242"
+  telemetry_schema:
+    default: reggie_pierce_aws_catalog.mlflow_traces
+  telemetry_table_prefix:
+    default: demo
   secret_scope:
     default: dbx-tools-demo
   tunnel_auth_allow:
@@ -183,6 +187,15 @@ resources:
           # the startup log for `lakebase resolved for the gate cache`; a line
           # saying the cache stays in memory means every redeploy signs everyone
           # out again.
+      # Persist AppKit/Mastra OTel spans into the experiment's UC tables. The
+      # Apps runtime injects a loopback OTLP sidecar from this block; managed
+      # MLflow has no OTLP ingest of its own. Pair with `OTEL_PROPAGATORS=none`
+      # above so Apps ingress `traceparent` does not orphan chat roots.
+      telemetry_export_destinations:
+        - unity_catalog:
+            traces_table: ${var.telemetry_schema}.${var.telemetry_table_prefix}_otel_spans
+            logs_table: ${var.telemetry_schema}.${var.telemetry_table_prefix}_otel_logs
+            metrics_table: ${var.telemetry_schema}.${var.telemetry_table_prefix}_otel_metrics
       user_api_scopes:
         - sql
         - genie
@@ -213,25 +226,17 @@ resources:
             database: projects/${var.lakebase_project_id}/branches/production/databases/databricks-postgres
             permission: CAN_CONNECT_AND_CREATE
         # MLflow experiment the agent's traces and user feedback land in
-        # (`/Users/reggie.pierce@databricks.com/dbx-tools-demo`).
+        # (`/Shared/dbx-tools-demo`). Workspace `users` inherit CAN_MANAGE from
+        # `/Shared`, so anyone in the workspace can open the experiment. Trace
+        # rows live in `reggie_pierce_aws_catalog.mlflow_traces` (`demo_otel_*`)
+        # with SELECT for `account users`.
         #
         # This binding is what makes the experiment writable in the deployed
-        # app. The experiment's ACL only lists its creator and `admins`, so the
-        # app service principal (`app-1glm9d dbx-tools-demo`, in no groups) gets
-        # PERMISSION_DENIED without it -- deploying the env var alone is not
-        # enough. CAN_EDIT is the lowest level that permits logging; CAN_READ
+        # app. CAN_EDIT is the lowest level that permits logging; CAN_READ
         # only allows viewing runs and metrics.
         #
-        # The matching `valueFrom: mlflow-experiment` in app.yaml resolves to
-        # the experiment id, so the id is declared once, here.
-        #
-        # To also persist OTel spans into the experiment's UC trace location
-        # (required for chat turns to show up as MLflow traces - managed MLflow
-        # has no OTLP ingest), add `telemetry_export_destinations` on this app
-        # pointing at that location's `${target}_otel_{spans,logs,metrics}`
-        # tables, set `OTEL_PROPAGATORS=none` (already in app.yaml), and grant
-        # the app SP USE_CATALOG / USE_SCHEMA / SELECT / MODIFY. See
-        # `@dbx-tools/appkit-mastra` README "Databricks Apps -> Unity Catalog".
+        # `config.env` `value_from: mlflow-experiment` resolves to the experiment
+        # id, so the id is declared once, here.
         - name: mlflow-experiment
           experiment:
             experiment_id: ${var.experiment_id}

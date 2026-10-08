@@ -164,6 +164,15 @@
         }
       ]
     },
+    "demo:deploy": {
+      "name": "demo:deploy",
+      "description": "Stage and deploy the AppKit demo app to the FEVM workspace",
+      "steps": [
+        {
+          "exec": "bun scripts/demo-deploy.ts"
+        }
+      ]
+    },
     "docs:check-readmes": {
       "name": "docs:check-readmes",
       "description": "Validate and generate documentation from package READMEs",

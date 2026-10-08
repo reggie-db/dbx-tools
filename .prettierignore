@@ -97,6 +97,7 @@ packages/js/shared/email-template/index.ts
 packages/js/shared/fs/index.ts
 packages/js/shared/genie/index.ts
 packages/js/shared/genie/src/dashboards.ts
+packages/js/shared/genie-code/index.ts
 packages/js/shared/graphiti/index.ts
 packages/js/shared/mastra/index.ts
 packages/js/shared/model/index.ts

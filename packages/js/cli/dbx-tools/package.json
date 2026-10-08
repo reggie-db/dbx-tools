@@ -8,6 +8,7 @@
   },
   "bin": {
     "dbx": "./bin/dbx-tools.ts",
+    "dbx-genie": "./bin/dbx-genie.ts",
     "dbx-graphiti": "./bin/dbx-graphiti.ts",
     "dbx-lakebase-proxy": "./bin/dbx-lakebase-proxy.ts",
     "dbx-model-gateway": "./bin/dbx-model-gateway.ts",
@@ -48,11 +49,15 @@
     "@dbx-tools/shared-auth": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-email": "workspace:^",
+    "@dbx-tools/shared-genie-code": "workspace:^",
     "@dbx-tools/shared-model-gateway": "workspace:^",
     "@dbx-tools/tunnel": "workspace:^",
     "commander": "catalog:",
+    "concurrently": "^10.0.3",
+    "get-port": "^7.1.0",
     "http-proxy-3": "catalog:",
     "pg": "^8.22.0",
+    "smol-toml": "1.8.0",
     "zod": "catalog:"
   },
   "main": "index.ts",
@@ -63,6 +68,7 @@
     "types": "./lib/index.d.ts",
     "bin": {
       "dbx": "./lib/bin/dbx-tools.js",
+      "dbx-genie": "./lib/bin/dbx-genie.js",
       "dbx-graphiti": "./lib/bin/dbx-graphiti.js",
       "dbx-lakebase-proxy": "./lib/bin/dbx-lakebase-proxy.js",
       "dbx-model-gateway": "./lib/bin/dbx-model-gateway.js",
@@ -113,6 +119,14 @@
         "types": "./lib/src/graphiti/options.d.ts",
         "default": "./lib/src/graphiti/options.js"
       },
+      "./genie": {
+        "types": "./lib/src/genie-code/cli.d.ts",
+        "default": "./lib/src/genie-code/cli.js"
+      },
+      "./genie/options": {
+        "types": "./lib/src/genie-code/options.d.ts",
+        "default": "./lib/src/genie-code/options.js"
+      },
       "./lakebase-proxy": {
         "types": "./lib/src/lakebase-proxy/cli.d.ts",
         "default": "./lib/src/lakebase-proxy/cli.js"
@@ -160,6 +174,8 @@
     "./auth/options": "./src/auth/options.ts",
     "./graphiti": "./src/graphiti/cli.ts",
     "./graphiti/options": "./src/graphiti/options.ts",
+    "./genie": "./src/genie-code/cli.ts",
+    "./genie/options": "./src/genie-code/options.ts",
     "./lakebase-proxy": "./src/lakebase-proxy/cli.ts",
     "./lakebase-proxy/options": "./src/lakebase-proxy/options.ts",
     "./model-gateway": "./src/model-gateway/cli.ts",

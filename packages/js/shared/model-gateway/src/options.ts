@@ -24,6 +24,17 @@ export const ModelGatewayOptionsSchema = z
       .min(1)
       .default("100mb")
       .describe("Maximum JSON request body size."),
+    bearerToken: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe("Optional bearer token required by every gateway route.")
+      .meta({
+        env: "DBX_TOOLS_MODEL_GATEWAY_BEARER_TOKEN",
+        flag: false,
+        helpDefault: false,
+      }),
   })
   .strict()
   .describe("Model-gateway server configuration.");

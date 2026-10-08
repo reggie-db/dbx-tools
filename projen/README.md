@@ -481,7 +481,21 @@ bun run release --publish pypi --no-docs
 bun run release --no-npm --no-local-publish
 bun run release --publish local --install never
 bun run release --local-registry false --local-pypi auto
+bun run release --demo-deploy
+bun run release --no-release-notes
 ```
+
+`--demo-deploy` is off by default. After tagging and any local registry
+publication it runs `bun run demo:deploy`, which stages the AppKit demo
+and deploys it to the FEVM workspace. That step is local only and is not
+recorded in the annotated tag.
+
+After bump, release writes `docs/releases/vX.Y.Z.md` with `dbx genie exec -C
+"$PWD" --sandbox read-only --ephemeral -o`. If Genie fails or writes an empty
+file, the step keeps going with a short git-log summary. `--no-release-notes`
+skips the file. Notes are committed with the version bump and are not recorded
+in the annotated tag. They are skipped on `--no-bump` because that path
+requires an already committed tree.
 
 `--install auto` keeps Projen's normal local dependency-install behavior;
 `always` performs a manifest-resolved install first, and `never` uses dependencies already
@@ -553,6 +567,8 @@ release [options]
 | `--docs`                              | build and deploy docs for a selected scope                                                    |
 | `--no-docs`                           | skip documentation build and deployment                                                       |
 | `--no-validation`                     | skip optional release validation tasks; version/source checks remain mandatory                |
+| `--no-release-notes`                  | skip writing docs/releases notes (Genie and git-log fallback)                                 |
+| `--example-deploy`                    | after tagging, stage and deploy the AppKit example app (off by default)                       |
 | `--no-local-publish`                  | skip publishing to configured local registries                                                |
 | `--local-registry <auto\|false\|url>` | local npm registry selection (default: "auto")                                                |
 | `--local-pypi <auto\|false\|url>`     | local devpi registry selection (default: "auto")                                              |

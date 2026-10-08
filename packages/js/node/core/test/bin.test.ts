@@ -289,6 +289,75 @@ describe("bin.ensure", () => {
     }
   });
 
+  it("atomically preserves and validates a multi-file package", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-bin-package-"));
+    const fixture = join(root, "fixture");
+    const archive = join(root, "example.tar.gz");
+    const destinationRoot = join(root, "home", "releases", "1.2.3");
+    const destination = {
+      root: destinationRoot,
+      binDir: join(destinationRoot, "bin"),
+      path: join(destinationRoot, "bin", "example"),
+    };
+    await mkdir(join(fixture, "bin"), { recursive: true });
+    await mkdir(join(fixture, "resources"), { recursive: true });
+    await writeFile(join(fixture, "bin", "example"), EXECUTABLE_SOURCE);
+    await writeFile(join(fixture, "manifest.json"), "{}\n");
+    await writeFile(join(fixture, "resources", "data.txt"), "package data\n");
+    await createTar({ cwd: fixture, file: archive, gzip: true }, [
+      "bin",
+      "manifest.json",
+      "resources",
+    ]);
+    let resolutions = 0;
+    const source = () => {
+      resolutions += 1;
+      return { url: pathToFileURL(archive).href };
+    };
+
+    try {
+      const installed = await bin.ensure("example", source, {
+        destination,
+        package: {
+          entrypoint: "bin/example",
+          requiredPaths: ["manifest.json", "resources"],
+        },
+      });
+
+      assert.deepEqual(installed, destination);
+      assert.equal(await readFile(join(destinationRoot, "manifest.json"), "utf8"), "{}\n");
+      assert.equal(
+        await readFile(join(destinationRoot, "resources", "data.txt"), "utf8"),
+        "package data\n",
+      );
+      await bin.ensure(
+        "example",
+        () => {
+          throw new Error("a valid package must not resolve another download");
+        },
+        {
+          destination,
+          package: {
+            entrypoint: "bin/example",
+            requiredPaths: ["manifest.json", "resources"],
+          },
+        },
+      );
+
+      await rm(join(destinationRoot, "resources"), { recursive: true });
+      await bin.ensure("example", source, {
+        destination,
+        package: {
+          entrypoint: "bin/example",
+          requiredPaths: ["manifest.json", "resources"],
+        },
+      });
+      assert.equal(resolutions, 2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("unpacks a single executable from a zip archive by default", async () => {
     const root = await mkdtemp(join(tmpdir(), "dbx-bin-zip-"));
     const archive = join(root, "example.zip");

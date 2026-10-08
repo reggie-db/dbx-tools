@@ -347,6 +347,9 @@ await appkit.createApp({
     mastra({
       storage: mastraStorage,
       memory: mastraMemory,
+      // Fail boot unless MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME is set.
+      // The deployed app binds `/Shared/dbx-tools-demo` and the Apps OTLP sidecar.
+      feedback: true,
       // Run workspace command tools in the app service principal's stable
       // Databricks Sandbox. Memory and chart ownership remain per caller.
       sandbox: true,

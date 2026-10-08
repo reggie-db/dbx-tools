@@ -5,7 +5,13 @@
  */
 
 import { getExecutionContext, type WorkspaceClient } from "@databricks/appkit";
-import { metadata, modelCatalog, policy, resolve as modelResolve } from "@dbx-tools/model";
+import {
+  metadata,
+  modelCatalog,
+  policy,
+  resolve as modelResolve,
+  type ListServingEndpointsOptions,
+} from "@dbx-tools/model";
 import { log } from "@dbx-tools/shared-core";
 import {
   ModelClass,
@@ -36,31 +42,36 @@ export interface ModelRegistry {
 export interface ModelRegistryOptions {
   readonly ttlMs?: number;
   readonly overrides?: readonly ModelCapabilityOverride[];
+  /** Discover models with this client instead of the AppKit execution context. */
+  readonly client?: WorkspaceClient;
 }
 
 interface RegistryContext {
   readonly client: WorkspaceClient;
   readonly host: string;
-  readonly identity: string;
+  readonly identity?: string;
 }
 
 /** Model registry backed by the active AppKit execution context. */
 export class DatabricksModelRegistry implements ModelRegistry {
   private readonly ttlMs: number;
   private readonly overrides: readonly ModelCapabilityOverride[];
+  private readonly client: WorkspaceClient | undefined;
 
   constructor(options: ModelRegistryOptions = {}) {
     this.ttlMs = positiveTtl(options.ttlMs);
     this.overrides = options.overrides ?? [];
+    this.client = options.client;
   }
 
   async list(): Promise<ModelTarget[]> {
-    const context = await registryContext();
+    const context = await this.context();
     logger.debug("loading catalogue", { host: context.host, ttlMs: this.ttlMs });
-    const endpoints = await modelCatalog.listServingEndpoints(context.client, context.host, {
-      cacheIdentity: context.identity,
-      ttlMs: this.ttlMs,
-    });
+    const endpoints = await modelCatalog.listServingEndpoints(
+      context.client,
+      context.host,
+      catalogueOptions(context, this.ttlMs),
+    );
     const targets = endpoints.map((endpoint) => this.target(endpoint));
     logger.debug("loaded catalogue", {
       endpointCount: endpoints.length,
@@ -124,13 +135,16 @@ export class DatabricksModelRegistry implements ModelRegistry {
   }
 
   async refresh(): Promise<void> {
-    const context = await registryContext();
+    const context = await this.context();
     logger.debug("clearing catalogue", { host: context.host });
-    await modelCatalog.clearServingEndpointsCache(context.host, context.identity);
-    await modelCatalog.listServingEndpoints(context.client, context.host, {
-      cacheIdentity: context.identity,
-      ttlMs: this.ttlMs,
-    });
+    if (context.identity) {
+      await modelCatalog.clearServingEndpointsCache(context.host, context.identity);
+    }
+    await modelCatalog.listServingEndpoints(
+      context.client,
+      context.host,
+      catalogueOptions(context, this.ttlMs),
+    );
     logger.debug("refreshed catalogue", { host: context.host });
   }
 
@@ -182,6 +196,21 @@ export class DatabricksModelRegistry implements ModelRegistry {
       reasoningEfforts: endpoint.reasoningEfforts ?? [],
     };
   }
+
+  private async context(): Promise<RegistryContext> {
+    if (this.client) {
+      const host = (await this.client.config.getHost()).toString();
+      return { client: this.client, host };
+    }
+    return registryContext();
+  }
+}
+
+function catalogueOptions(context: RegistryContext, ttlMs: number): ListServingEndpointsOptions {
+  return {
+    ttlMs,
+    ...(context.identity ? { cacheIdentity: context.identity } : {}),
+  };
 }
 
 async function registryContext(): Promise<RegistryContext> {

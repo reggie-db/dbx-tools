@@ -9,8 +9,12 @@ import {
   CHAT_MESSAGES_ATTR,
   CHAT_RESPONSE_ATTR,
   chatTurnTelemetryMiddleware,
+  MLFLOW_GENIE_TAG_ATTR,
+  MLFLOW_SESSION_ATTR,
   MLFLOW_SPAN_INPUTS_ATTR,
   MLFLOW_SPAN_OUTPUTS_ATTR,
+  MLFLOW_SPAN_TYPE_ATTR,
+  MLFLOW_USER_ATTR,
   textOnlyChatInput,
   TRACE_IO_LIMIT,
 } from "../src/telemetry.ts";
@@ -164,6 +168,10 @@ describe("telemetry constants", () => {
     assert.equal(CHAT_RESPONSE_ATTR, "appkit.mastra.chat.response");
     assert.equal(CHAT_IDENTITY_ATTR, "appkit.mastra.identity.mode");
     assert.equal(CHAT_GENIE_USED_ATTR, "appkit.mastra.genie.used");
+    assert.equal(MLFLOW_SPAN_TYPE_ATTR, "mlflow.spanType");
+    assert.equal(MLFLOW_USER_ATTR, "user.id");
+    assert.equal(MLFLOW_SESSION_ATTR, "session.id");
+    assert.equal(MLFLOW_GENIE_TAG_ATTR, "mlflow.trace.tag.genie");
     assert.ok(TRACE_IO_LIMIT > 0);
   });
 });

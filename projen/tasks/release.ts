@@ -4,6 +4,7 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
 import { publishLocalRelease } from "./local-publish.ts";
+import { writeReleaseNotes } from "./release-notes.ts";
 import { assertReleaseVersion } from "./release-version.ts";
 import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 import {
@@ -105,6 +106,11 @@ export async function runRelease(
     readonly install?: ReleaseInstallMode;
     readonly pythonRoot?: string;
     readonly validationTasks?: readonly string[];
+    /** After tagging, stage and deploy the AppKit demo app. Off by default. */
+    readonly demoDeploy?: boolean;
+    /** Write `docs/releases/vX.Y.Z.md` via Genie, with a git-log fallback. On by default. */
+    readonly releaseNotes?: boolean;
+    readonly writeReleaseNotes?: typeof writeReleaseNotes;
   },
 ): Promise<string> {
   const { branch, prefix, remote, root } = options;
@@ -125,6 +131,9 @@ export async function runRelease(
   const version = readWorkspaceVersion(root);
   const tag = `${prefix}${version}`;
   assertReleaseVersion(version, { root, prefixes: [prefix], assertNext: true });
+  if ((options.releaseNotes ?? true) && (options.bump ?? true)) {
+    (options.writeReleaseNotes ?? writeReleaseNotes)({ prefix, root, version });
+  }
 
   if (taskCommandSucceeds(root, "git", ["rev-parse", "--verify", `refs/tags/${tag}`])) {
     throw new Error(`release tag ${tag} already exists`);
@@ -190,6 +199,10 @@ export async function runRelease(
     });
   }
 
+  if (options.demoDeploy) {
+    runTaskCommand(root, "bun", ["run", "demo:deploy"]);
+  }
+
   return tag;
 }
 
@@ -228,6 +241,11 @@ export function createReleaseCommand(): Command {
       "--no-validation",
       "skip optional release validation tasks; version/source checks remain mandatory",
     )
+    .option("--no-release-notes", "skip writing docs/releases notes (Genie and git-log fallback)")
+    .option(
+      "--demo-deploy",
+      "after tagging, stage and deploy the AppKit demo app (off by default)",
+    )
     .option("--no-local-publish", "skip publishing to configured local registries")
     .option("--local-registry <auto|false|url>", "local npm registry selection", "auto")
     .option("--local-pypi <auto|false|url>", "local devpi registry selection", "auto")
@@ -245,6 +263,8 @@ export function createReleaseCommand(): Command {
           localPypi: string;
           install: ReleaseInstallMode;
           validate: string[];
+          demoDeploy?: boolean;
+          releaseNotes?: boolean;
         },
       ) => {
         await runRelease({
@@ -264,6 +284,8 @@ export function createReleaseCommand(): Command {
           docs: options.docs,
           validation: options.validation,
           validationTasks: options.validate,
+          demoDeploy: options.demoDeploy,
+          releaseNotes: options.releaseNotes,
         });
       },
     );

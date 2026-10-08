@@ -20,10 +20,13 @@
 
 import { StringDecoder } from "node:string_decoder";
 
-import { json, log, object } from "@dbx-tools/shared-core";
+import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
+import { feedback, thread } from "@dbx-tools/shared-mastra";
 import { context, SpanKind, trace, type Span } from "@opentelemetry/api";
 import { getRPCMetadata, RPCType } from "@opentelemetry/core";
 import type express from "express";
+
+import { USER_EMAIL_HEADER, USER_ID_HEADER } from "./identity.ts";
 
 const logger = log.logger("mastra/telemetry");
 
@@ -56,6 +59,34 @@ export const CHAT_RESPONSE_ATTR = "appkit.mastra.chat.response";
 export const CHAT_IDENTITY_ATTR = "appkit.mastra.identity.mode";
 /** Whether the streamed turn emitted a Genie tool or progress event. */
 export const CHAT_GENIE_USED_ATTR = "appkit.mastra.genie.used";
+/**
+ * MLflow span-type attribute. Databricks maps this (or `gen_ai.operation.name`)
+ * onto the type chip in the experiment UI. Custom values such as `GENIE` are
+ * allowed.
+ */
+export const MLFLOW_SPAN_TYPE_ATTR = "mlflow.spanType";
+/** GenAI semantic-convention operation name, an alternate span-type source. */
+export const GEN_AI_OPERATION_NAME_ATTR = "gen_ai.operation.name";
+/**
+ * Root-span user id the MLflow experiment UI's User column reads from OTel
+ * traces. Prefer the forwarded email when present so the column is human.
+ */
+export const MLFLOW_USER_ATTR = "user.id";
+/** Root-span session id that enables the MLflow Sessions tab. */
+export const MLFLOW_SESSION_ATTR = "session.id";
+/**
+ * Prefix Databricks/MLflow copies onto the unified-view `tags` map. The
+ * suffix after this prefix is the tag name shown in the experiment UI.
+ */
+export const MLFLOW_TRACE_TAG_PREFIX = "mlflow.trace.tag.";
+/** Experiment-UI tag marking a turn that called Genie. */
+export const MLFLOW_GENIE_TAG = "genie";
+/** Root-span type for a Mastra agent turn. */
+export const MLFLOW_SPAN_TYPE_AGENT = "AGENT";
+/** Span type for an `ask_genie` tool call. */
+export const MLFLOW_SPAN_TYPE_GENIE = "GENIE";
+/** Attribute key for the `genie` trace tag. */
+export const MLFLOW_GENIE_TAG_ATTR = `${MLFLOW_TRACE_TAG_PREFIX}${MLFLOW_GENIE_TAG}`;
 
 /** Root-span metadata known before a chat request is dispatched. */
 export interface ChatTurnTelemetryOptions {
@@ -66,6 +97,57 @@ export interface ChatTurnTelemetryOptions {
 interface TraceTarget {
   span: Span;
   owned: boolean;
+}
+
+/** OpenTelemetry's sentinel for "no valid trace" - 32 zero hex chars. */
+const INVALID_TRACE_ID = "0".repeat(32);
+
+/**
+ * Publish the turn's MLflow trace id before the handler writes the body.
+ *
+ * The chat UI only shows thumbs when this header is present. Stamping it here
+ * (on the same span the middleware just resolved) avoids relying on async
+ * Express continuation still sitting inside `context.with()`.
+ */
+/**
+ * Mark the active span as a Genie call so the experiment UI types it `GENIE`
+ * and tags the trace `genie=true`. Safe no-op when no recording span is active.
+ */
+export function stampGenieToolSpan(span: Span | undefined = trace.getActiveSpan()): void {
+  if (!span?.isRecording()) return;
+  span.setAttribute(MLFLOW_SPAN_TYPE_ATTR, MLFLOW_SPAN_TYPE_GENIE);
+  span.setAttribute(GEN_AI_OPERATION_NAME_ATTR, "execute_tool");
+  span.setAttribute(MLFLOW_GENIE_TAG_ATTR, "true");
+}
+
+function requestHeader(req: express.Request, name: string): string | undefined {
+  const fromMethod =
+    typeof req.header === "function" ? stringUtils.trimToNull(req.header(name)) : undefined;
+  if (fromMethod) return fromMethod;
+  const raw = req.headers?.[name.toLowerCase()];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return stringUtils.trimToNull(typeof value === "string" ? value : undefined) ?? undefined;
+}
+
+function requestQuery(req: express.Request, name: string): string | undefined {
+  const raw = req.query?.[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return stringUtils.trimToNull(typeof value === "string" ? value : undefined) ?? undefined;
+}
+
+function stampMlflowActor(span: Span, req: express.Request): void {
+  const user = requestHeader(req, USER_EMAIL_HEADER) ?? requestHeader(req, USER_ID_HEADER);
+  if (user) span.setAttribute(MLFLOW_USER_ATTR, user);
+  const session =
+    requestHeader(req, thread.THREAD_ID_HEADER) ?? requestQuery(req, thread.THREAD_ID_QUERY);
+  if (session) span.setAttribute(MLFLOW_SESSION_ATTR, session);
+}
+
+function stampMlflowTraceId(res: express.Response, span: Span): void {
+  if (res.headersSent) return;
+  const traceId = span.spanContext().traceId;
+  if (!traceId || traceId === INVALID_TRACE_ID) return;
+  res.setHeader(feedback.MLFLOW_TRACE_ID_HEADER, `tr-${traceId}`);
 }
 
 /** Return one raw prompt when the request is exactly one text-only user message. */
@@ -276,6 +358,10 @@ export function chatTurnTelemetryMiddleware(
     next();
     return;
   }
+  stampMlflowTraceId(res, target.span);
+  stampMlflowActor(target.span, req);
+  target.span.setAttribute(MLFLOW_SPAN_TYPE_ATTR, MLFLOW_SPAN_TYPE_AGENT);
+  target.span.setAttribute(GEN_AI_OPERATION_NAME_ATTR, "invoke_agent");
   const identity =
     typeof options.identity === "function" ? options.identity(req) : options.identity;
   if (identity) {
@@ -311,7 +397,9 @@ export function chatTurnTelemetryMiddleware(
     fullOutputRecorded = true;
   };
   const recordGenie = (used: boolean): void => {
-    if (used) target.span.setAttribute(CHAT_GENIE_USED_ATTR, true);
+    if (!used) return;
+    target.span.setAttribute(CHAT_GENIE_USED_ATTR, true);
+    target.span.setAttribute(MLFLOW_GENIE_TAG_ATTR, "true");
   };
   const endOwnedSpan = (): void => {
     if (!target.owned || ownedSpanEnded) return;
