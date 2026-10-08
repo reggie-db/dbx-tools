@@ -397,6 +397,55 @@ describe("lookupModels", () => {
     assert.deepEqual(names(ranked), ["databricks-gpt-5-6-sol", "databricks-gpt-5-6-luna"]);
   });
 
+  it("puts the newest GPT generation first for a family search", () => {
+    const gptModels = [
+      chat("databricks-gpt-5-6-sol"),
+      chat("databricks-gpt-6-1"),
+      chat("databricks-gpt-5-5-pro"),
+    ];
+    const ranked = lookupModels(gptModels, { search: "gpt" });
+    assert.deepEqual(names(ranked), [
+      "databricks-gpt-6-1",
+      "databricks-gpt-5-6-sol",
+      "databricks-gpt-5-5-pro",
+    ]);
+    assert.equal(
+      lookupModels(gptModels, { search: "gpt chat", limit: 1 })[0]?.endpoint.name,
+      "databricks-gpt-6-1",
+    );
+  });
+
+  it("maps generic chat jobs to the most capable chat model", () => {
+    const models = [
+      { ...chat("custom-chat-fast"), profile: { quality: 10 } },
+      { ...chat("custom-chat-powerful"), profile: { quality: 90 } },
+      { ...chat("custom-chat-balanced"), profile: { quality: 50 } },
+      embedding(GTE),
+    ];
+
+    assert.equal(
+      lookupModels(models, { search: "chat", limit: 1 })[0]?.endpoint.name,
+      "custom-chat-powerful",
+    );
+    assert.equal(
+      lookupModels(models, { search: "summarize", limit: 1 })[0]?.endpoint.name,
+      "custom-chat-powerful",
+    );
+  });
+
+  it("maps generic embedding jobs to the strongest embedding model", () => {
+    const models = [
+      { ...embedding("databricks-gte-v2"), profile: { quality: 4 } },
+      { ...embedding("databricks-gte-v3"), profile: { quality: 9 } },
+      chat(OPUS_8),
+    ];
+
+    assert.equal(
+      lookupModels(models, { search: "best embedding model", limit: 1 })[0]?.endpoint.name,
+      "databricks-gte-v3",
+    );
+  });
+
   it("with no search, orders by class then within-class rank", () => {
     const ranked = lookupModels(TIERED);
     assert.deepEqual(names(ranked), [OPUS_8, SONNET, HAIKU_5]);

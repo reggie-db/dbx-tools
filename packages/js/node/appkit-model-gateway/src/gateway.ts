@@ -59,11 +59,10 @@ export class ModelGateway {
   async models(originator?: string, search?: string): Promise<ModelListResponse> {
     const codex = isCodexOriginator(originator);
     logger.debug("listing models", { codex, search });
-    const targets = search?.trim()
-      ? await this.registry.search(search.trim())
-      : await this.registry.list();
+    const query = search?.trim();
+    const targets = query ? await this.registry.search(query) : await this.registry.list();
     logger.debug("listed models", { codex, count: targets.length });
-    return listModelsPayload(targets, codex);
+    return listModelsPayload(targets, codex, query !== undefined && query.length > 0);
   }
 
   /** Resolve and execute one inference request. */

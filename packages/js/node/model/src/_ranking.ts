@@ -10,7 +10,7 @@ import { toModelDisplayName } from "@dbx-tools/shared-model/display";
 import Fuse from "fuse.js";
 
 import { modelStatusFor } from "./_retirement.ts";
-import { classesAtOrBelow, CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./classes.ts";
+import { classesAtOrBelow, CHAT_CLASS_ORDER, isChatClass, MODEL_CLASS_ORDER } from "./classes.ts";
 import {
   classifyEndpoints,
   endpointCapabilities,
@@ -23,6 +23,26 @@ type ModelClass = ModelClassType;
 const ModelClass = ModelClassValues;
 
 const DEFAULT_FUZZY_THRESHOLD = 0.4;
+const SEARCH_INTENT_FILLERS = new Set(["a", "best", "for", "model", "models", "the"]);
+const CHAT_SEARCH_INTENTS = new Set([
+  "chat",
+  "completion",
+  "completions",
+  "summarize",
+  "summarise",
+  "summarization",
+  "summarisation",
+  "summary",
+]);
+const EMBEDDING_SEARCH_INTENTS = new Set([
+  "embed",
+  "embedding",
+  "embeddings",
+  "vector",
+  "vectorize",
+  "vectorise",
+]);
+
 interface NativeRankingOptions {
   readonly includeDeprecated?: boolean;
   readonly modelClass?: ModelClass;
@@ -51,12 +71,23 @@ export function rankEndpoints(
         [options.modelClass]: normalized,
       }
     : classifyEndpoints(normalized);
-  const requestedClass = options.modelClass ?? query.modelClass;
+  const search = query.search?.trim();
+  const searchPlan = search ? modelSearchPlan(search) : undefined;
+  const rankedSearch = searchPlan ? searchPlan.search : search;
+  const searchIntent = searchPlan?.modelClass;
+  const requestedClass = options.modelClass ?? query.modelClass ?? searchIntent;
   const includeDeprecated = query.includeDeprecated ?? options.includeDeprecated ?? false;
   const eligible = requestedClass ? classesAtOrBelow(requestedClass) : CHAT_CLASS_ORDER;
   const candidates: RankedModel[] = [];
-  const search = query.search?.trim();
-  if (search && requestedClass === undefined) {
+  const explicitClass = options.modelClass ?? query.modelClass;
+  if (
+    searchIntent !== undefined &&
+    explicitClass !== undefined &&
+    isChatClass(searchIntent) !== isChatClass(explicitClass)
+  ) {
+    return [];
+  }
+  if (rankedSearch && requestedClass === undefined) {
     const classByName = classifyEndpointClasses(normalized);
     for (const endpoint of normalized) {
       if (!includeDeprecated && endpoint.status?.deprecated) continue;
@@ -78,13 +109,13 @@ export function rankEndpoints(
   }
 
   let ranked = candidates;
-  if (search) {
-    const exact = candidates.find((candidate) => candidate.endpoint.name === search);
+  if (rankedSearch) {
+    const exact = candidates.find((candidate) => candidate.endpoint.name === rankedSearch);
     if (exact) {
       ranked = [{ ...exact, score: 0 }];
     } else {
       const threshold = query.threshold ?? DEFAULT_FUZZY_THRESHOLD;
-      const searchTokens = tokenize(search);
+      const searchTokens = tokenize(rankedSearch);
       const tokenMatches = candidates
         .filter((candidate) => {
           const candidateTokens = new Set(searchableValues(candidate.endpoint).flatMap(tokenize));
@@ -110,7 +141,7 @@ export function rankEndpoints(
           useExtendedSearch: true,
           isCaseSensitive: false,
         });
-        const normalizedSearch = tokenize(search).join(" ");
+        const normalizedSearch = tokenize(rankedSearch).join(" ");
         ranked = normalizedSearch
           ? fuse
               .search(normalizedSearch)
@@ -247,6 +278,29 @@ function modelVariantRank(name: string): number {
   if (/(?:^|[-_.])sol(?:[-_.]|$)/i.test(name)) return 0;
   if (/(?:^|[-_.])luna(?:[-_.]|$)/i.test(name)) return 1;
   return 2;
+}
+
+/**
+ * Resolve generic job searches to the capability class that owns the work.
+ *
+ * A pure intent such as "summarize" ranks that capability directly. Mixed
+ * queries remove the intent word but retain the model identity, so "gpt chat"
+ * still uses the historical version and variant preference for GPT.
+ */
+function modelSearchPlan(
+  search: string,
+): { readonly modelClass: ModelClass; readonly search?: string } | undefined {
+  const tokens = tokenize(search).filter((token) => !SEARCH_INTENT_FILLERS.has(token));
+  if (tokens.length === 0) return undefined;
+  const chat = tokens.some((token) => CHAT_SEARCH_INTENTS.has(token));
+  const embedding = tokens.some((token) => EMBEDDING_SEARCH_INTENTS.has(token));
+  if (chat === embedding) return undefined;
+  const intentWords = chat ? CHAT_SEARCH_INTENTS : EMBEDDING_SEARCH_INTENTS;
+  const remaining = tokens.filter((token) => !intentWords.has(token));
+  return {
+    modelClass: chat ? ModelClass.ChatThinking : ModelClass.Embedding,
+    ...(remaining.length > 0 ? { search: remaining.join(" ") } : {}),
+  };
 }
 
 function tokenize(value: string): string[] {

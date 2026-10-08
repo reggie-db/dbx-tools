@@ -95,6 +95,19 @@ describe("model gateway catalogue", () => {
     );
   });
 
+  it("preserves model-owner ranking for searched catalogues", () => {
+    const payload = listModelsPayload(
+      [named("GPT 6.1", "gpt"), named("GPT 5.6 Sol", "gpt"), named("GPT 5.5 Pro", "gpt")],
+      false,
+      true,
+    );
+
+    assert.deepEqual(
+      payload.data.map((entry) => entry.name),
+      ["GPT 6.1", "GPT 5.6 Sol", "GPT 5.5 Pro"],
+    );
+  });
+
   it("omits deprecated models from both catalogue shapes", () => {
     const deprecated = {
       ...target("gpt"),

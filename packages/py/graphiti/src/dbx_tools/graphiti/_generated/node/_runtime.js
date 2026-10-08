@@ -43700,6 +43700,9 @@ var CHAT_CLASS_ORDER = [
   ModelClass2.ChatFast
 ];
 var MODEL_CLASS_ORDER = [...CHAT_CLASS_ORDER, ModelClass2.Embedding];
+function isChatClass(cls) {
+  return CHAT_CLASS_ORDER.includes(cls);
+}
 function classesAtOrBelow(cls) {
   if (cls === ModelClass2.Embedding)
     return [ModelClass2.Embedding];
@@ -43846,7 +43849,17 @@ function classifyEndpoints(endpoints) {
       version: versionTuple(ep.name)
     });
   }
-  const embeddings = endpoints.filter((e) => e.task === EMBEDDING_TASK);
+  const embeddings = endpoints.filter((endpoint) => endpoint.task === EMBEDDING_TASK).map((endpoint) => {
+    const quality = endpoint.profile?.quality;
+    return {
+      ep: endpoint,
+      sort: quality ?? versionScore(endpoint.name),
+      scored: quality !== undefined,
+      tieCost: endpoint.profile?.cost ?? Number.POSITIVE_INFINITY,
+      tieSpeed: endpoint.profile?.speed ?? 0,
+      version: versionTuple(endpoint.name)
+    };
+  }).sort(rankOrder).map(({ ep }) => ep);
   return {
     [ModelClass3.ChatThinking]: buckets[ModelClass3.ChatThinking].sort(rankOrder).map((x) => x.ep),
     [ModelClass3.ChatBalanced]: buckets[ModelClass3.ChatBalanced].sort(rankOrder).map((x) => x.ep),
@@ -44051,6 +44064,25 @@ function parseModelName(name) {
 // packages/js/node/model/src/_ranking.ts
 var ModelClass4 = ModelClass;
 var DEFAULT_FUZZY_THRESHOLD = 0.4;
+var SEARCH_INTENT_FILLERS = new Set(["a", "best", "for", "model", "models", "the"]);
+var CHAT_SEARCH_INTENTS = new Set([
+  "chat",
+  "completion",
+  "completions",
+  "summarize",
+  "summarise",
+  "summarization",
+  "summarisation",
+  "summary"
+]);
+var EMBEDDING_SEARCH_INTENTS = new Set([
+  "embed",
+  "embedding",
+  "embeddings",
+  "vector",
+  "vectorize",
+  "vectorise"
+]);
 function rankEndpoints(endpoints, query = {}, options = {}) {
   const filtered = endpoints.filter((endpoint) => matchesModelQuery(endpoint, query));
   const originalByName = new Map(filtered.map((endpoint) => [endpoint.name, endpoint]));
@@ -44066,12 +44098,19 @@ function rankEndpoints(endpoints, query = {}, options = {}) {
     [ModelClass4.Embedding]: [],
     [options.modelClass]: normalized
   } : classifyEndpoints(normalized);
-  const requestedClass = options.modelClass ?? query.modelClass;
+  const search2 = query.search?.trim();
+  const searchPlan = search2 ? modelSearchPlan(search2) : undefined;
+  const rankedSearch = searchPlan ? searchPlan.search : search2;
+  const searchIntent = searchPlan?.modelClass;
+  const requestedClass = options.modelClass ?? query.modelClass ?? searchIntent;
   const includeDeprecated = query.includeDeprecated ?? options.includeDeprecated ?? false;
   const eligible = requestedClass ? classesAtOrBelow(requestedClass) : CHAT_CLASS_ORDER;
   const candidates = [];
-  const search2 = query.search?.trim();
-  if (search2 && requestedClass === undefined) {
+  const explicitClass = options.modelClass ?? query.modelClass;
+  if (searchIntent !== undefined && explicitClass !== undefined && isChatClass(searchIntent) !== isChatClass(explicitClass)) {
+    return [];
+  }
+  if (rankedSearch && requestedClass === undefined) {
     const classByName = classifyEndpointClasses(normalized);
     for (const endpoint of normalized) {
       if (!includeDeprecated && endpoint.status?.deprecated)
@@ -44096,13 +44135,13 @@ function rankEndpoints(endpoints, query = {}, options = {}) {
     }
   }
   let ranked = candidates;
-  if (search2) {
-    const exact = candidates.find((candidate) => candidate.endpoint.name === search2);
+  if (rankedSearch) {
+    const exact = candidates.find((candidate) => candidate.endpoint.name === rankedSearch);
     if (exact) {
       ranked = [{ ...exact, score: 0 }];
     } else {
       const threshold = query.threshold ?? DEFAULT_FUZZY_THRESHOLD;
-      const searchTokens = tokenize3(search2);
+      const searchTokens = tokenize3(rankedSearch);
       const tokenMatches = candidates.filter((candidate) => {
         const candidateTokens = new Set(searchableValues(candidate.endpoint).flatMap(tokenize3));
         return searchTokens.length > 0 && searchTokens.every((token) => candidateTokens.has(token));
@@ -44124,7 +44163,7 @@ function rankEndpoints(endpoints, query = {}, options = {}) {
           useExtendedSearch: true,
           isCaseSensitive: false
         });
-        const normalizedSearch = tokenize3(search2).join(" ");
+        const normalizedSearch = tokenize3(rankedSearch).join(" ");
         ranked = normalizedSearch ? fuse.search(normalizedSearch).filter((result) => (result.score ?? 0) <= threshold).map((result) => ({ ...result.item, score: result.score ?? 0 })).sort(compareRanked) : [];
       }
     }
@@ -44233,6 +44272,21 @@ function modelVariantRank(name) {
   if (/(?:^|[-_.])luna(?:[-_.]|$)/i.test(name))
     return 1;
   return 2;
+}
+function modelSearchPlan(search2) {
+  const tokens = tokenize3(search2).filter((token) => !SEARCH_INTENT_FILLERS.has(token));
+  if (tokens.length === 0)
+    return;
+  const chat = tokens.some((token) => CHAT_SEARCH_INTENTS.has(token));
+  const embedding = tokens.some((token) => EMBEDDING_SEARCH_INTENTS.has(token));
+  if (chat === embedding)
+    return;
+  const intentWords = chat ? CHAT_SEARCH_INTENTS : EMBEDDING_SEARCH_INTENTS;
+  const remaining = tokens.filter((token) => !intentWords.has(token));
+  return {
+    modelClass: chat ? ModelClass4.ChatThinking : ModelClass4.Embedding,
+    ...remaining.length > 0 ? { search: remaining.join(" ") } : {}
+  };
 }
 function tokenize3(value) {
   return value.toLowerCase().match(/[a-z0-9]+/g) ?? [];

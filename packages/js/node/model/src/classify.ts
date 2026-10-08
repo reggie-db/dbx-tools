@@ -232,8 +232,8 @@ function rankOrder(a: Ranked, b: Ranked): number {
  * within each chat band.
  *
  * Embedding endpoints (`task === "llm/v1/embeddings"`) go into
- * {@link ModelClass.Embedding} by task, in listing order (they carry no
- * capability score to rank on).
+ * {@link ModelClass.Embedding} by task. Published profile quality ranks first;
+ * otherwise newer parsed versions rank first.
  *
  * Chat endpoints (`task === "llm/v1/chat"`) split into the three chat
  * bands. Scored endpoints (those carrying a `profile.quality`) drive
@@ -305,8 +305,21 @@ export function classifyEndpoints(
     });
   }
 
-  // Embeddings are bucketed by task in listing order - no score to rank.
-  const embeddings = endpoints.filter((e) => e.task === EMBEDDING_TASK);
+  const embeddings = endpoints
+    .filter((endpoint) => endpoint.task === EMBEDDING_TASK)
+    .map((endpoint): Ranked => {
+      const quality = endpoint.profile?.quality;
+      return {
+        ep: endpoint,
+        sort: quality ?? versionScore(endpoint.name),
+        scored: quality !== undefined,
+        tieCost: endpoint.profile?.cost ?? Number.POSITIVE_INFINITY,
+        tieSpeed: endpoint.profile?.speed ?? 0,
+        version: versionTuple(endpoint.name),
+      };
+    })
+    .sort(rankOrder)
+    .map(({ ep }) => ep);
 
   return {
     [ModelClass.ChatThinking]: buckets[ModelClass.ChatThinking].sort(rankOrder).map((x) => x.ep),

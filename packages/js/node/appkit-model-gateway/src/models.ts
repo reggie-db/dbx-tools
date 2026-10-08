@@ -32,24 +32,31 @@ const REASONING_DESCRIPTIONS: Readonly<Record<string, string>> = {
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: true,
+  preserveOrder?: boolean,
 ): CodexModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: false,
+  preserveOrder?: boolean,
 ): OpenAIModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
+  preserveOrder?: boolean,
 ): ModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
+  preserveOrder = false,
 ): ModelListResponse {
   const available = targets
     .filter((target) => target.endpoint?.status?.deprecated !== true)
-    .filter((target) => !includeCodex || hasChatClass(target))
-    .slice()
-    .sort((left, right) => compareCatalogueTargets(left, right, (target) => target.displayName));
+    .filter((target) => !includeCodex || hasChatClass(target));
+  if (!preserveOrder) {
+    available.sort((left, right) =>
+      compareCatalogueTargets(left, right, (target) => target.displayName),
+    );
+  }
   if (includeCodex) {
     return {
       models: available.map((target, index) => codexModel(target, index + 1)),
