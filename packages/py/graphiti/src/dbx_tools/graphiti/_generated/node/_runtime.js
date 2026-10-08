@@ -59070,7 +59070,6 @@ var package_default = {
   devDependencies: {
     "@types/cacache": "^20.0.1",
     "@types/node": "catalog:",
-    cheerio: "^1.2.0",
     typescript: "^5.9.3"
   },
   dependencies: {
@@ -59081,6 +59080,7 @@ var package_default = {
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-model": "workspace:^",
     cacache: "catalog:",
+    cheerio: "^1.2.0",
     "env-paths": "catalog:",
     "fuse.js": "^7.4.2"
   },

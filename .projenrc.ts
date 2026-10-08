@@ -362,10 +362,11 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
     "cacache@catalog:",
+    "cheerio@^1.2.0",
     "env-paths@catalog:",
     "fuse.js@^7.4.2",
   );
-  p.addDevDeps("cheerio@^1.2.0", "@types/cacache@^20.0.1");
+  p.addDevDeps("@types/cacache@^20.0.1");
   p.addTask("metadata", {
     exec: "bun scripts/generate-metadata.ts",
     description: "Refresh model retirement, capability, rate-limit, and reasoning snapshots",
