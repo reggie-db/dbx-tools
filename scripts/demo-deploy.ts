@@ -33,18 +33,12 @@ async function run(command: string[], cwd: string): Promise<void> {
 
 async function main(): Promise<void> {
   logger.info("compiling demo client");
-  await run(
-    [process.execPath, "run", "--filter", "@dbx-tools/demo-appkit-app", "compile"],
-    ROOT,
-  );
+  await run([process.execPath, "run", "--filter", "@dbx-tools/demo-appkit-app", "compile"], ROOT);
   logger.info("staging deploy tree");
   await run([process.execPath, "stage-deploy.ts"], SERVER_DIR);
   logger.info("deploying demo app", { profile: PROFILE, stageDir: STAGE_DIR });
   await run(["databricks", "bundle", "validate", "--profile", PROFILE], STAGE_DIR);
-  await run(
-    ["databricks", "bundle", "deploy", "--auto-approve", "--profile", PROFILE],
-    STAGE_DIR,
-  );
+  await run(["databricks", "bundle", "deploy", "--auto-approve", "--profile", PROFILE], STAGE_DIR);
   await run(["databricks", "bundle", "run", "demo_app", "--profile", PROFILE], STAGE_DIR);
   logger.info("demo app deployed");
 }

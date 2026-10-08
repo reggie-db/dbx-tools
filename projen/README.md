@@ -568,7 +568,7 @@ release [options]
 | `--no-docs`                           | skip documentation build and deployment                                                       |
 | `--no-validation`                     | skip optional release validation tasks; version/source checks remain mandatory                |
 | `--no-release-notes`                  | skip writing docs/releases notes (Genie and git-log fallback)                                 |
-| `--example-deploy`                    | after tagging, stage and deploy the AppKit example app (off by default)                       |
+| `--demo-deploy`                       | after tagging, stage and deploy the AppKit demo app (off by default)                          |
 | `--no-local-publish`                  | skip publishing to configured local registries                                                |
 | `--local-registry <auto\|false\|url>` | local npm registry selection (default: "auto")                                                |
 | `--local-pypi <auto\|false\|url>`     | local devpi registry selection (default: "auto")                                              |

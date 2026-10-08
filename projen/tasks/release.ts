@@ -242,10 +242,7 @@ export function createReleaseCommand(): Command {
       "skip optional release validation tasks; version/source checks remain mandatory",
     )
     .option("--no-release-notes", "skip writing docs/releases notes (Genie and git-log fallback)")
-    .option(
-      "--demo-deploy",
-      "after tagging, stage and deploy the AppKit demo app (off by default)",
-    )
+    .option("--demo-deploy", "after tagging, stage and deploy the AppKit demo app (off by default)")
     .option("--no-local-publish", "skip publishing to configured local registries")
     .option("--local-registry <auto|false|url>", "local npm registry selection", "auto")
     .option("--local-pypi <auto|false|url>", "local devpi registry selection", "auto")
