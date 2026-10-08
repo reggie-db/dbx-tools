@@ -2,16 +2,21 @@
 
 Date: 2026-10-07
 
+Updated: 2026-10-08
+
 Status: Proposed. This document defines the target package map, migration order,
-and test-performance gates. It does not authorize an unmeasured package merge.
+and test-performance reporting. It does not authorize an unmeasured package
+merge.
 
 ## Decision
 
-Reduce the npm publication surface from **50 packages to 28 packages** while
+Reduce the npm publication surface from **50 packages to 38 packages** while
 retaining the two Python distributions. The repository should keep boundaries
 that isolate browser, React, Node, optional SDK, and Python dependency costs. It
-should remove boundaries that only restate the same capability as shared, Node,
-AppKit, CLI, and UI packages released in lockstep.
+should retain capability-specific shared packages as the browser-safe contract
+between Node implementations and browser or UI consumers. It should remove
+boundaries that only restate command wiring, AppKit adapters, or UI foundations
+released in lockstep.
 
 The test suite has useful coverage. Its main cost is orchestration and expensive
 integration fixtures, not widespread duplicate scenarios. Keep the scenarios,
@@ -61,8 +66,9 @@ need. Several current boundaries do not meet that test:
 
 - `@dbx-tools/cli` already depends on every command package, so command packages
   do not reduce install reach for the main CLI.
-- Shared packages mostly depend on Zod and `@dbx-tools/shared-core`; they are
-  versioned and released together and are already consumed through subpaths.
+- Shared packages are justified when they own the browser-safe schemas, values,
+  and serialization contracts used by both a Node capability and its browser or
+  UI consumers. Their small size is not a reason to merge them.
 - `ui-appkit`, `ui-branding`, `ui-auth`, `ui-email`, and `ui-search` share React,
   AppKit UI, branding, and styling dependencies. Their separation creates more
   release surfaces than dependency isolation.
@@ -96,8 +102,10 @@ Evidence:
 
 This repository is closer to AppKit than to an adapter marketplace. Most
 dbx-tools packages are parts of one AppKit-oriented product and release in
-lockstep. The AppKit structure supports consolidating related implementations
-behind subpath exports while keeping UI and Lakebase dependency boundaries.
+lockstep. The AppKit structure supports consolidating CLI commands and related
+implementations behind subpath exports. Its internal `shared` package does not
+map directly to dbx-tools, where capability-specific shared packages are public
+contracts consumed by browser code.
 
 ### Mastra
 
@@ -120,8 +128,9 @@ Evidence:
 
 The Mastra comparison supports retaining packages such as
 `databricks-zerobus`, `ui-teams`, and `appkit-mastra` when they isolate a large
-or optional external dependency. It does not support package-per-layer splits
-for small contracts and CLI wiring.
+or optional external dependency. It also supports explicit public contract
+packages when multiple runtimes consume them. It does not support separate
+packages for small CLI wiring that the umbrella CLI always installs.
 
 ### Vercel AI SDK
 
@@ -141,38 +150,34 @@ that shares dependencies and release cadence.
 
 ## Target package map
 
-### Consolidate browser-safe contracts
+### Retain capability-specific shared contracts
 
-Replace the 12 `packages/js/shared/*` packages with two packages:
+Keep the 12 `packages/js/shared/*` packages separate. A shared package is the
+runtime-neutral contract for one capability, primarily from its Node
+implementation to browser or UI consumers. It may contain Zod schemas,
+serialized request and response shapes, browser-safe clients, pure value
+objects, and deterministic parsers. It must not contain Node process, filesystem,
+credential, database, or server lifecycle behavior.
 
-1. `@dbx-tools/shared`
-2. `@dbx-tools/email-template`
+The dependency direction remains:
 
-`@dbx-tools/shared` should absorb `shared-core` and expose capability subpaths:
+1. Shared contract package owns wire types and browser-safe behavior.
+2. Node capability package imports its shared contract.
+3. Browser and UI packages import the same shared contract directly.
+4. Shared packages never import Node or UI packages.
 
-- `@dbx-tools/shared/auth`
-- `@dbx-tools/shared/email`
-- `@dbx-tools/shared/fs`
-- `@dbx-tools/shared/genie`
-- `@dbx-tools/shared/graphiti`
-- `@dbx-tools/shared/mastra`
-- `@dbx-tools/shared/model`
-- `@dbx-tools/shared/model-gateway`
-- `@dbx-tools/shared/search`
-- `@dbx-tools/shared/teams`
+`@dbx-tools/shared-core` remains the dependency-light foundation used by the
+other shared packages. `@dbx-tools/shared-email-template` remains separate
+because React Email and React are part of its cross-runtime rendering contract.
 
-Keep `email-template` separate because React Email and React are materially
-different dependencies from the Zod-based browser contracts.
+Acceptance criteria:
 
-Acceptance gates:
-
-- Browser builds import no Node built-ins from any `@dbx-tools/shared/*`
-  subpath.
-- Each former package remains tree-shakeable through explicit exports.
-- The generated Python bindings continue to select modules by subpath without
-  copying contract types.
-- Packed consumers install one shared package instead of eleven contract
-  packages.
+- Every shared package documents its Node owner and browser or UI consumers.
+- Browser builds import no Node built-ins through a shared package.
+- Wire shapes have one schema owner and are not mirrored in Node or UI packages.
+- Node-only helpers found in a shared package move to the owning Node package.
+- Generated Python bindings consume the owning shared contract without creating
+  a second schema surface.
 
 ### Consolidate CLI command packages
 
@@ -217,9 +222,9 @@ Acceptance gates:
 
 ### Consolidate Graphiti integration
 
-Move `@dbx-tools/appkit-graphiti` into `@dbx-tools/graphiti/appkit`. Move the
-shared Graphiti options into `@dbx-tools/shared/graphiti` and the CLI command
-into `@dbx-tools/cli/graphiti`.
+Move `@dbx-tools/appkit-graphiti` into `@dbx-tools/graphiti/appkit`. Keep
+`@dbx-tools/shared-graphiti` as the runtime-neutral Graphiti option contract and
+move the CLI command into `@dbx-tools/cli/graphiti`.
 
 Keep `dbx-tools-graphiti` as a Python distribution. It owns the FastAPI, MCP,
 PostGraph, embedded PostgreSQL, and Python runtime dependency set.
@@ -266,9 +271,9 @@ or language boundary. `path` retains Chokidar, Glob, and Minimatch;
 `databricks-zerobus` retains the optional Zerobus SDK; `ui-teams` retains
 Adaptive Cards.
 
-The resulting target is 28 npm packages and two Python distributions:
+The resulting target is 38 npm packages and two Python distributions:
 
-- Shared packages: 12 to 2
+- Shared packages: remain at 12
 - CLI packages: 9 to 2
 - UI packages: 7 to 3
 - Graphiti Node packages: 2 to 1
@@ -358,8 +363,8 @@ Start with the generated workspace dependency graph:
 - It also selects every transitive reverse-dependent package.
 - Changes to root Projen policy, catalogs, shared compiler settings, or release
   tasks select the full relevant layer or `test:all`.
-- Changes to `@dbx-tools/shared` select consumers of the changed subpath when
-  source analysis can prove the import; otherwise select all shared consumers.
+- Changes to a `@dbx-tools/shared-*` package select that contract package's Node,
+  browser, UI, and generated Python consumers.
 - Changes to generated Python binding owners select their Python consumers.
 
 Add source-level transitive selection only after package-level selection is
@@ -406,19 +411,18 @@ Prototype root-level Bun discovery first. If tests require package-local working
 directories, generate one command per project group rather than restoring one
 command per package. Packages with no tests must not start a test process.
 
-### Performance gates
+### Performance reporting
 
-Record timing in CI and fail only after a baseline period. Initial targets:
+Record timing for each test tier as informational CI output. Do not fail CI from
+elapsed-time thresholds because runner capacity and corporate infrastructure can
+vary substantially. Compare trends only across equivalent runners and retain
+the raw durations with the build artifacts or job summary.
 
-- Focused package tests: under 5 seconds
-- Typical `test:changed`: under 15 seconds
-- Full JavaScript unit suite: under 25 seconds
-- Python unit suite: under 5 seconds
-- Full uncached `test:all`: under 75 seconds on the current CI runner
-
-Do not weaken correctness assertions to meet a duration target. Move expensive
-coverage to the correct tier, reuse fixtures where isolation is not part of the
-test, and remove orchestration overhead first.
+Use timing data to prioritize orchestration work, identify unexpected changes,
+and support code review. Do not weaken correctness assertions or block a change
+solely because a slow machine crosses a target duration. Move expensive coverage
+to the correct tier, reuse fixtures where isolation is not part of the test, and
+remove orchestration overhead first.
 
 ## Delivery sequence
 
@@ -436,18 +440,19 @@ test, and remove orchestration overhead first.
 Exit condition: current coverage passes in the new tiers and the timing report
 identifies each tier's wall time.
 
-### Phase 2: Shared contract consolidation
+### Phase 2: Shared contract boundary enforcement
 
-- [ ] Create the `@dbx-tools/shared` subpath map in the root Projen definition.
-- [ ] Move one low-risk contract family first, preferably Graphiti or Search.
+- [ ] Record the Node owner and browser or UI consumers for every shared package.
+- [ ] Add dependency-direction checks that reject Node and UI imports from shared
+      packages.
+- [ ] Move Node-only implementation helpers out of shared packages without
+      merging the shared contract packages.
+- [ ] Verify that each wire shape has one Zod schema owner.
 - [ ] Validate browser import safety, generated Python bindings, docs, and packed
       consumers.
-- [ ] Move the remaining contracts and remove their old packages in the same
-      lockstep change.
-- [ ] Keep `@dbx-tools/email-template` separate.
 
-Exit condition: shared packages fall from 12 to 2 with no browser dependency
-regression and no duplicate contract owner.
+Exit condition: all 12 shared packages remain separate, browser-safe contract
+owners with documented consumers and no mirrored schemas.
 
 ### Phase 3: CLI consolidation
 
@@ -495,8 +500,11 @@ PostgreSQL policy remains in `@dbx-tools/postgres`.
 
 - Do not merge the Python distributions into npm packages.
 - Do not merge browser and Node entrypoints without an import-safety test.
+- Do not combine capability-specific shared contracts into one catch-all shared
+  package.
 - Do not absorb optional Zerobus, Adaptive Cards, Mastra, model-gateway, or web
   search dependencies into a common package solely to reduce package count.
+- Do not fail CI based on test wall-clock duration.
 - Do not replace Projen with another task runner as part of this work.
 - Do not fix the existing native `oxc-parser` post-synthesis deadlock in this
   plan unless it blocks a consolidation phase.
