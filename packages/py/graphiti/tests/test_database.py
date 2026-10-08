@@ -96,6 +96,7 @@ async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) 
 
     runtime = await database._start_database(
         {
+            "postgresRole": "graphiti_owner",
             "databaseUrl": "project",
             "databaseSchema": "graphiti_memory",
             "profile": "PROFILE",
@@ -104,10 +105,11 @@ async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) 
     password = runtime.connection_options["password"]
 
     assert callable(password)
-    assert await password() == "token-8"
     assert await password() == "token-9"
+    assert await password() == "token-10"
     assert runtime.connection_options["server_settings"] == {
-        "search_path": "graphiti_memory, extensions, public"
+        "search_path": "graphiti_memory, extensions, public",
+        "role": "graphiti_owner",
     }
     assert runtime.dsn == (
         "postgresql://user%40example.com@primary.example:5432/databricks_postgres?sslmode=require"
@@ -121,7 +123,8 @@ async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) 
             "postgresql://user%40example.com@primary.example:5432/databricks_postgres?sslmode=require",
             {"password": "token-3"},
         ),
-        'CREATE SCHEMA IF NOT EXISTS "graphiti_memory"',
+        'CREATE SCHEMA IF NOT EXISTS "graphiti_memory" AUTHORIZATION "graphiti_owner"',
+        'SET ROLE "graphiti_owner"',
         (
             "SELECT quote_ident(n.nspname) FROM pg_extension e "
             "JOIN pg_namespace n ON n.oid = e.extnamespace "
@@ -176,10 +179,14 @@ async def test_local_postgres_url_is_used_without_lakebase(monkeypatch) -> None:
     )
     address = "postgresql://postgres@localhost:5433/graphiti"
 
-    runtime = await database._start_database({"databaseUrl": address})
+    runtime = await database._start_database(
+        {"databaseUrl": address, "postgresRole": "graphiti_owner"}
+    )
 
     assert runtime.dsn == address
-    assert runtime.connection_options == {}
+    assert runtime.connection_options == {
+        "server_settings": {"role": "graphiti_owner"}
+    }
 
 
 def test_embedded_mode_names_the_optional_extra_when_missing(monkeypatch, tmp_path: Path) -> None:

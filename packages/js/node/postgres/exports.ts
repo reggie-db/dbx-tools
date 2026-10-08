@@ -4,6 +4,14 @@
 // importable directly from `@dbx-tools/postgres`.
 export { withAdvisoryLock, withAdvisoryTransactionLock } from "./src/advisory-lock.ts";
 export {
+  postgresConnectionOptions,
+  postgresRoleStatement,
+  postgresServerSettings,
+  quotePostgresIdentifier,
+  resolvePostgresRole,
+} from "./src/session.ts";
+export type { PostgresConnectionOptions } from "./src/session.ts";
+export {
   decodePointer,
   messageBusGrantStatements,
   provisionMessageBusSchema,

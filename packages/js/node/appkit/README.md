@@ -256,6 +256,33 @@ hard-code registered names or casts at every call site. A missing required
 plugin throws AppKit's `ConfigurationError`, naming both the caller and the
 plugin to register.
 
+## Supervise AppKit Subprocesses
+
+`AppKitChildProcess` starts a long-running sibling process through
+`@dbx-tools/core/exec` and owns its shutdown escalation. Its spawn tuple accepts
+core exec options, including line handlers and optional output capture.
+
+```ts
+import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
+
+const worker = new AppKitChildProcess([
+  "bun",
+  ["run", "worker.ts"],
+  {
+    stdout: { onLine: (line) => logger.info(line), capture: false },
+    stderr: { onLine: (line) => logger.error(line), capture: false },
+  },
+]);
+
+worker.start();
+this.context.onLifecycle("shutdown", () => worker.shutdown());
+```
+
+`shutdown()` is idempotent. It sends `SIGTERM`, waits seven seconds, then sends
+`SIGKILL` and waits one more second. Override those signals or timeouts in the
+constructor's second argument. A detached POSIX child is signaled as a process
+group so descendants do not survive their AppKit owner.
+
 ## Provision Lakebase Cache Schema
 
 `provision.provisionCacheSchema()` grants the AppKit cache schema in Lakebase to

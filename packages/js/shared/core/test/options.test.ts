@@ -5,11 +5,14 @@ import {
   DatabricksEnvironmentNamesSchema,
   DatabricksOptionsSchema,
   LakebaseOptionsSchema,
+  PostgresEnvironmentNamesSchema,
+  PostgresOptionsSchema,
   databricksEnvironmentNames,
   formatListenAddress,
   listenAddressSchema,
   normalizedUrlSchema,
   parseOpts,
+  postgresEnvironmentNames,
   serializeOpts,
   serializeOptsEnvironment,
   tcpPortOrZeroSchema,
@@ -27,6 +30,20 @@ describe("shared option schemas", () => {
       host: "DATABRICKS_HOST",
     });
     assert.equal(databricksEnvironmentNames.lakebaseEndpoint, "LAKEBASE_ENDPOINT");
+  });
+
+  it("owns the shared PostgreSQL role option and environment", () => {
+    assert.deepEqual(PostgresEnvironmentNamesSchema.parse({}), {
+      postgresRole: "DBX_TOOLS_POSTGRES_ROLE",
+    });
+    assert.equal(postgresEnvironmentNames.postgresRole, "DBX_TOOLS_POSTGRES_ROLE");
+    assert.deepEqual(
+      parseOpts(PostgresOptionsSchema, null, {
+        DBX_TOOLS_POSTGRES_ROLE: "  app-owner@example.com  ",
+      }),
+      { postgresRole: "app-owner@example.com" },
+    );
+    assert.throws(() => PostgresOptionsSchema.parse({ postgresRole: "invalid role" }));
   });
 
   it("validates TCP ports with and without the zero sentinel", () => {

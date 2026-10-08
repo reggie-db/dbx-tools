@@ -33,6 +33,7 @@
     "@dbx-tools/auth": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/lakebase": "workspace:^",
+    "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "zod": "catalog:"
   },
@@ -58,6 +59,10 @@
       "./bundle": {
         "types": "./lib/src/bundle.d.ts",
         "default": "./lib/src/bundle.js"
+      },
+      "./child-process": {
+        "types": "./lib/src/child-process.d.ts",
+        "default": "./lib/src/child-process.js"
       },
       "./databricks": {
         "types": "./lib/src/databricks.d.ts",
@@ -119,6 +124,7 @@
     "./appkit": "./src/appkit.ts",
     "./brand-context": "./src/brand-context.ts",
     "./bundle": "./src/bundle.ts",
+    "./child-process": "./src/child-process.ts",
     "./databricks": "./src/databricks.ts",
     "./identity": "./src/identity.ts",
     "./interceptor": "./src/interceptor.ts",

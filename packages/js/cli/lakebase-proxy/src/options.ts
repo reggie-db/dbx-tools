@@ -11,6 +11,7 @@ const text = (description: string) => z.string().trim().min(1).optional().descri
 
 export const LakebaseProxyOptionsSchema = z
   .object({
+    ...options.PostgresOptionsSchema.shape,
     listen: options
       .listenAddressSchema({ port: 5432, loopback: true })
       .describe("Loopback listener address."),

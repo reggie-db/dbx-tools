@@ -3,6 +3,7 @@
 import { createServer, type Server, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import { LakebaseClient, requireAddress } from "@dbx-tools/lakebase";
+import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { log } from "@dbx-tools/shared-core";
 import { Client } from "pg";
 
@@ -129,7 +130,11 @@ export class LakebaseProxy {
       }
       let connected;
       try {
-        connected = await connectUpstream(resolved, password, startup.parameters);
+        connected = await connectUpstream(
+          resolved,
+          password,
+          postgresConnectionOptions(startup.parameters, this.options.postgresRole),
+        );
       } catch (error) {
         throw new ProxyFailure(message(error), "08001");
       }

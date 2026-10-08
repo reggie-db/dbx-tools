@@ -34,6 +34,7 @@
 
 import { getUsernameWithApiLookup } from "@databricks/appkit";
 import { migration as appkitMigration } from "@dbx-tools/appkit";
+import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { hash, log } from "@dbx-tools/shared-core";
 import { fastembed } from "@mastra/fastembed";
 import { Memory } from "@mastra/memory";
@@ -123,7 +124,7 @@ export async function createServicePrincipalPool(pgConfig: PoolConfig): Promise<
   // lookup (e.g. local dev authenticating via PAT) so the pool always
   // has an identity to connect with.
   const user = pgConfig.user ?? (await getUsernameWithApiLookup());
-  return new Pool({ ...pgConfig, user });
+  return new Pool(postgresConnectionOptions({ ...pgConfig, user }));
 }
 
 /** Effective per-knob setting after the plugin/agent cascade. */

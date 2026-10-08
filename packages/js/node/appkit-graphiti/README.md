@@ -51,6 +51,8 @@ Plugin config uses the shared Graphiti schema. Common fields include:
 - `databaseUrl` / `LAKEBASE_ENDPOINT` or `DATABASE_URL`: optional external
   PostgreSQL URL or Lakebase target;
 - `databaseSchema` / `GRAPHITI_DATABASE_SCHEMA`: Lakebase graph schema.
+- `postgresRole` / `DBX_TOOLS_POSTGRES_ROLE`: shared PostgreSQL role assumed by
+  the Graphiti child for schema bootstrap and pooled connections.
 
 The package owns AppKit routing and app-scoped supervision only. Python process
 launch and the reusable Graphiti runtime belong to

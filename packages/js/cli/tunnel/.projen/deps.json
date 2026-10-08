@@ -41,6 +41,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/postgres",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:^",
       "type": "runtime"

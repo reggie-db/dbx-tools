@@ -37,6 +37,7 @@ describe("Graphiti options", () => {
         DATABRICKS_CONFIG_PROFILE: "PROFILE",
         TEMPERATURE: "0.25",
         DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS: "240000",
+        DBX_TOOLS_POSTGRES_ROLE: "graphiti_owner",
         GRAPHITI_DATABASE_SCHEMA: "graphiti_memory",
         GRAPHITI_HOME: "/graphiti",
         GRAPHITI_LISTEN: "tcp://localhost:8100",
@@ -45,6 +46,7 @@ describe("Graphiti options", () => {
         profile: "PROFILE",
         temperature: 0.25,
         startupTimeoutMs: 240_000,
+        postgresRole: "graphiti_owner",
         databaseSchema: "graphiti_memory",
         graphitiHome: "/graphiti",
         listen: { scheme: "tcp", host: "localhost", port: 8100 },
@@ -78,6 +80,7 @@ describe("Graphiti options", () => {
     assert.equal(environment.MODEL_NAME, "databricks-gpt-5-nano");
     assert.equal(environment.EMBEDDER_MODEL, "gte-large-en");
     assert.equal(environment.DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS, "180000");
+    assert.equal(environment.DBX_TOOLS_POSTGRES_ROLE, undefined);
     assert.equal(environment.GRAPHITI_DATABASE_SCHEMA, "dbx_tools_graphiti");
     assert.equal(environment.GRAPHITI_LISTEN, "tcp://localhost:8100");
     assert.equal(environment.DATABASE_URL, undefined);
@@ -91,5 +94,13 @@ describe("Graphiti options", () => {
 
   it("rejects database schema values that require SQL quoting", () => {
     assert.throws(() => resolveGraphitiOptions({ databaseSchema: "graphiti-memory" }));
+  });
+
+  it("uses the shared PostgreSQL role contract", () => {
+    assert.equal(
+      resolveGraphitiOptions({ postgresRole: "  graphiti-owner@example.com  " }).postgresRole,
+      "graphiti-owner@example.com",
+    );
+    assert.throws(() => resolveGraphitiOptions({ postgresRole: "invalid role" }));
   });
 });

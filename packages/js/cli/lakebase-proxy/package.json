@@ -30,6 +30,7 @@
     "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/lakebase": "workspace:^",
+    "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "commander": "catalog:",
     "pg": "^8.22.0",

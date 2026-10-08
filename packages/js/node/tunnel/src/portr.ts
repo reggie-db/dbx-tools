@@ -9,14 +9,16 @@
  *
  * @module
  */
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
-import { Transform } from "node:stream";
-import { StringDecoder } from "node:string_decoder";
 import { promisify } from "node:util";
 
+import {
+  AppKitChildProcess,
+  type AppKitChildProcessOptions,
+} from "@dbx-tools/appkit/child-process";
 import { bin, configUtils } from "@dbx-tools/core";
 import { log, options as sharedOptions, stringUtils } from "@dbx-tools/shared-core";
 import { z } from "zod";
@@ -34,20 +36,6 @@ const EMOJI = /\p{Extended_Pictographic}\uFE0F?/gu;
 /** Remove pictographs from third-party process output before forwarding it. */
 export function normalizePortrOutput(value: string): string {
   return value.replace(EMOJI, "").replace(/^[ \t]+/gm, "");
-}
-
-function normalizedOutput(destination: NodeJS.WriteStream): Transform {
-  const decoder = new StringDecoder("utf8");
-  return new Transform({
-    transform(chunk, _encoding, callback) {
-      destination.write(normalizePortrOutput(decoder.write(chunk)));
-      callback();
-    },
-    flush(callback) {
-      destination.write(normalizePortrOutput(decoder.end()));
-      callback();
-    },
-  });
 }
 
 /** Options for installing the portr executable. */
@@ -175,14 +163,32 @@ export async function writePortrConfig(
 export async function startPortr(
   config: PortrConfig,
   childEnv: NodeJS.ProcessEnv,
-): Promise<ReturnType<typeof spawn>> {
+  options: AppKitChildProcessOptions = {},
+): Promise<AppKitChildProcess> {
   // Reclaim the subdomain from any portr left by a previous boot in this container.
   await execFileAsync("pkill", ["-x", "portr"]).catch(() => undefined);
 
   logger.info(`portr tunneling https://${config.subdomain}.${config.server} -> :${config.port}`);
-  const child = spawn("portr", ["start"], { env: childEnv, stdio: ["inherit", "pipe", "pipe"] });
-  child.stdout?.pipe(normalizedOutput(process.stdout));
-  child.stderr?.pipe(normalizedOutput(process.stderr));
+  const child = new AppKitChildProcess(
+    [
+      "portr",
+      ["start"],
+      {
+        env: childEnv,
+        stdin: "inherit",
+        stdout: {
+          onLine: (line) => process.stdout.write(`${normalizePortrOutput(line)}\n`),
+          capture: false,
+        },
+        stderr: {
+          onLine: (line) => process.stderr.write(`${normalizePortrOutput(line)}\n`),
+          capture: false,
+        },
+      },
+    ],
+    options,
+  );
+  child.start();
   return child;
 }
 
@@ -211,7 +217,7 @@ export function supervisePortr(
   return superviseProcessForever({
     name: "portr",
     logger,
-    start: () => startPortr(config, childEnv),
+    start: () => startPortr(config, childEnv, { gracefulTimeoutMs: 10_000 }),
     // Kill + restart when the edge drops the registration while the local
     // process is still alive. Without this, lensiq.apps.dbx.tools (and any
     // other in-process tunnel) stays unregistered until a full app bounce.

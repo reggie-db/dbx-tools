@@ -5,8 +5,10 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/postgres";
 export const PACKAGE_VERSION = "0.9.58";
 export * as advisoryLock from "./src/advisory-lock.ts";
+export * as bindings from "./src/bindings.ts";
 export * as identity from "./src/identity.ts";
 export * as persistence from "./src/persistence.ts";
+export * as session from "./src/session.ts";
 export * as topicBus from "./src/topic-bus.ts";
 export type { AdvisoryLockKey, PgPoolLike, PgQueryable } from "./src/advisory-lock.ts";
 export { POINTER_VERSION } from "./src/persistence.ts";

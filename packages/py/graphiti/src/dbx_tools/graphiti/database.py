@@ -21,6 +21,12 @@ from ._generated.node.lakebase.bindings import (
     create_lakebase_client,
     parse_address,
 )
+from ._generated.node.postgres.bindings import (
+    postgres_role_statement,
+    postgres_server_settings,
+    quote_postgres_identifier,
+    resolve_postgres_role,
+)
 from .options import ResolvedGraphitiOptionsResponse
 
 _DATABASE_DIRECTORY = "postgres"
@@ -51,18 +57,26 @@ async def _start_database(
 ) -> _DatabaseRuntime:
     """Resolve the configured database or start persistent embedded PostgreSQL."""
     address = options.get("databaseUrl")
+    role = resolve_postgres_role(options.get("postgresRole"))
     if not address:
-        return await _start_embedded_database(options.get("graphitiHome"))
+        return await _start_embedded_database(options.get("graphitiHome"), role)
     if not _uses_lakebase_credentials(address):
-        return _DatabaseRuntime(dsn=address)
+        return _DatabaseRuntime(
+            dsn=address,
+            connection_options=_database_role_options(role),
+        )
     return await _start_lakebase_database(
         address,
         options.get("profile"),
         options["databaseSchema"],
+        role,
     )
 
 
-async def _start_embedded_database(home: str | None) -> _DatabaseRuntime:
+async def _start_embedded_database(
+    home: str | None,
+    role: str | None = None,
+) -> _DatabaseRuntime:
     """Start the bundled PostgreSQL distribution under the Graphiti data directory."""
     root = (
         Path(home).expanduser().resolve()
@@ -78,6 +92,7 @@ async def _start_embedded_database(home: str | None) -> _DatabaseRuntime:
         raise
     return _DatabaseRuntime(
         dsn=server.get_uri(_DEFAULT_DATABASE),
+        connection_options=_database_role_options(role),
         _embedded=server,
     )
 
@@ -86,6 +101,7 @@ async def _start_lakebase_database(
     address: str,
     profile: str | None,
     schema: str,
+    role: str | None = None,
 ) -> _DatabaseRuntime:
     """Resolve Lakebase coordinates and mint a credential for each new pool connection."""
     client = create_lakebase_client({"profile": profile}) if profile else create_lakebase_client()
@@ -97,7 +113,13 @@ async def _start_lakebase_database(
     dsn = _lakebase_dsn(resolved)
     connection = await asyncpg.connect(dsn, password=await password())
     try:
-        await connection.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+        authorization = f" AUTHORIZATION {quote_postgres_identifier(role)}" if role else ""
+        await connection.execute(
+            f'CREATE SCHEMA IF NOT EXISTS "{schema}"{authorization}'
+        )
+        role_statement = postgres_role_statement(role)
+        if role_statement:
+            await connection.execute(role_statement)
         extension_schema = await _ensure_vector_extension(connection, schema)
     finally:
         await connection.close()
@@ -106,14 +128,24 @@ async def _start_lakebase_database(
     if extension_schema != schema:
         search_path.append(extension_schema)
     search_path.append("public")
+    server_settings = postgres_server_settings(
+        role,
+        {"search_path": ", ".join(search_path)},
+    )
     return _DatabaseRuntime(
         dsn=dsn,
         connection_options={
             "password": password,
-            "server_settings": {"search_path": ", ".join(search_path)},
+            "server_settings": server_settings,
         },
         _lakebase=client,
     )
+
+
+def _database_role_options(role: str | None) -> dict[str, Any]:
+    """Return asyncpg/PostGraph connection options for an assumed database role."""
+    server_settings = postgres_server_settings(role)
+    return {"server_settings": server_settings} if server_settings else {}
 
 
 async def _ensure_vector_extension(connection: asyncpg.Connection, schema: str) -> str:

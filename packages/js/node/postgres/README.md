@@ -35,6 +35,30 @@ them without a second database client or connection pool.
   listener reads back — which lifts the 8000-byte `NOTIFY` limit and keeps the
   contents behind a table grant.
 
+## Session Roles
+
+Set `DBX_TOOLS_POSTGRES_ROLE` when every repository-owned PostgreSQL connection
+should assume one role after authenticating. `postgresConnectionOptions()` adds
+the role to `pg` and AppKit Lakebase pool startup options, while
+`postgresServerSettings()` returns the equivalent `asyncpg` server settings.
+
+```ts
+import { postgresConnectionOptions } from "@dbx-tools/postgres";
+import { Pool } from "pg";
+
+const pool = new Pool(postgresConnectionOptions({}));
+```
+
+An explicit second argument overrides the environment value. The helper retains
+existing `options`, including statement timeouts, and appends the role setting.
+Use `postgresRoleStatement()` only for setup work that must change role after a
+connection is already open.
+
+When these options configure an AppKit Lakebase routing pool, they apply to its
+service-principal and per-user OBO pools. Every login identity that can reach the
+pool must therefore be a member of the configured role, or otherwise have
+permission to `SET ROLE`, before the pool can connect successfully.
+
 ## Why Use This Over Native AppKit
 
 Use AppKit `lakebase()` to obtain and refresh the PostgreSQL pool. This package
@@ -45,10 +69,10 @@ Lakebase plugin does not provide.
 ## Advisory Locks
 
 ```ts
-import { withAdvisoryLock } from "@dbx-tools/postgres";
+import { postgresConnectionOptions, withAdvisoryLock } from "@dbx-tools/postgres";
 import { Pool } from "pg";
 
-const pool = new Pool();
+const pool = new Pool(postgresConnectionOptions({}));
 
 await withAdvisoryLock(pool, ["invoice", invoiceId], async (client) => {
   await client.query("UPDATE invoices SET status = 'sent' WHERE id = $1", [invoiceId]);

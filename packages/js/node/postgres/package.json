@@ -47,6 +47,10 @@
         "types": "./lib/src/advisory-lock.d.ts",
         "default": "./lib/src/advisory-lock.js"
       },
+      "./bindings": {
+        "types": "./lib/src/bindings.d.ts",
+        "default": "./lib/src/bindings.js"
+      },
       "./identity": {
         "types": "./lib/src/identity.d.ts",
         "default": "./lib/src/identity.js"
@@ -54,6 +58,10 @@
       "./persistence": {
         "types": "./lib/src/persistence.d.ts",
         "default": "./lib/src/persistence.js"
+      },
+      "./session": {
+        "types": "./lib/src/session.d.ts",
+        "default": "./lib/src/session.js"
       },
       "./topic-bus": {
         "types": "./lib/src/topic-bus.d.ts",
@@ -73,8 +81,10 @@
   "exports": {
     ".": "./index.ts",
     "./advisory-lock": "./src/advisory-lock.ts",
+    "./bindings": "./src/bindings.ts",
     "./identity": "./src/identity.ts",
     "./persistence": "./src/persistence.ts",
+    "./session": "./src/session.ts",
     "./topic-bus": "./src/topic-bus.ts",
     "./package.json": "./package.json"
   },

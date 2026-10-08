@@ -24,6 +24,7 @@
  */
 
 import { ExecutionError } from "@databricks/appkit";
+import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { log, object, stringUtils } from "@dbx-tools/shared-core";
 import type {
   SearchDocument,
@@ -151,7 +152,7 @@ export class LakebaseSearchBackend {
     const pgConfigFactory = this.poolSource;
     this.poolPromise ??= (async () => {
       const config = await pgConfigFactory();
-      const pool = this.poolFactory(config);
+      const pool = this.poolFactory(postgresConnectionOptions(config));
       this.pool = pool;
       this.ownsPool = true;
       return pool;

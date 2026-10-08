@@ -44,6 +44,43 @@ export type DatabricksEnvironmentNames = z.output<typeof DatabricksEnvironmentNa
 /** Canonical Databricks environment names derived from the owning schema. */
 export const databricksEnvironmentNames = Object.freeze(DatabricksEnvironmentNamesSchema.parse({}));
 
+export const PostgresEnvironmentNamesSchema = z
+  .object({
+    postgresRole: environmentName(
+      "DBX_TOOLS_POSTGRES_ROLE",
+      "PostgreSQL assumed-role environment.",
+    ),
+  })
+  .strict()
+  .describe("Canonical dbx-tools PostgreSQL environment names.");
+
+export type PostgresEnvironmentNames = z.output<typeof PostgresEnvironmentNamesSchema>;
+
+/** Canonical PostgreSQL environment names derived from the owning schema. */
+export const postgresEnvironmentNames = Object.freeze(PostgresEnvironmentNamesSchema.parse({}));
+
+export const postgresRoleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(
+    /^[A-Za-z0-9._@+-]{1,255}$/,
+    "PostgreSQL role must contain only letters, numbers, dot, underscore, at, plus, or hyphen.",
+  )
+  .describe("PostgreSQL role assumed after authentication.");
+
+export const PostgresOptionsSchema = z
+  .object({
+    postgresRole: postgresRoleSchema
+      .optional()
+      .describe("PostgreSQL role assumed after authentication.")
+      .meta({ env: postgresEnvironmentNames.postgresRole }),
+  })
+  .strict()
+  .describe("Shared PostgreSQL session options.");
+
+export type PostgresOptions = z.input<typeof PostgresOptionsSchema>;
+
 export const tcpPortSchema = z.coerce
   .number<number>()
   .int()

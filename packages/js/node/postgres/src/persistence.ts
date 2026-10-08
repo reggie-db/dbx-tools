@@ -12,6 +12,7 @@ import { object } from "@dbx-tools/shared-core";
 import type { QueryResultRow } from "pg";
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
 import { withAdvisoryTransactionLock } from "./advisory-lock.ts";
+import { quotePostgresIdentifier } from "./session.ts";
 import type { TopicMessage } from "./topic-bus.ts";
 
 /** Storage and grant tier for persisted topic messages. */
@@ -61,9 +62,8 @@ const DEFAULT_TTL = "24 hours";
  * the notification as foreign traffic rather than guessing at its shape.
  */
 export const POINTER_VERSION = 1;
-const quote = (value: string): string => `"${value.replaceAll('"', '""')}"`;
 const table = (options: ResolvedTopicBusPersistenceOptions, scope: TopicPersistenceScope): string =>
-  `${quote(options.schema)}.${quote(options.tables[scope])}`;
+  `${quotePostgresIdentifier(options.schema)}.${quotePostgresIdentifier(options.tables[scope])}`;
 
 /** Validate persistence scope and apply stable schema, table, TTL, and cleanup defaults. */
 export function resolvePersistenceOptions(
@@ -94,9 +94,9 @@ export async function provisionMessageBusSchema(
   options: ResolvedTopicBusPersistenceOptions,
 ): Promise<void> {
   await withAdvisoryTransactionLock(pool, ["dbx_message_bus", "schema"], async (client) => {
-    await client.query(`CREATE SCHEMA IF NOT EXISTS ${quote(options.schema)}`);
+    await client.query(`CREATE SCHEMA IF NOT EXISTS ${quotePostgresIdentifier(options.schema)}`);
     await client.query(
-      `CREATE TABLE IF NOT EXISTS ${quote(options.schema)}.${quote("schema_version")} (version INTEGER PRIMARY KEY)`,
+      `CREATE TABLE IF NOT EXISTS ${quotePostgresIdentifier(options.schema)}.${quotePostgresIdentifier("schema_version")} (version INTEGER PRIMARY KEY)`,
     );
     for (const scope of ["open", "restricted"] as const) {
       const name = table(options, scope);
@@ -104,14 +104,14 @@ export async function provisionMessageBusSchema(
         `CREATE TABLE IF NOT EXISTS ${name} (sequence BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, channel TEXT NOT NULL, topic TEXT NOT NULL, message_id TEXT NOT NULL, published_at TIMESTAMPTZ NOT NULL, expires_at TIMESTAMPTZ, xact_id XID8 NOT NULL DEFAULT pg_current_xact_id(), envelope JSONB NOT NULL, UNIQUE (channel, message_id), CHECK (jsonb_typeof(envelope) = 'object'))`,
       );
       await client.query(
-        `CREATE INDEX IF NOT EXISTS ${quote(`${options.tables[scope]}_replay_idx`)} ON ${name} (channel, topic, sequence)`,
+        `CREATE INDEX IF NOT EXISTS ${quotePostgresIdentifier(`${options.tables[scope]}_replay_idx`)} ON ${name} (channel, topic, sequence)`,
       );
       await client.query(
-        `CREATE INDEX IF NOT EXISTS ${quote(`${options.tables[scope]}_expiry_idx`)} ON ${name} (expires_at) WHERE expires_at IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS ${quotePostgresIdentifier(`${options.tables[scope]}_expiry_idx`)} ON ${name} (expires_at) WHERE expires_at IS NOT NULL`,
       );
     }
     await client.query(
-      `INSERT INTO ${quote(options.schema)}.${quote("schema_version")} (version) VALUES (1) ON CONFLICT (version) DO NOTHING`,
+      `INSERT INTO ${quotePostgresIdentifier(options.schema)}.${quotePostgresIdentifier("schema_version")} (version) VALUES (1) ON CONFLICT (version) DO NOTHING`,
     );
   });
 }
@@ -124,9 +124,9 @@ export function messageBusGrantStatements(
 ): string[] {
   const selected = table(options, scope);
   return (typeof roles === "string" ? [roles] : roles).flatMap((role) => [
-    `GRANT USAGE ON SCHEMA ${quote(options.schema)} TO ${quote(role)};`,
-    `GRANT SELECT, INSERT, DELETE ON TABLE ${selected} TO ${quote(role)};`,
-    `GRANT SELECT ON TABLE ${quote(options.schema)}.${quote("schema_version")} TO ${quote(role)};`,
+    `GRANT USAGE ON SCHEMA ${quotePostgresIdentifier(options.schema)} TO ${quotePostgresIdentifier(role)};`,
+    `GRANT SELECT, INSERT, DELETE ON TABLE ${selected} TO ${quotePostgresIdentifier(role)};`,
+    `GRANT SELECT ON TABLE ${quotePostgresIdentifier(options.schema)}.${quotePostgresIdentifier("schema_version")} TO ${quotePostgresIdentifier(role)};`,
   ]);
 }
 

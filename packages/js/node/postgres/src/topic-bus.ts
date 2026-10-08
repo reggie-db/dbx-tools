@@ -30,6 +30,7 @@ import type { Notification, PoolClient } from "pg";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
 import { channelName } from "./identity.ts";
+import { quotePostgresIdentifier } from "./session.ts";
 import {
   cleanupExpired,
   decodePointer,
@@ -266,11 +267,6 @@ async function senderMetadata(): Promise<TopicMetadata> {
   } catch {
     return {};
   }
-}
-
-/** Quote a validated channel for `LISTEN`/`UNLISTEN`, which take no parameters. */
-function quoteIdentifier(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
 }
 
 /**
@@ -559,7 +555,7 @@ export class PostgresTopicBus {
     client.removeListener("error", this.handleClientError);
     let releaseError: Error | undefined;
     try {
-      await client.query(`UNLISTEN ${quoteIdentifier(this.channelName)}`);
+      await client.query(`UNLISTEN ${quotePostgresIdentifier(this.channelName)}`);
     } catch (cause) {
       releaseError = errorUtils.toError(cause);
     }
@@ -580,7 +576,7 @@ export class PostgresTopicBus {
     try {
       client.on("notification", this.handleNotification);
       client.on("error", this.handleClientError);
-      await client.query(`LISTEN ${quoteIdentifier(this.channelName)}`);
+      await client.query(`LISTEN ${quotePostgresIdentifier(this.channelName)}`);
       if (this.closed) throw new Error("Postgres topic bus is closed");
       this.client = client;
     } catch (cause) {

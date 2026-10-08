@@ -61,6 +61,10 @@ modules = [ "bindings" ]
 package = "@dbx-tools/lakebase"
 modules = [ "bindings" ]
 
+[[tool.dbx_tools.node_bindings]]
+package = "@dbx-tools/postgres"
+modules = [ "bindings" ]
+
 [[tool.dbx_tools.sync]]
 name = "postgraph"
 source = "postgraph-driver @ git+https://github.com/crajah/graphiti.git@4f6d7bc31dd9a84053d4094b382485044448d9c8#subdirectory=graphiti_core/driver"

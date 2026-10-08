@@ -12,6 +12,7 @@ test("reports the package version", () => {
   const program = buildProgram();
   expect(program.version()).toBe(version);
   expect(program.helpInformation()).toContain("--listen <value>");
+  expect(program.helpInformation()).toContain("--postgres-role <value>");
   expect(program.helpInformation()).toContain("DATABRICKS_CONFIG_PROFILE");
   const url = program.commands.find((command) => command.name() === "url");
   expect(url?.helpInformation()).not.toContain("--lakebase-endpoint");
@@ -54,12 +55,15 @@ test("persists Lakebase service listener and optional profile", async () => {
     ":5544",
     "--profile",
     "LAKEBASE-PROFILE",
+    "--postgres-role",
+    "app-owner@example.com",
   ]);
 
   expect(definition).toEqual(
     lakebaseProxyServiceDefinition({
       listen: 5544,
       profile: "LAKEBASE-PROFILE",
+      postgresRole: "app-owner@example.com",
     }),
   );
 });

@@ -16,10 +16,12 @@ describe("Graphiti runtime options", () => {
 
   it("serializes database-agnostic environment names", () => {
     const values = {
+      postgresRole: "graphiti_owner",
       databaseUrl: "postgresql://localhost:5433/graphiti",
     };
 
     const environment = graphitiOptionsEnvironment(values);
     assert.equal(environment.LAKEBASE_ENDPOINT, "postgresql://localhost:5433/graphiti");
+    assert.equal(environment.DBX_TOOLS_POSTGRES_ROLE, "graphiti_owner");
   });
 });

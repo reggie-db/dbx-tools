@@ -72,6 +72,7 @@ export const GraphitiOptionsSchema = z
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Database schema must be a PostgreSQL identifier.")
       .default("dbx_tools_graphiti")
       .meta({ env: "GRAPHITI_DATABASE_SCHEMA" }),
+    ...options.PostgresOptionsSchema.shape,
   })
   .strict()
   .describe("Graphiti options accepted by Node, CLI, AppKit, and browser callers.");

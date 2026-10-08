@@ -7,6 +7,7 @@
  *
  * @module
  */
+import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
 import * as exec from "@dbx-tools/core/exec";
 import {
   graphitiOptionsEnvironment,
@@ -69,15 +70,16 @@ export async function startGraphitiRuntime(
   options: GraphitiRuntimeOptions = {},
 ): Promise<GraphitiRuntime> {
   const resolved = resolveGraphitiOptions(options);
-  const child = exec.spawn(
+  const managedProcess = new AppKitChildProcess([
     "uv",
     await _pythonArgs({ dev: !resolved.databaseUrl }, "-m", "dbx_tools.graphiti"),
     {
       detached: process.platform !== "win32",
       env: _runtimeEnvironment(resolved),
     },
-  );
-  return managedRuntime(resolved, child);
+  ]);
+  const child = managedProcess.start();
+  return managedRuntime(resolved, managedProcess, child);
 }
 
 /** Run the supervised stack until one child exits or the process is signaled. */
@@ -93,6 +95,7 @@ export async function runGraphiti(options: GraphitiRuntimeOptions = {}): Promise
 
 function managedRuntime(
   options: ResolvedGraphitiOptions,
+  managedProcess: AppKitChildProcess,
   child: exec.ChildProcessResult,
 ): GraphitiRuntime {
   let closing: Promise<void> | undefined;
@@ -100,15 +103,7 @@ function managedRuntime(
   const stop = (): Promise<void> => {
     closing ??= (async () => {
       stopping = true;
-      signalChild(child, "SIGTERM");
-      const exited = await Promise.race([
-        child.then(() => true),
-        new Promise<false>((resolve) => setTimeout(() => resolve(false), 13_000)),
-      ]);
-      if (!exited) {
-        signalChild(child, "SIGKILL");
-        await child;
-      }
+      await managedProcess.shutdown();
     })();
     return closing;
   };
@@ -120,18 +115,6 @@ function managedRuntime(
     })
     .finally(stop);
   return { options, result, stop };
-}
-
-function signalChild(child: exec.ChildProcessResult, signal: NodeJS.Signals): void {
-  if (process.platform !== "win32" && child.pid) {
-    try {
-      process.kill(-child.pid, signal);
-      return;
-    } catch {
-      // The process group already exited; the direct child fallback is harmless.
-    }
-  }
-  child.kill(signal);
 }
 
 function installSignalHandlers(runtime: GraphitiRuntime): () => void {

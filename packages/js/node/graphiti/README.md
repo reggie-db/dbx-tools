@@ -44,6 +44,10 @@ to the runtime. Omit `databaseUrl` to persist bundled PostgreSQL beneath
 `graphitiHome`. A configured PostgreSQL URL or Lakebase target uses the external
 database instead.
 
+Set `postgresRole` or `DBX_TOOLS_POSTGRES_ROLE` when Graphiti should use the
+shared PostgreSQL assumed-role policy. The login identity must already have
+permission to `SET ROLE` to that role.
+
 ## Embed The Runtime
 
 Use this package from Node applications that need Graphiti lifecycle control.

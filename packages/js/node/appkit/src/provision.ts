@@ -23,6 +23,7 @@
 
 import { createLakebasePool, getWorkspaceClient, ValidationError } from "@databricks/appkit";
 import { configUtils } from "@dbx-tools/core";
+import { postgresConnectionOptions, quotePostgresIdentifier } from "@dbx-tools/postgres";
 import { errorUtils, log } from "@dbx-tools/shared-core";
 
 const defaultLogger = log.logger("provision");
@@ -45,17 +46,6 @@ const CONNECT_TIMEOUT_MS = 10_000;
 const STATEMENT_TIMEOUT_MS = 15_000;
 
 /**
- * Quote a Postgres identifier: wrap in double quotes and double any embedded
- * quote. Schema and role names are identifiers, and Postgres does not accept a
- * bind parameter in an identifier position, so quoting is the only defense
- * available for these statements. Lakebase role names are usually emails
- * (`user@host`), which must be quoted to be a valid identifier at all.
- */
-function quoteIdent(ident: string): string {
-  return `"${ident.replace(/"/g, '""')}"`;
-}
-
-/**
  * Idempotent grants that make the (already-existing) AppKit cache schema fully
  * usable by `role`. The `ALTER DEFAULT PRIVILEGES` lines cover the cache table
  * whenever the schema owner creates it later.
@@ -67,8 +57,8 @@ export function cacheGrantStatements(role: string): readonly string[] {
   if (!ROLE_PATTERN.test(role)) {
     throw ValidationError.invalidValue("role", role, "a Postgres role name");
   }
-  const schema = quoteIdent(CACHE_SCHEMA);
-  const target = quoteIdent(role);
+  const schema = quotePostgresIdentifier(CACHE_SCHEMA);
+  const target = quotePostgresIdentifier(role);
   return [
     `GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${target}`,
     `GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ${schema} TO ${target}`,
@@ -114,12 +104,14 @@ export async function provisionCacheSchema(
   // returns a fresh default-auth client - literally `new WorkspaceClient({})`,
   // but built against the SDK version AppKit's `createLakebasePool` expects
   // (importing the SDK class directly here pulls a newer, type-incompatible copy).
-  const pool = createLakebasePool({
-    user: role,
-    workspaceClient: getWorkspaceClient({}),
-    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
-    statement_timeout: STATEMENT_TIMEOUT_MS,
-  });
+  const pool = createLakebasePool(
+    postgresConnectionOptions({
+      user: role,
+      workspaceClient: getWorkspaceClient({}),
+      connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+      statement_timeout: STATEMENT_TIMEOUT_MS,
+    }),
+  );
   try {
     const found = await pool.query(
       "SELECT 1 FROM information_schema.schemata WHERE schema_name = $1",

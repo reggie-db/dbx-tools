@@ -16,6 +16,10 @@ from .._runtime import invoke_positioned_sync as _invoke_positioned_sync
 
 @dataclass(kw_only=True)
 class GraphitiOptions:
+    postgres_role: str | None = field(
+        default=None,
+        metadata={"javascript_name": "postgresRole"},
+    )
     profile: str | None = field(
         default=None,
         metadata={"javascript_name": "profile"},
@@ -63,6 +67,7 @@ class GraphitiOptions:
 
 
 class GraphitiOptionsResponse(TypedDict):
+    postgresRole: NotRequired[str]
     profile: NotRequired[str]
     graphitiHome: NotRequired[str]
     model: NotRequired[str]
@@ -91,6 +96,7 @@ class ResolvedGraphitiOptionsResponse(TypedDict):
     startupTimeoutMs: int | float
     listen: TcpListenAddressResponse
     databaseSchema: str
+    postgresRole: NotRequired[str]
     profile: NotRequired[str]
     graphitiHome: NotRequired[str]
     databaseUrl: NotRequired[str]

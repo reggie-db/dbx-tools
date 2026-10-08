@@ -23,6 +23,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/appkit": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/shared-graphiti": "workspace:^"
   },

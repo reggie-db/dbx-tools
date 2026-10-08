@@ -62,15 +62,29 @@ export type ExecStdio = "inherit" | "pipe" | "ignore";
 /** Invoked once per output line when a fd is piped. */
 export type LineHandler = (line: string) => void;
 
+/** Stream lines to a handler with optional result capture. */
+export interface LineOutputOptions {
+  /** Invoked once per output line. */
+  onLine: LineHandler;
+  /** Retain lines in the completed result. Defaults to `true`. */
+  capture?: boolean;
+}
+
 /**
  * Stdio config for one fd.
  *
  * - `"inherit"` / `"pipe"` / `"ignore"` — pass through to `spawn`
  * - `"capture"` — pipe the fd and append each line to the result
  * - {@link LineHandler} — pipe and invoke the handler per line (lines are still captured)
+ * - {@link LineOutputOptions} — pipe and invoke the handler, with optional capture
  * - `(LineHandler | "capture")[]` — pipe; `"capture"` is a no-op marker, handlers run per line
  */
-export type StdioOption = ExecStdio | LineHandler | "capture" | (LineHandler | "capture")[];
+export type StdioOption =
+  | ExecStdio
+  | LineHandler
+  | LineOutputOptions
+  | "capture"
+  | (LineHandler | "capture")[];
 
 /** Outcome of {@link spawn} / {@link spawnSync}: exit code, captured output, and line views. */
 export type ExecResult = {
@@ -341,7 +355,12 @@ function lineHandlers(option: StdioOption): LineHandler[] {
   if (Array.isArray(option)) {
     return option.filter((item): item is LineHandler => item !== "capture");
   }
+  if (typeof option === "object") return [option.onLine];
   return [];
+}
+
+function capturesLines(option: StdioOption): boolean {
+  return typeof option !== "object" || Array.isArray(option) || option.capture !== false;
 }
 
 /**
@@ -382,10 +401,11 @@ function resolveStdio(
   if (isPassthroughMode(option) && option !== "pipe") return { mode: option };
 
   const handlers = lineHandlers(option);
+  const capture = capturesLines(option);
   return {
     mode: "pipe",
     onLine: (line) => {
-      lines.push(line);
+      if (capture) lines.push(line);
       for (const handler of handlers) handler(line);
     },
   };

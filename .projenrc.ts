@@ -292,6 +292,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/lakebase@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@databricks/sdk-experimental@catalog:",
     "zod@catalog:",
@@ -375,6 +376,7 @@ project.applyToProjects(root, { identifierName: "graphiti", tags: "node" }, (p) 
     "Typed Graphiti options and bounded Python process supervision",
   );
   p.addDeps(
+    "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-graphiti@workspace:^",
   );
@@ -386,6 +388,7 @@ project.applyToProjects(root, { identifierName: "cli-lakebase-proxy", tags: "cli
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/lakebase@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "pg@^8.22.0",
   );
@@ -608,6 +611,7 @@ project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) =>
     "@dbx-tools/shared-model@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/model@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
@@ -642,6 +646,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/path@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "@mastra/ai-sdk@catalog:",
@@ -935,6 +940,7 @@ project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p)
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/email@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/tunnel@workspace:^",
     "@dbx-tools/shared-email@workspace:^",
     "http-proxy-3@catalog:",
@@ -1379,6 +1385,10 @@ const pythonPackages: project.PythonPackageOptions[] = [
       },
       {
         package: "@dbx-tools/lakebase",
+        modules: ["bindings"],
+      },
+      {
+        package: "@dbx-tools/postgres",
         modules: ["bindings"],
       },
     ],

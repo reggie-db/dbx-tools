@@ -1,14 +1,15 @@
-import type { ChildProcess } from "node:child_process";
+import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
+import type { ChildProcessResult } from "@dbx-tools/core/exec";
 import { asyncUtils, type Logger } from "@dbx-tools/shared-core";
 
 const STABLE_CONNECTION_MS = 60_000;
-const DEFAULT_SHUTDOWN_GRACE_MS = 10_000;
 /** How long to wait after a child start before the first public liveness probe. */
 const DEFAULT_HEALTH_CHECK_GRACE_MS = 45_000;
 /** Interval between public liveness probes while a child is running. */
 const DEFAULT_HEALTH_CHECK_INTERVAL_MS = 30_000;
 /** Consecutive failed probes required before killing a still-running child. */
 const DEFAULT_HEALTH_CHECK_FAILURES = 2;
+type ManagedProcess = Pick<AppKitChildProcess, "process" | "shutdown">;
 
 /** Handle used to stop a supervised child and its restart loop. */
 export interface ProcessSupervisor {
@@ -27,9 +28,8 @@ type ProcessOutcome = {
 export interface ProcessSupervisorOptions {
   name: string;
   logger: Logger;
-  start: () => ChildProcess | Promise<ChildProcess>;
+  start: () => ManagedProcess | Promise<ManagedProcess>;
   retryDelaysMs?: readonly number[];
-  shutdownGraceMs?: number;
   /**
    * Optional public liveness probe. When it returns `false` while the child is
    * still running, the supervisor kills the child so the forever-loop restarts
@@ -46,16 +46,14 @@ export interface ProcessSupervisorOptions {
 /** Supervise and restart a long-running child process until explicitly stopped. */
 export function superviseProcessForever(options: ProcessSupervisorOptions): ProcessSupervisor {
   const controller = new AbortController();
-  let child: ChildProcess | undefined;
+  let managedProcess: ManagedProcess | undefined;
 
   const terminateChild = () => {
-    const stoppingChild = child;
-    if (!stoppingChild) return;
-    stoppingChild.kill("SIGTERM");
-    setTimeout(
-      () => stoppingChild.kill("SIGKILL"),
-      options.shutdownGraceMs ?? DEFAULT_SHUTDOWN_GRACE_MS,
-    ).unref();
+    const stoppingProcess = managedProcess;
+    if (!stoppingProcess) return;
+    void stoppingProcess
+      .shutdown()
+      .catch((error) => options.logger.error(`${options.name} did not stop`, { error }));
   };
 
   const stop = () => {
@@ -65,7 +63,7 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
     process.off("exit", onProcessExit);
   };
   const onProcessExit = () => {
-    if (child) child.kill("SIGTERM");
+    terminateChild();
   };
   process.once("exit", onProcessExit);
 
@@ -75,12 +73,14 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
       const startedAt = Date.now();
       let outcome: ProcessOutcome;
       try {
-        child = await options.start();
-        outcome = await processOutcome(child, controller.signal, options);
+        managedProcess = await options.start();
+        const child = managedProcess.process;
+        if (!child) throw new Error(`${options.name} did not start a child process`);
+        outcome = await processOutcome(managedProcess, child, controller.signal, options);
       } catch (error) {
         outcome = { error };
       } finally {
-        child = undefined;
+        managedProcess = undefined;
       }
       if (controller.signal.aborted) return;
       if (Date.now() - startedAt >= STABLE_CONNECTION_MS) failures = 0;
@@ -101,7 +101,8 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
 }
 
 function processOutcome(
-  child: ChildProcess,
+  managedProcess: ManagedProcess,
+  child: ChildProcessResult,
   signal: AbortSignal,
   options: ProcessSupervisorOptions,
 ): Promise<ProcessOutcome> {
@@ -122,8 +123,7 @@ function processOutcome(
     const onExit = (code: number | null, exitSignal: NodeJS.Signals | null) =>
       finish({ code, signal: exitSignal });
     const onError = (error: Error) => {
-      child.kill("SIGTERM");
-      finish({ error });
+      finishAfterShutdown({ error });
     };
     const onAbort = () => {
       finish({ signal: "SIGTERM" });
@@ -160,16 +160,21 @@ function processOutcome(
         });
         if (consecutiveFailures >= threshold) {
           options.logger.warn(`${options.name} restarting after failed public liveness probes`);
-          child.kill("SIGTERM");
-          setTimeout(
-            () => child.kill("SIGKILL"),
-            options.shutdownGraceMs ?? DEFAULT_SHUTDOWN_GRACE_MS,
-          ).unref();
-          finish({ unhealthy: true, signal: "SIGTERM" });
+          finishAfterShutdown({ unhealthy: true, signal: "SIGTERM" });
           return;
         }
       }
       scheduleHealthCheck(options.healthCheckIntervalMs ?? DEFAULT_HEALTH_CHECK_INTERVAL_MS);
+    };
+
+    const finishAfterShutdown = (outcome: ProcessOutcome) => {
+      void managedProcess.shutdown().then(
+        () => finish(outcome),
+        (error) => {
+          options.logger.error(`${options.name} did not stop`, { error });
+          finish(outcome);
+        },
+      );
     };
 
     child.once("exit", onExit);

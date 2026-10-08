@@ -1,6 +1,4 @@
-import { spawn } from "node:child_process";
-import { Transform } from "node:stream";
-import { StringDecoder } from "node:string_decoder";
+import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
 
 const EMOJI = /\p{Extended_Pictographic}\uFE0F?/gu;
 
@@ -8,41 +6,39 @@ export function normalizeProcessOutput(value: string): string {
   return value.replace(EMOJI, "").replace(/^[ \t]+/gm, "");
 }
 
-function normalizedOutput(destination: NodeJS.WriteStream): Transform {
-  const decoder = new StringDecoder("utf8");
-  return new Transform({
-    transform(chunk, _encoding, callback) {
-      destination.write(normalizeProcessOutput(decoder.write(chunk)));
-      callback();
-    },
-    flush(callback) {
-      destination.write(normalizeProcessOutput(decoder.end()));
-      callback();
-    },
-  });
+function writeNormalizedLine(destination: NodeJS.WriteStream, line: string): void {
+  destination.write(`${normalizeProcessOutput(line)}\n`);
 }
 
-const child = spawn("bun", ["src/server.ts"], {
-  detached: true,
-  env: process.env,
-  stdio: ["inherit", "pipe", "pipe"],
-});
+const managedProcess = new AppKitChildProcess([
+  "bun",
+  ["src/server.ts"],
+  {
+    detached: true,
+    env: process.env,
+    stdin: "inherit",
+    stdout: { onLine: (line) => writeNormalizedLine(process.stdout, line), capture: false },
+    stderr: { onLine: (line) => writeNormalizedLine(process.stderr, line), capture: false },
+  },
+]);
+const child = managedProcess.start();
+let stopping = false;
+const signalHandlers = new Map<NodeJS.Signals, () => void>();
 
-child.stdout.pipe(normalizedOutput(process.stdout));
-child.stderr.pipe(normalizedOutput(process.stderr));
-
-function forward(signal: NodeJS.Signals): void {
-  if (child.pid) process.kill(-child.pid, signal);
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  const handler = () => {
+    if (stopping) return;
+    stopping = true;
+    for (const [name, callback] of signalHandlers) process.off(name, callback);
+    void managedProcess
+      .shutdown()
+      .catch((error) => console.error(error))
+      .finally(() => process.kill(process.pid, signal));
+  };
+  signalHandlers.set(signal, handler);
+  process.once(signal, handler);
 }
 
-process.once("SIGINT", () => forward("SIGINT"));
-process.once("SIGTERM", () => forward("SIGTERM"));
-
-child.once("error", (error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
-
-child.once("exit", (code, signal) => {
-  process.exitCode = code ?? (signal ? 1 : 0);
+void child.then((result) => {
+  if (!stopping) process.exitCode = result.exitCode ?? (child.signalCode ? 1 : 0);
 });

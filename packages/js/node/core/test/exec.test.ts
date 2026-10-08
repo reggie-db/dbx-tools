@@ -138,4 +138,17 @@ describe("live process handle", () => {
     const viaThen = await proc.then((r) => r.stdout);
     assert.equal(viaThen, "hi");
   });
+
+  it("streams lines without retaining them when capture is disabled", async () => {
+    const lines: string[] = [];
+    const result = await exec.spawn(process.execPath, ["-e", "console.log('hi')"], {
+      stdout: { onLine: (line) => lines.push(line), capture: false },
+      stderr: "ignore",
+      stdin: "ignore",
+    });
+
+    assert.deepEqual(lines, ["hi"]);
+    assert.deepEqual(result.stdoutLines, []);
+    assert.equal(result.stdout, "");
+  });
 });

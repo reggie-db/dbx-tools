@@ -22,8 +22,8 @@
  * @module
  */
 
-import { type ChildProcess, spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
 import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
 import { log } from "@dbx-tools/shared-core";
 import { frp, interceptor, portr } from "@dbx-tools/tunnel";
@@ -34,9 +34,6 @@ import { startProxy } from "./proxy.ts";
 export { CommanderError };
 
 const logger = log.logger("tunnel");
-
-/** How long a child gets to exit on SIGTERM before the wrapper escalates. */
-const SHUTDOWN_GRACE_MS = 10_000;
 
 /**
  * A free loopback port, from the OS rather than a random guess: binding `0` and
@@ -61,18 +58,14 @@ function freePort(): Promise<number> {
  * forwarded before it leaves. Without this a crashed app leaves a portr tunnel
  * serving a dead port, which looks like a hang rather than a failure.
  */
-function supervise(children: readonly ChildProcess[]): void {
+function supervise(children: readonly AppKitChildProcess[]): void {
   let stopping = false;
   const stop = (code: number): void => {
     if (stopping) return;
     stopping = true;
-    for (const child of children) if (!child.killed) child.kill("SIGTERM");
-    setTimeout(() => {
-      for (const child of children) child.kill("SIGKILL");
-      process.exit(code);
-    }, SHUTDOWN_GRACE_MS);
+    void Promise.allSettled(children.map((child) => child.shutdown())).then(() => process.exit(code));
   };
-  for (const child of children) child.on("exit", (code) => stop(code ?? 1));
+  for (const child of children) child.process?.on("exit", (code) => stop(code ?? 1));
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
     process.on(signal, () => stop(0));
   }
@@ -81,7 +74,7 @@ function supervise(children: readonly ChildProcess[]): void {
 async function run(raw: TunnelOptions, command: readonly string[]): Promise<void> {
   const [executable, ...args] = command;
   const resolved = resolveTunnelOptions(raw);
-  const children: ChildProcess[] = [];
+  const children: AppKitChildProcess[] = [];
 
   // Two upstream modes:
   //   - WRAP: a command after `--`. The wrapper spawns it on a private loopback
@@ -93,15 +86,25 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
   let appPort: number;
   if (executable) {
     appPort = resolved.appPort ?? (await freePort());
-    const app = spawn(executable, args, {
-      env: {
-        ...process.env,
-        DATABRICKS_APP_PORT: String(appPort),
-        PORT: String(appPort),
-        HOST: "127.0.0.1",
-      },
-      stdio: "inherit",
-    });
+    const app = new AppKitChildProcess(
+      [
+        executable,
+        args,
+        {
+          env: {
+            ...process.env,
+            DATABRICKS_APP_PORT: String(appPort),
+            PORT: String(appPort),
+            HOST: "127.0.0.1",
+          },
+          stdin: "inherit",
+          stdout: "inherit",
+          stderr: "inherit",
+        },
+      ],
+      { gracefulTimeoutMs: 10_000 },
+    );
+    app.start();
     children.push(app);
   } else if (resolved.appPort) {
     appPort = resolved.appPort;
