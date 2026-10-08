@@ -130,6 +130,9 @@ export async function runRelease(
   const install = options.install ?? "auto";
 
   if (install === "always") runTaskCommand(root, "bun", ["install"]);
+  if (selection.validation && hasPackageScript(root, "eslint:fix")) {
+    runTaskCommand(root, "bun", ["run", "eslint:fix"]);
+  }
 
   prepareReleaseBranch({ branch, remote, root });
 
@@ -157,9 +160,6 @@ export async function runRelease(
   }
 
   runTaskCommand(root, "bun", ["run", "version:check"]);
-  if (selection.validation && hasPackageScript(root, "eslint:fix")) {
-    runTaskCommand(root, "bun", ["run", "eslint:fix"]);
-  }
   for (const task of selection.validation ? (options.validationTasks ?? []) : []) {
     runTaskCommand(root, "bun", ["run", task]);
   }
