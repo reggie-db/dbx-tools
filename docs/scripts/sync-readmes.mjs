@@ -285,7 +285,7 @@ function docsPackageJson() {
       scripts: {
         dev: "astro dev --host 127.0.0.1",
         build: "astro build",
-        "check-links": "node ../../docs/scripts/check-dist-links.mjs ../dist",
+        "check-links": "bun ../../docs/scripts/check-dist-links.mjs ../dist",
       },
       dependencies: docsToolchain,
       devDependencies: {},

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /** Validate built internal routes and fragments directly from the static dist tree. */
 import fs from "node:fs";
 import path from "node:path";
