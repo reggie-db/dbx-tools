@@ -147,6 +147,16 @@ export type MastraMemoryConfig = PgVectorConfig & {
   id?: string;
 };
 
+/** On-demand workspace skill search configuration. */
+export interface MastraSkillSearchConfig {
+  /** Maximum skill matches returned by one search. Defaults to 5. */
+  topK?: number;
+  /** Minimum BM25 relevance score. Defaults to 0.1. */
+  minScore?: number;
+  /** Loaded-skill thread-state TTL in milliseconds. Defaults to one hour. */
+  ttlMs?: number;
+}
+
 /**
  * Fine-grained control for the optional MCP server exposure
  * ({@link MastraPluginConfig.mcp}). Every field is optional; the object
@@ -207,6 +217,16 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * custom `workspace` keeps that workspace and its sandbox.
    */
   sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
+  /**
+   * AppKit cache TTL for user-scoped Databricks workspace skill files.
+   * Defaults to five minutes.
+   */
+  workspaceSkillRefreshTtlMs?: number;
+  /**
+   * Use Mastra's on-demand skill search instead of injecting the full skill
+   * catalogue. Defaults to true. Pass an object to tune search.
+   */
+  workspaceSkillSearch?: boolean | MastraSkillSearchConfig;
   /**
    * Code-defined agents. Accepts three shapes for convenience:
    *
@@ -646,6 +666,16 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: ["boolean", "string", "object"],
       description:
         'Command sandbox for auto-created agent workspaces. Defaults to Databricks Sandbox with Monty fallback; false disables command execution, "monty" selects Monty directly, and an object configures Databricks lifecycle/fallback settings.',
+    },
+    workspaceSkillRefreshTtlMs: {
+      type: "number",
+      description:
+        "AppKit cache TTL in milliseconds for user-scoped Databricks workspace skill files. Defaults to 5 minutes.",
+    },
+    workspaceSkillSearch: {
+      type: ["boolean", "object"],
+      description:
+        "Use Mastra on-demand skill search instead of injecting every skill description. Defaults to true.",
     },
     defaultAgent: {
       type: "string",

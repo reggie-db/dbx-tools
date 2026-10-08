@@ -273,6 +273,19 @@ Every `agents.createAgent()` gets a default Mastra `Workspace` from
 current OBO user's `WorkspaceClient`, so Mastra can discover Assistant-style
 `SKILL.md` files at request time.
 
+Path-backed mounts reuse one stable Mastra filesystem per resolved user,
+workspace host, and root. Reads use AppKit's `CacheManager`, keyed by the
+existing Mastra resolved user id. Concurrent misses coalesce, Lakebase-backed
+AppKit caches survive process restarts, and no access token or client enters a
+cache key or value. The default TTL is five minutes; set
+`workspaceSkillRefreshTtlMs` on the plugin or `createWorkspace()` to change it.
+
+The plugin uses Mastra's `SkillSearchProcessor` by default. The model searches
+the cached catalogue and loads relevant instructions instead of receiving every
+skill description on every turn. Set `workspaceSkillSearch: false` to retain
+Mastra's eager catalogue, or pass `{ topK, minScore, ttlMs }` to tune on-demand
+search.
+
 Locations are a named map (`skillFolders`), so an app refers to a tree by name
 rather than repeating a path. Each name mounts at `/<name>` in the workspace
 namespace (override with `mount`) and carries its own policy: `readable`
@@ -310,6 +323,8 @@ const agent = agents.createAgent({
       async () => ({
         mounts: { "/reference": myFilesystem },
         skillPaths: ["/reference/skills"],
+        // Stable custom mounts can opt into cross-request source reuse.
+        cacheKey: "reference-v1",
       }),
     ],
   }),
@@ -962,6 +977,12 @@ requiring callers to assemble a Mastra server by hand.
   auto-created workspaces. `false` disables command execution, `"monty"`
   selects Monty directly, and `true` or an object selects/configures
   Databricks.
+- `workspaceSkillRefreshTtlMs` controls AppKit-cached workspace skill reads.
+  Entries are isolated by the Mastra resolved user id and default to five
+  minutes.
+- `workspaceSkillSearch` defaults to Mastra's on-demand
+  `SkillSearchProcessor`. Pass `false` for the eager catalogue or an object with
+  `topK`, `minScore`, and `ttlMs` overrides.
 - `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
   list, or an options bag with `failOnError`, `userEmail`,

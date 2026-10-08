@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.61";
+export const PACKAGE_VERSION = "0.9.62";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -27,6 +27,7 @@ export * as sandbox from "./src/sandbox.ts";
 export * as server from "./src/server.ts";
 export * as serving from "./src/serving.ts";
 export * as servingSanitize from "./src/serving-sanitize.ts";
+export * as skillCache from "./src/skill-cache.ts";
 export * as skillPaths from "./src/skill-paths.ts";
 export * as statement from "./src/statement.ts";
 export * as storageSchema from "./src/storage-schema.ts";
@@ -41,7 +42,7 @@ export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolki
 export { chartPlanSchema, chartPlannerRequestSchema, chartToolOutputSchema } from "./src/chart.ts";
 export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
-export type { User, MastraMemoryConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
+export type { User, MastraMemoryConfig, MastraSkillSearchConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
 export type { MastraEvalDriverOptions } from "./src/evaluation.ts";
 export { MastraFileSystemAdapter } from "./src/filesystems.ts";
@@ -69,6 +70,8 @@ export { MastraServer } from "./src/server.ts";
 export type { AttributedIdentity, MastraApiGateOptions } from "./src/server.ts";
 export { MASTRA_MODEL_OVERRIDE_KEY } from "./src/serving.ts";
 export type { ModelOverrideRequest } from "./src/serving.ts";
+export { DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS, AppKitCachedFileSystem } from "./src/skill-cache.ts";
+export type { AppKitCachedFileSystemOptions, CachedWorkspaceSkillMount } from "./src/skill-cache.ts";
 export { ASSISTANT_SHARED_SKILLS_PATH } from "./src/skill-paths.ts";
 export { STATEMENT_ROW_CAP } from "./src/statement.ts";
 export { TYPOGRAPHY_RULE } from "./src/style.ts";

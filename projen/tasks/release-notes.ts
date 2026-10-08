@@ -7,7 +7,7 @@
  * @module
  */
 
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { log } from "@dbx-tools/shared-core";
 
@@ -59,7 +59,6 @@ export function writeReleaseNotes(options: WriteReleaseNotesOptions): string {
   const { prefix, root, version } = options;
   const destination = releaseNotesPath(root, version);
   mkdirSync(dirname(destination), { recursive: true });
-  removeStaleReleaseNotes(destination);
   const relative = join("docs", "releases", `v${version}.md`);
   const genieArgs = [
     "exec",
@@ -95,15 +94,6 @@ export function writeReleaseNotes(options: WriteReleaseNotesOptions): string {
   writeFileSync(destination, fallbackReleaseNotes(version, commits, previousTag || undefined));
   logger.warn("Genie release notes unavailable; wrote git-log summary", { path: relative });
   return destination;
-}
-
-function removeStaleReleaseNotes(destination: string): void {
-  const directory = dirname(destination);
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-    const path = join(directory, entry.name);
-    if (path !== destination) rmSync(path);
-  }
 }
 
 function readNotes(path: string): string {

@@ -6,11 +6,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { log } from "@dbx-tools/shared-core";
+import { MemoryFileSystem } from "@dbx-tools/shared-fs";
 import { RequestContext } from "@mastra/core/request-context";
 import type { WorkspaceSandbox } from "@mastra/core/workspace";
 
 import { buildAgents } from "../src/agents.ts";
 import { MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY } from "../src/config.ts";
+import { filesystems } from "../src/filesystems.ts";
 import { MontySandbox } from "../src/monty-sandbox.ts";
 import { DatabricksSandbox } from "../src/sandbox.ts";
 import { ASSISTANT_SHARED_SKILLS_PATH } from "../src/skill-paths.ts";
@@ -147,6 +149,36 @@ describe("createWorkspace sandbox", () => {
   });
 });
 
+describe("createWorkspace skill source identity", () => {
+  it("reuses a resolved filesystem for the same Mastra user scope", async () => {
+    const mount = filesystems(new MemoryFileSystem({ root: "/skills" }));
+    const workspace = createWorkspace({
+      assistantSkills: false,
+      sandbox: false,
+      mounts: [
+        ({ requestContext }) => ({
+          mounts: { "/skills": mount },
+          skillPaths: ["/skills"],
+          cacheKey: requestContext?.get("resolved-user") as string,
+        }),
+      ],
+    });
+    const firstContext = new RequestContext();
+    firstContext.set("resolved-user", "user-1");
+    const secondContext = new RequestContext();
+    secondContext.set("resolved-user", "user-1");
+    const otherContext = new RequestContext();
+    otherContext.set("resolved-user", "user-2");
+
+    const first = await workspace.resolveFilesystem({ requestContext: firstContext });
+    const second = await workspace.resolveFilesystem({ requestContext: secondContext });
+    const other = await workspace.resolveFilesystem({ requestContext: otherContext });
+
+    assert.equal(first, second);
+    assert.notEqual(first, other);
+  });
+});
+
 describe("agent workspace selection", () => {
   it("preserves an explicit workspace resolver opt-out", async () => {
     const built = await buildAgents({
@@ -182,5 +214,31 @@ describe("agent workspace selection", () => {
 
     const options = await built.agents.analyst?.getDefaultOptions();
     assert.equal(options?.requireToolApproval, requireToolApproval);
+  });
+
+  it("uses Mastra on-demand skill discovery by default", async () => {
+    const built = await buildAgents({
+      config: {},
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const processors = await built.agents[built.defaultAgentId]?.listConfiguredInputProcessors();
+    assert.ok(
+      processors?.some((processor) => "id" in processor && processor.id === "skill-search"),
+    );
+  });
+
+  it("can retain Mastra's eager skill catalogue explicitly", async () => {
+    const built = await buildAgents({
+      config: { workspaceSkillSearch: false },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const processors = await built.agents[built.defaultAgentId]?.listConfiguredInputProcessors();
+    assert.ok(
+      processors?.every((processor) => !("id" in processor) || processor.id !== "skill-search"),
+    );
   });
 });

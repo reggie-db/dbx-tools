@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -82,26 +82,6 @@ describe("release notes", () => {
         readFileSync(destination, "utf8"),
         fallbackReleaseNotes("1.0.1", ["feat: ship notes"], "v1.0.0"),
       );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it("removes stale release notes before writing the current version", () => {
-    const root = fixture();
-    const stale = releaseNotesPath(root, "0.9.9");
-    mkdirSync(join(root, "docs", "releases"), { recursive: true });
-    writeFileSync(stale, "# Stale\n");
-    try {
-      const destination = writeReleaseNotes({
-        prefix: "v",
-        root,
-        version: "1.0.1",
-        runGenie: () => false,
-      });
-
-      assert.equal(existsSync(stale), false);
-      assert.equal(existsSync(destination), true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

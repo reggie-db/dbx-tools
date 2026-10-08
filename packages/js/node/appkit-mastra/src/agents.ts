@@ -32,6 +32,7 @@ import type {
   ToolsInput,
 } from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
+import { SkillSearchProcessor } from "@mastra/core/processors";
 import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
 import type { Tool } from "@mastra/core/tools";
 import { createTool } from "@mastra/core/tools";
@@ -569,10 +570,16 @@ export async function buildAgents(opts: {
     let workspace = resolveAgentWorkspace(def.workspace);
     if (
       (def.workspace === undefined && !workspace) ||
-      ((extraSkillPaths?.length || config.sandbox !== undefined) && isDefaultWorkspace(workspace))
+      ((extraSkillPaths?.length ||
+        config.sandbox !== undefined ||
+        config.workspaceSkillRefreshTtlMs !== undefined) &&
+        isDefaultWorkspace(workspace))
     ) {
       workspace = createWorkspace({
         extraSkillPaths,
+        ...(config.workspaceSkillRefreshTtlMs !== undefined
+          ? { workspaceSkillRefreshTtlMs: config.workspaceSkillRefreshTtlMs }
+          : {}),
         sandbox:
           config.sandbox === undefined || config.sandbox === true ? "databricks" : config.sandbox,
       });
@@ -602,7 +609,7 @@ export async function buildAgents(opts: {
       tools,
       ...(memory ? { memory } : {}),
       ...(workspace ? { workspace } : {}),
-      inputProcessors,
+      inputProcessors: [...inputProcessors, ...workspaceSkillInputProcessors(workspace, config)],
     });
     // Surface the effective default model per agent so operators can
     // see at a glance which endpoint each agent points at without
@@ -632,6 +639,26 @@ export async function buildAgents(opts: {
 
   log.info("agents ready", { ids, defaultAgentId });
   return { agents, defaultAgentId, defaultModels, ambientTools };
+}
+
+function workspaceSkillInputProcessors(
+  workspace: Workspace | undefined,
+  config: MastraPluginConfig,
+): SkillSearchProcessor[] {
+  if (!workspace?.skills || config.workspaceSkillSearch === false) return [];
+  const options =
+    typeof config.workspaceSkillSearch === "object" ? config.workspaceSkillSearch : undefined;
+  return [
+    new SkillSearchProcessor({
+      workspace,
+      search: {
+        topK: options?.topK ?? 5,
+        minScore: options?.minScore ?? 0.1,
+      },
+      ...(options?.ttlMs !== undefined ? { ttl: options.ttlMs } : {}),
+      blockingRefresh: false,
+    }),
+  ];
 }
 
 /**

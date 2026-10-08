@@ -34,10 +34,17 @@ import {
   type WorkspaceSandboxResolver,
 } from "@mastra/core/workspace";
 
-import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY, type User } from "./config.ts";
-import { scratchFilesystem, filesystems } from "./filesystems.ts";
+import {
+  MASTRA_SCOPES_KEY,
+  MASTRA_USER_EMAIL_KEY,
+  MASTRA_USER_KEY,
+  resolveUserKey,
+  type User,
+} from "./config.ts";
+import { scratchFilesystem } from "./filesystems.ts";
 import { MontySandbox } from "./monty-sandbox.ts";
 import { DatabricksSandbox, type DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
+import { cachedWorkspaceSkillMount, DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS } from "./skill-cache.ts";
 import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-paths.ts";
 
 /* ------------------------------ constants ------------------------------ */
@@ -46,6 +53,8 @@ import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-p
 const WORKSPACE_FILE_SCOPES = ["workspace", "workspace.workspace", "all-apis"] as const;
 
 const logger = log.logger("mastra/workspaces");
+const MAX_SCOPED_WORKSPACE_FILESYSTEMS = 16;
+const scopedWorkspaceFilesystems = new Map<string, WorkspaceFilesystem>();
 
 /* -------------------------------- types -------------------------------- */
 
@@ -93,6 +102,11 @@ export interface WorkspaceMountContribution {
   mounts: Record<string, WorkspaceFilesystem>;
   /** Paths within the composite namespace where `SKILL.md` files are scanned. */
   skillPaths?: string[];
+  /**
+   * Stable identity for this contribution. When every non-empty contribution
+   * supplies one, Mastra reuses the resolved source across requests.
+   */
+  cacheKey?: string;
 }
 
 /** Contributes filesystem mounts (and optional skill paths) for one request. */
@@ -139,6 +153,11 @@ export interface CreateWorkspaceOptions {
   skills?: SkillsResolver;
   /** Forwarded to Mastra when skill discovery is enabled. */
   checkSkillFileMtime?: boolean;
+  /**
+   * AppKit cache TTL for Databricks skill metadata and content.
+   * Defaults to five minutes.
+   */
+  workspaceSkillRefreshTtlMs?: number;
   /** Enable BM25 keyword search over indexed workspace content. */
   bm25?: boolean;
   /**
@@ -220,7 +239,11 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
   const { id, name } = resolveWorkspaceIdentity(options);
   const skillFolders = resolveSkillFolders(options);
   const folderNames = Object.keys(skillFolders);
-  const resolvers = buildMountResolvers(skillFolders, options.mounts);
+  const resolvers = buildMountResolvers(
+    skillFolders,
+    options.mounts,
+    options.workspaceSkillRefreshTtlMs,
+  );
   const extraSkillPaths = options.extraSkillPaths ?? [];
   const skills =
     options.skills ??
@@ -238,6 +261,8 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
     customMountResolvers: options.mounts?.length ?? 0,
     customSkillsResolver: Boolean(options.skills),
     checkSkillFileMtime,
+    workspaceSkillRefreshTtlMs:
+      options.workspaceSkillRefreshTtlMs ?? DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS,
     bm25,
     extraSkillPaths: extraSkillPaths.length,
     sandbox: sandbox ? sandboxName(options.sandbox) : "disabled",
@@ -372,9 +397,11 @@ function hasWorkspaceFileScope(requestContext: RequestContext | undefined): bool
 async function resolveSkillFolderMounts(
   skillFolders: Record<string, SkillFolderOptions>,
   context: WorkspaceMountContext,
+  workspaceSkillRefreshTtlMs: number,
 ): Promise<WorkspaceMountContribution> {
   const mounts: Record<string, WorkspaceFilesystem> = {};
   const skillPaths: string[] = [];
+  const cacheKeys: string[] = [];
   const requestContext = context.requestContext;
 
   if (!requestContext || !shouldMountSkillFolders(requestContext)) {
@@ -388,12 +415,20 @@ async function resolveSkillFolderMounts(
 
   const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
   const client = user?.executionContext.client as WorkspaceClient | undefined;
+  const userKey = user ? resolveUserKey(requestContext) : undefined;
+  const host = client ? (await client.config.getHost()).toString() : undefined;
 
   for (const [name, folder] of Object.entries(skillFolders)) {
-    const filesystem = await resolveSkillFolderFilesystem(name, folder, context, client);
-    if (!filesystem) continue;
+    const resolved = await resolveSkillFolderFilesystem(name, folder, context, {
+      client,
+      host,
+      userKey,
+      workspaceSkillRefreshTtlMs,
+    });
+    if (!resolved) continue;
     const mount = folder.mount ?? `/${name}`;
-    mounts[mount] = filesystem;
+    mounts[mount] = resolved.filesystem;
+    if (resolved.cacheKey) cacheKeys.push(resolved.cacheKey);
     if (folder.readable !== false) skillPaths.push(mount);
   }
 
@@ -402,7 +437,13 @@ async function resolveSkillFolderMounts(
     skillPaths,
   });
 
-  return { mounts, skillPaths };
+  return {
+    mounts,
+    skillPaths,
+    ...(cacheKeys.length === Object.keys(mounts).length && cacheKeys.length > 0
+      ? { cacheKey: object.toStableKey(cacheKeys.sort()) }
+      : {}),
+  };
 }
 
 /**
@@ -413,13 +454,19 @@ async function resolveSkillFolderFilesystem(
   name: string,
   folder: SkillFolderOptions,
   context: WorkspaceMountContext,
-  client: WorkspaceClient | undefined,
-): Promise<WorkspaceFilesystem | undefined> {
+  cache: {
+    client: WorkspaceClient | undefined;
+    host: string | undefined;
+    userKey: string | undefined;
+    workspaceSkillRefreshTtlMs: number;
+  },
+): Promise<{ cacheKey?: string; filesystem: WorkspaceFilesystem } | undefined> {
   if (folder.filesystem !== undefined) {
-    return resolveSkillFolderValue(folder.filesystem, context);
+    const filesystem = await resolveSkillFolderValue(folder.filesystem, context);
+    return filesystem ? { filesystem } : undefined;
   }
   // A path mount needs the request's OBO client to reach the workspace.
-  if (folder.path === undefined || !client) {
+  if (folder.path === undefined || !cache.client || !cache.host || !cache.userKey) {
     logger.debug("skill-folder:skipped", {
       name,
       reason: folder.path === undefined ? "no-location" : "missing-obo-client",
@@ -428,7 +475,11 @@ async function resolveSkillFolderFilesystem(
   }
   const root = stringUtils.trimToNull(await resolveSkillFolderValue(folder.path, context));
   if (!root) return undefined;
-  return databricksFilesystem(client, root, folder.writable !== true);
+  return databricksFilesystem(cache.client, root, folder.writable !== true, {
+    host: cache.host,
+    ttlMs: cache.workspaceSkillRefreshTtlMs,
+    userKey: cache.userKey,
+  });
 }
 
 /** Read a {@link SkillFolderValue}, calling it when it is a per-request resolver. */
@@ -464,11 +515,14 @@ function resolveWorkspaceIdentity(options: CreateWorkspaceOptions): {
 function buildMountResolvers(
   skillFolders: Record<string, SkillFolderOptions>,
   mounts: WorkspaceMountResolver[] | undefined,
+  workspaceSkillRefreshTtlMs = DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS,
 ): WorkspaceMountResolver[] {
   const resolvers: WorkspaceMountResolver[] = [];
   const folderCount = Object.keys(skillFolders).length;
   if (folderCount > 0) {
-    resolvers.push((context) => resolveSkillFolderMounts(skillFolders, context));
+    resolvers.push((context) =>
+      resolveSkillFolderMounts(skillFolders, context, workspaceSkillRefreshTtlMs),
+    );
   }
   if (mounts?.length) {
     resolvers.push(...mounts);
@@ -506,18 +560,23 @@ async function databricksFilesystem(
   client: WorkspaceClient,
   root: string,
   readOnly: boolean = true,
-): Promise<WorkspaceFilesystem> {
+  cache: { host: string; ttlMs: number; userKey: string },
+): Promise<{ cacheKey: string; filesystem: WorkspaceFilesystem } | undefined> {
   const fs = new DatabricksFileSystem({
     client: workspaceClient.toLegacyWorkspaceClient(client),
     root,
     readOnly,
     createRoot: !readOnly,
   });
+  const cached = cachedWorkspaceSkillMount({
+    host: cache.host,
+    source: fs,
+    ttlMs: cache.ttlMs,
+    userKey: cache.userKey,
+  });
   try {
-    await fs.init();
-    if (await fs.exists(".")) {
-      return filesystems(fs, { readOnly });
-    }
+    await cached.filesystem.init();
+    if (await cached.filesystem.exists(".")) return cached;
   } catch (err) {
     logger.debug("databricks-mount:scratch-fallback", {
       root,
@@ -525,7 +584,7 @@ async function databricksFilesystem(
       error: errorUtils.errorMessage(err),
     });
   }
-  return scratchFilesystem();
+  return undefined;
 }
 
 /**
@@ -538,6 +597,8 @@ async function resolveWorkspaceContribution(
 ): Promise<WorkspaceMountContribution> {
   const mounts: Record<string, WorkspaceFilesystem> = {};
   const skillPaths: string[] = [];
+  const cacheKeys: string[] = [];
+  let cacheable = true;
 
   for (const [index, resolver] of resolvers.entries()) {
     const contribution = await resolver(context);
@@ -547,6 +608,10 @@ async function resolveWorkspaceContribution(
       skillPaths: contribution.skillPaths ?? [],
     });
     Object.assign(mounts, contribution.mounts);
+    if (Object.keys(contribution.mounts).length > 0) {
+      if (contribution.cacheKey) cacheKeys.push(contribution.cacheKey);
+      else cacheable = false;
+    }
     if (contribution.skillPaths?.length) {
       skillPaths.push(...contribution.skillPaths);
     }
@@ -557,7 +622,13 @@ async function resolveWorkspaceContribution(
     skillPaths,
   });
 
-  return { mounts, skillPaths };
+  return {
+    mounts,
+    skillPaths,
+    ...(cacheable && cacheKeys.length > 0
+      ? { cacheKey: object.toStableKey(cacheKeys.sort()) }
+      : {}),
+  };
 }
 
 /**
@@ -570,7 +641,7 @@ async function resolveWorkspaceFilesystem(
   resolvers: WorkspaceMountResolver[],
   context: WorkspaceMountContext,
 ): Promise<WorkspaceFilesystem> {
-  const { mounts } = await resolveWorkspaceContribution(resolvers, context);
+  const { cacheKey, mounts } = await resolveWorkspaceContribution(resolvers, context);
   const mountKeys = Object.keys(mounts);
   if (mountKeys.length === 0) {
     logger.debug("filesystem:scratch", {
@@ -579,7 +650,21 @@ async function resolveWorkspaceFilesystem(
     return scratchFilesystem();
   }
   logger.debug("filesystem:composite", { mountKeys });
-  return new CompositeFilesystem({ mounts });
+  if (!cacheKey) return new CompositeFilesystem({ mounts });
+  const existing = scopedWorkspaceFilesystems.get(cacheKey);
+  if (existing) {
+    scopedWorkspaceFilesystems.delete(cacheKey);
+    scopedWorkspaceFilesystems.set(cacheKey, existing);
+    return existing;
+  }
+  const filesystem = new CompositeFilesystem({ mounts });
+  scopedWorkspaceFilesystems.set(cacheKey, filesystem);
+  while (scopedWorkspaceFilesystems.size > MAX_SCOPED_WORKSPACE_FILESYSTEMS) {
+    const oldest = scopedWorkspaceFilesystems.keys().next().value;
+    if (oldest === undefined) break;
+    scopedWorkspaceFilesystems.delete(oldest);
+  }
+  return filesystem;
 }
 
 /**

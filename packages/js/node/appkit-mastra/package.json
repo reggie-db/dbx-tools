@@ -166,6 +166,10 @@
         "types": "./lib/src/serving.d.ts",
         "default": "./lib/src/serving.js"
       },
+      "./skill-cache": {
+        "types": "./lib/src/skill-cache.d.ts",
+        "default": "./lib/src/skill-cache.js"
+      },
       "./skill-paths": {
         "types": "./lib/src/skill-paths.d.ts",
         "default": "./lib/src/skill-paths.js"
@@ -205,7 +209,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.61",
+  "version": "0.9.62",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
@@ -238,6 +242,7 @@
     "./server": "./src/server.ts",
     "./serving-sanitize": "./src/serving-sanitize.ts",
     "./serving": "./src/serving.ts",
+    "./skill-cache": "./src/skill-cache.ts",
     "./skill-paths": "./src/skill-paths.ts",
     "./statement": "./src/statement.ts",
     "./storage-schema": "./src/storage-schema.ts",
