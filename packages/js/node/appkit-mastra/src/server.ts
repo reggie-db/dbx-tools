@@ -29,6 +29,7 @@ import {
 } from "./config.ts";
 import { requestUserEmail, requestUserId } from "./identity.ts";
 import { resolveFeedbackEnabled } from "./mlflow.ts";
+import { recordActiveTraceAuth, recordActiveTraceUser } from "./telemetry.ts";
 
 import {
   extractModelOverride,
@@ -222,6 +223,18 @@ export class MastraServer extends ExpressMastraServer {
       userId: requestUserId(req),
       email: requestUserEmail(req),
     });
+    const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
+    if (user) {
+      recordActiveTraceAuth(
+        "isUserContext" in user.executionContext ? "obo" : "service-principal",
+      );
+    }
+    const traceUser = [
+      requestContext.get(MASTRA_USER_EMAIL_KEY),
+      requestContext.get(MASTRA_USER_NAME_KEY),
+      requestContext.get(MASTRA_RESOURCE_ID_KEY),
+    ].find((value): value is string => typeof value === "string" && value.trim().length > 0);
+    recordActiveTraceUser(traceUser);
   }
 
   /**

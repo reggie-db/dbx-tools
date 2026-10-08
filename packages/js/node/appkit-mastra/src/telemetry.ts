@@ -20,13 +20,45 @@
 
 import { StringDecoder } from "node:string_decoder";
 
-import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
+import { environmentUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
-import { context, SpanKind, trace, type Span } from "@opentelemetry/api";
+import { context, createContextKey, SpanKind, trace, type Span } from "@opentelemetry/api";
 import { getRPCMetadata, RPCType } from "@opentelemetry/core";
 import type express from "express";
 
 import { USER_EMAIL_HEADER, USER_ID_HEADER } from "./identity.ts";
+import {
+  directMlflowTracingActive,
+  updateActiveMlflowTrace,
+  updateActiveMlflowTraceTags,
+} from "./mlflow.ts";
+import {
+  MLFLOW_AGENT_TAG,
+  MLFLOW_AGENT_TAG_ATTR,
+  MLFLOW_GENIE_TAG,
+  MLFLOW_GENIE_TAG_ATTR,
+  MLFLOW_MODEL_TAG,
+  MLFLOW_LOCAL_TAG,
+  MLFLOW_OBO_AUTH_TAG,
+  MLFLOW_SP_AUTH_TAG,
+  MLFLOW_TRACE_TAG_PREFIX,
+} from "./trace-attributes.ts";
+
+export {
+  MLFLOW_AGENT_TAG,
+  MLFLOW_AGENT_TAG_ATTR,
+  MLFLOW_GENIE_TAG,
+  MLFLOW_GENIE_TAG_ATTR,
+  MLFLOW_MODEL_TAG,
+  MLFLOW_MODEL_TAG_ATTR,
+  MLFLOW_LOCAL_TAG,
+  MLFLOW_LOCAL_TAG_ATTR,
+  MLFLOW_OBO_AUTH_TAG,
+  MLFLOW_OBO_AUTH_TAG_ATTR,
+  MLFLOW_SP_AUTH_TAG,
+  MLFLOW_SP_AUTH_TAG_ATTR,
+  MLFLOW_TRACE_TAG_PREFIX,
+} from "./trace-attributes.ts";
 
 const logger = log.logger("mastra/telemetry");
 
@@ -74,19 +106,10 @@ export const GEN_AI_OPERATION_NAME_ATTR = "gen_ai.operation.name";
 export const MLFLOW_USER_ATTR = "user.id";
 /** Root-span session id that enables the MLflow Sessions tab. */
 export const MLFLOW_SESSION_ATTR = "session.id";
-/**
- * Prefix Databricks/MLflow copies onto the unified-view `tags` map. The
- * suffix after this prefix is the tag name shown in the experiment UI.
- */
-export const MLFLOW_TRACE_TAG_PREFIX = "mlflow.trace.tag.";
-/** Experiment-UI tag marking a turn that called Genie. */
-export const MLFLOW_GENIE_TAG = "genie";
 /** Root-span type for a Mastra agent turn. */
 export const MLFLOW_SPAN_TYPE_AGENT = "AGENT";
 /** Span type for an `ask_genie` tool call. */
 export const MLFLOW_SPAN_TYPE_GENIE = "GENIE";
-/** Attribute key for the `genie` trace tag. */
-export const MLFLOW_GENIE_TAG_ATTR = `${MLFLOW_TRACE_TAG_PREFIX}${MLFLOW_GENIE_TAG}`;
 
 /** Root-span metadata known before a chat request is dispatched. */
 export interface ChatTurnTelemetryOptions {
@@ -99,16 +122,20 @@ interface TraceTarget {
   owned: boolean;
 }
 
+interface ChatTraceState {
+  readonly models: Set<string>;
+  readonly tags: Map<string, string>;
+  user?: string;
+}
+
+/** Values accepted by request-scoped trace-tag injection helpers. */
+export type ChatTraceTagValue = string | number | boolean;
+
+const CHAT_TRACE_STATE_KEY = createContextKey("@dbx-tools/appkit-mastra/chat-trace-state");
+
 /** OpenTelemetry's sentinel for "no valid trace" - 32 zero hex chars. */
 const INVALID_TRACE_ID = "0".repeat(32);
 
-/**
- * Publish the turn's MLflow trace id before the handler writes the body.
- *
- * The chat UI only shows thumbs when this header is present. Stamping it here
- * (on the same span the middleware just resolved) avoids relying on async
- * Express continuation still sitting inside `context.with()`.
- */
 /**
  * Mark the active span as a Genie call so the experiment UI types it `GENIE`
  * and tags the trace `genie=true`. Safe no-op when no recording span is active.
@@ -135,14 +162,89 @@ function requestQuery(req: express.Request, name: string): string | undefined {
   return stringUtils.trimToNull(typeof value === "string" ? value : undefined) ?? undefined;
 }
 
-function stampMlflowActor(span: Span, req: express.Request): void {
+function stampMlflowActor(span: Span, req: express.Request): string | undefined {
   const user = requestHeader(req, USER_EMAIL_HEADER) ?? requestHeader(req, USER_ID_HEADER);
   if (user) span.setAttribute(MLFLOW_USER_ATTR, user);
   const session =
     requestHeader(req, thread.THREAD_ID_HEADER) ?? requestQuery(req, thread.THREAD_ID_QUERY);
   if (session) span.setAttribute(MLFLOW_SESSION_ATTR, session);
+  return user;
 }
 
+function traceId(span: Span | undefined = trace.getActiveSpan()): string | undefined {
+  const value = span?.spanContext().traceId;
+  return value && value !== INVALID_TRACE_ID ? value : undefined;
+}
+
+function activeChatTraceState(): ChatTraceState | undefined {
+  return context.active().getValue(CHAT_TRACE_STATE_KEY) as ChatTraceState | undefined;
+}
+
+function setChatTraceTag(
+  state: ChatTraceState,
+  name: string,
+  value: ChatTraceTagValue,
+): void {
+  const tag = stringUtils.trimToNull(name);
+  if (!tag) return;
+  state.tags.set(tag, String(value));
+}
+
+/** Inject one MLflow trace tag into the active chat request. */
+export function recordActiveTraceTag(
+  name: string,
+  value: ChatTraceTagValue = true,
+): void {
+  const state = activeChatTraceState();
+  if (state) setChatTraceTag(state, name, value);
+}
+
+/** Inject multiple MLflow trace tags into the active chat request. */
+export function recordActiveTraceTags(
+  tags: Readonly<Record<string, ChatTraceTagValue | undefined>>,
+): void {
+  const state = activeChatTraceState();
+  if (!state) return;
+  for (const [name, value] of Object.entries(tags)) {
+    if (value !== undefined) setChatTraceTag(state, name, value);
+  }
+}
+
+/** Record a selected model on the active chat trace, preserving first-use order. */
+export function recordActiveTraceModel(modelId: string): void {
+  const value = stringUtils.trimToNull(modelId);
+  if (!value) return;
+  activeChatTraceState()?.models.add(value);
+}
+
+/** Record the best resolved user identifier on the active chat trace. */
+export function recordActiveTraceUser(user: string | undefined): void {
+  const value = stringUtils.trimToNull(user);
+  if (!value) return;
+  const state = activeChatTraceState();
+  if (state) state.user = value;
+}
+
+/** Record one Databricks authentication mode used during the active chat trace. */
+export function recordActiveTraceAuth(auth: "obo" | "service-principal"): void {
+  recordActiveTraceTag(auth === "obo" ? MLFLOW_OBO_AUTH_TAG : MLFLOW_SP_AUTH_TAG);
+}
+
+/** Serialize model tags as a scalar or an ordered JSON array for multiple values. */
+export function modelTraceTag(models: Iterable<string>): string | undefined {
+  const values: string[] = [];
+  const seen = new Set<string>();
+  for (const model of models) {
+    const value = stringUtils.trimToNull(model);
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    values.push(value);
+  }
+  if (values.length === 0) return undefined;
+  return values.length === 1 ? values[0] : JSON.stringify(values);
+}
+
+/** Publish the turn's MLflow trace id before the handler writes the body. */
 function stampMlflowTraceId(res: express.Response, span: Span): void {
   if (res.headersSent) return;
   const traceId = span.spanContext().traceId;
@@ -315,6 +417,28 @@ class AssistantResponseCollector {
  */
 function resolveTraceTarget(): TraceTarget | undefined {
   const activeContext = context.active();
+  if (directMlflowTracingActive()) {
+    const span = trace
+      .getTracer(CHAT_TURN_TRACER)
+      .startSpan(
+        "mastra.chat_turn",
+        {
+          kind: SpanKind.SERVER,
+          attributes: {
+            [MLFLOW_AGENT_TAG_ATTR]: "true",
+            [MLFLOW_SPAN_TYPE_ATTR]: MLFLOW_SPAN_TYPE_AGENT,
+            [GEN_AI_OPERATION_NAME_ATTR]: "invoke_agent",
+          },
+        },
+        trace.deleteSpan(activeContext),
+      );
+    if (!span.isRecording()) {
+      span.end();
+      return undefined;
+    }
+    return { span, owned: true };
+  }
+
   const rpc = getRPCMetadata(activeContext);
   if (rpc?.type === RPCType.HTTP && rpc.span.isRecording()) {
     return { span: rpc.span, owned: false };
@@ -325,7 +449,18 @@ function resolveTraceTarget(): TraceTarget | undefined {
 
   const span = trace
     .getTracer(CHAT_TURN_TRACER)
-    .startSpan("mastra.chat_turn", { kind: SpanKind.SERVER }, activeContext);
+    .startSpan(
+      "mastra.chat_turn",
+      {
+        kind: SpanKind.SERVER,
+        attributes: {
+          [MLFLOW_AGENT_TAG_ATTR]: "true",
+          [MLFLOW_SPAN_TYPE_ATTR]: MLFLOW_SPAN_TYPE_AGENT,
+          [GEN_AI_OPERATION_NAME_ATTR]: "invoke_agent",
+        },
+      },
+      activeContext,
+    );
   if (!span.isRecording()) {
     span.end();
     return undefined;
@@ -358,14 +493,31 @@ export function chatTurnTelemetryMiddleware(
     next();
     return;
   }
+  const targetTraceId = traceId(target.span);
+  if (!targetTraceId) {
+    if (target.owned) target.span.end();
+    next();
+    return;
+  }
+  const traceState: ChatTraceState = { models: new Set(), tags: new Map() };
+  setChatTraceTag(traceState, MLFLOW_AGENT_TAG, true);
+  if (!environmentUtils.isDatabricksAppEnv()) {
+    setChatTraceTag(traceState, MLFLOW_LOCAL_TAG, true);
+  }
   stampMlflowTraceId(res, target.span);
-  stampMlflowActor(target.span, req);
+  traceState.user = stampMlflowActor(target.span, req);
   target.span.setAttribute(MLFLOW_SPAN_TYPE_ATTR, MLFLOW_SPAN_TYPE_AGENT);
   target.span.setAttribute(GEN_AI_OPERATION_NAME_ATTR, "invoke_agent");
+  target.span.setAttribute(MLFLOW_AGENT_TAG_ATTR, "true");
   const identity =
     typeof options.identity === "function" ? options.identity(req) : options.identity;
   if (identity) {
     target.span.setAttribute(CHAT_IDENTITY_ATTR, identity);
+    setChatTraceTag(
+      traceState,
+      identity === "obo" ? MLFLOW_OBO_AUTH_TAG : MLFLOW_SP_AUTH_TAG,
+      true,
+    );
   }
   target.span.setAttribute(CHAT_GENIE_USED_ATTR, false);
 
@@ -382,7 +534,9 @@ export function chatTurnTelemetryMiddleware(
   const collector = new AssistantResponseCollector();
   let outputRecorded = false;
   let fullOutputRecorded = false;
+  let genieRecorded = false;
   let ownedSpanEnded = false;
+  let traceFinalized = false;
   const passThroughWrite = res.write.bind(res) as (...args: unknown[]) => boolean;
   const passThroughEnd = res.end.bind(res) as (...args: unknown[]) => unknown;
   const passThroughJson = res.json.bind(res) as (body?: unknown) => express.Response;
@@ -397,9 +551,31 @@ export function chatTurnTelemetryMiddleware(
     fullOutputRecorded = true;
   };
   const recordGenie = (used: boolean): void => {
-    if (!used) return;
+    if (!used || genieRecorded) return;
+    genieRecorded = true;
     target.span.setAttribute(CHAT_GENIE_USED_ATTR, true);
     target.span.setAttribute(MLFLOW_GENIE_TAG_ATTR, "true");
+    setChatTraceTag(traceState, MLFLOW_GENIE_TAG, true);
+    context.with(trace.setSpan(context.active(), target.span), () => {
+      updateActiveMlflowTraceTags({ [MLFLOW_GENIE_TAG]: "true" });
+    });
+  };
+  const finalizeTrace = (): void => {
+    if (traceFinalized) return;
+    traceFinalized = true;
+    const model = modelTraceTag(traceState.models);
+    if (model) setChatTraceTag(traceState, MLFLOW_MODEL_TAG, model);
+    const tags = Object.fromEntries(traceState.tags);
+    for (const [name, value] of traceState.tags) {
+      target.span.setAttribute(`${MLFLOW_TRACE_TAG_PREFIX}${name}`, value);
+    }
+    if (traceState.user) target.span.setAttribute(MLFLOW_USER_ATTR, traceState.user);
+    context.with(trace.setSpan(context.active(), target.span), () => {
+      updateActiveMlflowTrace({
+        ...(Object.keys(tags).length > 0 ? { tags } : {}),
+        ...(traceState.user ? { user: traceState.user } : {}),
+      });
+    });
   };
   const endOwnedSpan = (): void => {
     if (!target.owned || ownedSpanEnded) return;
@@ -424,6 +600,7 @@ export function chatTurnTelemetryMiddleware(
     recordOutput(collector.finish());
     recordFullOutput(collector.rawBody());
     recordGenie(collector.usedGenie());
+    finalizeTrace();
     try {
       return passThroughEnd(chunk, ...rest);
     } finally {
@@ -435,10 +612,17 @@ export function chatTurnTelemetryMiddleware(
     recordOutput(collector.finish());
     recordFullOutput(collector.rawBody());
     recordGenie(collector.usedGenie());
+    finalizeTrace();
     endOwnedSpan();
   });
 
-  context.with(trace.setSpan(context.active(), target.span), next);
+  const chatContext = trace
+    .setSpan(context.active(), target.span)
+    .setValue(CHAT_TRACE_STATE_KEY, traceState);
+  context.with(chatContext, () => {
+    updateActiveMlflowTraceTags({ [MLFLOW_AGENT_TAG]: "true" });
+    next();
+  });
 }
 
 /**

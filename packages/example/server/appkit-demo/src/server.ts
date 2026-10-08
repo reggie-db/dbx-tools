@@ -283,7 +283,11 @@ const searchProvider = USE_VECTOR_SEARCH
 
 await appkit.createApp({
   plugins: [
-    server({ host, staticPath: clientDist }),
+    // AppKit's server plugin enables HTTP/Express tracing by default whenever
+    // an exporter is active. This demo wants agent traces, not one trace per
+    // request; appkit-mastra creates a request-lifetime chat root when the HTTP
+    // instrumentation is disabled.
+    server({ host, staticPath: clientDist, telemetry: { traces: false } }),
     genie(),
     lakebase({ pool: postgresConnectionOptions({}) }),
     ...(graphitiEnabled ? [graphiti()] : []),

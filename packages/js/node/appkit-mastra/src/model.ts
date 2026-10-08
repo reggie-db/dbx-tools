@@ -37,6 +37,7 @@ import {
   rewriteServingResponseStream,
 } from "./serving-sanitize.ts";
 import { MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving.ts";
+import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
 
 type ModelClass = model.ModelClass;
 const { parseModelClass } = classes;
@@ -135,6 +136,7 @@ export async function buildModel(
   // (the active OBO scope, or the service principal) when it's absent.
   const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
   const executionContext = user?.executionContext ?? getExecutionContext();
+  recordActiveTraceAuth("isUserContext" in executionContext ? "obo" : "service-principal");
   const clientConfig = executionContext.client.config;
   const host = (await clientConfig.getHost()).toString();
   const headers = new Headers();
@@ -165,6 +167,7 @@ export async function buildModel(
     selectionInput(config, requested, overrides.modelClass, serving),
   );
   logger.debug("model selected", { modelId, source, requested });
+  recordActiveTraceModel(modelId);
 
   return {
     providerId: config.providerId ?? "databricks",

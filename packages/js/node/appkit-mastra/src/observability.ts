@@ -49,7 +49,7 @@ import { OtelBridge } from "@mastra/otel-bridge";
 import { propagation } from "@opentelemetry/api";
 
 import { TRACE_REQUEST_CONTEXT_KEYS } from "./config.ts";
-import { mlflowEnabled } from "./mlflow.ts";
+import { initializeDirectMlflowTracing, mlflowEnabled } from "./mlflow.ts";
 
 const logger = log.logger("mastra/observability");
 
@@ -117,7 +117,8 @@ export function configureOtelPropagation(): boolean {
  * OTel pipeline via `@mastra/otel-bridge`.
  *
  * Returns `undefined` when tracing is off: either the caller passed
- * `enabled: false`, or auto mode finds no OTLP endpoint (the default).
+ * `enabled: false`, or auto mode finds neither AppKit OTLP nor a local MLflow
+ * experiment.
  * Skipping the bridge in that case avoids `[OtelBridge] No OTEL span
  * found` log spam from Mastra spans that have no parent on the noop
  * tracer.
@@ -128,13 +129,17 @@ export async function buildObservability(
   const otelBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
   const otelTracesOverride = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
   const otlpConfigured = isOtlpTracingConfigured();
+  const directMlflowConfigured =
+    options?.enabled === false || otlpConfigured ? false : await initializeDirectMlflowTracing();
+  if (directMlflowConfigured) configureOtelPropagation();
+  const tracingConfigured = otlpConfigured || directMlflowConfigured;
 
-  if (options?.enabled === false || (options?.enabled !== true && !otlpConfigured)) {
+  if (options?.enabled === false || (options?.enabled !== true && !tracingConfigured)) {
     logger.info("Mastra observability off", {
       reason:
         options?.enabled === false
           ? "disabled in plugin config"
-          : "OTEL_EXPORTER_OTLP_ENDPOINT unset",
+          : "no OTLP endpoint or direct MLflow experiment configured",
     });
     return undefined;
   }
@@ -164,7 +169,7 @@ export async function buildObservability(
     otelBase: otelBase ?? "<unset>",
     resolvedTracesUrl: resolvedTracesUrl ?? "<unset>",
     feedback,
-    observability: feedback ? "mlflow" : "otel",
+    observability: directMlflowConfigured ? "mlflow-direct" : feedback ? "mlflow" : "otel",
   });
 
   return new Observability({

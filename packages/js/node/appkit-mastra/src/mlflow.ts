@@ -27,12 +27,91 @@
 
 import { ConfigurationError } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
-import { asyncUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
+import { asyncUtils, environmentUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
+import type { Context } from "@opentelemetry/api";
+import type {
+  ReadableSpan,
+  Span as SdkSpan,
+  SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import type { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { z } from "zod";
 import { databricksFetch, readResponseJson, readResponseText } from "./rest.ts";
+import { MLFLOW_AGENT_TAG_ATTR } from "./trace-attributes.ts";
 
 const logger = log.logger("mastra/mlflow");
+
+type MlflowModule = typeof import("@mlflow/core");
+type UpdateCurrentTraceOptions = Parameters<MlflowModule["updateCurrentTrace"]>[0];
+
+let directMlflow: MlflowModule | undefined;
+let directMlflowInitStarted = false;
+let directMlflowProvider: NodeTracerProvider | undefined;
+let directMlflowProcessor: SpanProcessor | undefined;
+
+const NOISY_INSTRUMENTATION_SCOPES = new Set([
+  "@opentelemetry/instrumentation-express",
+  "@opentelemetry/instrumentation-http",
+  "cache-manager-cache-manager",
+]);
+
+function isAgentTraceRoot(span: SdkSpan): boolean {
+  return span.attributes[MLFLOW_AGENT_TAG_ATTR] === "true";
+}
+
+function isUsefulAgentDescendant(span: SdkSpan): boolean {
+  return !NOISY_INSTRUMENTATION_SCOPES.has(span.instrumentationScope.name);
+}
+
+/**
+ * Restrict the direct MLflow provider to chat roots and their descendants.
+ * AppKit and Mastra create other OTel roots for cache and plugin operations;
+ * forwarding those would recreate the one-trace-per-request noise this path is
+ * intended to avoid.
+ */
+export class AgentTraceSpanProcessor implements SpanProcessor {
+  private readonly traceIds = new Set<string>();
+  private readonly spanIds = new Set<string>();
+
+  constructor(private readonly delegate: SpanProcessor) {}
+
+  onStart(span: SdkSpan, parentContext: Context): void {
+    const traceId = span.spanContext().traceId;
+    const isRoot = !span.parentSpanContext?.spanId;
+    if (isRoot) {
+      if (!isAgentTraceRoot(span)) return;
+      this.traceIds.add(traceId);
+    } else if (!this.traceIds.has(traceId) || !isUsefulAgentDescendant(span)) {
+      return;
+    }
+    this.spanIds.add(span.spanContext().spanId);
+    this.delegate.onStart(span, parentContext);
+  }
+
+  onEnding(span: SdkSpan): void {
+    if (!this.spanIds.has(span.spanContext().spanId)) return;
+    this.delegate.onEnding?.(span);
+  }
+
+  onEnd(span: ReadableSpan): void {
+    const traceId = span.spanContext().traceId;
+    const spanId = span.spanContext().spanId;
+    if (!this.spanIds.delete(spanId)) return;
+    this.delegate.onEnd(span);
+    if (!span.parentSpanContext?.spanId) this.traceIds.delete(traceId);
+  }
+
+  forceFlush(): Promise<void> {
+    return this.delegate.forceFlush();
+  }
+
+  shutdown(): Promise<void> {
+    this.traceIds.clear();
+    this.spanIds.clear();
+    return this.delegate.shutdown();
+  }
+}
 
 /** Workspace client carried on an AppKit execution context. */
 type WorkspaceClient = appkit.WorkspaceClientLike;
@@ -214,14 +293,172 @@ function configuredExperiment(): { id?: string; name?: string } {
   };
 }
 
+/** Tracking URI for direct local MLflow tracing, with CLI-profile auth injected. */
+export function directMlflowTrackingUri(): string | undefined {
+  if (environmentUtils.isDatabricksAppEnv()) return undefined;
+  const configured = process.env.MLFLOW_TRACKING_URI?.trim();
+  if (configured && configured !== "databricks") return configured;
+  const profile = process.env.DATABRICKS_CONFIG_PROFILE?.trim();
+  return profile ? `databricks://${profile}` : "databricks";
+}
+
+/** Parse the optional UC table-prefix location used by direct local tracing. */
+export function directMlflowTraceLocation():
+  | { catalogName: string; schemaName: string; tablePrefix: string }
+  | undefined {
+  const catalogName = process.env.MLFLOW_UC_CATALOG?.trim();
+  const schemaName = process.env.MLFLOW_UC_SCHEMA?.trim();
+  const tablePrefix = process.env.MLFLOW_UC_TABLE_PREFIX?.trim();
+  if (catalogName && schemaName && tablePrefix) {
+    return { catalogName, schemaName, tablePrefix };
+  }
+
+  const prefix = normalizeUcPrefix(process.env.MLFLOW_UC_TRACE_PREFIX);
+  if (!prefix) return undefined;
+  const parts = prefix.split(".");
+  if (parts.length !== 3) return undefined;
+  const [prefixCatalog, prefixSchema, prefixTable] = parts;
+  if (!prefixCatalog || !prefixSchema || !prefixTable) return undefined;
+  return {
+    catalogName: prefixCatalog,
+    schemaName: prefixSchema,
+    tablePrefix: prefixTable,
+  };
+}
+
+/** Whether the local direct-to-experiment MLflow SDK has enough configuration. */
+export function directMlflowTracingConfigured(): boolean {
+  return Boolean(
+    !environmentUtils.isDatabricksAppEnv() &&
+      process.env.MLFLOW_EXPERIMENT_ID?.trim() &&
+      directMlflowTrackingUri(),
+  );
+}
+
+async function detectedDirectMlflowTraceLocation(
+  mlflow: MlflowModule,
+  trackingUri: string,
+  experimentId: string,
+  host: string | undefined,
+): Promise<{ catalogName: string; schemaName: string; tablePrefix: string } | undefined> {
+  const explicit = directMlflowTraceLocation();
+  if (explicit) return explicit;
+  try {
+    const authProvider = mlflow.createAuthProvider({
+      trackingUri,
+      ...(host ? { host } : {}),
+    });
+    const client = new mlflow.MlflowClient({ trackingUri, authProvider });
+    const experiment = await client.getExperiment(experimentId);
+    if (!experiment) return undefined;
+    const { ucLocationFromExperimentTags } = await import("@mlflow/core/dist/core/destination");
+    const location = ucLocationFromExperimentTags(experiment.tags);
+    if (!location?.tablePrefix) return undefined;
+    return {
+      catalogName: location.catalogName,
+      schemaName: location.schemaName,
+      tablePrefix: location.tablePrefix,
+    };
+  } catch (err) {
+    logger.warn("direct MLflow UC trace-location detection failed", {
+      experimentId,
+      error: errorUtils.errorMessage(err),
+    });
+    return undefined;
+  }
+}
+
+/**
+ * Start the MLflow Node tracer for local development when AppKit has no OTLP
+ * exporter. This provider is never started in the deployed Apps path, avoiding
+ * a second global OTel provider racing AppKit's telemetry manager.
+ */
+export async function initializeDirectMlflowTracing(): Promise<boolean> {
+  if (directMlflow) return true;
+  if (directMlflowInitStarted || !directMlflowTracingConfigured()) return false;
+  directMlflowInitStarted = true;
+
+  const experimentId = process.env.MLFLOW_EXPERIMENT_ID!.trim();
+  const trackingUri = directMlflowTrackingUri()!;
+  try {
+    const mlflow = await import("@mlflow/core");
+    const rawHost = process.env.DATABRICKS_HOST?.trim();
+    const host = rawHost
+      ? /^https?:\/\//i.test(rawHost)
+        ? rawHost
+        : `https://${rawHost}`
+      : undefined;
+    const traceLocation = await detectedDirectMlflowTraceLocation(
+      mlflow,
+      trackingUri,
+      experimentId,
+      host,
+    );
+    if (!traceLocation) {
+      throw new ConfigurationError(
+        "Direct local MLflow tracing requires a UC-linked experiment or MLFLOW_UC_TRACE_PREFIX.",
+      );
+    }
+    const [{ DatabricksUCTableSpanExporter, DatabricksUCTableSpanProcessor }, sdk] =
+      await Promise.all([
+        import("@mlflow/core/dist/exporters/uc_table"),
+        import("@opentelemetry/sdk-trace-node"),
+      ]);
+    const authProvider = mlflow.createAuthProvider({
+      trackingUri,
+      ...(host ? { host } : {}),
+    });
+    const client = new mlflow.MlflowClient({ trackingUri, authProvider });
+    const exporter = new DatabricksUCTableSpanExporter(client);
+    const processor = new AgentTraceSpanProcessor(
+      new DatabricksUCTableSpanProcessor(exporter, traceLocation),
+    );
+    const provider = new sdk.NodeTracerProvider({ spanProcessors: [processor] });
+    provider.register();
+    directMlflow = mlflow;
+    directMlflowProvider = provider;
+    directMlflowProcessor = processor;
+    logger.info("direct MLflow tracing enabled", {
+      experimentId,
+      trackingUri,
+      traceLocation,
+    });
+    return true;
+  } catch (err) {
+    logger.warn("direct MLflow tracing disabled", {
+      error: errorUtils.errorMessage(err),
+    });
+    return false;
+  }
+}
+
+/** Persist trace-level fields on the direct MLflow trace in the current OTel context. */
+export function updateActiveMlflowTrace(options: UpdateCurrentTraceOptions): void {
+  directMlflow?.updateCurrentTrace(options);
+}
+
+/** Persist tags on the direct MLflow trace active in the current OTel context. */
+export function updateActiveMlflowTraceTags(tags: Record<string, string>): void {
+  updateActiveMlflowTrace({ tags });
+}
+
+/** Whether this process owns the filtered local MLflow tracer provider. */
+export function directMlflowTracingActive(): boolean {
+  return directMlflowProcessor !== undefined;
+}
+
+/** Flush pending direct local trace exports during graceful shutdown. */
+export async function flushDirectMlflowTracing(): Promise<void> {
+  await directMlflowProcessor?.forceFlush();
+  await directMlflowProvider?.forceFlush();
+}
+
 /**
  * Whether MLflow feedback logging is available for this deployment.
  *
- * Enabled when an OTLP exporter endpoint is configured (traces are
- * actually shipped somewhere) AND an MLflow experiment is named - the
- * two signals that the OTLP backend is MLflow and traces will
- * materialize there. Both are standard env vars, so no plugin config is
- * required; a deployment opts in simply by wiring MLflow tracing.
+ * Enabled when an MLflow experiment is configured and traces have an export
+ * path: AppKit OTLP in a Databricks App, or the direct MLflow Node SDK outside
+ * one. Both paths are selected from standard environment values.
  */
 export function mlflowEnabled(): boolean {
   const hasExporter = Boolean(
@@ -231,7 +468,7 @@ export function mlflowEnabled(): boolean {
   const hasExperiment = Boolean(
     process.env.MLFLOW_EXPERIMENT_ID?.trim() || process.env.MLFLOW_EXPERIMENT_NAME?.trim(),
   );
-  return hasExporter && hasExperiment;
+  return hasExperiment && (hasExporter || directMlflowTracingConfigured());
 }
 
 /**

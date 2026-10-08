@@ -19,8 +19,7 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@opentelemetry/sdk-trace-base": "catalog:",
-    "@opentelemetry/sdk-trace-node": "catalog:",
+    "@mlflow/core": "catalog:",
     "@types/express": "catalog:",
     "@types/node": "catalog:",
     "@types/pg": "^8",
@@ -29,6 +28,7 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@mlflow/core": "catalog:",
     "skills": "^1"
   },
   "dependencies": {
@@ -58,6 +58,8 @@
     "@modelcontextprotocol/sdk": "catalog:",
     "@opentelemetry/api": "catalog:",
     "@opentelemetry/core": "catalog:",
+    "@opentelemetry/sdk-trace-base": "catalog:",
+    "@opentelemetry/sdk-trace-node": "catalog:",
     "@pydantic/monty": "catalog:",
     "express": "catalog:",
     "pg": "^8.22.0",
@@ -194,6 +196,10 @@
         "types": "./lib/src/telemetry.d.ts",
         "default": "./lib/src/telemetry.js"
       },
+      "./trace-attributes": {
+        "types": "./lib/src/trace-attributes.d.ts",
+        "default": "./lib/src/trace-attributes.js"
+      },
       "./validation": {
         "types": "./lib/src/validation.d.ts",
         "default": "./lib/src/validation.js"
@@ -249,6 +255,7 @@
     "./style": "./src/style.ts",
     "./summarize": "./src/summarize.ts",
     "./telemetry": "./src/telemetry.ts",
+    "./trace-attributes": "./src/trace-attributes.ts",
     "./validation": "./src/validation.ts",
     "./workspaces": "./src/workspaces.ts",
     "./writer": "./src/writer.ts",
@@ -257,10 +264,14 @@
   "files": [
     "index.ts",
     "src",
+    "exports.ts",
     "lib"
   ],
   "peerDependenciesMeta": {
     "skills": {
+      "optional": true
+    },
+    "@mlflow/core": {
       "optional": true
     }
   },

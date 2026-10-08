@@ -20,14 +20,24 @@ import {
   CHAT_RESPONSE_ATTR,
   chatTurnTelemetryMiddleware,
   GEN_AI_OPERATION_NAME_ATTR,
+  MLFLOW_AGENT_TAG_ATTR,
   MLFLOW_GENIE_TAG_ATTR,
+  MLFLOW_LOCAL_TAG_ATTR,
+  MLFLOW_MODEL_TAG_ATTR,
+  MLFLOW_OBO_AUTH_TAG_ATTR,
   MLFLOW_SESSION_ATTR,
   MLFLOW_SPAN_INPUTS_ATTR,
   MLFLOW_SPAN_OUTPUTS_ATTR,
   MLFLOW_SPAN_TYPE_AGENT,
   MLFLOW_SPAN_TYPE_ATTR,
   MLFLOW_SPAN_TYPE_GENIE,
+  MLFLOW_SP_AUTH_TAG_ATTR,
   MLFLOW_USER_ATTR,
+  recordActiveTraceAuth,
+  recordActiveTraceModel,
+  recordActiveTraceTag,
+  recordActiveTraceTags,
+  recordActiveTraceUser,
   stampGenieToolSpan,
 } from "../src/telemetry.ts";
 
@@ -35,6 +45,7 @@ const INCOMING_TRACE_ID = "0123456789abcdef0123456789abcdef";
 const INCOMING_SPAN_ID = "0123456789abcdef";
 const INCOMING_TRACEPARENT = `00-${INCOMING_TRACE_ID}-${INCOMING_SPAN_ID}-01`;
 const ORIGINAL_PROPAGATORS = process.env.OTEL_PROPAGATORS;
+const ORIGINAL_APP_ENV = process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
 
 interface TestResponse {
   headers: Record<string, string>;
@@ -107,6 +118,11 @@ function restorePropagatorsEnvironment(): void {
   else process.env.OTEL_PROPAGATORS = ORIGINAL_PROPAGATORS;
 }
 
+function restoreAppEnvironment(): void {
+  if (ORIGINAL_APP_ENV === undefined) delete process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
+  else process.env.DBX_TOOLS_DATABRICKS_APP_ENV = ORIGINAL_APP_ENV;
+}
+
 describe("chat trace topology", () => {
   const exporter = new InMemorySpanExporter();
   let provider: NodeTracerProvider;
@@ -123,11 +139,13 @@ describe("chat trace topology", () => {
   beforeEach(() => {
     exporter.reset();
     delete process.env.OTEL_PROPAGATORS;
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "false";
     restorePropagator();
   });
 
   afterEach(() => {
     restorePropagatorsEnvironment();
+    restoreAppEnvironment();
   });
 
   after(async () => {
@@ -160,6 +178,12 @@ describe("chat trace topology", () => {
         response as never,
         () => {
           assert.equal(trace.getActiveSpan(), root);
+          recordActiveTraceModel("model-a");
+          recordActiveTraceModel("model-a");
+          recordActiveTraceModel("model-b");
+          recordActiveTraceAuth("obo");
+          recordActiveTraceTag("custom_tag", "custom-value");
+          recordActiveTraceTags({ numeric_tag: 2, boolean_tag: true, skipped_tag: undefined });
           const genieSpan = tracer.startSpan("ask_genie", undefined, context.active());
           stampGenieToolSpan(genieSpan);
           genieSpan.end();
@@ -189,7 +213,16 @@ describe("chat trace topology", () => {
     assert.equal(exportedRoot.attributes[MLFLOW_SESSION_ATTR], "thread-1");
     assert.equal(exportedRoot.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_AGENT);
     assert.equal(exportedRoot.attributes[GEN_AI_OPERATION_NAME_ATTR], "invoke_agent");
+    assert.equal(exportedRoot.attributes[MLFLOW_AGENT_TAG_ATTR], "true");
     assert.equal(exportedRoot.attributes[MLFLOW_GENIE_TAG_ATTR], "true");
+    assert.equal(exportedRoot.attributes[MLFLOW_MODEL_TAG_ATTR], '["model-a","model-b"]');
+    assert.equal(exportedRoot.attributes[MLFLOW_OBO_AUTH_TAG_ATTR], "true");
+    assert.equal(exportedRoot.attributes[MLFLOW_SP_AUTH_TAG_ATTR], "true");
+    assert.equal(exportedRoot.attributes[MLFLOW_LOCAL_TAG_ATTR], "true");
+    assert.equal(exportedRoot.attributes["mlflow.traceTag.custom_tag"], "custom-value");
+    assert.equal(exportedRoot.attributes["mlflow.traceTag.numeric_tag"], "2");
+    assert.equal(exportedRoot.attributes["mlflow.traceTag.boolean_tag"], "true");
+    assert.equal(exportedRoot.attributes["mlflow.traceTag.skipped_tag"], undefined);
     const exportedGenie = spans.find((span) => span.name === "ask_genie");
     assert.ok(exportedGenie);
     assert.equal(exportedGenie.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_GENIE);
@@ -224,6 +257,8 @@ describe("chat trace topology", () => {
         request("/agents/support/stream", [{ role: "user", content: "stream this" }]) as never,
         response as never,
         () => {
+          recordActiveTraceModel("model-local");
+          recordActiveTraceUser("local-user@example.com");
           endChildSpans(tracer, ["invoke_agent support", "model", "tool", "memory", "processor"]);
           propagation.inject(context.active(), downstream);
           const payload = Buffer.from(
@@ -253,8 +288,13 @@ describe("chat trace topology", () => {
     assert.equal(roots[0]?.attributes[CHAT_IDENTITY_ATTR], "obo");
     assert.equal(roots[0]?.attributes[CHAT_GENIE_USED_ATTR], false);
     assert.equal(roots[0]?.attributes[MLFLOW_GENIE_TAG_ATTR], undefined);
-    assert.equal(roots[0]?.attributes[MLFLOW_USER_ATTR], undefined);
+    assert.equal(roots[0]?.attributes[MLFLOW_USER_ATTR], "local-user@example.com");
+    assert.equal(roots[0]?.attributes[MLFLOW_MODEL_TAG_ATTR], "model-local");
+    assert.equal(roots[0]?.attributes[MLFLOW_OBO_AUTH_TAG_ATTR], "true");
+    assert.equal(roots[0]?.attributes[MLFLOW_SP_AUTH_TAG_ATTR], undefined);
+    assert.equal(roots[0]?.attributes[MLFLOW_LOCAL_TAG_ATTR], "true");
     assert.equal(roots[0]?.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_AGENT);
+    assert.equal(roots[0]?.attributes[MLFLOW_AGENT_TAG_ATTR], "true");
     assert.equal(
       spans.every((span) => span.spanContext().traceId === roots[0]?.spanContext().traceId),
       true,
@@ -267,6 +307,7 @@ describe("chat trace topology", () => {
   });
 
   it("retains W3C parentage and injection when propagation is enabled", () => {
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
     assert.equal(configureOtelPropagation(), false);
     const extracted = propagation.extract(ROOT_CONTEXT, {
       traceparent: INCOMING_TRACEPARENT,
@@ -293,6 +334,7 @@ describe("chat trace topology", () => {
     assert.equal(span.parentSpanContext?.spanId, INCOMING_SPAN_ID);
     assert.equal(span.attributes[MLFLOW_SPAN_OUTPUTS_ATTR], "generated answer");
     assert.equal(span.attributes[MLFLOW_SPAN_INPUTS_ATTR], "generate this");
+    assert.equal(span.attributes[MLFLOW_LOCAL_TAG_ATTR], undefined);
     assert.match(String(span.attributes[CHAT_MESSAGES_ATTR]), /generate this/);
     assert.match(String(span.attributes[CHAT_RESPONSE_ATTR]), /generated answer/);
     assert.equal(exporter.getFinishedSpans().filter((item) => !item.parentSpanContext).length, 0);

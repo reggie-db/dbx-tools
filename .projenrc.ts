@@ -83,6 +83,7 @@ const root = new project.DBXToolsNodeProject({
     "@opentelemetry/core": "2.11.0",
     "@opentelemetry/sdk-trace-base": "2.8.0",
     "@opentelemetry/sdk-trace-node": "2.8.0",
+    "@mlflow/core": "0.4.0",
     "http-proxy-3": "^1.23.1",
     "better-auth": "1.7.6",
     "@better-auth/passkey": "1.7.6",
@@ -589,12 +590,12 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@pydantic/monty@catalog:",
     "@opentelemetry/api@catalog:",
     "@opentelemetry/core@catalog:",
+    "@opentelemetry/sdk-trace-base@catalog:",
+    "@opentelemetry/sdk-trace-node@catalog:",
     "zod@catalog:",
     "pg@^8.22.0",
   );
   p.addDevDeps(
-    "@opentelemetry/sdk-trace-base@catalog:",
-    "@opentelemetry/sdk-trace-node@catalog:",
     "@types/express@catalog:",
     "@types/pg@^8",
     "vitest@catalog:",
@@ -604,6 +605,9 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
   // so consumers opt in; the runtime falls back to a direct fetch when it is
   // not installed. Present in devDeps for local typecheck/tests.
   projectJs.addOptionalPeer(p, "skills@^1");
+  // Direct-to-experiment tracing for local development. Deployed Databricks
+  // Apps keep using AppKit's single OTLP provider and UC telemetry sidecar.
+  projectJs.addOptionalPeer(p, "@mlflow/core@catalog:");
 });
 
 // node-appkit-model-gateway: raw AppKit OpenAI/Anthropic protocol plugin.

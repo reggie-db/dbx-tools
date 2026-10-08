@@ -789,9 +789,17 @@ serialized envelopes. `appkit.mastra.identity.mode` records `obo` versus
 `service-principal`. The experiment UI's User and Tags columns read the OTel
 attributes Databricks documents for inbound traces: `user.id` (forwarded email
 or user id), `session.id` (Mastra thread id), `mlflow.spanType` (`AGENT` on the
-root, `GENIE` on `ask_genie`), and `mlflow.trace.tag.genie=true` when the turn
-called Genie. `appkit.mastra.genie.used` remains as a searchable custom
-attribute.
+root, `GENIE` on `ask_genie`), `mlflow.traceTag.agent=true` on every chat, and
+`mlflow.traceTag.genie=true` when the turn called Genie. The `model` trace tag is
+the selected model id for a one-model turn, or an ordered JSON array string when
+the turn uses multiple models. `obo_auth=true` and `sp_auth=true` independently
+record whether each Databricks authentication mode was invoked during the turn,
+so a mixed-auth turn keeps both tags. `local=true` is added automatically when
+`isDatabricksAppEnv()` is false. Package and application code can add more tags
+from anywhere inside the active request with `recordActiveTraceTag(name, value)`
+or `recordActiveTraceTags({ name: value })`. The reserved `mlflow.traceTag.`
+prefix persists these as trace tags rather than ordinary span metadata.
+`appkit.mastra.genie.used` remains as a searchable custom attribute.
 
 ```ts
 mastra({
@@ -806,6 +814,19 @@ On Apps UC traces it reads the experiment's
 so the assessment URI matches the row the experiment UI shows. The response
 header name and request/response schemas live in
 [`@dbx-tools/shared-mastra`](../../shared/mastra).
+
+Outside a Databricks App, an experiment id automatically enables direct MLflow
+tracing. The plugin initializes the MLflow Node SDK, injects
+`DATABRICKS_CONFIG_PROFILE` into a `databricks://<profile>` tracking URI, and
+auto-detects the experiment's UC trace location. `MLFLOW_UC_TRACE_PREFIX` or the
+`MLFLOW_UC_CATALOG` / `MLFLOW_UC_SCHEMA` / `MLFLOW_UC_TABLE_PREFIX` trio can
+override that location. The local provider forwards only `agent=true` chat
+roots and their descendants, so unrelated AppKit HTTP, cache, and plugin spans
+do not become traces. Before export it also writes the resolved email, user
+name, or resource id to MLflow's trace user field. Direct mode requires a
+UC-linked experiment. Inside a Databricks App (`isDatabricksAppEnv()`), this
+provider stays off so AppKit remains the single global OTel provider and the
+platform telemetry sidecar owns export.
 
 ### Databricks Apps -> Unity Catalog (the supported path)
 

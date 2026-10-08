@@ -1,27 +1,154 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { appkit } from "@dbx-tools/appkit";
+import { context, trace } from "@opentelemetry/api";
+import type {
+  ReadableSpan,
+  Span,
+  SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
 import {
+  AgentTraceSpanProcessor,
+  directMlflowTraceLocation,
+  directMlflowTracingConfigured,
+  directMlflowTrackingUri,
   logFeedback,
   mlflowAssessmentTraceId,
+  mlflowEnabled,
   mlflowExperimentManagerUrl,
   resetUcTracePrefixCache,
   ucTracePrefixFromExperimentTags,
   validateFeedbackConfig,
 } from "../src/mlflow.ts";
+import { MLFLOW_AGENT_TAG_ATTR } from "../src/trace-attributes.ts";
 
 const originalExperimentId = process.env.MLFLOW_EXPERIMENT_ID;
 const originalExperimentName = process.env.MLFLOW_EXPERIMENT_NAME;
 const originalUcPrefix = process.env.MLFLOW_UC_TRACE_PREFIX;
+const originalTrackingUri = process.env.MLFLOW_TRACKING_URI;
+const originalProfile = process.env.DATABRICKS_CONFIG_PROFILE;
+const originalAppOverride = process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
+const originalOtlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+const originalOtlpTracesEndpoint = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
 const originalFetch = globalThis.fetch;
+
+class RecordingSpanProcessor implements SpanProcessor {
+  readonly started: string[] = [];
+  readonly ended: string[] = [];
+
+  onStart(span: Span): void {
+    this.started.push(span.name);
+  }
+
+  onEnd(span: ReadableSpan): void {
+    this.ended.push(span.name);
+  }
+
+  async forceFlush(): Promise<void> {}
+
+  async shutdown(): Promise<void> {}
+}
 
 afterEach(() => {
   restoreEnvironment("MLFLOW_EXPERIMENT_ID", originalExperimentId);
   restoreEnvironment("MLFLOW_EXPERIMENT_NAME", originalExperimentName);
   restoreEnvironment("MLFLOW_UC_TRACE_PREFIX", originalUcPrefix);
+  restoreEnvironment("MLFLOW_TRACKING_URI", originalTrackingUri);
+  restoreEnvironment("DATABRICKS_CONFIG_PROFILE", originalProfile);
+  restoreEnvironment("DBX_TOOLS_DATABRICKS_APP_ENV", originalAppOverride);
+  restoreEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", originalOtlpEndpoint);
+  restoreEnvironment("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", originalOtlpTracesEndpoint);
   resetUcTracePrefixCache();
   globalThis.fetch = originalFetch;
+});
+
+describe("direct MLflow configuration", () => {
+  it("injects the selected Databricks profile automatically outside Apps", () => {
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "false";
+    process.env.DATABRICKS_CONFIG_PROFILE = "FEVM-REGGIE-PIERCE-AWS";
+    delete process.env.MLFLOW_TRACKING_URI;
+
+    assert.equal(
+      directMlflowTrackingUri(),
+      "databricks://FEVM-REGGIE-PIERCE-AWS",
+    );
+  });
+
+  it("never starts a direct provider inside a Databricks App", () => {
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    process.env.MLFLOW_TRACKING_URI = "databricks";
+
+    assert.equal(directMlflowTrackingUri(), undefined);
+    assert.equal(directMlflowTracingConfigured(), false);
+  });
+
+  it("parses the existing UC trace prefix for the direct SDK", () => {
+    process.env.MLFLOW_UC_TRACE_PREFIX = "reggie_pierce_aws_catalog.mlflow_traces.demo";
+    assert.deepEqual(directMlflowTraceLocation(), {
+      catalogName: "reggie_pierce_aws_catalog",
+      schemaName: "mlflow_traces",
+      tablePrefix: "demo",
+    });
+  });
+
+  it("enables MLflow feedback for automatic local direct tracing", () => {
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "false";
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    delete process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+
+    assert.equal(directMlflowTracingConfigured(), true);
+    assert.equal(mlflowEnabled(), true);
+  });
+});
+
+describe("direct MLflow span filtering", () => {
+  it("keeps chat semantics while dropping unrelated HTTP and cache spans", () => {
+    const recording = new RecordingSpanProcessor();
+    const provider = new NodeTracerProvider({
+      spanProcessors: [new AgentTraceSpanProcessor(recording)],
+    });
+    const httpTracer = provider.getTracer("@opentelemetry/instrumentation-http");
+    const cacheTracer = provider.getTracer("cache-manager-cache-manager");
+    const mastraTracer = provider.getTracer("mastra");
+
+    const health = httpTracer.startSpan("GET /health", {
+      attributes: { "http.target": "/health" },
+    });
+    health.end();
+
+    const root = mastraTracer.startSpan("mastra.chat_turn", {
+      attributes: { [MLFLOW_AGENT_TAG_ATTR]: "true" },
+    });
+    const parent = trace.setSpan(context.active(), root);
+    const request = httpTracer.startSpan("POST", undefined, parent);
+    const cache = cacheTracer.startSpan("cache.getOrExecute", undefined, parent);
+    const model = mastraTracer.startSpan("model_generation", undefined, parent);
+    request.end();
+    cache.end();
+    model.end();
+    root.end();
+
+    assert.deepEqual(recording.started, ["mastra.chat_turn", "model_generation"]);
+    assert.deepEqual(recording.ended, ["model_generation", "mastra.chat_turn"]);
+  });
+
+  it("accepts an explicitly tagged owned chat root", () => {
+    const recording = new RecordingSpanProcessor();
+    const provider = new NodeTracerProvider({
+      spanProcessors: [new AgentTraceSpanProcessor(recording)],
+    });
+    const root = provider.getTracer("telemetry").startSpan("mastra.chat_turn", {
+      attributes: { [MLFLOW_AGENT_TAG_ATTR]: "true" },
+    });
+    root.end();
+
+    assert.deepEqual(recording.started, ["mastra.chat_turn"]);
+    assert.deepEqual(recording.ended, ["mastra.chat_turn"]);
+  });
 });
 
 describe("feedback configuration", () => {

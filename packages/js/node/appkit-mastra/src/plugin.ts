@@ -100,6 +100,7 @@ import {
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
 import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
 import {
+  flushDirectMlflowTracing,
   logFeedback,
   mlflowExperimentManagerUrl,
   resolveFeedbackEnabled,
@@ -304,6 +305,13 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * shutdown budget.
    */
   async shutdown(): Promise<void> {
+    try {
+      await flushDirectMlflowTracing();
+    } catch (err) {
+      this.logger.warn("error flushing direct MLflow traces", {
+        error: errorUtils.errorMessage(err),
+      });
+    }
     const pool = this.servicePrincipalPool;
     if (!pool) return;
     this.servicePrincipalPool = null;

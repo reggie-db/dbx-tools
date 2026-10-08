@@ -1,12 +1,7 @@
 {
   "dependencies": [
     {
-      "name": "@opentelemetry/sdk-trace-base",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
-      "name": "@opentelemetry/sdk-trace-node",
+      "name": "@mlflow/core",
       "version": "catalog:",
       "type": "build"
     },
@@ -39,6 +34,11 @@
       "name": "vitest",
       "version": "catalog:",
       "type": "build"
+    },
+    {
+      "name": "@mlflow/core",
+      "version": "catalog:",
+      "type": "peer"
     },
     {
       "name": "skills",
@@ -172,6 +172,16 @@
     },
     {
       "name": "@opentelemetry/core",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@opentelemetry/sdk-trace-base",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@opentelemetry/sdk-trace-node",
       "version": "catalog:",
       "type": "runtime"
     },

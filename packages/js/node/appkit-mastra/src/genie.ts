@@ -59,7 +59,7 @@ import { chartPlannerRequestSchema, chartToolOutputSchema, prepareChart } from "
 import { MASTRA_USER_KEY, resolveUserKey } from "./config.ts";
 import type { MastraPluginConfig, User } from "./config.ts";
 import { fetchStatementData } from "./statement.ts";
-import { stampGenieToolSpan } from "./telemetry.ts";
+import { recordActiveTraceAuth, stampGenieToolSpan } from "./telemetry.ts";
 import { safeWriteProgress } from "./writer.ts";
 
 const logger = log.logger("mastra/genie");
@@ -128,6 +128,7 @@ function requireClient(
       "Invoke the tool from an agent turn served by the mastra plugin, which stamps the AppKit user on the Mastra request context.",
     );
   }
+  recordActiveTraceAuth("isUserContext" in user.executionContext ? "obo" : "service-principal");
   return { client: user.executionContext.client, requestContext };
 }
 
