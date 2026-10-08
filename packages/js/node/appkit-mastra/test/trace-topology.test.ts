@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 
 import { feedback } from "@dbx-tools/shared-mastra";
+import { injectRequestTags } from "@dbx-tools/appkit/request-tags";
 import { context, propagation, ROOT_CONTEXT, trace, type Tracer } from "@opentelemetry/api";
 import {
   getRPCMetadata,
@@ -167,14 +168,20 @@ describe("chat trace topology", () => {
     assert.equal(getRPCMetadata(rpcContext)?.span, root);
 
     const response = createResponse();
+    const chatRequest = request(
+      "/chat/support",
+      [{ role: "user", parts: [{ type: "text", text: "hello" }] }],
+      {
+        headers: {
+          "x-forwarded-email": "ada@example.com",
+          "x-mastra-thread-id": "thread-1",
+        },
+      },
+    );
+    injectRequestTags(chatRequest, { tunnel: "portr", tunnel_subdomain: "demo" });
     context.with(rpcContext, () => {
       chatTurnTelemetryMiddleware(
-        request("/chat/support", [{ role: "user", parts: [{ type: "text", text: "hello" }] }], {
-          headers: {
-            "x-forwarded-email": "ada@example.com",
-            "x-mastra-thread-id": "thread-1",
-          },
-        }) as never,
+        chatRequest as never,
         response as never,
         () => {
           assert.equal(trace.getActiveSpan(), root);
@@ -223,6 +230,8 @@ describe("chat trace topology", () => {
     assert.equal(exportedRoot.attributes["mlflow.traceTag.numeric_tag"], "2");
     assert.equal(exportedRoot.attributes["mlflow.traceTag.boolean_tag"], "true");
     assert.equal(exportedRoot.attributes["mlflow.traceTag.skipped_tag"], undefined);
+    assert.equal(exportedRoot.attributes["mlflow.traceTag.tunnel"], "portr");
+    assert.equal(exportedRoot.attributes["mlflow.traceTag.tunnel_subdomain"], "demo");
     const exportedGenie = spans.find((span) => span.name === "ask_genie");
     assert.ok(exportedGenie);
     assert.equal(exportedGenie.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_GENIE);

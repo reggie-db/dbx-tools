@@ -90,6 +90,10 @@
         "types": "./lib/src/portr.d.ts",
         "default": "./lib/src/portr.js"
       },
+      "./request-context": {
+        "types": "./lib/src/request-context.d.ts",
+        "default": "./lib/src/request-context.js"
+      },
       "./send-code": {
         "types": "./lib/src/send-code.d.ts",
         "default": "./lib/src/send-code.js"
@@ -125,6 +129,7 @@
     "./path-proxy": "./src/path-proxy.ts",
     "./plugin": "./src/plugin.ts",
     "./portr": "./src/portr.ts",
+    "./request-context": "./src/request-context.ts",
     "./send-code": "./src/send-code.ts",
     "./signing-key": "./src/signing-key.ts",
     "./supervisor": "./src/supervisor.ts",

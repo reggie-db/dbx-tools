@@ -14,6 +14,7 @@ export * as loginPage from "./src/login-page.ts";
 export * as pathProxy from "./src/path-proxy.ts";
 export * as plugin from "./src/plugin.ts";
 export * as portr from "./src/portr.ts";
+export * as requestContext from "./src/request-context.ts";
 export * as sendCode from "./src/send-code.ts";
 export * as signingKey from "./src/signing-key.ts";
 export * as supervisor from "./src/supervisor.ts";
@@ -31,6 +32,7 @@ export { AuthGateConfigSchema, AuthGatePlugin, authGate } from "./src/plugin.ts"
 export type { AuthGateConfig, SendCodeOptions, ResolvedAuthGateConfig, AuthGateApi } from "./src/plugin.ts";
 export { PortrOptionsSchema } from "./src/portr.ts";
 export type { PortrInstallOptions, PortrConfig, PortrOptions } from "./src/portr.ts";
+export { TUNNEL_TRACE_TAG, TUNNEL_SUBDOMAIN_TRACE_TAG } from "./src/request-context.ts";
 export { KEY_TTL_SECONDS } from "./src/signing-key.ts";
 export type { SigningKey } from "./src/signing-key.ts";
 export type { ProcessSupervisor, ProcessSupervisorOptions } from "./src/supervisor.ts";

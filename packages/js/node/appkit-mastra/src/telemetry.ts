@@ -20,6 +20,7 @@
 
 import { StringDecoder } from "node:string_decoder";
 
+import { getRequestTags } from "@dbx-tools/appkit/request-tags";
 import { environmentUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
 import { context, createContextKey, SpanKind, trace, type Span } from "@opentelemetry/api";
@@ -115,6 +116,10 @@ export const MLFLOW_SPAN_TYPE_GENIE = "GENIE";
 export interface ChatTurnTelemetryOptions {
   readonly identity?:
     "obo" | "service-principal" | ((request: express.Request) => "obo" | "service-principal");
+  /** Initial trace tags derived from the inbound request. */
+  readonly tags?:
+    | Readonly<Record<string, ChatTraceTagValue | undefined>>
+    | ((request: express.Request) => Readonly<Record<string, ChatTraceTagValue | undefined>>);
 }
 
 interface TraceTarget {
@@ -503,6 +508,15 @@ export function chatTurnTelemetryMiddleware(
   setChatTraceTag(traceState, MLFLOW_AGENT_TAG, true);
   if (!environmentUtils.isDatabricksAppEnv()) {
     setChatTraceTag(traceState, MLFLOW_LOCAL_TAG, true);
+  }
+  for (const [name, value] of Object.entries(getRequestTags(req))) {
+    setChatTraceTag(traceState, name, value);
+  }
+  const initialTags = typeof options.tags === "function" ? options.tags(req) : options.tags;
+  if (initialTags) {
+    for (const [name, value] of Object.entries(initialTags)) {
+      if (value !== undefined) setChatTraceTag(traceState, name, value);
+    }
   }
   stampMlflowTraceId(res, target.span);
   traceState.user = stampMlflowActor(target.span, req);

@@ -23,6 +23,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { injectRequestTags } from "@dbx-tools/appkit/request-tags";
 import { AUTH_BASE_PATH, auth as sharedAuth } from "@dbx-tools/shared-auth";
 import { log, token } from "@dbx-tools/shared-core";
 import { getRequest, setResponse } from "better-call/node";
@@ -30,6 +31,7 @@ import type { RequestHandler } from "express";
 import { toHeaderPolicy, type HeaderPolicy } from "./headers.ts";
 import { loginPageHtml } from "./login-page.ts";
 import type { AuthGateApi } from "./plugin.ts";
+import { requestTunnelTraceTags } from "./request-context.ts";
 
 const logger = log.logger("tunnel:gate");
 
@@ -360,6 +362,7 @@ export function mountGate(
   // --- The gate middleware (runs before static + the app's /api handlers) ---
 
   const gateMiddleware = (async (req, res, next) => {
+    injectRequestTags(req, requestTunnelTraceTags(req));
     const action = await gateRequest(req, { gate, publicDomain, headerPolicy, gatePaths });
     if (action === "deny" && wantsLoginPage(req)) {
       res

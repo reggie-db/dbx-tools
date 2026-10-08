@@ -100,6 +100,10 @@
         "types": "./lib/src/provision.d.ts",
         "default": "./lib/src/provision.js"
       },
+      "./request-tags": {
+        "types": "./lib/src/request-tags.d.ts",
+        "default": "./lib/src/request-tags.js"
+      },
       "./tool-provider": {
         "types": "./lib/src/tool-provider.d.ts",
         "default": "./lib/src/tool-provider.js"
@@ -134,6 +138,7 @@
     "./plugin-execution": "./src/plugin-execution.ts",
     "./plugin-registry": "./src/plugin-registry.ts",
     "./provision": "./src/provision.ts",
+    "./request-tags": "./src/request-tags.ts",
     "./tool-provider": "./src/tool-provider.ts",
     "./toolkit-entries": "./src/toolkit-entries.ts",
     "./package.json": "./package.json"

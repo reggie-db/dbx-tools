@@ -795,10 +795,15 @@ the selected model id for a one-model turn, or an ordered JSON array string when
 the turn uses multiple models. `obo_auth=true` and `sp_auth=true` independently
 record whether each Databricks authentication mode was invoked during the turn,
 so a mixed-auth turn keeps both tags. `local=true` is added automatically when
-`isDatabricksAppEnv()` is false. Package and application code can add more tags
-from anywhere inside the active request with `recordActiveTraceTag(name, value)`
-or `recordActiveTraceTags({ name: value })`. The reserved `mlflow.traceTag.`
-prefix persists these as trace tags rather than ordinary span metadata.
+`isDatabricksAppEnv()` is false. The `@dbx-tools/tunnel` AppKit plugin injects
+`tunnel=portr|frp` and `tunnel_subdomain=<name>` through AppKit's generic
+request-tag context when the public host matches its tunnel configuration.
+Other AppKit plugins can use `injectRequestTag(s)`, and direct middleware callers
+can seed `ChatTurnTelemetryOptions.tags`; package and application code can then
+add or replace tags anywhere inside the active request with
+`recordActiveTraceTag(name, value)` or `recordActiveTraceTags({ name: value })`.
+The reserved `mlflow.traceTag.` prefix persists these as trace tags rather than
+ordinary span metadata.
 `appkit.mastra.genie.used` remains as a searchable custom attribute.
 
 ```ts

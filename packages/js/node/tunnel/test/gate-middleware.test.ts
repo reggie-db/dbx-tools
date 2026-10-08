@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { getRequestTags } from "@dbx-tools/appkit/request-tags";
 import { AUTH_BASE_PATH, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
 import type { Request, RequestHandler, Response } from "express";
 import {
@@ -181,20 +182,36 @@ describe("gate middleware", () => {
   });
 
   it("lets a tunnel /api/* with a valid session through, injecting identity", async () => {
+    const originalTransport = process.env.TUNNEL_TRANSPORT;
+    const originalToken = process.env.PORTR_TOKEN;
+    const originalDomain = process.env.TUNNEL_PUBLIC_DOMAIN;
+    process.env.TUNNEL_TRANSPORT = "portr";
+    process.env.PORTR_TOKEN = "secret";
+    process.env.TUNNEL_PUBLIC_DOMAIN = PUBLIC_DOMAIN;
     const { middleware } = mount();
     let nexted = false;
     const req = makeReq(PUBLIC_DOMAIN, "/api/data", `${SESSION_COOKIE_NAME}=tok`);
-    await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
-      req,
-      makeRes(),
-      () => {
-        nexted = true;
-      },
-    );
-    assert.equal(nexted, true);
-    // Identity injected for the app; gate cookie stripped.
-    assert.equal(req.headers["x-forwarded-user"], "user@example.com");
-    assert.equal(req.headers.cookie, undefined);
+    try {
+      await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
+        req,
+        makeRes(),
+        () => {
+          nexted = true;
+        },
+      );
+      assert.equal(nexted, true);
+      // Identity and request context are injected for downstream AppKit plugins.
+      assert.equal(req.headers["x-forwarded-user"], "user@example.com");
+      assert.equal(req.headers.cookie, undefined);
+      assert.deepEqual(getRequestTags(req), { tunnel: "portr", tunnel_subdomain: "demo" });
+    } finally {
+      if (originalTransport === undefined) delete process.env.TUNNEL_TRANSPORT;
+      else process.env.TUNNEL_TRANSPORT = originalTransport;
+      if (originalToken === undefined) delete process.env.PORTR_TOKEN;
+      else process.env.PORTR_TOKEN = originalToken;
+      if (originalDomain === undefined) delete process.env.TUNNEL_PUBLIC_DOMAIN;
+      else process.env.TUNNEL_PUBLIC_DOMAIN = originalDomain;
+    }
   });
 
   it("lets the login routes through on tunnel traffic (open)", async () => {
