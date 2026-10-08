@@ -59,6 +59,30 @@ describe("normalizeChartOption layout", () => {
     assert.equal(label.hideOverlap, true);
   });
 
+  it("moves a y-axis name beyond long category labels", () => {
+    const out = obj(
+      normalizeChartOption({
+        yAxis: {
+          type: "category",
+          data: ["Atlanta East/West/Griffin/Rome, GA", "Cape Canaveral/Orlando/Tampa, FL"],
+          name: "Market Cluster",
+        },
+      }),
+    );
+    const yAxis = obj(out.yAxis);
+    assert.ok((yAxis.nameGap as number) > 200);
+  });
+
+  it("separates an x-axis name from the bottom legend", () => {
+    const out = obj(normalizeChartOption(plannerOption()));
+    assert.equal(obj(out.grid).bottom, 96);
+  });
+
+  it("keeps a larger explicit bottom margin", () => {
+    const out = obj(normalizeChartOption({ ...plannerOption(), grid: { bottom: 120 } }));
+    assert.equal(obj(out.grid).bottom, 120);
+  });
+
   it("preserves a formatter the spec pinned itself", () => {
     const pinned = (v: number) => `${v}!`;
     const out = obj(

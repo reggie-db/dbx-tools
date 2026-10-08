@@ -35,6 +35,9 @@ const COMPACT_NUMBER = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
+const APPROXIMATE_LABEL_CHARACTER_WIDTH = 7;
+const MAX_CATEGORY_LABEL_WIDTH = 320;
+const AXIS_NAME_PADDING = 24;
 
 /**
  * Format a value-axis tick compactly: `1200 -> "1.2K"`,
@@ -55,6 +58,26 @@ const isObj = object.isRecord;
 function hasTitleText(title: unknown): boolean {
   const entries = Array.isArray(title) ? title : [title];
   return entries.some((t) => isObj(t) && typeof t.text === "string" && t.text.trim().length > 0);
+}
+
+/** True when one axis object carries a visible name. */
+function hasAxisName(axis: unknown): boolean {
+  const entries = Array.isArray(axis) ? axis : [axis];
+  return entries.some(
+    (entry) => isObj(entry) && typeof entry.name === "string" && entry.name.trim().length > 0,
+  );
+}
+
+/** True when an existing legend node is visible. */
+function hasVisibleLegend(legend: unknown): boolean {
+  const entries = Array.isArray(legend) ? legend : [legend];
+  return entries.some((entry) => isObj(entry) && entry.show !== false);
+}
+
+/** Keep a numeric pixel margin at or above the space the normalized layout needs. */
+function minimumPixelMargin(value: unknown, minimum: number): unknown {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(value, minimum);
+  return value ?? minimum;
 }
 
 /**
@@ -90,16 +113,35 @@ function normalizeTitle(title: unknown, chrome?: ChartChrome): unknown {
  * for the title (top) and the axis name (bottom) which `containLabel`
  * does not account for.
  */
-function normalizeGrid(grid: unknown, opts: { hasTitle: boolean }): unknown {
+function normalizeGrid(
+  grid: unknown,
+  opts: { hasTitle: boolean; hasXAxisName: boolean; hasLegend: boolean },
+): unknown {
   const base = isObj(grid) ? grid : {};
+  const bottom =
+    opts.hasXAxisName && opts.hasLegend ? 96 : opts.hasXAxisName ? 64 : opts.hasLegend ? 56 : 24;
   return {
     left: 12,
     right: 24,
-    bottom: 24,
     ...base,
     top: base.top ?? (opts.hasTitle ? 64 : 32),
+    bottom: minimumPixelMargin(base.bottom, bottom),
     containLabel: base.containLabel ?? true,
   };
+}
+
+/**
+ * Approximate the widest category label so a rotated y-axis name can clear it.
+ * Echarts measures the labels itself, but does not include the axis name in
+ * `containLabel`, so the renderer must supply a name gap before layout.
+ */
+function categoryLabelWidth(axis: Obj): number {
+  if (!Array.isArray(axis.data)) return 0;
+  const longest = axis.data.reduce(
+    (width, value) => Math.max(width, [...String(value ?? "")].length),
+    0,
+  );
+  return Math.min(longest * APPROXIMATE_LABEL_CHARACTER_WIDTH, MAX_CATEGORY_LABEL_WIDTH);
 }
 
 /** Patch a single axis node in place-safe fashion (`x` or `y`). */
@@ -130,7 +172,7 @@ function normalizeAxis(axis: Obj, pos: "x" | "y", chrome?: ChartChrome): Obj {
     next.nameLocation = next.nameLocation ?? "middle";
     if (pos === "y") {
       next.nameRotate = next.nameRotate ?? 90;
-      next.nameGap = next.nameGap ?? 56;
+      next.nameGap = next.nameGap ?? Math.max(56, categoryLabelWidth(next) + AXIS_NAME_PADDING);
     } else {
       next.nameGap = next.nameGap ?? 56;
     }
@@ -206,7 +248,11 @@ export function normalizeChartOption<T>(option: T, chrome?: ChartChrome): T {
   if (!isObj(option)) return option;
   let next: Obj = { ...option };
   next.title = normalizeTitle(next.title, chrome);
-  next.grid = normalizeGrid(next.grid, { hasTitle: hasTitleText(next.title) });
+  next.grid = normalizeGrid(next.grid, {
+    hasTitle: hasTitleText(next.title),
+    hasXAxisName: hasAxisName(next.xAxis),
+    hasLegend: hasVisibleLegend(next.legend),
+  });
   next.xAxis = normalizeAxisField(next.xAxis, "x", chrome);
   next.yAxis = normalizeAxisField(next.yAxis, "y", chrome);
   if (chrome) next = normalizeChrome(next, chrome);
