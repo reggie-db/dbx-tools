@@ -184,9 +184,7 @@ async def test_local_postgres_url_is_used_without_lakebase(monkeypatch) -> None:
     )
 
     assert runtime.dsn == address
-    assert runtime.connection_options == {
-        "server_settings": {"role": "graphiti_owner"}
-    }
+    assert runtime.connection_options == {"server_settings": {"role": "graphiti_owner"}}
 
 
 def test_embedded_mode_names_the_optional_extra_when_missing(monkeypatch, tmp_path: Path) -> None:

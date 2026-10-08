@@ -188,7 +188,7 @@ export async function startPortr(
     ],
     options,
   );
-  child.start();
+  void child.start();
   return child;
 }
 

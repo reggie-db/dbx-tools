@@ -227,7 +227,7 @@ export function startFrp(
     ],
     options,
   );
-  child.start();
+  void child.start();
   return child;
 }
 

@@ -80,11 +80,7 @@ export interface LineOutputOptions {
  * - `(LineHandler | "capture")[]` — pipe; `"capture"` is a no-op marker, handlers run per line
  */
 export type StdioOption =
-  | ExecStdio
-  | LineHandler
-  | LineOutputOptions
-  | "capture"
-  | (LineHandler | "capture")[];
+  ExecStdio | LineHandler | LineOutputOptions | "capture" | (LineHandler | "capture")[];
 
 /** Outcome of {@link spawn} / {@link spawnSync}: exit code, captured output, and line views. */
 export type ExecResult = {

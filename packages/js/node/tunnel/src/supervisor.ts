@@ -115,8 +115,8 @@ function processOutcome(
       if (settled) return;
       settled = true;
       if (healthTimer) clearTimeout(healthTimer);
-      child.off("exit", onExit);
-      child.off("error", onError);
+      void child.off("exit", onExit);
+      void child.off("error", onError);
       signal.removeEventListener("abort", onAbort);
       resolve(outcome);
     };
@@ -177,8 +177,8 @@ function processOutcome(
       );
     };
 
-    child.once("exit", onExit);
-    child.once("error", onError);
+    void child.once("exit", onExit);
+    void child.once("error", onError);
     signal.addEventListener("abort", onAbort, { once: true });
     scheduleHealthCheck(options.healthCheckGraceMs ?? DEFAULT_HEALTH_CHECK_GRACE_MS);
   });

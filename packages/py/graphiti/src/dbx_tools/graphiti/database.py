@@ -114,9 +114,7 @@ async def _start_lakebase_database(
     connection = await asyncpg.connect(dsn, password=await password())
     try:
         authorization = f" AUTHORIZATION {quote_postgres_identifier(role)}" if role else ""
-        await connection.execute(
-            f'CREATE SCHEMA IF NOT EXISTS "{schema}"{authorization}'
-        )
+        await connection.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"{authorization}')
         role_statement = postgres_role_statement(role)
         if role_statement:
             await connection.execute(role_statement)

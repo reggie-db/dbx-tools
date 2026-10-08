@@ -30,7 +30,6 @@ import type { Notification, PoolClient } from "pg";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
 import { channelName } from "./identity.ts";
-import { quotePostgresIdentifier } from "./session.ts";
 import {
   cleanupExpired,
   decodePointer,
@@ -45,6 +44,7 @@ import {
   type TopicHistoryPage,
   type TopicPersistenceScope,
 } from "./persistence.ts";
+import { quotePostgresIdentifier } from "./session.ts";
 
 /**
  * `@dbx-tools/shared-core` owns the JSON-round-trip rule; this alias just keeps the

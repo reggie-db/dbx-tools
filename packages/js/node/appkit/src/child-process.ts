@@ -66,7 +66,7 @@ export class AppKitChildProcess {
 
     const child = exec.spawn(...this.#spawnArgs);
     this.#child = child;
-    child.once("close", () => {
+    void child.once("close", () => {
       if (this.#child === child) this.#child = undefined;
     });
     return child;
@@ -139,15 +139,15 @@ function waitForExit(child: exec.ChildProcessResult, timeoutMs: number): Promise
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
-      child.off("exit", onExit);
-      child.off("error", onError);
+      void child.off("exit", onExit);
+      void child.off("error", onError);
       resolve(exited);
     };
     const onExit = () => finish(true);
     const onError = () => finish(true);
 
-    child.once("exit", onExit);
-    child.once("error", onError);
+    void child.once("exit", onExit);
+    void child.once("error", onError);
     if (hasExited(child)) {
       finish(true);
       return;

@@ -63,9 +63,13 @@ function supervise(children: readonly AppKitChildProcess[]): void {
   const stop = (code: number): void => {
     if (stopping) return;
     stopping = true;
-    void Promise.allSettled(children.map((child) => child.shutdown())).then(() => process.exit(code));
+    void Promise.allSettled(children.map((child) => child.shutdown())).then(() => {
+      process.exit(code);
+    });
   };
-  for (const child of children) child.process?.on("exit", (code) => stop(code ?? 1));
+  for (const child of children) {
+    void child.process?.on("exit", (code) => stop(code ?? 1));
+  }
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
     process.on(signal, () => stop(0));
   }
@@ -104,7 +108,7 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
       ],
       { gracefulTimeoutMs: 10_000 },
     );
-    app.start();
+    void app.start();
     children.push(app);
   } else if (resolved.appPort) {
     appPort = resolved.appPort;
