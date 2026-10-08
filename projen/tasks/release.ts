@@ -110,6 +110,8 @@ export async function runRelease(
     readonly demoDeploy?: boolean;
     /** Write `docs/releases/vX.Y.Z.md` via Genie, with a git-log fallback. On by default. */
     readonly releaseNotes?: boolean;
+    /** Additional instructions appended to the standard Genie release-notes prompt. */
+    readonly releaseNotesInstructions?: string;
     readonly writeReleaseNotes?: typeof writeReleaseNotes;
   },
 ): Promise<string> {
@@ -132,7 +134,12 @@ export async function runRelease(
   const tag = `${prefix}${version}`;
   assertReleaseVersion(version, { root, prefixes: [prefix], assertNext: true });
   if ((options.releaseNotes ?? true) && (options.bump ?? true)) {
-    (options.writeReleaseNotes ?? writeReleaseNotes)({ prefix, root, version });
+    (options.writeReleaseNotes ?? writeReleaseNotes)({
+      prefix,
+      root,
+      version,
+      instructions: options.releaseNotesInstructions,
+    });
   }
 
   if (taskCommandSucceeds(root, "git", ["rev-parse", "--verify", `refs/tags/${tag}`])) {
@@ -242,6 +249,10 @@ export function createReleaseCommand(): Command {
       "skip optional release validation tasks; version/source checks remain mandatory",
     )
     .option("--no-release-notes", "skip writing docs/releases notes (Genie and git-log fallback)")
+    .option(
+      "--release-notes-instructions <text>",
+      "append custom instructions to the Genie release-notes prompt",
+    )
     .option("--demo-deploy", "after tagging, stage and deploy the AppKit demo app (off by default)")
     .option("--no-local-publish", "skip publishing to configured local registries")
     .option("--local-registry <auto|false|url>", "local npm registry selection", "auto")
@@ -262,6 +273,7 @@ export function createReleaseCommand(): Command {
           validate: string[];
           demoDeploy?: boolean;
           releaseNotes?: boolean;
+          releaseNotesInstructions?: string;
         },
       ) => {
         await runRelease({
@@ -283,6 +295,7 @@ export function createReleaseCommand(): Command {
           validationTasks: options.validate,
           demoDeploy: options.demoDeploy,
           releaseNotes: options.releaseNotes,
+          releaseNotesInstructions: options.releaseNotesInstructions,
         });
       },
     );

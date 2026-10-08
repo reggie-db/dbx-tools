@@ -26340,16 +26340,16 @@ var require_range2 = __commonJS((exports2, module2) => {
   };
   var replaceTilde = (comp, options) => {
     const r = options.loose ? re[t.TILDELOOSE] : re[t.TILDE];
-    const z9 = options.includePrerelease ? "-0" : "";
+    const z10 = options.includePrerelease ? "-0" : "";
     return comp.replace(r, (_, M, m, p, pr) => {
       debug("tilde", comp, _, M, m, p, pr);
       let ret;
       if (isX(M)) {
         ret = "";
       } else if (isX(m)) {
-        ret = `>=${M}.0.0${z9} <${+M + 1}.0.0-0`;
+        ret = `>=${M}.0.0${z10} <${+M + 1}.0.0-0`;
       } else if (isX(p)) {
-        ret = `>=${M}.${m}.0${z9} <${M}.${+m + 1}.0-0`;
+        ret = `>=${M}.${m}.0${z10} <${M}.${+m + 1}.0-0`;
       } else if (pr) {
         debug("replaceTilde pr", pr);
         ret = `>=${M}.${m}.${p}-${pr} <${M}.${+m + 1}.0-0`;
@@ -26366,19 +26366,19 @@ var require_range2 = __commonJS((exports2, module2) => {
   var replaceCaret = (comp, options) => {
     debug("caret", comp, options);
     const r = options.loose ? re[t.CARETLOOSE] : re[t.CARET];
-    const z9 = options.includePrerelease ? "-0" : "";
+    const z10 = options.includePrerelease ? "-0" : "";
     return comp.replace(r, (_, M, m, p, pr) => {
       debug("caret", comp, _, M, m, p, pr);
       let ret;
       if (isX(M)) {
         ret = "";
       } else if (isX(m)) {
-        ret = `>=${M}.0.0${z9} <${+M + 1}.0.0-0`;
+        ret = `>=${M}.0.0${z10} <${+M + 1}.0.0-0`;
       } else if (isX(p)) {
         if (M === "0") {
-          ret = `>=${M}.${m}.0${z9} <${M}.${+m + 1}.0-0`;
+          ret = `>=${M}.${m}.0${z10} <${M}.${+m + 1}.0-0`;
         } else {
-          ret = `>=${M}.${m}.0${z9} <${+M + 1}.0.0-0`;
+          ret = `>=${M}.${m}.0${z10} <${+M + 1}.0.0-0`;
         }
       } else if (pr) {
         debug("replaceCaret pr", pr);
@@ -31198,7 +31198,7 @@ var require_index_min = __commonJS((exports2) => {
       return this.#S;
     }
     constructor(t) {
-      let { max: e = 0, ttl: i, ttlResolution: s = 1, ttlAutopurge: n, updateAgeOnGet: o, updateAgeOnHas: l, allowStale: h, dispose: r, onInsert: c, disposeAfter: w, noDisposeOnSet: _, noUpdateTTL: d, maxSize: p = 0, maxEntrySize: f = 0, sizeCalculation: y, fetchMethod: a, memoMethod: S, noDeleteOnFetchRejection: F, noDeleteOnStaleGet: b, allowStaleOnFetchRejection: m, allowStaleOnFetchAbort: A, ignoreFetchAbort: z9, backgroundFetchSize: x = 1, perf: v } = t;
+      let { max: e = 0, ttl: i, ttlResolution: s = 1, ttlAutopurge: n, updateAgeOnGet: o, updateAgeOnHas: l, allowStale: h, dispose: r, onInsert: c, disposeAfter: w, noDisposeOnSet: _, noUpdateTTL: d, maxSize: p = 0, maxEntrySize: f = 0, sizeCalculation: y, fetchMethod: a, memoMethod: S, noDeleteOnFetchRejection: F, noDeleteOnStaleGet: b, allowStaleOnFetchRejection: m, allowStaleOnFetchAbort: A, ignoreFetchAbort: z10, backgroundFetchSize: x = 1, perf: v } = t;
       if (this.backgroundFetchSize = x, v !== undefined && typeof v?.now != "function")
         throw new TypeError("perf option must have a now() method if specified");
       if (this.#w = v ?? N.defaultPerf, e !== 0 && !T(e))
@@ -31216,7 +31216,7 @@ var require_index_min = __commonJS((exports2) => {
         throw new TypeError("memoMethod must be a function if defined");
       if (this.#j = S, a !== undefined && typeof a != "function")
         throw new TypeError("fetchMethod must be a function if specified");
-      if (this.#x = a, this.#U = !!a, this.#s = new Map, this.#i = Array.from({ length: e }).fill(undefined), this.#t = Array.from({ length: e }).fill(undefined), this.#l = new E(e), this.#u = new E(e), this.#a = 0, this.#h = 0, this.#y = L.create(e), this.#n = 0, this.#b = 0, typeof r == "function" && (this.#m = r), typeof c == "function" && (this.#W = c), typeof w == "function" ? (this.#S = w, this.#r = []) : (this.#S = undefined, this.#r = undefined), this.#T = !!this.#m, this.#R = !!this.#W, this.#f = !!this.#S, this.noDisposeOnSet = !!_, this.noUpdateTTL = !!d, this.noDeleteOnFetchRejection = !!F, this.allowStaleOnFetchRejection = !!m, this.allowStaleOnFetchAbort = !!A, this.ignoreFetchAbort = !!z9, this.maxEntrySize !== 0) {
+      if (this.#x = a, this.#U = !!a, this.#s = new Map, this.#i = Array.from({ length: e }).fill(undefined), this.#t = Array.from({ length: e }).fill(undefined), this.#l = new E(e), this.#u = new E(e), this.#a = 0, this.#h = 0, this.#y = L.create(e), this.#n = 0, this.#b = 0, typeof r == "function" && (this.#m = r), typeof c == "function" && (this.#W = c), typeof w == "function" ? (this.#S = w, this.#r = []) : (this.#S = undefined, this.#r = undefined), this.#T = !!this.#m, this.#R = !!this.#W, this.#f = !!this.#S, this.noDisposeOnSet = !!_, this.noUpdateTTL = !!d, this.noDeleteOnFetchRejection = !!F, this.allowStaleOnFetchRejection = !!m, this.allowStaleOnFetchAbort = !!A, this.ignoreFetchAbort = !!z10, this.maxEntrySize !== 0) {
         if (this.#c !== 0 && !T(this.#c))
           throw new TypeError("maxSize must be a positive integer if specified");
         if (!T(this.maxEntrySize))
@@ -31600,8 +31600,8 @@ var require_index_min = __commonJS((exports2) => {
         let A = this.#p(b);
         if (!y && !A)
           return a && (a.fetch = "hit"), this.#M(b), s && this.#D(b), a && this.#E(a, b), m;
-        let z9 = this.#G(t, b, F, f), v = z9.__staleWhileFetching !== undefined && i;
-        return a && (a.fetch = A ? "stale" : "refresh", v && A && (a.returnedStale = true)), v ? z9.__staleWhileFetching : z9.__returned = z9;
+        let z10 = this.#G(t, b, F, f), v = z10.__staleWhileFetching !== undefined && i;
+        return a && (a.fetch = A ? "stale" : "refresh", v && A && (a.returnedStale = true)), v ? z10.__staleWhileFetching : z10.__returned = z10;
       }
     }
     forceFetch(t, e = {}) {
@@ -35969,9 +35969,9 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
     };
     ee.Ignore = Ae;
   });
-  var Fs = R((z9) => {
-    Object.defineProperty(z9, "__esModule", { value: true });
-    z9.Processor = z9.SubWalks = z9.MatchRecord = z9.HasWalkedCache = undefined;
+  var Fs = R((z10) => {
+    Object.defineProperty(z10, "__esModule", { value: true });
+    z10.Processor = z10.SubWalks = z10.MatchRecord = z10.HasWalkedCache = undefined;
     var Ds = H(), se = class n {
       store;
       constructor(t = new Map) {
@@ -35988,7 +35988,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         i ? i.add(e.globString()) : this.store.set(s, new Set([e.globString()]));
       }
     };
-    z9.HasWalkedCache = se;
+    z10.HasWalkedCache = se;
     var ie = class {
       store = new Map;
       add(t, e, s) {
@@ -35999,7 +35999,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         return [...this.store.entries()].map(([t, e]) => [t, !!(e & 2), !!(e & 1)]);
       }
     };
-    z9.MatchRecord = ie;
+    z10.MatchRecord = ie;
     var re = class {
       store = new Map;
       add(t, e) {
@@ -36021,7 +36021,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         return [...this.store.keys()].filter((t) => t.canReaddir());
       }
     };
-    z9.SubWalks = re;
+    z10.SubWalks = re;
     var Me = class n {
       hasWalkedCache;
       matches = new ie;
@@ -36111,7 +36111,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         t.isNamed(e) && (s ? this.subwalks.add(t, s) : this.matches.add(t, i, false));
       }
     };
-    z9.Processor = Me;
+    z10.Processor = Me;
   });
   var Ls = R((X) => {
     Object.defineProperty(X, "__esModule", { value: true });
@@ -39071,24 +39071,160 @@ function* iterateClaims(input, distinct2 = true) {
   }
   yield* visit(input);
 }
-// packages/js/shared/graphiti/src/options.ts
+// packages/js/shared/model/src/contracts.ts
 var import_zod4 = __toESM(require_zod(), 1);
-var graphitiText = (description) => import_zod4.z.string().trim().min(1).describe(description);
-var GraphitiOptionsSchema = import_zod4.z.object({
+var ModelClassSchema = import_zod4.z.enum(["chat-thinking", "chat-balanced", "chat-fast", "embedding"]).describe("Intent-oriented Databricks Model Serving endpoint class.");
+var ModelClass = {
+  ChatThinking: "chat-thinking",
+  ChatBalanced: "chat-balanced",
+  ChatFast: "chat-fast",
+  Embedding: "embedding"
+};
+var ReasoningEffortSchema = import_zod4.z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).describe("Reasoning effort value accepted by compatible model endpoints.");
+var ModelProfileSchema = import_zod4.z.object({
+  quality: import_zod4.z.number().optional().describe("Relative quality score for ranking."),
+  speed: import_zod4.z.number().optional().describe("Relative speed score for ranking."),
+  cost: import_zod4.z.number().optional().describe("Relative cost score for ranking.")
+}).describe("Relative quality, speed, and cost scores for an endpoint.");
+var ModelStatusSchema = import_zod4.z.object({
+  deprecated: import_zod4.z.boolean().default(false).describe("True when the model should no longer be selected by default.")
+}).describe("Model retirement status.");
+var ServingEndpointSummarySchema = import_zod4.z.object({
+  name: import_zod4.z.string().describe("Serving endpoint invoke id."),
+  displayName: import_zod4.z.string().optional().describe("Human-readable label when the workspace provides one."),
+  family: import_zod4.z.string().optional().describe("Detected model family used for grouping and sort order."),
+  task: import_zod4.z.string().optional().describe("Databricks serving task reported for the endpoint."),
+  state: import_zod4.z.string().optional().describe("Serving endpoint lifecycle state."),
+  description: import_zod4.z.string().optional().describe("Workspace-provided endpoint description."),
+  supportsTools: import_zod4.z.boolean().optional().describe("True when the endpoint accepts tool calls."),
+  profile: ModelProfileSchema.optional().describe("Relative quality, speed, and cost scores."),
+  class: ModelClassSchema.optional().describe("Intent-oriented class assigned to this endpoint."),
+  serviceNames: import_zod4.z.record(import_zod4.z.string(), import_zod4.z.string()).optional().describe("Provider-specific service name aliases keyed by protocol."),
+  modelServiceName: import_zod4.z.string().optional().describe("Canonical model-service name used for metadata lookup."),
+  reasoningEfforts: import_zod4.z.array(ReasoningEffortSchema).optional().describe("Reasoning effort values this endpoint accepts."),
+  status: ModelStatusSchema.optional().describe("Retirement status for this endpoint."),
+  dimension: import_zod4.z.number().optional().describe("Embedding vector size when the endpoint is an embedding model.")
+}).describe("Browser-safe normalized Model Serving endpoint metadata.");
+var ModelQuerySchema = import_zod4.z.object({
+  name: import_zod4.z.string().optional().describe("Exact serving endpoint name to retain."),
+  search: import_zod4.z.string().optional().describe("Free-text query matched against endpoint names and labels."),
+  modelClass: ModelClassSchema.optional().describe("Restrict results to this intent-oriented class."),
+  requiresTools: import_zod4.z.boolean().optional().describe("When true, only endpoints that accept tools are returned."),
+  task: import_zod4.z.string().optional().describe("Exact Databricks serving task to retain."),
+  dimension: import_zod4.z.number().int().positive().optional().describe("Exact embedding vector dimension to retain."),
+  minDimension: import_zod4.z.number().int().positive().optional().describe("Minimum embedding vector dimension to retain."),
+  maxDimension: import_zod4.z.number().int().positive().optional().describe("Maximum embedding vector dimension to retain."),
+  reasoningEffort: ReasoningEffortSchema.optional().describe("Reasoning effort that a retained endpoint must accept."),
+  includeDeprecated: import_zod4.z.boolean().optional().describe("When true, retired endpoints remain in the result set."),
+  limit: import_zod4.z.number().int().min(1).max(50).optional().describe("Maximum number of ranked results to return."),
+  threshold: import_zod4.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1.")
+}).describe("Browser-safe model catalogue search and ranking controls.");
+var RankedModelSchema = import_zod4.z.object({
+  endpoint: ServingEndpointSummarySchema.describe("Normalized endpoint chosen for this result."),
+  modelClass: ModelClassSchema.describe("Class used to rank this result."),
+  score: import_zod4.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
+}).describe("One ranked model-search result.");
+var EndpointCapabilitiesSchema = import_zod4.z.object({
+  chat: import_zod4.z.boolean().describe("True when the endpoint can serve chat completions."),
+  embedding: import_zod4.z.boolean().describe("True when the endpoint can serve embeddings."),
+  tools: import_zod4.z.boolean().describe("True when the endpoint accepts tool calls.")
+}).describe("Capabilities derived from one normalized serving endpoint.");
+var FamilyClassSchema = import_zod4.z.object({
+  class: ModelClassSchema.describe("Fallback class for an unscored recognized family."),
+  rank: import_zod4.z.number().min(0).describe("Relative rank among family fallbacks, starting at 0.")
+}).describe("Fallback class and rank for an unscored recognized model family.");
+var ModelCapabilitiesSchema = import_zod4.z.object({
+  responses: import_zod4.z.boolean().describe("True when the model supports the Responses API."),
+  imageInput: import_zod4.z.boolean().describe("True when the model accepts image inputs."),
+  applyPatch: import_zod4.z.boolean().describe("True when the model supports the apply-patch tool."),
+  webSearch: import_zod4.z.boolean().describe("True when the model supports web search.")
+}).describe("Documented capabilities resolved for one model identity.");
+var ModelRateLimitsSchema = import_zod4.z.object({
+  inputTokensPerMinute: import_zod4.z.number().int().min(0).nullable().describe("Published input tokens per minute, or null when unpublished."),
+  outputTokensPerMinute: import_zod4.z.number().int().min(0).nullable().describe("Published output tokens per minute, or null when unpublished."),
+  queriesPerHour: import_zod4.z.number().int().min(0).nullable().describe("Published queries per hour, or null when unpublished.")
+}).describe("Published pay-per-token limits for one model.");
+var ModelMetadataSchema = import_zod4.z.object({
+  status: ModelStatusSchema.describe("Retirement status for this model identity."),
+  capabilities: ModelCapabilitiesSchema.describe("Documented capabilities for this model identity."),
+  rateLimits: ModelRateLimitsSchema.optional().describe("Published rate limits when available.")
+}).describe("Combined retirement, capability, and rate-limit metadata.");
+var ResolvedModelSchema = import_zod4.z.object({
+  modelId: import_zod4.z.string().describe("Resolved serving endpoint or model identifier."),
+  matched: import_zod4.z.boolean().describe("True when the identifier matched a catalogue entry."),
+  score: import_zod4.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
+}).describe("Result of resolving a fuzzy model identifier.");
+var ResolveModelOptionsSchema = import_zod4.z.object({
+  threshold: import_zod4.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
+  requiresTools: import_zod4.z.boolean().optional().describe("When true, only tool-capable endpoints may match.")
+}).describe("Pure controls for fuzzy endpoint resolution.");
+var ScoredEndpointSchema = import_zod4.z.object({
+  endpoint: ServingEndpointSummarySchema.describe("Candidate serving endpoint."),
+  score: import_zod4.z.number().min(0).max(1).describe("Fuzzy-match distance in the range 0 to 1.")
+}).describe("One endpoint paired with its fuzzy-match distance.");
+var ResolveModelInputSchema = import_zod4.z.object({
+  explicit: import_zod4.z.string().optional().describe("Exact model id or display name supplied by the caller."),
+  fuzzy: import_zod4.z.boolean().optional().describe("When true, unmatched explicit values may fuzzy-match."),
+  threshold: import_zod4.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
+  requiresTools: import_zod4.z.boolean().optional().describe("When true, only tool-capable endpoints may be selected."),
+  modelClass: ModelClassSchema.optional().describe("Preferred intent-oriented class when no explicit model matches."),
+  fallbacks: import_zod4.z.array(import_zod4.z.string()).optional().describe("Ordered model ids tried after class selection fails."),
+  liveOnly: import_zod4.z.boolean().optional().describe("When true, skip endpoints that are not currently ready.")
+}).describe("Caller intent used to resolve one model from a catalogue.");
+var ResolvedModelSelectionSchema = import_zod4.z.object({
+  modelId: import_zod4.z.string().describe("Selected serving endpoint identifier."),
+  source: import_zod4.z.enum(["explicit", "fuzzy-match", "class", "fallback"]).describe("Policy branch that selected this model.")
+}).describe("Selected model identifier and the policy branch that selected it.");
+
+// packages/js/shared/model-gateway/src/options.ts
+var import_zod5 = __toESM(require_zod(), 1);
+var ModelOptionSchema = import_zod5.z.string().trim().min(1).optional().describe("Optional fuzzy or exact model name.");
+var ModelClassOptionSchema = ModelClassSchema.optional().describe("Optional model capability class used when selecting a default model.");
+var ChatModelClassOptionSchema = ModelClassSchema.exclude(["embedding"]).optional().describe("Optional chat capability class used when selecting a default model.");
+var ModelSelectionOptionsSchema = import_zod5.z.object({
+  model: ModelOptionSchema,
+  modelClass: ModelClassOptionSchema
+}).refine((options) => !(options.model && options.modelClass), {
+  message: "Model and model class are mutually exclusive.",
+  path: ["modelClass"]
+}).describe("Model selection by name or capability class.");
+var ChatModelSelectionOptionsSchema = ModelSelectionOptionsSchema.safeExtend({
+  modelClass: ChatModelClassOptionSchema
+}).describe("Chat-model selection by name or capability class.");
+var ModelGatewayOptionsSchema = ModelSelectionOptionsSchema.safeExtend({
+  listen: exports_options.listenAddressSchema({ port: 4000, loopback: true }).describe("Loopback listener address."),
+  profile: exports_options.DatabricksOptionsSchema.shape.profile.describe("Databricks profile used for model discovery and requests."),
+  bodyLimit: import_zod5.z.string().trim().min(1).default("100mb").describe("Maximum JSON request body size."),
+  bearerToken: import_zod5.z.string().trim().min(1).optional().describe("Optional bearer token required by every gateway route.").meta({
+    env: "DBX_TOOLS_MODEL_GATEWAY_BEARER_TOKEN",
+    flag: false,
+    helpDefault: false
+  })
+}).strict().describe("Model-gateway server configuration.");
+var ModelGatewayCliOptionsSchema = ModelGatewayOptionsSchema.safeExtend({
+  runtimeInfo: import_zod5.z.boolean().default(false).describe("Print runtime implementation metadata.")
+}).refine((options) => options.listen.port > 0, {
+  message: "Port must be an integer from 1 through 65535.",
+  path: ["listen"]
+}).describe("Model-gateway command-line configuration.");
+var MODEL_GATEWAY_DEFAULTS = Object.freeze(ModelGatewayOptionsSchema.parse({}));
+
+// packages/js/shared/graphiti/src/options.ts
+var import_zod6 = __toESM(require_zod(), 1);
+var graphitiText = (description) => import_zod6.z.string().trim().min(1).describe(description);
+var GraphitiOptionsSchema = import_zod6.z.object({
   profile: exports_options.DatabricksOptionsSchema.shape.profile.describe("Databricks profile used for model discovery and authentication."),
   graphitiHome: graphitiText("Application-owned Graphiti runtime directory.").optional().meta({ env: "GRAPHITI_HOME" }),
-  model: graphitiText("Fuzzy chat-model name or endpoint identifier.").default("databricks-gpt-5-nano").meta({ env: "MODEL_NAME" }),
-  temperature: import_zod4.z.coerce.number().min(0).max(2).default(1).describe("Sampling temperature forwarded to the Graphiti LLM client.").meta({ env: "TEMPERATURE" }),
-  embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.").default("gte-large-en").meta({ env: "EMBEDDER_MODEL" }),
-  embedderDimensions: import_zod4.z.coerce.number().int().positive().default(1024).describe("Embedding vector dimensions expected by Graphiti.").meta({ env: "EMBEDDER_DIMENSIONS" }),
+  modelClass: ChatModelClassOptionSchema.default("chat-fast").meta({ env: "MODEL_CLASS" }),
+  temperature: import_zod6.z.coerce.number().min(0).max(2).default(1).describe("Sampling temperature forwarded to the Graphiti LLM client.").meta({ env: "TEMPERATURE" }),
   structuredOutputMode: graphitiText("Structured-output mode forwarded to Graphiti's OpenAI provider.").default("json_object").meta({ env: "LLM_STRUCTURED_OUTPUT_MODE" }),
-  startupTimeoutMs: import_zod4.z.coerce.number().int().positive().default(180000).describe("Maximum milliseconds allowed for the Graphiti runtime to become ready.").meta({ env: "DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS" }),
+  startupTimeoutMs: import_zod6.z.coerce.number().int().positive().default(180000).describe("Maximum milliseconds allowed for the Graphiti runtime to become ready.").meta({ env: "DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS" }),
   listen: exports_options.listenAddressSchema({
     host: "127.0.0.1",
     loopback: true,
     port: 7272
   }).describe("Graphiti HTTP listener.").meta({ env: "GRAPHITI_LISTEN" }),
-  databaseUrl: import_zod4.z.string().trim().min(1).optional().describe("PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL.").meta({ env: ["LAKEBASE_ENDPOINT", "DATABASE_URL"], helpDefault: false }),
+  databaseUrl: import_zod6.z.string().trim().min(1).optional().describe("PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL.").meta({ env: ["LAKEBASE_ENDPOINT", "DATABASE_URL"], helpDefault: false }),
   databaseSchema: graphitiText("PostgreSQL schema used for Lakebase graph tables.").regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Database schema must be a PostgreSQL identifier.").default("dbx_tools_graphiti").meta({ env: "GRAPHITI_DATABASE_SCHEMA" }),
   ...exports_options.PostgresOptionsSchema.shape
 }).strict().describe("Graphiti options accepted by Node, CLI, AppKit, and browser callers.");
@@ -39807,26 +39943,26 @@ var import_node_path = __toESM(require_path_browserify(), 1);
 var import_ini = __toESM(require_ini(), 1);
 
 // packages/js/shared/auth/src/config-schema.ts
-var import_zod5 = __toESM(require_zod(), 1);
-var authTypeSchema = import_zod5.z.enum([
+var import_zod7 = __toESM(require_zod(), 1);
+var authTypeSchema = import_zod7.z.enum([
   AuthType.DatabricksCli,
   AuthType.OAuthM2M,
   AuthType.PersonalAccessToken,
   AuthType.AppOnBehalfOf,
   AuthType.AppServicePrincipal
 ]).meta({ env: exports_options.databricksEnvironmentNames.authType, flag: false }).describe("Databricks authentication type values.");
-var targetKindSchema = import_zod5.z.enum([TargetKind.Workspace, TargetKind.Account, TargetKind.Unified]).describe("Databricks authentication target values.");
+var targetKindSchema = import_zod7.z.enum([TargetKind.Workspace, TargetKind.Account, TargetKind.Unified]).describe("Databricks authentication target values.");
 
 // packages/js/node/auth/src/config.ts
-var import_zod6 = __toESM(require_zod(), 1);
-var text = (description) => import_zod6.z.string().trim().min(1).optional().describe(description);
-var safeInteger = (description) => import_zod6.z.coerce.number().int().safe().describe(description);
-var AuthOptionsSchema = import_zod6.z.object({
+var import_zod8 = __toESM(require_zod(), 1);
+var text = (description) => import_zod8.z.string().trim().min(1).optional().describe(description);
+var safeInteger = (description) => import_zod8.z.coerce.number().int().safe().describe(description);
+var AuthOptionsSchema = import_zod8.z.object({
   refreshBufferMs: safeInteger("Token refresh buffer in milliseconds.").default(300000),
   lockTimeoutMs: safeInteger("Credential lock timeout in milliseconds.").nonnegative().default(0),
   loginTimeoutMs: safeInteger("Browser login timeout in milliseconds.").nonnegative().default(900000)
 }).strict().describe("Token lifecycle timing configuration.");
-var DatabricksAuthOptionsSchema = import_zod6.z.object({
+var DatabricksAuthOptionsSchema = import_zod8.z.object({
   profile: exports_options.DatabricksOptionsSchema.shape.profile,
   host: exports_options.DatabricksOptionsSchema.shape.host,
   accountId: exports_options.DatabricksOptionsSchema.shape.accountId,
@@ -39837,12 +39973,12 @@ var DatabricksAuthOptionsSchema = import_zod6.z.object({
   accessToken: exports_options.DatabricksOptionsSchema.shape.accessToken,
   groupId: exports_options.DatabricksOptionsSchema.shape.groupId,
   authType: authTypeSchema.optional().describe("Databricks authentication type."),
-  scopes: import_zod6.z.array(import_zod6.z.string().trim().min(1)).optional().describe("OAuth scopes."),
+  scopes: import_zod8.z.array(import_zod8.z.string().trim().min(1)).optional().describe("OAuth scopes."),
   target: targetKindSchema.optional().describe("OAuth target."),
   auth: AuthOptionsSchema.partial().optional().describe("Token lifecycle overrides."),
-  requestHeaders: import_zod6.z.record(import_zod6.z.string(), import_zod6.z.string()).optional().describe("Additional authentication request headers."),
+  requestHeaders: import_zod8.z.record(import_zod8.z.string(), import_zod8.z.string()).optional().describe("Additional authentication request headers."),
   accessTokenHeader: text("Request header carrying a bearer access token."),
-  preferUserToMachine: import_zod6.z.boolean().optional().describe("Prefer a matching user profile over selected machine credentials.")
+  preferUserToMachine: import_zod8.z.boolean().optional().describe("Prefer a matching user profile over selected machine credentials.")
 }).strict().describe("Databricks profile and credential-source options.");
 var AUTH_DEFAULTS = Object.freeze(AuthOptionsSchema.parse({}));
 var DEFAULT_CLIENT_ID = "databricks-cli";
@@ -41412,16 +41548,16 @@ class MemoryCredentialStore {
 }
 
 // packages/js/shared/auth/src/client.ts
-var import_zod7 = __toESM(require_zod(), 1);
+var import_zod9 = __toESM(require_zod(), 1);
 var RUNTIME_AUTH_TYPE = "runtime";
-var databricksAuthClientInfoSchema = import_zod7.z.object({
-  profile: import_zod7.z.string().min(1).optional(),
+var databricksAuthClientInfoSchema = import_zod9.z.object({
+  profile: import_zod9.z.string().min(1).optional(),
   host: exports_options.normalizedUrlSchema,
-  accountId: import_zod7.z.string().min(1).optional(),
-  workspaceId: import_zod7.z.string().min(1).optional(),
+  accountId: import_zod9.z.string().min(1).optional(),
+  workspaceId: import_zod9.z.string().min(1).optional(),
   target: targetKindSchema,
-  authType: authTypeSchema.or(import_zod7.z.literal(RUNTIME_AUTH_TYPE)),
-  principal: import_zod7.z.string().min(1)
+  authType: authTypeSchema.or(import_zod9.z.literal(RUNTIME_AUTH_TYPE)),
+  principal: import_zod9.z.string().min(1)
 });
 
 // packages/js/node/auth/src/runtime-auth.ts
@@ -41806,111 +41942,6 @@ function toProfileSummary(profile) {
     principal: profile.principal
   };
 }
-
-// packages/js/shared/model/src/contracts.ts
-var import_zod8 = __toESM(require_zod(), 1);
-var ModelClassSchema = import_zod8.z.enum(["chat-thinking", "chat-balanced", "chat-fast", "embedding"]).describe("Intent-oriented Databricks Model Serving endpoint class.");
-var ModelClass = {
-  ChatThinking: "chat-thinking",
-  ChatBalanced: "chat-balanced",
-  ChatFast: "chat-fast",
-  Embedding: "embedding"
-};
-var ReasoningEffortSchema = import_zod8.z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).describe("Reasoning effort value accepted by compatible model endpoints.");
-var ModelProfileSchema = import_zod8.z.object({
-  quality: import_zod8.z.number().optional().describe("Relative quality score for ranking."),
-  speed: import_zod8.z.number().optional().describe("Relative speed score for ranking."),
-  cost: import_zod8.z.number().optional().describe("Relative cost score for ranking.")
-}).describe("Relative quality, speed, and cost scores for an endpoint.");
-var ModelStatusSchema = import_zod8.z.object({
-  deprecated: import_zod8.z.boolean().default(false).describe("True when the model should no longer be selected by default.")
-}).describe("Model retirement status.");
-var ServingEndpointSummarySchema = import_zod8.z.object({
-  name: import_zod8.z.string().describe("Serving endpoint invoke id."),
-  displayName: import_zod8.z.string().optional().describe("Human-readable label when the workspace provides one."),
-  family: import_zod8.z.string().optional().describe("Detected model family used for grouping and sort order."),
-  task: import_zod8.z.string().optional().describe("Databricks serving task reported for the endpoint."),
-  state: import_zod8.z.string().optional().describe("Serving endpoint lifecycle state."),
-  description: import_zod8.z.string().optional().describe("Workspace-provided endpoint description."),
-  supportsTools: import_zod8.z.boolean().optional().describe("True when the endpoint accepts tool calls."),
-  profile: ModelProfileSchema.optional().describe("Relative quality, speed, and cost scores."),
-  class: ModelClassSchema.optional().describe("Intent-oriented class assigned to this endpoint."),
-  serviceNames: import_zod8.z.record(import_zod8.z.string(), import_zod8.z.string()).optional().describe("Provider-specific service name aliases keyed by protocol."),
-  modelServiceName: import_zod8.z.string().optional().describe("Canonical model-service name used for metadata lookup."),
-  reasoningEfforts: import_zod8.z.array(ReasoningEffortSchema).optional().describe("Reasoning effort values this endpoint accepts."),
-  status: ModelStatusSchema.optional().describe("Retirement status for this endpoint."),
-  dimension: import_zod8.z.number().optional().describe("Embedding vector size when the endpoint is an embedding model.")
-}).describe("Browser-safe normalized Model Serving endpoint metadata.");
-var ModelQuerySchema = import_zod8.z.object({
-  name: import_zod8.z.string().optional().describe("Exact serving endpoint name to retain."),
-  search: import_zod8.z.string().optional().describe("Free-text query matched against endpoint names and labels."),
-  modelClass: ModelClassSchema.optional().describe("Restrict results to this intent-oriented class."),
-  requiresTools: import_zod8.z.boolean().optional().describe("When true, only endpoints that accept tools are returned."),
-  task: import_zod8.z.string().optional().describe("Exact Databricks serving task to retain."),
-  dimension: import_zod8.z.number().int().positive().optional().describe("Exact embedding vector dimension to retain."),
-  minDimension: import_zod8.z.number().int().positive().optional().describe("Minimum embedding vector dimension to retain."),
-  maxDimension: import_zod8.z.number().int().positive().optional().describe("Maximum embedding vector dimension to retain."),
-  reasoningEffort: ReasoningEffortSchema.optional().describe("Reasoning effort that a retained endpoint must accept."),
-  includeDeprecated: import_zod8.z.boolean().optional().describe("When true, retired endpoints remain in the result set."),
-  limit: import_zod8.z.number().int().min(1).max(50).optional().describe("Maximum number of ranked results to return."),
-  threshold: import_zod8.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1.")
-}).describe("Browser-safe model catalogue search and ranking controls.");
-var RankedModelSchema = import_zod8.z.object({
-  endpoint: ServingEndpointSummarySchema.describe("Normalized endpoint chosen for this result."),
-  modelClass: ModelClassSchema.describe("Class used to rank this result."),
-  score: import_zod8.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
-}).describe("One ranked model-search result.");
-var EndpointCapabilitiesSchema = import_zod8.z.object({
-  chat: import_zod8.z.boolean().describe("True when the endpoint can serve chat completions."),
-  embedding: import_zod8.z.boolean().describe("True when the endpoint can serve embeddings."),
-  tools: import_zod8.z.boolean().describe("True when the endpoint accepts tool calls.")
-}).describe("Capabilities derived from one normalized serving endpoint.");
-var FamilyClassSchema = import_zod8.z.object({
-  class: ModelClassSchema.describe("Fallback class for an unscored recognized family."),
-  rank: import_zod8.z.number().min(0).describe("Relative rank among family fallbacks, starting at 0.")
-}).describe("Fallback class and rank for an unscored recognized model family.");
-var ModelCapabilitiesSchema = import_zod8.z.object({
-  responses: import_zod8.z.boolean().describe("True when the model supports the Responses API."),
-  imageInput: import_zod8.z.boolean().describe("True when the model accepts image inputs."),
-  applyPatch: import_zod8.z.boolean().describe("True when the model supports the apply-patch tool."),
-  webSearch: import_zod8.z.boolean().describe("True when the model supports web search.")
-}).describe("Documented capabilities resolved for one model identity.");
-var ModelRateLimitsSchema = import_zod8.z.object({
-  inputTokensPerMinute: import_zod8.z.number().int().min(0).nullable().describe("Published input tokens per minute, or null when unpublished."),
-  outputTokensPerMinute: import_zod8.z.number().int().min(0).nullable().describe("Published output tokens per minute, or null when unpublished."),
-  queriesPerHour: import_zod8.z.number().int().min(0).nullable().describe("Published queries per hour, or null when unpublished.")
-}).describe("Published pay-per-token limits for one model.");
-var ModelMetadataSchema = import_zod8.z.object({
-  status: ModelStatusSchema.describe("Retirement status for this model identity."),
-  capabilities: ModelCapabilitiesSchema.describe("Documented capabilities for this model identity."),
-  rateLimits: ModelRateLimitsSchema.optional().describe("Published rate limits when available.")
-}).describe("Combined retirement, capability, and rate-limit metadata.");
-var ResolvedModelSchema = import_zod8.z.object({
-  modelId: import_zod8.z.string().describe("Resolved serving endpoint or model identifier."),
-  matched: import_zod8.z.boolean().describe("True when the identifier matched a catalogue entry."),
-  score: import_zod8.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
-}).describe("Result of resolving a fuzzy model identifier.");
-var ResolveModelOptionsSchema = import_zod8.z.object({
-  threshold: import_zod8.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
-  requiresTools: import_zod8.z.boolean().optional().describe("When true, only tool-capable endpoints may match.")
-}).describe("Pure controls for fuzzy endpoint resolution.");
-var ScoredEndpointSchema = import_zod8.z.object({
-  endpoint: ServingEndpointSummarySchema.describe("Candidate serving endpoint."),
-  score: import_zod8.z.number().min(0).max(1).describe("Fuzzy-match distance in the range 0 to 1.")
-}).describe("One endpoint paired with its fuzzy-match distance.");
-var ResolveModelInputSchema = import_zod8.z.object({
-  explicit: import_zod8.z.string().optional().describe("Exact model id or display name supplied by the caller."),
-  fuzzy: import_zod8.z.boolean().optional().describe("When true, unmatched explicit values may fuzzy-match."),
-  threshold: import_zod8.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
-  requiresTools: import_zod8.z.boolean().optional().describe("When true, only tool-capable endpoints may be selected."),
-  modelClass: ModelClassSchema.optional().describe("Preferred intent-oriented class when no explicit model matches."),
-  fallbacks: import_zod8.z.array(import_zod8.z.string()).optional().describe("Ordered model ids tried after class selection fails."),
-  liveOnly: import_zod8.z.boolean().optional().describe("When true, skip endpoints that are not currently ready.")
-}).describe("Caller intent used to resolve one model from a catalogue.");
-var ResolvedModelSelectionSchema = import_zod8.z.object({
-  modelId: import_zod8.z.string().describe("Selected serving endpoint identifier."),
-  source: import_zod8.z.enum(["explicit", "fuzzy-match", "class", "fallback"]).describe("Policy branch that selected this model.")
-}).describe("Selected model identifier and the policy branch that selected it.");
 
 // node_modules/fuse.js/dist/fuse.mjs
 function isArray(value) {
@@ -43700,9 +43731,6 @@ var CHAT_CLASS_ORDER = [
   ModelClass2.ChatFast
 ];
 var MODEL_CLASS_ORDER = [...CHAT_CLASS_ORDER, ModelClass2.Embedding];
-function isChatClass(cls) {
-  return CHAT_CLASS_ORDER.includes(cls);
-}
 function classesAtOrBelow(cls) {
   if (cls === ModelClass2.Embedding)
     return [ModelClass2.Embedding];
@@ -44064,25 +44092,6 @@ function parseModelName(name) {
 // packages/js/node/model/src/_ranking.ts
 var ModelClass4 = ModelClass;
 var DEFAULT_FUZZY_THRESHOLD = 0.4;
-var SEARCH_INTENT_FILLERS = new Set(["a", "best", "for", "model", "models", "the"]);
-var CHAT_SEARCH_INTENTS = new Set([
-  "chat",
-  "completion",
-  "completions",
-  "summarize",
-  "summarise",
-  "summarization",
-  "summarisation",
-  "summary"
-]);
-var EMBEDDING_SEARCH_INTENTS = new Set([
-  "embed",
-  "embedding",
-  "embeddings",
-  "vector",
-  "vectorize",
-  "vectorise"
-]);
 function rankEndpoints(endpoints, query = {}, options = {}) {
   const filtered = endpoints.filter((endpoint) => matchesModelQuery(endpoint, query));
   const originalByName = new Map(filtered.map((endpoint) => [endpoint.name, endpoint]));
@@ -44099,18 +44108,11 @@ function rankEndpoints(endpoints, query = {}, options = {}) {
     [options.modelClass]: normalized
   } : classifyEndpoints(normalized);
   const search2 = query.search?.trim();
-  const searchPlan = search2 ? modelSearchPlan(search2) : undefined;
-  const rankedSearch = searchPlan ? searchPlan.search : search2;
-  const searchIntent = searchPlan?.modelClass;
-  const requestedClass = options.modelClass ?? query.modelClass ?? searchIntent;
+  const requestedClass = options.modelClass ?? query.modelClass;
   const includeDeprecated = query.includeDeprecated ?? options.includeDeprecated ?? false;
   const eligible = requestedClass ? classesAtOrBelow(requestedClass) : CHAT_CLASS_ORDER;
   const candidates = [];
-  const explicitClass = options.modelClass ?? query.modelClass;
-  if (searchIntent !== undefined && explicitClass !== undefined && isChatClass(searchIntent) !== isChatClass(explicitClass)) {
-    return [];
-  }
-  if (rankedSearch && requestedClass === undefined) {
+  if (search2 && requestedClass === undefined) {
     const classByName = classifyEndpointClasses(normalized);
     for (const endpoint of normalized) {
       if (!includeDeprecated && endpoint.status?.deprecated)
@@ -44134,14 +44136,14 @@ function rankEndpoints(endpoints, query = {}, options = {}) {
       }
     }
   }
-  let ranked = candidates;
-  if (rankedSearch) {
-    const exact = candidates.find((candidate) => candidate.endpoint.name === rankedSearch);
+  let ranked = !search2 && requestedClass === undefined ? preferLatestWithinLeadingFamily(candidates) : candidates;
+  if (search2) {
+    const exact = candidates.find((candidate) => candidate.endpoint.name === search2);
     if (exact) {
       ranked = [{ ...exact, score: 0 }];
     } else {
       const threshold = query.threshold ?? DEFAULT_FUZZY_THRESHOLD;
-      const searchTokens = tokenize3(rankedSearch);
+      const searchTokens = tokenize3(search2);
       const tokenMatches = candidates.filter((candidate) => {
         const candidateTokens = new Set(searchableValues(candidate.endpoint).flatMap(tokenize3));
         return searchTokens.length > 0 && searchTokens.every((token) => candidateTokens.has(token));
@@ -44163,7 +44165,7 @@ function rankEndpoints(endpoints, query = {}, options = {}) {
           useExtendedSearch: true,
           isCaseSensitive: false
         });
-        const normalizedSearch = tokenize3(rankedSearch).join(" ");
+        const normalizedSearch = tokenize3(search2).join(" ");
         ranked = normalizedSearch ? fuse.search(normalizedSearch).filter((result) => (result.score ?? 0) <= threshold).map((result) => ({ ...result.item, score: result.score ?? 0 })).sort(compareRanked) : [];
       }
     }
@@ -44173,6 +44175,20 @@ function rankEndpoints(endpoints, query = {}, options = {}) {
     endpoint: originalByName.get(result.endpoint.name) ?? result.endpoint
   }));
   return query.limit === undefined ? restored : restored.slice(0, Math.max(0, query.limit));
+}
+function preferLatestWithinLeadingFamily(candidates) {
+  const leading = candidates[0];
+  if (!leading)
+    return [];
+  const family = modelFamily(leading.endpoint.name);
+  if (!family)
+    return [...candidates];
+  const sameFamily = candidates.filter((candidate) => modelFamily(candidate.endpoint.name) === family).sort(compareRanked);
+  const selected = new Set(sameFamily.map((candidate) => candidate.endpoint.name));
+  return [
+    ...sameFamily,
+    ...candidates.filter((candidate) => !selected.has(candidate.endpoint.name))
+  ];
 }
 function matchesModelQuery(endpoint, query) {
   if (query.name !== undefined && endpoint.name !== query.name)
@@ -44277,21 +44293,6 @@ function modelVariantRank(name) {
     return 1;
   return 2;
 }
-function modelSearchPlan(search2) {
-  const tokens = tokenize3(search2).filter((token) => !SEARCH_INTENT_FILLERS.has(token));
-  if (tokens.length === 0)
-    return;
-  const chat = tokens.some((token) => CHAT_SEARCH_INTENTS.has(token));
-  const embedding = tokens.some((token) => EMBEDDING_SEARCH_INTENTS.has(token));
-  if (chat === embedding)
-    return;
-  const intentWords = chat ? CHAT_SEARCH_INTENTS : EMBEDDING_SEARCH_INTENTS;
-  const remaining = tokens.filter((token) => !intentWords.has(token));
-  return {
-    modelClass: chat ? ModelClass4.ChatThinking : ModelClass4.Embedding,
-    ...remaining.length > 0 ? { search: remaining.join(" ") } : {}
-  };
-}
 function tokenize3(value) {
   return value.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 }
@@ -44367,7 +44368,6 @@ var FALLBACK_MODEL_IDS = [
 ];
 
 // packages/js/node/model/src/_selection.ts
-var DEFAULT_MODEL_FAMILY_SEARCH = "gpt";
 function lookupModels(endpoints, query = {}) {
   return rankEndpoints(endpoints, query);
 }
@@ -44391,11 +44391,6 @@ function resolveModel(endpoints, input = {}) {
       return { modelId: pinned, source: "fallback" };
   }
   const source = input.modelClass !== undefined ? "class" : "fallback";
-  if (input.modelClass === undefined) {
-    const [preferred] = lookupModels(endpoints, buildQuery(input, DEFAULT_MODEL_FAMILY_SEARCH));
-    if (preferred)
-      return { modelId: preferred.endpoint.name, source };
-  }
   const [top] = lookupModels(endpoints, buildQuery(input, undefined));
   if (top)
     return { modelId: top.endpoint.name, source };
@@ -59563,13 +59558,21 @@ class AuthenticatedModelClient {
   workspaceId() {
     return this.auth.workspaceId;
   }
-  async request(path2) {
+  async request(path2, init = {}) {
     const url = new URL(path2, `${this.host().replace(/\/$/, "")}/`).toString();
-    let headers = await this.auth.headers();
-    let response = await this.fetcher(url, { headers });
+    const headers = new Headers(init.headers);
+    for (const [name, value] of Object.entries(await this.auth.headers())) {
+      headers.set(name, value);
+    }
+    if (init.body !== undefined && !headers.has("content-type")) {
+      headers.set("content-type", "application/json");
+    }
+    let response = await this.fetcher(url, { ...init, headers });
     if (response.status === 401) {
-      headers = await this.auth.headers({ refresh: true });
-      response = await this.fetcher(url, { headers });
+      for (const [name, value] of Object.entries(await this.auth.headers({ refresh: true }))) {
+        headers.set(name, value);
+      }
+      response = await this.fetcher(url, { ...init, headers });
     }
     const text4 = await response.text();
     if (!response.ok) {
@@ -59657,7 +59660,7 @@ class DefaultModelClient {
     if (!isRecord(response) || !Array.isArray(response.endpoints)) {
       throw new Error("Databricks serving-endpoints response is missing an endpoints array");
     }
-    const endpoints = normalizeEndpoints(response.endpoints);
+    const endpoints = await this.measureEmbeddingDimensions(normalizeEndpoints(response.endpoints));
     logger10.debug("listed", {
       count: endpoints.length,
       host: this.client.host(),
@@ -59665,6 +59668,35 @@ class DefaultModelClient {
     });
     return endpoints;
   }
+  async measureEmbeddingDimensions(endpoints) {
+    return Promise.all(endpoints.map(async (endpoint) => {
+      if (endpoint.class !== ModelClass.Embedding || endpoint.dimension !== undefined) {
+        return endpoint;
+      }
+      try {
+        const response = await this.client.request(`/serving-endpoints/${encodeURIComponent(endpoint.name)}/invocations`, {
+          method: "POST",
+          body: JSON.stringify({ input: ["ping"] })
+        });
+        const dimension = embeddingDimension(response);
+        return dimension === undefined ? endpoint : { ...endpoint, dimension };
+      } catch (error) {
+        logger10.warn("embedding dimension probe failed", {
+          model: endpoint.name,
+          error
+        });
+        return endpoint;
+      }
+    }));
+  }
+}
+function embeddingDimension(value) {
+  if (!isRecord(value) || !Array.isArray(value.data))
+    return;
+  const first2 = value.data[0];
+  if (!isRecord(first2) || !Array.isArray(first2.embedding))
+    return;
+  return first2.embedding.length > 0 ? first2.embedding.length : undefined;
 }
 async function createModelClient(options = {}) {
   const cacheTtlMs = validateCacheTtl(options.cacheTtlMs);

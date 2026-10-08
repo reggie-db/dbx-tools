@@ -20,8 +20,6 @@ export const GenieCodeModelProviderSchema = z
 
 export const GenieCodeBaseConfigSchema = z
   .object({
-    model_provider: z.string().describe("Selected provider identifier."),
-    model: z.string().describe("Selected model name."),
     databricks_profile: z.string().describe("Databricks profile represented by this home."),
     projects: z
       .record(
@@ -29,6 +27,17 @@ export const GenieCodeBaseConfigSchema = z
         z.object({ trust_level: z.literal("trusted").describe("Project trust level.") }).strict(),
       )
       .describe("Trusted local projects keyed by absolute path."),
+  })
+  .strict()
+  .describe("Persistent profile-scoped Genie Code configuration.");
+
+export const GenieCodeProviderOverlaySchema = z
+  .object({
+    model_provider: z.string().describe("Selected provider identifier."),
+    model: z.string().describe("Selected model name."),
+    model_providers: z
+      .record(z.string(), GenieCodeModelProviderSchema)
+      .describe("Invocation-local model providers keyed by identifier."),
     tui: z
       .object({
         model_availability_nux: z
@@ -36,22 +45,16 @@ export const GenieCodeBaseConfigSchema = z
           .describe("Models whose availability notice has been acknowledged."),
       })
       .strict()
-      .describe("Genie terminal UI settings."),
-  })
-  .strict()
-  .describe("Persistent profile-model Genie Code configuration.");
-
-export const GenieCodeProviderOverlaySchema = z
-  .object({
-    model_providers: z
-      .record(z.string(), GenieCodeModelProviderSchema)
-      .describe("Invocation-local model providers keyed by identifier."),
+      .describe("Invocation-specific Genie terminal UI settings."),
   })
   .strict()
   .describe("Invocation-specific Genie Code provider overlay.");
 
 export const GenieCodeConfigSchema = GenieCodeBaseConfigSchema.extend({
+  model_provider: GenieCodeProviderOverlaySchema.shape.model_provider,
+  model: GenieCodeProviderOverlaySchema.shape.model,
   model_providers: GenieCodeProviderOverlaySchema.shape.model_providers,
+  tui: GenieCodeProviderOverlaySchema.shape.tui,
 }).describe("Merged persistent and invocation-specific Genie Code configuration.");
 
 export type GenieCodeBaseConfig = z.infer<typeof GenieCodeBaseConfigSchema>;

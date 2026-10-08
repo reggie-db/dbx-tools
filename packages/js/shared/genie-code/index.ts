@@ -8,5 +8,5 @@ export * as config from "./src/config.ts";
 export * as options from "./src/options.ts";
 export { GenieCodeModelProviderSchema, GenieCodeBaseConfigSchema, GenieCodeProviderOverlaySchema, GenieCodeConfigSchema } from "./src/config.ts";
 export type { GenieCodeBaseConfig, GenieCodeProviderOverlay, GenieCodeConfig } from "./src/config.ts";
-export { GENIE_CODE_VERSION, GenieCodeOptionsSchema, GenieCodePairingSchema, GenieCodeRunnerOptionsSchema, GENIE_CODE_DEFAULTS } from "./src/options.ts";
-export type { GenieCodeOptions, ResolvedGenieCodeOptions, GenieCodePairing, GenieCodeRunnerOptions } from "./src/options.ts";
+export { GENIE_CODE_VERSION, GenieCodeOptionsSchema, GenieCodeHomeSchema, GenieCodeRunnerOptionsSchema, GENIE_CODE_DEFAULTS } from "./src/options.ts";
+export type { GenieCodeOptions, ResolvedGenieCodeOptions, GenieCodeHome, GenieCodeRunnerOptions } from "./src/options.ts";

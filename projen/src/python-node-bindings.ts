@@ -1,10 +1,11 @@
 /** Shared pyproject-backed configuration for PythonMonkey Node bindings. */
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { find } from "@dbx-tools/path";
 import { object, stringUtils } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
+import ts from "typescript";
 import { runTaskCommand } from "./_task-command.ts";
 import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
 
@@ -29,6 +30,7 @@ export interface ResolvedPythonNodeBindings {
   readonly projectDirectory: string;
   readonly pyproject: string;
   readonly runtimeOutput: string;
+  readonly watchInputs: readonly string[];
   readonly workspaceDirectories: readonly string[];
 }
 
@@ -152,7 +154,7 @@ export function resolvePythonNodeBindings(
     }
     const bindingName = nodePackageName(packageName);
     const bindingDirectory = join(moduleDirectory, "_generated", "node", bindingName);
-    return {
+    const resolved = {
       project,
       projectDirectory,
       pyproject,
@@ -177,9 +179,83 @@ export function resolvePythonNodeBindings(
       }),
       workspaceDirectories: workspaceDependencyDirectories(packageName, root),
     };
+    return {
+      ...resolved,
+      watchInputs: bindingSourceInputs(root, resolved),
+    };
   });
   validateBindings(configs);
   return configs;
+}
+
+type BindingSourceConfig = Omit<ResolvedPythonNodeBindings, "watchInputs">;
+
+/** Transitive workspace source files reachable from configured binding modules. */
+function bindingSourceInputs(root: string, config: BindingSourceConfig): string[] {
+  const allowed = config.workspaceDirectories.map(canonicalPath);
+  const packageEntrypoint = Bun.resolveSync(config.entrypoint, config.projectDirectory);
+  const entrypoints =
+    config.modules.length > 0
+      ? config.modules.map((module) => resolvePythonNodeBindingModule(packageEntrypoint, module))
+      : [packageEntrypoint];
+  const pending = [
+    ...entrypoints,
+    ...config.functionOverrides.map(({ handlerFile }) => handlerFile),
+  ];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const candidate = canonicalPath(pending.pop()!);
+    if (
+      visited.has(candidate) ||
+      !allowed.some((directory) => containsResolvedPath(directory, candidate))
+    ) {
+      continue;
+    }
+    visited.add(candidate);
+    let source: string;
+    try {
+      source = readFileSync(candidate, "utf8");
+    } catch {
+      continue;
+    }
+    const dependencies = ts.preProcessFile(source, true, true).importedFiles;
+    for (const dependency of dependencies) {
+      try {
+        pending.push(Bun.resolveSync(dependency.fileName, dirname(candidate)));
+      } catch {
+        // Built-ins and external packages are outside the workspace source graph.
+      }
+    }
+  }
+  return [...visited].sort().map((path) => relative(root, path));
+}
+
+/** Resolve one configured namespace from a package entrypoint barrel. */
+export function resolvePythonNodeBindingModule(entrypoint: string, module: string): string {
+  if (!/^[$A-Z_a-z][$\w]*$/.test(module)) {
+    throw new Error(`Node binding module must be a TypeScript identifier: ${module}`);
+  }
+  const source = readFileSync(entrypoint, "utf8");
+  const escaped = module.replaceAll(/[$()*+.?[\\\]^{|}]/g, "\\$&");
+  const match = new RegExp(`export\\s+\\*\\s+as\\s+${escaped}\\s+from\\s+["']([^"']+)["']`).exec(
+    source,
+  );
+  if (!match?.[1]) {
+    throw new Error(`${entrypoint} does not export namespace ${module}`);
+  }
+  return Bun.resolveSync(match[1], dirname(entrypoint));
+}
+
+function canonicalPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+function containsResolvedPath(parent: string, candidate: string): boolean {
+  return candidate === parent || candidate.startsWith(`${parent}${sep}`);
 }
 
 /** All paths that can change a workspace-backed generated Node runtime. */
@@ -189,7 +265,7 @@ export function pythonNodeBindingWatchInputs(config: ResolvedPythonNodeBindings)
   }
   return [
     config.pyproject,
-    ...config.workspaceDirectories,
+    ...config.watchInputs,
     ...config.functionOverrides.map(({ handlerFile }) => handlerFile),
   ];
 }

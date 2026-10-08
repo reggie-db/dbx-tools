@@ -103,7 +103,7 @@ interface DatabricksModelClient {
   host(): string;
   principal(): string;
   workspaceId(): string | undefined;
-  request(path: string): Promise<unknown>;
+  request(path: string, init?: RequestInit): Promise<unknown>;
 }
 
 class AuthenticatedModelClient implements DatabricksModelClient {
@@ -124,13 +124,21 @@ class AuthenticatedModelClient implements DatabricksModelClient {
     return this.auth.workspaceId;
   }
 
-  async request(path: string): Promise<unknown> {
+  async request(path: string, init: RequestInit = {}): Promise<unknown> {
     const url = new URL(path, `${this.host().replace(/\/$/, "")}/`).toString();
-    let headers = await this.auth.headers();
-    let response = await this.fetcher(url, { headers });
+    const headers = new Headers(init.headers);
+    for (const [name, value] of Object.entries(await this.auth.headers())) {
+      headers.set(name, value);
+    }
+    if (init.body !== undefined && !headers.has("content-type")) {
+      headers.set("content-type", "application/json");
+    }
+    let response = await this.fetcher(url, { ...init, headers });
     if (response.status === 401) {
-      headers = await this.auth.headers({ refresh: true });
-      response = await this.fetcher(url, { headers });
+      for (const [name, value] of Object.entries(await this.auth.headers({ refresh: true }))) {
+        headers.set(name, value);
+      }
+      response = await this.fetcher(url, { ...init, headers });
     }
     const text = await response.text();
     if (!response.ok) {
@@ -236,7 +244,7 @@ class DefaultModelClient implements ModelClient {
     if (!object.isRecord(response) || !Array.isArray(response.endpoints)) {
       throw new Error("Databricks serving-endpoints response is missing an endpoints array");
     }
-    const endpoints = normalizeEndpoints(response.endpoints);
+    const endpoints = await this.measureEmbeddingDimensions(normalizeEndpoints(response.endpoints));
     logger.debug("listed", {
       count: endpoints.length,
       host: this.client.host(),
@@ -244,6 +252,42 @@ class DefaultModelClient implements ModelClient {
     });
     return endpoints;
   }
+
+  private async measureEmbeddingDimensions(
+    endpoints: readonly ServingEndpointSummary[],
+  ): Promise<ServingEndpointSummary[]> {
+    return Promise.all(
+      endpoints.map(async (endpoint) => {
+        if (endpoint.class !== ModelClass.Embedding || endpoint.dimension !== undefined) {
+          return endpoint;
+        }
+        try {
+          const response = await this.client.request(
+            `/serving-endpoints/${encodeURIComponent(endpoint.name)}/invocations`,
+            {
+              method: "POST",
+              body: JSON.stringify({ input: ["ping"] }),
+            },
+          );
+          const dimension = embeddingDimension(response);
+          return dimension === undefined ? endpoint : { ...endpoint, dimension };
+        } catch (error) {
+          logger.warn("embedding dimension probe failed", {
+            model: endpoint.name,
+            error,
+          });
+          return endpoint;
+        }
+      }),
+    );
+  }
+}
+
+function embeddingDimension(value: unknown): number | undefined {
+  if (!object.isRecord(value) || !Array.isArray(value.data)) return undefined;
+  const first = value.data[0];
+  if (!object.isRecord(first) || !Array.isArray(first.embedding)) return undefined;
+  return first.embedding.length > 0 ? first.embedding.length : undefined;
 }
 
 /** Create an authentication-aware Databricks model client. */

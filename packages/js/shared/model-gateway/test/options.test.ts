@@ -35,6 +35,18 @@ describe("model-gateway options", () => {
     assert.throws(() => resolveModelGatewayCliOptions({ listen: 0 }), /Port must be an integer/);
   });
 
+  it("shares mutually exclusive model and model-class selectors", () => {
+    assert.equal(resolveModelGatewayOptions({ model: "gpt" }).model, "gpt");
+    assert.equal(
+      resolveModelGatewayOptions({ modelClass: "chat-balanced" }).modelClass,
+      "chat-balanced",
+    );
+    assert.throws(
+      () => resolveModelGatewayOptions({ model: "gpt", modelClass: "chat-balanced" }),
+      /mutually exclusive/,
+    );
+  });
+
   it("rejects public listener hosts", () => {
     assert.throws(() => resolveModelGatewayOptions({ listen: "0.0.0.0:4000" }), /loopback/);
   });

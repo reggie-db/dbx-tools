@@ -21,7 +21,6 @@ From the repository root, the local launcher starts the unified runtime:
 
 ```sh
 DATABRICKS_CONFIG_PROFILE=<profile> \
-MODEL_NAME=databricks-gpt-5-nano \
 bash scripts/run-graphiti-python.sh
 ```
 
@@ -51,10 +50,15 @@ database runtime.
 ## Databricks Model Resolution
 
 The process creates one generated auth client and one generated model client at
-startup. It resolves the fuzzy chat model, ranks embedding endpoints by the
-configured name, embedding class, and dimensions, then resolves both endpoint
-routes. REST and MCP reuse the same Graphiti model clients, while the auth client
-injects refreshed Databricks headers into every model request.
+startup. It selects the chat endpoint by `modelClass`, which defaults to
+`chat-fast`, and independently selects the best embedding-class endpoint. REST
+and MCP reuse the same Graphiti model clients, while the auth client injects
+refreshed Databricks headers into every model request.
+
+Graphiti reads embedding dimensions from the discovered endpoint metadata
+before initializing PostGraph. Startup fails clearly when the selected endpoint
+does not publish a positive dimension; there is no model-name or dimension
+fallback.
 
 ## Use From A Notebook
 

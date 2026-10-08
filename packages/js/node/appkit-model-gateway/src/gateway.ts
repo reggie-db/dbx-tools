@@ -5,7 +5,11 @@
  */
 
 import { log } from "@dbx-tools/shared-core";
-import { ModelClass } from "@dbx-tools/shared-model";
+import {
+  ModelClass,
+  ModelClassSchema,
+  type ModelClass as ModelClassType,
+} from "@dbx-tools/shared-model";
 import type {
   ClientProtocol,
   GatewayRoute,
@@ -30,6 +34,8 @@ const logger = log.logger("appkit/model-gateway");
 export interface ModelGatewayOptions {
   readonly cacheTtlMs?: number;
   readonly overrides?: readonly ModelCapabilityOverride[];
+  readonly model?: string;
+  readonly modelClass?: ModelClassType;
 }
 
 /** Error carrying an HTTP status and protocol-safe message. */
@@ -46,6 +52,8 @@ export class ModelGatewayError extends Error {
 /** AppKit-scoped model gateway with dynamic model discovery and streaming inference. */
 export class ModelGateway {
   private readonly registry: ModelRegistry;
+  private readonly model?: string;
+  private readonly modelClass?: ModelClassType;
 
   constructor(options: ModelGatewayOptions = {}, registry?: ModelRegistry) {
     const registryOptions: ModelRegistryOptions = {
@@ -53,6 +61,8 @@ export class ModelGateway {
       ...(options.overrides ? { overrides: options.overrides } : {}),
     };
     this.registry = registry ?? new DatabricksModelRegistry(registryOptions);
+    this.model = options.model;
+    this.modelClass = options.modelClass;
   }
 
   /** Return the live OpenAI model list, including Codex metadata when requested. */
@@ -73,19 +83,37 @@ export class ModelGateway {
     signal: AbortSignal,
   ): Promise<Response> {
     const sanitizedBody = sanitizeInferenceBody(body);
-    const requestedModel = requiredModel(sanitizedBody.model);
+    const selection = gatewayModelSelection(
+      sanitizedBody,
+      headers,
+      {
+        model: this.model,
+        modelClass: this.modelClass,
+      },
+      protocol,
+    );
     logger.debug("resolving request", {
       clientProtocol: protocol,
-      model: requestedModel,
+      model: selection.model,
+      modelClass: selection.modelClass,
       originator: headers.get("originator") ?? undefined,
       stream: sanitizedBody.stream === true,
     });
     const features = requestedFeatures(sanitizedBody);
-    const target = await this.registry.resolve(requestedModel, {
+    const target = await this.registry.resolve(selection.model, {
       ...(protocol === "openai-embeddings" ? { modelClass: ModelClass.Embedding } : {}),
+      ...(selection.modelClass ? { modelClass: selection.modelClass } : {}),
       ...(features.tools ? { requiresTools: true } : {}),
     });
-    if (!target) throw new ModelGatewayError(404, `Model not found: ${requestedModel}`);
+    if (!target) {
+      throw new ModelGatewayError(
+        404,
+        selection.model
+          ? `Model not found: ${selection.model}`
+          : "No model matches the requested class",
+      );
+    }
+    const requestedModel = selection.model ?? target.id;
     const route = resolveRoute({
       clientProtocol: protocol,
       requestedModel,
@@ -155,11 +183,28 @@ export function sanitizeInferenceBody(
   return sanitized;
 }
 
-function requiredModel(value: unknown): string {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new ModelGatewayError(400, "Request body must include a non-empty model");
+/** Resolve request, header, configured, and protocol model-selection inputs. */
+export function gatewayModelSelection(
+  body: Readonly<Record<string, unknown>>,
+  headers: Headers,
+  defaults: { readonly model?: string; readonly modelClass?: ModelClassType } = {},
+  protocol?: ClientProtocol,
+): { readonly model?: string; readonly modelClass?: ModelClassType } {
+  const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : undefined;
+  const header = headers.get("x-dbx-tools-model-class")?.trim();
+  const parsedClass = header ? ModelClassSchema.safeParse(header) : undefined;
+  if (parsedClass && !parsedClass.success) {
+    throw new ModelGatewayError(400, `Invalid model class: ${header}`);
   }
-  return value.trim();
+  if (model && parsedClass?.data) {
+    throw new ModelGatewayError(400, "Model and model class are mutually exclusive");
+  }
+  if (model) return { model };
+  if (parsedClass?.data) return { modelClass: parsedClass.data };
+  if (defaults.model) return { model: defaults.model };
+  if (defaults.modelClass) return { modelClass: defaults.modelClass };
+  if (protocol === "openai-embeddings") return { modelClass: ModelClass.Embedding };
+  return {};
 }
 
 function logResponse(upstreamProtocol: string, model: string, response: Response): void {

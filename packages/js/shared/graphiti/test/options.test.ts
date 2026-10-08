@@ -10,10 +10,8 @@ describe("Graphiti options", () => {
   it("applies the shared model defaults", () => {
     const options = resolveGraphitiOptions();
 
-    assert.equal(options.model, "databricks-gpt-5-nano");
+    assert.equal(options.modelClass, "chat-fast");
     assert.equal(options.temperature, 1);
-    assert.equal(options.embedderModel, "gte-large-en");
-    assert.equal(options.embedderDimensions, 1024);
     assert.equal(options.startupTimeoutMs, 180_000);
     assert.equal(options.databaseSchema, "dbx_tools_graphiti");
     assert.deepEqual(options.listen, {
@@ -23,12 +21,12 @@ describe("Graphiti options", () => {
     });
   });
 
-  it("normalizes model values without duplicating environment policy", () => {
-    const options = resolveGraphitiOptions({
-      model: "  gpt  ",
-    });
-
-    assert.equal(options.model, "gpt");
+  it("uses the shared chat-class contract", () => {
+    assert.equal(
+      resolveGraphitiOptions({ modelClass: "chat-thinking" }).modelClass,
+      "chat-thinking",
+    );
+    assert.throws(() => resolveGraphitiOptions({ modelClass: "embedding" as never }));
   });
 
   it("parses environment names without reading process state", () => {
@@ -41,6 +39,7 @@ describe("Graphiti options", () => {
         GRAPHITI_DATABASE_SCHEMA: "graphiti_memory",
         GRAPHITI_HOME: "/graphiti",
         GRAPHITI_LISTEN: "tcp://localhost:8100",
+        MODEL_CLASS: "chat-balanced",
       }),
       {
         profile: "PROFILE",
@@ -50,6 +49,7 @@ describe("Graphiti options", () => {
         databaseSchema: "graphiti_memory",
         graphitiHome: "/graphiti",
         listen: { scheme: "tcp", host: "localhost", port: 8100 },
+        modelClass: "chat-balanced",
       },
     );
   });
@@ -77,8 +77,7 @@ describe("Graphiti options", () => {
     });
 
     assert.equal(environment.DATABRICKS_CONFIG_PROFILE, "PROFILE");
-    assert.equal(environment.MODEL_NAME, "databricks-gpt-5-nano");
-    assert.equal(environment.EMBEDDER_MODEL, "gte-large-en");
+    assert.equal(environment.MODEL_CLASS, "chat-fast");
     assert.equal(environment.DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS, "180000");
     assert.equal(environment.DBX_TOOLS_POSTGRES_ROLE, undefined);
     assert.equal(environment.GRAPHITI_DATABASE_SCHEMA, "dbx_tools_graphiti");

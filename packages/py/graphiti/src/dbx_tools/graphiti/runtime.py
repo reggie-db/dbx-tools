@@ -89,7 +89,7 @@ class GraphitiRuntime(AbstractAsyncContextManager["GraphitiRuntime"]):
             self.database = await _start_database(self.options)
             driver = PostGraphDriver(
                 dsn=self.database.dsn,
-                embedding_dim=int(self.options["embedderDimensions"]),
+                embedding_dim=self.clients.embedder_dimensions,
                 connection_options=self.database.connection_options,
             )
             self.graphiti = Graphiti(
@@ -129,13 +129,14 @@ async def create_runtime_clients(
         else await create_model_client()
     )
     chat_route = await model.route(
-        {"explicit": options["model"], "fuzzy": True, "protocol": "chat"}
+        {
+            "modelClass": options["modelClass"],
+            "protocol": "chat",
+        }
     )
-    matches = await model.search_models(
-        {"search": options["embedderModel"], "modelClass": "embedding", "limit": 1}
-    )
+    matches = await model.search_models({"modelClass": "embedding", "limit": 1})
     if not matches:
-        raise RuntimeError(f"No embedding model matched {options['embedderModel']!r}")
+        raise RuntimeError("No embedding model is available")
     endpoint = matches[0]["endpoint"]
     embedding_route = await model.route(
         {
@@ -145,7 +146,7 @@ async def create_runtime_clients(
             "protocol": "embeddings",
         }
     )
-    dimensions = int(endpoint.get("dimension") or options["embedderDimensions"])
+    dimensions = _required_embedding_dimensions(endpoint)
     http = httpx.AsyncClient(
         auth=_DatabricksRouteAuth(
             auth,
@@ -188,6 +189,14 @@ async def create_runtime_clients(
         embedder_model=embedding_route["modelId"],
         embedder_dimensions=dimensions,
     )
+
+
+def _required_embedding_dimensions(endpoint: dict[str, object]) -> int:
+    """Return positive embedding dimensions published by model discovery."""
+    dimension = endpoint.get("dimension")
+    if not isinstance(dimension, (int, float)) or int(dimension) <= 0:
+        raise RuntimeError(f"Embedding model {endpoint['name']!r} has no dimension metadata")
+    return int(dimension)
 
 
 def configure_graphiti_client(client: Graphiti, clients: RuntimeClients) -> None:

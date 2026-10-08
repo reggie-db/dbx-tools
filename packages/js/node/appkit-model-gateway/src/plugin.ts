@@ -32,6 +32,8 @@ export class ModelGatewayPlugin extends Plugin<ModelGatewayPluginConfig> {
     this.gateway = new ModelGateway({
       ...(config.cacheTtlMs !== undefined ? { cacheTtlMs: config.cacheTtlMs } : {}),
       ...(config.overrides ? { overrides: config.overrides } : {}),
+      ...(config.model ? { model: config.model } : {}),
+      ...(config.modelClass ? { modelClass: config.modelClass } : {}),
     });
   }
 

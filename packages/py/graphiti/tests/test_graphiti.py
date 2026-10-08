@@ -25,10 +25,8 @@ from dbx_tools.graphiti.options import normalize_graphiti_options
 
 def _resolved_options():
     return {
-        "model": "chat-model",
+        "modelClass": "chat-fast",
         "temperature": 1,
-        "embedderModel": "embedding-model",
-        "embedderDimensions": 768,
         "structuredOutputMode": "json_object",
         "listen": {"scheme": "tcp", "host": "127.0.0.1", "port": 8100.0},
         "databaseUrl": "postgresql://localhost:5433/graphiti",
@@ -98,7 +96,7 @@ def test_load_graphiti_options_uses_generated_environment_parser(monkeypatch) ->
 
     def parse(environment):
         calls.append(environment)
-        return {"model": "chat-model"}
+        return {"modelClass": "chat-thinking"}
 
     def resolve(options):
         calls.append(options)
@@ -107,14 +105,14 @@ def test_load_graphiti_options_uses_generated_environment_parser(monkeypatch) ->
     monkeypatch.setattr(main, "graphiti_options_from_environment", parse)
     monkeypatch.setattr(main, "normalize_graphiti_options", resolve)
 
-    assert main.load_graphiti_options({"MODEL_NAME": "chat-model"}) is resolved
-    assert calls == [{"MODEL_NAME": "chat-model"}, {"model": "chat-model"}]
+    assert main.load_graphiti_options({"MODEL_CLASS": "chat-thinking"}) is resolved
+    assert calls == [{"MODEL_CLASS": "chat-thinking"}, {"modelClass": "chat-thinking"}]
 
 
 def test_normalize_graphiti_options_accepts_input_and_resolved_values() -> None:
-    resolved = normalize_graphiti_options(GraphitiOptions(model="chat-model"))
+    resolved = normalize_graphiti_options(GraphitiOptions(model_class="chat-thinking"))
 
-    assert resolved["model"] == "chat-model"
+    assert resolved["modelClass"] == "chat-thinking"
     assert "databaseUrl" not in resolved
     assert normalize_graphiti_options(resolved) == resolved
 
@@ -234,7 +232,7 @@ def test_upstream_openai_credentials_use_a_scoped_placeholder(monkeypatch) -> No
 def test_shared_options_map_to_mcp_settings() -> None:
     options = _resolved_options()
 
-    mapped_mcp = main.mcp_settings(options)
+    mapped_mcp = main.mcp_settings(options, "chat-model", "embedding-model", 768)
     assert mapped_mcp.server.host == "127.0.0.1"
     assert mapped_mcp.server.port == 8100
     assert mapped_mcp.llm.model == "chat-model"
@@ -246,6 +244,17 @@ def test_shared_options_map_to_mcp_settings() -> None:
     assert mapped_mcp.embedder.providers.openai is not None
     assert mapped_mcp.embedder.providers.openai.api_url == "https://api.openai.com/v1"
     assert mapped_mcp.embedder.dimensions == 768
+
+
+def test_embedding_dimensions_require_discovered_metadata() -> None:
+    assert (
+        graphiti_runtime._required_embedding_dimensions(
+            {"name": "embedding-model", "dimension": 768}
+        )
+        == 768
+    )
+    with pytest.raises(RuntimeError, match="has no dimension metadata"):
+        graphiti_runtime._required_embedding_dimensions({"name": "embedding-model"})
 
 
 @pytest.mark.asyncio
@@ -289,6 +298,7 @@ async def test_runtime_clients_resolve_ranked_embedding_route(monkeypatch) -> No
     monkeypatch.setattr(graphiti_runtime, "create_model_client", create_model)
 
     runtime = await graphiti_runtime.create_runtime_clients(_resolved_options())
+    class_runtime = None
     try:
         assert runtime.auth is auth
         assert runtime.model is model
@@ -298,15 +308,13 @@ async def test_runtime_clients_resolve_ranked_embedding_route(monkeypatch) -> No
         assert runtime.embedder.config.embedding_model == "embedding-best"
         assert model.searches == [
             {
-                "search": "embedding-model",
                 "modelClass": "embedding",
                 "limit": 1,
             }
         ]
         assert model.routes == [
             {
-                "explicit": "chat-model",
-                "fuzzy": True,
+                "modelClass": "chat-fast",
                 "protocol": "chat",
             },
             {
@@ -316,8 +324,18 @@ async def test_runtime_clients_resolve_ranked_embedding_route(monkeypatch) -> No
                 "protocol": "embeddings",
             },
         ]
+        model.routes.clear()
+        class_runtime = await graphiti_runtime.create_runtime_clients(
+            {**_resolved_options(), "modelClass": "chat-thinking"}
+        )
+        assert model.routes[0] == {
+            "modelClass": "chat-thinking",
+            "protocol": "chat",
+        }
     finally:
         await runtime.http.aclose()
+        if class_runtime is not None:
+            await class_runtime.http.aclose()
 
 
 @pytest.mark.asyncio

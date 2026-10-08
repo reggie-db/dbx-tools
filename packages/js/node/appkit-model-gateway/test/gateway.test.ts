@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ModelTarget } from "@dbx-tools/shared-model-gateway";
 
-import { ModelGateway, sanitizeInferenceBody } from "../src/gateway.ts";
+import { gatewayModelSelection, ModelGateway, sanitizeInferenceBody } from "../src/gateway.ts";
 import type { ModelRegistry } from "../src/registry.ts";
 
 describe("ModelGateway model discovery", () => {
@@ -32,6 +32,28 @@ describe("ModelGateway model discovery", () => {
 });
 
 describe("ModelGateway request sanitization", () => {
+  it("selects by explicit model, class header, configured default, or empty best-chat input", () => {
+    assert.deepEqual(gatewayModelSelection({}, new Headers()), {});
+    assert.deepEqual(
+      gatewayModelSelection({}, new Headers({ "x-dbx-tools-model-class": "chat-fast" })),
+      { modelClass: "chat-fast" },
+    );
+    assert.deepEqual(gatewayModelSelection({}, new Headers(), { modelClass: "chat-balanced" }), {
+      modelClass: "chat-balanced",
+    });
+    assert.deepEqual(gatewayModelSelection({ model: "gpt" }, new Headers()), {
+      model: "gpt",
+    });
+    assert.throws(
+      () =>
+        gatewayModelSelection(
+          { model: "gpt" },
+          new Headers({ "x-dbx-tools-model-class": "chat-fast" }),
+        ),
+      /mutually exclusive/,
+    );
+  });
+
   it("omits a null temperature without mutating the caller body", () => {
     const body = { model: "chat", temperature: null, stream: true };
 

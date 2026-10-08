@@ -685,7 +685,7 @@ project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "s
   );
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/shared-model-gateway@workspace:^",
     "zod@catalog:",
   );
 });
@@ -693,9 +693,13 @@ project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "s
 project.applyToProjects(root, { identifierName: "shared-genie-code", tags: "shared" }, (p) => {
   p.package.addField(
     "description",
-    "Browser-safe managed Genie Code options and profile-model pairing contracts",
+    "Browser-safe managed Genie Code options and profile-scoped home contracts",
   );
-  p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
+  p.addDeps(
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
+    "zod@catalog:",
+  );
 });
 
 project.applyToProjects(root, { identifierName: "shared-graphiti", tags: "shared" }, (p) => {
@@ -703,7 +707,11 @@ project.applyToProjects(root, { identifierName: "shared-graphiti", tags: "shared
     "description",
     "Browser-safe Graphiti options, defaults, and runtime configuration",
   );
-  p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
+  p.addDeps(
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-model-gateway@workspace:^",
+    "zod@catalog:",
+  );
 });
 
 project.applyToProjects(root, { identifierName: "shared-fs", tags: "shared" }, (p) => {

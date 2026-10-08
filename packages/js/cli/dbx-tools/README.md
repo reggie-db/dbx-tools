@@ -8,12 +8,11 @@ applications through a gated public URL.
 
 ```sh
 bun add --global @dbx-tools/cli
-dbx auth login --profile MY-PROFILE
-dbx auth status --profile MY-PROFILE
 ```
 
-`dbx-tools` is an alias for `dbx`. Choose a configured Databricks profile for
-workspace commands; the examples use `MY-PROFILE` as a placeholder.
+`dbx-tools` is an alias for `dbx`. Authentication and a configured Databricks
+profile are resolved automatically. Pass `--profile` only to override that
+selection; examples that use `MY-PROFILE` show the explicit form.
 
 ## Serve Models To Local Tools
 
@@ -24,19 +23,66 @@ dbx model-gateway --profile MY-PROFILE --port 4000
 Point an OpenAI-compatible client at `http://127.0.0.1:4000/v1`. The generated
 command reference includes all gateway and desktop-service options.
 
+Requests may omit `model` to select the best available chat endpoint. Set a
+gateway default with `--model` or `--model-class`, or select a class per request
+with the `x-dbx-tools-model-class` header.
+
 ## Run Genie Code
 
+`dbx genie` runs the Databricks Genie Code CLI with dbx-tools model discovery,
+authentication, and configuration. It removes the setup steps normally required
+before the first non-interactive Genie command:
+
+- No Genie onboarding or separate `genie` initialization.
+- No Genie configuration profile to create or pass.
+- No manual provider URL, token command, workspace header, or `config.toml`.
+- No required `--profile` when dbx-tools can discover a configured Databricks
+  profile automatically.
+- No restriction to Genie Code's default model. Select any compatible model
+  available in the workspace, including GPT, Grok, Claude, Gemini, and custom
+  serving endpoints.
+
+With no model option, dbx-tools selects the best available tool-capable chat
+model. Use either `--model` for fuzzy or exact model selection, or
+`--model-class` for a capability band:
+
 ```sh
-dbx genie --profile MY-PROFILE --model gpt
-# Equivalent installed binary:
-dbx-genie --profile MY-PROFILE --model gpt
+# Select the best available chat model.
+dbx genie
+
+# Select the best fast chat model.
+dbx genie --model-class chat-fast
+
+# Select the best matching GPT model.
+dbx genie --model gpt
+
+# Select another model family.
+dbx genie --model grok
+
+# Pin an exact model or serving endpoint.
+dbx genie --profile MY-PROFILE --model databricks-gpt-5-6-sol
 ```
 
-The command installs the pinned Genie Code package under `~/.dbx-tools`, writes
-one persistent home per exact profile-model pairing, and supervises an
-authenticated loopback model gateway. Unknown flags and extra arguments are
-forwarded to Genie Code. Use `--` only when a wrapper option such as `--model`
-must be sent to Genie instead.
+`dbx-genie` is the equivalent installed binary:
+
+```sh
+dbx-genie --model gpt
+```
+
+The command installs the pinned Genie Code package under `~/.dbx-tools` and
+creates one persistent home per exact Databricks profile. Models share that
+home's conversation state and project trust, while each invocation receives a
+model-specific overlay with an independent local gateway port and credential.
+
+Unknown flags, prompts, and extra arguments are forwarded to Genie Code:
+
+```sh
+dbx genie --model gpt "Summarize the changes since the latest release."
+dbx genie --model claude -- exec --ephemeral "Review this repository."
+```
+
+Use `--` only when a wrapper option such as `--model` must be sent to Genie
+instead of being consumed by `dbx genie`.
 
 ## Connect To Lakebase
 
@@ -133,7 +179,7 @@ dbx dev [projenArgs...]
 AppKit helpers: resolve the environment an AppKit app would start with.
 
 ```sh
-appkit [command]
+dbx appkit [command]
 ```
 
 #### Commands
@@ -147,7 +193,7 @@ appkit [command]
 Run AppKit auto-config and print new/changed env vars.
 
 ```sh
-appkit env [options]
+dbx appkit env [options]
 ```
 
 #### Options
@@ -163,7 +209,7 @@ appkit env [options]
 Authenticate to Databricks with user or machine OAuth
 
 ```sh
-auth [options] [command]
+dbx auth [options] [command]
 ```
 
 #### Options
@@ -195,7 +241,7 @@ auth [options] [command]
 Force browser login and return an access token
 
 ```sh
-auth login
+dbx auth login
 ```
 
 ### `dbx auth token`
@@ -203,7 +249,7 @@ auth login
 Return a valid access token, logging in when needed
 
 ```sh
-auth token [options]
+dbx auth token [options]
 ```
 
 #### Options
@@ -221,7 +267,7 @@ auth token [options]
 Return current Databricks authentication headers
 
 ```sh
-auth headers
+dbx auth headers
 ```
 
 ### `dbx auth profile`
@@ -229,7 +275,7 @@ auth headers
 Print the configured or automatically detected profile
 
 ```sh
-auth profile
+dbx auth profile
 ```
 
 ### `dbx auth logout`
@@ -237,7 +283,7 @@ auth profile
 Delete the stored credential for the selected profile
 
 ```sh
-auth logout
+dbx auth logout
 ```
 
 ### `dbx auth status`
@@ -245,7 +291,7 @@ auth logout
 Show the resolved authentication client configuration
 
 ```sh
-auth status
+dbx auth status
 ```
 
 ### `dbx tunnel`
@@ -253,7 +299,7 @@ auth status
 Front a command with a public tunnel and passwordless auth
 
 ```sh
-tunnel [options] [command] [command...]
+dbx tunnel [options] [command] [command...]
 ```
 
 #### Arguments
@@ -305,7 +351,7 @@ tunnel [options] [command] [command...]
 Wrap a command (the default action)
 
 ```sh
-tunnel run [options] <command...>
+dbx tunnel run [options] <command...>
 ```
 
 #### Arguments
@@ -349,7 +395,7 @@ tunnel run [options] <command...>
 Resolve the configuration and print it
 
 ```sh
-tunnel status [options]
+dbx tunnel status [options]
 ```
 
 #### Options
@@ -387,7 +433,7 @@ tunnel status [options]
 Install public tunnel client binaries and exit
 
 ```sh
-tunnel install [transport]
+dbx tunnel install [transport]
 ```
 
 #### Arguments
@@ -401,7 +447,7 @@ tunnel install [transport]
 Run a loopback PostgreSQL proxy for Databricks Lakebase
 
 ```sh
-lakebase-proxy [options] [command]
+dbx lakebase-proxy [options] [command]
 ```
 
 #### Options
@@ -426,7 +472,7 @@ lakebase-proxy [options] [command]
 Format a local PostgreSQL URL for a Lakebase target
 
 ```sh
-lakebase-proxy url [options]
+dbx lakebase-proxy url [options]
 ```
 
 #### Options
@@ -441,7 +487,7 @@ lakebase-proxy url [options]
 Install and manage the desktop service
 
 ```sh
-lakebase-proxy service [command]
+dbx lakebase-proxy service [command]
 ```
 
 #### Commands
@@ -460,7 +506,7 @@ lakebase-proxy service [command]
 Install the service for the current user and start it
 
 ```sh
-lakebase-proxy service install [options]
+dbx lakebase-proxy service install [options]
 ```
 
 #### Options
@@ -478,7 +524,7 @@ lakebase-proxy service install [options]
 Start the installed service
 
 ```sh
-lakebase-proxy service start
+dbx lakebase-proxy service start
 ```
 
 ### `dbx lakebase-proxy service stop`
@@ -486,7 +532,7 @@ lakebase-proxy service start
 Stop the running service
 
 ```sh
-lakebase-proxy service stop
+dbx lakebase-proxy service stop
 ```
 
 ### `dbx lakebase-proxy service restart`
@@ -494,7 +540,7 @@ lakebase-proxy service stop
 Restart the installed service
 
 ```sh
-lakebase-proxy service restart
+dbx lakebase-proxy service restart
 ```
 
 ### `dbx lakebase-proxy service status`
@@ -502,7 +548,7 @@ lakebase-proxy service restart
 Print service installation and process state as JSON
 
 ```sh
-lakebase-proxy service status
+dbx lakebase-proxy service status
 ```
 
 ### `dbx lakebase-proxy service uninstall`
@@ -510,7 +556,7 @@ lakebase-proxy service status
 Stop and remove the service for the current user
 
 ```sh
-lakebase-proxy service uninstall
+dbx lakebase-proxy service uninstall
 ```
 
 ### `dbx model-gateway`
@@ -518,19 +564,21 @@ lakebase-proxy service uninstall
 Run or manage the AppKit Databricks model gateway
 
 ```sh
-model-gateway [options] [command]
+dbx model-gateway [options] [command]
 ```
 
 #### Options
 
-| Option                 | Description                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------ |
-| `-v, --version`        | output the version number                                                                  |
-| `--listen <value>`     | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                    |
-| `--profile <value>`    | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE) |
-| `--body-limit <value>` | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                        |
-| `--runtime-info`       | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                 |
-| `--no-runtime-info`    | Disable print runtime implementation metadata.                                             |
+| Option                  | Description                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-v, --version`         | output the version number                                                                                                                                    |
+| `--model <value>`       | Optional fuzzy or exact model name. (env: MODEL)                                                                                                             |
+| `--model-class <value>` | Optional model capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", "embedding", env: MODEL_CLASS) |
+| `--listen <value>`      | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                                                                                      |
+| `--profile <value>`     | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE)                                                                   |
+| `--body-limit <value>`  | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                                                                                          |
+| `--runtime-info`        | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                                                                                   |
+| `--no-runtime-info`     | Disable print runtime implementation metadata.                                                                                                               |
 
 #### Commands
 
@@ -543,7 +591,7 @@ model-gateway [options] [command]
 Install and manage the desktop service
 
 ```sh
-model-gateway service [command]
+dbx model-gateway service [command]
 ```
 
 #### Commands
@@ -562,7 +610,7 @@ model-gateway service [command]
 Install the service for the current user and start it
 
 ```sh
-model-gateway service install [options]
+dbx model-gateway service install [options]
 ```
 
 #### Options
@@ -576,7 +624,7 @@ model-gateway service install [options]
 Start the installed service
 
 ```sh
-model-gateway service start
+dbx model-gateway service start
 ```
 
 ### `dbx model-gateway service stop`
@@ -584,7 +632,7 @@ model-gateway service start
 Stop the running service
 
 ```sh
-model-gateway service stop
+dbx model-gateway service stop
 ```
 
 ### `dbx model-gateway service restart`
@@ -592,7 +640,7 @@ model-gateway service stop
 Restart the installed service
 
 ```sh
-model-gateway service restart
+dbx model-gateway service restart
 ```
 
 ### `dbx model-gateway service status`
@@ -600,7 +648,7 @@ model-gateway service restart
 Print service installation and process state as JSON
 
 ```sh
-model-gateway service status
+dbx model-gateway service status
 ```
 
 ### `dbx model-gateway service uninstall`
@@ -608,7 +656,7 @@ model-gateway service status
 Stop and remove the service for the current user
 
 ```sh
-model-gateway service uninstall
+dbx model-gateway service uninstall
 ```
 
 ### `dbx genie`
@@ -616,7 +664,7 @@ model-gateway service uninstall
 Run Genie Code through an authenticated local Databricks model gateway
 
 ```sh
-genie [options] [genieArgs...]
+dbx genie [options] [genieArgs...]
 ```
 
 #### Arguments
@@ -627,37 +675,36 @@ genie [options] [genieArgs...]
 
 #### Options
 
-| Option                     | Description                                                                                                  |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `--profile <value>`        | Databricks profile used by the model-gateway sidecar. (env: DATABRICKS_CONFIG_PROFILE)                       |
-| `--model <value>`          | Model name resolved by the model gateway. (default: "gpt", env: MODEL)                                       |
-| `--gateway-listen <value>` | Loopback listener allocated for the model-gateway sidecar. (default: tcp://127.0.0.1:0, env: GATEWAY_LISTEN) |
+| Option                     | Description                                                                                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--model <value>`          | Optional fuzzy or exact model name. (env: MODEL)                                                                                               |
+| `--model-class <value>`    | Optional chat capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", env: MODEL_CLASS) |
+| `--profile <value>`        | Databricks profile used by the model-gateway sidecar. (env: DATABRICKS_CONFIG_PROFILE)                                                         |
+| `--gateway-listen <value>` | Loopback listener allocated for the model-gateway sidecar. (default: tcp://127.0.0.1:0, env: GATEWAY_LISTEN)                                   |
 
 ### `dbx graphiti`
 
 Run Graphiti or manage its current-user desktop service
 
 ```sh
-graphiti [options] [command]
+dbx graphiti [options] [command]
 ```
 
 #### Options
 
-| Option                             | Description                                                                                                                          |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `-v, --version`                    | output the version number                                                                                                            |
-| `--profile <value>`                | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                                     |
-| `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                                   |
-| `--model <value>`                  | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                                    |
-| `--temperature <value>`            | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                            |
-| `--embedder-model <value>`         | Fuzzy embedding-model name or endpoint identifier. (default: "gte-large-en", env: EMBEDDER_MODEL)                                    |
-| `--embedder-dimensions <value>`    | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                                          |
-| `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE)            |
-| `--startup-timeout-ms <value>`     | Maximum milliseconds allowed for the Graphiti runtime to become ready. (default: 180000, env: DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS) |
-| `--listen <value>`                 | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                                        |
-| `--database-url <value>`           | PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL. (env: LAKEBASE_ENDPOINT)                           |
-| `--database-schema <value>`        | PostgreSQL schema used for Lakebase graph tables. (default: "dbx_tools_graphiti", env: GRAPHITI_DATABASE_SCHEMA)                     |
-| `--postgres-role <value>`          | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE)                                                         |
+| Option                             | Description                                                                                                                                                          |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-v, --version`                    | output the version number                                                                                                                                            |
+| `--profile <value>`                | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                                                                     |
+| `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                                                                   |
+| `--model-class <value>`            | Optional chat capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", default: "chat-fast", env: MODEL_CLASS) |
+| `--temperature <value>`            | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                                                            |
+| `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE)                                            |
+| `--startup-timeout-ms <value>`     | Maximum milliseconds allowed for the Graphiti runtime to become ready. (default: 180000, env: DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS)                                 |
+| `--listen <value>`                 | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                                                                        |
+| `--database-url <value>`           | PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL. (env: LAKEBASE_ENDPOINT)                                                           |
+| `--database-schema <value>`        | PostgreSQL schema used for Lakebase graph tables. (default: "dbx_tools_graphiti", env: GRAPHITI_DATABASE_SCHEMA)                                                     |
+| `--postgres-role <value>`          | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE)                                                                                         |
 
 #### Commands
 
@@ -670,7 +717,7 @@ graphiti [options] [command]
 Install and manage the desktop service
 
 ```sh
-graphiti service [command]
+dbx graphiti service [command]
 ```
 
 #### Commands
@@ -689,7 +736,7 @@ graphiti service [command]
 Install the service for the current user and start it
 
 ```sh
-graphiti service install [options]
+dbx graphiti service install [options]
 ```
 
 #### Options
@@ -703,7 +750,7 @@ graphiti service install [options]
 Start the installed service
 
 ```sh
-graphiti service start
+dbx graphiti service start
 ```
 
 ### `dbx graphiti service stop`
@@ -711,7 +758,7 @@ graphiti service start
 Stop the running service
 
 ```sh
-graphiti service stop
+dbx graphiti service stop
 ```
 
 ### `dbx graphiti service restart`
@@ -719,7 +766,7 @@ graphiti service stop
 Restart the installed service
 
 ```sh
-graphiti service restart
+dbx graphiti service restart
 ```
 
 ### `dbx graphiti service status`
@@ -727,7 +774,7 @@ graphiti service restart
 Print service installation and process state as JSON
 
 ```sh
-graphiti service status
+dbx graphiti service status
 ```
 
 ### `dbx graphiti service uninstall`
@@ -735,7 +782,7 @@ graphiti service status
 Stop and remove the service for the current user
 
 ```sh
-graphiti service uninstall
+dbx graphiti service uninstall
 ```
 
 <!-- cli-reference:end -->

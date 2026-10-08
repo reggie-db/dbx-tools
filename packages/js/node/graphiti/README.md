@@ -13,8 +13,7 @@ import { startGraphitiRuntime } from "@dbx-tools/graphiti/runtime";
 
 const runtime = await startGraphitiRuntime({
   profile: "MY-PROFILE",
-  model: "gpt 5",
-  embedderModel: "gte large",
+  modelClass: "chat-fast",
 });
 
 await runtime.stop();

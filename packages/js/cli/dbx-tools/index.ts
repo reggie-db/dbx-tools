@@ -38,7 +38,7 @@ export type { AuthCliOptions, TokenCommandOptions } from "./src/auth/options.ts"
 export { resolveBunArgv } from "./src/bun.ts";
 export type { GenieCodeCliDependencies } from "./src/genie-code/cli.ts";
 export { GENIE_CODE_GATEWAY_PROVIDER } from "./src/genie-code/config.ts";
-export type { WriteGenieCodeConfigOptions, GenieCodePairingHome, GenieCodeHome } from "./src/genie-code/config.ts";
+export type { WriteGenieCodeConfigOptions, GenieCodeProfileHome, GenieCodeHome } from "./src/genie-code/config.ts";
 export type { InstallGenieCodeOptions } from "./src/genie-code/install.ts";
 export { RUNNER_OPTIONS_ENV } from "./src/genie-code/runner.ts";
 export type { GenieCodeRuntimeDependencies, RunGenieCodeOptions, PreparedGenieCodeRuntime } from "./src/genie-code/runtime.ts";

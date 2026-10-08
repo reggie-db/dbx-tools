@@ -39,9 +39,9 @@ describe("managed Genie Code runtime", () => {
   it("uses AuthClient.profile when no profile argument is supplied", async () => {
     const authOptions: DatabricksAuthOptions[] = [];
     const configs: unknown[] = [];
+    const selections: unknown[] = [];
     const prepared = await prepareGenieCodeRuntime({
       cwd: "/workspace/project",
-      options: { model: "gpt" },
       dependencies: {
         async createAuthClient(options = {}) {
           authOptions.push(options);
@@ -49,7 +49,10 @@ describe("managed Genie Code runtime", () => {
         },
         install: async () => INSTALLATION,
         port: async () => 4312,
-        resolveCodexModel: async (model) => `databricks/system.ai.${model}-5-6-sol`,
+        resolveCodexModel: async (...selection) => {
+          selections.push(selection);
+          return "databricks/system.ai.gpt-5-6-sol";
+        },
         token: () => "sidecar-token",
         async writeConfig(options) {
           configs.push(options);
@@ -65,6 +68,7 @@ describe("managed Genie Code runtime", () => {
     });
 
     assert.deepEqual(authOptions, [{}]);
+    assert.deepEqual(selections, [[undefined, "AUTO-PROFILE", undefined]]);
     assert.equal(prepared.profile, "AUTO-PROFILE");
     assert.equal(prepared.model, "databricks/system.ai.gpt-5-6-sol");
     assert.equal(prepared.gatewayBaseUrl, "http://127.0.0.1:4312/v1");
@@ -88,6 +92,35 @@ describe("managed Genie Code runtime", () => {
       }),
       /configured Databricks profile/,
     );
+  });
+
+  it("passes the shared model class without inventing a fuzzy model", async () => {
+    const selections: unknown[] = [];
+    await prepareGenieCodeRuntime({
+      options: {
+        profile: "PROFILE",
+        modelClass: "chat-fast",
+      },
+      dependencies: {
+        createAuthClient: async () => fakeAuth("PROFILE"),
+        install: async () => INSTALLATION,
+        port: async () => 4312,
+        resolveCodexModel: async (...selection) => {
+          selections.push(selection);
+          return "databricks/system.ai.gpt-5-6-luna";
+        },
+        token: () => "sidecar-token",
+        writeConfig: async () => ({
+          name: "profile-hash",
+          home: "/home/genie",
+          configPath: "/home/genie/config.toml",
+          overlayName: "dbx-run",
+          overlayPath: "/home/genie/dbx-run.config.toml",
+        }),
+      },
+    });
+
+    assert.deepEqual(selections, [[undefined, "PROFILE", "chat-fast"]]);
   });
 
   it("rejects an occupied explicit gateway port", async () => {

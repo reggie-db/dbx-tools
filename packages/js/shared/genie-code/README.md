@@ -6,9 +6,9 @@ model-gateway sidecar.
 ## Resolve Runtime Options
 
 Use `resolveGenieCodeOptions()` to apply the shared defaults. Use
-`genieCodePairingName()` with the first twelve hexadecimal characters of a
-SHA-256 over the exact profile and model values to derive a stable home
-directory name.
+`genieCodeHomeName()` with the first twelve hexadecimal characters of a
+SHA-256 over the exact profile value to derive a stable profile home. Models
+use invocation overlays within that home.
 
 ```ts
 import { resolveGenieCodeOptions } from "@dbx-tools/shared-genie-code/options";

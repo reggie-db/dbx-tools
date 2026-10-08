@@ -94,7 +94,6 @@ describe("Genie Code CLI", () => {
         ],
         options: {
           profile: "PROFILE",
-          model: "gpt",
           gatewayListen: { scheme: "tcp", host: "127.0.0.1", port: 0 },
         },
       },

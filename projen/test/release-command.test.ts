@@ -182,6 +182,7 @@ describe("direct release tags", () => {
 
   it("commits Genie or fallback release notes with the version bump", async () => {
     const { root } = fixture();
+    let releaseNotesInstructions: string | undefined;
     try {
       git(root, "tag", "-a", "v1.0.0", "-m", "v1.0.0");
       await runRelease({
@@ -190,7 +191,9 @@ describe("direct release tags", () => {
         prefix: "v",
         remote: "origin",
         localPublish: false,
-        writeReleaseNotes: ({ root: notesRoot, version }) => {
+        releaseNotesInstructions: "Focus on operator-visible changes.",
+        writeReleaseNotes: ({ root: notesRoot, version, instructions }) => {
+          releaseNotesInstructions = instructions;
           const dest = join(notesRoot, "docs", "releases", `v${version}.md`);
           mkdirSync(join(notesRoot, "docs", "releases"), { recursive: true });
           writeFileSync(dest, `# Release ${version}\n\nGenie notes.\n`);
@@ -201,6 +204,7 @@ describe("direct release tags", () => {
         readFileSync(join(root, "docs/releases/v1.0.1.md"), "utf8"),
         "# Release 1.0.1\n\nGenie notes.\n",
       );
+      assert.equal(releaseNotesInstructions, "Focus on operator-visible changes.");
       assert.match(git(root, "ls-tree", "-r", "--name-only", "HEAD"), /docs\/releases\/v1.0.1.md/);
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });

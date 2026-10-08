@@ -72,6 +72,25 @@ describe("ModelClient", () => {
     );
   });
 
+  it("measures missing embedding dimensions from the selected endpoint", async () => {
+    const requests: Array<{ path: string; init?: RequestInit }> = [];
+    const client = createModelClientWithDatabricksClient(
+      fakeClient(async (path, init) => {
+        requests.push({ path, init });
+        if (path === "/api/2.0/serving-endpoints") {
+          return {
+            endpoints: [endpoint("databricks-qwen-embedding", "llm/v1/embeddings")],
+          };
+        }
+        return { data: [{ embedding: [0.1, 0.2, 0.3] }] };
+      }, "embedding-dimension"),
+    );
+
+    assert.equal((await client.listModels())[0]?.dimension, 3);
+    assert.equal(requests[1]?.path, "/serving-endpoints/databricks-qwen-embedding/invocations");
+    assert.equal(requests[1]?.init?.method, "POST");
+  });
+
   it("fails fast on invalid responses and cache TTLs", async () => {
     assert.throws(() =>
       createModelClientWithDatabricksClient(
@@ -101,7 +120,10 @@ function endpoint(name: string, task = "llm/v1/chat") {
   };
 }
 
-function fakeClient(load: () => Promise<unknown>, principal = "principal") {
+function fakeClient(
+  load: (path: string, init?: RequestInit) => Promise<unknown>,
+  principal = "principal",
+) {
   const auth = {
     profile: "DEFAULT",
     host: HOST,

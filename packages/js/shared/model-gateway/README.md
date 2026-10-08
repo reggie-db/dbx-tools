@@ -67,13 +67,17 @@ import {
 } from "@dbx-tools/shared-model-gateway/options";
 
 const options = resolveModelGatewayOptions({
-  host: "localhost",
-  port: 4400,
+  listen: "localhost:4400",
+  modelClass: "chat-balanced",
   bodyLimit: "100mb",
 });
 
 ModelGatewayOptionsSchema.parse(options);
 ```
+
+`ModelSelectionOptionsSchema` owns the mutually exclusive `model` and
+`modelClass` fields shared by model-gateway and Genie Code callers. Omit both to
+select the best available chat model.
 
 ## Package API
 

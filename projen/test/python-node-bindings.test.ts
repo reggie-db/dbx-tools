@@ -23,6 +23,7 @@ function binding(
   project: string,
   packageName: string,
   workspaceDirectories: readonly string[],
+  watchInputs: readonly string[],
 ): ResolvedPythonNodeBindings {
   const moduleDirectory = join(ROOT, project, "src", "fixture");
   return {
@@ -37,6 +38,7 @@ function binding(
     projectDirectory: join(ROOT, project),
     pyproject: join(ROOT, project, "pyproject.toml"),
     runtimeOutput: join(moduleDirectory, "_generated", "node", "_runtime.js"),
+    watchInputs,
     workspaceDirectories,
   };
 }
@@ -46,9 +48,19 @@ describe("affectedPythonNodeBindingProjects", () => {
     const app = join(ROOT, "packages/app");
     const core = join(ROOT, "packages/core");
     const configs = [
-      binding("python/app", "app", [app, core]),
-      binding("python/app", "core", [core]),
-      binding("python/other", "other", [join(ROOT, "packages/other")]),
+      binding(
+        "python/app",
+        "app",
+        [app, core],
+        [join(app, "src/app.ts"), join(core, "src/options.ts")],
+      ),
+      binding("python/app", "core", [core], [join(core, "src/options.ts")]),
+      binding(
+        "python/other",
+        "other",
+        [join(ROOT, "packages/other")],
+        [join(ROOT, "packages/other/src/index.ts")],
+      ),
     ];
 
     assert.deepEqual(
@@ -61,10 +73,25 @@ describe("affectedPythonNodeBindingProjects", () => {
   });
 
   it("keeps unrelated changes on the no-lock path", () => {
-    const configs = [binding("python/app", "app", [join(ROOT, "packages/app")])];
+    const app = join(ROOT, "packages/app");
+    const configs = [binding("python/app", "app", [app], [join(app, "src/index.ts")])];
 
     assert.deepEqual(
       affectedPythonNodeBindingProjects(ROOT, configs, [join(ROOT, "README.md")]),
+      [],
+    );
+  });
+
+  it("ignores tests and unrelated modules in a configured package", () => {
+    const app = join(ROOT, "packages/app");
+    const configs = [binding("python/app", "app", [app], [join(app, "src/bindings.ts")])];
+
+    assert.deepEqual(
+      affectedPythonNodeBindingProjects(ROOT, configs, [
+        join(app, "test/bindings.test.ts"),
+        join(app, "src/unrelated.ts"),
+        join(app, "lib/bindings.js"),
+      ]),
       [],
     );
   });

@@ -18,8 +18,6 @@ import { rankEndpoints } from "./_ranking.ts";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import { endpointSupportsTools } from "./policy.ts";
 
-const DEFAULT_MODEL_FAMILY_SEARCH = "gpt";
-
 /** Rank a catalogue against a model query, best-first. */
 export function lookupModels(
   endpoints: readonly ServingEndpointSummary[],
@@ -72,10 +70,6 @@ export function resolveModel(
   }
 
   const source = input.modelClass !== undefined ? "class" : "fallback";
-  if (input.modelClass === undefined) {
-    const [preferred] = lookupModels(endpoints, buildQuery(input, DEFAULT_MODEL_FAMILY_SEARCH));
-    if (preferred) return { modelId: preferred.endpoint.name, source };
-  }
   const [top] = lookupModels(endpoints, buildQuery(input, undefined));
   if (top) return { modelId: top.endpoint.name, source };
 

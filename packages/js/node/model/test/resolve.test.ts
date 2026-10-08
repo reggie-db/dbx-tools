@@ -415,13 +415,10 @@ describe("lookupModels", () => {
       "databricks-gpt-5-6-sol",
       "databricks-gpt-5-5-pro",
     ]);
-    assert.equal(
-      lookupModels(gptModels, { search: "gpt chat", limit: 1 })[0]?.endpoint.name,
-      "databricks-gpt-6-1",
-    );
+    assert.deepEqual(lookupModels(gptModels, { search: "gpt chat", limit: 1 }), []);
   });
 
-  it("maps generic chat jobs to the most capable chat model", () => {
+  it("keeps fuzzy search literal instead of treating job words as hidden classes", () => {
     const models = [
       { ...chat("custom-chat-fast"), profile: { quality: 10 } },
       { ...chat("custom-chat-powerful"), profile: { quality: 90 } },
@@ -433,9 +430,43 @@ describe("lookupModels", () => {
       lookupModels(models, { search: "chat", limit: 1 })[0]?.endpoint.name,
       "custom-chat-powerful",
     );
+    assert.deepEqual(lookupModels(models, { search: "summarize", limit: 1 }), []);
+  });
+
+  it("selects the best chat model when no model or class is supplied", () => {
+    const models = [
+      chat("databricks-gpt-5-4"),
+      chat("databricks-gpt-6-1"),
+      chat(OPUS_8),
+      chat(SONNET),
+    ];
+    assert.equal(lookupModels(models, { limit: 1 })[0]?.endpoint.name, OPUS_8);
     assert.equal(
-      lookupModels(models, { search: "summarize", limit: 1 })[0]?.endpoint.name,
-      "custom-chat-powerful",
+      lookupModels([chat("databricks-gpt-5-4"), chat("databricks-gpt-6-1"), chat(SONNET)], {
+        limit: 1,
+      })[0]?.endpoint.name,
+      "databricks-gpt-6-1",
+    );
+    assert.equal(resolveModel(models).modelId, OPUS_8);
+  });
+
+  it("prefers a newer unscored successor within the leading chat family", () => {
+    const older = {
+      ...chat("databricks-gpt-5-4"),
+      family: "gpt",
+      profile: { quality: 57 },
+    };
+    const newer = {
+      ...chat("databricks-gpt-6-1-sol"),
+      family: "gpt",
+    };
+
+    assert.equal(
+      lookupModels([older, newer], {
+        requiresTools: true,
+        limit: 1,
+      })[0]?.endpoint.name,
+      newer.name,
     );
   });
 
@@ -447,7 +478,7 @@ describe("lookupModels", () => {
     ];
 
     assert.equal(
-      lookupModels(models, { search: "best embedding model", limit: 1 })[0]?.endpoint.name,
+      lookupModels(models, { modelClass: ModelClass.Embedding, limit: 1 })[0]?.endpoint.name,
       "databricks-gte-v3",
     );
   });

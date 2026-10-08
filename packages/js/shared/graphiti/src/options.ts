@@ -9,6 +9,7 @@
  */
 
 import { options } from "@dbx-tools/shared-core";
+import { ChatModelClassOptionSchema } from "@dbx-tools/shared-model-gateway/options";
 import { z } from "zod";
 
 const graphitiText = (description: string) => z.string().trim().min(1).describe(description);
@@ -21,9 +22,7 @@ export const GraphitiOptionsSchema = z
     graphitiHome: graphitiText("Application-owned Graphiti runtime directory.")
       .optional()
       .meta({ env: "GRAPHITI_HOME" }),
-    model: graphitiText("Fuzzy chat-model name or endpoint identifier.")
-      .default("databricks-gpt-5-nano")
-      .meta({ env: "MODEL_NAME" }),
+    modelClass: ChatModelClassOptionSchema.default("chat-fast").meta({ env: "MODEL_CLASS" }),
     temperature: z.coerce
       .number<number>()
       .min(0)
@@ -31,16 +30,6 @@ export const GraphitiOptionsSchema = z
       .default(1)
       .describe("Sampling temperature forwarded to the Graphiti LLM client.")
       .meta({ env: "TEMPERATURE" }),
-    embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.")
-      .default("gte-large-en")
-      .meta({ env: "EMBEDDER_MODEL" }),
-    embedderDimensions: z.coerce
-      .number<number>()
-      .int()
-      .positive()
-      .default(1024)
-      .describe("Embedding vector dimensions expected by Graphiti.")
-      .meta({ env: "EMBEDDER_DIMENSIONS" }),
     structuredOutputMode: graphitiText(
       "Structured-output mode forwarded to Graphiti's OpenAI provider.",
     )

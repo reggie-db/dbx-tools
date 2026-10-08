@@ -16,6 +16,7 @@ async function flags(args: string[]): Promise<
     localPublish: boolean;
     demoDeploy?: boolean;
     releaseNotes?: boolean;
+    releaseNotesInstructions?: string;
   }
 > {
   const command = createReleaseCommand().action(() => {});
@@ -110,6 +111,15 @@ describe("per-run release selection", () => {
   it("opts out of release notes without recording it in the annotated tag", async () => {
     const options = await flags(["--no-release-notes"]);
     assert.equal(options.releaseNotes, false);
+    assert.equal(releaseTagAnnotation("v1.2.3", releaseStepSelection(options)), "v1.2.3");
+  });
+
+  it("accepts additional release-note instructions without recording them in the tag", async () => {
+    const options = await flags([
+      "--release-notes-instructions",
+      "Focus on operator-visible changes.",
+    ]);
+    assert.equal(options.releaseNotesInstructions, "Focus on operator-visible changes.");
     assert.equal(releaseTagAnnotation("v1.2.3", releaseStepSelection(options)), "v1.2.3");
   });
 

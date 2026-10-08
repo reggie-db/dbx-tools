@@ -160,9 +160,7 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
 /** Build the complete command tree used for generated documentation. */
 export async function buildDocumentationProgram(name: string = PROGRAM_NAMES[0]): Promise<Command> {
   const program = buildProgram(name);
-  (program.commands as Command[]).splice(
-    1,
-    program.commands.length - 1,
+  const children = [
     (await import("./appkit/cli.ts")).buildProgram("appkit"),
     (await import("./auth/cli.ts")).buildProgram("auth"),
     (await import("./tunnel/cli.ts")).buildProgram("tunnel"),
@@ -170,7 +168,9 @@ export async function buildDocumentationProgram(name: string = PROGRAM_NAMES[0])
     (await import("./model-gateway/cli.ts")).buildProgram("model-gateway"),
     (await import("./genie-code/cli.ts")).buildProgram("genie"),
     (await import("./graphiti/cli.ts")).buildProgram("graphiti"),
-  );
+  ];
+  (program.commands as Command[]).splice(1, program.commands.length - 1);
+  for (const child of children) program.addCommand(child);
   return program;
 }
 

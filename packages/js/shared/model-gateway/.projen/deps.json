@@ -11,7 +11,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/shared-model",
+      "name": "@dbx-tools/shared-model-gateway",
       "version": "workspace:^",
       "type": "runtime"
     },

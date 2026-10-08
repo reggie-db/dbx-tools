@@ -11,14 +11,14 @@ import { resolveGraphitiOptions } from "@dbx-tools/shared-graphiti/options";
 
 const options = resolveGraphitiOptions({
   profile: "MY-PROFILE",
-  model: "gpt 5",
-  embedderModel: "gte large",
+  modelClass: "chat-fast",
 });
 ```
 
-The result includes stable listener, model, embedding, database durability, and
-structured-output defaults. Route and embedded-process details are intentionally
-not part of this browser-safe contract.
+The result includes stable listener, chat-class, database durability, and
+structured-output defaults. Embedding selection and dimensions come from live
+model metadata. Route and embedded-process details are intentionally not part
+of this browser-safe contract.
 
 ## Parse Environment Options
 

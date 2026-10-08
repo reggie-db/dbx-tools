@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import {
   fallbackReleaseNotes,
   releaseNotesPath,
+  releaseNotesPrompt,
   writeReleaseNotes,
 } from "../tasks/release-notes.ts";
 
@@ -32,6 +33,13 @@ function fixture(): string {
 }
 
 describe("release notes", () => {
+  it("appends trimmed custom instructions to the Genie prompt", () => {
+    const prompt = releaseNotesPrompt("  Focus on operator-visible changes.  ");
+
+    assert.match(prompt, /Compare HEAD and the working tree/);
+    assert.match(prompt, /Additional instructions:\nFocus on operator-visible changes\.$/);
+  });
+
   it("keeps Genie output when exec succeeds and writes a file", () => {
     const root = fixture();
     try {
@@ -74,6 +82,26 @@ describe("release notes", () => {
         readFileSync(destination, "utf8"),
         fallbackReleaseNotes("1.0.1", ["feat: ship notes"], "v1.0.0"),
       );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("removes stale release notes before writing the current version", () => {
+    const root = fixture();
+    const stale = releaseNotesPath(root, "0.9.9");
+    mkdirSync(join(root, "docs", "releases"), { recursive: true });
+    writeFileSync(stale, "# Stale\n");
+    try {
+      const destination = writeReleaseNotes({
+        prefix: "v",
+        root,
+        version: "1.0.1",
+        runGenie: () => false,
+      });
+
+      assert.equal(existsSync(stale), false);
+      assert.equal(existsSync(destination), true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -1,8 +1,8 @@
 #!/usr/bin/env -S bun
 /** Keep every configured Python Node bridge current with one repository watcher. */
-import { dirname, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { log, object } from "@dbx-tools/shared-core";
+import { log } from "@dbx-tools/shared-core";
 import { runTaskCommand } from "../src/_task-command.ts";
 import { repoRoot } from "../src/packages.ts";
 import {
@@ -12,36 +12,24 @@ import {
   resolveAllPythonNodeBindings,
   type ResolvedPythonNodeBindings,
 } from "../src/python-node-bindings.ts";
-import { watchLoop, watchRoots } from "../src/watch.ts";
+import { watchLoop } from "../src/watch.ts";
 import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
 const logger = log.logger("projen:python-node-bindings-watch");
 const generator = fileURLToPath(new URL("./python-node-bindings.ts", import.meta.url));
+const watcher = fileURLToPath(import.meta.url);
+const bindingSource = fileURLToPath(new URL("../src/python-node-bindings.ts", import.meta.url));
+const toolingInputs = [generator, watcher, bindingSource];
 
 function generate(project: string): void {
   runTaskCommand(repoRoot, "bun", [generator, "--root", repoRoot, "--project", project]);
 }
 
-function containsPath(parent: string, candidate: string): boolean {
-  const resolvedParent = resolve(parent);
-  const resolvedCandidate = resolve(candidate);
-  return (
-    resolvedCandidate === resolvedParent || resolvedCandidate.startsWith(`${resolvedParent}${sep}`)
-  );
-}
-
 /**
- * Watch broad package roots, each configured Python workspace root, and only
- * exceptional inputs such as function overrides that live outside those roots.
+ * Watch only configured manifests and transitive workspace source inputs.
  */
 function watchPaths(configs: readonly ResolvedPythonNodeBindings[]): string[] {
-  const roots = watchRoots();
-  const pythonRoots = configs.map(({ projectDirectory }) => dirname(projectDirectory));
-  const covered = [...roots, ...pythonRoots];
-  const explicitInputs = configs
-    .flatMap(pythonNodeBindingWatchInputs)
-    .filter((input) => !covered.some((root) => containsPath(root, input)));
-  return [...object.sequence(covered, explicitInputs).distinct()].sort();
+  return [...new Set([...configs.flatMap(pythonNodeBindingWatchInputs), ...toolingInputs])].sort();
 }
 
 function selection(
@@ -51,14 +39,20 @@ function selection(
   readonly all: boolean;
   readonly configs: ResolvedPythonNodeBindings[];
   readonly projects: string[];
+  readonly restart: boolean;
 } {
   const configs = resolveAllPythonNodeBindings(repoRoot);
   const manifests = new Set([...previous, ...configs].map(({ pyproject }) => resolve(pyproject)));
-  const all = changed.some((path) => manifests.has(resolve(path)));
+  const all = changed.some(
+    (path) =>
+      manifests.has(resolve(path)) ||
+      toolingInputs.some((input) => resolve(input) === resolve(path)),
+  );
   return {
     all,
     configs,
     projects: all ? [] : affectedPythonNodeBindingProjects(repoRoot, configs, changed),
+    restart: watchPaths(previous).join("\n") !== watchPaths(configs).join("\n"),
   };
 }
 
@@ -77,11 +71,15 @@ export async function main(): Promise<void> {
       if (next.all) {
         generatePythonNodeBindings(repoRoot);
         logger.success("regenerated all Python Node bindings");
-        return;
+      } else {
+        for (const project of next.projects) {
+          generate(project);
+          logger.success(`regenerated ${project} Node bindings`);
+        }
       }
-      for (const project of next.projects) {
-        generate(project);
-        logger.success(`regenerated ${project} Node bindings`);
+      if (next.restart) {
+        logger.info("binding inputs changed; restarting watcher");
+        setTimeout(() => process.exit(0), 0);
       }
     },
     {

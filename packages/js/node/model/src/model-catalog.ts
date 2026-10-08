@@ -250,7 +250,6 @@ export function searchServingEndpoints(
     },
     {
       includeDeprecated: true,
-      modelClass: model.ModelClass.ChatBalanced,
       task: "llm/v1/chat",
     },
   ).map((ranked) => ({ endpoint: ranked.endpoint, score: ranked.score ?? 0 }));

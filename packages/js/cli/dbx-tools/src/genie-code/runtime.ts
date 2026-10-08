@@ -13,6 +13,7 @@ import { resolveServicePackageBin } from "@dbx-tools/cli-service/definition";
 import type { BinContext } from "@dbx-tools/core/bin";
 import { workspaceClient } from "@dbx-tools/databricks";
 import { log } from "@dbx-tools/shared-core";
+import type { ModelClass } from "@dbx-tools/shared-model/contracts";
 import {
   resolveGenieCodeOptions,
   type GenieCodeOptions,
@@ -33,7 +34,11 @@ export interface GenieCodeRuntimeDependencies {
   install: typeof installGenieCode;
   port(options: { host: string; port?: number }): Promise<number>;
   resolveBin(packageReference: string, binName: string): string;
-  resolveCodexModel(model: string, profile: string): Promise<string>;
+  resolveCodexModel(
+    model: string | undefined,
+    profile: string,
+    modelClass?: ModelClass,
+  ): Promise<string>;
   supervise: typeof concurrently;
   token(): string;
   writeConfig: typeof writeGenieCodeConfig;
@@ -51,12 +56,21 @@ const DEFAULT_DEPENDENCIES: GenieCodeRuntimeDependencies = {
 };
 
 /** Resolve a Genie `--model` value to the Codex catalogue slug the gateway publishes. */
-async function resolveCodexModel(model: string, profile: string): Promise<string> {
+async function resolveCodexModel(
+  model: string | undefined,
+  profile: string,
+  modelClass?: ModelClass,
+): Promise<string> {
   const client = await workspaceClient.createWorkspaceClient({ profile });
   const target = await new DatabricksModelRegistry({ client }).resolve(model, {
     requiresTools: true,
+    ...(modelClass ? { modelClass } : {}),
   });
-  if (!target) throw new Error(`Genie Code model not found: ${model}`);
+  if (!target) {
+    throw new Error(
+      model ? `Genie Code model not found: ${model}` : "No tool-capable chat model is available",
+    );
+  }
   return models.codexModelSlug(target);
 }
 
@@ -100,6 +114,7 @@ export async function prepareGenieCodeRuntime(
   logger.info("preparing Genie Code runtime", {
     profile,
     model: options.model,
+    modelClass: options.modelClass,
   });
   const installation = await dependencies.install();
   const host = options.gatewayListen.host;
@@ -111,8 +126,12 @@ export async function prepareGenieCodeRuntime(
   if (requestedPort > 0 && gatewayPort !== requestedPort) {
     throw new Error(`Genie Code gateway port ${requestedPort} is already in use`);
   }
-  const model = await dependencies.resolveCodexModel(options.model, profile);
-  logger.info("resolved Genie Code model", { requested: options.model, model });
+  const model = await dependencies.resolveCodexModel(options.model, profile, options.modelClass);
+  logger.info("resolved Genie Code model", {
+    requested: options.model,
+    modelClass: options.modelClass,
+    model,
+  });
   const urlHost = host.includes(":") ? `[${host}]` : host;
   const gatewayBaseUrl = `http://${urlHost}:${gatewayPort}/v1`;
   const gatewayHealthUrl = `http://${urlHost}:${gatewayPort}/api/healthz`;

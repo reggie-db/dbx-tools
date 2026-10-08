@@ -2,6 +2,15 @@ import { GENIE_PROGRESS_PART_TYPE, GenieProgressPartDataSchema } from "@dbx-tool
 import { getToolOrDynamicToolName, isToolOrDynamicToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 
+/** Collapse one reasoning event into a compact paragraph. */
+export function compactReasoningText(text: string): string {
+  return stripMarkdownTables(text)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
 /**
  * Collect Genie `thinking` events for the assistant Thoughts panel.
  *
@@ -14,7 +23,7 @@ export function genieReasoningText(events: ToolEvent[]): string {
   for (const event of events) {
     for (const progress of event.progress ?? []) {
       if (progress.type !== "thinking") continue;
-      const text = stripMarkdownTables(progress.text).trim();
+      const text = compactReasoningText(progress.text);
       if (text) sections.push(text);
     }
   }

@@ -43,6 +43,7 @@ import type {
 } from "./types.ts";
 import { copyText } from "../support/clipboard.ts";
 import {
+  compactReasoningText,
   genieReasoningText,
   mergeToolEvents,
   toolEventsFromParts,
@@ -55,7 +56,8 @@ import {
 const getReasoningText = (parts: UIMessage["parts"]): string =>
   parts
     .filter((p): p is { type: "reasoning"; text: string } => p.type === "reasoning")
-    .map((p) => p.text)
+    .map((p) => compactReasoningText(p.text))
+    .filter(Boolean)
     .join("\n\n");
 
 const RoleAvatar = ({ role }: { role: UIMessage["role"] }) => (
@@ -424,7 +426,7 @@ export const AssistantBubble = ({
               <span>{isReasoningStreaming ? "Thinking..." : "Thoughts"}</span>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="mt-1 border-l-2 border-border/60 pl-3 text-xs text-muted-foreground">
+              <div className="mt-1 border-l-2 border-border/60 pl-2.5 text-xs text-muted-foreground">
                 <ToolMarkdown>{reasoning}</ToolMarkdown>
               </div>
             </CollapsibleContent>

@@ -16,6 +16,7 @@ import { publicFunctionExports, publicNamespaceExports } from "../src/module-exp
 import { resolveRepoRoot } from "../src/packages.ts";
 import {
   generatePythonNodeBindings,
+  resolvePythonNodeBindingModule,
   resolvePythonNodeBindings,
   type ResolvedPythonNodeBindings,
   type ResolvedPythonNodeFunctionOverride,
@@ -139,7 +140,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   );
   const packageEntrypoint = Bun.resolveSync(config.entrypoint, projectDirectory);
   const entrypoint = selectedModule
-    ? resolveGeneratedModule(packageEntrypoint, selectedModule)
+    ? resolvePythonNodeBindingModule(packageEntrypoint, selectedModule)
     : packageEntrypoint;
   const functions = publicFunctionExports(entrypoint);
   if (functions.length === 0) {
@@ -217,7 +218,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     return binding.modules.length > 0
       ? binding.modules.map((module) => ({
           key: runtimeModuleName(binding, module),
-          entrypoint: resolveGeneratedModule(entrypoint, module),
+          entrypoint: resolvePythonNodeBindingModule(entrypoint, module),
         }))
       : [{ key: runtimeModuleName(binding), entrypoint }];
   });
@@ -310,7 +311,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     const packageEntrypoint = Bun.resolveSync(candidate.entrypoint, candidate.projectDirectory);
     const modules = publicNamespaceExports(packageEntrypoint).filter(
       (module) =>
-        publicFunctionExports(resolveGeneratedModule(packageEntrypoint, module)).length > 0,
+        publicFunctionExports(resolvePythonNodeBindingModule(packageEntrypoint, module)).length > 0,
     );
     return { ...candidate, modules };
   }
@@ -1218,21 +1219,6 @@ function pythonRuntimeLoader(source: string): string {
     "    return get_runtime().invoke_positioned_sync(module, name, arguments)",
     "",
   ].join("\n");
-}
-
-function resolveGeneratedModule(entrypoint: string, module: string): string {
-  if (!/^[$A-Z_a-z][$\w]*$/.test(module)) {
-    throw new Error(`Node binding module must be a TypeScript identifier: ${module}`);
-  }
-  const source = readFileSync(entrypoint, "utf8");
-  const escaped = module.replaceAll(/[$()*+.?[\\\]^{|}]/g, "\\$&");
-  const match = new RegExp(`export\\s+\\*\\s+as\\s+${escaped}\\s+from\\s+["']([^"']+)["']`).exec(
-    source,
-  );
-  if (!match?.[1]) {
-    throw new Error(`${entrypoint} does not export namespace ${module}`);
-  }
-  return Bun.resolveSync(match[1], dirname(entrypoint));
 }
 
 if (import.meta.main) await main();

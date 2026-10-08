@@ -7,7 +7,7 @@
  * @module
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { log } from "@dbx-tools/shared-core";
 
@@ -20,11 +20,19 @@ const GENIE_PROMPT =
 
 /** Inputs for one notes write. */
 export interface WriteReleaseNotesOptions {
+  /** Extra agent instructions appended after the standard release-note requirements. */
+  readonly instructions?: string;
   readonly prefix: string;
   readonly root: string;
   readonly version: string;
   /** Override Genie invocation; return false to force the git-log fallback. */
   readonly runGenie?: (args: readonly string[]) => boolean;
+}
+
+/** Compose the stable release-note prompt with optional caller guidance. */
+export function releaseNotesPrompt(instructions?: string): string {
+  const additional = instructions?.trim();
+  return additional ? `${GENIE_PROMPT}\n\nAdditional instructions:\n${additional}` : GENIE_PROMPT;
 }
 
 /** Path of the notes file for one workspace version. */
@@ -51,6 +59,7 @@ export function writeReleaseNotes(options: WriteReleaseNotesOptions): string {
   const { prefix, root, version } = options;
   const destination = releaseNotesPath(root, version);
   mkdirSync(dirname(destination), { recursive: true });
+  removeStaleReleaseNotes(destination);
   const relative = join("docs", "releases", `v${version}.md`);
   const genieArgs = [
     "exec",
@@ -61,7 +70,7 @@ export function writeReleaseNotes(options: WriteReleaseNotesOptions): string {
     "--ephemeral",
     "-o",
     relative,
-    GENIE_PROMPT,
+    releaseNotesPrompt(options.instructions),
   ] as const;
   const ran =
     options.runGenie?.([...genieArgs]) ??
@@ -86,6 +95,15 @@ export function writeReleaseNotes(options: WriteReleaseNotesOptions): string {
   writeFileSync(destination, fallbackReleaseNotes(version, commits, previousTag || undefined));
   logger.warn("Genie release notes unavailable; wrote git-log summary", { path: relative });
   return destination;
+}
+
+function removeStaleReleaseNotes(destination: string): void {
+  const directory = dirname(destination);
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const path = join(directory, entry.name);
+    if (path !== destination) rmSync(path);
+  }
 }
 
 function readNotes(path: string): string {

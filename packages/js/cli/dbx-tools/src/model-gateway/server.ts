@@ -60,7 +60,10 @@ export function gatewayBearerMiddleware(token: string): express.RequestHandler {
 /** Start the foreground model gateway and keep its AppKit server active. */
 export async function startModelGateway(options: ModelGatewayOptions = {}): Promise<void> {
   const resolved = resolveModelGatewayOptions(options);
-  const gateway = new ModelGateway();
+  const gateway = new ModelGateway({
+    ...(resolved.model ? { model: resolved.model } : {}),
+    ...(resolved.modelClass ? { modelClass: resolved.modelClass } : {}),
+  });
   const client = await workspaceClient.createWorkspaceClient({
     ...(resolved.profile ? { profile: resolved.profile } : {}),
   });

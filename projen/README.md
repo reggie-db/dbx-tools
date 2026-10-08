@@ -205,9 +205,11 @@ The workspace creates one repository-wide binding lifecycle:
 - `python-node-bindings` generates every configured bridge.
 - `python-node-bindings:check` verifies generated files and fails on stale
   `_generated/node` directories.
-- `python-node-bindings:watch` watches all configured bridges and regenerates
-  only Python projects affected by a Node package, transitive workspace
-  dependency, binding manifest, or function override change.
+- `python-node-bindings:watch` watches only configured module entrypoints and
+  their transitive workspace source imports. Tests, compiled output, generated
+  bindings, and unrelated modules do not trigger regeneration or acquire the
+  workspace mutation lock. Binding-manifest and generator changes regenerate
+  the affected projects and restart the watcher when its input graph changes.
 
 When a runtime owner is configured, the workspace also creates one shared
 runtime lifecycle:
@@ -483,6 +485,7 @@ bun run release --publish local --install never
 bun run release --local-registry false --local-pypi auto
 bun run release --demo-deploy
 bun run release --no-release-notes
+bun run release --release-notes-instructions "Focus on operator-visible changes."
 ```
 
 `--demo-deploy` is off by default. After tagging and any local registry
@@ -493,9 +496,10 @@ recorded in the annotated tag.
 After bump, release writes `docs/releases/vX.Y.Z.md` with `dbx genie exec -C
 "$PWD" --sandbox read-only --ephemeral -o`. If Genie fails or writes an empty
 file, the step keeps going with a short git-log summary. `--no-release-notes`
-skips the file. Notes are committed with the version bump and are not recorded
-in the annotated tag. They are skipped on `--no-bump` because that path
-requires an already committed tree.
+skips the file. `--release-notes-instructions` appends run-specific guidance to
+the standard Genie prompt. Notes are committed with the version bump and are not
+recorded in the annotated tag. They are skipped on `--no-bump` because that
+path requires an already committed tree.
 
 `--install auto` keeps Projen's normal local dependency-install behavior;
 `always` performs a manifest-resolved install first, and `never` uses dependencies already
@@ -568,6 +572,7 @@ release [options]
 | `--no-docs`                           | skip documentation build and deployment                                                       |
 | `--no-validation`                     | skip optional release validation tasks; version/source checks remain mandatory                |
 | `--no-release-notes`                  | skip writing docs/releases notes (Genie and git-log fallback)                                 |
+| `--release-notes-instructions <text>` | append custom instructions to the Genie release-notes prompt                                  |
 | `--demo-deploy`                       | after tagging, stage and deploy the AppKit demo app (off by default)                          |
 | `--no-local-publish`                  | skip publishing to configured local registries                                                |
 | `--local-registry <auto\|false\|url>` | local npm registry selection (default: "auto")                                                |

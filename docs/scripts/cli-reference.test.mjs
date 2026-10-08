@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Command, Option } from "commander";
+import { buildDocumentationProgram as buildDbxDocumentationProgram } from "../../packages/js/cli/dbx-tools/src/cli.ts";
 import { buildProgram as buildGraphitiProgram } from "../../packages/js/cli/dbx-tools/src/graphiti/cli.ts";
 import { buildServiceCommand } from "../../packages/js/cli/service/src/cli.ts";
 import {
@@ -74,6 +75,15 @@ describe("parser-owned CLI references", () => {
     assert.doesNotMatch(reference, /dbx graphiti (?:start|up|down|env)(?:\s|`)/);
     assert.doesNotMatch(reference, /journal-database-url/);
     assert.doesNotMatch(reference, /--help|display help/);
+  });
+
+  it("preserves the root CLI name in forwarded command usage", async () => {
+    const reference = commanderReference(await buildDbxDocumentationProgram("dbx"));
+    const install = section(reference, "### `dbx graphiti service install`");
+
+    assert.match(install, /```sh\ndbx graphiti service install \[options\]/);
+    assert.match(reference, /```sh\ndbx genie \[options\] \[genieArgs\.\.\.\]/);
+    assert.doesNotMatch(reference, /```sh\ngraphiti service install/);
   });
 
   it("documents parent flags only on the command that owns them", () => {

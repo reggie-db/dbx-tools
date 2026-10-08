@@ -34,7 +34,7 @@ export type ModelRegistryResolveOptions = Pick<ResolveModelInput, "modelClass" |
 export interface ModelRegistry {
   list(): Promise<ModelTarget[]>;
   search(query: string): Promise<ModelTarget[]>;
-  resolve(model: string, options?: ModelRegistryResolveOptions): Promise<ModelTarget | undefined>;
+  resolve(model?: string, options?: ModelRegistryResolveOptions): Promise<ModelTarget | undefined>;
   refresh(): Promise<void>;
 }
 
@@ -82,16 +82,19 @@ export class DatabricksModelRegistry implements ModelRegistry {
   }
 
   async resolve(
-    model: string,
+    model: string | undefined,
     options: ModelRegistryResolveOptions = {},
   ): Promise<ModelTarget | undefined> {
-    const requested = unqualifiedModel(model);
+    const requested = model === undefined ? undefined : unqualifiedModel(model);
     const targets = await this.list();
-    const exact = targets.find((target) =>
-      target.aliases.some(
-        (alias) => alias.localeCompare(requested, undefined, { sensitivity: "accent" }) === 0,
-      ),
-    );
+    const exact =
+      requested === undefined
+        ? undefined
+        : targets.find((target) =>
+            target.aliases.some(
+              (alias) => alias.localeCompare(requested, undefined, { sensitivity: "accent" }) === 0,
+            ),
+          );
     if (exact && matchesResolveOptions(exact, options)) {
       logger.debug("resolved exact model", { requested, resolved: exact.id });
       return exact;
@@ -101,7 +104,7 @@ export class DatabricksModelRegistry implements ModelRegistry {
       .map((target) => target.endpoint)
       .filter((endpoint): endpoint is ServingEndpointSummary => endpoint !== undefined);
     const resolved = modelResolve.resolveModel(endpoints, {
-      explicit: requested,
+      ...(requested !== undefined ? { explicit: requested } : {}),
       ...options,
     });
     const target = targets.find((candidate) => candidate.id === resolved.modelId);

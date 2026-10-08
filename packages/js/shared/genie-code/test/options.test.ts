@@ -1,16 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  GENIE_CODE_DEFAULTS,
-  genieCodePairingName,
-  resolveGenieCodeOptions,
-} from "../src/options.ts";
+import { GENIE_CODE_DEFAULTS, genieCodeHomeName, resolveGenieCodeOptions } from "../src/options.ts";
 
 describe("Genie Code options", () => {
-  it("defaults to fuzzy GPT routing on an ephemeral loopback listener", () => {
+  it("defaults to the best tool-capable chat model on an ephemeral loopback listener", () => {
     assert.deepEqual(GENIE_CODE_DEFAULTS, {
-      model: "gpt",
       gatewayListen: { scheme: "tcp", host: "127.0.0.1", port: 0 },
     });
     assert.deepEqual(resolveGenieCodeOptions(), GENIE_CODE_DEFAULTS);
@@ -31,41 +26,48 @@ describe("Genie Code options", () => {
     );
   });
 
-  it("derives readable pairing names without losing exact-input identity", () => {
+  it("selects by model name or shared chat class, but not both", () => {
     assert.equal(
-      genieCodePairingName({
+      resolveGenieCodeOptions({ modelClass: "chat-thinking" }).modelClass,
+      "chat-thinking",
+    );
+    assert.throws(
+      () => resolveGenieCodeOptions({ model: "gpt", modelClass: "chat-balanced" }),
+      /mutually exclusive/,
+    );
+    assert.throws(() => resolveGenieCodeOptions({ modelClass: "embedding" as never }));
+  });
+
+  it("derives readable profile homes without losing exact-input identity", () => {
+    assert.equal(
+      genieCodeHomeName({
         profile: "FEVM REGGIE PIERCE AWS",
-        model: "GPT 5.6 Sol",
         digest: "0123456789ab",
       }),
-      "fevm-reggie-pierce-aws-gpt-5-6-sol-0123456789ab",
+      "fevm-reggie-pierce-aws-0123456789ab",
     );
     assert.notEqual(
-      genieCodePairingName({
+      genieCodeHomeName({
         profile: "FEVM REGGIE PIERCE AWS",
-        model: "GPT 5.6 Sol",
         digest: "0123456789ab",
       }),
-      genieCodePairingName({
+      genieCodeHomeName({
         profile: "fevm-reggie-pierce-aws",
-        model: "gpt-5-6-sol",
         digest: "abcdef012345",
       }),
     );
   });
 
-  it("rejects public gateway listeners and malformed pairing hashes", () => {
+  it("rejects public gateway listeners and malformed profile hashes", () => {
     assert.throws(() => resolveGenieCodeOptions({ gatewayListen: "0.0.0.0:4000" }), /loopback/);
     assert.throws(() =>
-      genieCodePairingName({
-        profile: "PROFILE",
+      genieCodeHomeName({
         digest: "0123456789ab",
       } as never),
     );
     assert.throws(() =>
-      genieCodePairingName({
+      genieCodeHomeName({
         profile: "PROFILE",
-        model: "gpt",
         digest: "short",
       }),
     );

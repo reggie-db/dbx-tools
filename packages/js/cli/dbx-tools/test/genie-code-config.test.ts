@@ -14,24 +14,19 @@ import {
 } from "../src/genie-code/config.ts";
 
 describe("Genie Code configuration", () => {
-  it("derives one readable home from the exact profile-model pairing", () => {
+  it("derives one readable home from the exact profile", () => {
     const profile = "FEVM-REGGIE-PIERCE-AWS";
-    const model = "GPT 5.6 Sol";
-    const digest = createHash("sha256")
-      .update(JSON.stringify([profile, model]))
-      .digest("hex")
-      .slice(0, 12);
+    const digest = createHash("sha256").update(profile).digest("hex").slice(0, 12);
 
-    assert.deepEqual(genieCodeHome(profile, model, "/home/user"), {
-      name: `fevm-reggie-pierce-aws-gpt-5-6-sol-${digest}`,
-      home: `/home/user/.dbx-tools/genie/profiles/fevm-reggie-pierce-aws-gpt-5-6-sol-${digest}`,
+    assert.deepEqual(genieCodeHome(profile, "/home/user"), {
+      name: `fevm-reggie-pierce-aws-${digest}`,
+      home: `/home/user/.dbx-tools/genie/profiles/fevm-reggie-pierce-aws-${digest}`,
       configPath:
-        `/home/user/.dbx-tools/genie/profiles/` +
-        `fevm-reggie-pierce-aws-gpt-5-6-sol-${digest}/config.toml`,
+        `/home/user/.dbx-tools/genie/profiles/` + `fevm-reggie-pierce-aws-${digest}/config.toml`,
     });
     assert.notEqual(
-      genieCodeHome(profile, model, "/home/user").name,
-      genieCodeHome(profile.toLowerCase(), model, "/home/user").name,
+      genieCodeHome(profile, "/home/user").name,
+      genieCodeHome(profile.toLowerCase(), "/home/user").name,
     );
   });
 
@@ -71,7 +66,7 @@ describe("Genie Code configuration", () => {
     );
   });
 
-  it("writes private TOML atomically inside the pairing home", async () => {
+  it("writes private TOML overlays inside one persistent profile home", async () => {
     const root = await mkdtemp(join(tmpdir(), "dbx-genie-config-"));
     try {
       const destination = await writeGenieCodeConfig({
@@ -85,8 +80,10 @@ describe("Genie Code configuration", () => {
       const config = parse(await readFile(destination.configPath, "utf8"));
       const overlay = parse(await readFile(destination.overlayPath, "utf8"));
 
-      assert.equal(config.model, "gpt");
+      assert.equal(config.databricks_profile, "PROFILE");
+      assert.equal(config.model, undefined);
       assert.equal(config.model_providers, undefined);
+      assert.equal(overlay.model, "gpt");
       assert.equal(
         (overlay.model_providers as Record<string, { http_headers: Record<string, string> }>)[
           GENIE_CODE_GATEWAY_PROVIDER
@@ -98,12 +95,13 @@ describe("Genie Code configuration", () => {
         bearerToken: "other-secret",
         gatewayBaseUrl: "http://127.0.0.1:4313/v1",
         homeDirectory: root,
-        model: "gpt",
+        model: "grok",
         profile: "PROFILE",
         projectDirectory: "/workspace/other",
       });
       assert.equal(concurrent.home, destination.home);
       assert.notEqual(concurrent.overlayName, destination.overlayName);
+      assert.equal(parse(await readFile(concurrent.overlayPath, "utf8")).model, "grok");
       assert.deepEqual(parse(await readFile(destination.configPath, "utf8")).projects, {
         "/workspace/project": { trust_level: "trusted" },
         "/workspace/other": { trust_level: "trusted" },

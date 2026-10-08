@@ -74,8 +74,31 @@ function discoverGuides() {
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 
+/** Release notes retained under `docs/releases`, newest version first. */
+function discoverReleaseNotes() {
+  const dir = path.join(root, "docs", "releases");
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => {
+      const source = path.join(dir, entry.name);
+      const slug = entry.name.replace(/\.md$/, "");
+      return {
+        source,
+        slug,
+        title: pageTitle(read(source), slug),
+      };
+    })
+    .sort((left, right) => right.slug.localeCompare(left.slug, undefined, { numeric: true }));
+}
+
 function docsPathForGuide(guide) {
   return `/guides/${guide.slug}`;
+}
+
+function docsPathForRelease(release) {
+  return `/releases/${release.slug.replaceAll(".", "")}`;
 }
 
 function docsPathForPackage(pkg) {
@@ -195,7 +218,7 @@ function buildPackageIndex(packages) {
   ].join("\n");
 }
 
-function nav(packages, guides) {
+function nav(packages, guides, releases) {
   const groups = new Map();
   for (const pkg of packages) {
     const items = groups.get(pkg.group) ?? [];
@@ -226,13 +249,24 @@ function nav(packages, guides) {
     // API reference sorts after the README guides: readers reach the
     // hand-written package guides first, then generated language API pages.
     { label: "API Reference", link: "/api/" },
+    ...(releases.length
+      ? [
+          {
+            label: "Release Notes",
+            items: releases.map((release) => ({
+              label: release.title,
+              link: docsPathForRelease(release),
+            })),
+          },
+        ]
+      : []),
   ];
   return {
     sidebar,
   };
 }
 
-function llms(packages, guides) {
+function llms(packages, guides, releases) {
   const lines = [
     `# ${brandContext.name}`,
     "",
@@ -260,10 +294,18 @@ function llms(packages, guides) {
     lines.push(`- [${pkg.name}](${withBase(docsPathForPackage(pkg))}): ${summary}`);
   }
   lines.push("");
+  if (releases.length) {
+    lines.push("## Release Notes", "");
+    for (const release of releases) {
+      const summary = summaryText(read(release.source));
+      lines.push(`- [${release.title}](${withBase(docsPathForRelease(release))}): ${summary}`);
+    }
+    lines.push("");
+  }
   return lines.join("\n");
 }
 
-function llmsFull(packages, guides, mappings) {
+function llmsFull(packages, guides, releases, mappings) {
   const parts = [
     brandFiles.brandContextPrompt(brandContext),
     transformLinks(read(path.join(root, "README.md")), root, mappings),
@@ -273,6 +315,9 @@ function llmsFull(packages, guides, mappings) {
   }
   for (const pkg of packages) {
     parts.push(transformLinks(read(pkg.readme), pkg.dir, mappings));
+  }
+  for (const release of releases) {
+    parts.push(transformLinks(read(release.source), path.dirname(release.source), mappings));
   }
   return parts.join("\n\n---\n\n");
 }
@@ -432,12 +477,16 @@ function main() {
     }
   }
   const guides = discoverGuides();
+  const releases = discoverReleaseNotes();
   const mappings = { byDir: new Map(), byFile: new Map() };
   for (const pkg of packages) {
     mappings.byDir.set(path.resolve(pkg.dir), docsPathForPackage(pkg));
   }
   for (const guide of guides) {
     mappings.byFile.set(path.resolve(guide.source), docsPathForGuide(guide));
+  }
+  for (const release of releases) {
+    mappings.byFile.set(path.resolve(release.source), docsPathForRelease(release));
   }
   rm(sourceRoot);
   mkdir(docsContentRoot);
@@ -479,7 +528,23 @@ function main() {
     );
   }
 
-  write(path.join(sourceRoot, "nav.json"), `${JSON.stringify(nav(packages, guides), null, 2)}\n`);
+  for (const release of releases) {
+    write(
+      path.join(docsContentRoot, "releases", `${release.slug}.md`),
+      generatedPage(
+        release.source,
+        read(release.source),
+        release.title,
+        path.dirname(release.source),
+        mappings,
+      ),
+    );
+  }
+
+  write(
+    path.join(sourceRoot, "nav.json"),
+    `${JSON.stringify(nav(packages, guides, releases), null, 2)}\n`,
+  );
   write(path.join(sourceRoot, "package.json"), docsPackageJson());
   write(path.join(sourceRoot, "pnpm-workspace.yaml"), docsWorkspaceYaml());
   write(path.join(sourceRoot, "astro.config.mjs"), astroConfig());
@@ -493,13 +558,13 @@ function main() {
     stderr: "inherit",
   });
   if (result.exitCode !== 0) process.exit(result.exitCode);
-  write(path.join(publicRoot, "llms.txt"), llms(packages, guides));
-  write(path.join(publicRoot, "llms-full.txt"), llmsFull(packages, guides, mappings));
+  write(path.join(publicRoot, "llms.txt"), llms(packages, guides, releases));
+  write(path.join(publicRoot, "llms-full.txt"), llmsFull(packages, guides, releases, mappings));
   // Disable Jekyll on GitHub Pages so Astro's `_astro/` asset dir (underscore
   // prefix) is served instead of stripped. Astro copies `public/*` to dist root.
   write(path.join(publicRoot, ".nojekyll"), "");
   console.log(
-    `Generated docs from ${packages.length} package READMEs and ${guides.length} guides into ${posix(path.relative(root, sourceRoot))}`,
+    `Generated docs from ${packages.length} package READMEs, ${guides.length} guides, and ${releases.length} release notes into ${posix(path.relative(root, sourceRoot))}`,
   );
 }
 

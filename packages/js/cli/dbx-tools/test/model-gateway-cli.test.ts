@@ -21,6 +21,8 @@ describe("model gateway CLI", () => {
     assert.match(help, /--listen <value>/);
     assert.match(help, /--profile <value>/);
     assert.match(help, /PROFILE/);
+    assert.match(help, /--model <value>/);
+    assert.match(help, /--model-class <value>/);
     assert.match(help, /--body-limit <value>/);
     assert.match(help, /BODY_LIMIT/);
     assert.doesNotMatch(help, /bearer-token/i);

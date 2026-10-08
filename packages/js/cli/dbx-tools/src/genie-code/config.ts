@@ -18,7 +18,7 @@ import {
   type GenieCodeConfig,
   type GenieCodeProviderOverlay,
 } from "@dbx-tools/shared-genie-code/config";
-import { genieCodePairingName } from "@dbx-tools/shared-genie-code/options";
+import { genieCodeHomeName } from "@dbx-tools/shared-genie-code/options";
 import { parse, stringify } from "smol-toml";
 
 /** Provider identifier written to the base and invocation overlay configurations. */
@@ -34,30 +34,26 @@ export interface WriteGenieCodeConfigOptions {
   projectDirectory: string;
 }
 
-/** Stable persistent home for one exact profile-model pairing. */
-export interface GenieCodePairingHome {
+/** Stable persistent home for one exact Databricks profile. */
+export interface GenieCodeProfileHome {
   configPath: string;
   home: string;
   name: string;
 }
 
-/** Persistent pairing home and invocation-specific provider overlay. */
-export interface GenieCodeHome extends GenieCodePairingHome {
+/** Persistent profile home and invocation-specific model-provider overlay. */
+export interface GenieCodeHome extends GenieCodeProfileHome {
   overlayName: string;
   overlayPath: string;
 }
 
-/** Derive the stable home for one exact profile-model pair. */
+/** Derive the stable home for one exact Databricks profile. */
 export function genieCodeHome(
   profile: string,
-  model: string,
   homeDirectory: string = homedir(),
-): GenieCodePairingHome {
-  const digest = createHash("sha256")
-    .update(JSON.stringify([profile, model]))
-    .digest("hex")
-    .slice(0, 12);
-  const name = genieCodePairingName({ profile, model, digest });
+): GenieCodeProfileHome {
+  const digest = createHash("sha256").update(profile).digest("hex").slice(0, 12);
+  const name = genieCodeHomeName({ profile, digest });
   const home = join(homeDirectory, ".dbx-tools", "genie", "profiles", name);
   return { name, home, configPath: join(home, "config.toml") };
 }
@@ -73,18 +69,11 @@ export function genieCodeBaseConfig(
     ),
   );
   return GenieCodeBaseConfigSchema.parse({
-    model_provider: GENIE_CODE_GATEWAY_PROVIDER,
-    model: options.model,
     databricks_profile: options.profile,
     projects: {
       ...projects,
       [resolve(options.projectDirectory)]: {
         trust_level: "trusted",
-      },
-    },
-    tui: {
-      model_availability_nux: {
-        [options.model]: 1,
       },
     },
   });
@@ -95,6 +84,8 @@ export function genieCodeProviderOverlay(
   options: WriteGenieCodeConfigOptions,
 ): GenieCodeProviderOverlay {
   return GenieCodeProviderOverlaySchema.parse({
+    model_provider: GENIE_CODE_GATEWAY_PROVIDER,
+    model: options.model,
     model_providers: {
       [GENIE_CODE_GATEWAY_PROVIDER]: {
         name: "dbx-tools model gateway",
@@ -106,6 +97,11 @@ export function genieCodeProviderOverlay(
           Authorization: `Bearer ${options.bearerToken}`,
           Originator: "codex",
         },
+      },
+    },
+    tui: {
+      model_availability_nux: {
+        [options.model]: 1,
       },
     },
   });
@@ -144,7 +140,7 @@ async function writePrivateToml(path: string, value: unknown): Promise<void> {
 export async function writeGenieCodeConfig(
   options: WriteGenieCodeConfigOptions,
 ): Promise<GenieCodeHome> {
-  const base = genieCodeHome(options.profile, options.model, options.homeDirectory);
+  const base = genieCodeHome(options.profile, options.homeDirectory);
   const overlayName = `dbx-${randomUUID().replaceAll("-", "")}`;
   const destination = {
     ...base,

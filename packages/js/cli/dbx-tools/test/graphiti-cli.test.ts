@@ -20,10 +20,9 @@ describe("Graphiti CLI", () => {
       program.commands.map((command) => command.name()),
       ["service"],
     );
-    assert.match(help, /--embedder-model <value>/);
-    assert.match(help, /EMBEDDER_MODEL/);
     assert.match(help, /DATABRICKS_CONFIG_PROFILE/);
-    assert.match(help, /MODEL_NAME/);
+    assert.match(help, /--model-class <value>/);
+    assert.match(help, /MODEL_CLASS/);
     assert.match(help, /--graphiti-home <value>/);
     assert.match(help, /GRAPHITI_HOME/);
     assert.match(help, /LAKEBASE_ENDPOINT/);
@@ -38,11 +37,13 @@ describe("Graphiti CLI", () => {
       async run(options) {
         received = options;
       },
-    }).parseAsync(["--profile", "GRAPHITI-PROFILE", "--model", "my-model"], { from: "user" });
+    }).parseAsync(["--profile", "GRAPHITI-PROFILE", "--model-class", "chat-thinking"], {
+      from: "user",
+    });
     assert.deepEqual(received, {
       ...GRAPHITI_DEFAULTS,
       profile: "GRAPHITI-PROFILE",
-      model: "my-model",
+      modelClass: "chat-thinking",
     });
   });
 

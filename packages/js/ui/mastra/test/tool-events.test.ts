@@ -161,7 +161,30 @@ describe("native persisted tool events", () => {
           ],
         },
       ]),
-      "Sampling the view.\n\nBeer leads.",
+      "Sampling the view. Beer leads.",
+    );
+  });
+
+  it("removes blank lines inside thoughts while separating distinct events", () => {
+    assert.equal(
+      genieReasoningText([
+        {
+          id: "tool-1",
+          toolName: "ask_genie",
+          status: "running",
+          progress: [
+            {
+              type: "thinking",
+              text: "First sentence.\n\n   \nSecond sentence.",
+            },
+            {
+              type: "thinking",
+              text: "\n\nAnother thought.\n",
+            },
+          ],
+        },
+      ]),
+      "First sentence. Second sentence.\n\nAnother thought.",
     );
   });
 });

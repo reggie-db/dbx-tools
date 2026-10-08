@@ -81,9 +81,9 @@ def load_graphiti_options(
 
 def mcp_settings(
     options: ResolvedGraphitiOptionsResponse,
-    llm_model: str | None = None,
-    embedder_model: str | None = None,
-    embedder_dimensions: int | None = None,
+    llm_model: str,
+    embedder_model: str,
+    embedder_dimensions: int,
 ) -> GraphitiConfig:
     """Map shared Graphiti options to the upstream MCP settings."""
     config = GraphitiConfig()
@@ -99,7 +99,7 @@ def mcp_settings(
             ),
             "llm": config.llm.model_copy(
                 update={
-                    "model": llm_model or options["model"],
+                    "model": llm_model,
                     "temperature": float(options["temperature"]),
                     "structured_output_mode": options["structuredOutputMode"],
                     "providers": config.llm.providers.model_copy(update={"openai": openai}),
@@ -107,8 +107,8 @@ def mcp_settings(
             ),
             "embedder": config.embedder.model_copy(
                 update={
-                    "model": embedder_model or options["embedderModel"],
-                    "dimensions": embedder_dimensions or int(options["embedderDimensions"]),
+                    "model": embedder_model,
+                    "dimensions": embedder_dimensions,
                     "providers": config.embedder.providers.model_copy(update={"openai": openai}),
                 }
             ),

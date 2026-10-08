@@ -28,21 +28,13 @@ class GraphitiOptions:
         default=None,
         metadata={"javascript_name": "graphitiHome"},
     )
-    model: str | None = field(
+    model_class: str | None = field(
         default=None,
-        metadata={"javascript_name": "model"},
+        metadata={"javascript_name": "modelClass"},
     )
     temperature: int | float | None = field(
         default=None,
         metadata={"javascript_name": "temperature"},
-    )
-    embedder_model: str | None = field(
-        default=None,
-        metadata={"javascript_name": "embedderModel"},
-    )
-    embedder_dimensions: int | float | None = field(
-        default=None,
-        metadata={"javascript_name": "embedderDimensions"},
     )
     structured_output_mode: str | None = field(
         default=None,
@@ -70,10 +62,8 @@ class GraphitiOptionsResponse(TypedDict):
     postgresRole: NotRequired[str]
     profile: NotRequired[str]
     graphitiHome: NotRequired[str]
-    model: NotRequired[str]
+    modelClass: NotRequired[str | None]
     temperature: NotRequired[int | float]
-    embedderModel: NotRequired[str]
-    embedderDimensions: NotRequired[int | float]
     structuredOutputMode: NotRequired[str]
     startupTimeoutMs: NotRequired[int | float]
     listen: NotRequired[Any]
@@ -88,10 +78,8 @@ class TcpListenAddressResponse(TypedDict):
 
 
 class ResolvedGraphitiOptionsResponse(TypedDict):
-    model: str
+    modelClass: str
     temperature: int | float
-    embedderModel: str
-    embedderDimensions: int | float
     structuredOutputMode: str
     startupTimeoutMs: int | float
     listen: TcpListenAddressResponse
