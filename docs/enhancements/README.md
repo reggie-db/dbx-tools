@@ -12,6 +12,7 @@ date and final status.
 
 ## Active plans
 
+- [Consolidate packages and reduce test orchestration cost](2026-10-07-package-and-test-consolidation.md)
 - [Promote Mastra chat turns as MLflow root traces with input and output](2026-10-05-mlflow-root-chat-input-output.md)
 
 ## Cross-repository suggestions
