@@ -25,6 +25,22 @@ The next measured turn repeated the behavior with 752 GETs, 545 workspace
 exports, 166 HTTP 429 responses, and 12.42 seconds in skill processing. This is
 per-turn work rather than one-time startup or first-user discovery.
 
+## Partial improvement in 0.9.64
+
+Version 0.9.64 added user-scoped workspace caching and on-demand skill search.
+It fixes warm turns but still materializes too much data on a cold refresh.
+
+Two Store 2682 turns after upgrading show:
+
+- cold turn: 540 GETs, 330 workspace exports, 131 HTTP 429 responses, 56.08
+  seconds, and no final response because the browser stream failed;
+- immediate warm retry: 2 GETs, no workspace exports, no HTTP 429 responses,
+  and a completed response.
+
+The five-minute default TTL means normal use can encounter the cold-refresh
+storm repeatedly. Consumers can raise `workspaceSkillRefreshTtlMs`, but the
+initial and post-expiry refresh still need bounded, lazy I/O.
+
 ## Root cause
 
 `createWorkspace()` enables the default Assistant skill folders and merges

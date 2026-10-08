@@ -146,14 +146,6 @@ export async function runRelease(
   const version = readWorkspaceVersion(root);
   const tag = `${prefix}${version}`;
   assertReleaseVersion(version, { root, prefixes: [prefix], assertNext: true });
-  if ((options.releaseNotes ?? true) && (options.bump ?? true)) {
-    (options.writeReleaseNotes ?? writeReleaseNotes)({
-      prefix,
-      root,
-      version,
-      instructions: options.releaseNotesInstructions,
-    });
-  }
 
   if (taskCommandSucceeds(root, "git", ["rev-parse", "--verify", `refs/tags/${tag}`])) {
     throw new Error(`release tag ${tag} already exists`);
@@ -162,6 +154,14 @@ export async function runRelease(
   runTaskCommand(root, "bun", ["run", "version:check"]);
   for (const task of selection.validation ? (options.validationTasks ?? []) : []) {
     runTaskCommand(root, "bun", ["run", task]);
+  }
+  if ((options.releaseNotes ?? true) && (options.bump ?? true)) {
+    (options.writeReleaseNotes ?? writeReleaseNotes)({
+      prefix,
+      root,
+      version,
+      instructions: options.releaseNotesInstructions,
+    });
   }
   const status = captureTaskCommand(
     root,

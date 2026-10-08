@@ -116,6 +116,7 @@
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
+        "@dbx-tools/cli-args",
         "@dbx-tools/cli-service",
         "@dbx-tools/core",
         "@dbx-tools/databricks",
@@ -126,10 +127,22 @@
         "@dbx-tools/shared-auth",
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-email",
+        "@dbx-tools/shared-genie-code",
         "@dbx-tools/shared-model-gateway",
         "@dbx-tools/tunnel"
       ],
       "reverseDependencies": []
+    },
+    {
+      "name": "@dbx-tools/cli-args",
+      "path": "packages/js/cli/args",
+      "dependencies": [
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli"
+      ]
     },
     {
       "name": "@dbx-tools/cli-service",
@@ -156,6 +169,7 @@
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
         "@dbx-tools/cli",
+        "@dbx-tools/cli-args",
         "@dbx-tools/cli-service",
         "@dbx-tools/databricks",
         "@dbx-tools/demo-appkit-server",
@@ -399,6 +413,7 @@
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
         "@dbx-tools/cli",
+        "@dbx-tools/cli-args",
         "@dbx-tools/cli-service",
         "@dbx-tools/core",
         "@dbx-tools/databricks",
@@ -418,6 +433,7 @@
         "@dbx-tools/shared-email-template",
         "@dbx-tools/shared-fs",
         "@dbx-tools/shared-genie",
+        "@dbx-tools/shared-genie-code",
         "@dbx-tools/shared-graphiti",
         "@dbx-tools/shared-model",
         "@dbx-tools/shared-model-gateway",
@@ -475,10 +491,23 @@
       ]
     },
     {
+      "name": "@dbx-tools/shared-genie-code",
+      "path": "packages/js/shared/genie-code",
+      "dependencies": [
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-model",
+        "@dbx-tools/shared-model-gateway"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli"
+      ]
+    },
+    {
       "name": "@dbx-tools/shared-graphiti",
       "path": "packages/js/shared/graphiti",
       "dependencies": [
-        "@dbx-tools/shared-core"
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-model-gateway"
       ],
       "reverseDependencies": [
         "@dbx-tools/graphiti"
@@ -508,6 +537,7 @@
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/model",
         "@dbx-tools/search",
+        "@dbx-tools/shared-genie-code",
         "@dbx-tools/shared-mastra",
         "@dbx-tools/shared-model-gateway",
         "@dbx-tools/ui-mastra"
@@ -522,7 +552,9 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit-model-gateway",
-        "@dbx-tools/cli"
+        "@dbx-tools/cli",
+        "@dbx-tools/shared-genie-code",
+        "@dbx-tools/shared-graphiti"
       ]
     },
     {

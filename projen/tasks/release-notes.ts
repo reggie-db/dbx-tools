@@ -16,7 +16,7 @@ import { captureTaskCommand, tryTaskCommand } from "../src/_task-command.ts";
 const logger = log.logger("projen:release-notes");
 
 const GENIE_PROMPT =
-  "Compare HEAD and the working tree against the latest v* tag. Produce concise user-facing release notes. Ignore generated-file churn and test-only changes. Include breaking changes, fixes, and validation results. Do not modify files.";
+  "Compare HEAD and the working tree against the latest v* tag. Produce concise user-facing release notes. Ignore generated-file churn and test-only changes. Include breaking changes, fixes, and validation results. The configured release validation phase has already completed, so do not run tests or other validation commands and do not invent validation counts. Do not modify files.";
 
 /** Inputs for one notes write. */
 export interface WriteReleaseNotesOptions {

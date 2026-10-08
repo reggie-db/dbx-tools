@@ -493,13 +493,15 @@ publication it runs `bun run demo:deploy`, which stages the AppKit demo
 and deploys it to the FEVM workspace. That step is local only and is not
 recorded in the annotated tag.
 
-After bump, release writes `docs/releases/vX.Y.Z.md` with `dbx genie exec -C
-"$PWD" --sandbox read-only --ephemeral -o`. If Genie fails or writes an empty
-file, the step keeps going with a short git-log summary. `--no-release-notes`
-skips the file. `--release-notes-instructions` appends run-specific guidance to
-the standard Genie prompt. Notes are committed with the version bump and are not
-recorded in the annotated tag. They are skipped on `--no-bump` because that
-path requires an already committed tree.
+After bump and configured validation, release writes
+`docs/releases/vX.Y.Z.md` with `dbx genie exec -C "$PWD" --sandbox read-only
+--ephemeral -o`. The standard prompt forbids running tests or other validation
+commands. If Genie fails or writes an empty file, the step keeps going with a
+short git-log summary. `--no-release-notes` skips the file.
+`--release-notes-instructions` appends run-specific guidance to the standard
+Genie prompt. Notes are committed with the version bump and are not recorded in
+the annotated tag. They are skipped on `--no-bump` because that path requires an
+already committed tree.
 
 `--install auto` keeps Projen's normal local dependency-install behavior;
 `always` performs a manifest-resolved install first, and `never` uses dependencies already

@@ -37,6 +37,7 @@ describe("release notes", () => {
     const prompt = releaseNotesPrompt("  Focus on operator-visible changes.  ");
 
     assert.match(prompt, /Compare HEAD and the working tree/);
+    assert.match(prompt, /do not run tests or other validation commands/);
     assert.match(prompt, /Additional instructions:\nFocus on operator-visible changes\.$/);
   });
 

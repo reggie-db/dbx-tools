@@ -156,7 +156,7 @@ describe("direct release tags", () => {
     }
   });
 
-  it("runs the ESLint fixer before release validation", async () => {
+  it("runs the ESLint fixer before validation and writes notes afterward", async () => {
     const { root } = fixture();
     try {
       writeFileSync(
@@ -169,7 +169,7 @@ describe("direct release tags", () => {
               bump: "node bump.mjs",
               "version:check": "true",
               "eslint:fix": "touch lint-fixed",
-              validate: "test -f lint-fixed",
+              validate: "test -f lint-fixed && touch validated",
             },
           },
           null,
@@ -182,8 +182,14 @@ describe("direct release tags", () => {
         prefix: "v",
         remote: "origin",
         localPublish: false,
-        releaseNotes: false,
         validationTasks: ["validate"],
+        writeReleaseNotes: ({ root: notesRoot, version }) => {
+          assert.equal(readFileSync(join(notesRoot, "validated"), "utf8"), "");
+          const destination = join(notesRoot, "docs", "releases", `v${version}.md`);
+          mkdirSync(join(notesRoot, "docs", "releases"), { recursive: true });
+          writeFileSync(destination, `# Release ${version}\n`);
+          return destination;
+        },
       });
       assert.equal(readFileSync(join(root, "lint-fixed"), "utf8"), "");
     } finally {
