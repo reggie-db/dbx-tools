@@ -111,6 +111,7 @@
   "workspaces": [
     "packages/example/app/appkit-demo",
     "packages/example/server/appkit-demo",
+    "packages/js/cli/args",
     "packages/js/cli/dbx-tools",
     "packages/js/cli/service",
     "packages/js/node/appkit",

@@ -14,6 +14,7 @@ import {
 } from "@dbx-tools/ui/react";
 import type { UIMessage } from "ai";
 import {
+  BugIcon,
   CheckIcon,
   ChevronDownIcon,
   CopyIcon,
@@ -325,6 +326,8 @@ type AssistantBubbleProps = {
   onFeedback?: (submission: FeedbackSubmission) => void | Promise<void>;
   /** Last thumbs the user left on this message, for highlighting. */
   feedbackValue?: FeedbackValue;
+  /** MLflow experiment link shown only to viewers with `CAN_MANAGE`. */
+  mlflowExperimentUrl?: string;
 };
 
 export const AssistantBubble = ({
@@ -339,6 +342,7 @@ export const AssistantBubble = ({
   onExport,
   onFeedback,
   feedbackValue,
+  mlflowExperimentUrl,
 }: AssistantBubbleProps) => {
   const reasoning = getReasoningText(message.parts);
   const isReasoningStreaming =
@@ -439,7 +443,7 @@ export const AssistantBubble = ({
             onResolve={onResolveToolApproval}
           />
         ))}
-        {hasText && (isLast || onExport || onFeedback) && (
+        {hasText && (isLast || onExport || onFeedback || mlflowExperimentUrl) && (
           <div className="flex items-center gap-1">
             {isLast && regenerate && (
               <Tooltip>
@@ -476,6 +480,23 @@ export const AssistantBubble = ({
               </Tooltip>
             )}
             {onExport && <ExportMenu onExport={onExport} iconOnly tooltip="Export message" />}
+            {mlflowExperimentUrl && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button asChild type="button" size="icon" variant="ghost" className="size-7">
+                    <a
+                      href={mlflowExperimentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Open MLflow experiment"
+                    >
+                      <BugIcon className="size-3" />
+                    </a>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Open MLflow experiment</TooltipContent>
+              </Tooltip>
+            )}
             {onFeedback && (
               <FeedbackControls
                 onSubmit={onFeedback}

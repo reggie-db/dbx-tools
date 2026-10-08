@@ -20,6 +20,7 @@
 export const MASTRA_ROUTES = {
   chat: "/chat",
   feedback: "/route/feedback",
+  mlflowExperiment: "/route/mlflow-experiment",
   suggestions: "/suggestions",
   models: "/models",
   // The static serving-endpoint an agent falls back to when the client pins

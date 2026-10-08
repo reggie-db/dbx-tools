@@ -1,9 +1,12 @@
 import {
   Button,
-  Label,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
   Textarea,
   Tooltip,
   TooltipContent,
@@ -15,7 +18,7 @@ import { useState } from "react";
 import type { FeedbackSubmission, FeedbackValue } from "./types.ts";
 
 // Per-message feedback action row: thumbs up/down that log immediately,
-// plus a separate comment affordance that opens a popover for freeform
+// plus a separate comment affordance that opens a modal for freeform
 // text. Rendered inside the assistant bubble's action row when the host
 // wires feedback (which only happens when MLflow logging is enabled and
 // the turn has a captured trace id).
@@ -79,10 +82,10 @@ export const FeedbackControls = ({
         </TooltipTrigger>
         <TooltipContent>Bad response</TooltipContent>
       </Tooltip>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={setOpen}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
+            <DialogTrigger asChild>
               <Button
                 type="button"
                 size="icon"
@@ -92,43 +95,44 @@ export const FeedbackControls = ({
               >
                 <MessageSquareTextIcon className="size-3" />
               </Button>
-            </PopoverTrigger>
+            </DialogTrigger>
           </TooltipTrigger>
           <TooltipContent>Leave a comment</TooltipContent>
         </Tooltip>
-        <PopoverContent align="start" className="w-80">
-          <div className="grid gap-2">
-            <Label className="text-xs">Share feedback</Label>
-            <Textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              onKeyDown={(e) => {
-                // Cmd/Ctrl+Enter submits, matching the composer's feel.
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  void submitComment();
-                }
-              }}
-              placeholder="What worked well, or what could be better?"
-              rows={3}
-              autoFocus
-            />
-            <div className="flex justify-end gap-2">
-              <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={!comment.trim() || sending}
-                onClick={() => void submitComment()}
-              >
-                {sending ? "Sending..." : "Send"}
-              </Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share feedback</DialogTitle>
+            <DialogDescription>
+              Tell us what worked well or what could be improved.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void submitComment();
+              }
+            }}
+            placeholder="Add details about this response"
+            rows={5}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!comment.trim() || sending}
+              onClick={() => void submitComment()}
+            >
+              {sending ? "Sending..." : "Send feedback"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

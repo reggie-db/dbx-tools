@@ -1,12 +1,12 @@
 /** Commander entry point for the pure Node Lakebase proxy. */
 
+import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
 import { connectionUrl } from "@dbx-tools/lakebase";
 import { Command } from "commander";
 
 import { PACKAGE_VERSION } from "../../index.ts";
-import { addArgs, parseArgs, serializeArgs } from "../args.ts";
 import {
   LakebaseProxyOptionsSchema,
   LakebaseProxyUrlOptionsSchema,

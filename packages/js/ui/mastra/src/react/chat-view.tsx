@@ -62,6 +62,7 @@ export const ChatView = ({
   onExportMessage,
   feedbackByMessage = {},
   onFeedback,
+  mlflowExperimentUrl,
 }: ChatViewProps) => {
   const transcript = useChatTranscriptController({
     messages,
@@ -108,6 +109,7 @@ export const ChatView = ({
         onExportMessage={onExportMessage}
         feedbackByMessage={feedbackByMessage}
         onFeedback={onFeedback}
+        mlflowExperimentUrl={mlflowExperimentUrl}
       />
       <ChatComposer
         isEmpty={messages.length === 0}

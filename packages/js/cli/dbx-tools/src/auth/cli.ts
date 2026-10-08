@@ -8,10 +8,10 @@
  */
 
 import * as databricks from "@dbx-tools/auth";
+import { addArgs, parseArgs } from "@dbx-tools/cli-args";
 import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth/client";
 import { Command, CommanderError } from "commander";
 
-import { addArgs, parseArgs } from "../args.ts";
 import {
   AuthCliOptionsSchema,
   databricksAuthOptions,

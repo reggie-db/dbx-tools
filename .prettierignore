@@ -67,6 +67,7 @@ assets/tsconfig.json
 **/src/generated/**
 packages/example/app/appkit-demo/index.ts
 packages/example/server/appkit-demo/index.ts
+packages/js/cli/args/index.ts
 packages/js/cli/dbx-tools/index.ts
 packages/js/cli/service/index.ts
 packages/js/node/appkit/index.ts

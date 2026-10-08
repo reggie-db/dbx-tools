@@ -99,7 +99,12 @@ import {
 } from "./identity.ts";
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
 import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
-import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
+import {
+  logFeedback,
+  mlflowExperimentManagerUrl,
+  resolveFeedbackEnabled,
+  validateFeedbackConfig,
+} from "./mlflow.ts";
 import { resolveDefaultModelId } from "./model.ts";
 import { buildObservability, configureOtelPropagation } from "./observability.ts";
 import { provisionRemoteSkills } from "./remote-skills.ts";
@@ -249,6 +254,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // Resolve the identity mode up front so an invalid `genieIdentity` fails the
     // app boot with a clear message rather than 500-ing the first chat request.
     this.identityMode = resolveIdentityMode(this.config.genieIdentity);
+    validateFeedbackConfig(this.config.feedback);
     // Wait until sibling plugins (e.g. `lakebase`) finish `setup()` so
     // the lakebase pool is valid when storage/memory are enabled.
     this.context?.onLifecycle("setup:complete", async () => {
@@ -466,6 +472,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     this.registerEmbedRoutes(router);
     this.registerSuggestionRoutes(router);
     this.registerFeedbackRoutes(router);
+    this.registerMlflowExperimentRoute(router);
     this.registerAgentRoutes(router);
   }
 
@@ -770,6 +777,23 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     });
   }
 
+  /** Register the best-effort per-viewer MLflow experiment debug link. */
+  private registerMlflowExperimentRoute(router: IAppRouter): void {
+    this.route(router, {
+      name: "mlflowExperiment",
+      method: "get",
+      path: routes.MASTRA_ROUTES.mlflowExperiment,
+      handler: async (req, res) => {
+        if (!this.feedbackEnabled()) {
+          res.json({ url: null });
+          return;
+        }
+        const result = await this.scopedSelf(req).fetchMlflowExperimentUrl();
+        res.json({ url: result.ok ? (result.data ?? null) : null });
+      },
+    });
+  }
+
   /** Register the gated Mastra catch-all after every explicit route. */
   private registerAgentRoutes(router: IAppRouter): void {
     // Middleware rather than `this.route`: this is the catch-all that hands
@@ -915,6 +939,15 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         }),
       feedbackWriteDefaults,
     );
+  }
+
+  /**
+   * Resolve an experiment link under the active request identity. The helper
+   * returns no URL unless the viewer has effective `CAN_MANAGE` permission.
+   */
+  private async fetchMlflowExperimentUrl(): Promise<ExecutionResult<string | undefined>> {
+    const client = getExecutionContext().client;
+    return this.execute(() => mlflowExperimentManagerUrl(client), feedbackWriteDefaults);
   }
 
   /**

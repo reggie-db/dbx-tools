@@ -21,9 +21,11 @@
  * @module
  */
 
+import { ConfigurationError } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
+import { z } from "zod";
 import { databricksFetch, readResponseJson, readResponseText } from "./rest.ts";
 
 const logger = log.logger("mastra/mlflow");
@@ -39,6 +41,78 @@ const assessmentsPath = (traceId: string): string =>
 const NOT_FOUND_RETRIES = 3;
 /** Base backoff between "trace not found" retries, in ms (grows linearly). */
 const NOT_FOUND_BACKOFF_MS = 1200;
+
+const MlflowExperimentResponseSchema = z
+  .object({
+    experiment: z
+      .object({
+        experiment_id: z.string().min(1).describe("Workspace MLflow experiment identifier."),
+      })
+      .passthrough()
+      .describe("Configured MLflow experiment."),
+  })
+  .passthrough()
+  .describe("MLflow get-experiment response.");
+
+const CurrentUserResponseSchema = z
+  .object({
+    userName: z.string().optional().describe("Current workspace user name."),
+    applicationId: z.string().optional().describe("Current service principal application id."),
+    displayName: z.string().optional().describe("Current principal display name."),
+    groups: z
+      .array(
+        z
+          .object({
+            value: z.string().optional().describe("Workspace group identifier."),
+            display: z.string().optional().describe("Workspace group display name."),
+          })
+          .passthrough(),
+      )
+      .optional()
+      .describe("Groups assigned to the current principal."),
+  })
+  .passthrough()
+  .describe("Databricks Current User API response.");
+
+const ExperimentPermissionsResponseSchema = z
+  .object({
+    access_control_list: z
+      .array(
+        z
+          .object({
+            user_name: z.string().optional().describe("User principal name."),
+            group_name: z.string().optional().describe("Group principal name."),
+            service_principal_name: z
+              .string()
+              .optional()
+              .describe("Service principal application id."),
+            all_permissions: z
+              .array(
+                z
+                  .object({
+                    permission_level: z.string().describe("Effective experiment permission level."),
+                  })
+                  .passthrough(),
+              )
+              .optional()
+              .describe("Direct and inherited permissions for this principal."),
+          })
+          .passthrough(),
+      )
+      .optional()
+      .describe("Experiment access control entries."),
+  })
+  .passthrough()
+  .describe("Databricks experiment permissions response.");
+
+function configuredExperiment(): { id?: string; name?: string } {
+  const id = process.env.MLFLOW_EXPERIMENT_ID?.trim();
+  const name = process.env.MLFLOW_EXPERIMENT_NAME?.trim();
+  return {
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+  };
+}
 
 /**
  * Whether MLflow feedback logging is available for this deployment.
@@ -69,6 +143,101 @@ export function mlflowEnabled(): boolean {
  */
 export function resolveFeedbackEnabled(explicit: boolean | undefined): boolean {
   return explicit ?? mlflowEnabled();
+}
+
+/**
+ * Reject an explicitly enabled feedback surface when no MLflow experiment is
+ * configured. Auto mode remains non-fatal and simply disables feedback.
+ */
+export function validateFeedbackConfig(explicit: boolean | undefined): void {
+  if (explicit !== true) return;
+  const experiment = configuredExperiment();
+  if (experiment.id || experiment.name) return;
+  throw new ConfigurationError(
+    "mastra: feedback is enabled but no MLflow experiment is configured. " +
+      "Set MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME, use feedback: false, " +
+      "or omit feedback to use automatic detection.",
+  );
+}
+
+/**
+ * Return the configured experiment URL only when the active Databricks
+ * principal has effective `CAN_MANAGE` permission. Permission lookup is
+ * intentionally best-effort so Apps environments that do not expose the
+ * required APIs simply omit the debug affordance.
+ */
+export async function mlflowExperimentManagerUrl(
+  client: WorkspaceClient,
+): Promise<string | undefined> {
+  try {
+    return await resolveMlflowExperimentManagerUrl(client);
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveMlflowExperimentManagerUrl(
+  client: WorkspaceClient,
+): Promise<string | undefined> {
+  const experimentId = await resolveExperimentId(client);
+  if (!experimentId) return undefined;
+
+  const [currentResponse, permissionsResponse] = await Promise.all([
+    databricksFetch(client, "/api/2.0/preview/scim/v2/Me", { method: "GET" }),
+    databricksFetch(
+      client,
+      `/api/2.0/permissions/experiments/${encodeURIComponent(experimentId)}`,
+      { method: "GET" },
+    ),
+  ]);
+  if (!currentResponse.ok || !permissionsResponse.ok) return undefined;
+
+  const current = CurrentUserResponseSchema.safeParse(await readResponseJson(currentResponse));
+  const permissions = ExperimentPermissionsResponseSchema.safeParse(
+    await readResponseJson(permissionsResponse),
+  );
+  if (!current.success || !permissions.success) return undefined;
+
+  const userNames = new Set(
+    [current.data.userName, current.data.applicationId, current.data.displayName].filter(
+      (value): value is string => Boolean(value),
+    ),
+  );
+  const groupNames = new Set(
+    (current.data.groups ?? []).flatMap(({ value, display }) =>
+      [value, display].filter((entry): entry is string => Boolean(entry)),
+    ),
+  );
+  const canManage = (permissions.data.access_control_list ?? []).some((entry) => {
+    const matches =
+      (entry.user_name !== undefined && userNames.has(entry.user_name)) ||
+      (entry.service_principal_name !== undefined && userNames.has(entry.service_principal_name)) ||
+      (entry.group_name !== undefined && groupNames.has(entry.group_name));
+    return (
+      matches &&
+      (entry.all_permissions ?? []).some(
+        (permission) => permission.permission_level === "CAN_MANAGE",
+      )
+    );
+  });
+  if (!canManage) return undefined;
+
+  const host = (await client.config.getHost()).toString();
+  return new URL(`/ml/experiments/${encodeURIComponent(experimentId)}`, host).toString();
+}
+
+async function resolveExperimentId(client: WorkspaceClient): Promise<string | undefined> {
+  const experiment = configuredExperiment();
+  if (experiment.id) return experiment.id;
+  if (!experiment.name) return undefined;
+
+  const path = `/api/2.0/mlflow/experiments/get-by-name?experiment_name=${encodeURIComponent(
+    experiment.name,
+  )}`;
+  const response = await databricksFetch(client, path, { method: "GET" });
+  if (!response.ok) return undefined;
+  const parsed = MlflowExperimentResponseSchema.safeParse(await readResponseJson(response));
+  return parsed.success ? parsed.data.experiment.experiment_id : undefined;
 }
 
 /** Parameters for {@link logFeedback}. */

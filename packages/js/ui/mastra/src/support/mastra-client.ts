@@ -10,6 +10,7 @@ import {
   type MastraClientConfig,
   type MastraFeedbackRequest,
   type MastraFeedbackResponse,
+  type MastraMlflowExperimentResponse,
   type StatementData,
 } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
@@ -421,6 +422,19 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
+   * Resolve the configured MLflow experiment for the active viewer.
+   * The server returns a URL only when that viewer has effective
+   * `CAN_MANAGE`; inability to determine access resolves to `null`.
+   */
+  async mlflowExperiment(signal?: AbortSignal): Promise<MastraMlflowExperimentResponse> {
+    return this.#getJson(
+      `${this.basePath}${routes.MASTRA_ROUTES.mlflowExperiment}`,
+      feedback.MastraMlflowExperimentResponseSchema,
+      signal,
+    );
+  }
+
+  /**
    * Resolve a `[chart:<id>]` marker from
    * `GET ${basePath}/embed/chart/:id`. The chart planner runs in the
    * background, so the server long-polls the cache and returns the
@@ -559,6 +573,43 @@ export const useMastraClient = (): MastraPluginClient => {
     // fully determined by these two scalars.
     [config.basePath, config.defaultAgent],
   );
+};
+
+/**
+ * Resolve the configured MLflow experiment link once at chat boot.
+ * Missing permissions, unsupported Apps identity APIs, and lookup failures
+ * all degrade to no link.
+ */
+export const useMastraMlflowExperiment = (
+  enabled = true,
+): { url: string | null; loading: boolean } => {
+  const client = useMastraClient();
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(enabled);
+
+  useEffect(() => {
+    if (!enabled) {
+      setUrl(null);
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setLoading(true);
+    client
+      .mlflowExperiment(controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setUrl(result.url);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setUrl(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [client, enabled]);
+
+  return { url, loading };
 };
 
 /**

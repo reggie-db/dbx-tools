@@ -761,7 +761,9 @@ MLflow reporting, OTel tracing, or the official AI SDK chat route.
 `observability.buildObservability()` wires Mastra tracing when OTLP export is
 configured. `mlflow.resolveFeedbackEnabled()` turns MLflow feedback on when both
 trace export and an MLflow experiment are configured, unless the plugin config
-forces a value. The plugin also stamps each chat turn's request/response onto
+forces a value. Explicit `feedback: true` requires `MLFLOW_EXPERIMENT_ID` or
+`MLFLOW_EXPERIMENT_NAME` and fails app startup when neither is available. The
+plugin also stamps each chat turn's request/response onto
 the request's exported root span via `telemetry.attachChatTurnTelemetry()` so
 MLflow's UC `*_trace_unified` view can show them. It uses AppKit's HTTP server
 span when present and creates one request-lifetime fallback span otherwise.
@@ -917,6 +919,7 @@ use Mastra's native route surfaces behind the same scoped request-context gate.
 | `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                                             |
 | `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                                                           |
 | `POST`                     | `/route/feedback`                 | Log a thumbs / comment assessment to the turn's MLflow trace. `404` when feedback is off.                                |
+| `GET`                      | `/route/mlflow-experiment`        | Return the experiment URL only when the active viewer has effective `CAN_MANAGE`; otherwise `{ "url": null }`.           |
 | `POST` / `GET`             | `/mcp`, `/sse`, `/messages`       | MCP transports, when `mcp` is enabled.                                                                                   |
 
 The UI consumes `/chat/:agentId` with the AI SDK's `DefaultChatTransport`.
@@ -969,6 +972,7 @@ requiring callers to assemble a Mastra server by hand.
   names are resolved through Databricks Model Serving.
 - `feedback` controls whether MLflow feedback routes are exposed. The automatic
   mode enables feedback when tracing and an MLflow experiment are configured.
+  Explicit `true` fails startup unless an experiment id or name is configured.
 - `mcp` controls whether agents are exposed as MCP tools and how that server is
   named.
 - `genieIdentity` picks the Databricks identity the agents' workspace calls run

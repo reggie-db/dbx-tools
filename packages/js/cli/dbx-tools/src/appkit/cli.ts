@@ -13,10 +13,10 @@
  */
 
 import { appkit } from "@dbx-tools/appkit";
+import { addArgs, parseArgs } from "@dbx-tools/cli-args";
 import { log } from "@dbx-tools/shared-core";
 import { Command, CommanderError } from "commander";
 
-import { addArgs, parseArgs } from "../args.ts";
 import {
   diffEnv,
   EnvCommandOptionsSchema,

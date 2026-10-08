@@ -37,6 +37,7 @@
     "@dbx-tools/appkit-model-gateway": "workspace:^",
     "@dbx-tools/auth": "workspace:^",
     "@dbx-tools/auth-gate": "workspace:^",
+    "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/databricks": "workspace:^",
@@ -71,10 +72,6 @@
       ".": {
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
-      },
-      "./args": {
-        "types": "./lib/src/args.d.ts",
-        "default": "./lib/src/args.js"
       },
       "./bootstrap": {
         "types": "./lib/src/bootstrap.d.ts",
@@ -153,7 +150,6 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./args": "./src/args.ts",
     "./bootstrap": "./src/bootstrap.ts",
     "./bun": "./src/bun.ts",
     "./cli": "./src/cli.ts",

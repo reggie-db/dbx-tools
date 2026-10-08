@@ -143,7 +143,6 @@ export function App() {
       showModelPicker
       threadPlacement="auto"
       enableExport
-      enableFeedback
       className="h-dvh"
     />
   );
@@ -176,8 +175,10 @@ Useful options:
 - `enableThreads: false` is the older shorthand for
   `threadPlacement: "disabled"`.
 - `enableExport` adds whole-conversation and per-message export affordances.
-- `enableFeedback` enables thumbs/comment controls when the server reports
-  MLflow feedback is available and a turn produced a trace id.
+- Feedback defaults to auto: thumbs, dislike, and comment controls appear when
+  the server reports MLflow feedback is available and a turn produced a trace
+  id. Set `enableFeedback={false}` to hide them. Viewers with `CAN_MANAGE` on
+  the experiment also get an experiment debug link beside copy and export.
 
 ## Place The Conversation List
 

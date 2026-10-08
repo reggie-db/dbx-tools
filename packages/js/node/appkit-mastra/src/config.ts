@@ -464,9 +464,10 @@ export interface MastraPluginConfig extends BasePluginConfig {
    *   is named (the same signals the observability pipeline needs to
    *   ship traces to MLflow). Otherwise off, since there'd be no trace
    *   to attach feedback to.
-   * - `true`: force on. Feedback controls show and writes are attempted
-   *   regardless of env detection (use when the env is configured in a
-   *   way the auto-probe doesn't recognize).
+   * - `true`: force on. Requires `MLFLOW_EXPERIMENT_ID` or
+   *   `MLFLOW_EXPERIMENT_NAME`; app startup fails when neither is configured.
+   *   Use this when trace export is wired in a way the auto-probe does not
+   *   recognize.
    * - `false`: force off. No trace-id header, no feedback route, no UI.
    *
    * Feedback attaches to a turn's MLflow trace via the OpenTelemetry
@@ -720,7 +721,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     feedback: {
       type: "boolean",
       description:
-        "Log thumbs / comment assessments to MLflow and surface the feedback controls. Defaults to on only when an OTLP endpoint and MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME are set.",
+        "Log thumbs / comment assessments to MLflow and surface the feedback controls. Defaults to on only when an OTLP endpoint and MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME are set. Explicit true fails startup unless an experiment id or name is configured.",
     },
     mcp: {
       type: ["boolean", "object"],

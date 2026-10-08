@@ -363,6 +363,11 @@ export type ChatViewProps = {
    * handler logs the feedback to MLflow via the plugin's feedback route.
    */
   onFeedback?: (message: UIMessage, submission: FeedbackSubmission) => void | Promise<void>;
+  /**
+   * Configured MLflow experiment URL for viewers with effective
+   * `CAN_MANAGE`. When present, assistant action rows show a debug link.
+   */
+  mlflowExperimentUrl?: string;
 };
 
 /** Payload {@link ChatViewProps.onResolveToolApproval} receives. */

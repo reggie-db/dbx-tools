@@ -15,6 +15,7 @@ import type { EmbedResolver, ExportFormat } from "../support/export.ts";
 import {
   useMastraClient,
   useMastraDefaultModel,
+  useMastraMlflowExperiment,
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,
@@ -201,15 +202,13 @@ export interface UseMastraChatOptions<
   enableExport?: boolean;
   /**
    * Surface per-message feedback controls (thumbs up/down + a comment
-   * popover) that log to MLflow as trace assessments.
+   * modal) that log to MLflow as trace assessments.
    *
-   * Defaults to whatever {@link enableExport} is (feedback and export
-   * are the two "quality loop" affordances, so turning on export opts
-   * into feedback too); pass an explicit `true` / `false` to override.
-   * Regardless of this flag, controls only actually render when the
+   * Defaults to auto: controls render when the server reports MLflow
+   * feedback is available. Pass `false` to hide them or `true` to request
+   * them explicitly. Regardless of this flag, controls only render when the
    * server reports MLflow logging is enabled (`clientConfig.feedbackEnabled`)
-   * and the turn produced a trace id - so enabling it on a deployment
-   * without MLflow tracing is a safe no-op.
+   * and the turn produced a trace id.
    */
   enableFeedback?: boolean;
   /**
@@ -276,11 +275,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const enableThreads = threadPlacement !== "disabled";
   // Export is opt-in (default off): the host turns it on explicitly.
   const enableExport = options.enableExport === true;
-  // Feedback defaults to export's setting; an explicit option overrides.
-  // It only actually surfaces when the server reports MLflow logging is
-  // wired (so a trace exists to attach the assessment to).
-  const enableFeedback = options.enableFeedback ?? enableExport;
+  // Feedback defaults to automatic server capability detection. An explicit
+  // false hides it; true keeps it requested but cannot bypass the server gate.
+  const enableFeedback = options.enableFeedback !== false;
   const feedbackAvailable = enableFeedback && mastraClient.feedbackEnabled;
+  const { url: mlflowExperimentUrl } = useMastraMlflowExperiment(feedbackAvailable);
   const threadKey = threadStorageKey(mastraClient.basePath, agentId);
   const [activeThreadId, setActiveThreadId] = useState<string>(() =>
     enableThreads ? (readStoredThreadId(threadKey) ?? hash.id()) : hash.id(),
@@ -1038,6 +1037,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       ? {
           feedbackByMessage: activeSession.feedbackByMessage,
           onFeedback: submitFeedback,
+          ...(mlflowExperimentUrl ? { mlflowExperimentUrl } : {}),
         }
       : {}),
   };

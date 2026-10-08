@@ -156,6 +156,7 @@ type ChatTranscriptProps = {
   onExportMessage: ChatViewProps["onExportMessage"];
   feedbackByMessage: NonNullable<ChatViewProps["feedbackByMessage"]>;
   onFeedback: ChatViewProps["onFeedback"];
+  mlflowExperimentUrl: ChatViewProps["mlflowExperimentUrl"];
 };
 
 /** Internal transcript renderer with loading, error, approval, and feedback states. */
@@ -175,6 +176,7 @@ export const ChatTranscript = ({
   onExportMessage,
   feedbackByMessage,
   onFeedback,
+  mlflowExperimentUrl,
 }: ChatTranscriptProps) => {
   const isRunning = status === "submitted" || status === "streaming";
   const lastMessage = messages.at(-1);
@@ -251,6 +253,7 @@ export const ChatTranscript = ({
                             : {}),
                         }
                       : {})}
+                    {...(mlflowExperimentUrl ? { mlflowExperimentUrl } : {})}
                   />
                 );
               }

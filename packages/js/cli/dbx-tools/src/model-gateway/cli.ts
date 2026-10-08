@@ -4,6 +4,7 @@
  * @module
  */
 
+import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
 import {
@@ -15,7 +16,6 @@ import {
 import { Command } from "commander";
 
 import { PACKAGE_VERSION } from "../../index.ts";
-import { addArgs, parseArgs, serializeArgs } from "../args.ts";
 import { startModelGateway } from "./server.ts";
 
 /** Injectable foreground gateway boundary for CLI tests. */

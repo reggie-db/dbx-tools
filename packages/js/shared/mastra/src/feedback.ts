@@ -87,3 +87,23 @@ export const MastraFeedbackResponseSchema = z.object({
 });
 /** Feedback-route result, including the assessment id when MLflow accepted it. */
 export type MastraFeedbackResponse = z.infer<typeof MastraFeedbackResponseSchema>;
+
+/**
+ * Per-viewer MLflow experiment link returned by the plugin.
+ *
+ * `url` is present only when the active user has effective `CAN_MANAGE`
+ * permission on the configured experiment. A null value keeps permission
+ * lookup failures and non-manager access from affecting chat startup.
+ */
+export const MastraMlflowExperimentResponseSchema = z
+  .object({
+    url: z
+      .string()
+      .url()
+      .nullable()
+      .describe("Experiment URL when the active viewer can manage it, otherwise null."),
+  })
+  .describe("Per-viewer link to the configured MLflow experiment.");
+
+/** Per-viewer MLflow experiment debug-link response. */
+export type MastraMlflowExperimentResponse = z.infer<typeof MastraMlflowExperimentResponseSchema>;

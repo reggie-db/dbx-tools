@@ -24,11 +24,11 @@
 
 import { createServer } from "node:net";
 import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
+import { addArgs, parseArgs } from "@dbx-tools/cli-args";
 import { log } from "@dbx-tools/shared-core";
 import { frp, interceptor, portr } from "@dbx-tools/tunnel";
 import { Command, CommanderError } from "commander";
 
-import { addArgs, parseArgs } from "../args.ts";
 import { resolveTunnelOptions, TunnelOptionsSchema, type TunnelOptions } from "./options.ts";
 import { startProxy } from "./proxy.ts";
 

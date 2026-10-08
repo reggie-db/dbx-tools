@@ -6,6 +6,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 ## CLI Tools
 
 - `@dbx-tools/cli` - Use one CLI to authenticate with Databricks, connect local PostgreSQL tools to Lakebase, serve Databricks models to coding agents, run graph memory, and share applications through a gated public URL. Source: `packages/js/cli/dbx-tools`.
+- `@dbx-tools/cli-args` - Generate Commander flags from a Zod object schema so any CLI can share one argument, help, and layered-config path without installing the full dbx package. Source: `packages/js/cli/args`.
 - `@dbx-tools/cli-service` - Add desktop-service installation, lifecycle commands, optional uv-managed Python dependencies, and a tray menu to a Commander CLI. Users can keep your command running after their terminal closes and manage it through the same service commands on macOS, Linux, and Windows. Source: `packages/js/cli/service`.
 
 ## Node and AppKit
@@ -23,7 +24,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/fs` - Node local-disk FileSystem implementation of the @dbx-tools/shared-fs contract. Built on BaseFileSystem, so this package only owns host separator conversion (toBackendPath), Node I/O, symlink containment (preparePath), and errno mapping. Source: `packages/js/node/fs`.
 - `@dbx-tools/genie` - Server-side Databricks Genie chat drivers. Source: `packages/js/node/genie`.
 - `@dbx-tools/graphiti` - Run Graphiti from Node without coupling lifecycle control to a CLI or AppKit plugin. Callers provide the shared typed Graphiti options and receive one runtime handle for completion and shutdown. Source: `packages/js/node/graphiti`.
-- `@dbx-tools/lakebase` - Resolve a Databricks Lakebase target into the host, database, and user a PostgreSQL client needs, then request a short-lived database credential. The package gives Node and Bun applications one profile-aware path from a project name or resource URL to connection-ready values. Source: `packages/js/node/lakebase`.
+- `@dbx-tools/lakebase` - Resolve a Databricks Lakebase target into the host, database, and user a PostgreSQL client needs, then request a short-lived database credential. The package gives Node and Bun applications one profile-aware path from a project name or resource URL to connection-ready values. When the target is a Lakebase path or URL without a chosen database, discovery picks the branch default (status.default, then Lakebase's provisioned databricks_postgres) instead of PostgreSQL's generic postgres database. Source: `packages/js/node/lakebase`.
 - `@dbx-tools/model` - Workspace-aware Databricks Model Serving selection. Source: `packages/js/node/model`.
 - `@dbx-tools/path` - Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching. Source: `packages/js/node/path`.
 - `@dbx-tools/postgres` - Connection-correct PostgreSQL primitives for Node.js: advisory locks that hold the connection they lock, and a structured topic bus over LISTEN/NOTIFY. Source: `packages/js/node/postgres`.

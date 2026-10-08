@@ -794,6 +794,16 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 // the single bun workspace (added via `extraWorkspaceMembers`). It synthesizes
 // itself, so there is no engine rule here.
 
+// cli-args: Zod-to-Commander binding for any CLI. Kept as its own package so
+// consuming projects can generate flags without installing the full dbx CLI.
+project.applyToProjects(root, { identifierName: "cli-args", tags: "cli" }, (p) => {
+  p.package.addField(
+    "description",
+    "Commander argument generation from Zod object schemas for dbx-tools CLIs",
+  );
+  p.addDeps("@dbx-tools/core@workspace:^", "@dbx-tools/shared-core@workspace:^");
+});
+
 // cli-service: a product-agnostic systray host plus Commander lifecycle command.
 // It remains public because consuming published CLIs load its compiled runtime;
 // marking it private would leave those manifests with an unresolvable dependency.
@@ -832,6 +842,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/appkit-model-gateway@workspace:^",
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/auth-gate@workspace:^",
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/databricks@workspace:^",
@@ -849,7 +860,6 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
   );
   p.addDevDeps("@types/pg@^8");
   project.addExports(p, {
-    "./args": "./src/args.ts",
     "./appkit": "./src/appkit/cli.ts",
     "./appkit/env-export": "./src/appkit/env-export.ts",
     "./auth": "./src/auth/cli.ts",

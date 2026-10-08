@@ -68,7 +68,7 @@ export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, QueuedSteer,
 export { LIGHT_CHART_CHROME } from "./src/support/chart-theme.ts";
 export type { ChartChrome } from "./src/support/chart-theme.ts";
 export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from "./src/support/export.ts";
-export { MastraPluginClient, useMastraConfig, useMastraClient, useMastraModels, useMastraDefaultModel, useMastraSuggestions, useMastraThreads, useChartFetch, useStatementFetch } from "./src/support/mastra-client.ts";
+export { MastraPluginClient, useMastraConfig, useMastraClient, useMastraMlflowExperiment, useMastraModels, useMastraDefaultModel, useMastraSuggestions, useMastraThreads, useChartFetch, useStatementFetch } from "./src/support/mastra-client.ts";
 export type { MastraStreamResponse, MastraMemoryThread, ByIdFetchState } from "./src/support/mastra-client.ts";
 export { modelStorageKey, readStoredModel, storeSelectedModel } from "./src/support/model-selection.ts";
 export type { MastraRequestContextInput, MastraRequestContextSource, MastraRequestContextSnapshot } from "./src/support/request-context.ts";
