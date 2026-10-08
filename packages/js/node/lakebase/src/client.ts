@@ -22,7 +22,16 @@ import type { ParsedAddress } from "./address.ts";
 
 const logger = log.logger("lakebase");
 const API_BASE = "/api/2.0/postgres";
-const DEFAULT_DATABASE = "databricks_postgres";
+/** Postgres database name Lakebase provisions on a new branch. */
+const LAKEBASE_DEFAULT_DATABASE = "databricks_postgres";
+/** Resource id Lakebase uses for {@link LAKEBASE_DEFAULT_DATABASE}. */
+const LAKEBASE_DEFAULT_DATABASE_ID = "databricks-postgres";
+/**
+ * Built-in database name for ordinary PostgreSQL (including Graphiti's
+ * embedded server). A Lakebase path or URL that only names this database
+ * has not chosen a Lakebase database yet.
+ */
+const GENERIC_POSTGRES_DATABASE = "postgres";
 const DISCOVERY_TTL_MS = 30_000;
 const SESSION_TTL_MS = 10 * 60_000;
 
@@ -269,20 +278,60 @@ function selectEndpoint(endpoints: object[], explicit?: string, host?: string): 
   return selected;
 }
 
+interface DatabaseCandidate {
+  id: string | undefined;
+  name: string;
+  default: boolean;
+}
+
 function selectDatabase(databases: object[], explicit?: string): string {
   const candidates = databases
     .filter((value) => !isInactive(value))
-    .map((value) => ({
+    .map((value): DatabaseCandidate => ({
       id: resourceId(value, "databases"),
-      name: text(at(value, "status", "postgres_database")),
+      name: text(at(value, "status", "postgres_database")) ?? "",
+      default: at(value, "status", "default") === true,
     }))
-    .filter((value): value is { id: string | undefined; name: string } => Boolean(value.name));
-  const selected = explicit
-    ? candidates.find((value) => value.id === explicit || value.name === explicit)?.name
-    : (candidates.find((value) => value.name === DEFAULT_DATABASE)?.name ??
-      (candidates.length === 1 ? candidates[0]?.name : undefined));
-  if (!selected) throw new Error("Lakebase database is ambiguous or unavailable");
-  return selected;
+    .filter((value) => Boolean(value.name));
+  const requested = isGenericPostgresDatabase(explicit) ? undefined : explicit;
+  if (requested) {
+    const match = candidates.find((value) => value.id === requested || value.name === requested);
+    if (!match) throw new Error(`Lakebase database is unavailable: ${requested}`);
+    return match.name;
+  }
+  const ranked = candidates
+    .filter((candidate) => !isGenericPostgresDatabase(candidate.name))
+    .sort(compareDatabasePreference);
+  const selected = ranked[0];
+  const tied =
+    selected &&
+    ranked.filter((candidate) => compareDatabasePreference(candidate, selected) === 0).length === 1
+      ? selected.name
+      : undefined;
+  if (!tied) throw new Error("Lakebase database is ambiguous or unavailable");
+  return tied;
+}
+
+/**
+ * Rank discovered databases so an unspecified Lakebase path gets the branch
+ * default: a `status.default` database, then Lakebase's provisioned
+ * `databricks_postgres`, then the only remaining application database. The
+ * generic PostgreSQL name `postgres` is removed before this comparison.
+ */
+function compareDatabasePreference(left: DatabaseCandidate, right: DatabaseCandidate): number {
+  if (left.default !== right.default) return left.default ? -1 : 1;
+  const leftOwned = isLakebaseDefaultDatabase(left);
+  const rightOwned = isLakebaseDefaultDatabase(right);
+  if (leftOwned !== rightOwned) return leftOwned ? -1 : 1;
+  return 0;
+}
+
+function isLakebaseDefaultDatabase(value: DatabaseCandidate): boolean {
+  return value.name === LAKEBASE_DEFAULT_DATABASE || value.id === LAKEBASE_DEFAULT_DATABASE_ID;
+}
+
+function isGenericPostgresDatabase(value: string | undefined): boolean {
+  return value === GENERIC_POSTGRES_DATABASE;
 }
 
 function isInactive(value: object): boolean {

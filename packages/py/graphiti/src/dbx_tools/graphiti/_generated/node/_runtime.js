@@ -59793,7 +59793,9 @@ function decode(value) {
 // packages/js/node/lakebase/src/client.ts
 var logger11 = exports_log.logger("lakebase");
 var API_BASE = "/api/2.0/postgres";
-var DEFAULT_DATABASE = "databricks_postgres";
+var LAKEBASE_DEFAULT_DATABASE = "databricks_postgres";
+var LAKEBASE_DEFAULT_DATABASE_ID = "databricks-postgres";
+var GENERIC_POSTGRES_DATABASE = "postgres";
 var DISCOVERY_TTL_MS = 30000;
 var SESSION_TTL_MS = 10 * 60000;
 var DEFAULT_DEPENDENCIES = {
@@ -59965,12 +59967,37 @@ function selectEndpoint(endpoints, explicit, host) {
 function selectDatabase(databases, explicit) {
   const candidates = databases.filter((value) => !isInactive(value)).map((value) => ({
     id: resourceId(value, "databases"),
-    name: text4(at2(value, "status", "postgres_database"))
+    name: text4(at2(value, "status", "postgres_database")) ?? "",
+    default: at2(value, "status", "default") === true
   })).filter((value) => Boolean(value.name));
-  const selected = explicit ? candidates.find((value) => value.id === explicit || value.name === explicit)?.name : candidates.find((value) => value.name === DEFAULT_DATABASE)?.name ?? (candidates.length === 1 ? candidates[0]?.name : undefined);
-  if (!selected)
+  const requested = isGenericPostgresDatabase(explicit) ? undefined : explicit;
+  if (requested) {
+    const match = candidates.find((value) => value.id === requested || value.name === requested);
+    if (!match)
+      throw new Error(`Lakebase database is unavailable: ${requested}`);
+    return match.name;
+  }
+  const ranked = candidates.filter((candidate) => !isGenericPostgresDatabase(candidate.name)).sort(compareDatabasePreference);
+  const selected = ranked[0];
+  const tied = selected && ranked.filter((candidate) => compareDatabasePreference(candidate, selected) === 0).length === 1 ? selected.name : undefined;
+  if (!tied)
     throw new Error("Lakebase database is ambiguous or unavailable");
-  return selected;
+  return tied;
+}
+function compareDatabasePreference(left, right) {
+  if (left.default !== right.default)
+    return left.default ? -1 : 1;
+  const leftOwned = isLakebaseDefaultDatabase(left);
+  const rightOwned = isLakebaseDefaultDatabase(right);
+  if (leftOwned !== rightOwned)
+    return leftOwned ? -1 : 1;
+  return 0;
+}
+function isLakebaseDefaultDatabase(value) {
+  return value.name === LAKEBASE_DEFAULT_DATABASE || value.id === LAKEBASE_DEFAULT_DATABASE_ID;
+}
+function isGenericPostgresDatabase(value) {
+  return value === GENERIC_POSTGRES_DATABASE;
 }
 function isInactive(value) {
   const state = text4(at2(value, "status", "current_state"))?.toUpperCase();

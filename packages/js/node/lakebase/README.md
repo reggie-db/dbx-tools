@@ -3,7 +3,10 @@
 Resolve a Databricks Lakebase target into the host, database, and user a
 PostgreSQL client needs, then request a short-lived database credential. The
 package gives Node and Bun applications one profile-aware path from a project
-name or resource URL to connection-ready values.
+name or resource URL to connection-ready values. When the target is a Lakebase
+path or URL without a chosen database, discovery picks the branch default
+(`status.default`, then Lakebase's provisioned `databricks_postgres`) instead of
+PostgreSQL's generic `postgres` database.
 
 ## Quick Start
 

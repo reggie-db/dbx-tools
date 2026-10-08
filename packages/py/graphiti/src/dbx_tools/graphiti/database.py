@@ -30,7 +30,7 @@ from ._generated.node.postgres.bindings import (
 from .options import ResolvedGraphitiOptionsResponse
 
 _DATABASE_DIRECTORY = "postgres"
-_DEFAULT_DATABASE = "postgres"
+_EMBEDDED_DATABASE = "postgres"
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
@@ -91,7 +91,7 @@ async def _start_embedded_database(
         await asyncio.to_thread(server.__exit__, None, None, None)
         raise
     return _DatabaseRuntime(
-        dsn=server.get_uri(_DEFAULT_DATABASE),
+        dsn=server.get_uri(_EMBEDDED_DATABASE),
         connection_options=_database_role_options(role),
         _embedded=server,
     )
