@@ -156,6 +156,41 @@ describe("direct release tags", () => {
     }
   });
 
+  it("runs the ESLint fixer before release validation", async () => {
+    const { root } = fixture();
+    try {
+      writeFileSync(
+        join(root, "package.json"),
+        `${JSON.stringify(
+          {
+            name: "fixture",
+            private: true,
+            scripts: {
+              bump: "node bump.mjs",
+              "version:check": "true",
+              "eslint:fix": "touch lint-fixed",
+              validate: "test -f lint-fixed",
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      await runRelease({
+        root,
+        branch: "main",
+        prefix: "v",
+        remote: "origin",
+        localPublish: false,
+        releaseNotes: false,
+        validationTasks: ["validate"],
+      });
+      assert.equal(readFileSync(join(root, "lint-fixed"), "utf8"), "");
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
+
   it("can use an existing bump when explicitly requested", async () => {
     const { remote, root } = fixture();
     try {

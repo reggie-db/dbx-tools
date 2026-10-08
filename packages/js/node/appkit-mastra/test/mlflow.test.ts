@@ -70,8 +70,7 @@ describe("UC prefix from experiment tags", () => {
     assert.equal(
       ucTracePrefixFromExperimentTags({
         "mlflow.experiment.databricksTraceDestinationPath": "reggie.mlflow_traces",
-        "mlflow.experiment.databricksTraceSpanStorageTable":
-          "reggie.mlflow_traces.demo_otel_spans",
+        "mlflow.experiment.databricksTraceSpanStorageTable": "reggie.mlflow_traces.demo_otel_spans",
       }),
       "reggie.mlflow_traces.demo",
     );

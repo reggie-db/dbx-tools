@@ -51,7 +51,10 @@ let loadedUcPrefix: { prefix: string | undefined } | undefined;
 
 /** Strip the `trace:/` URI wrapper and trailing slashes from a UC prefix. */
 function normalizeUcPrefix(raw: string | undefined): string | undefined {
-  const value = raw?.trim().replace(/^trace:\//, "").replace(/\/+$/, "");
+  const value = raw
+    ?.trim()
+    .replace(/^trace:\//, "")
+    .replace(/\/+$/, "");
   return value || undefined;
 }
 

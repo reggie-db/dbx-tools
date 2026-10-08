@@ -1,5 +1,7 @@
 #!/usr/bin/env -S bun
 /** Run the configured release transaction. */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
@@ -19,6 +21,14 @@ import {
 import { readWorkspaceVersion } from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
+
+/** Whether the root manifest exposes one repository-owned script. */
+function hasPackageScript(root: string, name: string): boolean {
+  const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+    scripts?: Record<string, string>;
+  };
+  return Boolean(manifest.scripts?.[name]);
+}
 
 function gitHead(root: string, ref: string): string | undefined {
   if (!taskCommandSucceeds(root, "git", ["rev-parse", "--verify", ref])) return undefined;
@@ -147,6 +157,9 @@ export async function runRelease(
   }
 
   runTaskCommand(root, "bun", ["run", "version:check"]);
+  if (selection.validation && hasPackageScript(root, "eslint:fix")) {
+    runTaskCommand(root, "bun", ["run", "eslint:fix"]);
+  }
   for (const task of selection.validation ? (options.validationTasks ?? []) : []) {
     runTaskCommand(root, "bun", ["run", task]);
   }

@@ -6,7 +6,6 @@ import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service
 import { connectionUrl } from "@dbx-tools/lakebase";
 import { Command } from "commander";
 
-import { PACKAGE_VERSION } from "../../index.ts";
 import {
   LakebaseProxyOptionsSchema,
   LakebaseProxyUrlOptionsSchema,
@@ -14,6 +13,7 @@ import {
   type LakebaseProxyOptions,
 } from "./options.ts";
 import { LakebaseProxy } from "./proxy.ts";
+import { PACKAGE_VERSION } from "../../index.ts";
 
 /** Injectable service boundary for Lakebase proxy CLI composition and tests. */
 export interface LakebaseProxyCliDependencies {

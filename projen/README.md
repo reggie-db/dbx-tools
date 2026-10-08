@@ -503,8 +503,9 @@ path requires an already committed tree.
 
 `--install auto` keeps Projen's normal local dependency-install behavior;
 `always` performs a manifest-resolved install first, and `never` uses dependencies already
-installed while still regenerating versioned sources. `--no-validation` skips
-optional task checks locally and in CI, not version or immutable-source checks.
+installed while still regenerating versioned sources. Local release validation
+runs `eslint:fix` before the selected fail-closed tasks; CI remains check-only.
+`--no-validation` skips optional task checks locally and in CI, not version or immutable-source checks.
 `--no-docs` skips building and deploying the site, not package README validation.
 Scopes select artifacts, not the normal commit and tag-push transaction.
 The annotated tag records CI step selections, so publishing a selected scope does

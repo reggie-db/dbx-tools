@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/graphiti";
-export const PACKAGE_VERSION = "0.9.62";
+export const PACKAGE_VERSION = "0.9.63";
 export * as appkitConfig from "./src/appkit/config.ts";
 export * as appkitPlugin from "./src/appkit/plugin.ts";
 export * as options from "./src/options.ts";

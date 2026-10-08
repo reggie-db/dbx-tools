@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 
+import { feedback } from "@dbx-tools/shared-mastra";
 import { context, propagation, ROOT_CONTEXT, trace, type Tracer } from "@opentelemetry/api";
 import {
   getRPCMetadata,
@@ -10,8 +11,6 @@ import {
 } from "@opentelemetry/core";
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-
-import { feedback } from "@dbx-tools/shared-mastra";
 
 import { configureOtelPropagation } from "../src/observability.ts";
 import {
@@ -152,16 +151,12 @@ describe("chat trace topology", () => {
     const response = createResponse();
     context.with(rpcContext, () => {
       chatTurnTelemetryMiddleware(
-        request(
-          "/chat/support",
-          [{ role: "user", parts: [{ type: "text", text: "hello" }] }],
-          {
-            headers: {
-              "x-forwarded-email": "ada@example.com",
-              "x-mastra-thread-id": "thread-1",
-            },
+        request("/chat/support", [{ role: "user", parts: [{ type: "text", text: "hello" }] }], {
+          headers: {
+            "x-forwarded-email": "ada@example.com",
+            "x-mastra-thread-id": "thread-1",
           },
-        ) as never,
+        }) as never,
         response as never,
         () => {
           assert.equal(trace.getActiveSpan(), root);

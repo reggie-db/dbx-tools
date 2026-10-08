@@ -13,12 +13,12 @@ import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service
 import { runGraphiti, type GraphitiRuntimeOptions } from "@dbx-tools/graphiti/runtime";
 import { Command } from "commander";
 
-import { PACKAGE_VERSION } from "../../index.ts";
 import {
   GraphitiCliOptionsSchema,
   GraphitiOptionsSchema,
   type GraphitiOptions,
 } from "./options.ts";
+import { PACKAGE_VERSION } from "../../index.ts";
 
 /** Injectable runtime and service lifecycle boundaries for CLI callers. */
 export interface GraphitiCliDependencies {

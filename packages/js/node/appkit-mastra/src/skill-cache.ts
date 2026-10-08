@@ -95,8 +95,9 @@ export class AppKitCachedFileSystem implements FileSystem<"appkit-cache"> {
     await this.source.init();
   }
 
-  async close(): Promise<void> {
-    await this.source.close();
+  /** Keep the shared scope alive when one request releases its workspace view. */
+  close(): Promise<void> {
+    return Promise.resolve();
   }
 
   resolvePath(inputPath: string): string {

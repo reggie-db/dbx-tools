@@ -685,7 +685,7 @@ project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "s
   );
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model-gateway@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
     "zod@catalog:",
   );
 });
@@ -698,6 +698,7 @@ project.applyToProjects(root, { identifierName: "shared-genie-code", tags: "shar
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/shared-model-gateway@workspace:^",
     "zod@catalog:",
   );
 });

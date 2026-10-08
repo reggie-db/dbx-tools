@@ -13,12 +13,12 @@ import { resolveServicePackageBin } from "@dbx-tools/cli-service/definition";
 import type { BinContext } from "@dbx-tools/core/bin";
 import { workspaceClient } from "@dbx-tools/databricks";
 import { log } from "@dbx-tools/shared-core";
-import type { ModelClass } from "@dbx-tools/shared-model/contracts";
 import {
   resolveGenieCodeOptions,
   type GenieCodeOptions,
   type GenieCodeRunnerOptions,
 } from "@dbx-tools/shared-genie-code/options";
+import type { ModelClass } from "@dbx-tools/shared-model/contracts";
 import concurrently from "concurrently";
 import getPort from "get-port";
 
