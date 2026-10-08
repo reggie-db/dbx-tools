@@ -1,6 +1,6 @@
 {
-  "name": "@dbx-tools/ui-appkit",
-  "description": "Shared React and Tailwind foundation for AppKit-oriented UI packages",
+  "name": "@dbx-tools/ui",
+  "description": "AppKit React foundation with branding, authentication, email, and search surfaces",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -30,8 +30,12 @@
   },
   "dependencies": {
     "@databricks/appkit-ui": "catalog:",
+    "@dbx-tools/shared-auth": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
-    "@dbx-tools/ui-branding": "workspace:^",
+    "@dbx-tools/shared-email": "workspace:^",
+    "@dbx-tools/shared-email-template": "workspace:^",
+    "@dbx-tools/shared-search": "workspace:^",
+    "lucide-react": "catalog:",
     "streamdown": "catalog:",
     "tailwindcss": "catalog:"
   },
@@ -49,6 +53,20 @@
   "exports": {
     "./react": "./src/react/index.ts",
     "./styles.css": "./src/styles.css",
+    "./branding/react": "./src/branding/react/index.ts",
+    "./branding/browser": "./src/branding/browser.ts",
+    "./branding/assets": "./src/branding/generated/assets.ts",
+    "./branding/styles.css": "./src/branding/styles.css",
+    "./branding/brand-bridge.css": "./src/branding/brand-bridge.css",
+    "./branding/assets/icon-light.svg": "./src/branding/generated/icon-light.svg",
+    "./branding/assets/icon-dark.svg": "./src/branding/generated/icon-dark.svg",
+    "./branding/assets/logo-light.svg": "./src/branding/generated/logo-light.svg",
+    "./branding/assets/logo-dark.svg": "./src/branding/generated/logo-dark.svg",
+    "./auth/react": "./src/auth/react/index.ts",
+    "./email/react": "./src/email/react/index.ts",
+    "./email/styles.css": "./src/email/styles.css",
+    "./search/react": "./src/search/react/index.ts",
+    "./search/styles.css": "./src/search/styles.css",
     "./package.json": "./package.json"
   },
   "files": [

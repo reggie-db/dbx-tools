@@ -41,11 +41,6 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/appkit-graphiti",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/appkit-mastra",
       "version": "workspace:^",
       "type": "runtime"
@@ -72,6 +67,11 @@
     },
     {
       "name": "@dbx-tools/email",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/graphiti",
       "version": "workspace:^",
       "type": "runtime"
     },

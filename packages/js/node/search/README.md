@@ -244,7 +244,7 @@ the GIN index, so it only runs after the indexed pass finds nothing.
 
 The provider returns AppKit's `SearchResponse` and mounts the same
 `/api/ai-search/:alias` query surface. AppKit UI's `useAiSearchQuery` and
-`@dbx-tools/ui-search` work without a backend-specific client:
+`@dbx-tools/ui/search` work without a backend-specific client:
 
 ```ts
 import { createApp, lakebase } from "@databricks/appkit";
@@ -315,5 +315,5 @@ default.
 
 Browser-safe schemas live in
 [`@dbx-tools/shared-search`](../../shared/search); the React search box
-lives in [`@dbx-tools/ui-search`](../../ui/search). Model resolution reuses
+lives in [`@dbx-tools/ui/search`](../../ui/appkit). Model resolution reuses
 [`@dbx-tools/model`](../model).

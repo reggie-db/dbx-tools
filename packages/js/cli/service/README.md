@@ -132,10 +132,9 @@ Install the service for the current user and start it
 
 #### Options
 
-| Option       | Description                                                       |
-| ------------ | ----------------------------------------------------------------- |
-| `--start`    | Start the service after installation. (default: true, env: START) |
-| `--no-start` | Disable start the service after installation.                     |
+| Option       | Description                                 |
+| ------------ | ------------------------------------------- |
+| `--no-start` | Do not start the service after installation |
 
 ### `<cli> service start`
 

@@ -1,4 +1,4 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@dbx-tools/ui-appkit/react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@dbx-tools/ui/react";
 import { dedupeSuggestions, useMastraSuggestions } from "@dbx-tools/ui-mastra/react";
 import { AdaptiveCardGallery, TeamsChat } from "@dbx-tools/ui-teams/react";
 

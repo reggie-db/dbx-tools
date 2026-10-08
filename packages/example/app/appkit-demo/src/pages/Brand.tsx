@@ -1,4 +1,6 @@
 import { brandUtils } from "@dbx-tools/shared-core";
+import { BrandIcon, useBrand } from "@dbx-tools/ui/branding/react";
+import { EmailPreview } from "@dbx-tools/ui/email/react";
 import {
   Badge,
   BrandPicker,
@@ -8,9 +10,7 @@ import {
   CardHeader,
   CardTitle,
   type BrandPreset,
-} from "@dbx-tools/ui-appkit/react";
-import { BrandIcon, useBrand } from "@dbx-tools/ui-branding/react";
-import { EmailPreview } from "@dbx-tools/ui-email/react";
+} from "@dbx-tools/ui/react";
 
 const SITE_PRESETS: readonly BrandPreset[] = [
   {

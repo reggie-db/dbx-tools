@@ -14,11 +14,11 @@
  * rules below only give the mount container sane spacing and let the
  * card's own colors show through on both light and dark themes.
  *
- * Pulls shared styling from `@dbx-tools/ui-appkit` and registers this
+ * Pulls shared styling from `@dbx-tools/ui` and registers this
  * package's React components with Tailwind via `@source`.
  */
 
-@import "@dbx-tools/ui-appkit/styles.css";
+@import "@dbx-tools/ui/styles.css";
 
 @source "./react";
 

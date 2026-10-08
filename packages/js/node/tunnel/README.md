@@ -65,7 +65,7 @@ middleware on the app's OWN Express server (no separate proxy process).
   Auth's own migrations under a Postgres advisory lock or file lock.
 - Email OTP remains bootstrap and recovery. Returning users can authenticate
   with discoverable passkeys, enroll multiple devices, and name or remove them
-  through [`@dbx-tools/ui-auth`](../../ui/auth).
+  through [`@dbx-tools/ui/auth`](../../ui/appkit).
 - Allow-list patterns in three shapes, matched in order: a domain shortcut
   (`example.com`, `@example.com`), a shell-style glob (`*@example.com`), or a
   regex literal (`/^ops-.*@example\.com$/`). An empty list allows nobody.
@@ -412,4 +412,4 @@ upstream binary is otherwise terminated by the platform loader.
 
 Browser-safe gate contracts live in
 [`@dbx-tools/shared-auth`](../../shared/auth); the passkey-first React login and
-credential manager live in [`@dbx-tools/ui-auth`](../../ui/auth).
+credential manager live in [`@dbx-tools/ui/auth`](../../ui/appkit).

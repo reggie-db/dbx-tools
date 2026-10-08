@@ -4,6 +4,11 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/graphiti";
 export const PACKAGE_VERSION = "0.9.58";
+export * as appkitConfig from "./src/appkit/config.ts";
+export * as appkitPlugin from "./src/appkit/plugin.ts";
 export * as options from "./src/options.ts";
 export * as runtime from "./src/runtime.ts";
+export { GRAPHITI_CONFIG_SCHEMA } from "./src/appkit/config.ts";
+export type { GraphitiPluginConfig, ResolvedGraphitiPluginConfig } from "./src/appkit/config.ts";
+export { GraphitiPlugin, graphiti } from "./src/appkit/plugin.ts";
 export type { GraphitiRuntimeOptions, GraphitiRuntime } from "./src/runtime.ts";

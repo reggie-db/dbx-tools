@@ -87,7 +87,7 @@ client-side.
 
 The plugin does not decide how approval is presented. It emits a Mastra tool
 suspension and expects the host UI to resume that tool call with an approval or
-denial result. [`@dbx-tools/ui-email`](../../ui/email) provides the matching
+denial result. [`@dbx-tools/ui/email`](../../ui/appkit) provides the matching
 approval card and compose components.
 
 ## Configuration

@@ -65,7 +65,7 @@ const instructions = brandUtils.brandContextPrompt(context);
 typography, links, audience, and voice. Every field has a dbx tools default, so
 an empty object is a complete context. Use [`@dbx-tools/core`](../../node/core)
 to discover and read YAML/JSON files, and
-[`@dbx-tools/ui-branding`](../../ui/branding) to apply the same context to a UI.
+[`@dbx-tools/ui/branding`](../../ui/appkit) to apply the same context to a UI.
 
 ## Async Control
 

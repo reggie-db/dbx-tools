@@ -1,5 +1,5 @@
 import { errorUtils, log } from "@dbx-tools/shared-core";
-import { Card, CardContent, CardHeader, CardTitle } from "@dbx-tools/ui-appkit/react";
+import { Card, CardContent, CardHeader, CardTitle } from "@dbx-tools/ui/react";
 import type { ReactNode } from "react";
 import React, { Component } from "react";
 

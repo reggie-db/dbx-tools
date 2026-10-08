@@ -1,0 +1,53 @@
+/*
+ * Brand -> AppKit token bridge.
+ *
+ * Remaps the AppKit / shadcn semantic tokens the dbx-tools UI components
+ * actually style off (`--primary`, `--ring`, `--accent`, `--sidebar-*`,
+ * `--font-*`) onto the portable `--brand-color-*` / `--brand-font-*` custom
+ * properties that `applyBrandContext()` writes. This is the "tag selector":
+ * scoped to `:root[data-brand]`, it is completely INERT until a brand is
+ * applied to the document (which sets the `data-brand` attribute), so
+ * importing it never disturbs default AppKit.
+ *
+ * Import once via `@dbx-tools/ui/styles.css` (the shared UI base every
+ * feature UI package pulls in), so the bridge travels with every dbx-tools UI
+ * component automatically.
+ *
+ * Scope note: `:root[data-brand]` has higher specificity (0,2,0) than AppKit's
+ * `:root` and `.dark` (both 0,1,0), so these win regardless of source order.
+ *
+ * Deliberately identity-only: it does NOT remap neutrals (`--background`,
+ * `--foreground`, `--card`, `--muted`, `--border`). The brand context carries a
+ * single light palette, so remapping neutrals would break dark mode; leaving
+ * them to AppKit keeps light AND dark themes working while the brand's identity
+ * colors + fonts come through.
+ */
+:root[data-brand] {
+  --primary: var(--brand-color-primary);
+  --primary-foreground: var(--brand-color-background);
+  --ring: var(--brand-color-primary);
+  /*
+   * `--accent` is a SURFACE, not an identity color. In AppKit / shadcn it is the
+   * subtle hover + selected background (light theme `oklch(0.967 0.001 286)`,
+   * i.e. near-white) paired with a near-black `--accent-foreground`. Assigning
+   * the brand accent to it at full strength therefore put dark text on saturated
+   * `#00A972` in every hover and every selected row - the selected conversation
+   * in `ThreadSidebar`, which styles off `bg-accent text-accent-foreground`, was
+   * the worst of it.
+   *
+   * Menus, selected rows, and tabs are navigation, not success or identity
+   * signals. Tint them with the cooler primary-hover color rather than the
+   * identity accent so the default brand produces a quiet blue wash instead of
+   * coral/red or success green. Mixing into the CURRENT `--background` follows
+   * the active theme on its own - pale in light mode and deep in dark mode -
+   * while AppKit's per-theme `--accent-foreground` remains readable. That is
+   * also why `--accent-foreground` is NOT set here: pinning it would break
+   * whichever theme it was not chosen for.
+   */
+  --accent: color-mix(in oklab, var(--brand-color-primary-hover) 12%, var(--background));
+  --sidebar-primary: var(--brand-color-primary);
+  --sidebar-primary-foreground: var(--brand-color-background);
+  --sidebar-ring: var(--brand-color-primary);
+  --font-sans: var(--brand-font-sans);
+  --font-mono: var(--brand-font-mono);
+}

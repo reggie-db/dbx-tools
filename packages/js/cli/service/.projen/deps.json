@@ -11,11 +11,6 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/cli-args",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/core",
       "version": "workspace:^",
       "type": "runtime"

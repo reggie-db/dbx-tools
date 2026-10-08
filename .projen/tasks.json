@@ -500,9 +500,6 @@
           "spawn": "eslint"
         },
         {
-          "exec": "bun test docs/scripts"
-        },
-        {
           "spawn": "python-node-runtime:check"
         },
         {
@@ -515,10 +512,86 @@
           "spawn": "py:lint"
         },
         {
-          "spawn": "py:test"
+          "spawn": "test:all"
+        }
+      ]
+    },
+    "test:all": {
+      "name": "test:all",
+      "description": "Run all JavaScript, TypeScript, and Python tests",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
+            "all"
+          ]
         },
         {
-          "exec": "bun run --filter '*' test"
+          "spawn": "py:test"
+        }
+      ]
+    },
+    "test:changed": {
+      "name": "test:changed",
+      "description": "Run tests for changed packages and their dependents",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
+            "changed"
+          ],
+          "receiveArgs": true
+        }
+      ]
+    },
+    "test:focused": {
+      "name": "test:focused",
+      "description": "Run tests for explicit workspace packages or paths",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
+            "focused"
+          ],
+          "receiveArgs": true
+        }
+      ]
+    },
+    "test:integration": {
+      "name": "test:integration",
+      "description": "Run integration and packed-consumer tests",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
+            "integration"
+          ]
+        }
+      ]
+    },
+    "test:unit": {
+      "name": "test:unit",
+      "description": "Run unit tests in grouped root runners",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
+            "unit"
+          ]
+        }
+      ]
+    },
+    "ui:bundle-sizes": {
+      "name": "ui:bundle-sizes",
+      "description": "Report focused auth, email, and search browser bundle sizes",
+      "steps": [
+        {
+          "exec": "bun projen/tasks/ui-bundle-sizes.ts"
         }
       ]
     },
@@ -530,6 +603,19 @@
           "execArgs": [
             "bun",
             "node_modules/@dbx-tools/projen/tasks/version-check.ts"
+          ]
+        }
+      ]
+    },
+    "workspace:graph": {
+      "name": "workspace:graph",
+      "description": "Write the workspace dependency and reverse-dependency graph",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
+            "graph"
           ]
         }
       ]

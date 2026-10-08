@@ -9,7 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { MessageSquareTextIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 import { useState } from "react";
 import type { FeedbackSubmission, FeedbackValue } from "./types.ts";

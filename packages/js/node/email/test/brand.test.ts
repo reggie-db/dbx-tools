@@ -13,7 +13,7 @@ describe("email brand", () => {
   });
 
   it("drops a logo that is not a fetchable URL (package-export path)", () => {
-    // The default brand's logo is an `@dbx-tools/ui-branding/...svg` export
+    // The default brand's logo is an `@dbx-tools/ui/branding/...svg` export
     // path, which can't load in a mail client, so no logoUrl is emitted.
     assert.equal(defaultEmailBrand.logoUrl, undefined);
   });

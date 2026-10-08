@@ -859,15 +859,44 @@ class GeneratedSource extends Component {
  * are the child's business - so `bun run build` at the root type-checked nothing
  * and ran no package tests. Compilation groups ordinary package tsconfigs into
  * a few TypeScript processes and runs custom package lifecycles alongside them.
- * Tests still use Bun's filtered workspace fan-out. Both read the current
- * workspace list from `package.json`, so a newly added member needs no re-synth.
- *
- * `*` matches every workspace MEMBER and never the root itself, so the test
- * task delegating to it cannot recurse. Members declared outside the scanned
- * package roots (`extraWorkspaceMembers`) are covered by both tasks.
+ * Tests use a small number of root runner groups, skip packages without tests,
+ * and expose focused, changed, unit, integration, and full tiers. The test task
+ * reads the current workspace list from `package.json`, so a newly added member
+ * needs no re-synth.
  */
 class WorkspaceValidationTasks extends Component {
   private configured = false;
+
+  public constructor(project: DBXToolsNodeProject | DBXToolsTypeScriptProject) {
+    super(project);
+    if (project.parent) return;
+    project.addTask("workspace:graph", {
+      description: "Write the workspace dependency and reverse-dependency graph",
+      execArgs: taskCommand("test-workspace.ts", "graph"),
+    });
+    project.addTask("test:focused", {
+      description: "Run tests for explicit workspace packages or paths",
+      execArgs: taskCommand("test-workspace.ts", "focused"),
+      receiveArgs: true,
+    });
+    project.addTask("test:changed", {
+      description: "Run tests for changed packages and their dependents",
+      execArgs: taskCommand("test-workspace.ts", "changed"),
+      receiveArgs: true,
+    });
+    project.addTask("test:unit", {
+      description: "Run unit tests in grouped root runners",
+      execArgs: taskCommand("test-workspace.ts", "unit"),
+    });
+    project.addTask("test:integration", {
+      description: "Run integration and packed-consumer tests",
+      execArgs: taskCommand("test-workspace.ts", "integration"),
+    });
+    project.addTask("test:all", {
+      description: "Run all JavaScript, TypeScript, and Python tests",
+      execArgs: taskCommand("test-workspace.ts", "all"),
+    });
+  }
 
   public override preSynthesize(): void {
     if (this.configured) return;
@@ -877,7 +906,7 @@ class WorkspaceValidationTasks extends Component {
       return;
     }
     project.compileTask.execArgs(taskCommand("compile-workspace.ts"));
-    project.testTask.exec("bun run --filter '*' test");
+    project.testTask.spawn(project.tasks.tryFind("test:all")!);
   }
 }
 

@@ -8,7 +8,6 @@
  * @module
  */
 
-import { serializeArgs, type ArgumentSource } from "@dbx-tools/cli-args/args";
 import { z } from "zod";
 
 import { resolveServicePackage, servicePackageDefaults } from "./_package.ts";
@@ -52,13 +51,8 @@ export const CliServiceCommandSchema = z
 /** A process launched by the system-tray service host. */
 export type CliServiceCommand = z.infer<typeof CliServiceCommandSchema>;
 
-/** Command input accepted by {@link defineService} before option serialization. */
-export type CliServiceCommandInput = Omit<CliServiceCommand, "arguments"> & {
-  /** Positional or pre-serialized arguments placed before generated options. */
-  readonly arguments?: readonly string[];
-  /** Zod defaults or concrete option values converted into CLI flags. */
-  readonly options?: ArgumentSource;
-};
+/** Command input accepted by {@link defineService}. */
+export type CliServiceCommandInput = CliServiceCommand;
 
 /** A typed custom item inserted between the default service title and Quit item. */
 export const CliServiceMenuItemSchema = z.discriminatedUnion("type", [
@@ -178,15 +172,9 @@ function resolveServiceCommand(
   command: CliServiceCommandInput | undefined,
 ): CliServiceCommand | undefined {
   if (!command) return undefined;
-  const { options, ...definition } = command;
-  const arguments_ = [
-    ...(definition.arguments ?? []),
-    ...(options === undefined ? [] : serializeArgs(options)),
-  ];
   return CliServiceCommandSchema.parse({
-    ...definition,
-    environment: { NODE_ENV: "production", ...definition.environment },
-    ...(arguments_.length > 0 ? { arguments: arguments_ } : {}),
+    ...command,
+    environment: { NODE_ENV: "production", ...command.environment },
   });
 }
 

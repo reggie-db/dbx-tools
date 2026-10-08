@@ -1,7 +1,7 @@
 import { brandUtils } from "@dbx-tools/shared-core";
-import { Button, Separator } from "@dbx-tools/ui-appkit/react";
-import { getAuthStatus, logout as logoutAuth } from "@dbx-tools/ui-auth/react";
-import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui-branding/react";
+import { getAuthStatus, logout as logoutAuth } from "@dbx-tools/ui/auth/react";
+import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui/branding/react";
+import { Button, Separator } from "@dbx-tools/ui/react";
 import { MastraAssistant, useMastraAssistant } from "@dbx-tools/ui-mastra/react";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";

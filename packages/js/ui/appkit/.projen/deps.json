@@ -41,13 +41,33 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-auth",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/ui-branding",
+      "name": "@dbx-tools/shared-email-template",
       "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-email",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-search",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "lucide-react",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

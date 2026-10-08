@@ -25,7 +25,7 @@ import {
   Input,
   ScrollArea,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const API = "/api/bus-demo";

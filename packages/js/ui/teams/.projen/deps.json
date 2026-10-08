@@ -46,7 +46,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/ui-appkit",
+      "name": "@dbx-tools/ui",
       "version": "workspace:^",
       "type": "runtime"
     },

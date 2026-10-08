@@ -7,7 +7,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { DownloadIcon, FileTextIcon } from "lucide-react";
 import type { ExportFormat } from "../support/export.ts";
 

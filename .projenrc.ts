@@ -46,6 +46,9 @@ const root = new project.DBXToolsNodeProject({
     if (pkg.memberPath === "packages/js/cli/dbx-tools") {
       return { ...defaults, name: `@${SCOPE}/cli` };
     }
+    if (pkg.memberPath === "packages/js/ui/appkit") {
+      return { ...defaults, name: `@${SCOPE}/ui` };
+    }
     if (pkg.memberPath === "packages/example/server/appkit-demo") {
       return {
         ...defaults,
@@ -179,7 +182,6 @@ const sourceDocs = root.addTask("docs:check-source", {
   description: "Reject new undocumented public TypeScript exports",
 });
 sourceDocs.exec("bun docs/scripts/check-source-docs.mjs");
-root.testTask.exec("bun test docs/scripts");
 
 const readmeDocs = root.addTask("docs:check-readmes", {
   description: "Validate and generate documentation from package READMEs",
@@ -192,6 +194,11 @@ root.tasks.tryFind("bump")?.exec("bun docs/scripts/generate-agent-skill.mjs");
 root.addTask("docs:cli", {
   description: "Update package README command references from their CLI parsers",
   exec: "bun docs/scripts/sync-cli-readmes.mjs",
+});
+
+root.addTask("ui:bundle-sizes", {
+  description: "Report focused auth, email, and search browser bundle sizes",
+  exec: "bun projen/tasks/ui-bundle-sizes.ts",
 });
 
 // ---------------------------------------------------------------------------
@@ -301,99 +308,26 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
   p.addDevDeps("@dbx-tools/projen@workspace:^", "vitest@catalog:");
 });
 
-// cli-appkit-env: the `dbx appkit` command group - run AppKit auto-config
-// (node-appkit's `appkit.autoConfigure`) and print the env vars it added/changed
-// as eval-able shell / windows / json output. `cli`-tagged (commander from the
-// cli tag) but ships NO bin: `@dbx-tools/cli` mounts its `buildProgram()` as
-// `dbx appkit`, lazily, so AppKit only loads when that command is named.
-project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" }, (p) => {
-  p.package.addField(
-    "description",
-    "CLI and formatting helpers for exporting AppKit auto-configuration results",
-  );
-  p.addDeps(
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@databricks/appkit@catalog:",
-  );
-});
-
-// cli-auth: the `dbx auth` OAuth command group. Commander comes from the cli
-// tag, while @dbx-tools/auth owns profile selection, OAuth, locking, and storage.
-project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
-  p.package.addField("description", "Databricks OAuth commands mounted under dbx auth");
-  p.addDeps(
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-  );
-});
-
-project.applyToProjects(root, { identifierName: "cli-args", tags: "cli" }, (p) => {
-  p.package.addField(
-    "description",
-    "Bind Zod schemas to Commander arguments with layered configUtils defaults",
-  );
-  p.addDeps(
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-  );
-});
-
-project.applyToProjects(root, { identifierName: "cli-model-gateway", tags: "cli" }, (p) => {
-  p.package.addField("description", "Foreground and system-tray AppKit model-gateway CLI");
-  p.addDeps(
-    "@databricks/appkit@catalog:",
-    "@dbx-tools/appkit-model-gateway@workspace:^",
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/cli-service@workspace:^",
-    "@dbx-tools/databricks@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model-gateway@workspace:^",
-  );
-  p.package.addBin({ "dbx-model-gateway": "./bin/dbx-model-gateway.ts" });
-});
-
-project.applyToProjects(root, { identifierName: "cli-graphiti", tags: "cli" }, (p) => {
-  p.package.addField(
-    "description",
-    "Node-supervised Graphiti foreground CLI and desktop service",
-  );
-  p.addDeps(
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/cli-service@workspace:^",
-    "@dbx-tools/graphiti@workspace:^",
-  );
-  p.package.addBin({ "dbx-graphiti": "./bin/dbx-graphiti.ts" });
-});
-
-// node-graphiti: typed options and bounded Python process supervision.
+// Node Graphiti runtime plus its AppKit plugin subpath.
 project.applyToProjects(root, { identifierName: "graphiti", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "Typed Graphiti options and bounded Python process supervision",
+    "Graphiti process supervision and AppKit integration",
   );
   p.addDeps(
+    "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/auth@workspace:^",
     "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-graphiti@workspace:^",
-  );
-});
-
-project.applyToProjects(root, { identifierName: "cli-lakebase-proxy", tags: "cli" }, (p) => {
-  p.package.addField("description", "Pure Node loopback PostgreSQL proxy for Databricks Lakebase");
-  p.addDeps(
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/cli-service@workspace:^",
-    "@dbx-tools/lakebase@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "pg@^8.22.0",
+    "@dbx-tools/shared-graphiti@workspace:^",
+    "zod@catalog:",
   );
-  p.addDevDeps("@types/pg@^8");
-  p.package.addBin({ "dbx-lakebase-proxy": "./bin/dbx-lakebase-proxy.ts" });
+  p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
+  project.addExports(p, {
+    "./appkit": "./src/appkit/plugin.ts",
+    "./appkit/config": "./src/appkit/config.ts",
+  });
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -534,25 +468,6 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
     "zod@catalog:",
   );
   p.addDevDeps("@types/express@catalog:", "@types/html-to-text@^9", "@types/json-schema@^7");
-});
-
-// node-appkit-graphiti: AppKit lifecycle and direct user-scoped Graphiti tools
-// over the reusable node-graphiti runtime.
-project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
-  p.package.addField(
-    "description",
-    "AppKit process plugin for direct Python dbx-tools Graphiti tools",
-  );
-  p.addDeps(
-    "@databricks/appkit@catalog:",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/graphiti@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "zod@catalog:",
-  );
-  p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
 });
 
 // node-postgres: connection-correct Postgres utilities shared by packages.
@@ -884,68 +799,65 @@ project.applyToProjects(root, { identifierName: "cli-service", tags: "cli" }, (p
     "Cross-platform service lifecycle, uv Python runtimes, and system tray menus for CLIs",
   );
   p.addDeps(
-    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/core@workspace:^",
     `bun@${bunWorkflow.BUN_VERSION}`,
     "systray2@catalog:",
   );
 });
 
-// cli-dbx-tools: the published CLI package. It uses the concise
-// `@dbx-tools/cli` package name and ships the `dbx-tools` command plus the short
-// `dbx` alias. The sibling CLI packages contribute commands
-// rather than bins - `dbx appkit`, `dbx auth`, and `dbx tunnel` - and stay
-// separate packages so their heavy dependencies are
-// `await import()`ed only when named; see `src/cli.ts`. They are workspace deps
-// here because the installed `dbx` has to be able to reach them.
-// Tsconfig/exports come from the `cli` tag.
-// shared-core is declared by the explicit source-dependent rule above. No `pnpm` dep: the
-// CLI drives `bun` (the ambient runtime) - see `src/bun.ts`.
+// Consolidated CLI. Feature command modules remain behind dynamic imports, so
+// the single package does not eagerly load AppKit, Graphiti, tunnel, proxy, or
+// model-gateway dependencies when another command is selected.
 project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
   p.package.addField(
     "description",
     "The dbx CLI for workspace lifecycle, AppKit environment, Databricks OAuth, and gated tunnels",
   );
-  p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbx: "./bin/dbx-tools.ts" });
+  p.package.addBin({
+    [SCOPE]: "./bin/dbx-tools.ts",
+    dbx: "./bin/dbx-tools.ts",
+    "dbx-graphiti": "./bin/dbx-graphiti.ts",
+    "dbx-lakebase-proxy": "./bin/dbx-lakebase-proxy.ts",
+    "dbx-model-gateway": "./bin/dbx-model-gateway.ts",
+  });
   p.addDeps(
     "@clack/prompts@catalog:",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/cli-appkit-env@workspace:^",
-    "@dbx-tools/cli-auth@workspace:^",
-    "@dbx-tools/cli-graphiti@workspace:^",
-    "@dbx-tools/cli-lakebase-proxy@workspace:^",
-    "@dbx-tools/cli-model-gateway@workspace:^",
-    "@dbx-tools/cli-tunnel@workspace:^",
-  );
-});
-
-// cli-tunnel: the `dbx tunnel` command group - the WRAPPER path, for a project
-// that cannot register node-tunnel's interceptor + `authGate` plugin in-process.
-// `cli`-tagged (commander from the cli tag) and ships NO bin: `@dbx-tools/cli`
-// mounts its `buildProgram()` as `dbx tunnel`, lazily, so `dbx dev` pays for
-// neither the proxy nor AppKit. node-appkit + node-email are needed only by the
-// gate app, which sits behind a dynamic import, so an `--insecure` run loads
-// neither at runtime.
-project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p) => {
-  p.package.addField(
-    "description",
-    "Public Portr and FRP tunnel commands protected by the dbx-tools authentication gate",
-  );
-  p.addDeps(
     "@databricks/appkit@catalog:",
-    "@dbx-tools/auth-gate@workspace:^",
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/appkit-model-gateway@workspace:^",
+    "@dbx-tools/auth@workspace:^",
+    "@dbx-tools/auth-gate@workspace:^",
+    "@dbx-tools/cli-service@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/email@workspace:^",
+    "@dbx-tools/graphiti@workspace:^",
+    "@dbx-tools/lakebase@workspace:^",
     "@dbx-tools/postgres@workspace:^",
-    "@dbx-tools/tunnel@workspace:^",
+    "@dbx-tools/shared-auth@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email@workspace:^",
+    "@dbx-tools/shared-model-gateway@workspace:^",
+    "@dbx-tools/tunnel@workspace:^",
     "http-proxy-3@catalog:",
-    "zod@catalog:",
+    "pg@^8.22.0",
   );
+  p.addDevDeps("@types/pg@^8");
+  project.addExports(p, {
+    "./args": "./src/args.ts",
+    "./appkit": "./src/appkit/cli.ts",
+    "./appkit/env-export": "./src/appkit/env-export.ts",
+    "./auth": "./src/auth/cli.ts",
+    "./auth/options": "./src/auth/options.ts",
+    "./graphiti": "./src/graphiti/cli.ts",
+    "./graphiti/options": "./src/graphiti/options.ts",
+    "./lakebase-proxy": "./src/lakebase-proxy/cli.ts",
+    "./lakebase-proxy/options": "./src/lakebase-proxy/options.ts",
+    "./model-gateway": "./src/model-gateway/cli.ts",
+    "./model-gateway/server": "./src/model-gateway/server.ts",
+    "./tunnel": "./src/tunnel/cli.ts",
+    "./tunnel/options": "./src/tunnel/options.ts",
+  });
 });
 
 // node-auth-gate: Better Auth runtime with email OTP, passkeys, caller-provided
@@ -1016,71 +928,42 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
   projectJs.addOptionalPeer(p, "@dbx-tools/email@workspace:^");
 });
 
-// ui-appkit: the shared React UI base for the feature UI packages. Re-exports
-// AppKit's UI kit (`@databricks/appkit-ui/react`) and the shared stylesheet.
-// `ui`-tagged (React + jsx come from the ui tag). Tailwind v4 is compiled by the
-// `app` tag's `bun-plugin-tailwind`, so this component library ships no bundler
-// preset of its own.
-project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) => {
+// Common AppKit UI package. Foundation, branding, auth, email, and search stay
+// tree-shakeable behind distinct subpath exports; Mastra and Teams remain
+// separate packages because they carry larger optional dependency families.
+project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
   p.package.addField(
     "description",
-    "Shared React and Tailwind foundation for AppKit-oriented UI packages",
+    "AppKit React foundation with branding, authentication, email, and search surfaces",
   );
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
     "@databricks/appkit-ui@catalog:",
-    // The brand->AppKit token bridge ships here via `styles.css`
-    // (`@import "@dbx-tools/ui-branding/brand-bridge.css"`), so every feature
-    // UI package that depends on this base carries the (inert-by-default)
-    // bridge. Scoped to `:root[data-brand]`, so it never disturbs AppKit.
-    "@dbx-tools/ui-branding@workspace:^",
-    "tailwindcss@catalog:",
-    "streamdown@catalog:",
-  );
-});
-
-// ui-branding: portable SVG/data assets plus framework-agnostic browser helpers
-// and React bindings over shared-core's BrandContext. The root branding folder
-// is canonical; pre-compile regenerates the package copies and data URLs.
-project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p) => {
-  p.package.addField(
-    "description",
-    "Portable dbx-tools brand assets and React and browser bindings",
-  );
-  p.addDeps("@dbx-tools/shared-core@workspace:^");
-  project.addExports(p, {
-    // The brand->AppKit token bridge stylesheet. `ui-appkit/styles.css`
-    // `@import`s it so it travels with every feature UI package; scoped to
-    // `:root[data-brand]` so it is inert until a brand is applied.
-    "./brand-bridge.css": "./src/brand-bridge.css",
-    "./assets/icon-light.svg": "./src/generated/icon-light.svg",
-    "./assets/icon-dark.svg": "./src/generated/icon-dark.svg",
-    "./assets/logo-light.svg": "./src/generated/logo-light.svg",
-    "./assets/logo-dark.svg": "./src/generated/logo-dark.svg",
-  });
-  p.tasks.tryFind("pre-compile")?.exec("bun ../../../../branding/generate-package-assets.mjs");
-});
-
-// ui-email: the React surface for the email add-on - an Approve/Deny approval
-// card for the `send_email` tool, its read-only field preview, and a standard
-// editable compose view. Presentational; consumes the browser-safe
-// shared-email wire contract and renders through ui-appkit's UI kit + the
-// shared Markdown/Tailwind styling. `ui`-tagged (React + jsx from the ui tag).
-project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) => {
-  p.package.addField("description", "React email surfaces for AppKit chat and admin workflows");
-  p.addDeps(
+    "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email@workspace:^",
     "@dbx-tools/shared-email-template@workspace:^",
-    "@dbx-tools/ui-appkit@workspace:^",
-    // Direct, not via ui-appkit: the sign-in gate renders the host app's mark and
-    // name from the brand context, the same way ui-mastra's chat header does.
-    // Already in the tree (ui-appkit depends on it), so this adds no install.
-    "@dbx-tools/ui-branding@workspace:^",
+    "@dbx-tools/shared-search@workspace:^",
     "lucide-react@catalog:",
+    "tailwindcss@catalog:",
+    "streamdown@catalog:",
   );
-  // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
-  // tag's component-library default.
+  project.addExports(p, {
+    "./branding/react": "./src/branding/react/index.ts",
+    "./branding/browser": "./src/branding/browser.ts",
+    "./branding/assets": "./src/branding/generated/assets.ts",
+    "./branding/styles.css": "./src/branding/styles.css",
+    "./branding/brand-bridge.css": "./src/branding/brand-bridge.css",
+    "./branding/assets/icon-light.svg": "./src/branding/generated/icon-light.svg",
+    "./branding/assets/icon-dark.svg": "./src/branding/generated/icon-dark.svg",
+    "./branding/assets/logo-light.svg": "./src/branding/generated/logo-light.svg",
+    "./branding/assets/logo-dark.svg": "./src/branding/generated/logo-dark.svg",
+    "./auth/react": "./src/auth/react/index.ts",
+    "./email/react": "./src/email/react/index.ts",
+    "./email/styles.css": "./src/email/styles.css",
+    "./search/react": "./src/search/react/index.ts",
+    "./search/styles.css": "./src/search/styles.css",
+  });
+  p.tasks.tryFind("pre-compile")?.exec("bun ../../../../branding/generate-package-assets.mjs");
 });
 
 // shared-auth: browser-safe passwordless and Databricks authentication schemas.
@@ -1098,20 +981,6 @@ project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" },
   );
 });
 
-// ui-auth: Better Auth React client, passkey-first gate, and credential manager.
-project.applyToProjects(root, { identifierName: "ui-auth", tags: "ui" }, (p) => {
-  p.package.addField(
-    "description",
-    "React passwordless authentication surfaces for the dbx-tools authentication gate",
-  );
-  p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/ui-appkit@workspace:^",
-    "@dbx-tools/ui-branding@workspace:^",
-  );
-});
-
 // ui-teams: the React surface for the Teams add-on - an `AdaptiveCardView` that
 // renders a compiled Adaptive Card with the `adaptivecards` JavaScript renderer,
 // and a self-contained `AdaptiveCardGallery` dev tool that edits a `CardSpec`,
@@ -1126,29 +995,12 @@ project.applyToProjects(root, { identifierName: "ui-teams", tags: "ui" }, (p) =>
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-teams@workspace:^",
-    "@dbx-tools/ui-appkit@workspace:^",
+    "@dbx-tools/ui@workspace:^",
     "adaptivecards@catalog:",
     // The `adaptivecards` renderer ships no markdown parser - a `TextBlock` is
     // markdown per the spec, but the host supplies the implementation - so the
     // card view installs `marked` as its `onProcessMarkdown` processor.
     "marked@catalog:",
-  );
-  // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
-  // tag's component-library default.
-});
-
-// ui-search: the React surface for the AI Search add-on - a debounced
-// search-as-you-type `SearchBox`, a `SearchResults` list, and the `useSearch`
-// hook they share, all reading the plugin's client config through AppKit's
-// `usePluginClientConfig`. Presentational; consumes the browser-safe
-// shared-search contract and renders through ui-appkit's UI kit. `ui`-tagged.
-project.applyToProjects(root, { identifierName: "ui-search", tags: "ui" }, (p) => {
-  p.package.addField("description", "React search box and results for Databricks AI Search");
-  p.addDeps(
-    "@databricks/appkit-ui@catalog:",
-    "@dbx-tools/shared-search@workspace:^",
-    "@dbx-tools/ui-appkit@workspace:^",
-    "lucide-react@catalog:",
   );
   // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
   // tag's component-library default.
@@ -1167,11 +1019,7 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     "@dbx-tools/shared-mastra@workspace:^",
     "@dbx-tools/shared-genie@workspace:^",
     "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/ui-appkit@workspace:^",
-    // Direct dep: the driver reads the active brand (`useBrand`) to style the
-    // chat export document (logo + colors + font). Also transitive via
-    // ui-appkit, but the direct import warrants a declared dep.
-    "@dbx-tools/ui-branding@workspace:^",
+    "@dbx-tools/ui@workspace:^",
     "@mastra/client-js@catalog:",
     // Native persisted-message conversion used by browser history hydration.
     "@mastra/core@catalog:",
@@ -1210,7 +1058,7 @@ project.applyToProjects(
     projectJs.applyIncludes(p, "stage-deploy.ts");
     p.addDeps(
       "@dbx-tools/appkit@workspace:^",
-      "@dbx-tools/appkit-graphiti@workspace:^",
+      "@dbx-tools/graphiti@workspace:^",
       "@dbx-tools/appkit-mastra@workspace:^",
       "@dbx-tools/core@workspace:^",
       "@dbx-tools/databricks@workspace:^",
@@ -1256,14 +1104,9 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
   p.package.addField("private", true);
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/ui-appkit@workspace:^",
-    "@dbx-tools/ui-branding@workspace:^",
+    "@dbx-tools/ui@workspace:^",
     "@dbx-tools/ui-mastra@workspace:^",
     "@dbx-tools/ui-teams@workspace:^",
-    "@dbx-tools/ui-search@workspace:^",
-    "@dbx-tools/ui-auth@workspace:^",
-    // Email preview remains a separate feature package from authentication.
-    "@dbx-tools/ui-email@workspace:^",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.
     "@databricks/appkit-ui@catalog:",
@@ -1413,9 +1256,8 @@ new project.DBXToolsPythonWorkspace(root, {
   lintPaths: ["packages/py"],
   release: true,
 });
-for (const task of ["py:lint", "py:test"]) {
-  root.testTask.spawn(root.tasks.tryFind(task)!);
-}
+root.testTask.spawn(root.tasks.tryFind("py:lint")!);
+root.tasks.tryFind("test:all")?.spawn(root.tasks.tryFind("py:test")!);
 new BrandPackageAssets(root);
 
 // ---------------------------------------------------------------------------

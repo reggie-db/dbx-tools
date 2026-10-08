@@ -61,7 +61,7 @@ client profile always wins.
 ## Build A Proxy URL
 
 `connectionUrl()` formats the local URL expected by
-[`@dbx-tools/cli-lakebase-proxy`](../../cli/lakebase-proxy):
+[`@dbx-tools/cli/lakebase-proxy`](../../cli/dbx-tools):
 
 ```ts
 import { connectionUrl } from "@dbx-tools/lakebase";

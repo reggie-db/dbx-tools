@@ -21,7 +21,7 @@ import {
   SelectValue,
   Textarea,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdaptiveCardView } from "./adaptive-card.tsx";
 import { CARD_SAMPLES } from "./samples.ts";

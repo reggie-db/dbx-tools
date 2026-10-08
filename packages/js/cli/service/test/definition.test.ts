@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { z } from "zod";
-
 import { CliServiceDefinitionSchema, defineService } from "../src/definition.ts";
 
 describe("CLI service definition", () => {
@@ -46,47 +44,15 @@ describe("CLI service definition", () => {
     assert.equal(definition.menu?.[0]?.type, "url");
   });
 
-  it("serializes command options from a Zod schema or concrete object", () => {
-    const schemaDefinition = defineService(import.meta.url, {
+  it("preserves pre-serialized command arguments and environment", () => {
+    const definition = defineService(import.meta.url, {
       command: {
-        options: z.object({
-          host: z.string().default("127.0.0.1"),
-          port: z.number().default(4000),
-        }),
-      },
-    });
-    assert.deepEqual(schemaDefinition.command?.arguments, [
-      "--host",
-      "127.0.0.1",
-      "--port",
-      "4000",
-    ]);
-    assert.deepEqual(schemaDefinition.command?.environment, { NODE_ENV: "production" });
-
-    const objectDefinition = defineService(import.meta.url, {
-      command: {
-        arguments: ["serve"],
+        arguments: ["serve", "--host", "localhost", "--debug"],
         environment: { NODE_ENV: "development", SAMPLE: "configured" },
-        options: {
-          host: "localhost",
-          debug: true,
-          managed: false,
-          tags: ["one", "two"],
-        },
       },
     });
-    assert.deepEqual(objectDefinition.command?.arguments, [
-      "serve",
-      "--host",
-      "localhost",
-      "--debug",
-      "--no-managed",
-      "--tags",
-      "one",
-      "--tags",
-      "two",
-    ]);
-    assert.deepEqual(objectDefinition.command?.environment, {
+    assert.deepEqual(definition.command?.arguments, ["serve", "--host", "localhost", "--debug"]);
+    assert.deepEqual(definition.command?.environment, {
       NODE_ENV: "development",
       SAMPLE: "configured",
     });

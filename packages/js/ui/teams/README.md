@@ -7,7 +7,7 @@ JavaScript renderer.
 Import this package when a UI needs to display the Adaptive Card documents that
 [`@dbx-tools/teams`](../../node/teams) builds. It consumes the browser-safe card
 contract from [`@dbx-tools/shared-teams`](../../shared/teams) and renders through
-[`@dbx-tools/ui-appkit`](../appkit)'s UI kit.
+[`@dbx-tools/ui`](../appkit)'s UI kit.
 
 **Key features:**
 

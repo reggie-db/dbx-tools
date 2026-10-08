@@ -106,44 +106,60 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     program,
     "appkit",
     "AppKit helpers (env: print the environment an AppKit app resolves)",
-    async () => (await import("@dbx-tools/cli-appkit-env/cli")).buildProgram,
+    async () => (await import("./appkit/cli.ts")).buildProgram,
   );
 
   addForwardedCommand(
     program,
     "auth",
     "Authenticate to Databricks and manage OAuth tokens",
-    async () => (await import("@dbx-tools/cli-auth/cli")).buildProgram,
+    async () => (await import("./auth/cli.ts")).buildProgram,
   );
 
   addForwardedCommand(
     program,
     "tunnel",
     "Run a public portr tunnel with an email-OTP gate",
-    async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
+    async () => (await import("./tunnel/cli.ts")).buildProgram,
   );
 
   addForwardedCommand(
     program,
     "lakebase-proxy",
     "Run the Node Databricks Lakebase PostgreSQL proxy",
-    async () => (await import("@dbx-tools/cli-lakebase-proxy/cli")).buildProgram,
+    async () => (await import("./lakebase-proxy/cli.ts")).buildProgram,
   );
 
   addForwardedCommand(
     program,
     "model-gateway",
     "Run the foreground AppKit Databricks model gateway",
-    async () => (await import("@dbx-tools/cli-model-gateway/cli")).buildProgram,
+    async () => (await import("./model-gateway/cli.ts")).buildProgram,
   );
 
   addForwardedCommand(
     program,
     "graphiti",
     "Run Graphiti or manage its current-user desktop service",
-    async () => (await import("@dbx-tools/cli-graphiti/cli")).buildProgram,
+    async () => (await import("./graphiti/cli.ts")).buildProgram,
   );
 
+  return program;
+}
+
+/** Build the complete command tree used for generated documentation. */
+export async function buildDocumentationProgram(name: string = PROGRAM_NAMES[0]): Promise<Command> {
+  const program = buildProgram(name);
+  (program.commands as Command[]).splice(
+    1,
+    program.commands.length - 1,
+    (await import("./appkit/cli.ts")).buildProgram("appkit"),
+    (await import("./auth/cli.ts")).buildProgram("auth"),
+    (await import("./tunnel/cli.ts")).buildProgram("tunnel"),
+    (await import("./lakebase-proxy/cli.ts")).buildProgram("lakebase-proxy"),
+    (await import("./model-gateway/cli.ts")).buildProgram("model-gateway"),
+    (await import("./graphiti/cli.ts")).buildProgram("graphiti"),
+  );
   return program;
 }
 

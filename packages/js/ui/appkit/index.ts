@@ -2,8 +2,38 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-appkit";
+export const PACKAGE_IDENTIFIER = "@dbx-tools/ui";
 export const PACKAGE_VERSION = "0.9.58";
+export * as authReactAuthClient from "./src/auth/react/auth-client.ts";
+export * as authReactAuthGate from "./src/auth/react/auth-gate.tsx";
+export * as authReactPasskeyManager from "./src/auth/react/passkey-manager.tsx";
+export * as brandingBrowser from "./src/branding/browser.ts";
+export * as brandingGeneratedAssets from "./src/branding/generated/assets.ts";
+export * as brandingReactBrand from "./src/branding/react/brand.tsx";
+export * as emailReactEmailApprovalCard from "./src/email/react/email-approval-card.tsx";
+export * as emailReactEmailBody from "./src/email/react/email-body.tsx";
+export * as emailReactEmailCompose from "./src/email/react/email-compose.tsx";
+export * as emailReactFields from "./src/email/react/fields.ts";
 export * as reactAppkitUi from "./src/react/appkit-ui.ts";
 export * as reactBrandPicker from "./src/react/brand-picker.tsx";
+export * as searchReactSearchBox from "./src/search/react/search-box.tsx";
+export * as searchReactSearchResults from "./src/search/react/search-results.tsx";
+export * as searchReactUseSearch from "./src/search/react/use-search.ts";
+export type { AuthGateProps } from "./src/auth/react/auth-gate.tsx";
+export type { PasskeyManagerProps } from "./src/auth/react/passkey-manager.tsx";
+export { resolveBrandAsset } from "./src/branding/browser.ts";
+export type { BrandAssetResolver, ApplyBrandContextOptions } from "./src/branding/browser.ts";
+export { dbxToolsAssetSvg, dbxToolsAssetDataUrls } from "./src/branding/generated/assets.ts";
+export type { BrandProviderProps, BrandImageProps } from "./src/branding/react/brand.tsx";
+export { EmailPreview, EmailApprovalCard } from "./src/email/react/email-approval-card.tsx";
+export type { EmailPreviewProps, EmailApprovalCardProps } from "./src/email/react/email-approval-card.tsx";
+export { EmailBody } from "./src/email/react/email-body.tsx";
+export type { EmailBodyProps } from "./src/email/react/email-body.tsx";
+export { EmailComposeView } from "./src/email/react/email-compose.tsx";
+export type { EmailComposeProps } from "./src/email/react/email-compose.tsx";
+export { joinAddresses, parseAddresses, attachmentNames } from "./src/email/react/fields.ts";
+export type { EmailDraft } from "./src/email/react/fields.ts";
 export type { BrandPreset, BrandPickerProps } from "./src/react/brand-picker.tsx";
+export type { SearchBoxProps } from "./src/search/react/search-box.tsx";
+export type { SearchResultsProps } from "./src/search/react/search-results.tsx";
+export type { UseSearchOptions, UseSearchState } from "./src/search/react/use-search.ts";

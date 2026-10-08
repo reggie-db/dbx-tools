@@ -367,5 +367,5 @@ is shared. `@dbx-tools/appkit-mastra` exposes this as its `genieIdentity` option
 | `identity`         | OBO-vs-service-principal request identity: modes, resolution, and the forwarded headers.                                                        |
 
 The shell-facing wrapper for auto-config is
-[`@dbx-tools/cli-appkit-env`](../../cli/appkit-env). Higher-level agent composition
+[`@dbx-tools/cli/appkit`](../../cli/dbx-tools). Higher-level agent composition
 is in [`@dbx-tools/appkit-mastra`](../appkit-mastra).

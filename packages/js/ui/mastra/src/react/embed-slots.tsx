@@ -1,5 +1,5 @@
 import { markers, type ParsedMarker } from "@dbx-tools/shared-mastra";
-import { Spinner } from "@dbx-tools/ui-appkit/react";
+import { Spinner } from "@dbx-tools/ui/react";
 import { ClockIcon } from "lucide-react";
 import { lazy, Suspense, useMemo, useRef } from "react";
 import { DataGrid, humanizeLabel } from "./data-grid.tsx";

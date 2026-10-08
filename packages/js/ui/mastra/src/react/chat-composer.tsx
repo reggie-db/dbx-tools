@@ -17,7 +17,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import {
   GripVerticalIcon,
   SendHorizontalIcon,

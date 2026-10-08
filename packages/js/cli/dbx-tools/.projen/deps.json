@@ -6,6 +6,11 @@
       "type": "build"
     },
     {
+      "name": "@types/pg",
+      "version": "^8",
+      "type": "build"
+    },
+    {
       "name": "typescript",
       "version": "^5.9.3",
       "type": "build"
@@ -16,32 +21,32 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-appkit-env",
+      "name": "@databricks/appkit",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/appkit-model-gateway",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-auth",
+      "name": "@dbx-tools/appkit",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-graphiti",
+      "name": "@dbx-tools/auth-gate",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-lakebase-proxy",
+      "name": "@dbx-tools/auth",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-model-gateway",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
-      "name": "@dbx-tools/cli-tunnel",
+      "name": "@dbx-tools/cli-service",
       "version": "workspace:^",
       "type": "runtime"
     },
@@ -51,13 +56,68 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/databricks",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/email",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/graphiti",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/lakebase",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/postgres",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-auth",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-core",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-email",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-model-gateway",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/tunnel",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "commander",
       "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "http-proxy-3",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "pg",
+      "version": "^8.22.0",
       "type": "runtime"
     },
     {

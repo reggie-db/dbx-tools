@@ -173,7 +173,7 @@ export type GateAction = "pass" | "allow" | "deny";
  * THE gating decision, for one request, independent of how it will be answered.
  *
  * Both paths call this: the Express middleware below (where the app is the
- * process) and `@dbx-tools/cli-tunnel`'s reverse proxy (where the app is a child
+ * process) and `@dbx-tools/cli/tunnel`'s reverse proxy (where the app is a child
  * process on a private port). A divergence between them would be a security bug
  * the second path could not be tested into agreement - one path forgetting to
  * strip `x-forwarded-access-token` is enough - so the decision, the header

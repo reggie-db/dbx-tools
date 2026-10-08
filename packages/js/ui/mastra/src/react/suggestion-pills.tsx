@@ -1,4 +1,4 @@
-import { Button, cn } from "@dbx-tools/ui-appkit/react";
+import { Button, cn } from "@dbx-tools/ui/react";
 
 // Shared rendering for suggested questions. Both the initial starter
 // suggestions (above the composer when the transcript is empty) and

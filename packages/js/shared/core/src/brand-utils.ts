@@ -14,14 +14,14 @@ const color = z.string().regex(/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i, "Expe
 /** Package asset references used when a brand context supplies no custom artwork. */
 export const DEFAULT_BRAND_ASSETS = {
   icon: {
-    light: "@dbx-tools/ui-branding/assets/icon-light.svg",
-    dark: "@dbx-tools/ui-branding/assets/icon-dark.svg",
+    light: "@dbx-tools/ui/branding/assets/icon-light.svg",
+    dark: "@dbx-tools/ui/branding/assets/icon-dark.svg",
   },
   logo: {
-    light: "@dbx-tools/ui-branding/assets/logo-light.svg",
-    dark: "@dbx-tools/ui-branding/assets/logo-dark.svg",
+    light: "@dbx-tools/ui/branding/assets/logo-light.svg",
+    dark: "@dbx-tools/ui/branding/assets/logo-dark.svg",
   },
-  favicon: "@dbx-tools/ui-branding/assets/icon-light.svg",
+  favicon: "@dbx-tools/ui/branding/assets/icon-light.svg",
 } as const;
 
 /** Validates light and optional dark variants for one visual asset. */

@@ -1,0 +1,616 @@
+{
+  "packages": [
+    {
+      "name": "@dbx-tools/appkit",
+      "path": "packages/js/node/appkit",
+      "dependencies": [
+        "@dbx-tools/auth",
+        "@dbx-tools/core",
+        "@dbx-tools/lakebase",
+        "@dbx-tools/postgres",
+        "@dbx-tools/projen",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-web-search",
+        "@dbx-tools/cli",
+        "@dbx-tools/databricks",
+        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/email",
+        "@dbx-tools/genie",
+        "@dbx-tools/graphiti",
+        "@dbx-tools/model",
+        "@dbx-tools/search",
+        "@dbx-tools/teams",
+        "@dbx-tools/tunnel"
+      ]
+    },
+    {
+      "name": "@dbx-tools/appkit-mastra",
+      "path": "packages/js/node/appkit-mastra",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/core",
+        "@dbx-tools/databricks",
+        "@dbx-tools/fs",
+        "@dbx-tools/genie",
+        "@dbx-tools/model",
+        "@dbx-tools/path",
+        "@dbx-tools/postgres",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-fs",
+        "@dbx-tools/shared-genie",
+        "@dbx-tools/shared-mastra",
+        "@dbx-tools/shared-model"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
+      "name": "@dbx-tools/appkit-model-gateway",
+      "path": "packages/js/node/appkit-model-gateway",
+      "dependencies": [
+        "@dbx-tools/databricks",
+        "@dbx-tools/model",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-model",
+        "@dbx-tools/shared-model-gateway"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli"
+      ]
+    },
+    {
+      "name": "@dbx-tools/appkit-web-search",
+      "path": "packages/js/node/appkit-web-search",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/core",
+        "@dbx-tools/model",
+        "@dbx-tools/path",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-model"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
+      "name": "@dbx-tools/auth",
+      "path": "packages/js/node/auth",
+      "dependencies": [
+        "@dbx-tools/core",
+        "@dbx-tools/shared-auth",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/cli",
+        "@dbx-tools/databricks",
+        "@dbx-tools/graphiti",
+        "@dbx-tools/lakebase",
+        "@dbx-tools/model"
+      ]
+    },
+    {
+      "name": "@dbx-tools/auth-gate",
+      "path": "packages/js/node/auth-gate",
+      "dependencies": [
+        "@dbx-tools/core",
+        "@dbx-tools/postgres",
+        "@dbx-tools/shared-auth",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli",
+        "@dbx-tools/tunnel"
+      ]
+    },
+    {
+      "name": "@dbx-tools/cli",
+      "path": "packages/js/cli/dbx-tools",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/appkit-model-gateway",
+        "@dbx-tools/auth",
+        "@dbx-tools/auth-gate",
+        "@dbx-tools/cli-service",
+        "@dbx-tools/core",
+        "@dbx-tools/databricks",
+        "@dbx-tools/email",
+        "@dbx-tools/graphiti",
+        "@dbx-tools/lakebase",
+        "@dbx-tools/postgres",
+        "@dbx-tools/shared-auth",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-email",
+        "@dbx-tools/shared-model-gateway",
+        "@dbx-tools/tunnel"
+      ],
+      "reverseDependencies": []
+    },
+    {
+      "name": "@dbx-tools/cli-service",
+      "path": "packages/js/cli/service",
+      "dependencies": [
+        "@dbx-tools/core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli",
+        "@dbx-tools/databricks"
+      ]
+    },
+    {
+      "name": "@dbx-tools/core",
+      "path": "packages/js/node/core",
+      "dependencies": [
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-web-search",
+        "@dbx-tools/auth",
+        "@dbx-tools/auth-gate",
+        "@dbx-tools/cli",
+        "@dbx-tools/cli-service",
+        "@dbx-tools/databricks",
+        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/email",
+        "@dbx-tools/fs",
+        "@dbx-tools/graphiti",
+        "@dbx-tools/path",
+        "@dbx-tools/projen",
+        "@dbx-tools/search",
+        "@dbx-tools/teams",
+        "@dbx-tools/tunnel"
+      ]
+    },
+    {
+      "name": "@dbx-tools/databricks",
+      "path": "packages/js/node/databricks",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/auth",
+        "@dbx-tools/cli-service",
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-fs"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-model-gateway",
+        "@dbx-tools/cli",
+        "@dbx-tools/databricks-zerobus",
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
+      "name": "@dbx-tools/databricks-zerobus",
+      "path": "packages/js/node/databricks-zerobus",
+      "dependencies": [
+        "@dbx-tools/databricks"
+      ],
+      "reverseDependencies": []
+    },
+    {
+      "name": "@dbx-tools/demo-appkit-app",
+      "path": "packages/example/app/appkit-demo",
+      "dependencies": [
+        "@dbx-tools/shared-core",
+        "@dbx-tools/ui",
+        "@dbx-tools/ui-mastra",
+        "@dbx-tools/ui-teams"
+      ],
+      "reverseDependencies": []
+    },
+    {
+      "name": "@dbx-tools/demo-appkit-server",
+      "path": "packages/example/server/appkit-demo",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-web-search",
+        "@dbx-tools/core",
+        "@dbx-tools/databricks",
+        "@dbx-tools/email",
+        "@dbx-tools/graphiti",
+        "@dbx-tools/postgres",
+        "@dbx-tools/projen",
+        "@dbx-tools/search",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/teams",
+        "@dbx-tools/tunnel"
+      ],
+      "reverseDependencies": []
+    },
+    {
+      "name": "@dbx-tools/email",
+      "path": "packages/js/node/email",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-email",
+        "@dbx-tools/shared-email-template"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli",
+        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/tunnel"
+      ]
+    },
+    {
+      "name": "@dbx-tools/fs",
+      "path": "packages/js/node/fs",
+      "dependencies": [
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-fs"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra"
+      ]
+    },
+    {
+      "name": "@dbx-tools/genie",
+      "path": "packages/js/node/genie",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-genie"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra"
+      ]
+    },
+    {
+      "name": "@dbx-tools/graphiti",
+      "path": "packages/js/node/graphiti",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/auth",
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-graphiti"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli",
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
+      "name": "@dbx-tools/lakebase",
+      "path": "packages/js/node/lakebase",
+      "dependencies": [
+        "@dbx-tools/auth",
+        "@dbx-tools/shared-auth",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/cli",
+        "@dbx-tools/postgres"
+      ]
+    },
+    {
+      "name": "@dbx-tools/model",
+      "path": "packages/js/node/model",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/auth",
+        "@dbx-tools/shared-auth",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-model"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-model-gateway",
+        "@dbx-tools/appkit-web-search",
+        "@dbx-tools/search"
+      ]
+    },
+    {
+      "name": "@dbx-tools/path",
+      "path": "packages/js/node/path",
+      "dependencies": [
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-web-search",
+        "@dbx-tools/projen"
+      ]
+    },
+    {
+      "name": "@dbx-tools/postgres",
+      "path": "packages/js/node/postgres",
+      "dependencies": [
+        "@dbx-tools/lakebase",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/auth-gate",
+        "@dbx-tools/cli",
+        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/search"
+      ]
+    },
+    {
+      "name": "@dbx-tools/projen",
+      "path": "projen",
+      "dependencies": [
+        "@dbx-tools/core",
+        "@dbx-tools/path",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
+      "name": "@dbx-tools/search",
+      "path": "packages/js/node/search",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/core",
+        "@dbx-tools/model",
+        "@dbx-tools/postgres",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-model",
+        "@dbx-tools/shared-search"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-auth",
+      "path": "packages/js/shared/auth",
+      "dependencies": [
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/auth",
+        "@dbx-tools/auth-gate",
+        "@dbx-tools/cli",
+        "@dbx-tools/lakebase",
+        "@dbx-tools/model",
+        "@dbx-tools/tunnel",
+        "@dbx-tools/ui"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-core",
+      "path": "packages/js/shared/core",
+      "dependencies": [],
+      "reverseDependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-model-gateway",
+        "@dbx-tools/appkit-web-search",
+        "@dbx-tools/auth",
+        "@dbx-tools/auth-gate",
+        "@dbx-tools/cli",
+        "@dbx-tools/core",
+        "@dbx-tools/databricks",
+        "@dbx-tools/demo-appkit-app",
+        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/email",
+        "@dbx-tools/fs",
+        "@dbx-tools/genie",
+        "@dbx-tools/graphiti",
+        "@dbx-tools/lakebase",
+        "@dbx-tools/model",
+        "@dbx-tools/path",
+        "@dbx-tools/postgres",
+        "@dbx-tools/projen",
+        "@dbx-tools/search",
+        "@dbx-tools/shared-auth",
+        "@dbx-tools/shared-email-template",
+        "@dbx-tools/shared-fs",
+        "@dbx-tools/shared-genie",
+        "@dbx-tools/shared-graphiti",
+        "@dbx-tools/shared-model",
+        "@dbx-tools/shared-model-gateway",
+        "@dbx-tools/teams",
+        "@dbx-tools/tunnel",
+        "@dbx-tools/ui",
+        "@dbx-tools/ui-mastra",
+        "@dbx-tools/ui-teams"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-email",
+      "path": "packages/js/shared/email",
+      "dependencies": [],
+      "reverseDependencies": [
+        "@dbx-tools/cli",
+        "@dbx-tools/email",
+        "@dbx-tools/ui"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-email-template",
+      "path": "packages/js/shared/email-template",
+      "dependencies": [
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/email",
+        "@dbx-tools/ui"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-fs",
+      "path": "packages/js/shared/fs",
+      "dependencies": [
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/databricks",
+        "@dbx-tools/fs"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-genie",
+      "path": "packages/js/shared/genie",
+      "dependencies": [
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/genie",
+        "@dbx-tools/shared-mastra",
+        "@dbx-tools/ui-mastra"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-graphiti",
+      "path": "packages/js/shared/graphiti",
+      "dependencies": [
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/graphiti"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-mastra",
+      "path": "packages/js/shared/mastra",
+      "dependencies": [
+        "@dbx-tools/shared-genie",
+        "@dbx-tools/shared-model"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/ui-mastra"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-model",
+      "path": "packages/js/shared/model",
+      "dependencies": [
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-model-gateway",
+        "@dbx-tools/appkit-web-search",
+        "@dbx-tools/model",
+        "@dbx-tools/search",
+        "@dbx-tools/shared-mastra",
+        "@dbx-tools/shared-model-gateway",
+        "@dbx-tools/ui-mastra"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-model-gateway",
+      "path": "packages/js/shared/model-gateway",
+      "dependencies": [
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-model"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-model-gateway",
+        "@dbx-tools/cli"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-search",
+      "path": "packages/js/shared/search",
+      "dependencies": [],
+      "reverseDependencies": [
+        "@dbx-tools/search",
+        "@dbx-tools/ui"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-teams",
+      "path": "packages/js/shared/teams",
+      "dependencies": [],
+      "reverseDependencies": [
+        "@dbx-tools/teams",
+        "@dbx-tools/ui-teams"
+      ]
+    },
+    {
+      "name": "@dbx-tools/teams",
+      "path": "packages/js/node/teams",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-teams"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
+      "name": "@dbx-tools/tunnel",
+      "path": "packages/js/node/tunnel",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/auth-gate",
+        "@dbx-tools/core",
+        "@dbx-tools/email",
+        "@dbx-tools/shared-auth",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli",
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
+      "name": "@dbx-tools/ui",
+      "path": "packages/js/ui/appkit",
+      "dependencies": [
+        "@dbx-tools/shared-auth",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-email",
+        "@dbx-tools/shared-email-template",
+        "@dbx-tools/shared-search"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-app",
+        "@dbx-tools/ui-mastra",
+        "@dbx-tools/ui-teams"
+      ]
+    },
+    {
+      "name": "@dbx-tools/ui-mastra",
+      "path": "packages/js/ui/mastra",
+      "dependencies": [
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-genie",
+        "@dbx-tools/shared-mastra",
+        "@dbx-tools/shared-model",
+        "@dbx-tools/ui"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-app"
+      ]
+    },
+    {
+      "name": "@dbx-tools/ui-teams",
+      "path": "packages/js/ui/teams",
+      "dependencies": [
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-teams",
+        "@dbx-tools/ui"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-app"
+      ]
+    }
+  ]
+}

@@ -22,7 +22,7 @@ it lives on its own:
 - `@dbx-tools/shared-email` is a pure zod contract package consumed by
   non-AppKit callers such as `@dbx-tools/tunnel`. Templates that lived there
   would push React and `@react-email/components` onto every schema consumer.
-- `@dbx-tools/ui-email` is a React/DOM package. Templates that lived there would
+- `@dbx-tools/ui/email` is a React/DOM package. Templates that lived there would
   make the Node renderer depend on a DOM-typed package.
 
 This package depends on neither AppKit nor SMTP nor the DOM, so any runtime that
@@ -112,4 +112,4 @@ font, name, tagline, website, and fetchable logo URL.
 
 Pair this package with [`@dbx-tools/shared-email`](../email) for wire schemas,
 [`@dbx-tools/email`](../../node/email) for delivery, and
-[`@dbx-tools/ui-email`](../../ui/email) for approval and compose UI.
+[`@dbx-tools/ui/email`](../../ui/appkit) for approval and compose UI.

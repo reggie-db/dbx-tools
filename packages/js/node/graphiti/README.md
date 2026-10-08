@@ -51,5 +51,18 @@ permission to `SET ROLE` to that role.
 ## Embed The Runtime
 
 Use this package from Node applications that need Graphiti lifecycle control.
-Use `@dbx-tools/cli-graphiti` for Commander and desktop-service commands, or
-`@dbx-tools/appkit-graphiti` for direct AppKit tool publication and user scoping.
+Use `@dbx-tools/cli/graphiti` for Commander and desktop-service commands.
+
+## Register With AppKit
+
+```ts
+import { graphiti } from "@dbx-tools/graphiti/appkit";
+
+export default {
+  plugins: [graphiti({ profile: "MY-PROFILE" })],
+};
+```
+
+The AppKit subpath owns sidecar startup, OpenAPI-derived tool registration, and
+per-user graph scopes. Its configuration schema is available from
+`@dbx-tools/graphiti/appkit/config`.

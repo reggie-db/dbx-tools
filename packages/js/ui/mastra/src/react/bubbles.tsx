@@ -11,7 +11,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import type { UIMessage } from "ai";
 import {
   CheckIcon,

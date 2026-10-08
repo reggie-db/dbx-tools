@@ -11,8 +11,9 @@ import {
   cn,
 } from "@databricks/appkit-ui/react";
 import { brandUtils, object } from "@dbx-tools/shared-core";
-import { useBrand } from "@dbx-tools/ui-branding/react";
 import { useEffect, useId, useMemo, useState } from "react";
+
+import { useBrand } from "../branding/react/index.ts";
 
 const COLOR_FIELDS = [
   ["primary", "Primary"],

@@ -3,17 +3,9 @@
 packages:
   - packages/example/app/appkit-demo
   - packages/example/server/appkit-demo
-  - packages/js/cli/appkit-env
-  - packages/js/cli/args
-  - packages/js/cli/auth
   - packages/js/cli/dbx-tools
-  - packages/js/cli/graphiti
-  - packages/js/cli/lakebase-proxy
-  - packages/js/cli/model-gateway
   - packages/js/cli/service
-  - packages/js/cli/tunnel
   - packages/js/node/appkit
-  - packages/js/node/appkit-graphiti
   - packages/js/node/appkit-mastra
   - packages/js/node/appkit-model-gateway
   - packages/js/node/appkit-web-search
@@ -46,11 +38,7 @@ packages:
   - packages/js/shared/search
   - packages/js/shared/teams
   - packages/js/ui/appkit
-  - packages/js/ui/auth
-  - packages/js/ui/branding
-  - packages/js/ui/email
   - packages/js/ui/mastra
-  - packages/js/ui/search
   - packages/js/ui/teams
   - projen
 catalog:

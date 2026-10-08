@@ -11,7 +11,7 @@
  *   - `"markdown"` - a `.md` file download.
  *
  * The document can be brand-styled (logo, colors, font) via the optional
- * `brand` option; the driver resolves it from `@dbx-tools/ui-branding`.
+ * `brand` option; the driver resolves it from `@dbx-tools/ui/branding`.
  *
  * Charts are included, not dropped: each `[chart:<id>]` marker is
  * resolved against the plugin's chart cache and rendered to an inline
@@ -42,7 +42,7 @@ export type ExportFormat = "pdf" | "markdown";
 /**
  * Optional brand styling for the exported document. Plain data (no React /
  * DOM), so this module stays framework-free; the driver resolves it from
- * `@dbx-tools/ui-branding` (`useBrand()` + `resolveBrandAsset`) and passes it
+ * `@dbx-tools/ui/branding` (`useBrand()` + `resolveBrandAsset`) and passes it
  * through. Any field omitted falls back to the neutral default styling.
  */
 export interface ExportBrand {

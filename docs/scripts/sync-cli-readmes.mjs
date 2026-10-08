@@ -19,13 +19,19 @@ for (const pkg of discoverJavaScriptPackages(root).filter((pkg) => pkg.group ===
     continue;
   }
   const owner = await import(pathToFileURL(entry.file).href);
-  if (typeof owner.buildProgram !== "function" && typeof owner.buildServiceCommand !== "function") {
+  if (
+    typeof owner.buildProgram !== "function" &&
+    typeof owner.buildDocumentationProgram !== "function" &&
+    typeof owner.buildServiceCommand !== "function"
+  ) {
     throw new Error(`${pkg.name} must expose its parser builder for documentation`);
   }
   const reference =
-    typeof owner.buildProgram === "function"
-      ? commanderReference(owner.buildProgram())
-      : serviceReference(owner.buildServiceCommand);
+    typeof owner.buildDocumentationProgram === "function"
+      ? commanderReference(await owner.buildDocumentationProgram())
+      : typeof owner.buildProgram === "function"
+        ? commanderReference(owner.buildProgram())
+        : serviceReference(owner.buildServiceCommand);
   references.push({
     readme: pkg.readme,
     reference,

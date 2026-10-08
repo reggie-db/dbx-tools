@@ -7,7 +7,6 @@
  * @module
  */
 
-import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
 import { Command } from "commander";
 import { z } from "zod";
 
@@ -52,12 +51,14 @@ export function buildServiceCommand(
       : `Install and manage the ${source.name} desktop service`,
   );
 
-  const install = addArgs(
-    command.command("install").description("Install the service for the current user and start it"),
-    CliServiceInstallOptionsSchema,
-  );
+  const install = command
+    .command("install")
+    .description("Install the service for the current user and start it")
+    .option("--no-start", "Do not start the service after installation");
   install.action(async () => {
-    const options = parseArgs(install, CliServiceInstallOptionsSchema);
+    const options = CliServiceInstallOptionsSchema.parse({
+      start: install.getOptionValue("start"),
+    });
     await service().install({ start: options.start });
   });
 

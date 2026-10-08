@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Command, Option } from "commander";
-import { buildProgram as buildGraphitiProgram } from "../../packages/js/cli/graphiti/src/cli.ts";
+import { buildProgram as buildGraphitiProgram } from "../../packages/js/cli/dbx-tools/src/graphiti/cli.ts";
 import { buildServiceCommand } from "../../packages/js/cli/service/src/cli.ts";
 import {
   CLI_REFERENCE_START,

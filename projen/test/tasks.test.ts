@@ -61,7 +61,7 @@ describe("workspace validation tasks", () => {
 
   // A projen monorepo root gets EMPTY compile/test tasks, so `bun run build`
   // validated nothing. Compile batches plain TypeScript members in a few processes,
-  // while tests delegate to Bun's workspace filter. Both read the current
+  // while tests delegate to grouped root runners. Both read the current
   // package.json member list, so a new package needs no re-synth.
   it("covers every workspace member from root compile and test", () => {
     assert.deepEqual(
@@ -70,8 +70,23 @@ describe("workspace validation tasks", () => {
     );
     assert.deepEqual(
       tasks.root.tasks.test.steps?.map((step) => step.exec ?? `spawn:${step.spawn}`),
-      ["spawn:eslint", "bun run --filter '*' test"],
+      ["spawn:eslint", "spawn:test:all"],
     );
+  });
+
+  it("exposes focused, changed, unit, integration, and full test tiers", () => {
+    for (const name of [
+      "workspace:graph",
+      "test:focused",
+      "test:changed",
+      "test:unit",
+      "test:integration",
+      "test:all",
+    ]) {
+      assert.ok(tasks.root.tasks[name]);
+    }
+    assert.equal(tasks.root.tasks["test:focused"]?.steps?.[0]?.receiveArgs, true);
+    assert.equal(tasks.root.tasks["test:changed"]?.steps?.[0]?.receiveArgs, true);
   });
 
   it("checks lint without mutating and exposes fixes explicitly", () => {
@@ -86,8 +101,7 @@ describe("workspace validation tasks", () => {
     assert.equal(fixCommand, "bun run eslint -- --fix");
   });
 
-  // `*` selects workspace MEMBERS only. If it matched the root the delegating
-  // step would re-enter itself, so a root fan-out must never name the root.
+  // The root test delegates to test:all exactly once and must not re-enter itself.
   it("cannot recurse into the root task that delegates", () => {
     for (const task of [tasks.root.tasks.compile, tasks.root.tasks.test]) {
       for (const step of task.steps ?? []) {

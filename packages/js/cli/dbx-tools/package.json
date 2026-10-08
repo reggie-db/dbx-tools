@@ -8,6 +8,9 @@
   },
   "bin": {
     "dbx": "./bin/dbx-tools.ts",
+    "dbx-graphiti": "./bin/dbx-graphiti.ts",
+    "dbx-lakebase-proxy": "./bin/dbx-lakebase-proxy.ts",
+    "dbx-model-gateway": "./bin/dbx-model-gateway.ts",
     "dbx-tools": "./bin/dbx-tools.ts"
   },
   "scripts": {
@@ -24,19 +27,31 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/pg": "^8",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
-    "@dbx-tools/cli-appkit-env": "workspace:^",
-    "@dbx-tools/cli-auth": "workspace:^",
-    "@dbx-tools/cli-graphiti": "workspace:^",
-    "@dbx-tools/cli-lakebase-proxy": "workspace:^",
-    "@dbx-tools/cli-model-gateway": "workspace:^",
-    "@dbx-tools/cli-tunnel": "workspace:^",
+    "@databricks/appkit": "catalog:",
+    "@dbx-tools/appkit": "workspace:^",
+    "@dbx-tools/appkit-model-gateway": "workspace:^",
+    "@dbx-tools/auth": "workspace:^",
+    "@dbx-tools/auth-gate": "workspace:^",
+    "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/databricks": "workspace:^",
+    "@dbx-tools/email": "workspace:^",
+    "@dbx-tools/graphiti": "workspace:^",
+    "@dbx-tools/lakebase": "workspace:^",
+    "@dbx-tools/postgres": "workspace:^",
+    "@dbx-tools/shared-auth": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
+    "@dbx-tools/shared-email": "workspace:^",
+    "@dbx-tools/shared-model-gateway": "workspace:^",
+    "@dbx-tools/tunnel": "workspace:^",
     "commander": "catalog:",
+    "http-proxy-3": "catalog:",
+    "pg": "^8.22.0",
     "zod": "catalog:"
   },
   "main": "index.ts",
@@ -47,12 +62,19 @@
     "types": "./lib/index.d.ts",
     "bin": {
       "dbx": "./lib/bin/dbx-tools.js",
+      "dbx-graphiti": "./lib/bin/dbx-graphiti.js",
+      "dbx-lakebase-proxy": "./lib/bin/dbx-lakebase-proxy.js",
+      "dbx-model-gateway": "./lib/bin/dbx-model-gateway.js",
       "dbx-tools": "./lib/bin/dbx-tools.js"
     },
     "exports": {
       ".": {
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
+      },
+      "./args": {
+        "types": "./lib/src/args.d.ts",
+        "default": "./lib/src/args.js"
       },
       "./bootstrap": {
         "types": "./lib/src/bootstrap.d.ts",
@@ -70,6 +92,54 @@
         "types": "./lib/src/root.d.ts",
         "default": "./lib/src/root.js"
       },
+      "./appkit": {
+        "types": "./lib/src/appkit/cli.d.ts",
+        "default": "./lib/src/appkit/cli.js"
+      },
+      "./appkit/env-export": {
+        "types": "./lib/src/appkit/env-export.d.ts",
+        "default": "./lib/src/appkit/env-export.js"
+      },
+      "./auth": {
+        "types": "./lib/src/auth/cli.d.ts",
+        "default": "./lib/src/auth/cli.js"
+      },
+      "./auth/options": {
+        "types": "./lib/src/auth/options.d.ts",
+        "default": "./lib/src/auth/options.js"
+      },
+      "./graphiti": {
+        "types": "./lib/src/graphiti/cli.d.ts",
+        "default": "./lib/src/graphiti/cli.js"
+      },
+      "./graphiti/options": {
+        "types": "./lib/src/graphiti/options.d.ts",
+        "default": "./lib/src/graphiti/options.js"
+      },
+      "./lakebase-proxy": {
+        "types": "./lib/src/lakebase-proxy/cli.d.ts",
+        "default": "./lib/src/lakebase-proxy/cli.js"
+      },
+      "./lakebase-proxy/options": {
+        "types": "./lib/src/lakebase-proxy/options.d.ts",
+        "default": "./lib/src/lakebase-proxy/options.js"
+      },
+      "./model-gateway": {
+        "types": "./lib/src/model-gateway/cli.d.ts",
+        "default": "./lib/src/model-gateway/cli.js"
+      },
+      "./model-gateway/server": {
+        "types": "./lib/src/model-gateway/server.d.ts",
+        "default": "./lib/src/model-gateway/server.js"
+      },
+      "./tunnel": {
+        "types": "./lib/src/tunnel/cli.d.ts",
+        "default": "./lib/src/tunnel/cli.js"
+      },
+      "./tunnel/options": {
+        "types": "./lib/src/tunnel/options.d.ts",
+        "default": "./lib/src/tunnel/options.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -83,10 +153,23 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./args": "./src/args.ts",
     "./bootstrap": "./src/bootstrap.ts",
     "./bun": "./src/bun.ts",
     "./cli": "./src/cli.ts",
     "./root": "./src/root.ts",
+    "./appkit": "./src/appkit/cli.ts",
+    "./appkit/env-export": "./src/appkit/env-export.ts",
+    "./auth": "./src/auth/cli.ts",
+    "./auth/options": "./src/auth/options.ts",
+    "./graphiti": "./src/graphiti/cli.ts",
+    "./graphiti/options": "./src/graphiti/options.ts",
+    "./lakebase-proxy": "./src/lakebase-proxy/cli.ts",
+    "./lakebase-proxy/options": "./src/lakebase-proxy/options.ts",
+    "./model-gateway": "./src/model-gateway/cli.ts",
+    "./model-gateway/server": "./src/model-gateway/server.ts",
+    "./tunnel": "./src/tunnel/cli.ts",
+    "./tunnel/options": "./src/tunnel/options.ts",
     "./package.json": "./package.json"
   },
   "files": [

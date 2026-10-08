@@ -6,7 +6,7 @@
 
 import { hash, json, stringUtils } from "@dbx-tools/shared-core";
 import { teamsActivity, type Activity } from "@dbx-tools/shared-teams";
-import { Avatar, AvatarFallback, Button, Input, Spinner, cn } from "@dbx-tools/ui-appkit/react";
+import { Avatar, AvatarFallback, Button, Input, Spinner, cn } from "@dbx-tools/ui/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdaptiveCardView } from "./adaptive-card.tsx";
 

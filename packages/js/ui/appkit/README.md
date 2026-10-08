@@ -1,79 +1,65 @@
-# @dbx-tools/ui-appkit
+# @dbx-tools/ui
 
-Shared React and Tailwind foundation for AppKit-oriented UI packages.
+Use one tree-shakeable React package for the shared AppKit UI foundation,
+branding, passwordless authentication, email surfaces, and AI Search controls.
+Mastra chat and Teams Adaptive Cards remain separate packages because they have
+larger optional dependency families.
 
-Import this package when a React client or feature UI package needs the same
-base stylesheet and component imports used by dbx-tools AppKit UI components.
-It centralizes Tailwind v4, Streamdown base styles, and a shiki token paint shim
-for streamed markdown/code output.
-
-Key features:
-
-- Stable `@dbx-tools/ui-appkit/react` re-export of the repository's tested
-  AppKit UI 0.81 primitives for feature packages. AppKit and AppKit UI move as
-  one exact-tested pair.
-- `BrandPicker`, a controlled AppKit-native editor for portable identity,
-  color tokens, document metadata, and assets.
-- AppKit UI stylesheet import path for host applications and feature packages.
-- Streamdown/code-block styling used by streaming chat and Markdown surfaces.
-- One place to evolve UI styling assumptions for feature packages such as
-  [`@dbx-tools/ui-email`](../email) and [`@dbx-tools/ui-mastra`](../mastra).
-
-## Why Not Just AppKit UI?
-
-Use `@databricks/appkit-ui` directly in app code when you only need AppKit's
-components and hooks. This package exists for dbx-tools feature packages and
-hosts that want one stable import path for AppKit primitives,
-Streamdown/shiki styling, and Tailwind source registration. Host applications
-remain responsible for their own Bun, Vite, or other build configuration.
-
-## Import Styles
-
-```css
-@import "@databricks/appkit-ui/styles.css";
-@import "@dbx-tools/ui-appkit/styles.css";
-```
-
-The stylesheet imports Tailwind and Streamdown styles, then adds the shiki CSS
-variable shim used by Streamdown code-block spans. Feature UI packages should
-import this once and add their own `@source` directives for local class names.
-
-## Edit A Live Brand
-
-`BrandPicker` emits only complete, schema-valid `BrandContext` values. Feed the
-result back into `BrandProvider` to update AppKit tokens, document metadata,
-brand assets, and brand-aware feature UI together.
+## Foundation
 
 ```tsx
-import { brandUtils } from "@dbx-tools/shared-core";
-import { BrandPicker } from "@dbx-tools/ui-appkit/react";
-import { BrandProvider } from "@dbx-tools/ui-branding/react";
-import { useState } from "react";
-
-export function BrandSettings() {
-  const [context, setContext] = useState(brandUtils.defaultBrandContext);
-  return (
-    <BrandProvider context={context} applyToDocument>
-      <BrandPicker value={context} onChange={setContext} />
-    </BrandProvider>
-  );
-}
+import { Button, BrandPicker } from "@dbx-tools/ui/react";
+import "@dbx-tools/ui/styles.css";
 ```
 
-## Build Feature UI Packages
+`./react` re-exports the tested AppKit UI primitives and adds `BrandPicker`.
+`./styles.css` provides Tailwind, Streamdown, code-block, and brand-token bridge
+styles for dbx-tools feature UI.
 
-Feature packages should depend on this package instead of each owning their own
-Tailwind and Streamdown base setup. That gives downstream host apps one place to
-look for:
+## Branding
 
-- shared markdown/code styling;
-- AppKit UI peer assumptions;
-- future shared React utilities.
+```tsx
+import { BrandProvider, BrandLogo } from "@dbx-tools/ui/branding/react";
+import { applyBrandContext } from "@dbx-tools/ui/branding/browser";
+import { dbxToolsAssetDataUrls } from "@dbx-tools/ui/branding/assets";
+```
 
-## Module
+Import `@dbx-tools/ui/branding/styles.css` for default brand variables. Static
+SVG assets are exported under `@dbx-tools/ui/branding/assets/*`.
 
-- `./react` - AppKit React UI kit re-export plus the controlled `BrandPicker`.
-- `./styles.css` - Tailwind/Streamdown/shiki base stylesheet.
+## Authentication
 
-App-specific React components should live in feature UI packages that import this
-foundation. Cross-feature AppKit utilities such as `BrandPicker` live here.
+```tsx
+import { AuthGate, PasskeyManager } from "@dbx-tools/ui/auth/react";
+```
+
+These components consume the browser-safe `@dbx-tools/shared-auth` contracts and
+the routes provided by `@dbx-tools/auth-gate`.
+
+## Email
+
+```tsx
+import { EmailApprovalCard, EmailComposeView } from "@dbx-tools/ui/email/react";
+import "@dbx-tools/ui/email/styles.css";
+```
+
+Email components consume `@dbx-tools/shared-email` and
+`@dbx-tools/shared-email-template`; they do not own transport or approval policy.
+
+## Search
+
+```tsx
+import { SearchBox, SearchResults, useSearch } from "@dbx-tools/ui/search/react";
+import "@dbx-tools/ui/search/styles.css";
+```
+
+Search components consume `@dbx-tools/shared-search` and AppKit's browser query
+hook. Backend selection remains in `@dbx-tools/search`.
+
+## Export Map
+
+- `./react`, `./styles.css` - common AppKit UI foundation.
+- `./branding/react`, `./branding/browser`, `./branding/assets` - brand runtime and assets.
+- `./auth/react` - passwordless sign-in and passkey management.
+- `./email/react`, `./email/styles.css` - approval, preview, and compose UI.
+- `./search/react`, `./search/styles.css` - AI Search controls and state.

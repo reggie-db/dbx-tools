@@ -71,4 +71,4 @@ Single-index UI queries read native `aiSearch` client config instead.
 
 Runtime search, index management, the Mastra tools, and the AppKit plugin live
 in [`@dbx-tools/search`](../../node/search). The React search box lives in
-[`@dbx-tools/ui-search`](../../ui/search).
+[`@dbx-tools/ui/search`](../../ui/appkit).

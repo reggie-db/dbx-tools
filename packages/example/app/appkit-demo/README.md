@@ -14,18 +14,18 @@ branding, email, and Postgres topic-bus UI packages.
   starts with Genie Agent Mode enabled and
   places a checkbox beside the inline model selector that switches to an
   otherwise-identical polling agent.
-- [`@dbx-tools/ui-search/react`](../../../js/ui/search) — native AppKit AI
+- [`@dbx-tools/ui/search/react`](../../../js/ui/appkit) — native AppKit AI
   Search and the Lakebase full-text fallback share one search box and result
   surface.
 - [`@dbx-tools/ui-teams/react`](../../../js/ui/teams) — live Adaptive Card
   rendering plus the Teams-shaped synchronous and Bot Framework chat paths.
-- [`@dbx-tools/ui-auth/react`](../../../js/ui/auth) — the passkey-first gate,
+- [`@dbx-tools/ui/auth/react`](../../../js/ui/appkit) — the passkey-first gate,
   authentication status, and right-aligned logout surface used by the public
   tunnel. Logout is omitted when tunnel authentication is unavailable.
-- [`@dbx-tools/ui-branding/react`](../../../js/ui/branding) and
-  [`@dbx-tools/ui-email/react`](../../../js/ui/email) — one active brand context
+- [`@dbx-tools/ui/branding/react`](../../../js/ui/appkit) and
+  [`@dbx-tools/ui/email/react`](../../../js/ui/appkit) — one active brand context
   drives the shell and outbound-email previews.
-- [`@dbx-tools/ui-appkit`](../../../js/ui/appkit) — the AppKit UI kit
+- [`@dbx-tools/ui`](../../../js/ui/appkit) — the AppKit UI kit
   re-export (`/react`) plus the shared Tailwind foundation.
 
 ## Pages

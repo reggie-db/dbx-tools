@@ -10,7 +10,7 @@ import {
   EmptyMedia,
   EmptyTitle,
   Spinner,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";

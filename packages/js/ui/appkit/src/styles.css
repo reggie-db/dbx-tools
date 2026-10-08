@@ -1,5 +1,5 @@
 /*
- * @dbx-tools/ui-appkit shared stylesheet.
+ * @dbx-tools/ui shared stylesheet.
  *
  * Feature UI packages (`ui-email`, `ui-mastra`, ...) import
  * this once and add their own `@source` for local class strings.
@@ -13,11 +13,11 @@
 @import "streamdown/styles.css";
 /*
  * Brand -> AppKit token bridge. Scoped to `:root[data-brand]`, so it is inert
- * until a host applies a brand (see `@dbx-tools/ui-branding` `applyBrandContext`
+ * until a host applies a brand (see `@dbx-tools/ui/branding` `applyBrandContext`
  * / `BrandProvider applyToDocument`). Imported here so it travels with every
  * feature UI package that depends on this shared base.
  */
-@import "@dbx-tools/ui-branding/brand-bridge.css";
+@import "@dbx-tools/ui/branding/brand-bridge.css";
 
 @source "./react";
 

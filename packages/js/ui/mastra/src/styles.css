@@ -13,10 +13,10 @@
  * AppKit semantic tokens, so it inherits whatever theme the host app
  * provides and restyles to match the surrounding brand for free.
  *
- * Pulls shared Streamdown / shiki styling from `@dbx-tools/ui-appkit` and
+ * Pulls shared Streamdown / shiki styling from `@dbx-tools/ui` and
  * registers this package's React components with Tailwind via `@source`.
  */
 
-@import "@dbx-tools/ui-appkit/styles.css";
+@import "@dbx-tools/ui/styles.css";
 
 @source "./react";

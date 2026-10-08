@@ -1,6 +1,6 @@
 import { errorUtils, hash, log } from "@dbx-tools/shared-core";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
-import { useBrand } from "@dbx-tools/ui-branding/react";
+import { useBrand } from "@dbx-tools/ui/branding/react";
 import type { UIMessage } from "ai";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChatApprovals } from "./chat-approvals.ts";

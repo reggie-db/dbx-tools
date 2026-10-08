@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import {
   flexRender,
   getCoreRowModel,

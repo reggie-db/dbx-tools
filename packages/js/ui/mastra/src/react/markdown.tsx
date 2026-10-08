@@ -11,7 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";

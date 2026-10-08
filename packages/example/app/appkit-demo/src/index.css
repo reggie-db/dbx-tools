@@ -1,9 +1,9 @@
 @import "@databricks/appkit-ui/styles.css";
-@import "@dbx-tools/ui-appkit/styles.css";
+@import "@dbx-tools/ui/styles.css";
 /* Feature UI styles: Streamdown base, Tailwind `@source`, shiki shim. */
 @import "@dbx-tools/ui-mastra/styles.css";
 @import "@dbx-tools/ui-teams/styles.css";
-@import "@dbx-tools/ui-search/styles.css";
+@import "@dbx-tools/ui/search/styles.css";
 
 html,
 body,

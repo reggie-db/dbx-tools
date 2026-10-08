@@ -7,7 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { HistoryIcon, Loader2Icon, PlusIcon, XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ThreadSidebar, type ThreadSidebarProps } from "./thread-sidebar.tsx";

@@ -5,7 +5,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { PanelLeftIcon, PanelRightIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { ThreadSidebar, type ThreadSidebarProps } from "./thread-sidebar.tsx";

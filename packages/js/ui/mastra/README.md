@@ -76,7 +76,7 @@ understand Mastra-specific behavior:
 @import "@dbx-tools/ui-mastra/styles.css";
 ```
 
-The stylesheet imports the shared `@dbx-tools/ui-appkit` foundation and registers
+The stylesheet imports the shared `@dbx-tools/ui` foundation and registers
 this package's React files with Tailwind. It does not define design tokens; the
 chat UI uses AppKit semantic tokens from the host app.
 

@@ -13,7 +13,7 @@ import {
   type StatementData,
 } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
-import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
+import { usePluginClientConfig } from "@dbx-tools/ui/react";
 import {
   MastraClient,
   type ListAgentSuspendedRunsResponse,

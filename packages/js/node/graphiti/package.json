@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/graphiti",
-  "description": "Typed Graphiti options and bounded Python process supervision",
+  "description": "Graphiti process supervision and AppKit integration",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -19,13 +19,19 @@
     "projen": "projen"
   },
   "devDependencies": {
+    "@types/json-schema": "^7",
     "@types/node": "catalog:",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "catalog:"
   },
   "dependencies": {
+    "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:^",
+    "@dbx-tools/auth": "workspace:^",
     "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/shared-graphiti": "workspace:^"
+    "@dbx-tools/shared-core": "workspace:^",
+    "@dbx-tools/shared-graphiti": "workspace:^",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -46,6 +52,14 @@
         "types": "./lib/src/runtime.d.ts",
         "default": "./lib/src/runtime.js"
       },
+      "./appkit": {
+        "types": "./lib/src/appkit/plugin.d.ts",
+        "default": "./lib/src/appkit/plugin.js"
+      },
+      "./appkit/config": {
+        "types": "./lib/src/appkit/config.d.ts",
+        "default": "./lib/src/appkit/config.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -61,6 +75,8 @@
     ".": "./index.ts",
     "./options": "./src/options.ts",
     "./runtime": "./src/runtime.ts",
+    "./appkit": "./src/appkit/plugin.ts",
+    "./appkit/config": "./src/appkit/config.ts",
     "./package.json": "./package.json"
   },
   "files": [

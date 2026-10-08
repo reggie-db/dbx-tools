@@ -6,7 +6,7 @@ import {
   CollapsibleTrigger,
   Spinner,
   cn,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { JsonBlock, SqlBlock, ToolMarkdown } from "./markdown.tsx";
 import type { ToolEvent, ToolProgress } from "./types.ts";

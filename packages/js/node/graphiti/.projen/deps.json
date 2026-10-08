@@ -1,6 +1,11 @@
 {
   "dependencies": [
     {
+      "name": "@types/json-schema",
+      "version": "^7",
+      "type": "build"
+    },
+    {
       "name": "@types/node",
       "version": "catalog:",
       "type": "build"
@@ -11,7 +16,22 @@
       "type": "build"
     },
     {
+      "name": "vitest",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
+      "name": "@databricks/appkit",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/appkit",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/auth",
       "version": "workspace:^",
       "type": "runtime"
     },
@@ -21,8 +41,18 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-core",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-graphiti",
       "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "zod",
+      "version": "catalog:",
       "type": "runtime"
     }
   ],

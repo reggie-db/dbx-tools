@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
   Slider,
   Spinner,
-} from "@dbx-tools/ui-appkit/react";
+} from "@dbx-tools/ui/react";
 import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ChatModelOption, ChatViewProps } from "./types.ts";
