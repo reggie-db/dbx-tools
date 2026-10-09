@@ -3,6 +3,7 @@
 import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
+import { serviceTrayIcon } from "@dbx-tools/cli-service/icon";
 import { connectionUrl } from "@dbx-tools/lakebase";
 import { Command } from "commander";
 
@@ -28,6 +29,7 @@ export function lakebaseProxyServiceDefinition(
   return defineService(import.meta.url, {
     id: "dbx-tools.cli-lakebase-proxy",
     name: "dbx lakebase proxy",
+    icon: serviceTrayIcon("lakebase"),
     command: {
       binName: "dbx-lakebase-proxy",
       arguments: serializeArgs(resolved),

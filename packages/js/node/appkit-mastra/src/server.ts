@@ -6,8 +6,9 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { hash, http, log, object, stringUtils, token } from "@dbx-tools/shared-core";
+import { errorUtils, hash, http, log, object, stringUtils, token } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
+import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra/resume";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
@@ -42,6 +43,7 @@ import { recordActiveTraceAuth, recordActiveTraceUser } from "./telemetry.ts";
  * when no SDK is registered, which must never be surfaced as a trace to
  * attach feedback to.
  */
+const logger = log.logger("mastra/server");
 const INVALID_TRACE_ID = "0".repeat(32);
 const TRUSTED_REQUEST_CONTEXT_KEYS = [
   MASTRA_RESOURCE_ID_KEY,
@@ -458,5 +460,35 @@ export function attachRoutePatchMiddleware(app: express.Express): void {
     if (!isCustomRoute) return next();
     req.originalUrl = req.path;
     next();
+  });
+}
+
+/**
+ * Finish a chat request when Mastra throws because the workflow is no
+ * longer suspended. Duplicate approve/resume and late `consumeStream`
+ * both hit that path; the client already has (or will reload) the
+ * completed turn.
+ */
+export function attachStaleResumeRecovery(app: express.Express): void {
+  app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!isStaleMastraResumeError(error)) {
+      next(error);
+      return;
+    }
+    logger.warn("ignored stale mastra resume", {
+      path: req.path,
+      error: errorUtils.errorMessage(error),
+    });
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    res.status(200);
+    res.setHeader("content-type", "text/event-stream; charset=utf-8");
+    res.setHeader("cache-control", "no-cache");
+    res.write(`data: ${JSON.stringify({ type: "start" })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: "finish" })}\n\n`);
+    res.write("data: [DONE]\n\n");
+    res.end();
   });
 }

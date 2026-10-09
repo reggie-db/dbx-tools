@@ -111,6 +111,7 @@ import { buildObservability, configureOtelPropagation } from "./observability.ts
 import { provisionRemoteSkills } from "./remote-skills.ts";
 import {
   attachRoutePatchMiddleware,
+  attachStaleResumeRecovery,
   createRequestContext,
   isMastraRequestAllowed,
   MastraServer,
@@ -1185,6 +1186,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       customApiRoutes: agentChatRoutes(),
     });
     await this.mastraServer.init();
+    attachStaleResumeRecovery(this.mastraApp);
     this.logger.info("ready", {
       agents: Object.keys(this.built.agents),
       defaultAgent: this.built.defaultAgentId,

@@ -12,7 +12,14 @@ import {
   AppKitChildProcess,
   type AppKitChildProcessHealthCheck,
 } from "@dbx-tools/appkit/child-process";
-import { asyncUtils, options as sharedOptions } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/core";
+import {
+  asyncUtils,
+  environmentUtils,
+  functionUtils,
+  options as sharedOptions,
+} from "@dbx-tools/shared-core";
+import { coerce, rcompare, type SemVer } from "semver";
 import {
   graphitiOptionsEnvironment,
   resolveGraphitiOptions,
@@ -30,6 +37,22 @@ export type GraphitiRuntimeOptions = GraphitiOptions & {
 };
 
 const HEALTH_CHECK_INTERVAL_MS = 200;
+const PYTHON_CANDIDATES = ["python", "python3"] as const;
+const GRAPHITI_IMPORT_PROBE = "import dbx_tools.graphiti";
+
+interface PythonCandidate {
+  command: string;
+  version: SemVer;
+}
+
+/** Discover the newest app-installed Python that can import Graphiti once per process. */
+const graphitiPython = functionUtils.memoize(async (): Promise<string | undefined> => {
+  const available = (
+    await Promise.all(PYTHON_CANDIDATES.map((command) => _probePython(command)))
+  ).filter((candidate): candidate is PythonCandidate => candidate !== undefined);
+  available.sort((left, right) => rcompare(left.version, right.version));
+  return available[0]?.command;
+});
 
 /** Shared Graphiti options accepted by runtime callers, without the Node probe. */
 function graphitiOptions(options: GraphitiRuntimeOptions): GraphitiOptions {
@@ -108,13 +131,17 @@ export interface GraphitiPythonCommand {
   args: string[];
 }
 
-/** Resolve direct Python when configured, otherwise a uv-provisioned runtime. */
+/** Resolve configured or app-installed Python, otherwise a uv-provisioned runtime. */
 export async function resolveGraphitiPythonCommand(
   options: { dev?: boolean } = {},
   ...args: string[]
 ): Promise<GraphitiPythonCommand> {
-  const python = process.env.PYTHON;
+  const python = process.env.PYTHON?.trim();
   if (python) return { command: python, args };
+  if (environmentUtils.isDatabricksAppEnv()) {
+    const installed = await graphitiPython();
+    if (installed) return { command: installed, args };
+  }
   const extra = options.dev ? "[dev]" : "";
   const packageArgs = [
     "--with",
@@ -124,6 +151,28 @@ export async function resolveGraphitiPythonCommand(
     command: "uv",
     args: ["run", "--no-project", ...packageArgs, "--python", "python3", "python", ...args],
   };
+}
+
+/** Return one import-capable Python executable and its semantic version. */
+async function _probePython(command: string): Promise<PythonCandidate | undefined> {
+  const versionResult = await exec.spawn(command, ["-V"], {
+    check: false,
+    stdin: "ignore",
+    stdout: "capture",
+    stderr: "capture",
+    trim: true,
+  });
+  if (versionResult.exitCode !== 0) return undefined;
+  const version = coerce(`${versionResult.stdout}\n${versionResult.stderr}`);
+  if (!version) return undefined;
+
+  const importResult = await exec.spawn(command, ["-c", GRAPHITI_IMPORT_PROBE], {
+    check: false,
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  return importResult.exitCode === 0 ? { command, version } : undefined;
 }
 
 /** Build one HTTP URL for a resolved Graphiti listener. */

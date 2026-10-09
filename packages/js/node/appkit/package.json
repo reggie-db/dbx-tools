@@ -35,6 +35,7 @@
     "@dbx-tools/lakebase": "workspace:^",
     "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
+    "@dbx-tools/shared-fs": "workspace:^",
     "lru-cache": "catalog:",
     "zod": "catalog:"
   },
@@ -68,6 +69,10 @@
       "./databricks": {
         "types": "./lib/src/databricks.d.ts",
         "default": "./lib/src/databricks.js"
+      },
+      "./files-cache": {
+        "types": "./lib/src/files-cache.d.ts",
+        "default": "./lib/src/files-cache.js"
       },
       "./identity": {
         "types": "./lib/src/identity.d.ts",
@@ -131,6 +136,7 @@
     "./bundle": "./src/bundle.ts",
     "./child-process": "./src/child-process.ts",
     "./databricks": "./src/databricks.ts",
+    "./files-cache": "./src/files-cache.ts",
     "./identity": "./src/identity.ts",
     "./interceptor": "./src/interceptor.ts",
     "./lakebase-resolver": "./src/lakebase-resolver.ts",

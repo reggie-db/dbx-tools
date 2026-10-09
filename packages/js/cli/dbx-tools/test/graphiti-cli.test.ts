@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
-import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
 import { GraphitiOptionsSchema as RuntimeGraphitiOptionsSchema } from "@dbx-tools/appkit-graphiti/options";
 import type { GraphitiRuntimeOptions } from "@dbx-tools/appkit-graphiti/runtime";
+import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
+import { serviceTrayIcon } from "@dbx-tools/cli-service/icon";
 import { PACKAGE_VERSION } from "../index.ts";
 import { buildProgram, graphitiServiceDefinition } from "../src/graphiti/cli.ts";
 import { GRAPHITI_DEFAULTS, GraphitiOptionsSchema } from "../src/graphiti/options.ts";
@@ -54,14 +57,28 @@ describe("Graphiti CLI", () => {
     assert.equal(definition.packageName, "@dbx-tools/cli");
     assert.equal(definition.id, "dbx-tools.cli-graphiti");
     assert.equal(definition.name, "dbx graphiti");
+    assert.equal(definition.icon, serviceTrayIcon("graphiti"));
+    assert.equal(
+      definition.dataDirectory,
+      join(homedir(), ".dbx-tools", "services", "graphiti"),
+    );
     assert.equal(definition.command?.executable, undefined);
     assert.equal(definition.command?.binName, "dbx-graphiti");
     assert.deepEqual(definition.pythonPackage, {
-      name: "dbx-tools-graphiti",
+      name: "dbx-tools-graphiti[dev]",
       python: "3.11",
       dependencies: [],
     });
     assert.ok(definition.command?.arguments?.includes("GRAPHITI-PROFILE"));
+    assert.ok(definition.command?.arguments?.includes(join(homedir(), ".dbx-tools", "graphiti")));
+  });
+
+  it("installs no embedded database extra for external PostgreSQL", () => {
+    const definition = graphitiServiceDefinition({
+      databaseUrl: "postgresql://localhost/graphiti",
+    });
+
+    assert.equal(definition.pythonPackage?.name, "dbx-tools-graphiti");
   });
 
   it("persists options through shared install without starting foreground", async () => {
@@ -74,6 +91,9 @@ describe("Graphiti CLI", () => {
       async start() {},
       async stop() {},
       async restart() {},
+      logPath() {
+        return "/var/log/graphiti.log";
+      },
       async uninstall() {},
       async status() {
         return { installed: false, running: false };

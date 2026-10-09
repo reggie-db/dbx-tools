@@ -30,6 +30,40 @@ describe("Lakebase discovery", () => {
     });
   });
 
+  test("caches credentials until the API expiry buffer and coalesces refreshes", async () => {
+    const { calls, client } = discoveryClient();
+    const endpoint = "projects/project/branches/production/endpoints/primary";
+    expect(
+      await Promise.all([
+        client.generateDatabaseCredential(endpoint, "PROFILE"),
+        client.generateDatabaseCredential(endpoint, "PROFILE"),
+      ]),
+    ).toEqual(["database-token", "database-token"]);
+    expect(await client.generateDatabaseCredential(endpoint, "PROFILE")).toBe("database-token");
+    expect(calls.filter((call) => call.path.endsWith("/credentials"))).toHaveLength(1);
+  });
+
+  test("does not cache credentials inside the refresh buffer", async () => {
+    const { calls, client } = discoveryClient(undefined, {
+      token: "short-lived-token",
+      expire_time: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const endpoint = "projects/project/branches/production/endpoints/primary";
+    expect(await client.generateDatabaseCredential(endpoint, "PROFILE")).toBe("short-lived-token");
+    expect(await client.generateDatabaseCredential(endpoint, "PROFILE")).toBe("short-lived-token");
+    expect(calls.filter((call) => call.path.endsWith("/credentials"))).toHaveLength(2);
+  });
+
+  test("requires the credential expiration returned by the API", async () => {
+    const { client } = discoveryClient(undefined, { token: "database-token" });
+    await expect(
+      client.generateDatabaseCredential(
+        "projects/project/branches/production/endpoints/primary",
+        "PROFILE",
+      ),
+    ).rejects.toThrow("expire_time");
+  });
+
   test("ignores a generic postgres name on a Lakebase path", async () => {
     const { client } = discoveryClient([
       database("postgres", "postgres"),
@@ -72,7 +106,13 @@ describe("Lakebase discovery", () => {
   });
 });
 
-function discoveryClient(databases: object[] = [database("default", "databricks_postgres")]): {
+function discoveryClient(
+  databases: object[] = [database("default", "databricks_postgres")],
+  credential: unknown = {
+    token: "database-token",
+    expire_time: "2099-01-01T00:00:00Z",
+  },
+): {
   calls: Array<{ path: string; body?: unknown }>;
   client: LakebaseClient;
 } {
@@ -142,7 +182,7 @@ function discoveryClient(databases: object[] = [database("default", "databricks_
     ],
     ["/api/2.0/postgres/projects/project/branches/production/databases", { databases }],
     ["/api/2.0/preview/scim/v2/Me", { userName: "user@example.com" }],
-    ["/api/2.0/postgres/credentials", { token: "database-token" }],
+    ["/api/2.0/postgres/credentials", credential],
   ]);
   const api: LakebaseApiClient = {
     profiles: () => [profile("PROFILE")],

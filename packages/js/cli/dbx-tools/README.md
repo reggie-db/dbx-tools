@@ -499,6 +499,7 @@ dbx lakebase-proxy service [command]
 | `stop`              | Stop the running service                              |
 | `restart`           | Restart the installed service                         |
 | `status`            | Print service installation and process state as JSON  |
+| `logs [command...]` | Print the service log path or append it to a command  |
 | `uninstall`         | Stop and remove the service for the current user      |
 
 ### `dbx lakebase-proxy service install`
@@ -514,6 +515,8 @@ dbx lakebase-proxy service install [options]
 | Option                              | Description                                                                  |
 | ----------------------------------- | ---------------------------------------------------------------------------- |
 | `--no-start`                        | Do not start the service after installation                                  |
+| `--python-project <path>`           | Install a local Python project instead of the registry package               |
+| `--offline`                         | Install Python packages from the uv cache without network access             |
 | `--postgres-role <value>`           | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE) |
 | `--listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN)      |
 | `--startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS)      |
@@ -550,6 +553,20 @@ Print service installation and process state as JSON
 ```sh
 dbx lakebase-proxy service status
 ```
+
+### `dbx lakebase-proxy service logs`
+
+Print the service log path or append it to a command
+
+```sh
+dbx lakebase-proxy service logs [command...]
+```
+
+#### Arguments
+
+| Argument  | Description                                              |
+| --------- | -------------------------------------------------------- |
+| `command` | Command and arguments to run before the service log path |
 
 ### `dbx lakebase-proxy service uninstall`
 
@@ -603,6 +620,7 @@ dbx model-gateway service [command]
 | `stop`              | Stop the running service                              |
 | `restart`           | Restart the installed service                         |
 | `status`            | Print service installation and process state as JSON  |
+| `logs [command...]` | Print the service log path or append it to a command  |
 | `uninstall`         | Stop and remove the service for the current user      |
 
 ### `dbx model-gateway service install`
@@ -615,9 +633,11 @@ dbx model-gateway service install [options]
 
 #### Options
 
-| Option       | Description                                 |
-| ------------ | ------------------------------------------- |
-| `--no-start` | Do not start the service after installation |
+| Option                    | Description                                                      |
+| ------------------------- | ---------------------------------------------------------------- |
+| `--no-start`              | Do not start the service after installation                      |
+| `--python-project <path>` | Install a local Python project instead of the registry package   |
+| `--offline`               | Install Python packages from the uv cache without network access |
 
 ### `dbx model-gateway service start`
 
@@ -650,6 +670,20 @@ Print service installation and process state as JSON
 ```sh
 dbx model-gateway service status
 ```
+
+### `dbx model-gateway service logs`
+
+Print the service log path or append it to a command
+
+```sh
+dbx model-gateway service logs [command...]
+```
+
+#### Arguments
+
+| Argument  | Description                                              |
+| --------- | -------------------------------------------------------- |
+| `command` | Command and arguments to run before the service log path |
 
 ### `dbx model-gateway service uninstall`
 
@@ -730,6 +764,7 @@ dbx graphiti service [command]
 | `stop`              | Stop the running service                              |
 | `restart`           | Restart the installed service                         |
 | `status`            | Print service installation and process state as JSON  |
+| `logs [command...]` | Print the service log path or append it to a command  |
 | `uninstall`         | Stop and remove the service for the current user      |
 
 ### `dbx graphiti service install`
@@ -742,9 +777,11 @@ dbx graphiti service install [options]
 
 #### Options
 
-| Option       | Description                                 |
-| ------------ | ------------------------------------------- |
-| `--no-start` | Do not start the service after installation |
+| Option                    | Description                                                      |
+| ------------------------- | ---------------------------------------------------------------- |
+| `--no-start`              | Do not start the service after installation                      |
+| `--python-project <path>` | Install a local Python project instead of the registry package   |
+| `--offline`               | Install Python packages from the uv cache without network access |
 
 ### `dbx graphiti service start`
 
@@ -777,6 +814,20 @@ Print service installation and process state as JSON
 ```sh
 dbx graphiti service status
 ```
+
+### `dbx graphiti service logs`
+
+Print the service log path or append it to a command
+
+```sh
+dbx graphiti service logs [command...]
+```
+
+#### Arguments
+
+| Argument  | Description                                              |
+| --------- | -------------------------------------------------------- |
+| `command` | Command and arguments to run before the service log path |
 
 ### `dbx graphiti service uninstall`
 

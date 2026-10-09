@@ -176,17 +176,9 @@
         "types": "./lib/src/serving.d.ts",
         "default": "./lib/src/serving.js"
       },
-      "./skill-cache": {
-        "types": "./lib/src/skill-cache.d.ts",
-        "default": "./lib/src/skill-cache.js"
-      },
       "./skill-paths": {
         "types": "./lib/src/skill-paths.d.ts",
         "default": "./lib/src/skill-paths.js"
-      },
-      "./skill-search": {
-        "types": "./lib/src/skill-search.d.ts",
-        "default": "./lib/src/skill-search.js"
       },
       "./statement": {
         "types": "./lib/src/statement.d.ts",
@@ -261,9 +253,7 @@
     "./server": "./src/server.ts",
     "./serving-sanitize": "./src/serving-sanitize.ts",
     "./serving": "./src/serving.ts",
-    "./skill-cache": "./src/skill-cache.ts",
     "./skill-paths": "./src/skill-paths.ts",
-    "./skill-search": "./src/skill-search.ts",
     "./statement": "./src/statement.ts",
     "./storage-schema": "./src/storage-schema.ts",
     "./style": "./src/style.ts",

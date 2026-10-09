@@ -78,9 +78,9 @@ bookkeeping telemetry. A hit should not require both a database read and
 `createWorkspace()` enables the default Assistant skill folders and merges
 consumer folders over them:
 
-- `/Workspace/.assistant/skills`;
-- `/Users/<email>/.assistant/skills`;
-- consumer-defined folders such as ESADS global and app skills.
+- `/Workspace/.assistant/organization-skills`;
+- `/Users/<email>/.assistant/personal-skills`;
+- consumer-defined personal and shared skill folders.
 
 The workspace uses a dynamic `SkillsResolver`. On every turn,
 `buildWorkspaceSkillsResolver()` calls `resolveWorkspaceContribution()` and
@@ -202,5 +202,5 @@ For the RaceTrac reproduction:
 - no-skill turns issue fewer than 20 workspace GETs after warm-up;
 - no workspace 429 responses occur;
 - skill processing after warm-up completes in under 500 ms;
-- all default and ESADS skill folders remain available;
+- all default and consumer-defined skill folders remain available;
 - user skill edits become visible within the configured refresh interval.

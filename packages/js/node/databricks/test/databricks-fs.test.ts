@@ -123,6 +123,25 @@ describe("DatabricksFileSystem", () => {
     );
   });
 
+  it("resolves the current client for every operation", async () => {
+    const first = mockVolumeClient();
+    const second = mockVolumeClient();
+    let current = first.client;
+    const fs = new DatabricksFileSystem({
+      root: "main.default.assets",
+      client: () => current,
+    });
+    await fs.init();
+
+    await fs.writeFile("first.txt", "first");
+    current = second.client;
+    await fs.writeFile("second.txt", "second");
+
+    assert.equal(first.files.has("/Volumes/main/default/assets/first.txt"), true);
+    assert.equal(first.files.has("/Volumes/main/default/assets/second.txt"), false);
+    assert.equal(second.files.has("/Volumes/main/default/assets/second.txt"), true);
+  });
+
   it("streams UC Volume files without buffering through readFile/writeFile", async () => {
     const { client, files } = mockVolumeClient();
     const fs = new DatabricksFileSystem({ root: "main.default.assets", client });

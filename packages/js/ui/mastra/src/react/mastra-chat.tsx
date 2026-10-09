@@ -1,4 +1,5 @@
 import { errorUtils, hash, log } from "@dbx-tools/shared-core";
+import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra/resume";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { useBrand } from "@dbx-tools/ui/branding/react";
 import type { UIMessage } from "ai";
@@ -468,6 +469,25 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         }
       } catch (caught) {
         if (getSession(threadId).runToken !== token) return;
+        if (isStaleMastraResumeError(caught)) {
+          logger.warn("ignored stale mastra resume", {
+            error: errorUtils.errorMessage(caught),
+          });
+          updateSession(threadId, (session) => {
+            if (session.runToken !== token) return session;
+            return {
+              ...session,
+              error: null,
+              status: "ready",
+              abortController:
+                session.abortController === controller ? null : session.abortController,
+              runId: runIdRef.current,
+            };
+          });
+          refreshThreadsSoon();
+          drainQueueRef.current(threadId);
+          return;
+        }
         logger.error("stream error", {
           error: errorUtils.errorMessage(caught),
         });

@@ -308,6 +308,18 @@ Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
 and `ui`. Repo-specific mixins layer package-specific dependencies,
 scripts, and generated files on top.
 
+Every workspace root exposes a generic development watcher:
+
+```sh
+bun run dev:watch [--debounce-ms 15000] [--restart-key r] <command> [args...]
+```
+
+It restarts after watched writes have been quiet for 15 seconds. Command paths,
+`--cwd`, and `--filter` identify the owning package; its transitive workspace
+dependencies are watched with the shared generated/dependency/test/temp ignores.
+Press the configured key for an immediate restart. The demo uses this task to
+run its concrete server entrypoint; the `server` tag does not assume one.
+
 AppKit 0.81's `appkitServerConfig()` is the preferred tsdown preset for a
 consumer app using conventional compiled `server/agents/*/agent.ts` entries. It
 does not replace this engine's package discovery, Bun browser build, source-run

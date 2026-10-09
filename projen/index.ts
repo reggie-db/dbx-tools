@@ -10,6 +10,7 @@ export * as bunWorkflow from "./src/bun-workflow.ts";
 export * as clean from "./src/clean.ts";
 export * as codegen from "./src/codegen.ts";
 export * as dbxToolsConfig from "./src/dbx-tools-config.ts";
+export * as devWatch from "./src/dev-watch.ts";
 export * as engineRoot from "./src/engine-root.ts";
 export * as generated from "./src/generated.ts";
 export * as mixin from "./src/mixin.ts";
@@ -40,6 +41,7 @@ export { BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE, BUN_APP_OVERRIDES, RootBunfigFile
 export { BUN_VERSION } from "./src/bun-workflow.ts";
 export { DBXToolsConfigDataSchema, DBXToolsConfig } from "./src/dbx-tools-config.ts";
 export type { DBXToolsConfigOptions, DBXToolsConfigData } from "./src/dbx-tools-config.ts";
+export { DEV_WATCH_TASK, DEV_WATCH_SCRIPT, DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY, SERVER_WATCH_DISABLED_ENV } from "./src/dev-watch.ts";
 export { resolvePkgRoot } from "./src/engine-root.ts";
 export { PYTHON_GENERATED_PACKAGE, PYTHON_SYNC_PACKAGE } from "./src/generated.ts";
 export type { HeaderOpts } from "./src/generated.ts";

@@ -40,6 +40,7 @@ export interface L1CacheStorageOptions {
 
 /** AppKit's internal persistent storage surface. */
 export type PersistentStorageBase = CacheStorage & {
+  cleanupExpired?(): Promise<number>;
   initialize(): Promise<void>;
   initialized: boolean;
   schemaName?: string;
@@ -111,6 +112,16 @@ export class L1CacheStorage implements CacheStorage {
   async close(): Promise<void> {
     this.entries.clear();
     await this.storage.close();
+  }
+
+  /** Forward AppKit's runtime-only persistent cleanup hook when available. */
+  async cleanupExpired(): Promise<number> {
+    const cleanup = (
+      this.storage as CacheStorage & {
+        cleanupExpired?: () => Promise<number>;
+      }
+    ).cleanupExpired;
+    return cleanup ? cleanup.call(this.storage) : 0;
   }
 
   private retain<T>(key: string, entry: CacheEntry<T>): void {

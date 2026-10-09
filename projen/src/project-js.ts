@@ -21,6 +21,7 @@ import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { codegenModulePaths, generateCodegen } from "./codegen.ts";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
+import { DEV_WATCH_SCRIPT, DEV_WATCH_TASK } from "./dev-watch.ts";
 import { resolvePkgRoot } from "./engine-root.ts";
 import * as mixin from "./mixin.ts";
 import {
@@ -1070,6 +1071,11 @@ function resolveTags(p: DiscoveredPackage, tagPaths: Record<string, string[]>): 
 function registerRootTasks(project: javascript.NodeProject): void {
   project.addTask("barrels", { execArgs: taskCommand("barrels.ts") });
   project.addTask("clean", { execArgs: taskCommand("clean.ts"), receiveArgs: true });
+  project.addTask(DEV_WATCH_TASK, {
+    description: "Restart a development command after watched changes settle",
+    execArgs: taskCommand(DEV_WATCH_SCRIPT),
+    receiveArgs: true,
+  });
   project.addTask("sync", {
     execArgs: taskCommand("sync.ts"),
     receiveArgs: true,

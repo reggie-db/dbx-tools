@@ -1,8 +1,9 @@
 /**
  * Mastra workspace factory for Databricks Apps.
  *
- * Builds a per-request {@link Workspace} with Databricks Sandbox command
- * execution plus a {@link CompositeFilesystem} over the NAMED skill folders
+ * Builds a {@link Workspace} with Databricks Sandbox command execution, an
+ * isolated `/tmp` scratch mount, and a {@link CompositeFilesystem} over the
+ * named skill folders
  * resolved for that request. A skill folder maps a name to a location plus its
  * readable / writable policy: a Databricks path mounted through the OBO client
  * on {@link MASTRA_USER_KEY}, or any {@link WorkspaceFilesystem} a consuming
@@ -12,28 +13,43 @@
  * filesystems and skill scan roots on top.
  *
  * Databricks mounts use `@dbx-tools/databricks` {@link DatabricksFileSystem}
- * wrapped by {@link filesystems}; missing roots fall back to
- * {@link scratchFilesystem}.
+ * wrapped by {@link filesystems}; inaccessible roots are skipped independently.
  *
  * @module
  */
 
 import { createHash } from "node:crypto";
-import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
+import {
+  ConfigurationError,
+  createWorkspaceClient,
+  getExecutionContext,
+} from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
+import { pluginRegistry } from "@dbx-tools/appkit";
+import {
+  filesCache as filesCachePlugin,
+  type FilesCacheExports,
+  type FilesCacheScope,
+} from "@dbx-tools/appkit/files-cache";
 import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
 import { LocalFileSystem } from "@dbx-tools/fs";
 import { errorUtils, log, object, stringUtils, token } from "@dbx-tools/shared-core";
-import type { FileSystem } from "@dbx-tools/shared-fs";
-import { LRUCache } from "lru-cache";
+import {
+  fs as sharedFS,
+  posixPath,
+  type FileSystemCache,
+} from "@dbx-tools/shared-fs";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
-  CompositeFilesystem,
+  WORKSPACE_TOOLS,
   Workspace,
   type SkillsResolver,
   type WorkspaceFilesystem,
   type WorkspaceSandbox,
   type WorkspaceSandboxResolver,
+  type ToolConfigWithArgsContext,
+  type WorkspaceToolConfig,
+  type WorkspaceToolsConfig,
 } from "@mastra/core/workspace";
 
 import {
@@ -43,16 +59,18 @@ import {
   resolveUserKey,
   type User,
 } from "./config.ts";
-import { filesystems, scratchFilesystem } from "./filesystems.ts";
+import {
+  filesystems,
+  MountedCompositeFilesystem,
+  scratchFilesystem,
+  type MastraFileSystemAdapterOptions,
+} from "./filesystems.ts";
 import { MontySandbox } from "./monty-sandbox.ts";
 import { DatabricksSandbox, type DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
 import {
-  DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS,
-  workspaceSkillCatalogue,
-  type SkillCatalogueResolver,
-  type SkillCatalogueSource,
-} from "./skill-cache.ts";
-import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-paths.ts";
+  ORGANIZATION_ASSISTANT_PATH,
+  personalWorkspacePath,
+} from "./skill-paths.ts";
 
 /* ------------------------------ constants ------------------------------ */
 
@@ -60,11 +78,6 @@ import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-p
 const WORKSPACE_FILE_SCOPES = ["workspace", "workspace.workspace", "all-apis"] as const;
 
 const logger = log.logger("mastra/workspaces");
-const MAX_SCOPED_WORKSPACE_FILESYSTEMS = 16;
-const scopedWorkspaceFilesystems = new LRUCache<string, WorkspaceFilesystem>({
-  max: MAX_SCOPED_WORKSPACE_FILESYSTEMS,
-});
-const workspaceCatalogueResolvers = new WeakMap<Workspace, SkillCatalogueResolver>();
 
 /* -------------------------------- types -------------------------------- */
 
@@ -88,37 +101,44 @@ export type SkillFolderValue<T> =
  * itself. {@link filesystem} wins when both are set.
  */
 export interface SkillFolderOptions {
-  /** Absolute Databricks workspace path for this folder. */
+  /** Absolute Databricks workspace root mounted at its actual path. */
   path?: SkillFolderValue<string>;
   /** Ready-made mount, for locations the OBO client cannot reach. */
   filesystem?: SkillFolderValue<WorkspaceFilesystem>;
+  /** Human-friendly mount name shown in filesystem listings. */
+  displayName?: string;
+  /** Mount description shown in filesystem listings and workspace instructions. */
+  description?: string;
   /**
    * Scan this mount for `SKILL.md` files. Defaults to `true`; `false` mounts
    * the location for file tools without adding it to skill discovery.
    */
   readable?: boolean;
   /**
-   * Allow writes to a {@link path} mount (and create the root when missing).
-   * Defaults to `false`. A supplied {@link filesystem} carries its own
-   * read-only flag instead.
+   * Skill roots relative to this filesystem root. Defaults to `["."]`.
+   * Each path is joined to the actual mount path before Mastra scans it.
+   */
+  skills?: readonly string[];
+  /**
+   * Allow write attempts to a {@link path} mount. Defaults to `true` for
+   * `/Workspace` roots and `false` elsewhere. Databricks permissions still
+   * determine whether each mutation succeeds.
    */
   writable?: boolean;
-  /** Mount point in the composite namespace. Defaults to `/<name>`. */
+  /**
+   * Create a writable {@link path} root when missing. Defaults to
+   * {@link writable}; set `false` for pre-existing roots with conditional access.
+   */
+  createRoot?: boolean;
+  /** Mount point in the composite namespace. Databricks paths default to their actual root. */
   mount?: string;
 }
 
 /** Mount map plus optional Mastra skill scan roots for one resolver. */
 export interface WorkspaceMountContribution {
   mounts: Record<string, WorkspaceFilesystem>;
-  /** Ordered source roots included in catalogue discovery. */
-  skillSources?: SkillCatalogueSource[];
   /** Paths within the composite namespace where `SKILL.md` files are scanned. */
   skillPaths?: string[];
-  /**
-   * Stable identity for this contribution. When every non-empty contribution
-   * supplies one, Mastra reuses the resolved source across requests.
-   */
-  cacheKey?: string;
 }
 
 /** Contributes filesystem mounts (and optional skill paths) for one request. */
@@ -127,7 +147,7 @@ export type WorkspaceMountResolver = (
 ) => WorkspaceMountContribution | Promise<WorkspaceMountContribution>;
 
 /** Names carried by {@link DEFAULT_SKILL_FOLDERS}. */
-export type DefaultSkillFolderName = "workspace-team" | "workspace-team-app";
+export type DefaultSkillFolderName = "organization-skills" | "personal-skills";
 
 /**
  * Sandbox selection for {@link createWorkspace}. Databricks is the default;
@@ -165,11 +185,10 @@ export interface CreateWorkspaceOptions {
   skills?: SkillsResolver;
   /** Forwarded to Mastra when skill discovery is enabled. */
   checkSkillFileMtime?: boolean;
-  /**
-   * Refresh TTL for the complete parsed skill catalogue. Auxiliary reads are
-   * always fresh. Defaults to five minutes.
-   */
-  workspaceSkillRefreshTtlMs?: number;
+  /** Additional native Mastra workspace tool configuration and overrides. */
+  tools?: WorkspaceToolsConfig;
+  /** AppKit plugin context used to discover optional sibling capabilities. */
+  pluginContext?: pluginRegistry.PluginContextLike;
   /** Enable BM25 keyword search over indexed workspace content. */
   bm25?: boolean;
   /**
@@ -193,25 +212,32 @@ export interface CreateWorkspaceOptions {
 /**
  * The skill folders every workspace starts with.
  *
- * - `workspace-team` - the shared workspace Assistant tree, read-only because
- *   writing it is a workspace-admin action.
- * - `workspace-team-app` - the requesting user's own Assistant tree, writable
- *   so the app can save skills back to it. Skipped when the request carries no
- *   user email.
+ * - `organization-skills` - `/Workspace/.assistant` with `skills`; write
+ *   attempts require approval and remain subject to Databricks permissions.
+ * - `personal-skills` - the requesting user's `/Workspace/Users/<email>` root
+ *   with `.assistant/skills`, writable and skipped without an email.
  */
 export const DEFAULT_SKILL_FOLDERS: Readonly<Record<DefaultSkillFolderName, SkillFolderOptions>> = {
-  "workspace-team": {
-    path: ASSISTANT_SHARED_SKILLS_PATH,
+  "organization-skills": {
+    description: "Organization skills shared with everyone in this Databricks workspace.",
+    displayName: "Organization Skills",
+    path: ORGANIZATION_ASSISTANT_PATH,
     readable: true,
-    writable: false,
+    skills: ["skills"],
+    writable: true,
+    createRoot: false,
   },
-  "workspace-team-app": {
+  "personal-skills": {
+    description: "Your Databricks workspace home directory for personal files and skills.",
+    displayName: "Home",
     path: ({ requestContext }) => {
       const email = resolveScopedEmail(requestContext);
-      return email ? userAssistantSkillsPath(email) : undefined;
+      return email ? personalWorkspacePath(email) : undefined;
     },
     readable: true,
+    skills: [".assistant/skills"],
     writable: true,
+    createRoot: false,
   },
 };
 
@@ -227,8 +253,11 @@ export const DEFAULT_SKILL_FOLDERS: Readonly<Record<DefaultSkillFolderName, Skil
  * ```ts
  * createWorkspace({
  *   skillFolders: {
- *     "workspace-team": { path: "/Workspace/Shared/team-skills" },
- *     "workspace-team-app": false,
+ *     "organization-skills": {
+ *       path: "/Workspace/Shared/.assistant",
+ *       skills: ["skills"],
+ *     },
+ *     "personal-skills": false,
  *     runbooks: { path: "/Workspace/Shared/runbooks/skills", writable: true },
  *     volume: { filesystem: myVolumeFilesystem },
  *   },
@@ -252,15 +281,43 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
   const skillFolders = resolveSkillFolders(options);
   const folderNames = Object.keys(skillFolders);
   const extraSkillPaths = options.extraSkillPaths ?? [];
+  const filesCache = pluginRegistry
+    .instance(options.pluginContext, filesCachePlugin)
+    ?.exports();
+  const retainFilesystemSource =
+    filesCache !== undefined &&
+    (options.mounts?.length ?? 0) === 0 &&
+    Object.values(skillFolders).every(
+      (folder) =>
+        typeof folder.filesystem !== "function" &&
+        !(typeof folder.path === "function" && folder.mount !== undefined),
+    );
   const resolvers = buildMountResolvers(
     skillFolders,
     [...(options.mounts ?? []), ...localSkillMountResolvers(extraSkillPaths)],
+    filesCache,
   );
   const resolveContribution = contributionResolver(resolvers);
-  const skills = options.skills;
+  const resolveFilesystem = (context: WorkspaceMountContext) =>
+    resolveWorkspaceFilesystem(
+      resolveContribution,
+      context,
+      retainFilesystemSource ? filesCache : undefined,
+    );
+  const skills: SkillsResolver =
+    options.skills ??
+    (async ({ requestContext }) => {
+      const context = { requestContext };
+      const contribution = await resolveContribution(context);
+      return resolveDistinctSkillPaths(
+        await resolveFilesystem(context),
+        contribution.skillPaths ?? [],
+      );
+    });
   const checkSkillFileMtime = options.checkSkillFileMtime ?? false;
   const bm25 = options.bm25 !== false;
   const sandbox = resolveWorkspaceSandbox(options.sandbox, id, name);
+  const tools = workspaceTools(options.tools);
   logger.debug("workspace:create", {
     id,
     name,
@@ -269,8 +326,6 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
     customMountResolvers: options.mounts?.length ?? 0,
     customSkillsResolver: Boolean(options.skills),
     checkSkillFileMtime,
-    workspaceSkillRefreshTtlMs:
-      options.workspaceSkillRefreshTtlMs ?? DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS,
     bm25,
     extraSkillPaths: extraSkillPaths.length,
     sandbox: sandbox ? sandboxName(options.sandbox) : "disabled",
@@ -279,8 +334,8 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
   const workspace = new Workspace({
     id,
     name,
-    filesystem: (context) => resolveWorkspaceFilesystem(resolveContribution, context),
-    ...(skills
+    filesystem: resolveFilesystem,
+    ...(resolvers.length > 0 || options.skills
       ? {
           skills,
           checkSkillFileMtime,
@@ -293,21 +348,9 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
         }
       : {}),
     bm25,
+    tools,
   });
-  if (!options.skills && resolvers.length > 0) {
-    workspaceCatalogueResolvers.set(
-      workspace,
-      buildSkillCatalogueResolver(resolveContribution, options.workspaceSkillRefreshTtlMs),
-    );
-  }
   return workspace;
-}
-
-/** Return the dbx-tools catalogue resolver attached to one workspace. */
-export function workspaceSkillCatalogueResolver(
-  workspace: Workspace | undefined,
-): SkillCatalogueResolver | undefined {
-  return workspace ? workspaceCatalogueResolvers.get(workspace) : undefined;
 }
 
 /**
@@ -333,6 +376,46 @@ export function resolveSkillFolders(
 
 /* ---------------------------- private helpers ---------------------------- */
 
+/** Require approval unless a filesystem mutation stays inside the caller's home mount. */
+function requireApprovalOutsideHome({
+  args,
+  requestContext,
+}: ToolConfigWithArgsContext): boolean {
+  const emailValue = requestContext[MASTRA_USER_EMAIL_KEY];
+  const email = typeof emailValue === "string" ? stringUtils.trimToNull(emailValue) : undefined;
+  const inputPath = args.path;
+  if (!email || typeof inputPath !== "string" || !posixPath.isAbsolute(inputPath)) return true;
+  const normalized = posixPath.normalize(inputPath);
+  if (!normalized.ok) return true;
+  return !posixPath.isWithinRoot(personalWorkspacePath(email), normalized.path);
+}
+
+function workspaceTools(configured: WorkspaceToolsConfig | undefined): WorkspaceToolsConfig {
+  const requireApproval: WorkspaceToolConfig =
+    configured?.requireApproval === undefined
+      ? { requireApproval: requireApprovalOutsideHome }
+      : {};
+  const defaults = {
+    [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]: requireApproval,
+    [WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE]: requireApproval,
+    [WORKSPACE_TOOLS.FILESYSTEM.AST_EDIT]: requireApproval,
+    [WORKSPACE_TOOLS.FILESYSTEM.DELETE]: requireApproval,
+    [WORKSPACE_TOOLS.FILESYSTEM.MKDIR]: requireApproval,
+  } satisfies WorkspaceToolsConfig;
+  const configuredTools = configured as
+    Readonly<Record<string, WorkspaceToolConfig | undefined>> | undefined;
+  const mergedTools = Object.fromEntries(
+    Object.entries(defaults).map(([name, defaultConfig]) => [
+      name,
+      { ...defaultConfig, ...configuredTools?.[name] },
+    ]),
+  );
+  return {
+    ...defaults,
+    ...configured,
+    ...mergedTools,
+  };
+}
 function resolveWorkspaceSandbox(
   selection: WorkspaceSandboxSelection | undefined,
   workspaceId: string,
@@ -410,6 +493,48 @@ function hasWorkspaceFileScope(requestContext: RequestContext | undefined): bool
   );
 }
 
+/** Resolve the request client and authorization-safe files-cache scope. */
+async function resolveFilesCacheScope(context: WorkspaceMountContext): Promise<
+  | {
+      client: WorkspaceClient;
+      scope: FilesCacheScope;
+    }
+  | undefined
+> {
+  const requestContext = context.requestContext;
+  const user = requestContext?.get(MASTRA_USER_KEY) as User | undefined;
+  const client = user?.executionContext.client as WorkspaceClient | undefined;
+  if (!requestContext || !user || !client) return undefined;
+  return {
+    client,
+    scope: {
+      host: (await client.config.getHost()).toString(),
+      userKey: resolveUserKey(requestContext),
+      ...(process.env.DATABRICKS_WORKSPACE_ID?.trim()
+        ? { workspaceId: process.env.DATABRICKS_WORKSPACE_ID.trim() }
+        : {}),
+    },
+  };
+}
+
+/** Join one relative skill root to its actual composite mount path. */
+function mountedSkillPath(mount: string, skillRoot: string): string {
+  if (posixPath.isAbsolute(skillRoot)) {
+    throw new TypeError(`Skill path must be relative to its mount: ${skillRoot}`);
+  }
+  const normalized = posixPath.normalize(skillRoot);
+  if (!normalized.ok) {
+    throw new TypeError(`Skill path escapes its mount: ${skillRoot}`);
+  }
+  return posixPath.join(posixPath.normalizeRoot(mount), normalized.path.slice(1));
+}
+
+/** Return whether a Databricks path belongs to the writable Workspace namespace. */
+function isWorkspaceRoot(root: string): boolean {
+  const normalized = posixPath.normalizeRoot(root);
+  return normalized === "/Workspace" || normalized.startsWith("/Workspace/");
+}
+
 /**
  * Mount resolver for the named skill folders.
  *
@@ -419,11 +544,10 @@ function hasWorkspaceFileScope(requestContext: RequestContext | undefined): bool
 async function resolveSkillFolderMounts(
   skillFolders: Record<string, SkillFolderOptions>,
   context: WorkspaceMountContext,
+  filesCache: FilesCacheExports | undefined,
 ): Promise<WorkspaceMountContribution> {
   const mounts: Record<string, WorkspaceFilesystem> = {};
-  const skillSources: SkillCatalogueSource[] = [];
   const skillPaths: string[] = [];
-  const cacheKeys: string[] = [];
   const requestContext = context.requestContext;
 
   if (!requestContext || !shouldMountSkillFolders(requestContext)) {
@@ -435,24 +559,21 @@ async function resolveSkillFolderMounts(
     return { mounts, skillPaths };
   }
 
-  const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
-  const client = user?.executionContext.client as WorkspaceClient | undefined;
-  const userKey = user ? resolveUserKey(requestContext) : undefined;
-  const host = client ? (await client.config.getHost()).toString() : undefined;
+  const scoped = await resolveFilesCacheScope(context);
+  const client = scoped?.client;
+  const fileSystemCache =
+    filesCache && scoped ? await filesCache.forScope(scoped.scope) : undefined;
 
   for (const [name, folder] of Object.entries(skillFolders)) {
     const resolved = await resolveSkillFolderFilesystem(name, folder, context, {
       client,
-      host,
-      userKey,
+      fileSystemCache,
     });
     if (!resolved) continue;
-    const mount = folder.mount ?? `/${name}`;
+    const mount = folder.mount ?? resolved.root ?? `/${name}`;
     mounts[mount] = resolved.filesystem;
-    if (resolved.cacheKey) cacheKeys.push(resolved.cacheKey);
     if (folder.readable !== false) {
-      skillPaths.push(mount);
-      skillSources.push({ ...resolved.skillSource, id: object.toStableKey({ mount, source: resolved.skillSource.id }) });
+      skillPaths.push(...(folder.skills ?? ["."]).map((path) => mountedSkillPath(mount, path)));
     }
   }
 
@@ -463,11 +584,7 @@ async function resolveSkillFolderMounts(
 
   return {
     mounts,
-    skillSources,
     skillPaths,
-    ...(cacheKeys.length === Object.keys(mounts).length && cacheKeys.length > 0
-      ? { cacheKey: object.toStableKey(cacheKeys.sort()) }
-      : {}),
   };
 }
 
@@ -481,14 +598,12 @@ async function resolveSkillFolderFilesystem(
   context: WorkspaceMountContext,
   cache: {
     client: WorkspaceClient | undefined;
-    host: string | undefined;
-    userKey: string | undefined;
+    fileSystemCache: FileSystemCache | undefined;
   },
 ): Promise<
   | {
-      cacheKey?: string;
       filesystem: WorkspaceFilesystem;
-      skillSource: SkillCatalogueSource;
+      root?: string;
     }
   | undefined
 > {
@@ -497,19 +612,11 @@ async function resolveSkillFolderFilesystem(
     return filesystem
       ? {
           filesystem,
-          skillSource: mastraSkillSource(
-            object.toStableKey({
-              id: filesystem.id,
-              name,
-              provider: filesystem.provider,
-            }),
-            filesystem,
-          ),
         }
       : undefined;
   }
   // A path mount needs the request's OBO client to reach the workspace.
-  if (folder.path === undefined || !cache.client || !cache.host || !cache.userKey) {
+  if (folder.path === undefined || !cache.client) {
     logger.debug("skill-folder:skipped", {
       name,
       reason: folder.path === undefined ? "no-location" : "missing-obo-client",
@@ -518,10 +625,19 @@ async function resolveSkillFolderFilesystem(
   }
   const root = stringUtils.trimToNull(await resolveSkillFolderValue(folder.path, context));
   if (!root) return undefined;
-  return databricksFilesystem(cache.client, root, folder.writable !== true, {
-    host: cache.host,
-    userKey: cache.userKey,
-  });
+  const writable = folder.writable ?? isWorkspaceRoot(root);
+  const resolved = await databricksFilesystem(
+    cache.client,
+    root,
+    !writable,
+    folder.createRoot ?? (folder.writable === true),
+    cache.fileSystemCache,
+    {
+      ...(folder.description ? { description: folder.description } : {}),
+      ...(folder.displayName ? { displayName: folder.displayName } : {}),
+    },
+  );
+  return resolved ? { ...resolved, root } : undefined;
 }
 
 /** Read a {@link SkillFolderValue}, calling it when it is a per-request resolver. */
@@ -557,11 +673,12 @@ function resolveWorkspaceIdentity(options: CreateWorkspaceOptions): {
 function buildMountResolvers(
   skillFolders: Record<string, SkillFolderOptions>,
   mounts: WorkspaceMountResolver[] | undefined,
+  filesCache: FilesCacheExports | undefined,
 ): WorkspaceMountResolver[] {
-  const resolvers: WorkspaceMountResolver[] = [];
+  const resolvers: WorkspaceMountResolver[] = [scratchMountResolver()];
   const folderCount = Object.keys(skillFolders).length;
   if (folderCount > 0) {
-    resolvers.push((context) => resolveSkillFolderMounts(skillFolders, context));
+    resolvers.push((context) => resolveSkillFolderMounts(skillFolders, context, filesCache));
   }
   if (mounts?.length) {
     resolvers.push(...mounts);
@@ -574,10 +691,17 @@ function buildMountResolvers(
   return resolvers;
 }
 
+/** Contribute one isolated local scratch filesystem at `/tmp`. */
+function scratchMountResolver(): WorkspaceMountResolver {
+  return () => ({
+    mounts: { "/tmp": scratchFilesystem() },
+  });
+}
+
 /** Mount startup-provisioned local skill roots into Mastra's workspace filesystem. */
 function localSkillMountResolvers(paths: readonly string[]): WorkspaceMountResolver[] {
-  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))].map((root, index) => {
-    const mount = `/remote-skills/${index}`;
+  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))].map((root) => {
+    const mount = posixPath.normalizeRoot(root);
     const source = new LocalFileSystem({
       root,
       readOnly: true,
@@ -586,49 +710,9 @@ function localSkillMountResolvers(paths: readonly string[]): WorkspaceMountResol
     const filesystem = filesystems(source, { readOnly: true });
     return () => ({
       mounts: { [mount]: filesystem },
-      skillSources: [sharedSkillSource(object.toStableKey({ mount, root }), source)],
       skillPaths: [mount],
-      cacheKey: object.toStableKey({ mount, root }),
     });
   });
-}
-
-/** Adapt a portable dbx-tools filesystem to catalogue discovery callbacks. */
-function sharedSkillSource(id: string, filesystem: FileSystem): SkillCatalogueSource {
-  return {
-    id,
-    async list(path) {
-      await filesystem.init();
-      return (await filesystem.readdir(path)).flatMap((entry) =>
-        entry.type === "file" || entry.type === "directory"
-          ? [
-              {
-                name: entry.name,
-                type: entry.type,
-                ...(entry.size !== undefined ? { size: entry.size } : {}),
-                ...(entry.metadata ? { metadata: entry.metadata } : {}),
-              },
-            ]
-          : [],
-      );
-    },
-    async read(path) {
-      await filesystem.init();
-      return filesystem.readFile(path, { encoding: "utf8" });
-    },
-  };
-}
-
-/** Adapt an arbitrary Mastra filesystem when no portable source is available. */
-function mastraSkillSource(id: string, filesystem: WorkspaceFilesystem): SkillCatalogueSource {
-  return {
-    id,
-    list: (path) => filesystem.readdir(path),
-    async read(path) {
-      const value = await filesystem.readFile(path, { encoding: "utf8" });
-      return typeof value === "string" ? value : value.toString("utf8");
-    },
-  };
 }
 
 /**
@@ -648,47 +732,48 @@ function resolveScopedEmail(requestContext: RequestContext | undefined): string 
 }
 
 /**
- * Wrap a {@link DatabricksFileSystem} as a Mastra filesystem. When the root is
- * missing (and {@link readOnly} so we will not create it), fall back to
- * {@link scratchFilesystem} so skill scans still have a writable local mount.
+ * Wrap a {@link DatabricksFileSystem} as a Mastra filesystem. Missing or
+ * inaccessible roots return `undefined` so the independent `/tmp` mount and
+ * any other accessible roots remain usable.
  */
 async function databricksFilesystem(
   client: WorkspaceClient,
   root: string,
   readOnly: boolean = true,
-  cache: { host: string; userKey: string },
+  createRoot: boolean = !readOnly,
+  fileSystemCache?: FileSystemCache,
+  adapterOptions: Pick<
+    MastraFileSystemAdapterOptions,
+    "description" | "displayName"
+  > = {},
 ): Promise<
-  {
-    cacheKey: string;
-    filesystem: WorkspaceFilesystem;
-    skillSource: SkillCatalogueSource;
-  }
+  | {
+      filesystem: WorkspaceFilesystem;
+    }
   | undefined
 > {
+  const initialClient = workspaceClient.toLegacyWorkspaceClient(client);
   const fs = new DatabricksFileSystem({
-    client: workspaceClient.toLegacyWorkspaceClient(client),
+    client: () => {
+      try {
+        return workspaceClient.toLegacyWorkspaceClient(getExecutionContext().client);
+      } catch {
+        return initialClient;
+      }
+    },
     root,
     readOnly,
-    createRoot: !readOnly,
+    createRoot,
   });
-  const cacheKey = object.toStableKey({
-    host: cache.host,
-    readOnly,
-    root,
-    userKey: cache.userKey,
-  });
-  const filesystem = filesystems(fs, { readOnly });
+  const source = fileSystemCache ? sharedFS.cache(fs, fileSystemCache) : fs;
+  const filesystem = filesystems(source, { ...adapterOptions, readOnly });
   try {
     await filesystem.init();
     if (await filesystem.exists(".")) {
-      return {
-        cacheKey,
-        filesystem,
-        skillSource: sharedSkillSource(cacheKey, fs),
-      };
+      return { filesystem };
     }
   } catch (err) {
-    logger.debug("databricks-mount:scratch-fallback", {
+    logger.debug("databricks-mount:skipped", {
       root,
       readOnly,
       error: errorUtils.errorMessage(err),
@@ -706,10 +791,7 @@ async function resolveWorkspaceContribution(
   context: WorkspaceMountContext,
 ): Promise<WorkspaceMountContribution> {
   const mounts: Record<string, WorkspaceFilesystem> = {};
-  const skillSources: SkillCatalogueSource[] = [];
   const skillPaths: string[] = [];
-  const cacheKeys: string[] = [];
-  let cacheable = true;
 
   for (const [index, resolver] of resolvers.entries()) {
     const contribution = await resolver(context);
@@ -719,15 +801,8 @@ async function resolveWorkspaceContribution(
       skillPaths: contribution.skillPaths ?? [],
     });
     Object.assign(mounts, contribution.mounts);
-    if (Object.keys(contribution.mounts).length > 0) {
-      if (contribution.cacheKey) cacheKeys.push(contribution.cacheKey);
-      else cacheable = false;
-    }
     if (contribution.skillPaths?.length) {
       skillPaths.push(...contribution.skillPaths);
-    }
-    if (contribution.skillSources?.length) {
-      skillSources.push(...contribution.skillSources);
     }
   }
 
@@ -738,11 +813,7 @@ async function resolveWorkspaceContribution(
 
   return {
     mounts,
-    skillSources,
     skillPaths,
-    ...(cacheable && cacheKeys.length > 0
-      ? { cacheKey: object.toStableKey({ mounts: Object.keys(mounts), sources: cacheKeys }) }
-      : {}),
   };
 }
 
@@ -755,8 +826,9 @@ async function resolveWorkspaceContribution(
 async function resolveWorkspaceFilesystem(
   resolveContribution: (context: WorkspaceMountContext) => Promise<WorkspaceMountContribution>,
   context: WorkspaceMountContext,
+  filesCache?: FilesCacheExports,
 ): Promise<WorkspaceFilesystem> {
-  const { cacheKey, mounts } = await resolveContribution(context);
+  const { mounts } = await resolveContribution(context);
   const mountKeys = Object.keys(mounts);
   if (mountKeys.length === 0) {
     logger.debug("filesystem:scratch", {
@@ -765,12 +837,43 @@ async function resolveWorkspaceFilesystem(
     return scratchFilesystem();
   }
   logger.debug("filesystem:composite", { mountKeys });
-  if (!cacheKey) return new CompositeFilesystem({ mounts });
-  const existing = scopedWorkspaceFilesystems.get(cacheKey);
-  if (existing) return existing;
-  const filesystem = new CompositeFilesystem({ mounts });
-  scopedWorkspaceFilesystems.set(cacheKey, filesystem);
-  return filesystem;
+  const load = () => new MountedCompositeFilesystem({ mounts });
+  if (!filesCache) return load();
+  const scoped = await resolveFilesCacheScope(context);
+  if (!scoped) return load();
+  return filesCache.forFileSystem(scoped.scope, { paths: mountKeys }, load);
+}
+
+/**
+ * Expand skill roots into concrete skill directories and keep the first
+ * same-named directory. Mastra still owns parsing, indexing, and refreshes,
+ * while organization roots retain precedence over personal roots.
+ */
+async function resolveDistinctSkillPaths(
+  filesystem: WorkspaceFilesystem,
+  roots: readonly string[],
+): Promise<string[]> {
+  const selected = new Map<string, string>();
+  for (const root of roots) {
+    try {
+      const entries = await filesystem.readdir(root);
+      if (entries.some((entry) => entry.type === "file" && entry.name === "SKILL.md")) {
+        const name = posixPath.basename(root);
+        if (!selected.has(name)) selected.set(name, root);
+        continue;
+      }
+      for (const entry of entries) {
+        if (entry.type !== "directory" || selected.has(entry.name)) continue;
+        selected.set(entry.name, posixPath.join(root, entry.name));
+      }
+    } catch (error) {
+      logger.debug("skill-root:skipped", {
+        root,
+        error: errorUtils.errorMessage(error),
+      });
+    }
+  }
+  return [...selected.values()];
 }
 
 /** Memoize one complete mount contribution for each request context. */
@@ -789,24 +892,5 @@ function contributionResolver(
     const pending = resolveWorkspaceContribution(resolvers, context);
     scoped.set(context.requestContext, pending);
     return pending;
-  };
-}
-
-/** Resolve one semantic catalogue owner from a request's ordered skill roots. */
-function buildSkillCatalogueResolver(
-  resolveContribution: (context: WorkspaceMountContext) => Promise<WorkspaceMountContribution>,
-  ttlMs: number | undefined,
-): SkillCatalogueResolver {
-  return async ({ requestContext }) => {
-    const contribution = await resolveContribution({ requestContext });
-    const user = requestContext?.get(MASTRA_USER_KEY) as User | undefined;
-    const client = user?.executionContext.client as WorkspaceClient | undefined;
-    const host = client ? (await client.config.getHost()).toString() : "local";
-    return workspaceSkillCatalogue({
-      host,
-      sources: contribution.skillSources ?? [],
-      ttlMs,
-      userKey: user?.id ?? "service",
-    });
   };
 }

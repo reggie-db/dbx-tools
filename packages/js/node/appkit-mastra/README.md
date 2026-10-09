@@ -273,35 +273,75 @@ Every `agents.createAgent()` gets a default Mastra `Workspace` from
 current OBO user's `WorkspaceClient`, so Mastra can discover Assistant-style
 `SKILL.md` files at request time.
 
-Skill discovery materializes one parsed catalogue per resolved user, workspace
-host, and ordered root set. The catalogue contains `SKILL.md` metadata and
-instructions only; ordinary filesystem and auxiliary skill-file reads stay
-fresh. AppKit's bounded process L1 serves warm catalogue hits without Lakebase,
-while one persistent catalogue record survives restarts. The default TTL is
-five minutes; set
-`workspaceSkillRefreshTtlMs` on the plugin or `createWorkspace()` to change it.
+Mastra's native `WorkspaceSkills` owns discovery, indexing, refreshes, and lazy
+reads of references, scripts, templates, and assets. dbx-tools does not keep a
+second skill catalogue or skill-specific cache.
 
-The plugin exposes compatible `search_skills` and `load_skill` tools from its
-catalogue processor. `skill_read` fetches a selected skill's reference, script,
-template, or asset directly only when requested. Set `workspaceSkillSearch:
-false` to disable these tools, or pass `{ topK, minScore, ttlMs }` to tune
-on-demand search.
+When the app registers `filesCache()` from `@dbx-tools/appkit/files-cache`,
+auto-created workspaces retain one filesystem source per user and set of actual
+mount paths. Page refreshes and later turns reuse that source, allowing Mastra
+to retain its native parsed catalogue while the files cache handles repeated
+filesystem metadata operations. Each operation resolves the active request's
+OBO client, so the retained source does not retain an old token. Explicit
+caller-owned workspaces remain unchanged.
+
+Mastra exposes its native skill search and loading tools. Save or update a
+skill with the native workspace file tools by writing
+`<skill-root>/<name>/SKILL.md`. Set `workspaceSkills: false` to disable the
+skill search processor, or pass `{ topK, minScore, ttlMs }` to tune it.
+
+Workspace access policy stays on Mastra's native `Workspace.tools` owner. By
+default, mounted files are readable without approval. Write, edit, AST edit,
+delete, and mkdir run without approval only inside
+`/Workspace/Users/<email>` for the authenticated user. Mutations under
+organization mounts, `/tmp`, or any other path require approval.
+`workspaceTools` accepts Mastra's complete `WorkspaceToolsConfig`, so global or
+per-tool settings can change approval, enablement, read-before-write, hooks,
+and output limits:
+
+```ts
+import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
+
+mastra({
+  workspaceTools: {
+    requireApproval: false,
+    [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]: {
+      requireApproval: true,
+      requireReadBeforeWrite: true,
+    },
+  },
+});
+```
+
+File-tool and sandbox-command policies are independent. Disable
+`WORKSPACE_TOOLS.SANDBOX.EXECUTE_COMMAND` when an agent must not bypass file
+approvals by writing through shell commands.
 
 Locations are a named map (`skillFolders`), so an app refers to a tree by name
-rather than repeating a path. Each name mounts at `/<name>` in the workspace
-namespace (override with `mount`) and carries its own policy: `readable`
-(scanned for `SKILL.md`, default `true`) and `writable` (default `false`).
+rather than repeating a path. Databricks paths mount at their actual workspace
+location and carry relative `skills` roots plus their own policy: `readable`
+(scanned for `SKILL.md`, default `true`) and `writable` (default `true` for
+`/Workspace` roots, `false` elsewhere).
 `DEFAULT_SKILL_FOLDERS` supplies these:
 
-| Name                 | Location                           | Readable | Writable |
-| -------------------- | ---------------------------------- | -------- | -------- |
-| `workspace-team`     | `/Workspace/.assistant/skills`     | yes      | no       |
-| `workspace-team-app` | `/Users/<email>/.assistant/skills` | yes      | yes      |
+| Name                  | Mount                                | Skill root          | Readable | Writable |
+| --------------------- | ------------------------------------ | ------------------- | -------- | -------- |
+| `organization-skills` | `/Workspace/.assistant`              | `skills`            | yes      | yes      |
+| `personal-skills`     | `/Workspace/Users/<email>`            | `.assistant/skills` | yes      | yes      |
 
-Readable roots are expanded to concrete skill directories before Mastra scans
-them. Duplicate directory names use first-folder precedence, so the shared
-`workspace-team` skill wins over a same-named `workspace-team-app` skill while
-unique user skills remain available.
+Every workspace also has an isolated local scratch filesystem mounted at
+`/tmp`. Organization and personal mounts are probed independently on first
+load. A missing or inaccessible Databricks path is skipped, so `/tmp` and any
+accessible mounts remain available.
+
+Organization writes are enabled at the filesystem layer, require approval, and
+still depend on the caller's Databricks permissions. The existing
+`/Workspace/.assistant` root is never created automatically.
+
+Skill roots are expanded to concrete skill directories before Mastra scans
+them. The first root wins duplicate directory names, so organization skills
+override same-named personal skills while unique personal skills remain
+available.
 
 A consuming library merges over that map: a matching name overrides the
 default, `false` disables it, and any other name adds a location. A folder
@@ -315,11 +355,18 @@ const agent = agents.createAgent({
   workspace: workspaces.createWorkspace({
     skillFolders: {
       // Point an existing name somewhere else.
-      "workspace-team": { path: "/Workspace/Shared/team-skills" },
+      "organization-skills": {
+        path: "/Workspace/Shared/.assistant",
+        skills: ["skills"],
+      },
       // Drop a default entirely.
-      "workspace-team-app": false,
+      "personal-skills": false,
       // Add an app-owned tree the agent may write back to.
-      runbooks: { path: "/Workspace/Shared/runbooks/skills", writable: true },
+      runbooks: {
+        path: "/Workspace/Shared/runbooks",
+        skills: ["skills"],
+        writable: true,
+      },
       // Mount for file tools without adding it to skill discovery.
       templates: { path: "/Workspace/Shared/templates", readable: false },
       // Any Mastra filesystem works, including per-request ones.
@@ -329,8 +376,6 @@ const agent = agents.createAgent({
       async () => ({
         mounts: { "/reference": myFilesystem },
         skillPaths: ["/reference/skills"],
-        // Stable custom mounts can opt into cross-request source reuse.
-        cacheKey: "reference-v1",
       }),
     ],
   }),
@@ -338,7 +383,7 @@ const agent = agents.createAgent({
 ```
 
 A folder whose location resolves to `undefined` is skipped for that request,
-which is how `workspace-team-app` drops out when no user email is stamped.
+which is how `personal-skills` drops out when no user email is stamped.
 `assistantSkills: false` starts from an empty map, leaving only the
 `skillFolders` given. Production workspace mounts require a forwarded token
 with `workspace`, `workspace.workspace`, or `all-apis` scope. Development mode
@@ -454,11 +499,10 @@ one that was in the workspace all along. Resolution per source:
   staging dir. A non-URL source (e.g. bare `owner/repo`) without the `skills`
   package installed cannot be resolved this way and fails.
 
-The default destination is the Databricks workspace Assistant skills tree
-(`/Workspace/.assistant/skills`, the same tree a "save this as a skill" action
-writes to), so provisioned skills persist across restarts and are picked up by
+The default destination is the Databricks organization skills tree
+(`/Workspace/.assistant/skills`), so provisioned skills persist across restarts and are picked up by
 the built-in Assistant-skills mount. Pass `userEmail` to target that user's
-`/Users/<email>/.assistant/skills` instead, or `databricksBasePath` for an
+`/Workspace/Users/<email>/.assistant/skills` instead, or `databricksBasePath` for an
 explicit tree. When no Databricks client is resolvable at startup, the tree is
 written to a local temp dir and handed to Mastra as an extra local skill path
 for the current process only.
@@ -1016,12 +1060,13 @@ requiring callers to assemble a Mastra server by hand.
 - `sandbox` defaults to Monty for auto-created workspaces. `false` disables
   command execution, while `true`, `"databricks"`, or an object
   selects/configures Databricks Sandbox.
-- `workspaceSkillRefreshTtlMs` controls complete catalogue refreshes. Catalogues
-  are isolated by the Mastra resolved user id and default to five minutes;
-  auxiliary reads are not cached.
-- `workspaceSkillSearch` defaults to dbx-tools on-demand catalogue search. Pass
-  `false` to disable it or an object with `topK`, `minScore`, and `ttlMs`
+- `workspaceSkills` enables Mastra's native on-demand skill search by default.
+  Pass `false` to disable it or an object with `topK`, `minScore`, and `ttlMs`
   overrides.
+- `workspaceTools` forwards Mastra's native workspace-tool configuration.
+  Reads do not require approval. Filesystem mutations require approval outside
+  the authenticated user's `/Workspace/Users/<email>` home. Explicit global or
+  per-tool settings override those defaults.
 - `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
   list, or an options bag with `failOnError`, `userEmail`,
@@ -1099,7 +1144,7 @@ client that talks to these routes.
   workers.
 - `workspaces` / `filesystems` - Mastra workspace creation with a default
   Databricks sandbox plus named
-  `skillFolders` (defaults `workspace-team` / `workspace-team-app`, overridable
+  `skillFolders` (defaults `organization-skills` / `personal-skills`, overridable
   by consumers); `filesystems(fs)` wraps any `@dbx-tools/shared-fs`
   `FileSystem` (including `@dbx-tools/databricks` / `@dbx-tools/fs`) as a
   Mastra mount, with `scratchFilesystem` (fresh `tmpFS` + random id) when no

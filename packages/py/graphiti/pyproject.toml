@@ -28,7 +28,7 @@ dependencies = [
   Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/graphiti"
 
   [project.optional-dependencies]
-  dev = [ "embedded-postgres>=18.6.3,<19" ]
+  dev = [ "embedded-postgres>=18.6.3,<19", "pythonmonkey==1.3.2" ]
 
 [build-system]
 requires = [ "uv_build>=0.11.28,<0.12.0" ]
@@ -95,6 +95,8 @@ include = [
   "        for stmt in _extra_index_ddl():\n            with suppress(Exception):\n                await client._execute(stmt)" = """
         for stmt in _extra_index_ddl():
             await client._execute(stmt)"""
+  "to_tsquery('simple'," = "plainto_tsquery('simple',"
+  "return ' & '.join(terms)" = "return ' '.join(terms)"
 
 [[tool.dbx_tools.sync]]
 name = "graphiti_server"

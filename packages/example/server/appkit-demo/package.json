@@ -9,11 +9,9 @@
     "build": "projen build",
     "compile": "projen compile",
     "default": "projen default",
-    "dev": "projen dev",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
-    "start": "projen start",
     "test": "projen test",
     "watch": "projen watch",
     "projen": "projen"

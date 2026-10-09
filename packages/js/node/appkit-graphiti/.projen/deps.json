@@ -51,6 +51,11 @@
       "type": "runtime"
     },
     {
+      "name": "semver",
+      "version": "^7.7.3",
+      "type": "runtime"
+    },
+    {
       "name": "zod",
       "version": "catalog:",
       "type": "runtime"

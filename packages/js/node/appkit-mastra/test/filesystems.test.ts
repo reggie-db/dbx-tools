@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { MemoryFileSystem } from "@dbx-tools/shared-fs";
 import { FileExistsError, FileNotFoundError, WorkspaceReadOnlyError } from "@mastra/core/workspace";
 
-import { filesystems, scratchFilesystem } from "../src/filesystems.ts";
+import { filesystems, MountedCompositeFilesystem, scratchFilesystem } from "../src/filesystems.ts";
 
 describe("filesystems()", () => {
   it("wraps a shared-fs FileSystem as a Mastra filesystem", async () => {
@@ -79,5 +79,27 @@ describe("filesystems()", () => {
     await a.writeFile("/note.txt", "hi");
     assert.equal(await a.readFile("/note.txt", { encoding: "utf8" }), "hi");
     await a._destroy();
+  });
+
+  it("treats the virtual-root gitignore probe as absent", async () => {
+    const app = filesystems(new MemoryFileSystem({ root: "/app" }));
+    const global = filesystems(new MemoryFileSystem({ root: "/global" }));
+    const composite = new MountedCompositeFilesystem({
+      mounts: {
+        "/personal-skills": app,
+        "/shared-skills": global,
+      },
+    });
+    await composite.init();
+
+    assert.equal(await composite.readFile(".gitignore", { encoding: "utf8" }), "");
+    assert.deepEqual((await composite.readdir("/")).map(({ name }) => name).sort(), [
+      "personal-skills",
+      "shared-skills",
+    ]);
+    await composite.writeFile("/personal-skills/note.txt", "saved");
+    assert.equal(await app.readFile("note.txt", { encoding: "utf8" }), "saved");
+    await assert.rejects(() => composite.readFile("/not-mounted.txt"), /No mount for path/);
+    await composite.destroy();
   });
 });

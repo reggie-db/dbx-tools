@@ -46,6 +46,12 @@ the Python version uv manages and defaults to `3.11`. uv must be available on
 `PATH` during installation. Uninstalling the service removes the environment
 with the rest of the service-owned data.
 
+Pass `--python-project <path>` to `service install` to install the primary
+Python package from a local project instead of the versioned registry package.
+Package extras such as `[dev]` and companion dependencies remain active. Add
+`--offline` to resolve entirely from uv's cache and fail immediately when an
+artifact is unavailable instead of contacting a package index.
+
 `command.options` accepts either a concrete option object or a Zod object
 schema. Objects serialize their current values. Schemas parse `{}` and serialize
 their defaults. Boolean values become positive or negated flags, arrays become
@@ -70,15 +76,21 @@ For the example program above:
 
 ```sh
 example service install
+example service install --python-project packages/py/example --offline
 example service status
 example service stop
 example service start
 example service restart
+example service logs
+example service logs -- tail -f
 example service uninstall
 ```
 
 Installation starts the service by default. Pass `--no-start` to install without
-launching it. `status` reports installation and process state as JSON.
+launching it. `status` reports installation and process state as JSON. `logs`
+prints the managed process log path. Arguments after `--` run as a command with
+that path appended, so `logs -- cat` prints the log and `logs -- tail -f` follows
+it.
 
 The service belongs to the current user. Login startup uses a LaunchAgent on
 macOS, an XDG autostart entry on Linux, and a Startup command on Windows. Package
@@ -120,6 +132,7 @@ Install and manage the desktop service
 | `stop`              | Stop the running service                              |
 | `restart`           | Restart the installed service                         |
 | `status`            | Print service installation and process state as JSON  |
+| `logs [command...]` | Print the service log path or append it to a command  |
 | `uninstall`         | Stop and remove the service for the current user      |
 
 ### `<cli> service install`
@@ -132,9 +145,11 @@ Install the service for the current user and start it
 
 #### Options
 
-| Option       | Description                                 |
-| ------------ | ------------------------------------------- |
-| `--no-start` | Do not start the service after installation |
+| Option                    | Description                                                      |
+| ------------------------- | ---------------------------------------------------------------- |
+| `--no-start`              | Do not start the service after installation                      |
+| `--python-project <path>` | Install a local Python project instead of the registry package   |
+| `--offline`               | Install Python packages from the uv cache without network access |
 
 ### `<cli> service start`
 
@@ -167,6 +182,20 @@ Print service installation and process state as JSON
 ```sh
 <cli> service status
 ```
+
+### `<cli> service logs`
+
+Print the service log path or append it to a command
+
+```sh
+<cli> service logs [command...]
+```
+
+#### Arguments
+
+| Argument  | Description                                              |
+| --------- | -------------------------------------------------------- |
+| `command` | Command and arguments to run before the service log path |
 
 ### `<cli> service uninstall`
 

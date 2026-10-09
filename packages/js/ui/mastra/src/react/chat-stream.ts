@@ -1,5 +1,6 @@
-import { stringUtils } from "@dbx-tools/shared-core";
+import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
+import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra/resume";
 import { readUIMessageStream, type UIMessage } from "ai";
 import { useCallback } from "react";
 import type {
@@ -8,6 +9,8 @@ import type {
   ThreadSessionUpdater,
 } from "./chat-sessions.ts";
 import type { MastraStreamResponse } from "../support/mastra-client.ts";
+
+const logger = log.logger("ui-mastra/chat");
 
 /** Read the MLflow trace id captured by the server on a stream response. */
 const readMlflowTraceId = (stream: unknown): string | undefined => {
@@ -80,6 +83,12 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
         }
       } catch (error) {
         if (error instanceof StreamAborted || signal.aborted) return;
+        if (isStaleMastraResumeError(error)) {
+          logger.warn("ignored stale mastra resume", {
+            error: errorUtils.errorMessage(error),
+          });
+          return;
+        }
         throw error;
       }
     },

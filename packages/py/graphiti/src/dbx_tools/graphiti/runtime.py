@@ -1,6 +1,8 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
 import httpx
@@ -24,6 +26,8 @@ from .options import (
 )
 
 """Importable Python runtime for Graphiti, model routing, and embedded persistence."""
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,9 @@ class GraphitiRuntime(AbstractAsyncContextManager["GraphitiRuntime"]):
         """Start model clients and initialize PostgreSQL-backed Graphiti."""
         if self.graphiti is not None:
             return self.graphiti
+        started_at = perf_counter()
+        database_mode = "external" if self.options.get("databaseUrl") else "embedded"
+        _LOGGER.info("Graphiti runtime starting database=%s", database_mode)
         self.clients = await create_runtime_clients(self.options)
         try:
             self.database = await _start_database(self.options)
@@ -110,6 +117,15 @@ class GraphitiRuntime(AbstractAsyncContextManager["GraphitiRuntime"]):
                 cross_encoder=self.clients.cross_encoder,
             )
             await self.graphiti.build_indices_and_constraints()
+            _LOGGER.info(
+                "Graphiti runtime started database=%s llm_model=%r embedder_model=%r "
+                "embedding_dimensions=%d duration_ms=%.1f",
+                database_mode,
+                self.clients.llm_model,
+                self.clients.embedder_model,
+                self.clients.embedder_dimensions,
+                (perf_counter() - started_at) * 1000,
+            )
             return self.graphiti
         except BaseException:
             await self.close()
@@ -117,6 +133,10 @@ class GraphitiRuntime(AbstractAsyncContextManager["GraphitiRuntime"]):
 
     async def close(self) -> None:
         """Close Graphiti and model transports."""
+        if self.graphiti is None and self.database is None and self.clients is None:
+            return
+        started_at = perf_counter()
+        _LOGGER.info("Graphiti runtime stopping")
         if self.graphiti is not None:
             await self.graphiti.close()
             self.graphiti = None
@@ -126,6 +146,7 @@ class GraphitiRuntime(AbstractAsyncContextManager["GraphitiRuntime"]):
         if self.clients is not None:
             await self.clients.http.aclose()
             self.clients = None
+        _LOGGER.info("Graphiti runtime stopped duration_ms=%.1f", (perf_counter() - started_at) * 1000)
 
 
 async def create_runtime_clients(

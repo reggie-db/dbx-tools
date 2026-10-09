@@ -28,8 +28,9 @@ const connection = {
 ```
 
 Pass the resolved values to `pg`, Drizzle, an ORM, or another PostgreSQL client.
-Generate a fresh credential when opening a new upstream connection; this package
-does not persist database passwords.
+Request a credential when opening an upstream connection. The client reuses the
+token until two minutes before the API's `expire_time`, coalesces concurrent
+refreshes, and never persists database passwords.
 
 ## Choose A Target
 

@@ -66,6 +66,7 @@ export type CliServicePythonInstaller = (
   packageSpecifiers: readonly string[],
   python: string,
   platform: NodeJS.Platform,
+  offline: boolean,
 ) => Promise<string>;
 
 /** Host runtime overrides for tests, embedded distributions, and nonstandard homes. */
@@ -100,6 +101,10 @@ export interface CliServiceRuntimeOptions {
 export interface CliServiceInstallOptions {
   /** Start the service immediately after writing its configuration and login entry. */
   readonly start?: boolean;
+  /** Install the primary Python package from this local project instead of the registry. */
+  readonly pythonProject?: string;
+  /** Resolve and install Python packages only from the uv cache. */
+  readonly offline?: boolean;
 }
 
 /** Current installation and process state for a system-tray service. */
@@ -124,6 +129,8 @@ export interface CliServiceLifecycle {
   stop(): Promise<void>;
   /** Stop and start the installed service. */
   restart(): Promise<void>;
+  /** Return the managed service process log path. */
+  logPath(): string;
   /** Stop the service and remove its login entry and package-owned state. */
   uninstall(): Promise<void>;
   /** Read the current installation and process state. */
@@ -175,6 +182,9 @@ export class CliService implements CliServiceLifecycle {
 
   /** Install the login entry and optionally start the service. */
   async install(options: CliServiceInstallOptions = {}): Promise<void> {
+    if (options.pythonProject && !this.definition.pythonPackage) {
+      throw new Error(`${this.definition.name} does not define a Python package`);
+    }
     const owner = resolveServicePackage(this.definition.packageName);
     const dependencies = owner.dependencies();
     const external = new Set(externalRuntimePackages(dependencies));
@@ -184,7 +194,7 @@ export class CliService implements CliServiceLifecycle {
       Object.fromEntries(Object.entries(dependencies).filter(([name]) => external.has(name))),
     );
     const paths = resolveServicePaths(this.definition, this.runtime);
-    const installedDefinition = await this.installDefinition(owner, paths.directory);
+    const installedDefinition = await this.installDefinition(owner, paths.directory, options);
     const host = await this.ensureCompiledBinary(
       this.binaryName(installedDefinition, "service"),
       this.hostEntrypoint,
@@ -260,6 +270,11 @@ export class CliService implements CliServiceLifecycle {
     await this.start();
   }
 
+  /** Return the managed service process log path. */
+  logPath(): string {
+    return resolveServicePaths(this.definition, this.runtime).processLog;
+  }
+
   /** Stop the service and remove its login entry and package-owned state. */
   async uninstall(): Promise<void> {
     const paths = resolveServicePaths(this.definition, this.runtime);
@@ -295,6 +310,7 @@ export class CliService implements CliServiceLifecycle {
   private async installDefinition(
     owner: ServicePackage,
     directory: string,
+    options: CliServiceInstallOptions,
   ): Promise<CliServiceDefinition> {
     const definition = CliServiceDefinitionSchema.parse({
       ...this.definition,
@@ -309,12 +325,16 @@ export class CliService implements CliServiceLifecycle {
       : undefined;
     const pythonEnvironment: Record<string, string> = {};
     if (pythonPackage) {
+      const primarySpecifier = options.pythonProject
+        ? _localPythonSpecifier(options.pythonProject, pythonPackage.name)
+        : `${pythonPackage.name}==${pythonPackage.version}`;
       pythonEnvironment.PYTHON = await this.pythonInstaller(
         this.uvExecutable,
         join(directory, "python"),
-        [`${pythonPackage.name}==${pythonPackage.version}`, ...pythonPackage.dependencies],
+        [primarySpecifier, ...pythonPackage.dependencies],
         pythonPackage.python,
         this.runtime.platform,
+        options.offline ?? false,
       );
     }
     const command = definition.command
@@ -427,6 +447,16 @@ export class CliService implements CliServiceLifecycle {
     const name = safeToken(definition.name.toLowerCase()).replace(/[._]+/g, "-");
     return purpose === "service" ? name : `${name}-${purpose}`;
   }
+}
+
+/** Preserve a package's extras while replacing its registry name with a local project path. */
+function _localPythonSpecifier(project: string, packageName: string): string {
+  const directory = resolve(project);
+  if (!existsSync(join(directory, "pyproject.toml"))) {
+    throw new Error(`Local Python project has no pyproject.toml: ${directory}`);
+  }
+  const extras = /(\[[^\]]+\])$/.exec(packageName)?.[1] ?? "";
+  return `${directory}${extras}`;
 }
 
 function resolveHostEntrypoint(): string {

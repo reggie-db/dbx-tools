@@ -160,7 +160,8 @@
       },
       "steps": [
         {
-          "exec": "bun scripts/run-demo.ts"
+          "exec": "bun scripts/run-demo.ts",
+          "receiveArgs": true
         }
       ]
     },
@@ -170,6 +171,19 @@
       "steps": [
         {
           "exec": "bun scripts/demo-deploy.ts"
+        }
+      ]
+    },
+    "dev:watch": {
+      "name": "dev:watch",
+      "description": "Restart a development command after watched changes settle",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/dev-watch.ts"
+          ],
+          "receiveArgs": true
         }
       ]
     },

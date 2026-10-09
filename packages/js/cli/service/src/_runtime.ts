@@ -2,7 +2,9 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import * as exec from "@dbx-tools/core/exec";
-import { object } from "@dbx-tools/shared-core";
+import { log, object } from "@dbx-tools/shared-core";
+
+const logger = log.logger("cli:service");
 
 export function externalRuntimePackages(dependencies: Readonly<Record<string, string>>): string[] {
   return Object.keys(dependencies).filter((name) => !name.startsWith("@dbx-tools/"));
@@ -13,6 +15,7 @@ export async function installServiceRuntime(
   directory: string,
   dependencies: Readonly<Record<string, string>>,
 ): Promise<void> {
+  const packages = Object.keys(dependencies);
   await mkdir(directory, { recursive: true });
   const manifestPath = join(directory, "package.json");
   const current = await readOptionalRecord(manifestPath);
@@ -33,6 +36,9 @@ export async function installServiceRuntime(
     )}\n`,
     "utf8",
   );
+  if (packages.length > 0) {
+    logger.info("installing service runtime packages", { directory, packages });
+  }
   await exec.spawn(bunExecutable, ["install", "--production", "--cwd", directory], {
     check: true,
     cwd: directory,
@@ -40,6 +46,9 @@ export async function installServiceRuntime(
     stdout: "capture",
     stderr: "capture",
   });
+  if (packages.length > 0) {
+    logger.info("service runtime packages installed", { directory, packages });
+  }
 }
 
 /** Create a clean uv environment and install the primary and companion Python packages. */
@@ -49,7 +58,9 @@ export async function installServicePythonPackage(
   packageSpecifiers: readonly string[],
   python: string,
   platform: NodeJS.Platform,
+  offline: boolean,
 ): Promise<string> {
+  logger.info("creating service Python environment", { directory, python });
   await rm(directory, { recursive: true, force: true });
   await exec.spawn(
     uvExecutable,
@@ -62,9 +73,21 @@ export async function installServicePythonPackage(
     },
   );
   const executable = join(directory, platform === "win32" ? "Scripts/python.exe" : "bin/python");
+  logger.info("installing service Python packages", {
+    executable,
+    offline,
+    packages: packageSpecifiers,
+  });
   await exec.spawn(
     uvExecutable,
-    ["pip", "install", "--python", executable, "--upgrade", ...packageSpecifiers],
+    [
+      "pip",
+      "install",
+      "--python",
+      executable,
+      ...(offline ? ["--offline"] : []),
+      ...packageSpecifiers,
+    ],
     {
       check: true,
       stdin: "ignore",
@@ -72,6 +95,11 @@ export async function installServicePythonPackage(
       stderr: "capture",
     },
   );
+  logger.info("service Python packages installed", {
+    executable,
+    offline,
+    packages: packageSpecifiers,
+  });
   return executable;
 }
 

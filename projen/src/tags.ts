@@ -163,15 +163,11 @@ export const PACKAGE_TAG_MIXINS = {
     addPackageFiles(p, "bin");
   }),
   server: create(projectPredicate.hasTag("server"), (p) => {
-    // A Node/Express service. `dev` and `start` run `src/server.ts` directly
-    // through Bun, while package compilation remains native TypeScript.
+    // A Node/Express service. The root's generic `dev:watch` task owns watched
+    // execution because this tag cannot assume an entrypoint or command shape.
     p.addDeps("express@catalog:");
     p.addDevDeps("@types/node@catalog:", "@types/express@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
-    // bun runs the server `.ts` directly (native TS, no tsx). `--watch` restarts
-    // on change - the tsx-watch replacement.
-    (p.tasks.tryFind("dev") ?? p.addTask("dev")).reset("bun --watch src/server.ts");
-    (p.tasks.tryFind("start") ?? p.addTask("start")).reset("bun src/server.ts");
   }),
   node: create(projectPredicate.hasTag("node"), (p) => {
     p.addDevDeps("@types/node@catalog:");

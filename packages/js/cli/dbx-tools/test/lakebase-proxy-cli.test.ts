@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
+import { serviceTrayIcon } from "@dbx-tools/cli-service/icon";
 import { json } from "@dbx-tools/shared-core";
 import { buildProgram, lakebaseProxyServiceDefinition } from "../src/lakebase-proxy/cli.ts";
 
@@ -32,6 +33,9 @@ test("persists Lakebase service listener and optional profile", async () => {
     async start() {},
     async stop() {},
     async restart() {},
+    logPath() {
+      return "/var/log/lakebase-proxy.log";
+    },
     async uninstall() {},
     async status() {
       return { installed: false, running: false };
@@ -69,4 +73,5 @@ test("persists Lakebase service listener and optional profile", async () => {
   expect(definition?.command?.binName).toBe("dbx-lakebase-proxy");
   expect(definition?.id).toBe("dbx-tools.cli-lakebase-proxy");
   expect(definition?.name).toBe("dbx lakebase proxy");
+  expect(definition?.icon).toBe(serviceTrayIcon("lakebase"));
 });

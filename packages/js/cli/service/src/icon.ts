@@ -1,7 +1,7 @@
 import { deflateSync } from "node:zlib";
 
 const SIZE = 32;
-const RECTANGLES = [
+const MODEL_PROXY_RECTANGLES = [
   [4, 13, 6, 6],
   [24, 4, 6, 6],
   [24, 13, 6, 6],
@@ -12,33 +12,91 @@ const RECTANGLES = [
   [18, 15, 6, 2],
   [18, 24, 6, 2],
 ] as const;
+const GRAPHITI_BOLT_RECTANGLES = [
+  [10, 5, 10, 2],
+  [17, 7, 2, 2],
+  [15, 9, 7, 2],
+] as const;
 
-/** Return the dbx-tools service glyph as a systray2 PNG or Windows ICO payload. */
-export function serviceTrayIcon(platform: NodeJS.Platform = process.platform): string {
+/** Plain glyphs available to identify dbx-tools system-tray services. */
+export type ServiceTrayGlyph = "model-proxy" | "graphiti" | "lakebase";
+
+/** Return a service glyph as a systray2 PNG or Windows ICO payload. */
+export function serviceTrayIcon(
+  glyph: ServiceTrayGlyph = "model-proxy",
+  platform: NodeJS.Platform = process.platform,
+): string {
   const color =
     platform === "darwin"
       ? ([0x00, 0x00, 0x00, 0xff] as const)
       : ([0xff, 0x36, 0x21, 0xff] as const);
-  const png = encodePng(renderGlyph(color));
+  const png = encodePng(renderGlyph(glyph, color));
   return (platform === "win32" ? encodeIco(png) : png).toString("base64");
 }
 
-function renderGlyph(color: readonly [number, number, number, number]): Buffer {
+function renderGlyph(
+  glyph: ServiceTrayGlyph,
+  color: readonly [number, number, number, number],
+): Buffer {
   const rgba = Buffer.alloc(SIZE * SIZE * 4);
   for (let y = 0; y < SIZE; y += 1) {
     for (let x = 0; x < SIZE; x += 1) {
-      if (
-        !RECTANGLES.some(
-          ([left, top, width, height]) =>
-            x >= left && x < left + width && y >= top && y < top + height,
-        )
-      ) {
-        continue;
-      }
-      rgba.set(color, (y * SIZE + x) * 4);
+      const opacity = glyphOpacity(glyph, x, y);
+      if (opacity === 0) continue;
+      rgba.set([color[0], color[1], color[2], Math.round(color[3] * opacity)], (y * SIZE + x) * 4);
     }
   }
   return rgba;
+}
+
+function glyphOpacity(glyph: ServiceTrayGlyph, x: number, y: number): number {
+  switch (glyph) {
+    case "model-proxy":
+      return modelProxyGlyphContains(x, y) ? 1 : 0;
+    case "graphiti":
+      return graphitiGlyphContains(x, y) ? 1 : 0;
+    case "lakebase":
+      return lakebaseGlyphOpacity(x, y);
+  }
+}
+
+function modelProxyGlyphContains(x: number, y: number): boolean {
+  return MODEL_PROXY_RECTANGLES.some(
+    ([left, top, width, height]) => x >= left && x < left + width && y >= top && y < top + height,
+  );
+}
+
+function graphitiGlyphContains(x: number, y: number): boolean {
+  // Preserve the Graphiti bot mark through its bolt, antennae, outlined head, and ringed eyes.
+  const bolt = GRAPHITI_BOLT_RECTANGLES.some(
+    ([left, top, width, height]) => x >= left && x < left + width && y >= top && y < top + height,
+  );
+  const head =
+    (y >= 10 && y < 13 && x >= 6 && x < 26) ||
+    (y >= 13 && y < 25 && x >= 4 && x < 7) ||
+    (y >= 13 && y < 25 && x >= 25 && x < 28) ||
+    (y >= 24 && y < 27 && x >= 6 && x < 26);
+  const antenna =
+    y >= 3 &&
+    y < 11 &&
+    ((x >= 7 && x < 9) || (x >= 23 && x < 25));
+  return bolt || head || antenna || graphitiEyeContains(x, y, 11) || graphitiEyeContains(x, y, 21);
+}
+
+function graphitiEyeContains(x: number, y: number, centerX: number): boolean {
+  const distance = (x - centerX) ** 2 + (y - 18) ** 2;
+  return distance >= 10 && distance <= 25;
+}
+
+function lakebaseGlyphOpacity(x: number, y: number): number {
+  if (x < 5 || x >= 27) return 0;
+  if (y >= 5 && y < 11) return 0.45;
+
+  // Keep the official mark's light middle band, dark wave channel, and solid lower band.
+  const middleBoundary = 19 - Math.round(Math.sin(((x - 5) / 21) * Math.PI * 2));
+  if (y >= 13 && y < middleBoundary) return 0.45;
+  if (y >= middleBoundary + 3 && y < 27) return 1;
+  return 0;
 }
 
 function encodePng(rgba: Buffer): Buffer {

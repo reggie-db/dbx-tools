@@ -275,7 +275,9 @@ describe("remote skill caching", () => {
           import: async () => {
             calls.push("import");
             throw Object.assign(
-              new Error("The parent folder (/Workspace/.assistant/skills) does not exist."),
+              new Error(
+                "The parent folder (/Workspace/.assistant/skills) does not exist.",
+              ),
               { errorCode: "RESOURCE_DOES_NOT_EXIST" },
             );
           },

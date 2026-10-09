@@ -12,5 +12,6 @@ export { CliServiceInstallOptionsSchema } from "./src/cli.ts";
 export type { CliServiceDefinitionSource, CliServiceCliDependencies } from "./src/cli.ts";
 export { CliServiceCommandSchema, CliServiceMenuItemSchema, CliServicePythonPackageSchema, CliServiceDefinitionSchema } from "./src/definition.ts";
 export type { CliServiceCommand, CliServiceCommandInput, CliServiceMenuItem, CliServicePythonPackage, CliServicePythonPackageInput, CliServiceDefinition, CliServiceDefinitionOptions } from "./src/definition.ts";
+export type { ServiceTrayGlyph } from "./src/icon.ts";
 export { CliService } from "./src/service.ts";
 export type { CliServiceCompiler, CliServiceRuntimeInstaller, CliServicePythonInstaller, CliServiceRuntimeOptions, CliServiceStatus, CliServiceLifecycle } from "./src/service.ts";

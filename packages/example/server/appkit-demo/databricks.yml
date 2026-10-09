@@ -86,16 +86,10 @@ resources:
       lifecycle:
         prevent_destroy: true
       # app.yaml owns the runtime command so bundle and click-to-deploy launches
-      # both run the Bun-built server bundle under Node. The public tunnel, OTP
+      # both run the TypeScript server through Node and tsx. The public tunnel, OTP
       # gate, staged client path, and deployment resource bindings remain here.
       config:
         env:
-          # Databricks Apps installs requirements.txt into this Python 3.11
-          # environment. The Graphiti plugin otherwise falls back to the
-          # platform's `python3`, which can be an older interpreter and cannot
-          # import the already-installed dbx-tools-graphiti release.
-          - name: PYTHON
-            value: ./.venv/bin/python
           - name: GRAPHITI_ENABLED
             value: "true"
           - name: GRAPHITI_DATABASE_SCHEMA

@@ -7,13 +7,14 @@
  *
  * @module
  */
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+import { runGraphiti, type GraphitiRuntimeOptions } from "@dbx-tools/appkit-graphiti/runtime";
 import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
-import {
-  runGraphiti,
-  type GraphitiRuntimeOptions,
-} from "@dbx-tools/appkit-graphiti/runtime";
+import { serviceTrayIcon } from "@dbx-tools/cli-service/icon";
 import { Command } from "commander";
 
 import {
@@ -22,6 +23,9 @@ import {
   type GraphitiOptions,
 } from "./options.ts";
 import { PACKAGE_VERSION } from "../../index.ts";
+
+const DEFAULT_SERVICE_DIRECTORY = join(homedir(), ".dbx-tools", "services", "graphiti");
+const DEFAULT_SERVICE_HOME = join(homedir(), ".dbx-tools", "graphiti");
 
 /** Injectable runtime and service lifecycle boundaries for CLI callers. */
 export interface GraphitiCliDependencies {
@@ -38,13 +42,21 @@ export type GraphitiServiceOptions = GraphitiOptions;
 export function graphitiServiceDefinition(
   options: GraphitiServiceOptions = {},
 ): CliServiceDefinition {
+  const resolved = GraphitiOptionsSchema.parse({
+    ...options,
+    graphitiHome: options.graphitiHome ?? DEFAULT_SERVICE_HOME,
+  });
   return defineService(import.meta.url, {
     id: "dbx-tools.cli-graphiti",
     name: "dbx graphiti",
-    pythonPackage: { name: "dbx-tools-graphiti" },
+    icon: serviceTrayIcon("graphiti"),
+    dataDirectory: DEFAULT_SERVICE_DIRECTORY,
+    pythonPackage: {
+      name: resolved.databaseUrl ? "dbx-tools-graphiti" : "dbx-tools-graphiti[dev]",
+    },
     command: {
       binName: "dbx-graphiti",
-      arguments: serializeArgs(GraphitiOptionsSchema.parse(options)),
+      arguments: serializeArgs(resolved),
     },
   });
 }

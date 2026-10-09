@@ -36,10 +36,9 @@
  * Pass `refreshTtlMs: 0` to download on every boot.
  *
  * The default destination is the Databricks workspace Assistant skills tree
- * (`/Workspace/.assistant/skills`, the same tree a "save this as a skill"
- * action writes to), so provisioned skills persist across restarts and are
+ * (`/Workspace/.assistant/skills`), so provisioned skills persist across restarts and are
  * discovered by the built-in Assistant-skills mount. Pass `userEmail` (or an
- * explicit `databricksBasePath`) to target `/Users/<email>/.assistant/skills`
+ * explicit `databricksBasePath`) to target `/Workspace/Users/<email>/.assistant/skills`
  * instead. When no Databricks client is resolvable at startup - or the resolved
  * identity cannot WRITE the destination, which is the normal case for a
  * Databricks App service principal against the admin-owned shared tree (see
@@ -73,8 +72,7 @@ import {
 import type { OneOrMany } from "@dbx-tools/shared-core";
 import type { FileSystem } from "@dbx-tools/shared-fs";
 
-import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-paths.ts";
-import { clearWorkspaceSkillCache } from "./skill-cache.ts";
+import { ORGANIZATION_SKILLS_PATH, personalSkillsPath } from "./skill-paths.ts";
 
 const logger = log.logger("mastra/remote-skills");
 
@@ -208,7 +206,7 @@ export interface ProvisionRemoteSkillsOptions {
   failOnError?: boolean;
   /**
    * Absolute Databricks path that roots the destination Assistant skills tree.
-   * Defaults to the OBO user's `/Users/<email>/.assistant/skills`.
+   * Defaults to the OBO user's `/Workspace/Users/<email>/.assistant/skills`.
    */
   databricksBasePath?: string;
   /** Auth-scoped Databricks client. Defaults to the AppKit execution context. */
@@ -442,7 +440,6 @@ export async function provisionRemoteSkills(
   const localSkillPaths: string[] = [];
   const skillNames: string[] = [];
   let staging: LocalFileSystem | undefined;
-  let workspaceUpdated = false;
 
   try {
     const sources = Array.isArray(options.sources) ? options.sources : [options.sources];
@@ -491,7 +488,6 @@ export async function provisionRemoteSkills(
           // Only after the copy lands: a metadata entry written first would
           // mark a failed provision as fresh and suppress the retry for a day.
           await writeMetadata(destination, key, record);
-          workspaceUpdated = true;
         } else {
           localSkillPaths.push(await persistLocally(key, staged, record));
         }
@@ -518,12 +514,6 @@ export async function provisionRemoteSkills(
     if (staging) {
       await rm(staging.root, { recursive: true, force: true }).catch(() => undefined);
     }
-  }
-
-  if (workspaceUpdated && client?.config?.getHost) {
-    await clearWorkspaceSkillCache({
-      host: (await client.config.getHost()).toString(),
-    });
   }
 
   return { localSkillPaths, databricksBasePath, skillNames };
@@ -603,7 +593,7 @@ function resolveDatabricksBasePath(
   // A named user targets their personal Assistant tree (the "save a skill"
   // target); otherwise the shared workspace Assistant tree, which the built-in
   // Assistant-skills mount already scans.
-  return email ? userAssistantSkillsPath(email) : ASSISTANT_SHARED_SKILLS_PATH;
+  return email ? personalSkillsPath(email) : ORGANIZATION_SKILLS_PATH;
 }
 
 /**

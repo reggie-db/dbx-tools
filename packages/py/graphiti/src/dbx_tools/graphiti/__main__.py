@@ -22,7 +22,17 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("Graphiti requires a TCP listener")
     # PythonMonkey promise callbacks require the standard asyncio scheduler;
     # Uvicorn's automatic uvloop selection can crash during generated calls.
-    uvicorn.run(app, host=listen["host"], port=int(listen["port"]), loop="asyncio")
+    app.state.failure = None
+    uvicorn.run(
+        app,
+        host=listen["host"],
+        port=int(listen["port"]),
+        loop="asyncio",
+        access_log=False,
+    )
+    failure = getattr(app.state, "failure", None)
+    if failure is not None:
+        raise SystemExit(1) from failure
 
 
 if __name__ == "__main__":

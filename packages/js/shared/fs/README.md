@@ -24,6 +24,14 @@ Key features:
 - `posixPath` helpers that convert roots/joins to `/`-separated form
   (`posixPath.toPosix`, `posixPath.join`, …)
 - Typed `FileSystemError` codes for portable failure handling
+- Lazy debug logs for every public filesystem operation. Set
+  `LOG_LEVEL=debug`; operation metadata is not constructed at normal log levels.
+- `cache()` read-through decorator with automatic mutation invalidation.
+  `exists`, `readdir`, and `stat` are cached by default; other methods delegate
+  directly unless selected explicitly. Cache owners expose `keys()` so
+  directory move/delete operations can invalidate related ancestor and
+  descendant entries. `read`, `invalidate`, and `keys` may be synchronous or
+  asynchronous. Keys use `<stable-hash>_<canonical-rooted-backend-path>`.
 
 ## Why Use This
 
@@ -32,11 +40,19 @@ Use this when multiple backends (local disk, object storage, Databricks volumes,
 ## Quick Start
 
 ```ts
-import type { FileSystem } from "@dbx-tools/shared-fs";
-import { BaseFileSystem, FileSystemError, MemoryFileSystem, posixPath } from "@dbx-tools/shared-fs";
+import type { FileSystem, FileSystemCache } from "@dbx-tools/shared-fs";
+import {
+  BaseFileSystem,
+  FileSystemError,
+  fs,
+  MemoryFileSystem,
+  posixPath,
+} from "@dbx-tools/shared-fs";
 
 const mem = new MemoryFileSystem();
 await mem.writeFile("note.txt", "hi");
+const cached = fs.cache(mem, myCache satisfies FileSystemCache);
+await cached.stat("note.txt");
 ```
 
 ## Modules

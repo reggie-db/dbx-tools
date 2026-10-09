@@ -17,7 +17,7 @@ export * as projectUtils from "./src/project-utils.ts";
 export type { BinContext, BinSelectionContext, BinSelector, BinVersionOutput, BinVersionParser, BinOptions, BinPackageOptions, BinUrlResolveContext, BinSource, BinUrl } from "./src/bin.ts";
 export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContextJsonSchema, brandContextPrompt } from "./src/brand-files.ts";
 export type { BrandContext, BrandContextInput } from "./src/brand-files.ts";
-export { MAX_TCP_PORT, ENV_ONLY, valueSchema, bundleResourceSchema, bundleEnvEntrySchema, bundleAppSchema, appEnvEntrySchema, appSchema } from "./src/config-utils.ts";
+export { MAX_TCP_PORT, ENV_ONLY, valueSchema, bundleResourceSchema, bundleEnvEntrySchema, bundleAppSchema, appEnvEntrySchema, appSchema, toNumber } from "./src/config-utils.ts";
 export type { ConfigMapValue, ConfigData, ConfigSource, ConfigOptions, ConfigFile } from "./src/config-utils.ts";
 export type { DependencyResolverOptions, DependencyInfo, ResolvedNpmVersion, NpmSpecifierInput, ResolvedNpmDependencies, MissingDependencyInfo } from "./src/dependency-resolver.ts";
 export { COMMAND_NOT_FOUND_EXIT_CODE } from "./src/exec.ts";

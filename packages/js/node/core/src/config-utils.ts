@@ -442,6 +442,9 @@ export function boolean(
   return object.toBoolean(configured) ?? object.toBoolean(text(input, options));
 }
 
+/** Parse a finite number with the shared scalar coercion rules. */
+export const toNumber = object.toNumber;
+
 /**
  * Resolve a positive number that may be fractional (a score threshold, a ratio).
  * Use {@link positiveInt} for a count, port, or timeout.

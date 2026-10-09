@@ -18,10 +18,14 @@ from dbx_tools.graphiti._generated.node.shared_graphiti.options import GraphitiO
 from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.graph_ops import (
     PGGraphMaintenanceOperations,
 )
+from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.search_ops import (
+    PGSearchOperations,
+)
 from dbx_tools.graphiti._generated.sync.postgraph.postgraph_driver import PostGraphDriver
 from dbx_tools.graphiti.options import normalize_graphiti_options
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from graphiti_core.search.search_filters import SearchFilters
 
 """Validate the wrapper-owned composition without re-testing upstream Graphiti."""
 
@@ -66,14 +70,25 @@ def _node_environment(**values: str | None) -> Iterator[None]:
             update(name, value)
 
 
-def _request(path: str, authorization: str | None = None) -> Request:
+def _request(
+    path: str,
+    authorization: str | None = None,
+    *,
+    method: str = "GET",
+    payload: dict[str, object] | None = None,
+) -> Request:
     """Build one HTTP request for direct middleware tests."""
     headers = [] if authorization is None else [(b"authorization", authorization.encode())]
+    body = json.dumps(payload).encode() if payload is not None else b""
+
+    async def receive() -> dict[str, object]:
+        return {"type": "http.request", "body": body, "more_body": False}
+
     return Request(
         {
             "type": "http",
             "http_version": "1.1",
-            "method": "GET",
+            "method": method,
             "scheme": "http",
             "path": path,
             "raw_path": path.encode(),
@@ -83,7 +98,8 @@ def _request(path: str, authorization: str | None = None) -> Request:
             "server": ("127.0.0.1", 8100),
             "root_path": "",
             "app": main.app,
-        }
+        },
+        receive,
     )
 
 
@@ -200,6 +216,27 @@ async def test_postgraph_schema_initialization_surfaces_creation_failures() -> N
         await operations.build_indices_and_constraints_pg(Client(), 768)
 
 
+@pytest.mark.asyncio
+async def test_postgraph_fulltext_search_parses_natural_language_as_plain_text() -> None:
+    calls: list[tuple[str, tuple[object, ...]]] = []
+
+    class Client:
+        async def _fetch(self, query: str, *args: object) -> list[object]:
+            calls.append((query, args))
+            return []
+
+    class Executor:
+        client = Client()
+
+    query = 'user(user): http://127.0.0.1:7272/get-memory & "quoted history"'
+    await PGSearchOperations().edge_fulltext_search(Executor(), query, SearchFilters())
+
+    assert len(calls) == 1
+    sql, args = calls[0]
+    assert sql.count("plainto_tsquery('simple'") == 2
+    assert args[-1] == query
+
+
 def test_command_uses_standard_asyncio_loop(monkeypatch) -> None:
     calls: list[dict[str, object]] = []
     monkeypatch.setattr(
@@ -215,7 +252,32 @@ def test_command_uses_standard_asyncio_loop(monkeypatch) -> None:
 
     graphiti_command.main([])
 
-    assert calls == [{"host": "127.0.0.1", "port": 8100, "loop": "asyncio"}]
+    assert calls == [
+        {
+            "host": "127.0.0.1",
+            "port": 8100,
+            "loop": "asyncio",
+            "access_log": False,
+        }
+    ]
+
+
+def test_command_exits_nonzero_after_runtime_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        graphiti_command,
+        "load_graphiti_options",
+        lambda: {"listen": {"scheme": "tcp", "host": "127.0.0.1", "port": 8100}},
+    )
+
+    def run(_app, **_options) -> None:
+        graphiti_command.app.state.failure = RuntimeError("runtime failed")
+
+    monkeypatch.setattr(graphiti_command.uvicorn, "run", run)
+
+    with pytest.raises(SystemExit) as raised:
+        graphiti_command.main([])
+
+    assert raised.value.code == 1
 
 
 @pytest.mark.asyncio
@@ -314,6 +376,67 @@ def test_embedding_dimensions_require_discovered_metadata() -> None:
     )
     with pytest.raises(RuntimeError, match="has no dimension metadata"):
         graphiti_runtime._required_embedding_dimensions({"name": "embedding-model"})
+
+
+@pytest.mark.asyncio
+async def test_runtime_logs_startup_and_shutdown_timing(monkeypatch, caplog) -> None:
+    closed: list[str] = []
+
+    class Http:
+        async def aclose(self) -> None:
+            closed.append("http")
+
+    class Clients:
+        llm = object()
+        embedder = object()
+        cross_encoder = object()
+        llm_model = "chat-model"
+        embedder_model = "embedding-model"
+        embedder_dimensions = 768
+        http = Http()
+
+    class Database:
+        dsn = "postgresql://localhost/graphiti"
+
+        def __init__(self) -> None:
+            self.connection_options: dict[str, object] = {}
+
+        async def close(self) -> None:
+            closed.append("database")
+
+    class Graphiti:
+        async def build_indices_and_constraints(self) -> None:
+            pass
+
+        async def close(self) -> None:
+            closed.append("graphiti")
+
+    async def create_clients(_options):
+        return Clients()
+
+    async def start_database(_options):
+        return Database()
+
+    times = iter([1.0, 1.125, 2.0, 2.025])
+    monkeypatch.setattr(graphiti_runtime, "perf_counter", lambda: next(times))
+    monkeypatch.setattr(graphiti_runtime, "create_runtime_clients", create_clients)
+    monkeypatch.setattr(graphiti_runtime, "_start_database", start_database)
+    monkeypatch.setattr(graphiti_runtime, "PostGraphDriver", lambda **_kwargs: object())
+    monkeypatch.setattr(graphiti_runtime, "Graphiti", lambda **_kwargs: Graphiti())
+
+    runtime = graphiti_runtime.GraphitiRuntime(_resolved_options())
+    with caplog.at_level(logging.INFO, logger=graphiti_runtime.__name__):
+        await runtime.start()
+        await runtime.close()
+
+    assert any(
+        "Graphiti runtime started" in message and "duration_ms=125.0" in message
+        for message in caplog.messages
+    )
+    assert any(
+        "Graphiti runtime stopped duration_ms=25.0" in message for message in caplog.messages
+    )
+    assert closed == ["graphiti", "database", "http"]
 
 
 def test_llm_client_normalizes_structured_content_before_json_parsing() -> None:
@@ -495,29 +618,84 @@ async def test_healthcheck() -> None:
     assert json.loads(response.body) == {"status": "healthy"}
 
 
-def test_healthcheck_access_log_is_filtered() -> None:
-    filter = main._HealthcheckAccessFilter()
-    dropped = logging.LogRecord(
-        "uvicorn.access",
-        logging.INFO,
-        __file__,
-        0,
-        '127.0.0.1:1 - "GET /healthcheck HTTP/1.1" 503',
-        (),
-        None,
-    )
-    kept = logging.LogRecord(
-        "uvicorn.access",
-        logging.INFO,
-        __file__,
-        0,
-        '127.0.0.1:1 - "GET /openapi.json HTTP/1.1" 200',
-        (),
-        None,
-    )
+def test_uvicorn_access_log_is_restricted_to_warnings() -> None:
+    main._configure_dependency_logging()
 
-    assert filter.filter(dropped) is False
-    assert filter.filter(kept) is True
+    assert logging.getLogger("uvicorn.access").level == logging.WARNING
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "payload", "status", "expected"),
+    [
+        (
+            "/get-memory",
+            "POST",
+            {"group_id": "codex-user", "messages": [{}, {}], "max_facts": 12},
+            200,
+            "group_id='codex-user' message_count=2 max_facts=12",
+        ),
+        (
+            "/messages",
+            "POST",
+            {"group_id": "codex-user", "messages": [{}]},
+            202,
+            "group_id='codex-user' message_count=1",
+        ),
+        ("/openapi.json", "GET", None, 200, "path='/openapi.json' status=200"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_endpoint_log_has_timing_and_content_free_statistics(
+    monkeypatch,
+    caplog,
+    path: str,
+    method: str,
+    payload: dict[str, object] | None,
+    status: int,
+    expected: str,
+) -> None:
+    times = iter([1.0, 1.025])
+    monkeypatch.setattr(main, "perf_counter", lambda: next(times))
+
+    async def call_next(_: Request) -> JSONResponse:
+        return JSONResponse({"content": "not logged"}, status_code=status)
+
+    main.app.state.bearer = None
+    with caplog.at_level(logging.INFO, logger=main.__name__):
+        await main._require_bearer(
+            _request(path, method=method, payload=payload),
+            call_next,
+        )
+
+    message = caplog.messages[-1]
+    assert "duration_ms=25.0" in message
+    assert expected in message
+    assert "not logged" not in message
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "status"),
+    [
+        ("/healthcheck", "GET", 200),
+        ("/mcp/", "OPTIONS", 405),
+        ("/mcp", "POST", 307),
+    ],
+)
+@pytest.mark.asyncio
+async def test_noisy_protocol_requests_are_not_logged(
+    caplog,
+    path: str,
+    method: str,
+    status: int,
+) -> None:
+    async def call_next(_: Request) -> JSONResponse:
+        return JSONResponse({}, status_code=status)
+
+    main.app.state.bearer = None
+    with caplog.at_level(logging.INFO, logger=main.__name__):
+        await main._require_bearer(_request(path, method=method), call_next)
+
+    assert caplog.messages == []
 
 
 def test_uvicorn_shutdown_log_is_filtered() -> None:
@@ -602,6 +780,59 @@ async def test_docs_are_served_before_runtime_ready(monkeypatch) -> None:
         healthy = await main.healthcheck()
         assert healthy.status_code == 200
         assert json.loads(healthy.body) == {"status": "healthy"}
+
+
+@pytest.mark.parametrize(
+    ("failure_stage", "message"),
+    [
+        ("runtime", "database failed"),
+        ("mcp", "MCP failed"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_runtime_or_mcp_failure_requests_process_shutdown(
+    monkeypatch,
+    failure_stage: str,
+    message: str,
+) -> None:
+    shutdown_requested = asyncio.Event()
+    closed: list[str] = []
+
+    class Clients:
+        llm_model = "chat"
+        embedder_model = "embed"
+        embedder_dimensions = 8
+
+    class Runtime:
+        clients = Clients()
+        graphiti = object()
+
+        def __init__(self, _options) -> None:
+            pass
+
+        async def start(self) -> None:
+            if failure_stage == "runtime":
+                raise RuntimeError(message)
+
+        async def close(self) -> None:
+            closed.append("runtime")
+
+    async def initialize_mcp(*_args, **_kwargs) -> None:
+        if failure_stage == "mcp":
+            raise RuntimeError(message)
+
+    monkeypatch.setattr(main, "load_graphiti_options", lambda: _resolved_options())
+    monkeypatch.setattr(main, "GraphitiRuntime", Runtime)
+    monkeypatch.setattr(main, "initialize_mcp", initialize_mcp)
+    monkeypatch.setattr(main, "_request_process_shutdown", shutdown_requested.set)
+    monkeypatch.setattr(main.graphiti_mcp, "queue_service", None)
+
+    async with main.lifespan(main.app):
+        await asyncio.wait_for(shutdown_requested.wait(), timeout=1)
+
+    assert isinstance(main.app.state.failure, RuntimeError)
+    assert str(main.app.state.failure) == message
+    assert closed == ["runtime"]
 
 
 @pytest.mark.asyncio

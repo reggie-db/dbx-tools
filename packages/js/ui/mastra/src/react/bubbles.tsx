@@ -8,6 +8,7 @@ import {
   Item,
   ItemContent,
   ItemMedia,
+  RecordPreview,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -191,9 +192,7 @@ const ToolApprovalCard = ({
       {asEmailInput(input) ? (
         <EmailApprovalPreview email={asEmailInput(input)!} />
       ) : (
-        <pre className="overflow-x-auto rounded bg-background/40 p-2 text-[11px]">
-          {JSON.stringify(input, null, 2)}
-        </pre>
+        <RecordPreview value={input} className="rounded bg-background/40" />
       )}
       {expired ? (
         <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">

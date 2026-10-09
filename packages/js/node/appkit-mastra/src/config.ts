@@ -20,6 +20,7 @@ import type { BrandContext } from "@dbx-tools/shared-core";
 import type { AgentConfig } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
+import type { WorkspaceToolsConfig } from "@mastra/core/workspace";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
 import type { AnyMastraAgentDefinition, MastraTools } from "./agents.ts";
@@ -147,8 +148,8 @@ export type MastraMemoryConfig = PgVectorConfig & {
   id?: string;
 };
 
-/** On-demand workspace skill search configuration. */
-export interface MastraSkillSearchConfig {
+/** Mastra native workspace skill-search configuration. */
+export interface MastraWorkspaceSkillsConfig {
   /** Maximum skill matches returned by one search. Defaults to 5. */
   topK?: number;
   /** Minimum BM25 relevance score. Defaults to 0.1. */
@@ -217,16 +218,13 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * custom `workspace` keeps that workspace and its sandbox.
    */
   sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
+  /** Native Mastra workspace tool availability, approval, and hook configuration. */
+  workspaceTools?: WorkspaceToolsConfig;
   /**
-   * Refresh TTL for the complete user-scoped workspace skill catalogue.
-   * Defaults to five minutes; auxiliary files remain uncached.
+   * Use Mastra's native workspace skill manager. Defaults to true. Pass an
+   * object to tune on-demand discovery and loaded-skill state.
    */
-  workspaceSkillRefreshTtlMs?: number;
-  /**
-   * Use dbx-tools catalogue-backed on-demand skill search. Defaults to true.
-   * Pass an object to tune search.
-   */
-  workspaceSkillSearch?: boolean | MastraSkillSearchConfig;
+  workspaceSkills?: boolean | MastraWorkspaceSkillsConfig;
   /**
    * Code-defined agents. Accepts three shapes for convenience:
    *
@@ -613,7 +611,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * through neither fails startup unless `failOnError: false`.
    *
    * Provisioned skills are written to the Databricks user's Assistant skills
-   * folder (`/Users/<email>/.assistant/skills`, the "save this as a skill"
+   * folder (`/Workspace/Users/<email>/.assistant/skills`, the personal skill
    * target) so they persist and are picked up by the built-in Assistant-skills
    * mount. With no writable workspace, they go to a local temp dir instead.
    *
@@ -667,15 +665,15 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       description:
         'Command sandbox for auto-created agent workspaces. Defaults to Monty; false disables command execution, and true, "databricks", or an object selects/configures Databricks Sandbox with optional fallback.',
     },
-    workspaceSkillRefreshTtlMs: {
-      type: "number",
-      description:
-        "Refresh TTL in milliseconds for the complete user-scoped workspace skill catalogue. Defaults to 5 minutes; auxiliary file reads stay fresh.",
-    },
-    workspaceSkillSearch: {
+    workspaceSkills: {
       type: ["boolean", "object"],
       description:
-        "Use dbx-tools catalogue-backed on-demand skill search with lazy auxiliary reads. Defaults to true.",
+        "Use Mastra's native on-demand workspace skill search and writable skill saves. Defaults to true.",
+    },
+    workspaceTools: {
+      type: "object",
+      description:
+        "Native Mastra workspace tool configuration for availability, approvals, read-before-write, output limits, and hooks.",
     },
     defaultAgent: {
       type: "string",

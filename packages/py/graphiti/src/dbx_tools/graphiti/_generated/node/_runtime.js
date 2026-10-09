@@ -43669,10 +43669,10 @@ var import_promises2 = (() => ({}));
 var COMMAND_NOT_FOUND_EXIT_CODE = 127;
 function parseSpawnArgs(input) {
   let [value, ...values2] = input;
-  const [command, ...commandArgs] = shlex(value);
   const last = values2.at(-1);
   const options = last !== null && typeof last === "object" && !Array.isArray(last) ? last : undefined;
   const argumentValues = options ? values2.slice(0, -1) : values2;
+  const [command, ...commandArgs] = argumentValues.length === 0 ? shlex(value) : [value];
   const valueArgs = argumentValues.length === 1 && Array.isArray(argumentValues[0]) ? [...argumentValues[0]] : argumentValues;
   return {
     command,
@@ -61484,13 +61484,19 @@ function decode(value) {
   }
 }
 // packages/js/node/lakebase/src/client.ts
+var import_zod10 = __toESM(require_zod(), 1);
 var logger11 = exports_log.logger("lakebase");
 var API_BASE = "/api/2.0/postgres";
+var CREDENTIAL_REFRESH_BUFFER_MS = 2 * 60000;
 var LAKEBASE_DEFAULT_DATABASE = "databricks_postgres";
 var LAKEBASE_DEFAULT_DATABASE_ID = "databricks-postgres";
 var GENERIC_POSTGRES_DATABASE = "postgres";
 var DISCOVERY_TTL_MS = 30000;
 var SESSION_TTL_MS = 10 * 60000;
+var DatabaseCredentialSchema = import_zod10.z.object({
+  token: import_zod10.z.string().min(1).describe("OAuth token used as the PostgreSQL password."),
+  expire_time: import_zod10.z.string().datetime().describe("UTC ISO 8601 time when the PostgreSQL OAuth token expires.")
+}).describe("Short-lived Lakebase PostgreSQL OAuth credential.");
 var DEFAULT_DEPENDENCIES = {
   createClient: async (options) => {
     const auth = await exports_client.createAuthClient(options);
@@ -61507,6 +61513,8 @@ class LakebaseClient {
   dependencies;
   sessions = new Map;
   resolved = new Map;
+  credentials = new Map;
+  credentialRefreshes = new Map;
   constructor(authOptions = {}, dependencies = DEFAULT_DEPENDENCIES) {
     this.authOptions = authOptions;
     this.dependencies = dependencies;
@@ -61523,13 +61531,31 @@ class LakebaseClient {
   }
   async generateDatabaseCredential(endpoint, startupUser) {
     const profile = await this.resolveProfile(startupUser);
-    const response = record2(await (await this.session(profile)).request(`${API_BASE}/credentials`, {
-      body: { endpoint }
-    }));
-    const token = text5(response.token);
-    if (!token)
-      throw new Error("Lakebase credential response did not contain token");
-    return token;
+    const key = `${profile ?? "<default>"}:${endpoint}`;
+    const cached = current(this.credentials.get(key));
+    if (cached)
+      return cached;
+    const pending = this.credentialRefreshes.get(key);
+    if (pending)
+      return pending;
+    const refresh = this.refreshDatabaseCredential(key, endpoint, profile);
+    this.credentialRefreshes.set(key, refresh);
+    return refresh;
+  }
+  async refreshDatabaseCredential(key, endpoint, profile) {
+    try {
+      const credential = DatabaseCredentialSchema.parse(await (await this.session(profile)).request(`${API_BASE}/credentials`, {
+        body: { endpoint }
+      }));
+      const expiresAt = Date.parse(credential.expire_time);
+      const cacheExpiresAt = expiresAt - CREDENTIAL_REFRESH_BUFFER_MS;
+      if (cacheExpiresAt > Date.now()) {
+        this.credentials.set(key, { value: credential.token, expiresAt: cacheExpiresAt });
+      }
+      return credential.token;
+    } finally {
+      this.credentialRefreshes.delete(key);
+    }
   }
   async session(profile) {
     const key = profile ?? "<default>";

@@ -2,6 +2,7 @@ import path from "node:path";
 import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
+import { filesCache } from "@dbx-tools/appkit/files-cache";
 import {
   agents,
   genie as appkitMastraGenie,
@@ -97,9 +98,9 @@ const clientDist =
 // race lakebase's synchronous env validation.
 //
 // Plugin order:
-// 1. `server()` and `lakebase()` register before `mastra()` so the
-//    `setup:complete` lifecycle hook can open the Lakebase pool when
-//    Mastra storage/memory are enabled.
+// 1. `server()`, `lakebase()`, and `filesCache()` register before `mastra()`
+//    so Mastra can discover the process-local user-scoped filesystem cache
+//    and initialize Lakebase-backed memory during setup.
 // 2. `mastra(...)` mounts a chat route per registered agent under
 //    `/api/mastra/route/chat/<agentId>` (plus `/route/chat` bound to
 //    the default). Each agent resolves its model from the workspace
@@ -118,8 +119,9 @@ const clientDist =
 // hydration; no inner Genie orchestrator agent.
 //
 // Assistant skills: `createAgent` defaults `workspace` to
-// `createWorkspace()`, which mounts read-only Databricks paths
-// `/Workspace/.assistant/skills` and `/Users/<email>/.assistant/skills`.
+// `createWorkspace()`, which mounts the organization tree at
+// `/Workspace/.assistant` and the personal tree at
+// `/Workspace/Users/<email>`, then scans their relative `skills` roots.
 //
 // Required env vars (see .env.example):
 // - DATABRICKS_SERVING_ENDPOINT_NAME - optional override; when absent the
@@ -290,6 +292,7 @@ await appkit.createApp({
     server({ host, staticPath: clientDist, telemetry: { traces: false } }),
     genie(),
     lakebase({ pool: postgresConnectionOptions({}) }),
+    filesCache(),
     ...(graphitiEnabled ? [graphiti()] : []),
     // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
     // Lakebase connection and fans topic broadcasts out to its browser viewers.

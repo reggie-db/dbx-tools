@@ -12,6 +12,7 @@ import {
   port,
   resolveValue,
   text,
+  toNumber,
 } from "../src/config-utils.ts";
 
 interface AppEnvironmentFixture {
@@ -197,6 +198,14 @@ describe("port", () => {
     assert.equal(port(0, "UNUSED", 8000), 8000);
     assert.equal(port(65_536, "UNUSED", 8000), 8000);
     assert.equal(port("not-a-port", "UNUSED", 0), 0);
+  });
+});
+
+describe("toNumber", () => {
+  it("uses the shared finite-number coercion", () => {
+    assert.equal(toNumber("15,000"), 15_000);
+    assert.equal(toNumber(""), undefined);
+    assert.equal(toNumber("not-a-number"), undefined);
   });
 });
 

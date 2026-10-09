@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type express from "express";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
@@ -12,7 +13,11 @@ import {
   MASTRA_USER_EMAIL_KEY,
   MASTRA_USER_KEY,
 } from "../src/config.ts";
-import { clearTrustedRequestContext, isMastraRequestAllowed } from "../src/server.ts";
+import {
+  attachStaleResumeRecovery,
+  clearTrustedRequestContext,
+  isMastraRequestAllowed,
+} from "../src/server.ts";
 
 describe("application request context boundary", () => {
   it("keeps application values and removes client-spoofable trusted fields", () => {
@@ -70,3 +75,45 @@ describe("scoped Mastra API gate", () => {
     }
   });
 });
+
+describe("stale resume recovery", () => {
+  it("finishes the chat stream instead of forwarding a settled workflow error", () => {
+    const handlers: express.ErrorRequestHandler[] = [];
+    attachStaleResumeRecovery({
+      use: (handler: express.ErrorRequestHandler) => {
+        handlers.push(handler);
+      },
+    } as express.Express);
+    const chunks: string[] = [];
+    const res = {
+      headersSent: false,
+      statusCode: 0,
+      ended: false,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      setHeader() {},
+      write(chunk: string) {
+        chunks.push(chunk);
+      },
+      end() {
+        this.ended = true;
+      },
+    };
+    let forwarded: unknown;
+    handlers[0](
+      new Error("This workflow run was not suspended"),
+      { path: "/chat/support" } as express.Request,
+      res as unknown as express.Response,
+      (error?: unknown) => {
+        forwarded = error;
+      },
+    );
+    assert.equal(forwarded, undefined);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.ended, true);
+    assert.equal(chunks.some((chunk) => chunk.includes("[DONE]")), true);
+  });
+});
+

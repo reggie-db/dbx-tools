@@ -45,6 +45,11 @@ const VOLUME_ROOT_DEPTH = 4;
  */
 type BackendHandlers<T> = Record<DatabricksFilesBackend, (client: WorkspaceClient) => Promise<T>>;
 
+/** Resolve the Databricks client used for the current filesystem operation. */
+export type DatabricksFileSystemClientResolver = () =>
+  | WorkspaceClient
+  | Promise<WorkspaceClient>;
+
 /** Options for {@link DatabricksFileSystem}. */
 export interface DatabricksFileSystemOptions {
   /** Unique identifier. Defaults to a stable hash of the normalized root. */
@@ -72,7 +77,7 @@ export interface DatabricksFileSystemOptions {
    * Databricks workspace client. Defaults to `tryGetWorkspaceClient()`, otherwise
    * a default {@link WorkspaceClient} from env / profile auth.
    */
-  client?: WorkspaceClient;
+  client?: WorkspaceClient | DatabricksFileSystemClientResolver;
 
   /** Block all write operations. Defaults to false. */
   readOnly?: boolean;
@@ -90,6 +95,14 @@ export interface DatabricksStreamWriteOptions {
   overwrite?: boolean;
 }
 
+/** Resolve a static, operation-scoped, or ambient Databricks client. */
+async function resolveClientOption(
+  client: WorkspaceClient | DatabricksFileSystemClientResolver | undefined,
+): Promise<WorkspaceClient> {
+  if (typeof client === "function") return client();
+  return client ?? (await getWorkspaceClient());
+}
+
 /**
  * {@link FileSystem} implementation over Databricks workspace files, UC
  * volumes, and DBFS.
@@ -105,7 +118,7 @@ export interface DatabricksStreamWriteOptions {
  */
 export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
   private client: WorkspaceClient | undefined;
-  private readonly clientOption: WorkspaceClient | undefined;
+  private readonly clientOption: WorkspaceClient | DatabricksFileSystemClientResolver | undefined;
 
   constructor(options: DatabricksFileSystemOptions) {
     const root = normalizeDatabricksRoot(options.root, { userName: options.userName });
@@ -117,7 +130,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
       createRoot: options.createRoot ?? false,
     });
     this.clientOption = options.client;
-    this.client = options.client;
+    this.client = typeof options.client === "function" ? undefined : options.client;
   }
 
   /**
@@ -128,9 +141,13 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     if (!isHomeRelativePath(options.root) || options.userName?.trim()) {
       return new DatabricksFileSystem(options);
     }
-    const client = options.client ?? (await getWorkspaceClient());
+    const client = await resolveClientOption(options.client);
     const root = await resolveDatabricksRoot(options.root, { client });
-    return new DatabricksFileSystem({ ...options, root, client });
+    return new DatabricksFileSystem({
+      ...options,
+      root,
+      client: options.client ?? client,
+    });
   }
 
   /**
@@ -196,19 +213,21 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
   }
 
   protected override async onInit(): Promise<void> {
-    this.client = this.clientOption ?? (await getWorkspaceClient());
+    this.client = await resolveClientOption(this.clientOption);
   }
 
   /** Run the handler for `absolutePath`'s Databricks API with the live client. */
-  private dispatch<T>(absolutePath: string, handlers: BackendHandlers<T>): Promise<T> {
-    if (!this.client) {
+  private async dispatch<T>(absolutePath: string, handlers: BackendHandlers<T>): Promise<T> {
+    const client =
+      typeof this.clientOption === "function" ? await this.clientOption() : this.client;
+    if (!client) {
       throw new FileSystemError(
         "IO_ERROR",
         "Databricks filesystem is not initialized (no WorkspaceClient)",
         absolutePath,
       );
     }
-    return handlers[resolveDatabricksFilesBackend(absolutePath)](this.client);
+    return handlers[resolveDatabricksFilesBackend(absolutePath)](client);
   }
 
   /* ------------------------------------------------------------------ */

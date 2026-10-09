@@ -17,7 +17,14 @@
  * @module
  */
 
-import { errorUtils, functionUtils, hash, object, type OneOrMany } from "@dbx-tools/shared-core";
+import {
+  errorUtils,
+  functionUtils,
+  hash,
+  log,
+  object,
+  type OneOrMany,
+} from "@dbx-tools/shared-core";
 import type {
   CopyOptions,
   FileContent,
@@ -56,6 +63,7 @@ export type FileSystemRootInput = FileSystemRootSegment | OneOrMany<FileSystemRo
  * trace back. Only reject what genuinely cannot be a component.
  */
 const UNSAFE_PATH_SEGMENT = /[\\/\u0000-\u001F\u007F]/;
+const logger = log.logger("filesystem");
 
 /**
  * Turn {@link root} into a POSIX filesystem root:
@@ -305,10 +313,12 @@ export abstract class BaseFileSystem<
   }
 
   async init(): Promise<void> {
+    this.debug("init", () => ({ createRoot: this.createRoot }));
     await this._init();
   }
 
   async close(): Promise<void> {
+    this.debug("close", () => ({ initialized: this.initStarted }));
     if (!this.initStarted) return;
     try {
       await this._init();
@@ -340,6 +350,18 @@ export abstract class BaseFileSystem<
     if (this.readOnly) {
       throw new FileSystemError("READ_ONLY", `Cannot ${operation}: filesystem is read-only`);
     }
+  }
+
+  /** Emit operation metadata only when debug logging is active. */
+  private debug(operation: string, details: () => Readonly<Record<string, unknown>>): void {
+    if (!log.isLevelEnabled("debug")) return;
+    logger.debug("operation", {
+      backend: this.backend,
+      filesystemId: this.id,
+      operation,
+      root: this.root,
+      ...details(),
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -388,6 +410,7 @@ export abstract class BaseFileSystem<
   }
 
   resolvePath(inputPath: string): string {
+    this.debug("resolvePath", () => ({ path: inputPath }));
     return this.resolveBackendPath(this.normalizePath(inputPath));
   }
 
@@ -557,6 +580,10 @@ export abstract class BaseFileSystem<
     options: ReadFileOptions & { encoding: string },
   ): Promise<string>;
   async readFile(inputPath: string, options?: ReadFileOptions): Promise<string | Uint8Array> {
+    this.debug("readFile", () => ({
+      encoding: options?.encoding,
+      path: inputPath,
+    }));
     const resolvedPath = await this.resolveFor(inputPath);
     const content = await this.guard(resolvedPath, () => this.readBytesAt(resolvedPath));
     if (options?.encoding) {
@@ -570,6 +597,11 @@ export abstract class BaseFileSystem<
     content: FileContent,
     options: WriteFileOptions = {},
   ): Promise<void> {
+    this.debug("writeFile", () => ({
+      contentLength: typeof content === "string" ? content.length : content.byteLength,
+      overwrite: options.overwrite ?? true,
+      path: inputPath,
+    }));
     await this._init();
     this.assertWritable("write file");
 
@@ -582,6 +614,10 @@ export abstract class BaseFileSystem<
   }
 
   async appendFile(inputPath: string, content: FileContent): Promise<void> {
+    this.debug("appendFile", () => ({
+      contentLength: typeof content === "string" ? content.length : content.byteLength,
+      path: inputPath,
+    }));
     await this._init();
     this.assertWritable("append file");
 
@@ -603,6 +639,10 @@ export abstract class BaseFileSystem<
   }
 
   async deleteFile(inputPath: string, options: RemoveOptions = {}): Promise<void> {
+    this.debug("deleteFile", () => ({
+      force: options.force ?? false,
+      path: inputPath,
+    }));
     await this._init();
     this.assertWritable("delete file");
 
@@ -621,6 +661,11 @@ export abstract class BaseFileSystem<
     destinationPath: string,
     options: CopyOptions = {},
   ): Promise<void> {
+    this.debug("copyFile", () => ({
+      destinationPath,
+      overwrite: options.overwrite ?? true,
+      sourcePath,
+    }));
     const { source, destination, resolved } = await this.prepareTransfer(
       "copy file",
       sourcePath,
@@ -640,6 +685,11 @@ export abstract class BaseFileSystem<
     destinationPath: string,
     options: CopyOptions = {},
   ): Promise<void> {
+    this.debug("moveFile", () => ({
+      destinationPath,
+      overwrite: options.overwrite ?? true,
+      sourcePath,
+    }));
     const { source, destination, resolved } = await this.prepareTransfer(
       "move file",
       sourcePath,
@@ -719,6 +769,10 @@ export abstract class BaseFileSystem<
   /* ------------------------------------------------------------------ */
 
   async mkdir(inputPath: string, options: MakeDirectoryOptions = {}): Promise<void> {
+    this.debug("mkdir", () => ({
+      path: inputPath,
+      recursive: options.recursive ?? false,
+    }));
     await this._init();
     this.assertWritable("create directory");
 
@@ -749,6 +803,11 @@ export abstract class BaseFileSystem<
   }
 
   async rmdir(inputPath: string, options: RemoveOptions = {}): Promise<void> {
+    this.debug("rmdir", () => ({
+      force: options.force ?? false,
+      path: inputPath,
+      recursive: options.recursive ?? false,
+    }));
     await this._init();
     this.assertWritable("remove directory");
 
@@ -802,6 +861,12 @@ export abstract class BaseFileSystem<
   }
 
   async readdir(inputPath: string, options: ListOptions = {}): Promise<FileEntry[]> {
+    this.debug("readdir", () => ({
+      extension: options.extension,
+      maxDepth: options.maxDepth,
+      path: inputPath,
+      recursive: options.recursive ?? false,
+    }));
     await this._init();
 
     const namespacePath = this.normalizePath(inputPath);
@@ -863,6 +928,7 @@ export abstract class BaseFileSystem<
   }
 
   async exists(inputPath: string): Promise<boolean> {
+    this.debug("exists", () => ({ path: inputPath }));
     await this._init();
     try {
       await this.stat(inputPath);
@@ -877,6 +943,7 @@ export abstract class BaseFileSystem<
   }
 
   async stat(inputPath: string): Promise<FileStat> {
+    this.debug("stat", () => ({ path: inputPath }));
     await this._init();
     const namespacePath = this.normalizePath(inputPath);
     const resolvedPath = await this.resolveNamespaceFor(namespacePath);

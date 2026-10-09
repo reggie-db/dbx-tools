@@ -78,7 +78,7 @@ describe("soft persistent cache initialization", () => {
 
   it("rejects a storage backend whose cache table is unusable", async () => {
     const storage = storageWithInit(async () => {}, {
-      get: async () => undefined,
+      get: async () => null,
     });
 
     await assert.rejects(probeStorage(storage), /unexpected value/);
@@ -115,5 +115,20 @@ describe("persistent cache L1", () => {
 
     await l1.delete("second");
     assert.equal(await l1.get("second"), undefined);
+  });
+
+  it("forwards AppKit's persistent cleanup compatibility hook", async () => {
+    let cleanups = 0;
+    const storage = storageWithInit(async () => {}, {
+      async cleanupExpired() {
+        cleanups += 1;
+        return 3;
+      },
+    });
+    const l1 = new L1CacheStorage(storage);
+
+    assert.equal(await l1.cleanupExpired(), 3);
+    assert.equal(cleanups, 1);
+    assert.equal(await new L1CacheStorage(storageWithInit(async () => {})).cleanupExpired(), 0);
   });
 });

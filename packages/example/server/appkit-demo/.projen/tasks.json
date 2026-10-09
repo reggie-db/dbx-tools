@@ -47,14 +47,6 @@
         }
       ]
     },
-    "dev": {
-      "name": "dev",
-      "steps": [
-        {
-          "exec": "bun --watch src/server.ts"
-        }
-      ]
-    },
     "install": {
       "name": "install",
       "description": "Install project dependencies and update lockfile (non-frozen)"
@@ -92,14 +84,6 @@
     "pre-compile": {
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
-    },
-    "start": {
-      "name": "start",
-      "steps": [
-        {
-          "exec": "bun src/server.ts"
-        }
-      ]
     },
     "test": {
       "name": "test",

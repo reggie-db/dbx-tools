@@ -17,11 +17,13 @@ import {
 } from "@dbx-tools/auth";
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
 import { log, object, stringUtils } from "@dbx-tools/shared-core";
+import { z } from "zod";
 
 import type { ParsedAddress } from "./address.ts";
 
 const logger = log.logger("lakebase");
 const API_BASE = "/api/2.0/postgres";
+const CREDENTIAL_REFRESH_BUFFER_MS = 2 * 60_000;
 /** Postgres database name Lakebase provisions on a new branch. */
 const LAKEBASE_DEFAULT_DATABASE = "databricks_postgres";
 /** Resource id Lakebase uses for {@link LAKEBASE_DEFAULT_DATABASE}. */
@@ -34,6 +36,20 @@ const LAKEBASE_DEFAULT_DATABASE_ID = "databricks-postgres";
 const GENERIC_POSTGRES_DATABASE = "postgres";
 const DISCOVERY_TTL_MS = 30_000;
 const SESSION_TTL_MS = 10 * 60_000;
+
+/** Lakebase OAuth credential returned by the Databricks Postgres API. */
+export const DatabaseCredentialSchema = z
+  .object({
+    token: z.string().min(1).describe("OAuth token used as the PostgreSQL password."),
+    expire_time: z
+      .string()
+      .datetime()
+      .describe("UTC ISO 8601 time when the PostgreSQL OAuth token expires."),
+  })
+  .describe("Short-lived Lakebase PostgreSQL OAuth credential.");
+
+/** Lakebase OAuth credential returned by the Databricks Postgres API. */
+export type DatabaseCredential = z.infer<typeof DatabaseCredentialSchema>;
 
 /** Resolved Lakebase endpoint and database connection identity. */
 export interface ResolvedLakebase {
@@ -84,6 +100,8 @@ const DEFAULT_DEPENDENCIES: LakebaseClientDependencies = {
 export class LakebaseClient {
   private readonly sessions = new Map<string, Timed<LakebaseApiClient>>();
   private readonly resolved = new Map<string, Timed<ResolvedLakebase>>();
+  private readonly credentials = new Map<string, Timed<string>>();
+  private readonly credentialRefreshes = new Map<string, Promise<string>>();
 
   constructor(
     private readonly authOptions: DatabricksAuthOptions = {},
@@ -102,16 +120,38 @@ export class LakebaseClient {
 
   async generateDatabaseCredential(endpoint: string, startupUser?: string): Promise<string> {
     const profile = await this.resolveProfile(startupUser);
-    const response = record(
-      await (
-        await this.session(profile)
-      ).request(`${API_BASE}/credentials`, {
-        body: { endpoint },
-      }),
-    );
-    const token = text(response.token);
-    if (!token) throw new Error("Lakebase credential response did not contain token");
-    return token;
+    const key = `${profile ?? "<default>"}:${endpoint}`;
+    const cached = current(this.credentials.get(key));
+    if (cached) return cached;
+    const pending = this.credentialRefreshes.get(key);
+    if (pending) return pending;
+    const refresh = this.refreshDatabaseCredential(key, endpoint, profile);
+    this.credentialRefreshes.set(key, refresh);
+    return refresh;
+  }
+
+  private async refreshDatabaseCredential(
+    key: string,
+    endpoint: string,
+    profile?: string,
+  ): Promise<string> {
+    try {
+      const credential = DatabaseCredentialSchema.parse(
+        await (
+          await this.session(profile)
+        ).request(`${API_BASE}/credentials`, {
+          body: { endpoint },
+        }),
+      );
+      const expiresAt = Date.parse(credential.expire_time);
+      const cacheExpiresAt = expiresAt - CREDENTIAL_REFRESH_BUFFER_MS;
+      if (cacheExpiresAt > Date.now()) {
+        this.credentials.set(key, { value: credential.token, expiresAt: cacheExpiresAt });
+      }
+      return credential.token;
+    } finally {
+      this.credentialRefreshes.delete(key);
+    }
   }
 
   private async session(profile?: string): Promise<LakebaseApiClient> {

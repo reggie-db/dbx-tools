@@ -3,6 +3,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import * as exec from "@dbx-tools/core/exec";
+import { log } from "@dbx-tools/shared-core";
+
+const logger = log.logger("cli:service");
 
 /** Compile an entrypoint while containing Bun's intermediate executables. */
 export async function compileWithBun(
@@ -17,6 +20,10 @@ export async function compileWithBun(
   const absoluteOutput = resolve(workingDirectory, output);
   const before = await bunBuildArtifacts(workingDirectory);
   const compileDirectory = await mkdtemp(join(temporaryDirectory, "dbx-tools-bun-compile-"));
+  logger.info("compiling service executable with Bun", {
+    entrypoint: absoluteEntrypoint,
+    output: absoluteOutput,
+  });
   try {
     await exec.spawn(
       bunExecutable,
@@ -37,6 +44,10 @@ export async function compileWithBun(
         stderr: "capture",
       },
     );
+    logger.info("service executable compiled", {
+      entrypoint: absoluteEntrypoint,
+      output: absoluteOutput,
+    });
   } finally {
     try {
       for (const artifact of await bunBuildArtifacts(workingDirectory)) {

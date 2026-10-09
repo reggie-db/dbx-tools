@@ -7,6 +7,7 @@ export const PACKAGE_VERSION = "0.9.93";
 export * as feedback from "./src/feedback.ts";
 export * as markers from "./src/markers.ts";
 export * as override from "./src/override.ts";
+export * as resume from "./src/resume.ts";
 export * as routes from "./src/routes.ts";
 export * as thread from "./src/thread.ts";
 export * as wire from "./src/wire.ts";
@@ -14,6 +15,7 @@ export { MLFLOW_TRACE_ID_HEADER, DEFAULT_FEEDBACK_NAME, DEFAULT_COMMENT_NAME, Ma
 export type { MastraFeedbackValue, MastraFeedbackRequest, MastraFeedbackResponse, MastraMlflowExperimentResponse } from "./src/feedback.ts";
 export type { MarkerType, ParsedMarker } from "./src/markers.ts";
 export { MODEL_OVERRIDE_HEADER, MODEL_OVERRIDE_QUERY, MODEL_OVERRIDE_BODY_FIELDS } from "./src/override.ts";
+export { STALE_MASTRA_RESUME_IDS, STALE_MASTRA_RESUME_STREAM_TEXT } from "./src/resume.ts";
 export { MASTRA_ROUTES } from "./src/routes.ts";
 export { THREAD_ID_HEADER, THREAD_ID_QUERY } from "./src/thread.ts";
 export { MastraClientConfigSchema, DefaultModelResponseSchema, ServingEndpointsResponseSchema, MastraSuggestionsResponseSchema, ChartTypeSchema, ChartResultSchema, ChartSchema, StatementDataSchema, StartedEventSchema, AskGenieDoneEventSchema, MastraGenieErrorEventSchema, SummaryEventSchema, GenieAgentEventSchema, GenieWriterEventSchema, GENIE_PROGRESS_PART_TYPE, GenieProgressPartDataSchema, ToolStatusProgressEventSchema, ToolProgressEventSchema, TOOL_PROGRESS_PART_TYPE, ToolProgressPartDataSchema, GenieDatasetDataSchema, GenieDatasetChartSchema, GenieDatasetSchema, GenieSummaryItemSchema, GenieAgentResultSchema } from "./src/wire.ts";

@@ -223,12 +223,13 @@ interface RefreshedProcessTree {
 
 function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpawnArgs<T> {
   let [value, ...values] = input;
-  const [command, ...commandArgs] = shlex(value!);
 
   const last = values.at(-1);
   const options =
     last !== null && typeof last === "object" && !Array.isArray(last) ? last : undefined;
   const argumentValues = options ? values.slice(0, -1) : values;
+  // Only the one-string form is shell-like. Explicit arguments make the command an exact executable.
+  const [command, ...commandArgs] = argumentValues.length === 0 ? shlex(value!) : [value!];
   const valueArgs: string[] =
     argumentValues.length === 1 && Array.isArray(argumentValues[0])
       ? [...argumentValues[0]]

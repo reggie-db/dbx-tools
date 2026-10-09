@@ -141,7 +141,11 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
 
     run(consumer, ["install", "--force"], environment);
     assert.equal(existsSync(join(consumer, "node_modules/@dbx-tools/projen/shims")), false);
-    for (const task of ["python-node-bindings-watch.ts", "python-node-runtime-watch.ts"]) {
+    for (const task of [
+      "dev-watch.ts",
+      "python-node-bindings-watch.ts",
+      "python-node-runtime-watch.ts",
+    ]) {
       assert.equal(
         existsSync(join(consumer, "node_modules/@dbx-tools/projen/tasks", task)),
         true,

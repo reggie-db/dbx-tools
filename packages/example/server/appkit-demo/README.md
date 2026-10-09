@@ -130,11 +130,12 @@ databricks bundle run demo_app -t <target> --profile <resolved-profile>
 
 The staged app includes both `package.json` and `requirements.txt`. Databricks
 Apps installs the Node server from staged local `file:` archives and installs
-the locally built Graphiti and Node-runtime wheels. The bundle sets
-`PYTHON=./.venv/bin/python` so the Graphiti plugin uses that Python 3.11
-environment. The Graphiti wheel includes its pinned generated REST, MCP, and
-PostGraph sources; Node only supervises its process. npm and PyPI publication do
-not need to finish before the demo deploy uses the current checkout.
+the locally built Graphiti and Node-runtime wheels. In Databricks Apps, the
+Graphiti plugin selects the newest `python` or `python3` interpreter that can
+import the installed wheel. The Graphiti wheel includes its pinned generated
+REST, MCP, and PostGraph sources; Node only supervises its process. npm and PyPI
+publication do not need to finish before the demo deploy uses the current
+checkout.
 
 Two things worth knowing before changing this flow:
 

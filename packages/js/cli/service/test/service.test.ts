@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -29,7 +29,7 @@ describe("CLI service lifecycle", () => {
         icon: join(root, "icon.png"),
         dataDirectory,
         pythonPackage: {
-          name: "example-runtime",
+          name: "example-runtime[dev]",
           python: "3.12",
           dependencies: ["companion-runtime==4.5.6"],
         },
@@ -54,8 +54,8 @@ describe("CLI service lifecycle", () => {
           await chmod(output, 0o755);
         },
         async installRuntime() {},
-        async installPython(uv, directory, packageSpecifiers, python, platform) {
-          pythonInstalls.push({ uv, directory, packageSpecifiers, python, platform });
+        async installPython(uv, directory, packageSpecifiers, python, platform, offline) {
+          pythonInstalls.push({ uv, directory, packageSpecifiers, python, platform, offline });
           return join(directory, "bin/python");
         },
       },
@@ -63,6 +63,7 @@ describe("CLI service lifecycle", () => {
 
     await service.install({ start: false });
 
+    assert.equal(service.logPath(), join(dataDirectory, "service.log"));
     assert.deepEqual(await service.status(), { installed: true, running: false });
     const configuration = JSON.parse(
       await readFile(join(dataDirectory, "service.json"), "utf8"),
@@ -73,7 +74,7 @@ describe("CLI service lifecycle", () => {
     };
     assert.equal(configuration.id, "com.example.gateway");
     assert.deepEqual(configuration.pythonPackage, {
-      name: "example-runtime",
+      name: "example-runtime[dev]",
       version: "1.2.3",
       python: "3.12",
       dependencies: ["companion-runtime==4.5.6"],
@@ -91,9 +92,10 @@ describe("CLI service lifecycle", () => {
       {
         uv: "/opt/uv",
         directory: join(dataDirectory, "python"),
-        packageSpecifiers: ["example-runtime==1.2.3", "companion-runtime==4.5.6"],
+        packageSpecifiers: ["example-runtime[dev]==1.2.3", "companion-runtime==4.5.6"],
         python: "3.12",
         platform: "linux",
+        offline: false,
       },
     ]);
     assert.deepEqual(compiled, [commandEntrypoint, hostEntrypoint]);
@@ -103,6 +105,20 @@ describe("CLI service lifecycle", () => {
     );
     assert.match(startup, /example-gateway/);
     await stat(join(globalHomeDirectory, "bin", "traybin", "tray_linux_release"));
+
+    const pythonProject = join(root, "python-project");
+    await mkdir(pythonProject);
+    await writeFile(join(pythonProject, "pyproject.toml"), "");
+    await service.install({ start: false, pythonProject, offline: true });
+
+    assert.deepEqual(pythonInstalls[1], {
+      uv: "/opt/uv",
+      directory: join(dataDirectory, "python"),
+      packageSpecifiers: [`${pythonProject}[dev]`, "companion-runtime==4.5.6"],
+      python: "3.12",
+      platform: "linux",
+      offline: true,
+    });
 
     await service.uninstall();
 

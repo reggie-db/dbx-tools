@@ -7,12 +7,15 @@ import path from "node:path";
 import { finished } from "node:stream/promises";
 import { PassThrough, Transform } from "node:stream";
 import { appkit } from "@dbx-tools/appkit";
+import { configUtils } from "@dbx-tools/core";
+import { devWatch } from "@dbx-tools/projen";
 import { log } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
 
 const logger = log.logger("demo");
 const ROOT = process.cwd();
 const DEMO_BUNDLE = path.join(ROOT, "packages/example/server/appkit-demo/databricks.yml");
+const DEMO_SERVER = path.join(path.dirname(DEMO_BUNDLE), "src/server.ts");
 const ANSI_SEQUENCE = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 
 let resolvedDemoEnv: Promise<NodeJS.ProcessEnv> | undefined;
@@ -132,6 +135,28 @@ async function createLoggedOutput(): Promise<{
   };
 }
 
+/**
+ * True when {@link demoServerCommand} should skip `dev:watch`.
+ * Reads `SERVER_WATCH_DISABLED` through configUtils (`1` / `true` / `yes`).
+ */
+export function serverWatchDisabled(): boolean {
+  return (
+    configUtils.boolean(
+      undefined,
+      devWatch.SERVER_WATCH_DISABLED_ENV,
+      configUtils.ENV_ONLY,
+    ) === true
+  );
+}
+
+/** Root task command that watches the concrete demo server entrypoint. */
+export function demoServerCommand(watch?: boolean): string {
+  const watching = watch ?? !serverWatchDisabled();
+  let command = "bun --env-file=.env --env-file=.env.local run --elide-lines=0";
+  if (watching) command += ` ${devWatch.DEV_WATCH_TASK}`;
+  return `${command} bun ${JSON.stringify(path.relative(ROOT, DEMO_SERVER))}`;
+}
+
 /** Build the client, then run the AppKit server. */
 async function runDemo(): Promise<void> {
   delete process.env.FORCE_COLOR;
@@ -139,11 +164,12 @@ async function runDemo(): Promise<void> {
   const { default: concurrently } = await import("concurrently");
   const { output, close } = await createLoggedOutput();
   const env = await demoEnv();
-  const bun = "bun --env-file=.env --env-file=.env.local run --elide-lines=0";
+  const stdin = process.stdin;
+  const wasRaw = stdin.isTTY ? Boolean(stdin.isRaw) : false;
   const { result } = concurrently(
     [
       {
-        command: `${bun} --filter @dbx-tools/demo-appkit-server dev`,
+        command: demoServerCommand(),
         name: "server",
         prefixColor: "cyan",
         env,
@@ -152,20 +178,32 @@ async function runDemo(): Promise<void> {
     {
       cwd: ROOT,
       killOthersOn: ["success", "failure"],
+      defaultInputTarget: "server",
+      handleInput: stdin.isTTY,
       outputStream: output,
       prefix: "name",
     },
   );
+  if (stdin.isTTY) stdin.setRawMode(true);
   try {
     await result;
   } finally {
+    if (stdin.isTTY) stdin.setRawMode(wasRaw);
     await close();
   }
 }
 
-try {
-  await runDemo();
-} catch (err) {
-  logger.error("failed", err);
-  process.exitCode = 1;
+if (import.meta.main) {
+  try {
+    if (
+      process.argv.slice(2).includes("--server-watch-disabled") ||
+      process.argv.slice(2).includes("--no-server-watch")
+    ) {
+      process.env[devWatch.SERVER_WATCH_DISABLED_ENV] ??= "1";
+    }
+    await runDemo();
+  } catch (err) {
+    logger.error("failed", err);
+    process.exitCode = 1;
+  }
 }

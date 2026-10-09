@@ -307,6 +307,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@dbx-tools/lakebase@workspace:^",
     "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-fs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
     "lru-cache@catalog:",
     "zod@catalog:",
@@ -329,6 +330,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-graphiti@workspace:^",
+    "semver@^7.7.3",
     "zod@catalog:",
   );
   p.addDevDeps("vitest@catalog:");
@@ -384,6 +386,7 @@ project.applyToProjects(root, { identifierName: "lakebase", tags: "node" }, (p) 
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
+    "zod@catalog:",
   );
 });
 
@@ -1092,8 +1095,8 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 // `@dbx-tools/*` packages as `workspace:^` source siblings rather than from the
 // registry, so editing a package is reflected immediately.
 
-// packages/example/server/appkit-demo: the AppKit server. `server` tag supplies
-// express + the `bun --watch`/`bun` dev/start tasks.
+// packages/example/server/appkit-demo: the AppKit server. `server` supplies its
+// Express/compiler shape; the root `dev:watch` task runs its concrete entrypoint.
 project.applyToProjects(
   root,
   { path: "packages/example/server/appkit-demo", tags: "server" },
@@ -1166,6 +1169,8 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
 // ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
+const PYTHONMONKEY_REQUIREMENT = "pythonmonkey==1.3.2";
+
 const pythonPackages: project.PythonPackageOptions[] = [
   {
     directory: "node-runtime",
@@ -1194,7 +1199,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "uvicorn>=0.44",
     ],
     optionalDependencies: {
-      dev: ["embedded-postgres>=18.6.3,<19"],
+      dev: ["embedded-postgres>=18.6.3,<19", PYTHONMONKEY_REQUIREMENT],
     },
     sync: [
       {
@@ -1222,6 +1227,9 @@ const pythonPackages: project.PythonPackageOptions[] = [
             "        for stmt in _tsvector_ddl():\n            await client._execute(stmt)",
           "        for stmt in _extra_index_ddl():\n            with suppress(Exception):\n                await client._execute(stmt)":
             "        for stmt in _extra_index_ddl():\n            await client._execute(stmt)",
+          // Search input is arbitrary natural language, not PostgreSQL tsquery syntax.
+          "to_tsquery('simple',": "plainto_tsquery('simple',",
+          "return ' & '.join(terms)": "return ' '.join(terms)",
         },
       },
       {
@@ -1291,7 +1299,7 @@ new project.DBXToolsPythonWorkspace(root, {
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
   devDependencies: [
-    "pythonmonkey==1.3.2",
+    PYTHONMONKEY_REQUIREMENT,
     "tomli>=2,<3; python_version < '3.11'",
   ],
   requiresPython: ">=3.10,<4",
@@ -1337,6 +1345,7 @@ root.addTask("demo", {
     BUN_CONFIG_ELIDE_LINES: "0",
   },
   exec: "bun scripts/run-demo.ts",
+  receiveArgs: true,
   description: "Build the demo client and run the local AppKit server",
 });
 root.addTask("demo:deploy", {

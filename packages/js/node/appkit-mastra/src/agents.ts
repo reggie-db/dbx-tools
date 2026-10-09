@@ -49,10 +49,9 @@ import type { MemoryBuilder } from "./memory.ts";
 import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
 import { stripStaleChartsProcessor } from "./processors.ts";
 import { MASTRA_RESOLVED_MODEL_KEY } from "./serving.ts";
-import { CatalogueSkillSearchProcessor } from "./skill-search.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
-import { createWorkspace, workspaceSkillCatalogueResolver } from "./workspaces.ts";
+import { createWorkspace } from "./workspaces.ts";
 
 /**
  * Tool record accepted by every Mastra `Agent.tools` field and by the
@@ -577,14 +576,14 @@ export async function buildAgents(opts: {
       (def.workspace === undefined && !workspace) ||
       ((extraSkillPaths?.length ||
         config.sandbox !== undefined ||
-        config.workspaceSkillRefreshTtlMs !== undefined) &&
+        config.workspaceTools !== undefined ||
+        context !== undefined) &&
         isDefaultWorkspace(workspace))
     ) {
       workspace = createWorkspace({
         extraSkillPaths,
-        ...(config.workspaceSkillRefreshTtlMs !== undefined
-          ? { workspaceSkillRefreshTtlMs: config.workspaceSkillRefreshTtlMs }
-          : {}),
+        ...(config.workspaceTools !== undefined ? { tools: config.workspaceTools } : {}),
+        pluginContext: context,
         sandbox: config.sandbox === true ? "databricks" : config.sandbox,
       });
       markDefaultWorkspace(workspace);
@@ -668,21 +667,9 @@ function toolErrorLoggingProcessor(logger: log.Logger): OutputProcessor {
 function workspaceSkillInputProcessors(
   workspace: Workspace | undefined,
   config: MastraPluginConfig,
-): Array<SkillSearchProcessor | CatalogueSkillSearchProcessor> {
-  if (!workspace || config.workspaceSkillSearch === false) return [];
-  const options =
-    typeof config.workspaceSkillSearch === "object" ? config.workspaceSkillSearch : undefined;
-  const catalogue = workspaceSkillCatalogueResolver(workspace);
-  if (catalogue) {
-    return [
-      new CatalogueSkillSearchProcessor({
-        resolve: catalogue,
-        topK: options?.topK ?? 5,
-        minScore: options?.minScore ?? 0.1,
-        ...(options?.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),
-      }),
-    ];
-  }
+): SkillSearchProcessor[] {
+  if (!workspace || config.workspaceSkills === false) return [];
+  const options = typeof config.workspaceSkills === "object" ? config.workspaceSkills : undefined;
   if (!workspace.skills) return [];
   return [
     new SkillSearchProcessor({

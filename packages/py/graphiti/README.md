@@ -106,9 +106,11 @@ uv add 'dbx-tools-graphiti[dev]'
 
 Embedded mode starts bundled PostgreSQL with pgvector and persists it under
 `graphitiHome`, or the platform data directory when no home is configured. The
-owned PostgreSQL process stops with the runtime, while its data remains for the
-next start. Node, CLI, and AppKit launchers select the extra automatically only
-when no external database is configured.
+extra also preinstalls the locked PythonMonkey runtime so managed services do
+not need a startup-time package download. The owned PostgreSQL process stops
+with the runtime, while its data remains for the next start. Node, CLI, and
+AppKit launchers select the extra automatically only when no external database
+is configured.
 
 Pass a regular PostgreSQL URL to use an existing database. A passwordless
 non-local URL, Lakebase resource path, or Lakebase project name is resolved by

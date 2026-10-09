@@ -10,7 +10,7 @@ export * as memoryFS from "./src/memory-fs.ts";
 export * as posixPath from "./src/posix-path.ts";
 export { FileSystemError, BaseFileSystem } from "./src/base-fs.ts";
 export type { FileSystemRootSegment, FileSystemRootInput, FileSystemErrorCode, BaseFileSystemOptions } from "./src/base-fs.ts";
-export type { FileContent, FileEntryType, FileEntry, FileStat, ReadFileOptions, WriteFileOptions, RemoveOptions, CopyOptions, MakeDirectoryOptions, ListOptions, FileSystem } from "./src/fs.ts";
+export type { FileContent, FileEntryType, FileEntry, FileStat, ReadFileOptions, WriteFileOptions, RemoveOptions, CopyOptions, MakeDirectoryOptions, ListOptions, FileSystem, CacheValue, FileSystemCache, CacheableFileSystemOperation, FileSystemCacheOptions } from "./src/fs.ts";
 export { MemoryFileSystem } from "./src/memory-fs.ts";
 export type { MemoryFileSystemOptions } from "./src/memory-fs.ts";
 export type { NormalizeResult } from "./src/posix-path.ts";

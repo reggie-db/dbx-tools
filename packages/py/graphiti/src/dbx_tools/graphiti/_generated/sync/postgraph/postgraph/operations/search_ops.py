@@ -40,10 +40,10 @@ class PGSearchOperations(SearchOperations):
         sql = f"""
             SELECT realm, id, payload, created_at,
                    to_jsonb(t)->>'embedding' AS embedding_text,
-                   ts_rank(search_vector, to_tsquery('simple', ${ts_idx})) AS score
+                   ts_rank(search_vector, plainto_tsquery('simple', ${ts_idx})) AS score
             FROM "entity_nodes" t
             {where}
-              {and_kw} search_vector @@ to_tsquery('simple', ${ts_idx})
+              {and_kw} search_vector @@ plainto_tsquery('simple', ${ts_idx})
             ORDER BY score DESC
             LIMIT {limit}
         """
@@ -167,10 +167,10 @@ class PGSearchOperations(SearchOperations):
         sql = f"""
             SELECT realm, id, from_id, to_id, relation_type, payload,
                    created_at, to_jsonb(t)->>'embedding' AS embedding_text,
-                   ts_rank(search_vector, to_tsquery('simple', ${ts_idx})) AS score
+                   ts_rank(search_vector, plainto_tsquery('simple', ${ts_idx})) AS score
             FROM "entity_edges" t
             {where}
-              {and_kw} search_vector @@ to_tsquery('simple', ${ts_idx})
+              {and_kw} search_vector @@ plainto_tsquery('simple', ${ts_idx})
             ORDER BY score DESC
             LIMIT {limit}
         """
@@ -301,10 +301,10 @@ class PGSearchOperations(SearchOperations):
 
         sql = f"""
             SELECT realm, id, payload, created_at,
-                   ts_rank(search_vector, to_tsquery('simple', ${ts_idx})) AS score
+                   ts_rank(search_vector, plainto_tsquery('simple', ${ts_idx})) AS score
             FROM "episodic_nodes" t
             {where}
-              {and_kw} search_vector @@ to_tsquery('simple', ${ts_idx})
+              {and_kw} search_vector @@ plainto_tsquery('simple', ${ts_idx})
             ORDER BY score DESC
             LIMIT {limit}
         """
@@ -341,10 +341,10 @@ class PGSearchOperations(SearchOperations):
         sql = f"""
             SELECT realm, id, payload, created_at,
                    to_jsonb(t)->>'embedding' AS embedding_text,
-                   ts_rank(search_vector, to_tsquery('simple', ${ts_idx})) AS score
+                   ts_rank(search_vector, plainto_tsquery('simple', ${ts_idx})) AS score
             FROM "community_nodes" t
             {where}
-              {and_kw} search_vector @@ to_tsquery('simple', ${ts_idx})
+              {and_kw} search_vector @@ plainto_tsquery('simple', ${ts_idx})
             ORDER BY score DESC
             LIMIT {limit}
         """
@@ -532,7 +532,7 @@ def _build_ts_query(query: str, max_length: int = 128) -> str:
     terms = [w for w in words if w]
     if not terms:
         return ''
-    return ' & '.join(terms)
+    return ' '.join(terms)
 
 
 def _where(conditions: list[str]) -> str:

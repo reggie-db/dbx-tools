@@ -22,12 +22,14 @@ import {
   FileExistsError,
   FileNotFoundError,
   IsDirectoryError,
+  CompositeFilesystem,
   MastraFilesystem,
   NotDirectoryError,
   PermissionError,
   WorkspaceReadOnlyError,
 } from "@mastra/core/workspace";
 import type {
+  CompositeFilesystemConfig,
   CopyOptions,
   FileContent,
   FileEntry,
@@ -48,6 +50,15 @@ export interface MastraFileSystemAdapterOptions extends MastraFilesystemOptions 
 
   /** Override the Mastra display name. Defaults to `MastraFileSystemAdapter`. */
   name?: string;
+
+  /** Human-friendly mount name surfaced by composite filesystem listings. */
+  displayName?: string;
+
+  /** Mount description surfaced by composite filesystem listings and help. */
+  description?: string;
+
+  /** Replace the generated filesystem usage instructions. */
+  instructions?: string;
 
   /**
    * Override the Mastra provider id. Defaults to the source
@@ -117,6 +128,14 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
     return this.options.provider ?? this.fs.backend;
   }
 
+  get displayName(): string | undefined {
+    return this.options.displayName;
+  }
+
+  get description(): string | undefined {
+    return this.options.description;
+  }
+
   get readOnly(): boolean {
     return this.options.readOnly === true || this.fs.readOnly;
   }
@@ -145,7 +164,9 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
   }
 
   getInstructions(): string {
+    if (this.options.instructions !== undefined) return this.options.instructions;
     return [
+      ...(this.description ? [this.description] : []),
       `Files are served by a ${this.fs.backend} filesystem rooted at ${this.fs.root}.`,
       "Workspace paths are absolute within this mount (for example `/notes/report.md`).",
     ].join(" ");
@@ -295,6 +316,28 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
     }
 
     throw err;
+  }
+}
+
+/**
+ * Composite mount namespace whose virtual root has no repository-level
+ * `.gitignore`. Mastra's list tool probes that relative file before walking;
+ * an empty result keeps native ignore handling enabled without routing the
+ * virtual-root lookup into an unrelated mount.
+ */
+export class MountedCompositeFilesystem extends CompositeFilesystem {
+  constructor(config: CompositeFilesystemConfig) {
+    super(config);
+  }
+
+  override async readFile(inputPath: string, options?: ReadOptions): Promise<string | Buffer> {
+    if (
+      (inputPath === ".gitignore" || inputPath === "/.gitignore") &&
+      !this.getFilesystemForPath(inputPath)
+    ) {
+      return options?.encoding ? "" : Buffer.alloc(0);
+    }
+    return super.readFile(inputPath, options);
   }
 }
 

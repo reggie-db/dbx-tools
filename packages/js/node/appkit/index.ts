@@ -9,6 +9,7 @@ export * as brandContext from "./src/brand-context.ts";
 export * as bundle from "./src/bundle.ts";
 export * as childProcess from "./src/child-process.ts";
 export * as databricks from "./src/databricks.ts";
+export * as filesCache from "./src/files-cache.ts";
 export * as identity from "./src/identity.ts";
 export * as interceptor from "./src/interceptor.ts";
 export * as lakebaseResolver from "./src/lakebase-resolver.ts";
@@ -26,6 +27,8 @@ export type { BundleValidateJson, ConfigFile, ConfigMapValue, ConfigSource, Reso
 export { AppKitChildProcess } from "./src/child-process.ts";
 export type { AppKitSpawnArgs, AppKitChildProcessHealthCheckContext, AppKitChildProcessHealthCheck, AppKitChildProcessOptions, AppKitChildProcessRunOptions } from "./src/child-process.ts";
 export type { ContextLike } from "./src/databricks.ts";
+export { FilesCacheManager, FilesCachePlugin } from "./src/files-cache.ts";
+export type { FilesCachePluginConfig, FilesCacheScope, FilesCacheSourceIdentity, FilesCacheExports } from "./src/files-cache.ts";
 export { ACCESS_TOKEN_HEADER, USER_ID_HEADER, USER_EMAIL_HEADER, IDENTITY_MODES, DEFAULT_IDENTITY_MODE } from "./src/identity.ts";
 export type { IdentityMode, HeaderBearing } from "./src/identity.ts";
 export { LifecycleBridgePlugin, lifecycleBridge } from "./src/interceptor.ts";

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -75,6 +75,33 @@ describe("shell-string arguments", () => {
       rmSync(parent, { recursive: true, force: true });
     }
   });
+
+  it(
+    "preserves an explicit executable path containing spaces",
+    { skip: process.platform === "win32" },
+    async () => {
+      const parent = mkdtempSync(join(tmpdir(), "dbx tools exec-"));
+      const executable = join(parent, "print-argument");
+      try {
+        writeFileSync(
+          executable,
+          `#!${process.execPath}\nprocess.stdout.write(process.argv[2] ?? "");\n`,
+        );
+        chmodSync(executable, 0o755);
+
+        const result = await exec.spawn(executable, ["value"], {
+          stdin: "ignore",
+          stdout: "capture",
+          stderr: "capture",
+          check: true,
+        });
+
+        assert.equal(result.stdout, "value");
+      } finally {
+        rmSync(parent, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("missing executable", () => {

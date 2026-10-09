@@ -3,10 +3,12 @@ import logging
 import os
 import re
 import secrets
+import signal
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from inspect import Parameter, getdoc, signature
+from time import perf_counter
 from typing import Any, get_type_hints
 
 from fastapi import FastAPI, Request
@@ -35,12 +37,15 @@ _QUIET_LOGGERS = (
     "mcp.server.streamable_http",
 )
 _HEALTHCHECK_ACCESS = "/healthcheck"
+_QUIET_ENDPOINT_METHODS = frozenset({"OPTIONS"})
+_QUIET_ENDPOINT_STATUSES = frozenset({307, 308})
 _UVICORN_SHUTDOWN = (
     "Shutting down",
     "Waiting for application shutdown",
     "Application shutdown complete",
     "Finished server process",
 )
+_LOGGER = logging.getLogger(__name__)
 _UPSTREAM_OPENAI_PLACEHOLDER_KEY = "managed"
 _TOOL_NAMES = (
     "add_memory",
@@ -55,13 +60,6 @@ _TOOL_NAMES = (
     "summarize_saga",
     "wait_for_memory_queue",
 )
-
-
-class _HealthcheckAccessFilter(logging.Filter):
-    """Drop Uvicorn access lines for the readiness probe."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        return _HEALTHCHECK_ACCESS not in record.getMessage()
 
 
 class _UvicornShutdownFilter(logging.Filter):
@@ -81,7 +79,7 @@ def _add_logger_filter(name: str, log_filter: logging.Filter) -> None:
 
 def _configure_dependency_logging() -> None:
     """Restrict routine dependency lifecycle messages to warnings and errors."""
-    _add_logger_filter("uvicorn.access", _HealthcheckAccessFilter())
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     _add_logger_filter("uvicorn.error", _UvicornShutdownFilter())
     _add_logger_filter("uvicorn", _UvicornShutdownFilter())
     if not log_level_enabled("debug"):
@@ -90,6 +88,11 @@ def _configure_dependency_logging() -> None:
 
 
 _configure_dependency_logging()
+
+
+def _request_process_shutdown() -> None:
+    """Ask the hosting ASGI server to stop through its installed signal handler."""
+    signal.raise_signal(signal.SIGTERM)
 
 
 @contextmanager
@@ -161,6 +164,55 @@ async def _get_graphiti_with_runtime(
     yield runtime.graphiti
 
 
+async def _request_statistics(request: Request) -> dict[str, object]:
+    """Return content-free counters for known Graphiti request payloads."""
+    if request.method != "POST" or request.url.path not in {"/get-memory", "/messages"}:
+        return {}
+    try:
+        payload = await request.json()
+    except (UnicodeDecodeError, ValueError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    statistics: dict[str, object] = {}
+    group_id = payload.get("group_id")
+    if isinstance(group_id, str):
+        statistics["group_id"] = group_id
+    messages = payload.get("messages")
+    if isinstance(messages, list):
+        statistics["message_count"] = len(messages)
+    max_facts = payload.get("max_facts")
+    if isinstance(max_facts, int):
+        statistics["max_facts"] = max_facts
+    return statistics
+
+
+def _log_endpoint(
+    request: Request,
+    status: int,
+    started_at: float,
+    statistics: dict[str, object],
+) -> None:
+    """Log one completed semantic endpoint without request or response content."""
+    if (
+        request.method in _QUIET_ENDPOINT_METHODS
+        or request.url.path == _HEALTHCHECK_ACCESS
+        or status in _QUIET_ENDPOINT_STATUSES
+    ):
+        return
+    fields: dict[str, object] = {
+        "method": request.method,
+        "path": request.url.path,
+        "status": status,
+        "duration_ms": round((perf_counter() - started_at) * 1000, 1),
+        **statistics,
+    }
+    _LOGGER.info(
+        "Graphiti endpoint %s",
+        " ".join(f"{name}={value!r}" for name, value in fields.items()),
+    )
+
+
 async def initialize_mcp(
     config: GraphitiConfig | None = None,
     graphiti_client: Graphiti | None = None,
@@ -219,15 +271,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     options = load_graphiti_options()
     app.state.bearer = options.get("bearer")
+    app.state.failure = None
     app.state.ready = False
     app.state.runtime = None
     shutdown = asyncio.Event()
 
     async def boot() -> None:
         runtime = GraphitiRuntime(options)
+        app.state.runtime = runtime
         try:
             await runtime.start()
-            app.state.runtime = runtime
             if runtime.clients is None or runtime.graphiti is None:
                 raise RuntimeError("Graphiti runtime did not initialize")
             with _upstream_openai_credentials():
@@ -246,8 +299,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     await shutdown.wait()
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
+            app.state.failure = error
             logging.getLogger(__name__).exception("Graphiti runtime failed to start")
+            _request_process_shutdown()
         finally:
             await _close_runtime(app)
 
@@ -276,15 +331,26 @@ async def _require_bearer(
     call_next: RequestResponseEndpoint,
 ) -> Response:
     """Require the configured bearer token for every HTTP endpoint."""
+    started_at = perf_counter()
+    statistics: dict[str, object] = {}
     bearer = getattr(request.app.state, "bearer", None)
     authorization = request.headers.get("authorization", "")
     if bearer and not secrets.compare_digest(authorization, f"Bearer {bearer}"):
-        return JSONResponse(
+        response = JSONResponse(
             {"detail": "Unauthorized"},
             status_code=401,
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return await call_next(request)
+        _log_endpoint(request, response.status_code, started_at, statistics)
+        return response
+    statistics = await _request_statistics(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        _log_endpoint(request, 500, started_at, statistics)
+        raise
+    _log_endpoint(request, response.status_code, started_at, statistics)
+    return response
 
 
 app.include_router(retrieve.router)

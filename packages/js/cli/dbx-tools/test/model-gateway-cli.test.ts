@@ -59,6 +59,9 @@ describe("model gateway CLI", () => {
       async start() {},
       async stop() {},
       async restart() {},
+      logPath() {
+        return "/var/log/model-gateway.log";
+      },
       async uninstall() {},
       async status() {
         return { installed: false, running: false };

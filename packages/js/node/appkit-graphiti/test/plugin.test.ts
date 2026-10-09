@@ -118,6 +118,40 @@ describe("GraphitiPlugin", () => {
     assert.equal(stops, 1);
   });
 
+  it("keeps shutdown health-check aborts rejected for active callers", async () => {
+    const plugin = new GraphitiPlugin({});
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        assert.ok(signal);
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      })) as typeof fetch;
+    Object.assign(plugin, {
+      resolved: {
+        listen: { scheme: "tcp", host: "127.0.0.1", port: 4101 },
+      },
+    });
+    try {
+      (
+        plugin as unknown as {
+          watchSidecarHealth(timeoutMs: number): void;
+        }
+      ).watchSidecarHealth(30_000);
+      const ready = (
+        plugin as unknown as {
+          ready: Promise<void>;
+        }
+      ).ready;
+      const rejected = assert.rejects(ready, { name: "AbortError" });
+
+      await plugin.shutdown();
+      await rejected;
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("builds toolkit entries from OpenAPI contracts", async () => {
     const plugin = new GraphitiPlugin({});
     Object.assign(plugin, {

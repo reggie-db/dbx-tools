@@ -61,6 +61,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-fs",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "lru-cache",
       "version": "catalog:",
       "type": "runtime"

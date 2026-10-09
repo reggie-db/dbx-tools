@@ -49,6 +49,10 @@
         "types": "./lib/src/override.d.ts",
         "default": "./lib/src/override.js"
       },
+      "./resume": {
+        "types": "./lib/src/resume.d.ts",
+        "default": "./lib/src/resume.js"
+      },
       "./routes": {
         "types": "./lib/src/routes.d.ts",
         "default": "./lib/src/routes.js"
@@ -77,6 +81,7 @@
     "./feedback": "./src/feedback.ts",
     "./markers": "./src/markers.ts",
     "./override": "./src/override.ts",
+    "./resume": "./src/resume.ts",
     "./routes": "./src/routes.ts",
     "./thread": "./src/thread.ts",
     "./wire": "./src/wire.ts",

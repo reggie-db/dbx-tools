@@ -8,6 +8,9 @@
  * @module
  */
 
+import { hash } from "@dbx-tools/shared-core";
+import * as posixPath from "./posix-path.ts";
+
 /** Text or binary data accepted by filesystem write operations. */
 export type FileContent = string | Uint8Array;
 
@@ -159,4 +162,176 @@ export interface FileSystem<TBackend extends string = string> {
   exists(inputPath: string): Promise<boolean>;
 
   stat(inputPath: string): Promise<FileStat>;
+}
+
+/**
+ * Resolve one filesystem namespace path to its canonical rooted backend path.
+ *
+ * Backends retain ownership of lexical resolution through
+ * {@link FileSystem.resolvePath}; this helper only normalizes separators and
+ * trailing slashes for stable comparison and cache keys.
+ */
+export function resolveFileSystemPath(filesystem: FileSystem, inputPath: string): string {
+  return posixPath.normalizeRoot(posixPath.toPosix(filesystem.resolvePath(inputPath)));
+}
+
+/** Values returned by filesystem operations that may be cached. */
+export type CacheValue = boolean | string | Uint8Array | FileEntry[] | FileStat;
+
+/** Cache owner used by {@link cache}; implementations may be in-memory or persistent. */
+export interface FileSystemCache {
+  read<T extends CacheValue>(key: string, load: () => T | Promise<T>): T | Promise<T>;
+  invalidate(key: string): void | Promise<void>;
+  keys():
+    Iterable<string> | AsyncIterable<string> | Promise<Iterable<string> | AsyncIterable<string>>;
+}
+
+/** Read operations supported by the filesystem cache decorator. */
+export type CacheableFileSystemOperation = "exists" | "readFile" | "readdir" | "stat";
+
+/** Options for {@link cache}. */
+export interface FileSystemCacheOptions {
+  /**
+   * Read operations routed through the cache. Defaults to `exists`, `readdir`,
+   * and `stat`.
+   */
+  operations?: readonly CacheableFileSystemOperation[];
+  /** Additional namespace included in every generated cache key. */
+  namespace?: string;
+}
+
+const DEFAULT_CACHE_OPERATIONS: readonly CacheableFileSystemOperation[] = [
+  "exists",
+  "readdir",
+  "stat",
+];
+const MUTATING_FILESYSTEM_OPERATIONS = {
+  appendFile: [0],
+  copyFile: [1],
+  deleteFile: [0],
+  mkdir: [0],
+  moveFile: [0, 1],
+  rmdir: [0],
+  writeFile: [0],
+} as const;
+
+/**
+ * Decorate a filesystem with read-through caching while preserving its exact
+ * concrete type and automatically delegating every uncached member.
+ *
+ * Keys use `<stable-hash>_<normalized-path>`. Mutations enumerate the cache and
+ * invalidate every same-filesystem key whose path is an ancestor or descendant
+ * of a changed path, covering parent listings plus moved or deleted trees.
+ */
+export function cache<TFileSystem extends FileSystem>(
+  filesystem: TFileSystem,
+  storage: FileSystemCache,
+  options: FileSystemCacheOptions = {},
+): TFileSystem {
+  const operations = new Set(options.operations ?? DEFAULT_CACHE_OPERATIONS);
+  const namespace = options.namespace ?? "filesystem";
+  const filesystemHash = hash.fnvHashWithOptions(
+    { length: 10 },
+    namespace,
+    filesystem.backend,
+    filesystem.id,
+    filesystem.root,
+  );
+  const boundMethods = new Map<PropertyKey, unknown>();
+
+  const cacheKey = (
+    operation: CacheableFileSystemOperation,
+    path: string,
+    args: readonly unknown[],
+  ): string =>
+    `${filesystemHash}${hash.fnvHashWithOptions({ length: 8 }, operation, args)}_${path}`;
+
+  const invalidatePaths = async (paths: readonly string[]): Promise<void> => {
+    const normalized = paths.flatMap((path) => {
+      try {
+        return [resolveFileSystemPath(filesystem, path)];
+      } catch {
+        return [];
+      }
+    });
+    if (normalized.length === 0) return;
+    for await (const key of await storage.keys()) {
+      const path = cachePath(key, filesystemHash);
+      if (
+        path !== undefined &&
+        normalized.some(
+          (changed) =>
+            posixPath.isWithinRoot(changed, path) || posixPath.isWithinRoot(path, changed),
+        )
+      ) {
+        await storage.invalidate(key);
+      }
+    }
+  };
+
+  return new Proxy(filesystem, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (typeof value !== "function") return value;
+      if (boundMethods.has(property)) return boundMethods.get(property);
+
+      const delegated = value.bind(target) as (...args: unknown[]) => unknown;
+      let method: (...args: unknown[]) => unknown = delegated;
+      if (
+        typeof property === "string" &&
+        operations.has(property as CacheableFileSystemOperation)
+      ) {
+        method = async (...args: unknown[]): Promise<CacheValue> => {
+          const normalized = cacheOperationPath(filesystem, args);
+          if (normalized === undefined) {
+            return Promise.resolve(
+              (delegated as (...input: unknown[]) => CacheValue | Promise<CacheValue>)(...args),
+            );
+          }
+          const key = cacheKey(property as CacheableFileSystemOperation, normalized, args.slice(1));
+          return storage.read(key, () =>
+            Promise.resolve(
+              (delegated as (...input: unknown[]) => CacheValue | Promise<CacheValue>)(...args),
+            ),
+          );
+        };
+      } else if (typeof property === "string" && property in MUTATING_FILESYSTEM_OPERATIONS) {
+        method = async (...args: unknown[]): Promise<unknown> => {
+          const indices =
+            MUTATING_FILESYSTEM_OPERATIONS[property as keyof typeof MUTATING_FILESYSTEM_OPERATIONS];
+          const paths = indices.flatMap((index) =>
+            typeof args[index] === "string" ? [args[index]] : [],
+          );
+          try {
+            return await delegated(...args);
+          } finally {
+            await invalidatePaths(paths);
+          }
+        };
+      }
+      boundMethods.set(property, method);
+      return method;
+    },
+  });
+}
+
+function cacheOperationPath(filesystem: FileSystem, args: readonly unknown[]): string | undefined {
+  const path = args[0];
+  if (typeof path !== "string") return undefined;
+  try {
+    return resolveFileSystemPath(filesystem, path);
+  } catch {
+    return undefined;
+  }
+}
+
+function cachePath(key: string, filesystemHash: string): string | undefined {
+  if (!key.startsWith(filesystemHash)) return undefined;
+  const separator = key.indexOf("_", filesystemHash.length);
+  if (separator < 0) return undefined;
+  try {
+    return posixPath.normalizeRoot(key.slice(separator + 1));
+  } catch {
+    return undefined;
+  }
 }

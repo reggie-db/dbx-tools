@@ -10,10 +10,18 @@
  * @module
  */
 
-/** Shared Assistant skills tree, readable by everyone in the workspace. */
-export const ASSISTANT_SHARED_SKILLS_PATH = "/Workspace/.assistant/skills";
+/** Organization Assistant root, mounted at its actual workspace path. */
+export const ORGANIZATION_ASSISTANT_PATH = "/Workspace/.assistant";
 
-/** Assistant skills tree owned by one user (the "save this as a skill" target). */
-export function userAssistantSkillsPath(userEmail: string): string {
-  return `/Users/${userEmail.trim()}/.assistant/skills`;
+/** Organization skills tree, readable by everyone in the workspace. */
+export const ORGANIZATION_SKILLS_PATH = `${ORGANIZATION_ASSISTANT_PATH}/skills`;
+
+/** Workspace home root for one user. */
+export function personalWorkspacePath(userEmail: string): string {
+  return `/Workspace/Users/${userEmail.trim()}`;
+}
+
+/** Personal skills tree owned by one user. */
+export function personalSkillsPath(userEmail: string): string {
+  return `${personalWorkspacePath(userEmail)}/.assistant/skills`;
 }

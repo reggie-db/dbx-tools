@@ -156,11 +156,10 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
    databricks auth login --host "$DATABRICKS_HOST"
    ```
 
-3. **Run** (client + server, two processes):
+3. **Run** (build the client, then watch the server):
 
    ```bash
-   pnpm --filter @dbx-tools/demo-appkit-app dev      # vite dev server
-   pnpm --filter @dbx-tools/demo-appkit-server dev   # tsx watch on the API
+   bun run demo
    ```
 
    The server serves the client's built `dist/` on the same port as the API.
@@ -193,10 +192,9 @@ update → restart loop is too slow. Link mode points BOTH demo members at local
 packages this is the common case, so it is what a plain install gives you:
 
 ```bash
-pnpm install                                               # server + client use local source
-pnpm --filter @dbx-tools/demo-appkit-server dev            # restart for Node package edits
-pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch  # rebuild dist/ on UI source edits
-# edit ../js/**/src, restart/refresh as appropriate — no republish.
+bun install       # server + client use local source
+bun run demo      # build the client, then run the server through dev:watch
+# edit Node package source; wait for the settled restart or press r immediately.
 ```
 
 ### Consumer mode — for consuming projects

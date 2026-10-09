@@ -20,6 +20,8 @@ without taking on a heavier feature package.
   `Context` values.
 - Lakebase cache-schema provisioning for deployments where the app identity must
   be granted access before persistent cache initialization.
+- AppKit-global filesystem caching with user-isolated bounded L1 state,
+  cross-user invalidation, and stable framework filesystem sources.
 - An interceptor context on `createApp` (`interceptor?: Interceptor | Interceptor[]`)
   that hands add-ons the computed env, AppKit lifecycle hooks (`onLifecycle`, using
   AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary).
@@ -135,6 +137,36 @@ The injected persistent storage includes a bounded process-local L1 powered by
 `lru-cache`. Warm hits avoid Lakebase reads and `last_accessed` writes; misses,
 expiry, deletion, and clear operations remain coherent with the persistent
 store.
+
+## Filesystem Cache Plugin
+
+Register `filesCache()` when provider-backed filesystems should share one
+AppKit-lifecycle cache:
+
+```ts
+import { filesCache } from "@dbx-tools/appkit/files-cache";
+import { server } from "@databricks/appkit";
+import { appkit } from "@dbx-tools/appkit";
+
+await appkit.createApp({
+  plugins: [server(), filesCache()],
+});
+```
+
+The plugin exposes `forScope({ host, workspaceId?, userKey, ttlMs? })`, which
+returns the `FileSystemCache` consumed by `@dbx-tools/shared-fs` `fs.cache()`.
+Values are isolated by host, optional workspace id, and attributed user. A
+batched invalidation clears matching keys across active user scopes without
+sharing authorization-sensitive values.
+
+`forFileSystem(scope, { paths }, load)` retains one framework filesystem source
+for the same user and actual mounted paths. This gives frameworks such as Mastra
+a stable source identity across page refreshes and turns without introducing a
+second parsed catalogue cache.
+
+Values and retained filesystem sources use a bounded process-local `lru-cache`.
+Nothing is written to Lakebase or another persistent store. App restarts and
+replica changes begin with a cold filesystem cache.
 
 `lakebaseResolver.resolveLakebaseConnection()` accepts:
 

@@ -151,7 +151,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     this.readyWatch?.abort();
     const controller = new AbortController();
     this.readyWatch = controller;
-    this.ready = waitForGraphitiHealth(resolved, timeoutMs, controller.signal).then(
+    const ready = waitForGraphitiHealth(resolved, timeoutMs, controller.signal).then(
       () => {
         if (this.readyWatch === controller) {
           this.logger.info("sidecar ready", { graphitiPort: resolved.listen.port });
@@ -166,6 +166,10 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
         throw error;
       },
     );
+    this.ready = ready;
+    // Tool callers still receive the rejection from `this.ready`; this observer
+    // prevents an expected shutdown abort from becoming an unhandled rejection.
+    void ready.catch(() => undefined);
   }
 
   /** Stop the sidecar, then signal AppKit's process-level graceful shutdown. */
