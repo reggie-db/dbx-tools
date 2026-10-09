@@ -365,8 +365,9 @@ await appkit.createApp({
       // genieIdentity: "service-principal" here) to run the agents' Databricks
       // calls as the app service principal instead, so any account user who can
       // open the app can chat even without workspace membership. The deployed
-      // demo uses that mode because its OTP entrance forwards no Databricks
-      // token and front-door sessions can temporarily retain an older scope set.
+      // demo uses `auto`: the Databricks Apps front door supplies OBO credentials,
+      // while the OTP tunnel supplies only caller identity and falls back to the
+      // app service principal.
       // User attribution still partitions memory, cache, and traces.
       // Themes charts from the `render_data` / `prepare_chart` tools with the
       // same brand the client UI (`BrandProvider`) and email layouts use, so a

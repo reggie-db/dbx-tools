@@ -12,7 +12,8 @@ handle the topic bus, static delivery, deployment staging, and shared types.
   plugins run, then delegates to AppKit's `createApp`.
 - `mastra(...)` from
   [`@dbx-tools/appkit-mastra`](../../../js/node/appkit-mastra) — the
-  Mastra agent as an AppKit plugin: request-attributed service-principal auth,
+  Mastra agent as an AppKit plugin: automatic OBO/front-door and
+  service-principal/tunnel auth,
   Lakebase-backed storage/memory, workspace skills, model selection, history,
   threads, scoped routes, and lazy Databricks Sandbox command execution with
   Python-only Monty fallback. The demo agent also validates typed route/entity

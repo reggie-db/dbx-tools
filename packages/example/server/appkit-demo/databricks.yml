@@ -24,7 +24,7 @@ variables:
   lakebase_endpoint:
     default: projects/${var.lakebase_project_id}/branches/production/endpoints/primary
   genie_identity:
-    default: service-principal
+    default: auto
   mlflow_tracking_uri:
     default: databricks
   otel_propagators:
