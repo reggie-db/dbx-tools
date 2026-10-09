@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { resolveServicePackage } from "../src/_package.ts";
 
@@ -12,6 +13,14 @@ describe("CLI service package resolution", () => {
 
     assert.match(resolved.version, /^\d+\.\d+\.\d+/);
     assert.match(resolved.bin("bun"), /bun[\\/]bin[\\/]bun\.exe$/);
+  });
+
+  it("reads dependency versions when package.json is not exported", () => {
+    const resolved = resolveServicePackage(
+      fileURLToPath(new URL("../package.json", import.meta.url)),
+    );
+
+    assert.match(resolved.dependencies().commander!, /^\d+\.\d+\.\d+/);
   });
 
   it("falls back to an explicit monorepo workspace package", async () => {

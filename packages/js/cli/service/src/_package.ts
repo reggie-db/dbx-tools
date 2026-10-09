@@ -76,12 +76,7 @@ function localManifest(reference: string): string | undefined {
 }
 
 function installedManifest(name: string): string | undefined {
-  try {
-    return createRequire(import.meta.url).resolve(`${name}/package.json`);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "MODULE_NOT_FOUND") return undefined;
-    throw error;
-  }
+  return packageManifest(createRequire(import.meta.url), name);
 }
 
 function servicePackage(manifestPath: string, expectedName?: string): ServicePackage {
@@ -110,7 +105,8 @@ function servicePackage(manifestPath: string, expectedName?: string): ServicePac
       const require = createRequire(manifestPath);
       return Object.fromEntries(
         dependencies.map((dependency) => {
-          const path = require.resolve(`${dependency}/package.json`);
+          const path = packageManifest(require, dependency);
+          if (!path) throw new Error(`could not resolve dependency package: ${dependency}`);
           const resolved = readRecord(path);
           if (typeof resolved.version !== "string" || !resolved.version) {
             throw new Error(`dependency has no version: ${path}`);
@@ -120,6 +116,37 @@ function servicePackage(manifestPath: string, expectedName?: string): ServicePac
       );
     },
   };
+}
+
+/** Resolve a package manifest without requiring its unexported `package.json` subpath. */
+function packageManifest(require: NodeJS.Require, name: string): string | undefined {
+  for (const specifier of [name, `${name}/package.json`]) {
+    try {
+      const entry = require.resolve(specifier);
+      const manifest = namedManifest(entry, name);
+      if (manifest) return manifest;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "MODULE_NOT_FOUND" && code !== "ERR_PACKAGE_PATH_NOT_EXPORTED") throw error;
+    }
+  }
+  for (const directory of require.resolve.paths(name) ?? []) {
+    const manifest = join(directory, name, "package.json");
+    if (existsSync(manifest) && readRecord(manifest).name === name) return manifest;
+  }
+  return undefined;
+}
+
+/** Walk from a resolved package entry to the nearest manifest with the expected name. */
+function namedManifest(path: string, name: string): string | undefined {
+  let current = dirname(path);
+  while (true) {
+    const manifest = join(current, "package.json");
+    if (existsSync(manifest) && readRecord(manifest).name === name) return manifest;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
 }
 
 function resolveBin(directory: string, value: unknown, name?: string): string {
