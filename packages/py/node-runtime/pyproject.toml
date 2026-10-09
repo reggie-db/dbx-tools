@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-node-runtime"
-version = "0.9.69"
+version = "0.9.70"
 description = "Shared PythonMonkey runtime and lazy Node.js bootstrap"
 readme = "README.md"
 requires-python = ">=3.10,<4"
