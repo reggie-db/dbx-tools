@@ -41,33 +41,6 @@ function assertAncestor(root: string, ancestor: string, descendant: string, mess
   }
 }
 
-/** Parse a GitHub repository slug from an HTTPS or SSH remote URL. */
-export function githubRepositoryFromRemoteUrl(remoteUrl: string): string | undefined {
-  const value = remoteUrl.trim().replace(/\.git$/, "");
-  const https = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)$/i.exec(value);
-  if (https) return `${https[1]}/${https[2]}`;
-  const ssh = /^(?:ssh:\/\/)?git@([^/:]+)[:/]([^/]+)\/([^/]+)$/i.exec(value);
-  if (!ssh || !/^github(?:[.-].+)?$/i.test(ssh[1]!)) return undefined;
-  return `${ssh[2]}/${ssh[3]}`;
-}
-
-/** Infer the `gh auth` account encoded by a `git@github-<account>:` SSH alias. */
-export function githubAccountFromRemoteUrl(remoteUrl: string): string | undefined {
-  return /^git@github-([^:]+):/i.exec(remoteUrl.trim())?.[1];
-}
-
-function githubApiEnvironment(root: string, remoteUrl: string): NodeJS.ProcessEnv | undefined {
-  const account = githubAccountFromRemoteUrl(remoteUrl);
-  if (!account) return undefined;
-  const token = captureTaskCommand(
-    root,
-    "gh",
-    ["auth", "token", "--hostname", "github.com", "--user", account],
-    { check: true, stderr: "inherit" },
-  );
-  return token ? { ...process.env, GH_TOKEN: token } : undefined;
-}
-
 function pushAnnotatedReleaseTag(options: {
   readonly annotation: string;
   readonly branch: string;
@@ -78,15 +51,12 @@ function pushAnnotatedReleaseTag(options: {
 }): void {
   const { annotation, branch, head, remote, root, tag } = options;
   runTaskCommand(root, "git", ["tag", "--annotate", tag, "--message", annotation]);
-  const remoteUrl = captureTaskCommand(root, "git", ["remote", "get-url", remote], {
-    check: true,
-  });
-  const repository = githubRepositoryFromRemoteUrl(remoteUrl);
-  if (!repository || !taskCommandSucceeds(root, "gh", ["--version"])) {
+  const githubAccount = projectUtils.resolveProjectGhAccount(root, { remote });
+  if (!githubAccount) {
+    logger.warn("no authenticated GitHub account can access the release repository; using git push");
     runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);
     return;
   }
-  const githubEnv = githubApiEnvironment(root, remoteUrl);
 
   const remoteBranch = captureTaskCommand(
     root,
@@ -97,48 +67,66 @@ function pushAnnotatedReleaseTag(options: {
     .split(/\s+/)[0]
     ?.trim();
   if (remoteBranch !== head) {
-    throw new Error(`cannot tag ${repository}: ${remote}/${branch} does not equal local HEAD`);
+    throw new Error(
+      `cannot tag ${githubAccount.remote.repository}: ${remote}/${branch} does not equal local HEAD`,
+    );
   }
-
-  const tagObject = captureTaskCommand(
-    root,
-    "gh",
-    [
-      "api",
-      "--method",
-      "POST",
-      `repos/${repository}/git/tags`,
-      "-f",
-      `tag=${tag}`,
-      "-f",
-      `message=${annotation}`,
-      "-f",
-      `object=${head}`,
-      "-f",
-      "type=commit",
-      "--jq",
-      ".sha",
-    ],
-    { check: true, env: githubEnv, stderr: "inherit" },
-  );
-  if (!tagObject) throw new Error(`GitHub did not return an annotated tag object for ${tag}`);
-  runTaskCommand(
-    root,
-    "gh",
-    [
-      "api",
-      "--method",
-      "POST",
-      `repos/${repository}/git/refs`,
-      "-f",
-      `ref=refs/tags/${tag}`,
-      "-f",
-      `sha=${tagObject}`,
-      "--silent",
-    ],
-    { env: githubEnv },
-  );
-  logger.info(`created ${tag} through the GitHub API`, { repository, sha: head });
+  try {
+    const tagObject = captureTaskCommand(
+      root,
+      "gh",
+      [
+        "api",
+        "--hostname",
+        githubAccount.host,
+        "--method",
+        "POST",
+        `repos/${githubAccount.remote.repository}/git/tags`,
+        "-f",
+        `tag=${tag}`,
+        "-f",
+        `message=${annotation}`,
+        "-f",
+        `object=${head}`,
+        "-f",
+        "type=commit",
+        "--jq",
+        ".sha",
+      ],
+      { check: true, env: githubAccount.env, stderr: "inherit" },
+    );
+    if (!tagObject) throw new Error(`GitHub did not return an annotated tag object for ${tag}`);
+    runTaskCommand(
+      root,
+      "gh",
+      [
+        "api",
+        "--hostname",
+        githubAccount.host,
+        "--method",
+        "POST",
+        `repos/${githubAccount.remote.repository}/git/refs`,
+        "-f",
+        `ref=refs/tags/${tag}`,
+        "-f",
+        `sha=${tagObject}`,
+        "--silent",
+      ],
+      { env: githubAccount.env },
+    );
+    logger.info(`created ${tag} through the GitHub API`, {
+      account: githubAccount.login,
+      host: githubAccount.host,
+      repository: githubAccount.remote.repository,
+      sha: head,
+    });
+  } catch (error) {
+    logger.warn("GitHub API tag creation failed; using git push", {
+      error,
+      repository: githubAccount.remote.repository,
+    });
+    runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);
+  }
 }
 
 function prepareReleaseBranch(options: {

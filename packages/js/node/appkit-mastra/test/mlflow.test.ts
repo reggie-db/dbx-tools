@@ -2,11 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { appkit } from "@dbx-tools/appkit";
 import { context, trace } from "@opentelemetry/api";
-import type {
-  ReadableSpan,
-  Span,
-  SpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
 import {
@@ -27,7 +23,7 @@ import {
   ucTracePrefixFromExperimentTags,
   validateFeedbackConfig,
 } from "../src/mlflow.ts";
-import { MLFLOW_AGENT_TAG_ATTR } from "../src/trace-attributes.ts";
+import { APPKIT_AGENT_TRACE_ROOT_ATTR } from "../src/trace-attributes.ts";
 
 const originalExperimentId = process.env.MLFLOW_EXPERIMENT_ID;
 const originalExperimentName = process.env.MLFLOW_EXPERIMENT_NAME;
@@ -73,13 +69,10 @@ afterEach(() => {
 describe("direct MLflow configuration", () => {
   it("injects the selected Databricks profile automatically outside Apps", () => {
     process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "false";
-    process.env.DATABRICKS_CONFIG_PROFILE = "FEVM-REGGIE-PIERCE-AWS";
+    process.env.DATABRICKS_CONFIG_PROFILE = "workspace-profile";
     delete process.env.MLFLOW_TRACKING_URI;
 
-    assert.equal(
-      directMlflowTrackingUri(),
-      "databricks://FEVM-REGGIE-PIERCE-AWS",
-    );
+    assert.equal(directMlflowTrackingUri(), "databricks://workspace-profile");
   });
 
   it("never starts a direct provider inside a Databricks App", () => {
@@ -156,9 +149,8 @@ describe("Databricks Apps MLflow trace-info promotion", () => {
       responsePreview: "answer",
       user: "ada@example.com",
       tags: {
-        agent: "true",
+        agent: "model-a",
         genie: "true",
-        model: '["model-a","model-b"]',
         sp_auth: "true",
         tunnel: "portr",
         tunnel_subdomain: "demo",
@@ -190,9 +182,8 @@ describe("Databricks Apps MLflow trace-info promotion", () => {
         "mlflow.trace.user": "ada@example.com",
       },
       tags: {
-        agent: "true",
+        agent: "model-a",
         genie: "true",
-        model: '["model-a","model-b"]',
         sp_auth: "true",
         tunnel: "portr",
         tunnel_subdomain: "demo",
@@ -218,7 +209,7 @@ describe("direct MLflow span filtering", () => {
     health.end();
 
     const root = mastraTracer.startSpan("mastra.chat_turn", {
-      attributes: { [MLFLOW_AGENT_TAG_ATTR]: "true" },
+      attributes: { [APPKIT_AGENT_TRACE_ROOT_ATTR]: true },
     });
     const parent = trace.setSpan(context.active(), root);
     const request = httpTracer.startSpan("POST", undefined, parent);
@@ -239,7 +230,7 @@ describe("direct MLflow span filtering", () => {
       spanProcessors: [new AgentTraceSpanProcessor(recording)],
     });
     const root = provider.getTracer("telemetry").startSpan("mastra.chat_turn", {
-      attributes: { [MLFLOW_AGENT_TAG_ATTR]: "true" },
+      attributes: { [APPKIT_AGENT_TRACE_ROOT_ATTR]: true },
     });
     root.end();
 

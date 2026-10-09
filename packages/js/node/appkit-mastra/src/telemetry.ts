@@ -36,11 +36,11 @@ import {
   updateActiveMlflowTraceTags,
 } from "./mlflow.ts";
 import {
+  APPKIT_AGENT_TRACE_ROOT_ATTR,
   MLFLOW_AGENT_TAG,
   MLFLOW_AGENT_TAG_ATTR,
   MLFLOW_GENIE_TAG,
   MLFLOW_GENIE_TAG_ATTR,
-  MLFLOW_MODEL_TAG,
   MLFLOW_LOCAL_TAG,
   MLFLOW_OBO_AUTH_TAG,
   MLFLOW_SP_AUTH_TAG,
@@ -50,10 +50,9 @@ import {
 export {
   MLFLOW_AGENT_TAG,
   MLFLOW_AGENT_TAG_ATTR,
+  APPKIT_AGENT_TRACE_ROOT_ATTR,
   MLFLOW_GENIE_TAG,
   MLFLOW_GENIE_TAG_ATTR,
-  MLFLOW_MODEL_TAG,
-  MLFLOW_MODEL_TAG_ATTR,
   MLFLOW_LOCAL_TAG,
   MLFLOW_LOCAL_TAG_ATTR,
   MLFLOW_OBO_AUTH_TAG,
@@ -130,8 +129,8 @@ interface TraceTarget {
 }
 
 interface ChatTraceState {
-  readonly models: Set<string>;
   readonly tags: Map<string, string>;
+  firstModel?: string;
   user?: string;
 }
 
@@ -187,21 +186,14 @@ function activeChatTraceState(): ChatTraceState | undefined {
   return context.active().getValue(CHAT_TRACE_STATE_KEY) as ChatTraceState | undefined;
 }
 
-function setChatTraceTag(
-  state: ChatTraceState,
-  name: string,
-  value: ChatTraceTagValue,
-): void {
+function setChatTraceTag(state: ChatTraceState, name: string, value: ChatTraceTagValue): void {
   const tag = stringUtils.trimToNull(name);
   if (!tag) return;
   state.tags.set(tag, String(value));
 }
 
 /** Inject one MLflow trace tag into the active chat request. */
-export function recordActiveTraceTag(
-  name: string,
-  value: ChatTraceTagValue = true,
-): void {
+export function recordActiveTraceTag(name: string, value: ChatTraceTagValue = true): void {
   const state = activeChatTraceState();
   if (state) setChatTraceTag(state, name, value);
 }
@@ -217,11 +209,17 @@ export function recordActiveTraceTags(
   }
 }
 
-/** Record a selected model on the active chat trace, preserving first-use order. */
+/** Record the first selected model as the active chat trace's `agent` tag. */
 export function recordActiveTraceModel(modelId: string): void {
   const value = stringUtils.trimToNull(modelId);
   if (!value) return;
-  activeChatTraceState()?.models.add(value);
+  const state = activeChatTraceState();
+  if (!state || state.firstModel) return;
+  state.firstModel = value;
+  setChatTraceTag(state, MLFLOW_AGENT_TAG, value);
+  const span = trace.getActiveSpan();
+  if (span?.isRecording()) span.setAttribute(MLFLOW_AGENT_TAG_ATTR, value);
+  updateActiveMlflowTraceTags({ [MLFLOW_AGENT_TAG]: value });
 }
 
 /** Record the best resolved user identifier on the active chat trace. */
@@ -235,20 +233,6 @@ export function recordActiveTraceUser(user: string | undefined): void {
 /** Record one Databricks authentication mode used during the active chat trace. */
 export function recordActiveTraceAuth(auth: "obo" | "service-principal"): void {
   recordActiveTraceTag(auth === "obo" ? MLFLOW_OBO_AUTH_TAG : MLFLOW_SP_AUTH_TAG);
-}
-
-/** Serialize model tags as a scalar or an ordered JSON array for multiple values. */
-export function modelTraceTag(models: Iterable<string>): string | undefined {
-  const values: string[] = [];
-  const seen = new Set<string>();
-  for (const model of models) {
-    const value = stringUtils.trimToNull(model);
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    values.push(value);
-  }
-  if (values.length === 0) return undefined;
-  return values.length === 1 ? values[0] : JSON.stringify(values);
 }
 
 /** Publish the turn's MLflow trace id before the handler writes the body. */
@@ -425,20 +409,18 @@ class AssistantResponseCollector {
 function resolveTraceTarget(): TraceTarget | undefined {
   const activeContext = context.active();
   if (directMlflowTracingActive()) {
-    const span = trace
-      .getTracer(CHAT_TURN_TRACER)
-      .startSpan(
-        "mastra.chat_turn",
-        {
-          kind: SpanKind.SERVER,
-          attributes: {
-            [MLFLOW_AGENT_TAG_ATTR]: "true",
-            [MLFLOW_SPAN_TYPE_ATTR]: MLFLOW_SPAN_TYPE_AGENT,
-            [GEN_AI_OPERATION_NAME_ATTR]: "invoke_agent",
-          },
+    const span = trace.getTracer(CHAT_TURN_TRACER).startSpan(
+      "mastra.chat_turn",
+      {
+        kind: SpanKind.SERVER,
+        attributes: {
+          [APPKIT_AGENT_TRACE_ROOT_ATTR]: true,
+          [MLFLOW_SPAN_TYPE_ATTR]: MLFLOW_SPAN_TYPE_AGENT,
+          [GEN_AI_OPERATION_NAME_ATTR]: "invoke_agent",
         },
-        trace.deleteSpan(activeContext),
-      );
+      },
+      trace.deleteSpan(activeContext),
+    );
     if (!span.isRecording()) {
       span.end();
       return undefined;
@@ -454,20 +436,18 @@ function resolveTraceTarget(): TraceTarget | undefined {
   const active = trace.getActiveSpan();
   if (active?.isRecording()) return { span: active, owned: false };
 
-  const span = trace
-    .getTracer(CHAT_TURN_TRACER)
-    .startSpan(
-      "mastra.chat_turn",
-      {
-        kind: SpanKind.SERVER,
-        attributes: {
-          [MLFLOW_AGENT_TAG_ATTR]: "true",
-          [MLFLOW_SPAN_TYPE_ATTR]: MLFLOW_SPAN_TYPE_AGENT,
-          [GEN_AI_OPERATION_NAME_ATTR]: "invoke_agent",
-        },
+  const span = trace.getTracer(CHAT_TURN_TRACER).startSpan(
+    "mastra.chat_turn",
+    {
+      kind: SpanKind.SERVER,
+      attributes: {
+        [APPKIT_AGENT_TRACE_ROOT_ATTR]: true,
+        [MLFLOW_SPAN_TYPE_ATTR]: MLFLOW_SPAN_TYPE_AGENT,
+        [GEN_AI_OPERATION_NAME_ATTR]: "invoke_agent",
       },
-      activeContext,
-    );
+    },
+    activeContext,
+  );
   if (!span.isRecording()) {
     span.end();
     return undefined;
@@ -506,9 +486,8 @@ export function chatTurnTelemetryMiddleware(
     next();
     return;
   }
-  const traceState: ChatTraceState = { models: new Set(), tags: new Map() };
+  const traceState: ChatTraceState = { tags: new Map() };
   const traceRequestTime = Date.now();
-  setChatTraceTag(traceState, MLFLOW_AGENT_TAG, true);
   if (!appkit.isDatabricksAppEnv()) {
     setChatTraceTag(traceState, MLFLOW_LOCAL_TAG, true);
   }
@@ -525,7 +504,6 @@ export function chatTurnTelemetryMiddleware(
   traceState.user = stampMlflowActor(target.span, req);
   target.span.setAttribute(MLFLOW_SPAN_TYPE_ATTR, MLFLOW_SPAN_TYPE_AGENT);
   target.span.setAttribute(GEN_AI_OPERATION_NAME_ATTR, "invoke_agent");
-  target.span.setAttribute(MLFLOW_AGENT_TAG_ATTR, "true");
   const identity =
     typeof options.identity === "function" ? options.identity(req) : options.identity;
   if (identity) {
@@ -544,10 +522,7 @@ export function chatTurnTelemetryMiddleware(
     const fullInput = serialized(messages);
     requestPreview = textOnlyChatInput(messages) ?? fullInput;
     target.span.setAttribute(CHAT_MESSAGES_ATTR, fullInput);
-    target.span.setAttribute(
-      MLFLOW_SPAN_INPUTS_ATTR,
-      requestPreview.slice(0, TRACE_IO_LIMIT),
-    );
+    target.span.setAttribute(MLFLOW_SPAN_INPUTS_ATTR, requestPreview.slice(0, TRACE_IO_LIMIT));
   }
 
   const collector = new AssistantResponseCollector();
@@ -584,8 +559,6 @@ export function chatTurnTelemetryMiddleware(
   const finalizeTrace = (): void => {
     if (traceFinalized) return;
     traceFinalized = true;
-    const model = modelTraceTag(traceState.models);
-    if (model) setChatTraceTag(traceState, MLFLOW_MODEL_TAG, model);
     const tags = Object.fromEntries(traceState.tags);
     for (const [name, value] of traceState.tags) {
       target.span.setAttribute(`${MLFLOW_TRACE_TAG_PREFIX}${name}`, value);
@@ -651,7 +624,6 @@ export function chatTurnTelemetryMiddleware(
     .setSpan(context.active(), target.span)
     .setValue(CHAT_TRACE_STATE_KEY, traceState);
   context.with(chatContext, () => {
-    updateActiveMlflowTraceTags({ [MLFLOW_AGENT_TAG]: "true" });
     next();
   });
 }

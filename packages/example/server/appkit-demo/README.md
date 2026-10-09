@@ -98,13 +98,17 @@ client pool before the process deadline.
 
 This package's `@dbx-tools/*` deps are `workspace:*` and its third-party deps are
 `catalog:`, neither of which resolves when the Databricks Apps platform installs
-the uploaded source. Staging reads the root `VERSION` file and converts every
-`@dbx-tools/*` dependency to that exact workspace version.
+the uploaded source. Staging discovers the demo's transitive runtime workspace
+dependencies, packs their locally compiled publish artifacts into local npm
+archives, and builds the Python workspace wheels locally. External Node
+dependencies remain ordinary registry dependencies installed by the Apps build;
+the deploy never uploads `node_modules`.
 
-From the repository root, `bun run demo:deploy` compiles the client, stages
-the tree, and runs bundle validate/deploy/`demo_app` with
-`--profile FEVM-REGGIE-PIERCE-AWS`. Pass `--demo-deploy` on `bun run release`
-to do the same after tagging (off by default).
+From the repository root, `bun run demo:deploy` compiles the workspace, stages
+the tree, resolves the configured/default workspace profile through
+`@dbx-tools/auth`, and passes that profile explicitly to bundle
+validate/deploy/`demo_app`. Pass `--demo-deploy` on `bun run release` to do the
+same after tagging (off by default).
 
 ```bash
 bun run demo:deploy
@@ -114,22 +118,21 @@ The same steps by hand:
 
 ```bash
 bun run --filter '@dbx-tools/demo-appkit-app' compile   # client build the server serves
+bun run compile                                        # current local package artifacts
 bun stage-deploy.ts                                     # reads the root VERSION
 cd "$(dirname "$(mktemp -u)")/dbx-tools-deploy-app"     # printed by stage-deploy
-databricks bundle validate --profile FEVM-REGGIE-PIERCE-AWS
-databricks bundle deploy --profile FEVM-REGGIE-PIERCE-AWS
-databricks bundle run demo_app --profile FEVM-REGGIE-PIERCE-AWS
+databricks bundle validate -t <target> --profile <resolved-profile>
+databricks bundle deploy -t <target> --profile <resolved-profile>
+databricks bundle run demo_app -t <target> --profile <resolved-profile>
 ```
 
 The staged app includes both `package.json` and `requirements.txt`. Databricks
-Apps installs the Node server and matching `dbx-tools-graphiti` Python release;
-the bundle sets `PYTHON=./.venv/bin/python` so the Graphiti plugin uses that
-Python 3.11 environment. The Python wheel includes its pinned generated REST,
-MCP, and PostGraph sources; Node only supervises its process.
-Staging replaces each workspace dependency with the exact root version and writes
-the matching `dbx-tools-graphiti==<version>` requirement. The staged app expects
-that version to exist in npm and PyPI; local source changes are not bundled as
-package substitutes.
+Apps installs the Node server from staged local `file:` archives and installs
+the locally built Graphiti and Node-runtime wheels. The bundle sets
+`PYTHON=./.venv/bin/python` so the Graphiti plugin uses that Python 3.11
+environment. The Graphiti wheel includes its pinned generated REST, MCP, and
+PostGraph sources; Node only supervises its process. npm and PyPI publication do
+not need to finish before the demo deploy uses the current checkout.
 
 Two things worth knowing before changing this flow:
 
@@ -138,11 +141,11 @@ Two things worth knowing before changing this flow:
   `.gitignore`, and this repo ignores every `dist` directory. If staging happens there,
   `bundle deploy` warns "There are no files to sync" and ships an app with no
   source.
-- **Pass the FEVM profile explicitly.** `DATABRICKS_CONFIG_PROFILE` overrides
-  the profile declared by the bundle target. Without `--profile
-FEVM-REGGIE-PIERCE-AWS`, a shell configured for the deployment service
-  principal creates a separate bundle state and then fails because the app and
-  Lakebase project are already managed by the human-owned FEVM bundle.
+- **Pass the detected profile explicitly.** `DATABRICKS_CONFIG_PROFILE` can
+  otherwise retarget bundle commands. `scripts/demo-deploy.ts` resolves the
+  configured/default local profile through `@dbx-tools/auth` and passes both
+  target and profile to every workspace call. The profile owns the workspace
+  host; the bundle does not duplicate it.
 - **Start with `bundle run`, not `databricks apps deploy` or `apps start`.** The
   deployed `command` (`bun src/launch.ts`, which normalizes child output and
   starts the server that fronts itself with the public portr tunnel + OTP gate

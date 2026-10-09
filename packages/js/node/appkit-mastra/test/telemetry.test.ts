@@ -12,7 +12,6 @@ import {
   MLFLOW_AGENT_TAG_ATTR,
   MLFLOW_GENIE_TAG_ATTR,
   MLFLOW_LOCAL_TAG_ATTR,
-  MLFLOW_MODEL_TAG_ATTR,
   MLFLOW_OBO_AUTH_TAG_ATTR,
   MLFLOW_SESSION_ATTR,
   MLFLOW_SP_AUTH_TAG_ATTR,
@@ -20,7 +19,6 @@ import {
   MLFLOW_SPAN_OUTPUTS_ATTR,
   MLFLOW_SPAN_TYPE_ATTR,
   MLFLOW_USER_ATTR,
-  modelTraceTag,
   textOnlyChatInput,
   TRACE_IO_LIMIT,
 } from "../src/telemetry.ts";
@@ -166,16 +164,6 @@ describe("chatTurnTelemetryMiddleware", () => {
   });
 });
 
-describe("modelTraceTag", () => {
-  it("uses the model id directly for one model", () => {
-    assert.equal(modelTraceTag([" model-a ", "model-a"]), "model-a");
-  });
-
-  it("uses an ordered JSON array for multiple models", () => {
-    assert.equal(modelTraceTag(["model-a", "model-b", "model-a"]), '["model-a","model-b"]');
-  });
-});
-
 describe("telemetry constants", () => {
   it("exposes the MLflow attribute keys the UC view reads", () => {
     assert.equal(MLFLOW_SPAN_INPUTS_ATTR, "mlflow.spanInputs");
@@ -190,7 +178,6 @@ describe("telemetry constants", () => {
     assert.equal(MLFLOW_AGENT_TAG_ATTR, "mlflow.traceTag.agent");
     assert.equal(MLFLOW_GENIE_TAG_ATTR, "mlflow.traceTag.genie");
     assert.equal(MLFLOW_LOCAL_TAG_ATTR, "mlflow.traceTag.local");
-    assert.equal(MLFLOW_MODEL_TAG_ATTR, "mlflow.traceTag.model");
     assert.equal(MLFLOW_OBO_AUTH_TAG_ATTR, "mlflow.traceTag.obo_auth");
     assert.equal(MLFLOW_SP_AUTH_TAG_ATTR, "mlflow.traceTag.sp_auth");
     assert.ok(TRACE_IO_LIMIT > 0);

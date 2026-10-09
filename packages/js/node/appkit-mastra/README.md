@@ -789,12 +789,12 @@ serialized envelopes. `appkit.mastra.identity.mode` records `obo` versus
 `service-principal`. The experiment UI's User and Tags columns read the OTel
 attributes Databricks documents for inbound traces: `user.id` (forwarded email
 or user id), `session.id` (Mastra thread id), `mlflow.spanType` (`AGENT` on the
-root, `GENIE` on `ask_genie`), `mlflow.traceTag.agent=true` on every chat, and
-`mlflow.traceTag.genie=true` when the turn called Genie. The `model` trace tag is
-the selected model id for a one-model turn, or an ordered JSON array string when
-the turn uses multiple models. `obo_auth=true` and `sp_auth=true` independently
-record whether each Databricks authentication mode was invoked during the turn,
-so a mixed-auth turn keeps both tags. `local=true` is added automatically when
+root, `GENIE` on `ask_genie`), `mlflow.traceTag.agent=<first model id>` on every
+chat, and `mlflow.traceTag.genie=true` when the turn called Genie. Model changes
+later in the turn do not replace the `agent` tag, and no separate `model` tag is
+written. `obo_auth=true` and `sp_auth=true` independently record whether each
+Databricks authentication mode was invoked during the turn, so a mixed-auth
+turn keeps both tags. `local=true` is added automatically when
 `isDatabricksAppEnv()` is false. The `@dbx-tools/tunnel` AppKit plugin injects
 `tunnel=portr|frp` and `tunnel_subdomain=<name>` through AppKit's generic
 request-tag context when the public host matches its tunnel configuration.
@@ -825,8 +825,8 @@ tracing. The plugin initializes the MLflow Node SDK, injects
 `DATABRICKS_CONFIG_PROFILE` into a `databricks://<profile>` tracking URI, and
 auto-detects the experiment's UC trace location. `MLFLOW_UC_TRACE_PREFIX` or the
 `MLFLOW_UC_CATALOG` / `MLFLOW_UC_SCHEMA` / `MLFLOW_UC_TABLE_PREFIX` trio can
-override that location. The local provider forwards only `agent=true` chat
-roots and their descendants, so unrelated AppKit HTTP, cache, and plugin spans
+override that location. The local provider forwards only marked chat roots and
+their descendants, so unrelated AppKit HTTP, cache, and plugin spans
 do not become traces. Before export it also writes the resolved email, user
 name, or resource id to MLflow's trace user field. Direct mode requires a
 UC-linked experiment. Inside a Databricks App (`isDatabricksAppEnv()`), this

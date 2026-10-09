@@ -4,13 +4,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
-import {
-  githubAccountFromRemoteUrl,
-  githubRepositoryFromRemoteUrl,
-  runRelease,
-} from "../tasks/release.ts";
+import { runRelease } from "../tasks/release.ts";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -49,23 +46,20 @@ function fixture(): { remote: string; root: string } {
 describe("direct release tags", () => {
   it("recognizes GitHub HTTPS, SSH, and configured SSH aliases", () => {
     assert.equal(
-      githubRepositoryFromRemoteUrl("https://github.com/reggie-db/dbx-tools.git"),
-      "reggie-db/dbx-tools",
+      projectUtils.parseProjectGhRemote("https://github.example.com/example/dbx-tools.git")
+        ?.repository,
+      "example/dbx-tools",
     );
     assert.equal(
-      githubRepositoryFromRemoteUrl("git@github.com:reggie-db/dbx-tools.git"),
-      "reggie-db/dbx-tools",
+      projectUtils.parseProjectGhRemote("git@github.example.com:example/dbx-tools.git")?.repository,
+      "example/dbx-tools",
     );
-    assert.equal(
-      githubRepositoryFromRemoteUrl("git@github-reggie-db:reggie-db/dbx-tools.git"),
-      "reggie-db/dbx-tools",
-    );
-    assert.equal(
-      githubAccountFromRemoteUrl("git@github-reggie-db:reggie-db/dbx-tools.git"),
-      "reggie-db",
-    );
-    assert.equal(githubAccountFromRemoteUrl("git@github.com:reggie-db/dbx-tools.git"), undefined);
-    assert.equal(githubRepositoryFromRemoteUrl("/tmp/remote.git"), undefined);
+    assert.deepEqual(projectUtils.parseProjectGhRemote("git@github-release:example/dbx-tools.git"), {
+      accountHint: "release",
+      host: "github-release",
+      repository: "example/dbx-tools",
+    });
+    assert.equal(projectUtils.parseProjectGhRemote("/tmp/remote.git"), undefined);
   });
 
   it("carries task selections through the pushed annotation and skips optional checks", async () => {

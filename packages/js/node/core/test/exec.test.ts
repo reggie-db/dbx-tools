@@ -11,6 +11,57 @@ const QUIET_STDIO = {
   stdout: "ignore",
   stderr: "ignore",
 } as const;
+const PROCESS_TREE_FIXTURE = join(import.meta.dirname, "fixtures", "process-tree.cjs");
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+function forceKill(pid: number | undefined): void {
+  if (pid === undefined) return;
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+  }
+}
+
+function processTreeFixture(mode: "graceful" | "force" | "late") {
+  let ready!: (pid: number) => void;
+  let lateReady!: (pid: number) => void;
+  const gracefulSignals: string[] = [];
+  const started = new Promise<number>((resolve) => {
+    ready = resolve;
+  });
+  const lateStarted = new Promise<number>((resolve) => {
+    lateReady = resolve;
+  });
+  const child = exec.spawn(process.execPath, [PROCESS_TREE_FIXTURE, mode], {
+    stdin: "ignore",
+    stdout: {
+      capture: false,
+      onLine: (line) => {
+        const [event, value] = line.split(":");
+        if (event === "term") {
+          gracefulSignals.push(value!);
+          return;
+        }
+        const pid = Number.parseInt(value!, 10);
+        if (!Number.isSafeInteger(pid)) return;
+        if (event === "ready") ready(pid);
+        if (event === "late") lateReady(pid);
+      },
+    },
+    stderr: "ignore",
+  });
+  return { child, started, lateStarted, gracefulSignals };
+}
 
 describe("shell-string arguments", () => {
   it("keeps a single argument when options are omitted", async () => {
@@ -151,4 +202,87 @@ describe("live process handle", () => {
     assert.deepEqual(result.stdoutLines, []);
     assert.equal(result.stdout, "");
   });
+});
+
+describe("process tree termination", () => {
+  it("snapshots and gracefully stops a child and its descendants", async () => {
+    const { child, started } = processTreeFixture("graceful");
+    let descendantPid: number | undefined;
+    try {
+      descendantPid = await started;
+      await exec.kill(child, {
+        gracefulTimeoutMs: 1_000,
+        forceTimeoutMs: 1_000,
+        pollIntervalMs: 10,
+      });
+      await child;
+
+      assert.equal(processExists(child.pid!), false);
+      assert.equal(processExists(descendantPid), false);
+    } finally {
+      forceKill(descendantPid);
+      forceKill(child.pid);
+      await child.catch(() => undefined);
+    }
+  });
+
+  it(
+    "force-kills snapshot survivors after the graceful timeout",
+    { skip: process.platform === "win32" },
+    async () => {
+      const { child, started, gracefulSignals } = processTreeFixture("force");
+      let descendantPid: number | undefined;
+      try {
+        descendantPid = await started;
+        await exec.kill(child, {
+          gracefulTimeoutMs: 25,
+          forceTimeoutMs: 1_000,
+          pollIntervalMs: 5,
+        });
+        await child;
+
+        assert.equal(child.signalCode, "SIGKILL");
+        assert.equal(processExists(descendantPid), false);
+        assert.deepEqual(gracefulSignals, ["parent"]);
+      } finally {
+        forceKill(descendantPid);
+        forceKill(child.pid);
+        await child.catch(() => undefined);
+      }
+    },
+  );
+
+  it(
+    "discovers and signals descendants created during graceful polling",
+    { skip: process.platform === "win32" },
+    async () => {
+      const { child, started, lateStarted } = processTreeFixture("late");
+      let descendantPid: number | undefined;
+      let latePid: number | undefined;
+      try {
+        descendantPid = await started;
+        const shutdown = exec.kill(child, {
+          gracefulTimeoutMs: 250,
+          forceTimeoutMs: 1_000,
+          pollIntervalMs: 10,
+        });
+        latePid = await Promise.race([
+          lateStarted,
+          shutdown.then(() => {
+            throw new Error("Process tree exited before the late descendant started");
+          }),
+        ]);
+        await shutdown;
+        await child;
+
+        assert.equal(processExists(descendantPid), false);
+        assert.equal(processExists(latePid), false);
+      } finally {
+        forceKill(latePid);
+        forceKill(descendantPid);
+        forceKill(child.pid);
+        await child.catch(() => undefined);
+      }
+    },
+  );
 });

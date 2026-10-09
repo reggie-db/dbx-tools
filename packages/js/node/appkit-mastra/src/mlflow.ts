@@ -33,15 +33,11 @@ import { TraceLocationType, TraceMetadataKey } from "@mlflow/core";
 import { TraceInfo } from "@mlflow/core/dist/core/entities/trace_info";
 import { TraceState } from "@mlflow/core/dist/core/entities/trace_state";
 import type { Context } from "@opentelemetry/api";
-import type {
-  ReadableSpan,
-  Span as SdkSpan,
-  SpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import type { ReadableSpan, Span as SdkSpan, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import type { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { z } from "zod";
 import { databricksFetch, readResponseJson, readResponseText } from "./rest.ts";
-import { MLFLOW_AGENT_TAG_ATTR } from "./trace-attributes.ts";
+import { APPKIT_AGENT_TRACE_ROOT_ATTR } from "./trace-attributes.ts";
 
 const logger = log.logger("mastra/mlflow");
 
@@ -64,7 +60,7 @@ const NOISY_INSTRUMENTATION_SCOPES = new Set([
 ]);
 
 function isAgentTraceRoot(span: SdkSpan): boolean {
-  return span.attributes[MLFLOW_AGENT_TAG_ATTR] === "true";
+  return span.attributes[APPKIT_AGENT_TRACE_ROOT_ATTR] === true;
 }
 
 function isUsefulAgentDescendant(span: SdkSpan): boolean {
@@ -311,8 +307,7 @@ export function directMlflowTrackingUri(): string | undefined {
 
 /** Parse the optional UC table-prefix location used by direct local tracing. */
 export function directMlflowTraceLocation():
-  | { catalogName: string; schemaName: string; tablePrefix: string }
-  | undefined {
+  { catalogName: string; schemaName: string; tablePrefix: string } | undefined {
   const catalogName = process.env.MLFLOW_UC_CATALOG?.trim();
   const schemaName = process.env.MLFLOW_UC_SCHEMA?.trim();
   const tablePrefix = process.env.MLFLOW_UC_TABLE_PREFIX?.trim();
@@ -337,8 +332,8 @@ export function directMlflowTraceLocation():
 export function directMlflowTracingConfigured(): boolean {
   return Boolean(
     !appkit.isDatabricksAppEnv() &&
-      process.env.MLFLOW_EXPERIMENT_ID?.trim() &&
-      directMlflowTrackingUri(),
+    process.env.MLFLOW_EXPERIMENT_ID?.trim() &&
+    directMlflowTrackingUri(),
   );
 }
 
@@ -346,16 +341,14 @@ export function directMlflowTracingConfigured(): boolean {
 export function appMlflowTraceInfoConfigured(): boolean {
   return Boolean(
     appkit.isDatabricksAppEnv() &&
-      (process.env.MLFLOW_EXPERIMENT_ID?.trim() || process.env.MLFLOW_EXPERIMENT_NAME?.trim()) &&
-      (process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim() ||
-        process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim()),
+    (process.env.MLFLOW_EXPERIMENT_ID?.trim() || process.env.MLFLOW_EXPERIMENT_NAME?.trim()) &&
+    (process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim() ||
+      process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim()),
   );
 }
 
 /** Initialize the App service-principal client used to persist V4 trace tags and metadata. */
-export async function initializeAppMlflowTraceInfo(
-  client?: WorkspaceClient,
-): Promise<boolean> {
+export async function initializeAppMlflowTraceInfo(client?: WorkspaceClient): Promise<boolean> {
   if (appMlflowTraceInfoClient && appMlflowTracePrefix) return true;
   if (appMlflowTraceInfoInitStarted || !appMlflowTraceInfoConfigured()) return false;
   appMlflowTraceInfoInitStarted = true;

@@ -30,7 +30,6 @@ import {
   MLFLOW_AGENT_TAG_ATTR,
   MLFLOW_GENIE_TAG_ATTR,
   MLFLOW_LOCAL_TAG_ATTR,
-  MLFLOW_MODEL_TAG_ATTR,
   MLFLOW_OBO_AUTH_TAG_ATTR,
   MLFLOW_SESSION_ATTR,
   MLFLOW_SPAN_INPUTS_ATTR,
@@ -248,9 +247,8 @@ describe("chat trace topology", () => {
     assert.equal(exportedRoot.attributes[MLFLOW_SESSION_ATTR], "thread-1");
     assert.equal(exportedRoot.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_AGENT);
     assert.equal(exportedRoot.attributes[GEN_AI_OPERATION_NAME_ATTR], "invoke_agent");
-    assert.equal(exportedRoot.attributes[MLFLOW_AGENT_TAG_ATTR], "true");
+    assert.equal(exportedRoot.attributes[MLFLOW_AGENT_TAG_ATTR], "model-a");
     assert.equal(exportedRoot.attributes[MLFLOW_GENIE_TAG_ATTR], "true");
-    assert.equal(exportedRoot.attributes[MLFLOW_MODEL_TAG_ATTR], '["model-a","model-b"]');
     assert.equal(exportedRoot.attributes[MLFLOW_OBO_AUTH_TAG_ATTR], "true");
     assert.equal(exportedRoot.attributes[MLFLOW_SP_AUTH_TAG_ATTR], "true");
     assert.equal(exportedRoot.attributes[MLFLOW_LOCAL_TAG_ATTR], undefined);
@@ -309,13 +307,13 @@ describe("chat trace topology", () => {
       span: root,
     });
     const response = createResponse();
-    const chatRequest = request(
-      "/chat/support",
-      [{ role: "user", parts: [{ type: "text", text: "hello" }] }],
-    );
+    const chatRequest = request("/chat/support", [
+      { role: "user", parts: [{ type: "text", text: "hello" }] },
+    ]);
     injectRequestTags(chatRequest, { tunnel: "portr", tunnel_subdomain: "demo" });
     context.with(rpcContext, () => {
       chatTurnTelemetryMiddleware(chatRequest as never, response as never, () => {
+        recordActiveTraceModel("model-a");
         recordActiveTraceUser("ada@example.com");
         recordActiveTraceAuth("service-principal");
         response.end('data: {"type":"text-delta","delta":"answer"}\n\n');
@@ -330,7 +328,7 @@ describe("chat trace topology", () => {
       "mlflow.trace.user": "ada@example.com",
     });
     assert.deepEqual(bodies[0]?.tags, {
-      agent: "true",
+      agent: "model-a",
       sp_auth: "true",
       tunnel: "portr",
       tunnel_subdomain: "demo",
@@ -384,12 +382,11 @@ describe("chat trace topology", () => {
     assert.equal(roots[0]?.attributes[CHAT_GENIE_USED_ATTR], false);
     assert.equal(roots[0]?.attributes[MLFLOW_GENIE_TAG_ATTR], undefined);
     assert.equal(roots[0]?.attributes[MLFLOW_USER_ATTR], "local-user@example.com");
-    assert.equal(roots[0]?.attributes[MLFLOW_MODEL_TAG_ATTR], "model-local");
     assert.equal(roots[0]?.attributes[MLFLOW_OBO_AUTH_TAG_ATTR], "true");
     assert.equal(roots[0]?.attributes[MLFLOW_SP_AUTH_TAG_ATTR], undefined);
     assert.equal(roots[0]?.attributes[MLFLOW_LOCAL_TAG_ATTR], "true");
     assert.equal(roots[0]?.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_AGENT);
-    assert.equal(roots[0]?.attributes[MLFLOW_AGENT_TAG_ATTR], "true");
+    assert.equal(roots[0]?.attributes[MLFLOW_AGENT_TAG_ATTR], "model-local");
     assert.equal(
       spans.every((span) => span.spanContext().traceId === roots[0]?.spanContext().traceId),
       true,

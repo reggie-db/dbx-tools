@@ -490,8 +490,9 @@ bun run release --release-notes-instructions "Focus on operator-visible changes.
 
 `--demo-deploy` is off by default. After tagging and any local registry
 publication it runs `bun run demo:deploy`, which stages the AppKit demo
-and deploys it to the FEVM workspace. That step is local only and is not
-recorded in the annotated tag.
+from locally compiled Node packages and locally built Python wheels, resolves
+the configured/default workspace profile through `@dbx-tools/auth`, and deploys
+it. That step is local only and is not recorded in the annotated tag.
 
 After bump and configured validation, release writes
 `docs/releases/vX.Y.Z.md` with `dbx genie exec -C "$PWD" --sandbox read-only

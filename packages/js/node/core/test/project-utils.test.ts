@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { cwd } from "node:process";
@@ -18,6 +18,78 @@ describe("resolveWorkingDirectory", () => {
 
   it("resolves another relative directory normally", () => {
     assert.equal(projectUtils.resolveWorkingDirectory(".."), resolve(cwd(), ".."));
+  });
+});
+
+describe("resolveProjectGhAccount", () => {
+  it("caches the SSH-hinted account and reuses it for repository commands", () => {
+    const root = mkdtempSync(resolve(tmpdir(), "dbx-tools-gh-account-"));
+    const bin = resolve(root, "bin");
+    const repository = resolve(root, "repository");
+    const calls = resolve(root, "gh-calls");
+    mkdirSync(bin);
+    mkdirSync(repository);
+    const originalPath = process.env.PATH;
+    try {
+      assert.equal(spawnSync("git", ["init", repository], { stdio: "ignore" }).status, 0);
+      assert.equal(
+        spawnSync(
+          "git",
+          ["-C", repository, "remote", "add", "origin", "git@github-work:example/project.git"],
+          { stdio: "ignore" },
+        ).status,
+        0,
+      );
+      writeExecutable(
+        resolve(bin, "ssh"),
+        ["#!/bin/sh", 'printf "hostname github.example.test\\n"', ""].join("\n"),
+      );
+      writeExecutable(
+        resolve(bin, "gh"),
+        [
+          "#!/bin/sh",
+          `printf '%s\\n' "$*" >> '${calls}'`,
+          'if [ "$1" = "auth" ] && [ "$2" = "status" ]; then',
+          "  printf '%s\\n' '{\"hosts\":{\"github.example.test\":[{\"state\":\"success\",\"active\":true,\"host\":\"github.example.test\",\"login\":\"active\"},{\"state\":\"success\",\"active\":false,\"host\":\"github.example.test\",\"login\":\"work\"}]}}'",
+          "  exit 0",
+          "fi",
+          'if [ "$1" = "auth" ] && [ "$2" = "token" ]; then',
+          '  [ "$6" = "work" ] || exit 1',
+          "  printf '%s\\n' 'work-token'",
+          "  exit 0",
+          "fi",
+          'if [ "$1" = "api" ]; then',
+          '  [ "$GH_TOKEN" = "work-token" ] || exit 1',
+          '  [ "$GH_HOST" = "github.example.test" ] || exit 1',
+          "  exit 0",
+          "fi",
+          'if [ "$1" = "repo" ] && [ "$2" = "view" ]; then',
+          '  [ "$GH_TOKEN" = "work-token" ] || exit 1',
+          '  [ "$GH_HOST" = "github.example.test" ] || exit 1',
+          "  printf '%s\\n' '{\"url\":\"https://github.example.test/example/project\"}'",
+          "  exit 0",
+          "fi",
+          "exit 1",
+          "",
+        ].join("\n"),
+      );
+      process.env.PATH = `${bin}:${originalPath ?? ""}`;
+
+      const first = projectUtils.resolveProjectGhAccount(repository);
+      assert.equal(first?.login, "work", readFileSync(calls, "utf8"));
+      assert.equal(first?.host, "github.example.test");
+      assert.equal(first?.remote.repository, "example/project");
+      const initialCalls = readFileSync(calls, "utf8");
+      assert.equal(projectUtils.resolveProjectGhAccount(repository), first);
+      assert.equal(readFileSync(calls, "utf8"), initialCalls);
+      assert.equal(
+        projectUtils.repositoryUrl(repository),
+        "https://github.example.test/example/project",
+      );
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 });
 
@@ -102,6 +174,11 @@ function isolatedEnv(home: string, extra: NodeJS.ProcessEnv = {}): NodeJS.Proces
   delete env.NPM_CONFIG_GLOBALCONFIG;
   Object.assign(env, extra);
   return env;
+}
+
+function writeExecutable(path: string, source: string): void {
+  writeFileSync(path, source);
+  chmodSync(path, 0o755);
 }
 
 function spawnRegistry(

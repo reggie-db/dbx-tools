@@ -49,12 +49,20 @@ import {
   spawn as nodeSpawn,
   spawnSync as nodeSpawnSync,
 } from "node:child_process";
+import { readdir, readFile } from "node:fs/promises";
 import * as readline from "node:readline";
 import { Readable } from "node:stream";
+import { text } from "node:stream/consumers";
 import { finished } from "node:stream/promises";
 
 /** Shell-compatible exit code returned when an executable cannot be found. */
 export const COMMAND_NOT_FOUND_EXIT_CODE = 127;
+
+const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
+const DEFAULT_FORCE_TIMEOUT_MS = 4_000;
+const DEFAULT_KILL_POLL_INTERVAL_MS = 100;
+const WINDOWS_PROCESS_SNAPSHOT_SCRIPT =
+  "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, $_.CreationDate.ToFileTimeUtc() }";
 
 /** Stdio mode for a subprocess fd. */
 export type ExecStdio = "inherit" | "pipe" | "ignore";
@@ -144,6 +152,20 @@ export type ExecOptions = Omit<SpawnOptions, "stdio"> & {
   trim?: boolean;
 };
 
+/** Graceful and forced shutdown policy for {@link kill}. */
+export interface KillOptions {
+  /** Signal sent to the snapshotted process tree. Defaults to `SIGTERM`. */
+  gracefulSignal?: NodeJS.Signals;
+  /** Time to wait for graceful shutdown. Defaults to 10 seconds. */
+  gracefulTimeoutMs?: number;
+  /** Signal sent to surviving processes after the graceful timeout. Defaults to `SIGKILL`. */
+  forceSignal?: NodeJS.Signals;
+  /** Time to poll and force newly discovered descendants. Defaults to 4 seconds. */
+  forceTimeoutMs?: number;
+  /** Interval used to refresh and poll the process tree. Defaults to 100 milliseconds. */
+  pollIntervalMs?: number;
+}
+
 /** Stdio mode for {@link spawnSync} (no per-line callbacks). */
 export type SyncExecStdio = ExecStdio | "capture";
 
@@ -185,6 +207,19 @@ interface ParsedSpawnArgs<T extends SpawnOptions> {
   command: string;
   commandArgs: string[];
   options?: T;
+}
+
+/** One operating-system process captured before tree shutdown begins. */
+interface ProcessSnapshotEntry {
+  pid: number;
+  parentPid: number;
+  identity: string;
+}
+
+/** Current retained processes plus descendants first observed by one refresh. */
+interface RefreshedProcessTree {
+  processes: ProcessSnapshotEntry[];
+  discovered: ProcessSnapshotEntry[];
 }
 
 function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpawnArgs<T> {
@@ -269,6 +304,258 @@ function commandLabel(command: string, args: string[]): string {
 /** Return whether Node failed to spawn because the executable was not found. */
 function isCommandNotFoundError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+/** Return whether a process operation failed because the PID no longer exists. */
+function isMissingProcessError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error && error.code === "ESRCH";
+}
+
+/** Validate a finite non-negative timeout. */
+function timeoutValue(value: number, name: string): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${name} must be a finite non-negative number`);
+  }
+  return value;
+}
+
+/** Validate a finite positive polling interval. */
+function pollIntervalValue(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError("pollIntervalMs must be a finite positive number");
+  }
+  return value;
+}
+
+/** Parse the common `pid parentPid identity` process-snapshot format. */
+function parseProcessSnapshot(lines: readonly string[]): ProcessSnapshotEntry[] {
+  const snapshot: ProcessSnapshotEntry[] = [];
+  for (const line of lines) {
+    const match = /^\s*(\d+)\s+(\d+)(?:\s+(.+?))?\s*$/.exec(line);
+    const identity = match?.[3]?.trim();
+    if (!match || !identity) continue;
+    snapshot.push({
+      pid: Number.parseInt(match[1]!, 10),
+      parentPid: Number.parseInt(match[2]!, 10),
+      identity,
+    });
+  }
+  return snapshot;
+}
+
+/** Return whether a `/proc` record disappeared or is inaccessible during a snapshot. */
+function isUnavailableProcRecord(error: unknown): error is NodeJS.ErrnoException {
+  if (!(error instanceof Error) || !("code" in error)) return false;
+  return error.code === "ENOENT" || error.code === "EACCES" || error.code === "EPERM";
+}
+
+/** Parse Linux `/proc/<pid>/stat` parent PID and exact process-start ticks. */
+function parseLinuxProcessStat(pid: number, stat: string): ProcessSnapshotEntry | undefined {
+  const commandEnd = stat.lastIndexOf(")");
+  if (commandEnd < 0) return undefined;
+  const fields = stat
+    .slice(commandEnd + 1)
+    .trim()
+    .split(/\s+/);
+  const parentPid = Number.parseInt(fields[1]!, 10);
+  const startTicks = fields[19];
+  if (!Number.isSafeInteger(parentPid) || !startTicks) return undefined;
+  return { pid, parentPid, identity: startTicks };
+}
+
+/** Capture Linux process identities from `/proc` without second-level truncation. */
+async function linuxProcessSnapshot(): Promise<ProcessSnapshotEntry[]> {
+  const directories = await readdir("/proc", { withFileTypes: true });
+  const entries = await Promise.all(
+    directories
+      .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name))
+      .map(async (entry): Promise<ProcessSnapshotEntry | undefined> => {
+        const pid = Number.parseInt(entry.name, 10);
+        try {
+          return parseLinuxProcessStat(pid, await readFile(`/proc/${entry.name}/stat`, "utf8"));
+        } catch (error) {
+          if (isUnavailableProcRecord(error)) return undefined;
+          throw error;
+        }
+      }),
+  );
+  return entries.filter((entry): entry is ProcessSnapshotEntry => entry !== undefined);
+}
+
+/**
+ * Capture the current PID, parent PID, and process-start identity table.
+ *
+ * Linux reads exact start ticks from `/proc`. Windows uses the built-in
+ * PowerShell CIM provider. macOS and other POSIX platforms combine `ps`
+ * process start time and executable name.
+ */
+async function processSnapshot(): Promise<ProcessSnapshotEntry[]> {
+  if (process.platform === "linux") return linuxProcessSnapshot();
+
+  const command = process.platform === "win32" ? "powershell.exe" : "ps";
+  const args =
+    process.platform === "win32"
+      ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_PROCESS_SNAPSHOT_SCRIPT]
+      : ["-A", "-o", "pid=", "-o", "ppid=", "-o", "lstart=", "-o", "comm="];
+  const proc = nodeSpawn(command, args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const stdout = text(proc.stdout!);
+  const stderr = text(proc.stderr!);
+  const [exitCode, stdoutText, stderrText] = await Promise.all([waitForExit(proc), stdout, stderr]);
+  if (exitCode !== 0) {
+    throw new Error(
+      `${commandLabel(command, args)} failed (exit ${exitCode})${
+        stderrText ? `: ${stderrText.trim()}` : ""
+      }`,
+    );
+  }
+  return parseProcessSnapshot(linesFromCapturedOutput(stdoutText));
+}
+
+/** Group a process snapshot by parent PID. */
+function processChildren(
+  snapshot: readonly ProcessSnapshotEntry[],
+): Map<number, ProcessSnapshotEntry[]> {
+  const children = new Map<number, ProcessSnapshotEntry[]>();
+  for (const entry of snapshot) {
+    const siblings = children.get(entry.parentPid) ?? [];
+    siblings.push(entry);
+    children.set(entry.parentPid, siblings);
+  }
+  return children;
+}
+
+/** Select one snapshotted process tree in descendant-first signal order. */
+function processTree(
+  snapshot: readonly ProcessSnapshotEntry[],
+  rootPid: number,
+): ProcessSnapshotEntry[] {
+  const root = snapshot.find((entry) => entry.pid === rootPid);
+  if (!root) throw new Error(`Unable to identify child process ${rootPid}`);
+
+  const children = processChildren(snapshot);
+  const tree: ProcessSnapshotEntry[] = [];
+  const visited = new Set<number>([rootPid]);
+  const appendDescendants = (parentPid: number): void => {
+    for (const child of children.get(parentPid) ?? []) {
+      if (visited.has(child.pid)) continue;
+      visited.add(child.pid);
+      appendDescendants(child.pid);
+      tree.push(child);
+    }
+  };
+  appendDescendants(rootPid);
+  tree.push(root);
+  return tree;
+}
+
+/** Return whether two snapshots identify the same process lifetime. */
+function sameProcess(previous: ProcessSnapshotEntry, current: ProcessSnapshotEntry): boolean {
+  return previous.identity === current.identity;
+}
+
+/**
+ * Refresh retained process identities and merge descendants created after the
+ * initial snapshot.
+ */
+function refreshProcessTree(
+  retained: Map<number, ProcessSnapshotEntry>,
+  snapshot: readonly ProcessSnapshotEntry[],
+): RefreshedProcessTree {
+  const currentByPid = new Map(snapshot.map((entry) => [entry.pid, entry]));
+  const children = processChildren(snapshot);
+  const processes = new Map<number, ProcessSnapshotEntry>();
+  const discovered: ProcessSnapshotEntry[] = [];
+  const queue: ProcessSnapshotEntry[] = [];
+
+  for (const previous of retained.values()) {
+    const current = currentByPid.get(previous.pid);
+    if (!current || !sameProcess(previous, current)) continue;
+    retained.set(current.pid, current);
+    processes.set(current.pid, current);
+    queue.push(current);
+  }
+
+  const visited = new Set(processes.keys());
+  for (let index = 0; index < queue.length; index += 1) {
+    const parent = queue[index]!;
+    for (const child of children.get(parent.pid) ?? []) {
+      const previous = retained.get(child.pid);
+      if (!previous || !sameProcess(previous, child)) {
+        retained.set(child.pid, child);
+        discovered.push(child);
+      }
+      processes.set(child.pid, child);
+      if (visited.has(child.pid)) continue;
+      visited.add(child.pid);
+      queue.push(child);
+    }
+  }
+
+  return { processes: [...processes.values()], discovered };
+}
+
+/** Build the per-lifetime key used to prevent repeated signals after PID reuse. */
+function processIdentity(entry: ProcessSnapshotEntry): string {
+  return `${entry.pid}:${entry.identity}`;
+}
+
+/** Signal each process identity once, ignoring PIDs that already exited. */
+function signalProcesses(
+  processes: readonly ProcessSnapshotEntry[],
+  signal: NodeJS.Signals,
+  signaled: Set<string>,
+): void {
+  const errors: unknown[] = [];
+  for (const entry of processes) {
+    const identity = processIdentity(entry);
+    if (signaled.has(identity)) continue;
+    signaled.add(identity);
+    try {
+      process.kill(entry.pid, signal);
+    } catch (error) {
+      if (!isMissingProcessError(error)) errors.push(error);
+    }
+  }
+  if (errors.length > 0) {
+    throw new AggregateError(errors, `Failed to send ${signal} to the complete process tree`);
+  }
+}
+
+/** Pause without detaching the shutdown operation from the event loop. */
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/**
+ * Poll refreshed process snapshots until the retained tree exits or the
+ * timeout elapses. Descendants created during shutdown are retained and receive
+ * the current shutdown signal once.
+ */
+async function waitForProcessTreeExit(
+  retained: Map<number, ProcessSnapshotEntry>,
+  initialProcesses: readonly ProcessSnapshotEntry[],
+  signal: NodeJS.Signals,
+  signaled: Set<string>,
+  timeoutMs: number,
+  pollIntervalMs: number,
+): Promise<ProcessSnapshotEntry[]> {
+  let survivors = [...initialProcesses];
+  const deadline = Date.now() + timeoutMs;
+  while (survivors.length > 0) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs > 0) await delay(Math.min(pollIntervalMs, remainingMs));
+
+    const refreshed = refreshProcessTree(retained, await processSnapshot());
+    if (refreshed.discovered.length > 0) {
+      signalProcesses(refreshed.discovered, signal, signaled);
+    }
+    survivors = refreshed.processes;
+    if (Date.now() >= deadline) break;
+  }
+  return survivors;
 }
 
 /**
@@ -528,6 +815,79 @@ function capturedText(output: string | Buffer | null | undefined): string | unde
  */
 function linesFromCapturedOutput(output: string): string[] {
   return output.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+}
+
+/**
+ * Stop a child process and descendants discovered through operating-system
+ * process snapshots.
+ *
+ * The initial tree is retained before signaling so descendants remain
+ * targetable after their parent exits or they are reparented. Polling refreshes
+ * the process table, merges newly created descendants, and sends each one the
+ * active shutdown signal once. Identity-matched survivors receive the force
+ * signal after the graceful timeout. macOS and other POSIX platforms use `ps`;
+ * Windows uses the built-in PowerShell CIM process provider.
+ *
+ * Windows does not implement POSIX signal semantics. Node terminates processes
+ * unconditionally for supported signals there, including `SIGTERM`.
+ *
+ * @param child - Root child process whose snapshotted tree should stop
+ * @param options - Graceful signal, force signal, timeout, and polling policy
+ * @throws When the process table cannot be captured, a signal cannot be sent,
+ * or identity-matched processes remain after the force timeout
+ */
+export async function kill(child: ChildProcess, options: KillOptions = {}): Promise<void> {
+  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+
+  const gracefulTimeoutMs = timeoutValue(
+    options.gracefulTimeoutMs ?? DEFAULT_GRACEFUL_TIMEOUT_MS,
+    "gracefulTimeoutMs",
+  );
+  const forceTimeoutMs = timeoutValue(
+    options.forceTimeoutMs ?? DEFAULT_FORCE_TIMEOUT_MS,
+    "forceTimeoutMs",
+  );
+  const pollIntervalMs = pollIntervalValue(options.pollIntervalMs ?? DEFAULT_KILL_POLL_INTERVAL_MS);
+  const snapshot = await processSnapshot();
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const tree = processTree(snapshot, child.pid);
+  const retained = new Map(tree.map((entry) => [entry.pid, entry]));
+
+  const gracefulSignal = options.gracefulSignal ?? "SIGTERM";
+  const gracefulSignaled = new Set<string>();
+  signalProcesses(tree, gracefulSignal, gracefulSignaled);
+  const gracefulSurvivors = await waitForProcessTreeExit(
+    retained,
+    tree,
+    gracefulSignal,
+    gracefulSignaled,
+    gracefulTimeoutMs,
+    pollIntervalMs,
+  );
+  const forceTargets = gracefulSurvivors;
+  if (forceTargets.length === 0) return;
+
+  const forceSignal = options.forceSignal ?? "SIGKILL";
+  const forceSignaled = new Set<string>();
+  signalProcesses(forceTargets, forceSignal, forceSignaled);
+  const forcedSurvivors = await waitForProcessTreeExit(
+    retained,
+    forceTargets,
+    forceSignal,
+    forceSignaled,
+    forceTimeoutMs,
+    pollIntervalMs,
+  );
+  const remaining = forcedSurvivors;
+  if (remaining.length > 0) {
+    throw new Error(
+      `Processes did not terminate after ${forceSignal}: ${remaining
+        .map((entry) => entry.pid)
+        .join(", ")}`,
+    );
+  }
 }
 
 /**

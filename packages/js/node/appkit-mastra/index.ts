@@ -81,7 +81,7 @@ export { TITLE_INSTRUCTIONS } from "./src/summarize.ts";
 export type { SummarizeOptions } from "./src/summarize.ts";
 export { TRACE_IO_LIMIT, MLFLOW_SPAN_INPUTS_ATTR, MLFLOW_SPAN_OUTPUTS_ATTR, CHAT_MESSAGES_ATTR, CHAT_RESPONSE_ATTR, CHAT_IDENTITY_ATTR, CHAT_GENIE_USED_ATTR, MLFLOW_SPAN_TYPE_ATTR, GEN_AI_OPERATION_NAME_ATTR, MLFLOW_USER_ATTR, MLFLOW_SESSION_ATTR, MLFLOW_SPAN_TYPE_AGENT, MLFLOW_SPAN_TYPE_GENIE } from "./src/telemetry.ts";
 export type { ChatTurnTelemetryOptions, ChatTraceTagValue } from "./src/telemetry.ts";
-export { MLFLOW_TRACE_TAG_PREFIX, MLFLOW_AGENT_TAG, MLFLOW_GENIE_TAG, MLFLOW_MODEL_TAG, MLFLOW_OBO_AUTH_TAG, MLFLOW_SP_AUTH_TAG, MLFLOW_LOCAL_TAG, MLFLOW_AGENT_TAG_ATTR, MLFLOW_GENIE_TAG_ATTR, MLFLOW_MODEL_TAG_ATTR, MLFLOW_OBO_AUTH_TAG_ATTR, MLFLOW_SP_AUTH_TAG_ATTR, MLFLOW_LOCAL_TAG_ATTR } from "./src/trace-attributes.ts";
+export { MLFLOW_TRACE_TAG_PREFIX, MLFLOW_AGENT_TAG, MLFLOW_GENIE_TAG, MLFLOW_OBO_AUTH_TAG, MLFLOW_SP_AUTH_TAG, MLFLOW_LOCAL_TAG, MLFLOW_AGENT_TAG_ATTR, MLFLOW_GENIE_TAG_ATTR, APPKIT_AGENT_TRACE_ROOT_ATTR, MLFLOW_OBO_AUTH_TAG_ATTR, MLFLOW_SP_AUTH_TAG_ATTR, MLFLOW_LOCAL_TAG_ATTR } from "./src/trace-attributes.ts";
 export type { SchemaIssues } from "./src/validation.ts";
 export { DEFAULT_SKILL_FOLDERS } from "./src/workspaces.ts";
 export type { WorkspaceMountContext, SkillFolderValue, SkillFolderOptions, WorkspaceMountContribution, WorkspaceMountResolver, DefaultSkillFolderName, WorkspaceSandboxSelection, CreateWorkspaceOptions } from "./src/workspaces.ts";

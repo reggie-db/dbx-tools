@@ -15,14 +15,14 @@ import {
 
 describe("Genie Code configuration", () => {
   it("derives one readable home from the exact profile", () => {
-    const profile = "FEVM-REGGIE-PIERCE-AWS";
+    const profile = "Workspace Profile";
     const digest = createHash("sha256").update(profile).digest("hex").slice(0, 12);
 
     assert.deepEqual(genieCodeHome(profile, "/home/user"), {
-      name: `fevm-reggie-pierce-aws-${digest}`,
-      home: `/home/user/.dbx-tools/genie/profiles/fevm-reggie-pierce-aws-${digest}`,
+      name: `workspace-profile-${digest}`,
+      home: `/home/user/.dbx-tools/genie/profiles/workspace-profile-${digest}`,
       configPath:
-        `/home/user/.dbx-tools/genie/profiles/` + `fevm-reggie-pierce-aws-${digest}/config.toml`,
+        `/home/user/.dbx-tools/genie/profiles/` + `workspace-profile-${digest}/config.toml`,
     });
     assert.notEqual(
       genieCodeHome(profile, "/home/user").name,

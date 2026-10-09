@@ -14,12 +14,12 @@ describe("Genie Code options", () => {
   it("normalizes explicit profile, model, and listener values", () => {
     assert.deepEqual(
       resolveGenieCodeOptions({
-        profile: " FEVM-REGGIE-PIERCE-AWS ",
+        profile: " Workspace Profile ",
         model: " grok ",
         gatewayListen: "localhost:4400",
       }),
       {
-        profile: "FEVM-REGGIE-PIERCE-AWS",
+        profile: "Workspace Profile",
         model: "grok",
         gatewayListen: { scheme: "tcp", host: "localhost", port: 4400 },
       },
@@ -41,18 +41,18 @@ describe("Genie Code options", () => {
   it("derives readable profile homes without losing exact-input identity", () => {
     assert.equal(
       genieCodeHomeName({
-        profile: "FEVM REGGIE PIERCE AWS",
+        profile: "Workspace Profile",
         digest: "0123456789ab",
       }),
-      "fevm-reggie-pierce-aws-0123456789ab",
+      "workspace-profile-0123456789ab",
     );
     assert.notEqual(
       genieCodeHomeName({
-        profile: "FEVM REGGIE PIERCE AWS",
+        profile: "Workspace Profile",
         digest: "0123456789ab",
       }),
       genieCodeHomeName({
-        profile: "fevm-reggie-pierce-aws",
+        profile: "workspace-profile",
         digest: "abcdef012345",
       }),
     );

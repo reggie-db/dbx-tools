@@ -16012,6 +16012,17 @@ var require_child_process = __commonJS((exports2, module2) => {
   module2.exports = builtin;
 });
 
+// dbx-tools-node-runtime-builtin:fs/promises
+var require_promises = __commonJS((exports2, module2) => {
+  var runtime = globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")];
+  if (!runtime)
+    throw new Error("dbx-tools-node-runtime was not loaded before its generated bundle");
+  var builtin = runtime.modules["node:fs/promises"] ?? runtime.modules["fs/promises"];
+  if (!builtin)
+    throw new Error("dbx-tools-node-runtime does not provide fs/promises");
+  module2.exports = builtin;
+});
+
 // dbx-tools-node-runtime-builtin:readline
 var require_readline = __commonJS((exports2, module2) => {
   var runtime = globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")];
@@ -24852,17 +24863,6 @@ var require_minipass_pipeline = __commonJS((exports2, module2) => {
   module2.exports = Pipeline;
 });
 
-// dbx-tools-node-runtime-builtin:fs/promises
-var require_promises = __commonJS((exports2, module2) => {
-  var runtime = globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")];
-  if (!runtime)
-    throw new Error("dbx-tools-node-runtime was not loaded before its generated bundle");
-  var builtin = runtime.modules["node:fs/promises"] ?? runtime.modules["fs/promises"];
-  if (!builtin)
-    throw new Error("dbx-tools-node-runtime does not provide fs/promises");
-  module2.exports = builtin;
-});
-
 // node_modules/ssri/lib/index.js
 var require_lib = __commonJS((exports2, module2) => {
   var crypto2 = require_crypto();
@@ -29960,7 +29960,7 @@ var require_polyfill = __commonJS((exports2, module2) => {
     copyFile,
     lstat,
     mkdir,
-    readdir,
+    readdir: readdir2,
     readlink,
     stat,
     symlink,
@@ -30216,7 +30216,7 @@ var require_polyfill = __commonJS((exports2, module2) => {
     return setDestMode(dest, srcMode);
   }
   async function copyDir(src, dest, opts) {
-    const dir = await readdir(src);
+    const dir = await readdir2(src);
     for (let i = 0;i < dir.length; i++) {
       const item = dir[i];
       const srcItem = join(src, item);
@@ -30318,13 +30318,13 @@ var require_with_temp_dir = __commonJS((exports2, module2) => {
 
 // node_modules/@npmcli/fs/lib/readdir-scoped.js
 var require_readdir_scoped = __commonJS((exports2, module2) => {
-  var { readdir } = require_promises();
+  var { readdir: readdir2 } = require_promises();
   var { join } = require_path_browserify();
   var readdirScoped = async (dir) => {
     const results = [];
-    for (const item of await readdir(dir)) {
+    for (const item of await readdir2(dir)) {
       if (item.startsWith("@")) {
-        for (const scopedItem of await readdir(join(dir, item))) {
+        for (const scopedItem of await readdir2(join(dir, item))) {
           results.push(join(item, scopedItem));
         }
       } else {
@@ -30816,8 +30816,8 @@ var require_entry_index = __commonJS((exports2, module2) => {
   var {
     appendFile,
     mkdir,
-    readFile,
-    readdir,
+    readFile: readFile2,
+    readdir: readdir2,
     rm,
     writeFile
   } = require_promises();
@@ -30992,7 +30992,7 @@ ${hashEntry(stringified)}	${stringified}`);
   }
   module2.exports.bucketEntries = bucketEntries;
   async function bucketEntries(bucket, filter6) {
-    const data2 = await readFile(bucket, "utf8");
+    const data2 = await readFile2(bucket, "utf8");
     return _bucketEntries(data2, filter6);
   }
   function _bucketEntries(data2) {
@@ -31050,7 +31050,7 @@ ${hashEntry(stringified)}	${stringified}`);
     };
   }
   function readdirOrEmpty(dir) {
-    return readdir(dir).catch((err) => {
+    return readdir2(dir).catch((err) => {
       if (err.code === "ENOENT" || err.code === "ENOTDIR") {
         return [];
       }
@@ -36550,7 +36550,7 @@ var require_rm2 = __commonJS((exports2, module2) => {
 // node_modules/cacache/lib/verify.js
 var require_verify = __commonJS((exports2, module2) => {
   var {
-    readFile,
+    readFile: readFile2,
     rm,
     stat,
     truncate,
@@ -36752,7 +36752,7 @@ var require_verify = __commonJS((exports2, module2) => {
   }
   module2.exports.lastRun = lastRun;
   async function lastRun(cache) {
-    const data2 = await readFile(path.join(cache, "_lastverified"), { encoding: "utf8" });
+    const data2 = await readFile2(path.join(cache, "_lastverified"), { encoding: "utf8" });
     return new Date(+data2);
   }
 });
@@ -39283,8 +39283,10 @@ var TargetKind = {
 
 // packages/js/node/core/src/exec.ts
 var import_node_child_process = __toESM(require_child_process(), 1);
+var import_promises = __toESM(require_promises(), 1);
 var readline = __toESM(require_readline(), 1);
-var import_promises = (() => ({}));
+var import_consumers = (() => ({}));
+var import_promises2 = (() => ({}));
 var COMMAND_NOT_FOUND_EXIT_CODE = 127;
 function parseSpawnArgs(input) {
   let [value, ...values2] = input;
@@ -39385,7 +39387,7 @@ function queueLineReads(reads, stream, handler) {
 async function writeStdin(proc, stdin) {
   if (!isStdinPayload(stdin) || !proc.stdin)
     return;
-  const completion = import_promises.finished(proc.stdin, { cleanup: true });
+  const completion = import_promises2.finished(proc.stdin, { cleanup: true });
   proc.stdin.end(stdin);
   try {
     await completion;
@@ -39959,7 +39961,7 @@ var targetKindSchema = import_zod7.z.enum([TargetKind.Workspace, TargetKind.Acco
 
 // packages/js/node/auth/src/config.ts
 var import_zod8 = __toESM(require_zod(), 1);
-var text = (description) => import_zod8.z.string().trim().min(1).optional().describe(description);
+var text2 = (description) => import_zod8.z.string().trim().min(1).optional().describe(description);
 var safeInteger = (description) => import_zod8.z.coerce.number().int().safe().describe(description);
 var AuthOptionsSchema = import_zod8.z.object({
   refreshBufferMs: safeInteger("Token refresh buffer in milliseconds.").default(300000),
@@ -39981,7 +39983,7 @@ var DatabricksAuthOptionsSchema = import_zod8.z.object({
   target: targetKindSchema.optional().describe("OAuth target."),
   auth: AuthOptionsSchema.partial().optional().describe("Token lifecycle overrides."),
   requestHeaders: import_zod8.z.record(import_zod8.z.string(), import_zod8.z.string()).optional().describe("Additional authentication request headers."),
-  accessTokenHeader: text("Request header carrying a bearer access token."),
+  accessTokenHeader: text2("Request header carrying a bearer access token."),
   preferUserToMachine: import_zod8.z.boolean().optional().describe("Prefer a matching user profile over selected machine credentials.")
 }).strict().describe("Databricks profile and credential-source options.");
 var AUTH_DEFAULTS = Object.freeze(AuthOptionsSchema.parse({}));
@@ -42283,12 +42285,12 @@ var FuseIndex = class {
               subRecords.push(subRecord);
             }
           } else if (isDefined(item.v)) {
-            const text2 = isString(item.v) ? item.v : toString(item.v);
-            if (!isBlank(text2)) {
+            const text3 = isString(item.v) ? item.v : toString(item.v);
+            if (!isBlank(text3)) {
               const subRecord = {
-                v: text2,
+                v: text3,
                 i: item.i,
-                n: this.norm.get(text2)
+                n: this.norm.get(text3)
               };
               subRecords.push(subRecord);
             }
@@ -42352,11 +42354,11 @@ function convertMaskToIndices(matchmask = [], minMatchCharLength = Config.minMat
     indices.push([start, i - 1]);
   return indices;
 }
-function search(text2, pattern, patternAlphabet, { location = Config.location, distance = Config.distance, threshold = Config.threshold, findAllMatches = Config.findAllMatches, minMatchCharLength = Config.minMatchCharLength, includeMatches = Config.includeMatches, ignoreLocation = Config.ignoreLocation } = {}) {
+function search(text3, pattern, patternAlphabet, { location = Config.location, distance = Config.distance, threshold = Config.threshold, findAllMatches = Config.findAllMatches, minMatchCharLength = Config.minMatchCharLength, includeMatches = Config.includeMatches, ignoreLocation = Config.ignoreLocation } = {}) {
   if (pattern.length > 32)
     throw new Error(PATTERN_LENGTH_TOO_LARGE(32));
   const patternLen = pattern.length;
-  const textLen = text2.length;
+  const textLen = text3.length;
   const expectedLocation = Math.max(0, Math.min(location, textLen));
   let currentThreshold = threshold;
   let bestLocation = expectedLocation;
@@ -42372,7 +42374,7 @@ function search(text2, pattern, patternAlphabet, { location = Config.location, d
   const computeMatches = minMatchCharLength > 1 || includeMatches;
   const matchMask = computeMatches ? Array(textLen) : [];
   let index;
-  while ((index = text2.indexOf(pattern, bestLocation)) > -1) {
+  while ((index = text3.indexOf(pattern, bestLocation)) > -1) {
     const score = calcScore(0, index);
     currentThreshold = Math.min(score, currentThreshold);
     bestLocation = index + patternLen;
@@ -42407,7 +42409,7 @@ function search(text2, pattern, patternAlphabet, { location = Config.location, d
     bitArr[finish + 1] = (1 << i) - 1;
     for (let j = finish;j >= start; j -= 1) {
       const currentLocation = j - 1;
-      const charMatch = patternAlphabet[text2[currentLocation]];
+      const charMatch = patternAlphabet[text3[currentLocation]];
       bitArr[j] = (bitArr[j + 1] << 1 | 1) & charMatch;
       if (i)
         bitArr[j] |= (lastBitArr[j + 1] | lastBitArr[j]) << 1 | 1 | lastBitArr[j + 1];
@@ -42430,7 +42432,7 @@ function search(text2, pattern, patternAlphabet, { location = Config.location, d
   if (computeMatches && bestLocation >= 0) {
     const matchEnd = Math.min(textLen - 1, bestLocation + patternLen - 1 + bestErrors);
     for (let k = bestLocation;k <= matchEnd; k += 1)
-      if (patternAlphabet[text2[k]])
+      if (patternAlphabet[text3[k]])
         matchMask[k] = 1;
   }
   const result = {
@@ -42527,12 +42529,12 @@ var BitapSearch = class {
     } else
       addChunk(this.pattern, 0);
   }
-  searchIn(text2) {
+  searchIn(text3) {
     const { isCaseSensitive, ignoreDiacritics, includeMatches } = this.options;
-    text2 = isCaseSensitive ? text2 : text2.toLowerCase();
-    text2 = ignoreDiacritics ? stripDiacritics(text2) : text2;
-    if (this.pattern === text2) {
-      if (text2.length < this.options.minMatchCharLength)
+    text3 = isCaseSensitive ? text3 : text3.toLowerCase();
+    text3 = ignoreDiacritics ? stripDiacritics(text3) : text3;
+    if (this.pattern === text3) {
+      if (text3.length < this.options.minMatchCharLength)
         return {
           isMatch: false,
           score: 1
@@ -42542,7 +42544,7 @@ var BitapSearch = class {
         score: 0
       };
       if (includeMatches)
-        result2.indices = [[0, text2.length - 1]];
+        result2.indices = [[0, text3.length - 1]];
       return result2;
     }
     const { location, distance, threshold, findAllMatches, minMatchCharLength, ignoreLocation } = this.options;
@@ -42550,7 +42552,7 @@ var BitapSearch = class {
     let totalScore = 0;
     let hasMatches = false;
     this.chunks.forEach(({ pattern, alphabet, startIndex }) => {
-      const { isMatch, score, indices } = search(text2, pattern, alphabet, {
+      const { isMatch, score, indices } = search(text3, pattern, alphabet, {
         location: location + startIndex,
         distance,
         threshold,
@@ -42585,8 +42587,8 @@ var matchers = [
     singleRegex: /^=(.*)$/,
     create: (pattern) => ({
       type: "exact",
-      search(text2) {
-        const isMatch = text2 === pattern;
+      search(text3) {
+        const isMatch = text3 === pattern;
         return {
           isMatch,
           score: isMatch ? 0 : 1,
@@ -42601,12 +42603,12 @@ var matchers = [
     singleRegex: /^'(.*)$/,
     create: (pattern) => ({
       type: "include",
-      search(text2) {
+      search(text3) {
         let location = 0;
         let index;
         const indices = [];
         const patternLen = pattern.length;
-        while ((index = text2.indexOf(pattern, location)) > -1) {
+        while ((index = text3.indexOf(pattern, location)) > -1) {
           location = index + patternLen;
           indices.push([index, location - 1]);
         }
@@ -42625,8 +42627,8 @@ var matchers = [
     singleRegex: /^\^(.*)$/,
     create: (pattern) => ({
       type: "prefix-exact",
-      search(text2) {
-        const isMatch = text2.startsWith(pattern);
+      search(text3) {
+        const isMatch = text3.startsWith(pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
@@ -42641,12 +42643,12 @@ var matchers = [
     singleRegex: /^!\^(.*)$/,
     create: (pattern) => ({
       type: "inverse-prefix-exact",
-      search(text2) {
-        const isMatch = !text2.startsWith(pattern);
+      search(text3) {
+        const isMatch = !text3.startsWith(pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text2.length - 1]
+          indices: [0, text3.length - 1]
         };
       }
     })
@@ -42657,12 +42659,12 @@ var matchers = [
     singleRegex: /^!(.*)\$$/,
     create: (pattern) => ({
       type: "inverse-suffix-exact",
-      search(text2) {
-        const isMatch = !text2.endsWith(pattern);
+      search(text3) {
+        const isMatch = !text3.endsWith(pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text2.length - 1]
+          indices: [0, text3.length - 1]
         };
       }
     })
@@ -42673,12 +42675,12 @@ var matchers = [
     singleRegex: /^(.*)\$$/,
     create: (pattern) => ({
       type: "suffix-exact",
-      search(text2) {
-        const isMatch = text2.endsWith(pattern);
+      search(text3) {
+        const isMatch = text3.endsWith(pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [text2.length - pattern.length, text2.length - 1]
+          indices: [text3.length - pattern.length, text3.length - 1]
         };
       }
     })
@@ -42689,12 +42691,12 @@ var matchers = [
     singleRegex: /^!(.*)$/,
     create: (pattern) => ({
       type: "inverse-exact",
-      search(text2) {
-        const isMatch = text2.indexOf(pattern) === -1;
+      search(text3) {
+        const isMatch = text3.indexOf(pattern) === -1;
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text2.length - 1]
+          indices: [0, text3.length - 1]
         };
       }
     })
@@ -42717,8 +42719,8 @@ var matchers = [
       });
       return {
         type: "fuzzy",
-        search(text2) {
-          return bitap.searchIn(text2);
+        search(text3) {
+          return bitap.searchIn(text3);
         }
       };
     }
@@ -42823,7 +42825,7 @@ var ExtendedSearch = class {
   static condition(_, options) {
     return options.useExtendedSearch;
   }
-  searchIn(text2) {
+  searchIn(text3) {
     const query = this.query;
     if (!query)
       return {
@@ -42831,8 +42833,8 @@ var ExtendedSearch = class {
         score: 1
       };
     const { includeMatches, isCaseSensitive, ignoreDiacritics } = this.options;
-    text2 = isCaseSensitive ? text2 : text2.toLowerCase();
-    text2 = ignoreDiacritics ? stripDiacritics(text2) : text2;
+    text3 = isCaseSensitive ? text3 : text3.toLowerCase();
+    text3 = ignoreDiacritics ? stripDiacritics(text3) : text3;
     let numMatches = 0;
     const allIndices = [];
     let totalScore = 0;
@@ -42844,7 +42846,7 @@ var ExtendedSearch = class {
       hasInverse = false;
       for (let j = 0, pLen = searchers.length;j < pLen; j += 1) {
         const matcher = searchers[j];
-        const { isMatch, indices, score } = matcher.search(text2);
+        const { isMatch, indices, score } = matcher.search(text3);
         if (isMatch) {
           numMatches += 1;
           totalScore += score;
@@ -43058,8 +43060,8 @@ function warnNonGlobal(regex) {
 function resolveTokenize(tokenize3) {
   if (typeof tokenize3 === "function") {
     let validated = false;
-    return (text2) => {
-      const result = tokenize3(text2);
+    return (text3) => {
+      const result = tokenize3(text3);
       if (!validated) {
         validated = true;
         if (!Array.isArray(result) || result.some((t) => typeof t !== "string"))
@@ -43071,18 +43073,18 @@ function resolveTokenize(tokenize3) {
   if (tokenize3 instanceof RegExp) {
     if (!tokenize3.global)
       warnNonGlobal(tokenize3);
-    return (text2) => text2.match(tokenize3) || [];
+    return (text3) => text3.match(tokenize3) || [];
   }
-  return (text2) => text2.match(DEFAULT_TOKEN) || [];
+  return (text3) => text3.match(DEFAULT_TOKEN) || [];
 }
 function createAnalyzer({ isCaseSensitive = false, ignoreDiacritics = false, tokenize: tokenize3 } = {}) {
   const tokenizeFn = resolveTokenize(tokenize3);
-  return { tokenize(text2) {
+  return { tokenize(text3) {
     if (!isCaseSensitive)
-      text2 = text2.toLowerCase();
+      text3 = text3.toLowerCase();
     if (ignoreDiacritics)
-      text2 = stripDiacritics(text2);
-    return tokenizeFn(text2);
+      text3 = stripDiacritics(text3);
+    return tokenizeFn(text3);
   } };
 }
 var TokenSearch = class {
@@ -43120,7 +43122,7 @@ var TokenSearch = class {
     this.numTerms = this.termSearchers.length;
     this.useMask = this.numTerms <= 31;
   }
-  searchIn(text2) {
+  searchIn(text3) {
     if (!this.termSearchers.length)
       return {
         isMatch: false,
@@ -43133,7 +43135,7 @@ var TokenSearch = class {
     let matchedMask = 0;
     const matchedTerms = this.combineAll && !this.useMask ? /* @__PURE__ */ new Set : null;
     for (let i = 0;i < this.termSearchers.length; i++) {
-      const result = this.termSearchers[i].searchIn(text2);
+      const result = this.termSearchers[i].searchIn(text3);
       const idf = this.idfWeights[i];
       maxPossibleScore += idf;
       if (result.isMatch) {
@@ -43170,8 +43172,8 @@ var TokenSearch = class {
     return searchResult;
   }
 };
-function addField(index, text2, docIdx, analyzer) {
-  const tokens = analyzer.tokenize(text2);
+function addField(index, text3, docIdx, analyzer) {
+  const tokens = analyzer.tokenize(text3);
   if (!tokens.length)
     return;
   index.fieldCount++;
@@ -43413,14 +43415,14 @@ var Fuse = class {
     const requireAllTokens = this.options.useTokenSearch && this.options.tokenMatch === "all";
     const { records } = this._myIndex;
     const results = heap ? null : [];
-    records.forEach(({ v: text2, i: idx, n: norm2 }) => {
-      if (!isDefined(text2))
+    records.forEach(({ v: text3, i: idx, n: norm2 }) => {
+      if (!isDefined(text3))
         return;
-      const searchResult = searcher.searchIn(text2);
+      const searchResult = searcher.searchIn(text3);
       if (searchResult.isMatch) {
         const match = {
           score: searchResult.score,
-          value: text2,
+          value: text3,
           norm: norm2,
           indices: searchResult.indices
         };
@@ -43432,7 +43434,7 @@ var Fuse = class {
         const matches = [match];
         if (!requireAllTokens || this._coversAllTokens(matches)) {
           const result = {
-            item: text2,
+            item: text3,
             idx,
             matches
           };
@@ -43558,15 +43560,15 @@ var Fuse = class {
       return [];
     const matches = [];
     if (isArray(value))
-      value.forEach(({ v: text2, i: idx, n: norm2 }) => {
-        if (!isDefined(text2))
+      value.forEach(({ v: text3, i: idx, n: norm2 }) => {
+        if (!isDefined(text3))
           return;
-        const searchResult = searcher.searchIn(text2);
+        const searchResult = searcher.searchIn(text3);
         if (searchResult.isMatch) {
           const match = {
             score: searchResult.score,
             key,
-            value: text2,
+            value: text3,
             idx,
             norm: norm2,
             indices: searchResult.indices,
@@ -43581,13 +43583,13 @@ var Fuse = class {
         }
       });
     else {
-      const { v: text2, n: norm2 } = value;
-      const searchResult = searcher.searchIn(text2);
+      const { v: text3, n: norm2 } = value;
+      const searchResult = searcher.searchIn(text3);
       if (searchResult.isMatch) {
         const match = {
           score: searchResult.score,
           key,
-          value: text2,
+          value: text3,
           norm: norm2,
           indices: searchResult.indices,
           hasInverse: searchResult.hasInverse
@@ -43626,13 +43628,13 @@ Fuse.version = "7.5.0";
 Fuse.createIndex = createIndex;
 Fuse.parseIndex = parseIndex;
 Fuse.config = Config;
-Fuse.match = function(pattern, text2, options) {
+Fuse.match = function(pattern, text3, options) {
   if (options && options.useTokenSearch)
     throw new Error(FUSE_MATCH_TOKEN_SEARCH_UNSUPPORTED);
   return createSearcher(pattern, {
     ...Config,
     ...options
-  }).searchIn(text2);
+  }).searchIn(text3);
 };
 Fuse.parseQuery = parse2;
 register(ExtendedSearch);
@@ -44473,7 +44475,7 @@ var QUERY_REASON_MODELS_URL = "https://docs.databricks.com/aws/en/machine-learni
 var exports_static = {};
 __export(exports_static, {
   xml: () => xml,
-  text: () => text2,
+  text: () => text3,
   root: () => root,
   parseHTML: () => parseHTML,
   merge: () => merge,
@@ -44883,11 +44885,11 @@ class DomHandler {
     this.lastNode = null;
   }
   oncdatastart() {
-    const text2 = new Text2("");
-    const node2 = new CDATA2([text2]);
+    const text3 = new Text2("");
+    const node2 = new CDATA2([text3]);
     this.addNode(node2);
-    text2.parent = node2;
-    this.lastNode = text2;
+    text3.parent = node2;
+    this.lastNode = text3;
   }
   oncdataend() {
     this.lastNode = null;
@@ -46128,7 +46130,7 @@ function xml(dom) {
   const options = { ...this._options, xmlMode: true };
   return render2(this, dom, options);
 }
-function text2(elements) {
+function text3(elements) {
   const elems = elements !== null && elements !== undefined ? elements : this ? this.root() : [];
   let ret = "";
   for (let i = 0;i < elems.length; i++) {
@@ -47678,7 +47680,7 @@ function getAttr(elem, name, xmlMode) {
     return !xmlMode && rboolean.test(name) ? name : elem.attribs[name];
   }
   if (elem.name === "option" && name === "value") {
-    return text2(elem.children);
+    return text3(elem.children);
   }
   if (elem.name === "input" && (elem.attribs["type"] === "radio" || elem.attribs["type"] === "checkbox") && name === "value") {
     return "on";
@@ -47903,7 +47905,7 @@ function val(value) {
         }
         return this;
       }
-      return this.attr("multiple") ? option.toArray().map((el) => text2(el.children)) : option.attr("value");
+      return this.attr("multiple") ? option.toArray().map((el) => text3(el.children)) : option.attr("value");
     }
     case "button":
     case "input":
@@ -48440,13 +48442,13 @@ function getChildFunc(next, adapter) {
   };
 }
 var filters = {
-  contains(next, text3, { adapter }) {
+  contains(next, text4, { adapter }) {
     return function contains2(elem) {
-      return next(elem) && adapter.getText(elem).includes(text3);
+      return next(elem) && adapter.getText(elem).includes(text4);
     };
   },
-  icontains(next, text3, { adapter }) {
-    const itext = text3.toLowerCase();
+  icontains(next, text4, { adapter }) {
+    const itext = text4.toLowerCase();
     return function icontains(elem) {
       return next(elem) && adapter.getText(elem).toLowerCase().includes(itext);
     };
@@ -49497,7 +49499,7 @@ __export(exports_manipulation, {
   wrap: () => wrap,
   unwrap: () => unwrap2,
   toString: () => toString2,
-  text: () => text3,
+  text: () => text4,
   replaceWith: () => replaceWith,
   remove: () => remove,
   prependTo: () => prependTo,
@@ -49850,12 +49852,12 @@ function html2(str) {
 function toString2() {
   return this._render(this);
 }
-function text3(str) {
+function text4(str) {
   if (str === undefined) {
-    return text2(this);
+    return text3(this);
   }
   if (typeof str === "function") {
-    return domEach(this, (el, i) => this._make(el).text(str.call(el, i, text2([el]))));
+    return domEach(this, (el, i) => this._make(el).text(str.call(el, i, text3([el]))));
   }
   return domEach(this, (el) => {
     if (!hasChildren(el))
@@ -54218,22 +54220,22 @@ var defaultTreeAdapter = {
       node2.parentNode = null;
     }
   },
-  insertText(parentNode, text4) {
+  insertText(parentNode, text5) {
     if (parentNode.childNodes.length > 0) {
       const prevNode = parentNode.childNodes[parentNode.childNodes.length - 1];
       if (defaultTreeAdapter.isTextNode(prevNode)) {
-        prevNode.value += text4;
+        prevNode.value += text5;
         return;
       }
     }
-    defaultTreeAdapter.appendChild(parentNode, defaultTreeAdapter.createTextNode(text4));
+    defaultTreeAdapter.appendChild(parentNode, defaultTreeAdapter.createTextNode(text5));
   },
-  insertTextBefore(parentNode, text4, referenceNode) {
+  insertTextBefore(parentNode, text5, referenceNode) {
     const prevNode = parentNode.childNodes[parentNode.childNodes.indexOf(referenceNode) - 1];
     if (prevNode && defaultTreeAdapter.isTextNode(prevNode)) {
-      prevNode.value += text4;
+      prevNode.value += text5;
     } else {
-      defaultTreeAdapter.insertBefore(parentNode, defaultTreeAdapter.createTextNode(text4), referenceNode);
+      defaultTreeAdapter.insertBefore(parentNode, defaultTreeAdapter.createTextNode(text5), referenceNode);
     }
   },
   adoptAttributes(recipient, attrs) {
@@ -57849,20 +57851,20 @@ var adapter = {
       node2.parent = null;
     }
   },
-  insertText(parentNode, text4) {
+  insertText(parentNode, text5) {
     const lastChild = parentNode.children[parentNode.children.length - 1];
     if (lastChild && isText(lastChild)) {
-      lastChild.data += text4;
+      lastChild.data += text5;
     } else {
-      adapter.appendChild(parentNode, adapter.createTextNode(text4));
+      adapter.appendChild(parentNode, adapter.createTextNode(text5));
     }
   },
-  insertTextBefore(parentNode, text4, referenceNode) {
+  insertTextBefore(parentNode, text5, referenceNode) {
     const prevNode = parentNode.children[parentNode.children.indexOf(referenceNode) - 1];
     if (prevNode && isText(prevNode)) {
-      prevNode.data += text4;
+      prevNode.data += text5;
     } else {
-      adapter.insertBefore(parentNode, adapter.createTextNode(text4), referenceNode);
+      adapter.insertBefore(parentNode, adapter.createTextNode(text5), referenceNode);
     }
   },
   adoptAttributes(recipient, attrs) {
@@ -58211,9 +58213,9 @@ function parseReasoningModels(html3, generatedAt) {
 function reasoningModelNamesFromCell(cell, $2) {
   const names2 = new Set;
   cell.find("code").each((_, code) => {
-    const text4 = collapseText($2(code));
-    if (text4.startsWith("databricks-"))
-      names2.add(text4);
+    const text5 = collapseText($2(code));
+    if (text5.startsWith("databricks-"))
+      names2.add(text5);
   });
   if (names2.size === 0) {
     for (const match of collapseText(cell).matchAll(MODEL_CODE_PATTERN)) {
@@ -58222,9 +58224,9 @@ function reasoningModelNamesFromCell(cell, $2) {
   }
   return [...names2];
 }
-function extractAcceptedReasoningLevels(text4) {
+function extractAcceptedReasoningLevels(text5) {
   const levels = [];
-  for (const match of text4.matchAll(ACCEPTED_VALUES_PATTERN)) {
+  for (const match of text5.matchAll(ACCEPTED_VALUES_PATTERN)) {
     const fragment = match[1];
     if (!fragment || /vary by model/i.test(fragment))
       continue;
@@ -59578,11 +59580,11 @@ class AuthenticatedModelClient {
       }
       response = await this.fetcher(url, { ...init, headers });
     }
-    const text4 = await response.text();
+    const text5 = await response.text();
     if (!response.ok) {
-      throw new Error(`Databricks Model Serving API ${path2} returned HTTP ${response.status}: ${text4}`);
+      throw new Error(`Databricks Model Serving API ${path2} returned HTTP ${response.status}: ${text5}`);
     }
-    return text4 ? JSON.parse(text4) : undefined;
+    return text5 ? JSON.parse(text5) : undefined;
   }
 }
 var catalogueCache = new Map;
@@ -59873,7 +59875,7 @@ class LakebaseClient {
     const response = record2(await (await this.session(profile)).request(`${API_BASE}/credentials`, {
       body: { endpoint }
     }));
-    const token = text4(response.token);
+    const token = text5(response.token);
     if (!token)
       throw new Error("Lakebase credential response did not contain token");
     return token;
@@ -59916,13 +59918,13 @@ class LakebaseClient {
     endpointId = resourceId(endpoint, "endpoints");
     if (!endpointId)
       throw new Error("Lakebase endpoint has no resource name");
-    const host = text4(at2(endpoint, "status", "hosts", "host"));
+    const host = text5(at2(endpoint, "status", "hosts", "host"));
     if (!host)
       throw new Error(`Lakebase endpoint ${endpointId} has no writable host`);
     const port = number2(at2(endpoint, "status", "hosts", "port")) ?? 5432;
     const database = selectDatabase(await this.list(client, `${branchPath}/databases`, "databases"), target.databaseResourceId ?? target.database);
     const me = record2(await client.request("/api/2.0/preview/scim/v2/Me"));
-    const user = text4(me.userName);
+    const user = text5(me.userName);
     if (!user)
       throw new Error("Databricks identity response did not contain userName");
     return {
@@ -59964,7 +59966,7 @@ class LakebaseClient {
       const page = response[field];
       if (Array.isArray(page))
         values2.push(...page.filter(exports_object.isRecord));
-      pageToken = text4(response.next_page_token);
+      pageToken = text5(response.next_page_token);
     } while (pageToken);
     return values2;
   }
@@ -59986,7 +59988,7 @@ function selectBranch(project, branches, explicit) {
       throw new Error(`Lakebase branch is unavailable: ${explicit}`);
     return explicit;
   }
-  const defaultBranch = text4(at2(project, "status", "default_branch"));
+  const defaultBranch = text5(at2(project, "status", "default_branch"));
   const flagged = usable.find((value) => at2(value, "status", "default") === true);
   const candidates = usable.map((value) => resourceId(value, "branches")).filter(isString2);
   const selected = candidates.length === 1 ? candidates[0] : candidates.find((candidate) => candidate === resourcePathId(defaultBranch, "branches")) ?? resourceId(flagged, "branches");
@@ -59996,7 +59998,7 @@ function selectBranch(project, branches, explicit) {
 }
 function selectEndpoint(endpoints, explicit, host) {
   const usable = endpoints.filter((value) => {
-    const type = text4(at2(value, "status", "endpoint_type"))?.toUpperCase();
+    const type = text5(at2(value, "status", "endpoint_type"))?.toUpperCase();
     return !isInactive(value) && at2(value, "status", "disabled") !== true && (type === "READ_WRITE" || type === "ENDPOINT_TYPE_READ_WRITE");
   });
   const selected = explicit ? usable.find((value) => resourceId(value, "endpoints") === explicit) : host ? usable.find((value) => endpointHosts(value).includes(host)) : usable.length === 1 ? usable[0] : undefined;
@@ -60007,7 +60009,7 @@ function selectEndpoint(endpoints, explicit, host) {
 function selectDatabase(databases, explicit) {
   const candidates = databases.filter((value) => !isInactive(value)).map((value) => ({
     id: resourceId(value, "databases"),
-    name: text4(at2(value, "status", "postgres_database")) ?? "",
+    name: text5(at2(value, "status", "postgres_database")) ?? "",
     default: at2(value, "status", "default") === true
   })).filter((value) => Boolean(value.name));
   const requested = isGenericPostgresDatabase(explicit) ? undefined : explicit;
@@ -60040,11 +60042,11 @@ function isGenericPostgresDatabase(value) {
   return value === GENERIC_POSTGRES_DATABASE;
 }
 function isInactive(value) {
-  const state = text4(at2(value, "status", "current_state"))?.toUpperCase();
+  const state = text5(at2(value, "status", "current_state"))?.toUpperCase();
   return state === "ARCHIVED" || state === "DELETING" || state === "DELETED" || state === "DISABLED";
 }
 function resourceId(value, kind) {
-  const name = value ? text4(record2(value).name) : undefined;
+  const name = value ? text5(record2(value).name) : undefined;
   if (!name)
     return;
   const parts = name.split("/");
@@ -60059,7 +60061,7 @@ function resourcePathId(value, kind) {
   return index2 >= 0 ? parts[index2 + 1] : value;
 }
 function endpointHosts(value) {
-  return ["host", "read_write_pooled_host", "read_only_host"].map((name) => text4(at2(value, "status", "hosts", name))).filter(isString2);
+  return ["host", "read_write_pooled_host", "read_only_host"].map((name) => text5(at2(value, "status", "hosts", name))).filter(isString2);
 }
 function isDatabricksApp() {
   return Boolean(process.env.DATABRICKS_APP_NAME || process.env.DATABRICKS_APP_PORT);
@@ -60072,11 +60074,11 @@ async function request(auth, path2, options = {}) {
     headers = await auth.headers({ refresh: true });
     response = await send(url, headers, options);
   }
-  const text4 = await response.text();
+  const text5 = await response.text();
   if (!response.ok) {
-    throw new Error(`Databricks Lakebase API ${path2} returned HTTP ${response.status}: ${text4}`);
+    throw new Error(`Databricks Lakebase API ${path2} returned HTTP ${response.status}: ${text5}`);
   }
-  return text4 ? JSON.parse(text4) : undefined;
+  return text5 ? JSON.parse(text5) : undefined;
 }
 function send(url, authHeaders, options) {
   const headers = new Headers(authHeaders);
@@ -60107,7 +60109,7 @@ function at2(value, ...path2) {
     current2 = exports_object.isRecord(current2) ? current2[key] : undefined;
   return current2;
 }
-function text4(value) {
+function text5(value) {
   return exports_string_utils.trimToUndefined(value);
 }
 function number2(value) {

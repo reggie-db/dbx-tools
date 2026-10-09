@@ -59,6 +59,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./python-release-packaging": "./tasks/publish-python.ts",
     "./release-packaging": "./tasks/publish-npm.ts",
     "./package.json": "./package.json"
   },

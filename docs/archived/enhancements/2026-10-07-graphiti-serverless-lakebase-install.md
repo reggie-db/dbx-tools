@@ -55,7 +55,7 @@ single module command to build and install standard `pminit==1.3.2` under pip
 build isolation. The direct launchers reported Node `v22.20.0` and npm
 `10.9.3`.
 
-Databricks validation used profile `FEVM-REGGIE-PIERCE-AWS`, serverless job
+Databricks validation used the selected workspace profile, serverless job
 `1041824640462209`, successful run `834023557620673`, and active Lakebase
 endpoint `projects/lfp-chat-db/branches/production/endpoints/primary`.
 

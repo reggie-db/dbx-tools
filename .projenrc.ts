@@ -1338,7 +1338,7 @@ root.addTask("demo", {
 });
 root.addTask("demo:deploy", {
   exec: "bun scripts/demo-deploy.ts",
-  description: "Stage and deploy the AppKit demo app to the FEVM workspace",
+  description: "Stage local artifacts and deploy the AppKit demo to its configured workspace",
 });
 
 // The generated release workflow publishes every npm workspace member,

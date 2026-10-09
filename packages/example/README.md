@@ -256,9 +256,8 @@ See [`.env.example`](.env.example). At minimum:
 
 ## Demo KPI dataset and Genie space
 
-The agent's Genie tools need a space with data behind them. A ready-made KPI
-dataset is provisioned in the FEVM workspace
-(`fevm-reggie-pierce-aws.cloud.databricks.com`):
+The agent's Genie tools need a space with data behind them. The deployed demo
+uses the KPI dataset and Genie space configured by its bundle variables:
 
 | Resource                                                    | What it is                                                                             |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -298,15 +297,14 @@ via `valueFrom`. Grant the app's service principal `READ` on the scope
 ## Deploy
 
 ```bash
-cd server/appkit-demo
-databricks bundle validate --profile FEVM-REGGIE-PIERCE-AWS
-databricks bundle deploy --profile FEVM-REGGIE-PIERCE-AWS
-databricks bundle run demo_app --profile FEVM-REGGIE-PIERCE-AWS
+bun run demo:deploy
 ```
 
 The bundle ([`databricks.yml`](server/appkit-demo/databricks.yml)) provisions the
 Lakebase autoscaling Postgres; [`app.yaml`](server/appkit-demo/app.yaml) wires the
-Genie space and Lakebase endpoint into the deployed app.
+Genie space and Lakebase endpoint into the deployed app. The deploy script uses
+`@dbx-tools/auth` to resolve the configured/default workspace profile and host;
+neither is committed in the bundle.
 
 ## How the demo itself is configured
 

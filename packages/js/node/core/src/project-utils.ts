@@ -31,7 +31,9 @@ export function resolveWorkingDirectory(cwd?: string | null): string {
 
 /** A command's stdout, classified as a filesystem path and/or a URL. */
 export interface ProjectContext {
-  readonly output: string;
+  readonly output?: string;
+  /** Whether the command exited successfully. */
+  readonly success: boolean;
   /** `output` when it names something on disk. */
   readonly path?: string;
   /** `file.statSync` of {@link path}, when it exists. */
@@ -52,8 +54,22 @@ export interface ProjectContext {
  * parses as a real network URL. Empty {@link ProjectContext} on a non-zero exit
  * or empty output.
  */
-function projectContextCommandOutput(command: string, args: string[], cwd: string): ProjectContext {
-  const result = spawnSync(command, args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
+interface ProjectCommandOptions {
+  readonly cache?: boolean;
+  readonly env?: NodeJS.ProcessEnv;
+}
+
+function projectContextCommandOutput(
+  command: string,
+  args: string[],
+  cwd: string,
+  env?: NodeJS.ProcessEnv,
+): ProjectContext {
+  const result = spawnSync(command, args, {
+    cwd,
+    env: env ?? process.env,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
   const output = result?.stdout?.toString()?.trim();
   if (result.status === 0 && output) {
     const pathStats = fileStatSync(output);
@@ -62,29 +78,63 @@ function projectContextCommandOutput(command: string, args: string[], cwd: strin
     // `http://localhost/…`), which would mislabel directory outputs and bare
     // tokens - so gate on the raw output already carrying a scheme + authority.
     const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(output) ? net.urlBuilder(output) : undefined;
-    return { output, path: pathStats ? output : undefined, pathStats, url };
+    return { output, path: pathStats ? output : undefined, pathStats, success: true, url };
   }
-  return { output };
+  return { output, success: result.status === 0 };
 }
 
 const projectCommandCache = new Map<string, ProjectContext>();
 
-function projectContextCommand(command: string, args: string[], cwd?: string): ProjectContext {
+function projectContextCommand(
+  command: string,
+  args: string[],
+  cwd?: string,
+  options: ProjectCommandOptions = {},
+): ProjectContext {
   const resolved = resolveWorkingDirectory(cwd);
-  const key =
-    resolved === resolveWorkingDirectory() ? JSON.stringify([command, ...args]) : undefined;
+  const cache = options.cache ?? (!options.env && resolved === resolveWorkingDirectory());
+  const key = cache ? JSON.stringify([resolved, command, ...args]) : undefined;
   if (key !== undefined) {
     const cached = projectCommandCache.get(key);
     if (cached !== undefined) return cached;
   }
-  const value = projectContextCommandOutput(command, args, resolved);
+  const value = projectContextCommandOutput(command, args, resolved, options.env);
   if (key !== undefined) projectCommandCache.set(key, value);
   return value;
 }
 
-function commandRoot(command: string, args: string[], cwd: string): string | undefined {
-  const parsed = projectContextCommand(command, args, cwd);
-  return parsed.pathStats?.isDirectory() ? parsed.path : undefined;
+function projectCommand(command: string) {
+  const context = (
+    args: string[],
+    cwd?: string,
+    options?: ProjectCommandOptions,
+  ): ProjectContext => projectContextCommand(command, args, cwd, options);
+  return {
+    context,
+    output(
+      args: string[],
+      cwd?: string,
+      options?: ProjectCommandOptions,
+    ): string | undefined {
+      return stringUtils.trimToNull(context(args, cwd, options).output) ?? undefined;
+    },
+    root(args: string[], cwd: string): string | undefined {
+      const parsed = context(args, cwd);
+      return parsed.pathStats?.isDirectory() ? parsed.path : undefined;
+    },
+    succeeds(args: string[], cwd?: string, options?: ProjectCommandOptions): boolean {
+      return context(args, cwd, options).success;
+    },
+  };
+}
+
+const gitCommand = projectCommand("git");
+const ghCommand = projectCommand("gh");
+const npmCommand = projectCommand("npm");
+const sshCommand = projectCommand("ssh");
+
+function gitRemoteUrl(cwd?: string, remote = "origin", refresh = false): string | undefined {
+  return gitCommand.output(["remote", "get-url", remote], cwd, { cache: !refresh });
 }
 
 /**
@@ -104,7 +154,7 @@ function npmRoot(cwd?: string): string | undefined {
     const fromEnv = envDirectory(process.env.npm_config_local_prefix);
     if (fromEnv) return fromEnv;
   }
-  return commandRoot("npm", ["prefix"], resolved);
+  return npmCommand.root(["prefix"], resolved);
 }
 
 function envDirectory(value: string | undefined): string | undefined {
@@ -116,7 +166,7 @@ function envDirectory(value: string | undefined): string | undefined {
 
 function gitRoot(cwd?: string): string | undefined {
   const resolved = resolveWorkingDirectory(cwd);
-  return commandRoot("git", ["rev-parse", "--show-toplevel"], resolved);
+  return gitCommand.root(["rev-parse", "--show-toplevel"], resolved);
 }
 
 /** Resolve the nearest project root without walking above its npm or Git boundary. */
@@ -237,11 +287,7 @@ export function name(cwd?: string): string {
   const fromPackage = readPackageName(resolve(rootDir, "package.json"));
   if (fromPackage) return fromPackage;
 
-  const remote = projectContextCommand(
-    "git",
-    ["-C", rootDir, "remote", "get-url", "origin"],
-    rootDir,
-  ).output;
+  const remote = gitRemoteUrl(rootDir);
   const fromGit = remote ? parseGitRemote(remote) : undefined;
   if (fromGit) return fromGit;
 
@@ -254,17 +300,164 @@ export function name(cwd?: string): string {
  * `undefined` when `gh` is absent, unauthenticated, or the dir isn't a GH repo.
  */
 function repositoryUrlFromGh(cwd?: string): string | undefined {
-  const out = projectContextCommand("gh", ["repo", "view", "--json", "url"], cwd).output;
+  const account = resolveProjectGhAccount(cwd);
+  if (!account) return undefined;
+  const out = ghCommand.output(
+    ["repo", "view", account.remote.repository, "--json", "url"],
+    account.root,
+    { cache: false, env: account.env },
+  );
   return stringUtils.trimToNull(json.parseRecord(out)?.url) ?? undefined;
 }
 
 /** Resolve an ssh host alias (`~/.ssh/config`) to its effective `hostname` via `ssh -G`. */
-function resolveSshHostName(host: string, cwd?: string): string | undefined {
-  const line = projectContextCommand("ssh", ["-G", host], cwd)
+function resolveSshHostName(host: string, cwd?: string, refresh = false): string | undefined {
+  const line = sshCommand
+    .context(["-G", host], cwd, { cache: !refresh })
     .output?.split("\n")
     .find((l) => /^hostname\s/i.test(l.trim()));
   const name = line?.trim().split(/\s+/)[1];
   return name && name !== host ? name : undefined;
+}
+
+/** Parsed GitHub-style remote coordinates. */
+export interface ProjectGhRemote {
+  /** Account hinted by an SSH alias such as `git@github-work:`. */
+  readonly accountHint?: string;
+  /** Host written in the remote before SSH alias resolution. */
+  readonly host: string;
+  /** `owner/repository` path. */
+  readonly repository: string;
+}
+
+/** Authenticated GitHub CLI account selected for one project remote. */
+export interface ProjectGhAccount {
+  /** Environment to pass to every `gh` command for this project. */
+  readonly env: NodeJS.ProcessEnv;
+  /** Actual GitHub host selected from `gh auth status`. */
+  readonly host: string;
+  /** Authenticated GitHub login. */
+  readonly login: string;
+  /** Parsed project remote. */
+  readonly remote: ProjectGhRemote;
+  /** Resolved project directory used for command execution. */
+  readonly root: string;
+}
+
+/** Options for cached project GitHub-account resolution. */
+export interface ResolveProjectGhAccountOptions {
+  /** Git remote name. Defaults to `origin`. */
+  readonly remote?: string;
+  /** Re-read git, SSH, and GitHub CLI state instead of using the process cache. */
+  readonly refresh?: boolean;
+}
+
+/** Parse HTTPS, SSH URL, or scp-like GitHub remote coordinates. */
+export function parseProjectGhRemote(remoteUrl: string): ProjectGhRemote | undefined {
+  const value = remoteUrl.trim().replace(/\.git$/i, "");
+  const https = /^https?:\/\/([^/]+)\/([^/]+)\/([^/]+)$/i.exec(value);
+  if (https) return { host: https[1]!, repository: `${https[2]}/${https[3]}` };
+  const ssh = /^(?:ssh:\/\/)?git@([^/:]+)[:/]([^/]+)\/([^/]+)$/i.exec(value);
+  if (!ssh) return undefined;
+  const accountHint = /^github-(.+)$/i.exec(ssh[1]!)?.[1];
+  return {
+    ...(accountHint ? { accountHint } : {}),
+    host: ssh[1]!,
+    repository: `${ssh[2]}/${ssh[3]}`,
+  };
+}
+
+const projectGhAccountCache = new Map<string, ProjectGhAccount | null>();
+
+/**
+ * Resolve and cache the authenticated `gh` account that can access a project's
+ * remote. SSH alias account hints win, followed by the active account on the
+ * effective SSH/HTTPS host, then other authenticated accounts. Every candidate
+ * is verified against the repository before it is returned.
+ */
+export function resolveProjectGhAccount(
+  cwd?: string,
+  options: ResolveProjectGhAccountOptions = {},
+): ProjectGhAccount | undefined {
+  const root = resolveWorkingDirectory(cwd);
+  const remoteName = stringUtils.trimToNull(options.remote) ?? "origin";
+  const key = JSON.stringify([
+    root,
+    remoteName,
+    homedir(),
+    process.env.GH_CONFIG_DIR ?? "",
+  ]);
+  if (!options.refresh && projectGhAccountCache.has(key)) {
+    return projectGhAccountCache.get(key) ?? undefined;
+  }
+  const remoteUrl = gitRemoteUrl(root, remoteName, options.refresh);
+  if (!remoteUrl) return undefined;
+  const remote = parseProjectGhRemote(remoteUrl);
+  if (!remote) return undefined;
+  const effectiveHost = resolveSshHostName(remote.host, root, options.refresh) ?? remote.host;
+
+  const status = ghCommand.output(["auth", "status", "--json", "hosts"], root, {
+    cache: false,
+  });
+  if (!status) {
+    projectGhAccountCache.set(key, null);
+    return undefined;
+  }
+  let parsed: {
+    hosts?: Record<
+      string,
+      Array<{ active?: boolean; host?: string; login?: string; state?: string }>
+    >;
+  };
+  try {
+    parsed = JSON.parse(status) as typeof parsed;
+  } catch {
+    projectGhAccountCache.set(key, null);
+    return undefined;
+  }
+  const accounts = Object.entries(parsed.hosts ?? {}).flatMap(([host, entries]) =>
+    entries
+      .filter((entry) => entry.state === "success" && entry.login)
+      .map((entry) => ({
+        active: entry.active === true,
+        host: entry.host ?? host,
+        login: entry.login!,
+      })),
+  );
+  accounts.sort((left, right) => {
+    const rank = (account: (typeof accounts)[number]): number => {
+      if (remote.accountHint && account.login === remote.accountHint) return 0;
+      if (account.host === effectiveHost && account.active) return 1;
+      if (account.host === effectiveHost) return 2;
+      if (account.active) return 3;
+      return 4;
+    };
+    return rank(left) - rank(right);
+  });
+
+  for (const account of accounts) {
+    const token = ghCommand.output(
+      ["auth", "token", "--hostname", account.host, "--user", account.login],
+      root,
+      { cache: false },
+    );
+    if (!token) continue;
+    const env = { ...process.env, GH_HOST: account.host, GH_TOKEN: token };
+    if (
+      !ghCommand.succeeds(
+        ["api", "--hostname", account.host, `repos/${remote.repository}`, "--silent"],
+        root,
+        { cache: false, env },
+      )
+    ) {
+      continue;
+    }
+    const selected = { env, host: account.host, login: account.login, remote, root };
+    projectGhAccountCache.set(key, selected);
+    return selected;
+  }
+  projectGhAccountCache.set(key, null);
+  return undefined;
 }
 
 /**
@@ -274,7 +467,7 @@ function resolveSshHostName(host: string, cwd?: string): string | undefined {
  * followed to its real hostname.
  */
 function repositoryUrlFromGit(cwd?: string): string | undefined {
-  const raw = projectContextCommand("git", ["remote", "get-url", "origin"], cwd).output;
+  const raw = gitRemoteUrl(cwd);
   if (!raw) return undefined;
 
   // Normalize the scheme to https at the string level first: the WHATWG `URL`
@@ -293,7 +486,7 @@ function repositoryUrlFromGit(cwd?: string): string | undefined {
   if (builder.username || builder.password) {
     builder = builder.with("username", "").with("password", "");
   }
-  // Follow an ssh host alias to the true host (so `github-reggie-db` -> `github.com`).
+  // Follow an ssh host alias to the true host.
   const realHost = resolveSshHostName(builder.hostname, cwd);
   if (realHost) builder = builder.with("hostname", realHost);
 
@@ -552,4 +745,12 @@ if (import.meta.main) {
   console.log("project name:", name());
   console.log("repository url:", repositoryUrl());
   console.log("repository url (npm):", repositoryUrl(undefined, "npm"));
+  const ghAccount = resolveProjectGhAccount();
+  if (ghAccount) {
+    console.log("project gh host:", ghAccount.host);
+    console.log("project gh login:", ghAccount.login);
+    console.log("project gh remote:", ghAccount.remote.repository);
+  } else {
+    console.log("project gh account: not found");
+  }
 }

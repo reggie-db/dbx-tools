@@ -37,19 +37,13 @@ variables:
 workspace:
   root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 
-# The demo is deployed to the AWS FEVM workspace. Pinning `host` here (rather
-# than relying on whichever profile happens to be active) is what keeps
-# `bundle deploy` from landing in another workspace: the CLI matches the host
-# against `~/.databrickscfg` and errors if the active profile points elsewhere.
+# `scripts/demo-deploy.ts` resolves the configured/default workspace profile
+# through `@dbx-tools/auth` and passes it explicitly. Workspace hosts and profile
+# names remain machine-local and are not committed here.
 targets:
   dev:
     default: true
     mode: development
-    workspace:
-      host: https://fevm-reggie-pierce-aws.cloud.databricks.com
-      # Named explicitly because more than one profile in `~/.databrickscfg`
-      # points at this host, and the CLI refuses to guess between them.
-      profile: FEVM-REGGIE-PIERCE-AWS
 
 resources:
   # Lakebase Autoscaling project backing the demo's memory tools. Lakebase
