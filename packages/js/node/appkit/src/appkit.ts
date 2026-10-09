@@ -36,7 +36,7 @@ import {
 // publishes this subpath for exactly that type.
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
 import { profile as authProfile } from "@dbx-tools/auth";
-import { asyncUtils, log } from "@dbx-tools/shared-core";
+import { asyncUtils, environmentUtils, log } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
 import { createSoftPersistentStorage } from "./_cache-storage.ts";
@@ -52,6 +52,9 @@ import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.t
 import { provisionCacheSchema } from "./provision.ts";
 
 const logger = log.logger("appkit");
+
+/** Detect whether the current process is running as a deployed Databricks App. */
+export const isDatabricksAppEnv = environmentUtils.isDatabricksAppEnv;
 
 type AppKitCreateAppConfig = NonNullable<Parameters<typeof appkitCreateApp>[0]>;
 type AppKitPlugins = NonNullable<AppKitCreateAppConfig["plugins"]>;

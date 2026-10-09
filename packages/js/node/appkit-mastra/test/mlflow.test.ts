@@ -11,13 +11,18 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
 import {
   AgentTraceSpanProcessor,
+  appMlflowTraceInfoConfigured,
   directMlflowTraceLocation,
   directMlflowTracingConfigured,
   directMlflowTrackingUri,
+  flushDirectMlflowTracing,
+  initializeAppMlflowTraceInfo,
   logFeedback,
   mlflowAssessmentTraceId,
   mlflowEnabled,
   mlflowExperimentManagerUrl,
+  persistAppMlflowTraceInfo,
+  resetAppMlflowTraceInfo,
   resetUcTracePrefixCache,
   ucTracePrefixFromExperimentTags,
   validateFeedbackConfig,
@@ -61,6 +66,7 @@ afterEach(() => {
   restoreEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", originalOtlpEndpoint);
   restoreEnvironment("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", originalOtlpTracesEndpoint);
   resetUcTracePrefixCache();
+  resetAppMlflowTraceInfo();
   globalThis.fetch = originalFetch;
 });
 
@@ -85,6 +91,14 @@ describe("direct MLflow configuration", () => {
     assert.equal(directMlflowTracingConfigured(), false);
   });
 
+  it("enables trace-info promotion for an App OTLP deployment", () => {
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4314";
+
+    assert.equal(appMlflowTraceInfoConfigured(), true);
+  });
+
   it("parses the existing UC trace prefix for the direct SDK", () => {
     process.env.MLFLOW_UC_TRACE_PREFIX = "reggie_pierce_aws_catalog.mlflow_traces.demo";
     assert.deepEqual(directMlflowTraceLocation(), {
@@ -102,6 +116,89 @@ describe("direct MLflow configuration", () => {
 
     assert.equal(directMlflowTracingConfigured(), true);
     assert.equal(mlflowEnabled(), true);
+  });
+});
+
+describe("Databricks Apps MLflow trace-info promotion", () => {
+  it("persists trace tags and user metadata without uploading spans", async () => {
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4314";
+    const urls: string[] = [];
+    const bodies: unknown[] = [];
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes("/api/2.0/mlflow/experiments/get?")) {
+        return Response.json({
+          experiment: {
+            experiment_id: "123",
+            tags: [
+              {
+                key: "mlflow.experiment.databricksTraceDestinationPath",
+                value: "cat.schema.demo",
+              },
+            ],
+          },
+        });
+      }
+      bodies.push(JSON.parse(String(init?.body ?? "{}")));
+      return Response.json({});
+    };
+
+    assert.equal(await initializeAppMlflowTraceInfo(workspaceClient()), true);
+    persistAppMlflowTraceInfo({
+      traceId: "0123456789abcdef0123456789abcdef",
+      requestTime: 1000,
+      executionDuration: 250,
+      error: false,
+      requestPreview: "question",
+      responsePreview: "answer",
+      user: "ada@example.com",
+      tags: {
+        agent: "true",
+        genie: "true",
+        model: '["model-a","model-b"]',
+        sp_auth: "true",
+        tunnel: "portr",
+        tunnel_subdomain: "demo",
+      },
+    });
+    await flushDirectMlflowTracing();
+
+    assert.equal(
+      urls[1],
+      "https://workspace.example.com/api/4.0/mlflow/traces/cat.schema.demo/0123456789abcdef0123456789abcdef/info",
+    );
+    assert.deepEqual(bodies[0], {
+      trace_id: "trace:/cat.schema.demo/0123456789abcdef0123456789abcdef",
+      trace_location: {
+        type: "UC_TABLE_PREFIX",
+        uc_table_prefix: {
+          catalog_name: "cat",
+          schema_name: "schema",
+          table_prefix: "demo",
+        },
+      },
+      request_preview: "question",
+      response_preview: "answer",
+      request_time: "1970-01-01T00:00:01.000Z",
+      execution_duration: "0.25s",
+      state: "OK",
+      trace_metadata: {
+        "mlflow.trace_schema.version": "4",
+        "mlflow.trace.user": "ada@example.com",
+      },
+      tags: {
+        agent: "true",
+        genie: "true",
+        model: '["model-a","model-b"]',
+        sp_auth: "true",
+        tunnel: "portr",
+        tunnel_subdomain: "demo",
+      },
+      assessments: [],
+    });
   });
 });
 

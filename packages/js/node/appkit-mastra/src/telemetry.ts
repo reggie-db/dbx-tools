@@ -20,8 +20,9 @@
 
 import { StringDecoder } from "node:string_decoder";
 
+import { appkit } from "@dbx-tools/appkit";
 import { getRequestTags } from "@dbx-tools/appkit/request-tags";
-import { environmentUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
+import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
 import { context, createContextKey, SpanKind, trace, type Span } from "@opentelemetry/api";
 import { getRPCMetadata, RPCType } from "@opentelemetry/core";
@@ -30,6 +31,7 @@ import type express from "express";
 import { USER_EMAIL_HEADER, USER_ID_HEADER } from "./identity.ts";
 import {
   directMlflowTracingActive,
+  persistAppMlflowTraceInfo,
   updateActiveMlflowTrace,
   updateActiveMlflowTraceTags,
 } from "./mlflow.ts";
@@ -505,8 +507,9 @@ export function chatTurnTelemetryMiddleware(
     return;
   }
   const traceState: ChatTraceState = { models: new Set(), tags: new Map() };
+  const traceRequestTime = Date.now();
   setChatTraceTag(traceState, MLFLOW_AGENT_TAG, true);
-  if (!environmentUtils.isDatabricksAppEnv()) {
+  if (!appkit.isDatabricksAppEnv()) {
     setChatTraceTag(traceState, MLFLOW_LOCAL_TAG, true);
   }
   for (const [name, value] of Object.entries(getRequestTags(req))) {
@@ -536,16 +539,19 @@ export function chatTurnTelemetryMiddleware(
   target.span.setAttribute(CHAT_GENIE_USED_ATTR, false);
 
   const messages = (req.body as { messages?: unknown } | undefined)?.messages;
+  let requestPreview: string | undefined;
   if (messages !== undefined) {
     const fullInput = serialized(messages);
+    requestPreview = textOnlyChatInput(messages) ?? fullInput;
     target.span.setAttribute(CHAT_MESSAGES_ATTR, fullInput);
     target.span.setAttribute(
       MLFLOW_SPAN_INPUTS_ATTR,
-      (textOnlyChatInput(messages) ?? fullInput).slice(0, TRACE_IO_LIMIT),
+      requestPreview.slice(0, TRACE_IO_LIMIT),
     );
   }
 
   const collector = new AssistantResponseCollector();
+  let responsePreview: string | undefined;
   let outputRecorded = false;
   let fullOutputRecorded = false;
   let genieRecorded = false;
@@ -556,6 +562,7 @@ export function chatTurnTelemetryMiddleware(
   const passThroughJson = res.json.bind(res) as (body?: unknown) => express.Response;
   const recordOutput = (answer: string): void => {
     if (outputRecorded || !answer) return;
+    responsePreview = answer;
     target.span.setAttribute(MLFLOW_SPAN_OUTPUTS_ATTR, answer.slice(0, TRACE_IO_LIMIT));
     outputRecorded = true;
   };
@@ -589,6 +596,16 @@ export function chatTurnTelemetryMiddleware(
         ...(Object.keys(tags).length > 0 ? { tags } : {}),
         ...(traceState.user ? { user: traceState.user } : {}),
       });
+    });
+    persistAppMlflowTraceInfo({
+      traceId: targetTraceId,
+      requestTime: traceRequestTime,
+      executionDuration: Date.now() - traceRequestTime,
+      error: res.statusCode >= 500,
+      tags,
+      ...(traceState.user ? { user: traceState.user } : {}),
+      ...(requestPreview ? { requestPreview } : {}),
+      ...(responsePreview ? { responsePreview } : {}),
     });
   };
   const endOwnedSpan = (): void => {

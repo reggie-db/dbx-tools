@@ -11,7 +11,7 @@ function runtimeEnvironment(): Record<string, string | undefined> {
   );
 }
 
-/** Detect a Databricks App runtime from its required host and App-specific port. */
+/** Detect a Databricks App runtime from its workspace host plus App name or port. */
 export function isDatabricksAppEnv(
   source: Record<string, string | undefined> = runtimeEnvironment(),
 ): boolean {
@@ -20,9 +20,12 @@ export function isDatabricksAppEnv(
   const name = source.DATABRICKS_APP_NAME?.trim();
   const host = source.DATABRICKS_HOST?.trim();
   const port = source.DATABRICKS_APP_PORT?.trim();
-  if ((name && /\$\{[^}]+\}/.test(name)) || !host || !port || !/^\d+$/.test(port)) return false;
-  const parsedPort = Number(port);
-  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > MAX_TCP_PORT) return false;
+  if (!host || (!name && !port) || (name && /\$\{[^}]+\}/.test(name))) return false;
+  if (port) {
+    if (!/^\d+$/.test(port)) return false;
+    const parsedPort = Number(port);
+    if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > MAX_TCP_PORT) return false;
+  }
   try {
     const url = new URL(host);
     return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);

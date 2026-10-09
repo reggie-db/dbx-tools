@@ -49,7 +49,11 @@ import { OtelBridge } from "@mastra/otel-bridge";
 import { propagation } from "@opentelemetry/api";
 
 import { TRACE_REQUEST_CONTEXT_KEYS } from "./config.ts";
-import { initializeDirectMlflowTracing, mlflowEnabled } from "./mlflow.ts";
+import {
+  initializeAppMlflowTraceInfo,
+  initializeDirectMlflowTracing,
+  mlflowEnabled,
+} from "./mlflow.ts";
 
 const logger = log.logger("mastra/observability");
 
@@ -129,6 +133,8 @@ export async function buildObservability(
   const otelBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
   const otelTracesOverride = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
   const otlpConfigured = isOtlpTracingConfigured();
+  const appMlflowTraceInfo =
+    options?.enabled === false ? false : await initializeAppMlflowTraceInfo();
   const directMlflowConfigured =
     options?.enabled === false || otlpConfigured ? false : await initializeDirectMlflowTracing();
   if (directMlflowConfigured) configureOtelPropagation();
@@ -169,7 +175,13 @@ export async function buildObservability(
     otelBase: otelBase ?? "<unset>",
     resolvedTracesUrl: resolvedTracesUrl ?? "<unset>",
     feedback,
-    observability: directMlflowConfigured ? "mlflow-direct" : feedback ? "mlflow" : "otel",
+    observability: directMlflowConfigured
+      ? "mlflow-direct"
+      : appMlflowTraceInfo
+        ? "mlflow-apps"
+        : feedback
+          ? "mlflow"
+          : "otel",
   });
 
   return new Observability({

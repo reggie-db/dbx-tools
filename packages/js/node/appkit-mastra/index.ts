@@ -55,7 +55,7 @@ export type { MastraIdentityMode } from "./src/identity.ts";
 export type { ResolvedMcp } from "./src/mcp.ts";
 export { MemoryBuilder } from "./src/memory.ts";
 export { AgentTraceSpanProcessor } from "./src/mlflow.ts";
-export type { LogFeedbackParams } from "./src/mlflow.ts";
+export type { AppMlflowTraceInfo, LogFeedbackParams } from "./src/mlflow.ts";
 export { RESPONSES_PROVIDER_OPTIONS } from "./src/model.ts";
 export type { BuildModelOverrides } from "./src/model.ts";
 export { MontySandbox } from "./src/monty-sandbox.ts";

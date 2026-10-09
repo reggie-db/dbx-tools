@@ -25,10 +25,13 @@
  * @module
  */
 
-import { ConfigurationError } from "@databricks/appkit";
+import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
-import { asyncUtils, environmentUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
+import { TraceLocationType, TraceMetadataKey } from "@mlflow/core";
+import { TraceInfo } from "@mlflow/core/dist/core/entities/trace_info";
+import { TraceState } from "@mlflow/core/dist/core/entities/trace_state";
 import type { Context } from "@opentelemetry/api";
 import type {
   ReadableSpan,
@@ -49,6 +52,10 @@ let directMlflow: MlflowModule | undefined;
 let directMlflowInitStarted = false;
 let directMlflowProvider: NodeTracerProvider | undefined;
 let directMlflowProcessor: SpanProcessor | undefined;
+let appMlflowTraceInfoInitStarted = false;
+let appMlflowTraceInfoClient: WorkspaceClient | undefined;
+let appMlflowTracePrefix: string | undefined;
+const pendingAppMlflowTraceInfo = new Set<Promise<void>>();
 
 const NOISY_INSTRUMENTATION_SCOPES = new Set([
   "@opentelemetry/instrumentation-express",
@@ -295,7 +302,7 @@ function configuredExperiment(): { id?: string; name?: string } {
 
 /** Tracking URI for direct local MLflow tracing, with CLI-profile auth injected. */
 export function directMlflowTrackingUri(): string | undefined {
-  if (environmentUtils.isDatabricksAppEnv()) return undefined;
+  if (appkit.isDatabricksAppEnv()) return undefined;
   const configured = process.env.MLFLOW_TRACKING_URI?.trim();
   if (configured && configured !== "databricks") return configured;
   const profile = process.env.DATABRICKS_CONFIG_PROFILE?.trim();
@@ -329,10 +336,114 @@ export function directMlflowTraceLocation():
 /** Whether the local direct-to-experiment MLflow SDK has enough configuration. */
 export function directMlflowTracingConfigured(): boolean {
   return Boolean(
-    !environmentUtils.isDatabricksAppEnv() &&
+    !appkit.isDatabricksAppEnv() &&
       process.env.MLFLOW_EXPERIMENT_ID?.trim() &&
       directMlflowTrackingUri(),
   );
+}
+
+/** Whether a Databricks App can promote OTLP spans into full MLflow trace info. */
+export function appMlflowTraceInfoConfigured(): boolean {
+  return Boolean(
+    appkit.isDatabricksAppEnv() &&
+      (process.env.MLFLOW_EXPERIMENT_ID?.trim() || process.env.MLFLOW_EXPERIMENT_NAME?.trim()) &&
+      (process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim() ||
+        process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim()),
+  );
+}
+
+/** Initialize the App service-principal client used to persist V4 trace tags and metadata. */
+export async function initializeAppMlflowTraceInfo(
+  client?: WorkspaceClient,
+): Promise<boolean> {
+  if (appMlflowTraceInfoClient && appMlflowTracePrefix) return true;
+  if (appMlflowTraceInfoInitStarted || !appMlflowTraceInfoConfigured()) return false;
+  appMlflowTraceInfoInitStarted = true;
+  try {
+    const resolvedClient = client ?? (createWorkspaceClient() as WorkspaceClient);
+    const prefix = await resolveUcTracePrefix(resolvedClient);
+    if (!prefix || prefix.split(".").length !== 3) {
+      throw new ConfigurationError(
+        "Databricks Apps MLflow trace-info promotion requires a UC-linked experiment or MLFLOW_UC_TRACE_PREFIX.",
+      );
+    }
+    appMlflowTraceInfoClient = resolvedClient;
+    appMlflowTracePrefix = prefix;
+    logger.info("Databricks Apps MLflow trace-info promotion enabled", { prefix });
+    return true;
+  } catch (err) {
+    logger.warn("Databricks Apps MLflow trace-info promotion disabled", {
+      error: errorUtils.errorMessage(err),
+    });
+    return false;
+  }
+}
+
+/** Trace-level values persisted beside spans already exported by the Apps OTLP sidecar. */
+export interface AppMlflowTraceInfo {
+  traceId: string;
+  requestTime: number;
+  executionDuration: number;
+  error: boolean;
+  tags: Record<string, string>;
+  user?: string;
+  sessionId?: string;
+  requestPreview?: string;
+  responsePreview?: string;
+}
+
+/** Persist MLflow V4 trace info for one Databricks Apps OTel root without re-exporting spans. */
+export function persistAppMlflowTraceInfo(params: AppMlflowTraceInfo): void {
+  const client = appMlflowTraceInfoClient;
+  const prefix = appMlflowTracePrefix;
+  if (!client || !prefix) return;
+  const [catalogName, schemaName, tablePrefix] = prefix.split(".");
+  if (!catalogName || !schemaName || !tablePrefix) return;
+  const traceInfo = new TraceInfo({
+    traceId: `trace:/${prefix}/${params.traceId}`,
+    traceLocation: {
+      type: TraceLocationType.UC_TABLE_PREFIX,
+      ucTablePrefix: { catalogName, schemaName, tablePrefix },
+    },
+    requestTime: params.requestTime,
+    executionDuration: params.executionDuration,
+    state: params.error ? TraceState.ERROR : TraceState.OK,
+    ...(params.requestPreview ? { requestPreview: params.requestPreview } : {}),
+    ...(params.responsePreview ? { responsePreview: params.responsePreview } : {}),
+    traceMetadata: {
+      [TraceMetadataKey.SCHEMA_VERSION]: "4",
+      ...(params.user ? { [TraceMetadataKey.TRACE_USER]: params.user } : {}),
+      ...(params.sessionId ? { [TraceMetadataKey.TRACE_SESSION]: params.sessionId } : {}),
+    },
+    tags: params.tags,
+    assessments: [],
+  });
+  const path = `/api/4.0/mlflow/traces/${encodeURIComponent(prefix)}/${params.traceId}/info`;
+  const pending = databricksFetch(client, path, { method: "POST", body: traceInfo.toJson() })
+    .then(async (response) => {
+      if (response.ok) return;
+      logger.warn("Databricks Apps MLflow trace-info promotion failed", {
+        traceId: params.traceId,
+        status: response.status,
+        body: await readResponseText(response),
+      });
+    })
+    .catch((err) => {
+      logger.warn("Databricks Apps MLflow trace-info promotion failed", {
+        traceId: params.traceId,
+        error: errorUtils.errorMessage(err),
+      });
+    })
+    .finally(() => pendingAppMlflowTraceInfo.delete(pending));
+  pendingAppMlflowTraceInfo.add(pending);
+}
+
+/** Reset Apps trace-info promotion state for tests. */
+export function resetAppMlflowTraceInfo(): void {
+  appMlflowTraceInfoInitStarted = false;
+  appMlflowTraceInfoClient = undefined;
+  appMlflowTracePrefix = undefined;
+  pendingAppMlflowTraceInfo.clear();
 }
 
 async function detectedDirectMlflowTraceLocation(
@@ -449,6 +560,7 @@ export function directMlflowTracingActive(): boolean {
 
 /** Flush pending direct local trace exports during graceful shutdown. */
 export async function flushDirectMlflowTracing(): Promise<void> {
+  await Promise.all([...pendingAppMlflowTraceInfo]);
   await directMlflowProcessor?.forceFlush();
   await directMlflowProvider?.forceFlush();
 }
