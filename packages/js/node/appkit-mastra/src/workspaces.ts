@@ -19,11 +19,7 @@
  */
 
 import { createHash } from "node:crypto";
-import {
-  ConfigurationError,
-  createWorkspaceClient,
-  getExecutionContext,
-} from "@databricks/appkit";
+import { ConfigurationError, createWorkspaceClient, getExecutionContext } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { pluginRegistry } from "@dbx-tools/appkit";
 import {
@@ -34,11 +30,7 @@ import {
 import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
 import { LocalFileSystem } from "@dbx-tools/fs";
 import { errorUtils, log, object, stringUtils, token } from "@dbx-tools/shared-core";
-import {
-  fs as sharedFS,
-  posixPath,
-  type FileSystemCache,
-} from "@dbx-tools/shared-fs";
+import { fs as sharedFS, posixPath, type FileSystemCache } from "@dbx-tools/shared-fs";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
   WORKSPACE_TOOLS,
@@ -67,15 +59,13 @@ import {
 } from "./filesystems.ts";
 import { MontySandbox } from "./monty-sandbox.ts";
 import { DatabricksSandbox, type DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
-import {
-  ORGANIZATION_ASSISTANT_PATH,
-  personalWorkspacePath,
-} from "./skill-paths.ts";
+import { ORGANIZATION_ASSISTANT_PATH, personalWorkspacePath } from "./skill-paths.ts";
 
 /* ------------------------------ constants ------------------------------ */
 
 /** OAuth scopes that gate Databricks workspace file mounts. */
 const WORKSPACE_FILE_SCOPES = ["workspace", "workspace.workspace", "all-apis"] as const;
+const SCRATCH_MOUNT = "/tmp";
 
 const logger = log.logger("mastra/workspaces");
 
@@ -281,9 +271,7 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
   const skillFolders = resolveSkillFolders(options);
   const folderNames = Object.keys(skillFolders);
   const extraSkillPaths = options.extraSkillPaths ?? [];
-  const filesCache = pluginRegistry
-    .instance(options.pluginContext, filesCachePlugin)
-    ?.exports();
+  const filesCache = pluginRegistry.instance(options.pluginContext, filesCachePlugin)?.exports();
   const retainFilesystemSource =
     filesCache !== undefined &&
     (options.mounts?.length ?? 0) === 0 &&
@@ -376,24 +364,26 @@ export function resolveSkillFolders(
 
 /* ---------------------------- private helpers ---------------------------- */
 
-/** Require approval unless a filesystem mutation stays inside the caller's home mount. */
-function requireApprovalOutsideHome({
+/** Require approval unless a filesystem mutation stays inside a user-owned writable root. */
+function requireApprovalOutsideWritableRoots({
   args,
   requestContext,
 }: ToolConfigWithArgsContext): boolean {
-  const emailValue = requestContext[MASTRA_USER_EMAIL_KEY];
-  const email = typeof emailValue === "string" ? stringUtils.trimToNull(emailValue) : undefined;
   const inputPath = args.path;
-  if (!email || typeof inputPath !== "string" || !posixPath.isAbsolute(inputPath)) return true;
+  if (typeof inputPath !== "string" || !posixPath.isAbsolute(inputPath)) return true;
   const normalized = posixPath.normalize(inputPath);
   if (!normalized.ok) return true;
+  if (posixPath.isWithinRoot(SCRATCH_MOUNT, normalized.path)) return false;
+  const emailValue = requestContext[MASTRA_USER_EMAIL_KEY];
+  const email = typeof emailValue === "string" ? stringUtils.trimToNull(emailValue) : undefined;
+  if (!email) return true;
   return !posixPath.isWithinRoot(personalWorkspacePath(email), normalized.path);
 }
 
 function workspaceTools(configured: WorkspaceToolsConfig | undefined): WorkspaceToolsConfig {
   const requireApproval: WorkspaceToolConfig =
     configured?.requireApproval === undefined
-      ? { requireApproval: requireApprovalOutsideHome }
+      ? { requireApproval: requireApprovalOutsideWritableRoots }
       : {};
   const defaults = {
     [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]: requireApproval,
@@ -630,8 +620,9 @@ async function resolveSkillFolderFilesystem(
     cache.client,
     root,
     !writable,
-    folder.createRoot ?? (folder.writable === true),
+    folder.createRoot ?? folder.writable === true,
     cache.fileSystemCache,
+    folder.readable === false ? [] : (folder.skills ?? ["."]),
     {
       ...(folder.description ? { description: folder.description } : {}),
       ...(folder.displayName ? { displayName: folder.displayName } : {}),
@@ -694,7 +685,7 @@ function buildMountResolvers(
 /** Contribute one isolated local scratch filesystem at `/tmp`. */
 function scratchMountResolver(): WorkspaceMountResolver {
   return () => ({
-    mounts: { "/tmp": scratchFilesystem() },
+    mounts: { [SCRATCH_MOUNT]: scratchFilesystem() },
   });
 }
 
@@ -742,10 +733,8 @@ async function databricksFilesystem(
   readOnly: boolean = true,
   createRoot: boolean = !readOnly,
   fileSystemCache?: FileSystemCache,
-  adapterOptions: Pick<
-    MastraFileSystemAdapterOptions,
-    "description" | "displayName"
-  > = {},
+  skillPaths: readonly string[] = [],
+  adapterOptions: Pick<MastraFileSystemAdapterOptions, "description" | "displayName"> = {},
 ): Promise<
   | {
       filesystem: WorkspaceFilesystem;
@@ -765,7 +754,9 @@ async function databricksFilesystem(
     readOnly,
     createRoot,
   });
-  const source = fileSystemCache ? sharedFS.cache(fs, fileSystemCache) : fs;
+  const source = fileSystemCache
+    ? sharedFS.cache(fs, fileSystemCache, { readFilePaths: skillPaths })
+    : fs;
   const filesystem = filesystems(source, { ...adapterOptions, readOnly });
   try {
     await filesystem.init();

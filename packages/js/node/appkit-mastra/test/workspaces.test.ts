@@ -68,10 +68,7 @@ describe("DEFAULT_SKILL_FOLDERS", () => {
 
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_USER_EMAIL_KEY, " user@example.com ");
-    assert.equal(
-      await resolvePath(folder, requestContext),
-      "/Workspace/Users/user@example.com",
-    );
+    assert.equal(await resolvePath(folder, requestContext), "/Workspace/Users/user@example.com");
     assert.deepEqual(folder.skills, [".assistant/skills"]);
   });
 
@@ -296,10 +293,7 @@ describe("createWorkspace skill source identity", () => {
       "databricks-jobs",
       "personal-runbook",
     ]);
-    assert.equal(
-      (await catalogue.get("databricks-jobs"))?.instructions,
-      "Team instructions",
-    );
+    assert.equal((await catalogue.get("databricks-jobs"))?.instructions, "Team instructions");
     await assert.doesNotReject(() => catalogue.search("jobs"));
   });
 
@@ -525,6 +519,18 @@ describe("createWorkspace skill source identity", () => {
     await filesystem.readdir("/Workspace/.assistant");
     await filesystem.readdir("/Workspace/.assistant");
     assert.equal(listCalls, 1);
+    const regularReadCalls = exportCalls;
+    await filesystem.readFile("/Workspace/.assistant/note.txt", { encoding: "utf8" });
+    await filesystem.readFile("/Workspace/.assistant/note.txt", { encoding: "utf8" });
+    assert.equal(exportCalls, regularReadCalls + 2);
+    const skillReadCalls = exportCalls;
+    await filesystem.readFile("/Workspace/.assistant/skills/cached-skill/SKILL.md", {
+      encoding: "utf8",
+    });
+    await filesystem.readFile("/Workspace/.assistant/skills/cached-skill/SKILL.md", {
+      encoding: "utf8",
+    });
+    assert.equal(exportCalls, skillReadCalls + 1);
     const nextRequestContext = new RequestContext();
     nextRequestContext.set(MASTRA_SCOPES_KEY, ["workspace.workspace"]);
     nextRequestContext.set(MASTRA_USER_EMAIL_KEY, "user@example.com");
@@ -585,7 +591,7 @@ describe("createWorkspace skill source identity", () => {
     );
   });
 
-  it("requires approval for every filesystem mutation outside the user home", async () => {
+  it("requires approval for filesystem mutations outside user-owned writable roots", async () => {
     const workspace = createWorkspace({ assistantSkills: false, sandbox: false });
     const mutationTools = [
       WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
@@ -624,7 +630,7 @@ describe("createWorkspace skill source identity", () => {
           requestContext,
           workspace,
         }),
-        true,
+        false,
       );
       assert.equal(
         await config.requireApproval({
@@ -683,7 +689,9 @@ describe("agent workspace selection", () => {
     });
 
     const processors = await built.agents[built.defaultAgentId]?.listConfiguredInputProcessors();
-    assert.ok(processors?.some((processor) => "id" in processor && processor.id === "skill-search"));
+    assert.ok(
+      processors?.some((processor) => "id" in processor && processor.id === "skill-search"),
+    );
   });
 
   it("can disable Mastra's skill search processor explicitly", async () => {

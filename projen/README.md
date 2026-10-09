@@ -592,6 +592,7 @@ release [options]
 | `--no-release-notes`                  | skip writing docs/releases notes (Genie and git-log fallback)                                 |
 | `--release-notes-instructions <text>` | append custom instructions to the Genie release-notes prompt                                  |
 | `--demo-deploy`                       | after tagging, stage and deploy the AppKit demo app (off by default)                          |
+| `--profile <name>`                    | Databricks CLI profile for --demo-deploy                                                      |
 | `--no-local-publish`                  | skip publishing to configured local registries                                                |
 | `--local-registry <auto\|false\|url>` | local npm registry selection (default: "auto")                                                |
 | `--local-pypi <auto\|false\|url>`     | local devpi registry selection (default: "auto")                                              |

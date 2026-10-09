@@ -71,7 +71,9 @@ function pushAnnotatedReleaseTag(options: {
   runTaskCommand(root, "git", ["tag", "--annotate", tag, "--message", annotation]);
   const githubAccount = projectUtils.resolveProjectGhAccount(root, { remote });
   if (!githubAccount) {
-    logger.warn("no authenticated GitHub account can access the release repository; using git push");
+    logger.warn(
+      "no authenticated GitHub account can access the release repository; using git push",
+    );
     runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);
     return;
   }
@@ -228,6 +230,8 @@ export async function runRelease(
     readonly validationTasks?: readonly string[];
     /** After tagging, stage and deploy the AppKit demo app. Off by default. */
     readonly demoDeploy?: boolean;
+    /** Explicit Databricks CLI profile used by the optional demo deployment. */
+    readonly demoProfile?: string;
     /** Write `docs/releases/vX.Y.Z.md` via Genie, with a git-log fallback. On by default. */
     readonly releaseNotes?: boolean;
     /** Additional instructions appended to the standard Genie release-notes prompt. */
@@ -238,6 +242,11 @@ export async function runRelease(
   const { branch, prefix, remote, root } = options;
   const selection = releaseStepSelection(options);
   const install = options.install ?? "auto";
+  const demoProfile = options.demoProfile?.trim();
+
+  if (options.demoDeploy && !demoProfile) {
+    throw new Error("--demo-deploy requires --profile <name>");
+  }
 
   if (install === "always") runTaskCommand(root, "bun", ["install"]);
   if (selection.validation && hasPackageScript(root, "eslint:fix")) {
@@ -331,8 +340,8 @@ export async function runRelease(
     });
   }
 
-  if (options.demoDeploy) {
-    runTaskCommand(root, "bun", ["run", "demo:deploy"]);
+  if (options.demoDeploy && demoProfile) {
+    runTaskCommand(root, "bun", ["run", "demo:deploy", "--profile", demoProfile]);
   }
 
   return tag;
@@ -379,6 +388,7 @@ export function createReleaseCommand(): Command {
       "append custom instructions to the Genie release-notes prompt",
     )
     .option("--demo-deploy", "after tagging, stage and deploy the AppKit demo app (off by default)")
+    .option("--profile <name>", "Databricks CLI profile for --demo-deploy")
     .option("--no-local-publish", "skip publishing to configured local registries")
     .option("--local-registry <auto|false|url>", "local npm registry selection", "auto")
     .option("--local-pypi <auto|false|url>", "local devpi registry selection", "auto")
@@ -397,6 +407,7 @@ export function createReleaseCommand(): Command {
           install: ReleaseInstallMode;
           validate: string[];
           demoDeploy?: boolean;
+          profile?: string;
           releaseNotes?: boolean;
           releaseNotesInstructions?: string;
         },
@@ -419,6 +430,7 @@ export function createReleaseCommand(): Command {
           validation: options.validation,
           validationTasks: options.validate,
           demoDeploy: options.demoDeploy,
+          demoProfile: options.profile,
           releaseNotes: options.releaseNotes,
           releaseNotesInstructions: options.releaseNotesInstructions,
         });

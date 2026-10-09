@@ -196,6 +196,12 @@ export interface FileSystemCacheOptions {
    * and `stat`.
    */
   operations?: readonly CacheableFileSystemOperation[];
+  /**
+   * Filesystem-relative roots whose `readFile` results are cached in addition
+   * to the default metadata operations. Reads outside these roots always
+   * delegate to the source filesystem.
+   */
+  readFilePaths?: readonly string[];
   /** Additional namespace included in every generated cache key. */
   namespace?: string;
 }
@@ -229,6 +235,11 @@ export function cache<TFileSystem extends FileSystem>(
   options: FileSystemCacheOptions = {},
 ): TFileSystem {
   const operations = new Set(options.operations ?? DEFAULT_CACHE_OPERATIONS);
+  const cacheAllReadFiles = options.operations?.includes("readFile") ?? false;
+  const readFilePaths = (options.readFilePaths ?? []).map((path) =>
+    resolveFileSystemPath(filesystem, path),
+  );
+  if (readFilePaths.length > 0) operations.add("readFile");
   const namespace = options.namespace ?? "filesystem";
   const filesystemHash = hash.fnvHashWithOptions(
     { length: 10 },
@@ -283,7 +294,12 @@ export function cache<TFileSystem extends FileSystem>(
       ) {
         method = async (...args: unknown[]): Promise<CacheValue> => {
           const normalized = cacheOperationPath(filesystem, args);
-          if (normalized === undefined) {
+          if (
+            normalized === undefined ||
+            (property === "readFile" &&
+              !cacheAllReadFiles &&
+              !readFilePaths.some((root) => posixPath.isWithinRoot(root, normalized)))
+          ) {
             return Promise.resolve(
               (delegated as (...input: unknown[]) => CacheValue | Promise<CacheValue>)(...args),
             );

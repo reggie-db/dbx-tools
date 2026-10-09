@@ -187,16 +187,16 @@ export function createAgent<
  * options, so {@link buildAgents} may rebuild it with startup-provisioned
  * `extraSkillPaths` (a caller-supplied workspace is never touched).
  */
-const DEFAULT_WORKSPACE = Symbol.for("dbx-tools/appkit-mastra/default-workspace");
+const defaultWorkspaces = new WeakSet<Workspace>();
 
 /** Brand `workspace` as the auto-created default. */
 function markDefaultWorkspace(workspace: Workspace): void {
-  (workspace as unknown as Record<symbol, boolean>)[DEFAULT_WORKSPACE] = true;
+  defaultWorkspaces.add(workspace);
 }
 
 /** Whether `workspace` was auto-created by {@link createAgent}. */
 function isDefaultWorkspace(workspace: Workspace | undefined): boolean {
-  return Boolean(workspace && (workspace as unknown as Record<symbol, boolean>)[DEFAULT_WORKSPACE]);
+  return workspace !== undefined && defaultWorkspaces.has(workspace);
 }
 
 /**

@@ -54,11 +54,14 @@ describe("direct release tags", () => {
       projectUtils.parseProjectGhRemote("git@github.example.com:example/dbx-tools.git")?.repository,
       "example/dbx-tools",
     );
-    assert.deepEqual(projectUtils.parseProjectGhRemote("git@github-release:example/dbx-tools.git"), {
-      accountHint: "release",
-      host: "github-release",
-      repository: "example/dbx-tools",
-    });
+    assert.deepEqual(
+      projectUtils.parseProjectGhRemote("git@github-release:example/dbx-tools.git"),
+      {
+        accountHint: "release",
+        host: "github-release",
+        repository: "example/dbx-tools",
+      },
+    );
     assert.equal(projectUtils.parseProjectGhRemote("/tmp/remote.git"), undefined);
   });
 
@@ -67,23 +70,19 @@ describe("direct release tags", () => {
     try {
       git(root, "tag", "-a", "v1.0.0", "-m", "local annotation");
       const commit = git(root, "rev-parse", "HEAD");
-      const remoteObject = execFileSync(
-        "git",
-        ["mktag"],
-        {
-          cwd: remote,
-          encoding: "utf8",
-          input: [
-            `object ${commit}`,
-            "type commit",
-            "tag v1.0.0",
-            "tagger GitHub API <noreply@github.com> 1700000000 +0000",
-            "",
-            "remote annotation",
-            "",
-          ].join("\n"),
-        },
-      ).trim();
+      const remoteObject = execFileSync("git", ["mktag"], {
+        cwd: remote,
+        encoding: "utf8",
+        input: [
+          `object ${commit}`,
+          "type commit",
+          "tag v1.0.0",
+          "tagger GitHub API <noreply@github.com> 1700000000 +0000",
+          "",
+          "remote annotation",
+          "",
+        ].join("\n"),
+      }).trim();
       git(remote, "update-ref", "refs/tags/v1.0.0", remoteObject);
 
       refreshReleaseTagFromRemote({
@@ -177,9 +176,34 @@ describe("direct release tags", () => {
     }
   });
 
-  it("runs demo:deploy after tagging when requested", async () => {
+  it("requires an explicit profile before starting demo deployment", async () => {
+    const { root } = fixture();
+    try {
+      await assert.rejects(
+        runRelease({
+          root,
+          branch: "main",
+          prefix: "v",
+          remote: "origin",
+          localPublish: false,
+          demoDeploy: true,
+          releaseNotes: false,
+        }),
+        /--demo-deploy requires --profile <name>/,
+      );
+      assert.equal(git(root, "log", "-1", "--pretty=%s"), "initial");
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
+
+  it("runs demo:deploy with the selected profile after tagging", async () => {
     const { remote, root } = fixture();
     try {
+      writeFileSync(
+        join(root, "demo-deploy.mjs"),
+        'import { writeFileSync } from "node:fs";\nwriteFileSync("demo-deployed", process.argv.slice(2).join("\\n"));\n',
+      );
       writeFileSync(
         join(root, "package.json"),
         `${JSON.stringify(
@@ -189,7 +213,7 @@ describe("direct release tags", () => {
             scripts: {
               bump: "node bump.mjs",
               "version:check": "true",
-              "demo:deploy": "touch demo-deployed",
+              "demo:deploy": "node demo-deploy.mjs",
             },
           },
           null,
@@ -205,9 +229,10 @@ describe("direct release tags", () => {
         remote: "origin",
         localPublish: false,
         demoDeploy: true,
+        demoProfile: "TEST",
         releaseNotes: false,
       });
-      assert.equal(readFileSync(join(root, "demo-deployed"), "utf8"), "");
+      assert.equal(readFileSync(join(root, "demo-deployed"), "utf8"), "--profile\nTEST");
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
     }

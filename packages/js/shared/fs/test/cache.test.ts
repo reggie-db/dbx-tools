@@ -129,4 +129,30 @@ describe("cache()", () => {
     filesystem.clear();
     assert.equal(await filesystem.exists("note.txt"), false);
   });
+
+  it("caches file contents only inside configured read roots", async () => {
+    const source = new MemoryFileSystem({ root: "/cached" });
+    await source.writeFile("skills/example/SKILL.md", "skill one");
+    await source.writeFile("notes/note.txt", "note one");
+    const storage = new TestCache();
+    const filesystem = cache(source, storage, {
+      readFilePaths: ["skills"],
+    });
+
+    assert.equal(
+      await filesystem.readFile("skills/example/SKILL.md", { encoding: "utf8" }),
+      "skill one",
+    );
+    await source.writeFile("skills/example/SKILL.md", "skill two");
+    assert.equal(
+      await filesystem.readFile("skills/example/SKILL.md", { encoding: "utf8" }),
+      "skill one",
+    );
+
+    assert.equal(await filesystem.readFile("notes/note.txt", { encoding: "utf8" }), "note one");
+    await source.writeFile("notes/note.txt", "note two");
+    assert.equal(await filesystem.readFile("notes/note.txt", { encoding: "utf8" }), "note two");
+    assert.equal(storage.loads.length, 1);
+    assert.ok(storage.loads[0]?.endsWith("_/cached/skills/example/SKILL.md"));
+  });
 });
