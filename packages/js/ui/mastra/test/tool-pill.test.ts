@@ -47,6 +47,11 @@ describe("skill tool labels", () => {
     assert.equal(humanizeToolName("search_skills"), "Search Skills");
     assert.equal(humanizeToolName("load_skill"), "Load Skill");
   });
+
+  it("drops the Mastra workspace prefix from command and file tools", () => {
+    assert.equal(humanizeToolName("mastra_workspace_execute_command"), "Execute Command");
+    assert.equal(humanizeToolName("mastra_workspace_read_file"), "Read File");
+  });
 });
 
 describe("streaming web-search progress", () => {

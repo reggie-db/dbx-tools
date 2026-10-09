@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
+import { CacheManager } from "@databricks/appkit";
 import { log } from "@dbx-tools/shared-core";
 import { MemoryFileSystem } from "@dbx-tools/shared-fs";
 import { RequestContext } from "@mastra/core/request-context";
@@ -23,8 +24,13 @@ import {
   createWorkspace,
   DEFAULT_SKILL_FOLDERS,
   resolveSkillFolders,
+  workspaceSkillCatalogueResolver,
   type SkillFolderOptions,
 } from "../src/workspaces.ts";
+
+before(async () => {
+  await CacheManager.getInstance();
+});
 
 /** Invoke a skill folder's `path`, whether it is a literal or a resolver. */
 async function resolvePath(
@@ -110,24 +116,18 @@ describe("resolveSkillFolders", () => {
 });
 
 describe("createWorkspace sandbox", () => {
-  it("uses a per-user Databricks sandbox by default", async () => {
+  it("uses Monty by default", async () => {
     const workspace = createWorkspace({ assistantSkills: false, id: "analyst" });
     const requestContext = new RequestContext();
-    requestContext.set(MASTRA_USER_KEY, {
-      id: "user-1",
-      executionContext: { client: {} },
-    });
 
     const first = await workspace.resolveSandbox({ requestContext });
     const second = await workspace.resolveSandbox({ requestContext });
 
-    assert.ok(first instanceof DatabricksSandbox);
-    assert.equal(first.provider, "databricks");
-    assert.match(first.id, /^mastra-[a-f0-9]{32}$/);
+    assert.ok(first instanceof MontySandbox);
     assert.equal(first, second);
   });
 
-  it("can disable or replace the Databricks default explicitly", async () => {
+  it("can disable or select another sandbox explicitly", async () => {
     const disabled = createWorkspace({ assistantSkills: false, sandbox: false });
     assert.equal(
       await disabled.resolveSandbox({ requestContext: new RequestContext() }),
@@ -144,11 +144,20 @@ describe("createWorkspace sandbox", () => {
     const replaced = createWorkspace({ assistantSkills: false, sandbox: custom });
     assert.equal(await replaced.resolveSandbox({ requestContext: new RequestContext() }), custom);
 
-    const monty = createWorkspace({ assistantSkills: false, sandbox: "monty" });
-    assert.ok(
-      (await monty.resolveSandbox({ requestContext: new RequestContext() })) instanceof
-        MontySandbox,
-    );
+    const databricks = createWorkspace({
+      assistantSkills: false,
+      id: "analyst",
+      sandbox: "databricks",
+    });
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_USER_KEY, {
+      id: "user-1",
+      executionContext: { client: {} },
+    });
+    const resolved = await databricks.resolveSandbox({ requestContext });
+    assert.ok(resolved instanceof DatabricksSandbox);
+    assert.equal(resolved.provider, "databricks");
+    assert.match(resolved.id, /^mastra-[a-f0-9]{32}$/);
   });
 });
 
@@ -213,15 +222,18 @@ describe("createWorkspace skill source identity", () => {
     });
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_SCOPES_KEY, ["workspace"]);
-    const skills = workspace.skills?.getScoped
-      ? await workspace.skills.getScoped({ requestContext })
-      : workspace.skills;
+    const catalogue = await (
+      await workspaceSkillCatalogueResolver(workspace)!({ requestContext })
+    ).get();
 
-    assert.deepEqual((await skills!.list()).map(({ name }) => name).sort(), [
+    assert.deepEqual(catalogue.skills.map(({ name }) => name).sort(), [
       "databricks-jobs",
       "personal-runbook",
     ]);
-    assert.equal((await skills!.get("databricks-jobs"))?.instructions, "Team instructions");
+    assert.equal(
+      catalogue.skills.find(({ name }) => name === "databricks-jobs")?.instructions,
+      "Team instructions",
+    );
   });
 
   it("mounts startup-provisioned local skill roots for search", async () => {
@@ -244,12 +256,13 @@ describe("createWorkspace skill source identity", () => {
         sandbox: false,
         extraSkillPaths: [root],
       });
-      const skills = workspace.skills?.getScoped
-        ? await workspace.skills.getScoped({ requestContext: new RequestContext() })
-        : workspace.skills;
+      const catalogue = await (
+        await workspaceSkillCatalogueResolver(workspace)!({
+          requestContext: new RequestContext(),
+        })
+      ).get();
 
-      assert.deepEqual((await skills!.list()).map(({ name }) => name), ["databricks-apps"]);
-      assert.equal((await skills!.search("databricks apps"))[0]?.skillName, "databricks-apps");
+      assert.deepEqual(catalogue.skills.map(({ name }) => name), ["databricks-apps"]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -293,7 +306,7 @@ describe("agent workspace selection", () => {
     assert.equal(options?.requireToolApproval, requireToolApproval);
   });
 
-  it("uses Mastra on-demand skill discovery by default", async () => {
+  it("uses catalogue-backed on-demand skill discovery by default", async () => {
     const built = await buildAgents({
       config: {},
       context: undefined,
@@ -302,7 +315,9 @@ describe("agent workspace selection", () => {
 
     const processors = await built.agents[built.defaultAgentId]?.listConfiguredInputProcessors();
     assert.ok(
-      processors?.some((processor) => "id" in processor && processor.id === "skill-search"),
+      processors?.some(
+        (processor) => "id" in processor && processor.id === "skill-catalogue-search",
+      ),
     );
   });
 
@@ -315,7 +330,9 @@ describe("agent workspace selection", () => {
 
     const processors = await built.agents[built.defaultAgentId]?.listConfiguredInputProcessors();
     assert.ok(
-      processors?.every((processor) => !("id" in processor) || processor.id !== "skill-search"),
+      processors?.every(
+        (processor) => !("id" in processor) || processor.id !== "skill-catalogue-search",
+      ),
     );
   });
 });

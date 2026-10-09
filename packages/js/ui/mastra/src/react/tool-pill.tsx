@@ -16,17 +16,33 @@ import type { ToolEvent, ToolProgress } from "./types.ts";
 // cards (question + numbered queries + prose answers + errors).
 
 /**
+ * Mastra registers built-in workspace tools under
+ * `WORKSPACE_TOOLS_PREFIX` (`mastra_workspace_*`). The wire id stays
+ * that branded name; session pills drop the prefix so labels read as
+ * `Execute Command` rather than `Mastra Workspace Execute Command`.
+ */
+const MASTRA_WORKSPACE_TOOL_PREFIX = "mastra_workspace_";
+
+/**
  * Turn a snake/camel tool id into a Title Cased label the user can
  * read. Genie tools land on this surface as flat ids
  * (`ask_genie`, `get_statement`, `prepare_chart`) plus per-space
- * suffixes for non-default aliases (`ask_genie_sales`).
+ * suffixes for non-default aliases (`ask_genie_sales`). Mastra
+ * workspace tools keep their `mastra_workspace_` wire prefix, which
+ * this strips before labeling.
  *
  * Examples:
  *   `ask_genie`     -> `Ask Genie`
  *   `ask_genie_sales` -> `Ask Genie Sales`
+ *   `mastra_workspace_execute_command` -> `Execute Command`
  *   `myCoolTool`    -> `My Cool Tool`
  */
-export const humanizeToolName = (toolName: string): string => stringUtils.toLabel(toolName);
+export const humanizeToolName = (toolName: string): string => {
+  const label = toolName.startsWith(MASTRA_WORKSPACE_TOOL_PREFIX)
+    ? toolName.slice(MASTRA_WORKSPACE_TOOL_PREFIX.length)
+    : toolName;
+  return stringUtils.toLabel(label);
+};
 
 /**
  * Track the freshest status label a running tool has published so the

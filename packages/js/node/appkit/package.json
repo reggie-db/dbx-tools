@@ -35,6 +35,7 @@
     "@dbx-tools/lakebase": "workspace:^",
     "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
+    "lru-cache": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",
@@ -115,7 +116,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.74",
+  "version": "0.9.78",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [

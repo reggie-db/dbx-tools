@@ -78,7 +78,7 @@ const root = new project.DBXToolsNodeProject({
     "@mastra/observability": "1.18.1",
     "@mastra/otel-bridge": "1.5.11",
     "@mastra/pg": "1.27.1",
-    "@pydantic/monty": "0.0.23",
+    "@pydantic/monty": "1.0.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/core": "2.11.0",
     "@opentelemetry/sdk-trace-base": "2.8.0",
@@ -91,6 +91,7 @@ const root = new project.DBXToolsNodeProject({
     "better-call": "1.4.0",
     "env-paths": "^4.0.0",
     "cacache": "^21.0.1",
+    "lru-cache": "11.5.3",
     "tailwindcss": "^4.3.2",
     "tw-animate-css": "^1.4.0",
     "lucide-react": "^0.554.0",
@@ -307,6 +308,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@databricks/sdk-experimental@catalog:",
+    "lru-cache@catalog:",
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
@@ -590,7 +592,10 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@opentelemetry/sdk-trace-base@catalog:",
     "@opentelemetry/sdk-trace-node@catalog:",
     "zod@catalog:",
+    "fuse.js@^7.4.2",
+    "lru-cache@catalog:",
     "pg@^8.22.0",
+    "yaml@^2.9.0",
   );
   p.addDevDeps(
     "@types/express@catalog:",

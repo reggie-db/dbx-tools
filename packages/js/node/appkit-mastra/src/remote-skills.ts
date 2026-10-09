@@ -74,6 +74,7 @@ import type { OneOrMany } from "@dbx-tools/shared-core";
 import type { FileSystem } from "@dbx-tools/shared-fs";
 
 import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-paths.ts";
+import { clearWorkspaceSkillCache } from "./skill-cache.ts";
 
 const logger = log.logger("mastra/remote-skills");
 
@@ -441,6 +442,7 @@ export async function provisionRemoteSkills(
   const localSkillPaths: string[] = [];
   const skillNames: string[] = [];
   let staging: LocalFileSystem | undefined;
+  let workspaceUpdated = false;
 
   try {
     const sources = Array.isArray(options.sources) ? options.sources : [options.sources];
@@ -452,7 +454,8 @@ export async function provisionRemoteSkills(
         // the source's own stable local dir.
         const key = cacheKey(sourceOptions);
         const cacheFS = destination ?? localSkillsFS(key);
-        const cached = (await readMetadata(cacheFS))?.sources[key];
+        const metadata = await readMetadata(cacheFS);
+        const cached = metadata?.sources[key];
         if (cached && isFresh(cached, resolveRefreshTtl(sourceOptions, options))) {
           skillNames.push(...cached.skills);
           if (!destination) localSkillPaths.push(cacheFS.root);
@@ -483,10 +486,12 @@ export async function provisionRemoteSkills(
           ...(policy ? { policy } : {}),
         };
         if (destination && databricksBasePath) {
+          await removeDeletedSkills(destination, key, metadata, record.skills);
           await copySkillDirs(destination, staged);
           // Only after the copy lands: a metadata entry written first would
           // mark a failed provision as fresh and suppress the retry for a day.
           await writeMetadata(destination, key, record);
+          workspaceUpdated = true;
         } else {
           localSkillPaths.push(await persistLocally(key, staged, record));
         }
@@ -515,7 +520,33 @@ export async function provisionRemoteSkills(
     }
   }
 
+  if (workspaceUpdated && client?.config?.getHost) {
+    await clearWorkspaceSkillCache({
+      host: (await client.config.getHost()).toString(),
+    });
+  }
+
   return { localSkillPaths, databricksBasePath, skillNames };
+}
+
+/** Remove directories dropped by one source unless another source still owns them. */
+async function removeDeletedSkills(
+  destination: FileSystem,
+  key: string,
+  metadata: RemoteSkillsMetadata | undefined,
+  nextSkills: readonly string[],
+): Promise<void> {
+  const previous = metadata?.sources[key]?.skills ?? [];
+  const retained = new Set(nextSkills);
+  for (const [sourceKey, entry] of Object.entries(metadata?.sources ?? {})) {
+    if (sourceKey === key) continue;
+    for (const skill of entry.skills) retained.add(skill);
+  }
+  await Promise.all(
+    previous
+      .filter((skill) => !retained.has(skill))
+      .map((skill) => destination.rmdir(skill, { force: true, recursive: true })),
+  );
 }
 
 /** Probe file {@link openWritableWorkspace} writes and removes. */

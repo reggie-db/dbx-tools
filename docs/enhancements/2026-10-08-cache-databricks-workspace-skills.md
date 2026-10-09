@@ -2,7 +2,7 @@
 
 Date: 2026-10-08
 
-Status: Proposed
+Status: Implemented; production trace validation pending
 
 ## Problem
 
@@ -40,6 +40,38 @@ Two Store 2682 turns after upgrading show:
 The five-minute default TTL means normal use can encounter the cold-refresh
 storm repeatedly. Consumers can raise `workspaceSkillRefreshTtlMs`, but the
 initial and post-expiry refresh still need bounded, lazy I/O.
+
+## Cache trace amplification in 0.9.72
+
+Trace `56fa5b4e17e7094a97a629ad702879e0` explicitly searched for a Databricks
+Apps skill. The turn completed in 15.03 seconds but produced 5,917 spans:
+
+- 1,510 `cache.getOrExecute` spans;
+- 983 cache hits and 527 cache misses;
+- 3,843 `lakebase.query` spans;
+- 529 Databricks GET spans;
+- 205 successful workspace exports;
+- 257 workspace status checks, including 131 expected 404 responses;
+- 65 workspace directory listings.
+
+Persistent-cache bookkeeping generated most of the trace:
+
+- 1,510 `SELECT value, expiry` statements;
+- 1,417 `UPDATE ... SET last_accessed` statements;
+- 434 stale-entry deletes;
+- 434 insert/upsert statements;
+- 48 cache-size aggregation statements.
+
+The 3,843 database calls are not additional skill downloads. They are the
+persistent cache reading, touching, expiring, and rewriting individual
+filesystem-operation entries. Because each query receives its own OTel span,
+one skill catalogue refresh expands into thousands of trace nodes even when
+most operations are cache hits.
+
+The cache needs a request-local or process-local L1 layer over the persistent
+store, batched metadata/content operations, and sampled or aggregated
+bookkeeping telemetry. A hit should not require both a database read and
+`last_accessed` write for every file operation on every turn.
 
 ## Root cause
 
@@ -127,6 +159,26 @@ same in-flight refresh across concurrent turns.
 Keep one skill refresh span with counts for listed, exported, reused, missing,
 rate-limited, and failed objects. Avoid attaching hundreds of low-level cached
 GET spans to every chat root after materialization.
+
+## Implemented design
+
+- `@dbx-tools/appkit` layers a bounded `lru-cache` L1 over persistent AppKit
+  storage. A warm process hit performs no Lakebase query or `last_accessed`
+  update.
+- `@dbx-tools/appkit-mastra` persists one versioned catalogue per workspace
+  host, attributed user, and ordered root set. The record contains parsed
+  `SKILL.md` metadata and instructions only.
+- Catalogue refresh lists each root and immediate skill directory, compares
+  available listing metadata, exports only changed `SKILL.md` files, removes
+  deleted skills, negatively caches missing roots, coalesces concurrent misses,
+  and retains the last valid catalogue after a refresh failure.
+- The dbx-tools catalogue processor preserves `search_skills` and `load_skill`
+  and provides `skill_read`. References, scripts, templates, and assets are read
+  directly from the current request's filesystem only after the skill is loaded.
+- Ordinary workspace file operations bypass catalogue persistence and remain
+  fresh. Remote-skill writes invalidate affected host catalogues.
+- Bounded workspace, catalogue, Genie-suggestion, and AppKit L1 caches use the
+  shared `lru-cache` dependency rather than hand-rolled Map eviction.
 
 ## Tests
 

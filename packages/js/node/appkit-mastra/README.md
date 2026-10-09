@@ -273,18 +273,19 @@ Every `agents.createAgent()` gets a default Mastra `Workspace` from
 current OBO user's `WorkspaceClient`, so Mastra can discover Assistant-style
 `SKILL.md` files at request time.
 
-Path-backed mounts reuse one stable Mastra filesystem per resolved user,
-workspace host, and root. Reads use AppKit's `CacheManager`, keyed by the
-existing Mastra resolved user id. Concurrent misses coalesce, Lakebase-backed
-AppKit caches survive process restarts, and no access token or client enters a
-cache key or value. The default TTL is five minutes; set
+Skill discovery materializes one parsed catalogue per resolved user, workspace
+host, and ordered root set. The catalogue contains `SKILL.md` metadata and
+instructions only; ordinary filesystem and auxiliary skill-file reads stay
+fresh. AppKit's bounded process L1 serves warm catalogue hits without Lakebase,
+while one persistent catalogue record survives restarts. The default TTL is
+five minutes; set
 `workspaceSkillRefreshTtlMs` on the plugin or `createWorkspace()` to change it.
 
-The plugin uses Mastra's `SkillSearchProcessor` by default. The model searches
-the cached catalogue and loads relevant instructions instead of receiving every
-skill description on every turn. Set `workspaceSkillSearch: false` to retain
-Mastra's eager catalogue, or pass `{ topK, minScore, ttlMs }` to tune on-demand
-search.
+The plugin exposes compatible `search_skills` and `load_skill` tools from its
+catalogue processor. `skill_read` fetches a selected skill's reference, script,
+template, or asset directly only when requested. Set `workspaceSkillSearch:
+false` to disable these tools, or pass `{ topK, minScore, ttlMs }` to tune
+on-demand search.
 
 Locations are a named map (`skillFolders`), so an app refers to a tree by name
 rather than repeating a path. Each name mounts at `/<name>` in the workspace
@@ -343,22 +344,33 @@ which is how `workspace-team-app` drops out when no user email is stamped.
 with `workspace`, `workspace.workspace`, or `all-apis` scope. Development mode
 skips that gate for local iteration.
 
-## Databricks Sandbox
+## Workspace Sandbox
 
-Auto-created agent workspaces prefer the Beta
+Auto-created agent workspaces use the Node `@pydantic/monty` runtime by default,
+so Python command tools work without a workspace preview or remote API.
+Monty loads a platform optional native package (`@pydantic/monty-darwin-arm64`,
+`@pydantic/monty-linux-x64-gnu`, and the other published triples). npm can skip
+those nested optionalDependencies; on first start this package checks for the
+current platform package and, if it is missing, runs `npm install <pkg>@<monty
+version> --no-save` in the process working directory (or `bun add --no-save`
+when npm is not on PATH). Databricks App deploys should still declare the
+Linux GNU package as a direct dependency so the container install does not rely
+on that recovery.
+
+Opt into the Beta
 [Databricks Sandbox](https://docs.databricks.com/aws/en/compute/serverless/sandbox)
-service by default. The provider derives a stable opaque sandbox id from the
-workspace and attributed user, creates the sandbox lazily on the first command,
-starts a stopped sandbox, and waits for runnable state. Commands execute through
-the synchronous Sandbox API and return Mastra's normal stdout, stderr, exit,
-timeout, and truncation fields. When the Beta is definitively unavailable
-(404 or an explicit feature-disabled/preview-unavailable error), it falls back
-to the Node `@pydantic/monty` runtime so deployment and Python code execution
-still work. Permission, authentication, and transient network failures remain
-visible instead of silently changing providers.
+with `sandbox: true`, `sandbox: "databricks"`, or a Databricks options object.
+The provider derives a stable opaque sandbox id from the workspace and
+attributed user, creates the sandbox lazily on the first command, starts a
+stopped sandbox, and waits for runnable state. Commands execute through the
+synchronous Sandbox API and return Mastra's normal stdout, stderr, exit,
+timeout, and truncation fields. When the Beta is definitively unavailable, its
+configured fallback defaults to Monty. Permission, authentication, and
+transient network failures remain visible instead of silently changing
+providers.
 
-Enable Databricks Sandbox in the workspace Previews page before using command
-tools. The default adapter creates its own AppKit client through the normal
+Enable Databricks Sandbox in the workspace Previews page before selecting it.
+The adapter creates its own AppKit client through the normal
 environment/profile chain, so a Databricks App uses its service principal even
 when the agent turn uses OBO. Databricks Apps user authorization does not
 currently expose the Sandbox API scope. Outside Apps, a caller that supplies an
@@ -395,12 +407,12 @@ mastra({
 });
 ```
 
-Disable command execution, or explicitly replace Databricks with any Mastra
-sandbox on one agent:
+Disable command execution, select Databricks, or provide any Mastra sandbox on
+one agent:
 
 ```ts
 mastra({ agents: analyst, sandbox: false });
-mastra({ agents: analyst, sandbox: "monty" });
+mastra({ agents: analyst, sandbox: "databricks" });
 
 const localAgent = agents.createAgent({
   instructions: "Run only trusted local commands.",
@@ -479,14 +491,14 @@ pnpm add skills
 Provisioning runs on every app boot, and skill trees change rarely, so each
 provisioned tree carries a `.metadata.json` at its root recording when each
 source was last downloaded. A source is only re-downloaded once that record is
-older than a day; inside the window the existing tree is reused and no network
+older than seven days; inside the window the existing tree is reused and no network
 call is made. The record travels with the tree rather than living in process
 memory, so a container that restarts a dozen times an hour pulls each source
 once, not a dozen times.
 
 ```ts
 mastra({
-  // Re-pull at most once an hour instead of once a day.
+  // Re-pull at most once an hour instead of once every seven days.
   remoteSkills: { sources: ["aitools"], refreshTtlMs: 60 * 60 * 1000 },
 });
 
@@ -500,7 +512,7 @@ mastra({
 
 The record is keyed by the source AND the options that change what it contains
 (`skills`, `experimental`, `ref`), so narrowing a skill list or moving a `ref`
-re-downloads immediately rather than serving the previous selection for a day.
+re-downloads immediately rather than serving the previous selection for seven days.
 A missing or unreadable record is treated as a cache miss, never as a startup
 failure.
 
@@ -1004,21 +1016,20 @@ requiring callers to assemble a Mastra server by hand.
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
-- `sandbox` defaults to Databricks Sandbox with Node Monty fallback for
-  auto-created workspaces. `false` disables command execution, `"monty"`
-  selects Monty directly, and `true` or an object selects/configures
-  Databricks.
-- `workspaceSkillRefreshTtlMs` controls AppKit-cached workspace skill reads.
-  Entries are isolated by the Mastra resolved user id and default to five
-  minutes.
-- `workspaceSkillSearch` defaults to Mastra's on-demand
-  `SkillSearchProcessor`. Pass `false` for the eager catalogue or an object with
-  `topK`, `minScore`, and `ttlMs` overrides.
+- `sandbox` defaults to Monty for auto-created workspaces. `false` disables
+  command execution, while `true`, `"databricks"`, or an object
+  selects/configures Databricks Sandbox.
+- `workspaceSkillRefreshTtlMs` controls complete catalogue refreshes. Catalogues
+  are isolated by the Mastra resolved user id and default to five minutes;
+  auxiliary reads are not cached.
+- `workspaceSkillSearch` defaults to dbx-tools on-demand catalogue search. Pass
+  `false` to disable it or an object with `topK`, `minScore`, and `ttlMs`
+  overrides.
 - `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
   list, or an options bag with `failOnError`, `userEmail`,
   `databricksBasePath`, and `refreshTtlMs` (how long a provisioned tree is
-  reused before re-downloading, a day by default). A source is `"aitools"` (see
+  reused before re-downloading, seven days by default). A source is `"aitools"` (see
   [Databricks AI Tools](#databricks-ai-tools)) or any URL-like.
 - `genieSpaces` maps aliases to Genie Space IDs (or to
   `{ spaceId, hint }` objects). Those aliases flow into tool names,
@@ -1100,7 +1111,7 @@ client that talks to these routes.
   Databricks Assistant skills tree (or a local temp dir): the `"aitools"`
   constant reads Databricks' own skill repo directly, and any other source goes
   through the optional `skills` CLI or a direct fetch. Each tree carries a
-  `.metadata.json` so a source is re-downloaded at most once a day
+  `.metadata.json` so a source is re-downloaded at most once every seven days
   (`refreshTtlMs`).
 - `mcp` - MCP server construction.
 - `observability` / `mlflow` / `telemetry` - tracing, feedback, and stamping chat

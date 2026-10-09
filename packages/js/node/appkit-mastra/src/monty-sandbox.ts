@@ -17,10 +17,15 @@ import type {
 } from "@mastra/core/workspace";
 import type { CheckoutOptions, Monty as MontyPool, MontySession } from "@pydantic/monty/node";
 
+import { ensureMontyNativeBinding } from "./monty-native.ts";
+
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_MEMORY_BYTES = 10_000_000;
 
-const montyModule = functionUtils.memoize(() => import("@pydantic/monty/node"));
+const montyModule = functionUtils.memoize(async () => {
+  await ensureMontyNativeBinding();
+  return import("@pydantic/monty/node");
+});
 const montyPool = functionUtils.memoize(async (): Promise<MontyPool> => {
   const { Monty } = await montyModule();
   return Monty.create({
@@ -140,7 +145,7 @@ export class MontySandbox implements WorkspaceSandbox {
       pool,
       {
         limits: {
-          maxDurationSecs: Math.max(0.001, timeout / 1_000),
+          maxFeedDurationSecs: Math.max(0.001, timeout / 1_000),
           maxMemory: this.maxMemoryBytes,
         },
         typeCheck: this.typeCheck,

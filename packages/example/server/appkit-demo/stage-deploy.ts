@@ -16,6 +16,8 @@
  *   - `catalog:`     -> the concrete version from the root `pnpm-workspace.yaml`;
  *   - `bun`          -> added as a dependency so the platform's pnpm install
  *                       fetches the runtime (research: pnpm installs, bun runs);
+ *   - Monty's Linux binding -> declared directly so npm cannot omit the
+ *                       transitive optional native package;
  *   - a `pnpm-workspace.yaml` carrying `allowBuilds` (esbuild/unrs-resolver/bun/
  *     onnxruntime-node...) so pnpm 10+ doesn't fail the build on their postinstalls;
  *   - `requirements.txt` installing locally built workspace wheels so the
@@ -58,9 +60,12 @@ const workspaceManifest = JSON.parse(
 ) as Record<string, unknown>;
 const rootWorkspace = parse(readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8")) as {
   allowBuilds?: Record<string, boolean>;
+  catalog?: Record<string, string>;
   packages?: string[];
 };
 const allowBuilds = rootWorkspace.allowBuilds ?? {};
+const montyVersion = rootWorkspace.catalog?.["@pydantic/monty"];
+if (!montyVersion) throw new Error("workspace catalog has no @pydantic/monty version");
 const overrides = workspaceManifest.overrides as Record<string, unknown> | undefined;
 const bunVersion = overrides?.bun;
 if (typeof bunVersion !== "string" || !bunVersion) {
@@ -74,6 +79,7 @@ const deployPkg = materializeWorkspaceManifest(
     type: "module",
     dependencies: {
       ...(pkg.dependencies as Record<string, string>),
+      "@pydantic/monty-linux-x64-gnu": montyVersion,
       bun: bunVersion,
     },
   },

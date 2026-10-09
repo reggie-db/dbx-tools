@@ -131,6 +131,11 @@ one-time code) is lost on every restart. `"env"` is the right mode inside a
 deployed app, since the app service principal cannot grant on the cache schema
 anyway.
 
+The injected persistent storage includes a bounded process-local L1 powered by
+`lru-cache`. Warm hits avoid Lakebase reads and `last_accessed` writes; misses,
+expiry, deletion, and clear operations remain coherent with the persistent
+store.
+
 `lakebaseResolver.resolveLakebaseConnection()` accepts:
 
 | Option       | Type                                 | Default                                  | Description                                                                                                    |

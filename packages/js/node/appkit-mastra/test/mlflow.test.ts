@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { afterEach, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import type { appkit } from "@dbx-tools/appkit";
 import { context, trace } from "@opentelemetry/api";
 import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
@@ -64,6 +67,31 @@ afterEach(() => {
   resetUcTracePrefixCache();
   resetAppMlflowTraceInfo();
   globalThis.fetch = originalFetch;
+});
+
+describe("MLflow Node ESM compatibility", () => {
+  it("uses exact published filenames for every deep import", () => {
+    const source = readFileSync(new URL("../src/mlflow.ts", import.meta.url), "utf8");
+    const specifiers = [...source.matchAll(/["'](@mlflow\/core\/dist\/[^"']+)["']/g)].map(
+      ([, specifier]) => specifier!,
+    );
+
+    assert.ok(specifiers.length > 0);
+    assert.ok(specifiers.every((specifier) => specifier.endsWith(".js")));
+    const imported = spawnSync(
+      "node",
+      [
+        "--input-type=module",
+        "--eval",
+        `await Promise.all(${JSON.stringify(specifiers)}.map((specifier) => import(specifier)))`,
+      ],
+      {
+        cwd: fileURLToPath(new URL("..", import.meta.url)),
+        encoding: "utf8",
+      },
+    );
+    assert.equal(imported.status, 0, imported.stderr);
+  });
 });
 
 describe("direct MLflow configuration", () => {

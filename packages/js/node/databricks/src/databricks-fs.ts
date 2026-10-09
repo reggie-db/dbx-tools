@@ -297,6 +297,11 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
         collect(client.workspace.list({ path: resolvedPath }), (info) => ({
           name: posixPath.basename(info.path ?? ""),
           type: info.object_type === "DIRECTORY" ? "directory" : "file",
+          metadata: {
+            createdAt: info.created_at,
+            modifiedAt: info.modified_at,
+            objectId: info.object_id,
+          },
         })),
       volumes: (client) =>
         collect(client.files.listDirectoryContents({ directory_path: resolvedPath }), (entry) => ({

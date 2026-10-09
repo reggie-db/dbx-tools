@@ -30,8 +30,8 @@ import { appkit } from "@dbx-tools/appkit";
 import { asyncUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
 import { TraceLocationType, TraceMetadataKey } from "@mlflow/core";
-import { TraceInfo } from "@mlflow/core/dist/core/entities/trace_info";
-import { TraceState } from "@mlflow/core/dist/core/entities/trace_state";
+import { TraceInfo } from "@mlflow/core/dist/core/entities/trace_info.js";
+import { TraceState } from "@mlflow/core/dist/core/entities/trace_state.js";
 import type { Context } from "@opentelemetry/api";
 import type { ReadableSpan, Span as SdkSpan, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import type { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
@@ -455,7 +455,7 @@ async function detectedDirectMlflowTraceLocation(
     const client = new mlflow.MlflowClient({ trackingUri, authProvider });
     const experiment = await client.getExperiment(experimentId);
     if (!experiment) return undefined;
-    const { ucLocationFromExperimentTags } = await import("@mlflow/core/dist/core/destination");
+    const { ucLocationFromExperimentTags } = await import("@mlflow/core/dist/core/destination.js");
     const location = ucLocationFromExperimentTags(experiment.tags);
     if (!location?.tablePrefix) return undefined;
     return {
@@ -505,7 +505,7 @@ export async function initializeDirectMlflowTracing(): Promise<boolean> {
     }
     const [{ DatabricksUCTableSpanExporter, DatabricksUCTableSpanProcessor }, sdk] =
       await Promise.all([
-        import("@mlflow/core/dist/exporters/uc_table"),
+        import("@mlflow/core/dist/exporters/uc_table.js"),
         import("@opentelemetry/sdk-trace-node"),
       ]);
     const authProvider = mlflow.createAuthProvider({

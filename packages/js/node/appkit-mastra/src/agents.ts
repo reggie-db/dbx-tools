@@ -25,7 +25,7 @@ import type {
 } from "@databricks/appkit/beta";
 import { pluginRegistry, toolkitEntries } from "@dbx-tools/appkit";
 import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
-import { log, object, stringUtils } from "@dbx-tools/shared-core";
+import { errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { TOOL_PROGRESS_PART_TYPE, ToolProgressEventSchema } from "@dbx-tools/shared-mastra/wire";
 import type {
   AgentConfig,
@@ -35,6 +35,7 @@ import type {
 } from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
 import { SkillSearchProcessor } from "@mastra/core/processors";
+import type { OutputProcessor } from "@mastra/core/processors";
 import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
 import type { Tool } from "@mastra/core/tools";
 import { createTool } from "@mastra/core/tools";
@@ -48,9 +49,10 @@ import type { MemoryBuilder } from "./memory.ts";
 import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
 import { stripStaleChartsProcessor } from "./processors.ts";
 import { MASTRA_RESOLVED_MODEL_KEY } from "./serving.ts";
+import { CatalogueSkillSearchProcessor } from "./skill-search.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
-import { createWorkspace } from "./workspaces.ts";
+import { createWorkspace, workspaceSkillCatalogueResolver } from "./workspaces.ts";
 
 /**
  * Tool record accepted by every Mastra `Agent.tools` field and by the
@@ -583,8 +585,7 @@ export async function buildAgents(opts: {
         ...(config.workspaceSkillRefreshTtlMs !== undefined
           ? { workspaceSkillRefreshTtlMs: config.workspaceSkillRefreshTtlMs }
           : {}),
-        sandbox:
-          config.sandbox === undefined || config.sandbox === true ? "databricks" : config.sandbox,
+        sandbox: config.sandbox === true ? "databricks" : config.sandbox,
       });
       markDefaultWorkspace(workspace);
     }
@@ -613,6 +614,7 @@ export async function buildAgents(opts: {
       ...(memory ? { memory } : {}),
       ...(workspace ? { workspace } : {}),
       inputProcessors: [...inputProcessors, ...workspaceSkillInputProcessors(workspace, config)],
+      outputProcessors: [toolErrorLoggingProcessor(log)],
     });
     // Surface the effective default model per agent so operators can
     // see at a glance which endpoint each agent points at without
@@ -644,13 +646,44 @@ export async function buildAgents(opts: {
   return { agents, defaultAgentId, defaultModels, ambientTools };
 }
 
+/** Log failed tool calls without changing the chunks returned to the client. */
+function toolErrorLoggingProcessor(logger: log.Logger): OutputProcessor {
+  return {
+    id: "tool-error-logger",
+    async processOutputStream({ part }) {
+      if (part.type === "tool-error") {
+        const error = errorUtils.toError(part.payload.error);
+        logger.error("tool execution failed", {
+          toolName: part.payload.toolName,
+          toolCallId: part.payload.toolCallId,
+          error: error.message,
+          stack: error.stack,
+        });
+      }
+      return part;
+    },
+  };
+}
+
 function workspaceSkillInputProcessors(
   workspace: Workspace | undefined,
   config: MastraPluginConfig,
-): SkillSearchProcessor[] {
-  if (!workspace?.skills || config.workspaceSkillSearch === false) return [];
+): Array<SkillSearchProcessor | CatalogueSkillSearchProcessor> {
+  if (!workspace || config.workspaceSkillSearch === false) return [];
   const options =
     typeof config.workspaceSkillSearch === "object" ? config.workspaceSkillSearch : undefined;
+  const catalogue = workspaceSkillCatalogueResolver(workspace);
+  if (catalogue) {
+    return [
+      new CatalogueSkillSearchProcessor({
+        resolve: catalogue,
+        topK: options?.topK ?? 5,
+        minScore: options?.minScore ?? 0.1,
+        ...(options?.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),
+      }),
+    ];
+  }
+  if (!workspace.skills) return [];
   return [
     new SkillSearchProcessor({
       workspace,

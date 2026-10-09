@@ -19,12 +19,24 @@ import { dirname, join } from "node:path";
 import { createLakebasePool, getWorkspaceClient, type CacheConfig } from "@databricks/appkit";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { errorUtils, hash, log } from "@dbx-tools/shared-core";
+import { LRUCache } from "lru-cache";
 import { handleOwnershipMigrationError } from "./migration.ts";
 
 const logger = log.logger("cache-storage");
 
 type LakebasePool = ReturnType<typeof createLakebasePool>;
 type CacheStorage = NonNullable<CacheConfig["storage"]>;
+
+interface CacheEntry<T = unknown> {
+  expiry: number;
+  value: T;
+}
+
+/** Bounds for the process-local cache layered over persistent AppKit storage. */
+export interface L1CacheStorageOptions {
+  maxBytes?: number;
+  maxEntries?: number;
+}
 
 /** AppKit's internal persistent storage surface. */
 export type PersistentStorageBase = CacheStorage & {
@@ -40,6 +52,88 @@ type PersistentStorageConstructor = new (
 ) => PersistentStorageBase;
 
 let persistentStorageCtor: PersistentStorageConstructor | undefined | null = null;
+
+/** Process-local LRU that avoids a persistent cache query on every warm hit. */
+export class L1CacheStorage implements CacheStorage {
+  private readonly entries: LRUCache<string, CacheEntry>;
+
+  constructor(
+    private readonly storage: CacheStorage,
+    options: L1CacheStorageOptions = {},
+  ) {
+    this.entries = new LRUCache({
+      max: positiveBound(options.maxEntries, 1_000, "maxEntries"),
+      maxSize: positiveBound(options.maxBytes, 64 * 1024 * 1024, "maxBytes"),
+      sizeCalculation: (entry, key) => retainedSize(key, entry),
+    });
+  }
+
+  async get<T>(key: string): Promise<CacheEntry<T> | null> {
+    const local = this.entries.get(key);
+    if (local) return local as CacheEntry<T>;
+    const persisted = await this.storage.get<T>(key);
+    if (persisted && persisted.expiry > Date.now()) this.retain(key, persisted);
+    return persisted;
+  }
+
+  async set<T>(key: string, entry: CacheEntry<T>): Promise<void> {
+    await this.storage.set(key, entry);
+    this.retain(key, entry);
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.storage.delete(key);
+    this.entries.delete(key);
+  }
+
+  async clear(): Promise<void> {
+    await this.storage.clear();
+    this.entries.clear();
+  }
+
+  async has(key: string): Promise<boolean> {
+    if (this.entries.has(key)) return true;
+    return this.storage.has(key);
+  }
+
+  size(): Promise<number> {
+    return this.storage.size();
+  }
+
+  isPersistent(): boolean {
+    return this.storage.isPersistent();
+  }
+
+  healthCheck(): Promise<boolean> {
+    return this.storage.healthCheck();
+  }
+
+  async close(): Promise<void> {
+    this.entries.clear();
+    await this.storage.close();
+  }
+
+  private retain<T>(key: string, entry: CacheEntry<T>): void {
+    const ttl = entry.expiry - Date.now();
+    if (ttl > 0) this.entries.set(key, entry, { ttl });
+  }
+}
+
+function positiveBound(value: number | undefined, fallback: number, name: string): number {
+  const resolved = value ?? fallback;
+  if (!Number.isFinite(resolved) || resolved <= 0) {
+    throw new RangeError(`${name} must be a finite positive number`);
+  }
+  return Math.floor(resolved);
+}
+
+function retainedSize(key: string, entry: CacheEntry): number {
+  try {
+    return Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(entry));
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
 
 /**
  * Lazily resolve AppKit's internal `PersistentStorage` constructor. `null`
@@ -176,7 +270,10 @@ export async function createSoftPersistentStorage(
     }
     await storage.initialize();
     await probeStorage(storage);
-    return storage;
+    return new L1CacheStorage(storage, {
+      maxBytes: cache?.maxBytes,
+      maxEntries: cache?.maxSize,
+    });
   } catch (err) {
     logger.debug("soft persistent cache unavailable", {
       error: errorUtils.errorMessage(err),

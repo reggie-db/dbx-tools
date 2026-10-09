@@ -52,6 +52,7 @@ import type { StartedEvent } from "@dbx-tools/shared-mastra";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import { createTool, type ToolExecutionContext } from "@mastra/core/tools";
+import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
 import type { MastraTools } from "./agents.ts";
@@ -1089,26 +1090,20 @@ const SUGGESTION_LIMIT = 6;
  */
 const SUGGESTION_CACHE_TTL_MS = 10 * 60_000;
 
-/** Space-id -> cached sample questions with an absolute expiry. */
-const _suggestionCache = new Map<string, { questions: string[]; expires: number }>();
+/** Bounded process-local cache of parsed sample questions by Genie space id. */
+const _suggestionCache = new LRUCache<string, string[]>({
+  max: 128,
+  ttl: SUGGESTION_CACHE_TTL_MS,
+});
 
 /** Read a space's cached questions, or `undefined` on miss / expiry. */
 function readSuggestionCache(spaceId: string): string[] | undefined {
-  const entry = _suggestionCache.get(spaceId);
-  if (!entry) return undefined;
-  if (entry.expires <= Date.now()) {
-    _suggestionCache.delete(spaceId);
-    return undefined;
-  }
-  return entry.questions;
+  return _suggestionCache.get(spaceId);
 }
 
 /** Cache a space's parsed questions for {@link SUGGESTION_CACHE_TTL_MS}. */
 function writeSuggestionCache(spaceId: string, questions: string[]): void {
-  _suggestionCache.set(spaceId, {
-    questions,
-    expires: Date.now() + SUGGESTION_CACHE_TTL_MS,
-  });
+  _suggestionCache.set(spaceId, questions);
 }
 
 /**

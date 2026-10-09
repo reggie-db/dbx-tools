@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  L1CacheStorage,
   loadPersistentStorage,
   probeStorage,
   softenInitialize,
@@ -27,6 +28,8 @@ function storageWithInit(
     },
     clear: async () => {},
     has: async (key: string) => values.has(key),
+    size: async () => values.size,
+    isPersistent: () => true,
     ...overrides,
   } as PersistentStorageBase;
 }
@@ -79,5 +82,38 @@ describe("soft persistent cache initialization", () => {
     });
 
     await assert.rejects(probeStorage(storage), /unexpected value/);
+  });
+});
+
+describe("persistent cache L1", () => {
+  it("serves warm values without another persistent read", async () => {
+    let reads = 0;
+    const storage = storageWithInit(async () => {});
+    await storage.set("key", { value: "value", expiry: Date.now() + 60_000 });
+    const originalGet = storage.get.bind(storage);
+    storage.get = async (key) => {
+      reads += 1;
+      return originalGet(key);
+    };
+    const l1 = new L1CacheStorage(storage);
+
+    assert.equal((await l1.get<string>("key"))?.value, "value");
+    assert.equal((await l1.get<string>("key"))?.value, "value");
+    assert.equal(reads, 1);
+  });
+
+  it("keeps writes and invalidations coherent across layers", async () => {
+    const storage = storageWithInit(async () => {});
+    const l1 = new L1CacheStorage(storage, { maxEntries: 1 });
+    const future = Date.now() + 60_000;
+
+    await l1.set("first", { value: 1, expiry: future });
+    await l1.set("second", { value: 2, expiry: future });
+    await storage.delete("first");
+    assert.equal(await l1.get("first"), undefined);
+    assert.equal((await l1.get<number>("second"))?.value, 2);
+
+    await l1.delete("second");
+    assert.equal(await l1.get("second"), undefined);
   });
 });

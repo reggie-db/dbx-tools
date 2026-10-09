@@ -129,6 +129,10 @@
         "types": "./lib/src/model.d.ts",
         "default": "./lib/src/model.js"
       },
+      "./monty-native": {
+        "types": "./lib/src/monty-native.d.ts",
+        "default": "./lib/src/monty-native.js"
+      },
       "./monty-sandbox": {
         "types": "./lib/src/monty-sandbox.d.ts",
         "default": "./lib/src/monty-sandbox.js"
@@ -220,7 +224,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.74",
+  "version": "0.9.78",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
@@ -243,6 +247,7 @@
     "./memory": "./src/memory.ts",
     "./mlflow": "./src/mlflow.ts",
     "./model": "./src/model.ts",
+    "./monty-native": "./src/monty-native.ts",
     "./monty-sandbox": "./src/monty-sandbox.ts",
     "./observability": "./src/observability.ts",
     "./openapi-tool": "./src/openapi-tool.ts",

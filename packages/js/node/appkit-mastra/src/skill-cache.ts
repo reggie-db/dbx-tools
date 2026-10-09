@@ -1,312 +1,347 @@
 /**
- * AppKit-backed caching for Databricks workspace skill mounts.
+ * User-scoped workspace skill catalogues cached as one semantic record.
  *
  * @module
  */
 
-import { randomUUID } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
-import { hash, object } from "@dbx-tools/shared-core";
-import type {
-  CopyOptions,
-  FileContent,
-  FileEntry,
-  FileStat,
-  FileSystem,
-  ListOptions,
-  MakeDirectoryOptions,
-  ReadFileOptions,
-  RemoveOptions,
-  WriteFileOptions,
-} from "@dbx-tools/shared-fs";
+import { errorUtils, log, object } from "@dbx-tools/shared-core";
+import { posixPath } from "@dbx-tools/shared-fs";
+import type { RequestContext } from "@mastra/core/request-context";
+import { LRUCache } from "lru-cache";
+import { parse as parseYaml } from "yaml";
+import { z } from "zod";
 
-import { filesystems, type MastraFileSystemAdapter } from "./filesystems.ts";
+const CACHE_NAMESPACE = "mastra:workspace-skill-catalogue";
+const CATALOGUE_VERSION = 1;
+const MAX_SCOPED_CATALOGUES = 256;
+const logger = log.logger("mastra/skill-cache");
 
-const CACHE_NAMESPACE = "mastra:workspace-skills";
-const DEFAULT_MAX_SCOPED_MOUNTS = 256;
+const SkillCatalogueEntrySchema = z
+  .object({
+    name: z.string().describe("Unique skill name from SKILL.md frontmatter."),
+    description: z.string().describe("Skill description from SKILL.md frontmatter."),
+    instructions: z.string().describe("Markdown instructions below SKILL.md frontmatter."),
+    sourceId: z.string().describe("Identity of the mounted source that owns this skill."),
+    sourcePath: z.string().describe("Path to SKILL.md relative to its source root."),
+    signature: z
+      .string()
+      .optional()
+      .describe("Stable metadata signature used to retain unchanged instructions."),
+  })
+  .describe("One parsed skill in a materialized workspace catalogue.");
 
-interface CachedFileStat extends Omit<FileStat, "accessedAt" | "createdAt" | "modifiedAt"> {
-  accessedAt?: number;
-  createdAt?: number;
-  modifiedAt?: number;
+const SkillCatalogueSchema = z
+  .object({
+    version: z.literal(CATALOGUE_VERSION).describe("Persisted catalogue schema version."),
+    generatedAt: z.string().datetime().describe("Time the catalogue was last refreshed."),
+    roots: z.array(z.string()).describe("Ordered source identities included in the catalogue."),
+    skills: z
+      .array(SkillCatalogueEntrySchema)
+      .describe("Parsed skills after ordered duplicate-name precedence is applied."),
+  })
+  .describe("One user-scoped materialized workspace skill catalogue.");
+
+/** Parsed skill retained in a materialized workspace catalogue. */
+export type SkillCatalogueEntry = z.infer<typeof SkillCatalogueEntrySchema>;
+
+/** Versioned persisted skill catalogue. */
+export type SkillCatalogue = z.infer<typeof SkillCatalogueSchema>;
+
+/** One ordered filesystem root contributing skills to a catalogue. */
+export interface SkillCatalogueSource {
+  /** Stable source identity including its mount precedence. */
+  id: string;
+  /** List one source-relative directory with provider metadata when available. */
+  list(path: string): Promise<SkillCatalogueFileEntry[]>;
+  /** Read one source-relative file fresh from its owning filesystem. */
+  read(path: string): Promise<string>;
 }
 
-interface ScopedMountEntry {
-  adapter: MastraFileSystemAdapter;
-  cache: AppKitCachedFileSystem;
-  host: string;
-  root: string;
-  userKey: string;
+/** Minimal directory metadata used to compare one catalogue refresh. */
+export interface SkillCatalogueFileEntry {
+  metadata?: Readonly<Record<string, unknown>>;
+  name: string;
+  size?: number;
+  type: "directory" | "file";
 }
 
-const scopedMounts = new Map<string, ScopedMountEntry>();
-
-/** Default remote skill metadata and content cache lifetime. */
-export const DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS = 5 * 60 * 1000;
-
-/** Options for one AppKit-cached workspace skill filesystem. */
-export interface AppKitCachedFileSystemOptions {
+/** Options for one user-scoped workspace skill catalogue. */
+export interface WorkspaceSkillCatalogueOptions {
   host: string;
-  source: FileSystem;
+  sources: readonly SkillCatalogueSource[];
   ttlMs?: number;
   userKey: string;
 }
 
-/** Stable Mastra mount plus the identity key used for source reuse. */
-export interface CachedWorkspaceSkillMount {
-  cacheKey: string;
-  filesystem: MastraFileSystemAdapter;
+/** Request state used to resolve one user-scoped catalogue owner. */
+export interface SkillCatalogueResolveContext {
+  abortSignal?: AbortSignal;
+  requestContext?: RequestContext;
 }
 
-/**
- * Cache read-only filesystem operations through AppKit while delegating
- * mutations to the current request's source.
- */
-export class AppKitCachedFileSystem implements FileSystem<"appkit-cache"> {
-  readonly backend = "appkit-cache" as const;
-  readonly id: string;
-  readonly readOnly: boolean;
-  readonly root: string;
+/** Resolve one request's complete skill catalogue. */
+export type SkillCatalogueResolver = (
+  context: SkillCatalogueResolveContext,
+) => Promise<WorkspaceSkillCatalogue>;
 
-  private source: FileSystem;
-  private readonly host: string;
-  private readonly ttlSec: number;
-  private readonly userKey: string;
+interface ParsedSkill {
+  description: string;
+  instructions: string;
+  name: string;
+}
 
-  constructor(options: AppKitCachedFileSystemOptions) {
+const scopedCatalogues = new LRUCache<string, WorkspaceSkillCatalogue>({
+  max: MAX_SCOPED_CATALOGUES,
+});
+
+/** Default lifetime for one complete workspace skill catalogue. */
+export const DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** Materialized catalogue with one AppKit cache record and fresh auxiliary reads. */
+export class WorkspaceSkillCatalogue {
+  readonly cacheKey: string;
+  readonly host: string;
+  readonly userKey: string;
+
+  private lastValid?: SkillCatalogue;
+  private readonly ttlMs: number;
+  private sources: readonly SkillCatalogueSource[];
+
+  constructor(private readonly options: WorkspaceSkillCatalogueOptions) {
     this.host = options.host;
-    this.source = options.source;
-    this.root = options.source.root;
-    this.readOnly = options.source.readOnly;
-    this.ttlSec = cacheTtlSec(options.ttlMs);
     this.userKey = options.userKey;
-    this.id = `appkit-skill-cache-${hash.fnvHash(this.host, this.userKey, this.root)}`;
-  }
-
-  /** Rebind cache misses and writes to the current request's OBO filesystem. */
-  bind(source: FileSystem): void {
-    if (source.root !== this.root || source.readOnly !== this.readOnly) {
-      throw new Error("Cannot rebind a workspace skill cache to a different filesystem scope");
-    }
-    this.source = source;
-  }
-
-  async init(): Promise<void> {
-    await this.source.init();
-  }
-
-  /** Keep the shared scope alive when one request releases its workspace view. */
-  close(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  resolvePath(inputPath: string): string {
-    return this.source.resolvePath(inputPath);
-  }
-
-  async readFile(inputPath: string): Promise<Uint8Array>;
-  async readFile(
-    inputPath: string,
-    options: ReadFileOptions & { encoding: string },
-  ): Promise<string>;
-  async readFile(inputPath: string, options?: ReadFileOptions): Promise<string | Uint8Array> {
-    const value = await this.cached("readFile", inputPath, undefined, async (source) => ({
-      base64: Buffer.from(await source.readFile(inputPath)).toString("base64"),
-    }));
-    const bytes = Buffer.from(value.base64, "base64");
-    return options?.encoding ? bytes.toString(options.encoding as BufferEncoding) : bytes;
-  }
-
-  async writeFile(
-    inputPath: string,
-    content: FileContent,
-    options?: WriteFileOptions,
-  ): Promise<void> {
-    await this.mutate((source) => source.writeFile(inputPath, content, options));
-  }
-
-  async appendFile(inputPath: string, content: FileContent): Promise<void> {
-    await this.mutate((source) => source.appendFile(inputPath, content));
-  }
-
-  async deleteFile(inputPath: string, options?: RemoveOptions): Promise<void> {
-    await this.mutate((source) => source.deleteFile(inputPath, options));
-  }
-
-  async copyFile(
-    sourcePath: string,
-    destinationPath: string,
-    options?: CopyOptions,
-  ): Promise<void> {
-    await this.mutate((source) => source.copyFile(sourcePath, destinationPath, options));
-  }
-
-  async moveFile(
-    sourcePath: string,
-    destinationPath: string,
-    options?: CopyOptions,
-  ): Promise<void> {
-    await this.mutate((source) => source.moveFile(sourcePath, destinationPath, options));
-  }
-
-  async mkdir(inputPath: string, options?: MakeDirectoryOptions): Promise<void> {
-    await this.mutate((source) => source.mkdir(inputPath, options));
-  }
-
-  async rmdir(inputPath: string, options?: RemoveOptions): Promise<void> {
-    await this.mutate((source) => source.rmdir(inputPath, options));
-  }
-
-  async readdir(inputPath: string, options?: ListOptions): Promise<FileEntry[]> {
-    return this.cached("readdir", inputPath, options, (source) =>
-      source.readdir(inputPath, options),
-    );
-  }
-
-  async exists(inputPath: string): Promise<boolean> {
-    return this.cached("exists", inputPath, undefined, (source) => source.exists(inputPath));
-  }
-
-  async stat(inputPath: string): Promise<FileStat> {
-    const value = await this.cached("stat", inputPath, undefined, async (source) =>
-      serializeStat(await source.stat(inputPath)),
-    );
-    return deserializeStat(value);
-  }
-
-  /** Rotate this scope's cache generation so the next read reloads it. */
-  async invalidate(): Promise<void> {
-    const cache = await CacheManager.getInstance();
-    await cache.set(this.generationKey(cache), randomUUID(), {
-      ttl: this.ttlSec * 2,
+    this.sources = options.sources;
+    this.ttlMs = positiveTtl(options.ttlMs);
+    this.cacheKey = object.toStableKey({
+      host: options.host,
+      roots: options.sources.map(({ id }) => id),
+      userKey: options.userKey,
+      version: CATALOGUE_VERSION,
     });
   }
 
-  private async cached<T>(
-    operation: string,
+  /** Rebind refreshes and lazy reads to the current request's filesystem clients. */
+  bind(sources: readonly SkillCatalogueSource[]): void {
+    const identities = sources.map(({ id }) => id);
+    if (object.toStableKey(identities) !== object.toStableKey(this.sources.map(({ id }) => id))) {
+      throw new Error("Cannot rebind a skill catalogue to a different ordered root set");
+    }
+    this.sources = sources;
+  }
+
+  /** Return the cached catalogue, refreshing all roots once on cache miss. */
+  async get(signal?: AbortSignal): Promise<SkillCatalogue> {
+    const cache = CacheManager.getInstanceSync();
+    try {
+      const catalogue = SkillCatalogueSchema.parse(
+        await cache.getOrExecute(
+          [CACHE_NAMESPACE, CATALOGUE_VERSION, this.options.host, this.rootKey()],
+          () => this.refresh(),
+          this.options.userKey,
+          {
+            ttl: Math.max(1, Math.ceil(this.ttlMs / 1000)),
+            callerSignal: signal,
+          },
+        ),
+      );
+      this.lastValid = catalogue;
+      return catalogue;
+    } catch (error) {
+      if (!this.lastValid) throw error;
+      logger.warn("skill catalogue refresh failed; retaining last valid catalogue", {
+        error: errorUtils.errorMessage(error),
+        roots: this.sources.map(({ id }) => id),
+      });
+      return this.lastValid;
+    }
+  }
+
+  /** Expire this complete catalogue without touching unrelated cache entries. */
+  async invalidate(): Promise<void> {
+    const cache = CacheManager.getInstanceSync();
+    await cache.delete(this.persistentKey(cache));
+  }
+
+  /** Read one selected skill's auxiliary file directly from its current source. */
+  async readSkillFile(
+    skillName: string,
     inputPath: string,
-    options: unknown,
-    load: (source: FileSystem) => Promise<T>,
-  ): Promise<T> {
-    const source = this.source;
-    const cache = await CacheManager.getInstance();
-    const generation = await this.generation(cache);
-    return cache.getOrExecute(
-      [
-        CACHE_NAMESPACE,
-        this.host,
-        this.root,
-        generation,
-        operation,
-        source.resolvePath(inputPath),
-        object.toStableKey(options ?? {}),
-      ],
-      () => load(source),
-      this.userKey,
-      { ttl: this.ttlSec },
+    signal?: AbortSignal,
+  ): Promise<string> {
+    signal?.throwIfAborted();
+    const catalogue = await this.get(signal);
+    const skill = catalogue.skills.find(({ name }) => name === skillName);
+    if (!skill) throw new Error(`Unknown skill: ${skillName}`);
+    const normalized = posixPath.normalize(inputPath);
+    if (
+      !normalized.ok ||
+      normalized.path === "/" ||
+      inputPath.split("/").some((segment) => segment === "..")
+    ) {
+      throw new Error(`Invalid skill file path: ${inputPath}`);
+    }
+    const source = this.sources.find(({ id }) => id === skill.sourceId);
+    if (!source) throw new Error(`Skill source is no longer mounted: ${skill.sourceId}`);
+    const parent = skill.sourcePath.split("/").slice(0, -1).join("/");
+    const path = [parent, normalized.path.replace(/^\/+/, "")].filter(Boolean).join("/");
+    return source.read(path);
+  }
+
+  private async refresh(): Promise<SkillCatalogue> {
+    const previous = new Map(
+      this.lastValid?.skills.map((skill) => [`${skill.sourceId}\0${skill.sourcePath}`, skill]) ?? [],
     );
+    const selected = new Map<string, SkillCatalogueEntry>();
+    for (const source of this.sources) {
+      for (const candidate of await discoverSkillFiles(source)) {
+        const prior = previous.get(`${source.id}\0${candidate.path}`);
+        const signature = fileSignature(candidate.entry);
+        let parsed: ParsedSkill | undefined;
+        if (signature && prior?.signature === signature) {
+          parsed = prior;
+        } else {
+          parsed = parseSkill(
+            await source.read(candidate.path),
+            candidate.path,
+          );
+        }
+        if (!parsed || selected.has(parsed.name)) continue;
+        selected.set(parsed.name, {
+          ...parsed,
+          sourceId: source.id,
+          sourcePath: candidate.path,
+          ...(signature ? { signature } : {}),
+        });
+      }
+    }
+    return SkillCatalogueSchema.parse({
+      version: CATALOGUE_VERSION,
+      generatedAt: new Date().toISOString(),
+      roots: this.sources.map(({ id }) => id),
+      skills: [...selected.values()],
+    });
   }
 
-  private async generation(cache: CacheManager): Promise<string> {
-    return cache.getOrExecute(
-      [CACHE_NAMESPACE, "generation", this.host, this.root],
-      async () => randomUUID(),
-      this.userKey,
-      { ttl: this.ttlSec * 2 },
+  private rootKey(): string {
+    return object.toStableKey(this.sources.map(({ id }) => id));
+  }
+
+  private persistentKey(cache: CacheManager): string {
+    return cache.generateKey(
+      [CACHE_NAMESPACE, CATALOGUE_VERSION, this.options.host, this.rootKey()],
+      this.options.userKey,
     );
-  }
-
-  private generationKey(cache: CacheManager): string {
-    return cache.generateKey([CACHE_NAMESPACE, "generation", this.host, this.root], this.userKey);
-  }
-
-  private async mutate(run: (source: FileSystem) => Promise<void>): Promise<void> {
-    const source = this.source;
-    await run(source);
-    await this.invalidate();
   }
 }
 
-/** Return one stable Mastra mount per resolved user, host, and source root. */
-export function cachedWorkspaceSkillMount(
-  options: AppKitCachedFileSystemOptions,
-): CachedWorkspaceSkillMount {
-  const cacheKey = object.toStableKey({
+/** Return one stable catalogue owner for a user, host, and ordered root set. */
+export function workspaceSkillCatalogue(
+  options: WorkspaceSkillCatalogueOptions,
+): WorkspaceSkillCatalogue {
+  const key = object.toStableKey({
     host: options.host,
-    readOnly: options.source.readOnly,
-    root: options.source.root,
+    roots: options.sources.map(({ id }) => id),
     userKey: options.userKey,
   });
-  const existing = scopedMounts.get(cacheKey);
+  const existing = scopedCatalogues.get(key);
   if (existing) {
-    existing.cache.bind(options.source);
-    scopedMounts.delete(cacheKey);
-    scopedMounts.set(cacheKey, existing);
-    return { cacheKey, filesystem: existing.adapter };
+    existing.bind(options.sources);
+    return existing;
   }
-
-  const cache = new AppKitCachedFileSystem(options);
-  const entry: ScopedMountEntry = {
-    adapter: filesystems(cache, {
-      id: cache.id,
-      readOnly: options.source.readOnly,
-    }),
-    cache,
-    host: options.host,
-    root: options.source.root,
-    userKey: options.userKey,
-  };
-  scopedMounts.set(cacheKey, entry);
-  trimScopedMounts();
-  return { cacheKey, filesystem: entry.adapter };
+  const catalogue = new WorkspaceSkillCatalogue(options);
+  scopedCatalogues.set(key, catalogue);
+  return catalogue;
 }
 
-/** Invalidate one user's cached workspace skill scope. */
+/** Invalidate matching complete catalogues and retain their stable owners. */
 export async function clearWorkspaceSkillCache(options: {
   host: string;
-  root?: string;
-  userKey: string;
+  userKey?: string;
 }): Promise<void> {
-  const matches = [...scopedMounts.entries()].filter(
-    ([, entry]) =>
-      entry.host === options.host &&
-      entry.userKey === options.userKey &&
-      (options.root === undefined || entry.root === options.root),
+  const matches = [...scopedCatalogues.values()].filter(
+    (catalogue) =>
+      catalogue.host === options.host &&
+      (options.userKey === undefined || catalogue.userKey === options.userKey),
   );
-  await Promise.all(matches.map(([, entry]) => entry.cache.invalidate()));
+  await Promise.all(matches.map((catalogue) => catalogue.invalidate()));
 }
 
-function cacheTtlSec(ttlMs = DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS): number {
-  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
-    throw new Error("Workspace skill cache ttlMs must be a positive finite number");
+async function discoverSkillFiles(
+  source: SkillCatalogueSource,
+): Promise<Array<{ entry: SkillCatalogueFileEntry; path: string }>> {
+  let rootEntries: SkillCatalogueFileEntry[];
+  try {
+    rootEntries = await source.list(".");
+  } catch (error) {
+    if (errorUtils.errorContext(error).notAccessible) return [];
+    throw error;
   }
-  return Math.max(1, Math.ceil(ttlMs / 1000));
+  const candidates: Array<{ entry: SkillCatalogueFileEntry; path: string }> = [];
+  const rootSkill = rootEntries.find(
+    ({ name, type }) => name.toLowerCase() === "skill.md" && type === "file",
+  );
+  if (rootSkill) candidates.push({ entry: rootSkill, path: rootSkill.name });
+  await Promise.all(
+    rootEntries
+      .filter(({ type }) => type === "directory")
+      .map(async (directory) => {
+        const entries = await source.list(directory.name);
+        const skill = entries.find(
+          ({ name, type }) => name.toLowerCase() === "skill.md" && type === "file",
+        );
+        if (skill) candidates.push({ entry: skill, path: posixPath.join(directory.name, skill.name) });
+      }),
+  );
+  return candidates.sort((left, right) => left.path.localeCompare(right.path));
 }
 
-function serializeStat(value: FileStat): CachedFileStat {
-  const { accessedAt, createdAt, modifiedAt, ...stat } = value;
+function parseSkill(source: string, path: string): ParsedSkill | undefined {
+  const match = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)([\s\S]*)$/.exec(source);
+  if (!match) {
+    logger.warn("skill skipped (missing YAML frontmatter)", { path });
+    return undefined;
+  }
+  const metadata = parseYaml(match[1]!) as unknown;
+  if (!object.isRecord(metadata)) {
+    logger.warn("skill skipped (invalid YAML frontmatter)", { path });
+    return undefined;
+  }
+  const parsed = z
+    .object({
+      name: z.string().trim().min(1),
+      description: z.string().trim().min(1),
+    })
+    .safeParse(metadata);
+  if (!parsed.success) {
+    logger.warn("skill skipped (invalid metadata)", {
+      path,
+      error: parsed.error.message,
+    });
+    return undefined;
+  }
   return {
-    ...stat,
-    ...(accessedAt ? { accessedAt: accessedAt.getTime() } : {}),
-    ...(createdAt ? { createdAt: createdAt.getTime() } : {}),
-    ...(modifiedAt ? { modifiedAt: modifiedAt.getTime() } : {}),
+    name: parsed.data.name,
+    description: parsed.data.description,
+    instructions: match[2]!.trim(),
   };
 }
 
-function deserializeStat(value: CachedFileStat): FileStat {
-  const { accessedAt, createdAt, modifiedAt, ...stat } = value;
-  return {
-    ...stat,
-    ...(accessedAt !== undefined ? { accessedAt: new Date(accessedAt) } : {}),
-    ...(createdAt !== undefined ? { createdAt: new Date(createdAt) } : {}),
-    ...(modifiedAt !== undefined ? { modifiedAt: new Date(modifiedAt) } : {}),
+function fileSignature(entry: SkillCatalogueFileEntry): string | undefined {
+  const metadata = object.isRecord(entry.metadata) ? entry.metadata : {};
+  const values = {
+    modifiedAt: metadata.modifiedAt,
+    objectId: metadata.objectId,
+    size: entry.size,
   };
+  return Object.values(values).some((value) => value !== undefined)
+    ? object.toStableKey(values)
+    : undefined;
 }
 
-function trimScopedMounts(): void {
-  while (scopedMounts.size > DEFAULT_MAX_SCOPED_MOUNTS) {
-    const oldest = scopedMounts.keys().next().value;
-    if (oldest === undefined) return;
-    scopedMounts.delete(oldest);
+function positiveTtl(value = DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError("Workspace skill catalogue ttlMs must be a positive finite number");
   }
+  return value;
 }

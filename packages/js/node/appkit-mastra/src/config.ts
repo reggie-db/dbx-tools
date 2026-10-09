@@ -211,20 +211,20 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   memory?: boolean | MastraMemoryConfig;
   /**
-   * Sandbox for auto-created agent workspaces. Defaults to Databricks Sandbox.
-   * `true` selects Databricks with defaults, an object configures its lifecycle,
-   * and `false` disables workspace command execution. An agent with an explicit
+   * Sandbox for auto-created agent workspaces. Defaults to Monty. `true`,
+   * `"databricks"`, or an object selects/configures Databricks Sandbox, and
+   * `false` disables workspace command execution. An agent with an explicit
    * custom `workspace` keeps that workspace and its sandbox.
    */
   sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
   /**
-   * AppKit cache TTL for user-scoped Databricks workspace skill files.
-   * Defaults to five minutes.
+   * Refresh TTL for the complete user-scoped workspace skill catalogue.
+   * Defaults to five minutes; auxiliary files remain uncached.
    */
   workspaceSkillRefreshTtlMs?: number;
   /**
-   * Use Mastra's on-demand skill search instead of injecting the full skill
-   * catalogue. Defaults to true. Pass an object to tune search.
+   * Use dbx-tools catalogue-backed on-demand skill search. Defaults to true.
+   * Pass an object to tune search.
    */
   workspaceSkillSearch?: boolean | MastraSkillSearchConfig;
   /**
@@ -665,17 +665,17 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     sandbox: {
       type: ["boolean", "string", "object"],
       description:
-        'Command sandbox for auto-created agent workspaces. Defaults to Databricks Sandbox with Monty fallback; false disables command execution, "monty" selects Monty directly, and an object configures Databricks lifecycle/fallback settings.',
+        'Command sandbox for auto-created agent workspaces. Defaults to Monty; false disables command execution, and true, "databricks", or an object selects/configures Databricks Sandbox with optional fallback.',
     },
     workspaceSkillRefreshTtlMs: {
       type: "number",
       description:
-        "AppKit cache TTL in milliseconds for user-scoped Databricks workspace skill files. Defaults to 5 minutes.",
+        "Refresh TTL in milliseconds for the complete user-scoped workspace skill catalogue. Defaults to 5 minutes; auxiliary file reads stay fresh.",
     },
     workspaceSkillSearch: {
       type: ["boolean", "object"],
       description:
-        "Use Mastra on-demand skill search instead of injecting every skill description. Defaults to true.",
+        "Use dbx-tools catalogue-backed on-demand skill search with lazy auxiliary reads. Defaults to true.",
     },
     defaultAgent: {
       type: "string",

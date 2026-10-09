@@ -2,113 +2,145 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
-import { MemoryFileSystem } from "@dbx-tools/shared-fs";
-import type { FileEntry, ListOptions } from "@dbx-tools/shared-fs";
-
 import {
-  AppKitCachedFileSystem,
-  cachedWorkspaceSkillMount,
-  clearWorkspaceSkillCache,
+  WorkspaceSkillCatalogue,
+  workspaceSkillCatalogue,
+  type SkillCatalogueFileEntry,
+  type SkillCatalogueSource,
 } from "../src/skill-cache.ts";
 
-class CountingMemoryFileSystem extends MemoryFileSystem {
-  readdirCalls = 0;
-  waitForRead: Promise<void> | undefined;
-
-  override async readdir(inputPath: string, options?: ListOptions): Promise<FileEntry[]> {
-    this.readdirCalls += 1;
-    await this.waitForRead;
-    return super.readdir(inputPath, options);
-  }
+interface SourceFixture {
+  counts: { lists: number; reads: number };
+  fail: boolean;
+  modifiedAt: number;
+  source: SkillCatalogueSource;
 }
 
-async function source(root: string): Promise<CountingMemoryFileSystem> {
-  const filesystem = new CountingMemoryFileSystem({ root });
-  await filesystem.init();
-  await filesystem.writeFile("SKILL.md", "# Skill\n");
-  return filesystem;
+function sourceFixture(id: string): SourceFixture {
+  const fixture: SourceFixture = {
+    counts: { lists: 0, reads: 0 },
+    fail: false,
+    modifiedAt: 1,
+    source: undefined as never,
+  };
+  fixture.source = {
+    id,
+    async list(path): Promise<SkillCatalogueFileEntry[]> {
+      fixture.counts.lists += 1;
+      if (fixture.fail) throw new Error("workspace unavailable");
+      if (path === ".") return [{ name: "databricks-apps", type: "directory" }];
+      return [
+        {
+          name: "SKILL.md",
+          type: "file",
+          size: 100,
+          metadata: { modifiedAt: fixture.modifiedAt },
+        },
+        { name: "references", type: "directory" },
+      ];
+    },
+    async read(path): Promise<string> {
+      fixture.counts.reads += 1;
+      if (path.endsWith("SKILL.md")) {
+        return [
+          "---",
+          "name: databricks-apps",
+          "description: Build Databricks Apps",
+          "---",
+          `Instructions version ${fixture.modifiedAt}`,
+        ].join("\n");
+      }
+      return `Reference content for ${path}`;
+    },
+  };
+  return fixture;
 }
 
-describe("AppKit workspace skill cache", () => {
-  it("coalesces concurrent reads and isolates Mastra-resolved user ids", async () => {
+function catalogue(fixture: SourceFixture, userKey = randomUUID()): WorkspaceSkillCatalogue {
+  return new WorkspaceSkillCatalogue({
+    host: "https://workspace.example.com",
+    sources: [fixture.source],
+    ttlMs: 60_000,
+    userKey,
+  });
+}
+
+describe("workspace skill catalogue cache", () => {
+  it("coalesces concurrent discovery and serves warm turns without source reads", async () => {
     await CacheManager.getInstance();
-    const root = `/skills-${randomUUID()}`;
-    const filesystem = await source(root);
-    let release!: () => void;
-    filesystem.waitForRead = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const firstUser = new AppKitCachedFileSystem({
-      host: "https://workspace.example.com",
-      source: filesystem,
-      userKey: "mastra-user-1",
-    });
+    const fixture = sourceFixture(randomUUID());
+    const owner = catalogue(fixture);
 
-    const first = firstUser.readdir(".");
-    const second = firstUser.readdir(".");
-    await Promise.resolve();
-    release();
-    assert.deepEqual(await first, await second);
-    assert.equal(filesystem.readdirCalls, 1);
+    const [first, second] = await Promise.all([owner.get(), owner.get()]);
+    assert.deepEqual(first, second);
+    assert.equal(first.skills[0]?.name, "databricks-apps");
+    assert.deepEqual(fixture.counts, { lists: 2, reads: 1 });
 
-    await firstUser.readdir(".");
-    assert.equal(filesystem.readdirCalls, 1);
-
-    const secondUser = new AppKitCachedFileSystem({
-      host: "https://workspace.example.com",
-      source: filesystem,
-      userKey: "mastra-user-2",
-    });
-    await secondUser.readdir(".");
-    assert.equal(filesystem.readdirCalls, 2);
+    await owner.get();
+    assert.deepEqual(fixture.counts, { lists: 2, reads: 1 });
   });
 
-  it("invalidates cached reads after a mutation", async () => {
+  it("isolates catalogue records by user", async () => {
     await CacheManager.getInstance();
-    const filesystem = await source(`/skills-${randomUUID()}`);
-    const cached = new AppKitCachedFileSystem({
-      host: "https://workspace.example.com",
-      source: filesystem,
-      userKey: "mastra-user",
-    });
+    const fixture = sourceFixture(randomUUID());
 
-    assert.equal((await cached.readdir(".")).length, 1);
-    assert.equal(filesystem.readdirCalls, 1);
-    await cached.writeFile("reference.md", "reference");
-    assert.equal((await cached.readdir(".")).length, 2);
-    assert.equal(filesystem.readdirCalls, 2);
+    await catalogue(fixture, "user-one").get();
+    await catalogue(fixture, "user-two").get();
+
+    assert.deepEqual(fixture.counts, { lists: 4, reads: 2 });
   });
 
-  it("retains stable mount identity when its AppKit entries are cleared", async () => {
+  it("reuses unchanged SKILL.md content and refreshes changed metadata", async () => {
     await CacheManager.getInstance();
-    const root = `/skills-${randomUUID()}`;
-    const firstSource = await source(root);
-    const secondSource = await source(root);
+    const fixture = sourceFixture(randomUUID());
+    const owner = catalogue(fixture);
+
+    await owner.get();
+    await owner.invalidate();
+    await owner.get();
+    assert.deepEqual(fixture.counts, { lists: 4, reads: 1 });
+
+    fixture.modifiedAt = 2;
+    await owner.invalidate();
+    const refreshed = await owner.get();
+    assert.equal(refreshed.skills[0]?.instructions, "Instructions version 2");
+    assert.deepEqual(fixture.counts, { lists: 6, reads: 2 });
+  });
+
+  it("retains the last valid catalogue when refresh fails", async () => {
+    await CacheManager.getInstance();
+    const fixture = sourceFixture(randomUUID());
+    const owner = catalogue(fixture);
+    const initial = await owner.get();
+
+    fixture.fail = true;
+    await owner.invalidate();
+
+    assert.deepEqual(await owner.get(), initial);
+  });
+
+  it("reads auxiliary files only when explicitly requested", async () => {
+    await CacheManager.getInstance();
+    const fixture = sourceFixture(randomUUID());
+    const owner = catalogue(fixture);
+    await owner.get();
+    assert.equal(fixture.counts.reads, 1);
+
+    assert.equal(
+      await owner.readSkillFile("databricks-apps", "references/deploy.md"),
+      "Reference content for databricks-apps/references/deploy.md",
+    );
+    assert.equal(fixture.counts.reads, 2);
+  });
+
+  it("reuses a bounded stable owner for the same scope", () => {
+    const fixture = sourceFixture(randomUUID());
     const options = {
       host: "https://workspace.example.com",
-      source: firstSource,
-      userKey: "mastra-user",
+      sources: [fixture.source],
+      userKey: randomUUID(),
     };
 
-    const first = cachedWorkspaceSkillMount(options);
-    const second = cachedWorkspaceSkillMount({
-      ...options,
-      source: secondSource,
-    });
-    const otherUser = cachedWorkspaceSkillMount({
-      ...options,
-      userKey: "other-user",
-    });
-
-    assert.equal(first.filesystem, second.filesystem);
-    assert.notEqual(first.filesystem, otherUser.filesystem);
-
-    await clearWorkspaceSkillCache({
-      host: options.host,
-      root,
-      userKey: options.userKey,
-    });
-    const refreshed = cachedWorkspaceSkillMount(options);
-    assert.equal(first.filesystem, refreshed.filesystem);
+    assert.equal(workspaceSkillCatalogue(options), workspaceSkillCatalogue(options));
   });
 });
