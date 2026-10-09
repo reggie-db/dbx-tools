@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.78";
+export const PACKAGE_VERSION = "0.9.79";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -29,7 +29,9 @@ export * as sandbox from "./src/sandbox.ts";
 export * as server from "./src/server.ts";
 export * as serving from "./src/serving.ts";
 export * as servingSanitize from "./src/serving-sanitize.ts";
+export * as skillCache from "./src/skill-cache.ts";
 export * as skillPaths from "./src/skill-paths.ts";
+export * as skillSearch from "./src/skill-search.ts";
 export * as statement from "./src/statement.ts";
 export * as storageSchema from "./src/storage-schema.ts";
 export * as style from "./src/style.ts";
@@ -75,7 +77,11 @@ export { MastraServer } from "./src/server.ts";
 export type { AttributedIdentity, MastraApiGateOptions } from "./src/server.ts";
 export { MASTRA_MODEL_OVERRIDE_KEY, MASTRA_RESOLVED_MODEL_KEY } from "./src/serving.ts";
 export type { ModelOverrideRequest } from "./src/serving.ts";
+export { DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS, WorkspaceSkillCatalogue } from "./src/skill-cache.ts";
+export type { SkillCatalogueEntry, SkillCatalogue, SkillCatalogueSource, SkillCatalogueFileEntry, WorkspaceSkillCatalogueOptions, SkillCatalogueResolveContext, SkillCatalogueResolver } from "./src/skill-cache.ts";
 export { ASSISTANT_SHARED_SKILLS_PATH } from "./src/skill-paths.ts";
+export { CatalogueSkillSearchProcessor } from "./src/skill-search.ts";
+export type { CatalogueSkillSearchProcessorOptions } from "./src/skill-search.ts";
 export { STATEMENT_ROW_CAP } from "./src/statement.ts";
 export { TYPOGRAPHY_RULE } from "./src/style.ts";
 export { TITLE_INSTRUCTIONS } from "./src/summarize.ts";

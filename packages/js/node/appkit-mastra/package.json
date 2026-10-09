@@ -63,7 +63,10 @@
     "@opentelemetry/sdk-trace-node": "catalog:",
     "@pydantic/monty": "catalog:",
     "express": "catalog:",
+    "fuse.js": "^7.4.2",
+    "lru-cache": "catalog:",
     "pg": "^8.22.0",
+    "yaml": "^2.9.0",
     "zod": "catalog:"
   },
   "main": "index.ts",
@@ -185,6 +188,10 @@
         "types": "./lib/src/skill-paths.d.ts",
         "default": "./lib/src/skill-paths.js"
       },
+      "./skill-search": {
+        "types": "./lib/src/skill-search.d.ts",
+        "default": "./lib/src/skill-search.js"
+      },
       "./statement": {
         "types": "./lib/src/statement.d.ts",
         "default": "./lib/src/statement.js"
@@ -224,7 +231,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.78",
+  "version": "0.9.79",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
@@ -261,6 +268,7 @@
     "./serving": "./src/serving.ts",
     "./skill-cache": "./src/skill-cache.ts",
     "./skill-paths": "./src/skill-paths.ts",
+    "./skill-search": "./src/skill-search.ts",
     "./statement": "./src/statement.ts",
     "./storage-schema": "./src/storage-schema.ts",
     "./style": "./src/style.ts",

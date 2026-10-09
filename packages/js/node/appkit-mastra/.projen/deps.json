@@ -201,8 +201,23 @@
       "type": "runtime"
     },
     {
+      "name": "fuse.js",
+      "version": "^7.4.2",
+      "type": "runtime"
+    },
+    {
+      "name": "lru-cache",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "pg",
       "version": "^8.22.0",
+      "type": "runtime"
+    },
+    {
+      "name": "yaml",
+      "version": "^2.9.0",
       "type": "runtime"
     },
     {

@@ -13,6 +13,7 @@ interface SourceFixture {
   counts: { lists: number; reads: number };
   fail: boolean;
   modifiedAt: number;
+  present: boolean;
   source: SkillCatalogueSource;
 }
 
@@ -21,6 +22,7 @@ function sourceFixture(id: string): SourceFixture {
     counts: { lists: 0, reads: 0 },
     fail: false,
     modifiedAt: 1,
+    present: true,
     source: undefined as never,
   };
   fixture.source = {
@@ -28,7 +30,9 @@ function sourceFixture(id: string): SourceFixture {
     async list(path): Promise<SkillCatalogueFileEntry[]> {
       fixture.counts.lists += 1;
       if (fixture.fail) throw new Error("workspace unavailable");
-      if (path === ".") return [{ name: "databricks-apps", type: "directory" }];
+      if (path === ".") {
+        return fixture.present ? [{ name: "databricks-apps", type: "directory" }] : [];
+      }
       return [
         {
           name: "SKILL.md",
@@ -117,6 +121,18 @@ describe("workspace skill catalogue cache", () => {
     await owner.invalidate();
 
     assert.deepEqual(await owner.get(), initial);
+  });
+
+  it("removes deleted skills on refresh", async () => {
+    await CacheManager.getInstance();
+    const fixture = sourceFixture(randomUUID());
+    const owner = catalogue(fixture);
+    await owner.get();
+
+    fixture.present = false;
+    await owner.invalidate();
+
+    assert.deepEqual((await owner.get()).skills, []);
   });
 
   it("reads auxiliary files only when explicitly requested", async () => {
