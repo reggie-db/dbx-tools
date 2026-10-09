@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-genie-code";
-export const PACKAGE_VERSION = "0.9.67";
+export const PACKAGE_VERSION = "0.9.68";
 export * as config from "./src/config.ts";
 export * as options from "./src/options.ts";
 export { GenieCodeModelProviderSchema, GenieCodeBaseConfigSchema, GenieCodeProviderOverlaySchema, GenieCodeConfigSchema } from "./src/config.ts";
