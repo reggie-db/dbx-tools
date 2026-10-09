@@ -737,24 +737,3 @@ function readPackageName(pkgPath: string): string | undefined {
   if (!fileStatSync(pkgPath)?.isFile()) return undefined;
   return stringUtils.trimToNull(json.parseRecord(readFileSync(pkgPath, "utf8"))?.name) ?? undefined;
 }
-
-export function main() {
-  console.log("npm root:", npmRoot());
-  console.log("repo root:", gitRoot());
-  console.log("package root:", root());
-  console.log("project name:", name());
-  console.log("repository url:", repositoryUrl());
-  console.log("repository url (npm):", repositoryUrl(undefined, "npm"));
-  const ghAccount = resolveProjectGhAccount();
-  if (ghAccount) {
-    console.log("project gh host:", ghAccount.host);
-    console.log("project gh login:", ghAccount.login);
-    console.log("project gh remote:", ghAccount.remote.repository);
-  } else {
-    console.log("project gh account: not found");
-  }
-}
-
-if (import.meta.main) {
-  main();
-}
