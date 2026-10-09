@@ -1,38 +1,70 @@
 /**
  * Pydantic Monty fallback for Mastra command execution.
  *
- * Uses the Node subprocess-worker build of Monty. It executes Python source
+ * Prefers Monty's native Node subprocess workers and falls back to its WASM
+ * workers when the native package is unavailable. It executes Python source
  * with no host filesystem, network, environment, shell, or third-party package
- * access unless a future caller explicitly adds those capabilities.
+ * access.
  *
  * @module
  */
 
-import { errorUtils, functionUtils } from "@dbx-tools/shared-core";
+import { configUtils } from "@dbx-tools/core";
+import { errorUtils, functionUtils, log } from "@dbx-tools/shared-core";
 import type {
   CommandResult,
   ExecuteCommandOptions,
   SandboxInfo,
   WorkspaceSandbox,
 } from "@mastra/core/workspace";
-import type { CheckoutOptions, Monty as MontyPool, MontySession } from "@pydantic/monty/node";
-
-import { ensureMontyNativeBinding } from "./monty-native.ts";
+import type { CheckoutOptions, Monty, MontyCrashedError, MontySession } from "@pydantic/monty";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_MEMORY_BYTES = 10_000_000;
+const NATIVE_MONTY_TARGET = {
+  name: "native Monty",
+  load: () => import("@pydantic/monty/node"),
+} as const;
+const WASM_MONTY_TARGET = {
+  name: "WASM Monty",
+  load: () => import("@pydantic/monty/wasm"),
+} as const;
+const logger = log.logger("mastra/monty");
 
-const montyModule = functionUtils.memoize(async () => {
-  await ensureMontyNativeBinding();
-  return import("@pydantic/monty/node");
-});
-const montyPool = functionUtils.memoize(async (): Promise<MontyPool> => {
-  const { Monty } = await montyModule();
-  return Monty.create({
-    minProcesses: 1,
-    maxProcesses: 4,
-    requestTimeout: 35,
-  });
+type MontyPool = Pick<Monty, "checkout">;
+
+interface MontyContext {
+  crashedError: typeof MontyCrashedError;
+  pool: MontyPool;
+}
+
+const montyContext = functionUtils.memoize(async (): Promise<MontyContext> => {
+  const errors: Error[] = [];
+  const targets = configUtils.boolean(undefined, "MONTY_FORCE_WASM")
+    ? [WASM_MONTY_TARGET]
+    : [NATIVE_MONTY_TARGET, WASM_MONTY_TARGET];
+  for (const target of targets) {
+    try {
+      const module = await target.load();
+      logger.debug(`${target.name} module available`);
+      const pool = await module.Monty.create({
+        minProcesses: 1,
+        maxProcesses: 4,
+        requestTimeout: 35,
+      });
+      logger.debug(`${target.name} pool created`);
+      return {
+        crashedError: module.MontyCrashedError,
+        pool,
+      };
+    } catch (error) {
+      errors.push(errorUtils.toError(error));
+      logger.debug(`${target.name} unavailable`, {
+        error: errorUtils.errorMessage(error),
+      });
+    }
+  }
+  throw new AggregateError(errors, "Failed to create Monty pool");
 });
 
 /** Resource controls for the Monty Python fallback. */
@@ -49,7 +81,7 @@ export interface MontySandboxOptions {
   typeCheck?: boolean;
 }
 
-/** Python-only, deny-by-default sandbox backed by Monty's Node worker pool. */
+/** Python-only, deny-by-default sandbox backed by Monty's selected worker pool. */
 export class MontySandbox implements WorkspaceSandbox {
   readonly id: string;
   readonly name: string;
@@ -77,7 +109,7 @@ export class MontySandbox implements WorkspaceSandbox {
     this.status = "starting";
     this.error = undefined;
     try {
-      await montyPool();
+      await montyContext();
       this.status = "running";
     } catch (caught) {
       this.status = "error";
@@ -140,7 +172,7 @@ export class MontySandbox implements WorkspaceSandbox {
 
     await this.start();
     const timeout = options.timeout ?? this.commandTimeoutMs;
-    const pool = await montyPool();
+    const pool = (await montyContext()).pool;
     const session = await checkoutSession(
       pool,
       {
@@ -188,8 +220,8 @@ export class MontySandbox implements WorkspaceSandbox {
       }
       const message = errorUtils.errorMessage(caught);
       output.emit("stderr", output.stderr.value ? `\n${message}` : message);
-      const { MontyCrashedError } = await montyModule();
-      const timedOut = caught instanceof MontyCrashedError && caught.timedOut;
+      const { crashedError } = await montyContext();
+      const timedOut = caught instanceof crashedError && caught.timedOut;
       return {
         command,
         args,
@@ -408,4 +440,11 @@ function failedResult(
     stderr,
     executionTimeMs: performance.now() - started,
   };
+}
+
+if (import.meta.main) {
+  const sandbox = new MontySandbox();
+  await sandbox.start();
+  console.log(await sandbox.executeCommand("print('Hello, world!')"));
+  await sandbox.stop();
 }

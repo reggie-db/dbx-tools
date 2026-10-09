@@ -302,8 +302,9 @@ bun run demo:deploy
 The bundle ([`databricks.yml`](server/appkit-demo/databricks.yml)) provisions the
 Lakebase autoscaling Postgres; [`app.yaml`](server/appkit-demo/app.yaml) wires the
 Genie space and Lakebase endpoint into the deployed app. The deploy script uses
-`@dbx-tools/auth` to resolve the configured/default workspace profile and host;
-neither is committed in the bundle.
+`@dbx-tools/auth` to resolve the configured/default workspace profile and host,
+then force-refreshes the token with interactive login fallback; neither is
+committed in the bundle.
 
 ## How the demo itself is configured
 

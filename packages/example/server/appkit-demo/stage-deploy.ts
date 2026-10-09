@@ -14,26 +14,34 @@
  *   - the demo's transitive runtime `@dbx-tools/*` dependency closure packed
  *     from local compiled artifacts and linked through `file:` archives;
  *   - `catalog:`     -> the concrete version from the root `pnpm-workspace.yaml`;
- *   - `bun`          -> added as a dependency so the platform's pnpm install
- *                       fetches the runtime (research: pnpm installs, bun runs);
- *   - Monty's Linux binding -> declared directly so npm cannot omit the
- *                       transitive optional native package;
- *   - a `pnpm-workspace.yaml` carrying `allowBuilds` (esbuild/unrs-resolver/bun/
+ *   - a `pnpm-workspace.yaml` carrying `allowBuilds` (esbuild/unrs-resolver/
  *     onnxruntime-node...) so pnpm 10+ doesn't fail the build on their postinstalls;
  *   - `requirements.txt` installing locally built workspace wheels so the
  *     AppKit Graphiti plugin can launch its Python sidecar without PyPI;
- *   - `app.yaml` copied unchanged; deployment-only command/env overrides live in
- *     `databricks.yml` under the app resource's `config`;
+ *   - `app.yaml` copied unchanged; it owns the Node runtime command used by
+ *     click-to-deploy, while deployment env overrides live in `databricks.yml`;
  *   - the client `dist/` copied in and the server `src/` + support files.
  *
  * Run: `bun stage-deploy.ts` from the server package dir.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildPythonProjects } from "@dbx-tools/projen/python-release-packaging";
-import { materializeWorkspaceManifest, packNpmPackage } from "@dbx-tools/projen/release-packaging";
+import {
+  applyPublishConfig,
+  materializeWorkspaceManifest,
+  packNpmPackage,
+} from "@dbx-tools/projen/release-packaging";
 import { parse, stringify } from "yaml";
 
 const serverDir = dirname(fileURLToPath(import.meta.url));
@@ -64,24 +72,13 @@ const rootWorkspace = parse(readFileSync(join(repoRoot, "pnpm-workspace.yaml"), 
   packages?: string[];
 };
 const allowBuilds = rootWorkspace.allowBuilds ?? {};
-const montyVersion = rootWorkspace.catalog?.["@pydantic/monty"];
-if (!montyVersion) throw new Error("workspace catalog has no @pydantic/monty version");
-const overrides = workspaceManifest.overrides as Record<string, unknown> | undefined;
-const bunVersion = overrides?.bun;
-if (typeof bunVersion !== "string" || !bunVersion) {
-  throw new Error("root package.json has no Bun version override");
-}
 const deployPkg = materializeWorkspaceManifest(
   {
     name: "dbx-tools-demo-app",
     version,
     private: true,
     type: "module",
-    dependencies: {
-      ...(pkg.dependencies as Record<string, string>),
-      "@pydantic/monty-linux-x64-gnu": montyVersion,
-      bun: bunVersion,
-    },
+    dependencies: pkg.dependencies as Record<string, string>,
   },
   workspaceManifest,
 ) as Record<string, unknown>;
@@ -157,7 +154,9 @@ function externalPeerDependencies(packages: readonly WorkspacePackage[]): Record
       }
       const existing = peers.get(name);
       if (existing && existing !== value) {
-        throw new Error(`conflicting runtime peer dependency for ${name}: ${existing} and ${value}`);
+        throw new Error(
+          `conflicting runtime peer dependency for ${name}: ${existing} and ${value}`,
+        );
       }
       peers.set(name, value);
     }
@@ -170,7 +169,12 @@ function stageWorkspacePackages(packages: readonly WorkspacePackage[]): Record<s
   mkdirSync(archiveDir, { recursive: true });
   return Object.fromEntries(
     packages.map((workspacePackage) => {
-      const archive = packNpmPackage(workspacePackage.directory, archiveDir);
+      const archive = packNpmPackage(
+        workspacePackage.directory,
+        archiveDir,
+        process.env.PATH,
+        applyPublishConfig,
+      );
       return [workspacePackage.name, `file:./vendor/npm/${basename(archive)}`];
     }),
   );
@@ -196,11 +200,6 @@ function stagePythonWheels(): string[] {
   }
 }
 
-// pnpm-workspace.yaml: no members (single-package deploy), but `allowBuilds` so
-// pnpm 10+ runs the postinstalls the build needs (esbuild, unrs-resolver, bun,
-// onnxruntime-node, appkit, ...). This is the research recipe's build gate.
-const deployWorkspace = { allowBuilds };
-
 // --- write the staged tree ---
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
@@ -210,11 +209,16 @@ if (existsSync(join(serverDir, "shared"))) {
 }
 if (existsSync(clientDist)) cpSync(clientDist, join(outDir, "client-dist"), { recursive: true });
 const selectedPackages = runtimeWorkspacePackages(pkg, workspacePackages());
+const workspaceDependencies = stageWorkspacePackages(selectedPackages);
 const dependencies = {
   ...externalPeerDependencies(selectedPackages),
   ...((deployPkg.dependencies as Record<string, string> | undefined) ?? {}),
-  ...stageWorkspacePackages(selectedPackages),
+  ...workspaceDependencies,
 };
+// pnpm-workspace.yaml: no members (single-package deploy), but `allowBuilds` so
+// pnpm 10+ runs required postinstalls. Overrides keep every nested @dbx-tools/*
+// dependency on its staged local archive rather than consulting the registry.
+const deployWorkspace = { allowBuilds, overrides: workspaceDependencies };
 const pythonRequirements = stagePythonWheels();
 writeFileSync(
   join(outDir, "package.json"),
@@ -228,5 +232,5 @@ cpSync(join(serverDir, "databricks.yml"), join(outDir, "databricks.yml"));
 console.log(`staged deploy at ${outDir}`);
 console.log(`  ${selectedPackages.length} local @dbx-tools/* archives linked from ./vendor/npm`);
 console.log(`  ${pythonRequirements.length} local Python wheels linked from ./vendor/python`);
-console.log("  external catalog dependencies resolved; bun+pnpm-workspace added");
-console.log(`  app.yaml copied unchanged; databricks.yml owns deployed command/env overrides`);
+console.log("  external catalog dependencies resolved; pnpm-workspace added");
+console.log("  app.yaml owns the Node command; databricks.yml owns deployed env overrides");

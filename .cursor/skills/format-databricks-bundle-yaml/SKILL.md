@@ -9,13 +9,10 @@ This skill now lives globally at `~/.cursor/skills/format-databricks-bundle-yaml
 so every repository shares one copy. Load that skill instead of maintaining
 bundle guidance here.
 
-It covers bundle YAML shape for the direct deployment engine, `variables` versus
-`config.env`, `value` versus `value_from`, app/warehouse/secret/Lakebase resource
-bindings, `prevent_destroy`, adopting a resource that fails with
-`409 ALREADY_EXISTS`, Terraform-to-direct migration, and the pre-deploy review
-checklist. It also names the prerequisite skills to load first: `databricks-core`,
-`databricks-dabs`, `databricks-lakebase-autoscale-bundle`, and the product skill
-for each resource in the bundle.
+It enforces the ownership boundary for bundled Databricks Apps: `app.yaml`
+always owns the runtime command, while `databricks.yml` is the single source of
+truth for deployed env vars and resource bindings. It also provides the
+pre-deploy review checklist and names the prerequisite product skills.
 
 Repository-specific bundle conventions belong in `AGENTS.md`, not in a second
 copy of this skill.

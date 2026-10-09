@@ -171,6 +171,11 @@
       "type": "runtime"
     },
     {
+      "name": "tsx",
+      "version": "^4.22.4",
+      "type": "runtime"
+    },
+    {
       "name": "yaml",
       "version": "^2.9.0",
       "type": "runtime"

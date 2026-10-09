@@ -1,42 +1,5 @@
-command: ["npm", "run", "start"]
-env:
-  - name: DATABRICKS_GENIE_SPACE_ID
-    valueFrom: genie-space
-  - name: LAKEBASE_ENDPOINT
-    valueFrom: postgres
-  # MLflow experiment for agent traces and user feedback. `valueFrom` on an
-  # experiment resource resolves to the experiment id, so the id itself lives
-  # only in databricks.yml. `MLFLOW_TRACKING_URI=databricks` points the MLflow
-  # SDK at this workspace; the host and service-principal credentials are
-  # injected by the Apps runtime.
-  - name: MLFLOW_EXPERIMENT_ID
-    valueFrom: mlflow-experiment
-  - name: MLFLOW_TRACKING_URI
-    value: databricks
-  # Apps ingress stamps traceparent on every request. Without this, every HTTP
-  # span is a child of a platform span that never lands in UC OTel tables, so
-  # MLflow's `*_trace_unified` view silently drops every chat turn. Harmless
-  # locally (no OTLP sidecar). Pair with `telemetry_export_destinations` on the
-  # app resource in databricks.yml once the experiment has a UC trace location.
-  - name: OTEL_PROPAGATORS
-    value: none
-  # SMTP for the approval-gated `send_email` tool. The values live in the
-  # `dbx-tools-demo` Databricks secret scope so no credential is committed
-  # here; grant the app's service principal READ on that scope.
-  - name: SMTP_HOST
-    valueFrom: smtp-host
-  - name: SMTP_PORT
-    valueFrom: smtp-port
-  - name: SMTP_SECURE
-    valueFrom: smtp-secure
-  - name: SMTP_USER
-    valueFrom: smtp-user
-  - name: SMTP_PASSWORD
-    valueFrom: smtp-password
-  - name: EMAIL_DOMAIN
-    valueFrom: email-domain
-  # EMAIL_FROM is deliberately NOT set: the sender is derived from the
-  # on-behalf-of user on EMAIL_DOMAIN, and the tunnel's sign-in code (which has
-  # no user) sends from no-reply@EMAIL_DOMAIN. Leaving it unset is what dogfoods
-  # both defaults. Set it (from the `email-from` secret) to force every message
-  # from one fixed mailbox, or EMAIL_SYSTEM_FROM to rename the no-reply address.
+command:
+  - node
+  - --import
+  - tsx
+  - src/server.ts

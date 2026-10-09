@@ -1135,6 +1135,7 @@ project.applyToProjects(
       "pg@^8.22.0",
       "fuse.js@^7.4.2",
       "yaml@^2.9.0",
+      "tsx@^4.22.4",
     );
     p.addDevDeps(
       "@dbx-tools/projen@workspace:^",

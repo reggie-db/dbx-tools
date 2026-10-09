@@ -696,6 +696,7 @@ dbx graphiti [options] [command]
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-v, --version`                    | output the version number                                                                                                                                            |
 | `--profile <value>`                | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                                                                     |
+| `--bearer <value>`                 | Optional bearer token required by every Graphiti HTTP endpoint. (env: GRAPHITI_TOKEN)                                                                                |
 | `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                                                                   |
 | `--model-class <value>`            | Optional chat capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", default: "chat-fast", env: MODEL_CLASS) |
 | `--temperature <value>`            | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                                                            |

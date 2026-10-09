@@ -348,14 +348,11 @@ skips that gate for local iteration.
 
 Auto-created agent workspaces use the Node `@pydantic/monty` runtime by default,
 so Python command tools work without a workspace preview or remote API.
-Monty loads a platform optional native package (`@pydantic/monty-darwin-arm64`,
-`@pydantic/monty-linux-x64-gnu`, and the other published triples). npm can skip
-those nested optionalDependencies; on first start this package checks for the
-current platform package and, if it is missing, runs `npm install <pkg>@<monty
-version> --no-save` in the process working directory (or `bun add --no-save`
-when npm is not on PATH). Databricks App deploys should still declare the
-Linux GNU package as a direct dependency so the container install does not rely
-on that recovery.
+Monty's native subprocess worker is preferred because Bun's Linux
+`worker_threads` support cannot reliably host the WASM worker. The WASM entry is
+loaded only when native import fails. Databricks App staging declares the Linux
+native package directly so deployment does not depend on transitive optional
+dependency installation.
 
 Opt into the Beta
 [Databricks Sandbox](https://docs.databricks.com/aws/en/compute/serverless/sandbox)

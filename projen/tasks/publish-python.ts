@@ -72,6 +72,7 @@ function pythonProjects(root: string): PythonProjectFile[] {
   return allProjects;
 }
 
+/** Build and upload every selected public Python workspace distribution. */
 export function publishPythonProjects(options: {
   readonly dryRun?: boolean;
   readonly indexUrl: string;
@@ -180,6 +181,7 @@ function buildPythonProjectsInternal(
   }
 }
 
+/** Parse command-line publication options and run the Python release task. */
 export async function main(): Promise<void> {
   const program = new Command();
   program

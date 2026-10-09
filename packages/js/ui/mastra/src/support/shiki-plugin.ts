@@ -13,7 +13,10 @@ import type { CodeHighlighterPlugin } from "streamdown";
  * query previews); the rest cover code the assistant might emit. Kept
  * to a curated set so shiki only bundles these grammars.
  */
-const LANGUAGES: BundledLanguage[] = [
+const LANGUAGES = [
+  "text",
+  "plaintext",
+  "txt",
   "sql",
   "python",
   "typescript",
@@ -22,7 +25,7 @@ const LANGUAGES: BundledLanguage[] = [
   "bash",
   "yaml",
   "markdown",
-];
+] as const;
 
 /**
  * Single light theme. The demo has no dark-mode toggle, and a single
@@ -33,7 +36,7 @@ const LANGUAGES: BundledLanguage[] = [
 const THEME: BundledTheme = "github-light";
 
 /** Languages we can tokenize, as a set for O(1) support checks. */
-const SUPPORTED = new Set<BundledLanguage>(LANGUAGES);
+const SUPPORTED = new Set<string>(LANGUAGES);
 
 let _highlighter: HighlighterCore | null = null;
 let _loading: Promise<HighlighterCore> | null = null;
@@ -50,9 +53,9 @@ function loadHighlighter(): Promise<HighlighterCore> {
 }
 
 /** Tokenize `code` with the active theme into Streamdown's result shape. */
-function highlightTokens(h: HighlighterCore, code: string, language: BundledLanguage) {
+function highlightTokens(h: HighlighterCore, code: string, language: string) {
   const { tokens, fg, bg, rootStyle } = h.codeToTokens(code, {
-    lang: language,
+    lang: language as BundledLanguage,
     theme: THEME,
   });
   return { tokens, fg, bg, rootStyle };
@@ -70,7 +73,7 @@ const escapeHtml = stringUtils.escapeHtml;
  * supported or shiki fails to parse the snippet.
  */
 export async function highlightToHtml(code: string, language: string): Promise<string> {
-  if (!SUPPORTED.has(language as BundledLanguage)) return escapeHtml(code);
+  if (!SUPPORTED.has(language)) return escapeHtml(code);
   const h = await loadHighlighter();
   try {
     const { tokens } = h.codeToTokens(code, {
@@ -100,13 +103,12 @@ export async function highlightToHtml(code: string, language: string): Promise<s
  * block stays plaintext rather than throwing.
  */
 export function createShikiPlugin(): CodeHighlighterPlugin {
-  const isSupported = (language: string): language is BundledLanguage =>
-    SUPPORTED.has(language as BundledLanguage);
+  const isSupported = (language: string): boolean => SUPPORTED.has(language);
 
   return {
     name: "shiki",
     type: "code-highlighter",
-    getSupportedLanguages: () => LANGUAGES,
+    getSupportedLanguages: () => [...LANGUAGES],
     getThemes: () => [THEME, THEME],
     supportsLanguage: (language) => isSupported(language),
     highlight: (options, callback) => {

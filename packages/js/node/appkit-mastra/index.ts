@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.79";
+export const PACKAGE_VERSION = "0.9.92";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -17,7 +17,6 @@ export * as mcp from "./src/mcp.ts";
 export * as memory from "./src/memory.ts";
 export * as mlflow from "./src/mlflow.ts";
 export * as model from "./src/model.ts";
-export * as montyNative from "./src/monty-native.ts";
 export * as montySandbox from "./src/monty-sandbox.ts";
 export * as observability from "./src/observability.ts";
 export * as openapiTool from "./src/openapi-tool.ts";
@@ -61,7 +60,6 @@ export { AgentTraceSpanProcessor } from "./src/mlflow.ts";
 export type { AppMlflowTraceInfo, LogFeedbackParams } from "./src/mlflow.ts";
 export { RESPONSES_PROVIDER_OPTIONS } from "./src/model.ts";
 export type { BuildModelOverrides } from "./src/model.ts";
-export type { MontyNativeInstallResult, MontyNativeInstaller, EnsureMontyNativeBindingOptions } from "./src/monty-native.ts";
 export { MontySandbox } from "./src/monty-sandbox.ts";
 export type { MontySandboxOptions } from "./src/monty-sandbox.ts";
 export type { BuildObservabilityOptions } from "./src/observability.ts";

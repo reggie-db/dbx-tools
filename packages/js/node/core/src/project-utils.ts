@@ -738,7 +738,7 @@ function readPackageName(pkgPath: string): string | undefined {
   return stringUtils.trimToNull(json.parseRecord(readFileSync(pkgPath, "utf8"))?.name) ?? undefined;
 }
 
-if (import.meta.main) {
+export function main() {
   console.log("npm root:", npmRoot());
   console.log("repo root:", gitRoot());
   console.log("package root:", root());
@@ -753,4 +753,8 @@ if (import.meta.main) {
   } else {
     console.log("project gh account: not found");
   }
+}
+
+if (import.meta.main) {
+  main();
 }

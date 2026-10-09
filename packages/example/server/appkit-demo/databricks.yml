@@ -85,19 +85,10 @@ resources:
       source_code_path: .
       lifecycle:
         prevent_destroy: true
-      # Bundle app config overrides app.yaml for the deployed app. Keep the
-      # source app.yaml usable as the ordinary local/default app config; the
-      # public tunnel, OTP gate, staged client path, and deployment resource
-      # bindings belong to this deployment definition instead.
+      # app.yaml owns the runtime command so bundle and click-to-deploy launches
+      # both run the Bun-built server bundle under Node. The public tunnel, OTP
+      # gate, staged client path, and deployment resource bindings remain here.
       config:
-        # The server registers `tunnelInterceptor()` on its own `createApp`
-        # (`@dbx-tools/tunnel`), so the public portr tunnel + OTP gate run
-        # IN-PROCESS - the command runs the server directly rather than through a
-        # wrapper bin. Gate settings that were CLI flags are env now (see below):
-        # `TUNNEL_AUTH_ALLOW` is the old `--allow`.
-        command:
-          - bun
-          - src/launch.ts
         env:
           # Databricks Apps installs requirements.txt into this Python 3.11
           # environment. The Graphiti plugin otherwise falls back to the
@@ -159,9 +150,9 @@ resources:
             value_from: smtp-password
           - name: EMAIL_DOMAIN
             value_from: email-domain
-          # EMAIL_FROM is deliberately NOT set - see app.yaml. The sender is
-          # derived per on-behalf-of user, and system mail (the tunnel's sign-in
-          # code) goes out as no-reply@EMAIL_DOMAIN.
+          # EMAIL_FROM is deliberately NOT set. The sender is derived per
+          # on-behalf-of user, and system mail (the tunnel's sign-in code) goes
+          # out as no-reply@EMAIL_DOMAIN.
           - name: CLIENT_DIST
             value: ${var.client_dist}
           - name: TUNNEL_PUBLIC_DOMAIN

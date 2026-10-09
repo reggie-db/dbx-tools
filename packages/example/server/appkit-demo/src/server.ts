@@ -107,9 +107,9 @@ const clientDist =
 // 3. `lakebase()` backs Mastra Memory (`PostgresStore` + `PgVector`)
 //    when `storage` / `memory` are true on the mastra plugin.
 //
-// Genie integration: register the AppKit `genie()` plugin for its
-// resource manifest (so `app.yaml` picks up the Genie space binding)
-// and its `spaces` config format. The `mastra()` plugin's
+// Genie integration: register the AppKit `genie()` plugin for its resource
+// manifest and `spaces` config format. The deployed binding lives in
+// `databricks.yml`. The `mastra()` plugin's
 // `plugins.genie?.toolkit()` callback returns a flat set of Genie
 // tools (`ask_genie`, `get_statement`, `prepare_chart`,
 // `get_space_description`, `get_space_serialized`) the central

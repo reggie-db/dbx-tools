@@ -46,11 +46,11 @@ handle the topic bus, static delivery, deployment staging, and shared types.
 - `src/server.ts` - the plugin list plus the shared definition factory for the
   Agent Mode and polling agents. `mastra({ genieAgentMode: true })` makes Agent
   Mode explicit for the default `support` route.
-- `src/launch.ts` — the deployed process wrapper that strips emojis from logs.
+- `src/launch.ts` — an optional child-process wrapper that strips emojis from logs.
 - `src/bus-demo.ts` — the topic-bus plugin behind the Bus page.
-- `app.yaml` — Databricks App runtime env wiring (`genie-space`, `postgres`).
+- `app.yaml` — the Node runtime command used by bundle and click-to-deploy launches.
 - `databricks.yml` — Asset Bundle: the Lakebase autoscaling Postgres project,
-  the app resource, and the deployed `command`/`env` overrides.
+  the app resource, and the deployed environment/resource overrides.
 - `stage-deploy.ts` — stages a self-contained deploy tree (see Deploy).
 - `appkit.plugins.json` — the AppKit v2 native template-plugin catalogue;
   Graphiti and the dbx-tools add-ons are registered directly in `server.ts`.
@@ -107,7 +107,8 @@ the deploy never uploads `node_modules`.
 
 From the repository root, `bun run demo:deploy` compiles the workspace, stages
 the tree, resolves the configured/default workspace profile through
-`@dbx-tools/auth`, and passes that profile explicitly to bundle
+`@dbx-tools/auth`, force-refreshes its token with interactive login fallback,
+and passes that profile explicitly to bundle
 validate/deploy/`demo_app`. Pass `--demo-deploy` on `bun run release` to do the
 same after tagging (off by default).
 
@@ -147,22 +148,13 @@ Two things worth knowing before changing this flow:
   configured/default local profile through `@dbx-tools/auth` and passes both
   target and profile to every workspace call. The profile owns the workspace
   host; the bundle does not duplicate it.
-- **Start with `bundle run`, not `databricks apps deploy` or `apps start`.** The
-  deployed `command` (`bun src/launch.ts`, which normalizes child output and
-  starts the server that fronts itself with the public portr tunnel + OTP gate
-  in-process via `@dbx-tools/tunnel`'s `tunnelInterceptor`)
-  lives in `databricks.yml` under the app resource's `config`, which only the
-  bundle applies. A bare `apps deploy` falls back to `app.yaml`'s `npm run start`,
-  which the staged tree has no script for, and the app crashes on boot. `databricks
-apps stop` + `apps start` is the same trap: `start` re-deploys the last source
-  snapshot with the app.yaml command, so it takes a RUNNING app to
-  `FAILED`/`Missing script: "start"`. Recover with `bundle deploy` +
-  `bundle run demo_app`.
+- **The deployed server runs under Node.** `app.yaml` launches `src/server.ts`
+  through Node's `--import tsx` support. The staging tree includes the source and
+  installs `tsx` as a normal runtime dependency. Local development, compilation,
+  staging, and the client build remain Bun-first. Keeping the command in
+  `app.yaml` also gives click-to-deploy the same runtime as the bundle.
 - **To bounce the app, use `bundle run demo_app`.** It restarts a running app in
-  place with the bundle's command. Prefer this over `databricks apps stop` +
-  `apps start`: `start` re-deploys the last source snapshot with the app.yaml
-  command, so it can take a RUNNING app to `FAILED`/`Missing script: "start"`.
-  Recover with `bundle deploy` + `bundle run demo_app`. A lost portr edge
+  place with the bundle's environment and resource bindings. A lost portr edge
   (`demo.apps.dbx.tools` serving `unregistered-subdomain` while the platform
   URL still answers) is also recovered automatically by `@dbx-tools/tunnel`:
   the supervisor probes the public URL and restarts portr when the subdomain

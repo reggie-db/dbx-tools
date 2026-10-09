@@ -8,7 +8,7 @@ import {
   webSearchQueryLabel,
   webSearchResultLabel,
 } from "../src/react/tool-pill.tsx";
-import { highlightToHtml } from "../src/support/shiki-plugin.ts";
+import { createShikiPlugin, highlightToHtml } from "../src/support/shiki-plugin.ts";
 
 describe("raw tool payload formatting", () => {
   it("preserves complete request and response values", () => {
@@ -39,6 +39,25 @@ describe("raw tool payload formatting", () => {
     assert.match(html, /<span style="color:/);
     assert.match(html, /request/);
     assert.match(html, /count/);
+  });
+
+  it("highlights plaintext output fences", async () => {
+    const output = "779a65e7023cd2e7";
+    const plugin = createShikiPlugin();
+    const result = await new Promise<NonNullable<ReturnType<typeof plugin.highlight>>>((resolve) => {
+      const immediate = plugin.highlight(
+        {
+          code: output,
+          language: "text",
+          themes: ["github-light", "github-light"],
+        },
+        resolve,
+      );
+      if (immediate) resolve(immediate);
+    });
+
+    assert.equal(plugin.supportsLanguage("text"), true);
+    assert.equal(result.tokens.flat().map((token) => token.content).join(""), output);
   });
 });
 
