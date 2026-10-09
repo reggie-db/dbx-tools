@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
-import { runRelease } from "../tasks/release.ts";
+import { refreshReleaseTagFromRemote, runRelease } from "../tasks/release.ts";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -60,6 +60,44 @@ describe("direct release tags", () => {
       repository: "example/dbx-tools",
     });
     assert.equal(projectUtils.parseProjectGhRemote("/tmp/remote.git"), undefined);
+  });
+
+  it("refreshes a local tag when the remote created a different annotated tag object", () => {
+    const { remote, root } = fixture();
+    try {
+      git(root, "tag", "-a", "v1.0.0", "-m", "local annotation");
+      const commit = git(root, "rev-parse", "HEAD");
+      const remoteObject = execFileSync(
+        "git",
+        ["mktag"],
+        {
+          cwd: remote,
+          encoding: "utf8",
+          input: [
+            `object ${commit}`,
+            "type commit",
+            "tag v1.0.0",
+            "tagger GitHub API <noreply@github.com> 1700000000 +0000",
+            "",
+            "remote annotation",
+            "",
+          ].join("\n"),
+        },
+      ).trim();
+      git(remote, "update-ref", "refs/tags/v1.0.0", remoteObject);
+
+      refreshReleaseTagFromRemote({
+        expectedObject: remoteObject,
+        remote: "origin",
+        root,
+        tag: "v1.0.0",
+      });
+
+      assert.equal(git(root, "rev-parse", "refs/tags/v1.0.0"), remoteObject);
+      assert.equal(git(root, "rev-parse", "refs/tags/v1.0.0^{}"), commit);
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
   });
 
   it("carries task selections through the pushed annotation and skips optional checks", async () => {

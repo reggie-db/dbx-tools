@@ -41,6 +41,24 @@ function assertAncestor(root: string, ancestor: string, descendant: string, mess
   }
 }
 
+/** Replace the local annotated tag object with the tag object created on the remote. */
+export function refreshReleaseTagFromRemote(options: {
+  readonly expectedObject: string;
+  readonly remote: string;
+  readonly root: string;
+  readonly tag: string;
+}): void {
+  const { expectedObject, remote, root, tag } = options;
+  const ref = `refs/tags/${tag}`;
+  runTaskCommand(root, "git", ["fetch", "--force", remote, `${ref}:${ref}`]);
+  const localObject = captureTaskCommand(root, "git", ["rev-parse", ref], { check: true });
+  if (localObject !== expectedObject) {
+    throw new Error(
+      `remote ${tag} resolved to ${localObject || "<empty>"}, expected ${expectedObject}`,
+    );
+  }
+}
+
 function pushAnnotatedReleaseTag(options: {
   readonly annotation: string;
   readonly branch: string;
@@ -71,6 +89,7 @@ function pushAnnotatedReleaseTag(options: {
       `cannot tag ${githubAccount.remote.repository}: ${remote}/${branch} does not equal local HEAD`,
     );
   }
+  let remoteRefCreated = false;
   try {
     const tagObject = captureTaskCommand(
       root,
@@ -114,6 +133,8 @@ function pushAnnotatedReleaseTag(options: {
       ],
       { env: githubAccount.env },
     );
+    remoteRefCreated = true;
+    refreshReleaseTagFromRemote({ expectedObject: tagObject, remote, root, tag });
     logger.info(`created ${tag} through the GitHub API`, {
       account: githubAccount.login,
       host: githubAccount.host,
@@ -121,6 +142,7 @@ function pushAnnotatedReleaseTag(options: {
       sha: head,
     });
   } catch (error) {
+    if (remoteRefCreated) throw error;
     logger.warn("GitHub API tag creation failed; using git push", {
       error,
       repository: githubAccount.remote.repository,
