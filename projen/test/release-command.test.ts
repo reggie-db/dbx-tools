@@ -6,7 +6,11 @@ import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
-import { githubRepositoryFromRemoteUrl, runRelease } from "../tasks/release.ts";
+import {
+  githubAccountFromRemoteUrl,
+  githubRepositoryFromRemoteUrl,
+  runRelease,
+} from "../tasks/release.ts";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -56,6 +60,11 @@ describe("direct release tags", () => {
       githubRepositoryFromRemoteUrl("git@github-reggie-db:reggie-db/dbx-tools.git"),
       "reggie-db/dbx-tools",
     );
+    assert.equal(
+      githubAccountFromRemoteUrl("git@github-reggie-db:reggie-db/dbx-tools.git"),
+      "reggie-db",
+    );
+    assert.equal(githubAccountFromRemoteUrl("git@github.com:reggie-db/dbx-tools.git"), undefined);
     assert.equal(githubRepositoryFromRemoteUrl("/tmp/remote.git"), undefined);
   });
 

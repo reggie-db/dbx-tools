@@ -51,6 +51,23 @@ export function githubRepositoryFromRemoteUrl(remoteUrl: string): string | undef
   return `${ssh[2]}/${ssh[3]}`;
 }
 
+/** Infer the `gh auth` account encoded by a `git@github-<account>:` SSH alias. */
+export function githubAccountFromRemoteUrl(remoteUrl: string): string | undefined {
+  return /^git@github-([^:]+):/i.exec(remoteUrl.trim())?.[1];
+}
+
+function githubApiEnvironment(root: string, remoteUrl: string): NodeJS.ProcessEnv | undefined {
+  const account = githubAccountFromRemoteUrl(remoteUrl);
+  if (!account) return undefined;
+  const token = captureTaskCommand(
+    root,
+    "gh",
+    ["auth", "token", "--hostname", "github.com", "--user", account],
+    { check: true, stderr: "inherit" },
+  );
+  return token ? { ...process.env, GH_TOKEN: token } : undefined;
+}
+
 function pushAnnotatedReleaseTag(options: {
   readonly annotation: string;
   readonly branch: string;
@@ -69,6 +86,7 @@ function pushAnnotatedReleaseTag(options: {
     runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);
     return;
   }
+  const githubEnv = githubApiEnvironment(root, remoteUrl);
 
   const remoteBranch = captureTaskCommand(
     root,
@@ -101,20 +119,25 @@ function pushAnnotatedReleaseTag(options: {
       "--jq",
       ".sha",
     ],
-    { check: true, stderr: "inherit" },
+    { check: true, env: githubEnv, stderr: "inherit" },
   );
   if (!tagObject) throw new Error(`GitHub did not return an annotated tag object for ${tag}`);
-  runTaskCommand(root, "gh", [
-    "api",
-    "--method",
-    "POST",
-    `repos/${repository}/git/refs`,
-    "-f",
-    `ref=refs/tags/${tag}`,
-    "-f",
-    `sha=${tagObject}`,
-    "--silent",
-  ]);
+  runTaskCommand(
+    root,
+    "gh",
+    [
+      "api",
+      "--method",
+      "POST",
+      `repos/${repository}/git/refs`,
+      "-f",
+      `ref=refs/tags/${tag}`,
+      "-f",
+      `sha=${tagObject}`,
+      "--silent",
+    ],
+    { env: githubEnv },
+  );
   logger.info(`created ${tag} through the GitHub API`, { repository, sha: head });
 }
 
