@@ -24,7 +24,9 @@ import type {
   ToolProvider,
 } from "@databricks/appkit/beta";
 import { pluginRegistry, toolkitEntries } from "@dbx-tools/appkit";
+import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
 import { log, object, stringUtils } from "@dbx-tools/shared-core";
+import { TOOL_PROGRESS_PART_TYPE, ToolProgressEventSchema } from "@dbx-tools/shared-mastra/wire";
 import type {
   AgentConfig,
   AgentExecutionOptions,
@@ -45,6 +47,7 @@ import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import type { MemoryBuilder } from "./memory.ts";
 import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
 import { stripStaleChartsProcessor } from "./processors.ts";
+import { MASTRA_RESOLVED_MODEL_KEY } from "./serving.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
 import { createWorkspace } from "./workspaces.ts";
@@ -938,7 +941,7 @@ type ContextualToolProvider = Partial<Pick<ToolProvider, "getAgentTools">> & {
     name: string,
     args: unknown,
     signal?: AbortSignal,
-    context?: { resourceId?: string },
+    context?: AgentToolExecutionContext,
   ) => Promise<unknown>;
 };
 
@@ -1027,13 +1030,34 @@ function toolkitEntryToMastraTool(entry: ToolkitEntry, plugin: ContextualToolPro
     execute: async (input: unknown, context: unknown) => {
       const execution = context as
         | {
+            agent?: { toolCallId?: string };
             abortSignal?: AbortSignal;
             requestContext?: { get(key: string): unknown };
+            writer?: {
+              custom(part: { type: string; data: unknown }): Promise<void>;
+            };
           }
         | undefined;
       const resourceId = execution?.requestContext?.get(MASTRA_RESOURCE_ID_KEY);
+      const model = execution?.requestContext?.get(MASTRA_RESOLVED_MODEL_KEY);
+      const toolCallId = execution?.agent?.toolCallId;
+      const writer = execution?.writer;
       return plugin.executeAgentTool!(entry.localName, input, execution?.abortSignal, {
         ...(typeof resourceId === "string" ? { resourceId } : {}),
+        ...(typeof model === "string" ? { model } : {}),
+        ...(writer && toolCallId
+          ? {
+              writeProgress: async (event: unknown) => {
+                const parsed = ToolProgressEventSchema.parse(event);
+                await writer
+                  .custom({
+                    type: TOOL_PROGRESS_PART_TYPE,
+                    data: { toolCallId, event: parsed },
+                  })
+                  .catch(() => undefined);
+              },
+            }
+          : {}),
       });
     },
   });

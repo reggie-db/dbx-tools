@@ -19,6 +19,9 @@ export const GraphitiOptionsSchema = z
     profile: options.DatabricksOptionsSchema.shape.profile.describe(
       "Databricks profile used for model discovery and authentication.",
     ),
+    bearer: graphitiText("Optional bearer token required by every Graphiti HTTP endpoint.")
+      .optional()
+      .meta({ env: "GRAPHITI_TOKEN", helpDefault: false }),
     graphitiHome: graphitiText("Application-owned Graphiti runtime directory.")
       .optional()
       .meta({ env: "GRAPHITI_HOME" }),

@@ -313,26 +313,23 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
   p.addDevDeps("@dbx-tools/projen@workspace:^", "vitest@catalog:");
 });
 
-// Node Graphiti runtime plus its AppKit plugin subpath.
-project.applyToProjects(root, { identifierName: "graphiti", tags: "node" }, (p) => {
+// AppKit Graphiti plugin plus its Node runtime and shared option bindings.
+project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "Graphiti process supervision and AppKit integration",
+    "AppKit Graphiti plugin and Python runtime supervision",
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/appkit-mastra@workspace:^",
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-graphiti@workspace:^",
     "zod@catalog:",
   );
-  p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
-  project.addExports(p, {
-    "./appkit": "./src/appkit/plugin.ts",
-    "./appkit/config": "./src/appkit/config.ts",
-  });
+  p.addDevDeps("vitest@catalog:");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -597,6 +594,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
   );
   p.addDevDeps(
     "@types/express@catalog:",
+    "@types/json-schema@^7",
     "@types/pg@^8",
     "vitest@catalog:",
   );
@@ -870,7 +868,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/email@workspace:^",
-    "@dbx-tools/graphiti@workspace:^",
+    "@dbx-tools/appkit-graphiti@workspace:^",
     "@dbx-tools/lakebase@workspace:^",
     "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-auth@workspace:^",
@@ -927,8 +925,8 @@ project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p)
 // tunnel + @dbx-tools/auth-gate passwordless gate, consumed IN-PROCESS through
 // `@dbx-tools/appkit`'s `createApp` interceptor context.
 // `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs selected clients pointed
-// at the app's public port, and `bindProcess`es them so app and tunnels live/die as one
-// (concurrently-style). The authGate AppKit plugin composes Better Auth with the
+// at the app's public port, and stops them through AppKit's shutdown lifecycle.
+// The authGate AppKit plugin composes Better Auth with the
 // email transport and native Lakebase or SQLite storage, then registers one
 // handler + gating middleware on the app's OWN Express server.
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
@@ -1102,7 +1100,7 @@ project.applyToProjects(
     projectJs.applyIncludes(p, "stage-deploy.ts");
     p.addDeps(
       "@dbx-tools/appkit@workspace:^",
-      "@dbx-tools/graphiti@workspace:^",
+      "@dbx-tools/appkit-graphiti@workspace:^",
       "@dbx-tools/appkit-mastra@workspace:^",
       "@dbx-tools/core@workspace:^",
       "@dbx-tools/databricks@workspace:^",
@@ -1287,7 +1285,6 @@ new project.DBXToolsPythonWorkspace(root, {
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
   devDependencies: [
-    "nodejs-wheel>=22.20,<23",
     "pythonmonkey==1.3.2",
     "tomli>=2,<3; python_version < '3.11'",
   ],

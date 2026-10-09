@@ -22,10 +22,10 @@ export type { ApprovalGate, ApprovalPolicy, UrlPolicyMode, ModelSource, WebSearc
 export { SEARCH_CACHE_TTL_SECONDS, FETCH_CACHE_TTL_SECONDS, SERVING_RETRY_ATTEMPTS, WEB_RETRY_ATTEMPTS, webSearchExecuteDefaults, webFetchExecuteDefaults, scrapeSearchExecuteDefaults } from "./src/defaults.ts";
 export type { WebSearchExecuteConfig, WebSearchExecutionSettings } from "./src/defaults.ts";
 export { WebSearchPlugin, webSearch } from "./src/plugin.ts";
-export { WEB_SEARCH_PROVIDERS } from "./src/provider.ts";
+export { WebSearchProviderSpecSchema, WEB_SEARCH_PROVIDERS } from "./src/provider.ts";
 export type { WebSearchProvider, WebSearchProviderSpec } from "./src/provider.ts";
 export type { WebSearchExecutor, WebSearchRuntime, WebSearchRuntimeInput } from "./src/runtime.ts";
-export { WEB_SEARCH_TOOL_DESCRIPTION, WEB_FETCH_TOOL_DESCRIPTION, webSearchRequestSchema, webSearchCitationSchema, webSearchResultSchema, webFetchRequestSchema, webFetchResultSchema } from "./src/schema.ts";
-export type { WebSearchRequest, WebSearchCitation, WebSearchResult, WebFetchRequest, WebFetchResult } from "./src/schema.ts";
-export type { WebSearchContext } from "./src/search.ts";
+export { WEB_SEARCH_TOOL_DESCRIPTION, WEB_FETCH_TOOL_DESCRIPTION, webSearchRequestSchema, webSearchToolRequestSchema, webSearchCitationSchema, webSearchResultSchema, webFetchRequestSchema, webFetchResultSchema } from "./src/schema.ts";
+export type { WebSearchRequest, WebSearchToolRequest, WebSearchCitation, WebSearchResult, WebFetchRequest, WebFetchResult } from "./src/schema.ts";
+export type { WebSearchContext, WebSearchModelSelectionOptions } from "./src/search.ts";
 export type { WebSearchToolOptions } from "./src/tool.ts";

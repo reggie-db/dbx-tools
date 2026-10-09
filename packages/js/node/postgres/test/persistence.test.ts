@@ -115,6 +115,25 @@ describe("PostgresTopicBus persistence", () => {
     assert.equal(JSON.parse(String(payload)).body.id, 7);
   });
 
+  it("uses an externally managed table without attempting owner-only DDL", async () => {
+    const fix = fixture((text) => {
+      if (text.includes("pg_has_role")) return [{ can_manage: false }];
+      if (text.includes("INSERT INTO")) return [{ sequence: "12" }];
+      return [];
+    });
+    const bus = new PostgresTopicBus(fix.pool, { persist: true });
+
+    await bus.broadcast("orders", { type: "order.updated", body: { id: 7 } });
+
+    const statements = sql(fix);
+    assert.equal(
+      statements.some((text) => text.startsWith("CREATE ")),
+      false,
+    );
+    assert.ok(statements.some((text) => text.includes("INSERT INTO")));
+    assert.ok(statements.some((text) => text.includes("pg_notify")));
+  });
+
   it("sends a pointer instead of the envelope, lifting the NOTIFY size limit", async () => {
     const fix = fixture((text) => (text.includes("INSERT INTO") ? [{ sequence: "12" }] : []));
     const bus = new PostgresTopicBus(fix.pool, { persist: { payload: "pointer" } });

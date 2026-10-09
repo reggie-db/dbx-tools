@@ -350,7 +350,11 @@ export const AssistantBubble = ({
   feedbackValue,
   mlflowExperimentUrl,
 }: AssistantBubbleProps) => {
-  const toolEvents = mergeToolEvents(toolEventsFromParts(message.parts), events);
+  const toolEvents = mergeToolEvents(
+    toolEventsFromParts(message.parts),
+    events,
+    isLast && status === "error",
+  );
   const reasoning = [getReasoningText(message.parts), genieReasoningText(toolEvents)]
     .filter(Boolean)
     .join("\n\n");

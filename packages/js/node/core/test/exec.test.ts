@@ -253,6 +253,60 @@ describe("process tree termination", () => {
   );
 
   it(
+    "supports graceful-only tree signaling without forced escalation",
+    { skip: process.platform === "win32" },
+    async () => {
+      const { child, started, gracefulSignals } = processTreeFixture("force");
+      let descendantPid: number | undefined;
+      try {
+        descendantPid = await started;
+        await assert.rejects(
+          exec.kill(child, {
+            forceSignal: false,
+            gracefulTimeoutMs: 25,
+            pollIntervalMs: 5,
+          }),
+          /did not terminate after SIGTERM/,
+        );
+
+        assert.equal(processExists(child.pid!), true);
+        assert.equal(processExists(descendantPid), true);
+        assert.deepEqual(gracefulSignals, ["parent"]);
+      } finally {
+        forceKill(descendantPid);
+        forceKill(child.pid);
+        await child.catch(() => undefined);
+      }
+    },
+  );
+
+  it(
+    "supports force-only tree signaling without a graceful phase",
+    { skip: process.platform === "win32" },
+    async () => {
+      const { child, started, gracefulSignals } = processTreeFixture("force");
+      let descendantPid: number | undefined;
+      try {
+        descendantPid = await started;
+        await exec.kill(child, {
+          gracefulSignal: false,
+          forceTimeoutMs: 1_000,
+          pollIntervalMs: 5,
+        });
+        await child;
+
+        assert.equal(child.signalCode, "SIGKILL");
+        assert.equal(processExists(descendantPid), false);
+        assert.deepEqual(gracefulSignals, []);
+      } finally {
+        forceKill(descendantPid);
+        forceKill(child.pid);
+        await child.catch(() => undefined);
+      }
+    },
+  );
+
+  it(
     "discovers and signals descendants created during graceful polling",
     { skip: process.platform === "win32" },
     async () => {

@@ -9,6 +9,16 @@ import {
   type ToolRegistry,
 } from "@databricks/appkit/beta";
 
+/** Optional request state supplied by an agent host when dispatching a plugin tool. */
+export interface AgentToolExecutionContext {
+  /** Resource identity associated with the current agent turn. */
+  readonly resourceId?: string;
+  /** Model endpoint selected for the current agent turn. */
+  readonly model?: string;
+  /** Best-effort progress sink validated by the hosting integration. */
+  readonly writeProgress?: (event: unknown) => Promise<void>;
+}
+
 /**
  * Implements AppKit's `ToolProvider` contract from one native tool registry.
  *
@@ -28,7 +38,12 @@ export abstract class ToolRegistryPlugin<TConfig extends BasePluginConfig = Base
   }
 
   /** Validate and dispatch one AppKit agent tool call. */
-  executeAgentTool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
+  executeAgentTool(
+    name: string,
+    args: unknown,
+    signal?: AbortSignal,
+    _context?: AgentToolExecutionContext,
+  ): Promise<unknown> {
     return executeFromRegistry(this.toolRegistry, name, args, signal);
   }
 }

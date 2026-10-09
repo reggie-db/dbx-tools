@@ -6,19 +6,13 @@ import { tunnelInterceptor } from "../src/interceptor.ts";
 
 /** A recording {@link InterceptorContext} double - no real AppKit needed. */
 function fakeContext(databricksHost?: string): InterceptorContext & {
-  bound: unknown[];
   lifecycle: string[];
 } {
-  const bound: unknown[] = [];
   const lifecycle: string[] = [];
   return {
-    bound,
     lifecycle,
     env: databricksHost ? { databricksHost } : {},
     onLifecycle: (event) => void lifecycle.push(event),
-    onTeardown: () => {},
-    broadcastSignal: () => {},
-    bindProcess: (child) => void bound.push(child),
   };
 }
 
@@ -43,10 +37,9 @@ afterEach(() => {
 });
 
 describe("tunnelInterceptor without portr configured", () => {
-  it("is a no-op: binds no process when there is no PORTR_TOKEN / domain", async () => {
+  it("is a no-op when there is no PORTR_TOKEN / domain", async () => {
     const ctx = fakeContext();
     await tunnelInterceptor()(ctx);
-    assert.equal(ctx.bound.length, 0);
     assert.equal(ctx.lifecycle.length, 0);
   });
 

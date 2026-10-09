@@ -54,18 +54,23 @@ export const webSearchRequestSchema = z.object({
     .optional()
     .describe(
       stringUtils.toDescription(`
-        Optional web-search-capable model to use (a Databricks serving
-        endpoint name like "databricks-gemini-3-pro", a loose name like "gpt"
-        or "gemini", or a capability class). Defaults to the plugin's
-        configured web-search model. The web-search tool resolves its own
-        model independently of the calling agent's chat model, since not
-        every chat model supports web search.
+        Optional calling-model preference. The tool always tries the highest
+        web-search-capable Gemini first. When Gemini is unavailable, a matching
+        GPT endpoint wins before the highest-ranked GPT fallback.
       `),
     ),
 });
 
 /** A validated `web_search` request. */
 export type WebSearchRequest = z.infer<typeof webSearchRequestSchema>;
+
+/** Model-facing `web_search` input; the host owns model selection. */
+export const webSearchToolRequestSchema = webSearchRequestSchema
+  .omit({ model: true })
+  .describe("Model-facing web-search input with host-owned model selection.");
+
+/** Model-facing `web_search` request. */
+export type WebSearchToolRequest = z.infer<typeof webSearchToolRequestSchema>;
 
 /** Schema for a single source the model cited while answering. */
 export const webSearchCitationSchema = z.object({

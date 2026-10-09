@@ -8,21 +8,27 @@ import {
 
 import { compareVersionTuples, supportsToolsByFamily, versionTuple } from "./classify.ts";
 
-const FAMILIES = [
-  "claude",
-  "gpt",
-  "gemini",
-  "llama",
-  "grok",
-  "deepseek",
-  "qwen",
-  "glm",
-  "kimi",
-  "gemma",
-  "inkling",
-  "bge",
-  "gte",
-] as const;
+/** Recognized model families used by routing and provider policy. */
+export const ModelFamily = {
+  Claude: "claude",
+  Gpt: "gpt",
+  Gemini: "gemini",
+  Llama: "llama",
+  Grok: "grok",
+  Deepseek: "deepseek",
+  Qwen: "qwen",
+  Glm: "glm",
+  Kimi: "kimi",
+  Gemma: "gemma",
+  Inkling: "inkling",
+  Bge: "bge",
+  Gte: "gte",
+} as const;
+
+/** Recognized model family value. */
+export type ModelFamily = (typeof ModelFamily)[keyof typeof ModelFamily];
+
+const FAMILIES = Object.values(ModelFamily);
 
 const STANDARD: ReasoningEffort[] = ["low", "medium", "high"];
 const GPT_5_6: ReasoningEffort[] = ["none", "low", "medium", "high", "xhigh", "max"];
@@ -31,19 +37,19 @@ const CLAUDE: ReasoningEffort[] = ["none", "minimal", "low", "medium", "high", "
 const GEMINI: ReasoningEffort[] = ["minimal", "low", "medium", "high"];
 
 interface ParsedModelName {
-  family: (typeof FAMILIES)[number];
+  family: ModelFamily;
   version: number[];
   model: string[];
 }
 
 /** Return the normalized family parsed from a model identity. */
-export function modelFamily(name: string): string | undefined {
+export function modelFamily(name: string): ModelFamily | undefined {
   return parseModelName(name)?.family;
 }
 
 /** Rank a family by how major it is; unrecognized families sort last. */
 export function modelFamilyRank(family: string): number {
-  const index = FAMILIES.indexOf(family as (typeof FAMILIES)[number]);
+  const index = FAMILIES.indexOf(family as ModelFamily);
   return index >= 0 ? index : FAMILIES.length;
 }
 
@@ -209,7 +215,7 @@ function parseModelName(name: string): ParsedModelName | undefined {
       family = "qwen";
       break;
     }
-    if (FAMILIES.includes(token as ParsedModelName["family"])) {
+    if (FAMILIES.includes(token as ModelFamily)) {
       familyIndex = index;
       family = token as ParsedModelName["family"];
       break;

@@ -1,8 +1,7 @@
 /**
  * The `createApp` INTERCEPTOR context: an in-process handle an app hands to
  * add-ons (the tunnel, chiefly) so they can read the env auto-configuration
- * computed, hook AppKit's lifecycle, and supervise sibling child processes as one
- * unit - concurrently-style, where any death takes the whole set down.
+ * computed and hook AppKit's lifecycle.
  *
  * An interceptor is a plain function `(ctx) => void | Promise<void>` passed to
  * `appkit.createApp`'s `interceptor` option ("one or many"). `appkit.createApp`
@@ -20,7 +19,6 @@
  * @module
  */
 
-import type { ChildProcess } from "node:child_process";
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
 import { log } from "@dbx-tools/shared-core";
 import type { LakebaseConnection } from "./lakebase-resolver.ts";
@@ -61,14 +59,6 @@ export interface ResolvedAppEnv {
 }
 
 /**
- * A process {@link InterceptorContext.bindProcess} can supervise. A bare
- * `node:child_process` `ChildProcess` (e.g. portr) satisfies this, and so does
- * `@dbx-tools/core`'s `spawn()` result (a `ChildProcessResult` IS a
- * `ChildProcess`) - one code path handles both.
- */
-export type BindableProcess = Pick<ChildProcess, "pid" | "kill" | "killed" | "once">;
-
-/**
  * The handle passed to each interceptor.
  *
  * @example
@@ -77,9 +67,8 @@ export type BindableProcess = Pick<ChildProcess, "pid" | "kill" | "killed" | "on
  * await appkit.createApp({
  *   plugins: [server()],
  *   interceptor: (ctx) => {
- *     const portr = spawnPortr(ctx.env.databricksHost);
- *     ctx.bindProcess(portr);            // app <-> portr live/die together
- *     ctx.onLifecycle("shutdown", () => portr.kill("SIGTERM"));
+ *     const auxiliary = startAuxiliary(ctx.env.databricksHost);
+ *     ctx.onLifecycle("shutdown", () => auxiliary.stop());
  *   },
  * });
  */
@@ -93,65 +82,10 @@ export interface InterceptorContext {
    * retroactively (same semantics as AppKit).
    */
   onLifecycle(event: LifecycleEvent, fn: LifecycleHandler): void;
-  /** Register synchronous cleanup that runs before any bound process is killed. */
-  onTeardown(fn: () => void): void;
-  /**
-   * Broadcast a termination signal from the main app to every bound process.
-   * Called automatically when this process receives `SIGINT`/`SIGTERM`/`SIGHUP`;
-   * exposed so an interceptor can trigger teardown itself.
-   */
-  broadcastSignal(signal: NodeJS.Signals): void;
-  /**
-   * Supervise a child process alongside the app, concurrently-style: signals pass
-   * through, and if EITHER the child or the app dies the whole set comes down.
-   * Safe to call for several children; teardown is idempotent.
-   */
-  bindProcess(child: BindableProcess): void;
 }
 
 /** A single interceptor, or several. The `createApp` `interceptor?:` option. */
 export type Interceptor = (ctx: InterceptorContext) => void | Promise<void>;
-
-/** How long bound children get to exit on `SIGTERM` before the app force-exits. */
-const TEARDOWN_GRACE_MS = 10_000;
-
-/** The signals that trigger teardown when the MAIN process receives them. */
-const TEARDOWN_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
-const boundChildren = new Set<BindableProcess>();
-const teardownHandlers = new Set<() => void>();
-let processShuttingDown = false;
-let processSignalsBound = false;
-
-function teardownProcess(code: number): void {
-  if (processShuttingDown) return;
-  processShuttingDown = true;
-  for (const handler of teardownHandlers) handler();
-  teardownHandlers.clear();
-  const children = [...boundChildren];
-  for (const child of children) {
-    if (!child.killed) child.kill("SIGTERM");
-  }
-  boundChildren.clear();
-  setTimeout(() => {
-    for (const child of children) child.kill("SIGKILL");
-    process.exit(code);
-  }, TEARDOWN_GRACE_MS).unref();
-}
-
-function broadcastProcessSignal(signal: NodeJS.Signals): void {
-  for (const child of boundChildren) {
-    if (!child.killed) child.kill(signal);
-  }
-  teardownProcess(0);
-}
-
-function bindProcessSignals(): void {
-  if (processSignalsBound) return;
-  processSignalsBound = true;
-  for (const signal of TEARDOWN_SIGNALS) {
-    process.on(signal, () => broadcastProcessSignal(signal));
-  }
-}
 
 /**
  * The mutable machinery behind an {@link InterceptorContext}. Split out so
@@ -167,31 +101,9 @@ export interface InterceptorRuntime {
 
 /**
  * Build an {@link InterceptorContext} + its {@link InterceptorRuntime}.
- *
- * Teardown is the generalized `superviseExit`: the first child exit or main-process
- * termination signal flips a one-shot guard, `SIGTERM`s the other bound children,
- * then `process.exit`s after {@link TEARDOWN_GRACE_MS} (an `unref`'d timer, so it
- * never itself holds the loop open). The process-signal listeners are installed
- * lazily on the first `bindProcess` so an app that binds nothing is untouched.
  */
 export function createInterceptorContext(env: ResolvedAppEnv): InterceptorRuntime {
   const handlers = new Map<LifecycleEvent, LifecycleHandler[]>();
-  if (processShuttingDown && boundChildren.size === 0) processShuttingDown = false;
-  if (
-    processSignalsBound &&
-    TEARDOWN_SIGNALS.every((signal) => process.listenerCount(signal) === 0)
-  ) {
-    processSignalsBound = false;
-  }
-
-  const bindProcess = (child: BindableProcess): void => {
-    bindProcessSignals();
-    boundChildren.add(child);
-    child.once("exit", (code) => {
-      logger.warn("bound process exited; tearing down the app", { code });
-      teardownProcess(typeof code === "number" ? code : 1);
-    });
-  };
 
   const onLifecycle = (event: LifecycleEvent, fn: LifecycleHandler): void => {
     const list = handlers.get(event);
@@ -216,12 +128,6 @@ export function createInterceptorContext(env: ResolvedAppEnv): InterceptorRuntim
   const context: InterceptorContext = {
     env,
     onLifecycle,
-    onTeardown: (fn) => {
-      bindProcessSignals();
-      teardownHandlers.add(fn);
-    },
-    broadcastSignal: broadcastProcessSignal,
-    bindProcess,
   };
 
   return { context, emitLifecycle };

@@ -32,7 +32,7 @@ handle the topic bus, static delivery, deployment staging, and shared types.
   approves it in the chat UI.
 - `lakebase()` (AppKit) — backs Mastra Memory.
 - `graphiti()` from
-  [`@dbx-tools/graphiti/appkit`](../../../js/node/graphiti) — launches
+  [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
   the unified Python Graphiti runtime and contributes its OpenAPI-derived,
   user-scoped memory tools directly to the agents. Graphiti groups use the same
   per-user resource id as Mastra memory.

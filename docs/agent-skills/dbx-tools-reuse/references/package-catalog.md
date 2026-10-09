@@ -12,6 +12,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 ## Node and AppKit
 
 - `@dbx-tools/appkit` - Node-side helpers for Databricks AppKit apps. Source: `packages/js/node/appkit`.
+- `@dbx-tools/appkit-graphiti` - Run Graphiti as an AppKit plugin or supervise the same Python runtime directly from Node. The package root exposes the plugin; the runtime and options subpaths expose the underlying lifecycle and configuration contracts. Source: `packages/js/node/appkit-graphiti`.
 - `@dbx-tools/appkit-mastra` - AppKit plugin and server-side toolkit for hosting Mastra agents inside a Databricks App. Source: `packages/js/node/appkit-mastra`.
 - `@dbx-tools/appkit-model-gateway` - Give OpenAI-, Anthropic-, and Codex-compatible clients one endpoint for the models available in a Databricks workspace. The AppKit plugin discovers the workspace catalogue, exposes familiar model APIs, and chooses a compatible Databricks route for each request. Source: `packages/js/node/appkit-model-gateway`.
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
@@ -23,7 +24,6 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/email` - Server-side email runtime, agent tools, and AppKit plugin. Source: `packages/js/node/email`.
 - `@dbx-tools/fs` - Node local-disk FileSystem implementation of the @dbx-tools/shared-fs contract. Built on BaseFileSystem, so this package only owns host separator conversion (toBackendPath), Node I/O, symlink containment (preparePath), and errno mapping. Source: `packages/js/node/fs`.
 - `@dbx-tools/genie` - Server-side Databricks Genie chat drivers. Source: `packages/js/node/genie`.
-- `@dbx-tools/graphiti` - Run Graphiti from Node without coupling lifecycle control to a CLI or AppKit plugin. Callers provide the shared typed Graphiti options and receive one runtime handle for completion and shutdown. Source: `packages/js/node/graphiti`.
 - `@dbx-tools/lakebase` - Resolve a Databricks Lakebase target into the host, database, and user a PostgreSQL client needs, then request a short-lived database credential. The package gives Node and Bun applications one profile-aware path from a project name or resource URL to connection-ready values. When the target is a Lakebase path or URL without a chosen database, discovery picks the branch default (status.default, then Lakebase's provisioned databricks_postgres) instead of PostgreSQL's generic postgres database. Source: `packages/js/node/lakebase`.
 - `@dbx-tools/model` - Workspace-aware Databricks Model Serving selection. Source: `packages/js/node/model`.
 - `@dbx-tools/path` - Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching. Source: `packages/js/node/path`.

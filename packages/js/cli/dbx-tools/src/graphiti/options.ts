@@ -16,5 +16,8 @@ export {
   graphitiOptionsEnvironment,
   graphitiOptionsFromEnvironment,
   resolveGraphitiOptions,
-} from "@dbx-tools/graphiti/options";
-export type { GraphitiOptions, ResolvedGraphitiOptions } from "@dbx-tools/graphiti/options";
+} from "@dbx-tools/appkit-graphiti/options";
+export type {
+  GraphitiOptions,
+  ResolvedGraphitiOptions,
+} from "@dbx-tools/appkit-graphiti/options";

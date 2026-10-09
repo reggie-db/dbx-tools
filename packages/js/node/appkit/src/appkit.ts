@@ -103,8 +103,8 @@ export type CreateAppConfig<T extends AppKitPlugins = AppKitPlugins> = Omit<
   /**
    * One or many {@link Interceptor}s handed an {@link InterceptorContext} once
    * auto-configuration has computed the env. Each receives the resolved env, an
-   * AppKit-lifecycle hook, and `bindProcess` for concurrently-style supervision -
-   * see `./interceptor`. The tunnel is the primary consumer.
+   * AppKit lifecycle hook. See `./interceptor`. The tunnel is the primary
+   * consumer.
    */
   interceptor?: Interceptor | Interceptor[];
 };
@@ -293,7 +293,7 @@ function interceptorList(interceptor: CreateAppConfig["interceptor"]): Intercept
  * When {@link CreateAppConfig.interceptor}s are given, each is invoked with an
  * {@link InterceptorContext} AFTER auto-configuration computes the env and BEFORE
  * AppKit boots - so an interceptor can read the resolved connection, register
- * lifecycle handlers, and `bindProcess` a child. A hidden {@link lifecycleBridge}
+ * lifecycle handlers, and start auxiliary work. A hidden {@link lifecycleBridge}
  * plugin is injected so those `onLifecycle` handlers fire on the genuine AppKit
  * events; it has no exports, so the returned {@link PluginMap} is unchanged.
  *

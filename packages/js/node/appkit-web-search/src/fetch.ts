@@ -78,6 +78,9 @@ export async function runWebFetch(
     async (executeSignal): Promise<FetchedPage> => {
       const response = await gotScraping({
         url: request.url,
+        // Bun's node:http2 reports default-port origins with :443 while
+        // http2-wrapper compares them against URL-normalized origins.
+        http2: false,
         // got's own timeout aborts the socket and reports which phase timed
         // out; the interceptor timeout bounds the whole attempt around it.
         timeout: { request: config.timeoutMs },

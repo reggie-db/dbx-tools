@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
-import { GraphitiOptionsSchema as RuntimeGraphitiOptionsSchema } from "@dbx-tools/graphiti/options";
-import type { GraphitiRuntimeOptions } from "@dbx-tools/graphiti/runtime";
+import { GraphitiOptionsSchema as RuntimeGraphitiOptionsSchema } from "@dbx-tools/appkit-graphiti/options";
+import type { GraphitiRuntimeOptions } from "@dbx-tools/appkit-graphiti/runtime";
 import { PACKAGE_VERSION } from "../index.ts";
 import { buildProgram, graphitiServiceDefinition } from "../src/graphiti/cli.ts";
 import { GRAPHITI_DEFAULTS, GraphitiOptionsSchema } from "../src/graphiti/options.ts";

@@ -22,12 +22,8 @@ without taking on a heavier feature package.
   be granted access before persistent cache initialization.
 - An interceptor context on `createApp` (`interceptor?: Interceptor | Interceptor[]`)
   that hands add-ons the computed env, AppKit lifecycle hooks (`onLifecycle`, using
-  AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary),
-  synchronous `onTeardown` cleanup, signal broadcast, and `bindProcess` for
-  concurrently-style child supervision. Interceptor contexts share a
-  process-wide child registry and teardown guard. Any bound child exit starts
-  sibling teardown, callbacks run before child termination, and bound children
-  receive a 10-second shutdown grace. `@dbx-tools/tunnel` consumes this surface.
+  AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary).
+  `@dbx-tools/tunnel` consumes this surface for auxiliary startup and shutdown.
 
 ## Why Use This Over Native AppKit
 
@@ -123,7 +119,7 @@ reason.
 | Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                                      |
 | --------------- | ------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema; `"env"` resolves the connection only; `false` skips auto-configuration. Omit it to gate resolution on native `lakebase` or `database`; implicit database-only resolution does not grant the cache schema. |
-| `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env, `onLifecycle`, `onTeardown`, `broadcastSignal`, and globally shared `bindProcess` supervision.                                                                                            |
+| `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env and AppKit lifecycle registration through `onLifecycle`.                                                                                                                                   |
 
 Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
 still wants AppKit's PERSISTENT cache. AppKit only chooses Lakebase for
@@ -265,23 +261,48 @@ core exec options, including line handlers and optional output capture.
 ```ts
 import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
 
-const worker = new AppKitChildProcess([
-  "bun",
-  ["run", "worker.ts"],
+const worker = new AppKitChildProcess(
+  [
+    "bun",
+    ["run", "worker.ts"],
+    {
+      stdout: { onLine: (line) => logger.info(line), capture: false },
+      stderr: { onLine: (line) => logger.error(line), capture: false },
+    },
+  ],
   {
-    stdout: { onLine: (line) => logger.info(line), capture: false },
-    stderr: { onLine: (line) => logger.error(line), capture: false },
+    healthCheck: async ({ signal }) => {
+      try {
+        return (await fetch("http://127.0.0.1:3000/health", { signal })).ok;
+      } catch (error) {
+        if (signal.aborted) throw error;
+        return false;
+      }
+    },
+    healthCheckTimeoutMs: 30_000,
   },
-]);
+);
 
-worker.start();
+await worker.start();
 this.context.onLifecycle("shutdown", () => worker.shutdown());
 ```
 
-`shutdown()` is idempotent. It sends `SIGTERM`, waits seven seconds, then sends
-`SIGKILL` and waits one more second. Override those signals or timeouts in the
-constructor's second argument. A detached POSIX child is signaled as a process
-group so descendants do not survive their AppKit owner.
+When configured, `start()` polls `healthCheck` until it returns `true` and
+rejects when the process exits, the check throws, or the readiness timeout
+expires. The callback receives the live process, attempt number, and an
+`AbortSignal` suitable for `fetch`.
+
+Standalone foreground entrypoints can await `run()` instead of wiring
+`start()`, process signal handlers, process completion, and `shutdown()`
+separately. It shuts down the tree before re-raising `SIGINT`, `SIGTERM`, or
+`SIGHUP`. `SIGKILL` cannot be intercepted by Node.
+
+`shutdown()` is idempotent. It aborts an active readiness check, then delegates
+tree termination to `@dbx-tools/core`: every discovered process receives
+`SIGTERM`, surviving and newly discovered descendants receive `SIGKILL`, and
+shutdown fails if anything remains after the configured timeouts. Pass a
+non-`SIGKILL` signal to run only that graceful tree phase, or pass `SIGKILL` to
+skip directly to forced polling.
 
 ## Provision Lakebase Cache Schema
 

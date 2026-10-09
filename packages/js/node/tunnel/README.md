@@ -86,9 +86,9 @@ middleware on the app's OWN Express server (no separate proxy process).
   can load the client and render the login form; every other `/api/*` needs a
   valid session cookie or gets `401`. A WebSocket handshake is an ordinary `GET`
   and runs through the same gate.
-- Supervised teardown - `tunnelInterceptor` binds portr through the `createApp`
-  interceptor context, so the app and the tunnel are tied together: if either
-  exits, `bindProcess` brings the whole set down and passes signals through.
+- Supervised teardown - `tunnelInterceptor` registers its tunnel supervisor with
+  AppKit's native `shutdown` lifecycle. `AppKitChildProcess` aborts active
+  readiness work and terminates each tunnel process tree.
 - Public liveness probes - while portr is running, the supervisor HEADs the
   public URL. An `x-portr-error: unregistered-subdomain` (or any other
   `x-portr-error`) kills the child so the forever-loop restarts it. Process-exit

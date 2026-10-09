@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 import { ConfigurationError, Plugin, toPlugin, type PluginManifest } from "@databricks/appkit";
 import type {
@@ -14,20 +14,26 @@ import type {
   ToolProvider,
 } from "@databricks/appkit/beta";
 import { appkit as dbxAppkit, toolkitEntries } from "@dbx-tools/appkit";
+import type { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
+import { openApiTools, type OpenApiTool } from "@dbx-tools/appkit-mastra/openapi-tool";
 import { configUtils } from "@dbx-tools/core";
-import { asyncUtils, log, object } from "@dbx-tools/shared-core";
+import { errorUtils, log, object } from "@dbx-tools/shared-core";
 
-import { graphitiOptionOverrides, resolveGraphitiOptions } from "../options.ts";
-import { graphitiOpenApi, startGraphitiRuntime, type GraphitiRuntime } from "../runtime.ts";
-import { graphitiToolContracts, type GraphitiToolContract } from "./_openapi.ts";
 import {
   GRAPHITI_CONFIG_SCHEMA,
   resolveGraphitiConfig,
   type GraphitiPluginConfig,
   type ResolvedGraphitiPluginConfig,
 } from "./config.ts";
+import { graphitiOptionOverrides, resolveGraphitiOptions } from "./options.ts";
+import {
+  createGraphitiChildProcess,
+  graphitiHttpUrl,
+  graphitiRequestHeaders,
+  remainingTimeoutMs,
+  waitForGraphitiHealth,
+} from "./runtime.ts";
 
-const STARTUP_RETRY_MS = 250;
 const SCOPED_TOOL_FIELDS = {
   add_memory: "group_id",
   add_memory_sync: "group_id",
@@ -74,30 +80,13 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
 
   private readonly logger = log.logger(this);
   private resolved?: ResolvedGraphitiPluginConfig;
-  private runtime?: GraphitiRuntime;
-  private setupComplete = false;
-  private startup?: Promise<void>;
-  private stopping = false;
-  private toolContracts: Record<string, GraphitiToolContract> = {};
+  private sidecar?: AppKitChildProcess;
+  private ready?: Promise<void>;
+  private readyWatch?: AbortController;
+  private toolSchemas: OpenApiTool[] = [];
 
   override async setup(): Promise<void> {
-    await this.loadToolContracts();
-    this.startup = this.startSidecar();
-    void this.startup.catch((error: unknown) => {
-      if (this.stopping) return;
-      this.logger.error("background startup failed", { error });
-      process.kill(process.pid, "SIGTERM");
-    });
-    void this.startup;
-    this.logger.info("background startup scheduled");
-  }
-
-  private async loadToolContracts(): Promise<void> {
-    this.toolContracts = graphitiToolContracts(
-      await graphitiOpenApi(),
-      TOOL_NAMES,
-      HIDDEN_TOOL_ARGUMENTS,
-    );
+    await this.startSidecar();
   }
 
   private async startSidecar(): Promise<void> {
@@ -111,21 +100,87 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     );
     const resolved = resolveGraphitiOptions({
       ...graphitiOptionOverrides(configured),
+      bearer: randomBytes(32).toString("base64url"),
       listen: { ...configured.listen, port: graphitiPort },
     });
     this.resolved = resolved;
-    this.runtime = await startGraphitiRuntime(resolved);
-    this.setupComplete = true;
-    void this.runtime.result.then(
-      () => this.onSupervisorExit(),
-      (error) => this.onSupervisorExit(error),
+    const startedAt = Date.now();
+    const openApiUrl = graphitiHttpUrl(resolved, "/openapi.json");
+    let toolSchemas: OpenApiTool[] | undefined;
+    const sidecar = await createGraphitiChildProcess({
+      ...resolved,
+      healthCheck: async ({ signal }) => {
+        try {
+          const schemas = await openApiTools(openApiUrl, {
+            signal,
+            headers: graphitiRequestHeaders(resolved),
+          });
+          if (schemas.length === 0) return false;
+          toolSchemas = schemas;
+          return true;
+        } catch (error) {
+          if (signal.aborted) throw error;
+          return false;
+        }
+      },
+    });
+    this.sidecar = sidecar;
+    try {
+      await sidecar.start();
+      const child = sidecar.process;
+      if (!child) throw new Error("Graphiti sidecar exited after becoming ready");
+      if (!toolSchemas) throw new Error("Graphiti OpenAPI tools were not captured during readiness");
+      this.toolSchemas = selectToolSchemas(toolSchemas);
+      this.watchSidecarHealth(remainingTimeoutMs(startedAt, resolved.startupTimeoutMs));
+      this.logger.info("sidecar listening", { graphitiPort: resolved.listen.port });
+    } catch (error) {
+      await sidecar.shutdown();
+      if (this.sidecar === sidecar) this.sidecar = undefined;
+      throw error;
+    }
+  }
+
+  /**
+   * Poll `/healthcheck` with whatever startup budget remains after OpenAPI
+   * becomes available. Tool calls await the same promise. A timeout or probe
+   * error tears down this plugin and asks AppKit to exit via SIGTERM.
+   */
+  private watchSidecarHealth(timeoutMs: number): void {
+    const resolved = this.resolved;
+    if (!resolved) return;
+    this.readyWatch?.abort();
+    const controller = new AbortController();
+    this.readyWatch = controller;
+    this.ready = waitForGraphitiHealth(resolved, timeoutMs, controller.signal).then(
+      () => {
+        if (this.readyWatch === controller) {
+          this.logger.info("sidecar ready", { graphitiPort: resolved.listen.port });
+        }
+      },
+      async (error) => {
+        if (controller.signal.aborted) throw error;
+        this.logger.error("sidecar healthcheck failed", {
+          error: errorUtils.errorMessage(error),
+        });
+        await this.failAppkit();
+        throw error;
+      },
     );
-    await this.waitUntilReady();
-    this.logger.info("sidecar ready", { graphitiPort: resolved.listen.port });
+  }
+
+  /** Stop the sidecar, then signal AppKit's process-level graceful shutdown. */
+  private async failAppkit(): Promise<void> {
+    await this.shutdown();
+    process.kill(process.pid, "SIGTERM");
   }
 
   async shutdown(): Promise<void> {
-    await this.stopSidecar();
+    this.readyWatch?.abort();
+    this.readyWatch = undefined;
+    this.ready = undefined;
+    const sidecar = this.sidecar;
+    this.sidecar = undefined;
+    await sidecar?.shutdown();
   }
 
   async toolkit(options?: ToolkitOptions): Promise<Record<string, ToolkitEntry>> {
@@ -133,12 +188,14 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
   }
 
   getAgentTools(): AgentToolDefinition[] {
-    const names = new Set(Object.keys(this.toolContracts));
-    return Object.entries(this.toolContracts)
-      .filter(([name]) => !hasUnsuffixedTool(name, names))
-      .map(([, { definition }]) => ({
-        ...definition,
-        annotations: toolAnnotations(definition.name),
+    const names = new Set(this.toolSchemas.map(({ id }) => id));
+    return this.toolSchemas
+      .filter(({ id }) => !hasUnsuffixedTool(id, names))
+      .map(({ id, description, inputSchema }) => ({
+        name: id,
+        description,
+        parameters: hideArguments(inputSchema, HIDDEN_TOOL_ARGUMENTS),
+        annotations: toolAnnotations(id),
       }));
   }
 
@@ -148,15 +205,20 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     signal?: AbortSignal,
     context?: { resourceId?: string },
   ): Promise<unknown> {
-    const contract = this.toolContracts[name];
-    if (!contract) throw new Error(`Unknown Graphiti tool: ${name}`);
-    if (!this.startup) throw new Error("Graphiti sidecar startup has not been scheduled");
-    await abortable(this.startup, signal);
-    if (!this.resolved) throw new Error("Graphiti sidecar did not launch");
+    const toolSchema = this.toolSchemas.find(({ id }) => id === name);
+    if (!toolSchema) throw new Error(`Unknown Graphiti tool: ${name}`);
+    if (!this.resolved || !this.sidecar?.running) {
+      throw new Error("Graphiti sidecar is not running");
+    }
+    if (!this.resolved.bearer) throw new Error("Graphiti sidecar bearer is not configured");
+    await this.ready;
     const userId = context?.resourceId ?? executionContextUserId();
-    const response = await fetch(`http://127.0.0.1:${this.resolved.listen.port}${contract.path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+    const response = await fetch(toolSchema.url, {
+      method: toolSchema.method,
+      headers: {
+        ...graphitiRequestHeaders(this.resolved),
+        "content-type": "application/json",
+      },
       body: JSON.stringify(scopedArguments(name, args, userScope(userId))),
       signal,
     });
@@ -166,43 +228,6 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
       );
     }
     return response.json();
-  }
-
-  private async waitUntilReady(): Promise<void> {
-    if (!this.resolved) throw new Error("Graphiti sidecar did not launch");
-    const url = `http://127.0.0.1:${this.resolved.listen.port}/healthcheck`;
-    const deadline = Date.now() + this.resolved.startupTimeoutMs;
-    let lastError: unknown;
-    while (!this.stopping && Date.now() < deadline) {
-      try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
-        if (response.ok) return;
-        lastError = new Error(`Graphiti healthcheck returned HTTP ${response.status}`);
-      } catch (error) {
-        lastError = error;
-      }
-      await asyncUtils.sleep(STARTUP_RETRY_MS);
-    }
-    if (this.stopping) throw new Error("Graphiti stopped before becoming ready");
-    throw new Error("Graphiti sidecar readiness timed out", { cause: lastError });
-  }
-
-  private onSupervisorExit(error?: unknown): void {
-    if (this.stopping || !this.setupComplete) return;
-    this.logger.error("sidecar supervisor exited", { error });
-    process.kill(process.pid, "SIGTERM");
-  }
-
-  private async stopSidecar(): Promise<void> {
-    if (this.stopping) return;
-    this.stopping = true;
-    const startup = this.startup;
-    const runtime = this.runtime;
-    await runtime?.stop();
-    await startup?.catch(() => undefined);
-    if (this.runtime !== runtime) await this.runtime?.stop();
-    this.runtime = undefined;
-    this.startup = undefined;
   }
 }
 
@@ -242,23 +267,29 @@ function hasUnsuffixedTool(name: string, names: ReadonlySet<string>): boolean {
   return suffix ? names.has(name.slice(0, -suffix.length)) : false;
 }
 
-function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise;
-  signal.throwIfAborted();
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    signal.addEventListener("abort", onAbort, { once: true });
-    void promise.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
+function selectToolSchemas(schemas: readonly OpenApiTool[]): OpenApiTool[] {
+  return TOOL_NAMES.map((name) => {
+    const schema = schemas.find(({ id }) => id === name);
+    if (!schema) throw new Error(`Graphiti OpenAPI is missing tool operation: ${name}`);
+    return schema;
   });
+}
+
+function hideArguments(
+  schema: OpenApiTool["inputSchema"],
+  hiddenArguments: ReadonlySet<string>,
+): OpenApiTool["inputSchema"] {
+  const { properties: sourceProperties, required: sourceRequired, ...rest } = schema;
+  const properties = object.isRecord(sourceProperties) ? { ...sourceProperties } : undefined;
+  if (properties) {
+    for (const name of hiddenArguments) delete properties[name];
+  }
+  const required = sourceRequired?.filter((name) => !hiddenArguments.has(name));
+  return {
+    ...rest,
+    ...(properties ? { properties } : {}),
+    ...(required?.length ? { required } : {}),
+  };
 }
 
 async function availablePort(): Promise<number> {

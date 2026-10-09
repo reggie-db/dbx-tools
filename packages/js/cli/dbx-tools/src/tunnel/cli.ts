@@ -109,7 +109,7 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
       ],
       { gracefulTimeoutMs: 10_000 },
     );
-    void app.start();
+    await app.start();
     children.push(app);
   } else if (resolved.appPort) {
     appPort = resolved.appPort;
@@ -152,7 +152,7 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
   if ((resolved.transport === "frp" || resolved.transport === "both") && resolved.frp) {
     const frpEnv = await frp.installFrp();
     const configPath = await frp.writeFrpConfig(resolved.frp, frpEnv);
-    children.push(frp.startFrp(resolved.frp, frpEnv, configPath));
+    children.push(await frp.startFrp(resolved.frp, frpEnv, configPath));
   }
   const activeTunnelCount = children.length - (executable ? 1 : 0);
   if (!activeTunnelCount) {

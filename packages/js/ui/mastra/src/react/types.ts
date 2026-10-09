@@ -1,4 +1,4 @@
-import type { GenieWriterEvent } from "@dbx-tools/shared-mastra";
+import type { ToolProgressEvent } from "@dbx-tools/shared-mastra/wire";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { UIMessage } from "ai";
 import type { ReactNode } from "react";
@@ -38,7 +38,7 @@ export type ToolEvent = {
  * unified flat `{type, ...}` events the `tool-output` chunks
  * carry. New variants should be added there.
  */
-export type ToolProgress = GenieWriterEvent;
+export type ToolProgress = ToolProgressEvent;
 
 /**
  * Subset of a Model Serving endpoint surfaced in the model picker. `name`

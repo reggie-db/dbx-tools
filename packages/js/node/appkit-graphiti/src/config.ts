@@ -18,7 +18,7 @@ import {
   resolveGraphitiOptions,
   type GraphitiOptions,
   type ResolvedGraphitiOptions,
-} from "../options.ts";
+} from "./options.ts";
 
 /** Shared Graphiti options accepted by the AppKit plugin. */
 export type GraphitiPluginConfig = BasePluginConfig & GraphitiOptions;

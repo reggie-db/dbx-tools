@@ -3,15 +3,18 @@ import { describe, it } from "node:test";
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
 import type { AgentToolDefinition, ToolkitEntry } from "@databricks/appkit/beta";
 import { createTestPlugin, createTestPluginContext } from "@databricks/appkit/testing";
+import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
 import { log } from "@dbx-tools/shared-core";
+import { TOOL_PROGRESS_PART_TYPE } from "@dbx-tools/shared-mastra/wire";
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 import type { Tool } from "@mastra/core/tools";
 
 import { buildAgents, type MastraTools } from "../src/agents.ts";
+import { MASTRA_RESOLVED_MODEL_KEY } from "../src/serving.ts";
 
 interface RecordsPluginConfig extends BasePluginConfig {
   definitions?: AgentToolDefinition[];
-  calls?: Array<{ name: string; args: unknown; resourceId?: string }>;
+  calls?: Array<{ name: string; args: unknown; model?: string; resourceId?: string }>;
 }
 
 class RecordsPlugin extends Plugin<RecordsPluginConfig> {
@@ -31,9 +34,19 @@ class RecordsPlugin extends Plugin<RecordsPluginConfig> {
     name: string,
     args: unknown,
     _signal?: AbortSignal,
-    context?: { resourceId?: string },
+    context?: AgentToolExecutionContext,
   ) {
-    this.config.calls?.push({ name, args, resourceId: context?.resourceId });
+    this.config.calls?.push({
+      name,
+      args,
+      model: context?.model,
+      resourceId: context?.resourceId,
+    });
+    await context?.writeProgress?.({
+      type: "tool_status",
+      status: "working",
+      message: "Looking up record",
+    });
     return args;
   }
 }
@@ -81,6 +94,7 @@ describe("AppKit toolkit adaptation", () => {
     const calls: Array<{
       name: string;
       args: unknown;
+      model?: string;
       resourceId?: string;
     }> = [];
     const definitions: AgentToolDefinition[] = [
@@ -139,12 +153,39 @@ describe("AppKit toolkit adaptation", () => {
     assert.equal(tool.description, "Look up a record");
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_RESOURCE_ID_KEY, "resource-7");
-    await tool.execute({ id: "record-1" }, { requestContext });
+    requestContext.set(MASTRA_RESOLVED_MODEL_KEY, "databricks-gpt-6-1-sol");
+    const progress: unknown[] = [];
+    await tool.execute(
+      { id: "record-1" },
+      {
+        agent: { toolCallId: "tool-7" },
+        requestContext,
+        writer: {
+          async custom(part: unknown) {
+            progress.push(part);
+          },
+        },
+      },
+    );
     assert.deepEqual(calls, [
       {
         name: "lookup",
         args: { id: "record-1" },
+        model: "databricks-gpt-6-1-sol",
         resourceId: "resource-7",
+      },
+    ]);
+    assert.deepEqual(progress, [
+      {
+        type: TOOL_PROGRESS_PART_TYPE,
+        data: {
+          toolCallId: "tool-7",
+          event: {
+            type: "tool_status",
+            status: "working",
+            message: "Looking up record",
+          },
+        },
       },
     ]);
   });

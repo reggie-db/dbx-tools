@@ -297,6 +297,11 @@ namespace (override with `mount`) and carries its own policy: `readable`
 | `workspace-team`     | `/Workspace/.assistant/skills`     | yes      | no       |
 | `workspace-team-app` | `/Users/<email>/.assistant/skills` | yes      | yes      |
 
+Readable roots are expanded to concrete skill directories before Mastra scans
+them. Duplicate directory names use first-folder precedence, so the shared
+`workspace-team` skill wins over a same-named `workspace-team-app` skill while
+unique user skills remain available.
+
 A consuming library merges over that map: a matching name overrides the
 default, `false` disables it, and any other name adds a location. A folder
 points at a Databricks `path` (a literal, or a function resolving one per
@@ -986,7 +991,7 @@ needs no extra wiring.
 | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. On Apps, the telemetry sidecar injects these.                            |
 | `OTEL_PROPAGATORS`                                                  | Set to `none` on Databricks Apps. The plugin disables extraction and injection before serving requests while retaining local async span parenting. |
 | `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset. Assessments read the experiment's UC trace destination tag.              |
-| `MLFLOW_UC_TRACE_PREFIX`                                            | Optional override for the UC table prefix. Omit to use the experiment tag.                                                                          |
+| `MLFLOW_UC_TRACE_PREFIX`                                            | Optional override for the UC table prefix. Omit to use the experiment tag.                                                                         |
 
 ## Configuration Reference
 

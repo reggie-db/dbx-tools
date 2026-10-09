@@ -33,6 +33,7 @@ describe("Graphiti options", () => {
     assert.deepEqual(
       graphitiOptionsFromEnvironment({
         DATABRICKS_CONFIG_PROFILE: "PROFILE",
+        GRAPHITI_TOKEN: " secret ",
         TEMPERATURE: "0.25",
         DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS: "240000",
         DBX_TOOLS_POSTGRES_ROLE: "graphiti_owner",
@@ -43,6 +44,7 @@ describe("Graphiti options", () => {
       }),
       {
         profile: "PROFILE",
+        bearer: "secret",
         temperature: 0.25,
         startupTimeoutMs: 240_000,
         postgresRole: "graphiti_owner",
@@ -73,10 +75,12 @@ describe("Graphiti options", () => {
   it("serializes the resolved configuration as one process environment", () => {
     const environment = graphitiOptionsEnvironment({
       profile: "PROFILE",
+      bearer: "secret",
       listen: "tcp://localhost:8100",
     });
 
     assert.equal(environment.DATABRICKS_CONFIG_PROFILE, "PROFILE");
+    assert.equal(environment.GRAPHITI_TOKEN, "secret");
     assert.equal(environment.MODEL_CLASS, "chat-fast");
     assert.equal(environment.DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS, "180000");
     assert.equal(environment.DBX_TOOLS_POSTGRES_ROLE, undefined);

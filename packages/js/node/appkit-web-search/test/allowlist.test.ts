@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { policy } from "@dbx-tools/model";
 import { assertFetchUrlAllowed } from "../src/_fetch-url.ts";
 import {
   assertUrlAllowed,
@@ -10,11 +11,12 @@ import {
 import { approvalMatches, resolveWebSearchConfig, toApprovalPolicy } from "../src/config.ts";
 import { htmlToText } from "../src/html-text.ts";
 import {
-  detectWebSearchProvider,
   supportsWebSearch,
+  webSearchProviderForFamily,
   webSearchToolSpec,
   WEB_SEARCH_PROVIDERS,
 } from "../src/provider.ts";
+import { selectWebSearchEndpoint } from "../src/search.ts";
 
 describe("web-search allow-list", () => {
   it("strips the scheme from entries, leaving host / path verbatim", () => {
@@ -99,37 +101,85 @@ describe("web-fetch network policy", () => {
 });
 
 describe("web-search provider detection", () => {
-  it("maps GPT ids to openai and Gemini ids to gemini", () => {
-    assert.equal(detectWebSearchProvider("databricks-gpt-5"), "openai");
-    assert.equal(detectWebSearchProvider("databricks-gpt-5-mini"), "openai");
-    assert.equal(detectWebSearchProvider("databricks-gemini-3-pro"), "gemini");
-    assert.equal(detectWebSearchProvider("databricks-gemini-2-5-flash"), "gemini");
+  it("maps model-owned family values to provider contracts", () => {
+    assert.equal(webSearchProviderForFamily(policy.ModelFamily.Gpt), "openai");
+    assert.equal(webSearchProviderForFamily(policy.ModelFamily.Gemini), "gemini");
   });
 
   it("treats gpt-oss and non-web families as unsupported", () => {
-    assert.equal(detectWebSearchProvider("databricks-gpt-oss-120b"), null);
-    assert.equal(detectWebSearchProvider("databricks-claude-sonnet-4-6"), null);
-    assert.equal(detectWebSearchProvider("databricks-llama-3-70b"), null);
+    assert.equal(webSearchProviderForFamily(policy.ModelFamily.Claude), null);
+    assert.equal(webSearchProviderForFamily(policy.ModelFamily.Llama), null);
     assert.equal(supportsWebSearch("databricks-claude-sonnet-4-6"), false);
+    assert.equal(supportsWebSearch("databricks-gpt-oss-120b"), false);
     assert.equal(supportsWebSearch("databricks-gpt-5"), true);
   });
 
-  it("uses the built-in tool spec per provider", () => {
-    assert.deepEqual(webSearchToolSpec("openai").tool, { type: "web_search" });
+  it("uses the built-in request fragment per provider", () => {
+    assert.deepEqual(webSearchToolSpec("openai").request, {
+      tools: [{ type: "web_search" }],
+    });
     assert.equal(webSearchToolSpec("openai").api, "responses");
-    assert.deepEqual(webSearchToolSpec("gemini").tool, { google_search: {} });
+    assert.deepEqual(webSearchToolSpec("gemini").request, { google_search: {} });
     assert.equal(webSearchToolSpec("gemini").api, "chat");
-    assert.deepEqual(WEB_SEARCH_PROVIDERS.openai.tool, { type: "web_search" });
+    assert.deepEqual(WEB_SEARCH_PROVIDERS.openai.request, {
+      tools: [{ type: "web_search" }],
+    });
   });
 
   it("merges an operator override over the built-in map", () => {
-    const overrides = { gemini: { tool: { google_search_retrieval: {} } } };
+    const overrides = { gemini: { request: { google_search_retrieval: {} } } };
     const spec = webSearchToolSpec("gemini", overrides);
-    assert.deepEqual(spec.tool, { google_search_retrieval: {} });
+    assert.deepEqual(spec.request, { google_search_retrieval: {} });
     // api falls through to the built-in when not overridden
     assert.equal(spec.api, "chat");
     // other providers keep their defaults
-    assert.deepEqual(webSearchToolSpec("openai", overrides).tool, { type: "web_search" });
+    assert.deepEqual(webSearchToolSpec("openai", overrides).request, {
+      tools: [{ type: "web_search" }],
+    });
+  });
+});
+
+describe("web-search model selection", () => {
+  const config = {
+    modelFallbacks: ["gemini", "gpt"],
+    fuzzy: true,
+    fuzzyThreshold: 0.4,
+  };
+  const endpoints = [
+    "databricks-gemini-3-5-flash",
+    "databricks-gemini-3-8-flash",
+    "databricks-gpt-5-6-sol",
+    "databricks-gpt-6-1-sol",
+    "databricks-gpt-oss-120b",
+  ].map((name) => ({ name, task: "llm/v1/chat" }));
+
+  it("always prefers the highest-ranked Gemini model", () => {
+    assert.equal(
+      selectWebSearchEndpoint(endpoints, "databricks-gpt-5-6-sol", config)?.name,
+      "databricks-gemini-3-8-flash",
+    );
+  });
+
+  it("uses a matching GPT when Gemini is unavailable", () => {
+    assert.equal(
+      selectWebSearchEndpoint(
+        endpoints.filter(({ name }) => !name.includes("gemini")),
+        "databricks-gpt-5-6-sol",
+        config,
+      )?.name,
+      "databricks-gpt-5-6-sol",
+    );
+  });
+
+  it("otherwise uses the highest-ranked GPT when Gemini is unavailable", () => {
+    assert.equal(
+      selectWebSearchEndpoint(
+        endpoints.filter(({ name }) => !name.includes("gemini")),
+        undefined,
+        config,
+      )?.name,
+      "databricks-gpt-6-1-sol",
+    );
   });
 });
 
@@ -139,13 +189,14 @@ describe("web-search config", () => {
     assert.deepEqual(c.approval, { mode: "none" });
     assert.equal(c.model, undefined);
     assert.equal(c.modelSource, "none");
+    assert.equal(c.timeoutMs, 60_000);
     assert.match(c.modelFallbacks[0]!, /gemini/);
     assert.ok(c.modelFallbacks.some((m) => m.includes("gpt")));
   });
 
   it("merges webSearchTools override into resolved config", () => {
-    const c = resolveWebSearchConfig({ webSearchTools: { gemini: { tool: { x: {} } } } });
-    assert.deepEqual((c.webSearchTools as { gemini: unknown }).gemini, { tool: { x: {} } });
+    const c = resolveWebSearchConfig({ webSearchTools: { gemini: { request: { x: {} } } } });
+    assert.deepEqual((c.webSearchTools as { gemini: unknown }).gemini, { request: { x: {} } });
   });
 
   it("enables the scrape fallback by default, honors an explicit off", () => {
@@ -196,7 +247,7 @@ describe("web-search config", () => {
     }
   });
 
-  it("rejects a webSearchTools override that is not a tool spec", () => {
+  it("rejects a webSearchTools override that is not a request fragment", () => {
     assert.throws(() => webSearchToolSpec("gemini", { gemini: "nope" }), /webSearchTools.gemini/);
   });
 });

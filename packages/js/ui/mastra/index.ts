@@ -64,6 +64,7 @@ export type { ThreadSidebarProps } from "./src/react/thread-sidebar.tsx";
 export { ThreadActions, ThreadTabs } from "./src/react/thread-tabs.tsx";
 export type { ThreadTabsProps, ThreadActionsProps } from "./src/react/thread-tabs.tsx";
 export { humanizeToolName, ToolSessionPill } from "./src/react/tool-pill.tsx";
+export type { WebSearchProgressGroup } from "./src/react/tool-pill.tsx";
 export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ThreadPlacement, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types.ts";
 export { LIGHT_CHART_CHROME } from "./src/support/chart-theme.ts";
 export type { ChartChrome } from "./src/support/chart-theme.ts";

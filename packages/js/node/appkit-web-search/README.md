@@ -21,8 +21,9 @@ has no equivalent for.
   then GPT - independently of the calling agent's chat model (which may not
   support web search). Loose names (`"gemini"`, `"gpt"`) fuzzy-match the live
   catalogue via [`@dbx-tools/model`](../model).
-- A built-in provider -> tool-spec map (OpenAI Responses API
-  `{"type":"web_search"}`, Gemini Chat Completions `{"google_search":{}}`),
+- A built-in provider -> request-fragment map (OpenAI Responses API
+  `{"tools":[{"type":"web_search"}]}`, Gemini Chat Completions
+  `{"google_search":{}}`),
   overridable per provider via the `WEB_SEARCH_TOOLS` setting.
 - A named URL policy (`allowlist` or `unrestricted`) over a glob allow-list
   built on [`@dbx-tools/path`](../path)'s `match` matcher: `web_search` silently
@@ -120,35 +121,27 @@ Mastra memory, and durable approvals on `@dbx-tools/appkit-mastra`.
 ## Choose The Web-Search Model
 
 The native web-search tool only runs on certain models, and it is provider-
-specific. This package resolves a web-search-capable model INDEPENDENTLY of the
-agent's chat model, so an agent on any model can still search:
+specific. This package resolves deployed endpoints through
+[`@dbx-tools/model`](../model) and applies this order:
 
-- Default preference: an appropriate **Gemini**, then **GPT** (`modelFallbacks`).
-- Pin one via `model` (or `WEB_SEARCH_MODEL`): an endpoint name
-  (`"databricks-gemini-3-pro"`), a loose name (`"gemini"`, `"gpt"`), or a
-  capability class - all fuzzy-matched against the live catalogue.
-- Per call, the model can pass a `model` argument to override.
-- If an explicitly requested model doesn't support web search (e.g. a Claude or
-  Llama endpoint), the tool errors rather than silently searching with the wrong
-  thing. When nothing is pinned, unsupported fallbacks are skipped.
+1. Highest-ranked web-search-capable **Gemini**.
+2. Without Gemini, a capable **GPT** matching the calling/requested model.
+3. Highest-ranked capable **GPT**.
+4. Any additional `modelFallbacks` searches in order.
 
-The endpoint id is read in this order, and where it came from changes what
-happens when it cannot run web search:
-
-| Order | Source                             | Unsupported endpoint       |
-| ----- | ---------------------------------- | -------------------------- |
-| 1     | `model` in plugin config           | Error                      |
-| 2     | `WEB_SEARCH_MODEL`                 | Error                      |
-| 3     | `DATABRICKS_SERVING_ENDPOINT_NAME` | Skipped, fallbacks apply   |
-| 4     | `modelFallbacks`                   | Skipped, next one is tried |
+When Databricks reports that Gemini web search is unavailable because
+cross-region processing is disabled, the plugin suppresses Gemini for 24 hours
+in that runtime and transparently retries the same tool call with the next GPT
+candidate.
 
 `DATABRICKS_SERVING_ENDPOINT_NAME` is AppKit's standard name for a Model
 Serving binding, and it is the field the plugin declares in its manifest, so
 `app.yaml` / bundle wiring reaches this plugin the way it reaches any other.
-Because that binding is usually the app's chat endpoint - which need not
-support web search - it is treated as a preference rather than a pin.
-`WEB_SEARCH_MODEL` stays as the dedicated override for pointing web search at
-a different endpoint than the rest of the app.
+The request's `model`, plugin `model`, and environment model values are used to
+match the calling GPT after Gemini availability is checked.
+When the tool runs through `@dbx-tools/appkit-mastra`, the host injects the
+actual resolved chat model, overriding any different model argument generated
+by the LLM.
 
 Model resolution runs against the LIVE workspace catalogue (via
 [`@dbx-tools/model`](../model)), so it only ever picks an endpoint that is
@@ -165,16 +158,16 @@ so `answer` is a lead-in over the top results). It is enabled by default; set
 `scrapeFallback: false` (or `WEB_SEARCH_SCRAPE_FALLBACK=0`) to require a native
 model and error when none is deployed.
 
-The right provider tool-spec is selected automatically from the resolved model:
-OpenAI GPT uses the Responses API `{"type":"web_search"}`; Gemini uses Chat
-Completions `{"google_search":{}}`. Override or extend that map per provider with
+The right provider request fragment is selected automatically from the resolved model:
+OpenAI GPT uses the Responses API `{"tools":[{"type":"web_search"}]}`; Gemini
+uses the top-level Chat Completions field `{"google_search":{}}`. Override or extend that map per provider with
 the `webSearchTools` setting (env `WEB_SEARCH_TOOLS`, JSON) as the platform
 evolves:
 
 ```ts
 plugin.webSearch({
   model: "databricks-gemini-3-pro",
-  webSearchTools: { gemini: { tool: { google_search: {} } } },
+  webSearchTools: { gemini: { request: { google_search: {} } } },
 });
 ```
 
@@ -306,12 +299,12 @@ built-in default.
 | --------------------- | ------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
 | `model`               | `string`                                          | resolved from fallbacks | Web-search endpoint: an endpoint name, a loose name, or a capability class. |
 | `modelFallbacks`      | `string \| string[]`                              | Gemini, then GPT        | Ordered candidates tried when `model` is unset.                             |
-| `webSearchTools`      | `Record<string, unknown>`                         | built-in provider map   | Provider -> tool-spec overrides, merged over the defaults.                  |
+| `webSearchTools`      | `Record<string, unknown>`                         | built-in provider map   | Provider -> request-fragment overrides, merged over the defaults.           |
 | `modelFuzzyMatch`     | `boolean`                                         | `true`                  | Fuzzy-match loose model names against the live catalogue.                   |
 | `modelFuzzyThreshold` | `number`                                          | `0.4`                   | Fuse.js score below which a fuzzy match is accepted.                        |
 | `maxCitations`        | `number`                                          | `10`                    | Hard cap on citations returned from one search.                             |
 | `fetchMaxLength`      | `number`                                          | `50000`                 | Hard cap on `web_fetch` content length, in characters.                      |
-| `timeoutMs`           | `number`                                          | `30000`                 | Per-request network timeout.                                                |
+| `timeoutMs`           | `number`                                          | `60000`                 | Per-request network timeout.                                                |
 | `scrapeFallback`      | `boolean`                                         | `true`                  | Scrape DuckDuckGo when no web-search-capable model is deployed.             |
 | `urlPolicy`           | `"unrestricted" \| "allowlist"`                   | follows `allowedUrls`   | Which URLs the tools may reach.                                             |
 | `allowedUrls`         | `string \| string[]`                              | none                    | Allow-list globs or bare hosts.                                             |
@@ -340,6 +333,10 @@ runs through the plugin's `execute()` chain, so all three are cached, retried
 with jittered backoff, timed out, and traced. The cache is namespaced per user,
 so an on-behalf-of result never crosses identities. See `defaults.ts` for the
 TTLs and retry budgets and why each was chosen.
+
+OpenAI Responses web searches stream native search, page-read, and completion
+status through the Mastra tool writer. The common tool-session pill updates
+while the search runs; the completed Responses payload remains the tool result.
 
 Requirements: the native web-search tool runs on pay-per-token GPT / Gemini
 serving endpoints with cross-region processing enabled; it is unavailable on

@@ -58,4 +58,47 @@ describe("web-search plugin runtime ownership", () => {
     assert.match(afterShutdown.content, /second body/);
     assert.deepEqual(calls, [{ owner: "first" }, { owner: "second" }, { owner: "second" }]);
   });
+
+  it("uses the host-selected model and forwards progress", async () => {
+    const plugin = new WebSearchPlugin({});
+    const progress: unknown[] = [];
+    let selectedModel: string | undefined;
+    Object.assign(plugin, {
+      search: async (
+        request: { query: string; model?: string },
+        _signal: AbortSignal | undefined,
+        writeProgress: ((event: unknown) => Promise<void>) | undefined,
+      ) => {
+        selectedModel = request.model;
+        await writeProgress?.({
+          type: "tool_status",
+          status: "searching",
+          message: "Searching the web",
+        });
+        return { query: request.query, answer: "done", citations: [], model: request.model! };
+      },
+    });
+
+    const result = (await plugin.executeAgentTool(
+      "web_search",
+      { query: "current docs", model: "databricks-gpt-5-4" },
+      undefined,
+      {
+        model: "databricks-gpt-6-1-sol",
+        writeProgress: async (event) => {
+          progress.push(event);
+        },
+      },
+    )) as { model: string };
+
+    assert.equal(selectedModel, "databricks-gpt-6-1-sol");
+    assert.equal(result.model, "databricks-gpt-6-1-sol");
+    assert.deepEqual(progress, [
+      {
+        type: "tool_status",
+        status: "searching",
+        message: "Searching the web",
+      },
+    ]);
+  });
 });

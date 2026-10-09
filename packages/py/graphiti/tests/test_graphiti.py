@@ -2,6 +2,7 @@ import asyncio
 import base64
 import importlib
 import json
+import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -19,6 +20,8 @@ from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.graph_ops
 )
 from dbx_tools.graphiti._generated.sync.postgraph.postgraph_driver import PostGraphDriver
 from dbx_tools.graphiti.options import normalize_graphiti_options
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
 """Validate the wrapper-owned composition without re-testing upstream Graphiti."""
 
@@ -63,6 +66,27 @@ def _node_environment(**values: str | None) -> Iterator[None]:
             update(name, value)
 
 
+def _request(path: str, authorization: str | None = None) -> Request:
+    """Build one HTTP request for direct middleware tests."""
+    headers = [] if authorization is None else [(b"authorization", authorization.encode())]
+    return Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode(),
+            "query_string": b"",
+            "headers": headers,
+            "client": ("127.0.0.1", 1234),
+            "server": ("127.0.0.1", 8100),
+            "root_path": "",
+            "app": main.app,
+        }
+    )
+
+
 def test_app_composes_rest_mcp_and_direct_tool_routes() -> None:
     paths = _route_paths(main.app.routes)
 
@@ -90,6 +114,38 @@ def test_app_composes_rest_mcp_and_direct_tool_routes() -> None:
     assert {"name", "episode_body"}.issubset(add_memory_schema["required"])
 
 
+@pytest.mark.asyncio
+async def test_optional_bearer_secures_every_http_path() -> None:
+    calls: list[str] = []
+
+    async def call_next(request: Request):
+        calls.append(request.url.path)
+        return JSONResponse({"ok": True})
+
+    main.app.state.bearer = "secret"
+    try:
+        unauthorized = await main._require_bearer(_request("/openapi.json"), call_next)
+        wrong = await main._require_bearer(
+            _request("/healthcheck", "Bearer wrong"),
+            call_next,
+        )
+        authorized = await main._require_bearer(
+            _request("/tools/get_status", "Bearer secret"),
+            call_next,
+        )
+        main.app.state.bearer = None
+        unsecured = await main._require_bearer(_request("/mcp"), call_next)
+    finally:
+        main.app.state.bearer = None
+
+    assert unauthorized.status_code == 401
+    assert unauthorized.headers["www-authenticate"] == "Bearer"
+    assert wrong.status_code == 401
+    assert authorized.status_code == 200
+    assert unsecured.status_code == 200
+    assert calls == ["/tools/get_status", "/mcp"]
+
+
 def test_load_graphiti_options_uses_generated_environment_parser(monkeypatch) -> None:
     calls: list[object] = []
     resolved = _resolved_options()
@@ -110,9 +166,12 @@ def test_load_graphiti_options_uses_generated_environment_parser(monkeypatch) ->
 
 
 def test_normalize_graphiti_options_accepts_input_and_resolved_values() -> None:
-    resolved = normalize_graphiti_options(GraphitiOptions(model_class="chat-thinking"))
+    resolved = normalize_graphiti_options(
+        GraphitiOptions(model_class="chat-thinking", bearer="secret")
+    )
 
     assert resolved["modelClass"] == "chat-thinking"
+    assert resolved["bearer"] == "secret"
     assert "databaseUrl" not in resolved
     assert normalize_graphiti_options(resolved) == resolved
 
@@ -255,6 +314,18 @@ def test_embedding_dimensions_require_discovered_metadata() -> None:
     )
     with pytest.raises(RuntimeError, match="has no dimension metadata"):
         graphiti_runtime._required_embedding_dimensions({"name": "embedding-model"})
+
+
+def test_llm_client_normalizes_structured_content_before_json_parsing() -> None:
+    content = [{"type": "text", "text": '```json\n{"status":"ok"}\n```'}]
+
+    assert (
+        graphiti_runtime._GraphitiOpenAIGenericClient._strip_code_fences(content)
+        == '{"status":"ok"}'
+    )
+    assert graphiti_runtime._GraphitiOpenAIGenericClient._strip_code_fences('{"status":"ok"}') == (
+        '{"status":"ok"}'
+    )
 
 
 @pytest.mark.asyncio
@@ -422,6 +493,115 @@ async def test_healthcheck() -> None:
 
     assert response.status_code == 200
     assert json.loads(response.body) == {"status": "healthy"}
+
+
+def test_healthcheck_access_log_is_filtered() -> None:
+    filter = main._HealthcheckAccessFilter()
+    dropped = logging.LogRecord(
+        "uvicorn.access",
+        logging.INFO,
+        __file__,
+        0,
+        '127.0.0.1:1 - "GET /healthcheck HTTP/1.1" 503',
+        (),
+        None,
+    )
+    kept = logging.LogRecord(
+        "uvicorn.access",
+        logging.INFO,
+        __file__,
+        0,
+        '127.0.0.1:1 - "GET /openapi.json HTTP/1.1" 200',
+        (),
+        None,
+    )
+
+    assert filter.filter(dropped) is False
+    assert filter.filter(kept) is True
+
+
+def test_uvicorn_shutdown_log_is_filtered() -> None:
+    filter = main._UvicornShutdownFilter()
+    dropped = logging.LogRecord(
+        "uvicorn.error",
+        logging.INFO,
+        __file__,
+        0,
+        "Shutting down",
+        (),
+        None,
+    )
+    kept = logging.LogRecord(
+        "uvicorn.error",
+        logging.INFO,
+        __file__,
+        0,
+        "Uvicorn running on http://127.0.0.1:7272 (Press CTRL+C to quit)",
+        (),
+        None,
+    )
+
+    assert filter.filter(dropped) is False
+    assert filter.filter(kept) is True
+
+
+@pytest.mark.asyncio
+async def test_docs_are_served_before_runtime_ready(monkeypatch) -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class Clients:
+        llm_model = "chat"
+        embedder_model = "embed"
+        embedder_dimensions = 8
+
+    class Runtime:
+        clients = Clients()
+        graphiti = object()
+
+        def __init__(self, options) -> None:
+            pass
+
+        async def start(self):
+            started.set()
+            await release.wait()
+            return self.graphiti
+
+        async def close(self) -> None:
+            pass
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+    monkeypatch.setattr(main, "load_graphiti_options", lambda: _resolved_options())
+    monkeypatch.setattr(main, "GraphitiRuntime", Runtime)
+    monkeypatch.setattr(main, "initialize_mcp", lambda *_args, **_kwargs: asyncio.sleep(0))
+    monkeypatch.setattr(main.graphiti_mcp.mcp.session_manager, "run", lambda: Session())
+    monkeypatch.setattr(main.graphiti_mcp, "queue_service", None)
+
+    async with main.lifespan(main.app):
+        await started.wait()
+        health = await main.healthcheck()
+        assert health.status_code == 503
+        assert json.loads(health.body) == {"status": "starting"}
+        assert {getattr(route, "path", None) for route in main.app.routes}.issuperset(
+            {"/docs", "/openapi.json"}
+        )
+        assert "/healthcheck" in main.app.openapi()["paths"]
+        release.set()
+        for _ in range(50):
+            if getattr(main.app.state, "ready", False):
+                break
+            await asyncio.sleep(0.01)
+        else:
+            raise AssertionError("runtime never became healthy")
+        healthy = await main.healthcheck()
+        assert healthy.status_code == 200
+        assert json.loads(healthy.body) == {"status": "healthy"}
 
 
 @pytest.mark.asyncio

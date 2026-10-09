@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 from graphiti_core import Graphiti
@@ -13,6 +14,7 @@ from typing_extensions import Self
 
 from ._generated.node.auth.bindings import AuthClient, create_auth_client
 from ._generated.node.model.bindings import ModelClient, create_model_client
+from ._generated.node.shared_model.openai_chat import chat_content_to_text
 from ._generated.sync.postgraph.postgraph_driver import PostGraphDriver
 from .database import _DatabaseRuntime, _start_database
 from .options import (
@@ -54,6 +56,15 @@ class _DatabricksRouteAuth(httpx.Auth):
         request.url = route
         request.headers.update(await self._auth.headers())
         yield request
+
+
+class _GraphitiOpenAIGenericClient(OpenAIGenericClient):
+    """Normalize provider content parts before Graphiti parses structured JSON."""
+
+    @staticmethod
+    def _strip_code_fences(text: Any) -> str:
+        """Flatten structured chat content through the shared model owner."""
+        return OpenAIGenericClient._strip_code_fences(chat_content_to_text(text))
 
 
 class GraphitiRuntime(AbstractAsyncContextManager["GraphitiRuntime"]):
@@ -166,7 +177,7 @@ async def create_runtime_clients(
         small_model=chat_route["modelId"],
         temperature=float(options["temperature"]),
     )
-    llm = OpenAIGenericClient(
+    llm = _GraphitiOpenAIGenericClient(
         config=llm_config,
         client=openai,
         structured_output_mode=options["structuredOutputMode"],

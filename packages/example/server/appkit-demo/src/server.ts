@@ -13,7 +13,7 @@ import {
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
-import { graphiti } from "@dbx-tools/graphiti/appkit";
+import { graphiti } from "@dbx-tools/appkit-graphiti";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { lakebaseAiSearch, search } from "@dbx-tools/search";
 import { brandUtils } from "@dbx-tools/shared-core";

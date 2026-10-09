@@ -36,7 +36,11 @@ import {
   rewriteServingResponseBody,
   rewriteServingResponseStream,
 } from "./serving-sanitize.ts";
-import { MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving.ts";
+import {
+  MASTRA_MODEL_OVERRIDE_KEY,
+  MASTRA_RESOLVED_MODEL_KEY,
+  resolveServingConfig,
+} from "./serving.ts";
 import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
 
 type ModelClass = model.ModelClass;
@@ -167,6 +171,7 @@ export async function buildModel(
     selectionInput(config, requested, overrides.modelClass, serving),
   );
   logger.debug("model selected", { modelId, source, requested });
+  requestContext.set(MASTRA_RESOLVED_MODEL_KEY, modelId);
   recordActiveTraceModel(modelId);
 
   return {

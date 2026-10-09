@@ -12,6 +12,7 @@
         "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/cli",
@@ -19,11 +20,25 @@
         "@dbx-tools/demo-appkit-server",
         "@dbx-tools/email",
         "@dbx-tools/genie",
-        "@dbx-tools/graphiti",
         "@dbx-tools/model",
         "@dbx-tools/search",
         "@dbx-tools/teams",
         "@dbx-tools/tunnel"
+      ]
+    },
+    {
+      "name": "@dbx-tools/appkit-graphiti",
+      "path": "packages/js/node/appkit-graphiti",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/auth",
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-graphiti"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/cli",
+        "@dbx-tools/demo-appkit-server"
       ]
     },
     {
@@ -87,9 +102,9 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-graphiti",
         "@dbx-tools/cli",
         "@dbx-tools/databricks",
-        "@dbx-tools/graphiti",
         "@dbx-tools/lakebase",
         "@dbx-tools/model"
       ]
@@ -113,6 +128,7 @@
       "path": "packages/js/cli/dbx-tools",
       "dependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
@@ -121,7 +137,6 @@
         "@dbx-tools/core",
         "@dbx-tools/databricks",
         "@dbx-tools/email",
-        "@dbx-tools/graphiti",
         "@dbx-tools/lakebase",
         "@dbx-tools/postgres",
         "@dbx-tools/shared-auth",
@@ -164,6 +179,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/auth",
@@ -175,7 +191,6 @@
         "@dbx-tools/demo-appkit-server",
         "@dbx-tools/email",
         "@dbx-tools/fs",
-        "@dbx-tools/graphiti",
         "@dbx-tools/path",
         "@dbx-tools/projen",
         "@dbx-tools/search",
@@ -226,12 +241,12 @@
       "path": "packages/example/server/appkit-demo",
       "dependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/core",
         "@dbx-tools/databricks",
         "@dbx-tools/email",
-        "@dbx-tools/graphiti",
         "@dbx-tools/postgres",
         "@dbx-tools/projen",
         "@dbx-tools/search",
@@ -279,21 +294,6 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit-mastra"
-      ]
-    },
-    {
-      "name": "@dbx-tools/graphiti",
-      "path": "packages/js/node/graphiti",
-      "dependencies": [
-        "@dbx-tools/appkit",
-        "@dbx-tools/auth",
-        "@dbx-tools/core",
-        "@dbx-tools/shared-core",
-        "@dbx-tools/shared-graphiti"
-      ],
-      "reverseDependencies": [
-        "@dbx-tools/cli",
-        "@dbx-tools/demo-appkit-server"
       ]
     },
     {
@@ -407,6 +407,7 @@
       "dependencies": [],
       "reverseDependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/appkit-web-search",
@@ -422,7 +423,6 @@
         "@dbx-tools/email",
         "@dbx-tools/fs",
         "@dbx-tools/genie",
-        "@dbx-tools/graphiti",
         "@dbx-tools/lakebase",
         "@dbx-tools/model",
         "@dbx-tools/path",
@@ -510,7 +510,7 @@
         "@dbx-tools/shared-model-gateway"
       ],
       "reverseDependencies": [
-        "@dbx-tools/graphiti"
+        "@dbx-tools/appkit-graphiti"
       ]
     },
     {

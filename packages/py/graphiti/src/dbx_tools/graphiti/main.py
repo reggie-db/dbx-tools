@@ -1,6 +1,8 @@
+import asyncio
 import logging
 import os
 import re
+import secrets
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
@@ -8,9 +10,10 @@ from inspect import Parameter, getdoc, signature
 from typing import Any, get_type_hints
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from graphiti_core import Graphiti
 from pydantic import BaseModel, Field, create_model
+from starlette.middleware.base import RequestResponseEndpoint
 
 from ._generated.node.shared_core.bindings import log_level_enabled
 from ._generated.node.shared_graphiti.options import graphiti_options_from_environment
@@ -31,6 +34,13 @@ _QUIET_LOGGERS = (
     "httpx",
     "mcp.server.streamable_http",
 )
+_HEALTHCHECK_ACCESS = "/healthcheck"
+_UVICORN_SHUTDOWN = (
+    "Shutting down",
+    "Waiting for application shutdown",
+    "Application shutdown complete",
+    "Finished server process",
+)
 _UPSTREAM_OPENAI_PLACEHOLDER_KEY = "managed"
 _TOOL_NAMES = (
     "add_memory",
@@ -47,8 +57,33 @@ _TOOL_NAMES = (
 )
 
 
+class _HealthcheckAccessFilter(logging.Filter):
+    """Drop Uvicorn access lines for the readiness probe."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return _HEALTHCHECK_ACCESS not in record.getMessage()
+
+
+class _UvicornShutdownFilter(logging.Filter):
+    """Drop Uvicorn's repeated SIGINT/SIGTERM teardown lines."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return not any(item in message for item in _UVICORN_SHUTDOWN)
+
+
+def _add_logger_filter(name: str, log_filter: logging.Filter) -> None:
+    """Attach ``log_filter`` to a logger once."""
+    logger = logging.getLogger(name)
+    if not any(isinstance(item, type(log_filter)) for item in logger.filters):
+        logger.addFilter(log_filter)
+
+
 def _configure_dependency_logging() -> None:
     """Restrict routine dependency lifecycle messages to warnings and errors."""
+    _add_logger_filter("uvicorn.access", _HealthcheckAccessFilter())
+    _add_logger_filter("uvicorn.error", _UvicornShutdownFilter())
+    _add_logger_filter("uvicorn", _UvicornShutdownFilter())
     if not log_level_enabled("debug"):
         for name in _QUIET_LOGGERS:
             logging.getLogger(name).setLevel(logging.WARNING)
@@ -161,43 +196,97 @@ mcp_app = graphiti_mcp.mcp.streamable_http_app(
 )
 
 
+async def _close_runtime(app: FastAPI) -> None:
+    """Stop the queue and Graphiti runtime if either was started."""
+    app.state.ready = False
+    queue = graphiti_mcp.queue_service
+    if queue is not None:
+        await queue.close()
+    runtime = getattr(app.state, "runtime", None)
+    if runtime is not None:
+        await runtime.close()
+        app.state.runtime = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Initialize both upstream applications and own the mounted MCP session manager."""
+    """Serve OpenAPI immediately, then start Graphiti and MCP in the background.
+
+    Uvicorn only accepts requests after this context yields. Database, model
+    routing, and MCP stay off the first-request path so ``/docs`` and
+    ``/openapi.json`` are reachable while ``/healthcheck`` still reports
+    ``starting``.
+    """
     options = load_graphiti_options()
+    app.state.bearer = options.get("bearer")
     app.state.ready = False
-    runtime = GraphitiRuntime(options)
-    await runtime.start()
-    app.state.runtime = runtime
-    if runtime.clients is None or runtime.graphiti is None:
-        raise RuntimeError("Graphiti runtime did not initialize")
+    app.state.runtime = None
+    shutdown = asyncio.Event()
+
+    async def boot() -> None:
+        runtime = GraphitiRuntime(options)
+        try:
+            await runtime.start()
+            app.state.runtime = runtime
+            if runtime.clients is None or runtime.graphiti is None:
+                raise RuntimeError("Graphiti runtime did not initialize")
+            with _upstream_openai_credentials():
+                await initialize_mcp(
+                    mcp_settings(
+                        options,
+                        runtime.clients.llm_model,
+                        runtime.clients.embedder_model,
+                        runtime.clients.embedder_dimensions,
+                    ),
+                    runtime.graphiti,
+                    runtime.clients,
+                )
+                async with graphiti_mcp.mcp.session_manager.run():
+                    app.state.ready = True
+                    await shutdown.wait()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.getLogger(__name__).exception("Graphiti runtime failed to start")
+        finally:
+            await _close_runtime(app)
+
+    task = asyncio.create_task(boot())
     try:
-        with _upstream_openai_credentials():
-            await initialize_mcp(
-                mcp_settings(
-                    options,
-                    runtime.clients.llm_model,
-                    runtime.clients.embedder_model,
-                    runtime.clients.embedder_dimensions,
-                ),
-                runtime.graphiti,
-                runtime.clients,
-            )
-            async with graphiti_mcp.mcp.session_manager.run():
-                app.state.ready = True
-                yield
+        yield
     finally:
-        app.state.ready = False
-        queue = graphiti_mcp.queue_service
-        if queue is not None:
-            await queue.close()
-        await runtime.close()
+        shutdown.set()
+        if not getattr(app.state, "ready", False):
+            task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
     title="Graphiti",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def _require_bearer(
+    request: Request,
+    call_next: RequestResponseEndpoint,
+) -> Response:
+    """Require the configured bearer token for every HTTP endpoint."""
+    bearer = getattr(request.app.state, "bearer", None)
+    authorization = request.headers.get("authorization", "")
+    if bearer and not secrets.compare_digest(authorization, f"Bearer {bearer}"):
+        return JSONResponse(
+            {"detail": "Unauthorized"},
+            status_code=401,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return await call_next(request)
+
+
 app.include_router(retrieve.router)
 app.include_router(ingest.router)
 app.mount("/mcp", mcp_app)

@@ -10,6 +10,7 @@
 
 import type { ExecutionResult } from "@databricks/appkit";
 import { pluginExecution } from "@dbx-tools/appkit";
+import { policy } from "@dbx-tools/model";
 import { execution, log } from "@dbx-tools/shared-core";
 import {
   resolveWebSearchConfig,
@@ -34,6 +35,8 @@ export type WebSearchExecutor = <T>(
 export interface WebSearchRuntime {
   config: ResolvedWebSearchConfig;
   execute: WebSearchExecutor;
+  /** Provider-family cooldown deadlines learned from workspace failures. */
+  familyCooldowns: Map<policy.ModelFamily, number>;
 }
 
 /** Runtime-aware operation input, retaining resolved-config compatibility. */
@@ -51,7 +54,7 @@ export function createWebSearchRuntime(
   overrides?: WebSearchPluginConfig,
   execute: WebSearchExecutor = directExecute,
 ): WebSearchRuntime {
-  return { config: resolveWebSearchConfig(overrides), execute };
+  return { config: resolveWebSearchConfig(overrides), execute, familyCooldowns: new Map() };
 }
 
 /** Build an isolated runtime from config that has already been resolved. */
@@ -59,7 +62,7 @@ export function createResolvedWebSearchRuntime(
   config: ResolvedWebSearchConfig,
   execute: WebSearchExecutor = directExecute,
 ): WebSearchRuntime {
-  return { config, execute };
+  return { config, execute, familyCooldowns: new Map() };
 }
 
 /** Normalize an explicit runtime or legacy resolved config for one operation. */

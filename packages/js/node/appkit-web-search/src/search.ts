@@ -26,14 +26,14 @@ import {
   ConnectionError,
   ExecutionError,
   getExecutionContext,
-  ValidationError,
 } from "@databricks/appkit";
-import { invoke, resolve, modelCatalog } from "@dbx-tools/model";
+import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
+import { invoke, policy, resolve, modelCatalog } from "@dbx-tools/model";
 import { log, object, stringUtils } from "@dbx-tools/shared-core";
-import { openaiChat } from "@dbx-tools/shared-model";
-import { MODEL_ENV, SERVING_ENDPOINT_ENV, type ResolvedWebSearchConfig } from "./config.ts";
+import { openaiChat, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { MODEL_ENV, type ResolvedWebSearchConfig } from "./config.ts";
 import { toCallSettings, webSearchExecuteDefaults } from "./defaults.ts";
-import { detectWebSearchProvider, supportsWebSearch, webSearchToolSpec } from "./provider.ts";
+import { supportsWebSearch, webSearchProviderForFamily, webSearchToolSpec } from "./provider.ts";
 import {
   executeRead,
   toWebSearchRuntime,
@@ -44,8 +44,9 @@ import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./sch
 import { runScrapeSearch } from "./scrape.ts";
 
 type WorkspaceClientLike = modelCatalog.WorkspaceClientLike & invoke.AuthenticatingClientLike;
+type ProgressWriter = NonNullable<AgentToolExecutionContext["writeProgress"]>;
 const logger = log.logger("web-search/search");
-const { resolveModel } = resolve;
+const { lookupModels } = resolve;
 const { listServingEndpoints } = modelCatalog;
 
 /**
@@ -55,6 +56,8 @@ const { listServingEndpoints } = modelCatalog;
  * into a full traversal of the response.
  */
 const MAX_GROUNDING_WALK_DEPTH = 6;
+const GEMINI_CROSS_REGION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const GEMINI_CROSS_REGION_DISABLED = /cross-region processing is disabled/i;
 
 /** Lowest HTTP status treated as a server-side (retryable) serving failure. */
 const SERVER_ERROR_STATUS = 500;
@@ -69,6 +72,12 @@ export interface WebSearchContext {
   /** Trusted identity of the credential carried by `client`. */
   cacheIdentity?: string;
 }
+
+/** Model-selection fields used to rank one web-search endpoint. */
+export type WebSearchModelSelectionOptions = Pick<
+  ResolvedWebSearchConfig,
+  "model" | "modelFallbacks" | "fuzzy" | "fuzzyThreshold"
+>;
 
 /**
  * Resolve the OBO workspace client + host from the active AppKit execution
@@ -87,77 +96,96 @@ export async function resolveWebSearchContext(): Promise<WebSearchContext> {
  * Resolve a web-search-capable model against the LIVE workspace catalogue - so
  * we never return an endpoint id that isn't actually deployed (the "endpoint
  * does not exist" failure a hardcoded fallback id would cause). Reuses
- * `@dbx-tools/model`'s existing catalogue + resolver rather than a custom
+ * `@dbx-tools/model`'s existing catalogue + ranker rather than a custom
  * lookup: {@link listServingEndpoints} lists the endpoints (cached), and we
- * restrict the candidate set to the {@link supportsWebSearch} ones before
- * {@link resolveModel} fuzzy-picks within it.
+ * restrict the candidate set through model-owned capability metadata before
+ * {@link lookupModels} ranks within it.
  *
- * Returns the chosen endpoint id, or `null` when the workspace has no
- * web-search-capable model deployed (the caller then uses the scrape
- * fallback). A pin the caller chose deliberately - the request's `model`, the
- * plugin's `model`, or `WEB_SEARCH_MODEL` - throws when it resolves to an
- * unsupported / absent endpoint, so a bad pin surfaces rather than silently
- * degrading. A pin inherited from the shared `DATABRICKS_SERVING_ENDPOINT_NAME`
- * binding is only a preference: that endpoint is the app's serving endpoint,
- * not necessarily a web-search-capable one, so an unusable value falls through
- * to the fallback order.
+ * The highest-ranked Gemini model wins. Without Gemini, a GPT request matching
+ * the calling/configured model wins, followed by the highest-ranked GPT model
+ * and then any additional configured searches.
  */
 async function resolveWebSearchModel(
   ctx: WebSearchContext,
-  config: ResolvedWebSearchConfig,
+  runtime: WebSearchRuntime,
   requested: string | undefined,
-): Promise<string | null> {
+): Promise<ServingEndpointSummary | null> {
+  const { config } = runtime;
   const endpoints = await listServingEndpoints(ctx.client, ctx.host, {
     ...(ctx.cacheIdentity ? { cacheIdentity: ctx.cacheIdentity } : {}),
   });
-  // Only deployed, web-search-capable endpoints are candidates.
-  const capable = endpoints.filter((e) => supportsWebSearch(e.name));
-  const pinned = requested ?? config.model;
-  const pinIsDeliberate =
-    requested !== undefined || config.modelSource === "config" || config.modelSource === MODEL_ENV;
+  return selectWebSearchEndpoint(endpoints, requested, config, activeFamilyCooldowns(runtime));
+}
 
-  if (pinned) {
-    // Resolve the explicit ask within the capable set only.
-    const { modelId } = resolveModel(capable, {
-      explicit: pinned,
-      fuzzy: config.fuzzy,
-      threshold: config.fuzzyThreshold,
-    });
-    // resolveModel returns the input verbatim on no match; require it to be a
-    // real capable endpoint so a bad pin is a clear error, not a phantom call.
-    const usable = capable.some((e) => e.name === modelId) && supportsWebSearch(modelId);
-    if (usable) return modelId;
-    const deployed = capable.map((e) => e.name).join(", ") || "none";
-    if (!pinIsDeliberate) {
-      logger.info("shared-endpoint-not-web-capable", {
-        envVar: SERVING_ENDPOINT_ENV,
-        deployed,
-      });
-    } else if (requested !== undefined) {
-      throw ValidationError.invalidValue(
-        "model",
-        pinned,
-        `a deployed web-search-capable endpoint (deployed: ${deployed})`,
-      );
-    } else {
-      throw ConfigurationError.resourceNotFound(
-        "Web-search-capable serving endpoint",
-        `Deployed web-search-capable endpoints: ${deployed}. Set model or ${MODEL_ENV} to one of them.`,
-      );
+/** Select one deployed web-search endpoint using family and capability policy. */
+export function selectWebSearchEndpoint(
+  endpoints: readonly ServingEndpointSummary[],
+  requested: string | undefined,
+  config: WebSearchModelSelectionOptions,
+  suppressedFamilies: ReadonlySet<policy.ModelFamily> = new Set(),
+): ServingEndpointSummary | null {
+  // Only deployed, web-search-capable endpoints are candidates.
+  const capable = endpoints.filter((endpoint) => {
+    const family = endpointFamily(endpoint);
+    return supportsWebSearch(endpoint) && (!family || !suppressedFamilies.has(family));
+  });
+  const gemini = lookupModels(capable, {
+    search: policy.ModelFamily.Gemini,
+    limit: 1,
+    threshold: config.fuzzyThreshold,
+  })[0]?.endpoint;
+  if (gemini) return gemini;
+  const gpt = lookupModels(capable, {
+    search: policy.ModelFamily.Gpt,
+    limit: 50,
+    threshold: config.fuzzyThreshold,
+  }).map(({ endpoint }) => endpoint);
+
+  const preferred = requested ?? config.model;
+  if (preferred && policy.modelFamily(preferred) === policy.ModelFamily.Gpt) {
+    const matched = config.fuzzy
+      ? lookupModels(gpt, {
+          search: preferred,
+          limit: 1,
+          threshold: config.fuzzyThreshold,
+        })[0]?.endpoint
+      : gpt.find((endpoint) => endpoint.name === preferred);
+    if (matched) return matched;
+  }
+  if (gpt[0]) return gpt[0];
+
+  for (const search of config.modelFallbacks) {
+    if (
+      search.toLowerCase() === policy.ModelFamily.Gemini ||
+      search.toLowerCase() === policy.ModelFamily.Gpt
+    ) {
+      continue;
     }
+    const matched = lookupModels(capable, {
+      search,
+      limit: 1,
+      threshold: config.fuzzyThreshold,
+    })[0]?.endpoint;
+    if (matched) return matched;
   }
 
-  if (capable.length === 0) return null;
+  return null;
+}
 
-  // Nothing usable pinned: prefer the configured fallback order (Gemini, then
-  // GPT) when those ids are actually deployed; else take the best capable
-  // endpoint.
-  const { modelId } = resolveModel(capable, {
-    fallbacks: [...config.modelFallbacks],
-    fuzzy: config.fuzzy,
-    threshold: config.fuzzyThreshold,
-  });
-  return capable.some((e) => e.name === modelId) ? modelId : (capable[0]?.name ?? null);
+/** Return one endpoint's model-owned family identity. */
+function endpointFamily(endpoint: ServingEndpointSummary): policy.ModelFamily | undefined {
+  return policy.modelFamily(endpoint.modelServiceName ?? endpoint.name);
+}
+
+/** Drop expired family cooldowns and return the currently suppressed set. */
+function activeFamilyCooldowns(
+  runtime: WebSearchRuntime,
+  now = Date.now(),
+): ReadonlySet<policy.ModelFamily> {
+  for (const [family, expiresAt] of runtime.familyCooldowns) {
+    if (expiresAt <= now) runtime.familyCooldowns.delete(family);
+  }
+  return new Set(runtime.familyCooldowns.keys());
 }
 
 /**
@@ -181,6 +209,7 @@ async function postServing(
   runtime: WebSearchRuntime,
   cacheKey: readonly (string | number)[],
   signal?: AbortSignal,
+  writeProgress?: ProgressWriter,
 ): Promise<Record<string, unknown>> {
   const { config } = runtime;
   const payload = await executeRead(
@@ -199,6 +228,30 @@ async function postServing(
         ...(executeSignal ? { signal: executeSignal } : {}),
       });
       if (!response.ok) {
+        const responseBody = await response.text();
+        const model =
+          object.isRecord(body) && typeof body.model === "string" ? body.model : undefined;
+        logger.error("serving-request-rejected", {
+          model,
+          api: url.endsWith("/responses") ? "responses" : "chat",
+          url,
+          status: response.status,
+          responseBody,
+        });
+        if (
+          response.status === 400 &&
+          model &&
+          policy.modelFamily(model) === policy.ModelFamily.Gemini &&
+          GEMINI_CROSS_REGION_DISABLED.test(responseBody)
+        ) {
+          const expiresAt = Date.now() + GEMINI_CROSS_REGION_COOLDOWN_MS;
+          runtime.familyCooldowns.set(policy.ModelFamily.Gemini, expiresAt);
+          logger.warn("provider-family-suppressed", {
+            family: policy.ModelFamily.Gemini,
+            reason: "cross-region-disabled",
+            expiresAt: new Date(expiresAt).toISOString(),
+          });
+        }
         // Load-shedding and server faults are worth another attempt; a 4xx is
         // this request's own problem, so it must not be retried.
         const retryable =
@@ -208,11 +261,95 @@ async function postServing(
           ? new ConnectionError(message, { context: { status: response.status } })
           : new ExecutionError(message, { context: { status: response.status } });
       }
-      return response.json();
+      return writeProgress &&
+        response.body &&
+        response.headers.get("content-type")?.includes("text/event-stream")
+        ? readStreamingResponse(response, writeProgress)
+        : response.json();
     },
     signal,
   );
   return object.isRecord(payload) ? payload : {};
+}
+
+/** Consume an OpenAI Responses SSE stream and retain its completed response. */
+async function readStreamingResponse(
+  response: Response,
+  writeProgress: ProgressWriter,
+): Promise<Record<string, unknown>> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed: Record<string, unknown> | undefined;
+  const consume = async (frame: string) => {
+    const data = frame
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (!data || data === "[DONE]") return;
+    const event = JSON.parse(data) as unknown;
+    if (!object.isRecord(event) || typeof event.type !== "string") return;
+    await emitWebSearchProgress(event, writeProgress);
+    if (event.type === "response.completed" && object.isRecord(event.response)) {
+      completed = event.response;
+    }
+    if (event.type === "response.failed") {
+      throw new ExecutionError("web-search: streaming response failed", {
+        context: { response: event.response },
+      });
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    buffer = buffer.replaceAll("\r\n", "\n");
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary >= 0) {
+      await consume(buffer.slice(0, boundary));
+      buffer = buffer.slice(boundary + 2);
+      boundary = buffer.indexOf("\n\n");
+    }
+    if (done) break;
+  }
+  if (buffer.trim()) await consume(buffer);
+  if (!completed) throw new ExecutionError("web-search: streaming response did not complete");
+  return completed;
+}
+
+/** Publish native web-search lifecycle events as common tool progress. */
+async function emitWebSearchProgress(
+  event: Record<string, unknown>,
+  writeProgress: ProgressWriter,
+): Promise<void> {
+  if (event.type !== "response.output_item.done" || !object.isRecord(event.item)) return;
+  const action = object.isRecord(event.item.action) ? event.item.action : undefined;
+  if (!action || action.type !== "search") return;
+  const query = typeof action.query === "string" ? action.query : undefined;
+  const queries = Array.isArray(action.queries)
+    ? action.queries.filter((value): value is string => typeof value === "string")
+    : [];
+  const groupId =
+    typeof event.item.id === "string"
+      ? event.item.id
+      : `search-${String(event.sequence_number ?? query ?? "unknown")}`;
+  const resultCount = queries.length > 0 ? queries.length : query ? 1 : 0;
+  await writeProgress({
+    type: "tool_status",
+    status: "search",
+    message: query ?? "the web",
+    groupId,
+  });
+  await writeProgress({
+    type: "tool_status",
+    status: "result",
+    message: "Result",
+    groupId,
+    ...(resultCount > 0
+      ? { detail: `${resultCount} ${resultCount === 1 ? "result" : "results"}` }
+      : {}),
+  });
 }
 
 /* --------------------------- response extraction --------------------------- */
@@ -299,12 +436,13 @@ export async function runWebSearch(
   runtimeOrConfig: WebSearchRuntimeInput,
   ctx: WebSearchContext,
   signal?: AbortSignal,
+  writeProgress?: ProgressWriter,
 ): Promise<WebSearchResult> {
   const runtime = toWebSearchRuntime(runtimeOrConfig);
   const { config } = runtime;
-  const modelId = await resolveWebSearchModel(ctx, config, request.model);
+  const endpoint = await resolveWebSearchModel(ctx, runtime, request.model);
 
-  if (modelId === null) {
+  if (endpoint === null) {
     // No native web-search model deployed in this workspace.
     if (config.scrapeFallback) {
       logger.info("no-native-model:scrape-fallback", { query: request.query });
@@ -318,7 +456,51 @@ export async function runWebSearch(
     );
   }
 
-  const provider = detectWebSearchProvider(modelId)!; // guaranteed by resolve step
+  try {
+    return await runNativeWebSearch(request, runtime, ctx, endpoint, signal, writeProgress);
+  } catch (error) {
+    if (
+      endpointFamily(endpoint) !== policy.ModelFamily.Gemini ||
+      !activeFamilyCooldowns(runtime).has(policy.ModelFamily.Gemini)
+    ) {
+      throw error;
+    }
+    const fallback = await resolveWebSearchModel(ctx, runtime, request.model);
+    if (!fallback) {
+      if (config.scrapeFallback) {
+        logger.info("gemini-unavailable:scrape-fallback", { query: request.query });
+        return runScrapeSearch(request, runtime, signal);
+      }
+      throw error;
+    }
+    logger.info("gemini-unavailable:model-fallback", {
+      failedModel: endpoint.name,
+      fallbackModel: fallback.name,
+    });
+    return runNativeWebSearch(request, runtime, ctx, fallback, signal, writeProgress);
+  }
+}
+
+/** Execute one native provider request against an already-selected endpoint. */
+async function runNativeWebSearch(
+  request: WebSearchRequest,
+  runtime: WebSearchRuntime,
+  ctx: WebSearchContext,
+  endpoint: ServingEndpointSummary,
+  signal?: AbortSignal,
+  writeProgress?: ProgressWriter,
+): Promise<WebSearchResult> {
+  const { config } = runtime;
+  const modelId = endpoint.name;
+  const provider = webSearchProviderForFamily(
+    policy.modelFamily(endpoint.modelServiceName ?? endpoint.name),
+  );
+  if (!provider) {
+    throw ConfigurationError.resourceNotFound(
+      "Native web-search provider",
+      `Model ${modelId} has no supported provider family.`,
+    );
+  }
   const spec = webSearchToolSpec(provider, config.webSearchTools);
 
   const url =
@@ -326,14 +508,15 @@ export async function runWebSearch(
   const body =
     spec.api === "responses"
       ? {
+          ...spec.request,
           model: modelId,
           input: [{ role: "user", content: request.query }],
-          tools: [spec.tool],
+          ...(writeProgress ? { stream: true } : {}),
         }
       : {
+          ...spec.request,
           model: modelId,
           messages: [{ role: "user", content: request.query }],
-          tools: [spec.tool],
         };
 
   const payload = await postServing(
@@ -343,6 +526,7 @@ export async function runWebSearch(
     runtime,
     ["web-search", "serving", spec.api, modelId, request.query],
     signal,
+    writeProgress,
   );
 
   const { answer, citations } =

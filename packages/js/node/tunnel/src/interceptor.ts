@@ -6,13 +6,12 @@
  * The tunnel runs IN-PROCESS: the APP is the main process and hands this interceptor
  * its context, rather than a wrapper process spawning the app as a child. The
  * interceptor applies the computed workspace host, installs and launches portr on the
- * app's public port, binds the child process to the app, and stops portr during an
- * orderly AppKit shutdown.
+ * app's public port, and stops portr during an orderly AppKit shutdown.
  *
  * The passwordless GATE is a separate concern: it is the `authGate` AppKit plugin,
  * which registers the login routes + a gating middleware on the app's own server.
  * Register it in the app's `plugins` for gated traffic. This interceptor is only
- * the portr half - "update the host, bind portr" - the smallest useful unit.
+ * the portr half - "update the host, run portr" - the smallest useful unit.
  *
  * @module
  */
@@ -172,7 +171,6 @@ export function tunnelInterceptor(
       stopped = true;
       for (const auxiliary of auxiliaries) auxiliary.stop();
     };
-    ctx.onTeardown(stop);
     ctx.onLifecycle("shutdown", stop);
     void Promise.allSettled(initializers).then((results) => {
       for (const result of results) {

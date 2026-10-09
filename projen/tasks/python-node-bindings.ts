@@ -217,9 +217,9 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     const entrypoint = Bun.resolveSync(binding.entrypoint, binding.projectDirectory);
     return binding.modules.length > 0
       ? binding.modules.map((module) => ({
-          key: runtimeModuleName(binding, module),
-          entrypoint: resolvePythonNodeBindingModule(entrypoint, module),
-        }))
+        key: runtimeModuleName(binding, module),
+        entrypoint: resolvePythonNodeBindingModule(entrypoint, module),
+      }))
       : [{ key: runtimeModuleName(binding), entrypoint }];
   });
   const runtimeExports = [
@@ -320,8 +320,9 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     const result = await Bun.build({
       entrypoints: [shimEntry],
       format: "cjs",
-      plugins: [runtimePlugin],
       target: "browser",
+      conditions: ["require"],
+      plugins: [runtimePlugin],
     });
     if (!result.success) {
       for (const message of result.logs) logger.error(message);
@@ -366,8 +367,8 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
         ...bindings.flatMap((binding) => [
           ...(binding.modules.length > 0
             ? binding.modules.map((module) =>
-                join(binding.bindingDirectory, `${pythonFunctionName(module)}.py`),
-              )
+              join(binding.bindingDirectory, `${pythonFunctionName(module)}.py`),
+            )
             : [join(binding.bindingDirectory, "index.py")]),
         ]),
       ].filter((file): file is string => Boolean(file)),
@@ -986,18 +987,18 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   function pythonDataclass(record: PythonRecord): string {
     const body = record.fields.length
       ? record.fields
-          .map((field) => {
-            const defaultArgument = Object.hasOwn(field, "defaultValue")
-              ? pythonDefault(field.defaultValue)
-              : "default=None";
-            return [
-              `    ${field.pythonName}: ${pythonOptionalType(field.type)} = field(`,
-              `        ${defaultArgument},`,
-              `        metadata={"javascript_name": ${JSON.stringify(field.javascriptName)}},`,
-              "    )",
-            ].join("\n");
-          })
-          .join("\n")
+        .map((field) => {
+          const defaultArgument = Object.hasOwn(field, "defaultValue")
+            ? pythonDefault(field.defaultValue)
+            : "default=None";
+          return [
+            `    ${field.pythonName}: ${pythonOptionalType(field.type)} = field(`,
+            `        ${defaultArgument},`,
+            `        metadata={"javascript_name": ${JSON.stringify(field.javascriptName)}},`,
+            "    )",
+          ].join("\n");
+        })
+        .join("\n")
       : "    pass";
     return `@dataclass(kw_only=True)\nclass ${record.name}:\n${body}`;
   }
@@ -1025,11 +1026,11 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     }
     const body = response.fields.length
       ? response.fields
-          .map(
-            ({ name, required, type }) =>
-              `    ${name}: ${required ? type : `NotRequired[${type}]`}`,
-          )
-          .join("\n")
+        .map(
+          ({ name, required, type }) =>
+            `    ${name}: ${required ? type : `NotRequired[${type}]`}`,
+        )
+        .join("\n")
       : "    pass";
     return `class ${response.name}(TypedDict):\n${body}`;
   }
@@ -1044,18 +1045,18 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     );
     const methods = protocol.methods.length
       ? protocol.methods
-          .map((method) => {
-            const parameters = method.parameters.map(
-              ({ name, required, type }) => `        ${name}: ${type}${required ? "" : " = ..."},`,
-            );
-            return [
-              `    async def ${method.name}(`,
-              "        self,",
-              ...parameters,
-              `    ) -> ${method.returnType}: ...`,
-            ].join("\n");
-          })
-          .join("\n\n")
+        .map((method) => {
+          const parameters = method.parameters.map(
+            ({ name, required, type }) => `        ${name}: ${type}${required ? "" : " = ..."},`,
+          );
+          return [
+            `    async def ${method.name}(`,
+            "        self,",
+            ...parameters,
+            `    ) -> ${method.returnType}: ...`,
+          ].join("\n");
+        })
+        .join("\n\n")
       : "";
     const body = [...properties, methods].filter(Boolean).join("\n\n") || "    pass";
     return `class ${protocol.name}(Protocol):\n${body}`;

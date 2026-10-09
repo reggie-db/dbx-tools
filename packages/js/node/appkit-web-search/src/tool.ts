@@ -37,7 +37,7 @@ import { createWebSearchRuntime, type WebSearchRuntime } from "./runtime.ts";
 import {
   webFetchRequestSchema,
   webFetchResultSchema,
-  webSearchRequestSchema,
+  webSearchToolRequestSchema,
   webSearchResultSchema,
   WEB_FETCH_TOOL_DESCRIPTION,
   WEB_SEARCH_TOOL_DESCRIPTION,
@@ -108,13 +108,13 @@ export function webSearchTool(opts: WebSearchToolOptions = {}) {
   return createTool({
     id: opts.id ?? "web_search",
     description: WEB_SEARCH_TOOL_DESCRIPTION,
-    inputSchema: webSearchRequestSchema,
+    inputSchema: webSearchToolRequestSchema,
     outputSchema: webSearchResultSchema,
     // A search's result URLs aren't known before the call, so a pattern gate
     // is treated as "always gate".
     ...(gate.mode === "none" ? {} : { requireApproval: () => true }),
     execute: async (input) => {
-      const request = parseToolInput(webSearchRequestSchema, input);
+      const request = parseToolInput(webSearchToolRequestSchema, input);
       return runWebSearch(request, runtime, await resolveWebSearchContext());
     },
   });

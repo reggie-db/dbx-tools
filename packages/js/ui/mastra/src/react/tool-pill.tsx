@@ -384,6 +384,81 @@ const RawToolPayload = ({ label, value }: { label: "Request" | "Response"; value
   </Collapsible>
 );
 
+type ToolStatusProgress = Extract<ToolProgress, { type: "tool_status" }>;
+
+export type WebSearchProgressGroup = {
+  key: string;
+  search?: ToolStatusProgress;
+  results: ToolStatusProgress[];
+};
+
+/** Group each native search action with the result events that follow it. */
+export function webSearchProgressGroups(event: ToolEvent): WebSearchProgressGroup[] {
+  if (event.toolName !== "web_search") return [];
+  const groups = new Map<string, WebSearchProgressGroup>();
+  const ordered: WebSearchProgressGroup[] = [];
+  for (const progress of event.progress ?? []) {
+    if (progress.type !== "tool_status") continue;
+    const key = progress.groupId ?? `ungrouped-${ordered.length}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, results: [] };
+      groups.set(key, group);
+      ordered.push(group);
+    }
+    if (progress.status === "search") group.search = progress;
+    if (progress.status === "result") group.results.push(progress);
+  }
+  return ordered;
+}
+
+/** Query text for one search group, without a "Searching" prefix. */
+export function webSearchQueryLabel(group: WebSearchProgressGroup): string {
+  const raw = group.search?.message?.trim() ?? "";
+  const stripped = raw.replace(/^Searching:\s*/i, "").replace(/^Searching\s+the\s+web$/i, "");
+  return stripped || "the web";
+}
+
+/** Grey suffix shown after a search finishes, e.g. `4 results`. */
+export function webSearchResultLabel(group: WebSearchProgressGroup): string | undefined {
+  const detail = group.results.at(-1)?.detail?.trim();
+  if (!detail) return undefined;
+  const count = detail.match(/(\d+)/)?.[1];
+  if (!count) return detail;
+  const n = Number(count);
+  return `${n} ${n === 1 ? "result" : "results"}`;
+}
+
+/** One-line search rows rendered between a web-search request and response. */
+const WebSearchProgressDetails = ({ event }: { event: ToolEvent }) => {
+  const groups = webSearchProgressGroups(event);
+  if (groups.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      {groups.map((group) => {
+        const query = webSearchQueryLabel(group);
+        const results = webSearchResultLabel(group);
+        const done = group.results.length > 0 || event.status !== "running";
+        return (
+          <div
+            key={group.key}
+            className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4"
+            aria-label={done ? [query, results].filter(Boolean).join(", ") : `Searching ${query}`}
+          >
+            {done ? (
+              <CheckIcon className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+            ) : (
+              <Spinner className="size-3 shrink-0 text-primary" aria-hidden />
+            )}
+            <span className="min-w-0 truncate text-foreground/90">{query}</span>
+            {results ? <span className="shrink-0 text-muted-foreground">- {results}</span> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 /**
  * True when a tool event has anything worth expanding for. The
  * question text already rides on the row header (see
@@ -465,8 +540,9 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="flex flex-col gap-2 px-2 pb-2">
-          <ToolProgressDetails summary={summary} omitQuestion />
           {"input" in event ? <RawToolPayload label="Request" value={event.input} /> : null}
+          <WebSearchProgressDetails event={event} />
+          <ToolProgressDetails summary={summary} omitQuestion />
           {"output" in event ? <RawToolPayload label="Response" value={event.output} /> : null}
         </div>
       </CollapsibleContent>

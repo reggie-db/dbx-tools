@@ -11,6 +11,11 @@
       "type": "build"
     },
     {
+      "name": "@types/json-schema",
+      "version": "^7",
+      "type": "build"
+    },
+    {
       "name": "@types/node",
       "version": "catalog:",
       "type": "build"

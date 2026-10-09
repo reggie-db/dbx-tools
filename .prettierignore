@@ -71,6 +71,7 @@ packages/js/cli/args/index.ts
 packages/js/cli/dbx-tools/index.ts
 packages/js/cli/service/index.ts
 packages/js/node/appkit/index.ts
+packages/js/node/appkit-graphiti/index.ts
 packages/js/node/appkit-mastra/index.ts
 packages/js/node/appkit-model-gateway/index.ts
 packages/js/node/appkit-web-search/index.ts
@@ -82,7 +83,6 @@ packages/js/node/databricks-zerobus/index.ts
 packages/js/node/email/index.ts
 packages/js/node/fs/index.ts
 packages/js/node/genie/index.ts
-packages/js/node/graphiti/index.ts
 packages/js/node/lakebase/index.ts
 packages/js/node/model/index.ts
 packages/js/node/path/index.ts

@@ -10,7 +10,10 @@
 import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
-import { runGraphiti, type GraphitiRuntimeOptions } from "@dbx-tools/graphiti/runtime";
+import {
+  runGraphiti,
+  type GraphitiRuntimeOptions,
+} from "@dbx-tools/appkit-graphiti/runtime";
 import { Command } from "commander";
 
 import {

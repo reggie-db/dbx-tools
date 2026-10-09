@@ -11,7 +11,7 @@ import { RequestContext } from "@mastra/core/request-context";
 import type { WorkspaceSandbox } from "@mastra/core/workspace";
 
 import { buildAgents } from "../src/agents.ts";
-import { MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY } from "../src/config.ts";
+import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY } from "../src/config.ts";
 import { filesystems } from "../src/filesystems.ts";
 import { MontySandbox } from "../src/monty-sandbox.ts";
 import { DatabricksSandbox } from "../src/sandbox.ts";
@@ -176,6 +176,49 @@ describe("createWorkspace skill source identity", () => {
 
     assert.equal(first, second);
     assert.notEqual(first, other);
+  });
+
+  it("prefers a team skill over a same-named app-user skill", async () => {
+    const team = new MemoryFileSystem({ root: "/team" });
+    const app = new MemoryFileSystem({ root: "/app" });
+    await team.writeFile(
+      "databricks-jobs/SKILL.md",
+      "---\nname: databricks-jobs\ndescription: Shared jobs guidance\n---\nTeam instructions",
+    );
+    await app.writeFile(
+      "databricks-jobs/SKILL.md",
+      "---\nname: databricks-jobs\ndescription: User jobs guidance\n---\nUser instructions",
+    );
+    await app.writeFile(
+      "personal-runbook/SKILL.md",
+      "---\nname: personal-runbook\ndescription: User-only runbook\n---\nPersonal instructions",
+    );
+    const workspace = createWorkspace({
+      assistantSkills: false,
+      sandbox: false,
+      skillFolders: {
+        "workspace-team": {
+          filesystem: filesystems(team),
+          mount: "/workspace-team",
+        },
+        "workspace-team-app": {
+          filesystem: filesystems(app),
+          mount: "/workspace-team-app",
+          writable: true,
+        },
+      },
+    });
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_SCOPES_KEY, ["workspace"]);
+    const skills = workspace.skills?.getScoped
+      ? await workspace.skills.getScoped({ requestContext })
+      : workspace.skills;
+
+    assert.deepEqual((await skills!.list()).map(({ name }) => name).sort(), [
+      "databricks-jobs",
+      "personal-runbook",
+    ]);
+    assert.equal((await skills!.get("databricks-jobs"))?.instructions, "Team instructions");
   });
 });
 

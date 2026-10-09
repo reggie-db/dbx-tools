@@ -23,6 +23,7 @@ import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
 import { errorUtils, log, object, stringUtils, token } from "@dbx-tools/shared-core";
+import { posixPath } from "@dbx-tools/shared-fs";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
   CompositeFilesystem,
@@ -676,9 +677,83 @@ function buildWorkspaceSkillsResolver(
   extraSkillPaths: string[] = [],
 ): SkillsResolver {
   return async (context: SkillsContext) => {
-    const { skillPaths } = await resolveWorkspaceContribution(resolvers, context);
-    const merged = [...(skillPaths ?? []), ...extraSkillPaths];
-    logger.debug("skills:resolved", { skillPaths, extraSkillPaths });
+    const contribution = await resolveWorkspaceContribution(resolvers, context);
+    const skillPaths = await uniqueSkillPaths(contribution);
+    const merged = [...skillPaths, ...extraSkillPaths];
+    logger.debug("skills:resolved", {
+      configuredSkillPaths: contribution.skillPaths,
+      skillPaths,
+      extraSkillPaths,
+    });
     return merged;
   };
+}
+
+/** Expand mounted roots and keep the first concrete skill for each directory name. */
+async function uniqueSkillPaths(contribution: WorkspaceMountContribution): Promise<string[]> {
+  const selected = new Map<string, string>();
+  const unresolved: string[] = [];
+  for (const root of contribution.skillPaths ?? []) {
+    const mount = mountedFilesystem(root, contribution.mounts);
+    if (!mount) {
+      unresolved.push(root);
+      continue;
+    }
+    let candidates: string[];
+    try {
+      candidates = await concreteSkillPaths(root, mount.path, mount.filesystem);
+    } catch (error) {
+      logger.debug("skills:root-expansion-failed", {
+        root,
+        error: errorUtils.errorMessage(error),
+      });
+      unresolved.push(root);
+      continue;
+    }
+    if (candidates.length === 0) {
+      unresolved.push(root);
+      continue;
+    }
+    for (const candidate of candidates) {
+      const name = posixPath.basename(candidate);
+      const existing = selected.get(name);
+      if (existing) {
+        logger.debug("skills:duplicate-skipped", { name, path: candidate, selected: existing });
+      } else {
+        selected.set(name, candidate);
+      }
+    }
+  }
+  return [...selected.values(), ...unresolved];
+}
+
+/** Find the most-specific mounted filesystem containing one skill path. */
+function mountedFilesystem(
+  skillPath: string,
+  mounts: Readonly<Record<string, WorkspaceFilesystem>>,
+): { filesystem: WorkspaceFilesystem; path: string } | undefined {
+  return Object.entries(mounts)
+    .filter(([mount]) => skillPath === mount || skillPath.startsWith(`${mount}/`))
+    .sort(([left], [right]) => right.length - left.length)
+    .map(([path, filesystem]) => ({ filesystem, path }))[0];
+}
+
+/** Return concrete child skill directories from one mounted skill root. */
+async function concreteSkillPaths(
+  root: string,
+  mount: string,
+  filesystem: WorkspaceFilesystem,
+): Promise<string[]> {
+  const relativeRoot = root === mount ? "." : root.slice(mount.length + 1);
+  if (await filesystem.exists(posixPath.join(relativeRoot, "SKILL.md"))) return [root];
+  const entries = await filesystem.readdir(relativeRoot);
+  const candidates: string[] = [];
+  for (const entry of entries) {
+    if (entry.type !== "directory") continue;
+    const relative = posixPath.join(relativeRoot, entry.name);
+    if (await filesystem.exists(posixPath.join(relative, "SKILL.md"))) {
+      candidates.push(posixPath.join(root, entry.name));
+    }
+  }
+  return candidates;
 }

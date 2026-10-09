@@ -24,6 +24,9 @@ import type { MastraPluginConfig } from "./config.ts";
  */
 export const MASTRA_MODEL_OVERRIDE_KEY = "mastra__model_override";
 
+/** RequestContext key carrying the endpoint selected for the active agent step. */
+export const MASTRA_RESOLVED_MODEL_KEY = "mastra__resolved_model";
+
 /**
  * Minimal Express-ish request shape used by {@link extractModelOverride}.
  * Keeps this module independent of `express` so the helper can be

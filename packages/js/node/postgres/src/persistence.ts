@@ -65,6 +65,20 @@ export const POINTER_VERSION = 1;
 const table = (options: ResolvedTopicBusPersistenceOptions, scope: TopicPersistenceScope): string =>
   `${quotePostgresIdentifier(options.schema)}.${quotePostgresIdentifier(options.tables[scope])}`;
 
+type TableOwnershipRow = QueryResultRow & { can_manage: boolean };
+
+/** Whether the selected persistence table exists but is managed by another role. */
+async function selectedTableIsExternallyManaged(
+  queryable: PgQueryable,
+  options: ResolvedTopicBusPersistenceOptions,
+): Promise<boolean> {
+  const result = await queryable.query<TableOwnershipRow>(
+    `SELECT pg_has_role(current_user, pg_get_userbyid(table_class.relowner), 'USAGE') AS can_manage FROM pg_class AS table_class JOIN pg_namespace AS table_schema ON table_schema.oid = table_class.relnamespace WHERE table_schema.nspname = $1 AND table_class.relname = $2 AND table_class.relkind IN ('r', 'p')`,
+    [options.schema, options.tables[options.scope]],
+  );
+  return result.rows[0]?.can_manage === false;
+}
+
 /** Validate persistence scope and apply stable schema, table, TTL, and cleanup defaults. */
 export function resolvePersistenceOptions(
   value: true | TopicBusPersistenceOptions,
@@ -90,10 +104,12 @@ export function resolvePersistenceOptions(
 
 /** Create the persistence schema, open and restricted tables, and replay indexes. */
 export async function provisionMessageBusSchema(
-  pool: PgPoolLike,
+  pool: PgPoolLike & PgQueryable,
   options: ResolvedTopicBusPersistenceOptions,
 ): Promise<void> {
+  if (await selectedTableIsExternallyManaged(pool, options)) return;
   await withAdvisoryTransactionLock(pool, ["dbx_message_bus", "schema"], async (client) => {
+    if (await selectedTableIsExternallyManaged(client, options)) return;
     await client.query(`CREATE SCHEMA IF NOT EXISTS ${quotePostgresIdentifier(options.schema)}`);
     await client.query(
       `CREATE TABLE IF NOT EXISTS ${quotePostgresIdentifier(options.schema)}.${quotePostgresIdentifier("schema_version")} (version INTEGER PRIMARY KEY)`,

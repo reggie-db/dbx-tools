@@ -24,6 +24,10 @@ class GraphitiOptions:
         default=None,
         metadata={"javascript_name": "profile"},
     )
+    bearer: str | None = field(
+        default=None,
+        metadata={"javascript_name": "bearer"},
+    )
     graphiti_home: str | None = field(
         default=None,
         metadata={"javascript_name": "graphitiHome"},
@@ -61,6 +65,7 @@ class GraphitiOptions:
 class GraphitiOptionsResponse(TypedDict):
     postgresRole: NotRequired[str]
     profile: NotRequired[str]
+    bearer: NotRequired[str]
     graphitiHome: NotRequired[str]
     modelClass: NotRequired[str | None]
     temperature: NotRequired[int | float]
@@ -86,6 +91,7 @@ class ResolvedGraphitiOptionsResponse(TypedDict):
     databaseSchema: str
     postgresRole: NotRequired[str]
     profile: NotRequired[str]
+    bearer: NotRequired[str]
     graphitiHome: NotRequired[str]
     databaseUrl: NotRequired[str]
 

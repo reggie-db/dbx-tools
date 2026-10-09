@@ -29,13 +29,13 @@ import {
 } from "./config.ts";
 import { requestUserEmail, requestUserId } from "./identity.ts";
 import { resolveFeedbackEnabled } from "./mlflow.ts";
-import { recordActiveTraceAuth, recordActiveTraceUser } from "./telemetry.ts";
-
 import {
   extractModelOverride,
   MASTRA_MODEL_OVERRIDE_KEY,
+  MASTRA_RESOLVED_MODEL_KEY,
   resolveServingConfig,
 } from "./serving.ts";
+import { recordActiveTraceAuth, recordActiveTraceUser } from "./telemetry.ts";
 /**
  * OpenTelemetry's sentinel for "no valid trace" - 32 zero hex chars.
  * `trace.getActiveSpan()` returns a non-recording span with this id
@@ -52,6 +52,7 @@ const TRUSTED_REQUEST_CONTEXT_KEYS = [
   MASTRA_REQUEST_ID_KEY,
   MASTRA_SCOPES_KEY,
   MASTRA_MODEL_OVERRIDE_KEY,
+  MASTRA_RESOLVED_MODEL_KEY,
 ] as const;
 
 /** Remove browser-supplied values for fields owned by trusted server middleware. */
@@ -225,9 +226,7 @@ export class MastraServer extends ExpressMastraServer {
     });
     const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
     if (user) {
-      recordActiveTraceAuth(
-        "isUserContext" in user.executionContext ? "obo" : "service-principal",
-      );
+      recordActiveTraceAuth("isUserContext" in user.executionContext ? "obo" : "service-principal");
     }
     const traceUser = [
       requestContext.get(MASTRA_USER_EMAIL_KEY),

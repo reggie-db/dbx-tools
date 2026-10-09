@@ -1,11 +1,6 @@
 {
   "dependencies": [
     {
-      "name": "@types/json-schema",
-      "version": "^7",
-      "type": "build"
-    },
-    {
       "name": "@types/node",
       "version": "catalog:",
       "type": "build"
@@ -23,6 +18,11 @@
     {
       "name": "@databricks/appkit",
       "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/appkit-mastra",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {

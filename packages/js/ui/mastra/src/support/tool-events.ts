@@ -1,4 +1,9 @@
-import { GENIE_PROGRESS_PART_TYPE, GenieProgressPartDataSchema } from "@dbx-tools/shared-mastra";
+import {
+  GENIE_PROGRESS_PART_TYPE,
+  GenieProgressPartDataSchema,
+  TOOL_PROGRESS_PART_TYPE,
+  ToolProgressPartDataSchema,
+} from "@dbx-tools/shared-mastra/wire";
 import { getToolOrDynamicToolName, isToolOrDynamicToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 
@@ -54,8 +59,13 @@ export function toolEventsFromParts(parts: UIMessage["parts"]): ToolEvent[] {
   });
   const byId = new Map(events.map((event) => [event.id, event]));
   for (const part of parts) {
-    if (part.type !== GENIE_PROGRESS_PART_TYPE) continue;
-    const progress = GenieProgressPartDataSchema.safeParse(part.data);
+    const progress =
+      part.type === GENIE_PROGRESS_PART_TYPE
+        ? GenieProgressPartDataSchema.safeParse(part.data)
+        : part.type === TOOL_PROGRESS_PART_TYPE
+          ? ToolProgressPartDataSchema.safeParse(part.data)
+          : undefined;
+    if (!progress) continue;
     if (!progress.success) continue;
     const event = byId.get(progress.data.toolCallId);
     if (!event) continue;
@@ -68,11 +78,22 @@ export function toolEventsFromParts(parts: UIMessage["parts"]): ToolEvent[] {
 export function mergeToolEvents(
   persisted: ToolEvent[],
   live: ToolEvent[] | undefined,
+  terminalError = false,
 ): ToolEvent[] {
   const merged = new Map(persisted.map((event) => [event.id, event]));
   for (const event of live ?? []) {
     const prior = merged.get(event.id);
     merged.set(event.id, prior ? { ...prior, ...event } : event);
   }
-  return [...merged.values()];
+  const events = [...merged.values()];
+  if (!terminalError) return events;
+  return events.map((event) =>
+    event.status === "running"
+      ? {
+          ...event,
+          status: "error",
+          output: { error: "The assistant stream ended before this tool returned." },
+        }
+      : event,
+  );
 }

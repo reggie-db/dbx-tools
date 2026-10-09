@@ -21,6 +21,7 @@
   "devDependencies": {
     "@mlflow/core": "catalog:",
     "@types/express": "catalog:",
+    "@types/json-schema": "^7",
     "@types/node": "catalog:",
     "@types/pg": "^8",
     "skills": "^1",
@@ -136,6 +137,10 @@
         "types": "./lib/src/observability.d.ts",
         "default": "./lib/src/observability.js"
       },
+      "./openapi-tool": {
+        "types": "./lib/src/openapi-tool.d.ts",
+        "default": "./lib/src/openapi-tool.js"
+      },
       "./plugin": {
         "types": "./lib/src/plugin.d.ts",
         "default": "./lib/src/plugin.js"
@@ -240,6 +245,7 @@
     "./model": "./src/model.ts",
     "./monty-sandbox": "./src/monty-sandbox.ts",
     "./observability": "./src/observability.ts",
+    "./openapi-tool": "./src/openapi-tool.ts",
     "./plugin": "./src/plugin.ts",
     "./processors": "./src/processors.ts",
     "./remote-skills": "./src/remote-skills.ts",

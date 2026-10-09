@@ -26,6 +26,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/appkit-graphiti",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/appkit-model-gateway",
       "version": "workspace:^",
       "type": "runtime"
@@ -67,11 +72,6 @@
     },
     {
       "name": "@dbx-tools/email",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
-      "name": "@dbx-tools/graphiti",
       "version": "workspace:^",
       "type": "runtime"
     },

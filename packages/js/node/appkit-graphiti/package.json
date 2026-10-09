@@ -1,10 +1,10 @@
 {
-  "name": "@dbx-tools/graphiti",
-  "description": "Graphiti process supervision and AppKit integration",
+  "name": "@dbx-tools/appkit-graphiti",
+  "description": "AppKit Graphiti plugin and Python runtime supervision",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
-    "directory": "packages/js/node/graphiti"
+    "directory": "packages/js/node/appkit-graphiti"
   },
   "scripts": {
     "build": "projen build",
@@ -19,7 +19,6 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/json-schema": "^7",
     "@types/node": "catalog:",
     "typescript": "^5.9.3",
     "vitest": "catalog:"
@@ -27,6 +26,7 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:^",
+    "@dbx-tools/appkit-mastra": "workspace:^",
     "@dbx-tools/auth": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
@@ -44,21 +44,21 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./config": {
+        "types": "./lib/src/config.d.ts",
+        "default": "./lib/src/config.js"
+      },
       "./options": {
         "types": "./lib/src/options.d.ts",
         "default": "./lib/src/options.js"
       },
+      "./plugin": {
+        "types": "./lib/src/plugin.d.ts",
+        "default": "./lib/src/plugin.js"
+      },
       "./runtime": {
         "types": "./lib/src/runtime.d.ts",
         "default": "./lib/src/runtime.js"
-      },
-      "./appkit": {
-        "types": "./lib/src/appkit/plugin.d.ts",
-        "default": "./lib/src/appkit/plugin.js"
-      },
-      "./appkit/config": {
-        "types": "./lib/src/appkit/config.d.ts",
-        "default": "./lib/src/appkit/config.js"
       },
       "./package.json": "./package.json"
     }
@@ -73,10 +73,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./config": "./src/config.ts",
     "./options": "./src/options.ts",
+    "./plugin": "./src/plugin.ts",
     "./runtime": "./src/runtime.ts",
-    "./appkit": "./src/appkit/plugin.ts",
-    "./appkit/config": "./src/appkit/config.ts",
     "./package.json": "./package.json"
   },
   "files": [

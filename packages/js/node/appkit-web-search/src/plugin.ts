@@ -23,6 +23,7 @@ import {
 } from "@databricks/appkit";
 import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
 import { ToolRegistryPlugin } from "@dbx-tools/appkit";
+import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
 import { log, stringUtils } from "@dbx-tools/shared-core";
 import {
   MODEL_ENV,
@@ -34,7 +35,7 @@ import { runWebFetch } from "./fetch.ts";
 import { createWebSearchRuntime, type WebSearchRuntime } from "./runtime.ts";
 import {
   webFetchRequestSchema,
-  webSearchRequestSchema,
+  webSearchToolRequestSchema,
   WEB_FETCH_TOOL_DESCRIPTION,
   WEB_SEARCH_TOOL_DESCRIPTION,
 } from "./schema.ts";
@@ -149,10 +150,10 @@ export class WebSearchPlugin extends ToolRegistryPlugin<WebSearchPluginConfig> {
   protected readonly toolRegistry: ToolRegistry = {
     web_search: defineTool({
       description: WEB_SEARCH_TOOL_DESCRIPTION,
-      schema: webSearchRequestSchema,
+      schema: webSearchToolRequestSchema,
       annotations: { effect: "read", requiresUserContext: true },
       autoInheritable: false,
-      execute: async (args, signal) => this.search(webSearchRequestSchema.parse(args), signal),
+      execute: async (args, signal) => this.search(webSearchToolRequestSchema.parse(args), signal),
     }),
     web_fetch: defineTool({
       description: WEB_FETCH_TOOL_DESCRIPTION,
@@ -162,6 +163,25 @@ export class WebSearchPlugin extends ToolRegistryPlugin<WebSearchPluginConfig> {
       execute: async (args, signal) => this.fetch(webFetchRequestSchema.parse(args), signal),
     }),
   };
+
+  /** Dispatch with the actual calling model and optional host progress sink. */
+  override executeAgentTool(
+    name: string,
+    args: unknown,
+    signal?: AbortSignal,
+    context?: AgentToolExecutionContext,
+  ): Promise<unknown> {
+    if (name !== "web_search") return super.executeAgentTool(name, args, signal, context);
+    const request = webSearchToolRequestSchema.parse(args);
+    return this.search(
+      {
+        ...request,
+        ...(context?.model ? { model: context.model } : {}),
+      },
+      signal,
+      context?.writeProgress,
+    );
+  }
 
   /**
    * Log the effective policy so an active allow-list and caps are obvious at
@@ -213,8 +233,18 @@ export class WebSearchPlugin extends ToolRegistryPlugin<WebSearchPluginConfig> {
     };
   }
 
-  private async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
-    return runWebSearch(request, this.runtime, await resolveWebSearchContext(), signal);
+  private async search(
+    request: WebSearchRequest,
+    signal?: AbortSignal,
+    writeProgress?: AgentToolExecutionContext["writeProgress"],
+  ): Promise<WebSearchResult> {
+    return runWebSearch(
+      request,
+      this.runtime,
+      await resolveWebSearchContext(),
+      signal,
+      writeProgress,
+    );
   }
 
   private async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult> {

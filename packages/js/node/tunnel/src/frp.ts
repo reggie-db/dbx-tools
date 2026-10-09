@@ -210,12 +210,12 @@ export async function writeFrpConfig(
 }
 
 /** Launch frpc as a child process (caller supervises and terminates it). */
-export function startFrp(
+export async function startFrp(
   resolved: FrpConfig,
   childEnv: NodeJS.ProcessEnv,
   configPath: string,
   options: AppKitChildProcessOptions = {},
-): AppKitChildProcess {
+): Promise<AppKitChildProcess> {
   logger.info(
     `frpc tunneling https://${resolved.publicDomain}${resolved.path === "/" ? "" : resolved.path} -> :${resolved.port}`,
   );
@@ -227,7 +227,7 @@ export function startFrp(
     ],
     options,
   );
-  void child.start();
+  await child.start();
   return child;
 }
 

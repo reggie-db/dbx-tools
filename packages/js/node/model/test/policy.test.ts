@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { compareVersionTuples, versionTuple } from "../src/classify.ts";
-import { inheritsNativeWebSearch } from "../src/policy.ts";
+import { inheritsNativeWebSearch, modelFamily, ModelFamily } from "../src/policy.ts";
 
 describe("native web-search version inheritance", () => {
   const documented = ["gpt-5", "gpt-5-4", "gemini-3-1-pro"];
@@ -31,5 +31,13 @@ describe("native web-search version inheritance", () => {
     assert.equal(inheritsNativeWebSearch("databricks-gpt-oss-120b", documented), false);
     assert.equal(inheritsNativeWebSearch("databricks-claude-sonnet-4-6", documented), false);
     assert.equal(inheritsNativeWebSearch("databricks-gemini-2-5-pro", documented), false);
+  });
+});
+
+describe("model family values", () => {
+  it("returns typed family values from model identities", () => {
+    assert.equal(modelFamily("databricks-gpt-6-1-sol"), ModelFamily.Gpt);
+    assert.equal(modelFamily("databricks-gemini-3-8-flash"), ModelFamily.Gemini);
+    assert.equal(modelFamily("custom-endpoint"), undefined);
   });
 });

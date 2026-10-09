@@ -34,6 +34,35 @@ describe("native persisted tool events", () => {
     ]);
   });
 
+  it("projects Mastra skill search and load calls into pill events", () => {
+    const parts: UIMessage["parts"] = [
+      {
+        type: "dynamic-tool",
+        toolCallId: "skill-search",
+        toolName: "search_skills",
+        state: "output-available",
+        input: { query: "Databricks docs" },
+        output: { skills: [{ name: "databricks-docs" }] },
+      },
+      {
+        type: "dynamic-tool",
+        toolCallId: "skill-load",
+        toolName: "load_skill",
+        state: "output-available",
+        input: { name: "databricks-docs" },
+        output: { loaded: true },
+      },
+    ];
+
+    assert.deepEqual(
+      toolEventsFromParts(parts).map(({ toolName, status }) => ({ toolName, status })),
+      [
+        { toolName: "search_skills", status: "done" },
+        { toolName: "load_skill", status: "done" },
+      ],
+    );
+  });
+
   it("attaches native Genie progress data parts to their tool call", () => {
     const parts = [
       {
@@ -73,6 +102,45 @@ describe("native persisted tool events", () => {
     ]);
   });
 
+  it("attaches generic web-search progress data parts to their tool call", () => {
+    const parts = [
+      {
+        type: "dynamic-tool",
+        toolCallId: "tool-web",
+        toolName: "web_search",
+        state: "input-available",
+        input: { query: "Latest Databricks updates" },
+      },
+      {
+        type: "data-tool-progress",
+        data: {
+          toolCallId: "tool-web",
+          event: {
+            type: "tool_status",
+            status: "searching",
+            message: "Searching the web",
+          },
+        },
+      },
+    ] as unknown as UIMessage["parts"];
+
+    assert.deepEqual(toolEventsFromParts(parts), [
+      {
+        id: "tool-web",
+        toolName: "web_search",
+        status: "running",
+        input: { query: "Latest Databricks updates" },
+        progress: [
+          {
+            type: "tool_status",
+            status: "searching",
+            message: "Searching the web",
+          },
+        ],
+      },
+    ]);
+  });
+
   it("merges live progress over the persisted native event", () => {
     const persisted = [
       {
@@ -95,6 +163,44 @@ describe("native persisted tool events", () => {
         },
       ]),
       [{ ...persisted[0], progress }],
+    );
+  });
+
+  it("settles running tools as errors when the assistant stream fails", () => {
+    assert.deepEqual(
+      mergeToolEvents(
+        [
+          {
+            id: "tool-running",
+            toolName: "web_fetch",
+            status: "running",
+            input: { url: "https://docs.databricks.com" },
+          },
+          {
+            id: "tool-done",
+            toolName: "search_skills",
+            status: "done",
+            output: { skills: [] },
+          },
+        ],
+        undefined,
+        true,
+      ),
+      [
+        {
+          id: "tool-running",
+          toolName: "web_fetch",
+          status: "error",
+          input: { url: "https://docs.databricks.com" },
+          output: { error: "The assistant stream ended before this tool returned." },
+        },
+        {
+          id: "tool-done",
+          toolName: "search_skills",
+          status: "done",
+          output: { skills: [] },
+        },
+      ],
     );
   });
 

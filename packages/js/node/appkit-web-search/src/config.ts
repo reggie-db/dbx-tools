@@ -88,18 +88,11 @@ export const SERVING_ENDPOINT_ENV = "DATABRICKS_SERVING_ENDPOINT_NAME";
 export type ModelSource = "config" | typeof MODEL_ENV | typeof SERVING_ENDPOINT_ENV | "none";
 
 /**
- * Default web-search model preference, tried in order when no model is
- * pinned. Gemini first, then GPT - both support the native web-search tool;
- * a workspace typically has at least one. Each is fuzzy-matched against the
- * live catalogue, so a close variant (e.g. `databricks-gemini-3-1-pro`) is
- * picked when the exact id isn't present.
+ * Default web-search family preference, tried in order when no model is
+ * pinned. Each query selects the highest-ranked deployed model in that family
+ * after model-owned web-search capability filtering.
  */
-export const DEFAULT_MODEL_FALLBACKS: readonly string[] = [
-  "databricks-gemini-3-pro",
-  "databricks-gemini-2-5-pro",
-  "databricks-gpt-5",
-  "databricks-gpt-5-mini",
-];
+export const DEFAULT_MODEL_FALLBACKS: readonly string[] = ["gemini", "gpt"];
 
 /** Default cap on the number of citations returned from a single search. */
 export const DEFAULT_MAX_CITATIONS = 10;
@@ -108,17 +101,14 @@ export const DEFAULT_MAX_CITATIONS = 10;
 export const DEFAULT_FETCH_MAX_LENGTH = 50_000;
 
 /** Default per-request network timeout (ms) for search + fetch. */
-export const DEFAULT_TIMEOUT_MS = 30_000;
+export const DEFAULT_TIMEOUT_MS = 60_000;
 
 /** AppKit config accepted by the web-search plugin. */
 export interface WebSearchPluginConfig extends BasePluginConfig {
   /**
-   * The web-search model to use by default: a Databricks serving endpoint
-   * name (`"databricks-gemini-3-pro"`), a loose name (`"gemini"`, `"gpt"`),
-   * or a capability class. Fuzzy-matched against the live catalogue. Falls
-   * back to `WEB_SEARCH_MODEL`, then `DATABRICKS_SERVING_ENDPOINT_NAME`, then
-   * the {@link modelFallbacks} order. Chosen independently of the calling
-   * agent's chat model.
+   * GPT preference used when no capable Gemini is available. Accepts a
+   * Databricks serving endpoint name or loose family search and falls back to
+   * `WEB_SEARCH_MODEL`, then `DATABRICKS_SERVING_ENDPOINT_NAME`.
    */
   model?: string;
   /**
@@ -129,9 +119,9 @@ export interface WebSearchPluginConfig extends BasePluginConfig {
    */
   modelFallbacks?: string | string[];
   /**
-   * Provider -> tool-spec override map, merged over the built-in
+   * Provider -> request-fragment override map, merged over the built-in
    * {@link WEB_SEARCH_PROVIDERS} defaults. Keyed by provider family
-   * (`"openai"`, `"gemini"`); each value may override the `tool` entry
+   * (`"openai"`, `"gemini"`); each value may override the `request` fragment
    * and/or the `api` surface. Use to change the tool shape as the platform
    * evolves without a code change. Falls back to `WEB_SEARCH_TOOLS` parsed as
    * JSON. This is the `WEB_SEARCH_TOOLS` setting.
@@ -203,7 +193,7 @@ export interface ResolvedWebSearchConfig {
   modelSource: ModelSource;
   /** Ordered fallback model candidates (Gemini, then GPT, then a floor). */
   modelFallbacks: readonly string[];
-  /** Provider -> tool-spec override map, merged over the built-in defaults. */
+  /** Provider -> request-fragment override map, merged over the built-in defaults. */
   webSearchTools: Record<string, unknown>;
   /** Whether to fuzzy-match loose model names. */
   fuzzy: boolean;
@@ -240,7 +230,7 @@ export const WEB_SEARCH_CONFIG_SCHEMA: JSONSchema7 = {
     webSearchTools: {
       type: "object",
       description:
-        'Provider -> tool-spec override map merged over the built-in defaults (openai -> {"type":"web_search"}, gemini -> {"google_search":{}}). Env: WEB_SEARCH_TOOLS (JSON).',
+        'Provider -> request-fragment override map merged over the built-in defaults (openai -> {"tools":[{"type":"web_search"}]}, gemini -> {"google_search":{}}). Env: WEB_SEARCH_TOOLS (JSON).',
     },
     modelFuzzyMatch: {
       type: "boolean",
@@ -312,7 +302,7 @@ function parseToolsEnv(): Record<string, unknown> {
   const parsed = json.parseRecord(raw);
   if (!parsed) {
     throw new ConfigurationError(
-      "WEB_SEARCH_TOOLS must be a JSON object mapping a provider family to its tool spec",
+      "WEB_SEARCH_TOOLS must be a JSON object mapping a provider family to its request fragment",
       { context: { envVar: "WEB_SEARCH_TOOLS" } },
     );
   }

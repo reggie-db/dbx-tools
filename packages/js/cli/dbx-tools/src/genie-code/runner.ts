@@ -85,22 +85,8 @@ export async function runGenieCodeChild(
       forceTimeoutMs: 1_000,
     },
   );
-  const running = child.start();
-  const shutdown = () => {
-    void child.shutdown();
-  };
-  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-    process.once(signal, shutdown);
-  }
-  try {
-    const result = await running;
-    if (result.exitCode !== 0) process.exitCode = result.exitCode;
-  } finally {
-    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-      process.off(signal, shutdown);
-    }
-    await child.shutdown();
-  }
+  const result = await child.run();
+  if (result.exitCode !== 0) process.exitCode = result.exitCode;
 }
 
 export { RUNNER_OPTIONS_ENV };

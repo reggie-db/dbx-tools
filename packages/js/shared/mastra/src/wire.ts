@@ -434,6 +434,44 @@ export const GenieProgressPartDataSchema = z.object({
 /** Validated payload carried by a native Genie progress data part. */
 export type GenieProgressPartData = z.infer<typeof GenieProgressPartDataSchema>;
 
+/** Generic progress status emitted by non-Genie agent tools. */
+export const ToolStatusProgressEventSchema = z
+  .object({
+    type: z.literal("tool_status").describe("Generic tool progress discriminator."),
+    status: z.string().describe("Machine-readable tool status."),
+    message: z.string().describe("Human-readable progress label."),
+    url: z.string().optional().describe("Related URL when the tool is reading a page."),
+    groupId: z.string().optional().describe("Identifier grouping one search with its result."),
+    detail: z.string().optional().describe("Optional secondary result detail."),
+  })
+  .describe("Generic status update for one running agent tool.");
+
+/** Generic progress status emitted by non-Genie agent tools. */
+export type ToolStatusProgressEvent = z.infer<typeof ToolStatusProgressEventSchema>;
+
+/** Complete progress vocabulary rendered by the common tool-session pill. */
+export const ToolProgressEventSchema = z.union([
+  GenieWriterEventSchema,
+  ToolStatusProgressEventSchema,
+]);
+
+/** Complete progress event rendered by the common tool-session pill. */
+export type ToolProgressEvent = z.infer<typeof ToolProgressEventSchema>;
+
+/** Native AI SDK custom data-part type carrying generic tool progress. */
+export const TOOL_PROGRESS_PART_TYPE = "data-tool-progress" as const;
+
+/** Data attached to {@link TOOL_PROGRESS_PART_TYPE}. */
+export const ToolProgressPartDataSchema = z
+  .object({
+    toolCallId: z.string().describe("Native tool-call id receiving this progress event."),
+    event: ToolProgressEventSchema.describe("Progress event emitted by the running tool."),
+  })
+  .describe("Generic tool progress attached to one native tool call.");
+
+/** Validated payload carried by a native generic tool progress data part. */
+export type ToolProgressPartData = z.infer<typeof ToolProgressPartDataSchema>;
+
 /* ------------------------- summary + dataset ------------------------ */
 
 /**

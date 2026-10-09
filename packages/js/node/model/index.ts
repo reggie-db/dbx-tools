@@ -27,6 +27,7 @@ export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD } from "./src/model
 export type { WorkspaceClientLike, ListServingEndpointsOptions } from "./src/model-catalog.ts";
 export { DEFAULT_MODEL_CLIENT_CACHE_TTL_MS } from "./src/model-client.ts";
 export type { ModelAuthOptions, ModelClientOptions, ModelClientStatus, ModelProtocol, ModelRouteInput, ModelRoute, ModelClient } from "./src/model-client.ts";
+export { ModelFamily } from "./src/policy.ts";
 export { REASONING_LEVELS } from "./src/reasoning-translation.ts";
 export type { ReasoningLevel, ReasoningModelCatalogue, AdaptedRequestReasoning } from "./src/reasoning-translation.ts";
 export type { SelectModelInput, SearchModelsInput } from "./src/resolve.ts";

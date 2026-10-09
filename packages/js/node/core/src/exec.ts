@@ -122,17 +122,16 @@ export type ExecResult = {
  * This is additive - the object still satisfies `Promise<ExecResult>`, so every
  * existing `await spawn(...)` / `spawn(...).then(...)` caller is unchanged. What
  * is new is that the same value is the live child: callers that want to supervise
- * it (read `.pid`, `.kill(signal)`, listen for `exit`) can, without a second
- * spawn. `@dbx-tools/appkit`'s `bindProcess` consumes exactly this - one code path
- * supervises both a bare `ChildProcess` (e.g. portr) and a `spawn()` result.
+ * it can read `.pid`, call `.kill(signal)`, and listen for `exit` without a
+ * second spawn.
  *
  * @example Await it (unchanged)
  * const { stdout } = await spawn("git", ["rev-parse", "HEAD"], { stdout: "capture" });
  *
  * @example Supervise it
  * const proc = spawn("bun", ["src/server.ts"]);
- * ctx.bindProcess(proc);            // live handle
- * const { exitCode } = await proc;  // still a promise
+ * const shutdown = () => kill(proc);
+ * const { exitCode } = await proc;
  */
 export type ChildProcessResult = ChildProcess & Promise<ExecResult>;
 
@@ -154,12 +153,12 @@ export type ExecOptions = Omit<SpawnOptions, "stdio"> & {
 
 /** Graceful and forced shutdown policy for {@link kill}. */
 export interface KillOptions {
-  /** Signal sent to the snapshotted process tree. Defaults to `SIGTERM`. */
-  gracefulSignal?: NodeJS.Signals;
+  /** Signal sent to the snapshotted process tree. `false` skips this phase. Defaults to `SIGTERM`. */
+  gracefulSignal?: NodeJS.Signals | false;
   /** Time to wait for graceful shutdown. Defaults to 10 seconds. */
   gracefulTimeoutMs?: number;
-  /** Signal sent to surviving processes after the graceful timeout. Defaults to `SIGKILL`. */
-  forceSignal?: NodeJS.Signals;
+  /** Signal sent to survivors. `false` disables forced termination. Defaults to `SIGKILL`. */
+  forceSignal?: NodeJS.Signals | false;
   /** Time to poll and force newly discovered descendants. Defaults to 4 seconds. */
   forceTimeoutMs?: number;
   /** Interval used to refresh and poll the process tree. Defaults to 100 milliseconds. */
@@ -824,9 +823,9 @@ function linesFromCapturedOutput(output: string): string[] {
  * The initial tree is retained before signaling so descendants remain
  * targetable after their parent exits or they are reparented. Polling refreshes
  * the process table, merges newly created descendants, and sends each one the
- * active shutdown signal once. Identity-matched survivors receive the force
- * signal after the graceful timeout. macOS and other POSIX platforms use `ps`;
- * Windows uses the built-in PowerShell CIM process provider.
+ * active shutdown signal once. Either phase can be disabled for graceful-only
+ * or force-only termination. macOS and other POSIX platforms use `ps`; Windows
+ * uses the built-in PowerShell CIM process provider.
  *
  * Windows does not implement POSIX signal semantics. Node terminates processes
  * unconditionally for supported signals there, including `SIGTERM`.
@@ -834,7 +833,7 @@ function linesFromCapturedOutput(output: string): string[] {
  * @param child - Root child process whose snapshotted tree should stop
  * @param options - Graceful signal, force signal, timeout, and polling policy
  * @throws When the process table cannot be captured, a signal cannot be sent,
- * or identity-matched processes remain after the force timeout
+ * or identity-matched processes remain after the final enabled phase
  */
 export async function kill(child: ChildProcess, options: KillOptions = {}): Promise<void> {
   if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
@@ -854,22 +853,33 @@ export async function kill(child: ChildProcess, options: KillOptions = {}): Prom
   if (child.exitCode !== null || child.signalCode !== null) return;
   const tree = processTree(snapshot, child.pid);
   const retained = new Map(tree.map((entry) => [entry.pid, entry]));
+  const gracefulSignal = options.gracefulSignal === undefined ? "SIGTERM" : options.gracefulSignal;
+  const forceSignal = options.forceSignal === undefined ? "SIGKILL" : options.forceSignal;
+  if (gracefulSignal === false && forceSignal === false) {
+    throw new Error("At least one process-tree termination signal must be enabled");
+  }
 
-  const gracefulSignal = options.gracefulSignal ?? "SIGTERM";
-  const gracefulSignaled = new Set<string>();
-  signalProcesses(tree, gracefulSignal, gracefulSignaled);
-  const gracefulSurvivors = await waitForProcessTreeExit(
-    retained,
-    tree,
-    gracefulSignal,
-    gracefulSignaled,
-    gracefulTimeoutMs,
-    pollIntervalMs,
-  );
-  const forceTargets = gracefulSurvivors;
+  let forceTargets = tree;
+  if (gracefulSignal !== false) {
+    const gracefulSignaled = new Set<string>();
+    signalProcesses(tree, gracefulSignal, gracefulSignaled);
+    forceTargets = await waitForProcessTreeExit(
+      retained,
+      tree,
+      gracefulSignal,
+      gracefulSignaled,
+      gracefulTimeoutMs,
+      pollIntervalMs,
+    );
+  }
   if (forceTargets.length === 0) return;
+  if (forceSignal === false) {
+    if (gracefulSignal === false) {
+      throw new Error("At least one process-tree termination signal must be enabled");
+    }
+    throw processTerminationError(gracefulSignal, forceTargets);
+  }
 
-  const forceSignal = options.forceSignal ?? "SIGKILL";
   const forceSignaled = new Set<string>();
   signalProcesses(forceTargets, forceSignal, forceSignaled);
   const forcedSurvivors = await waitForProcessTreeExit(
@@ -880,14 +890,16 @@ export async function kill(child: ChildProcess, options: KillOptions = {}): Prom
     forceTimeoutMs,
     pollIntervalMs,
   );
-  const remaining = forcedSurvivors;
-  if (remaining.length > 0) {
-    throw new Error(
-      `Processes did not terminate after ${forceSignal}: ${remaining
-        .map((entry) => entry.pid)
-        .join(", ")}`,
-    );
-  }
+  if (forcedSurvivors.length > 0) throw processTerminationError(forceSignal, forcedSurvivors);
+}
+
+function processTerminationError(
+  signal: NodeJS.Signals,
+  processes: readonly ProcessSnapshotEntry[],
+): Error {
+  return new Error(
+    `Processes did not terminate after ${signal}: ${processes.map((entry) => entry.pid).join(", ")}`,
+  );
 }
 
 /**
@@ -899,7 +911,7 @@ export async function kill(child: ChildProcess, options: KillOptions = {}): Prom
  * or rejects (spawn error other than a missing executable, or `check` on non-zero
  * exit). Existing `await spawn(...)` callers are unaffected. The handle half lets a
  * caller supervise the process (`.pid`, `.kill(signal)`, `exit` event) without a
- * second spawn - e.g. `@dbx-tools/appkit`'s `bindProcess`.
+ * second spawn.
  *
  * @param command - Executable to run (resolved on `PATH` when `shell` is set on options)
  * @param args - Arguments passed verbatim to the executable
