@@ -27,15 +27,15 @@ import {
   markdownForPreview,
   recordPreviewRows,
   type RecordPreviewRow,
-} from "./record-preview.ts";
+} from "./record-preview-data.ts";
 
-export type { RecordPreviewRow } from "./record-preview.ts";
+export type { RecordPreviewRow } from "./record-preview-data.ts";
 export {
   formatRecordPreviewJson,
   looksLikeMarkdown,
   markdownForPreview,
   recordPreviewRows,
-} from "./record-preview.ts";
+} from "./record-preview-data.ts";
 
 /** Compact Streamdown in a table cell: match 11px rows, keep lists tight. */
 const MARKDOWN_CELL_CLASSES =

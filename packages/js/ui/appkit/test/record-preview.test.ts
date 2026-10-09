@@ -6,7 +6,7 @@ import {
   looksLikeMarkdown,
   markdownForPreview,
   recordPreviewRows,
-} from "../src/react/record-preview.ts";
+} from "../src/react/record-preview-data.ts";
 
 describe("recordPreviewRows", () => {
   it("humanizes object keys into left-column labels", () => {

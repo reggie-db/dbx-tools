@@ -109,6 +109,7 @@ const DEFAULT_ALLOW_BUILDS: AllowBuilds = {
 const DEFAULT_OVERRIDES: Readonly<Record<string, string>> = {
   bun: BUN_VERSION,
   glob: "^13.0.0",
+  "p-map": "7.0.8",
 };
 
 /**

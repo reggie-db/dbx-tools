@@ -17,6 +17,7 @@ export * as emailReactFields from "./src/email/react/fields.ts";
 export * as reactAppkitUi from "./src/react/appkit-ui.ts";
 export * as reactBrandPicker from "./src/react/brand-picker.tsx";
 export * as reactRecordPreview from "./src/react/record-preview.tsx";
+export * as reactRecordPreviewData from "./src/react/record-preview-data.ts";
 export * as searchReactSearchBox from "./src/search/react/search-box.tsx";
 export * as searchReactSearchResults from "./src/search/react/search-results.tsx";
 export * as searchReactUseSearch from "./src/search/react/use-search.ts";
@@ -36,6 +37,7 @@ export { joinAddresses, parseAddresses, attachmentNames } from "./src/email/reac
 export type { EmailDraft } from "./src/email/react/fields.ts";
 export type { BrandPreset, BrandPickerProps } from "./src/react/brand-picker.tsx";
 export type { RecordPreviewProps } from "./src/react/record-preview.tsx";
+export type { RecordPreviewRow } from "./src/react/record-preview-data.ts";
 export type { SearchBoxProps } from "./src/search/react/search-box.tsx";
 export type { SearchResultsProps } from "./src/search/react/search-results.tsx";
 export type { UseSearchOptions, UseSearchState } from "./src/search/react/use-search.ts";

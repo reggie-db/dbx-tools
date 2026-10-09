@@ -500,10 +500,10 @@ bun run release --no-release-notes
 bun run release --release-notes-instructions "Focus on operator-visible changes."
 ```
 
-`--demo-deploy` is off by default. After tagging and any local registry
-publication it runs `bun run demo:deploy`, which stages the AppKit demo
-from locally compiled Node packages and locally built Python wheels, resolves
-the configured/default workspace profile through `@dbx-tools/auth`,
+`--demo-deploy` is off by default and requires `--profile <name>`. After tagging
+and any local registry publication it runs `bun run demo:deploy`, which stages
+the AppKit demo from locally compiled Node packages and locally built Python
+wheels, resolves only the selected workspace profile through `@dbx-tools/auth`,
 force-refreshes its token with interactive login fallback, and deploys it. That
 step is local only and is not recorded in the annotated tag.
 
