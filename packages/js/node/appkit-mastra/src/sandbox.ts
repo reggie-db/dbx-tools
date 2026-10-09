@@ -546,6 +546,7 @@ function isDatabricksSandboxUnavailable(caught: unknown): boolean {
   const context = errorUtils.errorContext(caught);
   return (
     context.statusCode === 404 ||
+    context.hasMessage("requested", "api", "not", "available") ||
     context.hasMessage("feature", "disabled") ||
     context.hasMessage("sandbox", "not", "enabled") ||
     context.hasMessage("preview", "not", "enabled") ||

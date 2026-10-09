@@ -201,7 +201,9 @@ describe("DatabricksSandbox", () => {
       if (request.method === "GET") {
         return { name: "sandboxes/demo", status: { state: "SANDBOX_STATE_RUNNING" } };
       }
-      throw { statusCode: 404, message: "The requested API is not available" };
+      throw new Error(
+        'Response from server (Not Found) {"error_code":"NOT_FOUND","message":"The requested API is not available"}',
+      );
     });
     let starts = 0;
     const fallback: WorkspaceSandbox = {
