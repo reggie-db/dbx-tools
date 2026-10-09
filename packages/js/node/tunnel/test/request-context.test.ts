@@ -26,8 +26,8 @@ afterEach(() => {
   }
 });
 
-function request(host: string): IncomingMessage {
-  return { headers: { host } } as IncomingMessage;
+function request(host: string, remoteAddress = "127.0.0.1"): IncomingMessage {
+  return { headers: { host }, socket: { remoteAddress } } as IncomingMessage;
 }
 
 describe("request tunnel trace tags", () => {
@@ -41,6 +41,7 @@ describe("request tunnel trace tags", () => {
       [TUNNEL_SUBDOMAIN_TRACE_TAG]: "demo",
     });
     assert.deepEqual(requestTunnelTraceTags(request("localhost:8000")), {});
+    assert.deepEqual(requestTunnelTraceTags(request("demo.apps.dbx.tools", "203.0.113.8")), {});
   });
 
   it("identifies FRP requests and their public subdomain", () => {
@@ -51,6 +52,21 @@ describe("request tunnel trace tags", () => {
     assert.deepEqual(requestTunnelTraceTags(request("reports.example.com:443")), {
       [TUNNEL_TRACE_TAG]: "frp",
       [TUNNEL_SUBDOMAIN_TRACE_TAG]: "reports",
+    });
+  });
+
+  it("accepts IPv4-mapped and IPv6 loopback tunnel clients", () => {
+    process.env.TUNNEL_TRANSPORT = "portr";
+    process.env.PORTR_TOKEN = "secret";
+    process.env.TUNNEL_PUBLIC_DOMAIN = "demo.apps.dbx.tools";
+
+    assert.deepEqual(requestTunnelTraceTags(request("demo.apps.dbx.tools", "::ffff:127.0.0.1")), {
+      [TUNNEL_TRACE_TAG]: "portr",
+      [TUNNEL_SUBDOMAIN_TRACE_TAG]: "demo",
+    });
+    assert.deepEqual(requestTunnelTraceTags(request("demo.apps.dbx.tools", "::1")), {
+      [TUNNEL_TRACE_TAG]: "portr",
+      [TUNNEL_SUBDOMAIN_TRACE_TAG]: "demo",
     });
   });
 });

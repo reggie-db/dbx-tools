@@ -20,7 +20,6 @@ export * as provision from "./src/provision.ts";
 export * as requestTags from "./src/request-tags.ts";
 export * as toolProvider from "./src/tool-provider.ts";
 export * as toolkitEntries from "./src/toolkit-entries.ts";
-export { isDatabricksAppEnv } from "./src/appkit.ts";
 export type { AutoConfigureMode, CreateAppConfig, ExecutionContextLike, WorkspaceClientLike } from "./src/appkit.ts";
 export { bundleAppResourceSchema, flattenAppYamlEnv, flattenAppEnv, getBundlePath } from "./src/bundle.ts";
 export type { BundleValidateJson, ConfigFile, ConfigMapValue, ConfigSource, ResolveConfigValueOptions } from "./src/bundle.ts";

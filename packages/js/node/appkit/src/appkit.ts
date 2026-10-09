@@ -54,7 +54,16 @@ import { provisionCacheSchema } from "./provision.ts";
 const logger = log.logger("appkit");
 
 /** Detect whether the current process is running as a deployed Databricks App. */
-export const isDatabricksAppEnv = environmentUtils.isDatabricksAppEnv;
+export function isDatabricksAppEnv(
+  source: Record<string, string | undefined> = process.env,
+  cwd: string = process.cwd(),
+): boolean {
+  if (environmentUtils.isDatabricksAppEnv(source)) return true;
+  const normalized = cwd.replaceAll("\\", "/").replace(/\/+$/, "");
+  return (
+    normalized === "/app/python/source_code" || normalized.startsWith("/app/python/source_code/")
+  );
+}
 
 type AppKitCreateAppConfig = NonNullable<Parameters<typeof appkitCreateApp>[0]>;
 type AppKitPlugins = NonNullable<AppKitCreateAppConfig["plugins"]>;

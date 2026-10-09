@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
-import { runRelease } from "../tasks/release.ts";
+import { githubRepositoryFromRemoteUrl, runRelease } from "../tasks/release.ts";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -43,6 +43,22 @@ function fixture(): { remote: string; root: string } {
 }
 
 describe("direct release tags", () => {
+  it("recognizes GitHub HTTPS, SSH, and configured SSH aliases", () => {
+    assert.equal(
+      githubRepositoryFromRemoteUrl("https://github.com/reggie-db/dbx-tools.git"),
+      "reggie-db/dbx-tools",
+    );
+    assert.equal(
+      githubRepositoryFromRemoteUrl("git@github.com:reggie-db/dbx-tools.git"),
+      "reggie-db/dbx-tools",
+    );
+    assert.equal(
+      githubRepositoryFromRemoteUrl("git@github-reggie-db:reggie-db/dbx-tools.git"),
+      "reggie-db/dbx-tools",
+    );
+    assert.equal(githubRepositoryFromRemoteUrl("/tmp/remote.git"), undefined);
+  });
+
   it("carries task selections through the pushed annotation and skips optional checks", async () => {
     const { remote, root } = fixture();
     try {

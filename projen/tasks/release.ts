@@ -41,6 +41,83 @@ function assertAncestor(root: string, ancestor: string, descendant: string, mess
   }
 }
 
+/** Parse a GitHub repository slug from an HTTPS or SSH remote URL. */
+export function githubRepositoryFromRemoteUrl(remoteUrl: string): string | undefined {
+  const value = remoteUrl.trim().replace(/\.git$/, "");
+  const https = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)$/i.exec(value);
+  if (https) return `${https[1]}/${https[2]}`;
+  const ssh = /^(?:ssh:\/\/)?git@([^/:]+)[:/]([^/]+)\/([^/]+)$/i.exec(value);
+  if (!ssh || !/^github(?:[.-].+)?$/i.test(ssh[1]!)) return undefined;
+  return `${ssh[2]}/${ssh[3]}`;
+}
+
+function pushAnnotatedReleaseTag(options: {
+  readonly annotation: string;
+  readonly branch: string;
+  readonly head: string;
+  readonly remote: string;
+  readonly root: string;
+  readonly tag: string;
+}): void {
+  const { annotation, branch, head, remote, root, tag } = options;
+  runTaskCommand(root, "git", ["tag", "--annotate", tag, "--message", annotation]);
+  const remoteUrl = captureTaskCommand(root, "git", ["remote", "get-url", remote], {
+    check: true,
+  });
+  const repository = githubRepositoryFromRemoteUrl(remoteUrl);
+  if (!repository || !taskCommandSucceeds(root, "gh", ["--version"])) {
+    runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);
+    return;
+  }
+
+  const remoteBranch = captureTaskCommand(
+    root,
+    "git",
+    ["ls-remote", remote, `refs/heads/${branch}`],
+    { check: true },
+  )
+    .split(/\s+/)[0]
+    ?.trim();
+  if (remoteBranch !== head) {
+    throw new Error(`cannot tag ${repository}: ${remote}/${branch} does not equal local HEAD`);
+  }
+
+  const tagObject = captureTaskCommand(
+    root,
+    "gh",
+    [
+      "api",
+      "--method",
+      "POST",
+      `repos/${repository}/git/tags`,
+      "-f",
+      `tag=${tag}`,
+      "-f",
+      `message=${annotation}`,
+      "-f",
+      `object=${head}`,
+      "-f",
+      "type=commit",
+      "--jq",
+      ".sha",
+    ],
+    { check: true, stderr: "inherit" },
+  );
+  if (!tagObject) throw new Error(`GitHub did not return an annotated tag object for ${tag}`);
+  runTaskCommand(root, "gh", [
+    "api",
+    "--method",
+    "POST",
+    `repos/${repository}/git/refs`,
+    "-f",
+    `ref=refs/tags/${tag}`,
+    "-f",
+    `sha=${tagObject}`,
+    "--silent",
+  ]);
+  logger.info(`created ${tag} through the GitHub API`, { repository, sha: head });
+}
+
 function prepareReleaseBranch(options: {
   readonly branch: string;
   readonly remote: string;
@@ -191,17 +268,19 @@ export async function runRelease(
   }
 
   runTaskCommand(root, "git", ["push", remote, `HEAD:${branch}`]);
-  runTaskCommand(root, "git", [
-    "tag",
-    "--annotate",
-    tag,
-    "--message",
-    releaseTagAnnotation(tag, selection),
-  ]);
   try {
-    runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);
+    pushAnnotatedReleaseTag({
+      annotation: releaseTagAnnotation(tag, selection),
+      branch,
+      head,
+      remote,
+      root,
+      tag,
+    });
   } catch (error) {
-    runTaskCommand(root, "git", ["tag", "--delete", tag]);
+    if (taskCommandSucceeds(root, "git", ["rev-parse", "--verify", `refs/tags/${tag}`])) {
+      runTaskCommand(root, "git", ["tag", "--delete", tag]);
+    }
     throw error;
   }
   logger.success(`released ${tag}`, { sha: head });

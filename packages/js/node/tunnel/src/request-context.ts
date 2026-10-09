@@ -1,5 +1,6 @@
 /** Request-scoped trace tags derived from the configured tunnel transport. */
 import type { IncomingMessage } from "node:http";
+import { net } from "@dbx-tools/shared-core";
 
 import { resolveFrpConfig } from "./frp.ts";
 import { resolveTunnelTransport } from "./interceptor.ts";
@@ -19,11 +20,21 @@ function matchesHost(request: IncomingMessage, expected: string): boolean {
   return requestHost(request) === expected.trim().toLowerCase().split(":")[0];
 }
 
+function isLoopbackRequest(request: IncomingMessage): boolean {
+  const remoteAddress = request.socket.remoteAddress?.trim();
+  if (!remoteAddress) return false;
+  const normalized = remoteAddress.startsWith("::ffff:")
+    ? remoteAddress.slice("::ffff:".length)
+    : remoteAddress;
+  return Boolean(net.ipInCidr(normalized, "127.0.0.0/8") || net.ipInCidr(normalized, "::1/128"));
+}
+
 /**
  * Return trace tags when one request arrived through the configured Portr or FRP host.
  * Non-tunnel requests return an empty record.
  */
 export function requestTunnelTraceTags(request: IncomingMessage): Readonly<Record<string, string>> {
+  if (!isLoopbackRequest(request)) return {};
   const transport = resolveTunnelTransport();
   if (transport === "portr" || transport === "both") {
     const config = resolvePortrConfig({ port: 0 });

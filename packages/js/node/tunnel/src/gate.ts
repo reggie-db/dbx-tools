@@ -16,8 +16,9 @@
  * app directly sends `Host: 127.0.0.1:<port>` / `localhost`. So ONLY requests whose
  * `Host` matches the configured public domain are gated; the platform front door
  * and any other local client pass through untouched. There is no portr-injected
- * identifying header and no TCP/source-IP signal to use instead (the client dials
- * the target over plain loopback).
+ * identifying header, so tunnel context requires both the configured public Host
+ * and the tunnel client's loopback connection. A matching Host from a non-loopback
+ * peer is ignored.
  *
  * @module
  */
