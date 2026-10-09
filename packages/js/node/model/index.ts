@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model";
-export const PACKAGE_VERSION = "0.9.93";
+export const PACKAGE_VERSION = "0.9.94";
 export * as bindings from "./src/bindings.ts";
 export * as classes from "./src/classes.ts";
 export * as classify from "./src/classify.ts";

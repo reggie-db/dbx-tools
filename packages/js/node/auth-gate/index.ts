@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth-gate";
-export const PACKAGE_VERSION = "0.9.93";
+export const PACKAGE_VERSION = "0.9.94";
 export * as auth from "./src/auth.ts";
 export * as authStorage from "./src/auth-storage.ts";
 export type { AuthorizeIdentity, AuthEmailCopy, AuthEmailOptions, PasswordlessAuthOptions, PasswordlessAuthRuntime } from "./src/auth.ts";
