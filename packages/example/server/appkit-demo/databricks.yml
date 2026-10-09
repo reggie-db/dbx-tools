@@ -195,6 +195,7 @@ resources:
         - genie
         - dashboards.genie
         - serving.serving-endpoints
+        - workspace.workspace
       resources:
         - name: genie-space
           genie_space:

@@ -4,6 +4,9 @@
  * a consumer's map merges over them.
  */
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { log } from "@dbx-tools/shared-core";
 import { MemoryFileSystem } from "@dbx-tools/shared-fs";
@@ -219,6 +222,37 @@ describe("createWorkspace skill source identity", () => {
       "personal-runbook",
     ]);
     assert.equal((await skills!.get("databricks-jobs"))?.instructions, "Team instructions");
+  });
+
+  it("mounts startup-provisioned local skill roots for search", async () => {
+    const root = await mkdtemp(join(tmpdir(), "appkit-mastra-skills-"));
+    const skill = join(root, "databricks-apps");
+    await mkdir(skill);
+    await writeFile(
+      join(skill, "SKILL.md"),
+      [
+        "---",
+        "name: databricks-apps",
+        "description: Build and operate Databricks Apps.",
+        "---",
+        "Use this skill for Databricks Apps deployment and runtime guidance.",
+      ].join("\n"),
+    );
+    try {
+      const workspace = createWorkspace({
+        assistantSkills: false,
+        sandbox: false,
+        extraSkillPaths: [root],
+      });
+      const skills = workspace.skills?.getScoped
+        ? await workspace.skills.getScoped({ requestContext: new RequestContext() })
+        : workspace.skills;
+
+      assert.deepEqual((await skills!.list()).map(({ name }) => name), ["databricks-apps"]);
+      assert.equal((await skills!.search("databricks apps"))[0]?.skillName, "databricks-apps");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 

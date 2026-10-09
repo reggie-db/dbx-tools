@@ -22,6 +22,7 @@ import { createHash } from "node:crypto";
 import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
+import { LocalFileSystem } from "@dbx-tools/fs";
 import { errorUtils, log, object, stringUtils, token } from "@dbx-tools/shared-core";
 import { posixPath } from "@dbx-tools/shared-fs";
 import type { RequestContext } from "@mastra/core/request-context";
@@ -42,7 +43,7 @@ import {
   resolveUserKey,
   type User,
 } from "./config.ts";
-import { scratchFilesystem } from "./filesystems.ts";
+import { filesystems, scratchFilesystem } from "./filesystems.ts";
 import { MontySandbox } from "./monty-sandbox.ts";
 import { DatabricksSandbox, type DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
 import { cachedWorkspaceSkillMount, DEFAULT_WORKSPACE_SKILL_CACHE_TTL_MS } from "./skill-cache.ts";
@@ -168,7 +169,7 @@ export interface CreateWorkspaceOptions {
    */
   sandbox?: WorkspaceSandboxSelection;
   /**
-   * Extra LOCAL skill scan paths added to every request's skill discovery.
+   * Extra LOCAL skill roots mounted read-only for every request's skill discovery.
    * Used by the plugin to surface remote skills provisioned to a local temp
    * dir at startup (see `remote-skills.ts`). Databricks-hosted remote skills
    * need no entry here - they land in the Assistant tree the built-in mount
@@ -240,17 +241,15 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
   const { id, name } = resolveWorkspaceIdentity(options);
   const skillFolders = resolveSkillFolders(options);
   const folderNames = Object.keys(skillFolders);
+  const extraSkillPaths = options.extraSkillPaths ?? [];
   const resolvers = buildMountResolvers(
     skillFolders,
-    options.mounts,
+    [...(options.mounts ?? []), ...localSkillMountResolvers(extraSkillPaths)],
     options.workspaceSkillRefreshTtlMs,
   );
-  const extraSkillPaths = options.extraSkillPaths ?? [];
   const skills =
     options.skills ??
-    (resolvers.length > 0 || extraSkillPaths.length > 0
-      ? buildWorkspaceSkillsResolver(resolvers, extraSkillPaths)
-      : undefined);
+    (resolvers.length > 0 ? buildWorkspaceSkillsResolver(resolvers) : undefined);
   const checkSkillFileMtime = options.checkSkillFileMtime ?? folderNames.length > 0;
   const bm25 = options.bm25 !== false;
   const sandbox = resolveWorkspaceSandbox(options.sandbox, id, name);
@@ -536,6 +535,25 @@ function buildMountResolvers(
   return resolvers;
 }
 
+/** Mount startup-provisioned local skill roots into Mastra's workspace filesystem. */
+function localSkillMountResolvers(paths: readonly string[]): WorkspaceMountResolver[] {
+  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))].map((root, index) => {
+    const mount = `/remote-skills/${index}`;
+    const filesystem = filesystems(
+      new LocalFileSystem({
+        root,
+        readOnly: true,
+        createRoot: false,
+      }),
+      { readOnly: true },
+    );
+    return () => ({
+      mounts: { [mount]: filesystem },
+      skillPaths: [mount],
+    });
+  });
+}
+
 /**
  * Gate skill-folder mounts on the request's token.
  *
@@ -674,18 +692,15 @@ async function resolveWorkspaceFilesystem(
  */
 function buildWorkspaceSkillsResolver(
   resolvers: WorkspaceMountResolver[],
-  extraSkillPaths: string[] = [],
 ): SkillsResolver {
   return async (context: SkillsContext) => {
     const contribution = await resolveWorkspaceContribution(resolvers, context);
     const skillPaths = await uniqueSkillPaths(contribution);
-    const merged = [...skillPaths, ...extraSkillPaths];
     logger.debug("skills:resolved", {
       configuredSkillPaths: contribution.skillPaths,
       skillPaths,
-      extraSkillPaths,
     });
-    return merged;
+    return skillPaths;
   };
 }
 

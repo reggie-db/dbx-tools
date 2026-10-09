@@ -142,7 +142,9 @@ export async function openApiTools(
 }
 
 function httpUrl(source: string): UrlBuilder | undefined {
-  const url = urlBuilder(source);
+  const value = source.trim();
+  if (!value.startsWith("http://") && !value.startsWith("https://")) return undefined;
+  const url = urlBuilder(value);
   return url?.scheme === "http" || url?.scheme === "https" ? url : undefined;
 }
 

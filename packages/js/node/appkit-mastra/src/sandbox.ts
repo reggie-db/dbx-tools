@@ -110,6 +110,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
   private remoteCreatedAt?: Date;
   private lastUsedAt?: Date;
   private activeFallback?: WorkspaceSandbox;
+  private fallbackPromise?: Promise<void>;
   private startPromise?: Promise<void>;
 
   constructor(options: DatabricksSandboxOptions) {
@@ -173,16 +174,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
       this.lastUsedAt = new Date();
     } catch (caught) {
       if (this.fallbackConfig !== false && isDatabricksSandboxUnavailable(caught)) {
-        const fallback = resolveFallback(this.fallbackConfig);
-        logger.warn("Databricks Sandbox unavailable; using fallback", {
-          sandboxId: this.id,
-          fallback: fallback.provider,
-          error: errorUtils.errorMessage(caught),
-        });
-        await fallback.start?.();
-        this.activeFallback = fallback;
-        this.status = fallback.status;
-        this.error = fallback.error;
+        await this.activateFallback(caught);
         return;
       }
       this.status = "error";
@@ -254,36 +246,32 @@ export class DatabricksSandbox implements WorkspaceSandbox {
   ): Promise<CommandResult> {
     await this.startWithSignal(options.abortSignal);
     if (this.activeFallback) {
-      if (!this.activeFallback.executeCommand) {
-        return {
-          command,
-          args,
-          success: false,
-          exitCode: 1,
-          stdout: "",
-          stderr: `Fallback sandbox ${this.activeFallback.provider} does not support command execution.`,
-          executionTimeMs: 0,
-        };
-      }
-      return this.activeFallback.executeCommand(command, args, options);
+      return this.executeFallback(command, args, options);
     }
     const timeout = options.timeout ?? this.commandTimeoutMs;
     const script = commandScript(command, args, options.cwd);
     const started = performance.now();
-    const response = await this.request(
-      `${SANDBOX_EXEC_API_PATH}/${encodeURIComponent(this.id)}/exec-sync`,
-      "POST",
-      ExecuteResponseSchema,
-      {
-        payload: {
-          cmd: "/bin/bash",
-          args: ["-lc", script],
-          envs: definedEnvironment(options.env),
-          execution_timeout: `${Math.max(1, Math.ceil(timeout / 1_000))}s`,
+    let response: z.infer<typeof ExecuteResponseSchema>;
+    try {
+      response = await this.request(
+        `${SANDBOX_EXEC_API_PATH}/${encodeURIComponent(this.id)}/exec-sync`,
+        "POST",
+        ExecuteResponseSchema,
+        {
+          payload: {
+            cmd: "/bin/bash",
+            args: ["-lc", script],
+            envs: definedEnvironment(options.env),
+            execution_timeout: `${Math.max(1, Math.ceil(timeout / 1_000))}s`,
+          },
+          signal: options.abortSignal,
         },
-        signal: options.abortSignal,
-      },
-    );
+      );
+    } catch (caught) {
+      if (this.fallbackConfig === false || !isDatabricksSandboxUnavailable(caught)) throw caught;
+      await this.activateFallback(caught);
+      return this.executeFallback(command, args, options);
+    }
     const stdout = response.stdout ?? "";
     const stderr = response.stderr ?? "";
     options.onStdout?.(stdout);
@@ -307,6 +295,58 @@ export class DatabricksSandbox implements WorkspaceSandbox {
           }
         : {}),
     };
+  }
+
+  /** Activate the configured fallback once across concurrent command failures. */
+  private async activateFallback(caught: unknown): Promise<void> {
+    if (this.activeFallback) return;
+    if (this.fallbackPromise) {
+      await this.fallbackPromise;
+      return;
+    }
+    const pending = this.startFallback(caught);
+    this.fallbackPromise = pending;
+    try {
+      await pending;
+    } finally {
+      if (this.fallbackPromise === pending) this.fallbackPromise = undefined;
+    }
+  }
+
+  /** Start and publish the configured fallback after rechecking active state. */
+  private async startFallback(caught: unknown): Promise<void> {
+    if (this.activeFallback) return;
+    if (this.fallbackConfig === false) throw caught;
+    const fallback = resolveFallback(this.fallbackConfig);
+    logger.warn("Databricks Sandbox unavailable; using fallback", {
+      sandboxId: this.id,
+      fallback: fallback.provider,
+      error: errorUtils.errorMessage(caught),
+    });
+    await fallback.start?.();
+    this.activeFallback = fallback;
+    this.status = fallback.status;
+    this.error = fallback.error;
+  }
+
+  /** Execute through the active fallback or return an unsupported result. */
+  private executeFallback(
+    command: string,
+    args: string[],
+    options: ExecuteCommandOptions,
+  ): Promise<CommandResult> {
+    const fallback = this.activeFallback;
+    if (!fallback) throw new Error("Fallback sandbox is not active");
+    if (fallback.executeCommand) return fallback.executeCommand(command, args, options);
+    return Promise.resolve({
+      command,
+      args,
+      success: false,
+      exitCode: 1,
+      stdout: "",
+      stderr: `Fallback sandbox ${fallback.provider} does not support command execution.`,
+      executionTimeMs: 0,
+    });
   }
 
   /** Whether the adapter currently knows the remote sandbox to be running. */

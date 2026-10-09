@@ -196,6 +196,56 @@ describe("DatabricksSandbox", () => {
     assert.equal(result.stdout, "monty fallback\n");
   });
 
+  it("coalesces fallback when only the execution API is unavailable", async () => {
+    const client = workspaceClient((request) => {
+      if (request.method === "GET") {
+        return { name: "sandboxes/demo", status: { state: "SANDBOX_STATE_RUNNING" } };
+      }
+      throw { statusCode: 404, message: "The requested API is not available" };
+    });
+    let starts = 0;
+    const fallback: WorkspaceSandbox = {
+      id: "fallback",
+      name: "Fallback",
+      provider: "test-fallback",
+      status: "pending",
+      async snapshot() {},
+      async start() {
+        starts++;
+        await Promise.resolve();
+        this.status = "running";
+      },
+      async executeCommand(command, args = []) {
+        return {
+          command,
+          args,
+          success: true,
+          exitCode: 0,
+          stdout: `${command}\n`,
+          stderr: "",
+          executionTimeMs: 1,
+        };
+      },
+    };
+    const sandbox = new DatabricksSandbox({
+      client,
+      sandboxId: "demo",
+      fallback,
+    });
+
+    const results = await Promise.all([
+      sandbox.executeCommand("first"),
+      sandbox.executeCommand("second"),
+    ]);
+
+    assert.equal(starts, 1);
+    assert.equal(sandbox.provider, "test-fallback");
+    assert.deepEqual(
+      results.map(({ stdout }) => stdout),
+      ["first\n", "second\n"],
+    );
+  });
+
   it("does not hide authentication or transient failures behind fallback", async () => {
     for (const failure of [
       { statusCode: 401, message: "invalid credentials" },
