@@ -54,7 +54,7 @@
   },
   "main": "index.ts",
   "license": "Apache-2.0",
-  "version": "0.9.98",
+  "version": "0.9.99",
   "types": "index.ts",
   "type": "module",
   "exports": {
