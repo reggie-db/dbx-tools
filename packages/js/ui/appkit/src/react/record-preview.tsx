@@ -6,7 +6,7 @@
  */
 
 import { BracesIcon, Table2Icon } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Streamdown } from "streamdown";
 
 import {
@@ -21,6 +21,7 @@ import {
   TooltipTrigger,
   cn,
 } from "./appkit-ui.ts";
+import { JsonBlock } from "./highlighted-code.tsx";
 import {
   formatRecordPreviewJson,
   looksLikeMarkdown,
@@ -41,7 +42,7 @@ export {
 const MARKDOWN_CELL_CLASSES =
   "min-w-0 max-w-full text-[11px] leading-snug [&_p]:my-0.5 [&_p]:leading-snug [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_h1]:my-1 [&_h1]:text-[11px] [&_h1]:font-semibold [&_h2]:my-1 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:text-[11px] [&_h3]:font-semibold [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-background/60 [&_pre]:p-1.5 [&_pre]:text-[10px] [&_code]:text-[10px]";
 
-const NESTED_DEPTH = 2;
+const NESTED_DEPTH = 4;
 
 /** Props for {@link RecordPreview}. */
 export interface RecordPreviewProps {
@@ -55,8 +56,14 @@ export interface RecordPreviewProps {
 export function RecordPreview({ value, className }: RecordPreviewProps) {
   const [raw, setRaw] = useState(false);
   const rows = recordPreviewRows(value);
+  const rawJson = formatRecordPreviewJson(value);
   return (
-    <div className={cn("relative min-w-0", className)}>
+    <div
+      className={cn(
+        "relative min-w-0 overflow-hidden [&_[data-slot=table-container]]:overflow-x-hidden",
+        className,
+      )}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -73,13 +80,17 @@ export function RecordPreview({ value, className }: RecordPreviewProps) {
         </TooltipTrigger>
         <TooltipContent>{raw ? "Table" : "JSON"}</TooltipContent>
       </Tooltip>
-      {raw ? (
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded bg-background/40 p-2 pr-8 font-mono text-[11px] leading-relaxed">
-          {formatRecordPreviewJson(value)}
-        </pre>
-      ) : (
-        <RecordTable rows={rows} depth={0} />
-      )}
+      <div className="max-h-[inherit] min-w-0 overflow-auto">
+        {raw ? (
+          <JsonBlock json={rawJson} className="rounded bg-background/40 p-2 pr-8 text-[11px]" />
+        ) : rows.length === 0 ? (
+          <pre className="whitespace-pre-wrap break-words rounded bg-background/40 p-2 pr-8 font-mono text-[11px] leading-relaxed">
+            {rawJson}
+          </pre>
+        ) : (
+          <RecordTable rows={rows} depth={0} />
+        )}
+      </div>
     </div>
   );
 }
@@ -87,21 +98,49 @@ export function RecordPreview({ value, className }: RecordPreviewProps) {
 function RecordTable({ rows, depth }: { rows: RecordPreviewRow[]; depth: number }) {
   if (rows.length === 0) return null;
   return (
-    <Table className="text-[11px]">
+    <Table className="table-fixed text-[11px]">
       <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.key} className="hover:bg-transparent">
-            <TableHead className="w-[8.5rem] align-top whitespace-nowrap px-2 py-1.5 font-medium text-muted-foreground">
-              {row.label}
-            </TableHead>
-            <TableCell className="align-top break-words px-2 py-1.5 pr-8">
-              <RecordValue value={row.value} depth={depth} />
-            </TableCell>
-          </TableRow>
-        ))}
+        {rows.map((row) => {
+          const nested = isNestedValue(row.value) && depth < NESTED_DEPTH;
+          return nested ? (
+            <Fragment key={row.key}>
+              <TableRow className="border-b-0 hover:bg-transparent">
+                <TableHead
+                  colSpan={2}
+                  className="h-auto whitespace-normal px-2 pb-1 pt-2 font-medium text-muted-foreground"
+                >
+                  {row.label}
+                </TableHead>
+              </TableRow>
+              <TableRow className="hover:bg-transparent">
+                <TableCell
+                  colSpan={2}
+                  className="min-w-0 whitespace-normal p-0 pb-1 pl-2 [overflow-wrap:anywhere]"
+                >
+                  <RecordValue value={row.value} depth={depth} />
+                </TableCell>
+              </TableRow>
+            </Fragment>
+          ) : (
+            <TableRow key={row.key} className="hover:bg-transparent">
+              <TableHead className="h-auto w-28 align-top whitespace-normal px-2 py-1.5 font-medium text-muted-foreground sm:w-[8.5rem]">
+                {row.label}
+              </TableHead>
+              <TableCell className="min-w-0 whitespace-normal px-2 py-1.5 pr-8 align-top [overflow-wrap:anywhere]">
+                <RecordValue value={row.value} depth={depth} />
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
+}
+
+function isNestedValue(value: unknown): boolean {
+  if (value == null || typeof value !== "object") return false;
+  if (!Array.isArray(value)) return true;
+  return value.some((item) => item != null && typeof item === "object");
 }
 
 function RecordValue({ value, depth }: { value: unknown; depth: number }) {
@@ -124,8 +163,23 @@ function RecordValue({ value, depth }: { value: unknown; depth: number }) {
   if (typeof value === "object" && !Array.isArray(value) && depth < NESTED_DEPTH) {
     return <RecordTable rows={recordPreviewRows(value)} depth={depth + 1} />;
   }
-  if (Array.isArray(value) && value.every((item) => item == null || typeof item !== "object")) {
-    return <span className="whitespace-pre-wrap break-words">{value.map(String).join(", ")}</span>;
+  if (Array.isArray(value)) {
+    if (value.every((item) => item == null || typeof item !== "object")) {
+      return (
+        <span className="whitespace-pre-wrap break-words">{value.map(String).join(", ")}</span>
+      );
+    }
+    if (depth < NESTED_DEPTH) {
+      return (
+        <div className="min-w-0 divide-y divide-border/60">
+          {value.map((item, index) => (
+            <div key={index} className="min-w-0 py-1 first:pt-0 last:pb-0">
+              <RecordValue value={item} depth={depth + 1} />
+            </div>
+          ))}
+        </div>
+      );
+    }
   }
   return (
     <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">

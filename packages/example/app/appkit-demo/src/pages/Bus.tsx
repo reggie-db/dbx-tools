@@ -23,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  JsonBlock,
   ScrollArea,
   cn,
 } from "@dbx-tools/ui/react";
@@ -282,17 +283,19 @@ const Bus = () => {
                         <div className="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wide">
                           Body
                         </div>
-                        <pre className="bg-background/70 max-h-64 overflow-auto rounded-md border p-3 text-xs">
-                          {jsonText(message.body)}
-                        </pre>
+                        <JsonBlock
+                          json={jsonText(message.body)}
+                          className="bg-background/70 max-h-64 rounded-md border p-3"
+                        />
                       </div>
                       <details>
                         <summary className="text-muted-foreground cursor-pointer text-xs font-medium uppercase tracking-wide">
                           Metadata ({Object.keys(message.metadata).length} keys)
                         </summary>
-                        <pre className="bg-background/70 mt-2 max-h-72 overflow-auto rounded-md border p-3 text-xs">
-                          {jsonText(message.metadata)}
-                        </pre>
+                        <JsonBlock
+                          json={jsonText(message.metadata)}
+                          className="bg-background/70 mt-2 max-h-72 rounded-md border p-3"
+                        />
                       </details>
                     </div>
                   </article>

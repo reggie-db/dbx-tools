@@ -101,11 +101,6 @@
       "type": "runtime"
     },
     {
-      "name": "shiki",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "sql-formatter",
       "version": "catalog:",
       "type": "runtime"

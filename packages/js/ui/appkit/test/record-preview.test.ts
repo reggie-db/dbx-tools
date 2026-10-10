@@ -1,12 +1,35 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
+import { RecordPreview } from "../src/react/record-preview.tsx";
 import {
   formatRecordPreviewJson,
   looksLikeMarkdown,
   markdownForPreview,
   recordPreviewRows,
 } from "../src/react/record-preview-data.ts";
+
+describe("RecordPreview", () => {
+  it("stacks nested arrays beneath their field without index headings", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecordPreview, {
+        value: {
+          files: [
+            { path: "/first", content: "one" },
+            { path: "/second", content: "two" },
+          ],
+        },
+      }),
+    );
+
+    assert.match(html, /colSpan="2">Files<\/th>/);
+    assert.match(html, />Path<\/th>/);
+    assert.doesNotMatch(html, />1<\/th>/);
+    assert.match(html, /max-h-\[inherit\] min-w-0 overflow-auto/);
+  });
+});
 
 describe("recordPreviewRows", () => {
   it("humanizes object keys into left-column labels", () => {

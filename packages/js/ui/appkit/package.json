@@ -36,6 +36,7 @@
     "@dbx-tools/shared-email-template": "workspace:^",
     "@dbx-tools/shared-search": "workspace:^",
     "lucide-react": "catalog:",
+    "shiki": "catalog:",
     "streamdown": "catalog:",
     "tailwindcss": "catalog:"
   },

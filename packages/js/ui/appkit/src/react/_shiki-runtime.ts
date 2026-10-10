@@ -1,5 +1,5 @@
 /**
- * Fine-grained Shiki runtime containing only the chat's supported languages.
+ * Fine-grained Shiki runtime containing only the supported UI languages.
  *
  * This module is itself dynamically imported, so its grammar, theme, and WASM
  * dependencies remain off the network until a supported code block appears.

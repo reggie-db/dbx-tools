@@ -4,11 +4,13 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
+  JsonBlock,
+  RecordPreview,
   Spinner,
   cn,
 } from "@dbx-tools/ui/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
-import { JsonBlock, SourceBlock, SqlBlock, ToolMarkdown } from "./markdown.tsx";
+import { SourceBlock, SqlBlock, ToolMarkdown } from "./markdown.tsx";
 import type { ToolEvent, ToolProgress } from "./types.ts";
 
 // Consolidated tool-session pill and its Genie progress detail view:
@@ -388,20 +390,50 @@ export function formatRawToolPayload(value: unknown): string {
   return JSON.stringify(value, null, 2) ?? String(value);
 }
 
-const RawToolPayload = ({ label, value }: { label: "Request" | "Response"; value: unknown }) => (
-  <Collapsible className="rounded border border-border/60 bg-background/40">
-    <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
-      <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
-      <span>{label}</span>
-    </CollapsibleTrigger>
-    <CollapsibleContent>
-      <JsonBlock
-        json={formatRawToolPayload(value)}
-        className="max-h-80 border-t border-border/50 px-2 py-2 text-foreground"
-      />
-    </CollapsibleContent>
-  </Collapsible>
-);
+/** Return structured JSON from an object value or a complete JSON string. */
+export function structuredToolPayload(value: unknown): unknown | undefined {
+  if (typeof value === "object" && value !== null) return value;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return typeof parsed === "object" && parsed !== null ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const RawToolPayload = ({
+  label,
+  value,
+}: {
+  label: "Request" | "Response" | "Output";
+  value: unknown;
+}) => {
+  const structured = structuredToolPayload(value);
+  return (
+    <Collapsible className="rounded border border-border/60 bg-background/40">
+      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
+        <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
+        <span>{label}</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        {structured === undefined ? (
+          <JsonBlock
+            json={formatRawToolPayload(value)}
+            className="max-h-80 border-t border-border/50 px-2 py-2 text-foreground"
+          />
+        ) : (
+          <RecordPreview
+            value={structured}
+            className="max-h-80 border-t border-border/50 bg-transparent text-foreground"
+          />
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
 
 export type ToolInputPresentation = {
   label: "Code" | "Command" | "Output";
@@ -621,7 +653,9 @@ const ToolCallDetails = ({
       ) : null}
       <WebSearchProgressDetails event={event} />
       <ToolProgressDetails summary={summary} omitQuestion />
-      {outputPresentation ? (
+      {outputPresentation?.language === "json" ? (
+        <RawToolPayload label="Output" value={outputPresentation.source} />
+      ) : outputPresentation ? (
         <ToolInputSource presentation={outputPresentation} />
       ) : "output" in event ? (
         <RawToolPayload label="Response" value={event.output} />

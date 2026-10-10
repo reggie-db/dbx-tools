@@ -1,4 +1,4 @@
-import { Badge, Tabs, TabsContent, TabsList, TabsTrigger } from "@dbx-tools/ui/react";
+import { Badge, JsonBlock, Tabs, TabsContent, TabsList, TabsTrigger } from "@dbx-tools/ui/react";
 import { SearchBox, SearchResults, useSearch } from "@dbx-tools/ui/search/react";
 import type { SearchHit } from "@dbx-tools/ui/search/react";
 import { useState } from "react";
@@ -16,9 +16,10 @@ import { useState } from "react";
 
 const Selected = ({ hit }: { hit: SearchHit | null }) =>
   hit ? (
-    <pre className="mt-4 max-h-64 overflow-auto rounded-md border bg-muted/40 p-3 text-xs">
-      {JSON.stringify(hit, null, 2)}
-    </pre>
+    <JsonBlock
+      json={JSON.stringify(hit, null, 2)}
+      className="mt-4 max-h-64 rounded-md border bg-muted/40 p-3"
+    />
   ) : null;
 
 const ResultsTab = () => {

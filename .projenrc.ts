@@ -1071,6 +1071,7 @@ project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
     "@dbx-tools/shared-email-template@workspace:^",
     "@dbx-tools/shared-search@workspace:^",
     "lucide-react@catalog:",
+    "shiki@catalog:",
     "tailwindcss@catalog:",
     "streamdown@catalog:",
   );
@@ -1141,7 +1142,6 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     "echarts-for-react@catalog:",
     "lucide-react@catalog:",
     "marked@catalog:",
-    "shiki@catalog:",
     "sql-formatter@catalog:",
     "streamdown@catalog:",
   );

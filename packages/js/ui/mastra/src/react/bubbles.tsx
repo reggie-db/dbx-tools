@@ -192,7 +192,7 @@ const ToolApprovalCard = ({
       {asEmailInput(input) ? (
         <EmailApprovalPreview email={asEmailInput(input)!} />
       ) : (
-        <RecordPreview value={input} className="rounded bg-background/40" />
+        <RecordPreview value={input} className="max-h-80 rounded bg-background/40" />
       )}
       {expired ? (
         <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">

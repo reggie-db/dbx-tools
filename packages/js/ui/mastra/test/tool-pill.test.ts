@@ -4,13 +4,14 @@ import { describe, it } from "node:test";
 import {
   formatRawToolPayload,
   humanizeToolName,
+  structuredToolPayload,
   toolInputPresentation,
   toolOutputPresentation,
   webSearchProgressGroups,
   webSearchQueryLabel,
   webSearchResultLabel,
 } from "../src/react/tool-pill.tsx";
-import { createShikiPlugin, highlightToHtml } from "../src/support/shiki-plugin.ts";
+import { createShikiPlugin, highlightToHtml } from "@dbx-tools/ui/react";
 
 describe("raw tool payload formatting", () => {
   it("preserves complete request and response values", () => {
@@ -32,6 +33,15 @@ describe("raw tool payload formatting", () => {
     const payload = "x".repeat(50_000);
 
     assert.equal(formatRawToolPayload(payload), payload);
+  });
+
+  it("detects object payloads and complete JSON strings for table rendering", () => {
+    const nested = { rows: [{ store: { id: 1 } }] };
+
+    assert.equal(structuredToolPayload(nested), nested);
+    assert.deepEqual(structuredToolPayload(JSON.stringify(nested)), nested);
+    assert.equal(structuredToolPayload("not json"), undefined);
+    assert.equal(structuredToolPayload("{ incomplete"), undefined);
   });
 
   it("highlights formatted payloads with the JSON grammar", async () => {

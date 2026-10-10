@@ -71,6 +71,11 @@
       "type": "runtime"
     },
     {
+      "name": "shiki",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "streamdown",
       "version": "catalog:",
       "type": "runtime"

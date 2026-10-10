@@ -42,7 +42,6 @@
     "echarts-for-react": "catalog:",
     "lucide-react": "catalog:",
     "marked": "catalog:",
-    "shiki": "catalog:",
     "sql-formatter": "catalog:",
     "streamdown": "catalog:"
   },

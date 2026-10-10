@@ -10,6 +10,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  createShikiPlugin,
+  highlightToHtml,
+  useHighlightedHtml,
   cn,
 } from "@dbx-tools/ui/react";
 import { CheckIcon, CopyIcon } from "lucide-react";
@@ -17,7 +20,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid.tsx";
 import { copyText } from "../support/clipboard.ts";
-import { createShikiPlugin, highlightToHtml } from "../support/shiki-plugin.ts";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
 // wired with shiki highlighting and AppKit table primitives, plus the
@@ -180,27 +182,6 @@ const TOOL_MARKDOWN_COMPONENTS = {
  * plaintext. One instance keeps a single lazily-loaded highlighter.
  */
 const SHIKI_PLUGIN = { code: createShikiPlugin() };
-
-/** Resolve syntax-highlighted HTML while preserving plaintext during lazy load. */
-function useHighlightedHtml(source: string, language: string): string | null {
-  const [highlighted, setHighlighted] = useState<{
-    source: string;
-    language: string;
-    html: string;
-  } | null>(null);
-  useEffect(() => {
-    let active = true;
-    void highlightToHtml(source, language).then((result) => {
-      if (active) setHighlighted({ source, language, html: result });
-    });
-    return () => {
-      active = false;
-    };
-  }, [language, source]);
-  return highlighted?.source === source && highlighted.language === language
-    ? highlighted.html
-    : null;
-}
 
 /**
  * Per-word fade-in applied while a reply is still streaming. Streamdown
@@ -394,28 +375,6 @@ export const SqlBlock = ({ sql }: { sql: string }) => {
         )}
       </pre>
     </div>
-  );
-};
-
-/**
- * Render formatted JSON with the same lazily loaded Shiki runtime used by
- * SQL and fenced Markdown code blocks.
- */
-export const JsonBlock = ({ json, className }: { json: string; className?: string }) => {
-  const html = useHighlightedHtml(json, "json");
-  return (
-    <pre
-      className={cn(
-        "max-w-full overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed",
-        className,
-      )}
-    >
-      {html === null ? (
-        <code>{json}</code>
-      ) : (
-        <code data-dbx-highlighted-code dangerouslySetInnerHTML={{ __html: html }} />
-      )}
-    </pre>
   );
 };
 
