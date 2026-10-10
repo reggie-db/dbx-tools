@@ -92,7 +92,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.97",
+  "version": "0.9.98",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
