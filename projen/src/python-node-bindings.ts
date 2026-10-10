@@ -12,7 +12,7 @@ import { makeReadonly } from "./generated.ts";
 import { publicFunctionExports, publicNamespaceExports } from "./module-exports.ts";
 import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
 
-const FINGERPRINT_VERSION = 1;
+const FINGERPRINT_VERSION = 2;
 const INPUT_FINGERPRINT_LABEL = "dbx-tools binding inputs sha256";
 const CONTENT_FINGERPRINT_LABEL = "dbx-tools binding content sha256";
 const PYTHON_KEYWORDS = new Set([
@@ -162,24 +162,30 @@ export function pythonNodeBindingInputFingerprint(
   root: string,
   configs: readonly ResolvedPythonNodeBindings[],
 ): string {
-  const sourceDirectory = dirname(fileURLToPath(import.meta.url));
+  const canonicalRoot = canonicalPath(root);
+  const fingerprintPath = (path: string): string => relative(canonicalRoot, canonicalPath(path));
+  const sourceDirectory = canonicalPath(dirname(fileURLToPath(import.meta.url)));
   const task = resolve(sourceDirectory, "../tasks/python-node-bindings.ts");
   const files = new Set<string>([
-    task,
-    ...filesBelow(sourceDirectory).filter((file) => file.endsWith(".ts")),
+    canonicalPath(task),
+    ...filesBelow(sourceDirectory)
+      .filter((file) => file.endsWith(".ts"))
+      .map(canonicalPath),
   ]);
   for (const candidate of [join(root, "bun.lock"), join(root, "package.json")]) {
-    if (existsSync(candidate)) files.add(candidate);
+    if (existsSync(candidate)) files.add(canonicalPath(candidate));
   }
   for (const config of configs) {
-    for (const input of config.watchInputs) files.add(resolve(root, input));
-    for (const { handlerFile } of config.functionOverrides) files.add(handlerFile);
-    const packageEntrypoint = Bun.resolveSync(config.entrypoint, config.projectDirectory);
+    for (const input of config.watchInputs) files.add(canonicalPath(resolve(root, input)));
+    for (const { handlerFile } of config.functionOverrides) files.add(canonicalPath(handlerFile));
+    const packageEntrypoint = canonicalPath(
+      Bun.resolveSync(config.entrypoint, config.projectDirectory),
+    );
     files.add(packageEntrypoint);
     const packageManifest = nearestPackageManifest(packageEntrypoint);
-    if (packageManifest) files.add(packageManifest);
+    if (packageManifest) files.add(canonicalPath(packageManifest));
     for (const module of config.modules) {
-      files.add(resolvePythonNodeBindingModule(packageEntrypoint, module));
+      files.add(canonicalPath(resolvePythonNodeBindingModule(packageEntrypoint, module)));
     }
   }
 
@@ -188,28 +194,30 @@ export function pythonNodeBindingInputFingerprint(
     JSON.stringify({
       bun: Bun.version,
       configs: configs.map((config) => ({
-        bindingDirectory: relative(root, config.bindingDirectory),
+        bindingDirectory: fingerprintPath(config.bindingDirectory),
         bindingName: config.bindingName,
         entrypoint: config.entrypoint,
         functionOverrides: config.functionOverrides.map((override) => ({
           handlerExport: override.handlerExport,
-          handlerFile: relative(root, override.handlerFile),
+          handlerFile: fingerprintPath(override.handlerFile),
           targetExport: override.targetExport,
           targetModule: override.targetModule,
         })),
-        moduleDirectory: relative(root, config.moduleDirectory),
+        moduleDirectory: fingerprintPath(config.moduleDirectory),
         modules: config.modules,
         package: config.package,
         project: config.project,
-        runtimeOutput: relative(root, config.runtimeOutput),
+        runtimeOutput: fingerprintPath(config.runtimeOutput),
       })),
       format: FINGERPRINT_VERSION,
       typescript: ts.version,
     }),
   );
-  for (const file of [...files].sort()) {
+  for (const { file, path } of [...files]
+    .map((file) => ({ file, path: fingerprintPath(file) }))
+    .sort((left, right) => left.path.localeCompare(right.path))) {
     hash.update("\0file\0");
-    hash.update(relative(root, file));
+    hash.update(path);
     hash.update("\0");
     hash.update(existsSync(file) ? readFileSync(file) : "<missing>");
   }
