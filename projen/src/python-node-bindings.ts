@@ -12,7 +12,7 @@ import { makeReadonly } from "./generated.ts";
 import { publicFunctionExports, publicNamespaceExports } from "./module-exports.ts";
 import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
 
-const FINGERPRINT_VERSION = 2;
+const FINGERPRINT_VERSION = 3;
 const INPUT_FINGERPRINT_LABEL = "dbx-tools binding inputs sha256";
 const CONTENT_FINGERPRINT_LABEL = "dbx-tools binding content sha256";
 const PYTHON_KEYWORDS = new Set([
@@ -172,9 +172,8 @@ export function pythonNodeBindingInputFingerprint(
       .filter((file) => file.endsWith(".ts"))
       .map(canonicalPath),
   ]);
-  for (const candidate of [join(root, "bun.lock"), join(root, "package.json")]) {
-    if (existsSync(candidate)) files.add(canonicalPath(candidate));
-  }
+  const rootPackageManifest = join(root, "package.json");
+  if (existsSync(rootPackageManifest)) files.add(canonicalPath(rootPackageManifest));
   for (const config of configs) {
     for (const input of config.watchInputs) files.add(canonicalPath(resolve(root, input)));
     for (const { handlerFile } of config.functionOverrides) files.add(canonicalPath(handlerFile));
