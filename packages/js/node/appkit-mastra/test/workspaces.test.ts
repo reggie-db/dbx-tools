@@ -730,6 +730,31 @@ describe("databricksWorkspace skill source identity", () => {
 });
 
 describe("agent workspace selection", () => {
+  it("binds an explicit Databricks workspace to the AppKit plugin context", async () => {
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
+      sandbox: false,
+      tools: { requireApproval: false },
+    });
+    const built = await buildAgents({
+      config: {
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            workspace,
+          },
+        },
+      },
+      context: { getPlugins: () => new Map() },
+      log: log.logger("test/agents"),
+    });
+
+    const bound = await built.agents.analyst?.getWorkspace();
+    assert.ok(bound);
+    assert.notEqual(bound, workspace);
+    assert.equal(bound.getToolsConfig()?.requireApproval, false);
+  });
+
   it("preserves an explicit workspace resolver opt-out", async () => {
     const built = await buildAgents({
       config: {

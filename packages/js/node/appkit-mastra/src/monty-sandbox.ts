@@ -11,6 +11,7 @@
 
 import { configUtils } from "@dbx-tools/core";
 import { errorUtils, functionUtils, log } from "@dbx-tools/shared-core";
+import { availableParallelism } from "node:os";
 import type {
   CommandResult,
   ExecuteCommandOptions,
@@ -38,6 +39,11 @@ interface MontyContext {
   pool: MontyPool;
 }
 
+/** @internal Size the shared worker pool from the host's available processors. */
+export function montyMaxProcesses(parallelism: number = availableParallelism()): number {
+  return Math.max(4, Math.floor(parallelism) * 2);
+}
+
 const montyContext = functionUtils.memoize(async (): Promise<MontyContext> => {
   const errors: Error[] = [];
   const targets = configUtils.boolean(undefined, "MONTY_FORCE_WASM")
@@ -47,12 +53,13 @@ const montyContext = functionUtils.memoize(async (): Promise<MontyContext> => {
     try {
       const module = await target.load();
       logger.debug(`${target.name} module available`);
+      const maxProcesses = montyMaxProcesses();
       const pool = await module.Monty.create({
         minProcesses: 1,
-        maxProcesses: 4,
+        maxProcesses,
         requestTimeout: 35,
       });
-      logger.debug(`${target.name} pool created`);
+      logger.debug(`${target.name} pool created`, { maxProcesses });
       return {
         crashedError: module.MontyCrashedError,
         pool,

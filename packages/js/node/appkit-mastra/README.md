@@ -100,7 +100,7 @@ Benefits of importing the package:
 
 - `mastra()` registers a full AppKit plugin named `mastra`.
 - `agents.createAgent()` keeps agent definitions typed and applies the default
-  Databricks workspace/skill mounts and Databricks Sandbox command execution.
+  Databricks workspace skill paths and Monty command execution.
 - `agents.tool()` lets the same AppKit-shaped tool body work in this Mastra
   plugin.
 - `genie.GENIE_INSTRUCTIONS` and `plugins.genie.toolkit()` give agents a
@@ -269,47 +269,120 @@ and memory configs.
 ## Workspace Skills
 
 Every `agents.createAgent()` gets a default Mastra `Workspace` from
-`workspaces.createWorkspace()`. It mounts Databricks Workspace files through the
-current OBO user's `WorkspaceClient`, so Mastra can discover Assistant-style
-`SKILL.md` files at request time.
+`workspaces.databricksWorkspace()`. Most apps do not need workspace
+configuration: the default scans `/Workspace/.assistant/skills` and the current
+user's `~/.assistant/skills` path for `SKILL.md` files.
+
+Pass paths directly when an agent needs a different filesystem scope:
+
+```ts
+const analyst = agents.createAgent({
+  instructions: "Use the project files and skills when relevant.",
+  workspace: workspaces.databricksWorkspace({
+    assistantPaths: false,
+    paths: ["~/project"],
+  }),
+});
+```
+
+Paths mount at the same absolute path that they identify. `~` resolves to the
+current user's Databricks workspace home, so `~/project` exposes only that
+subtree. A path that is missing or inaccessible for the current request is
+skipped. Production Databricks mounts require a forwarded token with
+`workspace`, `workspace.workspace`, or `all-apis` scope.
+
+Use an options object only when a path needs additional behavior:
+
+```ts
+const workspace = workspaces.databricksWorkspace({
+  assistantPaths: false,
+  paths: [
+    {
+      path: "/Workspace/Shared/runbooks",
+      skills: ["skills"],
+      writable: true,
+      createRoot: false,
+    },
+    {
+      path: "/Workspace/Shared/templates",
+      readable: false,
+    },
+    ({ requestContext }) =>
+      requestContext.get("team") === "platform" ? "~/platform" : false,
+  ],
+});
+```
+
+`readable: false` keeps a mount available to file tools without scanning it for
+skills. `skills` contains relative roots within that path. `writable` controls
+whether the filesystem attempts mutations; Databricks permissions still decide
+whether an operation succeeds. `mount` can expose the path at a different
+Mastra path when required.
+
+`/tmp` is opt-in. An explicit `/tmp` path maps to a stable user-scoped directory
+under the host operating system's ephemeral temp location. `/tmp/project` maps
+to a child directory and exposes only `/tmp/project`, not the rest of `/tmp`.
+The location can survive process restarts while the host retains its temp
+storage, but it is not durable storage.
+
+The shortcut returns a native Mastra workspace and accepts native `mounts`,
+`tools`, and workspace options. Use the config helper when composing the result
+with another Mastra provider:
+
+```ts
+import { Workspace } from "@mastra/core/workspace";
+
+export const workspace = new Workspace({
+  ...workspaces.databricksWorkspaceConfig({
+    assistantPaths: false,
+    paths: ["~/project", "/tmp/project"],
+  }),
+  sandbox: mySandbox,
+});
+```
 
 Mastra's native `WorkspaceSkills` owns discovery, indexing, refreshes, and lazy
 reads of references, scripts, templates, and assets. dbx-tools does not keep a
 second skill catalogue or skill-specific cache.
 
 When the app registers `filesCache()` from `@dbx-tools/appkit/files-cache`,
-auto-created workspaces retain one filesystem source per user and set of actual
-mount paths. Page refreshes and later turns reuse that source, allowing Mastra
-to retain its native parsed catalogue while the files cache handles repeated
-filesystem metadata operations. Each operation resolves the active request's
-OBO client, so the retained source does not retain an old token. Explicit
-caller-owned workspaces remain unchanged.
+default workspaces and workspaces created with `databricksWorkspace()` retain
+one filesystem source per user and set of actual mount paths. Page refreshes
+and later turns reuse that source, allowing Mastra to retain its native parsed
+catalogue while the files cache handles repeated filesystem metadata
+operations. Each operation resolves the active request's OBO client, so the
+retained source does not retain an old token. Other caller-owned Mastra
+workspaces remain unchanged.
+
+```ts
+import { filesCache } from "@dbx-tools/appkit/files-cache";
+
+await createApp({
+  plugins: [server(), filesCache(), mastra({ agents: { analyst } })],
+});
+```
 
 The plugin is detected from the AppKit plugin context. If it is not registered,
-filesystem caching is disabled even when `workspace.files.cache` is configured. When it
-is registered, its app-lifetime `FilesCacheManager` is the single owner of the
-process-local, user-scoped LRU. Filesystem values do not use AppKit's
-`CacheManager`: that cache can write through to Lakebase, while file reads need
-a local-only fast path. Existing Lakebase-backed AppKit caching remains
-unchanged.
+filesystem caching is disabled. When it is registered, its app-lifetime
+`FilesCacheManager` is the single owner of the process-local, user-scoped LRU.
+Filesystem values do not use AppKit's `CacheManager`: that cache can write
+through to Lakebase, while file reads need a local-only fast path. Existing
+Lakebase-backed AppKit caching remains unchanged.
 
 The default file cache stores `exists`, `readdir`, and `stat` results for every
 mounted Databricks path. `readFile` is cached only under configured skill roots,
 so ordinary file contents remain live. Directory listings therefore remain
-cached. Set `workspace.files.cache: false` to disable this behavior, `true` to select the
-defaults explicitly, or provide operation/path rules. Explicit rules replace
-the defaults and are ORed:
+cached. Set `cache: false` on `databricksWorkspace()` to disable this behavior,
+`true` to select the defaults explicitly, or provide operation/path filters.
+Explicit filters replace the defaults and are ORed:
 
 ```ts
-mastra({
-  workspace: {
-    files: {
-      cache: [
-        { operations: ["exists", "readdir", "stat"], paths: "**" },
-        { operations: "readFile", paths: ["~/.assistant/skills/**"] },
-      ],
-    },
-  },
+const workspace = workspaces.databricksWorkspace({
+  paths: ["~/project"],
+  cache: [
+    { operations: ["exists", "readdir", "stat"], paths: "**" },
+    { operations: "readFile", paths: "~/project/skills/**" },
+  ],
 });
 ```
 
@@ -320,53 +393,17 @@ skill search processor, or pass `{ topK, minScore, ttlMs }` to tune it.
 
 Workspace access policy stays on Mastra's native `Workspace.tools` owner. By
 default, mounted files are readable without approval. Write, edit, AST edit,
-delete, and mkdir run without approval only inside
-`/Workspace/Users/<email>` for the authenticated user and under `/tmp`.
-Mutations under organization mounts or any other path require approval.
-`workspace.files.approval` adds ordered operation/path rules; the first match wins and an
-unmatched operation uses the default policy. Omit `operations` to cover every
-Mastra filesystem tool, omit `paths` to cover every path, and omit
-`requireApproval` to require approval. Use Mastra's `WORKSPACE_TOOLS` constants
-for operation names:
+delete, and mkdir run without approval inside the current user's Databricks
+workspace home and under explicit `/tmp` mounts. Mutations elsewhere require
+approval. Pass native Mastra tool configuration directly to the workspace
+shortcut:
 
 ```ts
 import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
 
-mastra({
-  workspace: {
-    files: {
-      approval: ({ requestContext }) => [
-        {
-          operations: WORKSPACE_TOOLS.FILESYSTEM.DELETE,
-          paths: "~/**",
-          requireApproval: true,
-        },
-        {
-          operations: [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE, WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE],
-          paths: "~/projects/**",
-          requireApproval: requestContext.role !== "editor",
-        },
-      ],
-    },
-  },
-});
-```
-
-`workspace.files.approval` and `workspace.files.cache` accept fixed values or per-request resolver
-functions. Path strings use `@dbx-tools/path` glob matching, including dotfiles.
-`~` and `~/...` expand to `/Workspace/Users/<email>` for the current request;
-home-relative rules do not match when no user email is available.
-
-`workspaceTools` accepts Mastra's complete `WorkspaceToolsConfig`, so global or
-per-tool settings can change approval, enablement, read-before-write, hooks,
-and output limits. Native `workspaceTools.requireApproval` or a per-tool value
-overrides `workspace.files.approval`:
-
-```ts
-import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
-
-mastra({
-  workspaceTools: {
+const workspace = workspaces.databricksWorkspace({
+  paths: ["~/project"],
+  tools: {
     requireApproval: false,
     [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]: {
       requireApproval: true,
@@ -379,83 +416,6 @@ mastra({
 File-tool and sandbox-command policies are independent. Disable
 `WORKSPACE_TOOLS.SANDBOX.EXECUTE_COMMAND` when an agent must not bypass file
 approvals by writing through shell commands.
-
-Locations are a named map (`skillFolders`), so an app refers to a tree by name
-rather than repeating a path. Databricks paths mount at their actual workspace
-location and carry relative `skills` roots plus their own policy: `readable`
-(scanned for `SKILL.md`, default `true`) and `writable` (default `true` for
-`/Workspace` roots, `false` elsewhere).
-`DEFAULT_SKILL_FOLDERS` supplies these:
-
-| Name                  | Mount                      | Skill root          | Readable | Writable |
-| --------------------- | -------------------------- | ------------------- | -------- | -------- |
-| `organization-skills` | `/Workspace/.assistant`    | `skills`            | yes      | yes      |
-| `personal-skills`     | `/Workspace/Users/<email>` | `.assistant/skills` | yes      | yes      |
-
-Every workspace also has an isolated local scratch filesystem mounted at
-`/tmp`. Organization and personal mounts are probed independently on first
-load. A missing or inaccessible Databricks path is skipped, so `/tmp` and any
-accessible mounts remain available.
-
-Organization writes are enabled at the filesystem layer, require approval, and
-still depend on the caller's Databricks permissions. The existing
-`/Workspace/.assistant` root is never created automatically.
-
-Skill roots are expanded to concrete skill directories before Mastra scans
-them. The first root wins duplicate directory names, so organization skills
-override same-named personal skills while unique personal skills remain
-available.
-
-A consuming library merges over that map: a matching name overrides the
-default, `false` disables it, and any other name adds a location. A folder
-points at a Databricks `path` or supplies a ready `filesystem` for anything the
-OBO client cannot reach. Every folder field accepts either a fixed value or a
-per-request resolver, so fixed and dynamic values can be mixed. Databricks
-`path` and composite `mount` values also accept `~`.
-
-```ts
-const agent = agents.createAgent({
-  instructions: "Use mounted workspace skills when relevant.",
-  workspace: workspaces.createWorkspace({
-    skillFolders: {
-      // Point an existing name somewhere else.
-      "organization-skills": {
-        path: "/Workspace/Shared/.assistant",
-        skills: ["skills"],
-      },
-      // Drop a default entirely.
-      "personal-skills": false,
-      // Add an app-owned tree the agent may write back to.
-      runbooks: {
-        path: ({ requestContext }) =>
-          requestContext?.get("team") === "platform"
-            ? "/Workspace/Shared/platform-runbooks"
-            : "~/runbooks",
-        skills: ["skills"],
-        writable: true,
-        createRoot: false,
-      },
-      // Mount for file tools without adding it to skill discovery.
-      templates: { path: "/Workspace/Shared/templates", readable: false },
-      // Any Mastra filesystem works, including per-request ones.
-      volume: { filesystem: ({ requestContext }) => volumeFor(requestContext) },
-    },
-    mounts: [
-      async () => ({
-        mounts: { "/reference": myFilesystem },
-        skillPaths: ["/reference/skills"],
-      }),
-    ],
-  }),
-});
-```
-
-A folder whose location resolves to `undefined` is skipped for that request,
-which is how `personal-skills` drops out when no user email is stamped.
-`assistantSkills: false` starts from an empty map, leaving only the
-`skillFolders` given. Production workspace mounts require a forwarded token
-with `workspace`, `workspace.workspace`, or `all-apis` scope. Development mode
-skips that gate for local iteration.
 
 Databricks mounts verify read access with an uncached root status request before
 the first cached read can succeed. The first mutation is always sent to
@@ -472,7 +432,8 @@ Monty's native subprocess worker is preferred because Bun's Linux
 `worker_threads` support cannot reliably host the WASM worker. The WASM entry is
 loaded only when native import fails. Databricks App staging declares the Linux
 native package directly so deployment does not depend on transitive optional
-dependency installation.
+dependency installation. The shared pool starts with one worker and can scale
+to `max(4, available processors * 2)` workers per app process.
 
 Opt into the Beta
 [Databricks Sandbox](https://docs.databricks.com/aws/en/compute/serverless/sandbox)
@@ -533,17 +494,15 @@ mastra({ agents: analyst, sandbox: "databricks" });
 
 const localAgent = agents.createAgent({
   instructions: "Run only trusted local commands.",
-  workspace: workspaces.createWorkspace({
+  workspace: workspaces.databricksWorkspace({
     sandbox: myMastraSandbox,
   }),
 });
 ```
 
 An explicit agent `workspace` always wins over plugin-level `sandbox` config, so
-providers never run in parallel accidentally. `workspaces.createWorkspace()`
-also accepts a custom resolver for per-request provider selection. A per-agent
-workspace resolver returning `undefined` explicitly disables the workspace for
-that agent.
+providers never run in parallel accidentally. A per-agent workspace resolver
+returning `undefined` explicitly disables the workspace for that agent.
 
 ## Remote Skills
 
@@ -574,7 +533,7 @@ one that was in the workspace all along. Resolution per source:
   staging dir. A non-URL source (e.g. bare `owner/repo`) without the `skills`
   package installed cannot be resolved this way and fails.
 
-The default destination is the Databricks organization skills tree
+The default destination is the shared Databricks Assistant skills tree
 (`/Workspace/.assistant/skills`), so provisioned skills persist across restarts and are picked up by
 the built-in Assistant-skills mount. Pass `userEmail` to target that user's
 `/Workspace/Users/<email>/.assistant/skills` instead, or `databricksBasePath` for an
@@ -1217,13 +1176,10 @@ client that talks to these routes.
   adapter.
 - `montySandbox` - Python-only Pydantic Monty fallback using Node subprocess
   workers.
-- `workspaces` / `filesystems` - Mastra workspace creation with a default
-  Databricks sandbox plus named
-  `skillFolders` (defaults `organization-skills` / `personal-skills`, overridable
-  by consumers); `filesystems(fs)` wraps any `@dbx-tools/shared-fs`
-  `FileSystem` (including `@dbx-tools/databricks` / `@dbx-tools/fs`) as a
-  Mastra mount, with `scratchFilesystem` (fresh `tmpFS` + random id) when no
-  other mount resolves.
+- `workspaces` / `filesystems` - native Mastra workspace configuration from
+  Databricks paths, opt-in user-scoped temp paths, and caller-supplied mounts;
+  `filesystems(fs)` wraps any `@dbx-tools/shared-fs` `FileSystem` (including
+  `@dbx-tools/databricks` / `@dbx-tools/fs`) as a Mastra mount.
 - `remote-skills` - startup provisioning of remote `SKILL.md` sources into the
   Databricks Assistant skills tree (or a local temp dir): the `"aitools"`
   constant reads Databricks' own skill repo directly, and any other source goes

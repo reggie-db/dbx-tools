@@ -51,7 +51,7 @@ import { stripStaleChartsProcessor } from "./processors.ts";
 import { MASTRA_RESOLVED_MODEL_KEY } from "./serving.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
-import { databricksWorkspace } from "./workspaces.ts";
+import { bindDatabricksWorkspaceContext, databricksWorkspace } from "./workspaces.ts";
 
 /**
  * Tool record accepted by every Mastra `Agent.tools` field and by the
@@ -168,8 +168,8 @@ function deriveToolId(description: string): string {
  * ```
  *
  * Adds the package's default workspace when the definition omits one. That
- * workspace carries Databricks skill mounts and Databricks Sandbox command
- * execution. An explicit workspace remains the caller's complete override.
+ * workspace carries Databricks skill mounts and Monty command execution. An
+ * explicit workspace remains the caller's complete override.
  */
 export function createAgent<
   TRequestContext extends Record<string, unknown> | unknown = unknown,
@@ -587,6 +587,8 @@ export async function buildAgents(opts: {
         sandbox: config.sandbox === true ? "databricks" : config.sandbox,
       });
       markDefaultWorkspace(workspace);
+    } else if (workspace) {
+      workspace = bindDatabricksWorkspaceContext(workspace, context);
     }
     const gated = approvalGatedToolIds(tools);
     if (gated.length > 0) approvalGatedByAgent.push({ agentId: id, toolIds: gated });

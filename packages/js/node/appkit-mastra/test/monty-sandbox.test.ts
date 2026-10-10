@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { MontySandbox } from "../src/monty-sandbox.ts";
+import { montyMaxProcesses, MontySandbox } from "../src/monty-sandbox.ts";
 
 describe("MontySandbox", () => {
+  it("sizes the shared pool at twice processor parallelism with a minimum of four", () => {
+    assert.equal(montyMaxProcesses(1), 4);
+    assert.equal(montyMaxProcesses(2), 4);
+    assert.equal(montyMaxProcesses(16), 32);
+  });
+
   it("executes Python source and returns prints plus the trailing value", async () => {
     const sandbox = new MontySandbox();
 
@@ -82,7 +88,7 @@ describe("MontySandbox", () => {
     const ready = new Promise<void>((resolve) => {
       resolveReady = resolve;
     });
-    const blockers = Array.from({ length: 4 }, () =>
+    const blockers = Array.from({ length: montyMaxProcesses() }, () =>
       sandbox.executeCommand("print('ready')\nwhile True:\n    pass", [], {
         timeout: 300,
         onStdout: (text) => {

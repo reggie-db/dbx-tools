@@ -80,6 +80,7 @@ const CACHEABLE_FILESYSTEM_OPERATIONS = [
 
 const logger = log.logger("mastra/workspaces");
 let workspaceSourceSequence = 0;
+const databricksWorkspaceOptions = new WeakMap<Workspace, DatabricksWorkspaceOptions>();
 
 /* -------------------------------- types -------------------------------- */
 
@@ -364,7 +365,21 @@ export function databricksWorkspaceConfig(
 
 /** Create a native Mastra {@link Workspace} from {@link databricksWorkspaceConfig}. */
 export function databricksWorkspace(options: DatabricksWorkspaceOptions = {}): Workspace {
-  return new Workspace(databricksWorkspaceConfig(options));
+  const workspace = new Workspace(databricksWorkspaceConfig(options));
+  databricksWorkspaceOptions.set(workspace, options);
+  return workspace;
+}
+
+/** @internal Bind a caller-created Databricks workspace to its AppKit plugin context. */
+export function bindDatabricksWorkspaceContext(
+  workspace: Workspace,
+  pluginContext: pluginRegistry.PluginContextLike | undefined,
+): Workspace {
+  const options = databricksWorkspaceOptions.get(workspace);
+  if (!options || options.pluginContext !== undefined || pluginContext === undefined) {
+    return workspace;
+  }
+  return databricksWorkspace({ ...options, pluginContext });
 }
 
 /**
@@ -895,11 +910,10 @@ function shouldMountSkillFolders(requestContext: RequestContext): boolean {
   return hasWorkspaceFileScope(requestContext);
 }
 
-/** Read the trimmed OBO user email stamped on {@link MASTRA_USER_EMAIL_KEY}. */
 /**
  * Wrap a {@link DatabricksFileSystem} as a Mastra filesystem. Missing or
- * inaccessible roots return `undefined` so the independent `/tmp` mount and
- * any other accessible roots remain usable.
+ * inaccessible roots return `undefined` so other accessible roots remain
+ * usable.
  */
 async function databricksFilesystem(
   client: WorkspaceClient,
@@ -1085,7 +1099,7 @@ async function resolveWorkspaceFilesystem(
 /**
  * Expand skill roots into concrete skill directories and keep the first
  * same-named directory. Mastra still owns parsing, indexing, and refreshes,
- * while organization roots retain precedence over personal roots.
+ * while earlier configured roots retain precedence over later roots.
  */
 async function resolveDistinctSkillPaths(
   filesystem: WorkspaceFilesystem,
