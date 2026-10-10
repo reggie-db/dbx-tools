@@ -1,6 +1,6 @@
 import type { ToolProgressEvent } from "@dbx-tools/shared-mastra/wire";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
-import type { UIMessage } from "ai";
+import type { FileUIPart, UIMessage } from "ai";
 import type { ReactNode } from "react";
 import type { ExportFormat } from "../support/export.ts";
 
@@ -52,12 +52,14 @@ export type ChatModelOption = Pick<
 >;
 
 /**
- * A steer message submitted while a turn was already streaming. It waits in a
- * per-thread queue until the running turn ends (auto-sent oldest-first) or the
- * user fires it early with "send now". `id` is a stable key for rendering /
- * removal.
+ * A text and/or image message submitted while a turn was already streaming.
+ * It waits in a per-thread queue until the running turn ends (auto-sent
+ * oldest-first) or the user fires it early with "send now". `id` is a stable
+ * key for rendering / removal.
  */
-export type QueuedSteer = { id: string; text: string };
+export type ChatInputMessage = { text?: string; files?: FileUIPart[] };
+
+export type QueuedSteer = ChatInputMessage & { id: string };
 
 /** Thumbs reaction a user can leave on an assistant turn. */
 export type FeedbackValue = "up" | "down";
@@ -128,7 +130,7 @@ export type ChatViewProps = {
    * ENQUEUES the message as a steer (it waits, no interrupt); the queue drains
    * oldest-first when the turn ends. An idle submit starts a turn immediately.
    */
-  sendMessage: (message: { text: string }) => void;
+  sendMessage: (message: ChatInputMessage) => void;
   /**
    * Steers submitted mid-turn that are waiting to run (oldest first). When
    * non-empty the composer shows them as chips above the input, each with a
@@ -202,7 +204,7 @@ export type ChatViewProps = {
   modelSelectorActions?: ReactNode;
   /**
    * Host-owned actions rendered on the left side of the composer's fixed
-   * footer, before Export and Clear.
+   * footer, after Upload and before Export and Clear.
    */
   composerLeadingActions?: ReactNode;
   /**

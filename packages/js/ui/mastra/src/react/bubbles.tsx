@@ -12,6 +12,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  cn,
 } from "@dbx-tools/ui/react";
 import type { UIMessage } from "ai";
 import {
@@ -535,14 +536,31 @@ export const UserBubble = ({ message }: { message: UIMessage }) => {
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
     .map((p) => p.text)
     .join("");
+  const files = message.parts.filter((part) => part.type === "file");
   return (
     <Item className="items-start gap-2.5 border-none bg-transparent p-0">
       <ItemMedia>
         <RoleAvatar role="user" />
       </ItemMedia>
       <ItemContent className="min-w-0">
-        <div className="rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap break-words">
-          {text}
+        <div className="max-w-full rounded-lg bg-muted p-2 text-sm">
+          {files.length > 0 && (
+            <div className={cn("grid gap-1.5", files.length > 1 && "grid-cols-2")}>
+              {files.map((file, index) => (
+                <img
+                  key={`${file.filename ?? "image"}-${index}`}
+                  src={file.url}
+                  alt={file.filename || "Attached image"}
+                  className="max-h-64 max-w-full rounded-md object-contain"
+                />
+              ))}
+            </div>
+          )}
+          {text && (
+            <div className={cn("whitespace-pre-wrap break-words px-1", files.length > 0 && "pt-2")}>
+              {text}
+            </div>
+          )}
         </div>
       </ItemContent>
     </Item>

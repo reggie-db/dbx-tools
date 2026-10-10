@@ -52,6 +52,7 @@ export { ThreadActions, ThreadTabs } from "./thread-tabs.tsx";
 export type { ThreadActionsProps, ThreadTabsProps } from "./thread-tabs.tsx";
 export type {
   ApprovalDecision,
+  ChatInputMessage,
   ChatModelOption,
   ChatStatus,
   ChatViewProps,

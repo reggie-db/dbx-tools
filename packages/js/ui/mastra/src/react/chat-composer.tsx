@@ -18,8 +18,10 @@ import {
   TooltipTrigger,
   cn,
 } from "@dbx-tools/ui/react";
+import type { FileUIPart } from "ai";
 import {
   GripVerticalIcon,
+  ImagePlusIcon,
   SendHorizontalIcon,
   SendIcon,
   SquareIcon,
@@ -28,6 +30,7 @@ import {
 } from "lucide-react";
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { autosizeComposerTextarea, observeComposerWidth } from "./_composer-autosize.ts";
+import { imageFileToUIPart, MAX_COMPOSER_IMAGES } from "./_image-attachments.ts";
 import { ModelSelector } from "./_model-selector.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { SuggestionPills } from "./suggestion-pills.tsx";
@@ -123,7 +126,9 @@ const QueuedSteerList = ({
               </span>
             )}
             <span className="text-muted-foreground">Queued</span>
-            <span className="min-w-0 flex-1 truncate">{steer.text}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {steer.text || steer.files?.map((file) => file.filename || "Image").join(", ")}
+            </span>
             {onSendSteerNow && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -192,13 +197,13 @@ const ClearConversationAction = ({ onClear, isLoadingHistory }: ClearConversatio
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => setOpen(true)}
             disabled={isLoadingHistory}
-            className="h-7 gap-1 rounded-full px-2.5 text-xs [&_svg]:size-3"
+            className="size-7 rounded-full [&_svg]:size-3"
+            aria-label="Clear conversation"
           >
             <Trash2Icon className="size-3" />
-            Clear
           </Button>
         </TooltipTrigger>
         <TooltipContent>Clear chat history for this thread</TooltipContent>
@@ -285,7 +290,11 @@ export const ChatComposer = ({
   onResumeFollow,
 }: ChatComposerProps) => {
   const [input, setInput] = useState("");
+  const [files, setFiles] = useState<FileUIPart[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [isPreparingFiles, setIsPreparingFiles] = useState(false);
   const inputId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const inputGroupRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -304,12 +313,42 @@ export const ChatComposer = ({
   }, [resizeTextarea]);
 
   const isRunning = status === "submitted" || status === "streaming";
+  const hasDraft = Boolean(input.trim() || files.length > 0);
   const submit = () => {
     const text = input.trim();
-    if (!text || isLoadingHistory) return;
-    sendMessage({ text });
+    if ((!text && files.length === 0) || isLoadingHistory || isPreparingFiles) return;
+    sendMessage({ ...(text ? { text } : {}), ...(files.length > 0 ? { files } : {}) });
     setInput("");
+    setFiles([]);
+    setFileError(null);
     onResumeFollow();
+  };
+
+  const addFiles = async (selected: FileList | null) => {
+    if (!selected?.length) return;
+    const remaining = MAX_COMPOSER_IMAGES - files.length;
+    if (remaining <= 0) {
+      setFileError(`You can attach up to ${MAX_COMPOSER_IMAGES} images`);
+      return;
+    }
+    setIsPreparingFiles(true);
+    setFileError(null);
+    try {
+      const next = await Promise.all(
+        Array.from(selected)
+          .slice(0, remaining)
+          .map((file) => imageFileToUIPart(file)),
+      );
+      setFiles((current) => [...current, ...next]);
+      if (selected.length > remaining) {
+        setFileError(`Only the first ${remaining} images were added`);
+      }
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Unable to attach image");
+    } finally {
+      setIsPreparingFiles(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const modelChangeable = Boolean(models && models.length > 0);
@@ -339,6 +378,34 @@ export const ChatComposer = ({
           ref={inputGroupRef}
           className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md"
         >
+          {files.length > 0 && (
+            <div className="flex max-w-full gap-2 overflow-x-auto px-3 pt-3">
+              {files.map((file, index) => (
+                <div
+                  key={`${file.filename ?? "image"}-${index}`}
+                  className="group relative size-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"
+                >
+                  <img
+                    src={file.url}
+                    alt={file.filename || "Attached image"}
+                    className="size-full object-cover"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="secondary"
+                    className="absolute right-0.5 top-0.5 size-5 rounded-full opacity-90"
+                    onClick={() =>
+                      setFiles((current) => current.filter((_, item) => item !== index))
+                    }
+                    aria-label={`Remove ${file.filename || "image"}`}
+                  >
+                    <XIcon className="size-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
           <InputGroupTextarea
             id={`${inputId}-message`}
             name="message"
@@ -355,15 +422,51 @@ export const ChatComposer = ({
             rows={1}
             className="field-sizing-fixed min-h-10 max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-base md:text-xs"
           />
+          {fileError && (
+            <div className="px-4 text-xs text-destructive" role="alert">
+              {fileError}
+            </div>
+          )}
           <InputGroupAddon
             align="block-end"
             className="flex w-full flex-row flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-1"
           >
             <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="sr-only"
+                onChange={(event) => void addFiles(event.currentTarget.files)}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-7 rounded-full [&_svg]:size-3"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={
+                      isLoadingHistory || isPreparingFiles || files.length >= MAX_COMPOSER_IMAGES
+                    }
+                    aria-label="Upload images"
+                  >
+                    {isPreparingFiles ? (
+                      <Spinner className="size-3" />
+                    ) : (
+                      <ImagePlusIcon className="size-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Upload images</TooltipContent>
+              </Tooltip>
               {composerLeadingActions}
               {onExportConversation && (
                 <ExportMenu
                   onExport={(format) => void onExportConversation(format)}
+                  iconOnly
                   tooltip="Export conversation"
                   disabled={isLoadingHistory}
                 />
@@ -399,7 +502,7 @@ export const ChatComposer = ({
                     )}
                   </span>
                 ))}
-              {isRunning && onStop && !input.trim() ? (
+              {isRunning && onStop && !hasDraft ? (
                 <InputGroupButton
                   type="button"
                   size="icon-sm"
@@ -415,7 +518,7 @@ export const ChatComposer = ({
                   type="submit"
                   size="icon-sm"
                   variant="default"
-                  disabled={!input.trim() || isLoadingHistory}
+                  disabled={!hasDraft || isLoadingHistory || isPreparingFiles}
                   aria-label={isRunning ? "Queue message" : "Send message"}
                   className="shrink-0 rounded-full"
                 >

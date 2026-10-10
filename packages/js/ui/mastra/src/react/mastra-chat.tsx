@@ -2,7 +2,7 @@ import { errorUtils, hash, log } from "@dbx-tools/shared-core";
 import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra/resume";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { useBrand } from "@dbx-tools/ui/branding/react";
-import type { UIMessage } from "ai";
+import type { FileUIPart, UIMessage } from "ai";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChatApprovals } from "./chat-approvals.ts";
 import { useChatFeedback } from "./chat-feedback.ts";
@@ -66,10 +66,10 @@ const EMPTY_REASONING_EFFORTS: readonly ReasoningEffort[] = [];
 
 const logger = log.logger("ui-mastra/chat");
 
-const makeUserMessage = (text: string): UIMessage => ({
+const makeUserMessage = (text: string, files: FileUIPart[] = []): UIMessage => ({
   id: hash.id(),
   role: "user",
-  parts: [{ type: "text", text }],
+  parts: [...files, ...(text ? [{ type: "text" as const, text }] : [])],
 });
 
 /** Project a native Mastra memory thread down to the sidebar's view. */
@@ -610,7 +610,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       ...session,
       queuedSteers: removeSteerFromQueue(session.queuedSteers, head.id),
     }));
-    const { message } = appendUserMessage(threadId, head.text);
+    const { message } = appendUserMessage(threadId, head.text ?? "", head.files);
     void runStream(threadId, message, head.requestContext);
   };
 
@@ -666,11 +666,17 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // Append a user message to a thread's transcript, update thread activity,
   // and derive a provisional title for a brand-new thread.
   const appendUserMessage = useCallback(
-    (threadId: string, text: string): { message: UIMessage; next: UIMessage[] } => {
+    (
+      threadId: string,
+      text: string,
+      files: FileUIPart[] = [],
+    ): { message: UIMessage; next: UIMessage[] } => {
       if (activeThreadId) {
         noteThreadActivity(activeThreadId);
         if (getSession(threadId).messages.length === 0) {
-          const provisional = deriveThreadTitle(text);
+          const provisional = deriveThreadTitle(
+            text || files.map((file) => file.filename || "Image").join(", "),
+          );
           if (provisional) {
             setProvisionalTitles((prev) =>
               prev[activeThreadId] ? prev : { ...prev, [activeThreadId]: provisional },
@@ -679,7 +685,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         }
       }
       const session = getSession(threadId);
-      const message = makeUserMessage(text);
+      const message = makeUserMessage(text, files);
       const next = [...session.messages, message];
       writeMessages(threadId, next);
       return { message, next };
@@ -694,7 +700,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const sendMessage = useCallback<ChatViewProps["sendMessage"]>(
     (message) => {
       const text = message.text ?? "";
-      if (!text) return;
+      const files = message.files ?? [];
+      if (!text && files.length === 0) return;
       const threadId = activeKey;
       const requestContext = snapshotRequestContext(requestContextRef.current);
       if (isSessionRunning(getSession(threadId))) {
@@ -703,12 +710,13 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           queuedSteers: enqueueSteer(session.queuedSteers, {
             id: hash.id(),
             text,
+            ...(files.length > 0 ? { files } : {}),
             ...(requestContext ? { requestContext } : {}),
           }),
         }));
         return;
       }
-      const { message: userMessage } = appendUserMessage(threadId, text);
+      const { message: userMessage } = appendUserMessage(threadId, text, files);
       void runStream(threadId, userMessage, requestContext);
     },
     [appendUserMessage, runStream, activeKey, getSession, updateSession],
@@ -728,7 +736,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         queuedSteers: removeSteerFromQueue(session.queuedSteers, steerId),
       }));
       logger.info("steer:send-now", { threadId });
-      const { message } = appendUserMessage(threadId, steer.text);
+      const { message } = appendUserMessage(threadId, steer.text ?? "", steer.files);
       void runStream(threadId, message, steer.requestContext);
     },
     [activeKey, appendUserMessage, getSession, runStream, updateSession],
