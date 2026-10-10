@@ -112,4 +112,33 @@ describe("workspace version synthesis", () => {
       rmSync(outdir, { recursive: true, force: true });
     }
   });
+
+  it("runs synthesis twice so cross-package generators converge", () => {
+    const outdir = mkdtempSync(join(tmpdir(), "workspace-bump-synth-"));
+    try {
+      writeWorkspaceVersion(outdir, "1.2.3");
+      writeFileSync(join(outdir, "package.json"), '{"name":"fixture","private":true}\n');
+      writeFileSync(
+        join(outdir, ".projenrc.ts"),
+        [
+          'import { existsSync, readFileSync, writeFileSync } from "node:fs";',
+          'const path = "synth-count";',
+          'const count = existsSync(path) ? Number(readFileSync(path, "utf8")) : 0;',
+          "writeFileSync(path, String(count + 1));",
+          "",
+        ].join("\n"),
+      );
+
+      execFileSync(
+        process.execPath,
+        [join(import.meta.dirname, "..", "tasks", "bump.ts"), "--level", "patch"],
+        { cwd: outdir, stdio: "pipe" },
+      );
+
+      assert.equal(readFileSync(join(outdir, "VERSION"), "utf8"), "1.2.4\n");
+      assert.equal(readFileSync(join(outdir, "synth-count"), "utf8"), "2");
+    } finally {
+      rmSync(outdir, { recursive: true, force: true });
+    }
+  });
 });

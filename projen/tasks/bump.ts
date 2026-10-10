@@ -35,6 +35,11 @@ export async function main(): Promise<void> {
 
       if (opts.synth) {
         runTaskCommand(root, process.execPath, [".projenrc.ts"]);
+        // Package manifests are generated during the first synthesis, while
+        // cross-package derived artifacts can read those manifests earlier in
+        // the same pass. A second pass makes the new version visible to every
+        // generator and leaves release validation on a converged tree.
+        runTaskCommand(root, process.execPath, [".projenrc.ts"]);
       }
       logger.success(`workspace version synchronized at ${next.version}`);
     });
