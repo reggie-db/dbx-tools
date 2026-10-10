@@ -4,6 +4,8 @@ import { describe, it } from "node:test";
 import {
   formatRawToolPayload,
   humanizeToolName,
+  toolInputPresentation,
+  toolOutputPresentation,
   webSearchProgressGroups,
   webSearchQueryLabel,
   webSearchResultLabel,
@@ -71,6 +73,59 @@ describe("raw tool payload formatting", () => {
         .map((token) => token.content)
         .join(""),
       output,
+    );
+  });
+});
+
+describe("tool request source formatting", () => {
+  it("extracts Code Mode TypeScript without escaped request JSON", () => {
+    assert.deepEqual(
+      toolInputPresentation("execute_typescript", {
+        code: "const files = await external_mastra_workspace_list_files({ path: '.' });\nreturn files;",
+      }),
+      {
+        label: "Code",
+        language: "typescript",
+        source:
+          "const files = await external_mastra_workspace_list_files({ path: '.' });\nreturn files;",
+      },
+    );
+  });
+
+  it("extracts workspace commands as shell source", () => {
+    assert.deepEqual(
+      toolInputPresentation("mastra_workspace_execute_command", {
+        command: "bun test packages/js/ui/mastra/test/tool-pill.test.ts",
+        timeout: 30,
+      }),
+      {
+        label: "Command",
+        language: "bash",
+        source: "bun test packages/js/ui/mastra/test/tool-pill.test.ts",
+      },
+    );
+  });
+
+  it("keeps generic tool requests on the raw payload path", () => {
+    assert.equal(toolInputPresentation("read_url", { url: "https://example.com" }), undefined);
+  });
+
+  it("extracts Code Mode results into a separate output panel", () => {
+    assert.deepEqual(
+      toolOutputPresentation("execute_typescript", {
+        success: true,
+        result: [
+          { path: "alpha.txt", characters: 5 },
+          { path: "bravo.txt", characters: 6 },
+        ],
+        logs: [],
+      }),
+      {
+        label: "Output",
+        language: "json",
+        source:
+          '[\n  {\n    "path": "alpha.txt",\n    "characters": 5\n  },\n  {\n    "path": "bravo.txt",\n    "characters": 6\n  }\n]',
+      },
     );
   });
 });

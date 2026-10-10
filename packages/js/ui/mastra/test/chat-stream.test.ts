@@ -7,6 +7,7 @@ import { closeOnTerminalChunk } from "../src/react/chat-stream.ts";
 describe("chat stream completion", () => {
   it("closes after forwarding the finish chunk without waiting for upstream", async () => {
     let cancelled = false;
+    let terminal = false;
     const upstream = new ReadableStream<UIMessageChunk>({
       start(controller) {
         controller.enqueue({ type: "start", messageId: "assistant-1" });
@@ -18,13 +19,16 @@ describe("chat stream completion", () => {
     });
 
     const chunks: UIMessageChunk[] = [];
-    for await (const chunk of closeOnTerminalChunk(upstream)) chunks.push(chunk);
+    for await (const chunk of closeOnTerminalChunk(upstream, () => (terminal = true))) {
+      chunks.push(chunk);
+    }
 
     assert.deepEqual(chunks, [
       { type: "start", messageId: "assistant-1" },
       { type: "finish", finishReason: "stop" },
     ]);
     assert.equal(cancelled, true);
+    assert.equal(terminal, true);
   });
 
   it("cancels the locked upstream reader when the consumer stops", async () => {

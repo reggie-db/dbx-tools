@@ -88,6 +88,8 @@ const root = new project.DBXToolsNodeProject({
     "@mastra/observability": "1.18.1",
     "@mastra/otel-bridge": "1.5.11",
     "@mastra/pg": "1.27.1",
+    "@mastra/isolated-vm": "0.1.2",
+    "@mastra/quickjs": "0.1.3",
     "@pydantic/monty": "1.0.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/core": "2.11.0",
@@ -642,6 +644,8 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@mastra/observability@catalog:",
     "@mastra/otel-bridge@catalog:",
     "@mastra/pg@catalog:",
+    "@mastra/isolated-vm@catalog:",
+    "@mastra/quickjs@catalog:",
     "@pydantic/monty@catalog:",
     "@opentelemetry/api@catalog:",
     "@opentelemetry/core@catalog:",
@@ -668,6 +672,8 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
   // Apps keep using AppKit's single OTLP provider and UC telemetry sidecar.
   projectJs.addOptionalPeer(p, "@mlflow/core@catalog:");
 });
+
+root.pnpmWorkspace.allowBuild("isolated-vm");
 
 // node-appkit-model-gateway: raw AppKit OpenAI/Anthropic protocol plugin.
 // Direct Databricks and Unity Gateway paths stream without protocol re-encoding;

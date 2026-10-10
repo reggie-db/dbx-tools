@@ -1,5 +1,6 @@
 command:
   - node
+  - --no-node-snapshot
   - --import
   - tsx
   - src/server.ts

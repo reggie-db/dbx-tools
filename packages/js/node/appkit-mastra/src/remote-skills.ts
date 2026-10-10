@@ -5,8 +5,8 @@
  * {@link AITOOLS_SOURCE} constant, a GitHub `owner/repo`, any git / GitLab URL,
  * or a direct download URL - and optional per-source policy.
  * {@link provisionRemoteSkills} materializes every source into a local
- * `SKILL.md` tree at app boot and returns the directories to hand Mastra as
- * extra skill scan paths.
+ * `SKILL.md` tree at app boot and returns read-only backing directories plus
+ * their stable virtual workspace mounts.
  *
  * Resolution per source, in order:
  *
@@ -43,8 +43,8 @@
  * identity cannot WRITE the destination, which is the normal case for a
  * Databricks App service principal against the admin-owned shared tree (see
  * {@link openWritableWorkspace}) - the tree is written under
- * {@link localFS.tmpFS} and returned as an extra local skill path for the
- * current process. Storage location degrades; the skills themselves do not.
+ * {@link localFS.tmpFS} and exposed through a stable read-only virtual mount
+ * for the current process. Storage location degrades; the skills themselves do not.
  *
  * @module
  */
@@ -99,6 +99,12 @@ const DEFAULT_DOWNLOAD_TIMEOUT_MS = 60_000;
 
 /** Stable temp directory holding one rebuilt skill tree per remote source. */
 const LOCAL_SKILLS_DIR = "mastra-local-skills";
+
+/** Virtual workspace path reserved for locally provisioned Databricks AI Tools. */
+export const AITOOLS_SKILLS_MOUNT = "/.databricks/skills";
+
+/** Virtual workspace root for every other locally provisioned remote source. */
+export const REMOTE_SKILLS_MOUNT = "/.skills";
 
 /**
  * Bookkeeping file written at the root of every provisioned skill tree, naming
@@ -156,6 +162,8 @@ interface AiToolsManifest {
 export interface RemoteSkillSourceOptions {
   /** `"aitools"`, a GitHub shorthand, a git / GitLab URL, or a download URL. */
   source: net.UrlLike | AiToolsSource;
+  /** Stable virtual mount name under `/.skills`; generated from the source when omitted. */
+  name?: string;
   /** Install only these skill names from the source. */
   skills?: string | string[];
   /** Include experimental skills. `"aitools"` only. */
@@ -195,6 +203,14 @@ export type RemoteSkillsOption =
 /** A source entry with its `source` flattened to a plain string. */
 type NormalizedSource = Omit<RemoteSkillSourceOptions, "source"> & { source: string };
 
+/** Read-only local backing storage exposed at a stable virtual workspace path. */
+export interface LocalSkillMount {
+  /** Physical local directory containing the provisioned `SKILL.md` tree. */
+  root: string;
+  /** Virtual path agents see inside the composed Mastra workspace. */
+  mountPath: string;
+}
+
 /** Top-level remote-skills provisioning options. */
 export interface ProvisionRemoteSkillsOptions {
   /** Sources to materialize at startup. */
@@ -226,11 +242,11 @@ export interface ProvisionRemoteSkillsOptions {
 /** What {@link provisionRemoteSkills} resolved. */
 export interface ProvisionedRemoteSkills {
   /**
-   * Extra LOCAL skill scan paths to hand Mastra (a temp dir per source that
-   * couldn't be written to Databricks). Empty when everything landed in the
-   * Databricks Assistant tree, which the built-in mount already scans.
+   * Extra read-only LOCAL skill mounts to hand Mastra when a source couldn't
+   * be written to Databricks. Physical temp/cache paths remain hidden behind
+   * stable virtual workspace paths.
    */
-  localSkillPaths: string[];
+  localSkillMounts: LocalSkillMount[];
   /** Absolute Databricks destination each source was written to, if any. */
   databricksBasePath?: string;
   /**
@@ -342,6 +358,29 @@ function cacheKey(sourceOptions: NormalizedSource): string {
   );
 }
 
+/** Stable virtual workspace path for one locally provisioned source. */
+function localSkillMountPath(sourceOptions: NormalizedSource, key: string): string {
+  if (isAiToolsSource(sourceOptions.source)) return AITOOLS_SKILLS_MOUNT;
+  const configuredName = stringUtils.trimToNull(sourceOptions.name);
+  const identifier = configuredName
+    ? stringUtils.toSlug(configuredName)
+    : stringUtils.toSlug(remoteSourceIdentifier(sourceOptions.source)) || "source";
+  if (!identifier) {
+    throw new Error(
+      `remote skill source name must contain letters or numbers: "${configuredName}"`,
+    );
+  }
+  return posix.join(REMOTE_SKILLS_MOUNT, configuredName ? identifier : `${identifier}-${key}`);
+}
+
+/** Human-readable source portion used by generated virtual mount identifiers. */
+function remoteSourceIdentifier(source: string): string {
+  const url = net.urlBuilder(source);
+  if (!url) return source;
+  const path = url.pathname.replace(/\.(git|md|zip|tar|tgz|gz)$/i, "");
+  return `${url.hostname}-${path}`;
+}
+
 /** The effective reuse window: per-source, then top-level, then seven days. */
 function resolveRefreshTtl(
   sourceOptions: NormalizedSource,
@@ -416,13 +455,13 @@ function localSkillsFS(key: string): LocalFileSystem {
  *
  * Writes each resolved `SKILL.md` tree to the Databricks user Assistant skills
  * folder when a writable workspace is available, else under
- * {@link localFS.tmpFS} returned in {@link ProvisionedRemoteSkills.localSkillPaths}.
+ * {@link localFS.tmpFS} returned in {@link ProvisionedRemoteSkills.localSkillMounts}.
  */
 export async function provisionRemoteSkills(
   option: RemoteSkillsOption | undefined,
 ): Promise<ProvisionedRemoteSkills> {
   const options = normalizeRemoteSkillsOption(option);
-  const empty: ProvisionedRemoteSkills = { localSkillPaths: [], skillNames: [] };
+  const empty: ProvisionedRemoteSkills = { localSkillMounts: [], skillNames: [] };
   if (!options) return empty;
 
   const failDefault = options.failOnError !== false;
@@ -437,7 +476,7 @@ export async function provisionRemoteSkills(
     : undefined;
   const databricksBasePath = destination ? requestedBasePath : undefined;
 
-  const localSkillPaths: string[] = [];
+  const localSkillMounts: LocalSkillMount[] = [];
   const skillNames: string[] = [];
   let staging: LocalFileSystem | undefined;
 
@@ -450,15 +489,16 @@ export async function provisionRemoteSkills(
         // Where this source's bookkeeping lives: the shared Databricks tree, or
         // the source's own stable local dir.
         const key = cacheKey(sourceOptions);
+        const mountPath = localSkillMountPath(sourceOptions, key);
         const cacheFS = destination ?? localSkillsFS(key);
         const metadata = await readMetadata(cacheFS);
         const cached = metadata?.sources[key];
         if (cached && isFresh(cached, resolveRefreshTtl(sourceOptions, options))) {
           skillNames.push(...cached.skills);
-          if (!destination) localSkillPaths.push(cacheFS.root);
+          if (!destination) localSkillMounts.push({ root: cacheFS.root, mountPath });
           logger.info("remote skill ready", {
             source: sourceOptions.source,
-            destination: databricksBasePath ?? cacheFS.root,
+            destination: databricksBasePath ?? mountPath,
             downloadedAt: cached.downloadedAt,
             skills: cached.skills,
             cached: true,
@@ -489,12 +529,15 @@ export async function provisionRemoteSkills(
           // mark a failed provision as fresh and suppress the retry for a day.
           await writeMetadata(destination, key, record);
         } else {
-          localSkillPaths.push(await persistLocally(key, staged, record));
+          localSkillMounts.push({
+            root: await persistLocally(key, staged, record),
+            mountPath,
+          });
         }
         skillNames.push(...record.skills);
         logger.info("remote skill installed", {
           source: sourceOptions.source,
-          destination: databricksBasePath ?? localSkillPaths.at(-1),
+          destination: databricksBasePath ?? localSkillMounts.at(-1)?.mountPath,
           skills: record.skills,
         });
       } catch (err) {
@@ -516,7 +559,22 @@ export async function provisionRemoteSkills(
     }
   }
 
-  return { localSkillPaths, databricksBasePath, skillNames };
+  assertUniqueLocalSkillMounts(localSkillMounts);
+  return { localSkillMounts, databricksBasePath, skillNames };
+}
+
+/** Fail before workspace composition when two sources claim one virtual mount. */
+function assertUniqueLocalSkillMounts(mounts: readonly LocalSkillMount[]): void {
+  const rootsByMount = new Map<string, string>();
+  for (const mount of mounts) {
+    const previousRoot = rootsByMount.get(mount.mountPath);
+    if (previousRoot && previousRoot !== mount.root) {
+      throw new Error(
+        `multiple remote skill sources resolve to virtual mount "${mount.mountPath}"; give each source a unique name`,
+      );
+    }
+    rootsByMount.set(mount.mountPath, mount.root);
+  }
 }
 
 /** Remove directories dropped by one source unless another source still owns them. */

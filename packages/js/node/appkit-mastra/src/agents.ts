@@ -38,21 +38,42 @@ import { createEventedAgent } from "@mastra/core/agent/durable";
 import { SkillSearchProcessor } from "@mastra/core/processors";
 import type { OutputProcessor } from "@mastra/core/processors";
 import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
-import type { Tool } from "@mastra/core/tools";
-import { createTool } from "@mastra/core/tools";
+import type { RequestContext } from "@mastra/core/request-context";
+import type { CodeModeTransport, Tool } from "@mastra/core/tools";
+import { createCodeMode, createTool } from "@mastra/core/tools";
 import type { Workspace } from "@mastra/core/workspace";
+import { createWorkspaceTools } from "@mastra/core/workspace";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
+import { QuickJsCodeModeTransport } from "@mastra/quickjs";
 
 import { buildRenderDataTool } from "./chart.ts";
 import type { MastraPluginConfig } from "./config.ts";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
-import type { MemoryBuilder } from "./memory.ts";
+import { withRequestMemoryScope, type MemoryBuilder } from "./memory.ts";
 import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
 import { stripStaleChartsProcessor } from "./processors.ts";
 import { MASTRA_RESOLVED_MODEL_KEY } from "./serving.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
-import { bindDatabricksWorkspaceContext, databricksWorkspace } from "./workspaces.ts";
+import {
+  bindDatabricksWorkspaceContext,
+  databricksWorkspace,
+  type DatabricksWorkspaceOptions,
+} from "./workspaces.ts";
+
+const codeModeLogger = log.logger("mastra/code-mode");
+let resolvedCodeModeTransport: Promise<CodeModeTransport> | undefined;
+
+/** Return whether this boot environment matches isolated-vm's supported app shape. */
+function supportsIsolatedVmTransport(): boolean {
+  if (process.versions.bun || process.release.name !== "node" || process.platform !== "linux") {
+    return false;
+  }
+  const nodeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
+  if (!Number.isFinite(nodeMajor) || nodeMajor < 20 || nodeMajor >= 25) return false;
+  const nodeOptions = process.env.NODE_OPTIONS?.split(/\s+/) ?? [];
+  return [...process.execArgv, ...nodeOptions].includes("--no-node-snapshot");
+}
 
 /**
  * Tool record accepted by every Mastra `Agent.tools` field and by the
@@ -169,8 +190,9 @@ function deriveToolId(description: string): string {
  * ```
  *
  * Adds the package's default workspace when the definition omits one. That
- * workspace carries Databricks skill mounts and Monty command execution. An
- * explicit workspace remains the caller's complete override.
+ * workspace carries Databricks skill mounts while command execution stays
+ * disabled until a sandbox is selected explicitly. An explicit workspace
+ * remains the caller's complete override.
  */
 export function createAgent<
   TRequestContext extends Record<string, unknown> | unknown = unknown,
@@ -186,7 +208,7 @@ export function createAgent<
 /**
  * Brand for a {@link Workspace} that `createAgent` built with no caller
  * options, so {@link buildAgents} may rebuild it with startup-provisioned
- * `extraSkillPaths` (a caller-supplied workspace is never touched).
+ * `extraSkillMounts` (a caller-supplied workspace is never touched).
  */
 const defaultWorkspaces = new WeakSet<Workspace>();
 
@@ -529,22 +551,114 @@ function appendDefaultInstructions(
 function composeInstructions<TRequestContext extends Record<string, unknown> | unknown>(
   agentInstructions: AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"],
   style: string | null,
+  resolveCodeMode?: CodeModeResolver<TRequestContext>,
 ): AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"] {
-  if (typeof agentInstructions !== "function") {
-    return appendDefaultInstructions(agentInstructions, style) as AgentConfig<
+  const append = (instructions: AgentInstructions, codeModeInstructions?: string) => {
+    const composed = appendDefaultInstructions(instructions, style);
+    return codeModeInstructions ? appendInstructionBlock(composed, codeModeInstructions) : composed;
+  };
+  if (typeof agentInstructions !== "function" && !resolveCodeMode) {
+    return append(agentInstructions) as AgentConfig<
       string,
       ToolsInput,
       undefined,
       TRequestContext
     >["instructions"];
   }
-  return (async (args) =>
-    appendDefaultInstructions(await agentInstructions(args), style)) as AgentConfig<
-    string,
-    ToolsInput,
-    undefined,
-    TRequestContext
-  >["instructions"];
+  return (async (args) => {
+    const [instructions, codeMode] = await Promise.all([
+      typeof agentInstructions === "function" ? agentInstructions(args) : agentInstructions,
+      resolveCodeMode?.(args),
+    ]);
+    return append(instructions, codeMode?.instructions);
+  }) as AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"];
+}
+
+/** Append one system instruction block while preserving Mastra's accepted shapes. */
+function appendInstructionBlock(instructions: AgentInstructions, block: string): AgentInstructions {
+  if (typeof instructions === "string") return `${instructions.trimEnd()}\n\n${block}`;
+  if (Array.isArray(instructions)) {
+    if (instructions.every((instruction) => typeof instruction === "string")) {
+      return [...instructions, block] as AgentInstructions;
+    }
+    return [...instructions, { role: "system", content: block }] as AgentInstructions;
+  }
+  return [instructions, { role: "system", content: block }] as AgentInstructions;
+}
+
+/** Resolve one native Code Mode transport during plugin startup. */
+function codeModeTransport(): Promise<CodeModeTransport> {
+  resolvedCodeModeTransport ??= (async () => {
+    if (!supportsIsolatedVmTransport()) {
+      codeModeLogger.info("transport selected", { provider: "quickjs" });
+      return new QuickJsCodeModeTransport();
+    }
+    try {
+      const { IsolatedVmCodeModeTransport } = await import("@mastra/isolated-vm");
+      const transport = new IsolatedVmCodeModeTransport();
+      codeModeLogger.info("transport selected", { provider: "isolated-vm" });
+      return transport;
+    } catch (caught) {
+      codeModeLogger.warn("isolated-vm unavailable; using QuickJS", {
+        error: errorUtils.errorMessage(caught),
+      });
+      return new QuickJsCodeModeTransport();
+    }
+  })();
+  return resolvedCodeModeTransport;
+}
+
+type CodeModeResolver<TRequestContext extends Record<string, unknown> | unknown = unknown> = (
+  args: Parameters<
+    Exclude<
+      AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"],
+      AgentInstructions
+    >
+  >[0],
+) => Promise<ReturnType<typeof createCodeMode> | undefined>;
+
+/** Build request-scoped native Code Mode over all executable context tools. */
+async function buildCodeMode<TRequestContext extends Record<string, unknown> | unknown>(
+  config: MastraPluginConfig,
+  tools: MastraTools,
+  workspace: Workspace | undefined,
+  requestContext: RequestContext<TRequestContext>,
+): Promise<ReturnType<typeof createCodeMode> | undefined> {
+  if (config.codeMode === false) return undefined;
+  const workspaceTools = workspace
+    ? await createWorkspaceTools(workspace, { requestContext, workspace })
+    : {};
+  const contextTools = { ...tools, ...workspaceTools };
+  const executableTools = Object.fromEntries(
+    Object.entries(contextTools).filter(
+      ([, tool]) =>
+        typeof tool === "object" &&
+        tool !== null &&
+        "execute" in tool &&
+        typeof tool.execute === "function",
+    ),
+  ) as ToolsInput;
+  if (Object.keys(executableTools).length === 0) return undefined;
+  const options = typeof config.codeMode === "object" ? config.codeMode : {};
+  const codeMode = createCodeMode(
+    { tools: executableTools, ...options },
+    await codeModeTransport(),
+  );
+  if (!("mastra_workspace_read_file" in workspaceTools)) return codeMode;
+  return {
+    ...codeMode,
+    instructions: `${codeMode.instructions}\n\nWorkspace file content note:\nText returned by external_mastra_workspace_read_file starts with one metadata line containing the path and size. Exclude that first line before calculating content character counts, hashes, or other content-only values.`,
+  };
+}
+
+/** Resolve Code Mode lazily so workspace and dynamic tool policy follow each request. */
+function codeModeResolver<TRequestContext extends Record<string, unknown> | unknown>(
+  config: MastraPluginConfig,
+  tools: MastraTools,
+  workspace: Workspace | undefined,
+): CodeModeResolver<TRequestContext> | undefined {
+  if (config.codeMode === false) return undefined;
+  return ({ requestContext }) => buildCodeMode(config, tools, workspace, requestContext);
 }
 
 /**
@@ -580,9 +694,9 @@ export async function buildAgents(opts: {
    * startup) folded into every agent that uses the auto-created default
    * workspace.
    */
-  extraSkillPaths?: string[];
+  extraSkillMounts?: DatabricksWorkspaceOptions["extraSkillMounts"];
 }): Promise<BuiltAgents> {
-  const { config, context, memoryBuilder, log, extraSkillPaths } = opts;
+  const { config, context, memoryBuilder, log, extraSkillMounts } = opts;
   const definitions = resolveDefinitions(config);
   const ids = Object.keys(definitions);
   const defaultAgentId = config.defaultAgent ?? ids[0] ?? FALLBACK_AGENT_ID;
@@ -592,8 +706,8 @@ export async function buildAgents(opts: {
   // `render_data` for inline visualizations and `summarize` for
   // offloading text condensing to the fast / small chat tier. The
   // user can shadow either by including a same-named tool in their own
-  // `config.tools` or per-agent `tools`. Order in {@link resolveTools}
-  // is `system -> user-ambient -> per-agent`, last write wins.
+  // `config.tools` or per-agent `tools`. Merge order is
+  // `system -> user-ambient -> per-agent`, last write wins.
   const systemTools: MastraTools = {
     render_data: buildRenderDataTool(config),
     summarize: buildSummarizeTool(config),
@@ -615,18 +729,21 @@ export async function buildAgents(opts: {
   const approvalGatedByAgent: Array<{ agentId: string; toolIds: string[] }> = [];
 
   for (const [id, def] of Object.entries(definitions)) {
-    const tools = await resolveTools(def.tools, plugins, ambientTools);
+    const userTools = await resolveUserTools(def.tools, plugins);
+    const tools = { ...ambientTools, ...userTools };
     let workspace = resolveAgentWorkspace(def.workspace);
     if (
       (def.workspace === undefined && !workspace) ||
-      ((extraSkillPaths?.length ||
+      ((extraSkillMounts?.length ||
         config.sandbox !== undefined ||
+        config.workspaceFallbackToTmp !== undefined ||
         config.workspaceTools !== undefined ||
         context !== undefined) &&
         isDefaultWorkspace(workspace))
     ) {
       workspace = databricksWorkspace({
-        extraSkillPaths,
+        extraSkillMounts,
+        fallbackToTmp: config.workspaceFallbackToTmp,
         ...(config.workspaceTools !== undefined ? { tools: config.workspaceTools } : {}),
         pluginContext: context,
         sandbox: config.sandbox === true ? "databricks" : config.sandbox,
@@ -638,6 +755,7 @@ export async function buildAgents(opts: {
     const gated = approvalGatedToolIds(tools);
     if (gated.length > 0) approvalGatedByAgent.push({ agentId: id, toolIds: gated });
     const memory = memoryBuilder?.forAgent(id, def);
+    const resolveCodeMode = codeModeResolver(config, tools, workspace);
     const agent = new Agent({
       id,
       name: def.name ?? id,
@@ -646,17 +764,26 @@ export async function buildAgents(opts: {
       // metadata. Fall back to a generated one when the definition
       // omits it.
       description: def.description?.trim() || defaultAgentDescription(def.name ?? id),
-      instructions: composeInstructions(def.instructions, style),
+      instructions: composeInstructions(def.instructions, style, resolveCodeMode),
       ...(def.requestContextSchema ? { requestContextSchema: def.requestContextSchema } : {}),
       model: resolveModel(config, def.model),
-      defaultOptions: {
-        maxSteps: config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS,
-        providerOptions: RESPONSES_PROVIDER_OPTIONS,
-        ...(def.requireToolApproval !== undefined
-          ? { requireToolApproval: def.requireToolApproval }
-          : {}),
-      },
-      tools,
+      defaultOptions: ({ requestContext }) =>
+        withRequestMemoryScope(
+          {
+            maxSteps: config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS,
+            providerOptions: RESPONSES_PROVIDER_OPTIONS,
+            ...(def.requireToolApproval !== undefined
+              ? { requireToolApproval: def.requireToolApproval }
+              : {}),
+          },
+          memory ? requestContext : undefined,
+        ),
+      tools: resolveCodeMode
+        ? async (args) => {
+            const codeMode = await resolveCodeMode(args);
+            return codeMode ? { ...tools, [codeMode.tool.id]: codeMode.tool } : tools;
+          }
+        : tools,
       ...(memory ? { memory } : {}),
       ...(workspace ? { workspace } : {}),
       inputProcessors: [...inputProcessors, ...workspaceSkillInputProcessors(workspace, config)],
@@ -679,7 +806,7 @@ export async function buildAgents(opts: {
       name: def.name ?? id,
       defaultModel:
         defaultModel.kind === "configured" ? defaultModel.model : `<${defaultModel.kind}>`,
-      tools: Object.keys(tools),
+      tools: [...Object.keys(tools), ...(resolveCodeMode ? ["<dynamic-code-mode>"] : [])],
     });
   }
 
@@ -909,19 +1036,16 @@ function resolveModel(
 }
 
 /**
- * Resolve a definition's `tools` field to a flat `MastraTools` record,
- * merging in plugin-level ambient tools (per-agent tools win on key
- * collision). Callback errors propagate verbatim so the original stack
- * survives - the caller already knows which agent was registering.
+ * Resolve only the tools explicitly supplied by one agent definition.
+ * Callback errors propagate verbatim so the original stack survives - the
+ * caller already knows which agent was registering.
  */
-async function resolveTools(
+async function resolveUserTools(
   defTools: AnyMastraAgentDefinition["tools"],
   plugins: MastraPlugins,
-  ambientTools: MastraTools,
 ): Promise<MastraTools> {
-  if (!defTools) return { ...ambientTools };
-  const resolved = typeof defTools === "function" ? await defTools(plugins) : defTools;
-  return { ...ambientTools, ...resolved };
+  if (!defTools) return {};
+  return typeof defTools === "function" ? defTools(plugins) : defTools;
 }
 
 function resolveAgentWorkspace(

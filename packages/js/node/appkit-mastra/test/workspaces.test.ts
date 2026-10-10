@@ -10,7 +10,15 @@ import { log } from "@dbx-tools/shared-core";
 import { MemoryFileSystem, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
 import { isEventedAgent } from "@mastra/core/agent/durable";
 import { RequestContext } from "@mastra/core/request-context";
-import { resolveToolConfig, WORKSPACE_TOOLS, type WorkspaceSandbox } from "@mastra/core/workspace";
+import { createTool } from "@mastra/core/tools";
+import {
+  LocalFilesystem,
+  resolveToolConfig,
+  WORKSPACE_TOOLS,
+  Workspace,
+  type WorkspaceSandbox,
+} from "@mastra/core/workspace";
+import { z } from "zod";
 
 import { buildAgents } from "../src/agents.ts";
 import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY } from "../src/config.ts";
@@ -105,15 +113,11 @@ describe("resolveDatabricksWorkspacePaths", () => {
 });
 
 describe("databricksWorkspace sandbox", () => {
-  it("uses Monty by default", async () => {
+  it("disables command execution by default", async () => {
     const workspace = databricksWorkspace({ assistantPaths: false, id: "analyst" });
     const requestContext = new RequestContext();
 
-    const first = await workspace.resolveSandbox({ requestContext });
-    const second = await workspace.resolveSandbox({ requestContext });
-
-    assert.ok(first instanceof MontySandbox);
-    assert.equal(first, second);
+    assert.equal(await workspace.resolveSandbox({ requestContext }), undefined);
   });
 
   it("can disable or select another sandbox explicitly", async () => {
@@ -121,6 +125,12 @@ describe("databricksWorkspace sandbox", () => {
     assert.equal(
       await disabled.resolveSandbox({ requestContext: new RequestContext() }),
       undefined,
+    );
+
+    const monty = databricksWorkspace({ assistantPaths: false, sandbox: "monty" });
+    assert.ok(
+      (await monty.resolveSandbox({ requestContext: new RequestContext() })) instanceof
+        MontySandbox,
     );
 
     const custom: WorkspaceSandbox = {
@@ -173,6 +183,22 @@ describe("databricksWorkspace skill source identity", () => {
     });
     assert.ok(filesystem);
     assert.deepEqual(await filesystem.readdir("/"), []);
+    await filesystem.destroy?.();
+  });
+
+  it("falls back to /tmp when enabled and no writable workspace path mounts", async () => {
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
+      fallbackToTmp: true,
+      paths: [{ path: "/Volumes/main/default/read-only", writable: false }],
+      sandbox: false,
+    });
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_USER_KEY, { id: "user-1", executionContext: { client: {} } });
+    const filesystem = await workspace.resolveFilesystem({ requestContext });
+    assert.ok(filesystem);
+    await filesystem.writeFile("/tmp/note.txt", "fallback");
+    assert.equal(await filesystem.readFile("/tmp/note.txt", { encoding: "utf8" }), "fallback");
     await filesystem.destroy?.();
   });
 
@@ -369,7 +395,7 @@ describe("databricksWorkspace skill source identity", () => {
       const workspace = databricksWorkspace({
         assistantPaths: false,
         sandbox: false,
-        extraSkillPaths: [root],
+        extraSkillMounts: [{ root, mountPath: "/.skills/databricks" }],
       });
       const catalogue = await resolveWorkspaceSkills(workspace, new RequestContext());
 
@@ -759,6 +785,264 @@ describe("agent workspace selection", () => {
     assert.equal(typeof instructions, "string");
     assert.match(instructions, /call multiple tools in the same turn/i);
     assert.match(instructions, /later input depends on an earlier result/i);
+  });
+
+  it("exposes all request context tools through native Code Mode", async () => {
+    const explicitTool = createTool({
+      id: "read_url",
+      description: "Read one URL.",
+      inputSchema: z.object({ url: z.string() }),
+      execute: async ({ url }) => url,
+    });
+    const ambientTool = createTool({
+      id: "write_url",
+      description: "Write one URL.",
+      inputSchema: z.object({ url: z.string() }),
+      execute: async ({ url }) => url,
+    });
+    const workspace = databricksWorkspace({ assistantPaths: false });
+    const built = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        tools: { write_url: ambientTool },
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            tools: { read_url: explicitTool },
+            workspace,
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const requestContext = new RequestContext();
+    const instructions = await built.agents.analyst?.getInstructions({ requestContext });
+    const tools = await built.agents.analyst?.listTools({ requestContext });
+
+    assert.equal(typeof instructions, "string");
+    assert.equal(typeof tools, "object");
+    assert.match(instructions, /external_read_url/);
+    assert.match(instructions, /external_write_url/);
+    assert.match(instructions, /external_render_data/);
+    assert.match(instructions, /external_summarize/);
+    assert.match(instructions, /external_mastra_workspace_list_files/);
+    assert.match(instructions, /external_mastra_workspace_read_file/);
+    assert.match(
+      instructions,
+      /Exclude that first line before calculating content character counts/,
+    );
+    assert.ok(tools && "execute_typescript" in tools);
+    assert.equal(await built.agents.analyst?.getWorkspace(), workspace);
+  });
+
+  it("executes native Code Mode without a workspace command sandbox", async () => {
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
+      sandbox: false,
+    });
+    const built = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            tools: {
+              read_url: createTool({
+                id: "read_url",
+                description: "Read one URL.",
+                inputSchema: z.object({ url: z.string() }),
+                execute: async ({ url }) => ({ url, characters: url.length }),
+              }),
+            },
+            workspace,
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const requestContext = new RequestContext();
+    const instructions = await built.agents.analyst?.getInstructions({ requestContext });
+    const tools = await built.agents.analyst?.listTools({ requestContext });
+
+    assert.equal(typeof instructions, "string");
+    assert.match(instructions, /external_read_url/);
+    assert.ok(tools && "execute_typescript" in tools);
+
+    const codeModeTool = tools.execute_typescript;
+    assert.equal(typeof codeModeTool, "object");
+    assert.ok(codeModeTool && "execute" in codeModeTool);
+    const result = await codeModeTool.execute?.(
+      {
+        code: "return await external_read_url({ url: 'https://example.com' });",
+      },
+      {
+        requestContext,
+        workspace,
+        observe: {
+          span: (_name: string, execute: () => unknown) => execute(),
+          log: () => undefined,
+        },
+      } as never,
+    );
+
+    assert.deepEqual(result, {
+      success: true,
+      result: { url: "https://example.com", characters: 19 },
+      logs: [],
+    });
+  });
+
+  it("executes native workspace list and read tools entirely through Code Mode", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-tools-code-mode-"));
+    await writeFile(join(root, "alpha.txt"), "alpha");
+    await writeFile(join(root, "bravo.txt"), "bravo!");
+    const workspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: root }),
+    });
+    const built = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            workspace,
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    try {
+      const requestContext = new RequestContext();
+      const tools = await built.agents.analyst?.listTools({ requestContext });
+      const codeModeTool = tools?.execute_typescript;
+      assert.ok(codeModeTool && "execute" in codeModeTool);
+      const result = await codeModeTool.execute?.(
+        {
+          code: [
+            "const listed = await external_mastra_workspace_list_files({ path: '.' });",
+            "const files = ['alpha.txt', 'bravo.txt'].filter((path) => listed.includes(path));",
+            "const counts = [];",
+            "for (const path of files) {",
+            "  const content = await external_mastra_workspace_read_file({ path, showLineNumbers: false });",
+            "  counts.push({ path, characters: content.slice(content.indexOf('\\n') + 1).length });",
+            "}",
+            "return counts;",
+          ].join("\n"),
+        },
+        {
+          requestContext,
+          workspace,
+          observe: {
+            span: (_name: string, execute: () => unknown) => execute(),
+            log: () => undefined,
+          },
+        } as never,
+      );
+
+      assert.deepEqual(result, {
+        success: true,
+        result: [
+          { path: "alpha.txt", characters: 5 },
+          { path: "bravo.txt", characters: 6 },
+        ],
+        logs: [],
+      });
+    } finally {
+      await workspace.destroy();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("regenerates Code Mode when request-scoped workspace tools change", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-tools-dynamic-code-mode-"));
+    const workspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: root }),
+      tools: {
+        [WORKSPACE_TOOLS.FILESYSTEM.READ_FILE]: {
+          enabled: ({ requestContext }) => requestContext.allowRead === true,
+        },
+      },
+    });
+    const built = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            workspace,
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    try {
+      const denied = new RequestContext();
+      denied.set("allowRead", false);
+      const allowed = new RequestContext();
+      allowed.set("allowRead", true);
+      const deniedInstructions = await built.agents.analyst?.getInstructions({
+        requestContext: denied,
+      });
+      const allowedInstructions = await built.agents.analyst?.getInstructions({
+        requestContext: allowed,
+      });
+
+      assert.equal(typeof deniedInstructions, "string");
+      assert.equal(typeof allowedInstructions, "string");
+      assert.doesNotMatch(deniedInstructions, /external_mastra_workspace_read_file/);
+      assert.match(allowedInstructions, /external_mastra_workspace_read_file/);
+    } finally {
+      await workspace.destroy();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("allows native Code Mode to be disabled explicitly", async () => {
+    const built = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        codeMode: false,
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            tools: {
+              read_url: createTool({
+                id: "read_url",
+                description: "Read one URL.",
+                inputSchema: z.object({ url: z.string() }),
+                execute: async ({ url }) => url,
+              }),
+            },
+            workspace: databricksWorkspace({
+              assistantPaths: false,
+              sandbox: new MontySandbox(),
+            }),
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const instructions = await built.agents.analyst?.getInstructions();
+    const tools = built.agents.analyst?.__getOverridableFields().tools;
+
+    assert.equal(typeof instructions, "string");
+    assert.doesNotMatch(instructions, /external_read_url/);
+    assert.ok(tools && !("execute_typescript" in tools));
   });
 
   it("binds an explicit Databricks workspace to the AppKit plugin context", async () => {

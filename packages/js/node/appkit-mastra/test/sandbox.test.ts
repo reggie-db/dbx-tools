@@ -183,11 +183,27 @@ describe("DatabricksSandbox", () => {
     assert.equal(result.stdout, "fallback\n");
   });
 
-  it("falls back to the Node Monty runtime by default", async () => {
+  it("fails closed when the Databricks preview is unavailable by default", async () => {
     const client = workspaceClient(() => {
       throw { statusCode: 404, message: "FEATURE_DISABLED" };
     });
     const sandbox = new DatabricksSandbox({ client, sandboxId: "demo" });
+
+    await assert.rejects(
+      sandbox.executeCommand("print('no fallback')"),
+      (caught: unknown) =>
+        typeof caught === "object" &&
+        caught !== null &&
+        "statusCode" in caught &&
+        caught.statusCode === 404,
+    );
+  });
+
+  it("falls back to the Node Monty runtime when explicitly selected", async () => {
+    const client = workspaceClient(() => {
+      throw { statusCode: 404, message: "FEATURE_DISABLED" };
+    });
+    const sandbox = new DatabricksSandbox({ client, sandboxId: "demo", fallback: "monty" });
 
     const result = await sandbox.executeCommand("'monty fallback'");
 

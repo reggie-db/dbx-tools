@@ -120,8 +120,8 @@ const clientDist =
 //
 // Workspace capabilities: `createAgent` defaults `workspace` to
 // `databricksWorkspace()`, which provides file access, configured Assistant
-// skill paths, and Monty command execution. Each capability can be configured
-// or disabled independently.
+// skill paths, and no command sandbox. Command execution can be selected
+// independently when needed.
 //
 // Required env vars (see .env.example):
 // - DATABRICKS_SERVING_ENDPOINT_NAME - optional override; when absent the
@@ -360,6 +360,7 @@ await appkit.createApp({
       agents: { support, "support-polling": supportPolling },
       defaultAgent: "support",
       genieAgentMode: true,
+      workspaceFallbackToTmp: true,
       // Chat runs on-behalf-of the signed-in user by default, so the caller must
       // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
       // genieIdentity: "service-principal" here) to run the agents' Databricks

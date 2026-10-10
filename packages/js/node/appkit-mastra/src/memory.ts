@@ -36,6 +36,12 @@ import { getUsernameWithApiLookup } from "@databricks/appkit";
 import { migration as appkitMigration } from "@dbx-tools/appkit";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { hash, log } from "@dbx-tools/shared-core";
+import type { AgentMemoryOption } from "@mastra/core/agent";
+import {
+  MASTRA_RESOURCE_ID_KEY,
+  MASTRA_THREAD_ID_KEY,
+  type RequestContext,
+} from "@mastra/core/request-context";
 import { fastembed } from "@mastra/fastembed";
 import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
@@ -47,6 +53,33 @@ import { agentStorageSchemaName } from "./storage-schema.ts";
 import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 
 const logger = log.logger("mastra/memory");
+
+/** Resolve the trusted Mastra memory scope stamped by AppKit middleware. */
+export function requestMemoryScope(
+  requestContext: Pick<RequestContext, "get"> | undefined,
+): AgentMemoryOption | undefined {
+  const threadId = requestContext?.get(MASTRA_THREAD_ID_KEY);
+  const resourceId = requestContext?.get(MASTRA_RESOURCE_ID_KEY);
+  if (typeof threadId !== "string" || typeof resourceId !== "string") return undefined;
+  return { thread: threadId, resource: resourceId };
+}
+
+/** Overlay trusted request memory identifiers onto Mastra execution options. */
+export function withRequestMemoryScope<T extends object>(
+  options: T,
+  requestContext: Pick<RequestContext, "get"> | undefined,
+): T & { memory?: AgentMemoryOption } {
+  const scope = requestMemoryScope(requestContext);
+  if (!scope) return options;
+  const memory = (options as { memory?: AgentMemoryOption }).memory;
+  return {
+    ...options,
+    memory: {
+      ...memory,
+      ...scope,
+    },
+  };
+}
 
 /**
  * Soften {@link PostgresStore.init} so a failed migration (e.g. Lakebase

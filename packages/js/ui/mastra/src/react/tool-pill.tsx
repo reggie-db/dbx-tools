@@ -8,7 +8,7 @@ import {
   cn,
 } from "@dbx-tools/ui/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
-import { JsonBlock, SqlBlock, ToolMarkdown } from "./markdown.tsx";
+import { JsonBlock, SourceBlock, SqlBlock, ToolMarkdown } from "./markdown.tsx";
 import type { ToolEvent, ToolProgress } from "./types.ts";
 
 // Consolidated tool-session pill and its Genie progress detail view:
@@ -398,6 +398,108 @@ const RawToolPayload = ({ label, value }: { label: "Request" | "Response"; value
   </Collapsible>
 );
 
+export type ToolInputPresentation = {
+  label: "Code" | "Command" | "Output";
+  language: "typescript" | "javascript" | "python" | "sql" | "json" | "bash" | "text";
+  source: string;
+};
+
+const inputRecord = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+/** Detect the most useful syntax grammar for a code-like tool request. */
+export function detectToolSourceLanguage(
+  source: string,
+  fallback: ToolInputPresentation["language"],
+): ToolInputPresentation["language"] {
+  const trimmed = source.trim();
+  if (/^(?:select|with|insert|update|delete|merge|create|alter)\b/i.test(trimmed)) return "sql";
+  if (/^(?:from\s+\S+\s+import|import\s+\S+|def\s+\w+|class\s+\w+):?/m.test(trimmed)) {
+    return "python";
+  }
+  if (/^(?:const|let|var|interface|type|export|import)\b/m.test(trimmed)) return "typescript";
+  if (/^(?:#!.*\b(?:ba|z|k)?sh\b|(?:cd|ls|cat|grep|find|bun|npm|pnpm|yarn)\s)/m.test(trimmed)) {
+    return "bash";
+  }
+  if ((trimmed.startsWith("{") || trimmed.startsWith("[")) && trimmed.length > 1) {
+    try {
+      JSON.parse(trimmed);
+      return "json";
+    } catch {
+      // Keep the tool-specific fallback for incomplete source.
+    }
+  }
+  return fallback;
+}
+
+/** Extract a compact code or command preview from a tool request payload. */
+export function toolInputPresentation(
+  toolName: string,
+  input: unknown,
+): ToolInputPresentation | undefined {
+  const record = inputRecord(input);
+  if (!record) return undefined;
+  if (typeof record.command === "string" && toolName.endsWith("execute_command")) {
+    return {
+      label: "Command",
+      language: detectToolSourceLanguage(record.command, "bash"),
+      source: record.command,
+    };
+  }
+  if (typeof record.code === "string") {
+    return {
+      label: "Code",
+      language: detectToolSourceLanguage(record.code, "typescript"),
+      source: record.code,
+    };
+  }
+  return undefined;
+}
+
+/** Extract Code Mode's completed result into its own compact output panel. */
+export function toolOutputPresentation(
+  toolName: string,
+  output: unknown,
+): ToolInputPresentation | undefined {
+  if (toolName !== "execute_typescript") return undefined;
+  const record = inputRecord(output);
+  if (!record || record.success !== true || !("result" in record)) return undefined;
+  const result = record.result;
+  const source = typeof result === "string" ? result : formatRawToolPayload(result);
+  return {
+    label: "Output",
+    language: typeof result === "string" ? detectToolSourceLanguage(result, "text") : "json",
+    source,
+  };
+}
+
+const ToolInputSource = ({ presentation }: { presentation: ToolInputPresentation }) => {
+  const lineCount = presentation.source.split("\n").length;
+  return (
+    <Collapsible className="rounded border border-border/60 bg-background/40">
+      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
+        <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
+        <span className="font-medium text-foreground/80">{presentation.label}</span>
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase leading-none tracking-wide">
+          {presentation.language}
+        </span>
+        <span className="ml-auto text-[10px] tabular-nums">
+          {lineCount} {lineCount === 1 ? "line" : "lines"}
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <SourceBlock
+          source={presentation.source}
+          language={presentation.language}
+          className="max-h-64 border-t border-border/50 px-2 py-1.5 text-foreground"
+        />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
+
 type ToolStatusProgress = Extract<ToolProgress, { type: "tool_status" }>;
 
 export type WebSearchProgressGroup = {
@@ -508,6 +610,10 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
   const question = askGenieQuestion(event);
   const summary = summarizeProgress(event.progress ?? []);
   const expandable = hasExpandableDetails(event);
+  const inputPresentation =
+    "input" in event ? toolInputPresentation(event.toolName, event.input) : undefined;
+  const outputPresentation =
+    "output" in event ? toolOutputPresentation(event.toolName, event.output) : undefined;
   // Inner rows defer to the live wire status when running (e.g.
   // "Executing query") so users tracking the open pill see the
   // backend's freshest state - not just the static
@@ -554,10 +660,18 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="flex flex-col gap-2 px-2 pb-2">
-          {"input" in event ? <RawToolPayload label="Request" value={event.input} /> : null}
+          {inputPresentation ? (
+            <ToolInputSource presentation={inputPresentation} />
+          ) : "input" in event ? (
+            <RawToolPayload label="Request" value={event.input} />
+          ) : null}
           <WebSearchProgressDetails event={event} />
           <ToolProgressDetails summary={summary} omitQuestion />
-          {"output" in event ? <RawToolPayload label="Response" value={event.output} /> : null}
+          {outputPresentation ? (
+            <ToolInputSource presentation={outputPresentation} />
+          ) : "output" in event ? (
+            <RawToolPayload label="Response" value={event.output} />
+          ) : null}
         </div>
       </CollapsibleContent>
     </Collapsible>

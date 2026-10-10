@@ -158,6 +158,14 @@ export interface MastraWorkspaceSkillsConfig {
   ttlMs?: number;
 }
 
+/** Native Mastra Code Mode settings for sandboxed multi-tool orchestration. */
+export interface MastraCodeModeConfig {
+  /** Generated orchestration tool id. Defaults to `execute_typescript`. */
+  id?: string;
+  /** Maximum orchestration program runtime in milliseconds. Defaults to 30 seconds. */
+  timeout?: number;
+}
+
 /**
  * Fine-grained control for the optional MCP server exposure
  * ({@link MastraPluginConfig.mcp}). Every field is optional; the object
@@ -218,12 +226,22 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   memory?: boolean | MastraMemoryConfig;
   /**
-   * Sandbox for auto-created agent workspaces. Defaults to Monty. `true`,
-   * `"databricks"`, or an object selects/configures Databricks Sandbox, and
-   * `false` disables workspace command execution. An agent with an explicit
-   * custom `workspace` keeps that workspace and its sandbox.
+   * Expose executable tools from each agent definition through native Mastra
+   * Code Mode. Defaults on whenever the agent has executable tools. The plugin
+   * selects Mastra's isolated-vm transport once during startup and falls back
+   * to Mastra QuickJS when the native transport is unavailable. Set `false` to
+   * opt out.
+   */
+  codeMode?: boolean | MastraCodeModeConfig;
+  /**
+   * Sandbox for auto-created agent workspaces. Disabled by default. `"monty"`
+   * selects Monty; `true`, `"databricks"`, or an object selects/configures
+   * Databricks Sandbox. An agent with an explicit custom `workspace` keeps that
+   * workspace and its sandbox.
    */
   sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
+  /** Add user-scoped `/tmp` only when no configured workspace path mounts writable. */
+  workspaceFallbackToTmp?: boolean;
   /** Native Mastra workspace tool availability, approval, and hook configuration. */
   workspaceTools?: WorkspaceToolsConfig;
   /**
@@ -659,7 +677,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     remoteSkills: {
       type: ["string", "array", "object"],
       description:
-        'Remote Agent-Skill sources provisioned at startup: "aitools" for Databricks\' own skill set (read from the public databricks/databricks-agent-skills repo, no CLI needed), a GitHub owner/repo, a git/GitLab URL, or a direct SKILL.md/archive URL. Non-aitools sources prefer the optional `skills` npm CLI, else a direct fetch; fails startup on error unless failOnError:false. Written to the Databricks user Assistant skills folder, or a local temp dir when no workspace is writable.',
+        'Remote Agent-Skill sources provisioned at startup: "aitools" for Databricks\' own skill set (read from the public databricks/databricks-agent-skills repo, no CLI needed), a GitHub owner/repo, a git/GitLab URL, or a direct SKILL.md/archive URL. Non-aitools sources prefer the optional `skills` npm CLI, else a direct fetch; fails startup on error unless failOnError:false. Written to the Databricks user Assistant skills folder, or read-only local backing storage exposed at stable virtual workspace mounts.',
     },
     storage: {
       type: ["boolean", "object"],
@@ -671,10 +689,20 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       description:
         "PgVector store for Mastra semantic recall. `true` reuses the `lakebase` plugin's pool, an object opens a dedicated store. Auto-enabled when the `lakebase` plugin is registered.",
     },
+    codeMode: {
+      type: ["boolean", "object"],
+      description:
+        "Expose all executable tools available to the current request, including native workspace tools, through dynamically generated Mastra Code Mode for sandboxed TypeScript batching, aggregation, and arithmetic. The plugin selects Mastra isolated-vm once during startup and falls back to Mastra QuickJS when native initialization is unavailable. False disables it.",
+    },
     sandbox: {
       type: ["boolean", "string", "object"],
       description:
-        'Command sandbox for auto-created agent workspaces. Defaults to Monty; false disables command execution, and true, "databricks", or an object selects/configures Databricks Sandbox with optional fallback.',
+        'Command sandbox for auto-created agent workspaces. Disabled by default. "monty" selects Monty; true, "databricks", or an object selects/configures Databricks Sandbox.',
+    },
+    workspaceFallbackToTmp: {
+      type: "boolean",
+      description:
+        "Add user-scoped /tmp to auto-created agent workspaces only when no configured Databricks path mounts writable. Defaults to false.",
     },
     workspaceSkills: {
       type: ["boolean", "object"],

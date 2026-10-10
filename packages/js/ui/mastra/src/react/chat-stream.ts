@@ -23,6 +23,7 @@ class StreamAborted extends Error {}
 /** Stop reading a background run once the AI SDK has delivered its terminal chunk. */
 export function closeOnTerminalChunk(
   stream: ReadableStream<UIMessageChunk>,
+  onTerminal?: () => void,
 ): ReadableStream<UIMessageChunk> {
   let reader: ReadableStreamDefaultReader<UIMessageChunk> | undefined;
   let cancelled = false;
@@ -38,6 +39,7 @@ export function closeOnTerminalChunk(
           }
           controller.enqueue(value);
           if (value.type === "finish" || value.type === "abort") {
+            onTerminal?.();
             controller.close();
             await reader.cancel("terminal AI SDK chunk received").catch(() => undefined);
             return;
@@ -101,12 +103,15 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
       }
 
       try {
+        let terminalReceived = false;
         const existing = getSession(threadId).messages.find(
           (message) => message.id === assistantId,
         );
         for await (const message of readUIMessageStream({
           ...(existing ? { message: existing } : {}),
-          stream: closeOnTerminalChunk(stream.stream),
+          stream: closeOnTerminalChunk(stream.stream, () => {
+            terminalReceived = true;
+          }),
           terminateOnError: true,
         })) {
           if (signal.aborted) throw new StreamAborted();
@@ -115,7 +120,7 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
           updateSession(threadId, (current) => ({
             ...current,
             runId: runIdRef.current,
-            status: "streaming",
+            status: terminalReceived ? "ready" : "streaming",
           }));
         }
       } catch (error) {

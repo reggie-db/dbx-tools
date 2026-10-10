@@ -92,7 +92,7 @@ This example provides:
 
 - `mastra()` registers a full AppKit plugin named `mastra`.
 - `agents.createAgent()` keeps agent definitions typed and applies the default
-  Databricks workspace skill paths and Monty command execution.
+  Databricks workspace skill paths. Command execution is opt-in.
 - `agents.tool()` lets the same AppKit-shaped tool body work in this Mastra
   plugin.
 - `genie.GENIE_INSTRUCTIONS` and `plugins.genie.toolkit()` give agents a
@@ -266,9 +266,10 @@ and memory configs.
 
 Every `agents.createAgent()` gets a default Mastra `Workspace` from
 `workspaces.databricksWorkspace()`. A workspace can provide file access, skill
-discovery, a command sandbox, or any combination. The default enables all three:
-it mounts `/Workspace/.assistant` and the current user's workspace home, scans
-their configured Assistant skill paths, and uses the Monty sandbox.
+discovery, a command sandbox, or any combination. The default enables file and
+skill access only: it mounts `/Workspace/.assistant` and the current user's
+workspace home and scans their configured Assistant skill paths. Command
+execution is disabled until a sandbox is selected explicitly.
 
 Pass paths directly when an agent needs a different filesystem scope:
 
@@ -467,11 +468,13 @@ explicit OBO client must request the Sandbox API's `sandbox` scope. The Sandbox
 filesystem is separate from Databricks Workspace skill mounts; command code must
 copy data explicitly when it needs both.
 
-Without a `sandbox` option, command tools use the local Monty Python runtime:
+Select the local Monty Python runtime explicitly when a Python-only command
+sandbox is appropriate:
 
 ```ts
 mastra({
   agents: analyst,
+  sandbox: "monty",
 });
 ```
 
@@ -496,6 +499,22 @@ const localAgent = agents.createAgent({
 
 An agent-level workspace overrides the plugin-level sandbox setting. Returning
 `undefined` from a workspace resolver disables the workspace for that agent.
+
+### Batch Tools With Code Mode
+
+Mastra Code Mode is enabled by default when an agent has explicitly supplied
+executable tools. It adds an
+`execute_typescript` tool so the model can batch independent calls, aggregate
+their results, and perform calculations in one sandboxed program. Only tools
+declared on that agent are exposed as `external_*` functions; plugin-level
+tools and native workspace tools are not added implicitly.
+
+The plugin selects Mastra's `IsolatedVmCodeModeTransport` once during startup.
+If the native addon cannot initialize in the current runtime, startup selects
+Mastra's QuickJS WebAssembly transport instead. Both transports expose no
+filesystem, network, process, timer, or module access beyond the explicitly
+supplied tools. Set `codeMode: false` to opt out, or pass `{ id, timeout }` to
+tune Mastra's generated tool.
 
 ## Remote Skills
 
@@ -571,7 +590,7 @@ mastra({
 mastra({
   remoteSkills: [
     { source: "aitools", skills: ["databricks-core", "databricks-jobs"] },
-    "owner/repo",
+    { source: "owner/repo", name: "team-runbooks" },
   ],
 });
 ```
@@ -590,9 +609,10 @@ Per-source options for `"aitools"`:
 - `experimental` - include the repo's `experimental/` skills (off by default).
 - `ref` - pin a tag / branch / sha. Defaults to `main`.
 
-Because these skills track a public repo rather than the workspace, they are
-added as LOCAL scan paths for the current process rather than uploaded to the
-Databricks Assistant tree.
+When the workspace destination is unavailable, local backing storage remains
+read-only and hidden behind stable workspace paths. AI Tools mounts at
+`/.databricks/skills`; other sources mount below `/.skills`, using the explicit
+per-source `name` when supplied or a stable source identifier otherwise.
 
 ## Genie Tools
 
@@ -1057,15 +1077,21 @@ The main plugin options are:
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
-- `sandbox` defaults to Monty for auto-created workspaces. `false` disables
-  command execution, while `true`, `"databricks"`, or an object
-  selects/configures Databricks Sandbox.
+- `sandbox` is disabled by default for auto-created workspaces. `"monty"`
+  selects Monty, while `true`, `"databricks"`, or an object selects/configures
+  Databricks Sandbox.
+- `codeMode` exposes each agent's explicitly supplied executable tools through
+  native Mastra Code Mode. It defaults on when such tools exist, selecting
+  isolated-vm once at startup and falling back to QuickJS only when unavailable.
+  Pass `false` to disable it.
 - `workspaceSkills` enables Mastra's native on-demand skill search by default.
   Pass `false` to disable it or an object with `topK`, `minScore`, and `ttlMs`
   overrides.
 - `workspaceTools` forwards Mastra's native workspace-tool configuration.
   All tools are enabled without approval by default. Global and per-tool
   settings can require approval or disable selected tools.
+- `workspaceFallbackToTmp` adds writable, user-scoped `/tmp` storage only when
+  no configured Databricks workspace path can be mounted writable.
 - `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
   list, or an options bag with `failOnError`, `userEmail`,
@@ -1130,7 +1156,8 @@ Clients that call these routes can import the browser-safe schemas from
   `filesystems(fs)` wraps any `@dbx-tools/shared-fs` `FileSystem` (including
   `@dbx-tools/databricks` / `@dbx-tools/fs`) as a Mastra mount.
 - `remote-skills` - startup provisioning of remote `SKILL.md` sources into the
-  Databricks Assistant skills tree (or a local temp dir): the `"aitools"`
+  Databricks Assistant skills tree (or read-only local backing storage exposed
+  at stable virtual mounts): the `"aitools"`
   constant reads Databricks' own skill repo directly, and any other source goes
   through the optional `skills` CLI or a direct fetch. Each tree carries a
   `.metadata.json` so a source is re-downloaded at most once every seven days

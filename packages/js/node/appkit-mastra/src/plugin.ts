@@ -1110,14 +1110,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // Materialize any remote Agent-Skill sources ONCE at startup. Runs
     // outside a request scope, so it uses the app service principal's client
     // and defaults to the shared workspace Assistant skills tree; a source
-    // that lands on a local temp dir (no writable workspace) is folded into
-    // every default-workspace agent via `extraSkillPaths`.
+    // backed by local temp storage (no writable workspace) is folded into
+    // every default-workspace agent via `extraSkillMounts`.
     const provisioned = await provisionRemoteSkills(this.config.remoteSkills);
     if (provisioned.skillNames.length > 0) {
       this.logger.info("remote skills configured", {
         skills: provisioned.skillNames,
         databricksBasePath: provisioned.databricksBasePath,
-        localSkillPaths: provisioned.localSkillPaths.length,
+        localSkillMounts: provisioned.localSkillMounts.length,
       });
     }
 
@@ -1126,7 +1126,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       context: this.context,
       memoryBuilder,
       log: this.logger,
-      extraSkillPaths: provisioned.localSkillPaths,
+      extraSkillMounts: provisioned.localSkillMounts,
     });
 
     // `mastra.server.apiRoutes` is only honored by Mastra's standalone

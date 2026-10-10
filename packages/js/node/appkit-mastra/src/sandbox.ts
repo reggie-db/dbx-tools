@@ -68,7 +68,8 @@ export interface DatabricksSandboxOptions {
   commandTimeoutMs?: number;
   /**
    * Provider used only when Databricks Sandbox is definitively unavailable.
-   * Defaults to the Node Pydantic Monty runtime; `false` fails instead.
+   * Disabled by default. Pass `"monty"`, Monty options, or another Mastra
+   * sandbox to enable a fallback explicitly.
    */
   fallback?: false | "monty" | MontySandboxOptions | WorkspaceSandbox;
 }
@@ -123,7 +124,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
     this.inactivityTimeout = options.inactivityTimeout ?? DEFAULT_INACTIVITY_TIMEOUT;
     this.startupTimeoutMs = options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS;
     this.commandTimeoutMs = options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
-    this.fallbackConfig = options.fallback ?? "monty";
+    this.fallbackConfig = options.fallback ?? false;
   }
 
   get provider(): string {

@@ -17,8 +17,13 @@ Canonical instructions for coding agents and contributors.
 
 ## Repository Boundary
 
-- The repository is JavaScript/TypeScript and Python only.
-- Rust, Cargo, UniFFI, native binding packages, native binary installers, and native release support have been removed. Do not restore them.
+- The repository is JavaScript/TypeScript and Python only. Do not create or restore
+  repository-owned Rust, Cargo, UniFFI, native binding, native binary installer,
+  or native release packages unless an explicit requirement makes them necessary.
+  Third-party native dependencies are allowed when an owning framework capability
+  requires them or the user explicitly selects them; declare install-script/build
+  allowances and preserve a supported portable fallback when the runtime may not
+  provide the native binary.
 - The monorepo changes in lockstep. Remove obsolete APIs instead of adding compatibility aliases or deprecated shims; update every in-repo caller in the same change.
 - Types, records, enums, interfaces, and module shapes have one owner. Import the owning type directly or fix its generator/export surface rather than creating mirrors.
 - Generated bindings, barrels, PythonMonkey bundles, and docs are derived artifacts. Fix their owner and regenerate them.

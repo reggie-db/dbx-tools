@@ -15,6 +15,8 @@ import { isEventedAgent } from "@mastra/core/agent/durable";
 import { registerApiRoute } from "@mastra/core/server";
 import { createUIMessageStreamResponse } from "ai";
 
+import { withRequestMemoryScope } from "./memory.ts";
+
 const logger = log.logger("mastra/chat");
 
 /** Client request cancellation is detached only for evented background agents. */
@@ -62,11 +64,14 @@ export function agentChatRoutes() {
             : status
               ? { agentVersion: { status } }
               : {}),
-          params: {
-            ...params,
+          params: withRequestMemoryScope(
+            {
+              ...params,
+              requestContext,
+              ...(abortSignal ? { abortSignal } : {}),
+            },
             requestContext,
-            ...(abortSignal ? { abortSignal } : {}),
-          },
+          ),
           version: "v7",
           sendReasoning: true,
           sendSources: true,

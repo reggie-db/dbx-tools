@@ -203,6 +203,12 @@ export interface UseMastraChatOptions<
    */
   enableExport?: boolean;
   /**
+   * Show the destructive Clear conversation action. Off by default because
+   * thread management already provides new/delete controls and most chats do
+   * not need a second way to erase the active conversation.
+   */
+  enableClear?: boolean;
+  /**
    * Surface per-message feedback controls (thumbs up/down + a comment
    * modal) that log to MLflow as trace assessments.
    *
@@ -277,6 +283,9 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const enableThreads = threadPlacement !== "disabled";
   // Export is opt-in (default off): the host turns it on explicitly.
   const enableExport = options.enableExport === true;
+  // Clearing is destructive and redundant with managed thread deletion, so
+  // the drop-in exposes it only when a host explicitly opts in.
+  const enableClear = options.enableClear === true;
   // Feedback defaults to automatic server capability detection. An explicit
   // false hides it; true keeps it requested but cannot bypass the server gate.
   const enableFeedback = options.enableFeedback !== false;
@@ -1080,7 +1089,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     isLoadingMore,
     hasMore: activeSession.hasMoreHistory,
     isLoadingHistory,
-    onClear: handleClear,
+    ...(enableClear ? { onClear: handleClear } : {}),
     threadPlacement,
     // Conversation management: hand ChatView the thread list + handlers
     // only when enabled, so the sidebar stays hidden for the classic

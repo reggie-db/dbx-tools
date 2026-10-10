@@ -146,6 +146,11 @@
       "type": "runtime"
     },
     {
+      "name": "@mastra/isolated-vm",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@mastra/mcp",
       "version": "catalog:",
       "type": "runtime"
@@ -167,6 +172,11 @@
     },
     {
       "name": "@mastra/pg",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@mastra/quickjs",
       "version": "catalog:",
       "type": "runtime"
     },

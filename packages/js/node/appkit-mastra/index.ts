@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.108";
+export const PACKAGE_VERSION = "0.9.109";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -42,7 +42,7 @@ export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolki
 export { chartPlanSchema, chartPlannerRequestSchema, chartToolOutputSchema } from "./src/chart.ts";
 export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
-export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
+export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraCodeModeConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
 export type { MastraEvalDriverOptions } from "./src/evaluation.ts";
 export { MastraFileSystemAdapter, MountedCompositeFilesystem } from "./src/filesystems.ts";
@@ -63,8 +63,8 @@ export type { BuildObservabilityOptions } from "./src/observability.ts";
 export type { OpenApiHttpMethod, OpenApiTool, OpenApiToolsOptions } from "./src/openapi-tool.ts";
 export { MastraPlugin, mastra } from "./src/plugin.ts";
 export { stripStaleChartsProcessor } from "./src/processors.ts";
-export { AITOOLS_SOURCE } from "./src/remote-skills.ts";
-export type { AiToolsSource, RemoteSkillSourceOptions, RemoteSkillSource, RemoteSkillsOption, ProvisionRemoteSkillsOptions, ProvisionedRemoteSkills, RemoteSkillCacheEntry, RemoteSkillsMetadata } from "./src/remote-skills.ts";
+export { AITOOLS_SKILLS_MOUNT, REMOTE_SKILLS_MOUNT, AITOOLS_SOURCE } from "./src/remote-skills.ts";
+export type { AiToolsSource, RemoteSkillSourceOptions, RemoteSkillSource, RemoteSkillsOption, LocalSkillMount, ProvisionRemoteSkillsOptions, ProvisionedRemoteSkills, RemoteSkillCacheEntry, RemoteSkillsMetadata } from "./src/remote-skills.ts";
 export type { DatabricksFetchInit } from "./src/rest.ts";
 export { DatabricksSandbox } from "./src/sandbox.ts";
 export type { DatabricksSandboxOptions, DatabricksWorkspaceSandboxOptions } from "./src/sandbox.ts";

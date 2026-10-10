@@ -418,3 +418,30 @@ export const JsonBlock = ({ json, className }: { json: string; className?: strin
     </pre>
   );
 };
+
+/** Compact syntax-highlighted source block for tool request previews. */
+export const SourceBlock = ({
+  source,
+  language,
+  className,
+}: {
+  source: string;
+  language: string;
+  className?: string;
+}) => {
+  const html = useHighlightedHtml(source, language);
+  return (
+    <pre
+      className={cn(
+        "max-w-full overflow-auto whitespace-pre font-mono text-xs leading-snug",
+        className,
+      )}
+    >
+      {html === null ? (
+        <code>{source}</code>
+      ) : (
+        <code data-dbx-highlighted-code dangerouslySetInnerHTML={{ __html: html }} />
+      )}
+    </pre>
+  );
+};

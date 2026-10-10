@@ -60,6 +60,7 @@ import {
   type MastraFileSystemAdapterOptions,
 } from "./filesystems.ts";
 import { MontySandbox } from "./monty-sandbox.ts";
+import type { LocalSkillMount } from "./remote-skills.ts";
 import { DatabricksSandbox, type DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
 import { ORGANIZATION_ASSISTANT_PATH, personalWorkspacePath } from "./skill-paths.ts";
 
@@ -172,9 +173,9 @@ type WorkspaceMountResolver = (
 ) => WorkspaceMountContribution | Promise<WorkspaceMountContribution>;
 
 /**
- * Sandbox selection for {@link databricksWorkspace}. Monty is the default;
- * `false` disables command execution, and a Mastra provider or resolver is an
- * explicit replacement.
+ * Sandbox selection for {@link databricksWorkspace}. Command execution is
+ * disabled by default; Monty, Databricks Sandbox, or a Mastra provider/resolver
+ * must be selected explicitly.
  */
 export type WorkspaceSandboxSelection =
   | false
@@ -207,19 +208,21 @@ export interface DatabricksWorkspaceOptions extends Omit<
   /** AppKit plugin context used to discover optional sibling capabilities. */
   pluginContext?: pluginRegistry.PluginContextLike;
   /**
-   * Command sandbox. Defaults to Monty. Pass `"databricks"` or an options
-   * object for Databricks Sandbox, `false` to disable command execution, or an
-   * explicit Mastra sandbox/provider resolver.
+   * Command sandbox. Disabled by default. Pass `"monty"`, `"databricks"`, or
+   * Databricks Sandbox options to enable one of the built-in providers, or pass
+   * an explicit Mastra sandbox/provider resolver.
    */
   sandbox?: WorkspaceSandboxSelection;
+  /** Add user-scoped `/tmp` only when no configured Databricks path mounts writable. */
+  fallbackToTmp?: boolean;
   /**
-   * Extra LOCAL skill paths mounted read-only for every request's skill discovery.
-   * Used by the plugin to surface remote skills provisioned to a local temp
-   * dir at startup (see `remote-skills.ts`). Databricks-hosted remote skills
-   * need no entry here - they land in the Assistant tree the built-in mount
-   * already scans.
+   * Extra LOCAL skill trees mounted read-only for every request's skill
+   * discovery. Used by the plugin to expose remote skills from local backing
+   * storage at stable virtual paths (see `remote-skills.ts`). Databricks-hosted
+   * remote skills need no entry here because the built-in Assistant mount
+   * already scans them.
    */
-  extraSkillPaths?: string[];
+  extraSkillMounts?: LocalSkillMount[];
 }
 
 /* ------------------------------- defaults ------------------------------- */
@@ -273,7 +276,7 @@ export function databricksWorkspaceConfig(
   const filesystemSourceKey = `${id}:${++workspaceSourceSequence}`;
   const paths = resolveDatabricksWorkspacePaths(options);
   const configuredPaths = paths.length;
-  const extraSkillPaths = options.extraSkillPaths ?? [];
+  const extraSkillMounts = options.extraSkillMounts ?? [];
   const filesCache = pluginRegistry.instance(options.pluginContext, filesCachePlugin)?.exports();
   const configuredCache = options.cache;
   const mountFilesCache = configuredCache === false ? undefined : filesCache;
@@ -284,9 +287,10 @@ export function databricksWorkspaceConfig(
   const resolvers = buildMountResolvers(
     paths,
     options.mounts,
-    localSkillMountResolvers(extraSkillPaths),
+    localSkillMountResolvers(extraSkillMounts),
     mountFilesCache,
     configuredCache,
+    options.fallbackToTmp === true,
   );
   const resolveContribution = contributionResolver(resolvers);
   const resolveFilesystem = (context: DatabricksWorkspaceContext) =>
@@ -296,7 +300,7 @@ export function databricksWorkspaceConfig(
       retainFilesystemSource ? mountFilesCache : undefined,
       filesystemSourceKey,
     );
-  const hasSkillPaths = paths.some(pathMayProvideSkills) || extraSkillPaths.length > 0;
+  const hasSkillPaths = paths.some(pathMayProvideSkills) || extraSkillMounts.length > 0;
   const skills: SkillsResolver =
     options.skills ??
     (async ({ requestContext }) => {
@@ -321,7 +325,7 @@ export function databricksWorkspaceConfig(
     customSkillsResolver: options.skills !== undefined,
     checkSkillFileMtime,
     bm25,
-    extraSkillPaths: extraSkillPaths.length,
+    extraSkillMounts: extraSkillMounts.length,
     sandbox: sandbox ? sandboxName(options.sandbox) : "disabled",
   });
 
@@ -333,7 +337,8 @@ export function databricksWorkspaceConfig(
     cache: _cache,
     pluginContext: _pluginContext,
     sandbox: _sandbox,
-    extraSkillPaths: _extraSkillPaths,
+    fallbackToTmp: _fallbackToTmp,
+    extraSkillMounts: _extraSkillMounts,
     ...workspaceOptions
   } = options;
   return {
@@ -411,7 +416,7 @@ function resolveWorkspaceSandbox(
   workspaceId: string,
   workspaceName: string,
 ): WorkspaceSandbox | WorkspaceSandboxResolver | undefined {
-  const configured = selection ?? "monty";
+  const configured = selection ?? false;
   if (configured === false) return undefined;
   if (configured === "monty") return new MontySandbox();
   if (typeof configured === "function" || isSandbox(configured)) return configured;
@@ -465,9 +470,9 @@ function isSandbox(value: unknown): value is WorkspaceSandbox {
 }
 
 function sandboxName(selection: WorkspaceSandboxSelection | undefined): string {
-  if (selection === undefined || selection === "monty") return "monty";
+  if (selection === undefined || selection === false) return "disabled";
+  if (selection === "monty") return "monty";
   if (selection === "databricks") return "databricks";
-  if (selection === false) return "disabled";
   if (typeof selection === "function") return "resolver";
   return isSandbox(selection) ? selection.provider : (selection.provider ?? "databricks");
 }
@@ -536,9 +541,11 @@ async function resolveWorkspacePathMounts(
   context: DatabricksWorkspaceContext,
   filesCache: FilesCacheExports | undefined,
   cacheConfig: DatabricksWorkspaceCache | undefined,
+  fallbackToTmp: boolean,
 ): Promise<WorkspaceMountContribution> {
   const mounts: Record<string, WorkspaceFilesystem> = {};
   const skillPaths: string[] = [];
+  let hasWritableMount = false;
   const requestContext = context.requestContext;
 
   const canMountDatabricks = Boolean(requestContext && shouldMountSkillFolders(requestContext));
@@ -553,6 +560,7 @@ async function resolveWorkspacePathMounts(
     if (posixPath.isWithinRoot(SCRATCH_MOUNT, configured.path)) {
       const mount = configured.mount ?? configured.path;
       mounts[mount] = userTempFilesystem(context, configured.path);
+      hasWritableMount = true;
       skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
       continue;
     }
@@ -574,7 +582,12 @@ async function resolveWorkspacePathMounts(
       continue;
     }
     mounts[mount] = resolved.filesystem;
+    hasWritableMount ||= resolved.writable;
     skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
+  }
+
+  if (fallbackToTmp && !hasWritableMount) {
+    mounts[SCRATCH_MOUNT] = userTempFilesystem(context, SCRATCH_MOUNT);
   }
 
   logger.debug("workspace-paths:mounted", {
@@ -632,6 +645,7 @@ async function resolveSkillFolderFilesystem(
   | {
       filesystem: WorkspaceFilesystem;
       root?: string;
+      writable: boolean;
     }
   | undefined
 > {
@@ -661,7 +675,7 @@ async function resolveSkillFolderFilesystem(
       ...(folder.displayName ? { displayName: folder.displayName } : {}),
     },
   );
-  return resolved ? { ...resolved, root } : undefined;
+  return resolved ? { ...resolved, root, writable } : undefined;
 }
 
 async function resolveCacheConfig(
@@ -782,12 +796,13 @@ function buildMountResolvers(
   localMounts: WorkspaceMountResolver[],
   filesCache: FilesCacheExports | undefined,
   cacheConfig: DatabricksWorkspaceCache | undefined,
+  fallbackToTmp: boolean,
 ): WorkspaceMountResolver[] {
   const resolvers: WorkspaceMountResolver[] = [];
   const pathCount = paths.length;
-  if (pathCount > 0) {
+  if (pathCount > 0 || fallbackToTmp) {
     resolvers.push((context) =>
-      resolveWorkspacePathMounts(paths, context, filesCache, cacheConfig),
+      resolveWorkspacePathMounts(paths, context, filesCache, cacheConfig, fallbackToTmp),
     );
   }
   if (mounts && Object.keys(mounts).length > 0) resolvers.push(() => ({ mounts }));
@@ -825,10 +840,16 @@ function userTempFilesystem(
   });
 }
 
-/** Mount startup-provisioned local skill paths into Mastra's workspace filesystem. */
-function localSkillMountResolvers(paths: readonly string[]): WorkspaceMountResolver[] {
-  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))].map((root) => {
-    const mount = posixPath.normalizeRoot(root);
+/** Mount startup-provisioned local skill trees into Mastra's workspace filesystem. */
+function localSkillMountResolvers(mounts: readonly LocalSkillMount[]): WorkspaceMountResolver[] {
+  const unique = new Map<string, LocalSkillMount>();
+  for (const entry of mounts) {
+    const root = entry.root.trim();
+    if (!root) continue;
+    unique.set(`${entry.mountPath}\0${root}`, { root, mountPath: entry.mountPath });
+  }
+  return [...unique.values()].map(({ root, mountPath }) => {
+    const mount = posixPath.normalizeRoot(mountPath);
     const source = new LocalFileSystem({
       root,
       readOnly: true,

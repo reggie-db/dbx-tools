@@ -24,12 +24,14 @@
  *
  * Run: `bun stage-deploy.ts` from the server package dir.
  */
+import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -169,12 +171,21 @@ function stageWorkspacePackages(packages: readonly WorkspacePackage[]): Record<s
   mkdirSync(archiveDir, { recursive: true });
   return Object.fromEntries(
     packages.map((workspacePackage) => {
-      const archive = packNpmPackage(
+      const packedArchive = packNpmPackage(
         workspacePackage.directory,
         archiveDir,
         process.env.PATH,
         applyPublishConfig,
       );
+      const digest = createHash("sha256")
+        .update(readFileSync(packedArchive))
+        .digest("hex")
+        .slice(0, 12);
+      const archive = join(
+        dirname(packedArchive),
+        `${basename(packedArchive, ".tgz")}-${digest}.tgz`,
+      );
+      renameSync(packedArchive, archive);
       return [workspacePackage.name, `file:./vendor/npm/${basename(archive)}`];
     }),
   );

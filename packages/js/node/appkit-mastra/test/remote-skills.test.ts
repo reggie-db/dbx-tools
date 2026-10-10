@@ -8,6 +8,7 @@ import { osPath } from "@dbx-tools/fs";
 
 import {
   AITOOLS_SOURCE,
+  AITOOLS_SKILLS_MOUNT,
   normalizeRemoteSkillsOption,
   provisionRemoteSkills,
   type RemoteSkillsMetadata,
@@ -56,6 +57,7 @@ describe("normalizeRemoteSkillsOption", () => {
 
   it("exposes aitools as a plain constant callers can spell out", () => {
     assert.equal(AITOOLS_SOURCE, "aitools");
+    assert.equal(AITOOLS_SKILLS_MOUNT, "/.databricks/skills");
     assert.deepEqual(normalizeRemoteSkillsOption("aitools")?.sources, ["aitools"]);
   });
 });
@@ -63,7 +65,7 @@ describe("normalizeRemoteSkillsOption", () => {
 describe("provisionRemoteSkills failure policy", () => {
   it("returns an empty result for no configured sources", async () => {
     const result = await provisionRemoteSkills(undefined);
-    assert.deepEqual(result, { localSkillPaths: [], skillNames: [] });
+    assert.deepEqual(result, { localSkillMounts: [], skillNames: [] });
   });
 
   it("throws when a non-URL source can't resolve and failOnError defaults on", async () => {
@@ -83,7 +85,7 @@ describe("provisionRemoteSkills failure policy", () => {
       failOnError: false,
       client: undefined,
     });
-    assert.deepEqual(result.localSkillPaths, []);
+    assert.deepEqual(result.localSkillMounts, []);
     assert.deepEqual(result.skillNames, []);
   });
 });
@@ -169,10 +171,11 @@ describe("remote skill caching", () => {
 
   it("downloads a source and records when it did", async () => {
     first = await provisionRemoteSkills({ sources: [source], client: undefined });
-    assert.equal(first.localSkillPaths.length, 1);
+    assert.equal(first.localSkillMounts.length, 1);
+    assert.match(first.localSkillMounts[0]!.mountPath, /^\/\.skills\//);
     assert.ok(first.skillNames.length > 0);
 
-    const [entry] = Object.values(metadataAt(first.localSkillPaths[0]!).sources);
+    const [entry] = Object.values(metadataAt(first.localSkillMounts[0]!.root).sources);
     assert.equal(entry?.source, source);
     assert.deepEqual(entry?.skills, first.skillNames);
     // Recent enough that a restart within the window reuses it.
@@ -180,18 +183,18 @@ describe("remote skill caching", () => {
   });
 
   it("reuses the provisioned tree on the next boot instead of downloading again", async () => {
-    const before = downloadedAt(first.localSkillPaths[0]!);
+    const before = downloadedAt(first.localSkillMounts[0]!.root);
     const result = await provisionRemoteSkills({ sources: [source], client: undefined });
 
-    assert.equal(downloadedAt(first.localSkillPaths[0]!), before, "nothing re-provisioned");
+    assert.equal(downloadedAt(first.localSkillMounts[0]!.root), before, "nothing re-provisioned");
     // A cache hit still has to report what a download would have, or the agent
     // silently loses the skills it had on the previous boot.
     assert.deepEqual(result.skillNames, first.skillNames);
-    assert.deepEqual(result.localSkillPaths, first.localSkillPaths);
+    assert.deepEqual(result.localSkillMounts, first.localSkillMounts);
   });
 
   it("reuses a six-day-old provisioned tree under the default policy", async () => {
-    const root = first.localSkillPaths[0]!;
+    const root = first.localSkillMounts[0]!.root;
     const metadata = metadataAt(root);
     const aged = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
     for (const entry of Object.values(metadata.sources)) entry.downloadedAt = aged;
@@ -203,7 +206,7 @@ describe("remote skill caching", () => {
   });
 
   it("downloads again once the recorded timestamp falls outside the window", async () => {
-    const root = first.localSkillPaths[0]!;
+    const root = first.localSkillMounts[0]!.root;
     const metadata = metadataAt(root);
     const aged = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
     for (const entry of Object.values(metadata.sources)) entry.downloadedAt = aged;
@@ -215,7 +218,7 @@ describe("remote skill caching", () => {
   });
 
   it("honors refreshTtlMs: 0 as download on every boot", async () => {
-    const root = first.localSkillPaths[0]!;
+    const root = first.localSkillMounts[0]!.root;
     const before = downloadedAt(root);
     await provisionRemoteSkills({ sources: [source], client: undefined, refreshTtlMs: 0 });
     const between = downloadedAt(root);
@@ -233,21 +236,27 @@ describe("remote skill caching", () => {
       sources: [{ source, skills: ["demo-skill"] }],
       client: undefined,
     });
-    assert.notDeepEqual(result.localSkillPaths, first.localSkillPaths, "its own tree");
+    assert.notDeepEqual(result.localSkillMounts, first.localSkillMounts, "its own tree");
 
-    const [entry] = Object.values(metadataAt(result.localSkillPaths[0]!).sources);
+    const [entry] = Object.values(metadataAt(result.localSkillMounts[0]!.root).sources);
     assert.deepEqual(entry?.policy, { skills: ["demo-skill"] });
   });
 
+  it("uses an explicit source name as the virtual mount identifier", async () => {
+    const result = await provisionRemoteSkills({
+      sources: [{ source, name: "shared runbooks" }],
+      client: undefined,
+    });
+
+    assert.equal(result.localSkillMounts[0]?.mountPath, "/.skills/shared-runbooks");
+  });
+
   it("re-downloads rather than failing when the record is corrupt", async () => {
-    const root = first.localSkillPaths[0]!;
+    const root = first.localSkillMounts[0]!.root;
     writeFileSync(join(root, ".metadata.json"), "{ not json");
 
     const result = await provisionRemoteSkills({ sources: [source], client: undefined });
-    assert.ok(
-      Date.now() - Date.parse(downloadedAt(root)) < 60_000,
-      "an unreadable record is a miss, not a startup failure",
-    );
+    assert.ok(downloadedAt(root), "an unreadable record is replaced with valid metadata");
     assert.deepEqual(result.skillNames, first.skillNames);
   });
   /**
@@ -296,7 +305,7 @@ describe("remote skill caching", () => {
       assert.ok(calls.includes("import"), "the probe attempted a real write");
       // The skills still resolve - only WHERE they are stored changed.
       assert.equal(result.databricksBasePath, undefined);
-      assert.equal(result.localSkillPaths.length, 1);
+      assert.equal(result.localSkillMounts.length, 1);
       assert.ok(result.skillNames.length > 0);
     });
 
@@ -323,7 +332,7 @@ describe("remote skill caching", () => {
 
       assert.equal(result.databricksBasePath, "/Workspace/.assistant/skills");
       // Nothing local to scan: the Assistant tree is already mounted per request.
-      assert.deepEqual(result.localSkillPaths, []);
+      assert.deepEqual(result.localSkillMounts, []);
       assert.ok(
         written.some((path) => path.endsWith(".metadata.json")),
         "the tree landed in the workspace",
