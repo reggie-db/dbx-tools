@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { createShikiPlugin, highlightToHtml } from "@dbx-tools/ui/react";
 import {
   formatRawToolPayload,
   humanizeToolName,
@@ -11,7 +12,6 @@ import {
   webSearchQueryLabel,
   webSearchResultLabel,
 } from "../src/react/tool-pill.tsx";
-import { createShikiPlugin, highlightToHtml } from "@dbx-tools/ui/react";
 
 describe("raw tool payload formatting", () => {
   it("preserves complete request and response values", () => {
