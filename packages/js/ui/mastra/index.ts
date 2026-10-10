@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-mastra";
-export const PACKAGE_VERSION = "0.9.109";
+export const PACKAGE_VERSION = "0.9.110";
 export * as reactBubbles from "./src/react/bubbles.tsx";
 export * as reactChatApprovals from "./src/react/chat-approvals.ts";
 export * as reactChatComposer from "./src/react/chat-composer.tsx";
@@ -52,7 +52,7 @@ export type { DataRow } from "./src/react/data-grid.tsx";
 export { MarkdownWithEmbeds } from "./src/react/embed-slots.tsx";
 export { ExportMenu } from "./src/react/export-menu.tsx";
 export { FeedbackControls } from "./src/react/feedback-controls.tsx";
-export { AssistantMarkdown, ToolMarkdown, SqlBlock, JsonBlock } from "./src/react/markdown.tsx";
+export { AssistantMarkdown, ToolMarkdown, SqlBlock, JsonBlock, SourceBlock } from "./src/react/markdown.tsx";
 export type { MastraAssistantMode, MastraAssistantSide, MastraAssistantLauncherPosition, MastraAssistantResizeOptions, MastraAssistantLauncherOptions, MastraAssistantController, MastraAssistantProps } from "./src/react/mastra-assistant.tsx";
 export { useMastraChat, MastraChat } from "./src/react/mastra-chat.tsx";
 export type { UseMastraChatOptions, MastraChatProps } from "./src/react/mastra-chat.tsx";
@@ -64,7 +64,7 @@ export type { ThreadSidebarProps } from "./src/react/thread-sidebar.tsx";
 export { ThreadActions, ThreadTabs } from "./src/react/thread-tabs.tsx";
 export type { ThreadTabsProps, ThreadActionsProps } from "./src/react/thread-tabs.tsx";
 export { humanizeToolName, ToolSessionPill } from "./src/react/tool-pill.tsx";
-export type { WebSearchProgressGroup } from "./src/react/tool-pill.tsx";
+export type { ToolInputPresentation, WebSearchProgressGroup } from "./src/react/tool-pill.tsx";
 export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ThreadPlacement, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types.ts";
 export { LIGHT_CHART_CHROME } from "./src/support/chart-theme.ts";
 export type { ChartChrome } from "./src/support/chart-theme.ts";
