@@ -59,6 +59,37 @@ function importPath(packageName, subpath) {
   return subpath === "." ? packageName : `${packageName}/${subpath.slice(2)}`;
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function packageFiles(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(directory, entry.name);
+    return entry.isDirectory() ? packageFiles(file) : [file];
+  });
+}
+
+function expandWildcardTarget(packageDir, subpath, target, context) {
+  if ((subpath.match(/\*/g) ?? []).length !== 1 || (target.match(/\*/g) ?? []).length !== 1) {
+    throw new Error(`Wildcard export must contain one * in subpath and target for ${context}`);
+  }
+  insidePackage(packageDir, target, context);
+  const [prefix, suffix] = target.split("*");
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}(.+)${escapeRegExp(suffix)}$`);
+  return packageFiles(packageDir).flatMap((file) => {
+    const relativeFile = `./${posix(path.relative(packageDir, file))}`;
+    const match = pattern.exec(relativeFile);
+    if (!match) return [];
+    const replacement = match[1];
+    return [{
+      subpath: subpath.replace("*", replacement),
+      target: relativeFile,
+      file,
+    }];
+  });
+}
+
 /**
  * Resolve the TypeScript entry file for every public code subpath in a package
  * export map. Asset, stylesheet, and package-metadata exports are ignored.
@@ -77,20 +108,39 @@ export function resolvePackageTypeScriptExports(packageJson) {
   }
 
   const entries = [];
-  for (const [subpath, value] of exportMapEntries(manifest.exports)) {
+  const exportEntries = exportMapEntries(manifest.exports);
+  const explicitSubpaths = new Set(
+    exportEntries.map(([subpath]) => subpath).filter((subpath) => !subpath.includes("*")),
+  );
+  for (const [subpath, value] of exportEntries) {
     if (subpath !== "." && !subpath.startsWith("./")) {
       throw new Error(`Invalid export subpath ${subpath} in ${manifest.name}`);
     }
     const context = `${manifest.name} export ${subpath}`;
-    const candidates = targetCandidates(value, context).map((target) => ({
+    const codeTargets = targetCandidates(value, context).filter((target) =>
+      TYPESCRIPT_EXPORT.test(target),
+    );
+    if (subpath.includes("*")) {
+      const expanded = codeTargets
+        .map((target) => expandWildcardTarget(packageDir, subpath, target, context))
+        .find((matches) => matches.length > 0) ?? [];
+      for (const selected of expanded) {
+        if (explicitSubpaths.has(selected.subpath)) continue;
+        entries.push({
+          subpath: selected.subpath,
+          importPath: importPath(manifest.name, selected.subpath),
+          target: selected.target,
+          file: selected.file,
+          relativeFile: posix(path.relative(packageDir, selected.file)),
+        });
+      }
+      continue;
+    }
+    const codeCandidates = codeTargets.map((target) => ({
       target,
       file: insidePackage(packageDir, target, context),
     }));
-    const codeCandidates = candidates.filter(({ target }) => TYPESCRIPT_EXPORT.test(target));
     if (codeCandidates.length === 0) continue;
-    if (codeCandidates.some(({ target }) => target.includes("*"))) {
-      throw new Error(`Wildcard TypeScript export is not supported for ${context}`);
-    }
     const selected = codeCandidates.find(
       ({ file }) => fs.existsSync(file) && fs.statSync(file).isFile(),
     );

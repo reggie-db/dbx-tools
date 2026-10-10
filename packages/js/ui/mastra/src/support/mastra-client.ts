@@ -26,10 +26,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MastraRequestContextSnapshot } from "./request-context.ts";
 
 type NativeAgentClient = ReturnType<MastraClient["getAgent"]>;
+
+/** Browser stream and response headers returned by a Mastra chat request. */
 export interface MastraStreamResponse {
   headers: Headers;
   stream: ReadableStream<UIMessageChunk>;
 }
+
+/** One memory thread returned by the native Mastra client. */
 export type MastraMemoryThread = ListMemoryThreadsResponse["threads"][number];
 
 /**

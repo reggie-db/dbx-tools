@@ -66,6 +66,30 @@ describe("resolvePackageTypeScriptExports", () => {
     expect(() => resolvePackageTypeScriptExports(manifest)).toThrow("escapes its package");
   });
 
+  test("expands wildcard TypeScript targets and lets exact subpaths win", () => {
+    const manifest = packageFixture(
+      {
+        name: "@scope/example",
+        exports: {
+          "./exact": "./src/exact/index.ts",
+          "./*": "./src/*/index.ts",
+        },
+      },
+      ["src/exact/index.ts", "src/example/index.ts", "src/example/wasm/index.ts"],
+    );
+
+    expect(
+      resolvePackageTypeScriptExports(manifest).map(({ subpath, relativeFile }) => ({
+        subpath,
+        relativeFile,
+      })),
+    ).toEqual([
+      { subpath: "./exact", relativeFile: "src/exact/index.ts" },
+      { subpath: "./example", relativeFile: "src/example/index.ts" },
+      { subpath: "./example/wasm", relativeFile: "src/example/wasm/index.ts" },
+    ]);
+  });
+
   test("uses only the published ui-mastra React entry", () => {
     const manifest = path.resolve("packages/js/ui/mastra/package.json");
 
@@ -74,6 +98,9 @@ describe("resolvePackageTypeScriptExports", () => {
         subpath,
         relativeFile,
       })),
-    ).toEqual([{ subpath: "./react", relativeFile: "src/react/index.ts" }]);
+    ).toEqual([
+      { subpath: "./react", relativeFile: "src/react/index.ts" },
+      { subpath: "./support", relativeFile: "src/support/index.ts" },
+    ]);
   });
 });
