@@ -15,7 +15,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { it } from "node:test";
 
+import {
+  workspaceGraph,
+  type WorkspaceGraph,
+  type WorkspaceGraphPackage,
+} from "../tasks/test-workspace.ts";
+
 const engineRoot = resolve(import.meta.dirname, "..");
+const workspaceRoot = resolve(engineRoot, "..");
 const bun = process.execPath;
 
 function run(cwd: string, args: string[], env: NodeJS.ProcessEnv): string {
@@ -68,6 +75,22 @@ function pack(directory: string, archiveDir: string, env: NodeJS.ProcessEnv): st
   return join(archiveDir, created[0]!);
 }
 
+function dependencyClosure(graph: WorkspaceGraph, root: string): WorkspaceGraphPackage[] {
+  const packages = new Map(graph.packages.map((pkg) => [pkg.name, pkg]));
+  const resolved: WorkspaceGraphPackage[] = [];
+  const visited = new Set<string>();
+  const visit = (name: string): void => {
+    if (visited.has(name)) return;
+    const pkg = packages.get(name);
+    assert.ok(pkg, `workspace graph omitted ${name}`);
+    visited.add(name);
+    for (const dependency of pkg.dependencies) visit(dependency);
+    resolved.push(pkg);
+  };
+  visit(root);
+  return resolved;
+}
+
 it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120_000 }, () => {
   const temp = mkdtempSync(join(tmpdir(), "dbx-tools-packed-consumer-"));
   const archiveDir = join(temp, "archive");
@@ -81,24 +104,12 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
   delete environment.PROJEN_DISABLE_POST;
 
   try {
-    const archives = {
-      "@dbx-tools/core": pack(
-        resolve(engineRoot, "../packages/js/node/core"),
-        archiveDir,
-        environment,
-      ),
-      "@dbx-tools/path": pack(
-        resolve(engineRoot, "../packages/js/node/path"),
-        archiveDir,
-        environment,
-      ),
-      "@dbx-tools/shared-core": pack(
-        resolve(engineRoot, "../packages/js/shared/core"),
-        archiveDir,
-        environment,
-      ),
-      "@dbx-tools/projen": pack(engineRoot, archiveDir, environment),
-    };
+    const archives = Object.fromEntries(
+      dependencyClosure(workspaceGraph(workspaceRoot), "@dbx-tools/projen").map((pkg) => [
+        pkg.name,
+        pack(resolve(workspaceRoot, pkg.path), archiveDir, environment),
+      ]),
+    );
     const dependencySpecs = Object.entries(archives).map(
       ([name, archive]) => `${name}@file:${archive}`,
     );
