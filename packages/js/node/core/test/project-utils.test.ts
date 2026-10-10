@@ -75,6 +75,10 @@ describe("resolveProjectGhAccount", () => {
       );
       process.env.PATH = `${bin}:${originalPath ?? ""}`;
 
+      const repositoryUrl = "https://github.example.test/example/project";
+      assert.equal(projectUtils.repositoryUrl(repository), repositoryUrl);
+      assert.equal(readFileSync(calls, { encoding: "utf8", flag: "a+" }), "");
+
       const first = projectUtils.resolveProjectGhAccount(repository);
       assert.equal(first?.login, "work", readFileSync(calls, "utf8"));
       assert.equal(first?.host, "github.example.test");
@@ -82,11 +86,8 @@ describe("resolveProjectGhAccount", () => {
       const initialCalls = readFileSync(calls, "utf8");
       assert.equal(projectUtils.resolveProjectGhAccount(repository), first);
       assert.equal(readFileSync(calls, "utf8"), initialCalls);
-      const repositoryUrl = "https://github.example.test/example/project";
       assert.equal(projectUtils.repositoryUrl(repository), repositoryUrl);
-      const repositoryCalls = readFileSync(calls, "utf8");
-      assert.equal(projectUtils.repositoryUrl(repository), repositoryUrl);
-      assert.equal(readFileSync(calls, "utf8"), repositoryCalls);
+      assert.equal(readFileSync(calls, "utf8"), initialCalls);
     } finally {
       process.env.PATH = originalPath;
       rmSync(root, { force: true, recursive: true });

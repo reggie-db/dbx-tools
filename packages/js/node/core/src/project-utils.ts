@@ -483,9 +483,11 @@ function repositoryUrlFromGit(cwd?: string): string | undefined {
 
 /**
  * The repo's canonical remote URL, or `undefined` when there is no git remote.
- * Tries `gh repo view` first (host-accurate, no parsing), then normalizes
- * `git remote get-url origin`. A blank, omitted, or explicitly current `cwd`
- * reuses cached command probes; another resolved directory executes directly.
+ * Normalizes `git remote get-url origin` locally first, including SSH aliases,
+ * and only asks `gh repo view` when the remote cannot be parsed. This keeps
+ * authenticated GitHub account discovery lazy for callers that actually need
+ * it. A blank, omitted, or explicitly current `cwd` reuses cached command
+ * probes; another resolved directory executes directly.
  *
  * @param cwd - directory to resolve from (defaults to `process.cwd()`).
  * @param format - `"https"` (default) yields `https://host/owner/repo`;
@@ -494,7 +496,7 @@ function repositoryUrlFromGit(cwd?: string): string | undefined {
  */
 export function repositoryUrl(cwd?: string, format: "https" | "npm" = "https"): string | undefined {
   const resolved = resolveWorkingDirectory(cwd);
-  const https = repositoryUrlFromGh(resolved) ?? repositoryUrlFromGit(resolved);
+  const https = repositoryUrlFromGit(resolved) ?? repositoryUrlFromGh(resolved);
   if (!https) return undefined;
   return format === "npm" ? `git+${https.replace(/\.git$/, "")}.git` : https;
 }
