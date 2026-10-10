@@ -887,11 +887,15 @@ class GeneratedSource extends Component {
       const sourceExports = Object.fromEntries(
         modules.map((module) => [`./${module.slice("src/".length, -".ts".length)}`, `./${module}`]),
       );
+      const nestedExport = current["./*"];
       subproject.package.addField("exports", {
         ...Object.fromEntries(
-          Object.entries(current).filter(([subpath]) => subpath !== "./package.json"),
+          Object.entries(current).filter(
+            ([subpath]) => subpath !== "./*" && subpath !== "./package.json",
+          ),
         ),
         ...sourceExports,
+        ...(nestedExport ? { "./*": nestedExport } : {}),
         ...(current["./package.json"] ? { "./package.json": current["./package.json"] } : {}),
       });
     }
