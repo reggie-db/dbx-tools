@@ -142,6 +142,10 @@ const root = new project.DBXToolsNodeProject({
         run: "bun docs/scripts/generate-api-docs.mjs",
       },
       {
+        name: "Check generated Markdown links",
+        run: "bun docs/scripts/check-generated-links.mjs",
+      },
+      {
         name: "Check generated titles",
         run: "bun docs/scripts/check-generated-titles.mjs",
       },
@@ -171,6 +175,7 @@ const root = new project.DBXToolsNodeProject({
     "@dbx-tools/projen@workspace:^",
     "commander@catalog:",
     "concurrently@^10.0.3",
+    "marked@catalog:",
     "whatwg-url@14.2.0",
     "yaml@^2.9.0",
     // shared-core's public brand namespace is Zod-backed and is loaded while
@@ -202,8 +207,15 @@ const readmeDocs = root.addTask("docs:check-readmes", {
 });
 readmeDocs.exec("bun docs/scripts/sync-cli-readmes.mjs --check");
 readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
+readmeDocs.exec("bun docs/scripts/check-generated-links.mjs --allow-api-stubs");
 readmeDocs.exec("bun docs/scripts/generate-agent-skill.mjs --check");
 root.tasks.tryFind("bump")?.exec("bun docs/scripts/generate-agent-skill.mjs");
+
+const linkDocs = root.addTask("docs:link-check", {
+  description: "Validate generated Markdown routes and fragments without building HTML",
+});
+linkDocs.exec("bun docs/scripts/sync-readmes.mjs");
+linkDocs.exec("bun docs/scripts/check-generated-links.mjs --allow-api-stubs");
 
 root.addTask("docs:cli", {
   description: "Update package README command references from their CLI parsers",

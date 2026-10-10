@@ -116,6 +116,18 @@ bun run --cwd .docs-build/site build
 bun run --cwd .docs-build/site check-links
 ```
 
+For a fast check after editing README or documentation links, run:
+
+```sh
+bun run docs:link-check
+```
+
+`docs:link-check` regenerates the README-based Markdown site and validates
+internal routes and heading fragments without installing Astro or building
+HTML. API package routes are checked as declared generated targets. The release
+workflow runs the same generated-Markdown checker again after API generation,
+before starting the Astro build.
+
 `check-links` validates built internal routes, assets, and fragments directly
 from `.docs-build/dist`. It starts no HTTP server and makes no external network
 requests, so release validation is deterministic.

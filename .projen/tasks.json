@@ -199,6 +199,9 @@
           "exec": "bun docs/scripts/sync-readmes.mjs"
         },
         {
+          "exec": "bun docs/scripts/check-generated-links.mjs --allow-api-stubs"
+        },
+        {
           "exec": "bun docs/scripts/generate-agent-skill.mjs --check"
         }
       ]
@@ -218,6 +221,18 @@
       "steps": [
         {
           "exec": "bun docs/scripts/sync-cli-readmes.mjs"
+        }
+      ]
+    },
+    "docs:link-check": {
+      "name": "docs:link-check",
+      "description": "Validate generated Markdown routes and fragments without building HTML",
+      "steps": [
+        {
+          "exec": "bun docs/scripts/sync-readmes.mjs"
+        },
+        {
+          "exec": "bun docs/scripts/check-generated-links.mjs --allow-api-stubs"
         }
       ]
     },

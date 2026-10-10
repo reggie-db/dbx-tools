@@ -72,6 +72,11 @@
       "type": "build"
     },
     {
+      "name": "marked",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "prettier",
       "type": "build"
     },

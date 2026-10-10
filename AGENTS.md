@@ -82,6 +82,7 @@ Primary ownership:
 ## Validation
 
 - Start with focused tests for changed packages, then broaden to relevant workspace tests and builds.
+- Run `bun run docs:link-check` after changing README or documentation links. It validates generated Markdown routes and heading fragments without building the Astro site; keep the built-HTML link check as the final release backstop.
 - Run `bunx projen` twice and ensure the second synthesis produces no additional diff when changing generated configuration.
 - Run `bun run version:check` after version or workspace changes.
 - Do not fix unrelated failures; report them clearly.

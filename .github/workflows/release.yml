@@ -118,6 +118,10 @@ jobs:
         id: generate_api_docs
         if: ${{ success() && steps.release.outputs.docs == 'true' }}
         run: bun docs/scripts/generate-api-docs.mjs
+      - name: Check generated Markdown links
+        id: check_generated_markdown_links
+        if: ${{ success() && steps.release.outputs.docs == 'true' }}
+        run: bun docs/scripts/check-generated-links.mjs
       - name: Check generated titles
         id: check_generated_titles
         if: ${{ success() && steps.release.outputs.docs == 'true' }}
