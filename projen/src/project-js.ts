@@ -737,6 +737,7 @@ function hasCustomInstallSteps(task: Task, defaultCommand: string): boolean {
   return step.exec !== defaultCommand;
 }
 
+/** Suppress redundant child install tasks when the workspace root owns dependency installation. */
 export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
   (construct: IConstruct): construct is DBXToolsNodeProject | DBXToolsTypeScriptProject =>
     (construct instanceof DBXToolsNodeProject || construct instanceof DBXToolsTypeScriptProject) &&
