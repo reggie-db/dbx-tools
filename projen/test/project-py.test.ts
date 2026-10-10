@@ -200,7 +200,9 @@ describe("DBXToolsPythonWorkspace", () => {
       workflowStep(build, "Build Python distributions").run?.includes("--package-directories"),
     );
     assert.ok(
-      workflowStep(build, "Build Python distributions").run?.includes('--package "core" "app"'),
+      workflowStep(build, "Build Python distributions").run?.includes(
+        '--package "core" --package "app"',
+      ),
     );
     assert.deepEqual(workflowStep(publishCore, "Download fixture-core distributions").with, {
       name: "release-python-core",

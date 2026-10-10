@@ -613,7 +613,9 @@ export class DBXToolsPythonWorkspace extends Component {
         run: [
           'bun node_modules/@dbx-tools/projen/tasks/publish-python.ts "$RELEASE_VERSION"',
           `--root ${JSON.stringify(this.repository.root)}`,
-          `--package ${allPublications.map((publication) => JSON.stringify(publication.directory)).join(" ")}`,
+          allPublications
+            .map((publication) => `--package ${JSON.stringify(publication.directory)}`)
+            .join(" "),
           "--output .release/python --package-directories",
         ].join(" \\\n  "),
       },

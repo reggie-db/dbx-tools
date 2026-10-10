@@ -148,7 +148,7 @@ jobs:
         run: |-
           bun node_modules/@dbx-tools/projen/tasks/publish-python.ts "$RELEASE_VERSION" \
             --root "packages/py" \
-            --package "node-runtime" "graphiti" \
+            --package "node-runtime" --package "graphiti" \
             --output .release/python --package-directories
       - name: Upload dbx-tools-node-runtime distributions
         id: upload_dbx-tools-node-runtime_distributions
