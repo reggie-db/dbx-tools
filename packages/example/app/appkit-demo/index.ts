@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/demo-appkit-app";
-export const PACKAGE_VERSION = "0.9.104";
+export const PACKAGE_VERSION = "0.9.105";
 export * as app from "./src/App.tsx";
 export * as errorBoundary from "./src/ErrorBoundary.tsx";
 export * as pagesBrand from "./src/pages/Brand.tsx";
