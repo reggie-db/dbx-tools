@@ -62,7 +62,7 @@ middleware on the app's Express server (no separate proxy process).
   NOTIFICATION, and a notification contains the sender, the subject, and a short
   snippet - nothing else - so a code that lives only in the body is unreachable
   however cleanly the body is shaped. See
-  [Why the code is in the subject](#why-the-code-is-in-the-subject).
+  [Why the code is in the subject](#email-code-subject).
 - The two MIME parts are built separately, on purpose. The HTML card uses the
   configured subject template as its neutral title and shows the code once as a
   large styled body heading; the `text/plain` part
