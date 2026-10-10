@@ -15,9 +15,9 @@
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConfigurationError, createWorkspaceClient, getExecutionContext } from "@databricks/appkit";
+import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
-import { pluginRegistry } from "@dbx-tools/appkit";
+import { appkit, pluginRegistry } from "@dbx-tools/appkit";
 import {
   filesCache as filesCachePlugin,
   type FilesCacheExports,
@@ -880,11 +880,15 @@ async function databricksFilesystem(
   const initialClient = workspaceClient.toLegacyWorkspaceClient(client);
   const fs = new DatabricksFileSystem({
     client: () => {
-      try {
-        return workspaceClient.toLegacyWorkspaceClient(getExecutionContext().client);
-      } catch {
-        return initialClient;
+      const executionContext = appkit.tryGetExecutionContext();
+      if (
+        executionContext &&
+        "isUserContext" in executionContext &&
+        executionContext.isUserContext === true
+      ) {
+        return workspaceClient.toLegacyWorkspaceClient(executionContext.client);
       }
+      return initialClient;
     },
     root,
     readOnly,

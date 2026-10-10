@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
+import { appkit } from "@dbx-tools/appkit";
 import type { FilesCacheExports } from "@dbx-tools/appkit/files-cache";
 import { log } from "@dbx-tools/shared-core";
 import { MemoryFileSystem, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
@@ -27,6 +28,7 @@ import {
 } from "../src/workspaces.ts";
 
 before(async () => {
+  await appkit.ensureInitialized();
   await CacheManager.getInstance();
 });
 
