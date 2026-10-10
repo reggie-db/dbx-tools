@@ -1,9 +1,10 @@
-import { stringUtils } from "@dbx-tools/shared-core";
+import { json, stringUtils } from "@dbx-tools/shared-core";
 import { genieModel } from "@dbx-tools/shared-genie";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
+  detectCodeLanguage,
   JsonBlock,
   RecordPreview,
   Spinner,
@@ -262,7 +263,7 @@ const isGroupRenderable = (g: MessageGroup): boolean =>
  *   1. The LLM's sub-question for this Genie call, always
  *      visible, styled as a blockquote so it reads as provenance.
  *   2. One numbered "Query N" Collapsible per query attachment
- *      (or just "Query" when there's one). Opens to reveal SQL.
+ *      (or just "Query" when there's one). Opens directly to the SQL.
  *   3. Errors that landed under this `message_id`, always
  *      visible (red text - users need to see failures, not click
  *      to find them).
@@ -291,11 +292,9 @@ const MessageGroupBody = ({
       {queryBuckets.map((bucket, i) => (
         // Each query bucket is a single Collapsible (default
         // closed) so the expanded group reads as just the
-        // question + a short stack of "Query N" rows.
-        // Click any row to drill into its SQL.
-        // SQL itself stays a nested Collapsible (default closed)
-        // for the same reason: code is the heaviest content here,
-        // and most readers only want a glance.
+        // question + a short stack of "Query N" rows. The query
+        // opens directly to its SQL instead of adding a redundant
+        // second "SQL" pill around the only child.
         <Collapsible key={bucket.key} className="rounded border border-border/60 bg-background/40">
           <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
             <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
@@ -305,24 +304,14 @@ const MessageGroupBody = ({
             ) : null}
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="flex flex-col gap-2 px-2 pb-2 text-xs">
+            <div className="flex flex-col gap-2 border-t border-border/50 px-2 pb-2 pt-2 text-xs">
               {bucket.query && (
-                <Collapsible className="rounded border border-border/60 bg-background/30">
-                  <CollapsibleTrigger className="group flex w-full items-center gap-1 px-2 py-1 text-left text-muted-foreground hover:text-foreground">
-                    <ChevronDownIcon className="size-3 transition-transform group-data-[state=closed]:-rotate-90" />
-                    <span>SQL</span>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="px-2 pb-2">
-                      <SqlBlock sql={bucket.query.sql} />
-                    </div>
-                    {bucket.query.description && (
-                      <div className="px-2 pb-2">
-                        <ToolMarkdown>{bucket.query.description}</ToolMarkdown>
-                      </div>
-                    )}
-                  </CollapsibleContent>
-                </Collapsible>
+                <>
+                  <SqlBlock sql={bucket.query.sql} />
+                  {bucket.query.description && (
+                    <ToolMarkdown>{bucket.query.description}</ToolMarkdown>
+                  )}
+                </>
               )}
             </div>
           </CollapsibleContent>
@@ -396,12 +385,8 @@ export function structuredToolPayload(value: unknown): unknown | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    return typeof parsed === "object" && parsed !== null ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
+  const parsed = json.parse(trimmed);
+  return typeof parsed === "object" && parsed !== null ? parsed : undefined;
 }
 
 const RawToolPayload = ({
@@ -451,24 +436,7 @@ export function detectToolSourceLanguage(
   source: string,
   fallback: ToolInputPresentation["language"],
 ): ToolInputPresentation["language"] {
-  const trimmed = source.trim();
-  if (/^(?:select|with|insert|update|delete|merge|create|alter)\b/i.test(trimmed)) return "sql";
-  if (/^(?:from\s+\S+\s+import|import\s+\S+|def\s+\w+|class\s+\w+):?/m.test(trimmed)) {
-    return "python";
-  }
-  if (/^(?:const|let|var|interface|type|export|import)\b/m.test(trimmed)) return "typescript";
-  if (/^(?:#!.*\b(?:ba|z|k)?sh\b|(?:cd|ls|cat|grep|find|bun|npm|pnpm|yarn)\s)/m.test(trimmed)) {
-    return "bash";
-  }
-  if ((trimmed.startsWith("{") || trimmed.startsWith("[")) && trimmed.length > 1) {
-    try {
-      JSON.parse(trimmed);
-      return "json";
-    } catch {
-      // Keep the tool-specific fallback for incomplete source.
-    }
-  }
-  return fallback;
+  return detectCodeLanguage(source) ?? fallback;
 }
 
 /** Extract a compact code or command preview from a tool request payload. */

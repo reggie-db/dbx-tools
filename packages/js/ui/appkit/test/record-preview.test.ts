@@ -3,16 +3,18 @@ import { describe, it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { detectCodeLanguage } from "../src/react/highlighted-code.tsx";
 import {
   formatRecordPreviewJson,
   looksLikeMarkdown,
   markdownForPreview,
+  parseNestedJsonText,
   recordPreviewRows,
 } from "../src/react/record-preview-data.ts";
 import { RecordPreview } from "../src/react/record-preview.tsx";
 
 describe("RecordPreview", () => {
-  it("keeps top-level scalars in a table and stacks nested arrays without index headings", () => {
+  it("keeps top-level and nested fields in one indented table without index headings", () => {
     const html = renderToStaticMarkup(
       createElement(RecordPreview, {
         value: {
@@ -26,13 +28,50 @@ describe("RecordPreview", () => {
     );
 
     assert.match(html, />Type<\/th>/);
-    assert.match(html, /<h3[^>]*>Files<\/h3>/);
-    assert.match(html, /<span[^>]*>Path<\/span>/);
+    assert.match(html, />Files<\/span>/);
+    assert.match(html, />Path<\/th>/);
     assert.doesNotMatch(html, />[12]<\/(?:th|span|h3)>/);
     assert.equal(html.match(/data-slot="table"/g)?.length, 1);
     assert.doesNotMatch(html, /max-h-\[inherit\] min-w-0 overflow-auto/);
     assert.match(html, /sticky top-1 z-10 float-right/);
-    assert.match(html, /border-l-2 border-border\/70/);
+    assert.doesNotMatch(html, /border-l-2 border-border\/70/);
+  });
+
+  it("expands quoted JSON object fields and marks that they were parsed from text", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecordPreview, {
+        value: {
+          metadata: '{"warehouse":"Serverless","output":{"format":"JSON"}}',
+        },
+      }),
+    );
+
+    assert.match(html, /aria-label="JSON parsed from text"/);
+    assert.match(html, />Warehouse<\/th>/);
+    assert.match(html, />Serverless<\/span><\/td>/);
+    assert.match(html, />Output<\/span>/);
+    assert.equal(html.match(/data-slot="table"/g)?.length, 1);
+  });
+
+  it("recursively parses quoted JSON in nested fields and arrays while highlighting SQL", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecordPreview, {
+        value: {
+          metadata: JSON.stringify({
+            config: JSON.stringify({
+              query: "SELECT store_id, SUM(sales) FROM sales GROUP BY store_id",
+              payloads: [JSON.stringify({ deepValue: "found" })],
+            }),
+          }),
+        },
+      }),
+    );
+
+    assert.equal(html.match(/aria-label="JSON parsed from text"/g)?.length, 3);
+    assert.match(html, /data-language="sql"/);
+    assert.match(html, />Deep Value<\/th>/);
+    assert.match(html, />found<\/span><\/td>/);
+    assert.equal(html.match(/data-slot="table"/g)?.length, 1);
   });
 });
 
@@ -60,6 +99,23 @@ describe("formatRecordPreviewJson", () => {
   it("pretty-prints objects and leaves strings authored", () => {
     assert.equal(formatRecordPreviewJson({ a: 1 }), '{\n  "a": 1\n}');
     assert.equal(formatRecordPreviewJson("already text"), "already text");
+  });
+});
+
+describe("parseNestedJsonText", () => {
+  it("parses complete quoted objects and arrays without accepting scalar text", () => {
+    assert.deepEqual(parseNestedJsonText('{"nested":true}'), { nested: true });
+    assert.deepEqual(parseNestedJsonText('[{"id":1}]'), [{ id: 1 }]);
+    assert.equal(parseNestedJsonText("plain text"), undefined);
+    assert.equal(parseNestedJsonText("true"), undefined);
+    assert.equal(parseNestedJsonText("{ incomplete"), undefined);
+  });
+});
+
+describe("detectCodeLanguage", () => {
+  it("detects SQL independently of field names", () => {
+    assert.equal(detectCodeLanguage("SELECT * FROM sales"), "sql");
+    assert.equal(detectCodeLanguage("plain sentence"), undefined);
   });
 });
 

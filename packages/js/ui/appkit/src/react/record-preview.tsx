@@ -6,7 +6,7 @@
  */
 
 import { BracesIcon, Table2Icon } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Streamdown } from "streamdown";
 
 import {
@@ -21,11 +21,12 @@ import {
   TooltipTrigger,
   cn,
 } from "./appkit-ui.ts";
-import { JsonBlock } from "./highlighted-code.tsx";
+import { detectCodeLanguage, HighlightedCodeBlock, JsonBlock } from "./highlighted-code.tsx";
 import {
   formatRecordPreviewJson,
   looksLikeMarkdown,
   markdownForPreview,
+  parseNestedJsonText,
   recordPreviewRows,
   type RecordPreviewRow,
 } from "./record-preview-data.ts";
@@ -35,6 +36,7 @@ export {
   formatRecordPreviewJson,
   looksLikeMarkdown,
   markdownForPreview,
+  parseNestedJsonText,
   recordPreviewRows,
 } from "./record-preview-data.ts";
 
@@ -42,7 +44,8 @@ export {
 const MARKDOWN_CELL_CLASSES =
   "min-w-0 max-w-full text-[11px] leading-snug [&_p]:my-0.5 [&_p]:leading-snug [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_h1]:my-1 [&_h1]:text-[11px] [&_h1]:font-semibold [&_h2]:my-1 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:text-[11px] [&_h3]:font-semibold [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-background/60 [&_pre]:p-1.5 [&_pre]:text-[10px] [&_code]:text-[10px]";
 
-const NESTED_DEPTH = 4;
+const MAX_NESTED_DEPTH = 12;
+const MAX_INDENT_DEPTH = 4;
 
 /** Props for {@link RecordPreview}. */
 export interface RecordPreviewProps {
@@ -97,104 +100,233 @@ export function RecordPreview({ value, className }: RecordPreviewProps) {
 
 function RecordTable({ rows }: { rows: RecordPreviewRow[] }) {
   if (rows.length === 0) return null;
-  const scalarRows = rows.filter((row) => !isNestedValue(row.value));
-  const nestedRows = rows.filter((row) => isNestedValue(row.value));
   return (
     <div className="min-w-0 px-2 pb-2">
-      {scalarRows.length > 0 ? <ScalarTable rows={scalarRows} /> : null}
-      {nestedRows.map((row) => (
-        <RecordGroup key={row.key} row={row} depth={0} />
-      ))}
+      <Table className="table-fixed text-[11px]">
+        <TableBody>
+          {rows.map((row) => (
+            <RecordRow key={row.key} row={row} depth={0} path={row.key} />
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-function ScalarTable({ rows }: { rows: RecordPreviewRow[] }) {
+function RecordRow({
+  row,
+  depth,
+  path,
+  divided,
+}: {
+  row: RecordPreviewRow;
+  depth: number;
+  path: string;
+  divided?: boolean;
+}) {
+  const nested = nestedRecordValue(row.value);
+  if (!nested) {
+    return <FieldRow row={row} depth={depth} divided={divided} />;
+  }
   return (
-    <Table className="table-fixed text-[11px]">
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.key} className="hover:bg-transparent">
-            <TableHead className="h-auto w-28 align-top whitespace-normal px-0 py-1.5 pr-2 font-medium text-muted-foreground sm:w-[8.5rem]">
-              {row.label}
-            </TableHead>
-            <TableCell className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]">
-              <RecordValue value={row.value} depth={0} />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Fragment>
+      <SectionRow
+        label={row.label}
+        depth={depth}
+        divided={divided}
+        parsedFromText={nested.parsedFromText}
+      />
+      <NestedRows value={nested.value} depth={depth + 1} path={path} />
+    </Fragment>
   );
 }
 
-function RecordGroup({ row, depth }: { row: RecordPreviewRow; depth: number }) {
+function FieldRow({
+  row,
+  depth,
+  divided,
+}: {
+  row: RecordPreviewRow;
+  depth: number;
+  divided?: boolean;
+}) {
   return (
-    <section className="mt-2.5 min-w-0 first:mt-2">
-      <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <TableRow className={cn("hover:bg-transparent", divided && "border-t-2 border-border/50")}>
+      <TableHead
+        className="h-auto w-28 align-top whitespace-normal px-0 py-1.5 pr-2 font-medium text-muted-foreground sm:w-[8.5rem]"
+        style={{ paddingLeft: rowIndent(depth) }}
+      >
         {row.label}
-      </h3>
-      <div className="min-w-0 border-l-2 border-border/70 pl-2.5">
-        <NestedValue value={row.value} depth={depth + 1} />
-      </div>
-    </section>
+      </TableHead>
+      <TableCell className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]">
+        <RecordValue value={row.value} depth={depth} />
+      </TableCell>
+    </TableRow>
   );
 }
 
-function NestedValue({ value, depth }: { value: unknown; depth: number }) {
-  if (depth > NESTED_DEPTH) return <RecordValue value={value} depth={depth} />;
+function SectionRow({
+  label,
+  depth,
+  divided,
+  parsedFromText,
+}: {
+  label: string;
+  depth: number;
+  divided?: boolean;
+  parsedFromText: boolean;
+}) {
+  return (
+    <TableRow
+      className={cn("border-b-0 hover:bg-transparent", divided && "border-t-2 border-border/50")}
+    >
+      <TableHead
+        colSpan={2}
+        className="h-auto px-0 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-foreground/85"
+        style={{ paddingLeft: rowIndent(depth) }}
+      >
+        <span className="inline-flex items-center gap-1">
+          {label}
+          {parsedFromText ? (
+            <BracesIcon
+              className="size-3 text-muted-foreground"
+              aria-label="JSON parsed from text"
+            />
+          ) : null}
+        </span>
+      </TableHead>
+    </TableRow>
+  );
+}
+
+function NestedRows({ value, depth, path }: { value: unknown; depth: number; path: string }) {
+  if (depth > MAX_NESTED_DEPTH) {
+    return <ValueRow value={value} depth={depth} />;
+  }
   if (Array.isArray(value)) {
     return (
-      <div className="min-w-0 divide-y divide-border/60">
+      <Fragment>
         {value.map((item, index) => (
-          <div key={index} className="min-w-0 py-1.5 first:pt-0 last:pb-0">
-            <NestedItem value={item} depth={depth} />
-          </div>
+          <ArrayItemRows
+            key={`${path}.${index}`}
+            value={item}
+            depth={depth}
+            path={`${path}.${index}`}
+            divided={index > 0}
+          />
         ))}
-      </div>
+      </Fragment>
     );
   }
   if (value != null && typeof value === "object") {
     const rows = recordPreviewRows(value);
+    if (rows.length === 0) return <ValueRow value={value} depth={depth} />;
     return (
-      <div className="min-w-0">
-        {rows.map((row) =>
-          isNestedValue(row.value) ? (
-            <RecordGroup key={row.key} row={row} depth={depth} />
-          ) : (
-            <StackedField key={row.key} row={row} depth={depth} />
-          ),
-        )}
-      </div>
+      <Fragment>
+        {rows.map((row) => (
+          <RecordRow
+            key={`${path}.${row.key}`}
+            row={row}
+            depth={depth}
+            path={`${path}.${row.key}`}
+          />
+        ))}
+      </Fragment>
     );
   }
-  return <RecordValue value={value} depth={depth} />;
+  return <ValueRow value={value} depth={depth} />;
 }
 
-function NestedItem({ value, depth }: { value: unknown; depth: number }) {
-  if (value != null && typeof value === "object") {
-    return <NestedValue value={value} depth={depth} />;
+function ArrayItemRows({
+  value,
+  depth,
+  path,
+  divided,
+}: {
+  value: unknown;
+  depth: number;
+  path: string;
+  divided: boolean;
+}) {
+  const nested = nestedRecordValue(value);
+  if (nested?.parsedFromText) {
+    return (
+      <Fragment>
+        <NestedTextMarkerRow depth={depth} divided={divided} />
+        <NestedRows value={nested.value} depth={depth + 1} path={path} />
+      </Fragment>
+    );
   }
-  return <RecordValue value={value} depth={depth} />;
+  if (value != null && typeof value === "object") {
+    const rows = recordPreviewRows(value);
+    if (rows.length === 0) return <ValueRow value={value} depth={depth} divided={divided} />;
+    return (
+      <Fragment>
+        {rows.map((row, index) => (
+          <RecordRow
+            key={`${path}.${row.key}`}
+            row={row}
+            depth={depth}
+            path={`${path}.${row.key}`}
+            divided={divided && index === 0}
+          />
+        ))}
+      </Fragment>
+    );
+  }
+  return <ValueRow value={value} depth={depth} divided={divided} />;
 }
 
-function StackedField({ row, depth }: { row: RecordPreviewRow; depth: number }) {
+function NestedTextMarkerRow({ depth, divided }: { depth: number; divided: boolean }) {
   return (
-    <div className="min-w-0 border-b border-border/60 py-1.5 last:border-b-0">
-      <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {row.label}
-      </span>
-      <div className="min-w-0 text-[11px] leading-snug [overflow-wrap:anywhere]">
-        <RecordValue value={row.value} depth={depth} />
-      </div>
-    </div>
+    <TableRow className={cn("border-b-0 hover:bg-transparent", divided && "border-t-2")}>
+      <TableHead
+        colSpan={2}
+        className="h-auto px-0 pb-0.5 pt-2 text-muted-foreground"
+        style={{ paddingLeft: rowIndent(depth) }}
+      >
+        <BracesIcon className="size-3" aria-label="JSON parsed from text" />
+      </TableHead>
+    </TableRow>
   );
 }
 
-function isNestedValue(value: unknown): boolean {
-  if (value == null || typeof value !== "object") return false;
-  if (!Array.isArray(value)) return true;
-  return value.some((item) => item != null && typeof item === "object");
+function ValueRow({ value, depth, divided }: { value: unknown; depth: number; divided?: boolean }) {
+  return (
+    <TableRow className={cn("hover:bg-transparent", divided && "border-t-2 border-border/50")}>
+      <TableHead
+        aria-hidden
+        className="h-auto w-28 px-0 py-1.5 pr-2 sm:w-[8.5rem]"
+        style={{ paddingLeft: rowIndent(depth) }}
+      />
+      <TableCell className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]">
+        <RecordValue value={value} depth={depth} />
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function rowIndent(depth: number): string {
+  return `${Math.min(depth, MAX_INDENT_DEPTH) * 0.9}rem`;
+}
+
+function nestedRecordValue(
+  value: unknown,
+): { value: Record<string, unknown> | unknown[]; parsedFromText: boolean } | undefined {
+  const parsed = parseNestedJsonText(value);
+  if (parsed) return { value: parsed, parsedFromText: true };
+  if (value == null || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) {
+    const hasNestedValue = value.some(
+      (item) =>
+        (item != null && typeof item === "object") || parseNestedJsonText(item) !== undefined,
+    );
+    if (!hasNestedValue) return undefined;
+  }
+  return {
+    value: value as Record<string, unknown> | unknown[],
+    parsedFromText: false,
+  };
 }
 
 function RecordValue({ value, depth }: { value: unknown; depth: number }) {
@@ -205,6 +337,16 @@ function RecordValue({ value, depth }: { value: unknown; depth: number }) {
     return <span className="tabular-nums">{String(value)}</span>;
   }
   if (typeof value === "string") {
+    const language = detectCodeLanguage(value);
+    if (language === "sql") {
+      return (
+        <HighlightedCodeBlock
+          source={value}
+          language={language}
+          className="rounded bg-background/60 p-1.5 text-[10px]"
+        />
+      );
+    }
     if (looksLikeMarkdown(value)) {
       return (
         <div className={MARKDOWN_CELL_CLASSES}>
@@ -220,7 +362,7 @@ function RecordValue({ value, depth }: { value: unknown; depth: number }) {
         <span className="whitespace-pre-wrap break-words">{value.map(String).join(", ")}</span>
       );
     }
-    if (depth < NESTED_DEPTH) {
+    if (depth < MAX_NESTED_DEPTH) {
       return (
         <div className="min-w-0 divide-y divide-border/60">
           {value.map((item, index) => (

@@ -188,12 +188,7 @@ export const ChatTranscript = ({
         (part.type === "text" || part.type === "reasoning") &&
         Boolean((part as { text?: string }).text),
     ) || (lastEvents?.length ?? 0) > 0;
-  const hasRunningTool = (lastEvents ?? []).some((event) => event.status === "running");
-  const waitingLabel = !lastAssistantHasContent
-    ? "Thinking..."
-    : hasRunningTool
-      ? "Working..."
-      : "Composing response...";
+  const showWaitingIndicator = isRunning && !lastAssistantHasContent;
 
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -259,10 +254,10 @@ export const ChatTranscript = ({
               }
               return <UserBubble key={message.id} message={message} />;
             })}
-            {isRunning && (
+            {showWaitingIndicator && (
               <div className="flex h-7 items-center gap-2 px-3 text-xs text-muted-foreground">
                 <Spinner className="size-3" />
-                <span className="animate-pulse">{waitingLabel}</span>
+                <span className="animate-pulse">Thinking...</span>
               </div>
             )}
             {status === "error" && (

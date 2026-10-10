@@ -4,7 +4,7 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
+import { json, object as objectUtils, stringUtils } from "@dbx-tools/shared-core";
 
 /** One field shown in the table view of {@link RecordPreview}. */
 export interface RecordPreviewRow {
@@ -37,6 +37,18 @@ export function formatRecordPreviewJson(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+/** Parse a string whose complete value is a serialized JSON object or array. */
+export function parseNestedJsonText(
+  value: unknown,
+): Record<string, unknown> | unknown[] | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
+  const parsed = json.parse(trimmed);
+  if (Array.isArray(parsed)) return parsed;
+  return objectUtils.isRecord(parsed) ? parsed : undefined;
 }
 
 /** YAML document fence at the start of a markdown file (`---` ... `---`). */
