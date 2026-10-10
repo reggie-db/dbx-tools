@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui";
-export const PACKAGE_VERSION = "0.9.113";
+export const PACKAGE_VERSION = "0.9.114";
 export * as authReactAuthClient from "./src/auth/react/auth-client.ts";
 export * as authReactAuthGate from "./src/auth/react/auth-gate.tsx";
 export * as authReactPasskeyManager from "./src/auth/react/passkey-manager.tsx";
@@ -38,7 +38,8 @@ export type { EmailComposeProps } from "./src/email/react/email-compose.tsx";
 export { joinAddresses, parseAddresses, attachmentNames } from "./src/email/react/fields.ts";
 export type { EmailDraft } from "./src/email/react/fields.ts";
 export type { BrandPreset, BrandPickerProps } from "./src/react/brand-picker.tsx";
-export { JsonBlock } from "./src/react/highlighted-code.tsx";
+export { HighlightedCodeBlock, JsonBlock } from "./src/react/highlighted-code.tsx";
+export type { DetectedCodeLanguage } from "./src/react/highlighted-code.tsx";
 export type { RecordPreviewProps } from "./src/react/record-preview.tsx";
 export type { RecordPreviewRow } from "./src/react/record-preview-data.ts";
 export type { SearchBoxProps } from "./src/search/react/search-box.tsx";
