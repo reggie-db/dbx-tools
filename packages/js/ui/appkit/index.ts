@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui";
-export const PACKAGE_VERSION = "0.9.107";
+export const PACKAGE_VERSION = "0.9.108";
 export * as authReactAuthClient from "./src/auth/react/auth-client.ts";
 export * as authReactAuthGate from "./src/auth/react/auth-gate.tsx";
 export * as authReactPasskeyManager from "./src/auth/react/passkey-manager.tsx";
