@@ -9,7 +9,8 @@
         "@dbx-tools/lakebase",
         "@dbx-tools/postgres",
         "@dbx-tools/projen",
-        "@dbx-tools/shared-core"
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-fs"
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit-graphiti",
@@ -31,6 +32,7 @@
       "path": "packages/js/node/appkit-graphiti",
       "dependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-mastra",
         "@dbx-tools/auth",
         "@dbx-tools/core",
         "@dbx-tools/shared-core",
@@ -51,6 +53,7 @@
         "@dbx-tools/fs",
         "@dbx-tools/genie",
         "@dbx-tools/model",
+        "@dbx-tools/model-protocol",
         "@dbx-tools/path",
         "@dbx-tools/postgres",
         "@dbx-tools/shared-core",
@@ -60,6 +63,7 @@
         "@dbx-tools/shared-model"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-graphiti",
         "@dbx-tools/demo-appkit-server"
       ]
     },
@@ -69,6 +73,7 @@
       "dependencies": [
         "@dbx-tools/databricks",
         "@dbx-tools/model",
+        "@dbx-tools/model-protocol",
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-model",
         "@dbx-tools/shared-model-gateway"
@@ -324,7 +329,22 @@
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/appkit-web-search",
+        "@dbx-tools/model-protocol",
         "@dbx-tools/search"
+      ]
+    },
+    {
+      "name": "@dbx-tools/model-protocol",
+      "path": "packages/js/node/model-protocol",
+      "dependencies": [
+        "@dbx-tools/model",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-model",
+        "@dbx-tools/shared-model-gateway"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-model-gateway"
       ]
     },
     {
@@ -425,6 +445,7 @@
         "@dbx-tools/genie",
         "@dbx-tools/lakebase",
         "@dbx-tools/model",
+        "@dbx-tools/model-protocol",
         "@dbx-tools/path",
         "@dbx-tools/postgres",
         "@dbx-tools/projen",
@@ -472,6 +493,7 @@
         "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/databricks",
         "@dbx-tools/fs"
@@ -536,6 +558,7 @@
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/model",
+        "@dbx-tools/model-protocol",
         "@dbx-tools/search",
         "@dbx-tools/shared-genie-code",
         "@dbx-tools/shared-mastra",
@@ -553,6 +576,7 @@
       "reverseDependencies": [
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/cli",
+        "@dbx-tools/model-protocol",
         "@dbx-tools/shared-genie-code",
         "@dbx-tools/shared-graphiti"
       ]
