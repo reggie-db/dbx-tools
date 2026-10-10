@@ -12,7 +12,7 @@ import { makeReadonly } from "./generated.ts";
 import { publicFunctionExports, publicNamespaceExports } from "./module-exports.ts";
 import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
 
-const FINGERPRINT_VERSION = 3;
+const FINGERPRINT_VERSION = 4;
 const INPUT_FINGERPRINT_LABEL = "dbx-tools binding inputs sha256";
 const CONTENT_FINGERPRINT_LABEL = "dbx-tools binding content sha256";
 const PYTHON_KEYWORDS = new Set([
@@ -82,6 +82,8 @@ export interface ResolvedPythonNodeBindings {
 export interface GeneratePythonNodeBindingsOptions {
   /** Verify generated output without changing it. */
   readonly check?: boolean;
+  /** Regenerate outputs without consulting fingerprints. */
+  readonly force?: boolean;
 }
 
 /** Generate or verify every pyproject-configured Node binding in a repository. */
@@ -90,6 +92,7 @@ export function generatePythonNodeBindings(
   options: GeneratePythonNodeBindingsOptions = {},
 ): void {
   const task = resolve(dirname(fileURLToPath(import.meta.url)), "../tasks/python-node-bindings.ts");
+  const force = options.force ?? process.env.CI === "true";
   const configuredProjects = pythonNodeBindingProjects(projectRoot).map((project) => ({
     project,
     configs: resolvePythonNodeBindings(projectRoot, project).map(resolvePythonNodeBindingModules),
@@ -113,7 +116,7 @@ export function generatePythonNodeBindings(
   }
   for (const { configs, project } of configuredProjects) {
     const inputFingerprint = pythonNodeBindingInputFingerprint(projectRoot, configs);
-    if (pythonNodeBindingOutputsCurrent(configs, inputFingerprint)) {
+    if (!force && pythonNodeBindingOutputsCurrent(configs, inputFingerprint)) {
       for (const output of pythonNodeBindingOutputs(configs)) makeReadonly(output);
       continue;
     }
@@ -124,6 +127,7 @@ export function generatePythonNodeBindings(
       "--project",
       project,
       ...(options.check ? ["--check"] : []),
+      ...(force ? ["--force"] : []),
     ]);
   }
 }
@@ -164,16 +168,14 @@ export function pythonNodeBindingInputFingerprint(
 ): string {
   const canonicalRoot = canonicalPath(root);
   const fingerprintPath = (path: string): string => relative(canonicalRoot, canonicalPath(path));
-  const sourceDirectory = canonicalPath(dirname(fileURLToPath(import.meta.url)));
+  const sourceFile = canonicalPath(fileURLToPath(import.meta.url));
+  const sourceDirectory = dirname(sourceFile);
   const task = resolve(sourceDirectory, "../tasks/python-node-bindings.ts");
-  const files = new Set<string>([
-    canonicalPath(task),
-    ...filesBelow(sourceDirectory)
-      .filter((file) => file.endsWith(".ts"))
-      .map(canonicalPath),
-  ]);
-  const rootPackageManifest = join(root, "package.json");
-  if (existsSync(rootPackageManifest)) files.add(canonicalPath(rootPackageManifest));
+  const files = new Set<string>(
+    transitiveSourceFiles([sourceFile, task], [dirname(sourceDirectory)]),
+  );
+  const versionFile = join(root, "VERSION");
+  if (existsSync(versionFile)) files.add(canonicalPath(versionFile));
   for (const config of configs) {
     for (const input of config.watchInputs) files.add(canonicalPath(resolve(root, input)));
     for (const { handlerFile } of config.functionOverrides) files.add(canonicalPath(handlerFile));
@@ -191,7 +193,6 @@ export function pythonNodeBindingInputFingerprint(
   const hash = createHash("sha256");
   hash.update(
     JSON.stringify({
-      bun: Bun.version,
       configs: configs.map((config) => ({
         bindingDirectory: fingerprintPath(config.bindingDirectory),
         bindingName: config.bindingName,
@@ -209,7 +210,6 @@ export function pythonNodeBindingInputFingerprint(
         runtimeOutput: fingerprintPath(config.runtimeOutput),
       })),
       format: FINGERPRINT_VERSION,
-      typescript: ts.version,
     }),
   );
   for (const { file, path } of [...files]
@@ -439,16 +439,23 @@ type BindingSourceConfig = Omit<ResolvedPythonNodeBindings, "watchInputs">;
 
 /** Transitive workspace source files reachable from configured binding modules. */
 function bindingSourceInputs(root: string, config: BindingSourceConfig): string[] {
-  const allowed = config.workspaceDirectories.map(canonicalPath);
   const packageEntrypoint = Bun.resolveSync(config.entrypoint, config.projectDirectory);
   const entrypoints =
     config.modules.length > 0
       ? config.modules.map((module) => resolvePythonNodeBindingModule(packageEntrypoint, module))
       : [packageEntrypoint];
-  const pending = [
-    ...entrypoints,
-    ...config.functionOverrides.map(({ handlerFile }) => handlerFile),
-  ];
+  return transitiveSourceFiles(
+    [...entrypoints, ...config.functionOverrides.map(({ handlerFile }) => handlerFile)],
+    config.workspaceDirectories,
+  ).map((path) => relative(root, path));
+}
+
+function transitiveSourceFiles(
+  entrypoints: readonly string[],
+  allowedDirectories: readonly string[],
+): string[] {
+  const allowed = allowedDirectories.map(canonicalPath);
+  const pending = [...entrypoints];
   const visited = new Set<string>();
   while (pending.length > 0) {
     const candidate = canonicalPath(pending.pop()!);
@@ -474,7 +481,7 @@ function bindingSourceInputs(root: string, config: BindingSourceConfig): string[
       }
     }
   }
-  return [...visited].sort().map((path) => relative(root, path));
+  return [...visited].sort();
 }
 
 /** Resolve one configured namespace from a package entrypoint barrel. */

@@ -48,6 +48,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     options: {
       binding: { type: "string" },
       check: { type: "boolean" },
+      force: { type: "boolean" },
       module: { type: "string" },
       project: { type: "string" },
       root: { type: "string" },
@@ -58,7 +59,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     if (values.binding !== undefined || values.module !== undefined) {
       throw new Error("--binding and --module require --project");
     }
-    generatePythonNodeBindings(root, { check: values.check });
+    generatePythonNodeBindings(root, { check: values.check, force: values.force });
     return;
   }
 
@@ -77,7 +78,11 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   const config = selectedBinding === undefined ? configs[0] : configs[selectedBinding];
   if (!config) throw new Error("Expected at least one Node binding configuration");
   const inputFingerprint = pythonNodeBindingInputFingerprint(root, configs);
-  if (selectedBinding === undefined && pythonNodeBindingOutputsCurrent(configs, inputFingerprint)) {
+  if (
+    selectedBinding === undefined &&
+    !values.force &&
+    pythonNodeBindingOutputsCurrent(configs, inputFingerprint)
+  ) {
     for (const output of pythonNodeBindingOutputs(configs)) makeReadonly(output);
     if (values.check) {
       logger.info(`verified ${relative(root, dirname(config.runtimeOutput))} from fingerprints`);
@@ -94,6 +99,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
           values.project,
           ...(values.root ? ["--root", values.root] : []),
           ...(values.check ? ["--check"] : []),
+          ...(values.force ? ["--force"] : []),
           "--binding",
           String(binding),
           "--module",
