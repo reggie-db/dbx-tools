@@ -234,10 +234,10 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   codeMode?: boolean | MastraCodeModeConfig;
   /**
-   * Sandbox for auto-created agent workspaces. Disabled by default. `"monty"`
-   * selects Monty; `true`, `"databricks"`, or an object selects/configures
-   * Databricks Sandbox. An agent with an explicit custom `workspace` keeps that
-   * workspace and its sandbox.
+   * Sandbox for auto-created agent workspaces. Defaults to Monty. `false`
+   * disables command execution; `true`, `"databricks"`, or an object
+   * selects/configures Databricks Sandbox. An agent with an explicit custom
+   * `workspace` keeps that workspace and its sandbox.
    */
   sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
   /** Add user-scoped `/tmp` only when no configured workspace path mounts writable. */
@@ -697,7 +697,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     sandbox: {
       type: ["boolean", "string", "object"],
       description:
-        'Command sandbox for auto-created agent workspaces. Disabled by default. "monty" selects Monty; true, "databricks", or an object selects/configures Databricks Sandbox.',
+        'Command sandbox for auto-created agent workspaces. Defaults to Monty. False disables command execution; true, "databricks", or an object selects/configures Databricks Sandbox.',
     },
     workspaceFallbackToTmp: {
       type: "boolean",

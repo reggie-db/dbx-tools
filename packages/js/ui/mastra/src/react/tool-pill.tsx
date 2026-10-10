@@ -22,6 +22,9 @@ import type { ToolEvent, ToolProgress } from "./types.ts";
  * `Execute Command` rather than `Mastra Workspace Execute Command`.
  */
 const MASTRA_WORKSPACE_TOOL_PREFIX = "mastra_workspace_";
+const TOOL_LABELS: Readonly<Record<string, string>> = {
+  execute_typescript: "Run Workflow",
+};
 
 /**
  * Turn a snake/camel tool id into a Title Cased label the user can
@@ -38,6 +41,8 @@ const MASTRA_WORKSPACE_TOOL_PREFIX = "mastra_workspace_";
  *   `myCoolTool`    -> `My Cool Tool`
  */
 export const humanizeToolName = (toolName: string): string => {
+  const explicitLabel = TOOL_LABELS[toolName];
+  if (explicitLabel) return explicitLabel;
   const label = toolName.startsWith(MASTRA_WORKSPACE_TOOL_PREFIX)
     ? toolName.slice(MASTRA_WORKSPACE_TOOL_PREFIX.length)
     : toolName;
@@ -590,6 +595,41 @@ const hasExpandableDetails = (event: ToolEvent): boolean => {
   );
 };
 
+const ToolCallDetails = ({
+  event,
+  showQuestion = false,
+}: {
+  event: ToolEvent;
+  showQuestion?: boolean;
+}) => {
+  const question = askGenieQuestion(event);
+  const summary = summarizeProgress(event.progress ?? []);
+  const inputPresentation =
+    "input" in event ? toolInputPresentation(event.toolName, event.input) : undefined;
+  const outputPresentation =
+    "output" in event ? toolOutputPresentation(event.toolName, event.output) : undefined;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {showQuestion && question ? (
+        <p className="break-words px-0.5 text-xs italic text-foreground/80">{question}</p>
+      ) : null}
+      {inputPresentation ? (
+        <ToolInputSource presentation={inputPresentation} />
+      ) : "input" in event ? (
+        <RawToolPayload label="Request" value={event.input} />
+      ) : null}
+      <WebSearchProgressDetails event={event} />
+      <ToolProgressDetails summary={summary} omitQuestion />
+      {outputPresentation ? (
+        <ToolInputSource presentation={outputPresentation} />
+      ) : "output" in event ? (
+        <RawToolPayload label="Response" value={event.output} />
+      ) : null}
+    </div>
+  );
+};
+
 /**
  * One row inside {@link ToolSessionPill}. Always-visible header
  * shows the status icon, the tool's verb (`Called Ask Genie`,
@@ -608,12 +648,7 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
   const isRunning = event.status === "running";
   const isError = event.status === "error";
   const question = askGenieQuestion(event);
-  const summary = summarizeProgress(event.progress ?? []);
   const expandable = hasExpandableDetails(event);
-  const inputPresentation =
-    "input" in event ? toolInputPresentation(event.toolName, event.input) : undefined;
-  const outputPresentation =
-    "output" in event ? toolOutputPresentation(event.toolName, event.output) : undefined;
   // Inner rows defer to the live wire status when running (e.g.
   // "Executing query") so users tracking the open pill see the
   // backend's freshest state - not just the static
@@ -659,19 +694,8 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
         {header}
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="flex flex-col gap-2 px-2 pb-2">
-          {inputPresentation ? (
-            <ToolInputSource presentation={inputPresentation} />
-          ) : "input" in event ? (
-            <RawToolPayload label="Request" value={event.input} />
-          ) : null}
-          <WebSearchProgressDetails event={event} />
-          <ToolProgressDetails summary={summary} omitQuestion />
-          {outputPresentation ? (
-            <ToolInputSource presentation={outputPresentation} />
-          ) : "output" in event ? (
-            <RawToolPayload label="Response" value={event.output} />
-          ) : null}
+        <div className="px-2 pb-2">
+          <ToolCallDetails event={event} />
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -762,10 +786,12 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
           )}
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="mt-1.5 flex flex-col gap-1">
-            {events.map((event) => (
-              <ToolCallRow key={event.id} event={event} />
-            ))}
+          <div className={cn("mt-1.5", events.length > 1 && "flex flex-col gap-1")}>
+            {events.length === 1 ? (
+              <ToolCallDetails event={latest} showQuestion />
+            ) : (
+              events.map((event) => <ToolCallRow key={event.id} event={event} />)
+            )}
           </div>
         </CollapsibleContent>
       </Collapsible>

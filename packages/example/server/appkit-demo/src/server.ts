@@ -120,8 +120,9 @@ const clientDist =
 //
 // Workspace capabilities: `createAgent` defaults `workspace` to
 // `databricksWorkspace()`, which provides file access, configured Assistant
-// skill paths, and no command sandbox. Command execution can be selected
-// independently when needed.
+// skill paths, and Monty command execution. Each capability can be configured
+// or disabled independently. Code Mode uses its own isolated-vm or QuickJS
+// transport rather than the workspace command sandbox.
 //
 // Required env vars (see .env.example):
 // - DATABRICKS_SERVING_ENDPOINT_NAME - optional override; when absent the

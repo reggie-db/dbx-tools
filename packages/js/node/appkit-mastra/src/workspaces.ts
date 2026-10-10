@@ -173,9 +173,9 @@ type WorkspaceMountResolver = (
 ) => WorkspaceMountContribution | Promise<WorkspaceMountContribution>;
 
 /**
- * Sandbox selection for {@link databricksWorkspace}. Command execution is
- * disabled by default; Monty, Databricks Sandbox, or a Mastra provider/resolver
- * must be selected explicitly.
+ * Sandbox selection for {@link databricksWorkspace}. Monty is the default;
+ * command execution can be disabled or replaced with Databricks Sandbox or any
+ * Mastra provider/resolver.
  */
 export type WorkspaceSandboxSelection =
   | false
@@ -208,9 +208,9 @@ export interface DatabricksWorkspaceOptions extends Omit<
   /** AppKit plugin context used to discover optional sibling capabilities. */
   pluginContext?: pluginRegistry.PluginContextLike;
   /**
-   * Command sandbox. Disabled by default. Pass `"monty"`, `"databricks"`, or
-   * Databricks Sandbox options to enable one of the built-in providers, or pass
-   * an explicit Mastra sandbox/provider resolver.
+   * Command sandbox. Defaults to Monty. Pass `false` to disable it,
+   * `"databricks"` or Databricks Sandbox options to select the remote provider,
+   * or an explicit Mastra sandbox/provider resolver.
    */
   sandbox?: WorkspaceSandboxSelection;
   /** Add user-scoped `/tmp` only when no configured Databricks path mounts writable. */
@@ -416,7 +416,7 @@ function resolveWorkspaceSandbox(
   workspaceId: string,
   workspaceName: string,
 ): WorkspaceSandbox | WorkspaceSandboxResolver | undefined {
-  const configured = selection ?? false;
+  const configured = selection ?? "monty";
   if (configured === false) return undefined;
   if (configured === "monty") return new MontySandbox();
   if (typeof configured === "function" || isSandbox(configured)) return configured;

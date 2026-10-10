@@ -266,10 +266,10 @@ and memory configs.
 
 Every `agents.createAgent()` gets a default Mastra `Workspace` from
 `workspaces.databricksWorkspace()`. A workspace can provide file access, skill
-discovery, a command sandbox, or any combination. The default enables file and
-skill access only: it mounts `/Workspace/.assistant` and the current user's
-workspace home and scans their configured Assistant skill paths. Command
-execution is disabled until a sandbox is selected explicitly.
+discovery, a command sandbox, or any combination. The default mounts
+`/Workspace/.assistant` and the current user's workspace home, scans their
+configured Assistant skill paths, and provides Monty for isolated Python
+command execution.
 
 Pass paths directly when an agent needs a different filesystem scope:
 
@@ -468,8 +468,11 @@ explicit OBO client must request the Sandbox API's `sandbox` scope. The Sandbox
 filesystem is separate from Databricks Workspace skill mounts; command code must
 copy data explicitly when it needs both.
 
-Select the local Monty Python runtime explicitly when a Python-only command
-sandbox is appropriate:
+The default local Monty Python runtime accepts Python source or `python3 -c` and
+has no host filesystem, network, environment variables, shell, or third-party
+packages. Use Python source when a command must work with either provider.
+
+Select Monty explicitly when replacing another plugin-level sandbox setting:
 
 ```ts
 mastra({
@@ -477,10 +480,6 @@ mastra({
   sandbox: "monty",
 });
 ```
-
-Monty accepts Python source or `python3 -c` and has no host filesystem, network,
-environment variables, shell, or third-party packages. Use Python source when a
-command must work with either provider.
 
 Disable command execution, select Databricks, or provide any Mastra sandbox on
 one agent:
@@ -1077,9 +1076,9 @@ The main plugin options are:
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
-- `sandbox` is disabled by default for auto-created workspaces. `"monty"`
-  selects Monty, while `true`, `"databricks"`, or an object selects/configures
-  Databricks Sandbox.
+- `sandbox` defaults to Monty for auto-created workspaces. `false` disables
+  command execution, while `true`, `"databricks"`, or an object
+  selects/configures Databricks Sandbox.
 - `codeMode` exposes each agent's explicitly supplied executable tools through
   native Mastra Code Mode. It defaults on when such tools exist, selecting
   isolated-vm once at startup and falling back to QuickJS only when unavailable.

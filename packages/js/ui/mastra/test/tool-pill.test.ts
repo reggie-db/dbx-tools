@@ -131,6 +131,10 @@ describe("tool request source formatting", () => {
 });
 
 describe("skill tool labels", () => {
+  it("presents Code Mode as a user-facing workflow", () => {
+    assert.equal(humanizeToolName("execute_typescript"), "Run Workflow");
+  });
+
   it("humanizes Mastra skill meta-tools for session pills", () => {
     assert.equal(humanizeToolName("search_skills"), "Search Skills");
     assert.equal(humanizeToolName("load_skill"), "Load Skill");

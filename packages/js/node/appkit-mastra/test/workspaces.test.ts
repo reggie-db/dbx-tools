@@ -113,11 +113,15 @@ describe("resolveDatabricksWorkspacePaths", () => {
 });
 
 describe("databricksWorkspace sandbox", () => {
-  it("disables command execution by default", async () => {
+  it("uses Monty by default", async () => {
     const workspace = databricksWorkspace({ assistantPaths: false, id: "analyst" });
     const requestContext = new RequestContext();
 
-    assert.equal(await workspace.resolveSandbox({ requestContext }), undefined);
+    const first = await workspace.resolveSandbox({ requestContext });
+    const second = await workspace.resolveSandbox({ requestContext });
+
+    assert.ok(first instanceof MontySandbox);
+    assert.equal(first, second);
   });
 
   it("can disable or select another sandbox explicitly", async () => {
@@ -834,14 +838,20 @@ describe("agent workspace selection", () => {
       instructions,
       /Exclude that first line before calculating content character counts/,
     );
+    assert.match(instructions, /Call a directly exposed tool directly/);
+    assert.match(instructions, /Keep dependent calls as direct sequential tool calls/);
+    assert.match(instructions, /Do not wrap a single ordinary tool call in execute_typescript/);
+    assert.ok(
+      instructions.indexOf("Tool routing:") > instructions.indexOf("# Code Mode"),
+      "hybrid routing guidance must follow Mastra's Code Mode contract",
+    );
     assert.ok(tools && "execute_typescript" in tools);
     assert.equal(await built.agents.analyst?.getWorkspace(), workspace);
   });
 
-  it("executes native Code Mode without a workspace command sandbox", async () => {
+  it("executes native Code Mode without using the workspace command sandbox", async () => {
     const workspace = databricksWorkspace({
       assistantPaths: false,
-      sandbox: false,
     });
     const built = await buildAgents({
       config: {
@@ -873,6 +883,10 @@ describe("agent workspace selection", () => {
     assert.equal(typeof instructions, "string");
     assert.match(instructions, /external_read_url/);
     assert.ok(tools && "execute_typescript" in tools);
+    assert.ok(
+      (await workspace.resolveSandbox({ requestContext: new RequestContext() })) instanceof
+        MontySandbox,
+    );
 
     const codeModeTool = tools.execute_typescript;
     assert.equal(typeof codeModeTool, "object");

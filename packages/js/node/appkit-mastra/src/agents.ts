@@ -486,6 +486,17 @@ export const DEFAULT_TOOL_WORKFLOW_INSTRUCTIONS = [
   "Keep calls sequential when a later input depends on an earlier result or when calls mutate the same resource.",
 ].join("\n");
 
+/** Hybrid routing guidance appended after Mastra's generated Code Mode contract. */
+export const CODE_MODE_ROUTING_INSTRUCTIONS = [
+  "Tool routing:",
+  "The Code Mode contract above explains how to use execute_typescript when selected; it does not require using Code Mode for every tool call.",
+  "Call a directly exposed tool directly when one ordinary call is sufficient.",
+  "Call independent tools directly in parallel when their results do not require code-side transformation.",
+  "Keep dependent calls as direct sequential tool calls when code-side transformation is unnecessary.",
+  "Use execute_typescript when the user explicitly requests Code Mode or when code is useful for loops, filtering, joins, random selection, aggregation, arithmetic, dynamic fan-out, or keeping substantial intermediate results out of model context.",
+  "Do not wrap a single ordinary tool call in execute_typescript.",
+].join("\n");
+
 /**
  * Style guardrails appended to every agent's `instructions` to curb
  * common LLM-isms (em dashes, emojis, sycophantic openers, excessive
@@ -555,7 +566,12 @@ function composeInstructions<TRequestContext extends Record<string, unknown> | u
 ): AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"] {
   const append = (instructions: AgentInstructions, codeModeInstructions?: string) => {
     const composed = appendDefaultInstructions(instructions, style);
-    return codeModeInstructions ? appendInstructionBlock(composed, codeModeInstructions) : composed;
+    return codeModeInstructions
+      ? appendInstructionBlock(
+          composed,
+          `${codeModeInstructions}\n\n${CODE_MODE_ROUTING_INSTRUCTIONS}`,
+        )
+      : composed;
   };
   if (typeof agentInstructions !== "function" && !resolveCodeMode) {
     return append(agentInstructions) as AgentConfig<
