@@ -107,6 +107,10 @@
         "types": "./lib/src/token.d.ts",
         "default": "./lib/src/token.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -138,6 +142,7 @@
     "./predicate": "./src/predicate.ts",
     "./string-utils": "./src/string-utils.ts",
     "./token": "./src/token.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

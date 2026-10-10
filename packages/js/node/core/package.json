@@ -84,6 +84,10 @@
         "types": "./lib/src/project-utils.d.ts",
         "default": "./lib/src/project-utils.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -107,6 +111,7 @@
     "./file": "./src/file.ts",
     "./process-lock": "./src/process-lock.ts",
     "./project-utils": "./src/project-utils.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

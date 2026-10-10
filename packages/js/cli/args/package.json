@@ -43,6 +43,10 @@
         "types": "./lib/src/args.d.ts",
         "default": "./lib/src/args.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -57,6 +61,7 @@
   "exports": {
     ".": "./index.ts",
     "./args": "./src/args.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

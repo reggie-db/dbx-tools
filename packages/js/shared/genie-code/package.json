@@ -46,6 +46,10 @@
         "types": "./lib/src/options.d.ts",
         "default": "./lib/src/options.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -61,6 +65,7 @@
     ".": "./index.ts",
     "./config": "./src/config.ts",
     "./options": "./src/options.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

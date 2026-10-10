@@ -15,7 +15,7 @@ import { type IConstruct } from "constructs";
 import { Component, LogLevel, Project, type Task, javascript, typescript } from "projen";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
-import { generateBarrels } from "./barrels.ts";
+import { generateBarrels, isGeneratedBarrel } from "./barrels.ts";
 
 import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
 import { BUN_VERSION } from "./bun-workflow.ts";
@@ -288,6 +288,8 @@ export function addPackageFiles(pkg: javascript.NodeProject, ...entries: string[
  * non-`_` module, so those names are public through `.` either way - the subpaths
  * just add a narrower import path. Deriving the map is what lets a tag carry the
  * whole export layout, instead of each package hand-listing its own modules.
+ * The wildcard resolves generated nested barrels at every depth while exact
+ * exports continue to win for hand-authored entrypoints and assets.
  */
 export function srcModuleExports(pkg: javascript.NodeProject): Record<string, string> {
   const srcDir = join(pkg.outdir, "src");
@@ -310,9 +312,11 @@ export function srcModuleExports(pkg: javascript.NodeProject): Record<string, st
     const index = ["index.ts", "index.tsx"].find((file) =>
       existsSync(join(srcDir, entry.name, file)),
     );
-    if (index) exports[`./${entry.name}`] = `./src/${entry.name}/${index}`;
+    if (index && !isGeneratedBarrel(join(srcDir, entry.name, index))) {
+      exports[`./${entry.name}`] = `./src/${entry.name}/${index}`;
+    }
   }
-  return exports;
+  return { ...exports, "./*": "./src/*/index.ts" };
 }
 
 /**

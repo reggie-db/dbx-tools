@@ -55,6 +55,7 @@ before(() => {
   node.dbxToolsConfig.tags.push("node");
   applyExports(node, {
     ".": "./index.ts",
+    "./*": "./src/*/index.ts",
     "./deep": "./src/nested/deep.ts",
     "./package.json": "./package.json",
   });
@@ -102,6 +103,7 @@ describe("compiled publish surface", () => {
     // resolves to `.ts` so packages type-check with no build step.
     assert.deepEqual(manifest("packages/node/thing").exports, {
       ".": "./index.ts",
+      "./*": "./src/*/index.ts",
       "./deep": "./src/nested/deep.ts",
       "./package.json": "./package.json",
     });
@@ -112,6 +114,10 @@ describe("compiled publish surface", () => {
     // mapping is a path prefix - not a flattening.
     assert.deepEqual(manifest("packages/node/thing").publishConfig.exports, {
       ".": { types: "./lib/index.d.ts", default: "./lib/index.js" },
+      "./*": {
+        types: "./lib/src/*/index.d.ts",
+        default: "./lib/src/*/index.js",
+      },
       "./deep": { types: "./lib/src/nested/deep.d.ts", default: "./lib/src/nested/deep.js" },
       "./package.json": "./package.json",
     });

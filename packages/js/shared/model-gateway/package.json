@@ -57,6 +57,10 @@
         "types": "./lib/src/upstream.d.ts",
         "default": "./lib/src/upstream.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -75,6 +79,7 @@
     "./models": "./src/models.ts",
     "./options": "./src/options.ts",
     "./upstream": "./src/upstream.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

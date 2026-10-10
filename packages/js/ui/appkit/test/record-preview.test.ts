@@ -3,19 +3,20 @@ import { describe, it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { RecordPreview } from "../src/react/record-preview.tsx";
 import {
   formatRecordPreviewJson,
   looksLikeMarkdown,
   markdownForPreview,
   recordPreviewRows,
 } from "../src/react/record-preview-data.ts";
+import { RecordPreview } from "../src/react/record-preview.tsx";
 
 describe("RecordPreview", () => {
-  it("stacks nested arrays beneath their field without index headings", () => {
+  it("keeps top-level scalars in a table and stacks nested arrays without index headings", () => {
     const html = renderToStaticMarkup(
       createElement(RecordPreview, {
         value: {
+          type: "write",
           files: [
             { path: "/first", content: "one" },
             { path: "/second", content: "two" },
@@ -24,10 +25,14 @@ describe("RecordPreview", () => {
       }),
     );
 
-    assert.match(html, /colSpan="2">Files<\/th>/);
-    assert.match(html, />Path<\/th>/);
-    assert.doesNotMatch(html, />1<\/th>/);
-    assert.match(html, /max-h-\[inherit\] min-w-0 overflow-auto/);
+    assert.match(html, />Type<\/th>/);
+    assert.match(html, /<h3[^>]*>Files<\/h3>/);
+    assert.match(html, /<span[^>]*>Path<\/span>/);
+    assert.doesNotMatch(html, />[12]<\/(?:th|span|h3)>/);
+    assert.equal(html.match(/data-slot="table"/g)?.length, 1);
+    assert.doesNotMatch(html, /max-h-\[inherit\] min-w-0 overflow-auto/);
+    assert.match(html, /sticky top-1 z-10 float-right/);
+    assert.match(html, /border-l-2 border-border\/70/);
   });
 });
 

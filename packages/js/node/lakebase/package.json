@@ -51,6 +51,10 @@
         "types": "./lib/src/client.d.ts",
         "default": "./lib/src/client.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -67,6 +71,7 @@
     "./address": "./src/address.ts",
     "./bindings": "./src/bindings.ts",
     "./client": "./src/client.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

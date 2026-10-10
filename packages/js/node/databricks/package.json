@@ -62,6 +62,10 @@
         "types": "./lib/src/workspace-client.d.ts",
         "default": "./lib/src/workspace-client.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -80,6 +84,7 @@
     "./databricks-path": "./src/databricks-path.ts",
     "./net": "./src/net.ts",
     "./workspace-client": "./src/workspace-client.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

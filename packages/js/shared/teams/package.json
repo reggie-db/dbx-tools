@@ -43,6 +43,10 @@
         "types": "./lib/src/teams-activity.d.ts",
         "default": "./lib/src/teams-activity.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -58,6 +62,7 @@
     ".": "./index.ts",
     "./card": "./src/card.ts",
     "./teams-activity": "./src/teams-activity.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

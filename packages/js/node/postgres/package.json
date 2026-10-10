@@ -67,6 +67,10 @@
         "types": "./lib/src/topic-bus.d.ts",
         "default": "./lib/src/topic-bus.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -86,6 +90,7 @@
     "./persistence": "./src/persistence.ts",
     "./session": "./src/session.ts",
     "./topic-bus": "./src/topic-bus.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

@@ -34,7 +34,15 @@ function fixturePackage(name: string, module = "graph"): string {
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(
     join(dir, "package.json"),
-    `${JSON.stringify({ name: `@test/${name}`, version: "1.2.3" }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        name: `@test/${name}`,
+        version: "1.2.3",
+        exports: { ".": "./index.ts", "./*": "./src/*/index.ts" },
+      },
+      null,
+      2,
+    )}\n`,
   );
   writeFileSync(join(dir, "src", `${module}.ts`), `export const ${module}Value = "x";\n`);
   return dir;
@@ -219,5 +227,73 @@ describe("generateBarrels", () => {
 
     assert.match(barrel, /export \* as generated from "\.\/src\/generated\/index\.ts";/);
     assert.doesNotMatch(barrel, /generatedInternal|internal\.ts/);
+  });
+
+  it("generates nested entrypoints at every source depth without changing root namespaces", () => {
+    const dir = fixturePackage("nested-entrypoints");
+    mkdirSync(join(dir, "src", "example", "wasm"), { recursive: true });
+    writeFileSync(join(dir, "src", "example", "one.ts"), "export const oneValue = 1;\n");
+    writeFileSync(join(dir, "src", "example", "wasm", "loader.ts"), "export const load = 2;\n");
+
+    assert.equal(generateBarrels({ dirs: [dir] }), 3);
+    const example = readFileSync(join(dir, "src", "example", "index.ts"), "utf8");
+    const wasm = readFileSync(join(dir, "src", "example", "wasm", "index.ts"), "utf8");
+    const root = readFileSync(join(dir, "index.ts"), "utf8");
+
+    assert.match(example, /export \* as one from "\.\/one\.ts";/);
+    assert.match(example, /export \* as wasm from "\.\/wasm\/index\.ts";/);
+    assert.match(example, /export \{ oneValue \} from "\.\/one\.ts";/);
+    assert.match(wasm, /export \* as loader from "\.\/loader\.ts";/);
+    assert.match(wasm, /export \{ load \} from "\.\/loader\.ts";/);
+    assert.match(root, /export \* as exampleOne from "\.\/src\/example\/one\.ts";/);
+    assert.match(root, /export \* as exampleWasmLoader from "\.\/src\/example\/wasm\/loader\.ts";/);
+    assert.doesNotMatch(root, /from "\.\/src\/example\/index\.ts"/);
+  });
+
+  it("applies a nested exports override beside its generated entrypoint", () => {
+    const dir = fixturePackage("nested-override");
+    mkdirSync(join(dir, "src", "example"), { recursive: true });
+    writeFileSync(join(dir, "src", "example", "one.ts"), "export const value = 1;\n");
+    writeFileSync(
+      join(dir, "src", "example", "exports.ts"),
+      'export { value as selected } from "./one.ts";\n',
+    );
+
+    generateBarrels({ dirs: [dir] });
+    const nested = readFileSync(join(dir, "src", "example", "index.ts"), "utf8");
+
+    assert.match(nested, /export \* as one from "\.\/one\.ts";/);
+    assert.match(nested, /export \* from "\.\/exports\.ts";/);
+    assert.doesNotMatch(nested, /export \* as exports/);
+  });
+
+  it("removes stale nested entrypoints when their directory loses public modules", () => {
+    const dir = fixturePackage("nested-cleanup");
+    mkdirSync(join(dir, "src", "example"), { recursive: true });
+    const module = join(dir, "src", "example", "one.ts");
+    writeFileSync(module, "export const one = 1;\n");
+    generateBarrels({ dirs: [dir] });
+    writeFileSync(module, "const one = 1;\n");
+
+    assert.equal(generateBarrels({ dirs: [dir] }), 2);
+    assert.throws(() => statSync(join(dir, "src", "example", "index.ts")), { code: "ENOENT" });
+  });
+
+  it("does not generate nested entrypoints when the package has no nested export map", () => {
+    const dir = fixturePackage("no-nested-exports");
+    writeFileSync(
+      join(dir, "package.json"),
+      `${JSON.stringify({ name: "@test/no-nested-exports", version: "1.2.3" }, null, 2)}\n`,
+    );
+    mkdirSync(join(dir, "src", "pages"), { recursive: true });
+    writeFileSync(join(dir, "src", "pages", "home.ts"), "export const home = true;\n");
+
+    generateBarrels({ dirs: [dir] });
+
+    assert.throws(() => statSync(join(dir, "src", "pages", "index.ts")), { code: "ENOENT" });
+    assert.match(
+      readFileSync(join(dir, "index.ts"), "utf8"),
+      /export \* as pagesHome from "\.\/src\/pages\/home\.ts";/,
+    );
   });
 });

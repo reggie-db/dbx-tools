@@ -64,6 +64,10 @@
         "types": "./lib/src/watch.d.ts",
         "default": "./lib/src/watch.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -83,6 +87,7 @@
     "./pattern": "./src/pattern.ts",
     "./scan": "./src/scan.ts",
     "./watch": "./src/watch.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

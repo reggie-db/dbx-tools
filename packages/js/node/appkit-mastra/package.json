@@ -216,6 +216,10 @@
         "types": "./lib/src/writer.d.ts",
         "default": "./lib/src/writer.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -262,6 +266,7 @@
     "./validation": "./src/validation.ts",
     "./workspaces": "./src/workspaces.ts",
     "./writer": "./src/writer.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

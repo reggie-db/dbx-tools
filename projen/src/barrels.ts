@@ -1,25 +1,28 @@
 /**
  * Barrel generator.
  *
- * For every package it writes a single `index.ts` **at the package root** (above
- * `src/`) that namespace-re-exports every module under `src/`, subject to a few
- * rules (see {@link isExcluded}):
+ * For every package it writes the package-root `index.ts` plus generated
+ * `src/**​/index.ts` subpath barrels when the package enables the generated
+ * nested export pattern. The root keeps its existing direct module
+ * namespaces; nested barrels expose each directory as
+ * `@scope/package/<directory>`. Both follow the same rules (see
+ * {@link isExcluded}):
  *   1. a file/folder whose name starts with `_` is private and never barrelled;
  *   2. test / `.d.ts` files are skipped;
  *   3. a hand-authored `src/**​/index.ts` is a subpath entry, while a generated
  *      nested index is the facade for its generated folder;
  *   4. only files that actually contain an `export` are re-exported.
  *
- * A hand-authored `exports.ts` sitting next to the generated `index.ts` (a Vite-style
- * override) is spliced in last and wins: its exports are appended, and any generated
- * `export * as <ns>` whose namespace it also declares is dropped so the custom one
- * takes priority. This keeps the barrel auto-generated while letting you add or
- * override individual exports.
+ * A hand-authored `exports.ts` sitting next to any generated `index.ts` (a
+ * Vite-style override) is spliced in last and wins: its exports are appended,
+ * and any generated `export * as <ns>` whose namespace it also declares is
+ * dropped so the custom one takes priority. This keeps barrels auto-generated
+ * while letting you add or override individual exports at every depth.
  *
  *
- * Each eligible module becomes `export * as <name> from "./src/x.ts"` (camelCase
- * namespace from its path segments; invalid identifiers suffixed with `Module`),
- * sorted by module path.
+ * Each eligible module becomes `export * as <name>` from its barrel-relative
+ * path (camelCase namespace from its path segments; invalid identifiers
+ * suffixed with `Module`), sorted by module path.
  *
  * On top of the namespace lines, every export that is UNIQUE across the package
  * (declared in exactly one module) is also HOISTED to the barrel's top level, so
@@ -29,8 +32,8 @@
  * `export { ... }`. The module namespaces stay either way, so a namespaced call
  * site keeps working.
  *
- * Every generated barrel also exports `PACKAGE_IDENTIFIER` and `PACKAGE_VERSION`
- * from the package's own `package.json`.
+ * The package-root barrel also exports `PACKAGE_IDENTIFIER` and
+ * `PACKAGE_VERSION` from the package's own `package.json`.
  *
  * Uniqueness is tallied over types and values TOGETHER: a name carried by two
  * modules is ambiguous whichever kind it is, and hoisting one module's value
@@ -50,7 +53,7 @@
  * The result gets a do-not-edit header + read-only bit (see `./generated`).
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { find } from "@dbx-tools/path";
 import { json, stringUtils } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
@@ -133,9 +136,12 @@ function moduleSegmentToCamel(segment: string): string {
   return head + rest.join("");
 }
 
-/** Derive a valid namespace identifier from a relocated barrel module path. */
+/** Derive a valid namespace identifier from a barrel-relative module path. */
 function modulePathToNamespace(modulePath: string): string {
-  const rel = modulePath.replace(/^\.\/src\//, "").replace(/\.(tsx?|jsx?|mjs|cjs)$/, "");
+  const rel = modulePath
+    .replace(/^\.\//, "")
+    .replace(/^src\//, "")
+    .replace(/\.(tsx?|jsx?|mjs|cjs)$/, "");
   const segments = rel.split("/");
   if (segments.at(-1) === "index" && segments.length > 1) segments.pop();
   const names = segments.map(moduleSegmentToCamel);
@@ -153,11 +159,11 @@ function modulePathToNamespace(modulePath: string): string {
   return name;
 }
 
-/** A `./src/x` module path parsed out of a generated `export * as <ns>` line. */
+/** A relative module path parsed out of a generated `export * as <ns>` line. */
 function namespaceLines(content: string): { ns: string; modulePath: string }[] {
   const out: { ns: string; modulePath: string }[] = [];
   for (const line of content.split("\n")) {
-    const match = /^export \* as (\w+) from "(\.\/src\/.+)";\s*$/.exec(line);
+    const match = /^export \* as (\w+) from "(\.\/.+)";\s*$/.exec(line);
     if (match) out.push({ ns: match[1]!, modulePath: match[2]! });
   }
   return out;
@@ -174,7 +180,7 @@ function namespaceLines(content: string): { ns: string; modulePath: string }[] {
  * hand-authored `exports.ts` surface) are never hoisted so that file stays
  * authoritative.
  */
-function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<string>): string {
+function hoistUniqueExports(content: string, barrelDir: string, suppress: Set<string>): string {
   const namespaces = namespaceLines(content);
   if (namespaces.length === 0) return content;
 
@@ -197,7 +203,7 @@ function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<strin
   const seen = new Map<string, { count: number; modulePath: string; generated: boolean }>();
   const perModule = new Map<string, ModuleExport[]>();
   for (const { modulePath } of namespaces) {
-    const file = join(pkgDir, modulePath.replace(/^\.\//, ""));
+    const file = join(barrelDir, modulePath.replace(/^\.\//, ""));
     const exports = moduleExports(file).filter((e) => !e.isFunction);
     perModule.set(modulePath, exports);
     const generated = isGenerated(file);
@@ -271,8 +277,8 @@ function customExportNames(file: string): Set<string> {
  * custom export wins - a plain `export *` cannot otherwise override an explicit
  * `export * as`), then the whole module is re-exported last.
  */
-function mergeCustomExports(content: string, pkgDir: string): string {
-  const customPath = join(pkgDir, CUSTOM_EXPORTS_FILE);
+function mergeCustomExports(content: string, barrelDir: string): string {
+  const customPath = join(barrelDir, CUSTOM_EXPORTS_FILE);
   if (!existsSync(customPath)) return content;
   const overridden = customExportNames(customPath);
   const kept = content.split("\n").filter((line) => {
@@ -324,38 +330,144 @@ function withPackageMetadata(content: string, pkgDir: string): string {
 }
 
 /**
- * Rebuild one package's root barrel. Returns 1 only if the barrel's contents
- * actually changed - a module was added, removed, renamed, or toggled its
- * `export` - and 0 for a no-op. An edit *inside* an already-exported module (even
- * adding a new named export) leaves the namespace `export * as … from "./src/x"`
- * list identical, so it is a no-op.
+ * True when a generated index belongs to this barrel generator rather than a
+ * binding/codegen owner that also uses the repository's generated-file header.
+ */
+export function isGeneratedBarrel(file: string): boolean {
+  return existsSync(file) && readFileSync(file, "utf8").startsWith(header(BARREL_HEADER));
+}
+
+/** Public direct modules and child-directory facades for one generated barrel. */
+function barrelCandidates(barrelDir: string): string[] {
+  const files = [...find.findFiles("*", { cwd: barrelDir })]
+    .map(toPosix)
+    .filter((file) => !file.includes("/"))
+    .filter((file) => file !== "index.ts" && file !== CUSTOM_EXPORTS_FILE)
+    .filter((file) => isModuleFile(file))
+    .filter((file) => !isExcluded(file, barrelDir))
+    .filter((file) => hasExport(join(barrelDir, file)));
+  const childIndexes = [...find.findFiles("*/index.ts", { cwd: barrelDir })]
+    .map(toPosix)
+    .filter((file) => file.split("/").length === 2)
+    .filter((file) => !isExcluded(file, barrelDir))
+    .filter((file) => hasExport(join(barrelDir, file)));
+  return [...files, ...childIndexes];
+}
+
+/** Write or remove one generated barrel and return whether its file changed. */
+function generateBarrel(
+  pkgDir: string,
+  barrelDir: string,
+  moduleFiles: string[],
+  includePackageMetadata: boolean,
+): number {
+  const barrel = includePackageMetadata ? join(pkgDir, "index.ts") : join(barrelDir, "index.ts");
+  if (!includePackageMetadata && existsSync(barrel) && !isGeneratedBarrel(barrel)) return 0;
+  const before = existsSync(barrel) ? readFileSync(barrel, "utf8") : undefined;
+
+  const byModulePath = new Map<string, string>();
+  for (const file of moduleFiles) {
+    const stem = file.replace(/(^|\/)index\.ts$/, "").replace(MODULE_EXT_RE, "");
+    const existing = byModulePath.get(stem);
+    if (!existing || (!isSourceExt(existing) && isSourceExt(file))) byModulePath.set(stem, file);
+  }
+  const modulePaths = [...byModulePath.keys()].sort((left, right) => left.localeCompare(right));
+
+  if (modulePaths.length === 0) {
+    if (before !== undefined && (includePackageMetadata || isGeneratedBarrel(barrel))) {
+      makeWritable(barrel);
+      rmSync(barrel, { force: true });
+      return includePackageMetadata ? 0 : 1;
+    }
+    return 0;
+  }
+
+  const namespaceExports = modulePaths
+    .map((stem) => {
+      const prefix = includePackageMetadata ? "./src/" : "./";
+      const modulePath = `${prefix}${byModulePath.get(stem)!}`;
+      return `export * as ${modulePathToNamespace(modulePath)} from "${modulePath}";`;
+    })
+    .join("\n");
+  let content = includePackageMetadata
+    ? `${PACKAGE_IDENTIFIER_LINE}\n${PACKAGE_VERSION_LINE}\n${namespaceExports}`
+    : namespaceExports;
+  const customDir = includePackageMetadata ? pkgDir : barrelDir;
+  const customPath = join(customDir, CUSTOM_EXPORTS_FILE);
+  const suppress = existsSync(customPath) ? customExportNames(customPath) : new Set<string>();
+  if (includePackageMetadata) {
+    suppress.add(PACKAGE_IDENTIFIER_EXPORT);
+    suppress.add(PACKAGE_VERSION_EXPORT);
+  }
+  content = hoistUniqueExports(content, includePackageMetadata ? pkgDir : barrelDir, suppress);
+  content = mergeCustomExports(content, customDir);
+  content = `${content.replace(/\n+$/, "")}\n`;
+  const template = `${header(BARREL_HEADER)}\n${content}`;
+  const next = includePackageMetadata ? withPackageMetadata(template, pkgDir) : template;
+  const structurallySame = includePackageMetadata
+    ? before !== undefined && withoutPackageMetadata(before) === template && before === next
+    : before === next;
+  if (structurallySame) return 0;
+
+  writeBarrel(barrel, next);
+  makeReadonly(barrel);
+  return 1;
+}
+
+/**
+ * Rebuild one package's nested and root barrels. Nested directories are processed
+ * deepest-first so a parent can export each child directory through its generated
+ * `index.ts`. The package root deliberately continues to export the underlying
+ * modules directly, preserving its existing namespaces while adding subpath entrypoints.
  */
 function generateForPackage(pkgDir: string): number {
   const srcDir = join(pkgDir, "src");
   if (!existsSync(srcDir)) return 0;
 
-  const rootBarrel = join(pkgDir, "index.ts");
-  // Snapshot the current barrel so we can tell a real change (module added/removed/
-  // renamed) from an edit *inside* an already-exported module, which leaves the
-  // `export * as … from "./src/x"` list - and therefore this file - byte-for-byte
-  // identical.
-  const before = existsSync(rootBarrel) ? readFileSync(rootBarrel, "utf8") : undefined;
-
-  // The re-exportable module set under `src/`: every source file that actually
-  // exports something, minus private / test / declaration files and hand-authored
-  // `src/**/index.ts` subpath entries. A generated nested index is retained as
-  // that generated folder's public facade. `findFiles`
-  // yields posix paths relative to `srcDir`; `hasExport` parses each via
-  // `moduleStatements` and needs the absolute path.
-  const candidates = [...find.findFiles("**/*", { cwd: srcDir })]
+  const sourceFiles = [...find.findFiles("**/*", { cwd: srcDir })]
     .map(toPosix)
-    .filter(
-      (file) =>
-        isModuleFile(file) || (/(^|\/)index\.ts$/.test(file) && isGenerated(join(srcDir, file))),
-    )
-    .filter((f) => !isExcluded(f, srcDir))
-    .filter((f) => hasExport(join(srcDir, f)));
+    .filter((file) => isModuleFile(file) || /(^|\/)index\.ts$/.test(file));
+  const manifest = json.parseRecord(readFileSync(join(pkgDir, "package.json"), "utf8"));
+  const exports = manifest?.exports;
+  const nestedExportsEnabled =
+    exports != null &&
+    typeof exports === "object" &&
+    !Array.isArray(exports) &&
+    (exports as Record<string, unknown>)["./*"] === "./src/*/index.ts";
+  const directories = new Set<string>();
+  for (const file of sourceFiles) {
+    const fileDir = dirname(file);
+    if (fileDir === "." || /(^|\/)_[^/]+/.test(fileDir)) continue;
+    let current = fileDir;
+    while (current !== ".") {
+      directories.add(current);
+      current = dirname(current);
+    }
+  }
 
+  let changed = 0;
+  const nestedDirectories = [...directories].sort((left, right) => {
+    const depth = (value: string): number => value.split("/").length;
+    return depth(right) - depth(left) || right.localeCompare(left);
+  });
+  for (const directory of nestedDirectories) {
+    const barrelDir = join(srcDir, directory);
+    if (nestedExportsEnabled) {
+      changed += generateBarrel(pkgDir, barrelDir, barrelCandidates(barrelDir), false);
+    } else {
+      const barrel = join(barrelDir, "index.ts");
+      if (isGeneratedBarrel(barrel)) {
+        makeWritable(barrel);
+        rmSync(barrel, { force: true });
+        changed += 1;
+      }
+    }
+  }
+
+  const candidates = sourceFiles
+    .filter((file) => !isGeneratedBarrel(join(srcDir, file)))
+    .filter((file) => !isExcluded(file, srcDir))
+    .filter((file) => hasExport(join(srcDir, file)));
   const generatedIndexDirs = new Set(
     candidates
       .filter((file) => /(^|\/)index\.ts$/.test(file) && isGenerated(join(srcDir, file)))
@@ -366,66 +478,7 @@ function generateForPackage(pkgDir: string): number {
     return ![...generatedIndexDirs].some((dir) => dir && file.startsWith(`${dir}/`));
   });
 
-  // Collapse each extensionless module path to one entry, preferring a TypeScript
-  // source over a sibling compiled artifact (`math.ts` wins over a committed
-  // `math.js`), so a module is barrelled exactly once. Then sort by module path.
-  const byModulePath = new Map<string, string>();
-  for (const f of publicCandidates) {
-    const stem = f.replace(/(^|\/)index\.ts$/, "").replace(MODULE_EXT_RE, "");
-    const existing = byModulePath.get(stem);
-    if (!existing || (!isSourceExt(existing) && isSourceExt(f))) byModulePath.set(stem, f);
-  }
-  const modulePaths = [...byModulePath.keys()].sort((a, b) => a.localeCompare(b));
-  const namespacedModulePaths = modulePaths;
-
-  // No eligible modules -> no barrel: drop any stale root barrel and bail.
-  if (modulePaths.length === 0) {
-    if (existsSync(rootBarrel)) {
-      makeWritable(rootBarrel);
-      rmSync(rootBarrel, { force: true });
-    }
-    return 0;
-  }
-
-  // `./src/<path>` with the module's REAL extension, namespaced by its path
-  // segments (camelCase; invalid identifiers suffixed with `Module`). The
-  // extension is written because `tsc` rewrites it on emit
-  // (`rewriteRelativeImportExtensions`) - an extensionless specifier would be
-  // copied through verbatim and Node's ESM resolver cannot probe for it.
-  const namespaceExports = namespacedModulePaths
-    .map((stem) => {
-      const modulePath = `./src/${byModulePath.get(stem)!}`;
-      return `export * as ${modulePathToNamespace(modulePath)} from "${modulePath}";`;
-    })
-    .join("\n");
-  let content = `${PACKAGE_IDENTIFIER_LINE}\n${PACKAGE_VERSION_LINE}\n${namespaceExports}`;
-  // Hoist package-unique named exports to the top level. Names a hand-authored
-  // `exports.ts` declares are suppressed so that file stays authoritative.
-  const customPath = join(pkgDir, CUSTOM_EXPORTS_FILE);
-  const suppress = existsSync(customPath) ? customExportNames(customPath) : new Set<string>();
-  suppress.add(PACKAGE_IDENTIFIER_EXPORT);
-  suppress.add(PACKAGE_VERSION_EXPORT);
-  content = hoistUniqueExports(content, pkgDir, suppress);
-  // A sibling `exports.ts` overrides/extends the generated barrel and wins on conflict.
-  content = mergeCustomExports(content, pkgDir);
-
-  // Package metadata is blanked for the structural comparison, then restored
-  // from package.json. If the result matches what's on disk, leave the file and
-  // its read-only bit untouched and report no change.
-  content = `${content.replace(/\n+$/, "")}\n`;
-  const template = `${header(BARREL_HEADER)}\n${content}`;
-  const next = withPackageMetadata(template, pkgDir);
-  if (before !== undefined && withoutPackageMetadata(before) === template && before === next) {
-    return 0;
-  }
-
-  // Written whole (header included) rather than via `stampGenerated`, which would
-  // re-read and rewrite the file to prepend the same header - a second write, and
-  // therefore a second window in which the read-only bit can come back. `next` is
-  // byte-for-byte what the comparison above accepted, so the two cannot drift.
-  writeBarrel(rootBarrel, next);
-  makeReadonly(rootBarrel);
-  return 1;
+  return changed + generateBarrel(pkgDir, srcDir, publicCandidates, true);
 }
 
 /**

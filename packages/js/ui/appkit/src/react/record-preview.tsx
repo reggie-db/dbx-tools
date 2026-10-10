@@ -6,7 +6,7 @@
  */
 
 import { BracesIcon, Table2Icon } from "lucide-react";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { Streamdown } from "streamdown";
 
 import {
@@ -60,80 +60,134 @@ export function RecordPreview({ value, className }: RecordPreviewProps) {
   return (
     <div
       className={cn(
-        "relative min-w-0 overflow-hidden [&_[data-slot=table-container]]:overflow-x-hidden",
+        "relative min-w-0 [&_[data-slot=table-container]]:overflow-x-hidden",
         className,
       )}
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-pressed={raw}
-            aria-label={raw ? "Show table" : "Show JSON"}
-            className="absolute right-1 top-1 z-10 size-6"
-            onClick={() => setRaw((current) => !current)}
-          >
-            {raw ? <Table2Icon className="size-3" /> : <BracesIcon className="size-3" />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{raw ? "Table" : "JSON"}</TooltipContent>
-      </Tooltip>
-      <div className="max-h-[inherit] min-w-0 overflow-auto">
-        {raw ? (
-          <JsonBlock json={rawJson} className="rounded bg-background/40 p-2 pr-8 text-[11px]" />
-        ) : rows.length === 0 ? (
-          <pre className="whitespace-pre-wrap break-words rounded bg-background/40 p-2 pr-8 font-mono text-[11px] leading-relaxed">
-            {rawJson}
-          </pre>
-        ) : (
-          <RecordTable rows={rows} depth={0} />
-        )}
+      <div className="sticky top-1 z-10 float-right mr-1 h-0">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-pressed={raw}
+              aria-label={raw ? "Show table" : "Show JSON"}
+              className="size-6 bg-background/85 backdrop-blur-sm"
+              onClick={() => setRaw((current) => !current)}
+            >
+              {raw ? <Table2Icon className="size-3" /> : <BracesIcon className="size-3" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{raw ? "Table" : "JSON"}</TooltipContent>
+        </Tooltip>
       </div>
+      {raw ? (
+        <JsonBlock json={rawJson} className="rounded bg-background/40 p-2 pr-8 text-[11px]" />
+      ) : rows.length === 0 ? (
+        <pre className="whitespace-pre-wrap break-words rounded bg-background/40 p-2 pr-8 font-mono text-[11px] leading-relaxed">
+          {rawJson}
+        </pre>
+      ) : (
+        <RecordTable rows={rows} />
+      )}
     </div>
   );
 }
 
-function RecordTable({ rows, depth }: { rows: RecordPreviewRow[]; depth: number }) {
+function RecordTable({ rows }: { rows: RecordPreviewRow[] }) {
   if (rows.length === 0) return null;
+  const scalarRows = rows.filter((row) => !isNestedValue(row.value));
+  const nestedRows = rows.filter((row) => isNestedValue(row.value));
+  return (
+    <div className="min-w-0 px-2 pb-2">
+      {scalarRows.length > 0 ? <ScalarTable rows={scalarRows} /> : null}
+      {nestedRows.map((row) => (
+        <RecordGroup key={row.key} row={row} depth={0} />
+      ))}
+    </div>
+  );
+}
+
+function ScalarTable({ rows }: { rows: RecordPreviewRow[] }) {
   return (
     <Table className="table-fixed text-[11px]">
       <TableBody>
-        {rows.map((row) => {
-          const nested = isNestedValue(row.value) && depth < NESTED_DEPTH;
-          return nested ? (
-            <Fragment key={row.key}>
-              <TableRow className="border-b-0 hover:bg-transparent">
-                <TableHead
-                  colSpan={2}
-                  className="h-auto whitespace-normal px-2 pb-1 pt-2 font-medium text-muted-foreground"
-                >
-                  {row.label}
-                </TableHead>
-              </TableRow>
-              <TableRow className="hover:bg-transparent">
-                <TableCell
-                  colSpan={2}
-                  className="min-w-0 whitespace-normal p-0 pb-1 pl-2 [overflow-wrap:anywhere]"
-                >
-                  <RecordValue value={row.value} depth={depth} />
-                </TableCell>
-              </TableRow>
-            </Fragment>
-          ) : (
-            <TableRow key={row.key} className="hover:bg-transparent">
-              <TableHead className="h-auto w-28 align-top whitespace-normal px-2 py-1.5 font-medium text-muted-foreground sm:w-[8.5rem]">
-                {row.label}
-              </TableHead>
-              <TableCell className="min-w-0 whitespace-normal px-2 py-1.5 pr-8 align-top [overflow-wrap:anywhere]">
-                <RecordValue value={row.value} depth={depth} />
-              </TableCell>
-            </TableRow>
-          );
-        })}
+        {rows.map((row) => (
+          <TableRow key={row.key} className="hover:bg-transparent">
+            <TableHead className="h-auto w-28 align-top whitespace-normal px-0 py-1.5 pr-2 font-medium text-muted-foreground sm:w-[8.5rem]">
+              {row.label}
+            </TableHead>
+            <TableCell className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]">
+              <RecordValue value={row.value} depth={0} />
+            </TableCell>
+          </TableRow>
+        ))}
       </TableBody>
     </Table>
+  );
+}
+
+function RecordGroup({ row, depth }: { row: RecordPreviewRow; depth: number }) {
+  return (
+    <section className="mt-2.5 min-w-0 first:mt-2">
+      <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {row.label}
+      </h3>
+      <div className="min-w-0 border-l-2 border-border/70 pl-2.5">
+        <NestedValue value={row.value} depth={depth + 1} />
+      </div>
+    </section>
+  );
+}
+
+function NestedValue({ value, depth }: { value: unknown; depth: number }) {
+  if (depth > NESTED_DEPTH) return <RecordValue value={value} depth={depth} />;
+  if (Array.isArray(value)) {
+    return (
+      <div className="min-w-0 divide-y divide-border/60">
+        {value.map((item, index) => (
+          <div key={index} className="min-w-0 py-1.5 first:pt-0 last:pb-0">
+            <NestedItem value={item} depth={depth} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (value != null && typeof value === "object") {
+    const rows = recordPreviewRows(value);
+    return (
+      <div className="min-w-0">
+        {rows.map((row) =>
+          isNestedValue(row.value) ? (
+            <RecordGroup key={row.key} row={row} depth={depth} />
+          ) : (
+            <StackedField key={row.key} row={row} depth={depth} />
+          ),
+        )}
+      </div>
+    );
+  }
+  return <RecordValue value={value} depth={depth} />;
+}
+
+function NestedItem({ value, depth }: { value: unknown; depth: number }) {
+  if (value != null && typeof value === "object") {
+    return <NestedValue value={value} depth={depth} />;
+  }
+  return <RecordValue value={value} depth={depth} />;
+}
+
+function StackedField({ row, depth }: { row: RecordPreviewRow; depth: number }) {
+  return (
+    <div className="min-w-0 border-b border-border/60 py-1.5 last:border-b-0">
+      <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {row.label}
+      </span>
+      <div className="min-w-0 text-[11px] leading-snug [overflow-wrap:anywhere]">
+        <RecordValue value={row.value} depth={depth} />
+      </div>
+    </div>
   );
 }
 
@@ -159,9 +213,6 @@ function RecordValue({ value, depth }: { value: unknown; depth: number }) {
       );
     }
     return <span className="whitespace-pre-wrap break-words">{value}</span>;
-  }
-  if (typeof value === "object" && !Array.isArray(value) && depth < NESTED_DEPTH) {
-    return <RecordTable rows={recordPreviewRows(value)} depth={depth + 1} />;
   }
   if (Array.isArray(value)) {
     if (value.every((item) => item == null || typeof item !== "object")) {

@@ -89,6 +89,10 @@
         "types": "./lib/src/transport.d.ts",
         "default": "./lib/src/transport.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -112,6 +116,7 @@
     "./sender": "./src/sender.ts",
     "./tool": "./src/tool.ts",
     "./transport": "./src/transport.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

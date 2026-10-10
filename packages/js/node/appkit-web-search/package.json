@@ -99,6 +99,10 @@
         "types": "./lib/src/tool.d.ts",
         "default": "./lib/src/tool.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -124,6 +128,7 @@
     "./scrape": "./src/scrape.ts",
     "./search": "./src/search.ts",
     "./tool": "./src/tool.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

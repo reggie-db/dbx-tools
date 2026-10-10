@@ -65,6 +65,10 @@
         "types": "./lib/src/wire.d.ts",
         "default": "./lib/src/wire.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -85,6 +89,7 @@
     "./routes": "./src/routes.ts",
     "./thread": "./src/thread.ts",
     "./wire": "./src/wire.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

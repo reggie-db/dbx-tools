@@ -53,6 +53,10 @@
         "types": "./lib/src/genie-model.d.ts",
         "default": "./lib/src/genie-model.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -73,6 +77,7 @@
     "./dashboards": "./src/dashboards.ts",
     "./event": "./src/event.ts",
     "./genie-model": "./src/genie-model.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

@@ -39,6 +39,10 @@
         "types": "./lib/src/search-schemas.d.ts",
         "default": "./lib/src/search-schemas.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -53,6 +57,7 @@
   "exports": {
     ".": "./index.ts",
     "./search-schemas": "./src/search-schemas.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

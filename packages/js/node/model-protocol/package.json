@@ -61,6 +61,10 @@
         "types": "./lib/src/serving-wire.d.ts",
         "default": "./lib/src/serving-wire.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -78,6 +82,7 @@
     "./gateway-encode": "./src/gateway-encode.ts",
     "./provider": "./src/provider.ts",
     "./serving-wire": "./src/serving-wire.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

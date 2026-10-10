@@ -95,6 +95,10 @@
         "types": "./lib/src/resolve.d.ts",
         "default": "./lib/src/resolve.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -120,6 +124,7 @@
     "./policy": "./src/policy.ts",
     "./reasoning-translation": "./src/reasoning-translation.ts",
     "./resolve": "./src/resolve.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

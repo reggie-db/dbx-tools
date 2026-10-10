@@ -427,7 +427,7 @@ const RawToolPayload = ({
         ) : (
           <RecordPreview
             value={structured}
-            className="max-h-80 border-t border-border/50 bg-transparent text-foreground"
+            className="border-t border-border/50 bg-transparent text-foreground"
           />
         )}
       </CollapsibleContent>

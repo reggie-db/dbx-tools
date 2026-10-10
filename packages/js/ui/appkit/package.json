@@ -54,6 +54,7 @@
   "exports": {
     "./react": "./src/react/index.ts",
     "./styles.css": "./src/styles.css",
+    "./*": "./src/*/index.ts",
     "./branding/react": "./src/branding/react/index.ts",
     "./branding/browser": "./src/branding/browser.ts",
     "./branding/assets": "./src/branding/generated/assets.ts",

@@ -381,16 +381,23 @@ added to `ignorePatterns` at synth - named individually via
 package may hold hand-written modules beside its generated ones, and those must
 stay linted.
 
-`generateBarrels()` writes package-root `index.ts` barrels with module
-namespaces, flat unique type exports, and `PACKAGE_IDENTIFIER`, returning the
-number that actually changed. A name two modules both declare is ambiguous and stays namespace-only,
-except when one of them is generated: the hand-written module is the curated view
-of the generated shape (`shared-genie`'s `genie-model.ts` extends its own
-codegen'd `dashboards.ts`), so it owns the name and stays hoisted. A barrel whose export surface is unchanged is left untouched,
-read-only bit included, so concurrent writers never collide over it. Every
-package is attempted even if one fails; the failures are re-thrown together as an
-`AggregateError` naming each package, rather than the first one abandoning the
-rest of the sweep.
+`generateBarrels()` writes the package-root `index.ts` and, for packages with the
+generated `"./*": "./src/*/index.ts"` export, read-only entrypoints in nested
+source directories. For example, `src/example/one.ts` becomes importable through
+`@scope/package/example`, and `src/example/wasm/one.ts` through
+`@scope/package/example/wasm`. A sibling `exports.ts` can extend or override the
+generated surface at the package root or any nested level. Existing hand-written
+`index.ts` entrypoints remain authoritative.
+
+Generated barrels include module namespaces and flat unique type/value exports;
+the package root additionally exposes `PACKAGE_IDENTIFIER`. A name two modules
+both declare is ambiguous and stays namespace-only, except when one is generated:
+the hand-written module is the curated view of the generated shape
+(`shared-genie`'s `genie-model.ts` extends its own codegen'd `dashboards.ts`), so
+it owns the name and stays hoisted. An unchanged barrel remains untouched,
+including its read-only bit, so concurrent writers do not collide. Every package
+is attempted even if one fails; failures are re-thrown together as an
+`AggregateError` naming each package.
 
 ## Configure pnpm Catalogs
 

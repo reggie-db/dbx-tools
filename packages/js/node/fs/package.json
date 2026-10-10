@@ -50,6 +50,10 @@
         "types": "./lib/src/os-path.d.ts",
         "default": "./lib/src/os-path.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -66,6 +70,7 @@
     "./local-fs": "./src/local-fs.ts",
     "./local-path": "./src/local-path.ts",
     "./os-path": "./src/os-path.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

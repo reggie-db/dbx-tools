@@ -52,6 +52,10 @@
         "types": "./lib/src/openai-chat.d.ts",
         "default": "./lib/src/openai-chat.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -69,6 +73,7 @@
     "./display": "./src/display.ts",
     "./model": "./src/model.ts",
     "./openai-chat": "./src/openai-chat.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

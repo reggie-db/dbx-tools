@@ -51,6 +51,10 @@
         "types": "./lib/src/space.d.ts",
         "default": "./lib/src/space.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -67,6 +71,7 @@
     "./agent-mode": "./src/agent-mode.ts",
     "./chat": "./src/chat.ts",
     "./space": "./src/space.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

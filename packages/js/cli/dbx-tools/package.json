@@ -95,6 +95,10 @@
         "types": "./lib/src/root.d.ts",
         "default": "./lib/src/root.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./appkit": {
         "types": "./lib/src/appkit/cli.d.ts",
         "default": "./lib/src/appkit/cli.js"
@@ -168,6 +172,7 @@
     "./bun": "./src/bun.ts",
     "./cli": "./src/cli.ts",
     "./root": "./src/root.ts",
+    "./*": "./src/*/index.ts",
     "./appkit": "./src/appkit/cli.ts",
     "./appkit/env-export": "./src/appkit/env-export.ts",
     "./auth": "./src/auth/cli.ts",

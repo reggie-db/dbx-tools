@@ -118,6 +118,10 @@
         "types": "./lib/src/toolkit-entries.d.ts",
         "default": "./lib/src/toolkit-entries.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -148,6 +152,7 @@
     "./request-tags": "./src/request-tags.ts",
     "./tool-provider": "./src/tool-provider.ts",
     "./toolkit-entries": "./src/toolkit-entries.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

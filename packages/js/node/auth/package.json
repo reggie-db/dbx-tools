@@ -62,6 +62,10 @@
         "types": "./lib/src/runtime-auth.d.ts",
         "default": "./lib/src/runtime-auth.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -80,6 +84,7 @@
     "./config": "./src/config.ts",
     "./profile": "./src/profile.ts",
     "./runtime-auth": "./src/runtime-auth.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

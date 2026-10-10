@@ -57,6 +57,10 @@
         "types": "./lib/src/service.d.ts",
         "default": "./lib/src/service.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -74,6 +78,7 @@
     "./definition": "./src/definition.ts",
     "./icon": "./src/icon.ts",
     "./service": "./src/service.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

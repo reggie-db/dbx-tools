@@ -42,6 +42,10 @@
         "types": "./lib/src/template.d.ts",
         "default": "./lib/src/template.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -56,6 +60,7 @@
   "exports": {
     ".": "./index.ts",
     "./template": "./src/template.tsx",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

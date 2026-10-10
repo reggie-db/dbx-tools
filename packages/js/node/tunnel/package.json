@@ -106,6 +106,10 @@
         "types": "./lib/src/supervisor.d.ts",
         "default": "./lib/src/supervisor.js"
       },
+      "./*": {
+        "types": "./lib/src/*/index.d.ts",
+        "default": "./lib/src/*/index.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -133,6 +137,7 @@
     "./send-code": "./src/send-code.ts",
     "./signing-key": "./src/signing-key.ts",
     "./supervisor": "./src/supervisor.ts",
+    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [

@@ -31,6 +31,7 @@ describe("srcModuleExports", () => {
     assert.deepEqual(
       srcModuleExports({ outdir: directory } as Parameters<typeof srcModuleExports>[0]),
       {
+        "./*": "./src/*/index.ts",
         "./client": "./src/client.ts",
         "./react": "./src/react/index.ts",
         "./styles.css": "./src/styles.css",
