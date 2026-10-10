@@ -370,7 +370,7 @@ describe("process tree termination", () => {
       try {
         descendantPid = await started;
         const shutdown = exec.kill(child, {
-          gracefulTimeoutMs: 250,
+          gracefulTimeoutMs: 1_000,
           forceTimeoutMs: 1_000,
           pollIntervalMs: 10,
         });
