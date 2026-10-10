@@ -4,8 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, describe, it } from "node:test";
-import { CacheManager } from "@databricks/appkit";
-import { appkit } from "@dbx-tools/appkit";
+import { CacheManager, type WorkspaceClient } from "@databricks/appkit";
 import type { FilesCacheExports } from "@dbx-tools/appkit/files-cache";
 import { log } from "@dbx-tools/shared-core";
 import { MemoryFileSystem, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
@@ -23,12 +22,12 @@ import {
   databricksWorkspace,
   databricksWorkspaceConfig,
   DEFAULT_DATABRICKS_WORKSPACE_PATHS,
+  requestWorkspaceClient,
   resolveDatabricksWorkspacePaths,
   type DatabricksWorkspacePathOptions,
 } from "../src/workspaces.ts";
 
 before(async () => {
-  await appkit.ensureInitialized();
   await CacheManager.getInstance();
 });
 
@@ -136,6 +135,21 @@ describe("databricksWorkspace sandbox", () => {
 });
 
 describe("databricksWorkspace skill source identity", () => {
+  it("uses only active user context to refresh the request workspace client", () => {
+    const initialClient = {} as WorkspaceClient;
+    const serviceClient = {} as WorkspaceClient;
+    const userClient = {} as WorkspaceClient;
+
+    assert.equal(
+      requestWorkspaceClient(initialClient, { client: serviceClient } as never),
+      initialClient,
+    );
+    assert.equal(
+      requestWorkspaceClient(initialClient, { client: userClient, isUserContext: true } as never),
+      userClient,
+    );
+  });
+
   it("does not mount /tmp unless requested", async () => {
     const workspace = databricksWorkspace({ assistantPaths: false, sandbox: false });
     const filesystem = await workspace.resolveFilesystem({

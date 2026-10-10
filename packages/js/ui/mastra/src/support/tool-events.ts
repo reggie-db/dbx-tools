@@ -4,7 +4,7 @@ import {
   TOOL_PROGRESS_PART_TYPE,
   ToolProgressPartDataSchema,
 } from "@dbx-tools/shared-mastra/wire";
-import { getToolOrDynamicToolName, isToolOrDynamicToolUIPart, type UIMessage } from "ai";
+import { getToolOrDynamicToolName, isToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 
 /** Collapse one reasoning event into a compact paragraph. */
@@ -46,7 +46,7 @@ function stripMarkdownTables(text: string): string {
 
 /** Project native AI SDK tool parts from persisted messages onto pill state. */
 export function toolEventsFromParts(parts: UIMessage["parts"]): ToolEvent[] {
-  const events = parts.filter(isToolOrDynamicToolUIPart).map<ToolEvent>((part) => {
+  const events = parts.filter(isToolUIPart).map<ToolEvent>((part) => {
     const error = part.state === "output-error";
     const done = part.state === "output-available";
     return {

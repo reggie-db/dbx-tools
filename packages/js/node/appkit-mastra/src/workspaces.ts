@@ -879,17 +879,7 @@ async function databricksFilesystem(
 > {
   const initialClient = workspaceClient.toLegacyWorkspaceClient(client);
   const fs = new DatabricksFileSystem({
-    client: () => {
-      const executionContext = appkit.tryGetExecutionContext();
-      if (
-        executionContext &&
-        "isUserContext" in executionContext &&
-        executionContext.isUserContext === true
-      ) {
-        return workspaceClient.toLegacyWorkspaceClient(executionContext.client);
-      }
-      return initialClient;
-    },
+    client: () => workspaceClient.toLegacyWorkspaceClient(requestWorkspaceClient(client)),
     root,
     readOnly,
     createRoot,
@@ -911,6 +901,23 @@ async function databricksFilesystem(
     });
   }
   return undefined;
+}
+
+/** @internal Keep service context from replacing the request-scoped workspace client. */
+export function requestWorkspaceClient(
+  initialClient: WorkspaceClient,
+  executionContext: ReturnType<
+    typeof appkit.tryGetExecutionContext
+  > = appkit.tryGetExecutionContext(),
+): WorkspaceClient {
+  if (
+    executionContext &&
+    "isUserContext" in executionContext &&
+    executionContext.isUserContext === true
+  ) {
+    return executionContext.client;
+  }
+  return initialClient;
 }
 
 function verifyFirstFileSystemAccess<TFileSystem extends FileSystem>(
