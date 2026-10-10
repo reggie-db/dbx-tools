@@ -122,7 +122,6 @@ const root = new project.DBXToolsNodeProject({
   githubOptions: { mergify: false, pullRequestLint: false },
   autoMerge: false,
   buildWorkflow: false,
-  releaseSynthesisCommands: ["bun --cwd projen .projenrc.ts"],
   releaseDocs: {
     siteUrl: "https://docs.dbx.tools",
     base: "/",

@@ -70,6 +70,39 @@ describe("release notes", () => {
     }
   });
 
+  it("writes supplied content without invoking Genie", () => {
+    const root = fixture();
+    try {
+      const destination = writeReleaseNotes({
+        content: "# Release 1.0.1\n\nSupplied notes.",
+        prefix: "v",
+        root,
+        version: "1.0.1",
+        runGenie: () => assert.fail("Genie must not run for supplied notes"),
+      });
+      assert.equal(readFileSync(destination, "utf8"), "# Release 1.0.1\n\nSupplied notes.\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("copies supplied content from a file without invoking Genie", () => {
+    const root = fixture();
+    try {
+      writeFileSync(join(root, "notes.md"), "# Release 1.0.1\n\nFile notes.\n");
+      const destination = writeReleaseNotes({
+        file: "notes.md",
+        prefix: "v",
+        root,
+        version: "1.0.1",
+        runGenie: () => assert.fail("Genie must not run for supplied notes"),
+      });
+      assert.equal(readFileSync(destination, "utf8"), "# Release 1.0.1\n\nFile notes.\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("falls back to a git-log summary when Genie fails or writes nothing", () => {
     const root = fixture();
     try {

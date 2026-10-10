@@ -513,6 +513,8 @@ bun run release --publish local --install never
 bun run release --local-registry false --local-pypi auto
 bun run release --demo-deploy
 bun run release --no-release-notes
+bun run release --release-notes-text "# Release 1.2.3"
+bun run release --release-notes-file ./notes.md
 bun run release --release-notes-instructions "Focus on operator-visible changes."
 ```
 
@@ -528,6 +530,8 @@ After bump and configured validation, release writes
 --ephemeral -o`. The standard prompt forbids running tests or other validation
 commands. If Genie fails or writes an empty file, the step keeps going with a
 short git-log summary. `--no-release-notes` skips the file.
+`--release-notes-text` writes supplied markdown directly, while
+`--release-notes-file` copies a prepared markdown file. Both bypass Genie.
 `--release-notes-instructions` appends run-specific guidance to the standard
 Genie prompt. Notes are committed with the version bump and are not recorded in
 the annotated tag. They are skipped on `--no-bump` because that path requires an
@@ -538,7 +542,8 @@ already committed tree.
 installed while still regenerating versioned sources. Local release validation
 runs `eslint:fix` before branch preparation and bump, then runs the selected
 fail-closed tasks; CI remains check-only.
-`--no-validation` skips optional task checks locally and in CI, not version or immutable-source checks.
+CI rebuilds the selected release artifacts instead of checking generated-source fingerprints.
+`--no-validation` skips optional task checks locally and in CI, not workspace-version or immutable-source checks.
 `--no-docs` skips building and deploying the site, not package README validation.
 Scopes select artifacts, not the normal commit and tag-push transaction.
 The annotated tag records CI step selections, so publishing a selected scope does
@@ -604,8 +609,10 @@ release [options]
 | `--no-pypi`                           | skip Python build and publication, including local Python publication                         |
 | `--docs`                              | build and deploy docs for a selected scope                                                    |
 | `--no-docs`                           | skip documentation build and deployment                                                       |
-| `--no-validation`                     | skip optional release validation tasks; version/source checks remain mandatory                |
+| `--no-validation`                     | skip optional release validation tasks; workspace version checks remain mandatory             |
 | `--no-release-notes`                  | skip writing docs/releases notes (Genie and git-log fallback)                                 |
+| `--release-notes-text <markdown>`     | write supplied markdown without invoking Genie                                                |
+| `--release-notes-file <path>`         | copy supplied markdown without invoking Genie                                                 |
 | `--release-notes-instructions <text>` | append custom instructions to the Genie release-notes prompt                                  |
 | `--demo-deploy`                       | after tagging, stage and deploy the AppKit demo app (off by default)                          |
 | `--profile <name>`                    | Databricks CLI profile for --demo-deploy                                                      |

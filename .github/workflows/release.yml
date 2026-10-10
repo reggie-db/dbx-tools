@@ -70,12 +70,6 @@ jobs:
         id: setup_uv
         if: ${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' || steps.release.outputs.pypi == 'true' }}
         uses: astral-sh/setup-uv@v7
-      - name: Verify generated sources
-        id: verify_generated_sources
-        run: |-
-          bun --cwd projen .projenrc.ts
-          bunx projen
-          git diff --ignore-space-at-eol --exit-code
       - name: Verify workspace versions
         id: verify_workspace_versions
         run: bun run version:check

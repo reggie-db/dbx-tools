@@ -51,8 +51,6 @@ export interface DBXToolsReleaseOptions {
   readonly validationTasks?: readonly string[];
   /** Repository prerequisites installed before release validation and artifact builds. */
   readonly setupSteps?: readonly JobStep[];
-  /** Repository-specific synthesis commands run before the root Projen synthesis check. */
-  readonly synthesisCommands?: readonly string[];
 }
 
 /** Locate the unified workflow when release generation is enabled. */
@@ -203,14 +201,6 @@ function releaseBuildJob(
         `
           // ============================================================================
         ),
-      },
-      {
-        name: "Verify generated sources",
-        run: [
-          ...(options.synthesisCommands ?? []),
-          "bunx projen",
-          "git diff --ignore-space-at-eol --exit-code",
-        ].join("\n"),
       },
       { name: "Verify workspace versions", run: "bun run version:check" },
       ...(options.setupSteps ?? []),

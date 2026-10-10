@@ -12,7 +12,7 @@ import { makeReadonly } from "./generated.ts";
 import { publicFunctionExports, publicNamespaceExports } from "./module-exports.ts";
 import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
 
-const FINGERPRINT_VERSION = 4;
+const FINGERPRINT_VERSION = 5;
 const INPUT_FINGERPRINT_LABEL = "dbx-tools binding inputs sha256";
 const CONTENT_FINGERPRINT_LABEL = "dbx-tools binding content sha256";
 const PYTHON_KEYWORDS = new Set([
@@ -170,10 +170,14 @@ export function pythonNodeBindingInputFingerprint(
   const fingerprintPath = (path: string): string => relative(canonicalRoot, canonicalPath(path));
   const sourceFile = canonicalPath(fileURLToPath(import.meta.url));
   const sourceDirectory = dirname(sourceFile);
-  const task = resolve(sourceDirectory, "../tasks/python-node-bindings.ts");
-  const files = new Set<string>(
-    transitiveSourceFiles([sourceFile, task], [dirname(sourceDirectory)]),
-  );
+  const files = new Set<string>([
+    sourceFile,
+    canonicalPath(resolve(sourceDirectory, "../tasks/python-node-bindings.ts")),
+    canonicalPath(join(sourceDirectory, "generated.ts")),
+    canonicalPath(join(sourceDirectory, "module-exports.ts")),
+    canonicalPath(join(sourceDirectory, "packages.ts")),
+    canonicalPath(join(sourceDirectory, "python-node-runtime.ts")),
+  ]);
   const versionFile = join(root, "VERSION");
   if (existsSync(versionFile)) files.add(canonicalPath(versionFile));
   for (const config of configs) {

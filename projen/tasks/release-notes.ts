@@ -8,7 +8,7 @@
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { log } from "@dbx-tools/shared-core";
 
 import { captureTaskCommand, tryTaskCommand } from "../src/_task-command.ts";
@@ -20,6 +20,10 @@ const GENIE_PROMPT =
 
 /** Inputs for one notes write. */
 export interface WriteReleaseNotesOptions {
+  /** Complete release-note content supplied by the caller instead of Genie. */
+  readonly content?: string;
+  /** File containing complete release notes supplied by the caller instead of Genie. */
+  readonly file?: string;
   /** Extra agent instructions appended after the standard release-note requirements. */
   readonly instructions?: string;
   readonly prefix: string;
@@ -60,6 +64,25 @@ export function writeReleaseNotes(options: WriteReleaseNotesOptions): string {
   const destination = releaseNotesPath(root, version);
   mkdirSync(dirname(destination), { recursive: true });
   const relative = join("docs", "releases", `v${version}.md`);
+  const suppliedContent = options.content?.trim();
+  const suppliedFile = options.file?.trim();
+  if (suppliedContent && suppliedFile) {
+    throw new Error("release notes content and file are mutually exclusive");
+  }
+  if (options.content !== undefined) {
+    if (!suppliedContent) throw new Error("release notes content must not be empty");
+    writeFileSync(destination, `${suppliedContent}\n`);
+    logger.info("wrote supplied release notes", { path: relative });
+    return destination;
+  }
+  if (options.file !== undefined) {
+    if (!suppliedFile) throw new Error("release notes file must not be empty");
+    const content = readNotes(resolve(root, suppliedFile));
+    if (!content) throw new Error(`release notes file is empty or unreadable: ${suppliedFile}`);
+    writeFileSync(destination, `${content}\n`);
+    logger.info("copied supplied release notes", { path: relative, source: suppliedFile });
+    return destination;
+  }
   const genieArgs = [
     "exec",
     "-C",

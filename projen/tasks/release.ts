@@ -236,6 +236,10 @@ export async function runRelease(
     readonly releaseNotes?: boolean;
     /** Additional instructions appended to the standard Genie release-notes prompt. */
     readonly releaseNotesInstructions?: string;
+    /** Complete release notes supplied directly instead of invoking Genie. */
+    readonly releaseNotesText?: string;
+    /** Path to complete release notes supplied instead of invoking Genie. */
+    readonly releaseNotesFile?: string;
     readonly writeReleaseNotes?: typeof writeReleaseNotes;
   },
 ): Promise<string> {
@@ -246,6 +250,23 @@ export async function runRelease(
 
   if (options.demoDeploy && !demoProfile) {
     throw new Error("--demo-deploy requires --profile <name>");
+  }
+  if (options.releaseNotesText !== undefined && options.releaseNotesFile !== undefined) {
+    throw new Error("--release-notes-text and --release-notes-file are mutually exclusive");
+  }
+  if (
+    options.releaseNotesInstructions !== undefined &&
+    (options.releaseNotesText !== undefined || options.releaseNotesFile !== undefined)
+  ) {
+    throw new Error(
+      "--release-notes-instructions cannot be combined with supplied release notes",
+    );
+  }
+  if (
+    options.releaseNotes === false &&
+    (options.releaseNotesText !== undefined || options.releaseNotesFile !== undefined)
+  ) {
+    throw new Error("--no-release-notes cannot be combined with supplied release notes");
   }
 
   if (install === "always") runTaskCommand(root, "bun", ["install"]);
@@ -279,6 +300,8 @@ export async function runRelease(
       prefix,
       root,
       version,
+      content: options.releaseNotesText,
+      file: options.releaseNotesFile,
       instructions: options.releaseNotesInstructions,
     });
   }
@@ -380,9 +403,11 @@ export function createReleaseCommand(): Command {
     .option("--no-docs", "skip documentation build and deployment")
     .option(
       "--no-validation",
-      "skip optional release validation tasks; version/source checks remain mandatory",
+      "skip optional release validation tasks; workspace version checks remain mandatory",
     )
     .option("--no-release-notes", "skip writing docs/releases notes (Genie and git-log fallback)")
+    .option("--release-notes-text <markdown>", "write supplied markdown without invoking Genie")
+    .option("--release-notes-file <path>", "copy supplied markdown without invoking Genie")
     .option(
       "--release-notes-instructions <text>",
       "append custom instructions to the Genie release-notes prompt",
@@ -410,6 +435,8 @@ export function createReleaseCommand(): Command {
           profile?: string;
           releaseNotes?: boolean;
           releaseNotesInstructions?: string;
+          releaseNotesText?: string;
+          releaseNotesFile?: string;
         },
       ) => {
         await runRelease({
@@ -433,6 +460,8 @@ export function createReleaseCommand(): Command {
           demoProfile: options.profile,
           releaseNotes: options.releaseNotes,
           releaseNotesInstructions: options.releaseNotesInstructions,
+          releaseNotesText: options.releaseNotesText,
+          releaseNotesFile: options.releaseNotesFile,
         });
       },
     );

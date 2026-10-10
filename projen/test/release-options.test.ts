@@ -17,6 +17,8 @@ async function flags(args: string[]): Promise<
     demoDeploy?: boolean;
     releaseNotes?: boolean;
     releaseNotesInstructions?: string;
+    releaseNotesText?: string;
+    releaseNotesFile?: string;
   }
 > {
   const command = createReleaseCommand().action(() => {});
@@ -121,6 +123,14 @@ describe("per-run release selection", () => {
     ]);
     assert.equal(options.releaseNotesInstructions, "Focus on operator-visible changes.");
     assert.equal(releaseTagAnnotation("v1.2.3", releaseStepSelection(options)), "v1.2.3");
+  });
+
+  it("accepts direct release-note text or a file without recording them in the tag", async () => {
+    const text = await flags(["--release-notes-text", "# Release notes"]);
+    assert.equal(text.releaseNotesText, "# Release notes");
+    const file = await flags(["--release-notes-file", "notes.md"]);
+    assert.equal(file.releaseNotesFile, "notes.md");
+    assert.equal(releaseTagAnnotation("v1.2.3", releaseStepSelection(file)), "v1.2.3");
   });
 
   it("rejects malformed or ambiguous policies rather than enabling unselected publication", () => {

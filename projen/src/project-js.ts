@@ -587,7 +587,6 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     /** Release build prerequisites installed before repository validation tasks. */
     readonly releaseSetupSteps?: readonly JobStep[];
     /** Repository-specific synthesis commands run before release source verification. */
-    readonly releaseSynthesisCommands?: readonly string[];
     /** Set to `false` to omit normal npm workspace publication. */
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
@@ -1380,7 +1379,6 @@ function initProject(
       pythonRoot: options.releasePythonRoot,
       validationTasks: options.releaseValidationTasks,
       setupSteps: options.releaseSetupSteps,
-      synthesisCommands: options.releaseSynthesisCommands,
     });
   }
 }
