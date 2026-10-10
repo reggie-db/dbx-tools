@@ -86,6 +86,22 @@ describe("resolveDatabricksWorkspacePaths", () => {
     assert.equal(typeof config.filesystem, "function");
     assert.equal(config.sandbox, undefined);
   });
+
+  it("keeps file-only paths independent from skill discovery", () => {
+    const config = databricksWorkspaceConfig({
+      assistantPaths: false,
+      paths: ["~/project"],
+      sandbox: false,
+    });
+    assert.equal(typeof config.filesystem, "function");
+    assert.equal(config.skills, undefined);
+  });
+
+  it("can disable skills while retaining default file mounts", () => {
+    const config = databricksWorkspaceConfig({ skills: false, sandbox: false });
+    assert.equal(typeof config.filesystem, "function");
+    assert.equal(config.skills, undefined);
+  });
 });
 
 describe("databricksWorkspace sandbox", () => {
@@ -275,7 +291,6 @@ describe("databricksWorkspace skill source identity", () => {
         ({ requestContext }) => ({
           path: "~",
           displayName: `Home for ${requestContext?.get(MASTRA_USER_EMAIL_KEY)}`,
-          readable: false,
           writable: true,
           createRoot: false,
         }),
@@ -612,7 +627,6 @@ describe("databricksWorkspace skill source identity", () => {
       paths: [
         {
           path: "/Workspace/.assistant",
-          readable: false,
           writable: true,
           createRoot: false,
         },

@@ -5,6 +5,7 @@ import { availableParallelism } from "node:os";
 import { join, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
 import { log } from "@dbx-tools/shared-core";
+import { runTaskMain } from "./cli.ts";
 
 const logger = log.logger("projen:compile");
 
@@ -142,4 +143,4 @@ async function compileCustomPackage(pkg: {
   return result!;
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

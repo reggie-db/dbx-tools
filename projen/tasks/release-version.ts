@@ -1,10 +1,19 @@
 #!/usr/bin/env -S bun
 /** Validate one stable release version against the canonical workspace policy. */
 import { resolve } from "node:path";
-import { parseArgs } from "node:util";
 import * as projectUtils from "@dbx-tools/core/project-utils";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { TaskRootOptionSchema } from "./options.ts";
 import { captureTaskCommand } from "../src/_task-command.ts";
 import { compareSemver, parseSemver, type Semver } from "../src/workspace-version.ts";
+
+export const ReleaseVersionOptionsSchema = z.object({
+  version: z.string().trim().min(1).describe("Release version to validate"),
+  root: TaskRootOptionSchema,
+  prefix: z.array(z.string().trim().min(1)).default([]).describe("Allowed release tag prefix"),
+  assertNext: z.boolean().default(false).describe("Require a version newer than published tags"),
+});
 
 function publishedVersion(root: string, prefixes: readonly string[]): string | undefined {
   let best: Semver | undefined;
@@ -46,23 +55,21 @@ export function assertReleaseVersion(
   }
 }
 
-export function main(args: string[] = process.argv.slice(2)): void {
-  const { values } = parseArgs({
+export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
+  const values = await taskOptions(
+    taskCommand(
+      import.meta.url,
+      "Validate a stable workspace release version",
+      ReleaseVersionOptionsSchema,
+    ),
+    ReleaseVersionOptionsSchema,
     args,
-    options: {
-      version: { type: "string" },
-      root: { type: "string" },
-      prefix: { type: "string", multiple: true },
-      "assert-next": { type: "boolean", default: false },
-    },
-    strict: true,
-  });
-  if (!values.version) throw new Error("--version is required");
+  );
   assertReleaseVersion(values.version, {
     ...(values.root ? { root: values.root } : {}),
-    ...(values.prefix ? { prefixes: values.prefix } : {}),
-    assertNext: values["assert-next"],
+    ...(values.prefix.length ? { prefixes: values.prefix } : {}),
+    assertNext: values.assertNext,
   });
 }
 
-if (import.meta.main) main();
+await runTaskMain(import.meta, main);

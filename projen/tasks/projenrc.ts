@@ -2,6 +2,7 @@
 /** Resynthesize when the root definition or configured generator inputs change. */
 import { resolve } from "node:path";
 import { log } from "@dbx-tools/shared-core";
+import { runTaskMain } from "./cli.ts";
 import { repoRoot, syncResynthPaths } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
 import { watchLoop } from "../src/watch.ts";
@@ -38,4 +39,4 @@ export function main(): void {
   );
 }
 
-if (import.meta.main) main();
+await runTaskMain(import.meta, main);

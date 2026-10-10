@@ -184,6 +184,7 @@
             "@types/semver",
             "projen",
             "@clack/prompts",
+            "@dbx-tools/cli-args",
             "@dbx-tools/core",
             "@dbx-tools/path",
             "@dbx-tools/shared-core",

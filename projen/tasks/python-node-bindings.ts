@@ -6,11 +6,13 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parseArgs } from "node:util";
 import { log, stringUtils } from "@dbx-tools/shared-core";
 import type { BunPlugin } from "bun";
 import stdLibBrowser from "node-stdlib-browser";
 import ts from "typescript";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { TaskCheckOptionSchema, TaskForceOptionSchema, TaskRootOptionSchema } from "./options.ts";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
 import { publicFunctionExports } from "../src/module-exports.ts";
 import { resolveRepoRoot } from "../src/packages.ts";
@@ -34,26 +36,37 @@ const logger = log.logger("projen:python-node-bindings");
 
 type FunctionOverride = ResolvedPythonNodeFunctionOverride;
 
-function bindingIndex(value: string, count: number, project: string): number {
-  const index = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(index) || String(index) !== value || index < 0 || index >= count) {
-    throw new Error(`Node binding index ${value} is not configured for ${project}`);
+function bindingIndex(index: number, count: number, project: string): number {
+  if (index >= count) {
+    throw new Error(`Node binding index ${index} is not configured for ${project}`);
   }
   return index;
 }
 
+export const PythonNodeBindingsOptionsSchema = z.object({
+  binding: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe("Configured binding index within the selected project"),
+  check: TaskCheckOptionSchema,
+  force: TaskForceOptionSchema,
+  module: z.string().trim().min(1).optional().describe("Configured package module to generate"),
+  project: z.string().trim().min(1).optional().describe("Python project directory"),
+  root: TaskRootOptionSchema,
+});
+
 export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  const { values } = parseArgs({
+  const values = await taskOptions(
+    taskCommand(
+      import.meta.url,
+      "Generate PythonMonkey runtime and typed Python wrappers",
+      PythonNodeBindingsOptionsSchema,
+    ),
+    PythonNodeBindingsOptionsSchema,
     args,
-    options: {
-      binding: { type: "string" },
-      check: { type: "boolean" },
-      force: { type: "boolean" },
-      module: { type: "string" },
-      project: { type: "string" },
-      root: { type: "string" },
-    },
-  });
+  );
   const root = values.root ? resolve(values.root) : resolveRepoRoot();
   if (!values.project) {
     if (values.binding !== undefined || values.module !== undefined) {
@@ -1186,4 +1199,4 @@ function pythonRuntimeLoader(source: string): string {
   ].join("\n");
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

@@ -198,11 +198,11 @@ dbx appkit env [options]
 
 #### Options
 
-| Option             | Description                                                                                                     |
-| ------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `--format <value>` | Output format: export, windows, or json. (choices: "export", "windows", "json", default: "export", env: FORMAT) |
-| `--quiet`          | Suppress auto-config log output. (default: false, env: QUIET)                                                   |
-| `--no-quiet`       | Disable suppress auto-config log output.                                                                        |
+| Option                 | Description                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `-f, --format <value>` | Output format: export, windows, or json. (choices: "export", "windows", "json", default: "export", env: FORMAT) |
+| `-q, --quiet`          | Suppress auto-config log output. (default: false, env: QUIET)                                                   |
+| `--no-quiet`           | Disable suppress auto-config log output.                                                                        |
 
 ### `dbx auth`
 
@@ -214,16 +214,16 @@ dbx auth [options] [command]
 
 #### Options
 
-| Option                        | Description                                                                                                    |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `--profile <value>`           | Databricks CLI profile. (env: DATABRICKS_CONFIG_PROFILE)                                                       |
-| `--scopes <value>`            | OAuth scopes. (default: [], env: SCOPES)                                                                       |
-| `--target <value>`            | OAuth target. (choices: "workspace", "account", "unified", env: TARGET)                                        |
-| `--lock-timeout-ms <value>`   | Credential lock timeout in milliseconds. (default: 0, env: LOCK_TIMEOUT_MS)                                    |
-| `--login-timeout-ms <value>`  | Browser login timeout in milliseconds. (default: 900000, env: LOGIN_TIMEOUT_MS)                                |
-| `--refresh-buffer-ms <value>` | Token refresh buffer in milliseconds. (default: 300000, env: REFRESH_BUFFER_MS)                                |
-| `--prefer-user-to-machine`    | Prefer a matching user profile over selected machine credentials. (default: true, env: PREFER_USER_TO_MACHINE) |
-| `--no-prefer-user-to-machine` | Disable prefer a matching user profile over selected machine credentials.                                      |
+| Option                            | Description                                                                                                    |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `--profile <value>`               | Databricks CLI profile. (env: DATABRICKS_CONFIG_PROFILE)                                                       |
+| `-s, --scopes <value>`            | OAuth scopes. (default: [], env: SCOPES)                                                                       |
+| `-t, --target <value>`            | OAuth target. (choices: "workspace", "account", "unified", env: TARGET)                                        |
+| `--lock-timeout-ms <value>`       | Credential lock timeout in milliseconds. (default: 0, env: LOCK_TIMEOUT_MS)                                    |
+| `--login-timeout-ms <value>`      | Browser login timeout in milliseconds. (default: 900000, env: LOGIN_TIMEOUT_MS)                                |
+| `-r, --refresh-buffer-ms <value>` | Token refresh buffer in milliseconds. (default: 300000, env: REFRESH_BUFFER_MS)                                |
+| `--prefer-user-to-machine`        | Prefer a matching user profile over selected machine credentials. (default: true, env: PREFER_USER_TO_MACHINE) |
+| `--no-prefer-user-to-machine`     | Disable prefer a matching user profile over selected machine credentials.                                      |
 
 #### Commands
 
@@ -258,7 +258,7 @@ dbx auth token [options]
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `--force-refresh`    | Refresh the token before returning it. (default: false, env: FORCE_REFRESH)                                        |
 | `--no-force-refresh` | Disable refresh the token before returning it.                                                                     |
-| `--login`            | Log in when credentials are missing or invalid. (default: true, env: LOGIN)                                        |
+| `-l, --login`        | Log in when credentials are missing or invalid. (default: true, env: LOGIN)                                        |
 | `--no-login`         | Disable log in when credentials are missing or invalid.                                                            |
 | `--format <value>`   | Output structured token metadata or only the access token. (choices: "json", "text", default: "json", env: FORMAT) |
 
@@ -310,33 +310,33 @@ dbx tunnel [options] [command] [command...]
 
 #### Options
 
-| Option                          | Description                                                                                     |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
-| `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
-| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
-| `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
-| `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
-| `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
-| `--subject <value>`             | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
-| `--brand-name <value>`          | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
-| `--message <value>`             | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
-| `--session-ttl-seconds <value>` | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
-| `--code-ttl-seconds <value>`    | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
-| `--session-cutoff <value>`      | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
-| `--storage <value>`             | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
-| `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
-| `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
-| `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
-| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
-| `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
-| `--no-insecure`                 | Disable run without an authentication gate.                                                     |
-| `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |
-| `--frp-public-domain <value>`   | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
-| `--frp-server-port <value>`     | FRP control port. (env: FRP_SERVER_PORT)                                                        |
-| `--frp-protocol <value>`        | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
-| `--frp-token <value>`           | FRP authentication token. (env: FRP_TOKEN)                                                      |
-| `--frp-proxy-name <value>`      | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
+| Option                           | Description                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `-t, --transport <value>`        | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
+| `--public-domain <value>`        | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
+| `--subdomain <value>`            | Portr subdomain. (env: SUBDOMAIN)                                                               |
+| `--port <value>`                 | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
+| `--app-port <value>`             | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
+| `--allow <value>`                | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
+| `--subject <value>`              | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
+| `--brand-name <value>`           | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `-m, --message <value>`          | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
+| `--session-ttl-seconds <value>`  | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
+| `-c, --code-ttl-seconds <value>` | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
+| `--session-cutoff <value>`       | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
+| `--storage <value>`              | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
+| `--sqlite-path <value>`          | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
+| `--forward-headers <value>`      | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
+| `-g, --gate-paths <value>`       | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
+| `--bind-hosts <value>`           | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
+| `-i, --insecure`                 | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
+| `--no-insecure`                  | Disable run without an authentication gate.                                                     |
+| `--frp-server <value>`           | FRP control host. (env: FRP_SERVER)                                                             |
+| `--frp-public-domain <value>`    | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
+| `--frp-server-port <value>`      | FRP control port. (env: FRP_SERVER_PORT)                                                        |
+| `--frp-protocol <value>`         | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
+| `--frp-token <value>`            | FRP authentication token. (env: FRP_TOKEN)                                                      |
+| `--frp-proxy-name <value>`       | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
 
 #### Commands
 
@@ -362,33 +362,33 @@ dbx tunnel run [options] <command...>
 
 #### Options
 
-| Option                          | Description                                                                                     |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
-| `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
-| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
-| `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
-| `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
-| `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
-| `--subject <value>`             | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
-| `--brand-name <value>`          | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
-| `--message <value>`             | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
-| `--session-ttl-seconds <value>` | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
-| `--code-ttl-seconds <value>`    | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
-| `--session-cutoff <value>`      | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
-| `--storage <value>`             | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
-| `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
-| `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
-| `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
-| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
-| `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
-| `--no-insecure`                 | Disable run without an authentication gate.                                                     |
-| `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |
-| `--frp-public-domain <value>`   | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
-| `--frp-server-port <value>`     | FRP control port. (env: FRP_SERVER_PORT)                                                        |
-| `--frp-protocol <value>`        | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
-| `--frp-token <value>`           | FRP authentication token. (env: FRP_TOKEN)                                                      |
-| `--frp-proxy-name <value>`      | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
+| Option                           | Description                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `-t, --transport <value>`        | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
+| `--public-domain <value>`        | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
+| `--subdomain <value>`            | Portr subdomain. (env: SUBDOMAIN)                                                               |
+| `--port <value>`                 | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
+| `--app-port <value>`             | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
+| `--allow <value>`                | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
+| `--subject <value>`              | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
+| `--brand-name <value>`           | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `-m, --message <value>`          | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
+| `--session-ttl-seconds <value>`  | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
+| `-c, --code-ttl-seconds <value>` | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
+| `--session-cutoff <value>`       | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
+| `--storage <value>`              | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
+| `--sqlite-path <value>`          | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
+| `--forward-headers <value>`      | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
+| `-g, --gate-paths <value>`       | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
+| `--bind-hosts <value>`           | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
+| `-i, --insecure`                 | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
+| `--no-insecure`                  | Disable run without an authentication gate.                                                     |
+| `--frp-server <value>`           | FRP control host. (env: FRP_SERVER)                                                             |
+| `--frp-public-domain <value>`    | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
+| `--frp-server-port <value>`      | FRP control port. (env: FRP_SERVER_PORT)                                                        |
+| `--frp-protocol <value>`         | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
+| `--frp-token <value>`            | FRP authentication token. (env: FRP_TOKEN)                                                      |
+| `--frp-proxy-name <value>`       | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
 
 ### `dbx tunnel status`
 
@@ -400,33 +400,33 @@ dbx tunnel status [options]
 
 #### Options
 
-| Option                          | Description                                                                                     |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
-| `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
-| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
-| `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
-| `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
-| `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
-| `--subject <value>`             | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
-| `--brand-name <value>`          | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
-| `--message <value>`             | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
-| `--session-ttl-seconds <value>` | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
-| `--code-ttl-seconds <value>`    | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
-| `--session-cutoff <value>`      | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
-| `--storage <value>`             | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
-| `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
-| `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
-| `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
-| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
-| `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
-| `--no-insecure`                 | Disable run without an authentication gate.                                                     |
-| `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |
-| `--frp-public-domain <value>`   | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
-| `--frp-server-port <value>`     | FRP control port. (env: FRP_SERVER_PORT)                                                        |
-| `--frp-protocol <value>`        | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
-| `--frp-token <value>`           | FRP authentication token. (env: FRP_TOKEN)                                                      |
-| `--frp-proxy-name <value>`      | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
+| Option                           | Description                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `-t, --transport <value>`        | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
+| `--public-domain <value>`        | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
+| `--subdomain <value>`            | Portr subdomain. (env: SUBDOMAIN)                                                               |
+| `--port <value>`                 | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
+| `--app-port <value>`             | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
+| `--allow <value>`                | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
+| `--subject <value>`              | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
+| `--brand-name <value>`           | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `-m, --message <value>`          | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
+| `--session-ttl-seconds <value>`  | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
+| `-c, --code-ttl-seconds <value>` | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
+| `--session-cutoff <value>`       | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
+| `--storage <value>`              | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
+| `--sqlite-path <value>`          | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
+| `--forward-headers <value>`      | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
+| `-g, --gate-paths <value>`       | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
+| `--bind-hosts <value>`           | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
+| `-i, --insecure`                 | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
+| `--no-insecure`                  | Disable run without an authentication gate.                                                     |
+| `--frp-server <value>`           | FRP control host. (env: FRP_SERVER)                                                             |
+| `--frp-public-domain <value>`    | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
+| `--frp-server-port <value>`      | FRP control port. (env: FRP_SERVER_PORT)                                                        |
+| `--frp-protocol <value>`         | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
+| `--frp-token <value>`            | FRP authentication token. (env: FRP_TOKEN)                                                      |
+| `--frp-proxy-name <value>`       | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
 
 ### `dbx tunnel install`
 
@@ -452,13 +452,13 @@ dbx lakebase-proxy [options] [command]
 
 #### Options
 
-| Option                              | Description                                                                  |
-| ----------------------------------- | ---------------------------------------------------------------------------- |
-| `-V, --version`                     | output the version number                                                    |
-| `--postgres-role <value>`           | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE) |
-| `--listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN)      |
-| `--startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS)      |
-| `--profile <value>`                 | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)                   |
+| Option                                  | Description                                                                  |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| `-V, --version`                         | output the version number                                                    |
+| `--postgres-role <value>`               | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE) |
+| `-l, --listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN)      |
+| `-s, --startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS)      |
+| `--profile <value>`                     | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)                   |
 
 #### Commands
 
@@ -477,10 +477,10 @@ dbx lakebase-proxy url [options]
 
 #### Options
 
-| Option             | Description                                                       |
-| ------------------ | ----------------------------------------------------------------- |
-| `--target <value>` | Lakebase project, resource path, host, or URL. (env: TARGET)      |
-| `--listen <value>` | Local proxy address. (default: tcp://localhost:5432, env: LISTEN) |
+| Option                 | Description                                                       |
+| ---------------------- | ----------------------------------------------------------------- |
+| `-t, --target <value>` | Lakebase project, resource path, host, or URL. (env: TARGET)      |
+| `--listen <value>`     | Local proxy address. (default: tcp://localhost:5432, env: LISTEN) |
 
 ### `dbx lakebase-proxy service`
 
@@ -512,15 +512,15 @@ dbx lakebase-proxy service install [options]
 
 #### Options
 
-| Option                              | Description                                                                  |
-| ----------------------------------- | ---------------------------------------------------------------------------- |
-| `--no-start`                        | Do not start the service after installation                                  |
-| `--python-project <path>`           | Install a local Python project instead of the registry package               |
-| `--offline`                         | Install Python packages from the uv cache without network access             |
-| `--postgres-role <value>`           | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE) |
-| `--listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN)      |
-| `--startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS)      |
-| `--profile <value>`                 | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)                   |
+| Option                                  | Description                                                                  |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| `--no-start`                            | Do not start the service after installation                                  |
+| `--python-project <path>`               | Install a local Python project instead of the registry package               |
+| `--offline`                             | Install Python packages from the uv cache without network access             |
+| `--postgres-role <value>`               | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE) |
+| `-l, --listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN)      |
+| `-s, --startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS)      |
+| `--profile <value>`                     | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)                   |
 
 ### `dbx lakebase-proxy service start`
 
@@ -591,10 +591,10 @@ dbx model-gateway [options] [command]
 | `-v, --version`         | output the version number                                                                                                                                    |
 | `--model <value>`       | Optional fuzzy or exact model name. (env: MODEL)                                                                                                             |
 | `--model-class <value>` | Optional model capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", "embedding", env: MODEL_CLASS) |
-| `--listen <value>`      | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                                                                                      |
-| `--profile <value>`     | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE)                                                                   |
+| `-l, --listen <value>`  | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                                                                                      |
+| `-p, --profile <value>` | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE)                                                                   |
 | `--body-limit <value>`  | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                                                                                          |
-| `--runtime-info`        | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                                                                                   |
+| `-r, --runtime-info`    | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                                                                                   |
 | `--no-runtime-info`     | Disable print runtime implementation metadata.                                                                                                               |
 
 #### Commands
@@ -709,12 +709,12 @@ dbx genie [options] [genieArgs...]
 
 #### Options
 
-| Option                     | Description                                                                                                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--model <value>`          | Optional fuzzy or exact model name. (env: MODEL)                                                                                               |
-| `--model-class <value>`    | Optional chat capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", env: MODEL_CLASS) |
-| `--profile <value>`        | Databricks profile used by the model-gateway sidecar. (env: DATABRICKS_CONFIG_PROFILE)                                                         |
-| `--gateway-listen <value>` | Loopback listener allocated for the model-gateway sidecar. (default: tcp://127.0.0.1:0, env: GATEWAY_LISTEN)                                   |
+| Option                         | Description                                                                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--model <value>`              | Optional fuzzy or exact model name. (env: MODEL)                                                                                               |
+| `--model-class <value>`        | Optional chat capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", env: MODEL_CLASS) |
+| `-p, --profile <value>`        | Databricks profile used by the model-gateway sidecar. (env: DATABRICKS_CONFIG_PROFILE)                                                         |
+| `-g, --gateway-listen <value>` | Loopback listener allocated for the model-gateway sidecar. (default: tcp://127.0.0.1:0, env: GATEWAY_LISTEN)                                   |
 
 ### `dbx graphiti`
 
@@ -730,13 +730,13 @@ dbx graphiti [options] [command]
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-v, --version`                    | output the version number                                                                                                                                            |
 | `--profile <value>`                | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                                                                     |
-| `--bearer <value>`                 | Optional bearer token required by every Graphiti HTTP endpoint. (env: GRAPHITI_TOKEN)                                                                                |
-| `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                                                                   |
-| `--model-class <value>`            | Optional chat capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", default: "chat-fast", env: MODEL_CLASS) |
-| `--temperature <value>`            | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                                                            |
+| `-b, --bearer <value>`             | Optional bearer token required by every Graphiti HTTP endpoint. (env: GRAPHITI_TOKEN)                                                                                |
+| `-g, --graphiti-home <value>`      | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                                                                   |
+| `-m, --model-class <value>`        | Optional chat capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", default: "chat-fast", env: MODEL_CLASS) |
+| `-t, --temperature <value>`        | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                                                            |
 | `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE)                                            |
 | `--startup-timeout-ms <value>`     | Maximum milliseconds allowed for the Graphiti runtime to become ready. (default: 180000, env: DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS)                                 |
-| `--listen <value>`                 | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                                                                        |
+| `-l, --listen <value>`             | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                                                                        |
 | `--database-url <value>`           | PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL. (env: LAKEBASE_ENDPOINT)                                                           |
 | `--database-schema <value>`        | PostgreSQL schema used for Lakebase graph tables. (default: "dbx_tools_graphiti", env: GRAPHITI_DATABASE_SCHEMA)                                                     |
 | `--postgres-role <value>`          | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE)                                                                                         |

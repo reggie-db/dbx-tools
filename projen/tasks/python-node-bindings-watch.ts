@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
+import { runTaskMain } from "./cli.ts";
 import { runTaskCommand } from "../src/_task-command.ts";
 import { repoRoot } from "../src/packages.ts";
 import {
@@ -91,4 +92,4 @@ export async function main(): Promise<void> {
   );
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

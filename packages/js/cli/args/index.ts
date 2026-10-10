@@ -5,5 +5,5 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-args";
 export const PACKAGE_VERSION = "0.9.106";
 export * as args from "./src/args.ts";
-export type { CliArgsOptions, CliArgMeta, ArgumentSource } from "./src/args.ts";
+export type { CliArgsOptions, CliArgMeta, CliObjectSchema, ArgumentSource } from "./src/args.ts";
 export * from "./exports.ts";

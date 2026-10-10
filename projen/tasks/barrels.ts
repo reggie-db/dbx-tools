@@ -1,8 +1,10 @@
 #!/usr/bin/env -S bun
 /** Generate package barrels once or keep affected barrels current in watch mode. */
 import { sep } from "node:path";
-import { parseArgs } from "node:util";
 import { log, object, stringUtils } from "@dbx-tools/shared-core";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { TaskDirectoriesOptionSchema, TaskWatchOptionSchema } from "./options.ts";
 import { generateBarrels } from "../src/barrels.ts";
 import { recordedPackages } from "../src/packages.ts";
 import { watchLoop, watchRoots } from "../src/watch.ts";
@@ -35,15 +37,21 @@ function warnUnownedChanges(changed: readonly string[]): void {
   }
 }
 
-export function main(args: string[] = process.argv.slice(2)): void {
-  const { values } = parseArgs({
+export const BarrelsOptionsSchema = z.object({
+  watch: TaskWatchOptionSchema,
+  dir: TaskDirectoriesOptionSchema.describe("Repeatable package directory to rebuild"),
+});
+
+export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
+  const values = await taskOptions(
+    taskCommand(
+      import.meta.url,
+      "Generate package barrels once or keep them current",
+      BarrelsOptionsSchema,
+    ),
+    BarrelsOptionsSchema,
     args,
-    options: {
-      watch: { type: "boolean" },
-      dir: { type: "string", multiple: true },
-    },
-    strict: false,
-  });
+  );
 
   if (values.watch) {
     // Watch the package roots; a source edit inside a package rebuilds just that
@@ -70,9 +78,7 @@ export function main(args: string[] = process.argv.slice(2)): void {
       },
     );
   } else {
-    const dirs = Array.isArray(values.dir)
-      ? values.dir.filter((value): value is string => typeof value === "string")
-      : [];
+    const dirs = values.dir;
     const n = generateBarrels(dirs.length ? { dirs } : undefined);
     logger.success(
       n === 0 ? "barrels already up to date" : `updated ${stringUtils.pluralize(n, "barrel")}`,
@@ -80,4 +86,4 @@ export function main(args: string[] = process.argv.slice(2)): void {
   }
 }
 
-if (import.meta.main) main();
+await runTaskMain(import.meta, main);

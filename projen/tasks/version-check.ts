@@ -6,6 +6,7 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
 import { json, log } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
+import { runTaskMain } from "./cli.ts";
 import { recordedPackages } from "../src/packages.ts";
 import { readWorkspaceVersion } from "../src/workspace-version.ts";
 
@@ -45,4 +46,4 @@ export function main(): void {
   logger.success(`all workspace package versions match ${version}`);
 }
 
-if (import.meta.main) main();
+await runTaskMain(import.meta, main);

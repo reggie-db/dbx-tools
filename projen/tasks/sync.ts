@@ -3,6 +3,9 @@
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { TaskWatchOptionSchema } from "./options.ts";
 import { repoRoot, syncWatchTasks } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
 import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
@@ -45,8 +48,19 @@ function taskWatcher(task: string) {
   };
 }
 
+export const SyncOptionsSchema = z.object({ watch: TaskWatchOptionSchema });
+
 export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  if (!args.includes("--watch")) {
+  const { watch } = await taskOptions(
+    taskCommand(
+      import.meta.url,
+      "Synthesize once or supervise focused generators",
+      SyncOptionsSchema,
+    ),
+    SyncOptionsSchema,
+    args,
+  );
+  if (!watch) {
     // One-shot: full synth (+install + barrels via the post-synth component). This is
     // the scriptable path, so a failed synth stays a failed exit code.
     logger.start("synthesizing");
@@ -123,4 +137,4 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   }
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

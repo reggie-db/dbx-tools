@@ -23,6 +23,13 @@ import { basename, dirname, join, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
 import { withFileLock } from "@dbx-tools/core/file-lock";
 import { parse } from "smol-toml";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import {
+  TaskCheckOptionSchema,
+  TaskForceOptionSchema,
+  TaskProjectOptionSchema,
+} from "./options.ts";
 import { PYTHON_GENERATED_PACKAGE, PYTHON_SYNC_PACKAGE } from "../src/generated.ts";
 
 /** AST rewriter that points absolute imports of synchronized modules at their generated package. */
@@ -50,13 +57,17 @@ interface ParsedSource {
 }
 
 export async function main(args: readonly string[] = process.argv.slice(2)): Promise<void> {
-  const projectIndex = args.indexOf("--project");
-  if (projectIndex < 0 || !args[projectIndex + 1]) {
-    throw new Error("python-sync requires --project <directory>");
-  }
-  const project = resolve(args[projectIndex + 1]!);
-  const force = args.includes("--force");
-  const check = args.includes("--check");
+  const schema = z.object({
+    project: TaskProjectOptionSchema,
+    force: TaskForceOptionSchema,
+    check: TaskCheckOptionSchema,
+  });
+  const options = await taskOptions(
+    taskCommand(import.meta.url, "Synchronize pinned Git sources into Python packages", schema),
+    schema,
+    args,
+  );
+  const project = resolve(options.project);
   const pyproject = parse(readFileSync(join(project, "pyproject.toml"), "utf8")) as {
     tool?: {
       uv?: { "build-backend"?: { "module-name"?: string; "module-root"?: string } };
@@ -73,7 +84,7 @@ export async function main(args: readonly string[] = process.argv.slice(2)): Pro
   const generatedPackage = [moduleName, PYTHON_GENERATED_PACKAGE, PYTHON_SYNC_PACKAGE].join(".");
   const generatedRoot = join(moduleRoot, ...generatedPackage.split("."));
   for (const config of configs) {
-    await synchronize(config, generatedRoot, generatedPackage, { check, force });
+    await synchronize(config, generatedRoot, generatedPackage, options);
   }
 }
 
@@ -327,4 +338,4 @@ function makeReadonly(path: string): void {
   }
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

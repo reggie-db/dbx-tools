@@ -2,6 +2,9 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
 import { log, object } from "@dbx-tools/shared-core";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
+import { TaskRootOptionSchema } from "./options.ts";
 
 const logger = log.logger("projen:test");
 
@@ -26,6 +29,12 @@ export interface WorkspaceGraph {
 }
 
 type TestMode = "focused" | "changed" | "unit" | "integration" | "all" | "graph";
+const TEST_MODES = ["focused", "changed", "unit", "integration", "all", "graph"] as const;
+
+export const TestWorkspaceOptionsSchema = z.object({
+  root: TaskRootOptionSchema,
+  base: z.string().trim().min(1).optional().describe("Git base used for changed-test selection"),
+});
 
 const PROJEN_INTEGRATION_TEST =
   /(?:local-publish|npm-release|packed-consumer|project-py|publish|python-sync|release|root-install|sdk-boundary).*\.test\.ts$/;
@@ -155,7 +164,8 @@ function selectedTests(
   root: string,
   graph: WorkspaceGraph,
   mode: TestMode,
-  args: readonly string[],
+  selections: readonly string[],
+  base?: string,
 ): string[] {
   const all = [
     ...graph.packages.flatMap((pkg) => testFiles(join(root, pkg.path, "test"))),
@@ -167,14 +177,13 @@ function selectedTests(
 
   let names: Set<string>;
   if (mode === "changed") {
-    const baseIndex = args.indexOf("--base");
-    const changed = changedFiles(root, baseIndex >= 0 ? args[baseIndex + 1] : undefined);
+    const changed = changedFiles(root, base);
     if (changed.length === 0) return [];
     names = affectedPackages(graph, changed);
   } else {
-    if (args.length === 0) throw new Error("test:focused requires a package name or path");
+    if (selections.length === 0) throw new Error("test:focused requires a package name or path");
     names = new Set<string>();
-    for (const value of args) {
+    for (const value of selections) {
       const direct = graph.packages.find((pkg) => pkg.name === value);
       const byPath = direct ?? packageForPath(graph, toPosix(relative(root, resolve(root, value))));
       if (!byPath) throw new Error(`Unknown workspace package or path: ${value}`);
@@ -239,15 +248,21 @@ async function runTests(root: string, files: readonly string[]): Promise<void> {
 }
 
 export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
-  const root = process.cwd();
-  const mode = (argv[0] ?? "all") as TestMode;
-  if (!["focused", "changed", "unit", "integration", "all", "graph"].includes(mode)) {
-    throw new Error(`Unknown test mode: ${mode}`);
-  }
+  const command = taskCommand(
+    import.meta.url,
+    "Select and run workspace tests by dependency graph",
+    TestWorkspaceOptionsSchema,
+  )
+    .argument(`[mode]`, `Test mode: ${TEST_MODES.join(", ")}`, "all")
+    .argument("[selection...]", "Workspace package names or paths for focused mode");
+  const options = await taskOptions(command, TestWorkspaceOptionsSchema, argv);
+  const [modeValue = "all", selections = []] = taskPositionals(command) as [string?, string[]?];
+  const mode = z.enum(TEST_MODES).parse(modeValue);
+  const root = taskRoot(options.root);
   const graph = workspaceGraph(root);
   writeGraph(root, graph);
   if (mode === "graph") return;
-  await runTests(root, selectedTests(root, graph, mode, argv.slice(1)));
+  await runTests(root, selectedTests(root, graph, mode, selections, options.base));
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

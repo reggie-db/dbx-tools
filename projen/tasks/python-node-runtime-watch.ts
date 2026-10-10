@@ -2,8 +2,10 @@
 /** Keep the one package-owned PythonMonkey shim runtime current. */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { parseArgs } from "node:util";
 import { log } from "@dbx-tools/shared-core";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { TaskProjectOptionSchema } from "./options.ts";
 import { runTaskCommand } from "../src/_task-command.ts";
 import { repoRoot } from "../src/packages.ts";
 import { watchLoop } from "../src/watch.ts";
@@ -12,13 +14,12 @@ import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 const logger = log.logger("projen:python-node-runtime-watch");
 
 export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  const { values } = parseArgs({
+  const schema = z.object({ project: TaskProjectOptionSchema });
+  const { project } = await taskOptions(
+    taskCommand(import.meta.url, "Watch and rebuild the shared Python Node runtime", schema),
+    schema,
     args,
-    options: { project: { type: "string" } },
-    strict: true,
-  });
-  const project = values.project?.trim();
-  if (!project) throw new Error("--project is required");
+  );
 
   const projectDirectory = resolve(repoRoot, project);
   const buildScript = resolve(projectDirectory, "build-runtime.ts");
@@ -37,4 +38,4 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   });
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

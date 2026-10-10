@@ -4,8 +4,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
-import { Command, Option } from "commander";
+import type { Command } from "commander";
+import { z } from "zod";
+import { parsedTaskOptions, runTaskMain, taskCommand } from "./cli.ts";
 import { publishLocalRelease } from "./local-publish.ts";
+import { TaskDirectoriesOptionSchema, TaskRootOptionSchema } from "./options.ts";
 import { writeReleaseNotes } from "./release-notes.ts";
 import { assertReleaseVersion } from "./release-version.ts";
 import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
@@ -368,101 +371,105 @@ export async function runRelease(
   return tag;
 }
 
-/** Build the release task's native parser without executing git or registry operations. */
+export const ReleaseOptionsSchema = z.object({
+  root: TaskRootOptionSchema,
+  branch: z.string().trim().min(1).default("main").describe("Release branch"),
+  prefix: z.string().default("v").describe("Release tag prefix"),
+  remote: z.string().trim().min(1).default("origin").describe("Git remote"),
+  pythonRoot: z
+    .string()
+    .trim()
+    .min(1)
+    .default("packages/py")
+    .describe("Python package root for local publish"),
+  validate: TaskDirectoriesOptionSchema.describe("Repeatable task to run before pushing"),
+  bump: z.boolean().default(true).describe("Create and synchronize a patch version bump"),
+  publish: z.enum(RELEASE_PUBLISH_TARGETS).default("auto").describe("Publication scope"),
+  install: z
+    .enum(RELEASE_INSTALL_MODES)
+    .default("auto")
+    .describe("Local workspace dependency installation"),
+  npm: z.boolean().default(true).describe("Build and publish npm packages"),
+  pypi: z.boolean().default(true).describe("Build and publish Python packages"),
+  docs: z.boolean().optional().describe("Build and deploy documentation"),
+  validation: z
+    .boolean()
+    .default(true)
+    .describe("Run optional release validation tasks before publishing"),
+  releaseNotes: z.boolean().default(true).describe("Write release notes before tagging"),
+  releaseNotesText: z
+    .string()
+    .optional()
+    .describe("Write supplied release-note Markdown without invoking Genie"),
+  releaseNotesFile: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("Copy release-note Markdown from this file without invoking Genie"),
+  releaseNotesInstructions: z
+    .string()
+    .optional()
+    .describe("Append instructions to the Genie release-note prompt"),
+  demoDeploy: z
+    .boolean()
+    .optional()
+    .describe("Deploy the AppKit demo after tagging and local publication"),
+  profile: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("Explicit Databricks CLI profile for demo deployment")
+    .meta({ env: [], helpDefault: false }),
+  localPublish: z.boolean().default(true).describe("Publish to configured local registries"),
+  localRegistry: z
+    .string()
+    .trim()
+    .min(1)
+    .default("auto")
+    .describe("Local npm registry selection: auto, false, or URL"),
+  localPypi: z
+    .string()
+    .trim()
+    .min(1)
+    .default("auto")
+    .describe("Local devpi registry selection: auto, false, or URL"),
+});
+
+/** Build the release task's schema-driven parser without executing release operations. */
 export function createReleaseCommand(): Command {
-  return new Command()
-    .name("release")
-    .description("Prepare an annotated release and select its build and publication steps")
-    .option("--root <path>", "repository root")
-    .option("--branch <name>", "release branch", "main")
-    .option("--prefix <prefix>", "release tag prefix", "v")
-    .option("--remote <name>", "git remote", "origin")
-    .option("--python-root <path>", "Python package root for local publish", "packages/py")
-    .option(
-      "--validate <task>",
-      "task to run before pushing",
-      (task, tasks: string[]) => [...tasks, task],
-      [],
-    )
-    .option("--no-bump", "use an existing synchronized local version bump")
-    .addOption(
-      new Option("--publish <target>", "publication scope")
-        .choices([...RELEASE_PUBLISH_TARGETS])
-        .default("auto"),
-    )
-    .addOption(
-      new Option("--install <mode>", "local workspace dependency installation")
-        .choices([...RELEASE_INSTALL_MODES])
-        .default("auto"),
-    )
-    .option("--no-npm", "skip npm build and publication, including local npm publication")
-    .option("--no-pypi", "skip Python build and publication, including local Python publication")
-    .option("--docs", "build and deploy docs for a selected scope")
-    .option("--no-docs", "skip documentation build and deployment")
-    .option(
-      "--no-validation",
-      "skip optional release validation tasks; workspace version checks remain mandatory",
-    )
-    .option("--no-release-notes", "skip writing docs/releases notes (Genie and git-log fallback)")
-    .option("--release-notes-text <markdown>", "write supplied markdown without invoking Genie")
-    .option("--release-notes-file <path>", "copy supplied markdown without invoking Genie")
-    .option(
-      "--release-notes-instructions <text>",
-      "append custom instructions to the Genie release-notes prompt",
-    )
-    .option("--demo-deploy", "after tagging, stage and deploy the AppKit demo app (off by default)")
-    .option("--profile <name>", "Databricks CLI profile for --demo-deploy")
-    .option("--no-local-publish", "skip publishing to configured local registries")
-    .option("--local-registry <auto|false|url>", "local npm registry selection", "auto")
-    .option("--local-pypi <auto|false|url>", "local devpi registry selection", "auto")
-    .action(
-      async (
-        options: ReleaseSelectionOptions & {
-          root?: string;
-          branch: string;
-          bump: boolean;
-          prefix: string;
-          remote: string;
-          pythonRoot: string;
-          localPublish: boolean;
-          localRegistry: string;
-          localPypi: string;
-          install: ReleaseInstallMode;
-          validate: string[];
-          demoDeploy?: boolean;
-          profile?: string;
-          releaseNotes?: boolean;
-          releaseNotesInstructions?: string;
-          releaseNotesText?: string;
-          releaseNotesFile?: string;
-        },
-      ) => {
-        await runRelease({
-          root: options.root ?? projectUtils.root() ?? process.cwd(),
-          branch: options.branch,
-          bump: options.bump,
-          prefix: options.prefix,
-          remote: options.remote,
-          pythonRoot: options.pythonRoot,
-          localPublish: options.localPublish,
-          localRegistry: options.localRegistry,
-          localPypi: options.localPypi,
-          install: options.install,
-          publish: options.publish,
-          npm: options.npm,
-          pypi: options.pypi,
-          docs: options.docs,
-          validation: options.validation,
-          validationTasks: options.validate,
-          demoDeploy: options.demoDeploy,
-          demoProfile: options.profile,
-          releaseNotes: options.releaseNotes,
-          releaseNotesInstructions: options.releaseNotesInstructions,
-          releaseNotesText: options.releaseNotesText,
-          releaseNotesFile: options.releaseNotesFile,
-        });
-      },
-    );
+  return taskCommand(
+    import.meta.url,
+    "Prepare an annotated release and select its build and publication steps",
+    ReleaseOptionsSchema,
+  ).action(async (_options: unknown, command: Command) => {
+    const options = parsedTaskOptions(command, ReleaseOptionsSchema);
+    await runRelease({
+      root: options.root ?? projectUtils.root() ?? process.cwd(),
+      branch: options.branch,
+      bump: options.bump,
+      prefix: options.prefix,
+      remote: options.remote,
+      pythonRoot: options.pythonRoot,
+      localPublish: options.localPublish,
+      localRegistry: options.localRegistry,
+      localPypi: options.localPypi,
+      install: options.install,
+      publish: options.publish,
+      npm: options.npm,
+      pypi: options.pypi,
+      docs: options.docs,
+      validation: options.validation,
+      validationTasks: options.validate,
+      demoDeploy: options.demoDeploy,
+      demoProfile: options.profile,
+      releaseNotes: options.releaseNotes,
+      releaseNotesInstructions: options.releaseNotesInstructions,
+      releaseNotesText: options.releaseNotesText,
+      releaseNotesFile: options.releaseNotesFile,
+    });
+  });
 }
 
 /** Execute the native release task parser. */
@@ -470,4 +477,4 @@ export async function main(): Promise<void> {
   await createReleaseCommand().parseAsync();
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

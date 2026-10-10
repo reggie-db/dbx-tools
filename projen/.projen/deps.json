@@ -26,6 +26,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/cli-args",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/core",
       "version": "workspace:^",
       "type": "runtime"
@@ -42,7 +47,7 @@
     },
     {
       "name": "commander",
-      "version": "^15.0.0",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
@@ -87,7 +92,7 @@
     },
     {
       "name": "typescript",
-      "version": "^5.9.3",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
@@ -97,7 +102,7 @@
     },
     {
       "name": "zod",
-      "version": "^4.3.6",
+      "version": "catalog:",
       "type": "runtime"
     }
   ],

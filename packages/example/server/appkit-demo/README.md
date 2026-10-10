@@ -32,9 +32,9 @@ await appkit.createApp({
   [`@dbx-tools/appkit-mastra`](../../../js/node/appkit-mastra) — the
   Mastra agent as an AppKit plugin: automatic OBO/front-door and
   service-principal/tunnel auth,
-  Lakebase-backed storage/memory, workspace skills, model selection, history,
-  threads, scoped routes, and lazy Databricks Sandbox command execution with
-  Python-only Monty fallback. The demo agent also validates typed route/entity
+  Lakebase-backed storage/memory, workspace file/skill/sandbox capabilities,
+  model selection, history, threads, scoped routes, and lazy Databricks Sandbox
+  command execution with Python-only Monty fallback. The demo agent also validates typed route/entity
   request context and exposes `get_ui_context` to prove tools receive it.
 - `genie()` + `buildGenieTools()` - the default `support` agent uses Genie Agent
   Mode SSE, while `support-polling` forces Conversation API polling for

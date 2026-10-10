@@ -1,11 +1,12 @@
 #!/usr/bin/env -S bun
 /** Restart a development command after relevant workspace changes settle. */
 import { isAbsolute, relative, resolve } from "node:path";
-import { configUtils } from "@dbx-tools/core";
 import * as exec from "@dbx-tools/core/exec";
 import { watch as pathWatch } from "@dbx-tools/path";
 import { log } from "@dbx-tools/shared-core";
-import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
+import { CommanderError } from "commander";
+import { z } from "zod";
+import { parsedTaskOptions, runTaskMain, taskCommand, taskPositionals } from "./cli.ts";
 import {
   DEV_RESTART_DEBOUNCE_MS,
   DEV_RESTART_KEY,
@@ -30,73 +31,57 @@ export interface DevWatchOptions {
   readonly serverWatchDisabled: boolean;
 }
 
+export const DevWatchOptionsSchema = z.object({
+  debounceMs: z.coerce
+    .number()
+    .int()
+    .nonnegative("Debounce must be a non-negative number of milliseconds")
+    .default(DEV_RESTART_DEBOUNCE_MS)
+    .describe("Quiet period before restarting the command"),
+  restartKey: z
+    .string()
+    .refine((value) => Array.from(value).length === 1, "Restart key must be exactly one character")
+    .default(DEV_RESTART_KEY)
+    .describe("Interactive immediate-restart key"),
+  serverWatchDisabled: z
+    .boolean()
+    .default(false)
+    .describe("Run the command once without watching")
+    .meta({ env: SERVER_WATCH_DISABLED_ENV }),
+});
+
 interface WorkspacePackage {
   readonly dir: string;
   readonly name?: string;
 }
 
-function debounceMilliseconds(value: string): number {
-  const parsed = configUtils.toNumber(value);
-  if (parsed === undefined || parsed < 0) {
-    throw new InvalidArgumentError("must be a non-negative number of milliseconds");
-  }
-  return parsed;
-}
-
-function singleKey(value: string): string {
-  if (Array.from(value).length !== 1) {
-    throw new InvalidArgumentError("must be exactly one character");
-  }
-  return value;
-}
-
 /** Parse watcher flags while passing every token after the command through unchanged. */
-export function parseDevWatchOptions(args: string[]): DevWatchOptions {
-  const program = new Command()
+export function parseDevWatchOptions(args: readonly string[]): DevWatchOptions {
+  const program = taskCommand(
+    import.meta.url,
+    "Restart a development command after watched changes settle",
+    DevWatchOptionsSchema,
+  )
     .name(DEV_WATCH_TASK)
-    .description("Restart a development command after watched changes settle")
     .exitOverride()
     .configureOutput({
       writeErr: (message) => {
-        if (import.meta.main) process.stderr.write(message);
+        if (process.argv[1]) process.stderr.write(message);
       },
     })
     .enablePositionalOptions()
     .passThroughOptions()
-    .addOption(
-      new Option("--debounce-ms <milliseconds>", "quiet period before restart")
-        .default(DEV_RESTART_DEBOUNCE_MS)
-        .argParser(debounceMilliseconds),
-    )
-    .addOption(
-      new Option("--restart-key <key>", "interactive immediate-restart key")
-        .default(DEV_RESTART_KEY)
-        .argParser(singleKey),
-    )
-    .addOption(
-      new Option(
-        "--server-watch-disabled",
-        `run the command once without watching (${SERVER_WATCH_DISABLED_ENV})`,
-      ),
-    )
     .argument("<command>")
     .argument("[args...]")
-    .parse(["bun", DEV_WATCH_TASK, ...args]);
-  const options = program.opts<{
-    debounceMs: number;
-    restartKey: string;
-    serverWatchDisabled?: boolean;
-  }>();
-  const [command, commandArgs = []] = program.processedArgs as [string, string[]?];
-  const serverWatchDisabled =
-    options.serverWatchDisabled === true ||
-    configUtils.boolean(undefined, SERVER_WATCH_DISABLED_ENV, configUtils.ENV_ONLY) === true;
-  if (serverWatchDisabled) process.env[SERVER_WATCH_DISABLED_ENV] = "1";
+    .parse([...args], { from: "user" });
+  const options = parsedTaskOptions(program, DevWatchOptionsSchema);
+  const [command, commandArgs = []] = taskPositionals(program) as [string, string[]?];
+  if (options.serverWatchDisabled) process.env[SERVER_WATCH_DISABLED_ENV] = "1";
   return {
     command: [command, ...commandArgs],
     debounceMs: options.debounceMs,
     restartKey: options.restartKey,
-    serverWatchDisabled,
+    serverWatchDisabled: options.serverWatchDisabled,
   };
 }
 
@@ -336,4 +321,4 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   await complete;
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

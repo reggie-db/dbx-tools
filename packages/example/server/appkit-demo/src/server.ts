@@ -118,10 +118,10 @@ const clientDist =
 // `@dbx-tools/genie` for streaming + `getStatement`-backed row
 // hydration; no inner Genie orchestrator agent.
 //
-// Assistant skills: `createAgent` defaults `workspace` to
-// `databricksWorkspace()`, which mounts the shared Assistant tree at
-// `/Workspace/.assistant` and the personal tree at
-// `/Workspace/Users/<email>`, then scans their relative `skills` roots.
+// Workspace capabilities: `createAgent` defaults `workspace` to
+// `databricksWorkspace()`, which provides file access, configured Assistant
+// skill roots, and Monty command execution. Each capability can be configured
+// or disabled independently.
 //
 // Required env vars (see .env.example):
 // - DATABRICKS_SERVING_ENDPOINT_NAME - optional override; when absent the

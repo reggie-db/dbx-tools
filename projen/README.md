@@ -584,30 +584,37 @@ release [options]
 
 #### Options
 
-| Option                                | Description                                                                                   |
-| ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `--root <path>`                       | repository root                                                                               |
-| `--branch <name>`                     | release branch (default: "main")                                                              |
-| `--prefix <prefix>`                   | release tag prefix (default: "v")                                                             |
-| `--remote <name>`                     | git remote (default: "origin")                                                                |
-| `--python-root <path>`                | Python package root for local publish (default: "packages/py")                                |
-| `--validate <task>`                   | task to run before pushing (default: [])                                                      |
-| `--no-bump`                           | use an existing synchronized local version bump                                               |
-| `--publish <target>`                  | publication scope (choices: "auto", "npm", "pypi", "local", "none", default: "auto")          |
-| `--install <mode>`                    | local workspace dependency installation (choices: "auto", "always", "never", default: "auto") |
-| `--no-npm`                            | skip npm build and publication, including local npm publication                               |
-| `--no-pypi`                           | skip Python build and publication, including local Python publication                         |
-| `--docs`                              | build and deploy docs for a selected scope                                                    |
-| `--no-docs`                           | skip documentation build and deployment                                                       |
-| `--no-validation`                     | skip optional release validation tasks; workspace version checks remain mandatory             |
-| `--no-release-notes`                  | skip writing docs/releases notes (Genie and git-log fallback)                                 |
-| `--release-notes-text <markdown>`     | write supplied markdown without invoking Genie                                                |
-| `--release-notes-file <path>`         | copy supplied markdown without invoking Genie                                                 |
-| `--release-notes-instructions <text>` | append custom instructions to the Genie release-notes prompt                                  |
-| `--demo-deploy`                       | after tagging, stage and deploy the AppKit demo app (off by default)                          |
-| `--profile <name>`                    | Databricks CLI profile for --demo-deploy                                                      |
-| `--no-local-publish`                  | skip publishing to configured local registries                                                |
-| `--local-registry <auto\|false\|url>` | local npm registry selection (default: "auto")                                                |
-| `--local-pypi <auto\|false\|url>`     | local devpi registry selection (default: "auto")                                              |
+| Option                                 | Description                                                                                                                |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `--root <value>`                       | Repository or workspace root (env: PROJEN_RELEASE_ROOT)                                                                    |
+| `--branch <value>`                     | Release branch (default: "main", env: PROJEN_RELEASE_BRANCH)                                                               |
+| `--prefix <value>`                     | Release tag prefix (default: "v", env: PROJEN_RELEASE_PREFIX)                                                              |
+| `--remote <value>`                     | Git remote (default: "origin", env: PROJEN_RELEASE_REMOTE)                                                                 |
+| `--python-root <value>`                | Python package root for local publish (default: "packages/py", env: PROJEN_RELEASE_PYTHON_ROOT)                            |
+| `--validate <value>`                   | Repeatable task to run before pushing (default: [], env: PROJEN_RELEASE_VALIDATE)                                          |
+| `--bump`                               | Create and synchronize a patch version bump (default: true, env: PROJEN_RELEASE_BUMP)                                      |
+| `--no-bump`                            | Disable create and synchronize a patch version bump                                                                        |
+| `--publish <value>`                    | Publication scope (choices: "auto", "npm", "pypi", "local", "none", default: "auto", env: PROJEN_RELEASE_PUBLISH)          |
+| `-i, --install <value>`                | Local workspace dependency installation (choices: "auto", "always", "never", default: "auto", env: PROJEN_RELEASE_INSTALL) |
+| `-n, --npm`                            | Build and publish npm packages (default: true, env: PROJEN_RELEASE_NPM)                                                    |
+| `--no-npm`                             | Disable build and publish npm packages                                                                                     |
+| `--pypi`                               | Build and publish Python packages (default: true, env: PROJEN_RELEASE_PYPI)                                                |
+| `--no-pypi`                            | Disable build and publish python packages                                                                                  |
+| `--docs`                               | Build and deploy documentation (env: PROJEN_RELEASE_DOCS)                                                                  |
+| `--no-docs`                            | Disable build and deploy documentation                                                                                     |
+| `--validation`                         | Run optional release validation tasks before publishing (default: true, env: PROJEN_RELEASE_VALIDATION)                    |
+| `--no-validation`                      | Disable run optional release validation tasks before publishing                                                            |
+| `--release-notes`                      | Write release notes before tagging (default: true, env: PROJEN_RELEASE_RELEASE_NOTES)                                      |
+| `--no-release-notes`                   | Disable write release notes before tagging                                                                                 |
+| `--release-notes-text <value>`         | Write supplied release-note Markdown without invoking Genie (env: PROJEN_RELEASE_RELEASE_NOTES_TEXT)                       |
+| `--release-notes-file <value>`         | Copy release-note Markdown from this file without invoking Genie (env: PROJEN_RELEASE_RELEASE_NOTES_FILE)                  |
+| `--release-notes-instructions <value>` | Append instructions to the Genie release-note prompt (env: PROJEN_RELEASE_RELEASE_NOTES_INSTRUCTIONS)                      |
+| `--demo-deploy`                        | Deploy the AppKit demo after tagging and local publication (env: PROJEN_RELEASE_DEMO_DEPLOY)                               |
+| `--no-demo-deploy`                     | Disable deploy the appkit demo after tagging and local publication                                                         |
+| `--profile <value>`                    | Explicit Databricks CLI profile for demo deployment                                                                        |
+| `--local-publish`                      | Publish to configured local registries (default: true, env: PROJEN_RELEASE_LOCAL_PUBLISH)                                  |
+| `--no-local-publish`                   | Disable publish to configured local registries                                                                             |
+| `--local-registry <value>`             | Local npm registry selection: auto, false, or URL (default: "auto", env: PROJEN_RELEASE_LOCAL_REGISTRY)                    |
+| `--local-pypi <value>`                 | Local devpi registry selection: auto, false, or URL (default: "auto", env: PROJEN_RELEASE_LOCAL_PYPI)                      |
 
 <!-- cli-reference:end -->

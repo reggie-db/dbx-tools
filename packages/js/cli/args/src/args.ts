@@ -11,7 +11,6 @@
 import { configUtils } from "@dbx-tools/core";
 import { object, options as sharedOptions, stringUtils } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
-import { z } from "zod";
 
 /** Layered config lookup used to resolve argument values and help defaults. */
 export type CliArgsOptions = configUtils.ConfigOptions;
@@ -24,10 +23,20 @@ export interface CliArgMeta {
   readonly flag?: boolean;
   /** Set false to keep schema and configured defaults out of generated help. */
   readonly helpDefault?: boolean;
+  /** One-character short flag without a dash, or false to disable automatic generation. */
+  readonly short?: string | false;
+}
+
+/** Structural Zod object contract that remains compatible across Zod v4 minors. */
+export interface CliObjectSchema<
+  TOutput extends Readonly<Record<string, unknown>> = Readonly<Record<string, unknown>>,
+> {
+  parse(value: unknown): TOutput;
+  toJSONSchema(): unknown;
 }
 
 /** Zod defaults or concrete option values serialized by {@link serializeArgs}. */
-export type ArgumentSource = z.ZodObject<z.ZodRawShape> | Readonly<Record<string, unknown>>;
+export type ArgumentSource = CliObjectSchema | Readonly<Record<string, unknown>>;
 
 interface JsonField extends CliArgMeta {
   type?: string;
@@ -48,17 +57,19 @@ interface Field extends CliArgMeta {
 const boundOptions = new WeakMap<Command, CliArgsOptions>();
 
 /** Register Commander arguments for every enabled field on a Zod object schema. */
-export function addArgs<T extends z.ZodRawShape>(
+export function addArgs<TSchema extends CliObjectSchema>(
   command: Command,
-  schema: z.ZodObject<T>,
+  schema: TSchema,
   options: CliArgsOptions = {},
 ): Command {
   boundOptions.set(command, options);
-  for (const field of fields(schema)) {
+  const schemaFields = fields(schema);
+  const shortFlags = fieldShortFlags(schemaFields);
+  for (const field of schemaFields) {
     if (field.flag === false) continue;
     const envKeys = fieldEnvKeys(field);
     const envName = envArgName(field, envKeys, options);
-    const flags = argFlags(field);
+    const flags = argFlags(field, shortFlags.get(field.key));
     const sourced = configValue(field, envKeys, options);
     const fallback = sourced ?? field.fallback;
     const option = new Option(flags, field.description);
@@ -87,11 +98,11 @@ export function addArgs<T extends z.ZodRawShape>(
 }
 
 /** Merge CLI values over layered config, then validate and default through Zod. */
-export function parseArgs<T extends z.ZodRawShape>(
+export function parseArgs<TSchema extends CliObjectSchema>(
   command: Command,
-  schema: z.ZodObject<T>,
+  schema: TSchema,
   options: CliArgsOptions = boundOptions.get(command) ?? {},
-): z.output<z.ZodObject<T>> {
+): ReturnType<TSchema["parse"]> {
   const values: Record<string, unknown> = {};
   for (const field of fields(schema)) {
     if (command.getOptionValueSource(field.key) === "cli") {
@@ -101,12 +112,12 @@ export function parseArgs<T extends z.ZodRawShape>(
     const sourced = configValue(field, fieldEnvKeys(field), options);
     if (sourced !== undefined) values[field.key] = sourced;
   }
-  return schema.parse(values);
+  return schema.parse(values) as ReturnType<TSchema["parse"]>;
 }
 
 /** Convert schema defaults or concrete option values into Commander arguments. */
 export function serializeArgs(source: ArgumentSource): string[] {
-  if (source instanceof z.ZodObject) {
+  if (isCliObjectSchema(source)) {
     const values = source.parse({}) as Readonly<Record<string, unknown>>;
     return fields(source).flatMap((field) =>
       field.flag === false ? [] : valueArguments(field.key, values[field.key]),
@@ -115,8 +126,8 @@ export function serializeArgs(source: ArgumentSource): string[] {
   return Object.entries(source).flatMap(([key, value]) => valueArguments(key, value));
 }
 
-function fields(schema: z.ZodObject<z.ZodRawShape>): Field[] {
-  const document = z.toJSONSchema(schema);
+function fields(schema: CliObjectSchema): Field[] {
+  const document = schema.toJSONSchema();
   const properties = object.isRecord(document) ? document.properties : undefined;
   if (!object.isRecord(properties)) {
     throw new TypeError("Zod Commander binding requires a z.object() schema");
@@ -137,13 +148,51 @@ function fields(schema: z.ZodObject<z.ZodRawShape>): Field[] {
       env: json.env,
       flag: json.flag,
       helpDefault: json.helpDefault,
+      short: json.short,
     };
   });
 }
 
-function argFlags(field: Field): string {
-  const flag = `--${stringUtils.toSlug(field.key)}`;
-  return field.type === "boolean" ? flag : `${flag} <value>`;
+function isCliObjectSchema(value: ArgumentSource): value is CliObjectSchema {
+  return typeof value.parse === "function" && typeof value.toJSONSchema === "function";
+}
+
+function argFlags(field: Field, short: string | undefined): string {
+  const long = `--${stringUtils.toSlug(field.key)}`;
+  const value = field.type === "boolean" ? "" : " <value>";
+  if (short) return `-${short}, ${long}${value}`;
+  return `${long}${value}`;
+}
+
+function fieldShortFlags(fields: readonly Field[]): ReadonlyMap<string, string> {
+  const result = new Map<string, string>();
+  const reserved = new Map<string, string>([["h", "help"]]);
+  for (const field of fields) {
+    if (field.short === false || field.short === undefined) continue;
+    if (!/^[A-Za-z]$/.test(field.short)) {
+      throw new TypeError(`Short flag for "${field.key}" must be one letter or false`);
+    }
+    const short = field.short.toLowerCase();
+    const existing = reserved.get(short);
+    if (existing) {
+      throw new TypeError(`Short flag -${short} is shared by "${existing}" and "${field.key}"`);
+    }
+    reserved.set(short, field.key);
+    result.set(field.key, short);
+  }
+  const candidates = new Map<string, Field[]>();
+  for (const field of fields) {
+    if (field.short !== undefined) continue;
+    const short = [...stringUtils.tokenize(field.key)][0]?.[0]?.toLowerCase();
+    if (!short || reserved.has(short)) continue;
+    const matching = candidates.get(short) ?? [];
+    matching.push(field);
+    candidates.set(short, matching);
+  }
+  for (const [short, matching] of candidates) {
+    if (matching.length === 1) result.set(matching[0]!.key, short);
+  }
+  return result;
 }
 
 function fieldEnvKeys(field: Field): readonly string[] {

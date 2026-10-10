@@ -73,9 +73,9 @@ app:
   sections across threads, local processes, or replicas with process, file, and
   Postgres advisory locks.
 - **Mastra inside AppKit** — register one or more Mastra agents as an AppKit
-  plugin with OBO auth, Lakebase-backed storage/memory, workspace skills, model
-  selection, Databricks Sandbox command execution with a Python-only Monty
-  fallback, history, threads, feedback, and scoped route exposure.
+  plugin with OBO auth, Lakebase-backed storage/memory, independently configured
+  workspace file access, skills, and sandboxing, model selection, history,
+  threads, feedback, and scoped route exposure.
 - **Genie as agent tools** — use Genie Agent Mode SSE by default to stream
   reasoning, SQL, query output, and synthesized answers as typed events; expose
   Genie metadata and starter questions. Agent Mode charts its inline rows

@@ -47,6 +47,15 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync 
 import { tmpdir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
+import {
+  TaskConcurrencyOptionSchema,
+  TaskDirectoriesOptionSchema,
+  TaskDryRunOptionSchema,
+  TaskOutputOptionSchema,
+  TaskRootOptionSchema,
+} from "./options.ts";
 import {
   applyPublishConfig,
   npmReleaseMatches,
@@ -100,31 +109,34 @@ function outputDirectory(root: string, value: string | undefined): string | unde
   return output;
 }
 
+export const PublishOptionsSchema = z.object({
+  root: TaskRootOptionSchema,
+  registry: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("npm registry URL")
+    .meta({ env: "NPM_CONFIG_REGISTRY" }),
+  output: TaskOutputOptionSchema,
+  exclude: TaskDirectoriesOptionSchema.describe("Repeatable workspace directory to exclude"),
+  dryRun: TaskDryRunOptionSchema,
+  skipCompile: z.boolean().default(false).describe("Reuse already validated compiled output"),
+  concurrency: TaskConcurrencyOptionSchema.default(4),
+});
+
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
-  const version = argv[0] && !argv[0].startsWith("--") ? argv[0] : undefined;
-  const rest = version ? argv.slice(1) : argv;
-  const root = process.cwd();
-  if (!version) {
-    logger.error(
-      "usage: bun tasks/publish.ts <version> [--registry <url>] [--output <dir>] [--exclude <dir>] [--dry-run] [--skip-compile]",
-    );
-    process.exit(1);
-  }
-  const registryIdx = rest.indexOf("--registry");
-  const registry = registryIdx >= 0 ? rest[registryIdx + 1] : undefined;
-  const outputIdx = rest.indexOf("--output");
-  const output = outputDirectory(root, outputIdx >= 0 ? rest[outputIdx + 1] : undefined);
-  const dryRun = rest.includes("--dry-run");
-  const skipCompile = rest.includes("--skip-compile");
-  const concurrencyIdx = rest.indexOf("--concurrency");
-  const parsedConcurrency = Number(concurrencyIdx >= 0 ? rest[concurrencyIdx + 1] : 4);
-  if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
-    throw new Error(`--concurrency must be a positive integer, got ${String(parsedConcurrency)}`);
-  }
-  const concurrency = parsedConcurrency;
-  const excluded = new Set(
-    rest.reduce<string[]>((acc, arg, i) => (arg === "--exclude" ? [...acc, rest[i + 1]] : acc), []),
-  );
+  const command = taskCommand(
+    import.meta.url,
+    "Build and publish the current npm workspace",
+    PublishOptionsSchema,
+  ).argument("<version>", "Workspace release version");
+  const options = await taskOptions(command, PublishOptionsSchema, argv);
+  const version = String(taskPositionals(command)[0]);
+  const root = taskRoot(options.root);
+  const output = outputDirectory(root, options.output);
+  const { registry, dryRun, skipCompile, concurrency } = options;
+  const excluded = new Set(options.exclude);
 
   const path = enrichedPath(root);
   const allMembers = recordedPackages(root)
@@ -265,4 +277,4 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   );
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

@@ -16,7 +16,9 @@ import { join, relative, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
-import { Command } from "commander";
+import { z } from "zod";
+import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { TaskDryRunOptionSchema } from "./options.ts";
 import { runTaskCommand } from "../src/_task-command.ts";
 
 const DEFAULT_REGISTRY = "https://registry.npmjs.org";
@@ -451,18 +453,27 @@ export async function publishNpmArchives(options: {
 }
 
 /** Parse npm archive publication options and execute the publisher. */
-export async function main(): Promise<void> {
-  const program = new Command();
-  program
-    .requiredOption("--directory <path>", "Directory containing npm archives")
-    .option("--version <version>", "Expected npm release version")
-    .option("--registry <url>", "npm registry URL")
-    .option("--dry-run", "Validate archives without publishing")
-    .action(
-      (options: { directory: string; dryRun?: boolean; registry?: string; version?: string }) =>
-        publishNpmArchives(options),
-    );
-  await program.parseAsync();
+export const PublishNpmOptionsSchema = z.object({
+  directory: z.string().trim().min(1).describe("Directory containing npm archives"),
+  version: z.string().trim().min(1).optional().describe("Expected npm release version"),
+  registry: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("npm registry URL")
+    .meta({ env: "NPM_CONFIG_REGISTRY" }),
+  dryRun: TaskDryRunOptionSchema,
+});
+
+/** Parse task options and publish validated npm release archives. */
+export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
+  const options = await taskOptions(
+    taskCommand(import.meta.url, "Publish validated npm release archives", PublishNpmOptionsSchema),
+    PublishNpmOptionsSchema,
+    args,
+  );
+  await publishNpmArchives(options);
 }
 
-if (import.meta.main) await main();
+await runTaskMain(import.meta, main);

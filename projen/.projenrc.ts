@@ -69,10 +69,11 @@ const project = new typescript.TypeScriptProject({
     // bun links these three from local source and rewrites them to the real
     // published range at publish time (root synthesis supplies that version),
     // so the engine still cannot resolve an older sibling than it was built with.
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/path@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "commander@^15.0.0",
+    "commander@catalog:",
     // `tasks/sync.ts` imports this to fan the watchers out. It resolved here only
     // because the repo root happens to depend on it; a consumer install has no
     // such luck and `sync --watch` dies on a missing module.
@@ -84,9 +85,9 @@ const project = new typescript.TypeScriptProject({
     "semver@^7.7.3",
     "smol-toml@1.8.0",
     "ts-to-zod@^5.1.0",
-    "typescript@^5.9.3",
+    "typescript@catalog:",
     "yaml@^2.9.0",
-    "zod@^4.3.6",
+    "zod@catalog:",
   ],
   peerDeps: [`projen@${PROJEN_VERSION}`],
   devDeps: ["@types/node@^24.6.0", "@types/semver@^7.7.1"],

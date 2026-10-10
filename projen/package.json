@@ -30,10 +30,11 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
+    "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/path": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
-    "commander": "^15.0.0",
+    "commander": "catalog:",
     "concurrently": "^10.0.3",
     "constructs": "^10.6.0",
     "is-identifier": "^1",
@@ -42,9 +43,9 @@
     "semver": "^7.7.3",
     "smol-toml": "1.8.0",
     "ts-to-zod": "^5.1.0",
-    "typescript": "^5.9.3",
+    "typescript": "catalog:",
     "yaml": "^2.9.0",
-    "zod": "^4.3.6"
+    "zod": "catalog:"
   },
   "devEngines": {
     "packageManager": {

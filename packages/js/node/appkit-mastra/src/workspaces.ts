@@ -81,7 +81,7 @@ const databricksWorkspaceOptions = new WeakMap<Workspace, DatabricksWorkspaceOpt
 
 /* -------------------------------- types -------------------------------- */
 
-/** Per-request context for mount and skill-folder resolvers. */
+/** Per-request context for workspace path resolvers. */
 export interface DatabricksWorkspaceContext {
   requestContext?: RequestContext;
 }
@@ -97,15 +97,11 @@ export interface DatabricksWorkspacePathOptions {
   /** Mount description shown in filesystem listings and workspace instructions. */
   description?: string;
   /**
-   * Scan this mount for `SKILL.md` files. Defaults to `true`; `false` mounts
-   * the location for file tools without adding it to skill discovery.
+   * Skill roots relative to this filesystem root. Omit or set `false` for a
+   * file-only mount. Each path is joined to the actual mount path before
+   * Mastra scans it.
    */
-  readable?: boolean;
-  /**
-   * Skill roots relative to this filesystem root. Defaults to `["."]`.
-   * Each path is joined to the actual mount path before Mastra scans it.
-   */
-  skills?: readonly string[];
+  skills?: readonly string[] | false;
   /**
    * Allow write attempts to a {@link path} mount. Defaults to `true` for
    * `/Workspace` roots and `false` elsewhere. Databricks permissions still
@@ -204,8 +200,8 @@ export interface DatabricksWorkspaceOptions extends Omit<
   paths?: readonly DatabricksWorkspacePathValue[];
   /** Native Mastra filesystems composed beside the Databricks paths. */
   mounts?: Record<string, WorkspaceFilesystem>;
-  /** Replace the auto-built dynamic skills resolver. */
-  skills?: SkillsResolver;
+  /** Replace the auto-built dynamic skills resolver, or disable skills. */
+  skills?: SkillsResolver | false;
   /** Filesystem cache filters. Ignored when the AppKit files-cache plugin is absent. */
   cache?: DatabricksWorkspaceCache;
   /** AppKit plugin context used to discover optional sibling capabilities. */
@@ -234,14 +230,12 @@ export interface DatabricksWorkspaceOptions extends Omit<
 export const DEFAULT_DATABRICKS_WORKSPACE_PATHS: readonly DatabricksWorkspacePathOptions[] = [
   {
     path: ORGANIZATION_ASSISTANT_PATH,
-    readable: true,
     skills: ["skills"],
     writable: true,
     createRoot: false,
   },
   {
     path: "~",
-    readable: true,
     skills: [".assistant/skills"],
     writable: true,
     createRoot: false,
@@ -279,7 +273,8 @@ export function databricksWorkspaceConfig(
   const filesystemSourceKey = `${id}:${++workspaceSourceSequence}`;
   const paths = resolveDatabricksWorkspacePaths(options);
   const configuredPaths = paths.length;
-  const extraSkillPaths = options.extraSkillPaths ?? [];
+  const skillsEnabled = options.skills !== false;
+  const extraSkillPaths = skillsEnabled ? (options.extraSkillPaths ?? []) : [];
   const filesCache = pluginRegistry.instance(options.pluginContext, filesCachePlugin)?.exports();
   const configuredCache = options.cache;
   const mountFilesCache = configuredCache === false ? undefined : filesCache;
@@ -302,8 +297,9 @@ export function databricksWorkspaceConfig(
       retainFilesystemSource ? mountFilesCache : undefined,
       filesystemSourceKey,
     );
+  const hasSkillPaths = paths.some(pathMayProvideSkills) || extraSkillPaths.length > 0;
   const skills: SkillsResolver =
-    options.skills ??
+    (options.skills || undefined) ??
     (async ({ requestContext }) => {
       const context = { requestContext };
       const contribution = await resolveContribution(context);
@@ -322,7 +318,8 @@ export function databricksWorkspaceConfig(
     resolverCount: resolvers.length,
     configuredPaths,
     customMounts: Object.keys(options.mounts ?? {}).length,
-    customSkillsResolver: Boolean(options.skills),
+    skillsEnabled: skillsEnabled && (options.skills !== undefined || hasSkillPaths),
+    customSkillsResolver: options.skills !== undefined && options.skills !== false,
     checkSkillFileMtime,
     bm25,
     extraSkillPaths: extraSkillPaths.length,
@@ -345,7 +342,7 @@ export function databricksWorkspaceConfig(
     id,
     name,
     filesystem: resolveFilesystem,
-    ...(resolvers.length > 0 || options.skills
+    ...(skillsEnabled && (options.skills !== undefined || hasSkillPaths)
       ? {
           skills,
           checkSkillFileMtime,
@@ -391,6 +388,13 @@ export function resolveDatabricksWorkspacePaths(
     ...(options.assistantPaths === false ? [] : DEFAULT_DATABRICKS_WORKSPACE_PATHS),
     ...(options.paths ?? []),
   ];
+}
+
+/** Whether one path can contribute skill roots to the workspace. */
+function pathMayProvideSkills(path: DatabricksWorkspacePathValue): boolean {
+  if (typeof path === "function") return true;
+  if (path === false || typeof path === "string") return false;
+  return path.skills !== false && (path.skills?.length ?? 0) > 0;
 }
 
 /* ---------------------------- private helpers ---------------------------- */
@@ -523,12 +527,12 @@ function isWorkspaceRoot(root: string): boolean {
 }
 
 /**
- * Mount resolver for the named skill folders.
+ * Mount resolver for configured Databricks and temporary paths.
  *
  * Gates on workspace file scope (or development mode), then mounts every
  * folder whose location resolves for this request.
  */
-async function resolveSkillFolderMounts(
+async function resolveWorkspacePathMounts(
   paths: readonly DatabricksWorkspacePathValue[],
   context: DatabricksWorkspaceContext,
   filesCache: FilesCacheExports | undefined,
@@ -550,7 +554,7 @@ async function resolveSkillFolderMounts(
     if (posixPath.isWithinRoot(SCRATCH_MOUNT, configured.path)) {
       const mount = configured.mount ?? configured.path;
       mounts[mount] = userTempFilesystem(context, configured.path);
-      if (configured.readable !== false) {
+      if (configured.skills !== false) {
         skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
       }
       continue;
@@ -573,12 +577,12 @@ async function resolveSkillFolderMounts(
       continue;
     }
     mounts[mount] = resolved.filesystem;
-    if (configured.readable !== false) {
-      skillPaths.push(...(configured.skills ?? ["."]).map((path) => mountedSkillPath(mount, path)));
+    if (configured.skills !== false) {
+      skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
     }
   }
 
-  logger.debug("skill-folders:mounted", {
+  logger.debug("workspace-paths:mounted", {
     mountKeys: Object.keys(mounts),
     skillPaths,
   });
@@ -593,8 +597,7 @@ interface ResolvedDatabricksWorkspacePath {
   path: string;
   displayName?: string;
   description?: string;
-  readable?: boolean;
-  skills?: readonly string[];
+  skills?: readonly string[] | false;
   writable?: boolean;
   createRoot?: boolean;
   mount?: string;
@@ -639,7 +642,7 @@ async function resolveSkillFolderFilesystem(
 > {
   // A path mount needs the request's OBO client to reach the workspace.
   if (!cache.client) {
-    logger.debug("skill-folder:skipped", {
+    logger.debug("workspace-path:skipped", {
       path: folder.path,
       reason: "missing-obo-client",
     });
@@ -653,7 +656,7 @@ async function resolveSkillFolderFilesystem(
         cacheConfig,
         context,
         root,
-        folder.readable === false ? [] : (folder.skills ?? ["."]),
+        folder.skills === false ? [] : (folder.skills ?? []),
       )
     : undefined;
   const resolved = await databricksFilesystem(
@@ -782,7 +785,7 @@ function resolveWorkspaceIdentity(options: DatabricksWorkspaceOptions): {
   return { id, name };
 }
 
-/** Collect the skill-folder resolver and any caller-supplied ones. */
+/** Collect the Databricks path resolver and any caller-supplied mounts. */
 function buildMountResolvers(
   paths: readonly DatabricksWorkspacePathValue[],
   mounts: Record<string, WorkspaceFilesystem> | undefined,
@@ -793,7 +796,9 @@ function buildMountResolvers(
   const resolvers: WorkspaceMountResolver[] = [];
   const pathCount = paths.length;
   if (pathCount > 0) {
-    resolvers.push((context) => resolveSkillFolderMounts(paths, context, filesCache, cacheConfig));
+    resolvers.push((context) =>
+      resolveWorkspacePathMounts(paths, context, filesCache, cacheConfig),
+    );
   }
   if (mounts && Object.keys(mounts).length > 0) resolvers.push(() => ({ mounts }));
   resolvers.push(...localMounts);

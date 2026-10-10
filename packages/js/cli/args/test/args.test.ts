@@ -9,7 +9,7 @@ import { z } from "zod";
 import { addArgs, parseArgs, serializeArgs } from "../src/args.ts";
 
 const schema = z.object({
-  port: z.coerce.number().default(3000).describe("Server listening port"),
+  port: z.coerce.number().default(3000).describe("Server listening port").meta({ short: "p" }),
   databaseUrl: z.string().url().describe("PostgreSQL database connection string"),
   debug: z.boolean().default(false).describe("Enable verbose debug logging"),
   tags: z.array(z.string()).default([]).describe("Repeatable tag values"),
@@ -25,10 +25,35 @@ describe("addArgs", () => {
   it("derives flags, environment names, choices, and defaults", () => {
     const help = addArgs(new Command("demo"), schema, isolated).helpInformation();
     assert.match(help, /--database-url <value>/);
+    assert.match(help, /-p, --port <value>/);
     assert.match(help, /DATABASE_URL/);
     assert.match(help, /--no-debug/);
     assert.match(help, /choices: "json", "text"/);
     assert.match(help, /default: 3000/);
+  });
+
+  it("generates only unambiguous single-letter short flags", () => {
+    const configured = z.object({
+      alpha: z.string().describe("Alpha value"),
+      beta: z.string().describe("Beta value"),
+      buildMode: z.string().describe("Build mode"),
+      custom: z.string().describe("Custom value").meta({ short: "x" }),
+      disabled: z.string().describe("Disabled short value").meta({ short: false }),
+    });
+    const help = addArgs(new Command("demo"), configured, isolated).helpInformation();
+    assert.match(help, /-a, --alpha <value>/);
+    assert.doesNotMatch(help, /-b, --beta <value>/);
+    assert.doesNotMatch(help, /-b, --build-mode <value>/);
+    assert.match(help, /-x, --custom <value>/);
+    assert.doesNotMatch(help, /-d, --disabled <value>/);
+  });
+
+  it("rejects explicit short-flag collisions", () => {
+    const configured = z.object({
+      first: z.string().describe("First").meta({ short: "x" }),
+      second: z.string().describe("Second").meta({ short: "x" }),
+    });
+    assert.throws(() => addArgs(new Command("demo"), configured, isolated), /shared by/);
   });
 
   it("documents unscoped environment names while still applying a prefix", () => {
