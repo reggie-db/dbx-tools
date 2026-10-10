@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.110";
+export const PACKAGE_VERSION = "0.9.111";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -37,7 +37,7 @@ export * as traceAttributes from "./src/trace-attributes.ts";
 export * as validation from "./src/validation.ts";
 export * as workspaces from "./src/workspaces.ts";
 export * as writer from "./src/writer.ts";
-export { FALLBACK_AGENT_ID, DEFAULT_AGENT_MAX_STEPS, DEFAULT_TOOL_WORKFLOW_INSTRUCTIONS, DEFAULT_STYLE_INSTRUCTIONS } from "./src/agents.ts";
+export { FALLBACK_AGENT_ID, DEFAULT_AGENT_MAX_STEPS, DEFAULT_TOOL_WORKFLOW_INSTRUCTIONS, CODE_MODE_ROUTING_INSTRUCTIONS, DEFAULT_STYLE_INSTRUCTIONS } from "./src/agents.ts";
 export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolkitProvider, MastraPlugins, MastraToolsFn, MastraAgentWorkspaceResolver, MastraAgentDefinition, AnyMastraAgentDefinition, MastraStorageConfigOverride, MastraMemoryConfigOverride, AgentDefaultModel, BuiltAgents } from "./src/agents.ts";
 export { chartPlanSchema, chartPlannerRequestSchema, chartToolOutputSchema } from "./src/chart.ts";
 export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
