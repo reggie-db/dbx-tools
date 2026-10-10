@@ -505,10 +505,17 @@ export function resolvePythonNodeBindingModule(entrypoint: string, module: strin
 }
 
 function canonicalPath(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return resolve(path);
+  const missing: string[] = [];
+  let candidate = resolve(path);
+  while (true) {
+    try {
+      return resolve(realpathSync(candidate), ...missing);
+    } catch {
+      const parent = dirname(candidate);
+      if (parent === candidate) return resolve(path);
+      missing.unshift(basename(candidate));
+      candidate = parent;
+    }
   }
 }
 

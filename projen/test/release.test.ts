@@ -78,8 +78,10 @@ describe("unified release workflow", () => {
     const verify = step(verifyJob, "Verify release context");
     assert.equal(verify.env?.RELEASE_TAG, "${{ github.ref_name }}");
     assert.ok(verify.run?.includes("tasks/release-version.ts"));
-    assert.match(step(verifyJob, "Verify generated sources").run ?? "", /bunx projen/);
-    assert.match(step(verifyJob, "Verify generated sources").run ?? "", /git diff/);
+    assert.equal(
+      verifyJob.steps.some((candidate) => candidate.name === "Verify generated sources"),
+      false,
+    );
     assert.equal(step(verifyJob, "Verify workspace versions").run, "bun run version:check");
     assert.match(step(verifyJob, "Setup bun").uses ?? "", /^oven-sh\/setup-bun@/);
     assert.deepEqual(step(verifyJob, "Setup bun").with, { "bun-version": "1.3.14" });
