@@ -286,7 +286,7 @@ OBO client, so the retained source does not retain an old token. Explicit
 caller-owned workspaces remain unchanged.
 
 The plugin is detected from the AppKit plugin context. If it is not registered,
-filesystem caching is disabled even when `files.cache` is configured. When it
+filesystem caching is disabled even when `workspace.files.cache` is configured. When it
 is registered, its app-lifetime `FilesCacheManager` is the single owner of the
 process-local, user-scoped LRU. Filesystem values do not use AppKit's
 `CacheManager`: that cache can write through to Lakebase, while file reads need
@@ -296,17 +296,19 @@ unchanged.
 The default file cache stores `exists`, `readdir`, and `stat` results for every
 mounted Databricks path. `readFile` is cached only under configured skill roots,
 so ordinary file contents remain live. Directory listings therefore remain
-cached. Set `files.cache: false` to disable this behavior, `true` to select the
+cached. Set `workspace.files.cache: false` to disable this behavior, `true` to select the
 defaults explicitly, or provide operation/path rules. Explicit rules replace
 the defaults and are ORed:
 
 ```ts
 mastra({
-  files: {
-    cache: [
-      { operations: ["exists", "readdir", "stat"], paths: "**" },
-      { operations: "readFile", paths: ["~/.assistant/skills/**"] },
-    ],
+  workspace: {
+    files: {
+      cache: [
+        { operations: ["exists", "readdir", "stat"], paths: "**" },
+        { operations: "readFile", paths: ["~/.assistant/skills/**"] },
+      ],
+    },
   },
 });
 ```
@@ -321,7 +323,7 @@ default, mounted files are readable without approval. Write, edit, AST edit,
 delete, and mkdir run without approval only inside
 `/Workspace/Users/<email>` for the authenticated user and under `/tmp`.
 Mutations under organization mounts or any other path require approval.
-`files.approval` adds ordered operation/path rules; the first match wins and an
+`workspace.files.approval` adds ordered operation/path rules; the first match wins and an
 unmatched operation uses the default policy. Omit `operations` to cover every
 Mastra filesystem tool, omit `paths` to cover every path, and omit
 `requireApproval` to require approval. Use Mastra's `WORKSPACE_TOOLS` constants
@@ -331,27 +333,29 @@ for operation names:
 import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
 
 mastra({
-  files: {
-    approval: ({ requestContext }) => [
-      {
-        operations: WORKSPACE_TOOLS.FILESYSTEM.DELETE,
-        paths: "~/**",
-        requireApproval: true,
-      },
-      {
-        operations: [
-          WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
-          WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE,
-        ],
-        paths: "~/projects/**",
-        requireApproval: requestContext.role !== "editor",
-      },
-    ],
+  workspace: {
+    files: {
+      approval: ({ requestContext }) => [
+        {
+          operations: WORKSPACE_TOOLS.FILESYSTEM.DELETE,
+          paths: "~/**",
+          requireApproval: true,
+        },
+        {
+          operations: [
+            WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
+            WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE,
+          ],
+          paths: "~/projects/**",
+          requireApproval: requestContext.role !== "editor",
+        },
+      ],
+    },
   },
 });
 ```
 
-`files.approval` and `files.cache` accept fixed values or per-request resolver
+`workspace.files.approval` and `workspace.files.cache` accept fixed values or per-request resolver
 functions. Path strings use `@dbx-tools/path` glob matching, including dotfiles.
 `~` and `~/...` expand to `/Workspace/Users/<email>` for the current request;
 home-relative rules do not match when no user email is available.
@@ -359,7 +363,7 @@ home-relative rules do not match when no user email is available.
 `workspaceTools` accepts Mastra's complete `WorkspaceToolsConfig`, so global or
 per-tool settings can change approval, enablement, read-before-write, hooks,
 and output limits. Native `workspaceTools.requireApproval` or a per-tool value
-overrides `files.approval`:
+overrides `workspace.files.approval`:
 
 ```ts
 import { WORKSPACE_TOOLS } from "@mastra/core/workspace";

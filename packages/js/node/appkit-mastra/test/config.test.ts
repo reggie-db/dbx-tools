@@ -17,6 +17,15 @@ describe("mastra config schema", () => {
       assert.ok((description as string).length > 0, `${name} description must be non-empty`);
     }
   });
+
+  it("nests filesystem policies under the standard workspace config", () => {
+    const properties = MASTRA_CONFIG_SCHEMA.properties ?? {};
+    assert.equal(properties.files, undefined);
+    const workspace = properties.workspace as {
+      properties?: Record<string, unknown>;
+    };
+    assert.ok(workspace.properties?.files);
+  });
 });
 
 describe("genie space normalization", () => {

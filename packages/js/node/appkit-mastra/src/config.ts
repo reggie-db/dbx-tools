@@ -198,6 +198,12 @@ export interface MastraMcpConfig {
   extraTools?: MastraTools;
 }
 
+/** Configuration applied to auto-created standard Mastra workspaces. */
+export interface MastraWorkspaceConfig {
+  /** Path-aware approval and cache policies for workspace filesystem operations. */
+  files?: WorkspaceFilesConfig;
+}
+
 /** Configuration accepted by the Mastra AppKit plugin. */
 export interface MastraPluginConfig extends BasePluginConfig {
   /** Mastra OpenAI-compatible provider id. Defaults to `"databricks"`; no env fallback. */
@@ -221,8 +227,8 @@ export interface MastraPluginConfig extends BasePluginConfig {
   sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
   /** Native Mastra workspace tool availability, approval, and hook configuration. */
   workspaceTools?: WorkspaceToolsConfig;
-  /** Path-aware approval and cache policies for auto-created workspace files. */
-  files?: WorkspaceFilesConfig;
+  /** Configuration applied to auto-created standard Mastra workspaces. */
+  workspace?: MastraWorkspaceConfig;
   /**
    * Use Mastra's native workspace skill manager. Defaults to true. Pass an
    * object to tune on-demand discovery and loaded-skill state.
@@ -678,10 +684,17 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       description:
         "Native Mastra workspace tool configuration for availability, approvals, read-before-write, output limits, and hooks.",
     },
-    files: {
+    workspace: {
       type: "object",
       description:
-        "Path-aware file approval and process-local cache policies for auto-created Mastra workspaces.",
+        "Configuration applied to auto-created standard Mastra workspaces, including path-aware filesystem approval and process-local cache policies.",
+      properties: {
+        files: {
+          type: "object",
+          description:
+            "Path-aware approval and process-local cache policies for workspace filesystem operations.",
+        },
+      },
     },
     defaultAgent: {
       type: "string",

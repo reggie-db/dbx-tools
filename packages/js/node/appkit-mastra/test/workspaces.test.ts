@@ -816,6 +816,33 @@ describe("createWorkspace skill source identity", () => {
 });
 
 describe("agent workspace selection", () => {
+  it("applies plugin filesystem policies through the standard workspace config", async () => {
+    const built = await buildAgents({
+      config: {
+        workspace: { files: { approval: false } },
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const workspace = await built.agents[built.defaultAgentId]?.getWorkspace();
+    assert.ok(workspace);
+    const config = await resolveToolConfig(
+      workspace.getToolsConfig(),
+      WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
+    );
+    assert.equal(typeof config.requireApproval, "function");
+    if (typeof config.requireApproval !== "function") return;
+    assert.equal(
+      await config.requireApproval({
+        args: { path: "/Workspace/.assistant/note.txt" },
+        requestContext: {},
+        workspace,
+      }),
+      false,
+    );
+  });
+
   it("preserves an explicit workspace resolver opt-out", async () => {
     const built = await buildAgents({
       config: {
