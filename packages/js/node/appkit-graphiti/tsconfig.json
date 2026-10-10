@@ -38,6 +38,7 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "smoke/**/*.ts",
     "index.ts"
   ],
   "exclude": [

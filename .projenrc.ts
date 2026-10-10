@@ -348,6 +348,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "zod@catalog:",
   );
   p.addDevDeps("vitest@catalog:");
+  projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
