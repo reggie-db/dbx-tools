@@ -54,7 +54,7 @@ const AGENT_TOOLS = [
     operation: "add_memory_sync",
     description:
       "Persist durable knowledge from text, JSON, or message content. Use this when the user " +
-      "asks to remember or save information. The call waits for extraction and the PostgreSQL " +
+      "asks to remember or save information. The call waits for extraction and the durable storage " +
       "commit before returning; omit uuid when creating a new episode.",
   },
   {
@@ -102,7 +102,7 @@ const AGENT_TOOLS = [
     name: "get_status",
     operation: "get_status",
     description:
-      "Check Graphiti and PostgreSQL connectivity. Use only for memory-service diagnostics.",
+      "Check Graphiti and storage connectivity. Use only for memory-service diagnostics.",
   },
 ] as const;
 const WRITE_TOOLS = new Set([
