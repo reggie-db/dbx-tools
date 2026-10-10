@@ -2,14 +2,8 @@
 
 Browser-safe utility base for `@dbx-tools/*` packages.
 
-This is the canonical owner for dependency-free cross-runtime utilities. Before
-adding a local parser, coercion, hash, memoizer, logger, async primitive, or
-object helper, check these modules and extend the owning utility when the rule
-should be shared across the repository.
-
-Import this package for small, dependency-light helpers that can run in Node,
-browsers, workers, CLIs, and shared schema packages. Modules are exported as
-namespaces so call sites stay explicit:
+These dependency-free helpers run in Node, browsers, workers, CLIs, and shared
+schema packages. Modules are exported as namespaces so call sites stay explicit:
 
 ```ts
 import {

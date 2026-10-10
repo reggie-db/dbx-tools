@@ -3,15 +3,31 @@
 Server-side Microsoft Teams Adaptive Card runtime, agent tool, and AppKit
 plugin.
 
-Import this package when an AppKit or Mastra backend needs to answer like a
-Teams bot - a conversation endpoint whose replies are Adaptive Cards - or to turn
-a model's short, structured description of a status/result into a valid Teams
-Adaptive Card to render in a preview UI or post to a channel. AppKit ships no
-first-party Teams / Adaptive Card surface, so this is additive rather than an
-alternative to a native plugin. The browser-safe card schemas live in
+Add a Teams bot endpoint to an AppKit or Mastra backend, or turn a short model
+response into an Adaptive Card for a preview or channel post. The browser-safe
+card schemas live in
 [`@dbx-tools/shared-teams`](../../shared/teams), and the React renderer (the
 `adaptivecards` JavaScript renderer) lives in
 [`@dbx-tools/ui-teams`](../../ui/teams).
+
+## Quick Start
+
+Register the Teams endpoint and give an agent its card tools:
+
+```ts
+import { createApp, server } from "@databricks/appkit";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
+import { teams } from "@dbx-tools/teams";
+
+const support = agents.createAgent({
+  instructions: "Return Teams cards for deployment summaries.",
+  async tools(plugins) {
+    return { ...(await plugins.teams.toolkit()) };
+  },
+});
+
+await createApp({ plugins: [server(), teams(), mastra({ agents: { support } })] });
+```
 
 **Key features:**
 
@@ -19,28 +35,28 @@ alternative to a native plugin. The browser-safe card schemas live in
   version and webhook state at boot, and mounts card-build / card-post routes.
 - Two agent surfaces: an AppKit `teams.createCard` tool and a standalone Mastra
   `create_teams_card` factory, both taking the small `CardSpec` vocabulary.
-  Every plugin owns its card config, webhook, and executor runtime.
+  Each plugin instance keeps its card config, webhook, and executor separate.
 - A deterministic builder that compiles a `CardSpec` (title, subtitle, text,
   key/value facts, link actions) into a valid Adaptive Card 1.5 document, so a
   card is well-formed by construction rather than by hoping the model produced
   correct schema.
 - Optional posting to a Teams incoming webhook, wrapped in the attachment
   envelope Teams expects, with a retrying execution policy.
-- `POST /api/teams/messages` - the REAL Microsoft Teams messaging endpoint: the
+- `POST /api/teams/messages` - the Microsoft Teams messaging endpoint: the
   URL you paste into an Azure Bot registration so a Teams channel can chat with
   your agents. It validates the Bot Service JWT (signature, issuer, and an
   audience equal to your bot's app id), acknowledges immediately, and delivers
   the agent's card back over the Bot Framework Connector API. This is the
   Teams-shaped analogue of how the Mastra plugin exposes MCP at a path - the
   protocol is the interface.
-- `POST /api/teams/activity` - the same turn, run SYNCHRONOUSLY with the reply
+- `POST /api/teams/activity` - the same turn, run synchronously with the reply
   activities in the response body. No bot registration required, so this is what
   a local client, a test, or any non-Teams caller uses. The conversation id maps
   onto the agent's memory thread, so repeat turns continue one conversation.
 - `POST /api/teams/card` route a browser dev page posts to for a live card
   preview, and `POST /api/teams/post` to push a card to the webhook.
 
-## Register The AppKit Plugin
+## Configure Teams Delivery
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
@@ -164,7 +180,7 @@ const createTeamsCard = tool.teamsCardTool({ runtime: teamsRuntime });
 
 Pass the runtime explicitly or provide the executor to `createTeamsRuntime`.
 
-## Why Use This Over Native AppKit
+## Use With AppKit
 
 AppKit has no Teams or Adaptive Card surface at all, so use this whenever an
 agent should emit a Teams card. The value is the policy layer around a card: the

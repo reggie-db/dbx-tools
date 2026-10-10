@@ -3,22 +3,9 @@
 Node filesystem path toolkit for discovery, matching, ignoring, scanning, and
 watching.
 
-This package owns repository-wide path discovery and ignore behavior. Reuse it
-instead of calling `glob`, `minimatch`, or Chokidar directly when results should
-agree with package discovery, generation, docs, cleanup, or watch workflows.
-
-Import this package when Node code needs consistent glob behavior across CLI,
-projen, barrel generation, codegen, or docs tooling.
-
-Key features:
-
-- Lazy glob-backed file discovery that composes with shared-core sequences.
-- Glob-to-predicate matchers for include/exclude logic.
-- Centralized ignore rules for generated files, dependencies, package-manager
-  output, VCS folders, and build artifacts.
-- Workspace scan option types shared by synthesis and docs tooling.
-- Chokidar wrapper for watch loops that should follow the same ignore behavior.
-- Escaped glob pattern builders for generated matcher fragments.
+The toolkit keeps file discovery, ignore rules, package scanning, and watch
+behavior consistent across the CLI, Projen, barrel generation, code generation,
+and documentation tooling.
 
 ## Find Files
 
@@ -35,6 +22,9 @@ const files = find
 `find.findFiles()` returns a lazy `Sequence<string>` from
 [`@dbx-tools/shared-core`](../../shared/core), so callers can map/filter without
 materializing immediately.
+
+The package also provides glob matchers, shared ignore rules, workspace package
+scanning, and Chokidar-based watch helpers.
 
 Use this package instead of direct `glob` or `chokidar` calls when the result
 should agree with package discovery, barrel generation, or cleanup logic.

@@ -72,6 +72,8 @@ export class MastraPluginClient extends MastraClient {
    * mode) keeps the OBO-gated behavior.
    */
   readonly chatAlwaysAvailable: boolean;
+  /** Whether turns continue server-side after the initiating stream disconnects. */
+  readonly backgroundTurns: boolean;
 
   constructor(config: MastraClientConfig) {
     super({
@@ -83,8 +85,9 @@ export class MastraPluginClient extends MastraClient {
     this.basePath = config.basePath;
     this.defaultAgent = config.defaultAgent;
     this.agents = config.agents;
-    this.feedbackEnabled = config.feedbackEnabled;
-    this.chatAlwaysAvailable = config.chatAlwaysAvailable;
+    this.feedbackEnabled = config.feedbackEnabled ?? false;
+    this.chatAlwaysAvailable = config.chatAlwaysAvailable ?? false;
+    this.backgroundTurns = config.backgroundTurns ?? false;
   }
 
   /**
@@ -137,6 +140,33 @@ export class MastraPluginClient extends MastraClient {
     return { headers, stream };
   }
 
+  async #uiReconnect(options: {
+    path: string;
+    chatId: string;
+    routing: { threadId?: string; model?: string };
+    signal?: AbortSignal;
+  }): Promise<MastraStreamResponse> {
+    let headers = new Headers();
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const transport = new DefaultChatTransport<UIMessage>({
+      api: new URL(options.path, origin).toString(),
+      credentials: "include",
+      headers: this.#routingHeaders(options.routing),
+      prepareReconnectToStreamRequest: ({ api }) => ({ api }),
+      fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        headers = new Headers(response.headers);
+        return response;
+      },
+    });
+    const stream = await transport.reconnectToStream({
+      chatId: options.chatId,
+      abortSignal: options.signal,
+    });
+    if (!stream) throw new Error(`Run ${options.chatId} is no longer available`);
+    return { headers, stream };
+  }
+
   #requestClient(
     routing: { threadId?: string; model?: string },
     signal?: AbortSignal,
@@ -186,6 +216,45 @@ export class MastraPluginClient extends MastraClient {
       routing: params,
       signal: params.signal,
     });
+  }
+
+  /** Reconnect to the cached event stream for one background agent run. */
+  async observeAgentStream(params: {
+    agentId: string;
+    runId: string;
+    threadId?: string;
+    model?: string;
+    signal?: AbortSignal;
+  }): Promise<MastraStreamResponse> {
+    return this.#uiReconnect({
+      path: `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}${routes.MASTRA_ROUTES.runs}/${encodeURIComponent(params.runId)}`,
+      chatId: params.runId,
+      routing: params,
+      signal: params.signal,
+    });
+  }
+
+  /** Explicitly stop one background agent run on the server. */
+  async abortAgentRun(params: {
+    agentId: string;
+    runId: string;
+    threadId?: string;
+    signal?: AbortSignal;
+  }): Promise<boolean> {
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const response = await this.#mutateJson(
+      new URL(
+        `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}${routes.MASTRA_ROUTES.runs}/${encodeURIComponent(params.runId)}${routes.MASTRA_ROUTES.abort}`,
+        origin,
+      ).toString(),
+      "POST",
+      wire.MastraRunAbortResponseSchema,
+      {
+        headers: this.#routingHeaders({ threadId: params.threadId }),
+        signal: params.signal,
+      },
+    );
+    return response.aborted;
   }
 
   /**

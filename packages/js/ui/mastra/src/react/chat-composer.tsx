@@ -353,7 +353,7 @@ export const ChatComposer = ({
             }}
             placeholder="Send a message..."
             rows={1}
-            className="field-sizing-fixed min-h-10 max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-xs"
+            className="field-sizing-fixed min-h-10 max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-base md:text-xs"
           />
           <InputGroupAddon
             align="block-end"

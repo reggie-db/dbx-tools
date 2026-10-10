@@ -4,6 +4,22 @@ The browser half of the demo Databricks App: a Bun-built React client that
 dogfoods the repository's AppKit-oriented chat, search, Teams, authentication,
 branding, email, and Postgres topic-bus UI packages.
 
+## Quick Start
+
+Wrap the routed application once to keep chat state alive across page changes:
+
+```tsx
+import { MastraAssistant } from "@dbx-tools/ui-mastra/react";
+
+export function App() {
+  return (
+    <MastraAssistant mode="overlay" side="right" chat={{ showModelPicker: true }}>
+      <AuthenticatedRoutes />
+    </MastraAssistant>
+  );
+}
+```
+
 ## What it wires
 
 - [`@dbx-tools/ui-mastra/react`](../../../js/ui/mastra) — `MastraAssistant`

@@ -1,4 +1,17 @@
+import {
+  ReasoningEffort as ReasoningEffortValue,
+  type ReasoningEffort,
+} from "@dbx-tools/shared-model";
+
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
+
+/** Default reasoning on for capable models while preserving an explicit off choice. */
+export const defaultReasoningEffort = (
+  efforts: readonly ReasoningEffort[],
+): ReasoningEffort | undefined =>
+  efforts.includes(ReasoningEffortValue.Medium)
+    ? ReasoningEffortValue.Medium
+    : efforts.find((effort) => effort !== ReasoningEffortValue.None);
 
 /** Namespace the last-selected model by plugin mount and agent. */
 export const modelStorageKey = (basePath: string, agentId: string): string =>

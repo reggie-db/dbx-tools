@@ -277,7 +277,7 @@ const MessageGroupBody = ({
   return (
     <div className="flex flex-col gap-1.5">
       {!omitQuestion && group.question && (
-        <div className="rounded border-l-2 border-primary/40 bg-background/40 px-2 py-1 text-[11px] italic leading-snug text-muted-foreground">
+        <div className="rounded border-l-2 border-primary/40 bg-background/40 px-2 py-1 text-xs italic leading-snug text-muted-foreground">
           {group.question}
         </div>
       )}
@@ -290,13 +290,11 @@ const MessageGroupBody = ({
         // for the same reason: code is the heaviest content here,
         // and most readers only want a glance.
         <Collapsible key={bucket.key} className="rounded border border-border/60 bg-background/40">
-          <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+          <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
             <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
             <span>{queryBuckets.length > 1 ? `Query ${i + 1}` : "Query"}</span>
             {bucket.query?.title ? (
-              <span className="min-w-0 flex-1 truncate normal-case text-muted-foreground/70">
-                {bucket.query.title}
-              </span>
+              <span className="min-w-0 flex-1 truncate normal-case">{bucket.query.title}</span>
             ) : null}
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -387,7 +385,7 @@ export function formatRawToolPayload(value: unknown): string {
 
 const RawToolPayload = ({ label, value }: { label: "Request" | "Response"; value: unknown }) => (
   <Collapsible className="rounded border border-border/60 bg-background/40">
-    <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+    <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
       <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
       <span>{label}</span>
     </CollapsibleTrigger>
@@ -458,7 +456,7 @@ const WebSearchProgressDetails = ({ event }: { event: ToolEvent }) => {
         return (
           <div
             key={group.key}
-            className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4"
+            className="flex min-w-0 items-center gap-1.5 text-xs leading-4"
             aria-label={done ? [query, results].filter(Boolean).join(", ") : `Searching ${query}`}
           >
             {done ? (
@@ -605,7 +603,7 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
   return (
     <div
       className={cn(
-        "rounded-md border bg-background/30 px-2 py-1.5 transition-colors",
+        "rounded-md border bg-background/30 px-2 py-1 transition-colors",
         // Loud-but-not-jarring "in flight" treatment when any row
         // is running: primary border + soft ring. Failed sessions
         // (no longer running) pick up the destructive border;
@@ -634,7 +632,7 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
             )}
           >
             {verb}
-            {countSuffix && <span className="text-muted-foreground/70">{countSuffix}</span>}
+            {countSuffix}
           </span>
           {/*
            * Trailing "live" pip on the right edge while any tool is
@@ -650,7 +648,7 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
           )}
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="mt-2 flex flex-col gap-1.5">
+          <div className="mt-1.5 flex flex-col gap-1">
             {events.map((event) => (
               <ToolCallRow key={event.id} event={event} />
             ))}

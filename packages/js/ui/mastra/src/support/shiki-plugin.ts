@@ -27,13 +27,11 @@ const LANGUAGES = [
   "markdown",
 ] as const;
 
-/**
- * Single light theme. The demo has no dark-mode toggle, and a single
- * theme guarantees every token carries a concrete `color` (shiki's
- * dual-theme mode emits CSS-variable-only tokens that need extra CSS
- * wiring to paint).
- */
-const THEME: BundledTheme = "github-light";
+/** High-contrast theme pair used for every syntax surface. */
+const THEMES = [
+  "github-light-high-contrast",
+  "github-dark-high-contrast",
+] as const satisfies readonly [BundledTheme, BundledTheme];
 
 /** Languages we can tokenize, as a set for O(1) support checks. */
 const SUPPORTED = new Set<string>(LANGUAGES);
@@ -52,13 +50,40 @@ function loadHighlighter(): Promise<HighlighterCore> {
   return _loading;
 }
 
-/** Tokenize `code` with the active theme into Streamdown's result shape. */
+function splitThemeColor(
+  value: string | undefined,
+  darkVariable: "--shiki-dark" | "--shiki-dark-bg",
+): { light?: string; dark?: string } {
+  if (!value) return {};
+  const marker = `;${darkVariable}:`;
+  const index = value.indexOf(marker);
+  if (index < 0) return { light: value };
+  return {
+    light: value.slice(0, index),
+    dark: value.slice(index + marker.length),
+  };
+}
+
+/** Tokenize `code` with the active themes into Streamdown's result shape. */
 function highlightTokens(h: HighlighterCore, code: string, language: string) {
   const { tokens, fg, bg, rootStyle } = h.codeToTokens(code, {
     lang: language as BundledLanguage,
-    theme: THEME,
+    themes: { light: THEMES[0], dark: THEMES[1] },
   });
-  return { tokens, fg, bg, rootStyle };
+  const foreground = splitThemeColor(fg, "--shiki-dark");
+  const background = splitThemeColor(bg, "--shiki-dark-bg");
+  const darkStyles = [
+    foreground.dark ? `--shiki-dark:${foreground.dark}` : "",
+    background.dark ? `--shiki-dark-bg:${background.dark}` : "",
+  ]
+    .filter(Boolean)
+    .join(";");
+  return {
+    tokens,
+    fg: foreground.light,
+    bg: background.light,
+    rootStyle: [rootStyle, darkStyles].filter(Boolean).join(";"),
+  };
 }
 
 /** Escape HTML-significant characters (from the shared string utils). */
@@ -76,17 +101,16 @@ export async function highlightToHtml(code: string, language: string): Promise<s
   if (!SUPPORTED.has(language)) return escapeHtml(code);
   const h = await loadHighlighter();
   try {
-    const { tokens } = h.codeToTokens(code, {
-      lang: language as BundledLanguage,
-      theme: THEME,
-    });
+    const { tokens } = highlightTokens(h, code, language);
     return tokens
       .map((line) =>
         line
-          .map(
-            (token) =>
-              `<span style="color:${token.color ?? "inherit"}">${escapeHtml(token.content)}</span>`,
-          )
+          .map((token) => {
+            const light = token.htmlStyle?.color ?? token.color ?? "inherit";
+            const dark = token.htmlStyle?.["--shiki-dark"] ?? light;
+            const style = `--sdm-c:${light};--shiki-dark:${dark}`;
+            return `<span style="${escapeHtml(style)}">${escapeHtml(token.content)}</span>`;
+          })
           .join(""),
       )
       .join("\n");
@@ -109,7 +133,7 @@ export function createShikiPlugin(): CodeHighlighterPlugin {
     name: "shiki",
     type: "code-highlighter",
     getSupportedLanguages: () => [...LANGUAGES],
-    getThemes: () => [THEME, THEME],
+    getThemes: () => [...THEMES],
     supportsLanguage: (language) => isSupported(language),
     highlight: (options, callback) => {
       if (!isSupported(options.language)) return null;

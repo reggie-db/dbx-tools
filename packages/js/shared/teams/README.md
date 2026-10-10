@@ -3,10 +3,21 @@
 Browser-safe Adaptive Card and Bot Framework activity schemas (plus inferred
 types) for the Teams add-on.
 
-Import this package when a UI, Mastra tool schema, server route, or test needs
-to validate the same Adaptive Card payloads that
+Use these schemas in UIs, Mastra tools, routes, and tests that exchange the
+Adaptive Card payloads that
 [`@dbx-tools/teams`](../../node/teams) builds and
 [`@dbx-tools/ui-teams`](../../ui/teams) renders.
+
+## Quick Start
+
+```ts
+import { card } from "@dbx-tools/shared-teams";
+
+const spec = card.cardSpecSchema.parse({
+  title: "Deployment succeeded",
+  text: "The API service rolled out cleanly.",
+});
+```
 
 Key features:
 
@@ -25,7 +36,7 @@ Key features:
 - Model/tool-friendly schemas that avoid JSON Schema constraints known to cause
   problems with some serving endpoints (no array `minItems`).
 
-## Validate A Drafted Card
+## Card Fields
 
 ```ts
 import { card, type CardSpec } from "@dbx-tools/shared-teams";
@@ -53,7 +64,7 @@ const result = card.cardResultSchema.parse(await response.json());
 ```
 
 `adaptiveCardSchema` pins the envelope every consumer relies on (`type`,
-`$schema`, `version`, `body`); the builder in `@dbx-tools/teams` owns the exact
+`$schema`, `version`, `body`); the builder in `@dbx-tools/teams` defines the exact
 element shapes inside `body` / `actions`.
 
 ## Modules

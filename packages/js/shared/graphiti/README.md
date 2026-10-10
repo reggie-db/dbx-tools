@@ -1,8 +1,8 @@
 # @dbx-tools/shared-graphiti
 
-Use the browser-safe Graphiti option contract from Node, AppKit, browser tools,
-or other JavaScript callers. This package owns defaults, validation, and
-environment parsing so every Node runtime accepts the same configuration.
+Use the same browser-safe Graphiti options from Node, AppKit, browser tools, and
+other JavaScript callers. The package applies defaults, validates values, and
+parses environment-shaped records.
 
 ## Resolve Runtime Options
 
@@ -34,6 +34,6 @@ const options = graphitiOptionsFromEnvironment({
 });
 ```
 
-Zod schemas own runtime validation and inferred input/output types. Process
-launching, Databricks authentication, model discovery, and service lifecycle
-remain with their Node and CLI owners.
+Zod schemas provide runtime validation and inferred input/output types. Process
+launching, Databricks authentication, model discovery, and service lifecycle are
+handled by the Node integration.

@@ -1,7 +1,7 @@
 import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
 import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra/resume";
-import { readUIMessageStream, type UIMessage } from "ai";
+import { readUIMessageStream, type UIMessage, type UIMessageChunk } from "ai";
 import { useCallback } from "react";
 import type {
   ThreadMessageWriter,
@@ -19,6 +19,43 @@ const readMlflowTraceId = (stream: unknown): string | undefined => {
 };
 
 class StreamAborted extends Error {}
+
+/** Stop reading a background run once the AI SDK has delivered its terminal chunk. */
+export function closeOnTerminalChunk(
+  stream: ReadableStream<UIMessageChunk>,
+): ReadableStream<UIMessageChunk> {
+  let reader: ReadableStreamDefaultReader<UIMessageChunk> | undefined;
+  let cancelled = false;
+  return new ReadableStream<UIMessageChunk>({
+    async start(controller) {
+      reader = stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(value);
+          if (value.type === "finish" || value.type === "abort") {
+            controller.close();
+            await reader.cancel("terminal AI SDK chunk received").catch(() => undefined);
+            return;
+          }
+        }
+      } catch (error) {
+        if (!cancelled) controller.error(error);
+      } finally {
+        reader.releaseLock();
+        reader = undefined;
+      }
+    },
+    cancel(reason) {
+      cancelled = true;
+      return reader?.cancel(reason);
+    },
+  });
+}
 
 /** Replace or append one assistant message without disturbing the transcript. */
 function upsertAssistant(messages: UIMessage[], assistant: UIMessage): UIMessage[] {
@@ -69,7 +106,7 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
         );
         for await (const message of readUIMessageStream({
           ...(existing ? { message: existing } : {}),
-          stream: stream.stream,
+          stream: closeOnTerminalChunk(stream.stream),
           terminateOnError: true,
         })) {
           if (signal.aborted) throw new StreamAborted();

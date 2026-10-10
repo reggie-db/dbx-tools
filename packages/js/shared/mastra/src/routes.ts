@@ -19,6 +19,8 @@
  */
 export const MASTRA_ROUTES = {
   chat: "/chat",
+  runs: "/runs",
+  abort: "/abort",
   feedback: "/route/feedback",
   mlflowExperiment: "/route/mlflow-experiment",
   suggestions: "/suggestions",

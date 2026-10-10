@@ -22,7 +22,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/databricks` - Databricks workspace, filesystem, cloud, and network utilities. Source: `packages/js/node/databricks`.
 - `@dbx-tools/databricks-zerobus` - Region-aware Zerobus ingest helpers for Databricks workspaces. Source: `packages/js/node/databricks-zerobus`.
 - `@dbx-tools/email` - Server-side email runtime, agent tools, and AppKit plugin. Source: `packages/js/node/email`.
-- `@dbx-tools/fs` - Node local-disk FileSystem implementation of the @dbx-tools/shared-fs contract. Built on BaseFileSystem, so this package only owns host separator conversion (toBackendPath), Node I/O, symlink containment (preparePath), and errno mapping. Source: `packages/js/node/fs`.
+- `@dbx-tools/fs` - Node local-disk FileSystem implementation of the @dbx-tools/shared-fs contract. Built on BaseFileSystem, so this package only implements host separator conversion (toBackendPath), Node I/O, symlink containment (preparePath), and errno mapping. Source: `packages/js/node/fs`.
 - `@dbx-tools/genie` - Server-side Databricks Genie chat drivers. Source: `packages/js/node/genie`.
 - `@dbx-tools/lakebase` - Resolve a Databricks Lakebase target into the host, database, and user a PostgreSQL client needs, then request a short-lived database credential. The package gives Node and Bun applications one profile-aware path from a project name or resource URL to connection-ready values. When the target is a Lakebase path or URL without a chosen database, discovery picks the branch default (status.default, then Lakebase's provisioned databricks_postgres) instead of PostgreSQL's generic postgres database. Source: `packages/js/node/lakebase`.
 - `@dbx-tools/model` - Workspace-aware Databricks Model Serving selection. Source: `packages/js/node/model`.
@@ -34,7 +34,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 
 ## Python
 
-- `dbx-tools-graphiti` - Run Graphiti REST, MCP, model routing, and PostgreSQL-backed graph memory from one Python runtime. The build synchronizes the upstream REST and MCP source at pinned commits. The PostGraph driver derived from Graphiti PR 1777 is maintained as attributed package source, so the published wheel has no direct Git dependencies. Source: `packages/py/graphiti`.
+- `dbx-tools-graphiti` - Run Graphiti REST, MCP, model routing, and PostgreSQL-backed graph memory from one Python runtime. It can use embedded PostgreSQL for local persistence or an external PostgreSQL/Lakebase database. Source: `packages/py/graphiti`.
 - `dbx-tools-node-runtime` - Run PythonMonkey-based packages in managed Python environments that do not provide system Node.js or npm. Source: `packages/py/node-runtime`.
 
 ## Shared Contracts
@@ -46,9 +46,9 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/shared-fs` - Browser-safe filesystem contract and abstract base for rooted storage backends. Source: `packages/js/shared/fs`.
 - `@dbx-tools/shared-genie` - Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers. Source: `packages/js/shared/genie`.
 - `@dbx-tools/shared-genie-code` - Browser-safe configuration for the managed Genie Code CLI and its local model-gateway sidecar. Source: `packages/js/shared/genie-code`.
-- `@dbx-tools/shared-graphiti` - Use the browser-safe Graphiti option contract from Node, AppKit, browser tools, or other JavaScript callers. This package owns defaults, validation, and environment parsing so every Node runtime accepts the same configuration. Source: `packages/js/shared/graphiti`.
+- `@dbx-tools/shared-graphiti` - Use the same browser-safe Graphiti options from Node, AppKit, browser tools, and other JavaScript callers. The package applies defaults, validates values, and parses environment-shaped records. Source: `packages/js/shared/graphiti`.
 - `@dbx-tools/shared-mastra` - Browser-safe contract for the AppKit Mastra plugin. Source: `packages/js/shared/mastra`.
-- `@dbx-tools/shared-model` - Browser-safe model-selection contracts generated from the canonical model owner. Source: `packages/js/shared/model`.
+- `@dbx-tools/shared-model` - Browser-safe model-selection contracts let UIs, routes, tools, and tests validate model lookups and type ranked model responses without importing Databricks clients. Server-side normalization, classification, ranking, and fuzzy resolution live in @dbx-tools/model. Source: `packages/js/shared/model`.
 - `@dbx-tools/shared-model-gateway` - Discover the models exposed by a dbx-tools model gateway from browser, edge, or shared application code. The package validates successful and error responses at the network boundary and provides the protocol contracts needed to build model pickers without importing Node or AppKit runtime code. Source: `packages/js/shared/model-gateway`.
 - `@dbx-tools/shared-search` - Browser-safe schemas and extension types for AppKit-compatible AI Search providers. Source: `packages/js/shared/search`.
 - `@dbx-tools/shared-teams` - Browser-safe Adaptive Card and Bot Framework activity schemas (plus inferred types) for the Teams add-on. Source: `packages/js/shared/teams`.

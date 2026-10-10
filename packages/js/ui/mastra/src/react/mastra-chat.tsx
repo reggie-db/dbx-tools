@@ -24,6 +24,7 @@ import {
   type MastraStreamResponse,
 } from "../support/mastra-client.ts";
 import {
+  defaultReasoningEffort,
   modelStorageKey,
   readStoredModel,
   storeSelectedModel,
@@ -368,11 +369,14 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const activeModel = model || defaultModelId || undefined;
   const activeModelOption = models.find((option) => option.name === activeModel);
   const reasoningEfforts = activeModelOption?.reasoningEfforts ?? EMPTY_REASONING_EFFORTS;
+  const reasoningDefault = defaultReasoningEffort(reasoningEfforts);
+  const reasoningModelKey = `${activeModel ?? ""}:${reasoningEfforts.join(",")}`;
+  const initializedReasoningModelRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (reasoningEffort && !reasoningEfforts.includes(reasoningEffort)) {
-      setReasoningEffort(undefined);
-    }
-  }, [reasoningEffort, reasoningEfforts]);
+    if (initializedReasoningModelRef.current === reasoningModelKey) return;
+    initializedReasoningModelRef.current = reasoningModelKey;
+    setReasoningEffort(reasoningDefault);
+  }, [reasoningDefault, reasoningModelKey]);
   // Starter suggestions: an explicit `options.suggestions` always
   // wins (including `[]` to force none) and is rendered verbatim;
   // otherwise auto-source the agent's Genie space sample questions.
@@ -450,8 +454,43 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       });
       const runIdRef = { current: getSession(threadId).runId };
       try {
-        const stream = await open(controller.signal);
-        await processStream(threadId, stream, assistantId, runIdRef, controller.signal);
+        try {
+          const stream = await open(controller.signal);
+          await processStream(threadId, stream, assistantId, runIdRef, controller.signal);
+        } catch (initialError) {
+          const runId = runIdRef.current;
+          if (
+            controller.signal.aborted ||
+            getSession(threadId).runToken !== token ||
+            !mastraClient.backgroundTurns ||
+            !runId
+          ) {
+            throw initialError;
+          }
+          logger.warn("chat stream disconnected; reconnecting to background run", {
+            runId,
+            error: errorUtils.errorMessage(initialError),
+          });
+          const messagesBeforeReplay = getSession(threadId).messages;
+          writeMessages(
+            threadId,
+            messagesBeforeReplay.filter((message) => message.id !== assistantId),
+          );
+          const streamThreadId =
+            threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
+          try {
+            const stream = await mastraClient.observeAgentStream({
+              agentId,
+              runId,
+              threadId: streamThreadId,
+              signal: controller.signal,
+            });
+            await processStream(threadId, stream, assistantId, runIdRef, controller.signal);
+          } catch (reconnectError) {
+            writeMessages(threadId, messagesBeforeReplay);
+            throw reconnectError;
+          }
+        }
         updateSession(threadId, (session) => {
           if (session.runToken !== token) return session;
           return {
@@ -500,7 +539,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         }));
       }
     },
-    [getSession, processStream, refreshThreadsSoon, updateSession],
+    [agentId, getSession, mastraClient, processStream, refreshThreadsSoon, updateSession, writeMessages],
   );
 
   const runStream = useCallback(
@@ -567,9 +606,26 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const stop = useCallback(
     (threadId?: string) => {
       const key = threadId ?? activeKey;
+      const current = getSession(key);
+      if (!isSessionRunning(current)) return;
+      const streamThreadId = key === DEFAULT_THREAD_SESSION_KEY ? undefined : key;
+      if (mastraClient.backgroundTurns && current.runId) {
+        void mastraClient
+          .abortAgentRun({
+            agentId,
+            runId: current.runId,
+            threadId: streamThreadId,
+          })
+          .catch((error: unknown) => {
+            logger.warn("failed to abort background run", {
+              runId: current.runId,
+              error: errorUtils.errorMessage(error),
+            });
+          });
+      }
+      current.abortController?.abort();
       updateSession(key, (session) => {
         if (!isSessionRunning(session)) return session;
-        session.abortController?.abort();
         return {
           ...session,
           abortController: null,
@@ -579,7 +635,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         };
       });
     },
-    [activeKey, updateSession],
+    [activeKey, agentId, getSession, mastraClient, updateSession],
   );
 
   const handleApproval = useChatApprovals({

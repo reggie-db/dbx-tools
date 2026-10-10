@@ -3,9 +3,20 @@
 Browser-safe schemas and extension types for AppKit-compatible AI Search
 providers.
 
-Import this package when a UI, Mastra tool schema, server route, or test needs
-to validate the same search payloads that
-[`@dbx-tools/search`](../../node/search) reads and writes.
+Use these schemas in UIs, Mastra tools, routes, and tests that exchange payloads
+with [`@dbx-tools/search`](../../node/search).
+
+## Quick Start
+
+```ts
+import { searchSchemas } from "@dbx-tools/shared-search";
+
+const request = searchSchemas.searchRequestSchema.parse({
+  query: "reset my password",
+  index: "main.support.docs",
+  limit: 5,
+});
+```
 
 Key features:
 
@@ -21,7 +32,7 @@ Key features:
 - Model/tool-friendly schemas that avoid JSON Schema constraints known to cause
   problems with some serving endpoints.
 
-## Validate A Search Request
+## Request Options
 
 ```ts
 import { searchSchemas, type SearchRequest } from "@dbx-tools/shared-search";

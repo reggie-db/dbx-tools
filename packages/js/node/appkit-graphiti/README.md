@@ -74,7 +74,7 @@ export default {
 };
 ```
 
-The package root owns sidecar startup, OpenAPI-derived tool registration,
+The package root provides sidecar startup, OpenAPI-derived tool registration,
 per-user graph scopes, and the exported `GRAPHITI_CONFIG_SCHEMA`.
 
 The model-facing `add_memory` tool executes Graphiti's synchronous write

@@ -36,7 +36,8 @@ describe("raw tool payload formatting", () => {
     const payload = formatRawToolPayload({ request: true, count: 3 });
     const html = await highlightToHtml(payload, "json");
 
-    assert.match(html, /<span style="color:/);
+    assert.match(html, /<span style="--sdm-c:/);
+    assert.match(html, /--shiki-dark:/);
     assert.match(html, /request/);
     assert.match(html, /count/);
   });
@@ -50,7 +51,7 @@ describe("raw tool payload formatting", () => {
           {
             code: output,
             language: "text",
-            themes: ["github-light", "github-light"],
+            themes: ["github-light-high-contrast", "github-dark-high-contrast"],
           },
           resolve,
         );
@@ -59,6 +60,11 @@ describe("raw tool payload formatting", () => {
     );
 
     assert.equal(plugin.supportsLanguage("text"), true);
+    assert.deepEqual(plugin.getThemes(), [
+      "github-light-high-contrast",
+      "github-dark-high-contrast",
+    ]);
+    assert.match(result.rootStyle ?? "", /--shiki-dark:#/);
     assert.equal(
       result.tokens
         .flat()

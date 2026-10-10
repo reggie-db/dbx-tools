@@ -219,7 +219,7 @@ export const ChatTranscript = ({
         ) : (
           <div
             ref={controller.contentRef}
-            className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-4 md:px-6"
+            className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-3 md:px-6"
           >
             {(isLoadingMore || isLoadingHistory) && (
               <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground">

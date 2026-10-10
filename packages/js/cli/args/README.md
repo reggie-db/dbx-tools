@@ -39,5 +39,5 @@ Schemas serialize their parsed defaults. Concrete objects serialize current
 values. Boolean false becomes `--no-*`, arrays become repeated flags, and
 listener addresses use the shared listen-address format.
 
-Consuming commands own their schemas. This package only binds Commander, help,
+Consuming commands define their schemas. This package binds Commander, help,
 and argv serialization.

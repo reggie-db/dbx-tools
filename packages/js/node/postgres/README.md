@@ -3,13 +3,24 @@
 Connection-correct PostgreSQL primitives for Node.js: advisory locks that hold the
 connection they lock, and a structured topic bus over `LISTEN`/`NOTIFY`.
 
-This package owns reusable PostgreSQL coordination behavior. Prefer its locks,
-topic bus, persistence, identity, and connection helpers over local SQL snippets
-or parallel message envelopes so Node and Python services remain compatible.
+The package provides advisory locks, a typed topic bus, optional message
+persistence, sender identity, and connection helpers for Node services.
 
 Both work against a plain `pg.Pool` or anything structurally compatible with one,
 including the pool AppKit's Lakebase plugin exports — so a Databricks App gets
 them without a second database client or connection pool.
+
+## Quick Start
+
+Run protected work on the same PostgreSQL connection that holds the lock:
+
+```ts
+import { withAdvisoryLock } from "@dbx-tools/postgres";
+
+await withAdvisoryLock(pool, ["invoice", invoiceId], async (client) => {
+  await client.query("UPDATE invoices SET status = 'sent' WHERE id = $1", [invoiceId]);
+});
+```
 
 ## Key Features
 
@@ -59,7 +70,7 @@ service-principal and per-user OBO pools. Every login identity that can reach th
 pool must therefore be a member of the configured role, or otherwise have
 permission to `SET ROLE`, before the pool can connect successfully.
 
-## Why Use This Over Native AppKit
+## Use With AppKit Lakebase
 
 Use AppKit `lakebase()` to obtain and refresh the PostgreSQL pool. This package
 does not replace that plugin. Add it when work needs connection-correct advisory
@@ -241,7 +252,7 @@ a listener can never be told about a row it cannot yet read.
 
 | Option             | Default           | Behavior                                                       |
 | ------------------ | ----------------- | -------------------------------------------------------------- |
-| `schema`           | `dbx_message_bus` | Schema the package owns.                                       |
+| `schema`           | `dbx_message_bus` | Schema used for message persistence.                            |
 | `scope`            | `open`            | Which tier's table publishes and history read by default.      |
 | `tables`           | `*_messages`      | Override a tier's table name for a managed installation.       |
 | `ttl`              | `24 hours`        | Per-message expiry. `false` keeps messages until deleted.      |
@@ -314,18 +325,17 @@ shared `dbx_tools_topic_bus` channel.
 `identity.channelName(parts)` exposes the derivation without constructing a bus,
 which is useful for configuration checks and cross-runtime contract tests.
 
-## Why A Separate Package?
+## Connection Lifecycles
 
 Advisory locks are connection-scoped, and that is easy to get wrong invisibly:
 taking the lock with `pool.query()` and doing the protected work with another
 `pool.query()` can use two different connections, so the lock protects nothing and
 the code looks correct. The same applies to `LISTEN`, which is session state a
-pooled query cannot hold. This package owns both lifecycles once, with no
-dependency beyond `pg`, so a consumer that only needs a lock does not pull in a
-message bus, an AppKit runtime, or a queue extension.
+pooled query cannot hold. These helpers keep both lifecycles on dedicated
+connections and depend only on `pg`.
 
-AppKit exposes Lakebase but has no lock helper and no message bus, so there is no
-native surface to prefer here.
+AppKit supplies the Lakebase pool; these helpers add locks and cross-instance
+message delivery on top of it.
 
 ## Module Map
 

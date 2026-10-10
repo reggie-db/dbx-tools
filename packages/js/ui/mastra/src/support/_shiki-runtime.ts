@@ -14,12 +14,13 @@ import python from "shiki/langs/python.mjs";
 import sql from "shiki/langs/sql.mjs";
 import typescript from "shiki/langs/typescript.mjs";
 import yaml from "shiki/langs/yaml.mjs";
-import githubLight from "shiki/themes/github-light.mjs";
+import githubDarkHighContrast from "shiki/themes/github-dark-high-contrast.mjs";
+import githubLightHighContrast from "shiki/themes/github-light-high-contrast.mjs";
 
 /** Create the shared highlighter with the exact configured language set. */
 export function createHighlighter() {
   return createHighlighterCore({
-    themes: [githubLight],
+    themes: [githubLightHighContrast, githubDarkHighContrast],
     langs: [sql, python, typescript, javascript, json, bash, yaml, markdown],
     engine: createOnigurumaEngine(import("shiki/wasm")),
   });

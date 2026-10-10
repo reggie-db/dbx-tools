@@ -1,12 +1,10 @@
 # @dbx-tools/shared-model
 
-Browser-safe model-selection contracts generated from the canonical model
-owner.
-
-Import this package when UI code, route handlers, tools, or tests need to
-validate model lookup requests or type ranked model responses without talking
-to Databricks. Normalization, classification, capability policy, ranking, and
-fuzzy resolution are exposed through [`@dbx-tools/model`](../../node/model).
+Browser-safe model-selection contracts let UIs, routes, tools, and tests
+validate model lookups and type ranked model responses without importing
+Databricks clients. Server-side normalization,
+classification, ranking, and fuzzy resolution live in
+[`@dbx-tools/model`](../../node/model).
 
 Key features:
 

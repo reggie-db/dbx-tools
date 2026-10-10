@@ -2,8 +2,8 @@
 
 Region-aware Zerobus ingest helpers for Databricks workspaces.
 
-Import this package when Node code needs to create a Zerobus SDK client and open
-an ingest stream without hand-building the region-specific Zerobus endpoint.
+Create a Zerobus SDK client and open ingest streams without constructing the
+region-specific endpoint yourself.
 
 Key features:
 

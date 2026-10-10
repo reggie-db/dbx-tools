@@ -4,10 +4,20 @@ React surface for the Teams add-on: render Microsoft Teams Adaptive Cards in the
 browser with the [`adaptivecards`](https://www.npmjs.com/package/adaptivecards)
 JavaScript renderer.
 
-Import this package when a UI needs to display the Adaptive Card documents that
-[`@dbx-tools/teams`](../../node/teams) builds. It consumes the browser-safe card
-contract from [`@dbx-tools/shared-teams`](../../shared/teams) and renders through
-[`@dbx-tools/ui`](../appkit)'s UI kit.
+Display the Adaptive Cards built by [`@dbx-tools/teams`](../../node/teams) in a
+browser or add a Teams-style conversation preview. The components use the card
+schemas from [`@dbx-tools/shared-teams`](../../shared/teams) and the shared
+[`@dbx-tools/ui`](../appkit) foundation.
+
+## Quick Start
+
+```tsx
+import { TeamsChat } from "@dbx-tools/ui-teams/react";
+
+export function SupportChat() {
+  return <TeamsChat className="h-full" />;
+}
+```
 
 **Key features:**
 
@@ -41,7 +51,7 @@ contract from [`@dbx-tools/shared-teams`](../../shared/teams) and renders throug
   text if a string fails to parse, and the stylesheet re-applies list markers /
   paragraph spacing that Tailwind's preflight resets away.
 
-## Simulate A Teams Chat
+## Configure The Chat Preview
 
 ```tsx
 import { TeamsChat } from "@dbx-tools/ui-teams/react";

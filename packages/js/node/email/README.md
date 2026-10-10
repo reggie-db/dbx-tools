@@ -2,14 +2,26 @@
 
 Server-side email runtime, agent tools, and AppKit plugin.
 
-Import this package when an AppKit or Mastra backend needs model-drafted
-outbound email with human approval, sender derivation, SMTP dispatch, and a
-local outbox mode for development. AppKit ships no first-party email surface,
-so this is additive rather than an alternative to a native plugin. Browser-safe
-message/result schemas live in
+Add model-drafted email with human approval, sender policy, SMTP delivery, and a
+local development outbox to an AppKit or Mastra backend. Browser-safe message
+and result schemas live in
 [`@dbx-tools/shared-email`](../../shared/email), and the reusable React Email
 presentation lives in
 [`@dbx-tools/shared-email-template`](../../shared/email-template).
+
+## Quick Start
+
+Give an agent an email tool that pauses before delivery:
+
+```ts
+import { emailTool } from "@dbx-tools/email";
+import { agents } from "@dbx-tools/appkit-mastra";
+
+const support = agents.createAgent({
+  instructions: "Draft the reply and request approval before sending it.",
+  tools: () => ({ send_email: emailTool() }),
+});
+```
 
 **Key features:**
 
@@ -31,7 +43,7 @@ presentation lives in
 - Named caps on body length and attachment size, and an `AbortSignal` threaded
   through every send.
 
-## Register The AppKit Plugin
+## Register Delivery
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";

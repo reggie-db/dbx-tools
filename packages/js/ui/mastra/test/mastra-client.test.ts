@@ -10,6 +10,46 @@ afterEach(() => {
 });
 
 describe("MastraPluginClient AI SDK transport", () => {
+  it("reconnects to and aborts a durable run through run-scoped routes", async () => {
+    const received: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request = new Request(input, init);
+      received.push(request);
+      if (request.method === "POST") return Response.json({ aborted: true });
+      return new Response("data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      });
+    }) as typeof fetch;
+    const client = new MastraPluginClient({
+      basePath: "/api/mastra",
+      defaultAgent: "support",
+      agents: ["support"],
+      backgroundTurns: true,
+    });
+
+    const response = await client.observeAgentStream({
+      agentId: "support",
+      runId: "run-1",
+      threadId: "thread-1",
+    });
+    await response.stream.cancel();
+    const aborted = await client.abortAgentRun({
+      agentId: "support",
+      runId: "run-1",
+      threadId: "thread-1",
+    });
+
+    assert.equal(received[0]?.method, "GET");
+    assert.equal(received[0]?.url, "http://localhost/api/mastra/chat/support/runs/run-1");
+    assert.equal(received[0]?.headers.get("x-mastra-thread-id"), "thread-1");
+    assert.equal(received[1]?.method, "POST");
+    assert.equal(
+      received[1]?.url,
+      "http://localhost/api/mastra/chat/support/runs/run-1/abort",
+    );
+    assert.equal(aborted, true);
+  });
+
   it("uses the official chat route with isolated routing and request context", async () => {
     let received!: Request;
     globalThis.fetch = (async (input, init) => {

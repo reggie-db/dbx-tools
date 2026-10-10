@@ -90,6 +90,9 @@ export function summaryText(markdown) {
 /** Structural quality issues that make a package README unsuitable as a docs page. */
 export function packageReadmeIssues(markdown) {
   const issues = [];
+  const firstCodeLine = markdown
+    .split(/\r?\n/)
+    .findIndex((line) => /^```[a-z0-9-]*$/i.test(line));
   if (!markdown.startsWith("# ")) issues.push("start with one H1 title");
   if (summaryText(markdown).length < 40) {
     issues.push("open with a useful summary of at least 40 characters");
@@ -99,6 +102,17 @@ export function packageReadmeIssues(markdown) {
   }
   if (!/^```[a-z0-9-]*$/im.test(markdown)) {
     issues.push("include at least one runnable usage example");
+  } else if (firstCodeLine >= 20) {
+    issues.push("show the first runnable usage example within the first 20 lines");
+  }
+  if (/\bImport this package when\b/i.test(markdown)) {
+    issues.push("describe the user task directly instead of saying 'Import this package when'");
+  }
+  if (/\b(?:canonical owner|this package owns|does not own)\b/i.test(markdown)) {
+    issues.push("move repository ownership policy out of the user guide");
+  }
+  if (/^## Why (?:Not Just|Use This|This Over)/im.test(markdown)) {
+    issues.push("use a task or decision heading instead of a defensive 'Why' heading");
   }
   return issues;
 }

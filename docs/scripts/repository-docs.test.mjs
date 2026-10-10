@@ -101,6 +101,38 @@ describe("repository docs catalogue", () => {
     );
   });
 
+  it("reports delayed examples and repository-policy prose", () => {
+    const preamble = Array.from({ length: 22 }, (_, index) => `Detail ${index + 1}.`).join("\n");
+    assert.deepEqual(
+      packageReadmeIssues(
+        [
+          "# Widget",
+          "",
+          "Import this package when an application needs widgets without repeated setup.",
+          "",
+          "## Why Use This Over Native Widgets",
+          "",
+          "This package owns widget policy. The host does not own it.",
+          preamble,
+          "",
+          "```ts",
+          "createWidget();",
+          "```",
+          "",
+          "## Options",
+          "",
+          "Configure the widget for the host application.",
+        ].join("\n"),
+      ),
+      [
+        "show the first runnable usage example within the first 20 lines",
+        "describe the user task directly instead of saying 'Import this package when'",
+        "move repository ownership policy out of the user guide",
+        "use a task or decision heading instead of a defensive 'Why' heading",
+      ],
+    );
+  });
+
   it("lets callers skip generated output trees", () => {
     const root = fixture();
     mkdirSync(join(root, "packages/js/ui/widget/lib"), { recursive: true });

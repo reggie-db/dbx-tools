@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  defaultReasoningEffort,
   modelStorageKey,
   readStoredModel,
   storeSelectedModel,
@@ -15,6 +16,13 @@ const memoryStorage = () => {
 };
 
 describe("model selection persistence", () => {
+  it("enables medium reasoning by default when the model supports it", () => {
+    assert.equal(defaultReasoningEffort(["none", "low", "medium", "high"]), "medium");
+    assert.equal(defaultReasoningEffort(["none", "high", "max"]), "high");
+    assert.equal(defaultReasoningEffort(["none"]), undefined);
+    assert.equal(defaultReasoningEffort([]), undefined);
+  });
+
   it("namespaces the selection by mount and agent", () => {
     assert.equal(modelStorageKey("/api/mastra", "analyst"), "dbx-mastra-model:/api/mastra:analyst");
   });

@@ -2,9 +2,18 @@
 
 Browser-safe filesystem contract and abstract base for rooted storage backends.
 
-This package owns the portable filesystem shape used across dbx-tools. New
-storage backends should implement `FileSystem` through `BaseFileSystem` rather
-than publish another set of entry, error, path, and operation types.
+The package defines the portable filesystem API used by local disk, Databricks,
+memory, and other storage backends. `BaseFileSystem` supplies rooted paths,
+common operations, and normalized errors for new adapters.
+
+## Quick Start
+
+```ts
+import { MemoryFileSystem } from "@dbx-tools/shared-fs";
+
+const files = new MemoryFileSystem();
+await files.writeFile("note.txt", "ready");
+```
 
 Key features:
 
@@ -33,11 +42,11 @@ Key features:
   descendant entries. `read`, `invalidate`, and `keys` may be synchronous or
   asynchronous. Keys use `<stable-hash>_<canonical-rooted-backend-path>`.
 
-## Why Use This
+## Use The Shared Contract
 
 Use this when multiple backends (local disk, object storage, Databricks volumes, in-memory) should share one API. Node hosts implement concrete adapters such as `@dbx-tools/fs` (`LocalFileSystem`).
 
-## Quick Start
+## Cache And Backend Helpers
 
 ```ts
 import type { FileSystem, FileSystemCache } from "@dbx-tools/shared-fs";

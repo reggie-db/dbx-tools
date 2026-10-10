@@ -62,6 +62,7 @@
     "@opentelemetry/sdk-trace-base": "catalog:",
     "@opentelemetry/sdk-trace-node": "catalog:",
     "@pydantic/monty": "catalog:",
+    "ai": "catalog:",
     "express": "catalog:",
     "fuse.js": "^7.4.2",
     "lru-cache": "catalog:",

@@ -2,11 +2,21 @@
 
 Workspace-aware Databricks Model Serving selection.
 
-Import this package when server-side code needs to turn a loose model request
-like `"claude sonnet"` or `"chat-fast"` into a concrete serving endpoint in the
-current workspace. It lists `/serving-endpoints`, caches and enriches the
+Turn a loose model request such as `"claude sonnet"` or `"chat-fast"` into a
+concrete serving endpoint in the current workspace. The client lists
+`/serving-endpoints`, caches and enriches the
 catalogue, classifies endpoints by capability, fuzzy-matches names, and falls
 back to a small static floor when the live catalogue is unavailable.
+
+## Quick Start
+
+```ts
+import { createModelClient } from "@dbx-tools/model";
+
+const models = await createModelClient();
+const selected = await models.resolveModel({ explicit: "sonnet" });
+console.log(selected.modelId);
+```
 
 Browser-safe request/result schemas and endpoint classification types live in
 [`@dbx-tools/shared-model`](../../shared/model).
@@ -33,7 +43,7 @@ Key features:
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
-## Why Not Just AppKit Serving?
+## Use With AppKit Model Serving
 
 Native AppKit's Model Serving plugin is the right choice when you already know
 the endpoint alias you want. It gives you authenticated invoke/stream routes,
@@ -53,7 +63,7 @@ endpoint:
 - keep local agents and CLIs working with a static fallback when catalogue
   access is unavailable.
 
-## Use The Portable Model Client
+## Route Requests
 
 ```ts
 import { createModelClient } from "@dbx-tools/model";
@@ -243,7 +253,7 @@ a property of the model (see `isResponsesOnly()` and `responsesUpstreamUrl()`),
 so a hard-coded string in one package silently diverges when that routing
 changes. `isResponsesOnly()` covers Codex and GPT 5.4+ endpoints, which reject
 tool-bearing Chat Completions, while keeping GPT-OSS on its supported Chat path.
-The TypeScript helper owns this policy so every Node consumer shares one version
+The TypeScript helper applies this policy so every Node consumer shares one version
 threshold without loading a native library.
 
 ## Read Published Model Metadata

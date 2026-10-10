@@ -2,10 +2,17 @@
 
 Browser-safe contract for the AppKit Mastra plugin.
 
-Import this package when a client, test, or server route needs the same route
-constants, header names, embed-marker parsing, feedback schemas, thread
-selection fields, and Mastra response schemas used by
+Share route constants, headers, embed parsing, feedback schemas, thread
+selection fields, and response schemas between clients, tests, routes, and
 [`@dbx-tools/appkit-mastra`](../../node/appkit-mastra).
+
+## Quick Start
+
+```ts
+import { wire } from "@dbx-tools/shared-mastra";
+
+const config = wire.MastraClientConfigSchema.parse(await response.json());
+```
 
 Key features:
 
@@ -21,7 +28,7 @@ Key features:
 - Browser-safe types that let UI packages stay aligned with the server without
   importing Node or Mastra runtime code.
 
-## Parse Client Configuration
+## Client Configuration Fields
 
 ```ts
 import { wire } from "@dbx-tools/shared-mastra";

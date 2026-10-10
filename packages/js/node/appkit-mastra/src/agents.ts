@@ -34,6 +34,7 @@ import type {
   ToolsInput,
 } from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
+import { createEventedAgent } from "@mastra/core/agent/durable";
 import { SkillSearchProcessor } from "@mastra/core/processors";
 import type { OutputProcessor } from "@mastra/core/processors";
 import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
@@ -409,6 +410,41 @@ export const FALLBACK_AGENT_ID = "default";
  */
 export const DEFAULT_AGENT_MAX_STEPS = 25;
 
+const EVENTED_CONSTRUCTOR_MODEL = {
+  specificationVersion: "v3",
+  provider: "dbx-tools",
+  modelId: "deferred",
+  supportedUrls: {},
+  async doGenerate() {
+    throw new Error("Deferred evented constructor model must not execute");
+  },
+  async doStream() {
+    throw new Error("Deferred evented constructor model must not execute");
+  },
+} as never;
+
+/**
+ * `EventedAgent` delegates model resolution to the wrapped agent at execution
+ * time, but its constructor also probes an untyped `__model` slot and otherwise
+ * calls `getModel()` with an empty request context. Temporarily filling that
+ * probe avoids an eager service-principal lookup while preserving the wrapped
+ * agent's request-scoped model resolver for real turns.
+ */
+function createBackgroundAgent(agent: Agent, maxSteps: number): Agent {
+  const modelSlot = "__model";
+  const descriptor = Object.getOwnPropertyDescriptor(agent, modelSlot);
+  Object.defineProperty(agent, modelSlot, {
+    configurable: true,
+    value: EVENTED_CONSTRUCTOR_MODEL,
+  });
+  try {
+    return createEventedAgent({ agent, maxSteps }) as unknown as Agent;
+  } finally {
+    if (descriptor) Object.defineProperty(agent, modelSlot, descriptor);
+    else delete (agent as Agent & { __model?: unknown }).__model;
+  }
+}
+
 const FALLBACK_AGENT_INSTRUCTIONS = `You are a data analyst. The user will ask questions about
 business metrics and may share personal preferences you should remember across turns.
 
@@ -420,6 +456,13 @@ Rules:
    you will remember it.
 3. If you don't have enough information to answer, ask a clarifying
    question instead of guessing.`;
+
+/** Tool-call guidance appended to every registered agent. */
+export const DEFAULT_TOOL_WORKFLOW_INSTRUCTIONS = [
+  "Tool workflow:",
+  "When the active model supports it, call multiple tools in the same turn when their inputs are independent, including multiple calls to the same tool.",
+  "Keep calls sequential when a later input depends on an earlier result or when calls mutate the same resource.",
+].join("\n");
 
 /**
  * Style guardrails appended to every agent's `instructions` to curb
@@ -459,34 +502,36 @@ function resolveStyleInstructions(config: MastraPluginConfig): string | null {
   return DEFAULT_STYLE_INSTRUCTIONS;
 }
 
-/** Append the style block without narrowing Mastra's native instruction shapes. */
-function appendStyleInstructions(
+/** Append shared workflow and style blocks without narrowing Mastra's instruction shapes. */
+function appendDefaultInstructions(
   instructions: AgentInstructions,
   style: string | null,
 ): AgentInstructions {
-  if (!style) return instructions;
+  const suffix = style
+    ? `${DEFAULT_TOOL_WORKFLOW_INSTRUCTIONS}\n\n${style}`
+    : DEFAULT_TOOL_WORKFLOW_INSTRUCTIONS;
   if (typeof instructions === "string") {
-    return `${instructions.trimEnd()}\n\n${style}`;
+    return `${instructions.trimEnd()}\n\n${suffix}`;
   }
   if (Array.isArray(instructions)) {
     if (instructions.every((instruction) => typeof instruction === "string")) {
-      return [...instructions, style] as AgentInstructions;
+      return [...instructions, suffix] as AgentInstructions;
     }
-    return [...instructions, { role: "system", content: style }] as AgentInstructions;
+    return [...instructions, { role: "system", content: suffix }] as AgentInstructions;
   }
-  return [instructions, { role: "system", content: style }] as AgentInstructions;
+  return [instructions, { role: "system", content: suffix }] as AgentInstructions;
 }
 
 /**
- * Compose static or request-context-aware instructions with the shared style
- * policy while preserving Mastra's native generic inference.
+ * Compose static or request-context-aware instructions with shared workflow
+ * and style guidance while preserving Mastra's native generic inference.
  */
 function composeInstructions<TRequestContext extends Record<string, unknown> | unknown>(
   agentInstructions: AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"],
   style: string | null,
 ): AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"] {
   if (typeof agentInstructions !== "function") {
-    return appendStyleInstructions(agentInstructions, style) as AgentConfig<
+    return appendDefaultInstructions(agentInstructions, style) as AgentConfig<
       string,
       ToolsInput,
       undefined,
@@ -494,7 +539,7 @@ function composeInstructions<TRequestContext extends Record<string, unknown> | u
     >["instructions"];
   }
   return (async (args) =>
-    appendStyleInstructions(await agentInstructions(args), style)) as AgentConfig<
+    appendDefaultInstructions(await agentInstructions(args), style)) as AgentConfig<
     string,
     ToolsInput,
     undefined,
@@ -593,7 +638,7 @@ export async function buildAgents(opts: {
     const gated = approvalGatedToolIds(tools);
     if (gated.length > 0) approvalGatedByAgent.push({ agentId: id, toolIds: gated });
     const memory = memoryBuilder?.forAgent(id, def);
-    agents[id] = new Agent({
+    const agent = new Agent({
       id,
       name: def.name ?? id,
       // Always carry a non-empty description: it's surfaced to MCP
@@ -617,6 +662,10 @@ export async function buildAgents(opts: {
       inputProcessors: [...inputProcessors, ...workspaceSkillInputProcessors(workspace, config)],
       outputProcessors: [toolErrorLoggingProcessor(log)],
     });
+    agents[id] =
+      config.backgroundTurns === false
+        ? agent
+        : createBackgroundAgent(agent, config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS);
     // Surface the effective default model per agent so operators can
     // see at a glance which endpoint each agent points at without
     // having to fire a request and inspect a trace. The value is the

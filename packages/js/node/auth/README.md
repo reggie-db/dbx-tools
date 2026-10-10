@@ -6,8 +6,18 @@ Node.js and Bun.
 The package resolves profile configuration, selects PAT, M2M, CLI U2M, App
 service-principal, or App OBO authentication, and coordinates token acquisition
 in process memory. Generated Python bindings can also accept authentication from
-the shared Python runtime. The Node package does not own workspace HTTP APIs or
-construct Databricks SDK clients.
+the shared Python runtime. Use the returned host, token, or headers with the
+workspace client for the capability being called.
+
+## Quick Start
+
+```ts
+import { client } from "@dbx-tools/auth";
+
+const auth = await client.createAuthClient({ profile: "DEFAULT" });
+const headers = await auth.headers();
+await fetch(`${auth.host}/api/2.0/clusters/list`, { headers });
+```
 
 ## Features
 
@@ -25,7 +35,7 @@ CLI-backed U2M requires an available `databricks` executable or an explicit
 `DATABRICKS_CLI_PATH`. The Databricks CLI remains responsible for its own login
 and credential persistence.
 
-## Basic use
+## Client API
 
 ```ts
 import { client, profile } from "@dbx-tools/auth";
@@ -51,28 +61,27 @@ Browser and UI code should import auth-type values, target values, profile
 summaries, profile selections, and client-configuration schemas from
 `@dbx-tools/shared-auth`.
 
-## Consumer-owned clients
+## Use The Credentials In A Client
 
-Capability packages should use the returned `AuthClient` directly:
+Use the returned `AuthClient` directly:
 
 ```ts
 const auth = await client.createAuthClient({ profile: "DEFAULT" });
 const headers = await auth.headers();
 ```
 
-Use those headers in a capability-specific request, or inject the token and host
-into an AppKit or Databricks SDK workspace client. Keep request paths, payloads,
-response parsing, and retry policy in the consuming package.
+Use the headers in an HTTP request, or inject the token and host into an AppKit
+or Databricks SDK workspace client.
 
 ## Public modules
 
-- `client` owns `createAuthClient`, `AuthClient`, access-token results, and
+- `client` exports `createAuthClient`, `AuthClient`, access-token results, and
   token lifecycle operations.
-- `config` owns secret-bearing profile options, lifecycle timing, and canonical
+- `config` exports secret-bearing profile options, lifecycle timing, and canonical
   header names.
-- `profile` owns profile resolution and listing operations.
+- `profile` exports profile resolution and listing operations.
 
-Provider, lifecycle, lock, and storage types are private implementation details.
+Provider, lock, and token-storage internals are not part of the public API.
 
 ## Debug logging
 

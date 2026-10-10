@@ -44,7 +44,7 @@ import "@dbx-tools/ui/email/styles.css";
 ```
 
 Email components consume `@dbx-tools/shared-email` and
-`@dbx-tools/shared-email-template`; they do not own transport or approval policy.
+`@dbx-tools/shared-email-template`; transport and approval remain server concerns.
 
 ## Search
 

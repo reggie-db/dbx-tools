@@ -196,6 +196,11 @@
       "type": "runtime"
     },
     {
+      "name": "ai",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "express",
       "version": "catalog:",
       "type": "runtime"

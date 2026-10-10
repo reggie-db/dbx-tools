@@ -9,7 +9,9 @@ Package READMEs are product guides, not implementation notes. Follow the same
 progression as AppKit documentation:
 
 1. Open with the outcome the package enables and why a user would choose it.
-2. Show the shortest successful path with a runnable example.
+2. Show the shortest successful path with a runnable example within the first
+   20 lines. Put the action before feature lists, architecture, and runtime
+   implementation details.
 3. Organize the rest around user tasks, choices, expected behavior, and limits.
 4. Put module lists and generated API references last.
 
@@ -17,6 +19,11 @@ Prefer headings such as `Quick Start`, `Choose A Target`, `Run As A Service`,
 and `Handle Errors`. Avoid leading with ownership boundaries, internal classes,
 dependency graphs, protocol routing, caches, or build details. Include those
 only when they change how a caller uses or operates the package.
+
+Write for the person using the package. Do not tell them which repository layer
+"owns" a type, which package another contributor should prefer, or where an
+implementation detail belongs. Keep that policy in `AGENTS.md` or an active
+enhancement plan.
 
 Every published package README must have a useful opening summary, at least two
 task-oriented H2 sections, and a runnable fenced example. The docs generator

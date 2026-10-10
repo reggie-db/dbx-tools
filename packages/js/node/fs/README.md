@@ -1,9 +1,19 @@
 # @dbx-tools/fs
 
 Node local-disk `FileSystem` implementation of the `@dbx-tools/shared-fs`
-contract. Built on `BaseFileSystem`, so this package only owns host separator
+contract. Built on `BaseFileSystem`, so this package only implements host separator
 conversion (`toBackendPath`), Node I/O, symlink containment (`preparePath`), and
 errno mapping.
+
+## Quick Start
+
+```ts
+import { LocalFileSystem } from "@dbx-tools/fs";
+
+const files = new LocalFileSystem({ root: "./data" });
+await files.init();
+await files.writeFile("hello.txt", "hi");
+```
 
 Key features:
 
@@ -17,13 +27,13 @@ Key features:
 - Native append / copy / rename via Node when available
 - Cross-process serialization for concurrent rebuilds of the same stable temp tree
 
-## Why Use This Over Native Node fs
+## Use With Native Node fs
 
 Use this when callers should speak the portable `FileSystem` interface (the same
 surface FTP, object storage, or Databricks mounts can implement) rather than
 Node APIs directly. Reach for `node:fs` when you only need one-off local I/O.
 
-## Quick Start
+## Filesystem Helpers
 
 ```ts
 import { LocalFileSystem, localFS } from "@dbx-tools/fs";

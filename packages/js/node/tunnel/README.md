@@ -3,6 +3,25 @@
 Front an app with a public Portr and/or FRP tunnel and the passwordless
 [`@dbx-tools/auth-gate`](../auth-gate) gate, in-process.
 
+## Quick Start
+
+Add an authenticated public FRP endpoint to an AppKit app:
+
+```ts
+import { server } from "@databricks/appkit";
+import { appkit } from "@dbx-tools/appkit";
+import { email } from "@dbx-tools/email";
+import { interceptor, plugin } from "@dbx-tools/tunnel";
+
+const { tunnelInterceptor } = interceptor;
+const { authGate } = plugin;
+
+await appkit.createApp({
+  plugins: [server(), email(), authGate({})],
+  interceptor: tunnelInterceptor({ transport: "frp" }),
+});
+```
+
 Supports the [SSE-enabled Portr fork](https://github.com/reggie-db/portr/releases/tag/v1.0.15-sse.2),
 based on [upstream Portr](https://github.com/amalshaji/portr), plus
 [FRP](https://github.com/fatedier/frp). Use this library
@@ -21,7 +40,7 @@ through, either death tears the pair down). The app is the process; the tunnel
 rides along inside it. Access is granted per email address against an allow-list,
 authenticated by Better Auth email OTP or a passkey; the gate itself is the
 `authGate` AppKit plugin, which registers the login routes and a gating
-middleware on the app's OWN Express server (no separate proxy process).
+middleware on the app's Express server (no separate proxy process).
 
 **Key features:**
 
@@ -98,7 +117,7 @@ middleware on the app's OWN Express server (no separate proxy process).
   cannot send codes locks everyone out. `@dbx-tools/email` is an OPTIONAL peer
   dependency, imported lazily; the app that mounts the gate provides it.
 
-## Why This Over An Ad-Hoc Tunnel
+## Tunnel And Gate Behavior
 
 A bare tunnel (`ngrok`, `portr` on its own) makes the app reachable by anyone
 with the URL. This package keeps the tunnel but puts a gate in front of it,
@@ -107,7 +126,7 @@ reusing what the app already has: AppKit's cache for code storage, the
 Because it rides inside the app's own `createApp`, there is no second process to
 supervise and no wrapper command to thread flags through.
 
-## Run It
+## Full App Configuration
 
 ```ts
 import { appkit } from "@dbx-tools/appkit";
@@ -200,7 +219,7 @@ Resolution order:
 
 3. **An ephemeral per-process key**, when there is no secret and no reachable
    cache. Sessions do not survive a restart, but the gate still serves: the key
-   only validates an ALREADY-issued session, so losing it costs sessions, never
+   only validates an existing session, so losing it costs sessions, never
    admission. A caller still needs a code delivered to an allow-listed address.
 
 The cached key is read, generated-and-stored, then **re-read**. Two instances
@@ -212,7 +231,7 @@ the one it minted. Set `TUNNEL_AUTH_JWT_SECRET` to remove the race entirely.
 purpose - a key that expired before the cookies it signed would sign everyone out
 for no reason.
 
-## Why The Code Is In The Subject
+## Email Code Subject
 
 The subject line the gate SENDS is `123456 is your verification code` -
 `--subject` is the template the code is spliced into, not the literal line.

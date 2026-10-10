@@ -2,23 +2,8 @@
 
 Projen engine for Bun-first dbx-tools workspaces.
 
-Import this package from `.projenrc.ts` when a repository should discover
-packages from the filesystem and generate manifests, tsconfigs,
-barrels, codegen outputs, and release tasks.
-
-Key features:
-
-- Filesystem package discovery: every `src`-bearing folder under configured
-  workspace roots becomes a TypeScript package.
-- Tag-driven runtime defaults for shared libraries, Node packages, CLIs,
-  servers, and React/browser UI packages.
-- Generated package manifests, tsconfigs, package-root barrels, Bun app configs,
-  VS Code settings, and a committed `pnpm-workspace.yaml` retained for
-  Databricks Apps deployment.
-- Extensible mixin system so repositories can add deps, tasks, or generated
-  files based on package predicates.
-- Zod schema generation from `.d.ts` inputs.
-- Read-only generated-file ownership, cleanup, and watch-loop helpers.
+Use it from `.projenrc.ts` to discover packages from the filesystem and generate
+manifests, tsconfigs, barrels, code generation, and release tasks.
 
 ## Define A Workspace Root
 
@@ -33,6 +18,11 @@ const rootProject = new project.DBXToolsNodeProject({
 
 rootProject.synth();
 ```
+
+The project discovers every `src`-bearing folder under the configured roots and
+applies defaults for shared libraries, Node packages, CLIs, servers, and React
+packages. It can also generate Zod schemas from declarations and coordinate
+generated-file cleanup and watch tasks.
 
 Every `src`-bearing folder under the configured roots becomes a
 `DBXToolsTypeScriptProject`. Folder path drives package name and runtime tags.

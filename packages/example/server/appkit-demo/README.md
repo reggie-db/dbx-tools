@@ -5,6 +5,24 @@ the plugins, and one shared definition factory creates the Agent Mode and pollin
 analyst agents. Supporting modules
 handle the topic bus, static delivery, deployment staging, and shared types.
 
+## Quick Start
+
+The demo server is one AppKit plugin list:
+
+```ts
+await appkit.createApp({
+  plugins: [
+    server({ host, staticPath: clientDist }),
+    genie(),
+    lakebase(),
+    graphiti(),
+    email(),
+    teams(),
+    mastra({ agents: { support, "support-polling": supportPolling } }),
+  ],
+});
+```
+
 ## What it wires
 
 - `appkit.createApp` from [`@dbx-tools/appkit`](../../../js/node/appkit) —

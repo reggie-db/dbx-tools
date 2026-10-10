@@ -51,3 +51,30 @@
   --font-sans: var(--brand-font-sans);
   --font-mono: var(--brand-font-mono);
 }
+
+/*
+ * Brand identity colors also need a dark-surface expression. The default navy
+ * is an excellent light-theme primary but has insufficient contrast against
+ * AppKit's near-black background when used for text, focus, progress, or icon
+ * states. Mix the interactive blue toward the active theme foreground so the
+ * same brand remains recognizable while remaining readable in dark mode.
+ */
+:root.dark[data-brand] {
+  --primary: color-mix(in oklab, var(--brand-color-primary-hover) 58%, var(--foreground));
+  --primary-foreground: var(--background);
+  --ring: var(--primary);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--background);
+  --sidebar-ring: var(--primary);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-brand]:not(.light) {
+    --primary: color-mix(in oklab, var(--brand-color-primary-hover) 58%, var(--foreground));
+    --primary-foreground: var(--background);
+    --ring: var(--primary);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--background);
+    --sidebar-ring: var(--primary);
+  }
+}

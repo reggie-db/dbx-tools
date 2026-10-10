@@ -10,9 +10,27 @@ queries. Add this package when an agent needs `search` /
 deployment needs the same AppKit query contract backed by PostgreSQL full-text
 search instead of Vector Search.
 
+## Quick Start
+
+Add the extension around an existing AppKit AI Search index:
+
+```ts
+import { createApp, server } from "@databricks/appkit";
+import { aiSearch } from "@databricks/appkit/beta";
+import { search } from "@dbx-tools/search";
+
+await createApp({
+  plugins: [
+    server(),
+    aiSearch({ indexes: { docs: { indexName: "main.support.docs" } } }),
+    search({ index: "main.support.docs" }),
+  ],
+});
+```
+
 **Key features:**
 
-- Vector Search reads delegate to AppKit `aiSearch`, which owns OBO execution,
+- Vector Search reads delegate to AppKit `aiSearch`, which handles OBO execution,
   caching, reranking, pagination, route validation, and response decoding.
 - `lakebaseAiSearch()` implements the same `aiSearch` alias, route,
   client-config, and `SearchResponse` contract with PostgreSQL `tsvector`.
@@ -47,7 +65,7 @@ search instead of Vector Search.
   instead of native `aiSearch` to serve the same aliases, query routes, filters,
   and result shape from a Postgres `tsvector` index.
 
-## Why Use This Over Native AppKit
+## Use With Native AppKit
 
 Do not use this package instead of native AppKit for ordinary Vector Search
 queries. Register `aiSearch` from `@databricks/appkit/beta`.
@@ -56,7 +74,7 @@ Use this package for capabilities AppKit does not ship: agent tool providers,
 federated fan-out, index lifecycle and seeding, reusable result components, or
 the Lakebase full-text implementation of the AppKit AI Search contract.
 
-## Quick Start
+## Add Search To A Mastra Agent
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
@@ -91,7 +109,8 @@ await createApp({
 });
 ```
 
-Every `search()` plugin owns its resolved config, client, and provider backend.
+Every `search()` plugin keeps its resolved config, client, and provider backend
+separate.
 App-integrated agents should consume its native toolkit as shown above, which
 keeps calls attached to that exact plugin. Standalone Mastra factories accept an
 explicit runtime, or config plus a provider:
@@ -154,7 +173,7 @@ await client.ensureIndex("main.support.docs", {
 await client.syncIndex("main.support.docs");
 await client.deleteIndex("main.support.docs");
 
-// Managed direct-access index (the lightest REAL index): Databricks embeds a
+// Managed direct-access index: Databricks embeds a
 // text column on write AND query, so no Delta table, no warehouse, no vectors.
 await client.createIndex("main.support.docs", {
   endpoint: "my-vs-endpoint",

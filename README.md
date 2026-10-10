@@ -6,13 +6,28 @@ reference, guides, and API docs.
 Companion packages for Databricks developers building Databricks Apps, AppKit
 backends, Mastra agents, Genie workflows, and Model Serving integrations.
 
-`dbx-tools` fills gaps around Databricks-provided packages that are often
-low-level: missing sensible defaults, requiring repeated setup code, or
-making common app patterns more cumbersome than they need to be. The packages in
-this repo add opinionated defaults, shared schemas, AppKit plugins, UI helpers,
-and local developer tools while staying close to Databricks' own APIs.
+`dbx-tools` adds Mastra agents, model routing, Genie tools, search, email,
+Teams, Graphiti memory, tunnels, and reusable React surfaces to AppKit apps.
 
-## Relationship To Native AppKit
+## Add A Sandboxed Agent
+
+```ts
+import { createApp, server } from "@databricks/appkit";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
+
+const analyst = agents.createAgent({
+  instructions: "Answer questions and use Python for analysis.",
+});
+
+await createApp({
+  plugins: [server(), mastra({ agents: { analyst }, sandbox: "databricks" })],
+});
+```
+
+Add Lakebase, Genie, Analytics, or other AppKit plugins when the agent needs
+durable threads or workspace tools.
+
+## Use With Native AppKit
 
 Use native AppKit first when it already gives you the exact surface you need.
 AppKit has strong built-in plugins for Analytics, Genie, Files, Lakebase, Model
@@ -110,7 +125,7 @@ app:
   region, public IPs, Zerobus endpoints, and Databricks SDK cancellation without
   binding every package to AppKit.
 
-## Quick Start
+## Repository Setup And Full Example
 
 Install dependencies and type-check the workspace:
 

@@ -258,6 +258,8 @@ export const AssistantMarkdown = ({
     isAnimating={animate}
     className={cn(
       "prose prose-sm dark:prose-invert max-w-none break-words",
+      "leading-relaxed prose-p:my-1.5 prose-p:leading-relaxed",
+      "prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5",
       "prose-headings:font-semibold prose-headings:tracking-tight",
       "prose-h1:text-lg prose-h1:mt-4 prose-h1:mb-2",
       "prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2",
@@ -288,13 +290,13 @@ export const ToolMarkdown = ({ children }: { children: string }) => (
     controls={false}
     className={cn(
       "prose prose-sm dark:prose-invert max-w-none break-words",
-      "text-[11px] leading-snug text-muted-foreground",
+      "text-xs leading-snug text-muted-foreground",
       "prose-p:my-0.5 prose-p:leading-snug",
       "prose-ul:my-0.5 prose-ul:pl-4 prose-ol:my-0.5 prose-ol:pl-4",
       "prose-li:my-0 prose-li:leading-snug prose-li:marker:text-muted-foreground/60",
       "prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold",
       "prose-strong:text-foreground/90 prose-strong:font-medium",
-      "prose-code:text-[10px] prose-code:font-medium",
+      "prose-code:text-xs prose-code:font-medium",
     )}
   >
     {children}
@@ -384,11 +386,11 @@ export const SqlBlock = ({ sql }: { sql: string }) => {
         value={formatted}
         className="absolute right-1.5 top-1.5 z-10 bg-background/70 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
       />
-      <pre className="max-w-full overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-[11px] leading-relaxed">
+      <pre className="max-w-full overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
         {html === null ? (
           <code>{formatted}</code>
         ) : (
-          <code dangerouslySetInnerHTML={{ __html: html }} />
+          <code data-dbx-highlighted-code dangerouslySetInnerHTML={{ __html: html }} />
         )}
       </pre>
     </div>
@@ -404,11 +406,15 @@ export const JsonBlock = ({ json, className }: { json: string; className?: strin
   return (
     <pre
       className={cn(
-        "max-w-full overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed",
+        "max-w-full overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed",
         className,
       )}
     >
-      {html === null ? <code>{json}</code> : <code dangerouslySetInnerHTML={{ __html: html }} />}
+      {html === null ? (
+        <code>{json}</code>
+      ) : (
+        <code data-dbx-highlighted-code dangerouslySetInnerHTML={{ __html: html }} />
+      )}
     </pre>
   );
 };

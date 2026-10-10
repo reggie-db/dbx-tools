@@ -199,6 +199,12 @@ export interface MastraMcpConfig {
 
 /** Configuration accepted by the Mastra AppKit plugin. */
 export interface MastraPluginConfig extends BasePluginConfig {
+  /**
+   * Run turns through Mastra's evented durable agent so execution continues
+   * after a browser disconnect and can be observed again by run id. Defaults
+   * to `true`.
+   */
+  backgroundTurns?: boolean;
   /** Mastra OpenAI-compatible provider id. Defaults to `"databricks"`; no env fallback. */
   providerId?: string;
   /**
@@ -641,6 +647,11 @@ export interface MastraPluginConfig extends BasePluginConfig {
 export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
   type: "object",
   properties: {
+    backgroundTurns: {
+      type: "boolean",
+      description:
+        "Run turns through Mastra evented durable execution so they continue after browser disconnects and remain reconnectable by run id. Defaults to true.",
+    },
     providerId: {
       type: "string",
       description: 'Mastra OpenAI-compatible provider id. Defaults to "databricks".',

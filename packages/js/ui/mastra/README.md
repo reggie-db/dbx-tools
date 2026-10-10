@@ -2,11 +2,21 @@
 
 React chat UI for the AppKit-Mastra plugin.
 
-Import this package when a Databricks App needs a production-ready chat surface
-for [`@dbx-tools/appkit-mastra`](../../node/appkit-mastra): streaming
-assistant responses, model selection, Genie progress events, inline charts/data
-tables, tool approvals, conversation history, thread management, export, and
-MLflow feedback.
+Add a complete chat surface for
+[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra), including streaming,
+model selection, Genie progress, charts, tables, approvals, history, threads,
+export, and MLflow feedback.
+
+## Quick Start
+
+```tsx
+import { MastraChat } from "@dbx-tools/ui-mastra/react";
+import "@dbx-tools/ui-mastra/styles.css";
+
+export function Assistant() {
+  return <MastraChat showModelPicker enableExport />;
+}
+```
 
 Key features:
 
@@ -47,7 +57,7 @@ Key features:
 - Export menu for PDF and Markdown, resolving charts and tables so
   exported conversations remain useful offline.
 
-## Why Not Just AppKit UI?
+## Choose This UI Or AppKit UI
 
 Use native `@databricks/appkit-ui` when you need its general primitives, Genie
 chat component, or Model Serving hooks directly against native AppKit plugins.
@@ -69,7 +79,7 @@ understand Mastra-specific behavior:
   has no steering.
 - Conversation export that resolves those embeds into Markdown or PDF.
 
-## Add The Styles
+## Stylesheet Setup
 
 ```css
 @import "@databricks/appkit-ui/styles.css";

@@ -9,6 +9,7 @@ import type { FilesCacheExports } from "@dbx-tools/appkit/files-cache";
 import { log } from "@dbx-tools/shared-core";
 import { MemoryFileSystem, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
 import { RequestContext } from "@mastra/core/request-context";
+import { isEventedAgent } from "@mastra/core/agent/durable";
 import { resolveToolConfig, WORKSPACE_TOOLS, type WorkspaceSandbox } from "@mastra/core/workspace";
 
 import { buildAgents } from "../src/agents.ts";
@@ -392,23 +393,19 @@ describe("databricksWorkspace skill source identity", () => {
       undefined,
     );
     assert.equal(
-      typeof workspace.getToolsConfig()?.[WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]?.requireApproval,
-      "function",
+      workspace.getToolsConfig()?.[WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]?.requireApproval,
+      undefined,
     );
-    const readApproval = (
-      await resolveToolConfig(workspace.getToolsConfig(), WORKSPACE_TOOLS.FILESYSTEM.READ_FILE)
-    ).requireApproval;
-    assert.equal(readApproval, false);
-    if (typeof readApproval === "function") {
-      assert.equal(
-        await readApproval({
-          args: { path: "/personal-skills/computer-jokes/SKILL.md" },
-          requestContext: {},
-          workspace,
-        }),
-        false,
-      );
-    }
+    assert.equal(
+      (await resolveToolConfig(workspace.getToolsConfig(), WORKSPACE_TOOLS.FILESYSTEM.READ_FILE))
+        .requireApproval,
+      false,
+    );
+    assert.equal(
+      (await resolveToolConfig(workspace.getToolsConfig(), WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE))
+        .requireApproval,
+      false,
+    );
   });
 
   it("wraps Databricks skill sources with the AppKit-global files cache", async () => {
@@ -675,61 +672,68 @@ describe("databricksWorkspace skill source identity", () => {
     );
   });
 
-  it("requires approval for filesystem mutations outside user-owned writable roots", async () => {
-    const workspace = databricksWorkspace({ assistantPaths: false, sandbox: false });
-    const mutationTools = [
+  it("enables workspace tools without approval by default", async () => {
+    const workspace = databricksWorkspace({ assistantPaths: false });
+    const defaultTools = [
+      WORKSPACE_TOOLS.FILESYSTEM.READ_FILE,
       WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
       WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE,
       WORKSPACE_TOOLS.FILESYSTEM.AST_EDIT,
       WORKSPACE_TOOLS.FILESYSTEM.DELETE,
       WORKSPACE_TOOLS.FILESYSTEM.MKDIR,
+      WORKSPACE_TOOLS.SANDBOX.EXECUTE_COMMAND,
     ] as const;
-    const requestContext = {
-      [MASTRA_USER_EMAIL_KEY]: "user@example.com",
-    };
 
-    for (const tool of mutationTools) {
+    assert.equal(workspace.getToolsConfig()?.enabled, true);
+    assert.equal(workspace.getToolsConfig()?.requireApproval, false);
+    for (const tool of defaultTools) {
       const config = await resolveToolConfig(workspace.getToolsConfig(), tool);
-      assert.equal(typeof config.requireApproval, "function");
-      if (typeof config.requireApproval !== "function") continue;
-      assert.equal(
-        await config.requireApproval({
-          args: { path: "/Workspace/Users/user@example.com/.assistant/skills/example/SKILL.md" },
-          requestContext,
-          workspace,
-        }),
-        false,
-      );
-      assert.equal(
-        await config.requireApproval({
-          args: { path: "/Workspace/.assistant/skills/shared/SKILL.md" },
-          requestContext,
-          workspace,
-        }),
-        true,
-      );
-      assert.equal(
-        await config.requireApproval({
-          args: { path: "/tmp/note.txt" },
-          requestContext,
-          workspace,
-        }),
-        false,
-      );
-      assert.equal(
-        await config.requireApproval({
-          args: { path: "/Workspace/Users/user@example.com/note.txt" },
-          requestContext: {},
-          workspace,
-        }),
-        true,
-      );
+      assert.equal(config.enabled, true);
+      assert.equal(config.requireApproval, false);
     }
   });
-
 });
 
 describe("agent workspace selection", () => {
+  it("uses evented durable agents by default with an explicit opt-out", async () => {
+    const durable = await buildAgents({
+      config: { agents: { analyst: { instructions: "Answer directly." } } },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+    const attached = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        agents: { analyst: { instructions: "Answer directly." } },
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    assert.equal(isEventedAgent(durable.agents.analyst), true);
+    assert.equal(isEventedAgent(attached.agents.analyst), false);
+  });
+
+  it("tells agents to batch independent tool calls", async () => {
+    const built = await buildAgents({
+      config: {
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const instructions = await built.agents.analyst?.getInstructions();
+    assert.equal(typeof instructions, "string");
+    assert.match(instructions, /call multiple tools in the same turn/i);
+    assert.match(instructions, /later input depends on an earlier result/i);
+  });
+
   it("binds an explicit Databricks workspace to the AppKit plugin context", async () => {
     const workspace = databricksWorkspace({
       assistantPaths: false,

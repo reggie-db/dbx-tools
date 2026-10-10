@@ -42,7 +42,7 @@ error response when one was returned.
 
 ## Validate Gateway Payloads
 
-Use the exported Zod schemas when another transport owns the HTTP request:
+Use the exported Zod schemas with another HTTP transport:
 
 ```ts
 import { ModelListResponseSchema } from "@dbx-tools/shared-model-gateway";
@@ -56,7 +56,7 @@ route-selection inputs and results.
 
 ## Configure The Gateway
 
-`ModelGatewayOptionsSchema` owns server defaults and validation. The derived
+`ModelGatewayOptionsSchema` defines server defaults and validation. The derived
 `ModelGatewayCliOptionsSchema` adds `runtimeInfo` and requires a non-zero port
 for foreground and service commands:
 
@@ -75,7 +75,7 @@ const options = resolveModelGatewayOptions({
 ModelGatewayOptionsSchema.parse(options);
 ```
 
-`ModelSelectionOptionsSchema` owns the mutually exclusive `model` and
+`ModelSelectionOptionsSchema` defines the mutually exclusive `model` and
 `modelClass` fields shared by model-gateway and Genie Code callers. Omit both to
 select the best available chat model.
 

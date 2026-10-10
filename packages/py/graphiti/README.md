@@ -1,15 +1,8 @@
 # `dbx-tools-graphiti`
 
 Run Graphiti REST, MCP, model routing, and PostgreSQL-backed graph memory from
-one Python runtime. The build synchronizes the upstream REST and MCP source at
-pinned commits. The PostGraph driver derived from Graphiti PR 1777 is maintained
-as attributed package source, so the published wheel has no direct Git
-dependencies.
-
-Both upstream surfaces come from the same Graphiti commit:
-
-- `graph-service` from `server/`
-- `mcp-server` from `mcp_server/`
+one Python runtime. It can use embedded PostgreSQL for local persistence or an
+external PostgreSQL/Lakebase database.
 
 ## Run
 

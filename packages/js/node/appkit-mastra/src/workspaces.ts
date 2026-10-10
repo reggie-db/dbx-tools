@@ -38,15 +38,12 @@ import {
 } from "@dbx-tools/shared-fs";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
-  WORKSPACE_TOOLS,
   Workspace,
   type SkillsResolver,
-  type ToolConfigWithArgsContext,
   type WorkspaceConfig,
   type WorkspaceFilesystem,
   type WorkspaceSandbox,
   type WorkspaceSandboxResolver,
-  type WorkspaceToolConfig,
   type WorkspaceToolsConfig,
 } from "@mastra/core/workspace";
 
@@ -396,48 +393,14 @@ export function resolveDatabricksWorkspacePaths(
 
 /* ---------------------------- private helpers ---------------------------- */
 
-/** Require approval unless a filesystem mutation stays inside a user-owned writable root. */
-function requireApprovalOutsideWritableRoots({
-  args,
-  requestContext,
-}: ToolConfigWithArgsContext): boolean {
-  const inputPath = args.path;
-  if (typeof inputPath !== "string" || !posixPath.isAbsolute(inputPath)) return true;
-  const normalized = posixPath.normalize(inputPath);
-  if (!normalized.ok) return true;
-  if (posixPath.isWithinRoot(SCRATCH_MOUNT, normalized.path)) return false;
-  const emailValue = requestContext[MASTRA_USER_EMAIL_KEY];
-  const email = typeof emailValue === "string" ? stringUtils.trimToNull(emailValue) : undefined;
-  if (!email) return true;
-  return !posixPath.isWithinRoot(personalWorkspacePath(email), normalized.path);
-}
-
 function workspaceTools(configured: WorkspaceToolsConfig | undefined): WorkspaceToolsConfig {
-  const requireApproval: WorkspaceToolConfig =
-    configured?.requireApproval === undefined
-      ? { requireApproval: requireApprovalOutsideWritableRoots }
-      : {};
-  const defaults = {
-    [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]: requireApproval,
-    [WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE]: requireApproval,
-    [WORKSPACE_TOOLS.FILESYSTEM.AST_EDIT]: requireApproval,
-    [WORKSPACE_TOOLS.FILESYSTEM.DELETE]: requireApproval,
-    [WORKSPACE_TOOLS.FILESYSTEM.MKDIR]: requireApproval,
-  } satisfies WorkspaceToolsConfig;
-  const configuredTools = configured as
-    Readonly<Record<string, WorkspaceToolConfig | undefined>> | undefined;
-  const mergedTools = Object.fromEntries(
-    Object.entries(defaults).map(([name, defaultConfig]) => [
-      name,
-      { ...defaultConfig, ...configuredTools?.[name] },
-    ]),
-  );
   return {
-    ...defaults,
+    enabled: true,
+    requireApproval: false,
     ...configured,
-    ...mergedTools,
   };
 }
+
 function resolveWorkspaceSandbox(
   selection: WorkspaceSandboxSelection | undefined,
   workspaceId: string,

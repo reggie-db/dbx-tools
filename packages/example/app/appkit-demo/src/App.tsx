@@ -12,6 +12,42 @@ const Cards = lazy(() => import("@/pages/Cards"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Search = lazy(() => import("@/pages/Search"));
 
+const useVisualViewportShell = () => {
+  useEffect(() => {
+    const root = document.getElementById("root");
+    const viewport = window.visualViewport;
+    if (!root || !viewport) return;
+
+    let animationFrame = 0;
+    let settleTimer = 0;
+    const commit = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        root.style.setProperty("--demo-visual-viewport-height", `${viewport.height}px`);
+        root.style.setProperty("--demo-visual-viewport-top", `${viewport.offsetTop}px`);
+      });
+    };
+    const schedule = () => {
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(commit, 100);
+    };
+
+    commit();
+    viewport.addEventListener("resize", schedule);
+    viewport.addEventListener("scroll", schedule);
+    viewport.addEventListener("scrollend", commit);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(settleTimer);
+      viewport.removeEventListener("resize", schedule);
+      viewport.removeEventListener("scroll", schedule);
+      viewport.removeEventListener("scrollend", commit);
+      root.style.removeProperty("--demo-visual-viewport-height");
+      root.style.removeProperty("--demo-visual-viewport-top");
+    };
+  }, []);
+};
+
 // Real browser routes keep deep links refreshable while lazy page modules ensure
 // each feature's dependencies load only when that route is selected. AppKit's
 // dev and static servers SPA-fallback non-API paths to index.html.
@@ -82,10 +118,10 @@ const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
   }, [loggingOut, logoutEnabled]);
 
   return (
-    <nav className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2 md:px-6">
+    <nav className="demo-nav mx-auto flex max-w-6xl items-center gap-2 px-2 py-2 sm:px-4 md:px-6">
       <Link to="/brand" className="mr-1 flex shrink-0 items-center gap-2 text-sm font-semibold">
         <BrandIcon className="size-6" />
-        <span>{context.shortName}</span>
+        <span className="hidden sm:inline">{context.shortName}</span>
       </Link>
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         {routes.map((route) => (
@@ -152,11 +188,11 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
       icon={<BrandIcon className="size-4" />}
       launcher={false}
       chat={{ showModelPicker: true, enableExport: true, threadPlacement: "top" }}
-      className="h-dvh"
+      className="h-full"
     >
       <div className="flex h-full flex-col">
         <AssistantRouteContext />
-        <header>
+        <header className="demo-header shrink-0">
           <Nav routes={routes} />
           <Separator />
         </header>
@@ -183,6 +219,7 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
 };
 
 const App = () => {
+  useVisualViewportShell();
   const [brandContext, setBrandContext] = useState(brandUtils.defaultBrandContext);
   const routes: RouteDef[] = [
     ...BASE_ROUTES,

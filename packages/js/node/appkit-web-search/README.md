@@ -2,14 +2,33 @@
 
 Server-side web-search runtime, Mastra tools, and AppKit plugin.
 
-Import this package when an AppKit or Mastra backend needs to search the web and
-read pages. `web_search` runs on the
+Add `web_search` and `web_fetch` to an AppKit or Mastra backend. `web_search`
+runs on the
 [Databricks Model Serving native web-search tool](https://docs.databricks.com/aws/en/machine-learning/model-serving/web-search):
 the model searches the web server-side and returns a synthesized answer plus the
 sources it used - no third-party search API key. `web_fetch` reads a single page
-through [`got-scraping`](https://www.npmjs.com/package/got-scraping) (browser-like
-TLS + header fingerprints so a fetch survives common bot walls), which Databricks
-has no equivalent for.
+through [`got-scraping`](https://www.npmjs.com/package/got-scraping).
+
+## Quick Start
+
+Register the plugin and give its tools to an agent:
+
+```ts
+import { createApp, server } from "@databricks/appkit";
+import { webSearch } from "@dbx-tools/appkit-web-search";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
+
+const researcher = agents.createAgent({
+  instructions: "Search the web, then read the most relevant sources.",
+  async tools(plugins) {
+    return { ...(await plugins["web-search"].toolkit()) };
+  },
+});
+
+await createApp({
+  plugins: [server(), webSearch(), mastra({ agents: { researcher } })],
+});
+```
 
 **Key features:**
 
@@ -17,7 +36,7 @@ has no equivalent for.
 - Two Mastra tools: `web_search` (answer + citations) and `web_fetch` (page
   contents as readable text or raw HTML), plus the same pair as AppKit agent
   tools through the plugin's `ToolProvider`.
-- `web_search` resolves its OWN web-search-capable model - defaulting to Gemini,
+- `web_search` resolves a dedicated web-search-capable model - defaulting to Gemini,
   then GPT - independently of the calling agent's chat model (which may not
   support web search). Loose names (`"gemini"`, `"gpt"`) fuzzy-match the live
   catalogue via [`@dbx-tools/model`](../model).
@@ -33,12 +52,12 @@ has no equivalent for.
   whose URL matches a pattern, mapped onto Mastra's `requireApproval`.
 - Every outbound call runs through AppKit's `execute()` chain - per-user cache,
   retry with jittered backoff, timeout, telemetry - and unwinds on an
-  `AbortSignal`. Each plugin instance owns its policy and executor, so multiple
+  `AbortSignal`. Each plugin instance keeps its policy and executor separate, so multiple
   apps in one process remain isolated.
 - Page and fallback-result HTML use parser-backed text conversion and selectors,
   including complete HTML entity decoding and malformed-markup recovery.
 
-## Why Use This Over Native AppKit
+## Use With Native AppKit
 
 AppKit has no first-party web-search or page-fetch surface. Use this package when
 an agent needs to look things up on the open web or read a URL the user pasted,
@@ -49,7 +68,7 @@ running on any chat model (including one without web search) can still search. I
 is a thin add-on in the same shape as [`@dbx-tools/email`](../email): a Mastra
 tool pair plus an AppKit plugin.
 
-## Register The AppKit Plugin
+## Configure The AppKit Plugin
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";
@@ -77,7 +96,7 @@ await createApp({
 ```
 
 `plugin.webSearch()` resolves config (over env), compiles the URL policy, and
-owns the executor used by its tools. App-integrated Mastra agents should consume
+provides the executor used by its tools. App-integrated Mastra agents can consume
 the native plugin toolkit as shown above, which preserves that plugin's policy,
 OBO scope, and AppKit execution chain. Approval, when enabled, requires Mastra
 storage, so register `lakebase()` or configure storage in the Mastra plugin.

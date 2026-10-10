@@ -3,14 +3,15 @@
 Run PythonMonkey-based packages in managed Python environments that do not
 provide system Node.js or npm.
 
-`pythonmonkey` depends on `pminit`, whose wheel build executes npm inside pip's
-isolated build environment. `nodejs-wheel` exposes Python console launchers,
-but those launchers cannot import `nodejs_wheel` from that isolated process.
-On first use, this package installs the locked runtime into the active Python
-environment. It reuses npm when npm is already on `PATH`. Otherwise it installs
-`nodejs-wheel>=22.20,<23` into the active environment and creates direct shell
-launchers to the packaged Node binary and npm CLI. It then installs
-`pythonmonkey==1.3.2` normally so `pminit` can build with those launchers.
+## Quick Start
+
+```python
+%pip install dbx-tools-node-runtime
+```
+
+On first use, the package installs the locked PythonMonkey runtime into the
+active Python environment. It reuses npm when available; otherwise it installs
+`nodejs-wheel>=22.20,<23` and uses the packaged Node and npm executables.
 
 An existing npm executable or installed `nodejs-wheel` package is reused without
 enforcing an exact Node wheel version. The range applies only when the runtime
@@ -22,7 +23,7 @@ environment instead of installing a second copy. The lock files contain no
 runtime packages. Set `DBX_TOOLS_NODE_RUNTIME_LOCK_DIRECTORY` only when the
 default per-user lock directory is unsuitable.
 
-## Install and run
+## Runtime Installation
 
 Install the package normally:
 
@@ -55,7 +56,7 @@ generated Node auth bindings. Empty auth options use that runtime credential
 source automatically. Explicit profiles, hosts, and credentials continue
 through the normal Node auth providers.
 
-The package also owns a shared PythonMonkey host under `shims/`. A shim path
+The shared PythonMonkey host lives under `shims/`. A shim path
 encodes its specifier: `___` becomes `:`, `__` becomes `/`, and every other
 character stays as written (`node___fs__promises.ts` becomes `node:fs/promises`).
 Files whose derived name has no scheme, including `bootstrap.ts`, are support
@@ -85,6 +86,4 @@ bun run python-node-runtime:watch
 ```
 
 `bun run sync --watch` supervises `python-node-runtime:watch` with the shared
-Python binding, barrel, and Projen configuration watchers. Projen owns only this
-task lifecycle; the builder, shims, generated runtime, lazy installation, and
-PythonMonkey loading remain in this package.
+Python binding, barrel, and Projen configuration watchers.

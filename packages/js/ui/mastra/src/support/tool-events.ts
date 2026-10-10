@@ -32,7 +32,7 @@ export function genieReasoningText(events: ToolEvent[]): string {
       if (text) sections.push(text);
     }
   }
-  return sections.join("\n\n");
+  return sections.join("\n");
 }
 
 /** Drop markdown table rows so query samples never land in Thoughts. */
@@ -78,21 +78,33 @@ export function toolEventsFromParts(parts: UIMessage["parts"]): ToolEvent[] {
 export function mergeToolEvents(
   persisted: ToolEvent[],
   live: ToolEvent[] | undefined,
-  terminalError = false,
+  terminalState?: "done" | "error",
 ): ToolEvent[] {
   const merged = new Map(persisted.map((event) => [event.id, event]));
   for (const event of live ?? []) {
     const prior = merged.get(event.id);
-    merged.set(event.id, prior ? { ...prior, ...event } : event);
+    merged.set(
+      event.id,
+      prior
+        ? {
+            ...prior,
+            ...event,
+            status: prior.status === "running" ? event.status : prior.status,
+            ...(prior.output !== undefined ? { output: prior.output } : {}),
+          }
+        : event,
+    );
   }
   const events = [...merged.values()];
-  if (!terminalError) return events;
+  if (!terminalState) return events;
   return events.map((event) =>
     event.status === "running"
       ? {
           ...event,
-          status: "error",
-          output: { error: "The assistant stream ended before this tool returned." },
+          status: terminalState,
+          ...(terminalState === "error"
+            ? { output: { error: "The assistant stream ended before this tool returned." } }
+            : {}),
         }
       : event,
   );

@@ -2,8 +2,19 @@
 
 Databricks workspace, filesystem, cloud, and network utilities.
 
-Import this package when backend code needs workspace URL/id discovery, cloud
-provider/region lookup, DNS resolution, or public-IP discovery.
+Use these helpers for Databricks workspace identity, filesystem access, cloud
+and region lookup, DNS resolution, and public IP discovery.
+
+## Quick Start
+
+Read and write a Unity Catalog volume through the shared filesystem API:
+
+```ts
+import { DatabricksFileSystem } from "@dbx-tools/databricks";
+
+const files = new DatabricksFileSystem({ root: "main.default.assets" });
+await files.writeFile("reports/latest.txt", "ready");
+```
 
 Key features:
 
@@ -27,7 +38,7 @@ Use this package when code needs Databricks filesystem root normalization,
 cloud region discovery, network helpers, or workspace identity fallbacks
 outside an AppKit request.
 
-## Databricks filesystem
+## Filesystem Targets
 
 ```ts
 import { DatabricksFileSystem } from "@dbx-tools/databricks";

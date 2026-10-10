@@ -2,20 +2,8 @@
 
 Browser-safe email sending schemas and inferred types.
 
-Import this package when a UI, Mastra tool schema, server route, or test needs
-to validate the same email payloads that
-[`@dbx-tools/email`](../../node/email) sends.
-
-Key features:
-
-- Shared `EmailMessage` contract for generated email drafts and direct sends.
-- Attachment schema that supports inline content, file paths, URLs, encoding,
-  and content-type hints.
-- Send-result schema for SMTP and outbox responses.
-- Sender-options schema for AppKit routes that expose allowed `From` values to
-  a browser client.
-- Model/tool-friendly schemas that avoid JSON Schema constraints known to cause
-  problems with some serving endpoints.
+Use these schemas in UIs, Mastra tools, routes, and tests that exchange email
+payloads with [`@dbx-tools/email`](../../node/email).
 
 ## Validate A Drafted Message
 
@@ -33,6 +21,9 @@ const message: EmailMessage = email.emailMessageSchema.parse({
 The message schema covers recipients, subject, body content, and attachments.
 Attachments can carry inline content, a local path, a URL, encoding metadata, and
 content type hints.
+
+The package also includes send-result and sender-option schemas for routes,
+approval UIs, and tests.
 
 ## Validate Send Results
 

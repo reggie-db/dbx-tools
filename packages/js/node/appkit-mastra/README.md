@@ -3,43 +3,35 @@
 AppKit plugin and server-side toolkit for hosting Mastra agents inside a
 Databricks App.
 
-Import this package when an AppKit backend needs an agent service with
-Databricks on-behalf-of auth, optional Lakebase-backed memory, Databricks Genie
-tools, model selection, chart/data embeds, MLflow feedback, and MCP exposure.
-The package mounts the standard Mastra agent stream under the AppKit server, so
-clients can use Mastra-compatible chat transports instead of a custom protocol.
+The plugin mounts Mastra's streaming routes in an AppKit server and adds
+Databricks authentication, Lakebase-backed memory, Genie tools, model selection,
+chart and table embeds, MLflow feedback, and MCP exposure.
 
-Key features:
+## Quick Start
 
-- AppKit plugin lifecycle integration: routes, setup, shutdown, sibling plugin
-  access, and AppKit request context are handled inside `mastra()`.
-- Agent composition: define one or more Mastra agents, give each one local tools,
-  AppKit plugin toolkits, workspace skills, model defaults, and approval-gated
-  tools.
-- Databricks execution model: tool calls run with the active AppKit OBO client
-  where available, while storage and background work use service-principal
-  connections. Set `genieIdentity: "service-principal"` to run the agents'
-  Databricks calls as the app service principal instead, so callers who can open
-  the app but are not workspace members can still chat, or `"auto"` to make that
-  fallback per-request - OBO when the caller forwards a token, service principal
-  when they cannot.
-- Durable conversations: Lakebase-backed Mastra storage provides thread
-  history, message persistence, and optional vector memory.
-- Isolated command execution: auto-created workspaces use Databricks Sandbox by
-  default, created lazily per attributed user outside the App container.
-- Rich data answers: Genie tools, statement fetches, chart preparation, and
-  embed markers let an agent answer with text plus delayed chart/table payloads.
-- Operational surfaces: model-list routes, feedback routes, MCP exposure,
-  scoped API gating, tracing, and MLflow feedback are bundled with the plugin.
+Add an agent and run its command tools in a per-user Databricks Sandbox:
 
-## Why Not Just AppKit Agents?
+```ts
+import { createApp, server } from "@databricks/appkit";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
 
-Native AppKit includes a beta Agents plugin with markdown and TypeScript agent
-definitions, AppKit tool-provider integration, streaming chat, thread
-management, cancellation, and HITL approval. Use it when you want the AppKit
-agent model and do not need a separate agent framework.
+const analyst = agents.createAgent({
+  instructions: "Answer questions and use Python when analysis requires it.",
+});
 
-Use this package when you specifically want Mastra inside AppKit:
+await createApp({
+  plugins: [server(), mastra({ agents: { analyst }, sandbox: "databricks" })],
+});
+```
+
+Add Lakebase, Genie, Analytics, or other AppKit plugins when the agent needs
+durable threads or workspace tools.
+
+## Choose Mastra Or AppKit Agents
+
+Native AppKit Agents is the shorter path for AppKit-native agent definitions,
+streaming chat, threads, cancellation, and approvals. Choose this package when
+the application already uses Mastra or needs Mastra-specific capabilities:
 
 - Mastra's larger plugin/tool ecosystem, MCP support, memory/storage model,
   workflow primitives, and `@mastra/client-js` stream shape.
@@ -53,7 +45,7 @@ Use this package when you specifically want Mastra inside AppKit:
   [`@dbx-tools/model`](../model), instead of binding every agent to a fixed
   endpoint name.
 
-## Quick Start
+## Full App Example
 
 ```ts
 import { analytics, createApp, lakebase, server } from "@databricks/appkit";
@@ -96,7 +88,7 @@ await createApp({
 });
 ```
 
-Benefits of importing the package:
+This example provides:
 
 - `mastra()` registers a full AppKit plugin named `mastra`.
 - `agents.createAgent()` keeps agent definitions typed and applies the default
@@ -140,6 +132,10 @@ const approveRefund = agents.createTool({
   execute: async ({ context }) => approve(context.orderId, context.amount),
 });
 ```
+
+Agents are also told to issue independent tool calls together in one turn and
+to keep dependent or conflicting calls sequential. Models that do not support
+parallel tool calls continue through the normal multi-step agent loop.
 
 ## Typed Application Request Context
 
@@ -341,18 +337,14 @@ export const workspace = new Workspace({
 });
 ```
 
-Mastra's native `WorkspaceSkills` owns discovery, indexing, refreshes, and lazy
-reads of references, scripts, templates, and assets. dbx-tools does not keep a
-second skill catalogue or skill-specific cache.
+Mastra discovers and loads skills from the configured roots. Set
+`workspaceSkills: false` to disable skill search, or pass `{ topK, minScore,
+ttlMs }` to tune it.
 
-When the app registers `filesCache()` from `@dbx-tools/appkit/files-cache`,
-default workspaces and workspaces created with `databricksWorkspace()` retain
-one filesystem source per user and set of actual mount paths. Page refreshes
-and later turns reuse that source, allowing Mastra to retain its native parsed
-catalogue while the files cache handles repeated filesystem metadata
-operations. Each operation resolves the active request's OBO client, so the
-retained source does not retain an old token. Other caller-owned Mastra
-workspaces remain unchanged.
+### Cache Workspace Metadata
+
+Register `filesCache()` to reuse Databricks directory metadata across page
+refreshes and later turns:
 
 ```ts
 import { filesCache } from "@dbx-tools/appkit/files-cache";
@@ -362,19 +354,9 @@ await createApp({
 });
 ```
 
-The plugin is detected from the AppKit plugin context. If it is not registered,
-filesystem caching is disabled. When it is registered, its app-lifetime
-`FilesCacheManager` is the single owner of the process-local, user-scoped LRU.
-Filesystem values do not use AppKit's `CacheManager`: that cache can write
-through to Lakebase, while file reads need a local-only fast path. Existing
-Lakebase-backed AppKit caching remains unchanged.
-
-The default file cache stores `exists`, `readdir`, and `stat` results for every
-mounted Databricks path. `readFile` is cached only under configured skill roots,
-so ordinary file contents remain live. Directory listings therefore remain
-cached. Set `cache: false` on `databricksWorkspace()` to disable this behavior,
-`true` to select the defaults explicitly, or provide operation/path filters.
-Explicit filters replace the defaults and are ORed:
+The cache is isolated by user and mount path. It stores `exists`, `readdir`, and
+`stat` results for mounted Databricks paths and caches `readFile` only under
+skill roots. Set `cache: false` to disable it or provide filters:
 
 ```ts
 const workspace = workspaces.databricksWorkspace({
@@ -386,17 +368,12 @@ const workspace = workspaces.databricksWorkspace({
 });
 ```
 
-Mastra exposes its native skill search and loading tools. Save or update a
-skill with the native workspace file tools by writing
-`<skill-root>/<name>/SKILL.md`. Set `workspaceSkills: false` to disable the
-skill search processor, or pass `{ topK, minScore, ttlMs }` to tune it.
+### Configure File Approvals
 
-Workspace access policy stays on Mastra's native `Workspace.tools` owner. By
-default, mounted files are readable without approval. Write, edit, AST edit,
-delete, and mkdir run without approval inside the current user's Databricks
-workspace home and under explicit `/tmp` mounts. Mutations elsewhere require
-approval. Pass native Mastra tool configuration directly to the workspace
-shortcut:
+Workspace tools are enabled and run without approval by default. This applies to
+file mutations and command execution with either Monty or Databricks Sandbox.
+Databricks permissions still decide whether a workspace file operation
+succeeds. Opt into approval for the tools that need it:
 
 ```ts
 import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
@@ -404,48 +381,55 @@ import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
 const workspace = workspaces.databricksWorkspace({
   paths: ["~/project"],
   tools: {
-    requireApproval: false,
     [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]: {
       requireApproval: true,
       requireReadBeforeWrite: true,
+    },
+    [WORKSPACE_TOOLS.FILESYSTEM.DELETE]: {
+      requireApproval: true,
     },
   },
 });
 ```
 
-File-tool and sandbox-command policies are independent. Disable
-`WORKSPACE_TOOLS.SANDBOX.EXECUTE_COMMAND` when an agent must not bypass file
-approvals by writing through shell commands.
-
-Databricks mounts verify read access with an uncached root status request before
-the first cached read can succeed. The first mutation is always sent to
-Databricks and marks write access only after it succeeds; failed checks are not
-retained. This keeps a retained filesystem source from treating an old cache
-entry as proof that the current user can still access the path, without creating
-temporary write-probe files.
+Set `enabled: false` on a tool to remove it. File approvals and sandbox commands
+are separate, so gate or disable
+`WORKSPACE_TOOLS.SANDBOX.EXECUTE_COMMAND` when commands must not bypass file
+policies. Cached metadata never grants Databricks access.
 
 ## Workspace Sandbox
 
-Auto-created agent workspaces use the Node `@pydantic/monty` runtime by default,
-so Python command tools work without a workspace preview or remote API.
-Monty's native subprocess worker is preferred because Bun's Linux
-`worker_threads` support cannot reliably host the WASM worker. The WASM entry is
-loaded only when native import fails. Databricks App staging declares the Linux
-native package directly so deployment does not depend on transitive optional
-dependency installation. The shared pool starts with one worker and can scale
-to `max(4, available processors * 2)` workers per app process.
+Run command tools in a per-user Beta
+[Databricks Sandbox](https://docs.databricks.com/aws/en/compute/serverless/sandbox):
 
-Opt into the Beta
-[Databricks Sandbox](https://docs.databricks.com/aws/en/compute/serverless/sandbox)
-with `sandbox: true`, `sandbox: "databricks"`, or a Databricks options object.
-The provider derives a stable opaque sandbox id from the workspace and
-attributed user, creates the sandbox lazily on the first command, starts a
-stopped sandbox, and waits for runnable state. Commands execute through the
-synchronous Sandbox API and return Mastra's normal stdout, stderr, exit,
-timeout, and truncation fields. When the Beta is definitively unavailable, its
-configured fallback defaults to Monty. Permission, authentication, and
-transient network failures remain visible instead of silently changing
-providers.
+```ts
+mastra({
+  agents: { analyst },
+  sandbox: "databricks",
+});
+```
+
+Use `sandbox: true` for the same selection. Pass options to set startup and
+command limits or to fall back to the local Python runtime when the workspace
+does not have the preview:
+
+```ts
+mastra({
+  agents: { analyst },
+  sandbox: {
+    inactivityTimeout: "1800s",
+    startupTimeoutMs: 180_000,
+    commandTimeoutMs: 60_000,
+    fallback: "monty",
+  },
+});
+```
+
+The sandbox is created on the first command and reused for the attributed user.
+Commands return the normal Mastra stdout, stderr, exit, timeout, and truncation
+fields. Authentication, permission, and network failures are returned to the
+caller; only a definitive unavailable-preview response uses the configured
+fallback.
 
 Enable Databricks Sandbox in the workspace Previews page before selecting it.
 The adapter creates its own AppKit client through the normal
@@ -456,14 +440,7 @@ explicit OBO client must request the Sandbox API's `sandbox` scope. The Sandbox
 filesystem is separate from Databricks Workspace skill mounts; command code must
 copy data explicitly when it needs both.
 
-Monty is intentionally narrower than Databricks Sandbox: it accepts Python
-source directly (or `python3 -c`), runs in crash-isolated subprocess workers,
-and exposes no host shell, filesystem, network, environment variables, or
-third-party packages. Per-command cancellation kills the isolated worker, and
-`maxRetainedBytes` bounds retained stdout/stderr without dropping callback
-chunks. Prefer Python source for commands that must work on both providers.
-
-The default needs no configuration:
+Without a `sandbox` option, command tools use the local Monty Python runtime:
 
 ```ts
 mastra({
@@ -471,19 +448,9 @@ mastra({
 });
 ```
 
-Tune the Databricks lifecycle globally for auto-created workspaces:
-
-```ts
-mastra({
-  agents: analyst,
-  sandbox: {
-    inactivityTimeout: "1800s",
-    startupTimeoutMs: 180_000,
-    commandTimeoutMs: 60_000,
-    fallback: "monty",
-  },
-});
-```
+Monty accepts Python source or `python3 -c` and has no host filesystem, network,
+environment variables, shell, or third-party packages. Use Python source when a
+command must work with either provider.
 
 Disable command execution, select Databricks, or provide any Mastra sandbox on
 one agent:
@@ -500,17 +467,14 @@ const localAgent = agents.createAgent({
 });
 ```
 
-An explicit agent `workspace` always wins over plugin-level `sandbox` config, so
-providers never run in parallel accidentally. A per-agent workspace resolver
-returning `undefined` explicitly disables the workspace for that agent.
+An agent-level workspace overrides the plugin-level sandbox setting. Returning
+`undefined` from a workspace resolver disables the workspace for that agent.
 
 ## Remote Skills
 
-Workspace skills above are discovered from files ALREADY in the Databricks
-workspace. `remoteSkills` provisions skills from OUTSIDE it at startup - a
-GitHub `owner/repo`, a git / GitLab URL, or a direct `SKILL.md` / archive
-download URL - so an app can ship with a curated skill set without anyone
-hand-uploading `SKILL.md` trees first.
+Use `remoteSkills` to install a curated skill set when the files are not already
+in the Databricks workspace. Sources can be a GitHub `owner/repo`, a git URL, a
+direct `SKILL.md`, or an archive URL.
 
 ```ts
 mastra({
@@ -522,54 +486,29 @@ mastra({
 });
 ```
 
-Each source is materialized at boot into an Assistant-style `SKILL.md` tree that
-the default workspace then scans, so a provisioned skill behaves exactly like
-one that was in the workspace all along. Resolution per source:
-
-- if the optional `skills` peer dependency is installed, the source is copied
-  into a staging dir with the `skills` CLI, which understands every source
-  format the ecosystem does (GitHub shorthand, git URLs, archive URLs);
-- otherwise the source URL is fetched directly and its `SKILL.md` written to the
-  staging dir. A non-URL source (e.g. bare `owner/repo`) without the `skills`
-  package installed cannot be resolved this way and fails.
-
-The default destination is the shared Databricks Assistant skills tree
-(`/Workspace/.assistant/skills`), so provisioned skills persist across restarts and are picked up by
-the built-in Assistant-skills mount. Pass `userEmail` to target that user's
-`/Workspace/Users/<email>/.assistant/skills` instead, or `databricksBasePath` for an
-explicit tree. When no Databricks client is resolvable at startup, the tree is
-written to a local temp dir and handed to Mastra as an extra local skill path
-for the current process only.
-
-The destination is **probed with a real write** before it is used, and falls back
-to that local tree when the probe fails. Writing the shared
-`/Workspace/.assistant/skills` tree is a workspace-ADMIN action, and a Databricks
-App runs as a non-admin service principal, so the common deployment cannot write
-it - and the workspace API reports a path the caller may not touch as
-`RESOURCE_DOES_NOT_EXIST` rather than a permission error. Only the storage
-LOCATION degrades: the same skills are provisioned either way, so a
-non-admin app keeps a working agent instead of failing startup. Give the app's
-service principal `CAN_MANAGE` on the tree (or point `databricksBasePath` at one
-it owns) to get workspace persistence back.
-
-A source that resolves through neither path fails app startup, so a misconfigured
-skill set is caught at boot rather than silently missing. Set `failOnError: false`
-(top-level or per-source) to log and skip a bad source instead. Install the
-optional peer to enable the richest source formats:
+Each source is copied into an Assistant-style `SKILL.md` tree at startup. Install
+the optional `skills` package for GitHub shorthand, git repositories, and archive
+URLs:
 
 ```sh
-pnpm add skills
+bun add skills
 ```
+
+Without that package, direct `SKILL.md` URLs still work.
+
+The default destination is `/Workspace/.assistant/skills`. Set `userEmail` for a
+user-specific Assistant tree or `databricksBasePath` for another location. If
+the app cannot write the selected workspace path, it uses a process-local skill
+tree so the agent can still start. Grant the app service principal access to the
+workspace path when the skills must persist across restarts.
+
+A source error fails startup by default. Set `failOnError: false` globally or on
+one source to log and skip it.
 
 ### Refresh policy
 
-Provisioning runs on every app boot, and skill trees change rarely, so each
-provisioned tree carries a `.metadata.json` at its root recording when each
-source was last downloaded. A source is only re-downloaded once that record is
-older than seven days; inside the window the existing tree is reused and no network
-call is made. The record travels with the tree rather than living in process
-memory, so a container that restarts a dozen times an hour pulls each source
-once, not a dozen times.
+Downloaded sources are reused for seven days by default. Set `refreshTtlMs` to a
+shorter interval or `0` to download on every boot:
 
 ```ts
 mastra({
@@ -585,11 +524,8 @@ mastra({
 });
 ```
 
-The record is keyed by the source AND the options that change what it contains
-(`skills`, `experimental`, `ref`), so narrowing a skill list or moving a `ref`
-re-downloads immediately rather than serving the previous selection for seven days.
-A missing or unreadable record is treated as a cache miss, never as a startup
-failure.
+Changing a source's `skills`, `experimental`, or `ref` option refreshes it
+immediately.
 
 ## Databricks AI Tools
 
@@ -1082,8 +1018,7 @@ needs no extra wiring.
 
 ## Configuration Reference
 
-The plugin config is intentionally centered on the AppKit lifecycle instead of
-requiring callers to assemble a Mastra server by hand.
+The main plugin options are:
 
 - `agents` registers a single agent, an array, or a record keyed by stable agent
   ids. Records are best for UIs because the ids become route-visible.
@@ -1098,9 +1033,8 @@ requiring callers to assemble a Mastra server by hand.
   Pass `false` to disable it or an object with `topK`, `minScore`, and `ttlMs`
   overrides.
 - `workspaceTools` forwards Mastra's native workspace-tool configuration.
-  Reads do not require approval. Filesystem mutations require approval outside
-  the authenticated user's `/Workspace/Users/<email>` home. Explicit global or
-  per-tool settings override those defaults.
+  All tools are enabled without approval by default. Global and per-tool
+  settings can require approval or disable selected tools.
 - `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
   list, or an options bag with `failOnError`, `userEmail`,
@@ -1109,9 +1043,8 @@ requiring callers to assemble a Mastra server by hand.
   [Databricks AI Tools](#databricks-ai-tools)) or any URL-like.
 - `genieSpaces` maps aliases to Genie Space IDs (or to
   `{ spaceId, hint }` objects). Those aliases flow into tool names,
-  suggestions, and chart/data workflows. An alias present with no space id is a
-  wiring contradiction and fails at construction rather than silently
-  registering no Genie tools.
+  suggestions, and chart/data workflows. Every configured alias needs a space
+  id.
 - `genieAgentMode` defaults to `true` for the streaming Agent Mode API. Set it
   to `false` to force Conversation API polling. Pre-stream feature-disabled or
   preview-toggle responses fall back automatically.
@@ -1122,33 +1055,18 @@ requiring callers to assemble a Mastra server by hand.
   Explicit `true` fails startup unless an experiment id or name is configured.
 - `mcp` controls whether agents are exposed as MCP tools and how that server is
   named.
-- `genieIdentity` picks the Databricks identity the agents' workspace calls run
-  as - the serving catalogue behind the model picker, Genie suggestions,
-  `ask_genie`, and the statement fetch behind a `[data:<id>]` embed. `"user"`
-  (default) is always on-behalf-of the signed-in user, so callers must be
-  members of the WORKSPACE, not just the Databricks account. `"service-principal"`
-  runs those calls as the app service principal instead, so any caller who can
-  open the app works even without workspace membership - useful when an app is
-  shared with an account-level group too large to add to the workspace. It
-  changes only the Databricks credential: memory threads, the per-user cache
-  namespace, and trace metadata still key off the forwarded user, at the cost
-  of per-user attribution in Genie / Unity Catalog. `"auto"` decides PER REQUEST:
-  OBO when the request actually carries an OBO token, service principal when it
-  does not. That is the mode for an app served through more than one door - a
-  container fronted by [`@dbx-tools/tunnel`](../../node/tunnel) serves both
-  email-code callers (no Databricks credential exists to forward) and the
-  platform front door on one port, and `"user"` would make every tunnel turn fail
-  with AppKit's `AuthenticationError` while `"service-principal"` would throw away
-  per-user scoping for the front-door callers who still have it. Falls back to
-  `MASTRA_GENIE_IDENTITY`. The decision itself lives in
-  [`@dbx-tools/appkit`](../appkit)'s `identity` module, so a non-Mastra plugin can
-  make the same call.
+- `genieIdentity` selects credentials for model discovery, Genie calls, and
+  statement fetches. `"user"` uses OBO and requires workspace membership.
+  `"service-principal"` lets account-level users call the app without workspace
+  membership. `"auto"` uses OBO when the request includes it and otherwise uses
+  the service principal. Memory threads, cache namespaces, and trace metadata
+  remain user-scoped in all three modes. The environment fallback is
+  `MASTRA_GENIE_IDENTITY`.
 - `apiAccess` chooses the route allowlist. Keep the default scoped mode for
   deployed apps.
 
-Use this package when you want an AppKit-native agent runtime. Use the shared
-schemas in [`@dbx-tools/shared-mastra`](../../shared/mastra) when building a
-client that talks to these routes.
+Clients that call these routes can import the browser-safe schemas from
+[`@dbx-tools/shared-mastra`](../../shared/mastra).
 
 ## Modules
 

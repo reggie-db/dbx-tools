@@ -458,6 +458,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       defaultAgent: this.built?.defaultAgentId ?? FALLBACK_AGENT_ID,
       agents: Object.keys(this.built?.agents ?? {}),
       feedbackEnabled: this.feedbackEnabled(),
+      backgroundTurns: this.config.backgroundTurns !== false,
       // In `service-principal` mode the chat works for any caller who can open
       // the app, so a UI that hides chat behind an OBO-token probe should show
       // it regardless. `"user"` mode keeps the OBO-gated behavior.
@@ -1190,6 +1191,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     this.logger.info("ready", {
       agents: Object.keys(this.built.agents),
       defaultAgent: this.built.defaultAgentId,
+      backgroundTurns: this.config.backgroundTurns !== false,
       apiAccess: this.config.apiAccess ?? "scoped",
       mcp: this.mcp ? `${this.basePath}${this.mcp.httpPath}` : "off",
       lakebase: memoryBuilder !== undefined,

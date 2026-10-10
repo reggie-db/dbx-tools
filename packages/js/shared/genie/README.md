@@ -2,10 +2,17 @@
 
 Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers.
 
-Import this package when a UI, test, or server component needs to validate Genie
-wire payloads or derive high-level events from raw Genie message snapshots
-without importing the Databricks SDK. The Node driver that calls Genie is
+Validate Genie wire payloads and derive high-level UI events from raw message
+snapshots without importing the Databricks SDK. The Node driver that calls Genie is
 [`@dbx-tools/genie`](../../node/genie).
+
+## Quick Start
+
+```ts
+import { genieModel } from "@dbx-tools/shared-genie";
+
+const response = genieModel.GenieResponseSchema.parse(await request.json());
+```
 
 Key features:
 
@@ -23,7 +30,7 @@ Key features:
 - Generated zod schemas for the upstream SDK Dashboard/Genie shapes, so
   validating an unwidened SDK payload needs no SDK import either.
 
-## Why Not Just AppKit Genie Types?
+## Use With AppKit Genie Types
 
 Use AppKit's Genie plugin and UI types when you are building directly against
 the native AppKit Genie routes. Use this package when you need a browser-safe
@@ -36,7 +43,7 @@ event vocabulary independent of AppKit transport:
 - detecting attachment/status shapes that are present on the live wire but not
   always convenient in generated SDK types.
 
-## Validate Genie Wire Payloads
+## Validate Message Snapshots
 
 ```ts
 import { genieModel } from "@dbx-tools/shared-genie";

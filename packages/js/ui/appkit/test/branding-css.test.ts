@@ -26,4 +26,14 @@ describe("default brand CSS", () => {
     );
     assert.doesNotMatch(bridge, /^\s*--(?:success|warning|destructive):/m);
   });
+
+  it("lightens brand interaction colors on dark surfaces", () => {
+    assert.match(bridge, /:root\.dark\[data-brand\]/);
+    assert.match(bridge, /@media \(prefers-color-scheme: dark\)/);
+    assert.match(
+      bridge,
+      /--primary:\s*color-mix\([\s\S]*var\(--brand-color-primary-hover\) 58%,[\s\S]*var\(--foreground\)/,
+    );
+    assert.match(bridge, /--primary-foreground:\s*var\(--background\);/);
+  });
 });

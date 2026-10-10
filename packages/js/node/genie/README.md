@@ -2,11 +2,19 @@
 
 Server-side Databricks Genie chat drivers.
 
-Import this package when Node or AppKit backend code needs to run one turn
-against a Genie space and consume either raw Genie message snapshots or a typed
-event stream. It preserves AppKit OBO auth when called inside an AppKit request,
-falls back to the Databricks SDK default auth outside AppKit, and supports
-caller-provided cancellation.
+Run a Genie turn from Node or AppKit code and consume raw message snapshots or a
+typed event stream. AppKit requests keep their OBO identity; standalone callers
+use the Databricks SDK authentication chain. Both modes support cancellation.
+
+## Quick Start
+
+```ts
+import { chat } from "@dbx-tools/genie";
+
+for await (const event of chat.genieEventChat(spaceId, "Top stores by revenue?")) {
+  console.log(event.type, event);
+}
+```
 
 Pure Genie schemas and event detector helpers live in
 [`@dbx-tools/shared-genie`](../../shared/genie).
@@ -29,7 +37,7 @@ Key features:
   CLI tools.
 - Fetches Genie space metadata and starter questions for UI suggestions.
 
-## Why Not Just AppKit Genie?
+## Choose The Driver Or AppKit Genie
 
 Native AppKit's Genie plugin is the right choice for a standalone Genie chat
 experience: it provides named space aliases, SSE status updates, conversation
@@ -49,7 +57,7 @@ backend:
 - You need the same driver to work inside AppKit with OBO auth and outside
   AppKit from scripts using normal Databricks SDK auth.
 
-## Stream Semantic Events
+## Handle Semantic Events
 
 ```ts
 import { chat } from "@dbx-tools/genie";
@@ -109,13 +117,10 @@ for (const prompt of prompts) {
 }
 ```
 
-The driver does not own multi-turn state. Callers read the conversation id from
-a yielded message/event and pass it into the next turn. That makes the package
-usable in stateless route handlers, durable thread stores, and one-off scripts.
-
-This split is deliberate: the package is a transport/driver layer, not a thread
-store. AppKit-Mastra persists thread state separately and passes the Genie
-conversation id back into this driver when a turn continues.
+Callers keep multi-turn state by reading the conversation id from a yielded
+message or event and passing it into the next turn. This works in stateless
+route handlers, durable thread stores, and one-off scripts. AppKit-Mastra stores
+the id with its thread and passes it back when a conversation continues.
 
 ## Resolve A Workspace Client
 

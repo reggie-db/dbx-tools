@@ -17,7 +17,7 @@ await createApp({
 ```
 
 AppKit mounts the plugin routes under `/api/model-gateway/v1/*`. The
-`@dbx-tools/cli/model-gateway` package owns foreground server construction and
+`@dbx-tools/cli/model-gateway` provides foreground server construction and
 standard root compatibility paths.
 
 ## Connect A Client

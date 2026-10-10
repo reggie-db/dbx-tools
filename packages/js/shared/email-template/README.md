@@ -3,6 +3,16 @@
 Universal React Email presentation shared by dbx-tools server and browser email
 surfaces.
 
+## Quick Start
+
+Render the same branded document in SMTP delivery and browser previews:
+
+```tsx
+import { EmailDocument } from "@dbx-tools/shared-email-template";
+
+<EmailDocument subject="Incident update" body="## Resolved\nAll systems are healthy." />;
+```
+
 Key features:
 
 - Responsive React Email document with email-safe inline styling.
@@ -11,7 +21,7 @@ Key features:
 - Consumer brand overrides without coupling templates to AppKit or SMTP.
 - Rich content rendered consistently in the inbox and browser.
 
-## Why A Separate Package
+## Runtime Support
 
 The presentation layer has two consumers with incompatible dependency needs, so
 it lives on its own:
@@ -29,7 +39,7 @@ This package depends on neither AppKit nor SMTP nor the DOM, so any runtime that
 can render React can produce the same branded email — including callers outside
 AppKit entirely.
 
-## Render The Shared Template
+## Template Options
 
 ```tsx
 import { EmailDocument } from "@dbx-tools/shared-email-template";

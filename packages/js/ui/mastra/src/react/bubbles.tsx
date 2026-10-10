@@ -349,10 +349,20 @@ export const AssistantBubble = ({
   feedbackValue,
   mlflowExperimentUrl,
 }: AssistantBubbleProps) => {
+  const pendingApprovals = mergePendingApprovals(
+    collectPendingApprovals(message.parts),
+    externalApprovals,
+  );
+  const terminalToolState =
+    isLast && status === "error"
+      ? "error"
+      : pendingApprovals.length === 0 && (!isLast || status === "ready")
+        ? "done"
+        : undefined;
   const toolEvents = mergeToolEvents(
     toolEventsFromParts(message.parts),
     events,
-    isLast && status === "error",
+    terminalToolState,
   );
   const reasoning = [getReasoningText(message.parts), genieReasoningText(toolEvents)]
     .filter(Boolean)
@@ -397,13 +407,8 @@ export const AssistantBubble = ({
   // {@link DataSlot} inline; unknown / expired ids resolve as
   // nothing so the prose flows unaffected. Suggested questions
   // stay gated on settle to avoid pop-in mid-stream.
-  const pendingApprovals = mergePendingApprovals(
-    collectPendingApprovals(message.parts),
-    externalApprovals,
-  );
-
   return (
-    <Item className="items-start gap-3 border-none bg-transparent p-0">
+    <Item className="items-start gap-2.5 border-none bg-transparent p-0">
       <ItemMedia>
         <RoleAvatar role="assistant" />
       </ItemMedia>
@@ -413,7 +418,7 @@ export const AssistantBubble = ({
        * bubble past the chat's `max-w-4xl`. Flex children default to
        * `min-width: auto`, which sizes to content and overflows.
        */}
-      <ItemContent className="min-w-0 gap-2">
+      <ItemContent className="min-w-0 gap-1.5">
         {/*
          * Tool session pill leads the message. Charts and tables are
          * embedded inline in the prose (via `[chart:<id>]` / `[data:<id>]`
@@ -535,7 +540,7 @@ export const UserBubble = ({ message }: { message: UIMessage }) => {
     .map((p) => p.text)
     .join("");
   return (
-    <Item className="items-start gap-3 border-none bg-transparent p-0">
+    <Item className="items-start gap-2.5 border-none bg-transparent p-0">
       <ItemMedia>
         <RoleAvatar role="user" />
       </ItemMedia>

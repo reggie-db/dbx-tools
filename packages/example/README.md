@@ -5,10 +5,22 @@ persistent slide-out assistant, typed route context, complete tool
 payloads, approval-gated email, conversation memory, a model picker, history,
 and threads on top of the `@dbx-tools/*` packages.
 
-The point of this folder is to show **how little you write**. It is a real,
-standalone downstream consumer: its own project, its own pnpm workspace, pulling
-`@dbx-tools/*` from a registry exactly like any external app would. Two small
-packages:
+## The Whole Server
+
+```ts
+await createApp({
+  plugins: [
+    server({ host, staticPath: clientDist }),
+    genie(),
+    lakebase(),
+    email(),
+    teams(),
+    mastra({ agents: { support }, storage: true, memory: true }),
+  ],
+});
+```
+
+The demo is a standalone downstream consumer with two small packages:
 
 | Package                                    | Tag      | What you write                               |
 | ------------------------------------------ | -------- | -------------------------------------------- |
@@ -22,7 +34,7 @@ switcher - comes from the packages. The demo is wiring, not implementation.
 The demo disables the optional floating launcher and opens the assistant from
 the navigation bar instead.
 
-## The whole server
+## Complete Server Configuration
 
 ```ts
 // server/appkit-demo/src/server.ts (abridged)

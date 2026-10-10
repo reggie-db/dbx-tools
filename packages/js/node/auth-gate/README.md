@@ -3,24 +3,7 @@
 Passwordless authentication runtime built on Better Auth, email OTP, passkeys,
 and caller-provided identity policy and delivery.
 
-Key features:
-
-- Better Auth ownership of users, sessions, OTP lifecycle, rate limits, and
-  passkey credentials;
-- session-required passkey enrollment and discoverable passkey login;
-- POST and browser-redirect logout routes with a same-origin destination;
-- caller-provided `authorizeIdentity`, email sender, secret, base origin,
-  additional trusted origins, and database;
-- native AppKit Lakebase pool or local SQLite storage;
-- programmatic Better Auth migrations under advisory or file locks.
-
-## Relationship To Native AppKit
-
-Use the Databricks Apps front door and AppKit execution context when traffic
-arrives through the platform. Use this package for a public tunnel or another
-route that bypasses that identity-aware proxy and therefore needs its own
-passwordless session. A passkey session proves the configured identity only; it
-does not mint a Databricks OBO access token.
+## Quick Start
 
 ```ts
 import { auth, authStorage } from "@dbx-tools/auth-gate";
@@ -40,6 +23,17 @@ const runtime = await auth.createPasswordlessAuth({
   sendCode: async (email, code) => sendEmail(email, code),
 });
 ```
+
+## Use With Native AppKit
+
+Use the Databricks Apps front door and AppKit execution context for platform
+traffic. Use this package for a public tunnel or another route that bypasses
+that identity-aware proxy and needs its own passwordless session. A passkey
+session proves the configured identity; it does not mint a Databricks OBO token.
+
+Better Auth stores users, sessions, OTPs, rate limits, and passkeys. Storage can
+use the AppKit Lakebase pool or local SQLite, and migrations run under advisory
+or file locks.
 
 `POST <basePath>/logout` returns `{ ok, redirectTo }`; `GET` clears the same
 session and redirects with status `303`. The redirect defaults to `/` and is

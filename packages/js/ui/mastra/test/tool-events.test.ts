@@ -166,6 +166,49 @@ describe("native persisted tool events", () => {
     );
   });
 
+  it("keeps a persisted completed tool settled over stale live progress", () => {
+    assert.deepEqual(
+      mergeToolEvents(
+        [
+          {
+            id: "tool-1",
+            toolName: "lookup_store",
+            status: "done",
+            output: { ok: true },
+          },
+        ],
+        [
+          {
+            id: "tool-1",
+            toolName: "lookup_store",
+            status: "running",
+            progress: [{ type: "started", content: "Looking up store" }],
+          },
+        ],
+      ),
+      [
+        {
+          id: "tool-1",
+          toolName: "lookup_store",
+          status: "done",
+          output: { ok: true },
+          progress: [{ type: "started", content: "Looking up store" }],
+        },
+      ],
+    );
+  });
+
+  it("settles running tools as done when the assistant turn finishes", () => {
+    assert.deepEqual(
+      mergeToolEvents(
+        [{ id: "tool-running", toolName: "web_fetch", status: "running" }],
+        undefined,
+        "done",
+      ),
+      [{ id: "tool-running", toolName: "web_fetch", status: "done" }],
+    );
+  });
+
   it("settles running tools as errors when the assistant stream fails", () => {
     assert.deepEqual(
       mergeToolEvents(
@@ -184,7 +227,7 @@ describe("native persisted tool events", () => {
           },
         ],
         undefined,
-        true,
+        "error",
       ),
       [
         {
@@ -248,7 +291,7 @@ describe("native persisted tool events", () => {
           ],
         },
       ]),
-      "Finding the relevant sales data.\n\nComparing the current period with last quarter.",
+      "Finding the relevant sales data.\nComparing the current period with last quarter.",
     );
   });
 
@@ -271,7 +314,7 @@ describe("native persisted tool events", () => {
     );
   });
 
-  it("removes blank lines inside thoughts while separating distinct events", () => {
+  it("removes blank lines and keeps distinct thoughts compact", () => {
     assert.equal(
       genieReasoningText([
         {
@@ -290,7 +333,7 @@ describe("native persisted tool events", () => {
           ],
         },
       ]),
-      "First sentence. Second sentence.\n\nAnother thought.",
+      "First sentence. Second sentence.\nAnother thought.",
     );
   });
 });

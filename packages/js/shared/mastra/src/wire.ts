@@ -67,6 +67,9 @@ import { z } from "zod";
  *     hides chat when the OBO token is absent should show it anyway. Defaults
  *     to `false` (the OBO / `"user"` identity mode), so an older server without
  *     the field keeps the OBO-gated behavior.
+ *   - `backgroundTurns`: whether turns use Mastra evented durable execution
+ *     and can be observed after the initiating HTTP stream disconnects.
+ *     Defaults to `false` for compatibility with older servers.
  */
 export const MastraClientConfigSchema = z.object({
   basePath: z.string(),
@@ -74,9 +77,17 @@ export const MastraClientConfigSchema = z.object({
   agents: z.array(z.string()),
   feedbackEnabled: z.boolean().default(false),
   chatAlwaysAvailable: z.boolean().default(false),
+  backgroundTurns: z.boolean().default(false),
 });
 /** Browser-safe Mastra plugin descriptor used to construct route and stream clients. */
-export type MastraClientConfig = z.infer<typeof MastraClientConfigSchema>;
+export type MastraClientConfig = z.input<typeof MastraClientConfigSchema>;
+
+/** Response returned after requesting cancellation of one durable agent run. */
+export const MastraRunAbortResponseSchema = z.object({
+  aborted: z.boolean(),
+});
+/** Result of an explicit durable run cancellation request. */
+export type MastraRunAbortResponse = z.infer<typeof MastraRunAbortResponseSchema>;
 
 /**
  * JSON payload returned by `GET ${basePath}/default-model[?agentId=]`. The

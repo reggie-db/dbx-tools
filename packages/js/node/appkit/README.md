@@ -2,9 +2,21 @@
 
 Node-side helpers for Databricks AppKit apps.
 
-Import this package when backend code needs AppKit execution context, typed
-plugin lookup, Databricks SDK cancellation, or Lakebase auto-configuration
-without taking on a heavier feature package.
+These helpers configure Lakebase before plugin startup and expose AppKit request
+context, typed plugin lookup, and Databricks SDK cancellation to backend code.
+
+## Quick Start
+
+Use the wrapper when Lakebase settings must be resolved before plugin setup:
+
+```ts
+import { lakebase, server } from "@databricks/appkit";
+import { appkit } from "@dbx-tools/appkit";
+
+await appkit.createApp({
+  plugins: [server(), lakebase()],
+});
+```
 
 **Key features:**
 
@@ -27,7 +39,7 @@ without taking on a heavier feature package.
   AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary).
   `@dbx-tools/tunnel` consumes this surface for auxiliary startup and shutdown.
 
-## Why Use This Over Native AppKit
+## Use With Native AppKit
 
 Use native AppKit directly when your app can read its required env vars before
 `createApp()` and does not need extra setup around plugin exports or config
@@ -41,14 +53,13 @@ Use this package when the friction is around bootstrapping and reuse:
   safe to call from scripts, tests, and background jobs too.
 - AppKit plugin instances are generic; the lookup helpers keep sibling-plugin
   access typed and return clear errors.
-- AppKit does not own your local CLI flags, bundle validation output, or
-  `app.yaml`; `@dbx-tools/core` centralizes those sources for this package and
-  other Node callers.
+- Local CLI flags, bundle validation output, and `app.yaml` values use the same
+  `@dbx-tools/core` configuration path.
 - AppKit's `asUser(req)` throws outside `NODE_ENV=development` when a request
   carries no OBO token; `identity` makes falling back to the service principal a
   configured, per-request decision instead of a `NODE_ENV` side effect.
 
-## Create An Auto-Configured App
+## Auto-Configuration Behavior
 
 `appkit.createApp` is a drop-in wrapper around AppKit `createApp` with the
 same config and the same typed plugin-export map. It runs
