@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-model-gateway";
-export const PACKAGE_VERSION = "0.9.112";
+export const PACKAGE_VERSION = "0.9.113";
 export * as gateway from "./src/gateway.ts";
 export * as models from "./src/models.ts";
 export * as plugin from "./src/plugin.ts";
