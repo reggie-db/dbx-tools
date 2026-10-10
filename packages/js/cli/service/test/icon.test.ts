@@ -4,7 +4,11 @@ import { describe, it } from "node:test";
 import { serviceTrayIcon, type ServiceTrayGlyph } from "../src/icon.ts";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const GLYPHS = ["model-proxy", "graphiti", "lakebase"] as const satisfies readonly ServiceTrayGlyph[];
+const GLYPHS = [
+  "model-proxy",
+  "graphiti",
+  "lakebase",
+] as const satisfies readonly ServiceTrayGlyph[];
 
 describe("CLI service tray icon", () => {
   it("renders the monochrome macOS glyph as PNG", () => {

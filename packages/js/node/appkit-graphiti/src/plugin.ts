@@ -186,7 +186,9 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
       await sidecar.start();
       const child = sidecar.process;
       if (!child) throw new Error("Graphiti sidecar exited after becoming ready");
-      if (!toolSchemas) throw new Error("Graphiti OpenAPI tools were not captured during readiness");
+      if (!toolSchemas) {
+        throw new Error("Graphiti OpenAPI tools were not captured during readiness");
+      }
       this.toolSchemas = selectToolSchemas(toolSchemas);
       this.watchSidecarHealth(remainingTimeoutMs(startedAt, resolved.startupTimeoutMs));
       this.logger.info("sidecar listening", { graphitiPort: resolved.listen.port });

@@ -4,7 +4,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import { DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY, SERVER_WATCH_DISABLED_ENV } from "../src/dev-watch.ts";
+import {
+  DEV_RESTART_DEBOUNCE_MS,
+  DEV_RESTART_KEY,
+  SERVER_WATCH_DISABLED_ENV,
+} from "../src/dev-watch.ts";
 import { DBXToolsNodeProject } from "../src/project.ts";
 import { devWatchDirectories, isRestartKey, parseDevWatchOptions } from "../tasks/dev-watch.ts";
 
@@ -13,29 +17,29 @@ describe("development command watcher", () => {
     const previous = process.env[SERVER_WATCH_DISABLED_ENV];
     delete process.env[SERVER_WATCH_DISABLED_ENV];
     try {
-    assert.deepEqual(parseDevWatchOptions(["bun", "server.ts", "--port", "3000"]), {
-      command: ["bun", "server.ts", "--port", "3000"],
-      debounceMs: DEV_RESTART_DEBOUNCE_MS,
-      restartKey: DEV_RESTART_KEY,
-      serverWatchDisabled: false,
-    });
-    assert.deepEqual(
-      parseDevWatchOptions([
-        "--debounce-ms",
-        "250",
-        "--restart-key",
-        "x",
-        "bun",
-        "--hot",
-        "server.ts",
-      ]),
-      {
-        command: ["bun", "--hot", "server.ts"],
-        debounceMs: 250,
-        restartKey: "x",
+      assert.deepEqual(parseDevWatchOptions(["bun", "server.ts", "--port", "3000"]), {
+        command: ["bun", "server.ts", "--port", "3000"],
+        debounceMs: DEV_RESTART_DEBOUNCE_MS,
+        restartKey: DEV_RESTART_KEY,
         serverWatchDisabled: false,
-      },
-    );
+      });
+      assert.deepEqual(
+        parseDevWatchOptions([
+          "--debounce-ms",
+          "250",
+          "--restart-key",
+          "x",
+          "bun",
+          "--hot",
+          "server.ts",
+        ]),
+        {
+          command: ["bun", "--hot", "server.ts"],
+          debounceMs: 250,
+          restartKey: "x",
+          serverWatchDisabled: false,
+        },
+      );
       assert.equal(
         parseDevWatchOptions(["--server-watch-disabled", "bun", "server.ts"]).serverWatchDisabled,
         true,

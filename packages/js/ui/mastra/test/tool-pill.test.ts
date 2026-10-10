@@ -44,20 +44,28 @@ describe("raw tool payload formatting", () => {
   it("highlights plaintext output fences", async () => {
     const output = "779a65e7023cd2e7";
     const plugin = createShikiPlugin();
-    const result = await new Promise<NonNullable<ReturnType<typeof plugin.highlight>>>((resolve) => {
-      const immediate = plugin.highlight(
-        {
-          code: output,
-          language: "text",
-          themes: ["github-light", "github-light"],
-        },
-        resolve,
-      );
-      if (immediate) resolve(immediate);
-    });
+    const result = await new Promise<NonNullable<ReturnType<typeof plugin.highlight>>>(
+      (resolve) => {
+        const immediate = plugin.highlight(
+          {
+            code: output,
+            language: "text",
+            themes: ["github-light", "github-light"],
+          },
+          resolve,
+        );
+        if (immediate) resolve(immediate);
+      },
+    );
 
     assert.equal(plugin.supportsLanguage("text"), true);
-    assert.equal(result.tokens.flat().map((token) => token.content).join(""), output);
+    assert.equal(
+      result.tokens
+        .flat()
+        .map((token) => token.content)
+        .join(""),
+      output,
+    );
   });
 });
 

@@ -137,8 +137,7 @@ describe("cache()", () => {
     const storage = new TestCache();
     const filesystem = cache(source, storage, {
       operations: ["readFile", "stat"],
-      filter: (operation, path) =>
-        operation === "readFile" && path.startsWith("/cached/skills/"),
+      filter: (operation, path) => operation === "readFile" && path.startsWith("/cached/skills/"),
     });
 
     assert.equal(

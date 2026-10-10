@@ -119,8 +119,7 @@ export interface WorkspaceFilePolicyContext {
 
 /** Fixed or per-request workspace file policy configuration. */
 export type WorkspaceFilePolicyValue<T> =
-  | T
-  | ((context: WorkspaceFilePolicyContext) => T | undefined | Promise<T | undefined>);
+  T | ((context: WorkspaceFilePolicyContext) => T | undefined | Promise<T | undefined>);
 
 /** Shared operation and path selection for a workspace file policy. */
 export interface WorkspaceFilePathPolicy<TOperation extends string> {
@@ -131,8 +130,7 @@ export interface WorkspaceFilePathPolicy<TOperation extends string> {
 }
 
 /** Approval decision for selected Mastra filesystem tools and paths. */
-export interface WorkspaceFileApprovalPolicy
-  extends WorkspaceFilePathPolicy<WorkspaceFileToolName> {
+export interface WorkspaceFileApprovalPolicy extends WorkspaceFilePathPolicy<WorkspaceFileToolName> {
   /** Approval result when the rule matches. Defaults to `true`. */
   requireApproval?: boolean;
 }
@@ -476,13 +474,7 @@ function fileApproval(
     if (inputPath) {
       for (const policy of toPolicyArray(resolved)) {
         if (
-          policyMatches(
-            policy,
-            operation,
-            inputPath,
-            context.requestContext,
-            FILESYSTEM_TOOL_NAMES,
-          )
+          policyMatches(policy, operation, inputPath, context.requestContext, FILESYSTEM_TOOL_NAMES)
         ) {
           return policy.requireApproval ?? true;
         }
@@ -710,18 +702,27 @@ async function resolveSkillFolderOptions(
   folder: SkillFolderOptions,
   context: WorkspaceMountContext,
 ): Promise<ResolvedSkillFolderOptions> {
-  const [path, filesystem, displayName, description, readable, skills, writable, createRoot, mount] =
-    await Promise.all([
-      resolveOptionalSkillFolderValue(folder.path, context),
-      resolveOptionalSkillFolderValue(folder.filesystem, context),
-      resolveOptionalSkillFolderValue(folder.displayName, context),
-      resolveOptionalSkillFolderValue(folder.description, context),
-      resolveOptionalSkillFolderValue(folder.readable, context),
-      resolveOptionalSkillFolderValue(folder.skills, context),
-      resolveOptionalSkillFolderValue(folder.writable, context),
-      resolveOptionalSkillFolderValue(folder.createRoot, context),
-      resolveOptionalSkillFolderValue(folder.mount, context),
-    ]);
+  const [
+    path,
+    filesystem,
+    displayName,
+    description,
+    readable,
+    skills,
+    writable,
+    createRoot,
+    mount,
+  ] = await Promise.all([
+    resolveOptionalSkillFolderValue(folder.path, context),
+    resolveOptionalSkillFolderValue(folder.filesystem, context),
+    resolveOptionalSkillFolderValue(folder.displayName, context),
+    resolveOptionalSkillFolderValue(folder.description, context),
+    resolveOptionalSkillFolderValue(folder.readable, context),
+    resolveOptionalSkillFolderValue(folder.skills, context),
+    resolveOptionalSkillFolderValue(folder.writable, context),
+    resolveOptionalSkillFolderValue(folder.createRoot, context),
+    resolveOptionalSkillFolderValue(folder.mount, context),
+  ]);
   const resolvedPath = resolveHomePath(path, requestContextValues(context.requestContext));
   const resolvedMount = resolveHomePath(mount, requestContextValues(context.requestContext));
   return {
@@ -896,7 +897,8 @@ async function resolveFileCacheOptions(
     return {
       operations: CACHEABLE_FILESYSTEM_OPERATIONS,
       filter: (operation, path) =>
-        operation !== "readFile" || roots.some((skillRoot) => posixPath.isWithinRoot(skillRoot, path)),
+        operation !== "readFile" ||
+        roots.some((skillRoot) => posixPath.isWithinRoot(skillRoot, path)),
     };
   }
   const policies = toPolicyArray(resolved);
@@ -1038,7 +1040,8 @@ async function databricksFilesystem(
     readOnly,
     createRoot,
   });
-  const cached = fileSystemCache && cacheOptions ? sharedFS.cache(fs, fileSystemCache, cacheOptions) : fs;
+  const cached =
+    fileSystemCache && cacheOptions ? sharedFS.cache(fs, fileSystemCache, cacheOptions) : fs;
   const source = verifyFirstFileSystemAccess(cached, () => fs.stat("."), root);
   const filesystem = filesystems(source, { ...adapterOptions, readOnly });
   try {

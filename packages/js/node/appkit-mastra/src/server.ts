@@ -470,25 +470,27 @@ export function attachRoutePatchMiddleware(app: express.Express): void {
  * completed turn.
  */
 export function attachStaleResumeRecovery(app: express.Express): void {
-  app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (!isStaleMastraResumeError(error)) {
-      next(error);
-      return;
-    }
-    logger.warn("ignored stale mastra resume", {
-      path: req.path,
-      error: errorUtils.errorMessage(error),
-    });
-    if (res.headersSent) {
+  app.use(
+    (error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (!isStaleMastraResumeError(error)) {
+        next(error);
+        return;
+      }
+      logger.warn("ignored stale mastra resume", {
+        path: req.path,
+        error: errorUtils.errorMessage(error),
+      });
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      res.status(200);
+      res.setHeader("content-type", "text/event-stream; charset=utf-8");
+      res.setHeader("cache-control", "no-cache");
+      res.write(`data: ${JSON.stringify({ type: "start" })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: "finish" })}\n\n`);
+      res.write("data: [DONE]\n\n");
       res.end();
-      return;
-    }
-    res.status(200);
-    res.setHeader("content-type", "text/event-stream; charset=utf-8");
-    res.setHeader("cache-control", "no-cache");
-    res.write(`data: ${JSON.stringify({ type: "start" })}\n\n`);
-    res.write(`data: ${JSON.stringify({ type: "finish" })}\n\n`);
-    res.write("data: [DONE]\n\n");
-    res.end();
-  });
+    },
+  );
 }

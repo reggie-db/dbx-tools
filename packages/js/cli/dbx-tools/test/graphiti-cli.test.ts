@@ -58,10 +58,7 @@ describe("Graphiti CLI", () => {
     assert.equal(definition.id, "dbx-tools.cli-graphiti");
     assert.equal(definition.name, "dbx graphiti");
     assert.equal(definition.icon, serviceTrayIcon("graphiti"));
-    assert.equal(
-      definition.dataDirectory,
-      join(homedir(), ".dbx-tools", "services", "graphiti"),
-    );
+    assert.equal(definition.dataDirectory, join(homedir(), ".dbx-tools", "services", "graphiti"));
     assert.equal(definition.command?.executable, undefined);
     assert.equal(definition.command?.binName, "dbx-graphiti");
     assert.deepEqual(definition.pythonPackage, {

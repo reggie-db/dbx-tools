@@ -5,8 +5,8 @@
  */
 
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
-import { posixPath, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
 import { errorUtils, log, object } from "@dbx-tools/shared-core";
+import { posixPath, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
 import { LRUCache } from "lru-cache";
 
 const DEFAULT_TTL_MS = 60_000;

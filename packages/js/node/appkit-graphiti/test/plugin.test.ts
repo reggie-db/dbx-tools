@@ -103,9 +103,7 @@ describe("GraphitiPlugin", () => {
       },
     });
     try {
-      await (
-        plugin as unknown as { failAppkit(): Promise<void> }
-      ).failAppkit();
+      await (plugin as unknown as { failAppkit(): Promise<void> }).failAppkit();
     } finally {
       process.kill = kill;
     }
@@ -304,7 +302,11 @@ describe("GraphitiPlugin", () => {
     assert.notEqual(requests[0]?.group_id, requests[2]?.group_id);
     assert.equal(requests[0]?.uuid, undefined);
     assert.equal(requests[0]?.previous_episode_uuids, undefined);
-    assert.deepEqual(authorizations, ["Bearer test-bearer", "Bearer test-bearer", "Bearer test-bearer"]);
+    assert.deepEqual(authorizations, [
+      "Bearer test-bearer",
+      "Bearer test-bearer",
+      "Bearer test-bearer",
+    ]);
   });
 
   it("executes add_memory through the synchronous sidecar route", async () => {
@@ -373,5 +375,4 @@ describe("GraphitiPlugin", () => {
       else process.env.DATABRICKS_APP_PORT = previous;
     }
   });
-
 });

@@ -54,7 +54,10 @@ describe("looksLikeMarkdown", () => {
   });
 
   it("ignores paths, labels, and hex colors", () => {
-    assert.equal(looksLikeMarkdown("/Workspace/Users/reggie/.assistant/skills/joke-generator/SKILL.md"), false);
+    assert.equal(
+      looksLikeMarkdown("/Workspace/Users/reggie/.assistant/skills/joke-generator/SKILL.md"),
+      false,
+    );
     assert.equal(looksLikeMarkdown("joke-generator"), false);
     assert.equal(looksLikeMarkdown("#ffffff"), false);
   });

@@ -46,9 +46,7 @@ const VOLUME_ROOT_DEPTH = 4;
 type BackendHandlers<T> = Record<DatabricksFilesBackend, (client: WorkspaceClient) => Promise<T>>;
 
 /** Resolve the Databricks client used for the current filesystem operation. */
-export type DatabricksFileSystemClientResolver = () =>
-  | WorkspaceClient
-  | Promise<WorkspaceClient>;
+export type DatabricksFileSystemClientResolver = () => WorkspaceClient | Promise<WorkspaceClient>;
 
 /** Options for {@link DatabricksFileSystem}. */
 export interface DatabricksFileSystemOptions {

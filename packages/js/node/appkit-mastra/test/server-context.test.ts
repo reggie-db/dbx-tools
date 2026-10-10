@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type express from "express";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
   RequestContext,
 } from "@mastra/core/request-context";
+import type express from "express";
 
 import {
   MASTRA_REQUEST_ID_KEY,
@@ -113,7 +113,9 @@ describe("stale resume recovery", () => {
     assert.equal(forwarded, undefined);
     assert.equal(res.statusCode, 200);
     assert.equal(res.ended, true);
-    assert.equal(chunks.some((chunk) => chunk.includes("[DONE]")), true);
+    assert.equal(
+      chunks.some((chunk) => chunk.includes("[DONE]")),
+      true,
+    );
   });
 });
-

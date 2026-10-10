@@ -45,7 +45,13 @@ describe("isDatabricksAppEnv", () => {
       DATABRICKS_APP_NAME: "dbx-tools-demo",
       DATABRICKS_HOST: "https://workspace.cloud.databricks.com",
     };
-    assert.equal(environmentUtils.isDatabricksAppEnv({ ...source, DATABRICKS_APP_PORT: "8000" }), true);
-    assert.equal(environmentUtils.isDatabricksAppEnv({ ...source, DATABRICKS_APP_PORT: "bad" }), false);
+    assert.equal(
+      environmentUtils.isDatabricksAppEnv({ ...source, DATABRICKS_APP_PORT: "8000" }),
+      true,
+    );
+    assert.equal(
+      environmentUtils.isDatabricksAppEnv({ ...source, DATABRICKS_APP_PORT: "bad" }),
+      false,
+    );
   });
 });

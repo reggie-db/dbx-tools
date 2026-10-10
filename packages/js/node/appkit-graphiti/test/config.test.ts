@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { GRAPHITI_DEFAULTS } from "@dbx-tools/appkit-graphiti/options";
 import { resolveGraphitiConfig } from "../src/config.ts";
+import { GRAPHITI_DEFAULTS } from "@dbx-tools/appkit-graphiti/options";
 
 const originalEnv = { ...process.env };
 

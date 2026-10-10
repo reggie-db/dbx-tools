@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 
 import type { appkit } from "@dbx-tools/appkit";
-import { feedback } from "@dbx-tools/shared-mastra";
 import { injectRequestTags } from "@dbx-tools/appkit/request-tags";
+import { feedback } from "@dbx-tools/shared-mastra";
 import { context, propagation, ROOT_CONTEXT, trace, type Tracer } from "@opentelemetry/api";
 import {
   getRPCMetadata,
@@ -14,12 +14,12 @@ import {
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
-import { configureOtelPropagation } from "../src/observability.ts";
 import {
   flushDirectMlflowTracing,
   initializeAppMlflowTraceInfo,
   resetAppMlflowTraceInfo,
 } from "../src/mlflow.ts";
+import { configureOtelPropagation } from "../src/observability.ts";
 import {
   CHAT_GENIE_USED_ATTR,
   CHAT_IDENTITY_ATTR,

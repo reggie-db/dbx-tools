@@ -9,16 +9,7 @@ import { urlBuilder, type UrlBuilder } from "@dbx-tools/shared-core/net";
 import type { JSONSchema7 } from "json-schema";
 import { z } from "zod";
 
-const HTTP_METHODS = [
-  "GET",
-  "POST",
-  "PUT",
-  "PATCH",
-  "DELETE",
-  "OPTIONS",
-  "HEAD",
-  "TRACE",
-] as const;
+const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD", "TRACE"] as const;
 
 const JsonObjectSchema = z
   .record(z.string(), z.unknown())
@@ -208,7 +199,7 @@ function operationUrl(document: OpenApiDocument, sourceUrl: URL | undefined, pat
       ? base.withPathAppend(path).toString()
       : `${server.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
   }
-  return sourceUrl ? urlBuilder(sourceUrl)?.withPathReplace(path).toString() ?? path : path;
+  return sourceUrl ? (urlBuilder(sourceUrl)?.withPathReplace(path).toString() ?? path) : path;
 }
 
 function resolveReferences(

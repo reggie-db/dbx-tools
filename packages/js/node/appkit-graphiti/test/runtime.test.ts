@@ -52,10 +52,7 @@ describe("Graphiti runtime", () => {
     try {
       const options = { listen: { scheme: "tcp" as const, host: "127.0.0.1", port: 7272 } };
       const signal = new AbortController().signal;
-      assert.equal(
-        await graphitiHealthCheck(options, signal),
-        true,
-      );
+      assert.equal(await graphitiHealthCheck(options, signal), true);
       assert.equal(await graphitiHealthCheck({ ...options, bearer: "secret" }, signal), false);
     } finally {
       globalThis.fetch = originalFetch;

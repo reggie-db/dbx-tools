@@ -76,10 +76,7 @@ function graphitiGlyphContains(x: number, y: number): boolean {
     (y >= 13 && y < 25 && x >= 4 && x < 7) ||
     (y >= 13 && y < 25 && x >= 25 && x < 28) ||
     (y >= 24 && y < 27 && x >= 6 && x < 26);
-  const antenna =
-    y >= 3 &&
-    y < 11 &&
-    ((x >= 7 && x < 9) || (x >= 23 && x < 25));
+  const antenna = y >= 3 && y < 11 && ((x >= 7 && x < 9) || (x >= 23 && x < 25));
   return bolt || head || antenna || graphitiEyeContains(x, y, 11) || graphitiEyeContains(x, y, 21);
 }
 
