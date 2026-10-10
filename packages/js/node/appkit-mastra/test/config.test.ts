@@ -17,7 +17,6 @@ describe("mastra config schema", () => {
       assert.ok((description as string).length > 0, `${name} description must be non-empty`);
     }
   });
-
 });
 
 describe("genie space normalization", () => {

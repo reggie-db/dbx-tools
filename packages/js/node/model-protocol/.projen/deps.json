@@ -1,18 +1,13 @@
 {
   "dependencies": [
     {
-      "name": "@types/express",
-      "version": "catalog:",
+      "name": "@types/json-schema",
+      "version": "^7",
       "type": "build"
     },
     {
       "name": "@types/node",
       "version": "catalog:",
-      "type": "build"
-    },
-    {
-      "name": "openai",
-      "version": "^6.16.0",
       "type": "build"
     },
     {
@@ -26,18 +21,18 @@
       "type": "build"
     },
     {
-      "name": "@databricks/appkit",
+      "name": "@ai-sdk/anthropic",
       "version": "catalog:",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/databricks",
-      "version": "workspace:^",
+      "name": "@ai-sdk/open-responses",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/model-protocol",
-      "version": "workspace:^",
+      "name": "@ai-sdk/openai-compatible",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
@@ -62,11 +57,6 @@
     },
     {
       "name": "ai",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "zod",
       "version": "catalog:",
       "type": "runtime"
     }

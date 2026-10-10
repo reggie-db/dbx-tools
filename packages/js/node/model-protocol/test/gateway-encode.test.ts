@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { TextStreamPart, ToolSet } from "ai";
 
-import { encodeGatewayStream } from "../src/protocols/encode.ts";
+import { encodeGatewayStream } from "../src/gateway-encode.ts";
 
 describe("gateway protocol streams", () => {
   it("emits a complete Responses SSE lifecycle", async () => {

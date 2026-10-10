@@ -258,9 +258,7 @@ export async function runRelease(
     options.releaseNotesInstructions !== undefined &&
     (options.releaseNotesText !== undefined || options.releaseNotesFile !== undefined)
   ) {
-    throw new Error(
-      "--release-notes-instructions cannot be combined with supplied release notes",
-    );
+    throw new Error("--release-notes-instructions cannot be combined with supplied release notes");
   }
   if (
     options.releaseNotes === false &&

@@ -8,8 +8,8 @@ import { CacheManager } from "@databricks/appkit";
 import type { FilesCacheExports } from "@dbx-tools/appkit/files-cache";
 import { log } from "@dbx-tools/shared-core";
 import { MemoryFileSystem, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
-import { RequestContext } from "@mastra/core/request-context";
 import { isEventedAgent } from "@mastra/core/agent/durable";
+import { RequestContext } from "@mastra/core/request-context";
 import { resolveToolConfig, WORKSPACE_TOOLS, type WorkspaceSandbox } from "@mastra/core/workspace";
 
 import { buildAgents } from "../src/agents.ts";
@@ -169,10 +169,7 @@ describe("databricksWorkspace skill source identity", () => {
     const scoped = await scopedWorkspace.resolveFilesystem({ requestContext });
     assert.ok(scoped);
     await scoped.writeFile("/tmp/project/result.txt", "scoped");
-    assert.equal(
-      await scoped.readFile("/tmp/project/result.txt", { encoding: "utf8" }),
-      "scoped",
-    );
+    assert.equal(await scoped.readFile("/tmp/project/result.txt", { encoding: "utf8" }), "scoped");
     await assert.rejects(() => scoped.readFile("/tmp/note.txt", { encoding: "utf8" }));
   });
 

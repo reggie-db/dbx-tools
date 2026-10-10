@@ -85,6 +85,7 @@ packages/js/node/fs/index.ts
 packages/js/node/genie/index.ts
 packages/js/node/lakebase/index.ts
 packages/js/node/model/index.ts
+packages/js/node/model-protocol/index.ts
 packages/js/node/path/index.ts
 packages/js/node/postgres/index.ts
 packages/js/node/search/index.ts

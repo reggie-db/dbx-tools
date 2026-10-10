@@ -712,8 +712,10 @@ same in either mode; chrome is not.
 ## Model Selection
 
 `model.buildModel()` adapts the generic resolver from
-[`@dbx-tools/model`](../model) to Mastra. It resolves the model per request,
-so OBO identity and request-specific overrides stay isolated.
+[`@dbx-tools/model`](../model) to Mastra, then constructs a request-scoped
+Vercel AI SDK ProviderV4 model through
+[`@dbx-tools/model-protocol`](../model-protocol). It resolves the model per
+request, so OBO identity and request-specific overrides stay isolated.
 
 Model priority is:
 
@@ -742,14 +744,16 @@ Use `serving.extractModelOverride()` and `serving.resolveServingConfig()` when
 building custom routes that should behave like the plugin's `/models` and stream
 routes.
 
-The serving fetch interceptor repairs provider-specific wire requirements for
-both `fetch(url, { body })` and `fetch(new Request(...))`. In particular,
+The Chat provider uses a provider-local fetch from
+`@dbx-tools/model-protocol`; Mastra does not patch `globalThis.fetch`. The
+shared fetch repairs provider-specific wire requirements for both
+`fetch(url, { body })` and `fetch(new Request(...))`. In particular,
 Databricks-hosted GPT 5.6 Chat Completions with function tools receives
 `reasoning_effort: "none"` even when a caller default selected another effort.
 Other Chat models receive no synthesized effort, while an explicit supported
 caller value is preserved. Responses-only models such as GPT Astra use the
 native Responses provider. Claude reasoning replay and Gemini/Claude structured
-response content continue through the same sanitizer.
+response content continue through the same shared sanitizer.
 
 Responses turns set `store: false`. The OpenAI provider automatically includes
 encrypted reasoning state so a tool continuation sends the complete stateless

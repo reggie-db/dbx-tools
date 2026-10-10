@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { decodeGatewayRequest } from "../src/protocols/decode.ts";
+import { decodeGatewayRequest } from "../src/gateway-decode.ts";
 
 describe("gateway protocol decoding", () => {
   it("consolidates Codex developer instructions into one system message", () => {

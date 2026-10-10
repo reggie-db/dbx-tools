@@ -95,10 +95,6 @@
         "types": "./lib/src/resolve.d.ts",
         "default": "./lib/src/resolve.js"
       },
-      "./serving-wire": {
-        "types": "./lib/src/serving-wire.d.ts",
-        "default": "./lib/src/serving-wire.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -124,7 +120,6 @@
     "./policy": "./src/policy.ts",
     "./reasoning-translation": "./src/reasoning-translation.ts",
     "./resolve": "./src/resolve.ts",
-    "./serving-wire": "./src/serving-wire.ts",
     "./package.json": "./package.json"
   },
   "files": [

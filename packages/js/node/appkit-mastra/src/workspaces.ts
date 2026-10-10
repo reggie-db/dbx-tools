@@ -189,8 +189,10 @@ export type WorkspaceSandboxSelection =
   | WorkspaceSandboxResolver;
 
 /** Native Mastra workspace options plus Databricks path shortcuts. */
-export interface DatabricksWorkspaceOptions
-  extends Omit<WorkspaceConfig, "filesystem" | "mounts" | "sandbox" | "skills"> {
+export interface DatabricksWorkspaceOptions extends Omit<
+  WorkspaceConfig,
+  "filesystem" | "mounts" | "sandbox" | "skills"
+> {
   /**
    * Start from {@link DEFAULT_DATABRICKS_WORKSPACE_PATHS}. Defaults to `true`.
    */
@@ -549,9 +551,7 @@ async function resolveSkillFolderMounts(
       const mount = configured.mount ?? configured.path;
       mounts[mount] = userTempFilesystem(context, configured.path);
       if (configured.readable !== false) {
-        skillPaths.push(
-          ...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)),
-        );
+        skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
       }
       continue;
     }
@@ -675,14 +675,9 @@ async function resolveCacheConfig(
   value: DatabricksWorkspaceCache | undefined,
   context: DatabricksWorkspaceContext,
 ): Promise<
-  | boolean
-  | DatabricksWorkspaceCacheFilter
-  | readonly DatabricksWorkspaceCacheFilter[]
-  | undefined
+  boolean | DatabricksWorkspaceCacheFilter | readonly DatabricksWorkspaceCacheFilter[] | undefined
 > {
-  return typeof value === "function"
-    ? value(context)
-    : value;
+  return typeof value === "function" ? value(context) : value;
 }
 
 function requestContextValues(requestContext: RequestContext | undefined): Record<string, unknown> {
@@ -764,15 +759,7 @@ async function resolveFileCacheOptions(
   return {
     operations,
     filter: (operation, path) =>
-      policies.some((policy) =>
-        cacheFilterMatches(
-          policy,
-          operation,
-          path,
-          requestContext,
-          root,
-        ),
-      ),
+      policies.some((policy) => cacheFilterMatches(policy, operation, path, requestContext, root)),
   };
 }
 
@@ -806,9 +793,7 @@ function buildMountResolvers(
   const resolvers: WorkspaceMountResolver[] = [];
   const pathCount = paths.length;
   if (pathCount > 0) {
-    resolvers.push((context) =>
-      resolveSkillFolderMounts(paths, context, filesCache, cacheConfig),
-    );
+    resolvers.push((context) => resolveSkillFolderMounts(paths, context, filesCache, cacheConfig));
   }
   if (mounts && Object.keys(mounts).length > 0) resolvers.push(() => ({ mounts }));
   resolvers.push(...localMounts);

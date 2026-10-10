@@ -28,17 +28,20 @@ import { isResponsesOnly as isResponsesOnlyByPolicy } from "./policy.ts";
  */
 export const INVOCATIONS_SUFFIX = "invocations";
 
+/** Workspace Model Serving root path used by provider base URLs. */
+export const SERVING_ENDPOINTS_PATH = "serving-endpoints";
+
 /**
  * Workspace-level OpenAI Responses API path. Body carries `model` (endpoint
  * id); used by GPT / Codex models that speak Responses natively.
  */
-export const RESPONSES_PATH = "serving-endpoints/responses";
+export const RESPONSES_PATH = `${SERVING_ENDPOINTS_PATH}/responses`;
 
 /**
  * Workspace-level Open Responses API path - the cross-provider Responses
  * surface (Claude, Gemini, …) that OpenAI `/responses` does not cover.
  */
-export const OPEN_RESPONSES_PATH = "serving-endpoints/open-responses";
+export const OPEN_RESPONSES_PATH = `${SERVING_ENDPOINTS_PATH}/open-responses`;
 
 /**
  * Workspace-level OpenAI Chat Completions path. Body carries `model` (endpoint
@@ -46,13 +49,21 @@ export const OPEN_RESPONSES_PATH = "serving-endpoints/open-responses";
  * this when the caller has a model id rather than a per-endpoint route - e.g.
  * attaching a provider tool spec to whichever endpoint was resolved.
  */
-export const CHAT_COMPLETIONS_PATH = "serving-endpoints/chat/completions";
+export const CHAT_COMPLETIONS_PATH = `${SERVING_ENDPOINTS_PATH}/chat/completions`;
 
 /** Unity Gateway OpenAI Responses path used by Codex-compatible model services. */
 export const AI_GATEWAY_CODEX_RESPONSES_PATH = "ai-gateway/codex/v1/responses";
 
+/** Workspace Anthropic provider root path. */
+export const ANTHROPIC_BASE_PATH = `${SERVING_ENDPOINTS_PATH}/anthropic/v1`;
+
 /** Workspace Anthropic Messages path for native Claude requests. */
-export const ANTHROPIC_MESSAGES_PATH = "serving-endpoints/anthropic/v1/messages";
+export const ANTHROPIC_MESSAGES_PATH = `${ANTHROPIC_BASE_PATH}/messages`;
+
+/** Workspace Model Serving root URL used by OpenAI-compatible providers. */
+export function servingEndpointsUrl(host: string): string {
+  return new URL(SERVING_ENDPOINTS_PATH, host).toString().replace(/\/$/, "");
+}
 
 /**
  * The OpenAI-compatible chat-completions invocations URL for an endpoint id.
@@ -63,7 +74,7 @@ export const ANTHROPIC_MESSAGES_PATH = "serving-endpoints/anthropic/v1/messages"
  */
 export function invocationsUrl(host: string, endpoint: string): string {
   return new URL(
-    `serving-endpoints/${encodeURIComponent(endpoint)}/${INVOCATIONS_SUFFIX}`,
+    `${SERVING_ENDPOINTS_PATH}/${encodeURIComponent(endpoint)}/${INVOCATIONS_SUFFIX}`,
     host,
   ).toString();
 }
@@ -91,6 +102,11 @@ export function aiGatewayCodexResponsesUrl(host: string): string {
 /** Workspace Anthropic Messages URL (`POST`, model in the body). */
 export function anthropicMessagesUrl(host: string): string {
   return new URL(ANTHROPIC_MESSAGES_PATH, host).toString();
+}
+
+/** Workspace Anthropic provider base URL used by AI SDK providers. */
+export function anthropicBaseUrl(host: string): string {
+  return new URL(ANTHROPIC_BASE_PATH, host).toString().replace(/\/$/, "");
 }
 
 /**

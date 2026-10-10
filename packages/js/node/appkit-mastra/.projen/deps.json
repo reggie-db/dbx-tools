@@ -81,6 +81,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/model-protocol",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/model",
       "version": "workspace:^",
       "type": "runtime"

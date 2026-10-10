@@ -27,7 +27,6 @@ export * as rest from "./src/rest.ts";
 export * as sandbox from "./src/sandbox.ts";
 export * as server from "./src/server.ts";
 export * as serving from "./src/serving.ts";
-export * as servingSanitize from "./src/serving-sanitize.ts";
 export * as skillPaths from "./src/skill-paths.ts";
 export * as statement from "./src/statement.ts";
 export * as storageSchema from "./src/storage-schema.ts";

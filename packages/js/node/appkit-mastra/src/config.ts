@@ -205,7 +205,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * to `true`.
    */
   backgroundTurns?: boolean;
-  /** Mastra OpenAI-compatible provider id. Defaults to `"databricks"`; no env fallback. */
+  /** AI SDK provider-options namespace. Defaults to `"openai"`; no env fallback. */
   providerId?: string;
   /**
    * PostgresStore for Mastra threads/messages. `true` reuses the
@@ -654,7 +654,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     },
     providerId: {
       type: "string",
-      description: 'Mastra OpenAI-compatible provider id. Defaults to "databricks".',
+      description: 'AI SDK provider-options namespace. Defaults to "openai".',
     },
     remoteSkills: {
       type: ["string", "array", "object"],

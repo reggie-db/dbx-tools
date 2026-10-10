@@ -27,7 +27,8 @@ export function agentChatRoutes() {
   const chatPath = `${routes.MASTRA_ROUTES.chat}/:agentId` as `${string}:agentId`;
   const runPath =
     `${routes.MASTRA_ROUTES.chat}/:agentId${routes.MASTRA_ROUTES.runs}/:runId` as `${string}:agentId${string}:runId`;
-  const abortPath = `${runPath}${routes.MASTRA_ROUTES.abort}` as `${string}:agentId${string}:runId${string}`;
+  const abortPath =
+    `${runPath}${routes.MASTRA_ROUTES.abort}` as `${string}:agentId${string}:runId${string}`;
   return [
     registerApiRoute(chatPath, {
       method: "POST",
@@ -52,10 +53,7 @@ export function agentChatRoutes() {
           throw new Error('Query parameter "status" must be "draft" or "published"');
         }
         const status = rawStatus as "draft" | "published" | undefined;
-        const abortSignal = agentAbortSignal(
-          mastra.getAgentById(agentId),
-          context.req.raw.signal,
-        );
+        const abortSignal = agentAbortSignal(mastra.getAgentById(agentId), context.req.raw.signal);
         const stream = await handleChatStream({
           mastra,
           agentId,

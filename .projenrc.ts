@@ -110,7 +110,10 @@ const root = new project.DBXToolsNodeProject({
     "@mastra/client-js": "1.50.0",
     "vitest": "3.2.4",
     "@tanstack/react-table": "^8.21.3",
-    "ai": "^5.0.0",
+    "@ai-sdk/anthropic": "^4.0.0",
+    "@ai-sdk/open-responses": "^2.0.58",
+    "@ai-sdk/openai-compatible": "^3.0.62",
+    "ai": "^7.0.0",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.2",
     "shiki": "^3.0.0",
@@ -389,6 +392,28 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
   });
 });
 
+// node-model-protocol: AI SDK provider construction plus protocol-level request,
+// response, and Databricks serving-wire transforms shared by Mastra and the
+// model gateway. HTTP routing, AppKit context, and auth orchestration stay with
+// the consuming packages.
+project.applyToProjects(root, { identifierName: "model-protocol", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "Vercel AI SDK providers and model protocol transforms for Databricks serving",
+  );
+  p.addDeps(
+    "@ai-sdk/anthropic@catalog:",
+    "@ai-sdk/open-responses@catalog:",
+    "@ai-sdk/openai-compatible@catalog:",
+    "@dbx-tools/model@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/shared-model-gateway@workspace:^",
+    "ai@catalog:",
+  );
+  p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
+});
+
 // node-lakebase: Node-native Lakebase address parsing, workspace discovery,
 // and short-lived database credentials shared by AppKit and the local proxy.
 project.applyToProjects(root, { identifierName: "lakebase", tags: "node" }, (p) => {
@@ -579,6 +604,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@dbx-tools/fs@workspace:^",
     "@dbx-tools/genie@workspace:^",
     "@dbx-tools/model@workspace:^",
+    "@dbx-tools/model-protocol@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
@@ -645,18 +671,15 @@ project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "n
     "@databricks/appkit@catalog:",
     "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/model@workspace:^",
+    "@dbx-tools/model-protocol@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-model-gateway@workspace:^",
     "@dbx-tools/shared-model@workspace:^",
-    "@ai-sdk/anthropic@^4.0.0",
-    "@ai-sdk/open-responses@^2.0.58",
-    "@ai-sdk/openai-compatible@^3.0.62",
-    "ai@^7.0.0",
+    "ai@catalog:",
     "zod@catalog:",
   );
   p.addDevDeps(
     "@types/express@catalog:",
-    "@types/json-schema@^7",
     "openai@^6.16.0",
     "vitest@catalog:",
   );

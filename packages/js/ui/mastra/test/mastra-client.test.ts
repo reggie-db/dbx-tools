@@ -43,10 +43,7 @@ describe("MastraPluginClient AI SDK transport", () => {
     assert.equal(received[0]?.url, "http://localhost/api/mastra/chat/support/runs/run-1");
     assert.equal(received[0]?.headers.get("x-mastra-thread-id"), "thread-1");
     assert.equal(received[1]?.method, "POST");
-    assert.equal(
-      received[1]?.url,
-      "http://localhost/api/mastra/chat/support/runs/run-1/abort",
-    );
+    assert.equal(received[1]?.url, "http://localhost/api/mastra/chat/support/runs/run-1/abort");
     assert.equal(aborted, true);
   });
 

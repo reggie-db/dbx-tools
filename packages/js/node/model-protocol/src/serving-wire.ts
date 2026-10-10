@@ -5,10 +5,9 @@
  * @module
  */
 
+import { chatToolReasoningEffort } from "@dbx-tools/model/policy";
 import { json, stringUtils } from "@dbx-tools/shared-core";
 import { type ChatMessage, type ChatRole, openaiChat } from "@dbx-tools/shared-model";
-
-import { chatToolReasoningEffort } from "./policy.ts";
 
 /** Chat message plus provider reasoning fields emitted by Databricks models. */
 export interface ServingChatMessage extends ChatMessage {

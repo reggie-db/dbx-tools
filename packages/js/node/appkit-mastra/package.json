@@ -40,6 +40,7 @@
     "@dbx-tools/fs": "workspace:^",
     "@dbx-tools/genie": "workspace:^",
     "@dbx-tools/model": "workspace:^",
+    "@dbx-tools/model-protocol": "workspace:^",
     "@dbx-tools/path": "workspace:^",
     "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
@@ -169,10 +170,6 @@
         "types": "./lib/src/server.d.ts",
         "default": "./lib/src/server.js"
       },
-      "./serving-sanitize": {
-        "types": "./lib/src/serving-sanitize.d.ts",
-        "default": "./lib/src/serving-sanitize.js"
-      },
       "./serving": {
         "types": "./lib/src/serving.d.ts",
         "default": "./lib/src/serving.js"
@@ -252,7 +249,6 @@
     "./rest": "./src/rest.ts",
     "./sandbox": "./src/sandbox.ts",
     "./server": "./src/server.ts",
-    "./serving-sanitize": "./src/serving-sanitize.ts",
     "./serving": "./src/serving.ts",
     "./skill-paths": "./src/skill-paths.ts",
     "./statement": "./src/statement.ts",

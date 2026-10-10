@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   aiGatewayCodexResponsesUrl,
+  anthropicBaseUrl,
   anthropicMessagesUrl,
   chatCompletionsUrl,
   invocationsUrl,
@@ -9,6 +10,7 @@ import {
   openResponsesUrl,
   responsesUpstreamUrl,
   responsesUrl,
+  servingEndpointsUrl,
 } from "../src/invoke.ts";
 
 describe("Model Serving invocation URLs", () => {
@@ -20,6 +22,10 @@ describe("Model Serving invocation URLs", () => {
   });
 
   it("builds shared serving paths", () => {
+    assert.equal(
+      servingEndpointsUrl("https://workspace.example.com/"),
+      "https://workspace.example.com/serving-endpoints",
+    );
     assert.equal(
       responsesUrl("https://workspace.example.com"),
       "https://workspace.example.com/serving-endpoints/responses",
@@ -39,6 +45,10 @@ describe("Model Serving invocation URLs", () => {
     assert.equal(
       anthropicMessagesUrl("https://workspace.example.com/"),
       "https://workspace.example.com/serving-endpoints/anthropic/v1/messages",
+    );
+    assert.equal(
+      anthropicBaseUrl("https://workspace.example.com/"),
+      "https://workspace.example.com/serving-endpoints/anthropic/v1",
     );
   });
 

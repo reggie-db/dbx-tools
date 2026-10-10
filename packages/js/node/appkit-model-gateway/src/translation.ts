@@ -4,17 +4,20 @@
  * @module
  */
 
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenResponses } from "@ai-sdk/open-responses";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { getExecutionContext } from "@databricks/appkit";
-import { invoke, servingWire } from "@dbx-tools/model";
+import { invoke } from "@dbx-tools/model";
+import { decodeGatewayRequest } from "@dbx-tools/model-protocol/gateway-decode";
+import {
+  encodeGatewayResponse,
+  encodeGatewayStream,
+} from "@dbx-tools/model-protocol/gateway-encode";
+import {
+  createDatabricksLanguageModel,
+  type DatabricksLanguageModelProtocol,
+} from "@dbx-tools/model-protocol/provider";
 import { log } from "@dbx-tools/shared-core";
 import type { GatewayRoute } from "@dbx-tools/shared-model-gateway";
 import { streamText, type LanguageModel, type ToolSet } from "ai";
-
-import { decodeGatewayRequest } from "./protocols/decode.ts";
-import { encodeGatewayResponse, encodeGatewayStream } from "./protocols/encode.ts";
 
 const logger = log.logger("appkit/model-gateway/translation");
 
@@ -108,71 +111,18 @@ async function translationModel(route: GatewayRoute): Promise<LanguageModel> {
   const client = getExecutionContext().client;
   const host = (await client.config.getHost()).toString();
   const headers = await invoke.authHeaders(client);
-  if (route.target.capabilities.responses) {
-    logger.debug("selected Responses provider", { model: route.target.id });
-    return createOpenResponses({
-      name: "databricks-responses",
-      url: invoke.responsesUrl(host),
-      headers,
-    })(route.target.id);
-  }
-  if (route.target.capabilities.anthropic) {
-    logger.debug("selected Anthropic provider", { model: route.target.id });
-    return createAnthropic({
-      name: "databricks-anthropic",
-      baseURL: new URL("serving-endpoints/anthropic/v1", host).toString(),
-      authToken: bearerToken(headers),
-      headers,
-    })(route.target.id);
-  }
-  logger.debug("selected Chat provider", { model: route.target.id });
-  return createOpenAICompatible({
-    name: "databricks-chat",
-    baseURL: new URL("serving-endpoints", host).toString(),
-    headers,
-    supportsStructuredOutputs: true,
-    fetch: compatibleFetch,
-  }).chatModel(route.target.id);
-}
-
-async function compatibleFetch(
-  input: Parameters<typeof fetch>[0],
-  init?: Parameters<typeof fetch>[1],
-): Promise<Response> {
-  const rewritten = await servingWire.rewriteServingRequest(input, init);
-  logger.debug("sending translated Chat request", {
-    rewritten: rewritten.input !== input || rewritten.init !== init,
-  });
-  const response = await fetch(rewritten.input, rewritten.init);
-  const responseDetails = {
-    contentType: response.headers.get("content-type"),
-    status: response.status,
-  };
-  if (response.ok) logger.debug("received translated Chat response", responseDetails);
-  else logger.warn("translated Chat request failed", responseDetails);
-  if (!response.body) return response;
-  const headers = new Headers(response.headers);
-  if (headers.get("content-type")?.includes("text/event-stream")) {
-    return new Response(servingWire.rewriteServingResponseStream(response.body), {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
-  }
-  const body = servingWire.rewriteServingResponseBody(await response.text());
-  headers.delete("content-length");
-  return new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
+  const protocol = translationProtocol(route);
+  logger.debug("selected translation provider", { model: route.target.id, protocol });
+  return createDatabricksLanguageModel({
+    modelId: route.target.id,
+    protocol,
+    host,
     headers,
   });
 }
 
-function bearerToken(headers: Readonly<Record<string, string>>): string {
-  const authorization = headers.authorization ?? headers.Authorization;
-  const [scheme, token] = authorization?.split(/\s+/, 2) ?? [];
-  if (scheme?.toLowerCase() !== "bearer" || !token) {
-    throw new Error("Databricks authentication did not produce a bearer token");
-  }
-  return token;
+function translationProtocol(route: GatewayRoute): DatabricksLanguageModelProtocol {
+  if (route.target.capabilities.responses) return "responses";
+  if (route.target.capabilities.anthropic) return "anthropic";
+  return "chat";
 }

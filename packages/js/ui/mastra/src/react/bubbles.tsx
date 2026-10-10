@@ -359,11 +359,7 @@ export const AssistantBubble = ({
       : pendingApprovals.length === 0 && (!isLast || status === "ready")
         ? "done"
         : undefined;
-  const toolEvents = mergeToolEvents(
-    toolEventsFromParts(message.parts),
-    events,
-    terminalToolState,
-  );
+  const toolEvents = mergeToolEvents(toolEventsFromParts(message.parts), events, terminalToolState);
   const reasoning = [getReasoningText(message.parts), genieReasoningText(toolEvents)]
     .filter(Boolean)
     .join("\n\n");

@@ -476,8 +476,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
             threadId,
             messagesBeforeReplay.filter((message) => message.id !== assistantId),
           );
-          const streamThreadId =
-            threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
+          const streamThreadId = threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
           try {
             const stream = await mastraClient.observeAgentStream({
               agentId,
@@ -539,7 +538,15 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         }));
       }
     },
-    [agentId, getSession, mastraClient, processStream, refreshThreadsSoon, updateSession, writeMessages],
+    [
+      agentId,
+      getSession,
+      mastraClient,
+      processStream,
+      refreshThreadsSoon,
+      updateSession,
+      writeMessages,
+    ],
   );
 
   const runStream = useCallback(

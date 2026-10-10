@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createServingFetchInterceptor } from "../src/model.ts";
+import { createDatabricksServingFetch } from "../src/provider.ts";
 import {
   rewriteServingBody,
   rewriteServingRequest,
   rewriteServingResponseBody,
   rewriteServingResponseStream,
-} from "../src/serving-sanitize.ts";
+} from "../src/serving-wire.ts";
 
 /**
  * Trimmed copy of a real Databricks-hosted Gemini reply: `content` is the
@@ -110,7 +110,7 @@ describe("serving request sanitize", () => {
         headers: { "content-type": "application/json" },
       });
     }) as typeof fetch;
-    const wrapped = createServingFetchInterceptor(original);
+    const wrapped = createDatabricksServingFetch(original);
     const request = new Request("https://example.com/serving-endpoints/chat/completions", {
       method: "POST",
       body: JSON.stringify({
@@ -133,7 +133,7 @@ describe("serving request sanitize", () => {
         headers: { "content-type": "application/json" },
       });
     }) as typeof fetch;
-    const wrapped = createServingFetchInterceptor(original);
+    const wrapped = createDatabricksServingFetch(original);
     const body = JSON.stringify({
       model: "databricks-gpt-6-astra",
       tools: [{ type: "function" }],

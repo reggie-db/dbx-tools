@@ -20,23 +20,20 @@
   },
   "devDependencies": {
     "@types/express": "catalog:",
-    "@types/json-schema": "^7",
     "@types/node": "catalog:",
     "openai": "^6.16.0",
     "typescript": "^5.9.3",
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.0",
-    "@ai-sdk/open-responses": "^2.0.58",
-    "@ai-sdk/openai-compatible": "^3.0.62",
     "@databricks/appkit": "catalog:",
     "@dbx-tools/databricks": "workspace:^",
     "@dbx-tools/model": "workspace:^",
+    "@dbx-tools/model-protocol": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-model": "workspace:^",
     "@dbx-tools/shared-model-gateway": "workspace:^",
-    "ai": "^7.0.0",
+    "ai": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",

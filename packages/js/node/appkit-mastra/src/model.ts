@@ -4,8 +4,8 @@
  * Each agent step calls {@link buildModel} with the active
  * `RequestContext`. The user stamped by `MastraServer` carries an
  * AppKit `WorkspaceClient`; we ask it for the workspace host and a
- * fresh bearer header, then point Mastra's OpenAI-compatible provider
- * at `/serving-endpoints` on that host.
+ * fresh bearer header, then construct a request-scoped Vercel AI SDK provider
+ * for the endpoint's native Databricks serving protocol.
  *
  * This module only adds the Mastra-specific glue. The actual model
  * selection - listing the workspace catalogue and resolving an
@@ -16,26 +16,21 @@
  * per-request override under {@link MASTRA_MODEL_OVERRIDE_KEY}, the
  * agent / plugin `modelId`, or `DATABRICKS_SERVING_ENDPOINT_NAME`),
  * pass the plugin's fuzzy / class / fallback knobs through, and wrap
- * the resolved id in the OpenAI-compatible provider config Mastra
- * expects. Catalogue fetches fail loud: network / auth errors
+ * the resolved id in the ProviderV4 model Mastra accepts. Catalogue fetches fail loud: network / auth errors
  * propagate so callers see the real SDK message.
  *
  * @module
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { classes, invoke, policy, resolve } from "@dbx-tools/model";
-import { functionUtils, json, log, net } from "@dbx-tools/shared-core";
+import { classes, policy, resolve } from "@dbx-tools/model";
+import { createDatabricksLanguageModel } from "@dbx-tools/model-protocol/provider";
+import { log } from "@dbx-tools/shared-core";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
-import {
-  rewriteServingRequest,
-  rewriteServingResponseBody,
-  rewriteServingResponseStream,
-} from "./serving-sanitize.ts";
 import {
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
@@ -133,7 +128,6 @@ export async function buildModel(
   requestContext: RequestContext,
   overrides: BuildModelOverrides = {},
 ): Promise<MastraModelConfig> {
-  void setupFetchInterceptor();
   // The chat path stamps the AppKit user on the request context via
   // `MastraServer`. The MCP transport routes don't thread that context
   // into tool execution, so fall back to the ambient execution context
@@ -145,11 +139,6 @@ export async function buildModel(
   const host = (await clientConfig.getHost()).toString();
   const headers = new Headers();
   await clientConfig.authenticate(headers);
-  // The OpenAI Node SDK appends paths like `/chat/completions` to whatever
-  // URL we hand it. Drop the trailing slash so the resulting URL stays
-  // well-formed (`/serving-endpoints/chat/completions`).
-  const url = new URL("/serving-endpoints", host).toString().replace(/\/$/, "");
-
   const logger = log.logger(config);
   const serving = resolveServingConfig(config);
   const override = serving.allowOverride
@@ -174,98 +163,11 @@ export async function buildModel(
   requestContext.set(MASTRA_RESOLVED_MODEL_KEY, modelId);
   recordActiveTraceModel(modelId);
 
-  return {
-    providerId: config.providerId ?? "databricks",
+  return createDatabricksLanguageModel({
     modelId,
-    url,
+    protocol: servingApi(modelId),
+    host,
     headers: Object.fromEntries(headers.entries()),
-    api: servingApi(modelId),
-  };
-}
-
-/** Chat Completions route whose provider-specific wire shapes are normalized here. */
-const CHAT_COMPLETIONS_PATH = `/${invoke.CHAT_COMPLETIONS_PATH}`;
-
-/**
- * Install a single shared `globalThis.fetch` wrapper for Chat Completions
- * requests. The wrapper does three things:
- *
- *   1. Rewrites outgoing JSON from either `init.body` or a `Request` to repair
- *      provider-specific request constraints (see {@link rewriteServingRequest}
- *      in `./serving-sanitize.js`).
- *   2. At `LOG_LEVEL=debug`, dumps the (post-sanitize) JSON body so
- *      4xx debugging doesn't have to fight AI SDK's `[Array]`
- *      formatter.
- *   3. Repairs buffered and streaming responses where a provider returns
- *      `choices[].message.content` or `choices[].delta.content` as a parts
- *      array that the AI SDK's OpenAI schema rejects.
- *
- * Safe to call from any hot path: {@link functionUtils.memoize} ensures
- * the wrapper is installed at most once per process, so subsequent
- * calls are a no-op even when {@link buildModel} fires on every agent
- * step.
- */
-const setupFetchInterceptor = functionUtils.memoize((): void => {
-  globalThis.fetch = createServingFetchInterceptor(globalThis.fetch.bind(globalThis));
-});
-
-/** Build the serving fetch wrapper; exported for transport-level regression tests. */
-export function createServingFetchInterceptor(original: typeof fetch): typeof fetch {
-  const logger = log.logger("mastra/llm");
-  return (async (input, init) => {
-    const url = net.urlBuilder(input);
-    const method = init?.method ?? (input instanceof Request ? input.method : "GET");
-    if (!url || url.pathname !== CHAT_COMPLETIONS_PATH || method.toUpperCase() !== "POST") {
-      return original(input, init);
-    }
-    const rewritten = await rewriteServingRequest(input, init);
-    const parsed = json.parse<unknown>(rewritten.body);
-    logger.debug(
-      "POST",
-      parsed === undefined
-        ? { url: url.toString(), bodyType: "non-JSON" }
-        : { url: url.toString(), body: parsed },
-    );
-    const response = await original(rewritten.input, rewritten.init);
-    return repairServingResponse(response);
-  }) as typeof globalThis.fetch;
-}
-
-/**
- * Rewrite a serving response whose body needs repair, leaving unsupported
- * content types byte-identical.
- *
- * SSE remains a live stream: a TransformStream repairs complete `data:` lines
- * as bytes arrive and preserves partial lines across network chunks. JSON is
- * buffered through the existing response-body repair. A non-JSON/non-SSE body
- * is returned untouched so the caller still sees the original response.
- */
-async function repairServingResponse(response: Response): Promise<Response> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("text/event-stream") && response.body) {
-    return rebuildServingResponse(response, rewriteServingResponseStream(response.body));
-  }
-  if (!contentType.includes("application/json")) return response;
-
-  const body = await response.clone().text();
-  const rewritten = rewriteServingResponseBody(body);
-  if (rewritten === body) return response;
-  return rebuildServingResponse(response, rewritten);
-}
-
-/** Rebuild a transformed response without stale byte-length/encoding headers. */
-function rebuildServingResponse(
-  response: Response,
-  body: string | ReadableStream<Uint8Array>,
-): Response {
-  // `content-length` / `content-encoding` describe the ORIGINAL bytes, so they
-  // are dropped: the rewritten body is a different length and already decoded.
-  const headers = new Headers(response.headers);
-  headers.delete("content-length");
-  headers.delete("content-encoding");
-  return new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
+    providerName: config.providerId ?? "openai",
   });
 }
