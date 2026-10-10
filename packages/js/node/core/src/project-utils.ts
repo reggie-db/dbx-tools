@@ -104,18 +104,11 @@ function projectContextCommand(
 }
 
 function projectCommand(command: string) {
-  const context = (
-    args: string[],
-    cwd?: string,
-    options?: ProjectCommandOptions,
-  ): ProjectContext => projectContextCommand(command, args, cwd, options);
+  const context = (args: string[], cwd?: string, options?: ProjectCommandOptions): ProjectContext =>
+    projectContextCommand(command, args, cwd, options);
   return {
     context,
-    output(
-      args: string[],
-      cwd?: string,
-      options?: ProjectCommandOptions,
-    ): string | undefined {
+    output(args: string[], cwd?: string, options?: ProjectCommandOptions): string | undefined {
       return stringUtils.trimToNull(context(args, cwd, options).output) ?? undefined;
     },
     root(args: string[], cwd: string): string | undefined {
@@ -305,7 +298,7 @@ function repositoryUrlFromGh(cwd?: string): string | undefined {
   const out = ghCommand.output(
     ["repo", "view", account.remote.repository, "--json", "url"],
     account.root,
-    { cache: false, env: account.env },
+    { cache: true, env: account.env },
   );
   return stringUtils.trimToNull(json.parseRecord(out)?.url) ?? undefined;
 }
@@ -381,12 +374,7 @@ export function resolveProjectGhAccount(
 ): ProjectGhAccount | undefined {
   const root = resolveWorkingDirectory(cwd);
   const remoteName = stringUtils.trimToNull(options.remote) ?? "origin";
-  const key = JSON.stringify([
-    root,
-    remoteName,
-    homedir(),
-    process.env.GH_CONFIG_DIR ?? "",
-  ]);
+  const key = JSON.stringify([root, remoteName, homedir(), process.env.GH_CONFIG_DIR ?? ""]);
   if (!options.refresh && projectGhAccountCache.has(key)) {
     return projectGhAccountCache.get(key) ?? undefined;
   }

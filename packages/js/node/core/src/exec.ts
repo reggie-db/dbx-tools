@@ -155,6 +155,8 @@ export type ExecOptions = Omit<SpawnOptions, "stdio"> & {
 export interface KillOptions {
   /** Signal sent to the snapshotted process tree. `false` skips this phase. Defaults to `SIGTERM`. */
   gracefulSignal?: NodeJS.Signals | false;
+  /** Processes receiving the graceful signal. Defaults to the complete process tree. */
+  gracefulSignalTarget?: "root" | "tree";
   /** Time to wait for graceful shutdown. Defaults to 10 seconds. */
   gracefulTimeoutMs?: number;
   /** Signal sent to survivors. `false` disables forced termination. Defaults to `SIGKILL`. */
@@ -531,8 +533,8 @@ function delay(milliseconds: number): Promise<void> {
 
 /**
  * Poll refreshed process snapshots until the retained tree exits or the
- * timeout elapses. Descendants created during shutdown are retained and receive
- * the current shutdown signal once.
+ * timeout elapses. Descendants created during shutdown are retained and may
+ * receive the current shutdown signal once.
  */
 async function waitForProcessTreeExit(
   retained: Map<number, ProcessSnapshotEntry>,
@@ -541,6 +543,7 @@ async function waitForProcessTreeExit(
   signaled: Set<string>,
   timeoutMs: number,
   pollIntervalMs: number,
+  signalDiscovered: boolean,
 ): Promise<ProcessSnapshotEntry[]> {
   let survivors = [...initialProcesses];
   const deadline = Date.now() + timeoutMs;
@@ -549,7 +552,7 @@ async function waitForProcessTreeExit(
     if (remainingMs > 0) await delay(Math.min(pollIntervalMs, remainingMs));
 
     const refreshed = refreshProcessTree(retained, await processSnapshot());
-    if (refreshed.discovered.length > 0) {
+    if (signalDiscovered && refreshed.discovered.length > 0) {
       signalProcesses(refreshed.discovered, signal, signaled);
     }
     survivors = refreshed.processes;
@@ -855,7 +858,11 @@ export async function kill(child: ChildProcess, options: KillOptions = {}): Prom
   const tree = processTree(snapshot, child.pid);
   const retained = new Map(tree.map((entry) => [entry.pid, entry]));
   const gracefulSignal = options.gracefulSignal === undefined ? "SIGTERM" : options.gracefulSignal;
+  const gracefulSignalTarget = options.gracefulSignalTarget ?? "tree";
   const forceSignal = options.forceSignal === undefined ? "SIGKILL" : options.forceSignal;
+  if (gracefulSignalTarget !== "root" && gracefulSignalTarget !== "tree") {
+    throw new RangeError("gracefulSignalTarget must be root or tree");
+  }
   if (gracefulSignal === false && forceSignal === false) {
     throw new Error("At least one process-tree termination signal must be enabled");
   }
@@ -863,7 +870,8 @@ export async function kill(child: ChildProcess, options: KillOptions = {}): Prom
   let forceTargets = tree;
   if (gracefulSignal !== false) {
     const gracefulSignaled = new Set<string>();
-    signalProcesses(tree, gracefulSignal, gracefulSignaled);
+    const gracefulTargets = gracefulSignalTarget === "root" ? [tree.at(-1)!] : tree;
+    signalProcesses(gracefulTargets, gracefulSignal, gracefulSignaled);
     forceTargets = await waitForProcessTreeExit(
       retained,
       tree,
@@ -871,6 +879,7 @@ export async function kill(child: ChildProcess, options: KillOptions = {}): Prom
       gracefulSignaled,
       gracefulTimeoutMs,
       pollIntervalMs,
+      gracefulSignalTarget === "tree",
     );
   }
   if (forceTargets.length === 0) return;
@@ -890,6 +899,7 @@ export async function kill(child: ChildProcess, options: KillOptions = {}): Prom
     forceSignaled,
     forceTimeoutMs,
     pollIntervalMs,
+    true,
   );
   if (forcedSurvivors.length > 0) throw processTerminationError(forceSignal, forcedSurvivors);
 }

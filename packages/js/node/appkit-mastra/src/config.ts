@@ -28,6 +28,7 @@ import type { GenieSpacesConfig } from "./genie.ts";
 import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
 import type { RemoteSkillsOption } from "./remote-skills.ts";
 import type { DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
+import type { WorkspaceFilesConfig } from "./workspaces.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the
@@ -220,6 +221,8 @@ export interface MastraPluginConfig extends BasePluginConfig {
   sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
   /** Native Mastra workspace tool availability, approval, and hook configuration. */
   workspaceTools?: WorkspaceToolsConfig;
+  /** Path-aware approval and cache policies for auto-created workspace files. */
+  files?: WorkspaceFilesConfig;
   /**
    * Use Mastra's native workspace skill manager. Defaults to true. Pass an
    * object to tune on-demand discovery and loaded-skill state.
@@ -674,6 +677,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: "object",
       description:
         "Native Mastra workspace tool configuration for availability, approvals, read-before-write, output limits, and hooks.",
+    },
+    files: {
+      type: "object",
+      description:
+        "Path-aware file approval and process-local cache policies for auto-created Mastra workspaces.",
     },
     defaultAgent: {
       type: "string",

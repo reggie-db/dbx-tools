@@ -17,13 +17,13 @@ from typing_extensions import Self
 from ._generated.node.auth.bindings import AuthClient, create_auth_client
 from ._generated.node.model.bindings import ModelClient, create_model_client
 from ._generated.node.shared_model.openai_chat import chat_content_to_text
-from ._generated.sync.postgraph.postgraph_driver import PostGraphDriver
 from .database import _DatabaseRuntime, _start_database
 from .options import (
     GraphitiOptionsInput,
     ResolvedGraphitiOptionsResponse,
     normalize_graphiti_options,
 )
+from .postgraph.driver import PostGraphDriver
 
 """Importable Python runtime for Graphiti, model routing, and embedded persistence."""
 
@@ -146,7 +146,9 @@ class GraphitiRuntime(AbstractAsyncContextManager["GraphitiRuntime"]):
         if self.clients is not None:
             await self.clients.http.aclose()
             self.clients = None
-        _LOGGER.info("Graphiti runtime stopped duration_ms=%.1f", (perf_counter() - started_at) * 1000)
+        _LOGGER.info(
+            "Graphiti runtime stopped duration_ms=%.1f", (perf_counter() - started_at) * 1000
+        )
 
 
 async def create_runtime_clients(

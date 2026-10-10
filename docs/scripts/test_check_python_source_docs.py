@@ -17,6 +17,10 @@ class CheckPythonSourceDocsTest(unittest.TestCase):
             generated = source / "_generated"
             generated.mkdir()
             (generated / "client.py").write_text("class Generated:\n    pass\n")
+            vendored = source / "vendor"
+            vendored.mkdir()
+            (vendored / "LICENSE.upstream").write_text("Upstream license")
+            (vendored / "client.py").write_text("class Vendored:\n    pass\n")
 
             findings = collect_undocumented(root)
 

@@ -302,6 +302,25 @@
         }
       ]
     },
+    "graphiti:smoke:embedded": {
+      "name": "graphiti:smoke:embedded",
+      "description": "Smoke-test the embedded PostGraph driver and restart persistence",
+      "steps": [
+        {
+          "exec": "cd packages/py/graphiti && uv run --extra dev python smoke/postgraph_restart.py"
+        }
+      ]
+    },
+    "graphiti:smoke:mastra": {
+      "name": "graphiti:smoke:mastra",
+      "description": "Smoke-test Graphiti through the AppKit Mastra tool provider",
+      "steps": [
+        {
+          "exec": "bun packages/js/node/appkit-graphiti/smoke/mastra-tool.ts",
+          "receiveArgs": true
+        }
+      ]
+    },
     "install": {
       "name": "install",
       "description": "Install project dependencies and update lockfile (non-frozen)",

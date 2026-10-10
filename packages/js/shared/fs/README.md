@@ -53,7 +53,16 @@ const mem = new MemoryFileSystem();
 await mem.writeFile("note.txt", "hi");
 const cached = fs.cache(mem, myCache satisfies FileSystemCache);
 await cached.stat("note.txt");
+
+const selected = fs.cache(mem, myCache, {
+  operations: ["readFile", "readdir"],
+  filter: (operation, path) => operation === "readdir" || path.startsWith("/skills/"),
+});
 ```
+
+The default caches `exists`, `readdir`, and `stat`. `filter` receives the
+operation and normalized absolute path, so an owning package can compile its
+own glob or authorization policy without adding a path-matcher dependency here.
 
 ## Modules
 

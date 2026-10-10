@@ -237,6 +237,8 @@ root.gitignore.addPatterns(
 // Per-package dependency rules (selected by package name + tag)
 // ---------------------------------------------------------------------------
 
+// Shared foundation
+
 // shared-core: the dependency-light, browser-safe base every package builds on.
 // Its logger uses only platform console/stderr surfaces so browser bundlers do
 // not retain optional bare imports that consumers must install themselves.
@@ -244,6 +246,8 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
   p.package.addField("description", "Browser-safe utility foundation for dbx-tools packages");
   p.addDeps("zod@catalog:");
 });
+
+// Node packages
 
 // node-core: the Node-only half of the shared runtime (exec + project +
 // layered config). Lives under packages/js/node/, so the `node` tag auto-applies
@@ -683,6 +687,91 @@ project.applyToProjects(root, { identifierName: "fs", tags: "node" }, (p) => {
   );
 });
 
+// node-auth-gate: Better Auth runtime with email OTP, passkeys, caller-provided
+// authorization/delivery, and Lakebase or SQLite persistence.
+project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "Passwordless authentication runtime built on Better Auth, email OTP, and passkeys",
+  );
+  p.addDeps(
+    "@better-auth/passkey@catalog:",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/shared-auth@workspace:^",
+    "better-auth@catalog:",
+    "env-paths@catalog:",
+    "zod@catalog:",
+  );
+});
+
+// node-tunnel (`@dbx-tools/tunnel`): fronts a Databricks App with Portr and/or FRP
+// tunnel + @dbx-tools/auth-gate passwordless gate, consumed IN-PROCESS through
+// `@dbx-tools/appkit`'s `createApp` interceptor context.
+// `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs selected clients pointed
+// at the app's public port, and stops them through AppKit's shutdown lifecycle.
+// The authGate AppKit plugin composes Better Auth with the
+// email transport and native Lakebase or SQLite storage, then registers one
+// handler + gating middleware on the app's OWN Express server.
+project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "In-process public Portr and FRP tunnels protected by the dbx-tools authentication gate",
+  );
+  p.addDeps(
+    "@dbx-tools/auth-gate@workspace:^",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-auth@workspace:^",
+    "@databricks/appkit@catalog:",
+    "@types/express@catalog:",
+    "better-call@catalog:",
+    "http-proxy-3@catalog:",
+    "zod@catalog:",
+  );
+  p.addDevDeps(`@types/bun@${bunWorkflow.BUN_VERSION}`);
+  if (p instanceof project.DBXToolsTypeScriptProject && p.tsconfig) {
+    new javascript.TypescriptConfig(p, {
+      fileName: "assets/tsconfig.json",
+      extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([p.tsconfig]),
+      compilerOptions: {
+        lib: ["ESNext", "DOM", "DOM.Iterable"],
+        noEmit: true,
+        target: "ESNext",
+        types: ["node", "bun"],
+      },
+      include: ["*.ts"],
+    });
+  }
+  p.tasks.tryFind("pre-compile")?.exec("bunx tsc --build assets/tsconfig.json");
+  p.tasks.tryFind("pre-compile")?.exec("bun assets/build-login-client.ts");
+  // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
+  // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
+  // `--insecure` mode) needs no mail transport, so it is an optional peer rather
+  // than a hard dep; the app that mounts `authGate` provides it. Kept as a devDep
+  // so it resolves for this package's own tests.
+  projectJs.addOptionalPeer(p, "@dbx-tools/email@workspace:^");
+});
+
+// Shared contracts
+
+// shared-auth: browser-safe passwordless and Databricks authentication schemas.
+project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" }, (p) => {
+  p.package.addField(
+    "description",
+    "Browser-safe passwordless and Databricks authentication schemas and types",
+  );
+  p.addDeps(
+    "@better-auth/passkey@catalog:",
+    "@dbx-tools/shared-core@workspace:^",
+    "@simplewebauthn/browser@catalog:",
+    "better-auth@catalog:",
+    "zod@catalog:",
+  );
+});
+
 // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
 project.applyToProjects(root, { identifierName: "shared-model", tags: "shared" }, (p) => {
   p.package.addField("description", "Browser-safe model selection contract and classifier");
@@ -822,6 +911,8 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 // the single bun workspace (added via `extraWorkspaceMembers`). It synthesizes
 // itself, so there is no engine rule here.
 
+// CLI packages
+
 // cli-args: Zod-to-Commander binding for any CLI. Kept as its own package so
 // consuming projects can generate flags without installing the full dbx CLI.
 project.applyToProjects(root, { identifierName: "cli-args", tags: "cli" }, (p) => {
@@ -910,73 +1001,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
   });
 });
 
-// node-auth-gate: Better Auth runtime with email OTP, passkeys, caller-provided
-// authorization/delivery, and Lakebase or SQLite persistence.
-project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p) => {
-  p.package.addField(
-    "description",
-    "Passwordless authentication runtime built on Better Auth, email OTP, and passkeys",
-  );
-  p.addDeps(
-    "@better-auth/passkey@catalog:",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "better-auth@catalog:",
-    "env-paths@catalog:",
-    "zod@catalog:",
-  );
-});
-
-// node-tunnel (`@dbx-tools/tunnel`): fronts a Databricks App with Portr and/or FRP
-// tunnel + @dbx-tools/auth-gate passwordless gate, consumed IN-PROCESS through
-// `@dbx-tools/appkit`'s `createApp` interceptor context.
-// `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs selected clients pointed
-// at the app's public port, and stops them through AppKit's shutdown lifecycle.
-// The authGate AppKit plugin composes Better Auth with the
-// email transport and native Lakebase or SQLite storage, then registers one
-// handler + gating middleware on the app's OWN Express server.
-project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
-  p.package.addField(
-    "description",
-    "In-process public Portr and FRP tunnels protected by the dbx-tools authentication gate",
-  );
-  p.addDeps(
-    "@dbx-tools/auth-gate@workspace:^",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@databricks/appkit@catalog:",
-    "@types/express@catalog:",
-    "better-call@catalog:",
-    "http-proxy-3@catalog:",
-    "zod@catalog:",
-  );
-  p.addDevDeps(`@types/bun@${bunWorkflow.BUN_VERSION}`);
-  if (p instanceof project.DBXToolsTypeScriptProject && p.tsconfig) {
-    new javascript.TypescriptConfig(p, {
-      fileName: "assets/tsconfig.json",
-      extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([p.tsconfig]),
-      compilerOptions: {
-        lib: ["ESNext", "DOM", "DOM.Iterable"],
-        noEmit: true,
-        target: "ESNext",
-        types: ["node", "bun"],
-      },
-      include: ["*.ts"],
-    });
-  }
-  p.tasks.tryFind("pre-compile")?.exec("bunx tsc --build assets/tsconfig.json");
-  p.tasks.tryFind("pre-compile")?.exec("bun assets/build-login-client.ts");
-  // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
-  // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
-  // `--insecure` mode) needs no mail transport, so it is an optional peer rather
-  // than a hard dep; the app that mounts `authGate` provides it. Kept as a devDep
-  // so it resolves for this package's own tests.
-  projectJs.addOptionalPeer(p, "@dbx-tools/email@workspace:^");
-});
+// UI packages
 
 // Common AppKit UI package. Foundation, branding, auth, email, and search stay
 // tree-shakeable behind distinct subpath exports; Mastra and Teams remain
@@ -1014,21 +1039,6 @@ project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
     "./search/styles.css": "./src/search/styles.css",
   });
   p.tasks.tryFind("pre-compile")?.exec("bun ../../../../branding/generate-package-assets.mjs");
-});
-
-// shared-auth: browser-safe passwordless and Databricks authentication schemas.
-project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" }, (p) => {
-  p.package.addField(
-    "description",
-    "Browser-safe passwordless and Databricks authentication schemas and types",
-  );
-  p.addDeps(
-    "@better-auth/passkey@catalog:",
-    "@dbx-tools/shared-core@workspace:^",
-    "@simplewebauthn/browser@catalog:",
-    "better-auth@catalog:",
-    "zod@catalog:",
-  );
 });
 
 // ui-teams: the React surface for the Teams add-on - an `AdaptiveCardView` that
@@ -1192,7 +1202,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "mcp>=2,<3",
       "openai>=2.41,<3",
       "platformdirs>=4,<5",
-      "post-graph>=0.7,<1",
+      "post-graph>=1.8,<2",
       "pydantic-settings>=2,<3",
       "pyyaml>=6,<7",
       "typing-extensions>=4,<5",
@@ -1202,36 +1212,6 @@ const pythonPackages: project.PythonPackageOptions[] = [
       dev: ["embedded-postgres>=18.6.3,<19", PYTHONMONKEY_REQUIREMENT],
     },
     sync: [
-      {
-        name: "postgraph",
-        source:
-          "postgraph-driver @ git+https://github.com/crajah/graphiti.git@4f6d7bc31dd9a84053d4094b382485044448d9c8#subdirectory=graphiti_core/driver",
-        include: ["postgraph_driver.py", "record_parsers.py", "postgraph/**/*.py"],
-        replace: {
-          "import asyncio\n": "",
-          "from contextlib import asynccontextmanager, suppress":
-            "from contextlib import asynccontextmanager",
-          "GraphProvider.POSTGRAPH": '"postgraph"',
-          "        embedding_dim: int | None = None,\n    ):":
-            "        embedding_dim: int | None = None,\n        connection_options: dict[str, Any] | None = None,\n    ):",
-          "        self._embedding_dim = embedding_dim or EMBEDDING_DIM":
-            "        self._embedding_dim = embedding_dim or EMBEDDING_DIM\n        self._connection_options = connection_options or {}",
-          "            self._client = AsyncPostGraph(dsn=self._dsn)":
-            "            self._client = AsyncPostGraph(dsn=self._dsn, **self._connection_options)",
-          "        self._init_task: asyncio.Task | None = None\n        try:\n            loop = asyncio.get_running_loop()\n            self._init_task = loop.create_task(self._init())\n        except RuntimeError:\n            pass\n\n    async def _init(self):\n        await self._ensure_client()\n        await self.build_indices_and_constraints()\n\n":
-            "",
-          "        if self._init_task is not None and not self._init_task.done():\n            self._init_task.cancel()\n            with suppress(asyncio.CancelledError):\n                await self._init_task\n":
-            "",
-          "with suppress(TableExistsError, Exception):": "with suppress(TableExistsError):",
-          "        for stmt in _tsvector_ddl():\n            with suppress(Exception):\n                await client._execute(stmt)":
-            "        for stmt in _tsvector_ddl():\n            await client._execute(stmt)",
-          "        for stmt in _extra_index_ddl():\n            with suppress(Exception):\n                await client._execute(stmt)":
-            "        for stmt in _extra_index_ddl():\n            await client._execute(stmt)",
-          // Search input is arbitrary natural language, not PostgreSQL tsquery syntax.
-          "to_tsquery('simple',": "plainto_tsquery('simple',",
-          "return ' & '.join(terms)": "return ' '.join(terms)",
-        },
-      },
       {
         name: "graphiti_server",
         source: `graph-service @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_COMMIT}#subdirectory=server`,
@@ -1253,7 +1233,9 @@ const pythonPackages: project.PythonPackageOptions[] = [
           "            asyncio.create_task(self._process_episode_queue(group_id))":
             "            self._worker_tasks[group_id] = asyncio.create_task(self._process_episode_queue(group_id))",
           "                    logger.error(\n                        f'Error processing queued episode for group_id {group_id}: {str(e)}'\n                    )":
-            "                    logger.error(\n                        f'Error processing queued episode for group_id {group_id}: {str(e)}'\n                    )\n                    self._queue_errors.setdefault(group_id, []).append(e)",
+            "                    logger.exception(\n                        'Error processing queued episode for group_id %s', group_id\n                    )\n                    self._queue_errors.setdefault(group_id, []).append(e)",
+          "            logger.error(f'Unexpected error in queue worker for group_id {group_id}: {str(e)}')":
+            "            logger.exception(\n                'Unexpected error in queue worker for group_id %s', group_id\n            )",
           "            self._queue_workers[group_id] = False\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')":
             "            self._queue_workers[group_id] = False\n            self._worker_tasks.pop(group_id, None)\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')",
           "    def get_queue_size(self, group_id: str) -> int:\n":
@@ -1309,10 +1291,20 @@ new project.DBXToolsPythonWorkspace(root, {
   // local devpi index, so uv must consider the pinned version from both.
   indexStrategy: "unsafe-best-match",
   lintPaths: ["packages/py"],
+  ruffExcludes: ["packages/py/graphiti/src/dbx_tools/graphiti/postgraph"],
   release: true,
 });
 root.testTask.spawn(root.tasks.tryFind("py:lint")!);
 root.tasks.tryFind("test:all")?.spawn(root.tasks.tryFind("py:test")!);
+root.addTask("graphiti:smoke:embedded", {
+  exec: "cd packages/py/graphiti && uv run --extra dev python smoke/postgraph_restart.py",
+  description: "Smoke-test the embedded PostGraph driver and restart persistence",
+});
+root.addTask("graphiti:smoke:mastra", {
+  exec: "bun packages/js/node/appkit-graphiti/smoke/mastra-tool.ts",
+  description: "Smoke-test Graphiti through the AppKit Mastra tool provider",
+  receiveArgs: true,
+});
 new BrandPackageAssets(root);
 
 // ---------------------------------------------------------------------------

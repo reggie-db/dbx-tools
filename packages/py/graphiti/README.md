@@ -1,9 +1,10 @@
 # `dbx-tools-graphiti`
 
 Run Graphiti REST, MCP, model routing, and PostgreSQL-backed graph memory from
-one Python runtime. The build synchronizes the upstream REST and MCP source plus
-the pinned PostGraph driver from Graphiti PR 1777 into the generated package
-tree, so the published wheel has no direct Git dependencies.
+one Python runtime. The build synchronizes the upstream REST and MCP source at
+pinned commits. The PostGraph driver derived from Graphiti PR 1777 is maintained
+as attributed package source, so the published wheel has no direct Git
+dependencies.
 
 Both upstream surfaces come from the same Graphiti commit:
 
@@ -32,6 +33,12 @@ The combined application exposes:
   ingestion endpoints
 - direct tool operations under `/tools/*`
 - Streamable HTTP MCP at `/mcp/`
+
+The MCP and direct HTTP operations use the same operation descriptions. The
+OpenAPI document additionally carries per-argument descriptions extracted from
+the operation `Args` sections into Pydantic fields; the upstream MCP schema does
+not currently preserve that field-level detail. AppKit tool registration uses
+the OpenAPI contract.
 
 Configure Graphiti through the shared environment contract used by the Node
 runtime and CLI.
@@ -126,10 +133,11 @@ discovers that extension schema for type resolution without moving it.
 
 ## Memory Writes
 
-`add_memory` queues a write and returns immediately. Call
-`wait_for_memory_queue` before stopping a short-lived runtime when the caller
-needs queued work to be durable. Queue processing errors are re-raised by the
-wait operation instead of being reported as an empty successful queue.
+The direct HTTP and MCP `add_memory` operation queues a write and returns
+immediately. Call `wait_for_memory_queue` before stopping a short-lived runtime
+when the caller needs queued work to be durable. Queue processing errors are
+logged with their traceback and re-raised by the wait operation instead of
+being reported as an empty successful queue.
 
 Use `add_memory_sync` when the request itself must wait for persistence. Both
 forms remain available; queued writes are not forced to become synchronous.
@@ -143,3 +151,9 @@ subsequent retrieval. A supplied `uuid` selects an existing episode to update.
 `dbx_tools.graphiti.main` adds FastAPI REST and MCP surfaces around the same
 importable runtime. Shared environment options are parsed through generated
 PythonMonkey bindings and mapped into both upstream settings objects.
+
+The PostgreSQL graph driver is maintained under
+`dbx_tools.graphiti.postgraph`. It is derived from the Apache-2.0 PostGraph
+driver and carries upstream attribution beside the source. Run
+`bun run graphiti:smoke:embedded` to exercise driver CRUD, full-text search,
+and embedded PostgreSQL restart persistence outside the regular test suite.

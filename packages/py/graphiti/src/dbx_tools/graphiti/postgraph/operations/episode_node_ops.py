@@ -470,3 +470,4 @@ def _as_episodic_node(node: Any) -> Any:
                 data[key] = None
     data.setdefault('entity_edges', [])
     return SimpleNamespace(**data)
+

@@ -251,13 +251,26 @@ mcp_app = graphiti_mcp.mcp.streamable_http_app(
 async def _close_runtime(app: FastAPI) -> None:
     """Stop the queue and Graphiti runtime if either was started."""
     app.state.ready = False
+    failure: BaseException | None = None
     queue = graphiti_mcp.queue_service
     if queue is not None:
-        await queue.close()
+        try:
+            await queue.close()
+        except BaseException as error:
+            failure = error
+            _LOGGER.exception("Graphiti asynchronous memory queue failed during shutdown")
     runtime = getattr(app.state, "runtime", None)
     if runtime is not None:
-        await runtime.close()
-        app.state.runtime = None
+        try:
+            await runtime.close()
+        except BaseException as error:
+            if failure is None:
+                failure = error
+            _LOGGER.exception("Graphiti runtime cleanup failed")
+        finally:
+            app.state.runtime = None
+    if failure is not None:
+        raise failure
 
 
 @asynccontextmanager

@@ -205,6 +205,7 @@ export async function createGraphitiChildProcess(
       },
     ],
     {
+      gracefulSignalTarget: "root",
       healthCheck: healthCheck ?? (({ signal }) => graphitiHealthCheck(resolved, signal)),
       healthCheckTimeoutMs: resolved.startupTimeoutMs,
     },

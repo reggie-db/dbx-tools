@@ -67,8 +67,8 @@ class QueueService:
                     # Process the episode
                     await process_func()
                 except Exception as e:
-                    logger.error(
-                        f'Error processing queued episode for group_id {group_id}: {str(e)}'
+                    logger.exception(
+                        'Error processing queued episode for group_id %s', group_id
                     )
                     self._queue_errors.setdefault(group_id, []).append(e)
                 finally:
@@ -77,7 +77,9 @@ class QueueService:
         except asyncio.CancelledError:
             logger.info(f'Episode queue worker for group_id {group_id} was cancelled')
         except Exception as e:
-            logger.error(f'Unexpected error in queue worker for group_id {group_id}: {str(e)}')
+            logger.exception(
+                'Unexpected error in queue worker for group_id %s', group_id
+            )
         finally:
             self._queue_workers[group_id] = False
             self._worker_tasks.pop(group_id, None)

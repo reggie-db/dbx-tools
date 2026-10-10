@@ -285,6 +285,32 @@ filesystem metadata operations. Each operation resolves the active request's
 OBO client, so the retained source does not retain an old token. Explicit
 caller-owned workspaces remain unchanged.
 
+The plugin is detected from the AppKit plugin context. If it is not registered,
+filesystem caching is disabled even when `files.cache` is configured. When it
+is registered, its app-lifetime `FilesCacheManager` is the single owner of the
+process-local, user-scoped LRU. Filesystem values do not use AppKit's
+`CacheManager`: that cache can write through to Lakebase, while file reads need
+a local-only fast path. Existing Lakebase-backed AppKit caching remains
+unchanged.
+
+The default file cache stores `exists`, `readdir`, and `stat` results for every
+mounted Databricks path. `readFile` is cached only under configured skill roots,
+so ordinary file contents remain live. Directory listings therefore remain
+cached. Set `files.cache: false` to disable this behavior, `true` to select the
+defaults explicitly, or provide operation/path rules. Explicit rules replace
+the defaults and are ORed:
+
+```ts
+mastra({
+  files: {
+    cache: [
+      { operations: ["exists", "readdir", "stat"], paths: "**" },
+      { operations: "readFile", paths: ["~/.assistant/skills/**"] },
+    ],
+  },
+});
+```
+
 Mastra exposes its native skill search and loading tools. Save or update a
 skill with the native workspace file tools by writing
 `<skill-root>/<name>/SKILL.md`. Set `workspaceSkills: false` to disable the
@@ -293,11 +319,47 @@ skill search processor, or pass `{ topK, minScore, ttlMs }` to tune it.
 Workspace access policy stays on Mastra's native `Workspace.tools` owner. By
 default, mounted files are readable without approval. Write, edit, AST edit,
 delete, and mkdir run without approval only inside
-`/Workspace/Users/<email>` for the authenticated user. Mutations under
-organization mounts, `/tmp`, or any other path require approval.
+`/Workspace/Users/<email>` for the authenticated user and under `/tmp`.
+Mutations under organization mounts or any other path require approval.
+`files.approval` adds ordered operation/path rules; the first match wins and an
+unmatched operation uses the default policy. Omit `operations` to cover every
+Mastra filesystem tool, omit `paths` to cover every path, and omit
+`requireApproval` to require approval. Use Mastra's `WORKSPACE_TOOLS` constants
+for operation names:
+
+```ts
+import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
+
+mastra({
+  files: {
+    approval: ({ requestContext }) => [
+      {
+        operations: WORKSPACE_TOOLS.FILESYSTEM.DELETE,
+        paths: "~/**",
+        requireApproval: true,
+      },
+      {
+        operations: [
+          WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
+          WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE,
+        ],
+        paths: "~/projects/**",
+        requireApproval: requestContext.role !== "editor",
+      },
+    ],
+  },
+});
+```
+
+`files.approval` and `files.cache` accept fixed values or per-request resolver
+functions. Path strings use `@dbx-tools/path` glob matching, including dotfiles.
+`~` and `~/...` expand to `/Workspace/Users/<email>` for the current request;
+home-relative rules do not match when no user email is available.
+
 `workspaceTools` accepts Mastra's complete `WorkspaceToolsConfig`, so global or
 per-tool settings can change approval, enablement, read-before-write, hooks,
-and output limits:
+and output limits. Native `workspaceTools.requireApproval` or a per-tool value
+overrides `files.approval`:
 
 ```ts
 import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
@@ -345,9 +407,10 @@ available.
 
 A consuming library merges over that map: a matching name overrides the
 default, `false` disables it, and any other name adds a location. A folder
-points at a Databricks `path` (a literal, or a function resolving one per
-request) or supplies a ready `filesystem` for anything the OBO client cannot
-reach.
+points at a Databricks `path` or supplies a ready `filesystem` for anything the
+OBO client cannot reach. Every folder field accepts either a fixed value or a
+per-request resolver, so fixed and dynamic values can be mixed. Databricks
+`path` and composite `mount` values also accept `~`.
 
 ```ts
 const agent = agents.createAgent({
@@ -363,9 +426,13 @@ const agent = agents.createAgent({
       "personal-skills": false,
       // Add an app-owned tree the agent may write back to.
       runbooks: {
-        path: "/Workspace/Shared/runbooks",
+        path: ({ requestContext }) =>
+          requestContext?.get("team") === "platform"
+            ? "/Workspace/Shared/platform-runbooks"
+            : "~/runbooks",
         skills: ["skills"],
         writable: true,
+        createRoot: false,
       },
       // Mount for file tools without adding it to skill discovery.
       templates: { path: "/Workspace/Shared/templates", readable: false },
@@ -388,6 +455,13 @@ which is how `personal-skills` drops out when no user email is stamped.
 `skillFolders` given. Production workspace mounts require a forwarded token
 with `workspace`, `workspace.workspace`, or `all-apis` scope. Development mode
 skips that gate for local iteration.
+
+Databricks mounts verify read access with an uncached root status request before
+the first cached read can succeed. The first mutation is always sent to
+Databricks and marks write access only after it succeeds; failed checks are not
+retained. This keeps a retained filesystem source from treating an old cache
+entry as proof that the current user can still access the path, without creating
+temporary write-probe files.
 
 ## Workspace Sandbox
 

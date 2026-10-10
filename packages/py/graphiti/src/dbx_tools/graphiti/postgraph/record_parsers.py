@@ -128,3 +128,4 @@ def community_node_from_record(record: Any) -> CommunityNode:
         created_at=parse_db_date(record['created_at']),  # type: ignore[arg-type]
         summary=record['summary'],
     )
+

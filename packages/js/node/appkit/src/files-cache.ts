@@ -79,6 +79,8 @@ export interface FilesCacheScope {
 export interface FilesCacheSourceIdentity {
   /** Actual mounted filesystem paths represented by the source. */
   paths: readonly string[];
+  /** Workspace-instance key separating sources with different policies over the same paths. */
+  key?: string;
 }
 
 /** Public exports from {@link FilesCachePlugin}. */
@@ -135,7 +137,7 @@ export class FilesCacheManager {
     const state = await this.resolveScopeState(input);
     const paths = identity.paths.map((path) => posixPath.normalizeRoot(path));
     if (paths.length === 0) throw new TypeError("Filesystem source paths must not be empty");
-    const sourceKey = object.toStableKey({ paths });
+    const sourceKey = object.toStableKey({ paths, key: identity.key });
     let source = state.sources.get(sourceKey);
     if (!source) {
       source = Promise.resolve(load());

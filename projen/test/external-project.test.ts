@@ -10,6 +10,7 @@ import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.t
 let temp: string;
 
 interface ProjenTsconfig {
+  readonly compilerOptions?: { readonly types?: string[] };
   readonly extends?: string | string[];
   readonly include?: string[];
 }
@@ -74,6 +75,8 @@ describe("external project roots", () => {
       const projenTsconfig = readProjenTsconfig(join(outdir, "tsconfig.projen.json"));
       assert.deepEqual([projenTsconfig.extends].flat(), ["./tsconfig.json"]);
       assert.deepEqual(projenTsconfig.include, [".projenrc.ts", "projenrc/**/*.ts"]);
+      const rootTsconfig = readProjenTsconfig(join(outdir, "tsconfig.json"));
+      assert.deepEqual(rootTsconfig.compilerOptions?.types, ["node", "bun"]);
     },
   );
 

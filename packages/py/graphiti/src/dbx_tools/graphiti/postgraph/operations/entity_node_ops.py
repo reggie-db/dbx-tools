@@ -443,3 +443,4 @@ def _as_entity_node(node: Any) -> Any:
         except ValueError:
             data['created_at'] = None
     return SimpleNamespace(**data)
+

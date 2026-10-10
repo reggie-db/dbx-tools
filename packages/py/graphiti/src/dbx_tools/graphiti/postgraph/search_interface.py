@@ -11,15 +11,15 @@ driver is one — the adapter is a signature translation, not new search logic.
 """
 from typing import Any
 
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.search_ops import PGSearchOperations
+from dbx_tools.graphiti.postgraph.operations.search_ops import PGSearchOperations
 from graphiti_core.driver.search_interface.search_interface import SearchInterface
+from pydantic import ConfigDict
 
 
 class PostGraphSearchInterface(SearchInterface):
     """Routes Graphiti's searches to the driver's SQL implementations."""
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     async def edge_fulltext_search(self, driver: Any, query: str, search_filter: Any,
                                    group_ids: list[str] | None = None,

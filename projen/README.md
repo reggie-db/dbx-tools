@@ -338,6 +338,22 @@ wrong fix, since the consumer authors no JSX and cannot know a transitive
 dependency started to. The option is inert without JSX in the graph: it selects
 how JSX syntax compiles and adds no lib, global, or type dependency.
 
+Keep the generated tsconfigs package-local. Each package build config owns its
+`rootDir`, declaration output, package-specific globals, and publish boundary.
+Projen also places a no-emit config in each `test/` directory so TypeScript 6,
+editors, and type-aware ESLint resolve the nearest project for test files. A
+single config per runtime folder would merge package output boundaries and would
+remove that nearest-config behavior. The runtime tag mixins already centralize
+the environment differences without replacing the package configs.
+
+Compilation preserves TypeScript's incremental cache. The root compile task
+passes the package configs to batched `tsc --build` processes, and each config
+retains its own `tsconfig.tsbuildinfo`. Synthesis also retains Projen's native
+change detection: unchanged generated files are not rewritten, and dependency
+installation runs only when the generated root manifest changes or
+`node_modules` is absent. Repository discovery is process-cached so every child
+package reuses the root probe instead of invoking `git`, `ssh`, and `gh` again.
+
 ## Work With Package Discovery
 
 ```ts

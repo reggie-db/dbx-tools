@@ -4,24 +4,24 @@ import json
 import logging
 from typing import Any
 
-from graphiti_core.driver.operations.has_episode_edge_ops import HasEpisodeEdgeOperations
+from graphiti_core.driver.operations.episodic_edge_ops import EpisodicEdgeOperations
 from graphiti_core.driver.query_executor import QueryExecutor, Transaction
-from graphiti_core.edges import HasEpisodeEdge
+from graphiti_core.edges import EpisodicEdge
 from graphiti_core.errors import EdgeNotFoundError
 from graphiti_core.helpers import parse_db_date
 
 logger = logging.getLogger(__name__)
 
-TABLE = 'has_episode_edges'
-SOURCE_TABLE = 'saga_nodes'
-TARGET_TABLE = 'episodic_nodes'
+TABLE = 'episodic_edges'
+SOURCE_TABLE = 'episodic_nodes'
+TARGET_TABLE = 'entity_nodes'
 
 
-class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
+class PGEpisodicEdgeOperations(EpisodicEdgeOperations):
     async def save(
         self,
         executor: QueryExecutor,
-        edge: HasEpisodeEdge,
+        edge: EpisodicEdge,
         _tx: Transaction | None = None,
     ) -> None:
         edge = _as_obj(edge)
@@ -57,7 +57,7 @@ class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
             edge.group_id,
             from_id=from_id,
             to_id=to_id,
-            relation_type='HAS_EPISODE',
+            relation_type='MENTIONS',
             edge_id=e_id,
             payload=payload,
         )
@@ -66,7 +66,7 @@ class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
     async def save_bulk(
         self,
         executor: QueryExecutor,
-        edges: list[HasEpisodeEdge],
+        edges: list[EpisodicEdge],
         _tx: Transaction | None = None,
         _batch_size: int = 100,
     ) -> None:
@@ -77,7 +77,7 @@ class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
     async def delete(
         self,
         executor: QueryExecutor,
-        edge: HasEpisodeEdge,
+        edge: EpisodicEdge,
         _tx: Transaction | None = None,
     ) -> None:
         client = executor.client
@@ -110,7 +110,7 @@ class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
         self,
         executor: QueryExecutor,
         uuid: str,
-    ) -> HasEpisodeEdge:
+    ) -> EpisodicEdge:
         client = executor.client
         rows = await client._fetch(
             f'SELECT realm, id, from_id, to_id, payload, created_at FROM "{TABLE}" '
@@ -119,13 +119,13 @@ class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
         )
         if not rows:
             raise EdgeNotFoundError(uuid)
-        return _row_to_has_episode_edge(dict(rows[0]))
+        return _row_to_episodic_edge(dict(rows[0]))
 
     async def get_by_uuids(
         self,
         executor: QueryExecutor,
         uuids: list[str],
-    ) -> list[HasEpisodeEdge]:
+    ) -> list[EpisodicEdge]:
         if not uuids:
             return []
         client = executor.client
@@ -136,7 +136,7 @@ class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
             f'WHERE {placeholders}',
             *uuid_json_list,
         )
-        return [_row_to_has_episode_edge(dict(r)) for r in rows]
+        return [_row_to_episodic_edge(dict(r)) for r in rows]
 
     async def get_by_group_ids(
         self,
@@ -144,7 +144,7 @@ class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
         group_ids: list[str],
         limit: int | None = None,
         uuid_cursor: str | None = None,
-    ) -> list[HasEpisodeEdge]:
+    ) -> list[EpisodicEdge]:
         if not group_ids:
             return []
         client = executor.client
@@ -160,14 +160,14 @@ class PGHasEpisodeEdgeOperations(HasEpisodeEdgeOperations):
             f"WHERE {where} ORDER BY payload->>'uuid' DESC{limit_clause}",
             *params,
         )
-        return [_row_to_has_episode_edge(dict(r)) for r in rows]
+        return [_row_to_episodic_edge(dict(r)) for r in rows]
 
 
-def _row_to_has_episode_edge(row: dict) -> HasEpisodeEdge:
+def _row_to_episodic_edge(row: dict) -> EpisodicEdge:
     p = row.get('payload', {})
     if isinstance(p, str):
         p = json.loads(p)
-    return HasEpisodeEdge(
+    return EpisodicEdge(
         uuid=p['uuid'],
         source_node_uuid=p['source_node_uuid'],
         target_node_uuid=p['target_node_uuid'],
@@ -211,3 +211,4 @@ def _as_obj(item):
             except ValueError:
                 pass
     return SimpleNamespace(**data)
+

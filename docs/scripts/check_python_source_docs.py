@@ -36,6 +36,17 @@ def module_description(module: ast.Module) -> str | None:
     return None
 
 
+def is_vendored(source: Path, root: Path) -> bool:
+    """Return whether an ancestor marks this source as an upstream snapshot."""
+
+    parent = source.parent
+    while parent != root and parent != parent.parent:
+        if (parent / "LICENSE.upstream").is_file():
+            return True
+        parent = parent.parent
+    return False
+
+
 def collect_undocumented(root: Path) -> list[Finding]:
     """Return undocumented handwritten Python declarations under package sources."""
 
@@ -44,7 +55,7 @@ def collect_undocumented(root: Path) -> list[Finding]:
         if any(
             part in {"generated", "_generated", "__pycache__"}
             for part in source.parts
-        ):
+        ) or is_vendored(source, root):
             continue
         module = ast.parse(source.read_text(), filename=str(source))
         if source.name != "__init__.py" and module_description(module) is None:

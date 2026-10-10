@@ -89,6 +89,11 @@ describe("FilesCacheManager", () => {
       { paths: ["/Workspace/.assistant"] },
       load,
     );
+    const otherPolicy = await manager.forFileSystem(
+      { ...scope, userKey: "one" },
+      { paths: ["/Workspace/.assistant", "/Workspace/Users/one"], key: "policy-two" },
+      load,
+    );
     const otherUser = await manager.forFileSystem(
       { ...scope, userKey: "two" },
       { paths: ["/Workspace/.assistant", "/Workspace/Users/one"] },
@@ -97,8 +102,9 @@ describe("FilesCacheManager", () => {
 
     assert.equal(first, repeated);
     assert.notEqual(first, otherPath);
+    assert.notEqual(first, otherPolicy);
     assert.notEqual(first, otherUser);
-    assert.equal(loads, 3);
+    assert.equal(loads, 4);
     await manager.close();
   });
 });

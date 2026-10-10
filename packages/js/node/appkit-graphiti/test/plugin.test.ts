@@ -4,11 +4,11 @@ import { describe, it } from "node:test";
 import type { OpenApiTool } from "@dbx-tools/appkit-mastra/openapi-tool";
 import { GraphitiPlugin } from "../src/plugin.ts";
 
-function fixtureSchema(name: string): OpenApiTool {
+function fixtureSchema(name: string, urlName = name): OpenApiTool {
   return {
     id: name,
     description: `Upstream description for ${name}`,
-    url: `http://127.0.0.1:4101/tools/${name}`,
+    url: `http://127.0.0.1:4101/tools/${urlName}`,
     method: "POST",
     inputSchema: {
       type: "object",
@@ -43,7 +43,18 @@ describe("GraphitiPlugin", () => {
 
   it("maps OpenAPI tool schemas to scoped AppKit definitions", () => {
     const plugin = new GraphitiPlugin({});
-    Object.assign(plugin, { toolSchemas: [fixtureSchema("add_memory")] });
+    Object.assign(plugin, {
+      toolSchemas: [
+        fixtureSchema("add_memory_sync"),
+        fixtureSchema("add_triplet"),
+        fixtureSchema("search_memory_facts"),
+        fixtureSchema("search_nodes"),
+        fixtureSchema("get_episodes"),
+        fixtureSchema("summarize_saga"),
+        fixtureSchema("build_communities"),
+        fixtureSchema("get_status"),
+      ],
+    });
     assert.deepEqual(plugin.getAgentTools()[0]?.parameters, {
       type: "object",
       additionalProperties: false,
@@ -155,7 +166,16 @@ describe("GraphitiPlugin", () => {
   it("builds toolkit entries from OpenAPI contracts", async () => {
     const plugin = new GraphitiPlugin({});
     Object.assign(plugin, {
-      toolSchemas: [fixtureSchema("add_memory")],
+      toolSchemas: [
+        fixtureSchema("add_memory_sync"),
+        fixtureSchema("add_triplet"),
+        fixtureSchema("search_memory_facts"),
+        fixtureSchema("search_nodes"),
+        fixtureSchema("get_episodes"),
+        fixtureSchema("summarize_saga"),
+        fixtureSchema("build_communities"),
+        fixtureSchema("get_status"),
+      ],
     });
 
     const toolkit = await plugin.toolkit({
@@ -164,23 +184,38 @@ describe("GraphitiPlugin", () => {
     });
 
     assert.deepEqual(Object.keys(toolkit), ["remember"]);
-    assert.equal(toolkit.remember?.def.description, "Upstream description for add_memory");
+    assert.match(toolkit.remember?.def.description ?? "", /waits for extraction/);
     assert.equal(toolkit.remember?.annotations?.effect, "write");
   });
 
-  it("hides synchronous tools when a non-blocking counterpart exists", () => {
+  it("maps the model-facing add_memory tool to the durable synchronous operation", () => {
     const plugin = new GraphitiPlugin({});
     Object.assign(plugin, {
       toolSchemas: [
         fixtureSchema("add_memory"),
         fixtureSchema("add_memory_sync"),
-        fixtureSchema("orphan_sync"),
+        fixtureSchema("add_triplet"),
+        fixtureSchema("search_memory_facts"),
+        fixtureSchema("search_nodes"),
+        fixtureSchema("get_episodes"),
+        fixtureSchema("summarize_saga"),
+        fixtureSchema("build_communities"),
+        fixtureSchema("get_status"),
       ],
     });
 
     assert.deepEqual(
       plugin.getAgentTools().map(({ name }) => name),
-      ["add_memory", "orphan_sync"],
+      [
+        "add_memory",
+        "add_triplet",
+        "search_memory_facts",
+        "search_nodes",
+        "get_episodes",
+        "summarize_saga",
+        "build_communities",
+        "get_status",
+      ],
     );
   });
 
@@ -205,7 +240,7 @@ describe("GraphitiPlugin", () => {
         bearer: "test-bearer",
         listen: { scheme: "tcp", host: "127.0.0.1", port: 4101 },
       },
-      toolSchemas: [fixtureSchema("add_memory")],
+      toolSchemas: [fixtureSchema("add_memory_sync")],
       ready,
     });
     try {
@@ -244,7 +279,7 @@ describe("GraphitiPlugin", () => {
         bearer: "test-bearer",
         listen: { scheme: "tcp", host: "127.0.0.1", port: 4101 },
       },
-      toolSchemas: [fixtureSchema("add_memory")],
+      toolSchemas: [fixtureSchema("add_memory_sync")],
     });
     try {
       await plugin.executeAgentTool(
@@ -270,6 +305,39 @@ describe("GraphitiPlugin", () => {
     assert.equal(requests[0]?.uuid, undefined);
     assert.equal(requests[0]?.previous_episode_uuids, undefined);
     assert.deepEqual(authorizations, ["Bearer test-bearer", "Bearer test-bearer", "Bearer test-bearer"]);
+  });
+
+  it("executes add_memory through the synchronous sidecar route", async () => {
+    const plugin = new GraphitiPlugin({});
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify({ message: "persisted" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    Object.assign(plugin, {
+      sidecar: { running: true },
+      resolved: {
+        bearer: "test-bearer",
+        listen: { scheme: "tcp", host: "127.0.0.1", port: 4101 },
+      },
+      toolSchemas: [fixtureSchema("add_memory_sync", "add_memory_sync")],
+    });
+    try {
+      await plugin.executeAgentTool(
+        "add_memory",
+        { name: "Preference", episode_body: "Prefers concise answers" },
+        undefined,
+        { resourceId: "user-a" },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    assert.deepEqual(urls, ["http://127.0.0.1:4101/tools/add_memory_sync"]);
   });
 
   it("rejects Graphiti tools without a group-scoped operation", async () => {

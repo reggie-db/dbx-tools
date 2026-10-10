@@ -254,6 +254,66 @@ describe("createWorkspace skill source identity", () => {
     assert.notEqual(first, second);
   });
 
+  it("resolves home shortcuts and dynamic folder fields per request", async () => {
+    const statusPaths: string[] = [];
+    const appkitClient = {
+      config: {
+        async getHost() {
+          return new URL("https://workspace.example.com");
+        },
+      },
+      toLegacyWorkspaceClient() {
+        return {
+          workspace: {
+            async getStatus({ path }: { path: string }) {
+              statusPaths.push(path);
+              return { path, object_type: "DIRECTORY" };
+            },
+            list() {
+              return (async function* () {})();
+            },
+          },
+        };
+      },
+    };
+    const workspace = createWorkspace({
+      assistantSkills: false,
+      sandbox: false,
+      files: {
+        cache: () => {
+          throw new Error("cache policy must not resolve without the files-cache plugin");
+        },
+      },
+      skillFolders: {
+        home: {
+          path: "~",
+          mount: ({ requestContext }) =>
+            requestContext?.get(MASTRA_USER_EMAIL_KEY) ? "~" : undefined,
+          displayName: ({ requestContext }) =>
+            `Home for ${requestContext?.get(MASTRA_USER_EMAIL_KEY)}`,
+          readable: () => false,
+          writable: () => true,
+          createRoot: false,
+        },
+      },
+    });
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_SCOPES_KEY, ["workspace.workspace"]);
+    requestContext.set(MASTRA_USER_EMAIL_KEY, "user@example.com");
+    requestContext.set(MASTRA_USER_KEY, {
+      id: "user-1",
+      executionContext: { client: appkitClient },
+    });
+
+    const filesystem = await workspace.resolveFilesystem({ requestContext });
+    assert.ok(filesystem);
+    const home = (await filesystem.readdir("/Workspace/Users")).find(
+      ({ name }) => name === "user@example.com",
+    );
+    assert.equal(home?.mount?.displayName, "Home for user@example.com");
+    assert.ok(statusPaths.includes("/Workspace/Users/user@example.com"));
+  });
+
   it("keeps first-root precedence for duplicate skill names", async () => {
     const team = new MemoryFileSystem({ root: "/team" });
     const app = new MemoryFileSystem({ root: "/app" });
@@ -367,18 +427,27 @@ describe("createWorkspace skill source identity", () => {
     const refreshed = await resolveWorkspaceSkills(workspace, new RequestContext());
     assert.equal((await refreshed.list())[0]?.name, "computer-jokes");
     assert.equal(
-      workspace.getToolsConfig()?.[WORKSPACE_TOOLS.FILESYSTEM.READ_FILE]?.requireApproval,
-      undefined,
+      typeof workspace.getToolsConfig()?.[WORKSPACE_TOOLS.FILESYSTEM.READ_FILE]?.requireApproval,
+      "function",
     );
     assert.equal(
       typeof workspace.getToolsConfig()?.[WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]?.requireApproval,
       "function",
     );
-    assert.equal(
-      (await resolveToolConfig(workspace.getToolsConfig(), WORKSPACE_TOOLS.FILESYSTEM.READ_FILE))
-        .requireApproval,
-      false,
-    );
+    const readApproval = (
+      await resolveToolConfig(workspace.getToolsConfig(), WORKSPACE_TOOLS.FILESYSTEM.READ_FILE)
+    ).requireApproval;
+    assert.equal(typeof readApproval, "function");
+    if (typeof readApproval === "function") {
+      assert.equal(
+        await readApproval({
+          args: { path: "/personal-skills/computer-jokes/SKILL.md" },
+          requestContext: {},
+          workspace,
+        }),
+        false,
+      );
+    }
   });
 
   it("wraps Databricks skill sources with the AppKit-global files cache", async () => {
@@ -558,6 +627,62 @@ describe("createWorkspace skill source identity", () => {
       { host: "https://workspace.example.com/", userKey: "user-1" },
       { host: "https://workspace.example.com/", userKey: "user-1" },
     ]);
+
+    values.clear();
+    listCalls = 0;
+    exportCalls = 0;
+    const filteredWorkspace = createWorkspace({
+      assistantSkills: false,
+      sandbox: false,
+      files: {
+        cache: {
+          operations: "readFile",
+          paths: "/Workspace/.assistant/note.txt",
+        },
+      },
+      skillFolders: {
+        organization: {
+          path: "/Workspace/.assistant",
+          readable: false,
+          writable: true,
+          createRoot: false,
+        },
+      },
+      pluginContext: {
+        getPlugins: () =>
+          new Map([
+            [
+              "files-cache",
+              {
+                exports: () => filesCache,
+              },
+            ],
+          ]),
+      },
+    });
+    const filteredContext = new RequestContext();
+    filteredContext.set(MASTRA_SCOPES_KEY, ["workspace.workspace"]);
+    filteredContext.set(MASTRA_USER_EMAIL_KEY, "user@example.com");
+    filteredContext.set(MASTRA_USER_KEY, {
+      id: "user-2",
+      executionContext: { client: appkitClient },
+    });
+    const filteredFilesystem = await filteredWorkspace.resolveFilesystem({
+      requestContext: filteredContext,
+    });
+    assert.ok(filteredFilesystem);
+    const listBaseline = listCalls;
+    await filteredFilesystem.readdir("/Workspace/.assistant");
+    await filteredFilesystem.readdir("/Workspace/.assistant");
+    assert.equal(listCalls, listBaseline + 2);
+    const filteredReadBaseline = exportCalls;
+    await filteredFilesystem.readFile("/Workspace/.assistant/note.txt", { encoding: "utf8" });
+    await filteredFilesystem.readFile("/Workspace/.assistant/note.txt", { encoding: "utf8" });
+    assert.equal(exportCalls, filteredReadBaseline + 1);
+    const uncachedReadBaseline = exportCalls;
+    await filteredFilesystem.readFile("/Workspace/.assistant/other.txt", { encoding: "utf8" });
+    await filteredFilesystem.readFile("/Workspace/.assistant/other.txt", { encoding: "utf8" });
+    assert.equal(exportCalls, uncachedReadBaseline + 2);
   });
 
   it("lets native Mastra workspace tool configuration override approval defaults", async () => {
@@ -639,6 +764,52 @@ describe("createWorkspace skill source identity", () => {
           workspace,
         }),
         true,
+      );
+    }
+  });
+
+  it("applies ordered operation and path approval policies with home expansion", async () => {
+    const workspace = createWorkspace({
+      assistantSkills: false,
+      sandbox: false,
+      files: {
+        approval: ({ requestContext }) => [
+          {
+            operations: WORKSPACE_TOOLS.FILESYSTEM.DELETE,
+            paths: "~/**",
+            requireApproval: requestContext[MASTRA_USER_EMAIL_KEY] === "user@example.com",
+          },
+          {
+            operations: WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
+            paths: "~/projects/**",
+            requireApproval: false,
+          },
+          {
+            operations: WORKSPACE_TOOLS.FILESYSTEM.READ_FILE,
+            paths: "/Workspace/.assistant/**",
+          },
+        ],
+      },
+    });
+    const requestContext = { [MASTRA_USER_EMAIL_KEY]: "user@example.com" };
+    const cases = [
+      [WORKSPACE_TOOLS.FILESYSTEM.DELETE, "~/projects/a.txt", true],
+      [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE, "~/projects/a.txt", false],
+      [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE, "/Workspace/.assistant/a.txt", true],
+      [WORKSPACE_TOOLS.FILESYSTEM.READ_FILE, "/Workspace/.assistant/a.txt", true],
+      [WORKSPACE_TOOLS.FILESYSTEM.READ_FILE, "~/notes.txt", false],
+    ] as const;
+
+    for (const [toolName, configuredPath, expected] of cases) {
+      const config = await resolveToolConfig(workspace.getToolsConfig(), toolName);
+      assert.equal(typeof config.requireApproval, "function");
+      if (typeof config.requireApproval !== "function") continue;
+      const path = configuredPath.startsWith("~/")
+        ? `/Workspace/Users/user@example.com/${configuredPath.slice(2)}`
+        : configuredPath;
+      assert.equal(
+        await config.requireApproval({ args: { path }, requestContext, workspace }),
+        expected,
       );
     }
   });

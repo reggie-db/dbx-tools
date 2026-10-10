@@ -34,7 +34,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 
 ## Python
 
-- `dbx-tools-graphiti` - Run Graphiti REST, MCP, model routing, and PostgreSQL-backed graph memory from one Python runtime. The build synchronizes the upstream REST and MCP source plus the pinned PostGraph driver from Graphiti PR 1777 into the generated package tree, so the published wheel has no direct Git dependencies. Source: `packages/py/graphiti`.
+- `dbx-tools-graphiti` - Run Graphiti REST, MCP, model routing, and PostgreSQL-backed graph memory from one Python runtime. The build synchronizes the upstream REST and MCP source at pinned commits. The PostGraph driver derived from Graphiti PR 1777 is maintained as attributed package source, so the published wheel has no direct Git dependencies. Source: `packages/py/graphiti`.
 - `dbx-tools-node-runtime` - Run PythonMonkey-based packages in managed Python environments that do not provide system Node.js or npm. Source: `packages/py/node-runtime`.
 
 ## Shared Contracts

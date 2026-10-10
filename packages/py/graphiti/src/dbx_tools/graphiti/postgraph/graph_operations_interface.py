@@ -643,3 +643,4 @@ class PostGraphOperationsInterface(GraphOperationsInterface):
 
     async def get_communities_by_nodes(self, driver: Any, nodes: list[Any]) -> list[Any]:
         return await driver.graph_ops.get_communities_by_nodes(driver, nodes)
+

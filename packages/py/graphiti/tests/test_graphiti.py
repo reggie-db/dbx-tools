@@ -15,14 +15,14 @@ from dbx_tools.graphiti import runtime as graphiti_runtime
 from dbx_tools.graphiti._generated.node import _runtime as node_runtime
 from dbx_tools.graphiti._generated.node.auth.bindings import create_auth_client
 from dbx_tools.graphiti._generated.node.shared_graphiti.options import GraphitiOptions
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.graph_ops import (
+from dbx_tools.graphiti.options import normalize_graphiti_options
+from dbx_tools.graphiti.postgraph.driver import PostGraphDriver
+from dbx_tools.graphiti.postgraph.operations.graph_ops import (
     PGGraphMaintenanceOperations,
 )
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.search_ops import (
+from dbx_tools.graphiti.postgraph.operations.search_ops import (
     PGSearchOperations,
 )
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph_driver import PostGraphDriver
-from dbx_tools.graphiti.options import normalize_graphiti_options
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from graphiti_core.search.search_filters import SearchFilters
@@ -836,6 +836,28 @@ async def test_runtime_or_mcp_failure_requests_process_shutdown(
 
 
 @pytest.mark.asyncio
+async def test_runtime_cleanup_closes_database_after_async_queue_failure(monkeypatch) -> None:
+    closed: list[str] = []
+
+    class Queue:
+        async def close(self) -> None:
+            raise RuntimeError("queued write failed")
+
+    class Runtime:
+        async def close(self) -> None:
+            closed.append("runtime")
+
+    monkeypatch.setattr(main.graphiti_mcp, "queue_service", Queue())
+    main.app.state.runtime = Runtime()
+
+    with pytest.raises(RuntimeError, match="queued write failed"):
+        await main._close_runtime(main.app)
+
+    assert closed == ["runtime"]
+    assert main.app.state.runtime is None
+
+
+@pytest.mark.asyncio
 async def test_synchronous_add_memory_waits_for_persistence() -> None:
     started = asyncio.Event()
     release = asyncio.Event()
@@ -910,7 +932,7 @@ async def test_queue_monitoring_waits_for_in_flight_work() -> None:
 
 
 @pytest.mark.asyncio
-async def test_queue_monitoring_surfaces_processing_errors() -> None:
+async def test_queue_monitoring_surfaces_processing_errors(caplog) -> None:
     class Graphiti:
         async def add_episode(self, **kwargs) -> None:
             raise ValueError(f"cannot persist {kwargs['name']}")
@@ -927,10 +949,20 @@ async def test_queue_monitoring_surfaces_processing_errors() -> None:
         uuid=None,
     )
 
-    with pytest.raises(RuntimeError, match="cannot persist broken memory"):
+    with (
+        caplog.at_level(logging.ERROR),
+        pytest.raises(RuntimeError, match="cannot persist broken memory"),
+    ):
         await queue.wait_until_idle("notebook-validation")
 
     await queue.close()
+    failures = [
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("Error processing queued episode")
+    ]
+    assert len(failures) == 1
+    assert failures[0].exc_info is not None
 
 
 @pytest.mark.asyncio

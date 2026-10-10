@@ -37,26 +37,26 @@ from graphiti_core.driver.operations.has_episode_edge_ops import HasEpisodeEdgeO
 from graphiti_core.driver.operations.next_episode_edge_ops import NextEpisodeEdgeOperations
 from graphiti_core.driver.operations.saga_node_ops import SagaNodeOperations
 from graphiti_core.driver.operations.search_ops import SearchOperations
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.graph_operations_interface import PostGraphOperationsInterface
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.community_edge_ops import (
+from dbx_tools.graphiti.postgraph.graph_operations_interface import PostGraphOperationsInterface
+from dbx_tools.graphiti.postgraph.operations.community_edge_ops import (
     PGCommunityEdgeOperations,
 )
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.community_node_ops import (
+from dbx_tools.graphiti.postgraph.operations.community_node_ops import (
     PGCommunityNodeOperations,
 )
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.entity_edge_ops import PGEntityEdgeOperations
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.entity_node_ops import PGEntityNodeOperations
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.episode_node_ops import PGEpisodeNodeOperations
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.episodic_edge_ops import PGEpisodicEdgeOperations
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.graph_ops import PGGraphMaintenanceOperations
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.has_episode_edge_ops import (
+from dbx_tools.graphiti.postgraph.operations.entity_edge_ops import PGEntityEdgeOperations
+from dbx_tools.graphiti.postgraph.operations.entity_node_ops import PGEntityNodeOperations
+from dbx_tools.graphiti.postgraph.operations.episode_node_ops import PGEpisodeNodeOperations
+from dbx_tools.graphiti.postgraph.operations.episodic_edge_ops import PGEpisodicEdgeOperations
+from dbx_tools.graphiti.postgraph.operations.graph_ops import PGGraphMaintenanceOperations
+from dbx_tools.graphiti.postgraph.operations.has_episode_edge_ops import (
     PGHasEpisodeEdgeOperations,
 )
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.next_episode_edge_ops import (
+from dbx_tools.graphiti.postgraph.operations.next_episode_edge_ops import (
     PGNextEpisodeEdgeOperations,
 )
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.saga_node_ops import PGSagaNodeOperations
-from dbx_tools.graphiti._generated.sync.postgraph.postgraph.operations.search_ops import PGSearchOperations
+from dbx_tools.graphiti.postgraph.operations.saga_node_ops import PGSagaNodeOperations
+from dbx_tools.graphiti.postgraph.operations.search_ops import PGSearchOperations
 from graphiti_core.driver.query_executor import Transaction
 
 logger = logging.getLogger(__name__)
@@ -159,7 +159,7 @@ class PostGraphDriver(GraphDriver):
         # Without this, search_utils falls back to raw Cypher, which PostgreSQL
         # rejects at the first query. The implementations already exist in
         # operations/search_ops.py; this is what makes them reachable.
-        from dbx_tools.graphiti._generated.sync.postgraph.postgraph.search_interface import (
+        from dbx_tools.graphiti.postgraph.search_interface import (
             PostGraphSearchInterface,
         )
 
@@ -276,7 +276,7 @@ class PostGraphDriver(GraphDriver):
         self, query: str, group_ids: list[str] | None = None, max_query_length: int = 128
     ) -> str:
         words = query.strip().split()[:max_query_length]
-        ts_query = ' & '.join(w for w in words if w)
+        ts_query = ' '.join(w for w in words if w)
         return ts_query or ''
 
     async def _resolve_vertex_id(

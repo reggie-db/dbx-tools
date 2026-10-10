@@ -270,7 +270,7 @@ describe("process tree termination", () => {
 
         assert.equal(child.signalCode, "SIGKILL");
         assert.equal(processExists(descendantPid), false);
-        assert.deepEqual(gracefulSignals, ["parent"]);
+        assert.deepEqual(gracefulSignals.toSorted(), ["child", "parent"]);
       } finally {
         forceKill(descendantPid);
         forceKill(child.pid);
@@ -298,6 +298,33 @@ describe("process tree termination", () => {
 
         assert.equal(processExists(child.pid!), true);
         assert.equal(processExists(descendantPid), true);
+        assert.deepEqual(gracefulSignals.toSorted(), ["child", "parent"]);
+      } finally {
+        forceKill(descendantPid);
+        forceKill(child.pid);
+        await child.catch(() => undefined);
+      }
+    },
+  );
+
+  it(
+    "gracefully signals only the root before forcing surviving descendants",
+    { skip: process.platform === "win32" },
+    async () => {
+      const { child, started, gracefulSignals } = processTreeFixture("force");
+      let descendantPid: number | undefined;
+      try {
+        descendantPid = await started;
+        await exec.kill(child, {
+          gracefulSignalTarget: "root",
+          gracefulTimeoutMs: 25,
+          forceTimeoutMs: 1_000,
+          pollIntervalMs: 5,
+        });
+        await child;
+
+        assert.equal(child.signalCode, "SIGKILL");
+        assert.equal(processExists(descendantPid), false);
         assert.deepEqual(gracefulSignals, ["parent"]);
       } finally {
         forceKill(descendantPid);

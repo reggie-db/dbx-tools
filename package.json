@@ -26,6 +26,8 @@
     "format": "projen format",
     "graphiti:python-sync": "projen graphiti:python-sync",
     "graphiti:python-sync:check": "projen graphiti:python-sync:check",
+    "graphiti:smoke:embedded": "projen graphiti:smoke:embedded",
+    "graphiti:smoke:mastra": "projen graphiti:smoke:mastra",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",

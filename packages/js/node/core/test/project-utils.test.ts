@@ -50,7 +50,7 @@ describe("resolveProjectGhAccount", () => {
           "#!/bin/sh",
           `printf '%s\\n' "$*" >> '${calls}'`,
           'if [ "$1" = "auth" ] && [ "$2" = "status" ]; then',
-          "  printf '%s\\n' '{\"hosts\":{\"github.example.test\":[{\"state\":\"success\",\"active\":true,\"host\":\"github.example.test\",\"login\":\"active\"},{\"state\":\"success\",\"active\":false,\"host\":\"github.example.test\",\"login\":\"work\"}]}}'",
+          '  printf \'%s\\n\' \'{"hosts":{"github.example.test":[{"state":"success","active":true,"host":"github.example.test","login":"active"},{"state":"success","active":false,"host":"github.example.test","login":"work"}]}}\'',
           "  exit 0",
           "fi",
           'if [ "$1" = "auth" ] && [ "$2" = "token" ]; then',
@@ -82,10 +82,11 @@ describe("resolveProjectGhAccount", () => {
       const initialCalls = readFileSync(calls, "utf8");
       assert.equal(projectUtils.resolveProjectGhAccount(repository), first);
       assert.equal(readFileSync(calls, "utf8"), initialCalls);
-      assert.equal(
-        projectUtils.repositoryUrl(repository),
-        "https://github.example.test/example/project",
-      );
+      const repositoryUrl = "https://github.example.test/example/project";
+      assert.equal(projectUtils.repositoryUrl(repository), repositoryUrl);
+      const repositoryCalls = readFileSync(calls, "utf8");
+      assert.equal(projectUtils.repositoryUrl(repository), repositoryUrl);
+      assert.equal(readFileSync(calls, "utf8"), repositoryCalls);
     } finally {
       process.env.PATH = originalPath;
       rmSync(root, { force: true, recursive: true });

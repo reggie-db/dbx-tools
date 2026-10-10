@@ -76,3 +76,21 @@ export default {
 
 The package root owns sidecar startup, OpenAPI-derived tool registration,
 per-user graph scopes, and the exported `GRAPHITI_CONFIG_SCHEMA`.
+
+The model-facing `add_memory` tool executes Graphiti's synchronous write
+operation, so a successful tool result means extraction and PostgreSQL
+persistence completed. The direct HTTP surface retains the upstream
+fire-and-forget operation for callers that intentionally manage queued writes.
+
+Run the manual smoke tiers separately from routine tests:
+
+```bash
+bun run graphiti:smoke:embedded
+bun run graphiti:smoke:mastra --profile MY-PROFILE
+```
+
+The embedded smoke test covers PostGraph CRUD, full-text search, shutdown, and
+restart persistence. The Mastra smoke test starts the AppKit plugin on an
+automatically selected loopback port, writes through the model-facing tool,
+restarts the embedded database, and verifies retrieval through the same tool
+provider path used by Mastra agents.

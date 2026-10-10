@@ -34,6 +34,7 @@ if (role === "child") {
   const child = spawnChild(mode);
   child.stdout.once("data", () => {
     process.stdout.write(`ready:${child.pid}\n`);
+    child.stdout.on("data", (data) => process.stdout.write(data));
   });
 }
 

@@ -757,3 +757,4 @@ def _matches_edge_filter(edge: EntityEdge, sf: SearchFilters) -> bool:
     if sf.edge_types is not None and edge.name not in sf.edge_types:
         return False
     return not (sf.edge_uuids is not None and edge.uuid not in sf.edge_uuids)
+

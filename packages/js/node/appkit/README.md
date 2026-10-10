@@ -159,14 +159,22 @@ Values are isolated by host, optional workspace id, and attributed user. A
 batched invalidation clears matching keys across active user scopes without
 sharing authorization-sensitive values.
 
-`forFileSystem(scope, { paths }, load)` retains one framework filesystem source
-for the same user and actual mounted paths. This gives frameworks such as Mastra
-a stable source identity across page refreshes and turns without introducing a
-second parsed catalogue cache.
+`forFileSystem(scope, { paths, key? }, load)` retains one framework filesystem
+source for the same user and actual mounted paths. `key` separates framework
+instances that use different policies over the same paths. This gives frameworks
+such as Mastra a stable source identity across page refreshes and turns without
+introducing a second parsed catalogue cache.
 
 Values and retained filesystem sources use a bounded process-local `lru-cache`.
 Nothing is written to Lakebase or another persistent store. App restarts and
 replica changes begin with a cold filesystem cache.
+
+This cache is intentionally separate from AppKit's exported `CacheManager`.
+`CacheManager` owns the application cache and may use Lakebase with an internal
+process-local L1; that L1 is not a public standalone store, and cache writes can
+flow through to persistent storage. `FilesCachePlugin` therefore remains the
+single app-lifetime owner for local-only filesystem values rather than reaching
+into AppKit internals or creating one cache per workspace.
 
 `lakebaseResolver.resolveLakebaseConnection()` accepts:
 

@@ -48,6 +48,63 @@ const SCOPED_TOOL_FIELDS = {
   wait_for_memory_queue: "group_id",
 } as const;
 const TOOL_NAMES = Object.keys(SCOPED_TOOL_FIELDS);
+const AGENT_TOOLS = [
+  {
+    name: "add_memory",
+    operation: "add_memory_sync",
+    description:
+      "Persist durable knowledge from text, JSON, or message content. Use this when the user " +
+      "asks to remember or save information. The call waits for extraction and the PostgreSQL " +
+      "commit before returning; omit uuid when creating a new episode.",
+  },
+  {
+    name: "add_triplet",
+    operation: "add_triplet",
+    description:
+      "Persist one explicit source-relationship-target fact. Use only when the entity names and " +
+      "relationship are already clear; prefer add_memory for unstructured content.",
+  },
+  {
+    name: "search_memory_facts",
+    operation: "search_memory_facts",
+    description:
+      "Search durable relationship facts extracted from memory. Use this for questions about what " +
+      "entities did, know, prefer, own, or are related to.",
+  },
+  {
+    name: "search_nodes",
+    operation: "search_nodes",
+    description:
+      "Search durable entities and their summaries. Use this to find people, organizations, " +
+      "products, places, or concepts rather than relationship facts.",
+  },
+  {
+    name: "get_episodes",
+    operation: "get_episodes",
+    description:
+      "List recently ingested source episodes. Use this to inspect original memory inputs or their " +
+      "episode identifiers, not for semantic fact retrieval.",
+  },
+  {
+    name: "summarize_saga",
+    operation: "summarize_saga",
+    description:
+      "Generate or refresh the summary of a named saga previously assigned through add_memory.",
+  },
+  {
+    name: "build_communities",
+    operation: "build_communities",
+    description:
+      "Run expensive graph-wide community detection and summaries. Use only when the user " +
+      "explicitly requests community analysis or maintenance.",
+  },
+  {
+    name: "get_status",
+    operation: "get_status",
+    description:
+      "Check Graphiti and PostgreSQL connectivity. Use only for memory-service diagnostics.",
+  },
+] as const;
 const WRITE_TOOLS = new Set([
   "add_memory",
   "add_memory_sync",
@@ -192,15 +249,16 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
   }
 
   getAgentTools(): AgentToolDefinition[] {
-    const names = new Set(this.toolSchemas.map(({ id }) => id));
-    return this.toolSchemas
-      .filter(({ id }) => !hasUnsuffixedTool(id, names))
-      .map(({ id, description, inputSchema }) => ({
-        name: id,
+    return AGENT_TOOLS.map(({ name, operation, description }) => {
+      const schema = this.toolSchemas.find(({ id }) => id === operation);
+      if (!schema) throw new Error(`Graphiti OpenAPI is missing agent operation: ${operation}`);
+      return {
+        name,
         description,
-        parameters: hideArguments(inputSchema, HIDDEN_TOOL_ARGUMENTS),
-        annotations: toolAnnotations(id),
-      }));
+        parameters: hideArguments(schema.inputSchema, HIDDEN_TOOL_ARGUMENTS),
+        annotations: toolAnnotations(operation),
+      };
+    });
   }
 
   async executeAgentTool(
@@ -209,7 +267,8 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     signal?: AbortSignal,
     context?: { resourceId?: string },
   ): Promise<unknown> {
-    const toolSchema = this.toolSchemas.find(({ id }) => id === name);
+    const operation = agentOperation(name);
+    const toolSchema = this.toolSchemas.find(({ id }) => id === operation);
     if (!toolSchema) throw new Error(`Unknown Graphiti tool: ${name}`);
     if (!this.resolved || !this.sidecar?.running) {
       throw new Error("Graphiti sidecar is not running");
@@ -223,7 +282,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
         ...graphitiRequestHeaders(this.resolved),
         "content-type": "application/json",
       },
-      body: JSON.stringify(scopedArguments(name, args, userScope(userId))),
+      body: JSON.stringify(scopedArguments(operation, args, userScope(userId))),
       signal,
     });
     if (!response.ok) {
@@ -265,10 +324,8 @@ function toolAnnotations(name: string): ToolAnnotations {
   };
 }
 
-/** Whether a synchronous tool has an equivalent non-blocking operation. */
-function hasUnsuffixedTool(name: string, names: ReadonlySet<string>): boolean {
-  const suffix = name.endsWith("_sync") ? "_sync" : name.endsWith("sync") ? "sync" : undefined;
-  return suffix ? names.has(name.slice(0, -suffix.length)) : false;
+function agentOperation(name: string): string {
+  return AGENT_TOOLS.find((tool) => tool.name === name)?.operation ?? name;
 }
 
 function selectToolSchemas(schemas: readonly OpenApiTool[]): OpenApiTool[] {

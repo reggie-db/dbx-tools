@@ -211,3 +211,4 @@ def _as_obj(item):
             except ValueError:
                 pass
     return SimpleNamespace(**data)
+

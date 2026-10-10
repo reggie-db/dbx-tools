@@ -83,5 +83,5 @@ export type { ChatTurnTelemetryOptions, ChatTraceTagValue } from "./src/telemetr
 export { MLFLOW_TRACE_TAG_PREFIX, MLFLOW_AGENT_TAG, MLFLOW_GENIE_TAG, MLFLOW_OBO_AUTH_TAG, MLFLOW_SP_AUTH_TAG, MLFLOW_LOCAL_TAG, MLFLOW_AGENT_TAG_ATTR, MLFLOW_GENIE_TAG_ATTR, APPKIT_AGENT_TRACE_ROOT_ATTR, MLFLOW_OBO_AUTH_TAG_ATTR, MLFLOW_SP_AUTH_TAG_ATTR, MLFLOW_LOCAL_TAG_ATTR } from "./src/trace-attributes.ts";
 export type { SchemaIssues } from "./src/validation.ts";
 export { DEFAULT_SKILL_FOLDERS } from "./src/workspaces.ts";
-export type { WorkspaceMountContext, SkillFolderValue, SkillFolderOptions, WorkspaceMountContribution, WorkspaceMountResolver, DefaultSkillFolderName, WorkspaceSandboxSelection, CreateWorkspaceOptions } from "./src/workspaces.ts";
+export type { WorkspaceMountContext, SkillFolderValue, WorkspaceFileToolName, WorkspaceFilePolicyContext, WorkspaceFilePolicyValue, WorkspaceFilePathPolicy, WorkspaceFileApprovalPolicy, WorkspaceFileCachePolicy, WorkspaceFilesConfig, SkillFolderOptions, WorkspaceMountContribution, WorkspaceMountResolver, DefaultSkillFolderName, WorkspaceSandboxSelection, CreateWorkspaceOptions } from "./src/workspaces.ts";
 export * from "./exports.ts";

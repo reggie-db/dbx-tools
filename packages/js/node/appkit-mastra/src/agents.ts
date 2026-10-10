@@ -577,11 +577,13 @@ export async function buildAgents(opts: {
       ((extraSkillPaths?.length ||
         config.sandbox !== undefined ||
         config.workspaceTools !== undefined ||
+        config.files !== undefined ||
         context !== undefined) &&
         isDefaultWorkspace(workspace))
     ) {
       workspace = createWorkspace({
         extraSkillPaths,
+        ...(config.files !== undefined ? { files: config.files } : {}),
         ...(config.workspaceTools !== undefined ? { tools: config.workspaceTools } : {}),
         pluginContext: context,
         sandbox: config.sandbox === true ? "databricks" : config.sandbox,

@@ -374,3 +374,4 @@ def _row_to_community_node(row: dict) -> CommunityNode:
         created_at=parse_db_date(p.get('created_at')) or row.get('created_at'),
         summary=p.get('summary', ''),
     )
+

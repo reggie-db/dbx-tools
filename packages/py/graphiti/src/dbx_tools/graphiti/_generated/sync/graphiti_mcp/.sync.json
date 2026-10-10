@@ -1,5 +1,5 @@
 {
-  "optionsHash": "f38c0b9b3479e88185669394586d45480baa95f21f235e9234ce6a4ae5705430",
+  "optionsHash": "10a2d5016d455c4d02e1df001f01f5f2aa721b2230820b326876f45366819fc8",
   "resolvedCommit": "2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066",
   "source": "mcp-server @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=mcp_server/src"
 }

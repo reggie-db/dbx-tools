@@ -29,8 +29,16 @@ import {
 } from "@dbx-tools/appkit/files-cache";
 import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
 import { LocalFileSystem } from "@dbx-tools/fs";
+import { match, type PathMatchInput } from "@dbx-tools/path";
 import { errorUtils, log, object, stringUtils, token } from "@dbx-tools/shared-core";
-import { fs as sharedFS, posixPath, type FileSystemCache } from "@dbx-tools/shared-fs";
+import {
+  fs as sharedFS,
+  posixPath,
+  type CacheableFileSystemOperation,
+  type FileSystem,
+  type FileSystemCache,
+  type FileSystemCacheOptions,
+} from "@dbx-tools/shared-fs";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
   WORKSPACE_TOOLS,
@@ -66,8 +74,25 @@ import { ORGANIZATION_ASSISTANT_PATH, personalWorkspacePath } from "./skill-path
 /** OAuth scopes that gate Databricks workspace file mounts. */
 const WORKSPACE_FILE_SCOPES = ["workspace", "workspace.workspace", "all-apis"] as const;
 const SCRATCH_MOUNT = "/tmp";
+const FILESYSTEM_TOOL_NAMES = Object.values(
+  WORKSPACE_TOOLS.FILESYSTEM,
+) as readonly WorkspaceFileToolName[];
+const MUTATING_FILESYSTEM_TOOL_NAMES = new Set<WorkspaceFileToolName>([
+  WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
+  WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE,
+  WORKSPACE_TOOLS.FILESYSTEM.AST_EDIT,
+  WORKSPACE_TOOLS.FILESYSTEM.DELETE,
+  WORKSPACE_TOOLS.FILESYSTEM.MKDIR,
+]);
+const CACHEABLE_FILESYSTEM_OPERATIONS = [
+  "exists",
+  "readFile",
+  "readdir",
+  "stat",
+] as const satisfies readonly CacheableFileSystemOperation[];
 
 const logger = log.logger("mastra/workspaces");
+let workspaceSourceSequence = 0;
 
 /* -------------------------------- types -------------------------------- */
 
@@ -83,6 +108,58 @@ export interface WorkspaceMountContext {
 export type SkillFolderValue<T> =
   T | ((context: WorkspaceMountContext) => T | undefined | Promise<T | undefined>);
 
+/** Mastra filesystem tool name accepted by workspace file approval policies. */
+export type WorkspaceFileToolName =
+  (typeof WORKSPACE_TOOLS.FILESYSTEM)[keyof typeof WORKSPACE_TOOLS.FILESYSTEM];
+
+/** Request values available to dynamic workspace file policy resolvers. */
+export interface WorkspaceFilePolicyContext {
+  requestContext: Record<string, unknown>;
+}
+
+/** Fixed or per-request workspace file policy configuration. */
+export type WorkspaceFilePolicyValue<T> =
+  | T
+  | ((context: WorkspaceFilePolicyContext) => T | undefined | Promise<T | undefined>);
+
+/** Shared operation and path selection for a workspace file policy. */
+export interface WorkspaceFilePathPolicy<TOperation extends string> {
+  /** Operations covered by this rule. Omit to cover every operation in the policy domain. */
+  operations?: TOperation | readonly TOperation[];
+  /** Absolute path globs or predicates. Omit to cover every path. `~` expands per request. */
+  paths?: PathMatchInput | readonly PathMatchInput[];
+}
+
+/** Approval decision for selected Mastra filesystem tools and paths. */
+export interface WorkspaceFileApprovalPolicy
+  extends WorkspaceFilePathPolicy<WorkspaceFileToolName> {
+  /** Approval result when the rule matches. Defaults to `true`. */
+  requireApproval?: boolean;
+}
+
+/** Cache selection for shared-filesystem read operations. */
+export type WorkspaceFileCachePolicy = WorkspaceFilePathPolicy<CacheableFileSystemOperation>;
+
+/** Workspace filesystem policy configuration. */
+export interface WorkspaceFilesConfig {
+  /**
+   * Ordered approval rules. The first matching rule wins; unmatched calls use
+   * the default `/tmp` and current-user-home policy. A boolean applies to all
+   * filesystem tools.
+   */
+  approval?: WorkspaceFilePolicyValue<
+    boolean | WorkspaceFileApprovalPolicy | readonly WorkspaceFileApprovalPolicy[]
+  >;
+  /**
+   * Cache rules used only when the AppKit files-cache plugin is registered.
+   * `false` disables caching; `true` or omission preserves the default metadata
+   * cache plus skill-file content cache.
+   */
+  cache?: WorkspaceFilePolicyValue<
+    boolean | WorkspaceFileCachePolicy | readonly WorkspaceFileCachePolicy[]
+  >;
+}
+
 /**
  * One named skill-folder location and its read / write policy.
  *
@@ -96,32 +173,32 @@ export interface SkillFolderOptions {
   /** Ready-made mount, for locations the OBO client cannot reach. */
   filesystem?: SkillFolderValue<WorkspaceFilesystem>;
   /** Human-friendly mount name shown in filesystem listings. */
-  displayName?: string;
+  displayName?: SkillFolderValue<string>;
   /** Mount description shown in filesystem listings and workspace instructions. */
-  description?: string;
+  description?: SkillFolderValue<string>;
   /**
    * Scan this mount for `SKILL.md` files. Defaults to `true`; `false` mounts
    * the location for file tools without adding it to skill discovery.
    */
-  readable?: boolean;
+  readable?: SkillFolderValue<boolean>;
   /**
    * Skill roots relative to this filesystem root. Defaults to `["."]`.
    * Each path is joined to the actual mount path before Mastra scans it.
    */
-  skills?: readonly string[];
+  skills?: SkillFolderValue<readonly string[]>;
   /**
    * Allow write attempts to a {@link path} mount. Defaults to `true` for
    * `/Workspace` roots and `false` elsewhere. Databricks permissions still
    * determine whether each mutation succeeds.
    */
-  writable?: boolean;
+  writable?: SkillFolderValue<boolean>;
   /**
    * Create a writable {@link path} root when missing. Defaults to
    * {@link writable}; set `false` for pre-existing roots with conditional access.
    */
-  createRoot?: boolean;
+  createRoot?: SkillFolderValue<boolean>;
   /** Mount point in the composite namespace. Databricks paths default to their actual root. */
-  mount?: string;
+  mount?: SkillFolderValue<string>;
 }
 
 /** Mount map plus optional Mastra skill scan roots for one resolver. */
@@ -177,6 +254,8 @@ export interface CreateWorkspaceOptions {
   checkSkillFileMtime?: boolean;
   /** Additional native Mastra workspace tool configuration and overrides. */
   tools?: WorkspaceToolsConfig;
+  /** Path-aware approval and cache policies for workspace files. */
+  files?: WorkspaceFilesConfig;
   /** AppKit plugin context used to discover optional sibling capabilities. */
   pluginContext?: pluginRegistry.PluginContextLike;
   /** Enable BM25 keyword search over indexed workspace content. */
@@ -268,12 +347,16 @@ export const DEFAULT_SKILL_FOLDERS: Readonly<Record<DefaultSkillFolderName, Skil
  */
 export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace {
   const { id, name } = resolveWorkspaceIdentity(options);
+  const filesystemSourceKey = `${id}:${++workspaceSourceSequence}`;
   const skillFolders = resolveSkillFolders(options);
   const folderNames = Object.keys(skillFolders);
   const extraSkillPaths = options.extraSkillPaths ?? [];
   const filesCache = pluginRegistry.instance(options.pluginContext, filesCachePlugin)?.exports();
+  const configuredCache = options.files?.cache;
+  const mountFilesCache = configuredCache === false ? undefined : filesCache;
   const retainFilesystemSource =
-    filesCache !== undefined &&
+    mountFilesCache !== undefined &&
+    typeof configuredCache !== "function" &&
     (options.mounts?.length ?? 0) === 0 &&
     Object.values(skillFolders).every(
       (folder) =>
@@ -283,14 +366,16 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
   const resolvers = buildMountResolvers(
     skillFolders,
     [...(options.mounts ?? []), ...localSkillMountResolvers(extraSkillPaths)],
-    filesCache,
+    mountFilesCache,
+    options.files,
   );
   const resolveContribution = contributionResolver(resolvers);
   const resolveFilesystem = (context: WorkspaceMountContext) =>
     resolveWorkspaceFilesystem(
       resolveContribution,
       context,
-      retainFilesystemSource ? filesCache : undefined,
+      retainFilesystemSource ? mountFilesCache : undefined,
+      filesystemSourceKey,
     );
   const skills: SkillsResolver =
     options.skills ??
@@ -305,7 +390,7 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
   const checkSkillFileMtime = options.checkSkillFileMtime ?? false;
   const bm25 = options.bm25 !== false;
   const sandbox = resolveWorkspaceSandbox(options.sandbox, id, name);
-  const tools = workspaceTools(options.tools);
+  const tools = workspaceTools(options.tools, options.files?.approval);
   logger.debug("workspace:create", {
     id,
     name,
@@ -380,18 +465,47 @@ function requireApprovalOutsideWritableRoots({
   return !posixPath.isWithinRoot(personalWorkspacePath(email), normalized.path);
 }
 
-function workspaceTools(configured: WorkspaceToolsConfig | undefined): WorkspaceToolsConfig {
-  const requireApproval: WorkspaceToolConfig =
-    configured?.requireApproval === undefined
-      ? { requireApproval: requireApprovalOutsideWritableRoots }
-      : {};
-  const defaults = {
-    [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]: requireApproval,
-    [WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE]: requireApproval,
-    [WORKSPACE_TOOLS.FILESYSTEM.AST_EDIT]: requireApproval,
-    [WORKSPACE_TOOLS.FILESYSTEM.DELETE]: requireApproval,
-    [WORKSPACE_TOOLS.FILESYSTEM.MKDIR]: requireApproval,
-  } satisfies WorkspaceToolsConfig;
+function fileApproval(
+  operation: WorkspaceFileToolName,
+  configured: WorkspaceFilesConfig["approval"],
+): WorkspaceToolConfig["requireApproval"] {
+  return async (context) => {
+    const resolved = await resolveFilePolicyValue(configured, context.requestContext);
+    if (typeof resolved === "boolean") return resolved;
+    const inputPath = normalizedToolPath(context.args);
+    if (inputPath) {
+      for (const policy of toPolicyArray(resolved)) {
+        if (
+          policyMatches(
+            policy,
+            operation,
+            inputPath,
+            context.requestContext,
+            FILESYSTEM_TOOL_NAMES,
+          )
+        ) {
+          return policy.requireApproval ?? true;
+        }
+      }
+    }
+    return MUTATING_FILESYSTEM_TOOL_NAMES.has(operation)
+      ? requireApprovalOutsideWritableRoots(context)
+      : false;
+  };
+}
+
+function workspaceTools(
+  configured: WorkspaceToolsConfig | undefined,
+  approval: WorkspaceFilesConfig["approval"],
+): WorkspaceToolsConfig {
+  const defaults = Object.fromEntries(
+    FILESYSTEM_TOOL_NAMES.map((toolName) => [
+      toolName,
+      configured?.requireApproval === undefined
+        ? { requireApproval: fileApproval(toolName, approval) }
+        : {},
+    ]),
+  ) as Record<WorkspaceFileToolName, WorkspaceToolConfig>;
   const configuredTools = configured as
     Readonly<Record<string, WorkspaceToolConfig | undefined>> | undefined;
   const mergedTools = Object.fromEntries(
@@ -535,6 +649,7 @@ async function resolveSkillFolderMounts(
   skillFolders: Record<string, SkillFolderOptions>,
   context: WorkspaceMountContext,
   filesCache: FilesCacheExports | undefined,
+  files: WorkspaceFilesConfig | undefined,
 ): Promise<WorkspaceMountContribution> {
   const mounts: Record<string, WorkspaceFilesystem> = {};
   const skillPaths: string[] = [];
@@ -555,15 +670,16 @@ async function resolveSkillFolderMounts(
     filesCache && scoped ? await filesCache.forScope(scoped.scope) : undefined;
 
   for (const [name, folder] of Object.entries(skillFolders)) {
-    const resolved = await resolveSkillFolderFilesystem(name, folder, context, {
+    const configured = await resolveSkillFolderOptions(folder, context);
+    const resolved = await resolveSkillFolderFilesystem(name, configured, context, files, {
       client,
       fileSystemCache,
     });
     if (!resolved) continue;
-    const mount = folder.mount ?? resolved.root ?? `/${name}`;
+    const mount = configured.mount ?? resolved.root ?? `/${name}`;
     mounts[mount] = resolved.filesystem;
-    if (folder.readable !== false) {
-      skillPaths.push(...(folder.skills ?? ["."]).map((path) => mountedSkillPath(mount, path)));
+    if (configured.readable !== false) {
+      skillPaths.push(...(configured.skills ?? ["."]).map((path) => mountedSkillPath(mount, path)));
     }
   }
 
@@ -578,14 +694,58 @@ async function resolveSkillFolderMounts(
   };
 }
 
+interface ResolvedSkillFolderOptions {
+  path?: string;
+  filesystem?: WorkspaceFilesystem;
+  displayName?: string;
+  description?: string;
+  readable?: boolean;
+  skills?: readonly string[];
+  writable?: boolean;
+  createRoot?: boolean;
+  mount?: string;
+}
+
+async function resolveSkillFolderOptions(
+  folder: SkillFolderOptions,
+  context: WorkspaceMountContext,
+): Promise<ResolvedSkillFolderOptions> {
+  const [path, filesystem, displayName, description, readable, skills, writable, createRoot, mount] =
+    await Promise.all([
+      resolveOptionalSkillFolderValue(folder.path, context),
+      resolveOptionalSkillFolderValue(folder.filesystem, context),
+      resolveOptionalSkillFolderValue(folder.displayName, context),
+      resolveOptionalSkillFolderValue(folder.description, context),
+      resolveOptionalSkillFolderValue(folder.readable, context),
+      resolveOptionalSkillFolderValue(folder.skills, context),
+      resolveOptionalSkillFolderValue(folder.writable, context),
+      resolveOptionalSkillFolderValue(folder.createRoot, context),
+      resolveOptionalSkillFolderValue(folder.mount, context),
+    ]);
+  const resolvedPath = resolveHomePath(path, requestContextValues(context.requestContext));
+  const resolvedMount = resolveHomePath(mount, requestContextValues(context.requestContext));
+  return {
+    ...(resolvedPath ? { path: resolvedPath } : {}),
+    ...(filesystem ? { filesystem } : {}),
+    ...(displayName ? { displayName } : {}),
+    ...(description ? { description } : {}),
+    ...(readable !== undefined ? { readable } : {}),
+    ...(skills ? { skills } : {}),
+    ...(writable !== undefined ? { writable } : {}),
+    ...(createRoot !== undefined ? { createRoot } : {}),
+    ...(resolvedMount ? { mount: resolvedMount } : {}),
+  };
+}
+
 /**
  * Resolve one skill folder to a Mastra filesystem, or `undefined` to skip it
  * for this request.
  */
 async function resolveSkillFolderFilesystem(
   name: string,
-  folder: SkillFolderOptions,
+  folder: ResolvedSkillFolderOptions,
   context: WorkspaceMountContext,
+  files: WorkspaceFilesConfig | undefined,
   cache: {
     client: WorkspaceClient | undefined;
     fileSystemCache: FileSystemCache | undefined;
@@ -598,10 +758,9 @@ async function resolveSkillFolderFilesystem(
   | undefined
 > {
   if (folder.filesystem !== undefined) {
-    const filesystem = await resolveSkillFolderValue(folder.filesystem, context);
-    return filesystem
+    return folder.filesystem
       ? {
-          filesystem,
+          filesystem: folder.filesystem,
         }
       : undefined;
   }
@@ -613,16 +772,24 @@ async function resolveSkillFolderFilesystem(
     });
     return undefined;
   }
-  const root = stringUtils.trimToNull(await resolveSkillFolderValue(folder.path, context));
+  const root = stringUtils.trimToNull(folder.path);
   if (!root) return undefined;
   const writable = folder.writable ?? isWorkspaceRoot(root);
+  const cacheOptions = cache.fileSystemCache
+    ? await resolveFileCacheOptions(
+        files?.cache,
+        context,
+        root,
+        folder.readable === false ? [] : (folder.skills ?? ["."]),
+      )
+    : undefined;
   const resolved = await databricksFilesystem(
     cache.client,
     root,
     !writable,
     folder.createRoot ?? folder.writable === true,
     cache.fileSystemCache,
-    folder.readable === false ? [] : (folder.skills ?? ["."]),
+    cacheOptions,
     {
       ...(folder.description ? { description: folder.description } : {}),
       ...(folder.displayName ? { displayName: folder.displayName } : {}),
@@ -639,6 +806,122 @@ function resolveSkillFolderValue<T>(
   return typeof value === "function"
     ? (value as (context: WorkspaceMountContext) => T | undefined | Promise<T | undefined>)(context)
     : value;
+}
+
+function resolveOptionalSkillFolderValue<T>(
+  value: SkillFolderValue<T> | undefined,
+  context: WorkspaceMountContext,
+): T | undefined | Promise<T | undefined> {
+  return value === undefined ? undefined : resolveSkillFolderValue(value, context);
+}
+
+async function resolveFilePolicyValue<T>(
+  value: WorkspaceFilePolicyValue<T> | undefined,
+  requestContext: Record<string, unknown>,
+): Promise<T | undefined> {
+  return typeof value === "function"
+    ? (value as (context: WorkspaceFilePolicyContext) => T | undefined | Promise<T | undefined>)({
+        requestContext,
+      })
+    : value;
+}
+
+function requestContextValues(requestContext: RequestContext | undefined): Record<string, unknown> {
+  return requestContext?.toJSON() ?? {};
+}
+
+function resolveHomePath(
+  input: string | undefined,
+  requestContext: Record<string, unknown>,
+): string | undefined {
+  const value = stringUtils.trimToNull(input);
+  if (!value || (value !== "~" && !value.startsWith("~/"))) return value ?? undefined;
+  const emailValue = requestContext[MASTRA_USER_EMAIL_KEY];
+  const email = typeof emailValue === "string" ? stringUtils.trimToNull(emailValue) : undefined;
+  if (!email) return undefined;
+  const home = personalWorkspacePath(email);
+  return value === "~" ? home : `${home}/${value.slice(2)}`;
+}
+
+function normalizedToolPath(args: Record<string, unknown>): string | undefined {
+  if (typeof args.path !== "string") return undefined;
+  const normalized = posixPath.normalize(args.path);
+  return normalized.ok ? normalized.path : undefined;
+}
+
+function toPolicyArray<T>(value: T | readonly T[] | undefined): readonly T[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? (value as readonly T[]) : [value as T];
+}
+
+function policyMatches<TOperation extends string>(
+  policy: WorkspaceFilePathPolicy<TOperation>,
+  operation: TOperation,
+  path: string,
+  requestContext: Record<string, unknown>,
+  allOperations: readonly TOperation[],
+  root?: string,
+): boolean {
+  const operations = toPolicyArray(policy.operations ?? allOperations);
+  if (!operations.includes(operation)) return false;
+  if (policy.paths === undefined) return true;
+  const inputs: PathMatchInput[] = [];
+  for (const input of toPolicyArray<PathMatchInput>(policy.paths)) {
+    if (typeof input !== "string") {
+      inputs.push(input);
+      continue;
+    }
+    const expanded = resolveHomePath(input, requestContext);
+    if (!expanded) continue;
+    inputs.push(
+      !root || posixPath.isAbsolute(expanded) || expanded.startsWith("**")
+        ? expanded
+        : `${posixPath.normalizeRoot(root)}/${expanded.replace(/^\.\//, "")}`,
+    );
+  }
+  return inputs.length > 0 && match.toPathMatcher(...inputs)(path);
+}
+
+async function resolveFileCacheOptions(
+  configured: WorkspaceFilesConfig["cache"],
+  context: WorkspaceMountContext,
+  root: string,
+  skillPaths: readonly string[],
+): Promise<FileSystemCacheOptions | undefined> {
+  const requestContext = requestContextValues(context.requestContext);
+  const resolved = await resolveFilePolicyValue(configured, requestContext);
+  if (resolved === false) return undefined;
+  if (resolved === undefined || resolved === true) {
+    const roots = skillPaths.map((path) => mountedSkillPath(root, path));
+    return {
+      operations: CACHEABLE_FILESYSTEM_OPERATIONS,
+      filter: (operation, path) =>
+        operation !== "readFile" || roots.some((skillRoot) => posixPath.isWithinRoot(skillRoot, path)),
+    };
+  }
+  const policies = toPolicyArray(resolved);
+  if (policies.length === 0) return undefined;
+  const operations = [
+    ...new Set(
+      policies.flatMap((policy) =>
+        toPolicyArray(policy.operations ?? CACHEABLE_FILESYSTEM_OPERATIONS),
+      ),
+    ),
+  ];
+  return {
+    operations,
+    filter: (operation, path) =>
+      policies.some((policy) =>
+        policyMatches(
+          policy,
+          operation,
+          path,
+          requestContext,
+          CACHEABLE_FILESYSTEM_OPERATIONS,
+          root,
+        ),
+      ),
+  };
 }
 
 /**
@@ -665,11 +948,12 @@ function buildMountResolvers(
   skillFolders: Record<string, SkillFolderOptions>,
   mounts: WorkspaceMountResolver[] | undefined,
   filesCache: FilesCacheExports | undefined,
+  files: WorkspaceFilesConfig | undefined,
 ): WorkspaceMountResolver[] {
   const resolvers: WorkspaceMountResolver[] = [scratchMountResolver()];
   const folderCount = Object.keys(skillFolders).length;
   if (folderCount > 0) {
-    resolvers.push((context) => resolveSkillFolderMounts(skillFolders, context, filesCache));
+    resolvers.push((context) => resolveSkillFolderMounts(skillFolders, context, filesCache, files));
   }
   if (mounts?.length) {
     resolvers.push(...mounts);
@@ -733,7 +1017,7 @@ async function databricksFilesystem(
   readOnly: boolean = true,
   createRoot: boolean = !readOnly,
   fileSystemCache?: FileSystemCache,
-  skillPaths: readonly string[] = [],
+  cacheOptions?: FileSystemCacheOptions,
   adapterOptions: Pick<MastraFileSystemAdapterOptions, "description" | "displayName"> = {},
 ): Promise<
   | {
@@ -754,9 +1038,8 @@ async function databricksFilesystem(
     readOnly,
     createRoot,
   });
-  const source = fileSystemCache
-    ? sharedFS.cache(fs, fileSystemCache, { readFilePaths: skillPaths })
-    : fs;
+  const cached = fileSystemCache && cacheOptions ? sharedFS.cache(fs, fileSystemCache, cacheOptions) : fs;
+  const source = verifyFirstFileSystemAccess(cached, () => fs.stat("."), root);
   const filesystem = filesystems(source, { ...adapterOptions, readOnly });
   try {
     await filesystem.init();
@@ -771,6 +1054,76 @@ async function databricksFilesystem(
     });
   }
   return undefined;
+}
+
+function verifyFirstFileSystemAccess<TFileSystem extends FileSystem>(
+  filesystem: TFileSystem,
+  readProbe: () => Promise<unknown>,
+  root: string,
+): TFileSystem {
+  let readCheck: Promise<void> | undefined;
+  let writeVerified = false;
+  const boundMethods = new Map<PropertyKey, unknown>();
+  const readOperations = new Set<PropertyKey>(["exists", "readFile", "readdir", "stat"]);
+  const writeOperations = new Set<PropertyKey>([
+    "appendFile",
+    "copyFile",
+    "deleteFile",
+    "mkdir",
+    "moveFile",
+    "rmdir",
+    "writeFile",
+  ]);
+  const verifyRead = async (): Promise<void> => {
+    readCheck ??= Promise.resolve(readProbe()).then(() => undefined);
+    try {
+      await readCheck;
+    } catch (error) {
+      readCheck = undefined;
+      logger.debug("databricks-mount:read-check-failed", {
+        root,
+        error: errorUtils.errorMessage(error),
+      });
+      throw error;
+    }
+  };
+
+  return new Proxy(filesystem, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (typeof value !== "function") return value;
+      if (boundMethods.has(property)) return boundMethods.get(property);
+      const delegated = value.bind(target) as (...args: unknown[]) => unknown;
+      let method = delegated;
+      if (readOperations.has(property)) {
+        method = async (...args: unknown[]) => {
+          await verifyRead();
+          return delegated(...args);
+        };
+      } else if (writeOperations.has(property)) {
+        method = async (...args: unknown[]) => {
+          try {
+            const result = await delegated(...args);
+            if (!writeVerified) {
+              writeVerified = true;
+              logger.debug("databricks-mount:write-check-passed", { root });
+            }
+            return result;
+          } catch (error) {
+            if (!writeVerified) {
+              logger.debug("databricks-mount:write-check-failed", {
+                root,
+                error: errorUtils.errorMessage(error),
+              });
+            }
+            throw error;
+          }
+        };
+      }
+      boundMethods.set(property, method);
+      return method;
+    },
+  });
 }
 
 /**
@@ -818,6 +1171,7 @@ async function resolveWorkspaceFilesystem(
   resolveContribution: (context: WorkspaceMountContext) => Promise<WorkspaceMountContribution>,
   context: WorkspaceMountContext,
   filesCache?: FilesCacheExports,
+  sourceKey?: string,
 ): Promise<WorkspaceFilesystem> {
   const { mounts } = await resolveContribution(context);
   const mountKeys = Object.keys(mounts);
@@ -832,7 +1186,7 @@ async function resolveWorkspaceFilesystem(
   if (!filesCache) return load();
   const scoped = await resolveFilesCacheScope(context);
   if (!scoped) return load();
-  return filesCache.forFileSystem(scoped.scope, { paths: mountKeys }, load);
+  return filesCache.forFileSystem(scoped.scope, { paths: mountKeys, key: sourceKey }, load);
 }
 
 /**

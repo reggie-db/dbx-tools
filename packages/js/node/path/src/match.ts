@@ -10,7 +10,6 @@
 
 import { object, predicate, type Predicate, type PredicateFunction } from "@dbx-tools/shared-core";
 import { Minimatch } from "minimatch";
-import { ignorePathMatcher } from "./ignore.ts";
 
 /** Plain path predicate accepted anywhere a glob pattern can be supplied. */
 export type PathMatchPredicate = PredicateFunction<string>;
@@ -56,12 +55,4 @@ export function toPathMatcher(
   return tests
     .slice(1)
     .reduce<PathMatcher>((acc, test) => acc.or(test), predicate.create(tests[0]!));
-}
-
-if (import.meta.main) {
-  const matcher = ignorePathMatcher({ test: true })
-    .negate()
-    .and(...pathMatchTests("**/cool.ts", "**/wow.ts"));
-  console.log(matcher("packages/node/file-scan/src/cool.ts"));
-  console.log(matcher("packages/node/file-scan/.src/cool.ts"));
 }
