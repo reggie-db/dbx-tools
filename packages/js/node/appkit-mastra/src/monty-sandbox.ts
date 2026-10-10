@@ -15,8 +15,8 @@ import type {
   CommandResult,
   ExecuteCommandOptions,
   SandboxInfo,
-  WorkspaceSandbox,
 } from "@mastra/core/workspace";
+import { MastraSandbox, type ProviderStatus } from "@mastra/core/workspace";
 import type { CheckoutOptions, Monty, MontyCrashedError, MontySession } from "@pydantic/monty";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
@@ -82,12 +82,11 @@ export interface MontySandboxOptions {
 }
 
 /** Python-only, deny-by-default sandbox backed by Monty's selected worker pool. */
-export class MontySandbox implements WorkspaceSandbox {
+export class MontySandbox extends MastraSandbox {
   readonly id: string;
   readonly name: string;
   readonly provider = "monty";
-  status: WorkspaceSandbox["status"] = "pending";
-  error?: string;
+  status: ProviderStatus = "pending";
 
   private readonly commandTimeoutMs: number;
   private readonly maxMemoryBytes: number;
@@ -96,8 +95,10 @@ export class MontySandbox implements WorkspaceSandbox {
   private lastUsedAt?: Date;
 
   constructor(options: MontySandboxOptions = {}) {
+    const name = options.name ?? "Pydantic Monty";
+    super({ name });
     this.id = options.id ?? "monty";
-    this.name = options.name ?? "Pydantic Monty";
+    this.name = name;
     this.commandTimeoutMs = options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
     this.maxMemoryBytes = options.maxMemoryBytes ?? DEFAULT_MAX_MEMORY_BYTES;
     this.typeCheck = options.typeCheck ?? false;
@@ -105,33 +106,14 @@ export class MontySandbox implements WorkspaceSandbox {
 
   /** Warm the shared crash-isolated worker pool. */
   async start(): Promise<void> {
-    if (this.status === "running") return;
-    this.status = "starting";
-    this.error = undefined;
-    try {
-      await montyContext();
-      this.status = "running";
-    } catch (caught) {
-      this.status = "error";
-      this.error = errorUtils.errorMessage(caught);
-      throw caught;
-    }
+    await montyContext();
   }
 
   /** The process-wide pool stays warm; this instance carries no open session. */
-  async stop(): Promise<void> {
-    this.status = "stopped";
-  }
+  async stop(): Promise<void> {}
 
   /** The process-wide pool stays warm; each command closes its own checkout. */
-  async destroy(): Promise<void> {
-    this.status = "destroyed";
-  }
-
-  /** Monty sessions are ephemeral and do not provide persistent checkpoints. */
-  async snapshot(): Promise<void> {}
-
-  readonly supportsCheckpoints = false;
+  async destroy(): Promise<void> {}
 
   /** Execute Python source and map Monty output to Mastra's command result. */
   async executeCommand(

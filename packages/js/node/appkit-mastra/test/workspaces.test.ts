@@ -1,8 +1,4 @@
-/**
- * Skill folders are the mapping a consuming app configures, so the cases here
- * pin the two halves it depends on: what the built-in names resolve to, and how
- * a consumer's map merges over them.
- */
+/** Databricks workspace path, cache, skill, and approval behavior. */
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,27 +18,20 @@ import { MontySandbox } from "../src/monty-sandbox.ts";
 import { DatabricksSandbox } from "../src/sandbox.ts";
 import { ORGANIZATION_ASSISTANT_PATH } from "../src/skill-paths.ts";
 import {
-  createWorkspace,
-  DEFAULT_SKILL_FOLDERS,
-  resolveSkillFolders,
-  type SkillFolderOptions,
+  databricksWorkspace,
+  databricksWorkspaceConfig,
+  DEFAULT_DATABRICKS_WORKSPACE_PATHS,
+  resolveDatabricksWorkspacePaths,
+  type DatabricksWorkspacePathOptions,
 } from "../src/workspaces.ts";
 
 before(async () => {
   await CacheManager.getInstance();
 });
 
-/** Invoke a skill folder's `path`, whether it is a literal or a resolver. */
-async function resolvePath(
-  folder: SkillFolderOptions,
-  requestContext?: RequestContext,
-): Promise<string | undefined> {
-  return typeof folder.path === "function" ? folder.path({ requestContext }) : folder.path;
-}
-
 /** Resolve Mastra's request-scoped skill view for a workspace test. */
 async function resolveWorkspaceSkills(
-  workspace: ReturnType<typeof createWorkspace>,
+  workspace: ReturnType<typeof databricksWorkspace>,
   requestContext: RequestContext,
 ) {
   const skills = workspace.skills;
@@ -50,90 +39,56 @@ async function resolveWorkspaceSkills(
   return (await skills.getScoped?.({ requestContext })) ?? skills;
 }
 
-describe("DEFAULT_SKILL_FOLDERS", () => {
-  it("maps organization-skills to the shared tree with approved writes", async () => {
-    const folder = DEFAULT_SKILL_FOLDERS["organization-skills"];
-    assert.equal(await resolvePath(folder), ORGANIZATION_ASSISTANT_PATH);
-    assert.deepEqual(folder.skills, ["skills"]);
-    assert.equal(folder.readable, true);
-    assert.equal(folder.writable, true);
-    assert.equal(folder.createRoot, false);
+describe("DEFAULT_DATABRICKS_WORKSPACE_PATHS", () => {
+  it("uses paths as their mount identity", () => {
+    const organization = DEFAULT_DATABRICKS_WORKSPACE_PATHS[0];
+    assert.equal(organization?.path, ORGANIZATION_ASSISTANT_PATH);
+    assert.deepEqual(organization?.skills, ["skills"]);
+    assert.equal(organization?.writable, true);
+    assert.equal(organization?.mount, undefined);
   });
 
-  it("maps personal-skills to the requesting user's tree, writable", async () => {
-    const folder = DEFAULT_SKILL_FOLDERS["personal-skills"];
-    assert.equal(folder.readable, true);
-    assert.equal(folder.writable, true);
-    assert.equal(folder.createRoot, false);
-
-    const requestContext = new RequestContext();
-    requestContext.set(MASTRA_USER_EMAIL_KEY, " user@example.com ");
-    assert.equal(await resolvePath(folder, requestContext), "/Workspace/Users/user@example.com");
-    assert.deepEqual(folder.skills, [".assistant/skills"]);
-  });
-
-  it("skips personal-skills when the request carries no user email", async () => {
-    const folder = DEFAULT_SKILL_FOLDERS["personal-skills"];
-    assert.equal(await resolvePath(folder), undefined);
-    assert.equal(await resolvePath(folder, new RequestContext()), undefined);
+  it("uses the home shortcut for the current user's path", () => {
+    const home = DEFAULT_DATABRICKS_WORKSPACE_PATHS[1];
+    assert.equal(home?.path, "~");
+    assert.deepEqual(home?.skills, [".assistant/skills"]);
+    assert.equal(home?.writable, true);
   });
 });
 
-describe("resolveSkillFolders", () => {
+describe("resolveDatabricksWorkspacePaths", () => {
   it("returns the built-in defaults when nothing is configured", () => {
-    assert.deepEqual(Object.keys(resolveSkillFolders()).sort(), [
-      "organization-skills",
-      "personal-skills",
-    ]);
+    assert.deepEqual(resolveDatabricksWorkspacePaths(), DEFAULT_DATABRICKS_WORKSPACE_PATHS);
   });
 
-  it("drops the defaults when assistantSkills is false", () => {
-    assert.deepEqual(resolveSkillFolders({ assistantSkills: false }), {});
+  it("drops the defaults when assistantPaths is false", () => {
+    assert.deepEqual(resolveDatabricksWorkspacePaths({ assistantPaths: false }), []);
   });
 
-  it("keeps explicit folders when the defaults are off", () => {
-    const custom: SkillFolderOptions = { path: "/Workspace/Shared/custom", writable: true };
-    assert.deepEqual(resolveSkillFolders({ assistantSkills: false, skillFolders: { custom } }), {
-      custom,
-    });
-  });
-
-  it("overrides one default by name and leaves the other alone", () => {
-    const resolved = resolveSkillFolders({
-      skillFolders: {
-        "organization-skills": {
-          path: "/Workspace/Shared/organization-skills",
-          writable: true,
-        },
-      },
-    });
-    assert.equal(resolved["organization-skills"]?.path, "/Workspace/Shared/organization-skills");
-    assert.equal(resolved["organization-skills"]?.writable, true);
-    assert.ok(resolved["personal-skills"]);
-  });
-
-  it("disables a default with false", () => {
+  it("appends string and configured paths", () => {
+    const runbooks = {
+      path: "/Workspace/Shared/runbooks",
+      skills: ["."],
+    } satisfies DatabricksWorkspacePathOptions;
     assert.deepEqual(
-      Object.keys(resolveSkillFolders({ skillFolders: { "personal-skills": false } })),
-      ["organization-skills"],
+      resolveDatabricksWorkspacePaths({
+        assistantPaths: false,
+        paths: ["/Volumes/main/default/data", runbooks],
+      }),
+      ["/Volumes/main/default/data", runbooks],
     );
   });
 
-  it("adds a consumer-defined folder alongside the defaults", () => {
-    const resolved = resolveSkillFolders({
-      skillFolders: { runbooks: { path: "/Workspace/Shared/runbooks" } },
-    });
-    assert.deepEqual(Object.keys(resolved).sort(), [
-      "organization-skills",
-      "personal-skills",
-      "runbooks",
-    ]);
+  it("returns a native Mastra workspace config", () => {
+    const config = databricksWorkspaceConfig({ assistantPaths: false, sandbox: false });
+    assert.equal(typeof config.filesystem, "function");
+    assert.equal(config.sandbox, undefined);
   });
 });
 
-describe("createWorkspace sandbox", () => {
+describe("databricksWorkspace sandbox", () => {
   it("uses Monty by default", async () => {
-    const workspace = createWorkspace({ assistantSkills: false, id: "analyst" });
+    const workspace = databricksWorkspace({ assistantPaths: false, id: "analyst" });
     const requestContext = new RequestContext();
 
     const first = await workspace.resolveSandbox({ requestContext });
@@ -144,7 +99,7 @@ describe("createWorkspace sandbox", () => {
   });
 
   it("can disable or select another sandbox explicitly", async () => {
-    const disabled = createWorkspace({ assistantSkills: false, sandbox: false });
+    const disabled = databricksWorkspace({ assistantPaths: false, sandbox: false });
     assert.equal(
       await disabled.resolveSandbox({ requestContext: new RequestContext() }),
       undefined,
@@ -157,11 +112,11 @@ describe("createWorkspace sandbox", () => {
       status: "running",
       async snapshot() {},
     };
-    const replaced = createWorkspace({ assistantSkills: false, sandbox: custom });
+    const replaced = databricksWorkspace({ assistantPaths: false, sandbox: custom });
     assert.equal(await replaced.resolveSandbox({ requestContext: new RequestContext() }), custom);
 
-    const databricks = createWorkspace({
-      assistantSkills: false,
+    const databricks = databricksWorkspace({
+      assistantPaths: false,
       id: "analyst",
       sandbox: "databricks",
     });
@@ -177,22 +132,47 @@ describe("createWorkspace sandbox", () => {
   });
 });
 
-describe("createWorkspace skill source identity", () => {
-  it("mounts local scratch at /tmp without Databricks workspace access", async () => {
-    const workspace = createWorkspace({ assistantSkills: false, sandbox: false });
+describe("databricksWorkspace skill source identity", () => {
+  it("does not mount /tmp unless requested", async () => {
+    const workspace = databricksWorkspace({ assistantPaths: false, sandbox: false });
     const filesystem = await workspace.resolveFilesystem({
       requestContext: new RequestContext(),
     });
     assert.ok(filesystem);
+    assert.deepEqual(await filesystem.readdir("/"), []);
+    await filesystem.destroy?.();
+  });
 
-    await filesystem.writeFile("/tmp/note.txt", "scratch");
-
-    assert.equal(await filesystem.readFile("/tmp/note.txt", { encoding: "utf8" }), "scratch");
+  it("maps an explicit /tmp path to stable user-scoped ephemeral storage", async () => {
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
+      paths: ["/tmp"],
+      sandbox: false,
+    });
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_USER_KEY, { id: "user-1", executionContext: { client: {} } });
+    const first = await workspace.resolveFilesystem({ requestContext });
+    assert.ok(first);
+    await first.writeFile("/tmp/note.txt", "scratch");
+    assert.equal(await first.readFile("/tmp/note.txt", { encoding: "utf8" }), "scratch");
     assert.deepEqual(
-      (await filesystem.readdir("/")).map(({ name }) => name),
+      (await first.readdir("/")).map(({ name }) => name),
       ["tmp"],
     );
-    await filesystem.destroy?.();
+
+    const scopedWorkspace = databricksWorkspace({
+      assistantPaths: false,
+      paths: ["/tmp/project"],
+      sandbox: false,
+    });
+    const scoped = await scopedWorkspace.resolveFilesystem({ requestContext });
+    assert.ok(scoped);
+    await scoped.writeFile("/tmp/project/result.txt", "scoped");
+    assert.equal(
+      await scoped.readFile("/tmp/project/result.txt", { encoding: "utf8" }),
+      "scoped",
+    );
+    await assert.rejects(() => scoped.readFile("/tmp/note.txt", { encoding: "utf8" }));
   });
 
   it("skips inaccessible organization and personal roots on first load", async () => {
@@ -212,7 +192,7 @@ describe("createWorkspace skill source identity", () => {
         };
       },
     };
-    const workspace = createWorkspace({ sandbox: false });
+    const workspace = databricksWorkspace({ sandbox: false });
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_SCOPES_KEY, ["workspace.workspace"]);
     requestContext.set(MASTRA_USER_EMAIL_KEY, "user@example.com");
@@ -226,22 +206,17 @@ describe("createWorkspace skill source identity", () => {
 
     assert.deepEqual(
       (await filesystem.readdir("/")).map(({ name }) => name),
-      ["tmp"],
+      [],
     );
     await filesystem.destroy?.();
   });
 
   it("leaves request-scoped filesystem reuse to Mastra", async () => {
     const mount = filesystems(new MemoryFileSystem({ root: "/skills" }));
-    const workspace = createWorkspace({
-      assistantSkills: false,
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
       sandbox: false,
-      mounts: [
-        () => ({
-          mounts: { "/skills": mount },
-          skillPaths: ["/skills"],
-        }),
-      ],
+      mounts: { "/skills": mount },
     });
     const firstContext = new RequestContext();
     const secondContext = new RequestContext();
@@ -276,26 +251,21 @@ describe("createWorkspace skill source identity", () => {
         };
       },
     };
-    const workspace = createWorkspace({
-      assistantSkills: false,
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
       sandbox: false,
-      files: {
-        cache: () => {
-          throw new Error("cache policy must not resolve without the files-cache plugin");
-        },
+      cache: () => {
+        throw new Error("cache policy must not resolve without the files-cache plugin");
       },
-      skillFolders: {
-        home: {
+      paths: [
+        ({ requestContext }) => ({
           path: "~",
-          mount: ({ requestContext }) =>
-            requestContext?.get(MASTRA_USER_EMAIL_KEY) ? "~" : undefined,
-          displayName: ({ requestContext }) =>
-            `Home for ${requestContext?.get(MASTRA_USER_EMAIL_KEY)}`,
-          readable: () => false,
-          writable: () => true,
+          displayName: `Home for ${requestContext?.get(MASTRA_USER_EMAIL_KEY)}`,
+          readable: false,
+          writable: true,
           createRoot: false,
-        },
-      },
+        }),
+      ],
     });
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_SCOPES_KEY, ["workspace.workspace"]);
@@ -314,7 +284,7 @@ describe("createWorkspace skill source identity", () => {
     assert.ok(statusPaths.includes("/Workspace/Users/user@example.com"));
   });
 
-  it("keeps first-root precedence for duplicate skill names", async () => {
+  it("preserves Mastra's native duplicate-skill error", async () => {
     const team = new MemoryFileSystem({ root: "/team" });
     const app = new MemoryFileSystem({ root: "/app" });
     await team.writeFile(
@@ -329,20 +299,14 @@ describe("createWorkspace skill source identity", () => {
       "personal-runbook/SKILL.md",
       "---\nname: personal-runbook\ndescription: User-only runbook\n---\nPersonal instructions",
     );
-    const workspace = createWorkspace({
-      assistantSkills: false,
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
       sandbox: false,
-      skillFolders: {
-        "organization-skills": {
-          filesystem: filesystems(team),
-          mount: "/organization-skills",
-        },
-        "personal-skills": {
-          filesystem: filesystems(app),
-          mount: "/personal-skills",
-          writable: true,
-        },
+      mounts: {
+        "/organization-skills": filesystems(team),
+        "/personal-skills": filesystems(app),
       },
+      skills: ["/organization-skills", "/personal-skills"],
     });
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_SCOPES_KEY, ["workspace"]);
@@ -351,9 +315,10 @@ describe("createWorkspace skill source identity", () => {
 
     assert.deepEqual(skills.map(({ name }) => name).sort(), [
       "databricks-jobs",
+      "databricks-jobs",
       "personal-runbook",
     ]);
-    assert.equal((await catalogue.get("databricks-jobs"))?.instructions, "Team instructions");
+    await assert.rejects(() => catalogue.get("databricks-jobs"), /multiple local skills found/);
     await assert.doesNotReject(() => catalogue.search("jobs"));
   });
 
@@ -372,8 +337,8 @@ describe("createWorkspace skill source identity", () => {
       ].join("\n"),
     );
     try {
-      const workspace = createWorkspace({
-        assistantSkills: false,
+      const workspace = databricksWorkspace({
+        assistantPaths: false,
         sandbox: false,
         extraSkillPaths: [root],
       });
@@ -391,18 +356,14 @@ describe("createWorkspace skill source identity", () => {
   it("refreshes skills after native workspace file mutations", async () => {
     const app = new MemoryFileSystem({ root: "/app" });
     const global = new MemoryFileSystem({ root: "/global" });
-    const workspace = createWorkspace({
-      assistantSkills: false,
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
       sandbox: false,
-      mounts: [
-        () => ({
-          mounts: {
-            "/personal-skills": filesystems(app),
-            "/shared-skills": filesystems(global),
-          },
-          skillPaths: ["/personal-skills", "/shared-skills"],
-        }),
-      ],
+      mounts: {
+        "/personal-skills": filesystems(app),
+        "/shared-skills": filesystems(global),
+      },
+      skills: ["/personal-skills", "/shared-skills"],
     });
     const requestContext = new RequestContext();
     const skills = await resolveWorkspaceSkills(workspace, requestContext);
@@ -427,8 +388,8 @@ describe("createWorkspace skill source identity", () => {
     const refreshed = await resolveWorkspaceSkills(workspace, new RequestContext());
     assert.equal((await refreshed.list())[0]?.name, "computer-jokes");
     assert.equal(
-      typeof workspace.getToolsConfig()?.[WORKSPACE_TOOLS.FILESYSTEM.READ_FILE]?.requireApproval,
-      "function",
+      workspace.getToolsConfig()?.[WORKSPACE_TOOLS.FILESYSTEM.READ_FILE]?.requireApproval,
+      undefined,
     );
     assert.equal(
       typeof workspace.getToolsConfig()?.[WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE]?.requireApproval,
@@ -437,7 +398,7 @@ describe("createWorkspace skill source identity", () => {
     const readApproval = (
       await resolveToolConfig(workspace.getToolsConfig(), WORKSPACE_TOOLS.FILESYSTEM.READ_FILE)
     ).requireApproval;
-    assert.equal(typeof readApproval, "function");
+    assert.equal(readApproval, false);
     if (typeof readApproval === "function") {
       assert.equal(
         await readApproval({
@@ -549,7 +510,7 @@ describe("createWorkspace skill source identity", () => {
       },
       async flush() {},
     };
-    const workspace = createWorkspace({
+    const workspace = databricksWorkspace({
       sandbox: false,
       pluginContext: {
         getPlugins: () =>
@@ -576,13 +537,13 @@ describe("createWorkspace skill source identity", () => {
     const organizationMount = (await filesystem.readdir("/Workspace")).find(
       ({ name }) => name === ".assistant",
     );
-    assert.equal(organizationMount?.mount?.displayName, "Organization Skills");
-    assert.match(organizationMount?.mount?.description ?? "", /shared with everyone/);
+    assert.equal(organizationMount?.mount?.displayName, undefined);
+    assert.equal(organizationMount?.mount?.description, undefined);
     const personalMount = (await filesystem.readdir("/Workspace/Users")).find(
       ({ name }) => name === "user@example.com",
     );
-    assert.equal(personalMount?.mount?.displayName, "Home");
-    assert.match(personalMount?.mount?.description ?? "", /personal files and skills/);
+    assert.equal(personalMount?.mount?.displayName, undefined);
+    assert.equal(personalMount?.mount?.description, undefined);
     await filesystem.writeFile("/Workspace/.assistant/note.txt", "approved elsewhere");
     assert.deepEqual(imports, ["/Workspace/.assistant/note.txt"]);
     await filesystem.readdir("/Workspace/.assistant");
@@ -631,23 +592,21 @@ describe("createWorkspace skill source identity", () => {
     values.clear();
     listCalls = 0;
     exportCalls = 0;
-    const filteredWorkspace = createWorkspace({
-      assistantSkills: false,
+    const filteredWorkspace = databricksWorkspace({
+      assistantPaths: false,
       sandbox: false,
-      files: {
-        cache: {
-          operations: "readFile",
-          paths: "/Workspace/.assistant/note.txt",
-        },
+      cache: {
+        operations: "readFile",
+        paths: "/Workspace/.assistant/note.txt",
       },
-      skillFolders: {
-        organization: {
+      paths: [
+        {
           path: "/Workspace/.assistant",
           readable: false,
           writable: true,
           createRoot: false,
         },
-      },
+      ],
       pluginContext: {
         getPlugins: () =>
           new Map([
@@ -686,8 +645,8 @@ describe("createWorkspace skill source identity", () => {
   });
 
   it("lets native Mastra workspace tool configuration override approval defaults", async () => {
-    const workspace = createWorkspace({
-      assistantSkills: false,
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
       sandbox: false,
       tools: {
         requireApproval: false,
@@ -717,7 +676,7 @@ describe("createWorkspace skill source identity", () => {
   });
 
   it("requires approval for filesystem mutations outside user-owned writable roots", async () => {
-    const workspace = createWorkspace({ assistantSkills: false, sandbox: false });
+    const workspace = databricksWorkspace({ assistantPaths: false, sandbox: false });
     const mutationTools = [
       WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
       WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE,
@@ -768,81 +727,9 @@ describe("createWorkspace skill source identity", () => {
     }
   });
 
-  it("applies ordered operation and path approval policies with home expansion", async () => {
-    const workspace = createWorkspace({
-      assistantSkills: false,
-      sandbox: false,
-      files: {
-        approval: ({ requestContext }) => [
-          {
-            operations: WORKSPACE_TOOLS.FILESYSTEM.DELETE,
-            paths: "~/**",
-            requireApproval: requestContext[MASTRA_USER_EMAIL_KEY] === "user@example.com",
-          },
-          {
-            operations: WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
-            paths: "~/projects/**",
-            requireApproval: false,
-          },
-          {
-            operations: WORKSPACE_TOOLS.FILESYSTEM.READ_FILE,
-            paths: "/Workspace/.assistant/**",
-          },
-        ],
-      },
-    });
-    const requestContext = { [MASTRA_USER_EMAIL_KEY]: "user@example.com" };
-    const cases = [
-      [WORKSPACE_TOOLS.FILESYSTEM.DELETE, "~/projects/a.txt", true],
-      [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE, "~/projects/a.txt", false],
-      [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE, "/Workspace/.assistant/a.txt", true],
-      [WORKSPACE_TOOLS.FILESYSTEM.READ_FILE, "/Workspace/.assistant/a.txt", true],
-      [WORKSPACE_TOOLS.FILESYSTEM.READ_FILE, "~/notes.txt", false],
-    ] as const;
-
-    for (const [toolName, configuredPath, expected] of cases) {
-      const config = await resolveToolConfig(workspace.getToolsConfig(), toolName);
-      assert.equal(typeof config.requireApproval, "function");
-      if (typeof config.requireApproval !== "function") continue;
-      const path = configuredPath.startsWith("~/")
-        ? `/Workspace/Users/user@example.com/${configuredPath.slice(2)}`
-        : configuredPath;
-      assert.equal(
-        await config.requireApproval({ args: { path }, requestContext, workspace }),
-        expected,
-      );
-    }
-  });
 });
 
 describe("agent workspace selection", () => {
-  it("applies plugin filesystem policies through the standard workspace config", async () => {
-    const built = await buildAgents({
-      config: {
-        workspace: { files: { approval: false } },
-      },
-      context: undefined,
-      log: log.logger("test/agents"),
-    });
-
-    const workspace = await built.agents[built.defaultAgentId]?.getWorkspace();
-    assert.ok(workspace);
-    const config = await resolveToolConfig(
-      workspace.getToolsConfig(),
-      WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
-    );
-    assert.equal(typeof config.requireApproval, "function");
-    if (typeof config.requireApproval !== "function") return;
-    assert.equal(
-      await config.requireApproval({
-        args: { path: "/Workspace/.assistant/note.txt" },
-        requestContext: {},
-        workspace,
-      }),
-      false,
-    );
-  });
-
   it("preserves an explicit workspace resolver opt-out", async () => {
     const built = await buildAgents({
       config: {

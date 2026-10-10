@@ -119,7 +119,7 @@ const clientDist =
 // hydration; no inner Genie orchestrator agent.
 //
 // Assistant skills: `createAgent` defaults `workspace` to
-// `createWorkspace()`, which mounts the organization tree at
+// `databricksWorkspace()`, which mounts the shared Assistant tree at
 // `/Workspace/.assistant` and the personal tree at
 // `/Workspace/Users/<email>`, then scans their relative `skills` roots.
 //

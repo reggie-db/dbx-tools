@@ -2,7 +2,7 @@
  * Where Databricks Assistant `SKILL.md` trees live.
  *
  * Two modules need these paths and must agree on them: `workspaces.ts` MOUNTS
- * them per request (see `DEFAULT_SKILL_FOLDERS`), and `remote-skills.ts`
+ * them per request (see `DEFAULT_DATABRICKS_WORKSPACE_PATHS`), and `remote-skills.ts`
  * WRITES provisioned skills into them at startup. They live here rather than being
  * spelled out in both, where a change to one would silently provision skills into a
  * tree the other never scanned.

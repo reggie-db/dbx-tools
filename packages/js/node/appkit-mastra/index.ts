@@ -43,7 +43,7 @@ export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolki
 export { chartPlanSchema, chartPlannerRequestSchema, chartToolOutputSchema } from "./src/chart.ts";
 export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
-export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraMcpConfig, MastraWorkspaceConfig, MastraPluginConfig } from "./src/config.ts";
+export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
 export type { MastraEvalDriverOptions } from "./src/evaluation.ts";
 export { MastraFileSystemAdapter, MountedCompositeFilesystem } from "./src/filesystems.ts";
@@ -82,6 +82,6 @@ export { TRACE_IO_LIMIT, MLFLOW_SPAN_INPUTS_ATTR, MLFLOW_SPAN_OUTPUTS_ATTR, CHAT
 export type { ChatTurnTelemetryOptions, ChatTraceTagValue } from "./src/telemetry.ts";
 export { MLFLOW_TRACE_TAG_PREFIX, MLFLOW_AGENT_TAG, MLFLOW_GENIE_TAG, MLFLOW_OBO_AUTH_TAG, MLFLOW_SP_AUTH_TAG, MLFLOW_LOCAL_TAG, MLFLOW_AGENT_TAG_ATTR, MLFLOW_GENIE_TAG_ATTR, APPKIT_AGENT_TRACE_ROOT_ATTR, MLFLOW_OBO_AUTH_TAG_ATTR, MLFLOW_SP_AUTH_TAG_ATTR, MLFLOW_LOCAL_TAG_ATTR } from "./src/trace-attributes.ts";
 export type { SchemaIssues } from "./src/validation.ts";
-export { DEFAULT_SKILL_FOLDERS } from "./src/workspaces.ts";
-export type { WorkspaceMountContext, SkillFolderValue, WorkspaceFileToolName, WorkspaceFilePolicyContext, WorkspaceFilePolicyValue, WorkspaceFilePathPolicy, WorkspaceFileApprovalPolicy, WorkspaceFileCachePolicy, WorkspaceFilesConfig, SkillFolderOptions, WorkspaceMountContribution, WorkspaceMountResolver, DefaultSkillFolderName, WorkspaceSandboxSelection, CreateWorkspaceOptions } from "./src/workspaces.ts";
+export { DEFAULT_DATABRICKS_WORKSPACE_PATHS } from "./src/workspaces.ts";
+export type { DatabricksWorkspaceContext, DatabricksWorkspacePathOptions, DatabricksWorkspacePath, DatabricksWorkspacePathValue, DatabricksWorkspaceCacheFilter, DatabricksWorkspaceCache, WorkspaceSandboxSelection, DatabricksWorkspaceOptions } from "./src/workspaces.ts";
 export * from "./exports.ts";

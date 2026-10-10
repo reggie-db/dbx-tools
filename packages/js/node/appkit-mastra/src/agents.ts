@@ -51,7 +51,7 @@ import { stripStaleChartsProcessor } from "./processors.ts";
 import { MASTRA_RESOLVED_MODEL_KEY } from "./serving.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
-import { createWorkspace } from "./workspaces.ts";
+import { databricksWorkspace } from "./workspaces.ts";
 
 /**
  * Tool record accepted by every Mastra `Agent.tools` field and by the
@@ -177,7 +177,7 @@ export function createAgent<
     MastraAgentDefinition<TRequestContext>,
 >(def: TDefinition): TDefinition {
   if (def.workspace) return { ...def };
-  const workspace = createWorkspace();
+  const workspace = databricksWorkspace();
   markDefaultWorkspace(workspace);
   return { ...def, workspace };
 }
@@ -338,7 +338,7 @@ export interface MastraAgentDefinition<
   /**
    * Mastra {@link Workspace} for this agent (filesystem, sandbox, or other
    * providers). Assistant skills from Databricks workspace paths are wired
-   * via {@link createWorkspace}.
+   * via {@link databricksWorkspace}.
    */
   workspace?: Workspace | MastraAgentWorkspaceResolver;
 }
@@ -577,13 +577,11 @@ export async function buildAgents(opts: {
       ((extraSkillPaths?.length ||
         config.sandbox !== undefined ||
         config.workspaceTools !== undefined ||
-        config.workspace?.files !== undefined ||
         context !== undefined) &&
         isDefaultWorkspace(workspace))
     ) {
-      workspace = createWorkspace({
+      workspace = databricksWorkspace({
         extraSkillPaths,
-        ...(config.workspace?.files !== undefined ? { files: config.workspace.files } : {}),
         ...(config.workspaceTools !== undefined ? { tools: config.workspaceTools } : {}),
         pluginContext: context,
         sandbox: config.sandbox === true ? "databricks" : config.sandbox,
