@@ -1,13 +1,57 @@
 /** Shared pyproject-backed configuration for PythonMonkey Node bindings. */
-import { readFileSync, realpathSync, rmSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { find } from "@dbx-tools/path";
 import { object, stringUtils } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
 import ts from "typescript";
 import { runTaskCommand } from "./_task-command.ts";
+import { makeReadonly } from "./generated.ts";
+import { publicFunctionExports, publicNamespaceExports } from "./module-exports.ts";
 import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
+
+const FINGERPRINT_VERSION = 1;
+const INPUT_FINGERPRINT_LABEL = "dbx-tools binding inputs sha256";
+const CONTENT_FINGERPRINT_LABEL = "dbx-tools binding content sha256";
+const PYTHON_KEYWORDS = new Set([
+  "and",
+  "as",
+  "assert",
+  "async",
+  "await",
+  "break",
+  "class",
+  "continue",
+  "def",
+  "del",
+  "elif",
+  "else",
+  "except",
+  "False",
+  "finally",
+  "for",
+  "from",
+  "global",
+  "if",
+  "import",
+  "in",
+  "is",
+  "lambda",
+  "None",
+  "nonlocal",
+  "not",
+  "or",
+  "pass",
+  "raise",
+  "return",
+  "True",
+  "try",
+  "while",
+  "with",
+  "yield",
+]);
 
 /** Resolved function replacement consumed while generating one PythonMonkey bundle. */
 export interface ResolvedPythonNodeFunctionOverride {
@@ -46,10 +90,13 @@ export function generatePythonNodeBindings(
   options: GeneratePythonNodeBindingsOptions = {},
 ): void {
   const task = resolve(dirname(fileURLToPath(import.meta.url)), "../tasks/python-node-bindings.ts");
-  const configuredProjects = pythonNodeBindingProjects(projectRoot);
+  const configuredProjects = pythonNodeBindingProjects(projectRoot).map((project) => ({
+    project,
+    configs: resolvePythonNodeBindings(projectRoot, project).map(resolvePythonNodeBindingModules),
+  }));
   const directories = new Set<string>();
-  for (const project of configuredProjects) {
-    for (const config of resolvePythonNodeBindings(projectRoot, project)) {
+  for (const { configs } of configuredProjects) {
+    for (const config of configs) {
       directories.add(relative(projectRoot, join(config.moduleDirectory, "_generated", "node")));
     }
   }
@@ -64,7 +111,12 @@ export function generatePythonNodeBindings(
   for (const directory of stale) {
     rmSync(resolve(projectRoot, directory), { recursive: true, force: true });
   }
-  for (const project of configuredProjects) {
+  for (const { configs, project } of configuredProjects) {
+    const inputFingerprint = pythonNodeBindingInputFingerprint(projectRoot, configs);
+    if (pythonNodeBindingOutputsCurrent(configs, inputFingerprint)) {
+      for (const output of pythonNodeBindingOutputs(configs)) makeReadonly(output);
+      continue;
+    }
     runTaskCommand(projectRoot, "bun", [
       task,
       "--root",
@@ -73,6 +125,182 @@ export function generatePythonNodeBindings(
       project,
       ...(options.check ? ["--check"] : []),
     ]);
+  }
+}
+
+/** Resolve automatically discovered bindable namespaces for one configured package. */
+export function resolvePythonNodeBindingModules(
+  config: ResolvedPythonNodeBindings,
+): ResolvedPythonNodeBindings {
+  if (config.modules.length > 0) return config;
+  const packageEntrypoint = Bun.resolveSync(config.entrypoint, config.projectDirectory);
+  const modules = publicNamespaceExports(packageEntrypoint).filter(
+    (module) =>
+      publicFunctionExports(resolvePythonNodeBindingModule(packageEntrypoint, module)).length > 0,
+  );
+  return { ...config, modules };
+}
+
+/** Map a JavaScript export or namespace to its generated Python identifier. */
+export function pythonNodeBindingFunctionName(javascriptName: string): string {
+  const name = stringUtils.toIdentifierWithOptions({ delimiter: "_" }, javascriptName);
+  if (!isPythonNodeBindingIdentifier(name)) {
+    throw new Error(
+      `JavaScript export ${javascriptName} does not map to a valid Python function name`,
+    );
+  }
+  return name;
+}
+
+/** Whether a value is a legal non-keyword Python identifier. */
+export function isPythonNodeBindingIdentifier(value: string): boolean {
+  return /^[_A-Za-z]\w*$/.test(value) && !PYTHON_KEYWORDS.has(value);
+}
+
+/** Content fingerprint for every source and toolchain input affecting generated bindings. */
+export function pythonNodeBindingInputFingerprint(
+  root: string,
+  configs: readonly ResolvedPythonNodeBindings[],
+): string {
+  const sourceDirectory = dirname(fileURLToPath(import.meta.url));
+  const task = resolve(sourceDirectory, "../tasks/python-node-bindings.ts");
+  const files = new Set<string>([
+    task,
+    ...filesBelow(sourceDirectory).filter((file) => file.endsWith(".ts")),
+  ]);
+  for (const candidate of [join(root, "bun.lock"), join(root, "package.json")]) {
+    if (existsSync(candidate)) files.add(candidate);
+  }
+  for (const config of configs) {
+    for (const input of config.watchInputs) files.add(resolve(root, input));
+    for (const { handlerFile } of config.functionOverrides) files.add(handlerFile);
+    const packageEntrypoint = Bun.resolveSync(config.entrypoint, config.projectDirectory);
+    files.add(packageEntrypoint);
+    const packageManifest = nearestPackageManifest(packageEntrypoint);
+    if (packageManifest) files.add(packageManifest);
+    for (const module of config.modules) {
+      files.add(resolvePythonNodeBindingModule(packageEntrypoint, module));
+    }
+  }
+
+  const hash = createHash("sha256");
+  hash.update(
+    JSON.stringify({
+      bun: Bun.version,
+      configs: configs.map((config) => ({
+        bindingDirectory: relative(root, config.bindingDirectory),
+        bindingName: config.bindingName,
+        entrypoint: config.entrypoint,
+        functionOverrides: config.functionOverrides.map((override) => ({
+          handlerExport: override.handlerExport,
+          handlerFile: relative(root, override.handlerFile),
+          targetExport: override.targetExport,
+          targetModule: override.targetModule,
+        })),
+        moduleDirectory: relative(root, config.moduleDirectory),
+        modules: config.modules,
+        package: config.package,
+        project: config.project,
+        runtimeOutput: relative(root, config.runtimeOutput),
+      })),
+      format: FINGERPRINT_VERSION,
+      typescript: ts.version,
+    }),
+  );
+  for (const file of [...files].sort()) {
+    hash.update("\0file\0");
+    hash.update(relative(root, file));
+    hash.update("\0");
+    hash.update(existsSync(file) ? readFileSync(file) : "<missing>");
+  }
+  return hash.digest("hex");
+}
+
+/** Complete generated output set for one Python project's Node bindings. */
+export function pythonNodeBindingOutputs(configs: readonly ResolvedPythonNodeBindings[]): string[] {
+  const nodeDirectory = pythonNodeBindingDirectory(configs);
+  return [
+    join(nodeDirectory, "_runtime.js"),
+    join(nodeDirectory, "_runtime.py"),
+    ...configs.flatMap((config) =>
+      config.modules.length > 0
+        ? config.modules.map((module) =>
+            join(config.bindingDirectory, `${pythonNodeBindingFunctionName(module)}.py`),
+          )
+        : [join(config.bindingDirectory, "index.py")],
+    ),
+  ].sort();
+}
+
+/** Whether all expected outputs exactly match their input and body fingerprints. */
+export function pythonNodeBindingOutputsCurrent(
+  configs: readonly ResolvedPythonNodeBindings[],
+  inputFingerprint: string,
+): boolean {
+  const generatedPackage = join(configs[0]!.moduleDirectory, "_generated", "__init__.py");
+  if (existsSync(generatedPackage)) return false;
+  const expected = pythonNodeBindingOutputs(configs);
+  const actual = filesBelow(pythonNodeBindingDirectory(configs)).sort();
+  if (actual.length !== expected.length || actual.some((file, index) => file !== expected[index])) {
+    return false;
+  }
+  return expected.every((output) => pythonNodeBindingFingerprintCurrent(output, inputFingerprint));
+}
+
+/** Prefix generated output with its input fingerprint and a self-validating body digest. */
+export function fingerprintPythonNodeBindingOutput(
+  contents: string,
+  inputFingerprint: string,
+  output: string,
+): string {
+  const prefix = output.endsWith(".py") ? "#" : "//";
+  const contentFingerprint = createHash("sha256").update(contents).digest("hex");
+  return [
+    `${prefix} ${INPUT_FINGERPRINT_LABEL}: ${inputFingerprint}`,
+    `${prefix} ${CONTENT_FINGERPRINT_LABEL}: ${contentFingerprint}`,
+    contents,
+  ].join("\n");
+}
+
+function pythonNodeBindingDirectory(configs: readonly ResolvedPythonNodeBindings[]): string {
+  const moduleDirectory = configs[0]?.moduleDirectory;
+  if (!moduleDirectory) throw new Error("Expected at least one Node binding configuration");
+  return join(moduleDirectory, "_generated", "node");
+}
+
+function pythonNodeBindingFingerprintCurrent(output: string, inputFingerprint: string): boolean {
+  try {
+    const [inputLine, contentLine, ...bodyLines] = readFileSync(output, "utf8").split("\n");
+    const prefix = output.endsWith(".py") ? "#" : "//";
+    if (inputLine !== `${prefix} ${INPUT_FINGERPRINT_LABEL}: ${inputFingerprint}`) return false;
+    const escapedPrefix = prefix === "//" ? "\\/\\/" : "#";
+    const expectedContent = contentLine?.match(
+      new RegExp(`^${escapedPrefix} ${CONTENT_FINGERPRINT_LABEL}: ([a-f0-9]{64})$`),
+    )?.[1];
+    if (!expectedContent) return false;
+    return createHash("sha256").update(bodyLines.join("\n")).digest("hex") === expectedContent;
+  } catch {
+    return false;
+  }
+}
+
+function filesBelow(directory: string): string[] {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === "__pycache__" || entry.name.endsWith(".pyc")) return [];
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? filesBelow(path) : [path];
+  });
+}
+
+function nearestPackageManifest(path: string): string | undefined {
+  let directory = dirname(path);
+  while (true) {
+    const manifest = join(directory, "package.json");
+    if (existsSync(manifest)) return manifest;
+    const parent = dirname(directory);
+    if (parent === directory) return undefined;
+    directory = parent;
   }
 }
 
@@ -102,16 +330,28 @@ export function pythonNodeBindingProjects(projectRoot: string): string[] {
 
 function existingBindingDirectories(projectRoot: string): string[] {
   const directories = new Set<string>();
-  for (const file of find.findFiles("**/_generated/node/**/*", {
-    cwd: projectRoot,
-    ignore: () => false,
-  })) {
-    const segments = file.split("/");
-    const generated = segments.lastIndexOf("_generated");
-    if (generated >= 0 && segments[generated + 1] === "node") {
-      directories.add(segments.slice(0, generated + 2).join("/"));
+  const ignored = new Set([
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "dist",
+    "node_modules",
+  ]);
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (!entry.isDirectory() || ignored.has(entry.name)) continue;
+      const path = join(directory, entry.name);
+      if (entry.name === "node" && basename(directory) === "_generated") {
+        directories.add(relative(projectRoot, path));
+        continue;
+      }
+      visit(path);
     }
-  }
+  };
+  visit(projectRoot);
   return [...directories].sort();
 }
 

@@ -12,11 +12,18 @@ import type { BunPlugin } from "bun";
 import stdLibBrowser from "node-stdlib-browser";
 import ts from "typescript";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
-import { publicFunctionExports, publicNamespaceExports } from "../src/module-exports.ts";
+import { publicFunctionExports } from "../src/module-exports.ts";
 import { resolveRepoRoot } from "../src/packages.ts";
 import {
   generatePythonNodeBindings,
+  fingerprintPythonNodeBindingOutput,
+  isPythonNodeBindingIdentifier,
+  pythonNodeBindingFunctionName as pythonFunctionName,
+  pythonNodeBindingInputFingerprint,
+  pythonNodeBindingOutputs,
+  pythonNodeBindingOutputsCurrent,
   resolvePythonNodeBindingModule,
+  resolvePythonNodeBindingModules,
   resolvePythonNodeBindings,
   type ResolvedPythonNodeBindings,
   type ResolvedPythonNodeFunctionOverride,
@@ -34,44 +41,6 @@ function bindingIndex(value: string, count: number, project: string): number {
   }
   return index;
 }
-
-const PYTHON_KEYWORDS = new Set([
-  "and",
-  "as",
-  "assert",
-  "async",
-  "await",
-  "break",
-  "class",
-  "continue",
-  "def",
-  "del",
-  "elif",
-  "else",
-  "except",
-  "False",
-  "finally",
-  "for",
-  "from",
-  "global",
-  "if",
-  "import",
-  "in",
-  "is",
-  "lambda",
-  "None",
-  "nonlocal",
-  "not",
-  "or",
-  "pass",
-  "raise",
-  "return",
-  "True",
-  "try",
-  "while",
-  "with",
-  "yield",
-]);
 
 export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
   const { values } = parseArgs({
@@ -93,7 +62,9 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     return;
   }
 
-  const configs = resolvePythonNodeBindings(root, values.project).map(discoverBindingModules);
+  const configs = resolvePythonNodeBindings(root, values.project).map(
+    resolvePythonNodeBindingModules,
+  );
   if (configs.length > 1 && configs.some(({ modules }) => modules.length === 0)) {
     throw new Error(
       "Every Node binding must export a namespace with bindable functions or configure modules",
@@ -105,6 +76,14 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       : bindingIndex(values.binding, configs.length, values.project);
   const config = selectedBinding === undefined ? configs[0] : configs[selectedBinding];
   if (!config) throw new Error("Expected at least one Node binding configuration");
+  const inputFingerprint = pythonNodeBindingInputFingerprint(root, configs);
+  if (selectedBinding === undefined && pythonNodeBindingOutputsCurrent(configs, inputFingerprint)) {
+    for (const output of pythonNodeBindingOutputs(configs)) makeReadonly(output);
+    if (values.check) {
+      logger.info(`verified ${relative(root, dirname(config.runtimeOutput))} from fingerprints`);
+    }
+    return;
+  }
   if (selectedBinding === undefined && (configs.length > 1 || config.modules.length > 0)) {
     prepareBindingDirectory(configs);
     writeRuntimeLoader(configs);
@@ -217,9 +196,9 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     const entrypoint = Bun.resolveSync(binding.entrypoint, binding.projectDirectory);
     return binding.modules.length > 0
       ? binding.modules.map((module) => ({
-        key: runtimeModuleName(binding, module),
-        entrypoint: resolvePythonNodeBindingModule(entrypoint, module),
-      }))
+          key: runtimeModuleName(binding, module),
+          entrypoint: resolvePythonNodeBindingModule(entrypoint, module),
+        }))
       : [{ key: runtimeModuleName(binding), entrypoint }];
   });
   const runtimeExports = [
@@ -304,18 +283,6 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   }
   await generate();
 
-  function discoverBindingModules(
-    candidate: ResolvedPythonNodeBindings,
-  ): ResolvedPythonNodeBindings {
-    if (candidate.modules.length > 0) return candidate;
-    const packageEntrypoint = Bun.resolveSync(candidate.entrypoint, candidate.projectDirectory);
-    const modules = publicNamespaceExports(packageEntrypoint).filter(
-      (module) =>
-        publicFunctionExports(resolvePythonNodeBindingModule(packageEntrypoint, module)).length > 0,
-    );
-    return { ...candidate, modules };
-  }
-
   async function generate(): Promise<void> {
     const result = await Bun.build({
       entrypoints: [shimEntry],
@@ -367,8 +334,8 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
         ...bindings.flatMap((binding) => [
           ...(binding.modules.length > 0
             ? binding.modules.map((module) =>
-              join(binding.bindingDirectory, `${pythonFunctionName(module)}.py`),
-            )
+                join(binding.bindingDirectory, `${pythonFunctionName(module)}.py`),
+              )
             : [join(binding.bindingDirectory, "index.py")]),
         ]),
       ].filter((file): file is string => Boolean(file)),
@@ -412,16 +379,6 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       grouped.set(override.targetModule, current);
     }
     return grouped;
-  }
-
-  function pythonFunctionName(javascriptName: string): string {
-    const name = stringUtils.toIdentifierWithOptions({ delimiter: "_" }, javascriptName);
-    if (!/^[_A-Za-z]\w*$/.test(name) || PYTHON_KEYWORDS.has(name)) {
-      throw new Error(
-        `JavaScript export ${javascriptName} does not map to a valid Python function name`,
-      );
-    }
-    return name;
   }
 
   function runtimeModuleName(binding: ResolvedPythonNodeBindings, module?: string): string {
@@ -987,18 +944,18 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   function pythonDataclass(record: PythonRecord): string {
     const body = record.fields.length
       ? record.fields
-        .map((field) => {
-          const defaultArgument = Object.hasOwn(field, "defaultValue")
-            ? pythonDefault(field.defaultValue)
-            : "default=None";
-          return [
-            `    ${field.pythonName}: ${pythonOptionalType(field.type)} = field(`,
-            `        ${defaultArgument},`,
-            `        metadata={"javascript_name": ${JSON.stringify(field.javascriptName)}},`,
-            "    )",
-          ].join("\n");
-        })
-        .join("\n")
+          .map((field) => {
+            const defaultArgument = Object.hasOwn(field, "defaultValue")
+              ? pythonDefault(field.defaultValue)
+              : "default=None";
+            return [
+              `    ${field.pythonName}: ${pythonOptionalType(field.type)} = field(`,
+              `        ${defaultArgument},`,
+              `        metadata={"javascript_name": ${JSON.stringify(field.javascriptName)}},`,
+              "    )",
+            ].join("\n");
+          })
+          .join("\n")
       : "    pass";
     return `@dataclass(kw_only=True)\nclass ${record.name}:\n${body}`;
   }
@@ -1026,17 +983,17 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     }
     const body = response.fields.length
       ? response.fields
-        .map(
-          ({ name, required, type }) =>
-            `    ${name}: ${required ? type : `NotRequired[${type}]`}`,
-        )
-        .join("\n")
+          .map(
+            ({ name, required, type }) =>
+              `    ${name}: ${required ? type : `NotRequired[${type}]`}`,
+          )
+          .join("\n")
       : "    pass";
     return `class ${response.name}(TypedDict):\n${body}`;
   }
 
   function isPythonIdentifier(value: string): boolean {
-    return /^[_A-Za-z]\w*$/.test(value) && !PYTHON_KEYWORDS.has(value);
+    return isPythonNodeBindingIdentifier(value);
   }
 
   function pythonProtocol(protocol: PythonProtocol): string {
@@ -1045,18 +1002,18 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     );
     const methods = protocol.methods.length
       ? protocol.methods
-        .map((method) => {
-          const parameters = method.parameters.map(
-            ({ name, required, type }) => `        ${name}: ${type}${required ? "" : " = ..."},`,
-          );
-          return [
-            `    async def ${method.name}(`,
-            "        self,",
-            ...parameters,
-            `    ) -> ${method.returnType}: ...`,
-          ].join("\n");
-        })
-        .join("\n\n")
+          .map((method) => {
+            const parameters = method.parameters.map(
+              ({ name, required, type }) => `        ${name}: ${type}${required ? "" : " = ..."},`,
+            );
+            return [
+              `    async def ${method.name}(`,
+              "        self,",
+              ...parameters,
+              `    ) -> ${method.returnType}: ...`,
+            ].join("\n");
+          })
+          .join("\n\n")
       : "";
     const body = [...properties, methods].filter(Boolean).join("\n\n") || "    pass";
     return `class ${protocol.name}(Protocol):\n${body}`;
@@ -1149,7 +1106,8 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
 
   function writeGenerated(output: string, contents: string, kind: string): void {
     const destination = relative(root, output);
-    if (existsSync(output) && readFileSync(output, "utf8") === contents) {
+    const generated = fingerprintPythonNodeBindingOutput(contents, inputFingerprint, output);
+    if (existsSync(output) && readFileSync(output, "utf8") === generated) {
       if (values.check) logger.info(`verified ${destination}`);
       return;
     }
@@ -1158,7 +1116,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     }
     mkdirSync(dirname(output), { recursive: true });
     makeWritable(output);
-    writeFileSync(output, contents);
+    writeFileSync(output, generated);
     makeReadonly(output);
     logger.info(`generated ${destination}`);
   }

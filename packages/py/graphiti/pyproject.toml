@@ -67,12 +67,12 @@ modules = [ "bindings" ]
 
 [[tool.dbx_tools.sync]]
 name = "graphiti_server"
-source = "graph-service @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=server"
+source = "graph-service @ git+https://github.com/getzep/graphiti.git@ba4a9cb32495b6864160616f8dfa2b898f4a500c#subdirectory=server"
 include = [ "graph_service/**/*.py" ]
 
 [[tool.dbx_tools.sync]]
 name = "graphiti_mcp"
-source = "mcp-server @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=mcp_server/src"
+source = "mcp-server @ git+https://github.com/getzep/graphiti.git@ba4a9cb32495b6864160616f8dfa2b898f4a500c#subdirectory=mcp_server/src"
 include = [
   "graphiti_mcp_server.py",
   "config/**/*.py",

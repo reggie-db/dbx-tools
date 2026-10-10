@@ -21,7 +21,17 @@ import { Component, javascript } from "projen";
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
 const PYTHON_ROOT = "packages/py";
-const GRAPHITI_UPSTREAM_COMMIT = "2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066";
+const GRAPHITI_UPSTREAM_RELEASE = {
+  version: "0.30.2",
+  tag: "v0.30.2",
+  tagCommit: "eaa4128681bc53487138a4bbc22d58336ebe70d2",
+  syncCommit: "ba4a9cb32495b6864160616f8dfa2b898f4a500c",
+  mcpRequirement: ">=2,<3",
+} as const;
+
+if (GRAPHITI_UPSTREAM_RELEASE.tag !== `v${GRAPHITI_UPSTREAM_RELEASE.version}`) {
+  throw new Error("Graphiti upstream tag must match the graphiti-core version");
+}
 
 /** Copy canonical branding into published package trees after synthesis. */
 class BrandPackageAssets extends Component {
@@ -1197,9 +1207,9 @@ const pythonPackages: project.PythonPackageOptions[] = [
     dependencies: [
       "asyncpg>=0.30,<1",
       "fastapi>=0.115,<1",
-      "graphiti-core==0.30.2",
+      `graphiti-core==${GRAPHITI_UPSTREAM_RELEASE.version}`,
       "httpx>=0.28,<1",
-      "mcp>=2,<3",
+      `mcp${GRAPHITI_UPSTREAM_RELEASE.mcpRequirement}`,
       "openai>=2.41,<3",
       "platformdirs>=4,<5",
       "post-graph>=1.8,<2",
@@ -1214,12 +1224,12 @@ const pythonPackages: project.PythonPackageOptions[] = [
     sync: [
       {
         name: "graphiti_server",
-        source: `graph-service @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_COMMIT}#subdirectory=server`,
+        source: `graph-service @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_RELEASE.syncCommit}#subdirectory=server`,
         include: ["graph_service/**/*.py"],
       },
       {
         name: "graphiti_mcp",
-        source: `mcp-server @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_COMMIT}#subdirectory=mcp_server/src`,
+        source: `mcp-server @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_RELEASE.syncCommit}#subdirectory=mcp_server/src`,
         include: [
           "graphiti_mcp_server.py",
           "config/**/*.py",
@@ -1304,6 +1314,10 @@ root.addTask("graphiti:smoke:mastra", {
   exec: "bun packages/js/node/appkit-graphiti/smoke/mastra-tool.ts",
   description: "Smoke-test Graphiti through the AppKit Mastra tool provider",
   receiveArgs: true,
+});
+root.addTask("graphiti:sync:verify-tag", {
+  exec: `bun -e 'const expected = "${GRAPHITI_UPSTREAM_RELEASE.tagCommit}"; const result = Bun.spawnSync(["git", "ls-remote", "https://github.com/getzep/graphiti.git", "refs/tags/${GRAPHITI_UPSTREAM_RELEASE.tag}"]); if (result.exitCode !== 0) throw new Error(result.stderr.toString()); const actual = result.stdout.toString().trim().split(/\\s+/)[0]; if (actual !== expected) throw new Error(\`Graphiti tag resolved to \${actual}, expected \${expected}\`);'`,
+  description: "Verify the Graphiti sync commit matches its release tag",
 });
 new BrandPackageAssets(root);
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -190,6 +191,44 @@ describe("Python Node task components", () => {
       ),
       true,
     );
+  });
+
+  it("reuses fingerprints only while every source and generated output matches", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    const entrypoint = join(entryDirectory, "index.ts");
+    writeFileSync(entrypoint, "export function value(): string { return 'first'; }\n");
+    writeFixturePyproject(directory, ['package = "fixture-entry"']);
+
+    const generated = runBindingTask(directory);
+    assert.equal(generated.exitCode, 0, generated.stderr.toString());
+    const runtime = join(directory, "python/src/fixture/runtime/_generated/node/_runtime.js");
+    assert.match(readFileSync(runtime, "utf8"), /dbx-tools binding inputs sha256/);
+
+    const cached = runBindingTask(directory, "--check");
+    assert.equal(cached.exitCode, 0, cached.stderr.toString());
+    assert.match(cached.stderr.toString(), /verified .* from fingerprints/);
+
+    const pyproject = join(directory, "python/pyproject.toml");
+    writeFileSync(
+      pyproject,
+      `${readFileSync(pyproject, "utf8")}\n[project]\nname = "unrelated-metadata"\n`,
+    );
+    const unrelatedPyprojectChange = runBindingTask(directory, "--check");
+    assert.equal(unrelatedPyprojectChange.exitCode, 0, unrelatedPyprojectChange.stderr.toString());
+    assert.match(unrelatedPyprojectChange.stderr.toString(), /verified .* from fingerprints/);
+
+    chmodSync(runtime, 0o644);
+    writeFileSync(runtime, `${readFileSync(runtime, "utf8")}\n// modified\n`);
+    const changedOutput = runBindingTask(directory, "--check");
+    assert.notEqual(changedOutput.exitCode, 0);
+    assert.match(changedOutput.stderr.toString(), /Generated JavaScript runtime is stale/);
+    assert.equal(runBindingTask(directory).exitCode, 0);
+
+    writeFileSync(entrypoint, "export function value(): string { return 'second'; }\n");
+    const changedInput = runBindingTask(directory, "--check");
+    assert.notEqual(changedInput.exitCode, 0);
+    assert.match(changedInput.stderr.toString(), /Generated .* is stale/);
   });
 
   it("always generates bindings beneath the Python package generated tree", () => {

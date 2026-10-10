@@ -342,10 +342,7 @@ mastra({
           requireApproval: true,
         },
         {
-          operations: [
-            WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE,
-            WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE,
-          ],
+          operations: [WORKSPACE_TOOLS.FILESYSTEM.WRITE_FILE, WORKSPACE_TOOLS.FILESYSTEM.EDIT_FILE],
           paths: "~/projects/**",
           requireApproval: requestContext.role !== "editor",
         },
@@ -390,10 +387,10 @@ location and carry relative `skills` roots plus their own policy: `readable`
 `/Workspace` roots, `false` elsewhere).
 `DEFAULT_SKILL_FOLDERS` supplies these:
 
-| Name                  | Mount                                | Skill root          | Readable | Writable |
-| --------------------- | ------------------------------------ | ------------------- | -------- | -------- |
-| `organization-skills` | `/Workspace/.assistant`              | `skills`            | yes      | yes      |
-| `personal-skills`     | `/Workspace/Users/<email>`            | `.assistant/skills` | yes      | yes      |
+| Name                  | Mount                      | Skill root          | Readable | Writable |
+| --------------------- | -------------------------- | ------------------- | -------- | -------- |
+| `organization-skills` | `/Workspace/.assistant`    | `skills`            | yes      | yes      |
+| `personal-skills`     | `/Workspace/Users/<email>` | `.assistant/skills` | yes      | yes      |
 
 Every workspace also has an isolated local scratch filesystem mounted at
 `/tmp`. Organization and personal mounts are probed independently on first

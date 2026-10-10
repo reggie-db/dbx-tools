@@ -321,6 +321,15 @@
         }
       ]
     },
+    "graphiti:sync:verify-tag": {
+      "name": "graphiti:sync:verify-tag",
+      "description": "Verify the Graphiti sync commit matches its release tag",
+      "steps": [
+        {
+          "exec": "bun -e 'const expected = \"eaa4128681bc53487138a4bbc22d58336ebe70d2\"; const result = Bun.spawnSync([\"git\", \"ls-remote\", \"https://github.com/getzep/graphiti.git\", \"refs/tags/v0.30.2\"]); if (result.exitCode !== 0) throw new Error(result.stderr.toString()); const actual = result.stdout.toString().trim().split(/\\s+/)[0]; if (actual !== expected) throw new Error(`Graphiti tag resolved to ${actual}, expected ${expected}`);'"
+        }
+      ]
+    },
     "install": {
       "name": "install",
       "description": "Install project dependencies and update lockfile (non-frozen)",

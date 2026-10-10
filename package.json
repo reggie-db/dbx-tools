@@ -28,6 +28,7 @@
     "graphiti:python-sync:check": "projen graphiti:python-sync:check",
     "graphiti:smoke:embedded": "projen graphiti:smoke:embedded",
     "graphiti:smoke:mastra": "projen graphiti:smoke:mastra",
+    "graphiti:sync:verify-tag": "projen graphiti:sync:verify-tag",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
