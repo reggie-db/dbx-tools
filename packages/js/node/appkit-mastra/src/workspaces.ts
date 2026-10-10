@@ -877,7 +877,6 @@ async function databricksFilesystem(
     }
   | undefined
 > {
-  const initialClient = workspaceClient.toLegacyWorkspaceClient(client);
   const fs = new DatabricksFileSystem({
     client: () => workspaceClient.toLegacyWorkspaceClient(requestWorkspaceClient(client)),
     root,
