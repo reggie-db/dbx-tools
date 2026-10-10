@@ -97,11 +97,11 @@ export interface DatabricksWorkspacePathOptions {
   /** Mount description shown in filesystem listings and workspace instructions. */
   description?: string;
   /**
-   * Skill roots relative to this filesystem root. Omit or set `false` for a
-   * file-only mount. Each path is joined to the actual mount path before
-   * Mastra scans it.
+   * Skill paths relative to this included filesystem path. Omit for a
+   * file-only mount. Each entry is joined to the actual mount path before
+   * Mastra receives it.
    */
-  skills?: readonly string[] | false;
+  skills?: readonly string[];
   /**
    * Allow write attempts to a {@link path} mount. Defaults to `true` for
    * `/Workspace` roots and `false` elsewhere. Databricks permissions still
@@ -200,8 +200,8 @@ export interface DatabricksWorkspaceOptions extends Omit<
   paths?: readonly DatabricksWorkspacePathValue[];
   /** Native Mastra filesystems composed beside the Databricks paths. */
   mounts?: Record<string, WorkspaceFilesystem>;
-  /** Replace the auto-built dynamic skills resolver, or disable skills. */
-  skills?: SkillsResolver | false;
+  /** Native Mastra skill paths or resolver composed with path-declared skills. */
+  skills?: SkillsResolver;
   /** Filesystem cache filters. Ignored when the AppKit files-cache plugin is absent. */
   cache?: DatabricksWorkspaceCache;
   /** AppKit plugin context used to discover optional sibling capabilities. */
@@ -213,7 +213,7 @@ export interface DatabricksWorkspaceOptions extends Omit<
    */
   sandbox?: WorkspaceSandboxSelection;
   /**
-   * Extra LOCAL skill roots mounted read-only for every request's skill discovery.
+   * Extra LOCAL skill paths mounted read-only for every request's skill discovery.
    * Used by the plugin to surface remote skills provisioned to a local temp
    * dir at startup (see `remote-skills.ts`). Databricks-hosted remote skills
    * need no entry here - they land in the Assistant tree the built-in mount
@@ -273,8 +273,7 @@ export function databricksWorkspaceConfig(
   const filesystemSourceKey = `${id}:${++workspaceSourceSequence}`;
   const paths = resolveDatabricksWorkspacePaths(options);
   const configuredPaths = paths.length;
-  const skillsEnabled = options.skills !== false;
-  const extraSkillPaths = skillsEnabled ? (options.extraSkillPaths ?? []) : [];
+  const extraSkillPaths = options.extraSkillPaths ?? [];
   const filesCache = pluginRegistry.instance(options.pluginContext, filesCachePlugin)?.exports();
   const configuredCache = options.cache;
   const mountFilesCache = configuredCache === false ? undefined : filesCache;
@@ -299,7 +298,7 @@ export function databricksWorkspaceConfig(
     );
   const hasSkillPaths = paths.some(pathMayProvideSkills) || extraSkillPaths.length > 0;
   const skills: SkillsResolver =
-    (options.skills || undefined) ??
+    options.skills ??
     (async ({ requestContext }) => {
       const context = { requestContext };
       const contribution = await resolveContribution(context);
@@ -318,8 +317,8 @@ export function databricksWorkspaceConfig(
     resolverCount: resolvers.length,
     configuredPaths,
     customMounts: Object.keys(options.mounts ?? {}).length,
-    skillsEnabled: skillsEnabled && (options.skills !== undefined || hasSkillPaths),
-    customSkillsResolver: options.skills !== undefined && options.skills !== false,
+    skillsConfigured: options.skills !== undefined || hasSkillPaths,
+    customSkillsResolver: options.skills !== undefined,
     checkSkillFileMtime,
     bm25,
     extraSkillPaths: extraSkillPaths.length,
@@ -342,7 +341,7 @@ export function databricksWorkspaceConfig(
     id,
     name,
     filesystem: resolveFilesystem,
-    ...(skillsEnabled && (options.skills !== undefined || hasSkillPaths)
+    ...(options.skills !== undefined || hasSkillPaths
       ? {
           skills,
           checkSkillFileMtime,
@@ -390,11 +389,11 @@ export function resolveDatabricksWorkspacePaths(
   ];
 }
 
-/** Whether one path can contribute skill roots to the workspace. */
+/** Whether one included path can contribute Mastra skill paths. */
 function pathMayProvideSkills(path: DatabricksWorkspacePathValue): boolean {
   if (typeof path === "function") return true;
   if (path === false || typeof path === "string") return false;
-  return path.skills !== false && (path.skills?.length ?? 0) > 0;
+  return (path.skills?.length ?? 0) > 0;
 }
 
 /* ---------------------------- private helpers ---------------------------- */
@@ -508,14 +507,14 @@ async function resolveFilesCacheScope(context: DatabricksWorkspaceContext): Prom
   };
 }
 
-/** Join one relative skill root to its actual composite mount path. */
-function mountedSkillPath(mount: string, skillRoot: string): string {
-  if (posixPath.isAbsolute(skillRoot)) {
-    throw new TypeError(`Skill path must be relative to its mount: ${skillRoot}`);
+/** Join one relative skill path to its actual composite mount path. */
+function mountedSkillPath(mount: string, skillPath: string): string {
+  if (posixPath.isAbsolute(skillPath)) {
+    throw new TypeError(`Skill path must be relative to its mount: ${skillPath}`);
   }
-  const normalized = posixPath.normalize(skillRoot);
+  const normalized = posixPath.normalize(skillPath);
   if (!normalized.ok) {
-    throw new TypeError(`Skill path escapes its mount: ${skillRoot}`);
+    throw new TypeError(`Skill path escapes its mount: ${skillPath}`);
   }
   return posixPath.join(posixPath.normalizeRoot(mount), normalized.path.slice(1));
 }
@@ -554,9 +553,7 @@ async function resolveWorkspacePathMounts(
     if (posixPath.isWithinRoot(SCRATCH_MOUNT, configured.path)) {
       const mount = configured.mount ?? configured.path;
       mounts[mount] = userTempFilesystem(context, configured.path);
-      if (configured.skills !== false) {
-        skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
-      }
+      skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
       continue;
     }
     if (!canMountDatabricks) {
@@ -577,9 +574,7 @@ async function resolveWorkspacePathMounts(
       continue;
     }
     mounts[mount] = resolved.filesystem;
-    if (configured.skills !== false) {
-      skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
-    }
+    skillPaths.push(...(configured.skills ?? []).map((path) => mountedSkillPath(mount, path)));
   }
 
   logger.debug("workspace-paths:mounted", {
@@ -597,7 +592,7 @@ interface ResolvedDatabricksWorkspacePath {
   path: string;
   displayName?: string;
   description?: string;
-  skills?: readonly string[] | false;
+  skills?: readonly string[];
   writable?: boolean;
   createRoot?: boolean;
   mount?: string;
@@ -652,12 +647,7 @@ async function resolveSkillFolderFilesystem(
   if (!root) return undefined;
   const writable = folder.writable ?? isWorkspaceRoot(root);
   const cacheOptions = cache.fileSystemCache
-    ? await resolveFileCacheOptions(
-        cacheConfig,
-        context,
-        root,
-        folder.skills === false ? [] : (folder.skills ?? []),
-      )
+    ? await resolveFileCacheOptions(cacheConfig, context, root, folder.skills ?? [])
     : undefined;
   const resolved = await databricksFilesystem(
     cache.client,
@@ -835,7 +825,7 @@ function userTempFilesystem(
   });
 }
 
-/** Mount startup-provisioned local skill roots into Mastra's workspace filesystem. */
+/** Mount startup-provisioned local skill paths into Mastra's workspace filesystem. */
 function localSkillMountResolvers(paths: readonly string[]): WorkspaceMountResolver[] {
   return [...new Set(paths.map((path) => path.trim()).filter(Boolean))].map((root) => {
     const mount = posixPath.normalizeRoot(root);
@@ -1060,30 +1050,30 @@ async function resolveWorkspaceFilesystem(
 }
 
 /**
- * Expand skill roots into concrete skill directories and keep the first
+ * Expand configured skill paths into concrete skill directories and keep the first
  * same-named directory. Mastra still owns parsing, indexing, and refreshes,
  * while earlier configured roots retain precedence over later roots.
  */
 async function resolveDistinctSkillPaths(
   filesystem: WorkspaceFilesystem,
-  roots: readonly string[],
+  paths: readonly string[],
 ): Promise<string[]> {
   const selected = new Map<string, string>();
-  for (const root of roots) {
+  for (const path of paths) {
     try {
-      const entries = await filesystem.readdir(root);
+      const entries = await filesystem.readdir(path);
       if (entries.some((entry) => entry.type === "file" && entry.name === "SKILL.md")) {
-        const name = posixPath.basename(root);
-        if (!selected.has(name)) selected.set(name, root);
+        const name = posixPath.basename(path);
+        if (!selected.has(name)) selected.set(name, path);
         continue;
       }
       for (const entry of entries) {
         if (entry.type !== "directory" || selected.has(entry.name)) continue;
-        selected.set(entry.name, posixPath.join(root, entry.name));
+        selected.set(entry.name, posixPath.join(path, entry.name));
       }
     } catch (error) {
-      logger.debug("skill-root:skipped", {
-        root,
+      logger.debug("skill-path:skipped", {
+        path,
         error: errorUtils.errorMessage(error),
       });
     }

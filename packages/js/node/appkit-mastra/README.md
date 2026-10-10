@@ -268,7 +268,7 @@ Every `agents.createAgent()` gets a default Mastra `Workspace` from
 `workspaces.databricksWorkspace()`. A workspace can provide file access, skill
 discovery, a command sandbox, or any combination. The default enables all three:
 it mounts `/Workspace/.assistant` and the current user's workspace home, scans
-their configured Assistant skill roots, and uses the Monty sandbox.
+their configured Assistant skill paths, and uses the Monty sandbox.
 
 Pass paths directly when an agent needs a different filesystem scope:
 
@@ -309,11 +309,12 @@ const workspace = workspaces.databricksWorkspace({
 });
 ```
 
-Paths are file-only unless `skills` lists relative skill roots within that path.
-Set the workspace-level `skills: false` to retain configured mounts while
-disabling skill discovery. `writable` controls whether the filesystem attempts
-mutations; Databricks permissions still decide whether an operation succeeds.
-`mount` can expose the path at a different Mastra path when required.
+Paths are file-only unless `skills` lists relative Mastra skill paths within
+that included path. At workspace level, `skills` uses Mastra's native path list
+or resolver. An empty list retains configured mounts without exposing skills.
+`writable` controls whether the filesystem attempts mutations; Databricks
+permissions still decide whether an operation succeeds. `mount` can expose the
+path at a different Mastra path when required.
 
 Configure the capabilities independently:
 
@@ -331,7 +332,7 @@ const skillsOnly = workspaces.databricksWorkspace({
 
 const sandboxOnly = workspaces.databricksWorkspace({
   assistantPaths: false,
-  skills: false,
+  skills: [],
   tools: {
     enabled: false,
     mastra_workspace_execute_command: { enabled: true },
@@ -361,11 +362,11 @@ export const workspace = new Workspace({
 });
 ```
 
-Mastra discovers and loads skills only from explicit `skills` roots, including
-the roots on the default Assistant paths. Set `workspaceSkills: false` to omit
-the agent's skill-search processor, or pass `{ topK, minScore, ttlMs }` to tune
-it. Set the workspace's `skills: false` when the workspace should expose no
-skills at all.
+Mastra discovers and loads skills only from explicit `skills` paths, including
+the paths declared under the default Assistant paths. Set `workspaceSkills:
+false` to omit the agent's skill-search processor, or pass `{ topK, minScore,
+ttlMs }` to tune it. Set the workspace's `skills` to an empty list when the
+workspace should expose no skills at all.
 
 ### Cache Workspace Metadata
 
@@ -382,7 +383,7 @@ await createApp({
 
 The cache is isolated by user and mount path. It stores `exists`, `readdir`, and
 `stat` results for mounted Databricks paths and caches `readFile` only under
-skill roots. Set `cache: false` to disable it or provide filters:
+skill paths. Set `cache: false` to disable it or provide filters:
 
 ```ts
 const workspace = workspaces.databricksWorkspace({

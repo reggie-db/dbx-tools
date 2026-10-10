@@ -161,7 +161,8 @@
         "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
-        "@dbx-tools/cli"
+        "@dbx-tools/cli",
+        "@dbx-tools/projen"
       ]
     },
     {
@@ -380,6 +381,7 @@
       "name": "@dbx-tools/projen",
       "path": "projen",
       "dependencies": [
+        "@dbx-tools/cli-args",
         "@dbx-tools/core",
         "@dbx-tools/path",
         "@dbx-tools/shared-core"

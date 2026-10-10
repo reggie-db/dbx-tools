@@ -120,7 +120,7 @@ const clientDist =
 //
 // Workspace capabilities: `createAgent` defaults `workspace` to
 // `databricksWorkspace()`, which provides file access, configured Assistant
-// skill roots, and Monty command execution. Each capability can be configured
+// skill paths, and Monty command execution. Each capability can be configured
 // or disabled independently.
 //
 // Required env vars (see .env.example):

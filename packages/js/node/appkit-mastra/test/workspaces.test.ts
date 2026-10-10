@@ -97,10 +97,10 @@ describe("resolveDatabricksWorkspacePaths", () => {
     assert.equal(config.skills, undefined);
   });
 
-  it("can disable skills while retaining default file mounts", () => {
-    const config = databricksWorkspaceConfig({ skills: false, sandbox: false });
+  it("accepts Mastra skill paths independently from default file mounts", () => {
+    const config = databricksWorkspaceConfig({ skills: [], sandbox: false });
     assert.equal(typeof config.filesystem, "function");
-    assert.equal(config.skills, undefined);
+    assert.deepEqual(config.skills, []);
   });
 });
 
@@ -351,7 +351,7 @@ describe("databricksWorkspace skill source identity", () => {
     await assert.doesNotReject(() => catalogue.search("jobs"));
   });
 
-  it("mounts startup-provisioned local skill roots for search", async () => {
+  it("mounts startup-provisioned local skill paths for search", async () => {
     const root = await mkdtemp(join(tmpdir(), "appkit-mastra-skills-"));
     const skill = join(root, "databricks-apps");
     await mkdir(skill);
