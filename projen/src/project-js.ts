@@ -12,7 +12,7 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { ignore, match } from "@dbx-tools/path";
 import { object, stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
-import { Component, LogLevel, Project, javascript, typescript } from "projen";
+import { Component, LogLevel, Project, type Task, javascript, typescript } from "projen";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
 import { generateBarrels } from "./barrels.ts";
@@ -605,8 +605,9 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly extraWorkspaceMembers?: readonly string[];
     /**
      * Install workspace dependencies once from the custom root instead of once
-     * per child project during post-synthesis. Defaults to `true`; set `false` to
-     * preserve projen's native per-project install tasks.
+     * per child project during post-synthesis. Defaults to `true`; set `false`
+     * on the root to preserve every native child install, or on an individual
+     * child to retain that package's native install lifecycle.
      */
     readonly rootInstallOnly?: boolean;
   };
@@ -636,7 +637,7 @@ export class DBXToolsNodeProject
   rootTsconfig?: DBXToolsRootTsconfig;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
-  private readonly rootInstallOnly: boolean;
+  readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
     validateReleaseOptions(options);
@@ -684,18 +685,66 @@ export class DBXToolsNodeProject
  *
  * Every projen child has its own `NodePackage` post-synth hook, which otherwise
  * runs the install task against the same root workspace once per package. Clear
- * the public child install tasks while leaving dependency resolution and the
- * root's real install/install:ci tasks intact. Applied in root `preSynthesize`
- * so manually attached late children are included and repeated synths remain
- * idempotent.
+ * the public child install tasks and suppress Projen's protected install hook,
+ * while leaving the rest of `NodePackage.postSynthesize` (including dependency
+ * resolution) and the root's real install/install:ci tasks intact. A child can
+ * set `rootInstallOnly: false` when it owns a package-local dependency tree.
+ * Applied in root `preSynthesize` so manually attached late children are
+ * included and repeated synths remain idempotent.
  */
+class RootInstallOnlyChild extends Component {
+  private readonly child: DBXToolsNodeProject | DBXToolsTypeScriptProject;
+  private readonly installDependencies: (trigger: unknown) => void;
+  private suppressed = false;
+
+  constructor(child: DBXToolsNodeProject | DBXToolsTypeScriptProject) {
+    super(child, "RootInstallOnly");
+    this.child = child;
+    const nodePackage = child.package as unknown as {
+      installDependencies(trigger: unknown): void;
+    };
+    if (typeof nodePackage.installDependencies !== "function") {
+      throw new Error("Projen NodePackage no longer exposes installDependencies");
+    }
+    this.installDependencies = nodePackage.installDependencies;
+  }
+
+  public override preSynthesize(): void {
+    const nodePackage = this.child.package as unknown as {
+      installDependencies(trigger: unknown): void;
+    };
+    if (
+      hasCustomInstallSteps(
+        this.child.package.installTask,
+        this.child.package.installAndUpdateLockfileCommand,
+      ) ||
+      hasCustomInstallSteps(this.child.package.installCiTask, this.child.package.installCommand)
+    ) {
+      if (this.suppressed) nodePackage.installDependencies = this.installDependencies;
+      this.suppressed = false;
+      return;
+    }
+    this.child.package.installTask.reset();
+    this.child.package.installCiTask.reset();
+    nodePackage.installDependencies = () => {};
+    this.suppressed = true;
+  }
+}
+
+function hasCustomInstallSteps(task: Task, defaultCommand: string): boolean {
+  if (task.steps.length === 0) return false;
+  if (task.steps.length !== 1) return true;
+  const step = task.steps[0]!;
+  return step.exec !== defaultCommand;
+}
+
 export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
   (construct: IConstruct): construct is DBXToolsNodeProject | DBXToolsTypeScriptProject =>
     (construct instanceof DBXToolsNodeProject || construct instanceof DBXToolsTypeScriptProject) &&
-    construct.parent !== undefined,
+    construct.parent !== undefined &&
+    construct.rootInstallOnly,
   (child) => {
-    child.package.installTask.reset();
-    child.package.installCiTask.reset();
+    if (!child.node.tryFindChild("RootInstallOnly")) new RootInstallOnlyChild(child);
   },
 );
 
@@ -717,7 +766,7 @@ export class DBXToolsTypeScriptProject
   rootTsconfig?: DBXToolsRootTsconfig;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
-  private readonly rootInstallOnly: boolean;
+  readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
     validateReleaseOptions(options);

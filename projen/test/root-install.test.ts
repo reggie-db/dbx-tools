@@ -17,7 +17,16 @@ import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.t
 let temp: string;
 
 /** Synth one root plus a child attached after root construction. */
-function synthFixture(name: string, rootInstallOnly?: boolean): string {
+function synthFixture(
+  name: string,
+  rootInstallOnly?: boolean,
+  childRootInstallOnly?: boolean,
+  customizeChildInstall = false,
+): {
+  readonly child: DBXToolsTypeScriptProject;
+  readonly outdir: string;
+  readonly root: DBXToolsNodeProject;
+} {
   const outdir = join(temp, name);
   const root = new DBXToolsNodeProject({
     name,
@@ -25,13 +34,15 @@ function synthFixture(name: string, rootInstallOnly?: boolean): string {
     defaultTagMixins: false,
     ...(rootInstallOnly !== undefined ? { rootInstallOnly } : {}),
   });
-  new DBXToolsTypeScriptProject({
+  const child = new DBXToolsTypeScriptProject({
     parent: root,
     outdir: "packages/child",
     name: `@fixture/${name}-child`,
+    ...(childRootInstallOnly !== undefined ? { rootInstallOnly: childRootInstallOnly } : {}),
   });
+  if (customizeChildInstall) child.package.installTask.exec("echo custom install");
   root.synth();
-  return outdir;
+  return { child, outdir, root };
 }
 
 /** Steps generated for task `name` in a project directory. */
@@ -53,19 +64,39 @@ after(() => {
 });
 
 describe("ROOT_INSTALL_ONLY_MIXIN", () => {
-  it("keeps root installs and clears late-attached child installs by default", () => {
-    const outdir = synthFixture("default");
+  it("keeps root installs and suppresses late-attached child installs by default", () => {
+    const { child, outdir, root } = synthFixture("default");
 
     assert.ok(taskSteps(outdir, "install").length > 0);
     assert.ok(taskSteps(outdir, "install:ci").length > 0);
     assert.deepEqual(taskSteps(join(outdir, "packages/child"), "install"), []);
     assert.deepEqual(taskSteps(join(outdir, "packages/child"), "install:ci"), []);
+    assert.equal(Object.hasOwn(root.package, "installDependencies"), false);
+    assert.equal(Object.hasOwn(child.package, "installDependencies"), true);
   });
 
   it("preserves child install tasks when rootInstallOnly is false", () => {
-    const outdir = synthFixture("opt-out", false);
+    const { child, outdir } = synthFixture("opt-out", false);
 
     assert.ok(taskSteps(join(outdir, "packages/child"), "install").length > 0);
     assert.ok(taskSteps(join(outdir, "packages/child"), "install:ci").length > 0);
+    assert.equal(Object.hasOwn(child.package, "installDependencies"), false);
+  });
+
+  it("preserves one child's native lifecycle when that child opts out", () => {
+    const { child, outdir } = synthFixture("child-opt-out", undefined, false);
+
+    assert.ok(taskSteps(join(outdir, "packages/child"), "install").length > 0);
+    assert.ok(taskSteps(join(outdir, "packages/child"), "install:ci").length > 0);
+    assert.equal(Object.hasOwn(child.package, "installDependencies"), false);
+  });
+
+  it("preserves a child lifecycle when an install task has custom steps", () => {
+    const { child, outdir } = synthFixture("custom-install", undefined, undefined, true);
+    const steps = taskSteps(join(outdir, "packages/child"), "install");
+
+    assert.equal(steps.length, 2);
+    assert.equal(steps[1]?.exec, "echo custom install");
+    assert.equal(Object.hasOwn(child.package, "installDependencies"), false);
   });
 });
