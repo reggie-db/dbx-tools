@@ -19,12 +19,14 @@ function spawnChild(childMode) {
 process.on("SIGTERM", () => {
   if (mode === "graceful") process.exit(0);
   if (mode === "force") process.stdout.write(`term:${role}\n`);
-  if (mode === "late" && role === "parent" && !lateStarted) {
-    lateStarted = true;
-    const lateChild = spawnChild("graceful");
-    lateChild.stdout.once("data", () => {
+  if (mode === "late") {
+    if (role === "child") process.exit(0);
+    if (!lateStarted) {
+      lateStarted = true;
+      const lateChild = spawnChild("graceful");
       process.stdout.write(`late:${lateChild.pid}\n`);
-    });
+      lateChild.once("exit", () => process.exit(0));
+    }
   }
 });
 
