@@ -39,7 +39,7 @@ import { profile as authProfile } from "@dbx-tools/auth";
 import { asyncUtils, environmentUtils, log } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
-import { createSoftPersistentStorage } from "./_cache-storage.ts";
+import { cacheDrain, createAppKitCacheStorage } from "./cache-storage.ts";
 import { loadBrandContext } from "./brand-context.ts";
 import {
   createInterceptorContext,
@@ -244,20 +244,12 @@ function applyDefaultProfile(): string | undefined {
   return resolved.name;
 }
 
-/**
- * Whether `createApp` should inject soft-fail Lakebase cache storage.
- *
- * Skips when the caller disabled the cache, already supplied a storage
- * backend (including in-memory), or Lakebase is not in play.
- */
-function shouldInjectSoftPersistentCache(
-  config: CreateAppConfig | undefined,
-  lakebase: LakebaseConnection | undefined,
-): boolean {
+/** Whether `createApp` should inject the default memory-first cache storage. */
+function shouldInjectCacheStorage(config: CreateAppConfig | undefined): boolean {
   const cache = config?.cache;
   if (cache?.enabled === false) return false;
   if (cache?.storage) return false;
-  return Boolean(lakebase) || usesPlugin(config, LAKEBASE_PLUGIN);
+  return true;
 }
 
 function redactLakebaseConnection(resolved: LakebaseConnection): Record<string, unknown> {
@@ -328,15 +320,17 @@ export async function createApp<T extends AppKitPlugins>(
   delete appConfig.autoConfigure;
   delete appConfig.interceptor;
 
-  if (shouldInjectSoftPersistentCache(config, lakebase)) {
-    logger.debug("createApp: inject soft persistent cache storage");
-    const storage = await createSoftPersistentStorage(config?.cache);
-    if (storage) {
-      appConfig.cache = { ...config?.cache, storage };
-      logger.debug("createApp: soft persistent cache storage ready");
-    } else {
-      logger.debug("createApp: soft persistent cache storage unavailable");
-    }
+  if (shouldInjectCacheStorage(config)) {
+    logger.debug("createApp: inject memory-first cache storage");
+    const storage = await createAppKitCacheStorage({
+      cache: config?.cache,
+      preferLakebase: Boolean(lakebase) || usesPlugin(config, LAKEBASE_PLUGIN),
+    });
+    appConfig.cache = { ...config?.cache, storage };
+    appConfig.plugins = [...(appConfig.plugins ?? []), cacheDrain({ storage })] as unknown as T;
+    logger.debug("createApp: memory-first cache storage ready", {
+      persistent: storage.isPersistent(),
+    });
   }
 
   if (interceptors.length === 0) {

@@ -135,19 +135,26 @@ reason.
 | `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env and AppKit lifecycle registration through `onLifecycle`.                                                                                                                                   |
 
 Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
-still wants AppKit's PERSISTENT cache. AppKit only chooses Lakebase for
-`CacheManager` when it can build a pool, and that reads `LAKEBASE_ENDPOINT`,
-`PGHOST`, and `PGDATABASE` from `process.env` — while a Databricks App `postgres`
-resource binding supplies only the first. Without the resolution step the cache
-degrades silently to in-memory, so anything it holds (a session signing key, a
-one-time code) is lost on every restart. `"env"` is the right mode inside a
-deployed app, since the app service principal cannot grant on the cache schema
-anyway.
+still wants Lakebase-backed cache persistence. The injected AppKit storage is
+memory-first: warm hits avoid persistent reads and `last_accessed` writes, while
+mutations are coalesced and written behind without blocking the request. When a
+Lakebase pool is available it is the persistent level. Otherwise the cache uses
+the portable project-scoped disk level from `@dbx-tools/cache`. `"env"` is the
+right mode inside a deployed app, since the app service principal cannot grant on
+the cache schema anyway.
 
-The injected persistent storage includes a bounded process-local L1 powered by
-`lru-cache`. Warm hits avoid Lakebase reads and `last_accessed` writes; misses,
-expiry, deletion, and clear operations remain coherent with the persistent
-store.
+`createApp()` installs this storage by default when AppKit caching is enabled and
+the caller did not provide `cache.storage`. A caller-provided storage is preserved.
+Native AppKit composition can create the same adapter directly:
+
+```ts
+import { cacheStorage } from "@dbx-tools/appkit";
+
+const storage = await cacheStorage.createAppKitCacheStorage();
+```
+
+Both paths register or expose graceful shutdown through `close()`, which drains
+tracked write-behind work before disconnecting the persistent levels.
 
 ## Filesystem Cache Plugin
 
@@ -176,16 +183,14 @@ instances that use different policies over the same paths. This gives frameworks
 such as Mastra a stable source identity across page refreshes and turns without
 introducing a second parsed catalogue cache.
 
-Values and retained filesystem sources use a bounded process-local `lru-cache`.
-Nothing is written to Lakebase or another persistent store. App restarts and
+Values and retained filesystem sources use bounded process-local Cacheable stores.
+Nothing is written to Lakebase or another persistent level. App restarts and
 replica changes begin with a cold filesystem cache.
 
-This cache is intentionally separate from AppKit's exported `CacheManager`.
-`CacheManager` owns the application cache and may use Lakebase with an internal
-process-local L1; that L1 is not a public standalone store, and cache writes can
-flow through to persistent storage. `FilesCachePlugin` therefore remains the
-single app-lifetime owner for local-only filesystem values rather than reaching
-into AppKit internals or creating one cache per workspace.
+This cache is intentionally separate from the application cache adapter.
+`FilesCachePlugin` remains the single app-lifetime owner for local-only filesystem
+values rather than creating one cache per workspace or persisting
+authorization-sensitive filesystem state.
 
 `lakebaseResolver.resolveLakebaseConnection()` accepts:
 

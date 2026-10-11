@@ -3,7 +3,7 @@
  *
  * Lists the workspace's `/serving-endpoints` and, when the caller supplies a
  * trusted credential identity, caches the result per host and identity with a
- * TTL via AppKit's `CacheManager`. Concurrent callers in the same scope share
+ * TTL via `@dbx-tools/cache`. Concurrent callers in the same scope share
  * one in-flight promise. Surfaces each endpoint as a stable
  * {@link ServingEndpointSummary} - including the Foundation Model API
  * `quality` / `speed` / `cost` profile when present, the classified
@@ -22,8 +22,8 @@
  */
 
 import { createHash } from "node:crypto";
-import { CacheManager } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
+import { deleteCachedValue, getOrSet, projectCache } from "@dbx-tools/cache/cache";
 import { errorUtils, log } from "@dbx-tools/shared-core";
 import {
   model,
@@ -54,12 +54,12 @@ export const DEFAULT_FUZZY_THRESHOLD = 0.4;
 
 /** Cache key parts under which endpoint listings are stored. */
 const CACHE_KEY_NAMESPACE = "serving-endpoints";
+const catalogueCache = projectCache("model-catalog", { maxEntries: 256 });
 
 /** Options for {@link listServingEndpoints}. */
 export interface ListServingEndpointsOptions {
   /**
-   * Override the default cache TTL for this call, in milliseconds. Forwarded to
-   * `CacheManager` as seconds.
+   * Override the default cache TTL for this call, in milliseconds.
    */
   ttlMs?: number;
   /**
@@ -73,30 +73,23 @@ export interface ListServingEndpointsOptions {
   cacheIdentity?: string;
 }
 
-/** Hash an opaque credential identity before handing it to CacheManager. */
+/** Hash an opaque credential identity before handing it to the shared cache. */
 function cacheUserKey(identity: string): string {
   return `model-${createHash("sha256").update(identity).digest("hex")}`;
 }
 
 /**
  * List Model Serving endpoints for the workspace owning `client`, routed
- * through AppKit's `CacheManager`. The manager gives us everything
- * `cachetools.TTLCache` provides plus what `cachetools-async` adds on top:
- * per-entry TTL, in-flight request coalescing (concurrent callers share one
- * fetch via the manager's internal `inFlightRequests` map), bounded size,
- * telemetry spans (`cache.getOrExecute`), and optional Lakebase persistence so
- * the catalogue survives restarts when the lakebase plugin is wired up.
+ * through the shared memory-first cache, including per-entry TTL, in-flight
+ * request coalescing, bounded process memory, and portable persistence.
  *
  * Returns plain {@link ServingEndpointSummary} objects (a stable subset of the
- * SDK type) so cache hits never expose stale SDK internals. Errors from
- * `CacheManager` or the SDK fetch propagate to the caller - we don't swallow
- * them so users see the real auth / network issue.
+ * SDK type) so cache hits never expose stale SDK internals.
  *
  * @param host - Workspace host used as the cache key. Pass the value resolved
  *   from `client.config.getHost()` so multi-host apps share one entry per
  *   workspace.
- * @param options.ttlMs - Override the default TTL just for this call. Forwarded
- *   to `CacheManager` as seconds.
+ * @param options.ttlMs - Override the default TTL just for this call.
  */
 export async function listServingEndpoints(
   client: WorkspaceClientLike,
@@ -104,13 +97,17 @@ export async function listServingEndpoints(
   options: ListServingEndpointsOptions = {},
 ): Promise<ServingEndpointSummary[]> {
   if (!options.cacheIdentity) return fetchEndpoints(client);
-  const ttlSec = Math.max(1, Math.round((options.ttlMs ?? DEFAULT_MODEL_CACHE_TTL_MS) / 1000));
-  return CacheManager.getInstanceSync().getOrExecute(
-    [CACHE_KEY_NAMESPACE, host],
+  return (await getOrSet(
+    catalogueCache,
+    catalogueCacheKey(host, options.cacheIdentity),
     () => fetchEndpoints(client),
-    cacheUserKey(options.cacheIdentity),
-    { ttl: ttlSec },
-  );
+    {
+      ttl: options.ttlMs ?? DEFAULT_MODEL_CACHE_TTL_MS,
+      returnCachedOnError: true,
+      cachedOnErrorTtl: "7d",
+      throwErrors: true,
+    },
+  ))!;
 }
 
 /**
@@ -119,7 +116,7 @@ export async function listServingEndpoints(
  * none of the cache-load enrichment ({@link listServingEndpoints} adds the
  * {@link ModelClass} stamp and the embedding-dimension probe). Use this for a
  * one-shot, dependency-light listing - e.g. a CLI that only needs names/tasks
- * for fuzzy resolution and doesn't want AppKit's `CacheManager` or the
+ * for fuzzy resolution and doesn't want shared cache persistence or the
  * per-embedding ping cost. Prefer {@link listServingEndpoints} for the cached,
  * enriched view.
  */
@@ -197,22 +194,22 @@ async function pingEmbeddingDimension(
 }
 
 /**
- * Force-evict cached endpoint listings via AppKit's `CacheManager`. A host and
- * identity delete only that principal's workspace entry. Because CacheManager
- * cannot enumerate a namespace, omitting either value clears the complete
- * manager and should be reserved for tests or administrative refreshes.
+ * Force-evict cached endpoint listings. A host and identity delete only that
+ * principal's workspace entry. Omitting either value clears this catalogue.
  */
 export async function clearServingEndpointsCache(
   host?: string,
   cacheIdentity?: string,
 ): Promise<void> {
-  const cache = CacheManager.getInstanceSync();
   if (host && cacheIdentity) {
-    const key = cache.generateKey([CACHE_KEY_NAMESPACE, host], cacheUserKey(cacheIdentity));
-    await cache.delete(key);
+    await deleteCachedValue(catalogueCache, catalogueCacheKey(host, cacheIdentity));
   } else {
-    await cache.clear();
+    await catalogueCache.clear();
   }
+}
+
+function catalogueCacheKey(host: string, cacheIdentity: string): string {
+  return JSON.stringify([CACHE_KEY_NAMESPACE, host, cacheUserKey(cacheIdentity)]);
 }
 
 /**

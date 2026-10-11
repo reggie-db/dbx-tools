@@ -8,9 +8,9 @@ Keyv-compatible levels can be supplied in read order. Pending persistence is
 tracked and can be drained during application shutdown.
 
 ```ts
-import { closeCache, getOrSet, projectCache } from "@dbx-tools/cache";
+import { closeCache, getOrSet, projectCache } from "@dbx-tools/cache/cache";
 
-const cache = await projectCache("models", { ttl: "5m" });
+const cache = projectCache("models", { ttl: "5m" });
 const models = await getOrSet(cache, "catalog", loadModels, {
   returnCachedOnError: true,
 });

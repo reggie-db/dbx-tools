@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  L1CacheStorage,
+  AppKitCacheStorage,
   loadPersistentStorage,
   probeStorage,
   softenInitialize,
   type PersistentStorageBase,
-} from "../src/_cache-storage.ts";
+} from "../src/cache-storage.ts";
+import { createCache } from "@dbx-tools/cache/cache";
 
 function storageWithInit(
   initialize: () => Promise<void>,
@@ -85,17 +86,24 @@ describe("soft persistent cache initialization", () => {
   });
 });
 
-describe("persistent cache L1", () => {
+describe("memory-first AppKit cache storage", () => {
   it("serves warm values without another persistent read", async () => {
     let reads = 0;
     const storage = storageWithInit(async () => {});
-    await storage.set("key", { value: "value", expiry: Date.now() + 60_000 });
     const originalGet = storage.get.bind(storage);
     storage.get = async (key) => {
       reads += 1;
       return originalGet(key);
     };
-    const l1 = new L1CacheStorage(storage);
+    const l1 = new AppKitCacheStorage(
+      createCache({ levels: [{ store: storageLevel(storage) }], maxEntries: 1 }),
+      storage,
+      true,
+    );
+    const future = Date.now() + 60_000;
+    await l1.set("key", { value: "value", expiry: future });
+    await l1.set("evict", { value: "other", expiry: future });
+    await l1.flush();
 
     assert.equal((await l1.get<string>("key"))?.value, "value");
     assert.equal((await l1.get<string>("key"))?.value, "value");
@@ -104,17 +112,22 @@ describe("persistent cache L1", () => {
 
   it("keeps writes and invalidations coherent across layers", async () => {
     const storage = storageWithInit(async () => {});
-    const l1 = new L1CacheStorage(storage, { maxEntries: 1 });
+    const l1 = new AppKitCacheStorage(
+      createCache({ levels: [{ store: storageLevel(storage) }], maxEntries: 1 }),
+      storage,
+      true,
+    );
     const future = Date.now() + 60_000;
 
     await l1.set("first", { value: 1, expiry: future });
     await l1.set("second", { value: 2, expiry: future });
-    await storage.delete("first");
-    assert.equal(await l1.get("first"), undefined);
+    await l1.flush();
+    await l1.delete("first");
+    assert.equal(await l1.get("first"), null);
     assert.equal((await l1.get<number>("second"))?.value, 2);
 
     await l1.delete("second");
-    assert.equal(await l1.get("second"), undefined);
+    assert.equal(await l1.get("second"), null);
   });
 
   it("forwards AppKit's persistent cleanup compatibility hook", async () => {
@@ -125,10 +138,38 @@ describe("persistent cache L1", () => {
         return 3;
       },
     });
-    const l1 = new L1CacheStorage(storage);
+    const l1 = new AppKitCacheStorage(createCache(), storage, true);
 
     assert.equal(await l1.cleanupExpired(), 3);
     assert.equal(cleanups, 1);
-    assert.equal(await new L1CacheStorage(storageWithInit(async () => {})).cleanupExpired(), 0);
+    assert.equal(
+      await new AppKitCacheStorage(
+        createCache(),
+        storageWithInit(async () => {}),
+        true,
+      ).cleanupExpired(),
+      0,
+    );
   });
 });
+
+function storageLevel(storage: PersistentStorageBase) {
+  return {
+    opts: {},
+    on() {
+      return this;
+    },
+    async get<T>(key: string): Promise<T | undefined> {
+      return (await storage.get<T>(key))?.value;
+    },
+    async set(key: string, value: unknown, ttl?: number): Promise<void> {
+      await storage.set(key, { value, expiry: Date.now() + (ttl ?? 60_000) });
+    },
+    async delete(key: string): Promise<boolean> {
+      await storage.delete(key);
+      return true;
+    },
+    clear: () => storage.clear(),
+    has: (key: string) => storage.has(key),
+  };
+}

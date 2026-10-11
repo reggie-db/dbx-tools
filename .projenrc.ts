@@ -105,8 +105,6 @@ const root = new project.DBXToolsNodeProject({
     "cacheable": "2.5.0",
     "env-paths": "^4.0.0",
     "keyv-file": "5.3.5",
-    "cacache": "^21.0.1",
-    "lru-cache": "11.5.3",
     "tailwindcss": "^4.3.2",
     "tw-animate-css": "^1.4.0",
     "lucide-react": "^0.554.0",
@@ -360,7 +358,6 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-fs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
-    "lru-cache@catalog:",
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
@@ -435,7 +432,7 @@ project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => 
 // node-model: the server-side model resolver (cached Model Serving listing +
 // fuzzy name resolution, workspace-aware selection, offline fallback floor).
 // Consumes the browser-safe shared-model classifier + node-appkit's AppKit
-// glue. AppKit is a runtime dep here (CacheManager is used directly, not lazy).
+// glue.
 project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => {
   p.package.addField("description", "Workspace-aware Databricks Model Serving selection");
   projectJs.applyIncludes(p, "scripts/**/*.ts");
@@ -447,12 +444,10 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/shared-model@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
-    "cacache@catalog:",
     "cheerio@^1.2.0",
     "env-paths@catalog:",
     "fuse.js@^7.4.2",
   );
-  p.addDevDeps("@types/cacache@^20.0.1");
   p.addTask("metadata", {
     exec: "bun scripts/generate-metadata.ts",
     description: "Refresh model retirement, capability, rate-limit, and reasoning snapshots",
@@ -707,7 +702,6 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@opentelemetry/sdk-trace-node@catalog:",
     "zod@catalog:",
     "fuse.js@^7.4.2",
-    "lru-cache@catalog:",
     "pg@^8.22.0",
     "yaml@^2.9.0",
   );

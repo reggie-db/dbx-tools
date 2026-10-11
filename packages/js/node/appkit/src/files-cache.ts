@@ -1,28 +1,23 @@
 /**
- * AppKit-global filesystem cache with user-isolated process-local LRU values.
+ * AppKit-global filesystem cache with user-isolated process-local values.
  *
  * @module
  */
 
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
+import { cacheKeys, closeCache, createCache, getOrSet } from "@dbx-tools/cache/cache";
 import { errorUtils, log, object } from "@dbx-tools/shared-core";
 import { posixPath, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
-import { LRUCache } from "lru-cache";
 
 const DEFAULT_TTL_MS = 60_000;
 const DEFAULT_INVALIDATION_BATCH_MS = 25;
 const DEFAULT_MAX_ENTRIES = 1_000;
-const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_SCOPES = 256;
 const logger = log.logger("files-cache");
 
-interface RetainedEntry {
-  value: CacheValue;
-}
-
 interface ScopeState {
   cache: FileSystemCache;
-  entries: LRUCache<string, RetainedEntry>;
+  entries: ReturnType<typeof createCache>;
   group: GroupState;
   scope: ResolvedFilesCacheScope;
   sources: Map<string, Promise<object>>;
@@ -36,7 +31,6 @@ interface GroupState {
 
 interface ResolvedFilesCacheConfig {
   invalidationBatchMs: number;
-  maxBytes: number;
   maxEntries: number;
   maxScopes: number;
   ttlMs: number;
@@ -57,8 +51,6 @@ export interface FilesCachePluginConfig extends BasePluginConfig {
   invalidationBatchMs?: number;
   /** Maximum entries retained in each user L1. Defaults to 1,000. */
   maxEntries?: number;
-  /** Maximum retained bytes in each user L1. Defaults to 64 MiB. */
-  maxBytes?: number;
   /** Maximum active user scopes retained by the process. Defaults to 256. */
   maxScopes?: number;
 }
@@ -101,7 +93,7 @@ export interface FilesCacheExports {
 export class FilesCacheManager {
   private readonly config: ResolvedFilesCacheConfig;
   private readonly groups = new Map<string, GroupState>();
-  private readonly scopes: LRUCache<string, ScopeState>;
+  private readonly scopes: ReturnType<typeof createCache>;
 
   constructor(config: FilesCachePluginConfig = {}) {
     this.config = {
@@ -112,15 +104,9 @@ export class FilesCacheManager {
         "invalidationBatchMs",
       ),
       maxEntries: positiveInteger(config.maxEntries, DEFAULT_MAX_ENTRIES, "maxEntries"),
-      maxBytes: positiveInteger(config.maxBytes, DEFAULT_MAX_BYTES, "maxBytes"),
       maxScopes: positiveInteger(config.maxScopes, DEFAULT_MAX_SCOPES, "maxScopes"),
     };
-    this.scopes = new LRUCache({
-      max: this.config.maxScopes,
-      dispose: (state) => {
-        state.group.scopes.delete(state);
-      },
-    });
+    this.scopes = createCache({ maxEntries: this.config.maxScopes, useClone: false });
   }
 
   /** Return one user-isolated cache within a host/workspace invalidation group. */
@@ -158,12 +144,23 @@ export class FilesCacheManager {
       userKey: scope.userKey,
       workspaceId: scope.workspaceId,
     });
-    let state = this.scopes.get(scopeKey);
+    let state = await this.scopes.get<ScopeState>(scopeKey);
     if (!state) {
+      if ([...cacheKeys(this.scopes)].length >= this.config.maxScopes) {
+        const oldestKey = cacheKeys(this.scopes).next().value;
+        if (oldestKey) {
+          const oldest = await this.scopes.get<ScopeState>(oldestKey);
+          if (oldest) {
+            oldest.group.scopes.delete(oldest);
+            await closeCache(oldest.entries);
+          }
+          await this.scopes.delete(oldestKey);
+        }
+      }
       const group = this.group(scope);
       state = this.createScope(scope, group);
       group.scopes.add(state);
-      this.scopes.set(scopeKey, state);
+      await this.scopes.set(scopeKey, state);
     }
     return state;
   }
@@ -180,7 +177,11 @@ export class FilesCacheManager {
       group.timer = undefined;
     }
     await this.flush();
-    this.scopes.clear();
+    for (const key of cacheKeys(this.scopes)) {
+      const state = await this.scopes.get<ScopeState>(key);
+      if (state) await closeCache(state.entries);
+    }
+    await closeCache(this.scopes);
     this.groups.clear();
   }
 
@@ -203,11 +204,7 @@ export class FilesCacheManager {
     const state = {} as ScopeState;
     state.scope = scope;
     state.group = group;
-    state.entries = new LRUCache({
-      max: this.config.maxEntries,
-      maxSize: this.config.maxBytes,
-      sizeCalculation: (entry, cacheKey) => retainedSize(cacheKey, entry),
-    });
+    state.entries = createCache({ maxEntries: this.config.maxEntries, useClone: false });
     state.sources = new Map();
     state.cache = {
       read: <T extends CacheValue>(cacheKey: string, load: () => T | Promise<T>) =>
@@ -224,16 +221,21 @@ export class FilesCacheManager {
     load: () => T | Promise<T>,
   ): Promise<T> {
     if (!state.group.pending.has(key)) {
-      const retained = state.entries.get(key);
-      if (retained) return retained.value as T;
+      const retained = await state.entries.get<T>(key);
+      if (retained !== undefined) return retained;
     }
-    const value = await load();
-    state.entries.set(key, { value }, { ttl: state.scope.ttlMs });
-    return value;
+    if (state.group.pending.has(key)) {
+      const value = await load();
+      await state.entries.set(key, value, { ttl: state.scope.ttlMs });
+      return value;
+    }
+    return (await getOrSet(state.entries, key, () => Promise.resolve(load()), {
+      ttl: state.scope.ttlMs,
+    })) as T;
   }
 
   private *keys(state: ScopeState): Iterable<string> {
-    for (const key of state.entries.keys()) {
+    for (const key of cacheKeys(state.entries)) {
       if (!state.group.pending.has(key)) yield key;
     }
   }
@@ -259,12 +261,12 @@ export class FilesCacheManager {
     const keys = [...group.pending];
     group.pending.clear();
     for (const state of group.scopes) {
-      for (const key of keys) state.entries.delete(key);
+      await Promise.all(keys.map((key) => state.entries.delete(key)));
     }
   }
 }
 
-/** AppKit plugin that owns process-local filesystem LRU caches. */
+/** AppKit plugin that owns process-local filesystem caches. */
 export class FilesCachePlugin extends Plugin<FilesCachePluginConfig> {
   static manifest = {
     name: "files-cache",
@@ -323,12 +325,4 @@ function positiveDuration(value: number | undefined, fallback: number, name: str
 
 function positiveInteger(value: number | undefined, fallback: number, name: string): number {
   return Math.floor(positiveDuration(value, fallback, name));
-}
-
-function retainedSize(key: string, entry: RetainedEntry): number {
-  try {
-    return Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(entry.value));
-  } catch {
-    return Number.MAX_SAFE_INTEGER;
-  }
 }

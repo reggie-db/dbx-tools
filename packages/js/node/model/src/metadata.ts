@@ -4,7 +4,7 @@
  * docs and error-learned reasoning ladders.
  *
  * Committed snapshots seed every process. {@link refreshModelMetadata} pulls
- * documentation through {@link createMetadataCache} (cacache memoize + disk) and
+ * documentation through the shared memory-first {@link createMetadataCache} and
  * rebuilds the in-memory index. Error-learned efforts use the same store via
  * {@link rememberReasoningLevels}. Disk writes are skipped in Databricks Apps.
  *
@@ -251,7 +251,7 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
   return refreshInflight;
 }
 
-/** Load cacache / memory entries without forcing a network refresh. */
+/** Load shared cache entries without forcing a network refresh. */
 export async function hydrateModelMetadata(): Promise<MetadataIndex> {
   const [retiredNames, capabilities, rateLimits, reasoning, learnedReasoning] = await Promise.all([
     peekOrFallback(retiredCache, COMMITTED_RETIRED_MODELS),
@@ -276,7 +276,7 @@ async function peekOrFallback<T>(cache: MetadataCache<T>, fallback: T): Promise<
   return cache.get().catch(() => fallback);
 }
 
-/** Absolute cacache root used by the documentation / learned caches. */
+/** Absolute persistent cache root used by the documentation and learned caches. */
 export function modelMetadataCachePath(): string {
   return retiredCache.path;
 }

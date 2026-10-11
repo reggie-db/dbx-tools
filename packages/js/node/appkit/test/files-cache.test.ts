@@ -51,7 +51,7 @@ describe("FilesCacheManager", () => {
     await manager.close();
   });
 
-  it("serves repeated reads from the process-local LRU", async () => {
+  it("serves repeated reads from the process-local memory cache", async () => {
     const manager = new FilesCacheManager();
     const cache = await manager.forScope({ ...scope, userKey: "one" });
     let loads = 0;

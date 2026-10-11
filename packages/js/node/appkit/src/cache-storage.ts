@@ -1,5 +1,5 @@
 /**
- * Soft-fail Lakebase cache storage for AppKit's persistent cache.
+ * Memory-first AppKit cache storage with soft-fail Lakebase persistence.
  *
  * AppKit's `PersistentStorage.initialize()` runs DDL migrations and throws on
  * any step failure. With `cache.strictPersistence: true` that throw makes
@@ -8,18 +8,33 @@
  * usable table keeps serving.
  *
  * `PersistentStorage` is not on AppKit's public export map. The deep load is
- * lazy and best-effort: if the installed AppKit layout changes, this returns
- * `undefined` and `createApp` leaves AppKit on its default cache path.
+ * lazy and best-effort: if the installed AppKit layout changes, Lakebase is
+ * skipped and the adapter keeps its project-scoped disk persistence.
  *
  * @module
  */
 
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { createLakebasePool, getWorkspaceClient, type CacheConfig } from "@databricks/appkit";
+import {
+  createLakebasePool,
+  getWorkspaceClient,
+  Plugin,
+  toPlugin,
+  type BasePluginConfig,
+  type CacheConfig,
+  type PluginManifest,
+} from "@databricks/appkit";
+import {
+  closeCache,
+  createCache,
+  flushCache,
+  projectCache,
+  type CacheOptions,
+} from "@dbx-tools/cache/cache";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { errorUtils, hash, log } from "@dbx-tools/shared-core";
-import { LRUCache } from "lru-cache";
+import { EventEmitter } from "node:events";
 import { handleOwnershipMigrationError } from "./migration.ts";
 
 const logger = log.logger("cache-storage");
@@ -32,9 +47,17 @@ interface CacheEntry<T = unknown> {
   value: T;
 }
 
-/** Bounds for the process-local cache layered over persistent AppKit storage. */
-export interface L1CacheStorageOptions {
-  maxBytes?: number;
+/** Options for AppKit's memory-first cache storage adapter. */
+export interface AppKitCacheStorageOptions {
+  /** Native AppKit cache configuration. */
+  cache?: CacheConfig;
+  /** Whether to attempt AppKit's Lakebase PersistentStorage. Defaults to true. */
+  preferLakebase?: boolean;
+  /** Portable disk scope used when Lakebase is unavailable. */
+  diskScope?: string;
+  /** Write-behind coalescing delay in milliseconds. */
+  writeDelayMs?: number;
+  /** Maximum entries retained in the process-local memory primary. */
   maxEntries?: number;
 }
 
@@ -54,95 +77,127 @@ type PersistentStorageConstructor = new (
 
 let persistentStorageCtor: PersistentStorageConstructor | undefined | null = null;
 
-/** Process-local LRU that avoids a persistent cache query on every warm hit. */
-export class L1CacheStorage implements CacheStorage {
-  private readonly entries: LRUCache<string, CacheEntry>;
+class AppKitStorageLevel extends EventEmitter {
+  readonly opts = {};
 
-  constructor(
-    private readonly storage: CacheStorage,
-    options: L1CacheStorageOptions = {},
-  ) {
-    this.entries = new LRUCache({
-      max: positiveBound(options.maxEntries, 1_000, "maxEntries"),
-      maxSize: positiveBound(options.maxBytes, 64 * 1024 * 1024, "maxBytes"),
-      sizeCalculation: (entry, key) => retainedSize(key, entry),
+  constructor(private readonly storage: CacheStorage) {
+    super();
+  }
+
+  async get<T>(key: string): Promise<T | undefined> {
+    const entry = await this.storage.get<T>(key);
+    if (!entry) return undefined;
+    if (entry.expiry <= Date.now()) {
+      await this.storage.delete(key);
+      return undefined;
+    }
+    return entry.value;
+  }
+
+  async set(key: string, value: unknown, ttl?: number): Promise<void> {
+    await this.storage.set(key, {
+      value,
+      expiry: Date.now() + (ttl ?? 60_000),
     });
   }
 
-  async get<T>(key: string): Promise<CacheEntry<T> | null> {
-    const local = this.entries.get(key);
-    if (local) return local as CacheEntry<T>;
-    const persisted = await this.storage.get<T>(key);
-    if (persisted && persisted.expiry > Date.now()) this.retain(key, persisted);
-    return persisted;
-  }
-
-  async set<T>(key: string, entry: CacheEntry<T>): Promise<void> {
-    await this.storage.set(key, entry);
-    this.retain(key, entry);
-  }
-
-  async delete(key: string): Promise<void> {
+  async delete(key: string): Promise<boolean> {
     await this.storage.delete(key);
-    this.entries.delete(key);
+    return true;
   }
 
-  async clear(): Promise<void> {
-    await this.storage.clear();
-    this.entries.clear();
+  clear(): Promise<void> {
+    return this.storage.clear();
   }
 
-  async has(key: string): Promise<boolean> {
-    if (this.entries.has(key)) return true;
+  has(key: string): Promise<boolean> {
     return this.storage.has(key);
   }
 
-  size(): Promise<number> {
-    return this.storage.size();
+  disconnect(): Promise<void> {
+    return this.storage.close();
+  }
+}
+
+/** Memory-first AppKit CacheStorage backed by @dbx-tools/cache. */
+export class AppKitCacheStorage implements CacheStorage {
+  private readonly cache: ReturnType<typeof createCache>;
+  private readonly keys = new Set<string>();
+  private closed = false;
+
+  constructor(
+    cache: ReturnType<typeof createCache>,
+    private readonly persistent: CacheStorage | undefined,
+    private readonly persistentMode: boolean,
+  ) {
+    this.cache = cache;
+  }
+
+  async get<T>(key: string): Promise<CacheEntry<T> | null> {
+    const entry = await this.cache.get<CacheEntry<T>>(key);
+    if (!entry) return null;
+    this.keys.add(key);
+    return entry;
+  }
+
+  async set<T>(key: string, entry: CacheEntry<T>): Promise<void> {
+    const ttl = entry.expiry - Date.now();
+    if (ttl <= 0) {
+      await this.delete(key);
+      return;
+    }
+    await this.cache.set(key, entry, { ttl });
+    this.keys.add(key);
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.cache.delete(key);
+    this.keys.delete(key);
+  }
+
+  async clear(): Promise<void> {
+    await this.cache.clear();
+    this.keys.clear();
+  }
+
+  async has(key: string): Promise<boolean> {
+    return this.cache.has(key);
+  }
+
+  async size(): Promise<number> {
+    return this.persistent ? this.persistent.size() : this.keys.size;
   }
 
   isPersistent(): boolean {
-    return this.storage.isPersistent();
+    return this.persistentMode;
   }
 
-  healthCheck(): Promise<boolean> {
-    return this.storage.healthCheck();
+  async healthCheck(): Promise<boolean> {
+    return this.persistent ? this.persistent.healthCheck() : true;
+  }
+
+  /** Drain tracked write-behind persistence without closing the storage. */
+  flush(): Promise<void> {
+    return flushCache(this.cache);
   }
 
   async close(): Promise<void> {
-    this.entries.clear();
-    await this.storage.close();
+    if (this.closed) return;
+    await closeCache(this.cache);
+    this.closed = true;
+    this.keys.clear();
   }
 
   /** Forward AppKit's runtime-only persistent cleanup hook when available. */
   async cleanupExpired(): Promise<number> {
     const cleanup = (
-      this.storage as CacheStorage & {
-        cleanupExpired?: () => Promise<number>;
-      }
-    ).cleanupExpired;
-    return cleanup ? cleanup.call(this.storage) : 0;
-  }
-
-  private retain<T>(key: string, entry: CacheEntry<T>): void {
-    const ttl = entry.expiry - Date.now();
-    if (ttl > 0) this.entries.set(key, entry, { ttl });
-  }
-}
-
-function positiveBound(value: number | undefined, fallback: number, name: string): number {
-  const resolved = value ?? fallback;
-  if (!Number.isFinite(resolved) || resolved <= 0) {
-    throw new RangeError(`${name} must be a finite positive number`);
-  }
-  return Math.floor(resolved);
-}
-
-function retainedSize(key: string, entry: CacheEntry): number {
-  try {
-    return Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(entry));
-  } catch {
-    return Number.MAX_SAFE_INTEGER;
+      this.persistent as
+        | (CacheStorage & {
+            cleanupExpired?: () => Promise<number>;
+          })
+        | undefined
+    )?.cleanupExpired;
+    return cleanup && this.persistent ? cleanup.call(this.persistent) : 0;
   }
 }
 
@@ -257,11 +312,9 @@ export async function probeStorage(storage: PersistentStorageBase): Promise<void
 /**
  * Build a soft-fail Lakebase cache storage when a pool can be created and
  * AppKit's PersistentStorage can be loaded. Returns `undefined` otherwise so
- * AppKit can fall through to its normal cache path.
+ * the caller can use portable disk persistence.
  */
-export async function createSoftPersistentStorage(
-  cache: CacheConfig | undefined,
-): Promise<CacheStorage | undefined> {
+async function createPersistentStorage(cache: CacheConfig | undefined): Promise<CacheStorage | undefined> {
   const PersistentStorage = loadPersistentStorage();
   if (!PersistentStorage) {
     return undefined;
@@ -281,10 +334,7 @@ export async function createSoftPersistentStorage(
     }
     await storage.initialize();
     await probeStorage(storage);
-    return new L1CacheStorage(storage, {
-      maxBytes: cache?.maxBytes,
-      maxEntries: cache?.maxSize,
-    });
+    return storage;
   } catch (err) {
     logger.debug("soft persistent cache unavailable", {
       error: errorUtils.errorMessage(err),
@@ -295,3 +345,53 @@ export async function createSoftPersistentStorage(
     return undefined;
   }
 }
+
+/**
+ * Create AppKit CacheStorage with bounded memory first and tracked persistence.
+ * Lakebase remains AppKit's persistent owner when available; otherwise the
+ * shared project-scoped portable disk level is used.
+ */
+export async function createAppKitCacheStorage(
+  options: AppKitCacheStorageOptions = {},
+): Promise<AppKitCacheStorage> {
+  const nativeCache = options.cache;
+  const persistent = options.preferLakebase === false
+    ? undefined
+    : await createPersistentStorage(nativeCache);
+  const common: CacheOptions = {
+    maxEntries: options.maxEntries ?? nativeCache?.maxSize,
+    writeDelayMs: options.writeDelayMs,
+  };
+  const cache = persistent
+    ? createCache({
+        ...common,
+        levels: [{ name: "appkit-persistent", store: new AppKitStorageLevel(persistent) }],
+      })
+    : projectCache(options.diskScope ?? "appkit", common);
+  return new AppKitCacheStorage(cache, persistent, true);
+}
+
+interface CacheDrainPluginConfig extends BasePluginConfig {
+  storage?: AppKitCacheStorage;
+}
+
+/** Hidden shutdown hook that drains cache writes before AppKit closes storage. */
+export class CacheDrainPlugin extends Plugin<CacheDrainPluginConfig> {
+  static manifest = {
+    name: "dbxToolsCacheDrain",
+    displayName: "Cache Drain",
+    description: "Drains dbx-tools cache write-behind during graceful shutdown.",
+    hidden: true,
+    stability: "beta",
+    resources: { required: [], optional: [] },
+  } satisfies PluginManifest<"dbxToolsCacheDrain">;
+
+  override async setup(): Promise<void> {}
+
+  async shutdown(): Promise<void> {
+    await this.config.storage?.flush();
+  }
+}
+
+/** Factory for the hidden cache-drain lifecycle plugin. */
+export const cacheDrain = toPlugin(CacheDrainPlugin);

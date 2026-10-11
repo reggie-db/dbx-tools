@@ -39,7 +39,7 @@ describe("createMetadataCache", () => {
     return root;
   }
 
-  it("memoizes in memory and write-throughs to cacache", async () => {
+  it("memoizes in memory and persists to the disk level", async () => {
     const cacheDir = await tempCacheDir();
     let loads = 0;
     const cache = createMetadataCache({
@@ -75,7 +75,7 @@ describe("createMetadataCache", () => {
     assert.equal(loads, 1);
   });
 
-  it("skips cacache when disk is disabled", async () => {
+  it("skips the disk level when persistence is disabled", async () => {
     const cacheDir = await tempCacheDir();
     const cache = createMetadataCache({
       key: "learned",

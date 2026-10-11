@@ -231,11 +231,6 @@
       "type": "runtime"
     },
     {
-      "name": "lru-cache",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "pg",
       "version": "^8.22.0",
       "type": "runtime"

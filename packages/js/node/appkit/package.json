@@ -37,7 +37,6 @@
     "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-fs": "workspace:^",
-    "lru-cache": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",
@@ -62,6 +61,10 @@
       "./bundle": {
         "types": "./lib/src/bundle.d.ts",
         "default": "./lib/src/bundle.js"
+      },
+      "./cache-storage": {
+        "types": "./lib/src/cache-storage.d.ts",
+        "default": "./lib/src/cache-storage.js"
       },
       "./child-process": {
         "types": "./lib/src/child-process.d.ts",
@@ -139,6 +142,7 @@
     "./appkit": "./src/appkit.ts",
     "./brand-context": "./src/brand-context.ts",
     "./bundle": "./src/bundle.ts",
+    "./cache-storage": "./src/cache-storage.ts",
     "./child-process": "./src/child-process.ts",
     "./databricks": "./src/databricks.ts",
     "./files-cache": "./src/files-cache.ts",

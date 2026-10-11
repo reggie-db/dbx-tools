@@ -20,7 +20,6 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/cacache": "^20.0.1",
     "@types/node": "catalog:",
     "typescript": "^5.9.3"
   },
@@ -32,7 +31,6 @@
     "@dbx-tools/shared-auth": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-model": "workspace:^",
-    "cacache": "catalog:",
     "cheerio": "^1.2.0",
     "env-paths": "catalog:",
     "fuse.js": "^7.4.2"

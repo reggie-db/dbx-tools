@@ -193,10 +193,12 @@ const raw = await modelCatalog.listServingEndpointsUncached(client);
 await modelCatalog.clearServingEndpointsCache(host);
 ```
 
-`listServingEndpoints()` uses AppKit's `CacheManager`, enriches endpoints with
-classification and embedding dimensions, and keys the cache by workspace host.
-`listServingEndpointsUncached()` is useful for simple scripts that only need the
-SDK response and do not want a cache dependency.
+`listServingEndpoints()` uses the shared memory-first project cache, enriches
+endpoints with classification and embedding dimensions, and isolates entries by
+workspace host and trusted credential identity. If a refresh fails, it can return
+the last cached value for up to seven days. `listServingEndpointsUncached()` is
+useful for simple scripts that only need the SDK response and do not want a cache
+dependency.
 
 ## Fuzzy Resolve Endpoint Names
 
@@ -221,10 +223,10 @@ const resolved = await resolve.rankModelIdLive((force) => loadCatalogue(force), 
 `rankModelIdLive()` matches the catalogue you already hold and, on a miss,
 reloads once with `force` before giving up, so a model deployed after your cache
 warmed still resolves without a restart. You supply the loader, so the caching
-policy stays yours: `listServingEndpoints` and its `CacheManager`, a plain field
-in a long-lived CLI, or a test double. `rankModelId()` is the pure form over a
-single snapshot; unlike `serving.resolveModelId` it breaks equal match scores by
-class and then version, so `"opus"` prefers `opus-5` over `opus-4-7`.
+policy stays yours: `listServingEndpoints` and its shared project cache, a plain
+field in a long-lived CLI, or a test double. `rankModelId()` is the pure form over
+a single snapshot; unlike `serving.resolveModelId` it breaks equal match scores
+by class and then version, so `"opus"` prefers `opus-5` over `opus-4-7`.
 
 ## Call An Endpoint Directly
 

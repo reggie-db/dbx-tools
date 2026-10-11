@@ -45,6 +45,7 @@ import {
 } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { pluginRegistry } from "@dbx-tools/appkit";
+import { createCache } from "@dbx-tools/cache/cache";
 import { chat, space as genieSpace } from "@dbx-tools/genie";
 import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import { genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
@@ -52,7 +53,6 @@ import type { StartedEvent } from "@dbx-tools/shared-mastra";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import { createTool, type ToolExecutionContext } from "@mastra/core/tools";
-import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
 import type { MastraTools } from "./agents.ts";
@@ -1091,19 +1091,19 @@ const SUGGESTION_LIMIT = 6;
 const SUGGESTION_CACHE_TTL_MS = 10 * 60_000;
 
 /** Bounded process-local cache of parsed sample questions by Genie space id. */
-const _suggestionCache = new LRUCache<string, string[]>({
-  max: 128,
+const _suggestionCache = createCache({
+  maxEntries: 128,
   ttl: SUGGESTION_CACHE_TTL_MS,
 });
 
 /** Read a space's cached questions, or `undefined` on miss / expiry. */
-function readSuggestionCache(spaceId: string): string[] | undefined {
-  return _suggestionCache.get(spaceId);
+function readSuggestionCache(spaceId: string): Promise<string[] | undefined> {
+  return _suggestionCache.get<string[]>(spaceId);
 }
 
 /** Cache a space's parsed questions for {@link SUGGESTION_CACHE_TTL_MS}. */
-function writeSuggestionCache(spaceId: string, questions: string[]): void {
-  _suggestionCache.set(spaceId, questions);
+async function writeSuggestionCache(spaceId: string, questions: string[]): Promise<void> {
+  await _suggestionCache.set(spaceId, questions);
 }
 
 /**
@@ -1128,7 +1128,7 @@ export async function collectSpaceSuggestions(opts: {
   const seen = new Set<string>();
 
   for (const { spaceId } of Object.values(opts.spaces)) {
-    let questions = readSuggestionCache(spaceId);
+    let questions = await readSuggestionCache(spaceId);
     if (!questions) {
       try {
         const space = await genieSpace.getGenieSpace(spaceId, {
@@ -1136,7 +1136,7 @@ export async function collectSpaceSuggestions(opts: {
           ...(opts.signal ? { context: opts.signal } : {}),
         });
         questions = genieSpace.genieSampleQuestions(space);
-        writeSuggestionCache(spaceId, questions);
+        await writeSuggestionCache(spaceId, questions);
       } catch (err) {
         logger.warn("suggestions:fetch-error", {
           spaceId,

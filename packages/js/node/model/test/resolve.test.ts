@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CacheManager } from "@databricks/appkit";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
@@ -229,7 +228,6 @@ describe("listServingEndpoints cache identity", () => {
   }
 
   it("isolates principals, coalesces one identity, and bypasses when identity is unknown", async () => {
-    await CacheManager.getInstance();
     const host = `https://identity-${Date.now()}.example.com`;
     const callsA = { value: 0 };
     const callsB = { value: 0 };
@@ -644,7 +642,6 @@ describe("resolveModel", () => {
 
 describe("selectModel", () => {
   it("checks tool support for an explicit non-fuzzy model", async () => {
-    await CacheManager.getInstance();
     const client = {
       servingEndpoints: {
         async *list() {

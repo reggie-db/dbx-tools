@@ -53,9 +53,9 @@ const STATEMENT_CACHE_TTL_SEC = 5 * 60;
 export const modelCatalogueDefaults: ExecuteSettings = {
   default: {
     // Cache disabled here because `listServingEndpoints` already memoizes the
-    // catalogue through the same `CacheManager`, keyed by workspace host with
-    // `config.modelCacheTtlMs`. That entry is shared across identities; a
-    // second interceptor cache would duplicate it once per user.
+    // catalogue in the shared model cache, keyed by workspace host and trusted
+    // credential identity with `config.modelCacheTtlMs`. A second interceptor
+    // cache would duplicate it once per user.
     cache: { enabled: false },
     // Retry enabled: listing endpoints is an idempotent GET, and the listing
     // is on the chat UI's load path, so a transient 5xx should not blank the
