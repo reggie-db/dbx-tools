@@ -342,8 +342,8 @@ export class DBXToolsRelease extends Component {
       fileName: "release.yml",
       limitConcurrency: true,
       concurrencyOptions: {
-        group: "release-${{ github.ref_name }}",
-        cancelInProgress: false,
+        group: "release",
+        cancelInProgress: true,
       },
     });
     releaseWorkflows.set(project, workflow);

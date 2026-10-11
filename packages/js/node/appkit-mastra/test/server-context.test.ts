@@ -53,6 +53,8 @@ describe("scoped Mastra API gate", () => {
     for (const [method, path] of [
       ["POST", "/agents/support/stream"],
       ["POST", "/chat/support"],
+      ["GET", "/chat/support/runs/run-1"],
+      ["POST", "/chat/support/runs/run-1/abort"],
       ["GET", "/agents/support/suspended-runs"],
       ["GET", "/memory/threads"],
       ["GET", "/memory/threads/thread-1/messages"],
@@ -67,6 +69,8 @@ describe("scoped Mastra API gate", () => {
   it("keeps unrelated native administration routes closed", () => {
     for (const [method, path] of [
       ["POST", "/memory/threads"],
+      ["POST", "/chat/support/runs/run-1"],
+      ["GET", "/chat/support/runs/run-1/abort"],
       ["POST", "/chat/support/tool-approval"],
       ["GET", "/memory/status"],
       ["DELETE", "/agents/support"],

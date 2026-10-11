@@ -22,13 +22,14 @@
  * @module
  */
 
-import { getExecutionContext } from "@databricks/appkit";
+import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
+import { appkit } from "@dbx-tools/appkit";
 import { classes, policy, resolve } from "@dbx-tools/model";
 import { createDatabricksLanguageModel } from "@dbx-tools/model-protocol/provider";
 import { log } from "@dbx-tools/shared-core";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
-import type { RequestContext } from "@mastra/core/request-context";
+import { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
 import {
@@ -71,6 +72,32 @@ export interface BuildModelOverrides {
    * class's static list when the workspace has none.
    */
   modelClass?: ModelClass;
+}
+
+/** Resolved workspace client and the authentication mode backing it. */
+interface ResolvedModelWorkspaceClient {
+  client: WorkspaceClient;
+  auth: "obo" | "service-principal";
+}
+
+/** Resolve an OBO workspace client when present, else a service-principal client. */
+function resolveModelWorkspaceContext(
+  requestContext?: RequestContext,
+): ResolvedModelWorkspaceClient {
+  const user = requestContext?.get(MASTRA_USER_KEY) as User | undefined;
+  const executionContext = user?.executionContext ?? appkit.tryGetExecutionContext();
+  if (executionContext?.client.config) {
+    return {
+      client: executionContext.client,
+      auth: "isUserContext" in executionContext ? "obo" : "service-principal",
+    };
+  }
+  return { client: createWorkspaceClient(), auth: "service-principal" };
+}
+
+/** Resolve the workspace client used for model discovery and inference. */
+export function resolveModelWorkspaceClient(requestContext?: RequestContext): WorkspaceClient {
+  return resolveModelWorkspaceContext(requestContext).client;
 }
 
 function selectionInput(
@@ -125,24 +152,24 @@ export function resolveDefaultModelId(
  */
 export async function buildModel(
   config: MastraPluginConfig,
-  requestContext: RequestContext,
+  requestContext?: RequestContext,
   overrides: BuildModelOverrides = {},
 ): Promise<MastraModelConfig> {
+  const context = requestContext ?? new RequestContext();
   // The chat path stamps the AppKit user on the request context via
   // `MastraServer`. The MCP transport routes don't thread that context
   // into tool execution, so fall back to the ambient execution context
   // (the active OBO scope, or the service principal) when it's absent.
-  const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
-  const executionContext = user?.executionContext ?? getExecutionContext();
-  recordActiveTraceAuth("isUserContext" in executionContext ? "obo" : "service-principal");
-  const clientConfig = executionContext.client.config;
+  const { client, auth } = resolveModelWorkspaceContext(context);
+  recordActiveTraceAuth(auth);
+  const clientConfig = client.config;
   const host = (await clientConfig.getHost()).toString();
   const headers = new Headers();
   await clientConfig.authenticate(headers);
   const logger = log.logger(config);
   const serving = resolveServingConfig(config);
   const override = serving.allowOverride
-    ? (requestContext.get(MASTRA_MODEL_OVERRIDE_KEY) as string | undefined)
+    ? (context.get(MASTRA_MODEL_OVERRIDE_KEY) as string | undefined)
     : undefined;
 
   // The override / agent default / env value can be either a concrete
@@ -155,12 +182,12 @@ export async function buildModel(
   const requested = override ?? overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
 
   const { modelId, source } = await selectModel(
-    executionContext.client,
+    client,
     host,
     selectionInput(config, requested, overrides.modelClass, serving),
   );
   logger.debug("model selected", { modelId, source, requested });
-  requestContext.set(MASTRA_RESOLVED_MODEL_KEY, modelId);
+  context.set(MASTRA_RESOLVED_MODEL_KEY, modelId);
   recordActiveTraceModel(modelId);
 
   return createDatabricksLanguageModel({

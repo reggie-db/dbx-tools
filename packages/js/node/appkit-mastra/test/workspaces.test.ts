@@ -153,14 +153,16 @@ describe("databricksWorkspace sandbox", () => {
       sandbox: "databricks",
     });
     const requestContext = new RequestContext();
+    const client = {} as WorkspaceClient;
     requestContext.set(MASTRA_USER_KEY, {
       id: "user-1",
-      executionContext: { client: {} },
+      executionContext: { client, isUserContext: true },
     });
     const resolved = await databricks.resolveSandbox({ requestContext });
     assert.ok(resolved instanceof DatabricksSandbox);
     assert.equal(resolved.provider, "databricks");
     assert.match(resolved.id, /^mastra-[a-f0-9]{32}$/);
+    assert.equal((resolved as unknown as { client: WorkspaceClient }).client, client);
   });
 });
 
@@ -1131,6 +1133,13 @@ describe("agent workspace selection", () => {
     assert.ok(
       processors?.some((processor) => "id" in processor && processor.id === "skill-search"),
     );
+    const renderDataFilter = processors?.find(
+      (processor) => "id" in processor && processor.id === "tool-call-filter",
+    );
+    assert.ok(renderDataFilter);
+    assert.deepEqual((renderDataFilter as unknown as { exclude: unknown }).exclude, [
+      "render_data",
+    ]);
   });
 
   it("can disable Mastra's skill search processor explicitly", async () => {

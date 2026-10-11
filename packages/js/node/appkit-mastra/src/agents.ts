@@ -35,7 +35,7 @@ import type {
 } from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
 import { createEventedAgent } from "@mastra/core/agent/durable";
-import { SkillSearchProcessor } from "@mastra/core/processors";
+import { SkillSearchProcessor, ToolCallFilter } from "@mastra/core/processors";
 import type { OutputProcessor } from "@mastra/core/processors";
 import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
 import type { RequestContext } from "@mastra/core/request-context";
@@ -738,6 +738,11 @@ export async function buildAgents(opts: {
   // turn's `[chart:<id>]` markers. Opt out per-plugin via
   // `config.stripStaleCharts: false`.
   const inputProcessors = [
+    // `render_data` can carry hundreds of inline rows. Keep the complete call
+    // in Memory and the UI transcript, but use Mastra's native prompt-stage
+    // filter to omit prior calls/results from later model requests. Current
+    // turn calls remain available to the agent loop.
+    new ToolCallFilter({ exclude: ["render_data"] }),
     ...(config.stripStaleCharts === false ? [] : [stripStaleChartsProcessor]),
   ];
   const agents: Record<string, Agent> = {};

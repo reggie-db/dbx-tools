@@ -488,8 +488,8 @@ describe("optional Python release stages", () => {
       project.synth();
       const workflow = readWorkflow(directOutdir);
       assert.deepEqual(workflow.concurrency, {
-        group: "release-${{ github.ref_name }}",
-        "cancel-in-progress": false,
+        group: "release",
+        "cancel-in-progress": true,
       });
       assert.equal(workflow.jobs["build-python"], undefined);
       assert.ok(workflow.jobs["publish-pypi-core"]);

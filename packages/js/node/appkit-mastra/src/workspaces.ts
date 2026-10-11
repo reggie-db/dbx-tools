@@ -15,7 +15,7 @@
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
+import { ConfigurationError } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { appkit, pluginRegistry } from "@dbx-tools/appkit";
 import {
@@ -439,7 +439,7 @@ function resolveWorkspaceSandbox(
     const client =
       typeof options.client === "function"
         ? options.client({ requestContext })
-        : (options.client ?? createWorkspaceClient());
+        : (options.client ?? (user.executionContext.client as WorkspaceClient));
     const {
       provider: _provider,
       sandboxId: _sandboxId,

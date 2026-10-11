@@ -66,8 +66,8 @@ describe("unified release workflow", () => {
     assert.equal("release" in release.on, false);
     assert.equal("workflow_dispatch" in release.on, false);
     assert.deepEqual(release.concurrency, {
-      group: "release-${{ github.ref_name }}",
-      "cancel-in-progress": false,
+      group: "release",
+      "cancel-in-progress": true,
     });
     assert.deepEqual(release.permissions, { contents: "read" });
 

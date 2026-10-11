@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { RequestContext } from "@mastra/core/request-context";
 
-import { resolveDefaultModelId, RESPONSES_PROVIDER_OPTIONS, servingApi } from "../src/model.ts";
+import { MASTRA_USER_KEY } from "../src/config.ts";
+import {
+  resolveDefaultModelId,
+  resolveModelWorkspaceClient,
+  RESPONSES_PROVIDER_OPTIONS,
+  servingApi,
+} from "../src/model.ts";
 
 describe("Mastra serving API selection", () => {
   it("routes Responses-only models through the native Responses provider", () => {
@@ -33,6 +40,21 @@ describe("Mastra serving API selection", () => {
         store: false,
       },
     });
+  });
+
+  it("falls back to a configured service-principal client outside a request", () => {
+    assert.ok(resolveModelWorkspaceClient(new RequestContext()).config);
+  });
+
+  it("prefers the request-scoped OBO client", () => {
+    const requestContext = new RequestContext();
+    const client = { config: {} };
+    requestContext.set(MASTRA_USER_KEY, {
+      id: "user-1",
+      executionContext: { client, isUserContext: true },
+    });
+
+    assert.equal(resolveModelWorkspaceClient(requestContext), client);
   });
 
   it("uses the highest-ranked live model when no default is configured", () => {

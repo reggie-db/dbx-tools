@@ -82,9 +82,8 @@ export interface DatabricksWorkspaceSandboxOptions extends Omit<
   /** Provider discriminator. Defaults to `databricks`. */
   provider?: "databricks";
   /**
-   * Credential source. Defaults to a fresh AppKit client using the normal
-   * environment/profile chain, which is the app service principal in a
-   * Databricks App.
+   * Credential source. Defaults to the active request's AppKit client, which
+   * uses OBO credentials when the turn runs in a user context.
    */
   client?: WorkspaceClient | ((context: { requestContext: RequestContext }) => WorkspaceClient);
   /**

@@ -409,6 +409,10 @@ const AGENT_METADATA = /^\/agents(\/[^/]+)?$/;
 const AGENT_SUSPENDED_RUNS = /^\/agents\/[^/]+\/suspended-runs$/i;
 /** Official AI SDK UI stream route, including `resumeData` continuations. */
 const AGENT_CHAT = /^\/chat\/[^/]+$/i;
+/** Durable run observation for one agent-owned chat stream. */
+const AGENT_CHAT_RUN = /^\/chat\/[^/]+\/runs\/[^/]+$/i;
+/** Explicit cancellation for one durable chat run. */
+const AGENT_CHAT_RUN_ABORT = /^\/chat\/[^/]+\/runs\/[^/]+\/abort$/i;
 /** Native resource-scoped memory reads used by history and the thread list. */
 const MEMORY_READ = /^\/memory\/threads(?:\/[^/]+(?:\/messages)?)?$/i;
 /** Native thread rename/delete routes. */
@@ -438,6 +442,8 @@ export function isMastraRequestAllowed(
   if (opts.mcpEnabled && (p === "/mcp" || p.startsWith("/mcp/"))) return true;
   const m = method.toUpperCase();
   if (m === "POST" && AGENT_CHAT.test(p)) return true;
+  if (m === "GET" && AGENT_CHAT_RUN.test(p)) return true;
+  if (m === "POST" && AGENT_CHAT_RUN_ABORT.test(p)) return true;
   if (m === "POST" && AGENT_INFERENCE.test(p)) return true;
   if (m === "GET" && (AGENT_METADATA.test(p) || AGENT_SUSPENDED_RUNS.test(p))) return true;
   if (m === "GET" && MEMORY_READ.test(p)) return true;
