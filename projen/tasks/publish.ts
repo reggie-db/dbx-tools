@@ -88,6 +88,12 @@ function compiledPublishTargets(value: unknown): string[] {
   return Object.values(value).flatMap(compiledPublishTargets);
 }
 
+export function compiledPublishTargetExists(dir: string, target: string): boolean {
+  if (!target.includes("*")) return existsSync(resolve(dir, target));
+  const staticRoot = target.slice(0, target.indexOf("*")).replace(/\/+$/, "");
+  return existsSync(resolve(dir, staticRoot));
+}
+
 /**
  * PATH with the workspace-root `node_modules/.bin` prepended. The root-level
  * compile reaches each package's projen/dax task, which resolves `tsc` off PATH;
@@ -199,7 +205,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     if (skipCompile) {
       const missing = compiled.flatMap((pkg) =>
         pkg.compiledTargets
-          .filter((target) => !existsSync(resolve(pkg.dir, target)))
+          .filter((target) => !compiledPublishTargetExists(pkg.dir, target))
           .map((target) => `${pkg.name}:${target}`),
       );
       if (missing.length > 0) {

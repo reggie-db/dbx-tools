@@ -379,11 +379,14 @@ export const ChatComposer = ({
           className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md"
         >
           {files.length > 0 && (
-            <div className="flex max-w-full gap-2 overflow-x-auto px-3 pt-3">
+            <InputGroupAddon
+              align="block-start"
+              className="max-w-full justify-start gap-2 overflow-x-auto pb-0"
+            >
               {files.map((file, index) => (
                 <div
                   key={`${file.filename ?? "image"}-${index}`}
-                  className="group relative size-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"
+                  className="group relative size-20 shrink-0 overflow-hidden rounded-xl border border-border bg-muted"
                 >
                   <img
                     src={file.url}
@@ -404,7 +407,7 @@ export const ChatComposer = ({
                   </Button>
                 </div>
               ))}
-            </div>
+            </InputGroupAddon>
           )}
           <InputGroupTextarea
             id={`${inputId}-message`}
