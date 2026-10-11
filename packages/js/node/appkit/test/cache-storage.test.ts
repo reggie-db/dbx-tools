@@ -98,7 +98,6 @@ describe("memory-first AppKit cache storage", () => {
     const l1 = new AppKitCacheStorage(
       createCache({ levels: [{ store: storageLevel(storage) }], maxEntries: 1 }),
       storage,
-      true,
     );
     const future = Date.now() + 60_000;
     await l1.set("key", { value: "value", expiry: future });
@@ -115,7 +114,6 @@ describe("memory-first AppKit cache storage", () => {
     const l1 = new AppKitCacheStorage(
       createCache({ levels: [{ store: storageLevel(storage) }], maxEntries: 1 }),
       storage,
-      true,
     );
     const future = Date.now() + 60_000;
 
@@ -138,7 +136,7 @@ describe("memory-first AppKit cache storage", () => {
         return 3;
       },
     });
-    const l1 = new AppKitCacheStorage(createCache(), storage, true);
+    const l1 = new AppKitCacheStorage(createCache(), storage);
 
     assert.equal(await l1.cleanupExpired(), 3);
     assert.equal(cleanups, 1);
@@ -146,7 +144,6 @@ describe("memory-first AppKit cache storage", () => {
       await new AppKitCacheStorage(
         createCache(),
         storageWithInit(async () => {}),
-        true,
       ).cleanupExpired(),
       0,
     );

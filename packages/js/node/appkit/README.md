@@ -153,8 +153,9 @@ import { cacheStorage } from "@dbx-tools/appkit";
 const storage = await cacheStorage.createAppKitCacheStorage();
 ```
 
-Both paths register or expose graceful shutdown through `close()`, which drains
-tracked write-behind work before disconnecting the persistent levels.
+AppKit closes injected storage during shutdown. Native composition should call
+`close()` when it owns the storage directly; that drains tracked write-behind
+work before disconnecting the persistent levels.
 
 ## Filesystem Cache Plugin
 

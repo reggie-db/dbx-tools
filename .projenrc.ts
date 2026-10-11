@@ -445,7 +445,6 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
     "cheerio@^1.2.0",
-    "env-paths@catalog:",
     "fuse.js@^7.4.2",
   );
   p.addTask("metadata", {

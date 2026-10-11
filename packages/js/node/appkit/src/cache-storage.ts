@@ -16,15 +16,7 @@
 
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import {
-  createLakebasePool,
-  getWorkspaceClient,
-  Plugin,
-  toPlugin,
-  type BasePluginConfig,
-  type CacheConfig,
-  type PluginManifest,
-} from "@databricks/appkit";
+import { createLakebasePool, getWorkspaceClient, type CacheConfig } from "@databricks/appkit";
 import {
   closeCache,
   createCache,
@@ -128,7 +120,6 @@ export class AppKitCacheStorage implements CacheStorage {
   constructor(
     cache: ReturnType<typeof createCache>,
     private readonly persistent: CacheStorage | undefined,
-    private readonly persistentMode: boolean,
   ) {
     this.cache = cache;
   }
@@ -169,7 +160,7 @@ export class AppKitCacheStorage implements CacheStorage {
   }
 
   isPersistent(): boolean {
-    return this.persistentMode;
+    return true;
   }
 
   async healthCheck(): Promise<boolean> {
@@ -314,7 +305,9 @@ export async function probeStorage(storage: PersistentStorageBase): Promise<void
  * AppKit's PersistentStorage can be loaded. Returns `undefined` otherwise so
  * the caller can use portable disk persistence.
  */
-async function createPersistentStorage(cache: CacheConfig | undefined): Promise<CacheStorage | undefined> {
+async function createPersistentStorage(
+  cache: CacheConfig | undefined,
+): Promise<CacheStorage | undefined> {
   const PersistentStorage = loadPersistentStorage();
   if (!PersistentStorage) {
     return undefined;
@@ -355,9 +348,8 @@ export async function createAppKitCacheStorage(
   options: AppKitCacheStorageOptions = {},
 ): Promise<AppKitCacheStorage> {
   const nativeCache = options.cache;
-  const persistent = options.preferLakebase === false
-    ? undefined
-    : await createPersistentStorage(nativeCache);
+  const persistent =
+    options.preferLakebase === false ? undefined : await createPersistentStorage(nativeCache);
   const common: CacheOptions = {
     maxEntries: options.maxEntries ?? nativeCache?.maxSize,
     writeDelayMs: options.writeDelayMs,
@@ -368,30 +360,5 @@ export async function createAppKitCacheStorage(
         levels: [{ name: "appkit-persistent", store: new AppKitStorageLevel(persistent) }],
       })
     : projectCache(options.diskScope ?? "appkit", common);
-  return new AppKitCacheStorage(cache, persistent, true);
+  return new AppKitCacheStorage(cache, persistent);
 }
-
-interface CacheDrainPluginConfig extends BasePluginConfig {
-  storage?: AppKitCacheStorage;
-}
-
-/** Hidden shutdown hook that drains cache writes before AppKit closes storage. */
-export class CacheDrainPlugin extends Plugin<CacheDrainPluginConfig> {
-  static manifest = {
-    name: "dbxToolsCacheDrain",
-    displayName: "Cache Drain",
-    description: "Drains dbx-tools cache write-behind during graceful shutdown.",
-    hidden: true,
-    stability: "beta",
-    resources: { required: [], optional: [] },
-  } satisfies PluginManifest<"dbxToolsCacheDrain">;
-
-  override async setup(): Promise<void> {}
-
-  async shutdown(): Promise<void> {
-    await this.config.storage?.flush();
-  }
-}
-
-/** Factory for the hidden cache-drain lifecycle plugin. */
-export const cacheDrain = toPlugin(CacheDrainPlugin);

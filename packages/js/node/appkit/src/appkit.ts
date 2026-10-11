@@ -39,7 +39,7 @@ import { profile as authProfile } from "@dbx-tools/auth";
 import { asyncUtils, environmentUtils, log } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
-import { cacheDrain, createAppKitCacheStorage } from "./cache-storage.ts";
+import { createAppKitCacheStorage } from "./cache-storage.ts";
 import { loadBrandContext } from "./brand-context.ts";
 import {
   createInterceptorContext,
@@ -327,7 +327,6 @@ export async function createApp<T extends AppKitPlugins>(
       preferLakebase: Boolean(lakebase) || usesPlugin(config, LAKEBASE_PLUGIN),
     });
     appConfig.cache = { ...config?.cache, storage };
-    appConfig.plugins = [...(appConfig.plugins ?? []), cacheDrain({ storage })] as unknown as T;
     logger.debug("createApp: memory-first cache storage ready", {
       persistent: storage.isPersistent(),
     });

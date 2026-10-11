@@ -25,7 +25,7 @@ export * as toolkitEntries from "./src/toolkit-entries.ts";
 export type { AutoConfigureMode, CreateAppConfig, ExecutionContextLike, WorkspaceClientLike } from "./src/appkit.ts";
 export { bundleAppResourceSchema, flattenAppYamlEnv, flattenAppEnv, getBundlePath } from "./src/bundle.ts";
 export type { BundleValidateJson, ConfigFile, ConfigMapValue, ConfigSource, ResolveConfigValueOptions } from "./src/bundle.ts";
-export { AppKitCacheStorage, CacheDrainPlugin, cacheDrain } from "./src/cache-storage.ts";
+export { AppKitCacheStorage } from "./src/cache-storage.ts";
 export type { AppKitCacheStorageOptions, PersistentStorageBase } from "./src/cache-storage.ts";
 export { AppKitChildProcess } from "./src/child-process.ts";
 export type { AppKitSpawnArgs, AppKitChildProcessHealthCheckContext, AppKitChildProcessHealthCheck, AppKitChildProcessOptions, AppKitChildProcessRunOptions } from "./src/child-process.ts";

@@ -23,7 +23,7 @@
 
 import { createHash } from "node:crypto";
 import { appkit } from "@dbx-tools/appkit";
-import { deleteCachedValue, getOrSet, projectCache } from "@dbx-tools/cache/cache";
+import { deleteCachedValue, getOrSet } from "@dbx-tools/cache/cache";
 import { errorUtils, log } from "@dbx-tools/shared-core";
 import {
   model,
@@ -34,6 +34,7 @@ import {
 } from "@dbx-tools/shared-model";
 
 import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_ranking.ts";
+import { modelCatalogueCache } from "./_cache.ts";
 
 const { ModelClass } = model;
 
@@ -54,7 +55,7 @@ export const DEFAULT_FUZZY_THRESHOLD = 0.4;
 
 /** Cache key parts under which endpoint listings are stored. */
 const CACHE_KEY_NAMESPACE = "serving-endpoints";
-const catalogueCache = projectCache("model-catalog", { maxEntries: 256 });
+const catalogueCache = modelCatalogueCache;
 
 /** Options for {@link listServingEndpoints}. */
 export interface ListServingEndpointsOptions {

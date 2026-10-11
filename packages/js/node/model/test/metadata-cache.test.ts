@@ -2,118 +2,167 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, describe, it } from "node:test";
+import { describe, it } from "node:test";
+import { closeCache, createCache, projectCache } from "@dbx-tools/cache/cache";
 
 import {
   createMetadataCache,
-  metadataCacheDiskEnabled,
   mergePreferFreshList,
   mergePreferFreshRecord,
-  resetMetadataCacheDir,
 } from "../src/metadata-cache.ts";
 
-describe("metadataCacheDiskEnabled", () => {
-  it("disables disk inside a Databricks App environment", () => {
-    assert.equal(
-      metadataCacheDiskEnabled({
-        DATABRICKS_APP_NAME: "demo",
-        DATABRICKS_HOST: "https://example.cloud.databricks.com",
-        DATABRICKS_APP_PORT: "8080",
-      }),
-      false,
-    );
-    assert.equal(metadataCacheDiskEnabled({}), true);
-  });
-});
-
 describe("createMetadataCache", () => {
-  const roots: string[] = [];
-
-  after(async () => {
-    await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
-  });
-
-  async function tempCacheDir(): Promise<string> {
-    const root = await mkdtemp(join(tmpdir(), "model-metadata-cache-"));
-    roots.push(root);
-    return root;
-  }
-
-  it("memoizes in memory and persists to the disk level", async () => {
-    const cacheDir = await tempCacheDir();
+  it("memoizes through the shared metadata store", async () => {
+    const store = createCache({ useClone: false });
     let loads = 0;
-    const cache = createMetadataCache({
-      key: "sample",
-      cacheDir,
-      disk: true,
-      ttlMs: 60_000,
-      fallback: ["fallback"],
-      load: async () => {
-        loads += 1;
-        return ["fresh"];
+    const cache = createMetadataCache(
+      {
+        key: "sample",
+        ttlMs: 60_000,
+        fallback: ["fallback"],
+        load: async () => {
+          loads += 1;
+          return ["fresh"];
+        },
+        merge: mergePreferFreshList,
       },
-      merge: mergePreferFreshList,
-    });
+      store,
+    );
 
     assert.deepEqual(await cache.get(), ["fresh"]);
     assert.deepEqual(await cache.get(), ["fresh"]);
     assert.equal(loads, 1);
 
-    const cold = createMetadataCache({
-      key: "sample",
-      cacheDir,
-      disk: true,
-      ttlMs: 60_000,
-      fallback: ["fallback"],
-      load: async () => {
-        loads += 1;
-        return ["should-not-run"];
+    const cold = createMetadataCache(
+      {
+        key: "sample",
+        ttlMs: 60_000,
+        fallback: ["fallback"],
+        load: async () => {
+          loads += 1;
+          return ["should-not-run"];
+        },
+        merge: mergePreferFreshList,
       },
-      merge: mergePreferFreshList,
-    });
+      store,
+    );
     assert.deepEqual(await cold.get(), ["fresh"]);
     assert.equal(loads, 1);
   });
 
-  it("skips the disk level when persistence is disabled", async () => {
-    const cacheDir = await tempCacheDir();
-    const cache = createMetadataCache({
-      key: "learned",
-      cacheDir,
-      disk: false,
-      ttlMs: 60_000,
-      fallback: {},
-      merge: mergePreferFreshRecord,
-    });
+  it("shares memory-only values across handles", async () => {
+    const store = createCache({ useClone: false });
+    const cache = createMetadataCache(
+      {
+        key: "learned",
+        ttlMs: 60_000,
+        fallback: {},
+        merge: mergePreferFreshRecord,
+      },
+      store,
+    );
 
     await cache.update((current) => ({ ...current, grok: ["low", "high"] }));
     assert.deepEqual(await cache.peek(), { grok: ["low", "high"] });
 
-    const cold = createMetadataCache({
-      key: "learned",
-      cacheDir,
-      disk: false,
-      ttlMs: 60_000,
-      fallback: {},
-      merge: mergePreferFreshRecord,
-    });
-    assert.equal(await cold.peek(), undefined);
+    const cold = createMetadataCache(
+      {
+        key: "learned",
+        ttlMs: 60_000,
+        fallback: {},
+        merge: mergePreferFreshRecord,
+      },
+      store,
+    );
+    assert.deepEqual(await cold.peek(), { grok: ["low", "high"] });
   });
 
   it("falls back to last good / hard-coded when load fails", async () => {
-    const cacheDir = await tempCacheDir();
-    await resetMetadataCacheDir(cacheDir);
-    const cache = createMetadataCache({
-      key: "broken",
-      cacheDir,
-      disk: true,
-      ttlMs: 1,
-      fallback: ["fallback"],
-      load: async () => {
-        throw new Error("network down");
+    const store = createCache({ useClone: false });
+    const cache = createMetadataCache(
+      {
+        key: "broken",
+        ttlMs: 1,
+        fallback: ["fallback"],
+        load: async () => {
+          throw new Error("network down");
+        },
+        merge: mergePreferFreshList,
       },
-      merge: mergePreferFreshList,
-    });
+      store,
+    );
     assert.deepEqual(await cache.get(), ["fallback"]);
+  });
+
+  it("retries a failed refresh while serving the previous value", async () => {
+    const store = createCache({ useClone: false });
+    let loads = 0;
+    let fail = false;
+    const cache = createMetadataCache(
+      {
+        key: "stale",
+        ttlMs: 1,
+        fallback: ["fallback"],
+        load: async () => {
+          loads += 1;
+          if (fail) throw new Error("offline");
+          return ["fresh"];
+        },
+        merge: mergePreferFreshList,
+      },
+      store,
+    );
+
+    assert.deepEqual(await cache.get(), ["fresh"]);
+    await Bun.sleep(5);
+    fail = true;
+    assert.deepEqual(await cache.get(), ["fresh"]);
+    assert.deepEqual(await cache.get(), ["fresh"]);
+    assert.equal(loads, 3);
+  });
+
+  it("loads the known-good value from the disk tier after restart", async () => {
+    const cacheDir = await mkdtemp(join(tmpdir(), "model-metadata-cache-"));
+    const storeOptions = {
+      cacheDir,
+      diskWriteDelayMs: 0,
+      projectName: "metadata-test",
+      useClone: false,
+      writeDelayMs: 0,
+    };
+    try {
+      const firstStore = projectCache("known-good", storeOptions);
+      const first = createMetadataCache(
+        {
+          key: "known-good",
+          ttlMs: 1,
+          fallback: ["fallback"],
+          load: async () => ["fresh"],
+          merge: mergePreferFreshList,
+        },
+        firstStore,
+      );
+      assert.deepEqual(await first.get(), ["fresh"]);
+      await closeCache(firstStore);
+
+      await Bun.sleep(5);
+      const secondStore = projectCache("known-good", storeOptions);
+      const second = createMetadataCache(
+        {
+          key: "known-good",
+          ttlMs: 1,
+          fallback: ["fallback"],
+          load: async () => {
+            throw new Error("offline");
+          },
+          merge: mergePreferFreshList,
+        },
+        secondStore,
+      );
+      assert.deepEqual(await second.get(), ["fresh"]);
+      await closeCache(secondStore);
+    } finally {
+      await rm(cacheDir, { force: true, recursive: true });
+    }
   });
 });

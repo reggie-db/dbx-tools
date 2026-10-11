@@ -193,10 +193,10 @@ const raw = await modelCatalog.listServingEndpointsUncached(client);
 await modelCatalog.clearServingEndpointsCache(host);
 ```
 
-`listServingEndpoints()` uses the shared memory-first project cache, enriches
+`listServingEndpoints()` uses the shared memory-first model project cache, enriches
 endpoints with classification and embedding dimensions, and isolates entries by
 workspace host and trusted credential identity. If a refresh fails, it can return
-the last cached value for up to seven days. `listServingEndpointsUncached()` is
+the last known-good value retained on disk. `listServingEndpointsUncached()` is
 useful for simple scripts that only need the SDK response and do not want a cache
 dependency.
 

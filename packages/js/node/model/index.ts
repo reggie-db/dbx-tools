@@ -21,7 +21,7 @@ export { FALLBACK_MODEL_IDS } from "./src/fallback.ts";
 export { INVOCATIONS_SUFFIX, SERVING_ENDPOINTS_PATH, RESPONSES_PATH, OPEN_RESPONSES_PATH, CHAT_COMPLETIONS_PATH, AI_GATEWAY_CODEX_RESPONSES_PATH, ANTHROPIC_BASE_PATH, ANTHROPIC_MESSAGES_PATH } from "./src/invoke.ts";
 export type { AuthenticatingClientLike } from "./src/invoke.ts";
 export { MODEL_METADATA_TTL_MS, MODEL_RATE_LIMITS_URL, OPENAI_RESPONSES_MODELS_URL, QUERY_REASON_MODELS_URL, RETIRED_MODELS_URL, WEB_SEARCH_MODELS_URL } from "./src/metadata.ts";
-export type { MetadataCacheRecord, MetadataCacheOptions, MetadataCacheMergeInput, MetadataCache } from "./src/metadata-cache.ts";
+export type { MetadataCacheOptions, MetadataCacheMergeInput, MetadataCache } from "./src/metadata-cache.ts";
 export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD } from "./src/model-catalog.ts";
 export type { WorkspaceClientLike, ListServingEndpointsOptions } from "./src/model-catalog.ts";
 export { DEFAULT_MODEL_CLIENT_CACHE_TTL_MS } from "./src/model-client.ts";

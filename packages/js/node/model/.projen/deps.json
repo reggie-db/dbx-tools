@@ -51,11 +51,6 @@
       "type": "runtime"
     },
     {
-      "name": "env-paths",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "fuse.js",
       "version": "^7.4.2",
       "type": "runtime"

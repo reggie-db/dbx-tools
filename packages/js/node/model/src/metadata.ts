@@ -6,7 +6,8 @@
  * Committed snapshots seed every process. {@link refreshModelMetadata} pulls
  * documentation through the shared memory-first {@link createMetadataCache} and
  * rebuilds the in-memory index. Error-learned efforts use the same store via
- * {@link rememberReasoningLevels}. Disk writes are skipped in Databricks Apps.
+ * {@link rememberReasoningLevels}. Known-good values are written behind to the
+ * shared model project cache.
  *
  * @module
  */
@@ -276,11 +277,6 @@ async function peekOrFallback<T>(cache: MetadataCache<T>, fallback: T): Promise<
   return cache.get().catch(() => fallback);
 }
 
-/** Absolute persistent cache root used by the documentation and learned caches. */
-export function modelMetadataCachePath(): string {
-  return retiredCache.path;
-}
-
 export { modelStatusFor, retiredModelNames } from "./_retirement.ts";
 
 /** Return the committed reasoning-effort catalogue. Cached per process. */
@@ -288,7 +284,7 @@ export function reasoningModelCatalogue(): ReasoningModelCatalogue {
   return metadataIndex().reasoning;
 }
 
-/** Return error-learned reasoning ladders persisted in the metadata cache. */
+/** Return error-learned reasoning ladders from the shared model cache. */
 export function learnedReasoningCatalogue(): ReasoningModelCatalogue {
   return metadataIndex().learnedReasoning;
 }
@@ -324,7 +320,7 @@ export async function rememberReasoningLevels(
  *
  * Accepts the same nested Databricks envelopes as {@link parseReasoningLevels}.
  * Returns the levels that were stored (or the current lookup when parse yields
- * nothing). The raw error body is never written to disk.
+ * nothing). The raw error body is never cached.
  */
 export async function learnReasoningLevelsFromError(
   model: string,
