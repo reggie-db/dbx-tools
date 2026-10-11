@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
   Slider,
   Spinner,
+  useIsMobile,
 } from "@dbx-tools/ui/react";
 import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
@@ -185,6 +186,7 @@ export const ModelSelector = ({
   onModelChange,
   actions,
 }: ModelSelectorProps) => {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [activeFamily, setActiveFamily] = useState<string>();
@@ -242,50 +244,102 @@ export const ModelSelector = ({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuSub
-          open={modelPickerOpen}
-          onOpenChange={(next) => {
-            if (!next && open) return;
-            setModelPickerOpen(next);
-            if (!next) setActiveFamily(undefined);
-          }}
-        >
-          <DropdownMenuSubTrigger className="mx-1 justify-center rounded-lg bg-accent/60 px-3 py-2 text-xs font-medium">
-            {showLoading ? (
+      <DropdownMenuContent
+        align="end"
+        collisionPadding={8}
+        className="w-48 max-w-[calc(100vw_-_1rem)]"
+      >
+        {isMobile && modelPickerOpen ? (
+          <>
+            {!activeFamily && (
               <>
-                <Spinner className="size-3 shrink-0" />
-                <span className="sr-only">Loading default model</span>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs font-medium outline-none hover:bg-accent focus-visible:bg-accent"
+                  onClick={() => setModelPickerOpen(false)}
+                >
+                  <ChevronLeftIcon className="size-3" />
+                  Options
+                </button>
+                <DropdownMenuSeparator />
               </>
-            ) : (
-              triggerLabel
             )}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent className="w-48">
-              <FamilyPicker
-                families={families}
-                selectedModelId={selectedModelId}
-                model={model}
-                defaultModelName={defaultModelName}
-                showLoading={showLoading}
-                activeFamily={activeFamily}
-                onActiveFamilyChange={setActiveFamily}
-                onModelChange={onModelChange}
+            <FamilyPicker
+              families={families}
+              selectedModelId={selectedModelId}
+              model={model}
+              defaultModelName={defaultModelName}
+              showLoading={showLoading}
+              activeFamily={activeFamily}
+              onActiveFamilyChange={setActiveFamily}
+              onModelChange={onModelChange}
+            />
+          </>
+        ) : (
+          <>
+            {isMobile ? (
+              <button
+                type="button"
+                className="mx-1 flex w-[calc(100%_-_0.5rem)] items-center rounded-lg bg-accent/60 px-3 py-2 text-xs font-medium outline-none hover:bg-accent focus-visible:bg-accent"
+                onClick={() => setModelPickerOpen(true)}
+              >
+                {showLoading ? (
+                  <>
+                    <Spinner className="size-3 shrink-0" />
+                    <span className="sr-only">Loading default model</span>
+                  </>
+                ) : (
+                  <span className="truncate">{triggerLabel}</span>
+                )}
+                <ChevronRightIcon className="ml-auto size-3 shrink-0 text-muted-foreground" />
+              </button>
+            ) : (
+              <DropdownMenuSub
+                open={modelPickerOpen}
+                onOpenChange={(next) => {
+                  if (!next && open) return;
+                  setModelPickerOpen(next);
+                  if (!next) setActiveFamily(undefined);
+                }}
+              >
+                <DropdownMenuSubTrigger className="mx-1 justify-center rounded-lg bg-accent/60 px-3 py-2 text-xs font-medium">
+                  {showLoading ? (
+                    <>
+                      <Spinner className="size-3 shrink-0" />
+                      <span className="sr-only">Loading default model</span>
+                    </>
+                  ) : (
+                    triggerLabel
+                  )}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent collisionPadding={8} className="w-48">
+                    <FamilyPicker
+                      families={families}
+                      selectedModelId={selectedModelId}
+                      model={model}
+                      defaultModelName={defaultModelName}
+                      showLoading={showLoading}
+                      activeFamily={activeFamily}
+                      onActiveFamilyChange={setActiveFamily}
+                      onModelChange={onModelChange}
+                    />
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+            )}
+            {(actions || (reasoningEfforts.length > 0 && onReasoningEffortChange)) && (
+              <DropdownMenuSeparator />
+            )}
+            {actions && <div className="px-1">{actions}</div>}
+            {reasoningEfforts.length > 0 && onReasoningEffortChange && (
+              <ReasoningControl
+                efforts={reasoningEfforts}
+                value={reasoningEffort}
+                onChange={onReasoningEffortChange}
               />
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
-        </DropdownMenuSub>
-        {(actions || (reasoningEfforts.length > 0 && onReasoningEffortChange)) && (
-          <DropdownMenuSeparator />
-        )}
-        {actions && <div className="px-1">{actions}</div>}
-        {reasoningEfforts.length > 0 && onReasoningEffortChange && (
-          <ReasoningControl
-            efforts={reasoningEfforts}
-            value={reasoningEffort}
-            onChange={onReasoningEffortChange}
-          />
+            )}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
