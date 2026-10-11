@@ -136,7 +136,7 @@ async function compileCustomPackage(pkg: {
       cwd: pkg.directory,
       stdin: "ignore",
       stdout: (line) => logger.info(`${pkg.name}: ${line.replace(emoji, "")}`),
-      stderr: (line) => logger.error(`${pkg.name}: ${line.replace(emoji, "")}`),
+      stderr: (line) => logger.info(`${pkg.name}: ${line.replace(emoji, "")}`),
     });
     if (result.exitCode !== 0) return result;
   }
