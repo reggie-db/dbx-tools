@@ -16,7 +16,7 @@ import {
   SquareIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { ThreadSummary } from "./types.ts";
 import { relativeTime, threadTitle } from "../support/thread-labels.ts";
 
@@ -52,6 +52,8 @@ export interface ThreadSidebarProps {
   onCancel?: (threadId: string) => void;
   /** Collapse the sidebar. Renders the hide button in the header when provided. */
   onHide?: () => void;
+  /** Host controls rendered in the conversation-list header. */
+  headerActions?: ReactNode;
   /**
    * Edge the sidebar is docked to. Only affects framing - which side carries
    * the divider, and which way the collapse icon points. Defaults to `left`.
@@ -82,6 +84,7 @@ export const ThreadSidebar = ({
   onRename,
   onCancel,
   onHide,
+  headerActions,
   side = "left",
   className,
 }: ThreadSidebarProps) => {
@@ -134,7 +137,7 @@ export const ThreadSidebar = ({
         className,
       )}
     >
-      {(onNew || onHide) && (
+      {(onNew || headerActions || onHide) && (
         <div className="flex items-center gap-2 p-2">
           {onNew && (
             <Button
@@ -148,6 +151,7 @@ export const ThreadSidebar = ({
               New chat
             </Button>
           )}
+          {headerActions}
           {onHide && (
             <Tooltip>
               <TooltipTrigger asChild>

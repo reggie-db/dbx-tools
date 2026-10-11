@@ -4,6 +4,7 @@ import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { useBrand } from "@dbx-tools/ui/branding/react";
 import type { FileUIPart, UIMessage } from "ai";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toChronologicalUiMessages } from "./_history-messages.ts";
 import { useChatApprovals } from "./chat-approvals.ts";
 import { useChatFeedback } from "./chat-feedback.ts";
 import { useChatHistory } from "./chat-history.ts";
@@ -12,6 +13,12 @@ import { useChatStream } from "./chat-stream.ts";
 import { ChatView } from "./chat-view.tsx";
 import { dedupeSuggestions } from "./suggestions.ts";
 import type { ChatViewProps, ThreadPlacement, ThreadSummary } from "./types.ts";
+import {
+  activeRunStorageKey,
+  readStoredActiveRuns,
+  removeStoredActiveRun,
+  storeActiveRun,
+} from "../support/active-runs.ts";
 import type { EmbedResolver, ExportFormat } from "../support/export.ts";
 import {
   useMastraClient,
@@ -292,6 +299,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const feedbackAvailable = enableFeedback && mastraClient.feedbackEnabled;
   const { url: mlflowExperimentUrl } = useMastraMlflowExperiment(feedbackAvailable);
   const threadKey = threadStorageKey(mastraClient.basePath, agentId);
+  const activeRunsKey = activeRunStorageKey(mastraClient.basePath, agentId);
   const [activeThreadId, setActiveThreadId] = useState<string>(() =>
     enableThreads ? (readStoredThreadId(threadKey) ?? hash.id()) : hash.id(),
   );
@@ -510,6 +518,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           };
         });
         if (getSession(threadId).runToken === token) {
+          const completedRunId = runIdRef.current;
+          if (completedRunId) removeStoredActiveRun(activeRunsKey, completedRunId);
           refreshThreadsSoon();
           // Turn finished on its own: start the oldest queued steer, if any.
           drainQueueRef.current(threadId);
@@ -531,6 +541,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
               runId: runIdRef.current,
             };
           });
+          const staleRunId = runIdRef.current;
+          if (staleRunId) removeStoredActiveRun(activeRunsKey, staleRunId);
           refreshThreadsSoon();
           drainQueueRef.current(threadId);
           return;
@@ -549,6 +561,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     },
     [
       agentId,
+      activeRunsKey,
       getSession,
       mastraClient,
       processStream,
@@ -562,6 +575,13 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     (threadId: string, message: UIMessage, requestContext?: MastraRequestContextSnapshot) => {
       const assistantId = hash.id();
       const runId = hash.id();
+      storeActiveRun(activeRunsKey, {
+        threadId,
+        runId,
+        assistantId,
+        userMessage: message,
+        startedAt: Date.now(),
+      });
       updateSession(threadId, (session) => ({
         ...session,
         assistantId,
@@ -595,8 +615,49 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         });
       });
     },
-    [driveStream, mastraClient, agentId, updateSession],
+    [activeRunsKey, driveStream, mastraClient, agentId, updateSession],
   );
+
+  const recoveredRunsKeyRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!mastraClient.backgroundTurns || recoveredRunsKeyRef.current === activeRunsKey) return;
+    recoveredRunsKeyRef.current = activeRunsKey;
+    for (const run of readStoredActiveRuns(activeRunsKey)) {
+      const session = getSession(run.threadId);
+      if (isSessionRunning(session) || session.runId === run.runId) continue;
+      updateSession(run.threadId, (current) => ({
+        ...current,
+        messages: current.messages.some((message) => message.id === run.userMessage.id)
+          ? current.messages
+          : [...current.messages, run.userMessage],
+        assistantId: run.assistantId,
+        runId: run.runId,
+        runs: {
+          ...current.runs,
+          [run.runId]: { assistantId: run.assistantId },
+        },
+      }));
+      void driveStream(run.threadId, run.assistantId, (signal) =>
+        mastraClient.observeAgentStream({
+          agentId,
+          runId: run.runId,
+          threadId: run.threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : run.threadId,
+          signal,
+        }),
+      ).then(async () => {
+        if (run.threadId === DEFAULT_THREAD_SESSION_KEY) return;
+        const history = await mastraClient
+          .history({
+            agentId,
+            threadId: run.threadId,
+            page: 0,
+            perPage: 20,
+          })
+          .catch(() => undefined);
+        if (history) writeMessages(run.threadId, toChronologicalUiMessages(history));
+      });
+    }
+  }, [activeRunsKey, agentId, driveStream, getSession, mastraClient, updateSession, writeMessages]);
 
   // Start the oldest queued steer as the next turn (FIFO drain). Called from
   // `driveStream` when a turn ends normally; a no-op when the queue is empty.
@@ -632,6 +693,9 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
             runId: current.runId,
             threadId: streamThreadId,
           })
+          .then((aborted) => {
+            if (aborted && current.runId) removeStoredActiveRun(activeRunsKey, current.runId);
+          })
           .catch((error: unknown) => {
             logger.warn("failed to abort background run", {
               runId: current.runId,
@@ -651,7 +715,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         };
       });
     },
-    [activeKey, agentId, getSession, mastraClient, updateSession],
+    [activeKey, activeRunsKey, agentId, getSession, mastraClient, updateSession],
   );
 
   const handleApproval = useChatApprovals({
@@ -1155,6 +1219,10 @@ export interface MastraChatProps<
   modelSelectorActions?: ReactNode;
   /** Host controls placed on the left side of the composer footer. */
   composerLeadingActions?: ReactNode;
+  /** Host controls rendered immediately before the responsive History action. */
+  threadHistoryLeadingActions?: ReactNode;
+  /** Host controls rendered in the full conversation-list header. */
+  threadSidebarHeaderActions?: ReactNode;
 }
 
 /**
@@ -1175,6 +1243,8 @@ export const MastraChat = <TValues extends Record<string, unknown> = Record<stri
   composerActions,
   modelSelectorActions,
   composerLeadingActions,
+  threadHistoryLeadingActions,
+  threadSidebarHeaderActions,
   ...options
 }: MastraChatProps<TValues>) => {
   const chat = useMastraChat(options);
@@ -1185,6 +1255,8 @@ export const MastraChat = <TValues extends Record<string, unknown> = Record<stri
       composerActions={composerActions}
       modelSelectorActions={modelSelectorActions}
       composerLeadingActions={composerLeadingActions}
+      threadHistoryLeadingActions={threadHistoryLeadingActions}
+      threadSidebarHeaderActions={threadSidebarHeaderActions}
     />
   );
 };

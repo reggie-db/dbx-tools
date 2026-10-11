@@ -27,6 +27,7 @@ export * as reactThreadSidebar from "./src/react/thread-sidebar.tsx";
 export * as reactThreadTabs from "./src/react/thread-tabs.tsx";
 export * as reactToolPill from "./src/react/tool-pill.tsx";
 export * as reactTypes from "./src/react/types.ts";
+export * as supportActiveRuns from "./src/support/active-runs.ts";
 export * as supportChartOption from "./src/support/chart-option.ts";
 export * as supportChartTheme from "./src/support/chart-theme.ts";
 export * as supportClipboard from "./src/support/clipboard.ts";
@@ -65,6 +66,8 @@ export type { ThreadTabsProps, ThreadActionsProps } from "./src/react/thread-tab
 export { humanizeToolName, ToolSessionPill } from "./src/react/tool-pill.tsx";
 export type { ToolInputPresentation, WebSearchProgressGroup } from "./src/react/tool-pill.tsx";
 export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, ChatInputMessage, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ThreadPlacement, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types.ts";
+export { StoredActiveRunSchema, activeRunStorageKey } from "./src/support/active-runs.ts";
+export type { StoredActiveRun } from "./src/support/active-runs.ts";
 export { LIGHT_CHART_CHROME } from "./src/support/chart-theme.ts";
 export type { ChartChrome } from "./src/support/chart-theme.ts";
 export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from "./src/support/export.ts";

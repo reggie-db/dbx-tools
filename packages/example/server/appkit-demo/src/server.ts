@@ -12,6 +12,7 @@ import {
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
+import { ssh } from "@dbx-tools/appkit-ssh";
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
@@ -209,6 +210,7 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
       // record without forcing that useless cross-tool type expansion.
       const agentTools = Object.assign({}, await demoGenieTools(plugins, agentMode)) as MastraTools;
       Object.assign(agentTools, await plugins.graphiti?.toolkit());
+      Object.assign(agentTools, await plugins.ssh?.toolkit());
       Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
       Object.assign(
         agentTools,
@@ -294,6 +296,19 @@ await appkit.createApp({
     genie(),
     lakebase({ pool: postgresConnectionOptions({}) }),
     filesCache(),
+    ssh({
+      fallbackToServicePrincipal: true,
+      machineAssignments: [
+        {
+          userId: "4739182178671968@7474652124440999",
+          machineId: "strapping-gemsbok-3103",
+        },
+        {
+          userId: "reggie.pierce@databricks.com",
+          machineId: "strapping-gemsbok-3103",
+        },
+      ],
+    }),
     ...(graphitiEnabled ? [graphiti()] : []),
     // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
     // Lakebase connection and fans topic broadcasts out to its browser viewers.

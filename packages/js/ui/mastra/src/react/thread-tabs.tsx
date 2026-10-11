@@ -44,6 +44,8 @@ export interface ThreadTabsProps extends Omit<ThreadSidebarProps, "onHide" | "si
   newIcon?: ReactNode;
   /** Replacement for the default history icon. */
   historyIcon?: ReactNode;
+  /** Host controls rendered immediately before History. */
+  historyLeadingActions?: ReactNode;
 }
 
 /** New/history controls reused by the tab strip and persistent assistant header. */
@@ -54,10 +56,17 @@ export interface ThreadActionsProps extends Omit<
   actions?: ReactNode;
   newIcon?: ReactNode;
   historyIcon?: ReactNode;
+  historyLeadingActions?: ReactNode;
 }
 
 /** Render New and History controls, plus optional host actions, as one group. */
-export const ThreadActions = ({ actions, newIcon, historyIcon, ...list }: ThreadActionsProps) => {
+export const ThreadActions = ({
+  actions,
+  newIcon,
+  historyIcon,
+  historyLeadingActions,
+  ...list
+}: ThreadActionsProps) => {
   const { onSelect, onNew } = list;
   const [historyOpen, setHistoryOpen] = useState(false);
   return (
@@ -79,6 +88,7 @@ export const ThreadActions = ({ actions, newIcon, historyIcon, ...list }: Thread
           <TooltipContent>New chat</TooltipContent>
         </Tooltip>
       )}
+      {historyLeadingActions}
       <Popover open={historyOpen} onOpenChange={setHistoryOpen}>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -136,6 +146,7 @@ export const ThreadTabs = ({
   showActions = true,
   newIcon,
   historyIcon,
+  historyLeadingActions,
   className,
   ...list
 }: ThreadTabsProps) => {
@@ -207,7 +218,13 @@ export const ThreadTabs = ({
           })}
         </div>
         {showActions ? (
-          <ThreadActions {...list} actions={actions} newIcon={newIcon} historyIcon={historyIcon} />
+          <ThreadActions
+            {...list}
+            actions={actions}
+            newIcon={newIcon}
+            historyIcon={historyIcon}
+            historyLeadingActions={historyLeadingActions}
+          />
         ) : null}
       </div>
     </div>

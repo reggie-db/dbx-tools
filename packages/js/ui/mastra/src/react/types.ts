@@ -274,6 +274,10 @@ export type ChatViewProps = {
    * actions. The persistent assistant uses this for its panel Close button.
    */
   threadBarActions?: ReactNode;
+  /** Host controls rendered immediately before the top-row History action. */
+  threadHistoryLeadingActions?: ReactNode;
+  /** Host controls rendered in the docked or drawer conversation-list header. */
+  threadSidebarHeaderActions?: ReactNode;
   /** Whether the top tab row renders its built-in New/History controls. */
   showThreadBarActions?: boolean;
   /** Replacement icon for the top tab row's New action. */

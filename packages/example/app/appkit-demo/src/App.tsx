@@ -11,6 +11,7 @@ const Bus = lazy(() => import("@/pages/Bus"));
 const Cards = lazy(() => import("@/pages/Cards"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Search = lazy(() => import("@/pages/Search"));
+const Ssh = lazy(() => import("@/pages/Ssh"));
 
 const useVisualViewportShell = () => {
   useEffect(() => {
@@ -228,6 +229,12 @@ const App = () => {
       label: "Brand",
       description: "Live brand picker and rich email template previews",
       element: <Brand value={brandContext} onChange={setBrandContext} />,
+    },
+    {
+      path: "/sandbox",
+      label: "SSH",
+      description: "Manage SSH machines and registered proxy routes",
+      element: <Ssh />,
     },
   ];
 

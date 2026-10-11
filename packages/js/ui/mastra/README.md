@@ -22,6 +22,9 @@ Key features:
 
 - Drop-in `MastraChat` component that discovers the plugin client config and
   wires itself to the default agent.
+- Reload recovery for background turns: active run metadata is persisted per
+  agent and thread, the cached stream reconnects after a page reload, and the
+  final persisted history is refreshed when recovery completes.
 - Headless `useMastraChat()` driver for apps that want the same transport logic
   with custom layout.
 - Persistent `MastraAssistant` application shell with a floating launcher,

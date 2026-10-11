@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export * as activeRuns from "./active-runs.ts";
 export * as chartOption from "./chart-option.ts";
 export * as chartTheme from "./chart-theme.ts";
 export * as clipboard from "./clipboard.ts";
@@ -14,6 +15,8 @@ export * as threadLabels from "./thread-labels.ts";
 export * as threadSessions from "./thread-sessions.ts";
 export * as threadTabs from "./thread-tabs.ts";
 export * as toolEvents from "./tool-events.ts";
+export { StoredActiveRunSchema, activeRunStorageKey } from "./active-runs.ts";
+export type { StoredActiveRun } from "./active-runs.ts";
 export { LIGHT_CHART_CHROME } from "./chart-theme.ts";
 export type { ChartChrome } from "./chart-theme.ts";
 export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from "./export.ts";

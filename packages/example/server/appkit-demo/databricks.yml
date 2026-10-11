@@ -20,7 +20,7 @@ variables:
   secret_scope:
     default: dbx-tools-demo
   tunnel_auth_allow:
-    default: databricks.com
+    default: reggie.pierce@databricks.com
   lakebase_endpoint:
     default: projects/${var.lakebase_project_id}/branches/production/endpoints/primary
   genie_identity:
@@ -176,6 +176,8 @@ resources:
             logs_table: ${var.telemetry_schema}.${var.telemetry_table_prefix}_otel_logs
             metrics_table: ${var.telemetry_schema}.${var.telemetry_table_prefix}_otel_metrics
       user_api_scopes:
+        - ai-gateway
+        - model-serving
         - sql
         - genie
         - dashboards.genie

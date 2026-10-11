@@ -9,6 +9,7 @@ import type {
 } from "./chat-sessions.ts";
 import type { PendingApproval } from "./types.ts";
 import type { MastraPluginClient } from "../support/mastra-client.ts";
+import { isSessionRunning } from "../support/thread-sessions.ts";
 
 const HISTORY_PAGE_SIZE = 20;
 const logger = log.logger("ui-mastra/chat");
@@ -126,7 +127,9 @@ export function useChatHistory({
         const messages = toChronologicalUiMessages(response);
         updateSession(threadId, (current) => ({
           ...current,
-          messages,
+          messages: isSessionRunning(current)
+            ? mergeCurrentMessages(messages, current.messages)
+            : messages,
           historyLoaded: true,
           hasMoreHistory: response.hasMore ?? false,
           historyPage: 1,
@@ -202,4 +205,9 @@ export function useChatHistory({
     isLoadingMore: loadingMoreThreads.has(activeKey),
     loadOlderHistory,
   };
+}
+
+function mergeCurrentMessages(history: UIMessage[], current: UIMessage[]): UIMessage[] {
+  const ids = new Set(history.map((message) => message.id));
+  return [...history, ...current.filter((message) => !ids.has(message.id))];
 }

@@ -43,7 +43,8 @@
     "lucide-react": "catalog:",
     "marked": "catalog:",
     "sql-formatter": "catalog:",
-    "streamdown": "catalog:"
+    "streamdown": "catalog:",
+    "zod": "catalog:"
   },
   "license": "Apache-2.0",
   "publishConfig": {

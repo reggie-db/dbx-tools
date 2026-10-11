@@ -97,11 +97,14 @@ const root = new project.DBXToolsNodeProject({
     "@opentelemetry/sdk-trace-node": "2.8.0",
     "@mlflow/core": "0.4.0",
     "http-proxy-3": "^1.23.1",
+    "ssh2": "^1.17.0",
     "better-auth": "1.7.6",
     "@better-auth/passkey": "1.7.6",
     "@simplewebauthn/browser": "13.3.0",
     "better-call": "1.4.0",
+    "cacheable": "2.5.0",
     "env-paths": "^4.0.0",
+    "keyv-file": "5.3.5",
     "cacache": "^21.0.1",
     "lru-cache": "11.5.3",
     "tailwindcss": "^4.3.2",
@@ -303,6 +306,23 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   p.addDevDeps("@types/proper-lockfile@^4.1.4", "@types/semver@^7.7.1");
 });
 
+// node-cache: AppKit-independent memory-first Cacheable/Keyv composition with
+// ordered persistence levels, write-behind draining, and project-scoped disk.
+project.applyToProjects(root, { identifierName: "cache", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "Memory-first Cacheable and Keyv storage with project-scoped persistence and tracked write-behind",
+  );
+  p.addDeps(
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "cacheable@catalog:",
+    "env-paths@catalog:",
+    "keyv-file@catalog:",
+  );
+  p.addDevDeps("vitest@catalog:");
+});
+
 // node-auth: dependency-light Databricks authentication lifecycle. The
 // package uses only platform APIs plus node-core's portable file-lock lease so
 // CLI and Node consumers can reuse the same engine without an SDK dependency.
@@ -332,6 +352,7 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
 project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) => {
   p.package.addField("description", "Node-side helpers for Databricks AppKit applications");
   p.addDeps(
+    "@dbx-tools/cache@workspace:^",
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/lakebase@workspace:^",
@@ -367,6 +388,37 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
 
+// AppKit SSH transport for existing Databricks Sandboxes. The package uses the
+// lakebox REST surface for discovery/lifecycle, OpenSSH for command sessions,
+// ssh2 for direct forwarding, and the existing proxy dependency for remote web
+// routes.
+project.applyToProjects(root, { identifierName: "appkit-ssh", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "AppKit SSH transport, Mastra tools, and remote web routing for existing Databricks Sandboxes",
+  );
+  p.addDeps(
+    "@databricks/appkit@catalog:",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/appkit-mastra@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-ssh@workspace:^",
+    "@mastra/core@catalog:",
+    "env-paths@catalog:",
+    "http-proxy-3@catalog:",
+    "ssh2@catalog:",
+    "zod@catalog:",
+  );
+  p.addDevDeps(
+    "@types/express@catalog:",
+    "@types/json-schema@^7",
+    "@types/ssh2@^1",
+    "vitest@catalog:",
+  );
+});
+
 // node-genie: the server-side Genie driver (live chat + space metadata).
 // Consumes the browser-safe shared-genie contracts and AppKit's public
 // workspace-client facade. AppKit handles request-scoped and default auth.
@@ -388,6 +440,7 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
   p.package.addField("description", "Workspace-aware Databricks Model Serving selection");
   projectJs.applyIncludes(p, "scripts/**/*.ts");
   p.addDeps(
+    "@dbx-tools/cache@workspace:^",
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
@@ -610,6 +663,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "AppKit plugin and server-side toolkit for hosting Mastra agents in Databricks Apps",
   );
   p.addDeps(
+    "@dbx-tools/cache@workspace:^",
     "@dbx-tools/shared-mastra@workspace:^",
     "@dbx-tools/shared-genie@workspace:^",
     "@dbx-tools/shared-model@workspace:^",
@@ -822,6 +876,14 @@ project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" },
     "better-auth@catalog:",
     "zod@catalog:",
   );
+});
+
+project.applyToProjects(root, { identifierName: "shared-ssh", tags: "shared" }, (p) => {
+  p.package.addField(
+    "description",
+    "Browser-safe contracts for AppKit SSH machines, commands, and forwarded routes",
+  );
+  p.addDeps("zod@catalog:");
 });
 
 // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
@@ -1144,9 +1206,19 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     "marked@catalog:",
     "sql-formatter@catalog:",
     "streamdown@catalog:",
+    "zod@catalog:",
   );
   // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
   // tag's component-library default.
+});
+
+project.applyToProjects(root, { identifierName: "ui-ssh", tags: "ui" }, (p) => {
+  p.package.addField("description", "React controls for AppKit SSH machines and forwarded routes");
+  p.addDeps(
+    "@dbx-tools/shared-ssh@workspace:^",
+    "@dbx-tools/ui@workspace:^",
+    "lucide-react@catalog:",
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -1172,6 +1244,7 @@ project.applyToProjects(
       "@dbx-tools/appkit@workspace:^",
       "@dbx-tools/appkit-graphiti@workspace:^",
       "@dbx-tools/appkit-mastra@workspace:^",
+      "@dbx-tools/appkit-ssh@workspace:^",
       "@dbx-tools/core@workspace:^",
       "@dbx-tools/databricks@workspace:^",
       "@dbx-tools/postgres@workspace:^",
@@ -1219,6 +1292,7 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "@dbx-tools/ui-mastra@workspace:^",
+    "@dbx-tools/ui-ssh@workspace:^",
     "@dbx-tools/ui-teams@workspace:^",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.

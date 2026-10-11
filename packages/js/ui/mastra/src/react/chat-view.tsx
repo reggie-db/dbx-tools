@@ -45,6 +45,8 @@ export const ChatView = ({
   threads,
   threadPlacement = "auto",
   threadBarActions,
+  threadHistoryLeadingActions,
+  threadSidebarHeaderActions,
   showThreadBarActions = true,
   threadNewIcon,
   threadHistoryIcon,
@@ -79,6 +81,8 @@ export const ChatView = ({
       threads={threads}
       threadPlacement={threadPlacement}
       threadBarActions={threadBarActions}
+      threadHistoryLeadingActions={threadHistoryLeadingActions}
+      threadSidebarHeaderActions={threadSidebarHeaderActions}
       showThreadBarActions={showThreadBarActions}
       threadNewIcon={threadNewIcon}
       threadHistoryIcon={threadHistoryIcon}

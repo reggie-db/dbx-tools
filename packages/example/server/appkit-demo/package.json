@@ -30,6 +30,7 @@
     "@dbx-tools/appkit": "workspace:^",
     "@dbx-tools/appkit-graphiti": "workspace:^",
     "@dbx-tools/appkit-mastra": "workspace:^",
+    "@dbx-tools/appkit-ssh": "workspace:^",
     "@dbx-tools/appkit-web-search": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/databricks": "workspace:^",

@@ -51,6 +51,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/appkit-ssh",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/appkit-web-search",
       "version": "workspace:^",
       "type": "runtime"

@@ -84,6 +84,8 @@ export interface MastraAssistantProps<TValues extends Record<string, unknown>> e
   closeIcon?: ReactNode;
   newConversationIcon?: ReactNode;
   historyIcon?: ReactNode;
+  /** Host controls rendered immediately before the History action and in the sidebar header. */
+  historyLeadingActions?: ReactNode;
   contentClassName?: string;
   panelClassName?: string;
   headerClassName?: string;
@@ -205,6 +207,7 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
   closeIcon,
   newConversationIcon,
   historyIcon,
+  historyLeadingActions,
   className,
   contentClassName,
   panelClassName,
@@ -493,6 +496,7 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
         onCancel={chatView.onCancelThread}
         newIcon={newConversationIcon}
         historyIcon={historyIcon}
+        historyLeadingActions={historyLeadingActions}
         actions={closeAction}
       />
     ) : (
@@ -550,6 +554,8 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
           threadBarActions={!header ? closeAction : undefined}
           threadNewIcon={newConversationIcon}
           threadHistoryIcon={historyIcon}
+          threadHistoryLeadingActions={historyLeadingActions}
+          threadSidebarHeaderActions={historyLeadingActions}
           className={cn("min-h-0 flex-1", chatClassName)}
         />
         {!header && chatView.threadPlacement !== "top" ? (

@@ -38,6 +38,8 @@ type ChatThreadLayoutProps = {
   threads: ChatViewProps["threads"];
   threadPlacement: NonNullable<ChatViewProps["threadPlacement"]>;
   threadBarActions: ChatViewProps["threadBarActions"];
+  threadHistoryLeadingActions: ChatViewProps["threadHistoryLeadingActions"];
+  threadSidebarHeaderActions: ChatViewProps["threadSidebarHeaderActions"];
   showThreadBarActions: NonNullable<ChatViewProps["showThreadBarActions"]>;
   threadNewIcon: ChatViewProps["threadNewIcon"];
   threadHistoryIcon: ChatViewProps["threadHistoryIcon"];
@@ -92,6 +94,8 @@ export const ChatThreadLayout = ({
   threads,
   threadPlacement,
   threadBarActions,
+  threadHistoryLeadingActions,
+  threadSidebarHeaderActions,
   showThreadBarActions,
   threadNewIcon,
   threadHistoryIcon,
@@ -144,6 +148,7 @@ export const ChatThreadLayout = ({
     ...(onDeleteThread ? { onDelete: onDeleteThread } : {}),
     ...(onRenameThread ? { onRename: onRenameThread } : {}),
     ...(onCancelThread ? { onCancel: onCancelThread } : {}),
+    ...(threadSidebarHeaderActions ? { headerActions: threadSidebarHeaderActions } : {}),
   };
 
   const [openTabIds, setOpenTabIds] = useState<string[]>([]);
@@ -195,6 +200,7 @@ export const ChatThreadLayout = ({
               showActions={showThreadBarActions}
               newIcon={threadNewIcon}
               historyIcon={threadHistoryIcon}
+              historyLeadingActions={threadHistoryLeadingActions}
             />
           )}
           {showSidebarToggle && (

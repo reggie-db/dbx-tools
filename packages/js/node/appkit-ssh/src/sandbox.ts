@@ -1,0 +1,189 @@
+import {
+  ConfigurationError,
+  createWorkspaceClient,
+  type WorkspaceClient,
+} from "@databricks/appkit";
+import { MASTRA_USER_KEY, type User } from "@dbx-tools/appkit-mastra";
+import type { SshMachine } from "@dbx-tools/shared-ssh";
+import type { RequestContext } from "@mastra/core/request-context";
+import {
+  MastraSandbox,
+  type CommandResult,
+  type ExecuteCommandOptions,
+  type SandboxInfo,
+  type SandboxStartOptions,
+  type SandboxStartResult,
+  type WorkspaceSandbox,
+  type WorkspaceSandboxResolver,
+} from "@mastra/core/workspace";
+import type { SshRuntime } from "./runtime.ts";
+
+/** Options for selecting and naming the SSH-backed Mastra workspace sandbox. */
+export interface SshWorkspaceSandboxOptions {
+  machineId?: string | ((context: { requestContext: RequestContext }) => string | undefined);
+  displayName?: string;
+}
+
+/** Mastra workspace sandbox backed by one existing Databricks Sandbox. */
+export class SshWorkspaceSandbox extends MastraSandbox {
+  readonly provider = "appkit-ssh";
+  status: WorkspaceSandbox["status"] = "pending";
+
+  constructor(
+    readonly id: string,
+    readonly name: string,
+    private readonly runtime: SshRuntime,
+    private readonly client: WorkspaceClient,
+    private readonly userId: string,
+  ) {
+    super({ name });
+  }
+
+  async start(options?: SandboxStartOptions): Promise<SandboxStartResult> {
+    await this.withAuth("startMachine", (client) =>
+      this.runtime.startMachine(client, this.userId, this.id, options?.abortSignal),
+    );
+    this.status = "running";
+    return { outcome: "connected" };
+  }
+
+  async stop(): Promise<void> {
+    await this.withAuth("stopMachine", (client) =>
+      this.runtime.stopMachine(client, this.userId, this.id),
+    );
+    this.status = "stopped";
+  }
+
+  async destroy(): Promise<void> {
+    this.runtime.disconnect(new DatabricksScope(this.client).value, this.userId, this.id);
+    this.status = "destroyed";
+  }
+
+  async snapshot(): Promise<void> {}
+
+  override async executeCommand(
+    command: string,
+    args: string[] = [],
+    options: ExecuteCommandOptions = {},
+  ): Promise<CommandResult> {
+    return this.withAuth("executeCommand", (client) =>
+      this.runtime.execute(
+        client,
+        this.userId,
+        {
+          machineId: this.id,
+          command,
+          args,
+          ...(options.cwd ? { cwd: options.cwd } : {}),
+          ...(options.env
+            ? {
+                env: Object.fromEntries(
+                  Object.entries(options.env).filter(
+                    (entry): entry is [string, string] => typeof entry[1] === "string",
+                  ),
+                ),
+              }
+            : {}),
+          ...(options.timeout ? { timeoutMs: options.timeout } : {}),
+        },
+        options.abortSignal,
+      ),
+    );
+  }
+
+  async getInfo(): Promise<SandboxInfo> {
+    const response = await this.withAuth("listMachines", (client) =>
+      this.runtime.listMachines(client, this.userId),
+    );
+    const machine = response.machines.find((candidate) => candidate.id === this.id);
+    if (!machine) throw new Error(`SSH machine ${this.id} no longer exists`);
+    this.status = providerStatus(machine.status);
+    return {
+      id: machine.id,
+      name: machine.name,
+      provider: this.provider,
+      status: this.status,
+      createdAt: machine.createdAt ? new Date(machine.createdAt) : new Date(0),
+      ...(machine.lastStartedAt ? { lastUsedAt: new Date(machine.lastStartedAt) } : {}),
+      metadata: { gatewayHost: machine.gatewayHost, routes: machine.routes },
+    };
+  }
+
+  getInstructions(): string {
+    return `Commands run on existing Databricks Sandbox ${this.id} over SSH. This transport never creates or deletes sandboxes.`;
+  }
+
+  private withAuth<T>(
+    operation: string,
+    action: (client: WorkspaceClient) => Promise<T>,
+  ): Promise<T> {
+    return this.runtime.withAuthFallback(
+      { operation, transport: "code-mode", userId: this.userId },
+      {
+        user: () => action(this.client),
+        servicePrincipal: () => action(createWorkspaceClient()),
+      },
+    );
+  }
+}
+
+/** Creates a request-scoped Mastra workspace resolver for existing SSH machines. */
+export function sshWorkspaceSandbox(
+  runtime: SshRuntime,
+  options: SshWorkspaceSandboxOptions = {},
+): WorkspaceSandboxResolver {
+  return async ({ requestContext }) => {
+    const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
+    if (!user) {
+      throw ConfigurationError.resourceNotFound(
+        "SSH sandbox user context",
+        "Invoke Code Mode from an agent turn served by the Mastra plugin.",
+      );
+    }
+    const client = user.executionContext.client as WorkspaceClient;
+    const configured =
+      typeof options.machineId === "function"
+        ? options.machineId({ requestContext })
+        : options.machineId;
+    const machines = await runtime.withAuthFallback(
+      { operation: "listMachines", transport: "code-mode", userId: user.id },
+      {
+        user: () => runtime.listMachines(client, user.id),
+        servicePrincipal: () => runtime.listMachines(createWorkspaceClient(), user.id),
+      },
+    );
+    const machine = configured
+      ? machines.machines.find((candidate) => candidate.id === configured)
+      : preferredMachine(machines.machines);
+    if (!machine) {
+      throw ConfigurationError.resourceNotFound(
+        "existing SSH machine",
+        configured
+          ? `No Databricks Sandbox named ${configured} exists.`
+          : "No Databricks Sandbox exists for this user.",
+      );
+    }
+    return new SshWorkspaceSandbox(
+      machine.id,
+      options.displayName ?? machine.name,
+      runtime,
+      client,
+      user.id,
+    );
+  };
+}
+
+function preferredMachine(machines: SshMachine[]): SshMachine | undefined {
+  return machines.find((machine) => machine.status === "running") ?? machines[0];
+}
+
+function providerStatus(status: SshMachine["status"]): WorkspaceSandbox["status"] {
+  return status === "unknown" ? "pending" : status;
+}
+
+class DatabricksScope {
+  readonly value: string;
+  constructor(client: WorkspaceClient) {
+    this.value = client.config.workspaceId || client.config.host || "workspace";
+  }
+}

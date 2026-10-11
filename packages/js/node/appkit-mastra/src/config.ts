@@ -20,7 +20,11 @@ import type { BrandContext } from "@dbx-tools/shared-core";
 import type { AgentConfig } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
-import type { WorkspaceToolsConfig } from "@mastra/core/workspace";
+import type {
+  WorkspaceSandbox,
+  WorkspaceSandboxResolver,
+  WorkspaceToolsConfig,
+} from "@mastra/core/workspace";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
 import type { AnyMastraAgentDefinition, MastraTools } from "./agents.ts";
@@ -239,7 +243,13 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * selects/configures Databricks Sandbox. An agent with an explicit custom
    * `workspace` keeps that workspace and its sandbox.
    */
-  sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
+  sandbox?:
+    | boolean
+    | "databricks"
+    | "monty"
+    | DatabricksWorkspaceSandboxOptions
+    | WorkspaceSandbox
+    | WorkspaceSandboxResolver;
   /** Add user-scoped `/tmp` only when no configured workspace path mounts writable. */
   workspaceFallbackToTmp?: boolean;
   /** Native Mastra workspace tool availability, approval, and hook configuration. */

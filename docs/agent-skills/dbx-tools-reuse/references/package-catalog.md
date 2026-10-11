@@ -15,6 +15,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/appkit-graphiti` - Run Graphiti as an AppKit plugin or supervise the same Python runtime directly from Node. The package root exposes the plugin; the runtime and options subpaths expose the underlying lifecycle and configuration contracts. Source: `packages/js/node/appkit-graphiti`.
 - `@dbx-tools/appkit-mastra` - AppKit plugin and server-side toolkit for hosting Mastra agents inside a Databricks App. Source: `packages/js/node/appkit-mastra`.
 - `@dbx-tools/appkit-model-gateway` - Give OpenAI-, Anthropic-, and Codex-compatible clients one endpoint for the models available in a Databricks workspace. The AppKit plugin discovers the workspace catalogue, exposes familiar model APIs, and chooses a compatible Databricks route for each request. Source: `packages/js/node/appkit-model-gateway`.
+- `@dbx-tools/appkit-ssh` - AppKit plugin for existing Databricks Sandboxes. It provides machine discovery, lifecycle controls, SSH command execution, Mastra tools, Code Mode sandbox transport, and dynamic routes to HTTP servers running in a Sandbox. Source: `packages/js/node/appkit-ssh`.
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
 - `@dbx-tools/auth` - Databricks profile resolution and token or authentication-header production for Node.js and Bun. Source: `packages/js/node/auth`.
 - `@dbx-tools/auth-gate` - Passwordless authentication runtime built on Better Auth, email OTP, passkeys, and caller-provided identity policy and delivery. Source: `packages/js/node/auth-gate`.
@@ -52,10 +53,12 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/shared-model` - Browser-safe model-selection contracts let UIs, routes, tools, and tests validate model lookups and type ranked model responses without importing Databricks clients. Server-side normalization, classification, ranking, and fuzzy resolution live in @dbx-tools/model. Source: `packages/js/shared/model`.
 - `@dbx-tools/shared-model-gateway` - Discover the models exposed by a dbx-tools model gateway from browser, edge, or shared application code. The package validates successful and error responses at the network boundary and provides the protocol contracts needed to build model pickers without importing Node or AppKit runtime code. Source: `packages/js/shared/model-gateway`.
 - `@dbx-tools/shared-search` - Browser-safe schemas and extension types for AppKit-compatible AI Search providers. Source: `packages/js/shared/search`.
+- `@dbx-tools/shared-ssh` - Browser-safe Zod contracts shared by the AppKit SSH server and React controls. Source: `packages/js/shared/ssh`.
 - `@dbx-tools/shared-teams` - Browser-safe Adaptive Card and Bot Framework activity schemas (plus inferred types) for the Teams add-on. Source: `packages/js/shared/teams`.
 
 ## React UI
 
 - `@dbx-tools/ui` - Use one tree-shakeable React package for the shared AppKit UI foundation, branding, passwordless authentication, email surfaces, and AI Search controls. Mastra chat and Teams Adaptive Cards remain separate packages because they have larger optional dependency families. Source: `packages/js/ui/appkit`.
 - `@dbx-tools/ui-mastra` - React chat UI for the AppKit-Mastra plugin. Source: `packages/js/ui/mastra`.
+- `@dbx-tools/ui-ssh` - Compact React controls for listing, starting, stopping, and opening AppKit SSH machines. Source: `packages/js/ui/ssh`.
 - `@dbx-tools/ui-teams` - React surface for the Teams add-on: render Microsoft Teams Adaptive Cards in the browser with the adaptivecards JavaScript renderer. Source: `packages/js/ui/teams`.

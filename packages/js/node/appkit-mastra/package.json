@@ -35,6 +35,7 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:^",
+    "@dbx-tools/cache": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/databricks": "workspace:^",
     "@dbx-tools/fs": "workspace:^",
