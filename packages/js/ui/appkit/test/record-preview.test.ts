@@ -73,6 +73,22 @@ describe("RecordPreview", () => {
     assert.match(html, />found<\/span><\/div><\/div><\/td>/);
     assert.equal(html.match(/data-slot="table"/g)?.length, 1);
   });
+
+  it("renders Markdown strings inside recursively parsed JSON arrays", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecordPreview, {
+        value: {
+          response: JSON.stringify({
+            sections: ["## Result\n\n- first\n- second"],
+          }),
+        },
+      }),
+    );
+
+    assert.match(html, /<h2[^>]*>Result<\/h2>/);
+    assert.match(html, /<li[^>]*>first<\/li>/);
+    assert.match(html, /<li[^>]*>second<\/li>/);
+  });
 });
 
 describe("recordPreviewRows", () => {

@@ -385,14 +385,14 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
 
-// AppKit SSH transport for existing Databricks Sandboxes. The package uses the
-// lakebox REST surface for discovery/lifecycle, OpenSSH for command sessions,
-// ssh2 for direct forwarding, and the existing proxy dependency for remote web
-// routes.
-project.applyToProjects(root, { identifierName: "appkit-ssh", tags: "node" }, (p) => {
+// AppKit management for existing Databricks Sandboxes. The current transport
+// uses the lakebox REST surface for discovery/lifecycle, OpenSSH for command
+// sessions, ssh2 for direct forwarding, and the existing proxy dependency for
+// remote web routes.
+project.applyToProjects(root, { identifierName: "appkit-databricks-sandbox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "AppKit SSH transport, Mastra tools, and remote web routing for existing Databricks Sandboxes",
+    "AppKit management, Mastra tools, and remote routing for existing Databricks Sandboxes",
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
@@ -401,7 +401,7 @@ project.applyToProjects(root, { identifierName: "appkit-ssh", tags: "node" }, (p
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-ssh@workspace:^",
+    "@dbx-tools/shared-databricks-sandbox@workspace:^",
     "@mastra/core@catalog:",
     "env-paths@catalog:",
     "http-proxy-3@catalog:",
@@ -414,6 +414,7 @@ project.applyToProjects(root, { identifierName: "appkit-ssh", tags: "node" }, (p
     "@types/ssh2@^1",
     "vitest@catalog:",
   );
+  projectJs.addPackageFiles(p, "skills");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -871,10 +872,10 @@ project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" },
   );
 });
 
-project.applyToProjects(root, { identifierName: "shared-ssh", tags: "shared" }, (p) => {
+project.applyToProjects(root, { identifierName: "shared-databricks-sandbox", tags: "shared" }, (p) => {
   p.package.addField(
     "description",
-    "Browser-safe contracts for AppKit SSH machines, commands, and forwarded routes",
+    "Browser-safe contracts for Databricks Sandbox lifecycle, commands, services, and routes",
   );
   p.addDeps("zod@catalog:");
 });
@@ -1205,10 +1206,10 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
   // tag's component-library default.
 });
 
-project.applyToProjects(root, { identifierName: "ui-ssh", tags: "ui" }, (p) => {
-  p.package.addField("description", "React controls for AppKit SSH machines and forwarded routes");
+project.applyToProjects(root, { identifierName: "ui-databricks-sandbox", tags: "ui" }, (p) => {
+  p.package.addField("description", "React controls for Databricks Sandboxes and forwarded routes");
   p.addDeps(
-    "@dbx-tools/shared-ssh@workspace:^",
+    "@dbx-tools/shared-databricks-sandbox@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "lucide-react@catalog:",
   );
@@ -1237,7 +1238,7 @@ project.applyToProjects(
       "@dbx-tools/appkit@workspace:^",
       "@dbx-tools/appkit-graphiti@workspace:^",
       "@dbx-tools/appkit-mastra@workspace:^",
-      "@dbx-tools/appkit-ssh@workspace:^",
+      "@dbx-tools/appkit-databricks-sandbox@workspace:^",
       "@dbx-tools/core@workspace:^",
       "@dbx-tools/databricks@workspace:^",
       "@dbx-tools/postgres@workspace:^",
@@ -1285,7 +1286,7 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "@dbx-tools/ui-mastra@workspace:^",
-    "@dbx-tools/ui-ssh@workspace:^",
+    "@dbx-tools/ui-databricks-sandbox@workspace:^",
     "@dbx-tools/ui-teams@workspace:^",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.

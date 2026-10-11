@@ -10,6 +10,6 @@ export * as pagesBrand from "./src/pages/Brand.tsx";
 export * as pagesBus from "./src/pages/Bus.tsx";
 export * as pagesCards from "./src/pages/Cards.tsx";
 export * as pagesChat from "./src/pages/Chat.tsx";
+export * as pagesSandboxes from "./src/pages/Sandboxes.tsx";
 export * as pagesSearch from "./src/pages/Search.tsx";
-export * as pagesSsh from "./src/pages/Ssh.tsx";
 export { ErrorBoundary } from "./src/ErrorBoundary.tsx";

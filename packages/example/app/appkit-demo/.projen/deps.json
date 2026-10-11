@@ -36,12 +36,12 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/ui-mastra",
+      "name": "@dbx-tools/ui-databricks-sandbox",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/ui-ssh",
+      "name": "@dbx-tools/ui-mastra",
       "version": "workspace:^",
       "type": "runtime"
     },

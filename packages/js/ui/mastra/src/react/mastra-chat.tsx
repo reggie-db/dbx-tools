@@ -196,7 +196,7 @@ export interface UseMastraChatOptions<
    * Where conversation management renders: `"left"` / `"right"` dock the list
    * to that edge, `"top"` shows the open conversations as an editor-style tab
    * strip with a history menu, `"disabled"` turns thread management off, and
-   * the default `"auto"` picks `"left"` while the chat is wide enough for a
+   * the default `"auto"` picks `"right"` while the chat is wide enough for a
    * side panel and `"top"` once it gets too narrow for one (measured on the
    * chat's own width, so an embedded panel decides on its own space).
    */
@@ -1235,7 +1235,7 @@ export interface MastraChatProps<
  * of the resource's threads with select / new / delete, persisted
  * across reloads) - all with no host wiring. The model picker is opt-in
  * via `showModelPicker`; thread management is on by default, laid out per
- * `threadPlacement` (`auto` docks it left and falls back to a tab strip on a
+ * `threadPlacement` (`auto` docks it right and falls back to a tab strip on a
  * narrow chat) and turned off with `threadPlacement: "disabled"`.
  */
 export const MastraChat = <TValues extends Record<string, unknown> = Record<string, unknown>>({

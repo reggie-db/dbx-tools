@@ -265,7 +265,7 @@ export type ChatViewProps = {
   /**
    * Where the conversation list renders (or `"disabled"` to hide it even when
    * {@link threads} and {@link onSelectThread} are wired). Defaults to
-   * `"auto"`: a left side panel while the chat is wide, a tab strip once it
+   * `"auto"`: a right side panel while the chat is wide, a tab strip once it
    * is too narrow for one. See {@link ThreadPlacement}.
    */
   threadPlacement?: ThreadPlacement;

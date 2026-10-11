@@ -113,7 +113,7 @@ export const ChatThreadLayout = ({
   const rootRef = useRef<HTMLDivElement>(null);
   const isNarrow = useIsNarrow(rootRef);
   const showThreads = Boolean(threads && onSelectThread) && threadPlacement !== "disabled";
-  const placement = threadPlacement === "auto" ? (isNarrow ? "top" : "left") : threadPlacement;
+  const placement = threadPlacement === "auto" ? (isNarrow ? "top" : "right") : threadPlacement;
   const tabbedThreads = showThreads && placement === "top";
   const dockedSide = placement === "right" ? "right" : "left";
   const dockedThreads = showThreads && (placement === "left" || placement === "right");

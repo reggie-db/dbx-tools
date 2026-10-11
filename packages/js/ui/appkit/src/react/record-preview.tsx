@@ -323,7 +323,9 @@ function nestedRecordValue(
   if (Array.isArray(value)) {
     const hasNestedValue = value.some(
       (item) =>
-        (item != null && typeof item === "object") || parseNestedJsonText(item) !== undefined,
+        (item != null && typeof item === "object") ||
+        parseNestedJsonText(item) !== undefined ||
+        (typeof item === "string" && looksLikeMarkdown(item)),
     );
     if (!hasNestedValue) return undefined;
   }

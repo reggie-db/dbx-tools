@@ -1126,7 +1126,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       context: this.context,
       memoryBuilder,
       log: this.logger,
-      extraSkillMounts: provisioned.localSkillMounts,
+      extraSkillMounts: [...(this.config.localSkillMounts ?? []), ...provisioned.localSkillMounts],
     });
 
     // `mastra.server.apiRoutes` is only honored by Mastra's standalone

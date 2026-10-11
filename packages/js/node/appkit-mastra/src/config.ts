@@ -30,7 +30,7 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 import type { AnyMastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
-import type { RemoteSkillsOption } from "./remote-skills.ts";
+import type { LocalSkillMount, RemoteSkillsOption } from "./remote-skills.ts";
 import type { DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
 
 /**
@@ -661,6 +661,8 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * ```
    */
   remoteSkills?: RemoteSkillsOption;
+  /** Read-only local skill trees mounted into every default agent workspace. */
+  localSkillMounts?: LocalSkillMount[];
 }
 
 /**

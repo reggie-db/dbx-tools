@@ -3,7 +3,7 @@ import { getAuthStatus, logout as logoutAuth } from "@dbx-tools/ui/auth/react";
 import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui/branding/react";
 import { Button, Separator } from "@dbx-tools/ui/react";
 import { MastraAssistant, useMastraAssistant } from "@dbx-tools/ui-mastra/react";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 const Brand = lazy(() => import("@/pages/Brand"));
@@ -11,7 +11,7 @@ const Bus = lazy(() => import("@/pages/Bus"));
 const Cards = lazy(() => import("@/pages/Cards"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Search = lazy(() => import("@/pages/Search"));
-const Ssh = lazy(() => import("@/pages/Ssh"));
+const Sandboxes = lazy(() => import("@/pages/Sandboxes"));
 
 const useVisualViewportShell = () => {
   useEffect(() => {
@@ -90,7 +90,6 @@ const BASE_ROUTES: RouteDef[] = [
 const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
   const { pathname } = useLocation();
   const { context } = useBrand();
-  const assistant = useMastraAssistant();
   const [logoutEnabled, setLogoutEnabled] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -124,34 +123,7 @@ const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
         <BrandIcon className="size-6" />
         <span className="hidden sm:inline">{context.shortName}</span>
       </Link>
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-        {routes.map((route) => (
-          <Button
-            key={route.path}
-            asChild
-            size="sm"
-            variant={pathname === route.path ? "default" : "ghost"}
-          >
-            <Link to={route.path} title={route.description}>
-              {route.label}
-            </Link>
-          </Button>
-        ))}
-      </div>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="shrink-0"
-        onClick={() =>
-          assistant.open({
-            route: pathname,
-            surface: "navigation",
-          })
-        }
-      >
-        Assistant
-      </Button>
+      <NavRouteStrip routes={routes} pathname={pathname} />
       {logoutEnabled ? (
         <Button
           type="button"
@@ -166,6 +138,53 @@ const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
         </Button>
       ) : null}
     </nav>
+  );
+};
+
+const NavRouteStrip = ({ routes, pathname }: { routes: readonly RouteDef[]; pathname: string }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const update = () => {
+      const remaining = element.scrollWidth - element.clientWidth - element.scrollLeft;
+      setOverflow({ left: element.scrollLeft > 2, right: remaining > 2 });
+    };
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [routes]);
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <div ref={scrollRef} className="flex min-w-0 items-center gap-1 overflow-x-auto">
+        {routes.map((route) => (
+          <Button
+            key={route.path}
+            asChild
+            size="sm"
+            variant={pathname === route.path ? "default" : "ghost"}
+          >
+            <Link to={route.path} title={route.description}>
+              {route.label}
+            </Link>
+          </Button>
+        ))}
+      </div>
+      {overflow.left ? (
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-7 bg-gradient-to-r from-background via-background/90 to-transparent sm:hidden" />
+      ) : null}
+      {overflow.right ? (
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-9 bg-gradient-to-l from-background via-background/90 to-transparent sm:hidden" />
+      ) : null}
+    </div>
   );
 };
 
@@ -232,9 +251,9 @@ const App = () => {
     },
     {
       path: "/sandbox",
-      label: "SSH",
-      description: "Manage SSH machines and registered proxy routes",
-      element: <Ssh />,
+      label: "Sandboxes",
+      description: "Manage assigned sandboxes and registered proxy routes",
+      element: <Sandboxes />,
     },
   ];
 

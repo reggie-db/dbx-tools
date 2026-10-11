@@ -3,6 +3,8 @@ import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
+import { databricksSandbox } from "@dbx-tools/appkit-databricks-sandbox";
+import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-databricks-sandbox/skills";
 import { graphiti } from "@dbx-tools/appkit-graphiti";
 import {
   agents,
@@ -12,7 +14,6 @@ import {
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
-import { ssh } from "@dbx-tools/appkit-ssh";
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
@@ -296,7 +297,7 @@ await appkit.createApp({
     genie(),
     lakebase({ pool: postgresConnectionOptions({}) }),
     filesCache(),
-    ssh({
+    databricksSandbox({
       fallbackToServicePrincipal: true,
       machineAssignments: [
         {
@@ -391,6 +392,7 @@ await appkit.createApp({
       // generated chart matches the surrounding AppKit UI instead of falling
       // back to Echarts' defaults.
       brand: defaultBrandContext,
+      localSkillMounts: databricksSandboxSkillMounts(),
       // Fold Databricks' own AI Tools skills into the agents. Read straight
       // from the public databricks/databricks-agent-skills repo, so this works
       // in a deployed App container where the `databricks` CLI is absent.

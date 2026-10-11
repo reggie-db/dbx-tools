@@ -71,10 +71,10 @@ packages/js/cli/args/index.ts
 packages/js/cli/dbx-tools/index.ts
 packages/js/cli/service/index.ts
 packages/js/node/appkit/index.ts
+packages/js/node/appkit-databricks-sandbox/index.ts
 packages/js/node/appkit-graphiti/index.ts
 packages/js/node/appkit-mastra/index.ts
 packages/js/node/appkit-model-gateway/index.ts
-packages/js/node/appkit-ssh/index.ts
 packages/js/node/appkit-web-search/index.ts
 packages/js/node/auth/index.ts
 packages/js/node/auth-gate/index.ts
@@ -95,6 +95,7 @@ packages/js/node/teams/index.ts
 packages/js/node/tunnel/index.ts
 packages/js/shared/auth/index.ts
 packages/js/shared/core/index.ts
+packages/js/shared/databricks-sandbox/index.ts
 packages/js/shared/email/index.ts
 packages/js/shared/email-template/index.ts
 packages/js/shared/fs/index.ts
@@ -106,10 +107,9 @@ packages/js/shared/mastra/index.ts
 packages/js/shared/model/index.ts
 packages/js/shared/model-gateway/index.ts
 packages/js/shared/search/index.ts
-packages/js/shared/ssh/index.ts
 packages/js/shared/teams/index.ts
 packages/js/ui/appkit/index.ts
+packages/js/ui/databricks-sandbox/index.ts
 packages/js/ui/mastra/index.ts
-packages/js/ui/ssh/index.ts
 packages/js/ui/teams/index.ts
 projen/index.ts

@@ -41,17 +41,17 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/appkit-databricks-sandbox",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/appkit-graphiti",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/appkit-mastra",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
-      "name": "@dbx-tools/appkit-ssh",
       "version": "workspace:^",
       "type": "runtime"
     },
