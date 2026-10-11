@@ -11,7 +11,5 @@ export * as pagesBus from "./src/pages/Bus.tsx";
 export * as pagesCards from "./src/pages/Cards.tsx";
 export * as pagesChat from "./src/pages/Chat.tsx";
 export * as pagesSandboxes from "./src/pages/Sandboxes.tsx";
-export * as pagesSandboxStats from "./src/pages/SandboxStats.tsx";
-export * as pagesSandboxTerminal from "./src/pages/SandboxTerminal.tsx";
 export * as pagesSearch from "./src/pages/Search.tsx";
 export { ErrorBoundary } from "./src/ErrorBoundary.tsx";

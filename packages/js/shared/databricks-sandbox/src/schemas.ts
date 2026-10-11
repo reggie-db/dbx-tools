@@ -27,16 +27,6 @@ export const sshMachineServiceKindSchema = z
   .describe("Built-in browser service available on a Databricks Sandbox.");
 export type SshMachineServiceKind = z.infer<typeof sshMachineServiceKindSchema>;
 
-/** Build the public viewer path for a Databricks Sandbox machine service. */
-export const sandboxMachineServicePath = (
-  machineId: string,
-  kind: SshMachineServiceKind,
-  routePrefix = "/sandbox",
-): string => {
-  const prefix = routePrefix.replace(/\/$/, "");
-  return `${prefix}/${encodeURIComponent(machineId)}/${kind}`;
-};
-
 export const sshMachineServiceSchema = z
   .object({
     kind: sshMachineServiceKindSchema.describe("Service type."),
@@ -130,38 +120,6 @@ export const sshCommandResultSchema = z
   .strict()
   .describe("SSH command execution result.");
 export type SshCommandResult = z.infer<typeof sshCommandResultSchema>;
-
-export const sandboxStatsSchema = z
-  .object({
-    machineId: z.string().min(1).describe("Databricks Sandbox identifier."),
-    sampledAt: z.string().datetime().describe("UTC time when the health sample was collected."),
-    uptimeSeconds: z.number().nonnegative().describe("Machine uptime in seconds."),
-    cpuCount: z.number().int().positive().describe("Logical CPU count."),
-    loadAverage: z
-      .tuple([z.number(), z.number(), z.number()])
-      .describe("One, five, and fifteen minute load averages."),
-    memory: z
-      .object({
-        totalBytes: z.number().nonnegative(),
-        availableBytes: z.number().nonnegative(),
-        usedBytes: z.number().nonnegative(),
-        usedPercent: z.number().min(0).max(100),
-      })
-      .strict()
-      .describe("Current memory utilization."),
-    disk: z
-      .object({
-        totalBytes: z.number().nonnegative(),
-        availableBytes: z.number().nonnegative(),
-        usedBytes: z.number().nonnegative(),
-        usedPercent: z.number().min(0).max(100),
-      })
-      .strict()
-      .describe("Root filesystem utilization."),
-  })
-  .strict()
-  .describe("Point-in-time Databricks Sandbox health sample.");
-export type SandboxStats = z.infer<typeof sandboxStatsSchema>;
 
 export const addSshRouteRequestSchema = z
   .object({

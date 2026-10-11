@@ -385,9 +385,10 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
 
-// AppKit management for existing Databricks Sandboxes. Workspace REST and gRPC
-// own lifecycle, commands, and the built-in terminal; SSH remains available for
-// arbitrary loopback port forwarding when the gateway is reachable.
+// AppKit management for existing Databricks Sandboxes. The current transport
+// uses the lakebox REST surface for discovery/lifecycle, OpenSSH for command
+// sessions, ssh2 for direct forwarding, and the existing proxy dependency for
+// remote web routes.
 project.applyToProjects(root, { identifierName: "appkit-databricks-sandbox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
@@ -395,8 +396,6 @@ project.applyToProjects(root, { identifierName: "appkit-databricks-sandbox", tag
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
-    "@grpc/grpc-js@^1.14.5",
-    "@grpc/proto-loader@^0.8.1",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/appkit-mastra@workspace:^",
     "@dbx-tools/core@workspace:^",
@@ -1212,8 +1211,6 @@ project.applyToProjects(root, { identifierName: "ui-databricks-sandbox", tags: "
   p.addDeps(
     "@dbx-tools/shared-databricks-sandbox@workspace:^",
     "@dbx-tools/ui@workspace:^",
-    "@xterm/addon-fit@^0.10.0",
-    "@xterm/xterm@^5.5.0",
     "lucide-react@catalog:",
   );
 });

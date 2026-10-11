@@ -1,13 +1,17 @@
 ---
 name: machine-health
-description: Open the native health overview for an assigned Databricks Sandbox.
+description: Start or open the full Glances Web UI for an assigned Databricks Sandbox.
 ---
 
 # Machine Health
 
-Use `list_ssh_machines` to identify an assigned machine and return its stable
-`/sandbox/<machine-id>/stats` path.
+Use `list_ssh_machines` to identify an assigned machine. Use
+`start_ssh_machine_service` with `service: "stats"` and return the service path
+from the result.
 
-The built-in view samples memory, disk, load, CPU count, and uptime through the
-Databricks Sandbox execution API. It installs nothing on the machine and remains
-scoped to the current AppKit user.
+The built-in service installs Glances with its web extras in an isolated remote
+virtual environment, binds it to loopback, configures the machine-specific
+`/sandbox/.../stats/` prefix, and exposes it only through the owner-scoped proxy.
+
+If startup fails, inspect `~/.dbx-tools/runtime/glances.log` with
+`execute_ssh_command` before retrying.

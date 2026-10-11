@@ -2,7 +2,6 @@ import {
   sshMachineSchema,
   sshMachineServiceSchema,
   sshMachinesResponseSchema,
-  sandboxStatsSchema,
   sshRouteResponseSchema,
   sshRoutesResponseSchema,
   type AddSshRouteRequest,
@@ -11,7 +10,6 @@ import {
   type SshMachineServiceKind,
   type SshMachinesResponse,
   type SshRoute,
-  type SandboxStats,
 } from "@dbx-tools/shared-databricks-sandbox";
 
 /** Browser client for the AppKit SSH plugin's machine and route APIs. */
@@ -41,14 +39,6 @@ export class SshClient {
       `/machines/${encodeURIComponent(machineId)}/services/${encodeURIComponent(service)}/start`,
       sshMachineServiceSchema.parse,
       { method: "POST" },
-    );
-  }
-
-  stats(machineId: string, signal?: AbortSignal): Promise<SandboxStats> {
-    return this.request(
-      `/machines/${encodeURIComponent(machineId)}/stats`,
-      sandboxStatsSchema.parse,
-      { signal },
     );
   }
 

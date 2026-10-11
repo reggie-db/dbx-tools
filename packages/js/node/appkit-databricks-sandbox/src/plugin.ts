@@ -38,7 +38,6 @@ import type { JSONSchema7 } from "json-schema";
 import { z } from "zod";
 import { resolveSshPluginConfig, SshPluginConfigSchema, type SshPluginConfig } from "./config.ts";
 import { SshRuntime } from "./runtime.ts";
-import { SandboxTerminalServer, terminalDimensions } from "./terminal.ts";
 
 interface ServerExtension {
   addExtension(fn: (application: Application) => void): void;
@@ -60,7 +59,6 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   } satisfies PluginManifest<"databricks-sandbox">;
 
   readonly runtime: SshRuntime;
-  private readonly terminal: SandboxTerminalServer;
   private mounted = false;
   private httpServer?: HttpServer;
   private readonly upgradeHandler = (request: IncomingMessage, socket: Socket, head: Buffer) =>
@@ -69,7 +67,6 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   constructor(config: SshPluginConfig = {}) {
     super(config);
     this.runtime = config.runtime ?? new SshRuntime(resolveSshPluginConfig(config));
-    this.terminal = new SandboxTerminalServer();
   }
 
   protected get toolRegistry(): ToolRegistry {
@@ -185,70 +182,6 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       },
     });
     this.route(router, {
-      name: "terminalStream",
-      method: "post",
-      path: "/machines/:machineId/terminal/stream",
-      handler: async (req, res) => {
-        const userId = this.resolveUserId(req);
-        const machineId = routeParam(req.params.machineId);
-        const client = await this.withRequestAuth(
-          req,
-          "openTerminal",
-          async (plugin) => {
-            const workspace = plugin.workspaceClient();
-            await plugin.runtime.prepareMachine(workspace, userId, machineId);
-            return workspace;
-          },
-          async () => {
-            const workspace = createWorkspaceClient();
-            await this.runtime.prepareMachine(workspace, userId, machineId);
-            return workspace;
-          },
-        );
-        await this.terminal.open(client, userId, machineId, res, terminalDimensions(req.query));
-      },
-    });
-    this.route(router, {
-      name: "terminalInput",
-      method: "post",
-      path: "/terminal/sessions/:sessionId/input",
-      handler: async (req, res) => {
-        const userId = this.resolveUserId(req);
-        const data = z.object({ data: z.string() }).parse(req.body).data;
-        const accepted = this.terminal.input(routeParam(req.params.sessionId), userId, data);
-        res.status(accepted ? 204 : 404).end();
-      },
-    });
-    this.route(router, {
-      name: "machineStats",
-      method: "get",
-      path: "/machines/:machineId/stats",
-      handler: async (req, res) => {
-        const userId = this.resolveUserId(req);
-        const machineId = routeParam(req.params.machineId);
-        res.json(
-          await this.withRequestAuth(
-            req,
-            "machineStats",
-            (plugin) => plugin.runtime.stats(plugin.workspaceClient(), userId, machineId),
-            () => this.runtime.stats(createWorkspaceClient(), userId, machineId),
-          ),
-        );
-      },
-    });
-    this.route(router, {
-      name: "closeTerminal",
-      method: "delete",
-      path: "/terminal/sessions/:sessionId",
-      handler: async (req, res) => {
-        const closed = this.terminal.closeSession(
-          routeParam(req.params.sessionId),
-          this.resolveUserId(req),
-        );
-        res.status(closed ? 204 : 404).end();
-      },
-    });
-    this.route(router, {
       name: "routes",
       method: "get",
       path: "/routes",
@@ -356,7 +289,6 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   async shutdown(): Promise<void> {
     this.httpServer?.off("upgrade", this.upgradeHandler);
     this.httpServer = undefined;
-    await this.terminal.close();
     await this.runtime.close();
   }
 
@@ -442,7 +374,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
           ),
       }),
       start_ssh_machine_service: defineTool({
-        description: "Prepare the built-in terminal or health viewer for a Sandbox.",
+        description: "Start the built-in DinoTTY terminal or Glances health service.",
         schema: sshMachineServiceActionSchema,
         annotations: { effect: "write", requiresUserContext: true },
         execute: (input, signal) =>
@@ -480,7 +412,3 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
 
 /** AppKit plugin factory for {@link AppKitSshPlugin}. */
 export const databricksSandbox = toPlugin(AppKitSshPlugin);
-
-function routeParam(value: string | string[]): string {
-  return Array.isArray(value) ? (value[0] ?? "") : value;
-}

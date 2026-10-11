@@ -12,8 +12,6 @@ const Cards = lazy(() => import("@/pages/Cards"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Search = lazy(() => import("@/pages/Search"));
 const Sandboxes = lazy(() => import("@/pages/Sandboxes"));
-const SandboxTerminal = lazy(() => import("@/pages/SandboxTerminal"));
-const SandboxStats = lazy(() => import("@/pages/SandboxStats"));
 
 const useVisualViewportShell = () => {
   useEffect(() => {
@@ -231,8 +229,6 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
               {routes.map((route) => (
                 <Route key={route.path} path={route.path} element={route.element} />
               ))}
-              <Route path="/sandbox/:machineId/terminal" element={<SandboxTerminal />} />
-              <Route path="/sandbox/:machineId/stats" element={<SandboxStats />} />
               <Route path="*" element={<Navigate to="/chat" replace />} />
             </Routes>
           </Suspense>

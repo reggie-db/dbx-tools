@@ -94,16 +94,15 @@ proxy paths.
 
 Every assigned machine advertises two stable paths:
 
-- `/sandbox/<machine-id>/terminal` opens an Xterm terminal backed by the
-  workspace Sandbox gRPC PTY API. Browser input uses ordered HTTP requests, so
-  it works through Databricks Apps without a WebSocket upgrade.
-- `/sandbox/<machine-id>/stats` shows a native memory, disk, load, and uptime
-  overview collected through the Sandbox execution API.
+- `/sandbox/<machine-id>/terminal` forwards the DinoTTY mobile web terminal.
+- `/sandbox/<machine-id>/stats` forwards the full Glances Web UI.
 
-Neither built-in viewer installs or runs a daemon in the Sandbox. Arbitrary web
-applications still use registered SSH or execution-backed proxy routes.
+Starting a machine provisions both services over SSH under
+`~/.dbx-tools/runtime`, binds them to loopback, and registers owner-scoped proxy
+routes. Opening either viewer rechecks the service and route before opening a
+new browser tab.
 
-`databricksSandboxSkillMounts()` exposes the packaged terminal, health, and
+`databricksSandboxSkillMounts()` exposes the packaged DinoTTY, Glances, and
 reverse-proxy-aware noVNC recipes at `/.dbx-tools/skills` through Mastra's
 native local-skill mount contract.
 

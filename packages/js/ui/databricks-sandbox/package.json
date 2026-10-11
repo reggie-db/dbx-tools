@@ -31,8 +31,6 @@
   "dependencies": {
     "@dbx-tools/shared-databricks-sandbox": "workspace:^",
     "@dbx-tools/ui": "workspace:^",
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/xterm": "^5.5.0",
     "lucide-react": "catalog:"
   },
   "license": "Apache-2.0",
