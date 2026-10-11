@@ -264,7 +264,7 @@ export const AssistantMarkdown = ({
  * (bold) gets the foreground color so KPI names still pop against
  * the muted body.
  */
-export const ToolMarkdown = ({ children }: { children: string }) => (
+export const ToolMarkdown = ({ children, className }: { children: string; className?: string }) => (
   <Streamdown
     components={TOOL_MARKDOWN_COMPONENTS}
     plugins={SHIKI_PLUGIN}
@@ -272,12 +272,13 @@ export const ToolMarkdown = ({ children }: { children: string }) => (
     className={cn(
       "prose prose-sm dark:prose-invert max-w-none break-words",
       "text-xs leading-snug text-muted-foreground",
-      "prose-p:my-0.5 prose-p:leading-snug",
+      "prose-p:my-0.5 prose-p:leading-snug [&_p]:!leading-snug",
       "prose-ul:my-0.5 prose-ul:pl-4 prose-ol:my-0.5 prose-ol:pl-4",
       "prose-li:my-0 prose-li:leading-snug prose-li:marker:text-muted-foreground/60",
       "prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold",
       "prose-strong:text-foreground/90 prose-strong:font-medium",
       "prose-code:text-xs prose-code:font-medium",
+      className,
     )}
   >
     {children}

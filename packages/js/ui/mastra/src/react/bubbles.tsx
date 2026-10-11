@@ -22,7 +22,6 @@ import {
   CopyIcon,
   MessageSquareIcon,
   RefreshCcwIcon,
-  SparklesIcon,
   UserIcon,
   XIcon,
 } from "lucide-react";
@@ -60,12 +59,12 @@ const getReasoningText = (parts: UIMessage["parts"]): string =>
     .filter((p): p is { type: "reasoning"; text: string } => p.type === "reasoning")
     .map((p) => compactReasoningText(p.text))
     .filter(Boolean)
-    .join("\n\n");
+    .join("\n");
 
-const RoleAvatar = ({ role }: { role: UIMessage["role"] }) => (
+const UserAvatar = () => (
   <Avatar className="size-7">
     <AvatarFallback>
-      {role === "assistant" ? <SparklesIcon className="size-4" /> : <UserIcon className="size-4" />}
+      <UserIcon className="size-4" />
     </AvatarFallback>
   </Avatar>
 );
@@ -363,7 +362,7 @@ export const AssistantBubble = ({
   const toolEvents = mergeToolEvents(toolEventsFromParts(message.parts), events, terminalToolState);
   const reasoning = [getReasoningText(message.parts), genieReasoningText(toolEvents)]
     .filter(Boolean)
-    .join("\n\n");
+    .join("\n");
   const isReasoningStreaming =
     isLast &&
     status === "streaming" &&
@@ -405,10 +404,7 @@ export const AssistantBubble = ({
   // nothing so the prose flows unaffected. Suggested questions
   // stay gated on settle to avoid pop-in mid-stream.
   return (
-    <Item className="items-start gap-2.5 border-none bg-transparent p-0">
-      <ItemMedia>
-        <RoleAvatar role="assistant" />
-      </ItemMedia>
+    <Item className="items-start gap-0 border-none bg-transparent p-0">
       {/*
        * `min-w-0` is required so wide content (markdown tables, long
        * code blocks) can shrink to fit instead of pushing the whole
@@ -432,7 +428,7 @@ export const AssistantBubble = ({
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="mt-1 border-l-2 border-border/60 pl-2.5 text-xs text-muted-foreground">
-                <ToolMarkdown>{reasoning}</ToolMarkdown>
+                <ToolMarkdown className="prose-p:my-0 [&_p]:!my-0">{reasoning}</ToolMarkdown>
               </div>
             </CollapsibleContent>
           </Collapsible>
@@ -540,7 +536,7 @@ export const UserBubble = ({ message }: { message: UIMessage }) => {
   return (
     <Item className="items-start gap-2.5 border-none bg-transparent p-0">
       <ItemMedia>
-        <RoleAvatar role="user" />
+        <UserAvatar />
       </ItemMedia>
       <ItemContent className="min-w-0">
         <div className="max-w-full rounded-lg bg-muted p-2 text-sm">

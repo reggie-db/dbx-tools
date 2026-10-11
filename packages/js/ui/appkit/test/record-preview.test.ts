@@ -27,9 +27,9 @@ describe("RecordPreview", () => {
       }),
     );
 
-    assert.match(html, />Type<\/th>/);
+    assert.match(html, />Type<\/div>/);
     assert.match(html, />Files<\/span>/);
-    assert.match(html, />Path<\/th>/);
+    assert.match(html, />Path<\/div>/);
     assert.doesNotMatch(html, />[12]<\/(?:th|span|h3)>/);
     assert.equal(html.match(/data-slot="table"/g)?.length, 1);
     assert.doesNotMatch(html, /max-h-\[inherit\] min-w-0 overflow-auto/);
@@ -47,8 +47,8 @@ describe("RecordPreview", () => {
     );
 
     assert.match(html, /aria-label="JSON parsed from text"/);
-    assert.match(html, />Warehouse<\/th>/);
-    assert.match(html, />Serverless<\/span><\/td>/);
+    assert.match(html, />Warehouse<\/div>/);
+    assert.match(html, />Serverless<\/span><\/div><\/div><\/td>/);
     assert.match(html, />Output<\/span>/);
     assert.equal(html.match(/data-slot="table"/g)?.length, 1);
   });
@@ -69,8 +69,8 @@ describe("RecordPreview", () => {
 
     assert.equal(html.match(/aria-label="JSON parsed from text"/g)?.length, 3);
     assert.match(html, /data-language="sql"/);
-    assert.match(html, />Deep Value<\/th>/);
-    assert.match(html, />found<\/span><\/td>/);
+    assert.match(html, />Deep Value<\/div>/);
+    assert.match(html, />found<\/span><\/div><\/div><\/td>/);
     assert.equal(html.match(/data-slot="table"/g)?.length, 1);
   });
 });

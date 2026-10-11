@@ -11,7 +11,7 @@ import {
   cn,
 } from "@dbx-tools/ui/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
-import { SourceBlock, SqlBlock, ToolMarkdown } from "./markdown.tsx";
+import { SourceBlock, ToolMarkdown } from "./markdown.tsx";
 import type { ToolEvent, ToolProgress } from "./types.ts";
 
 // Consolidated tool-session pill and its Genie progress detail view:
@@ -304,16 +304,20 @@ const MessageGroupBody = ({
             ) : null}
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="flex flex-col gap-2 border-t border-border/50 px-2 pb-2 pt-2 text-xs">
-              {bucket.query && (
-                <>
-                  <SqlBlock sql={bucket.query.sql} />
-                  {bucket.query.description && (
+            {bucket.query && (
+              <>
+                <SourceBlock
+                  source={bucket.query.sql}
+                  language="sql"
+                  className="max-h-64 border-t border-border/50 px-2 py-1.5 text-foreground"
+                />
+                {bucket.query.description && (
+                  <div className="border-t border-border/50 px-2 py-1.5">
                     <ToolMarkdown>{bucket.query.description}</ToolMarkdown>
-                  )}
-                </>
-              )}
-            </div>
+                  </div>
+                )}
+              </>
+            )}
           </CollapsibleContent>
         </Collapsible>
       ))}
@@ -608,15 +612,18 @@ const ToolCallDetails = ({
     "input" in event ? toolInputPresentation(event.toolName, event.input) : undefined;
   const outputPresentation =
     "output" in event ? toolOutputPresentation(event.toolName, event.output) : undefined;
+  const isAskGenie = event.toolName.startsWith("ask_genie");
 
   return (
     <div className="flex flex-col gap-2">
       {showQuestion && question ? (
-        <p className="break-words px-0.5 text-xs italic text-foreground/80">{question}</p>
+        <p className="break-words px-0.5 text-[11px] leading-snug text-muted-foreground">
+          {question}
+        </p>
       ) : null}
       {inputPresentation ? (
         <ToolInputSource presentation={inputPresentation} />
-      ) : "input" in event ? (
+      ) : "input" in event && !isAskGenie ? (
         <RawToolPayload label="Request" value={event.input} />
       ) : null}
       <WebSearchProgressDetails event={event} />
@@ -667,7 +674,9 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
         {verb}
       </span>
       {question && (
-        <span className="mt-0.5 block break-words italic text-foreground/80">{question}</span>
+        <span className="mt-0.5 block break-words text-[11px] leading-snug text-foreground/75">
+          {question}
+        </span>
       )}
     </span>
   );

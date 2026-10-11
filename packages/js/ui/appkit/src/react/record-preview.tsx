@@ -152,14 +152,19 @@ function FieldRow({
 }) {
   return (
     <TableRow className={cn("hover:bg-transparent", divided && "border-t-2 border-border/50")}>
-      <TableHead
-        className="h-auto w-28 align-top whitespace-normal px-0 py-1.5 pr-2 font-medium text-muted-foreground sm:w-[8.5rem]"
+      <TableCell
+        colSpan={2}
+        className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]"
         style={{ paddingLeft: rowIndent(depth) }}
       >
-        {row.label}
-      </TableHead>
-      <TableCell className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]">
-        <RecordValue value={row.value} depth={depth} />
+        <div className="grid min-w-0 gap-0.5 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-2">
+          <div className="text-[10px] font-medium leading-snug text-muted-foreground sm:text-[11px]">
+            {row.label}
+          </div>
+          <div className="min-w-0">
+            <RecordValue value={row.value} depth={depth} />
+          </div>
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -294,12 +299,11 @@ function NestedTextMarkerRow({ depth, divided }: { depth: number; divided: boole
 function ValueRow({ value, depth, divided }: { value: unknown; depth: number; divided?: boolean }) {
   return (
     <TableRow className={cn("hover:bg-transparent", divided && "border-t-2 border-border/50")}>
-      <TableHead
-        aria-hidden
-        className="h-auto w-28 px-0 py-1.5 pr-2 sm:w-[8.5rem]"
+      <TableCell
+        colSpan={2}
+        className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]"
         style={{ paddingLeft: rowIndent(depth) }}
-      />
-      <TableCell className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]">
+      >
         <RecordValue value={value} depth={depth} />
       </TableCell>
     </TableRow>
