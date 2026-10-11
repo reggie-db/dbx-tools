@@ -167,7 +167,7 @@ export class SshRuntime {
     const updated =
       normalizeStatus(current.status) === "running" ? current : await api.start(machineId, signal);
     const final = await waitForStatus(api, machineId, "running", updated, signal);
-    await Promise.all(
+    await Promise.allSettled(
       (["terminal", "stats"] as const).map((service) =>
         this.startService(client, userId, { machineId, service }, signal),
       ),

@@ -78,12 +78,19 @@ export class SshClient {
     });
     const body = (await response.json().catch(() => undefined)) as unknown;
     if (!response.ok) {
-      const message =
-        body && typeof body === "object" && "message" in body
-          ? String((body as { message: unknown }).message)
-          : `Sandbox request failed (${response.status})`;
+      const message = responseErrorMessage(body) ?? `Sandbox request failed (${response.status})`;
       throw new Error(message);
     }
     return parse(body);
   }
+}
+
+function responseErrorMessage(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  for (const field of ["error", "message"] as const) {
+    if (!(field in body)) continue;
+    const value = String((body as Record<string, unknown>)[field]).trim();
+    if (value) return value;
+  }
+  return undefined;
 }

@@ -84,4 +84,34 @@ describe("machine ownership", () => {
     assert.equal(requests.length, 2);
     await runtime.close();
   });
+
+  it("starts a machine even when optional browser services cannot be provisioned", async () => {
+    const path = await temporaryPath();
+    const client = {
+      config: { workspaceId: "workspace", host: "https://example.databricks.com" },
+      apiClient: {
+        request: async (request: { path: string; method: string }) => ({
+          sandboxId: "assigned",
+          status: request.method === "POST" ? "RUNNING" : "STOPPED",
+        }),
+      },
+    } as unknown as WorkspaceClient;
+    const runtime = new SshRuntime(
+      resolveSshPluginConfig({
+        ownershipPath: path,
+        machineAssignments: [{ userId: "user-a", machineId: "assigned" }],
+      }),
+    );
+    const attempted: string[] = [];
+    runtime.startService = async (_client, _userId, input) => {
+      attempted.push(input.service);
+      throw new Error(`${input.service} unavailable`);
+    };
+
+    const machine = await runtime.startMachine(client, "user-a", "assigned");
+
+    assert.equal(machine.status, "running");
+    assert.deepEqual(attempted.sort(), ["stats", "terminal"]);
+    await runtime.close();
+  });
 });
