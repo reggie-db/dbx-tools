@@ -1,8 +1,9 @@
-import type {
-  AddSshRouteRequest,
-  SshMachine,
-  SshMachineServiceKind,
-  SshRoute,
+import {
+  sandboxMachineServicePath,
+  type AddSshRouteRequest,
+  type SshMachine,
+  type SshMachineServiceKind,
+  type SshRoute,
 } from "@dbx-tools/shared-databricks-sandbox";
 import {
   Badge,
@@ -32,6 +33,7 @@ import { SshClient } from "./client.ts";
 /** Props for the full SSH machine and route management surface. */
 export interface SshManagerProps {
   basePath?: string;
+  viewerBasePath?: string;
   defaultRemotePort?: number;
   className?: string;
 }
@@ -39,6 +41,7 @@ export interface SshManagerProps {
 /** Manages existing SSH machines and their registered AppKit proxy routes. */
 export function SshManager({
   basePath = "/api/databricks-sandbox",
+  viewerBasePath = "/sandbox",
   defaultRemotePort = 3000,
   className,
 }: SshManagerProps) {
@@ -120,17 +123,11 @@ export function SshManager({
   };
 
   const openService = async (machine: SshMachine, service: SshMachineServiceKind) => {
-    setBusyId(`${machine.id}:${service}`);
-    setError(undefined);
-    try {
-      const result = await client.startService(machine.id, service);
-      window.open(result.path, "_blank", "noopener,noreferrer");
-      await refresh();
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setBusyId(undefined);
-    }
+    window.open(
+      sandboxMachineServicePath(machine.id, service, viewerBasePath),
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   const removeRoute = async (route: SshRoute) => {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
@@ -17,6 +18,24 @@ describe("log", () => {
 
     assert.equal(typeof logger.success, "function");
     assert.equal(typeof logger.start, "function");
+  });
+
+  it("writes informational logs to stdout and warnings to stderr", () => {
+    const moduleUrl = new URL("../src/log.ts", import.meta.url).href;
+    const result = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        `import { logger } from ${JSON.stringify(moduleUrl)}; const split = logger("split"); split.info("out"); split.warn("err");`,
+      ],
+      { encoding: "utf8" },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /INFO \[split\] out/);
+    assert.doesNotMatch(result.stdout, /WARN \[split\] err/);
+    assert.match(result.stderr, /WARN \[split\] err/);
+    assert.doesNotMatch(result.stderr, /INFO \[split\] out/);
   });
 
   it("exposes the active threshold through binding-safe functions", () => {

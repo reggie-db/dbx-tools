@@ -34,6 +34,8 @@
     "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-databricks-sandbox": "workspace:^",
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1",
     "@mastra/core": "catalog:",
     "env-paths": "catalog:",
     "http-proxy-3": "catalog:",
@@ -91,6 +93,10 @@
         "types": "./lib/src/skills.d.ts",
         "default": "./lib/src/skills.js"
       },
+      "./terminal": {
+        "types": "./lib/src/terminal.d.ts",
+        "default": "./lib/src/terminal.js"
+      },
       "./workspace": {
         "types": "./lib/src/workspace.d.ts",
         "default": "./lib/src/workspace.js"
@@ -122,6 +128,7 @@
     "./services": "./src/services.ts",
     "./session": "./src/session.ts",
     "./skills": "./src/skills.ts",
+    "./terminal": "./src/terminal.ts",
     "./workspace": "./src/workspace.ts",
     "./*": "./src/*/index.ts",
     "./package.json": "./package.json"

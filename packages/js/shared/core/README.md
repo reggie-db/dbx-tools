@@ -402,9 +402,9 @@ if (log.isLevelEnabled("debug")) {
 ```
 
 `log.logger()` is dependency-free and uses the platform console in browsers or
-formatted stderr output on server runtimes. It honors `LOG_LEVEL` per call, so
-debug statements can stay in production code without paying formatting cost
-when disabled.
+formatted process streams on server runtimes: debug/info use stdout and
+warn/error use stderr. It honors `LOG_LEVEL` per call, so debug statements can
+stay in production code without paying formatting cost when disabled.
 
 ## Modules
 

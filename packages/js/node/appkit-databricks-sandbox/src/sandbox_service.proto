@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package databricks.sandbox;
+
+service SandboxService {
+  rpc ExecuteCommand(ExecuteCommandRequest) returns (stream ExecuteCommandResponse);
+  rpc AttachCommand(AttachCommandRequest) returns (stream AttachCommandResponse);
+  rpc StreamInput(stream StreamInputRequest) returns (StreamInputResponse);
+  rpc ListCommands(ListCommandsRequest) returns (ListCommandsResponse);
+}
+
+message ExecuteCommandRequest {
+  string cmd = 1;
+  repeated string args = 2;
+  PtyConfig pty = 3;
+  map<string, string> envs = 4;
+  string command_id = 5;
+}
+
+message AttachCommandRequest {
+  string command_id = 1;
+  int64 last_sequence_number = 2;
+}
+
+message StreamInputRequest {
+  oneof event {
+    StreamInputStart start = 1;
+    StreamInputData data = 2;
+    StreamInputClose close = 3;
+  }
+}
+
+message StreamInputStart { string command_id = 1; }
+message StreamInputData { bytes data = 1; }
+message StreamInputClose {}
+message StreamInputResponse {}
+message ListCommandsRequest { int32 page_size = 1; string page_token = 2; }
+message ListCommandsResponse { repeated Command commands = 1; string next_page_token = 2; }
+message Command {
+  string command_id = 1;
+  string cmd = 2;
+  repeated string args = 3;
+  int64 pid = 4;
+  bool finished = 5;
+  int32 exit_code = 6;
+}
+
+message ExecuteCommandResponse { ProcessEvent process_event = 1; int64 sequence_number = 2; }
+message AttachCommandResponse { ProcessEvent process_event = 1; int64 sequence_number = 2; }
+message ProcessEvent {
+  oneof event {
+    StartEvent start = 1;
+    DataEvent data = 2;
+    EndEvent end = 3;
+  }
+}
+message StartEvent { int64 pid = 1; string command_id = 2; }
+message DataEvent {
+  oneof output {
+    bytes stdout = 1;
+    bytes stderr = 2;
+    bytes pty = 3;
+  }
+}
+message EndEvent { int32 exit_code = 1; }
+message PtyConfig { int32 cols = 1; int32 rows = 2; }

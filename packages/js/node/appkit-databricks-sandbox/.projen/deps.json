@@ -66,6 +66,16 @@
       "type": "runtime"
     },
     {
+      "name": "@grpc/grpc-js",
+      "version": "^1.14.5",
+      "type": "runtime"
+    },
+    {
+      "name": "@grpc/proto-loader",
+      "version": "^0.8.1",
+      "type": "runtime"
+    },
+    {
       "name": "@mastra/core",
       "version": "catalog:",
       "type": "runtime"

@@ -12,10 +12,10 @@
  * {@link LogLevel} filtering runs through {@link shouldEmit} in per-level
  * wrappers around the platform console or stderr sink.
  *
- * The console fallback writes formatted lines to `process.stderr` when it is
- * available (Bun `inspect` per argument when `LOG_BUN_CONSOLE_DISABLED` is
- * unset, otherwise `node:util` `formatWithOptions`), or delegates to global
- * `console.*` when stderr or `node:util` is unavailable. Browser hosts omit
+ * The console fallback writes debug/info to `process.stdout` and warn/error to
+ * `process.stderr` when available (Bun `inspect` per argument when
+ * `LOG_BUN_CONSOLE_DISABLED` is unset, otherwise `node:util` inspection), or
+ * delegates to global `console.*` when process streams are unavailable. Browser hosts omit
  * the `LEVEL` text prefix (devtools show severity) and keep only the `[name]`
  * tag.
  *
@@ -36,6 +36,7 @@ import { type NameLike, toBoolean } from "./object.ts";
 /** `process`-shaped view off `globalThis`, so no node types are needed. */
 interface ProcessLike {
   env?: Record<string, string | undefined>;
+  stdout?: { write?: (chunk: string) => void; isTTY?: unknown };
   stderr?: { write?: (chunk: string) => void; isTTY?: unknown };
 }
 
@@ -58,6 +59,11 @@ const globalBun = (globalThis as { Bun?: BunLike }).Bun;
 const globalProcessStdErr: any =
   globalProcess && typeof globalProcess.stderr?.write === "function"
     ? globalProcess.stderr
+    : undefined;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const globalProcessStdOut: any =
+  globalProcess && typeof globalProcess.stdout?.write === "function"
+    ? globalProcess.stdout
     : undefined;
 
 const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
@@ -115,27 +121,31 @@ type LoggerFactory = (name?: string) => Logger;
 /**
  * Console {@link LoggerFactory}; always succeeds.
  *
- * When `process.stderr` is available, formats each line and writes only to
- * stderr. Bun `inspect` formats each argument when enabled; otherwise
- * `util.inspect` when `node:util` loads, or a `JSON.stringify` fallback when
- * it does not. When stderr is unavailable (every browser), binds
+ * When process streams are available, formats each line and writes debug/info
+ * to stdout and warn/error to stderr. Bun `inspect` formats each argument when
+ * enabled; otherwise `util.inspect` when `node:util` loads, or a
+ * `JSON.stringify` fallback when it does not. When process streams are
+ * unavailable (every browser), binds
  * {@link createFormatter} prefixes into global `console.*` calls and skips the
  * `node:util` import entirely.
  */
-async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<LoggerFactory> {
+async function createConsoleLoggerFactory(
+  globalProcessStdOut: any,
+  globalProcessStdErr: any,
+): Promise<LoggerFactory> {
   // Indirect specifier so this browser-safe module doesn't statically pull in
   // node types: `node:util` is optional (the JSON fallback covers its absence).
   const nodeUtil = "node:util";
   // Gated, not just caught: the indirect specifier defeats bundler analysis by
   // design, so a client build emits a literal `import("node:util")` that no
   // browser can resolve, and the caught rejection still surfaced as a console
-  // error. `utils` only feeds the stderr branch of the emitter below, so no
-  // stderr means the import has nothing to serve and is skipped outright.
+  // error. `utils` only feeds the process-stream branch of the emitter below,
+  // so no writable stream means the import has nothing to serve and is skipped.
   const utils: { inspect?: any } | undefined =
-    globalProcessStdErr === undefined
+    globalProcessStdOut === undefined && globalProcessStdErr === undefined
       ? undefined
       : await import(/* @vite-ignore */ nodeUtil).catch(() => undefined);
-  return consoleLoggerFactory(globalProcessStdErr, utils);
+  return consoleLoggerFactory(globalProcessStdOut, globalProcessStdErr, utils);
 }
 
 /**
@@ -145,6 +155,7 @@ async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<Log
  * format through the `JSON.stringify` fallback.
  */
 function consoleLoggerFactory(
+  globalProcessStdOut: any,
   globalProcessStdErr: any,
   utils?: { inspect?: any } | undefined,
 ): LoggerFactory {
@@ -182,17 +193,20 @@ function consoleLoggerFactory(
   };
 
   const factory = (name?: string) => {
-    const prefixFormatter = createFormatter(name, globalProcessStdErr, resetColorsPrefix);
     const logger = Object.fromEntries(
       LOG_LEVELS.map((level) => {
+        const preferredStream =
+          level === "warn" || level === "error" ? globalProcessStdErr : globalProcessStdOut;
+        const stream = preferredStream ?? globalProcessStdErr ?? globalProcessStdOut;
+        const prefixFormatter = createFormatter(name, stream, resetColorsPrefix);
         const { prefix, colors, resetColors } = prefixFormatter(level);
         const emitter = (...args: any[]) => {
           if (!shouldEmit(level, true)) return;
-          if (globalProcessStdErr !== undefined) {
+          if (stream !== undefined) {
             const messageParts = prefix ? [prefix] : [];
             messageParts.push(...args.map((arg) => inspect(arg, colors)));
             if (resetColors) messageParts.push(LOG_LEVEL_COLOR_RESET);
-            globalProcessStdErr.write(messageParts.join(" ") + "\n");
+            stream.write(messageParts.join(" ") + "\n");
           } else {
             let levelFn = console[level];
             if (typeof levelFn !== "function") {
@@ -219,7 +233,7 @@ function consoleLoggerFactory(
  * concurrent and repeat callers share one in-flight promise and settled result.
  */
 const resolveFactory = memoize(async (): Promise<LoggerFactory> => {
-  return createConsoleLoggerFactory(globalProcessStdErr);
+  return createConsoleLoggerFactory(globalProcessStdOut, globalProcessStdErr);
 });
 
 /**
@@ -227,7 +241,7 @@ const resolveFactory = memoize(async (): Promise<LoggerFactory> => {
  * finishes evaluating immediately) and swaps to {@link resolveFactory}'s
  * result when server-side argument inspection is ready.
  */
-let activeFactory: LoggerFactory = consoleLoggerFactory(globalProcessStdErr);
+let activeFactory: LoggerFactory = consoleLoggerFactory(globalProcessStdOut, globalProcessStdErr);
 void resolveFactory().then(
   (factory) => {
     activeFactory = factory;

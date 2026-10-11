@@ -1,4 +1,8 @@
-import type { SshMachine, SshMachineServiceKind } from "@dbx-tools/shared-databricks-sandbox";
+import {
+  sandboxMachineServicePath,
+  type SshMachine,
+  type SshMachineServiceKind,
+} from "@dbx-tools/shared-databricks-sandbox";
 import {
   Button,
   Popover,
@@ -17,12 +21,14 @@ import { SshClient } from "./client.ts";
 /** Props for the compact SSH machine status and control popover. */
 export interface SshIndicatorProps {
   basePath?: string;
+  viewerBasePath?: string;
   className?: string;
 }
 
 /** Renders SSH machine status with start, stop, and open actions. */
 export function SshIndicator({
   basePath = "/api/databricks-sandbox",
+  viewerBasePath = "/sandbox",
   className,
 }: SshIndicatorProps) {
   const client = useMemo(() => new SshClient(basePath), [basePath]);
@@ -53,15 +59,19 @@ export function SshIndicator({
   }, [open, refresh]);
 
   const act = async (machine: SshMachine, action: "start" | "stop" | SshMachineServiceKind) => {
+    if (action === "terminal" || action === "stats") {
+      window.open(
+        sandboxMachineServicePath(machine.id, action, viewerBasePath),
+        "_blank",
+        "noopener,noreferrer",
+      );
+      return;
+    }
     setBusyId(machine.id);
     setError(undefined);
     try {
       if (action === "start") await client.start(machine.id);
       if (action === "stop") await client.stop(machine.id);
-      if (action === "terminal" || action === "stats") {
-        const service = await client.startService(machine.id, action);
-        window.open(service.path, "_blank", "noopener,noreferrer");
-      }
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -76,7 +86,7 @@ export function SshIndicator({
       type="button"
       variant="ghost"
       size="icon"
-      aria-label="SSH machines"
+      aria-label="Databricks Sandboxes"
       className={cn("relative size-7 shrink-0", className)}
     >
       <ServerIcon className="size-4" />
@@ -95,11 +105,11 @@ export function SshIndicator({
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>{indicator}</PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>SSH machines</TooltipContent>
+        <TooltipContent>Databricks Sandboxes</TooltipContent>
       </Tooltip>
-      <PopoverContent align="end" className="w-80 p-0" aria-label="SSH machines">
+      <PopoverContent align="end" className="w-80 p-0" aria-label="Databricks Sandboxes">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-sm font-medium">SSH machines</span>
+          <span className="text-sm font-medium">Sandboxes</span>
           {loading ? (
             <Spinner className="size-3" />
           ) : (
@@ -108,10 +118,10 @@ export function SshIndicator({
         </div>
         {!supported ? (
           <p className="px-3 py-5 text-sm text-muted-foreground">
-            SSH is not available in this workspace.
+            Databricks Sandbox is not available in this workspace.
           </p>
         ) : machines.length === 0 && !loading ? (
-          <p className="px-3 py-5 text-sm text-muted-foreground">No existing SSH machines.</p>
+          <p className="px-3 py-5 text-sm text-muted-foreground">No existing sandboxes.</p>
         ) : (
           <div className="max-h-80 overflow-y-auto p-1">
             {machines.map((machine) => (

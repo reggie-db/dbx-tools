@@ -2,6 +2,8 @@ import type { WorkspaceClient } from "@databricks/appkit";
 import { asyncUtils, log } from "@dbx-tools/shared-core";
 import {
   addSshRouteRequestSchema,
+  sandboxStatsSchema,
+  sandboxMachineServicePath,
   sshCommandRequestSchema,
   sshMachineServiceActionSchema,
   type AddSshRouteRequest,
@@ -12,6 +14,7 @@ import {
   type SshMachineServiceAction,
   type SshMachinesResponse,
   type SshRoute,
+  type SandboxStats,
 } from "@dbx-tools/shared-databricks-sandbox";
 import { z } from "zod";
 import type { ResolvedSshPluginConfig } from "./config.ts";
@@ -23,7 +26,6 @@ import {
 } from "./ownership.ts";
 import { DatabricksSandboxClient, isSandboxUnavailable, type SandboxEntry } from "./rest.ts";
 import { SshRouteRegistry } from "./routes.ts";
-import { ensureSshService } from "./services.ts";
 import { SshSession } from "./session.ts";
 
 const POLL_INTERVAL_MS = 1_000;
@@ -199,12 +201,7 @@ export class SshRuntime {
     const request = sshMachineServiceActionSchema.parse(input);
     const key = serviceKey(userId, request.machineId, request.service);
     const current = this.services.get(key);
-    if (
-      current?.state === "ready" &&
-      this.routes.list(request.machineId, userId).some((route) => route.path === current.path)
-    ) {
-      return current;
-    }
+    if (current?.state === "ready") return current;
     const pending = this.startingServices.get(key);
     if (pending) return pending;
     const starting: SshMachineService = {
@@ -213,10 +210,8 @@ export class SshRuntime {
       state: "starting",
     };
     this.services.set(key, starting);
-    const operation = this.provisionService(client, userId, request, starting, signal).finally(
-      () => {
-        this.startingServices.delete(key);
-      },
+    const operation = this.prepareBuiltInService(client, userId, request, starting, signal).finally(
+      () => this.startingServices.delete(key),
     );
     this.startingServices.set(key, operation);
     return operation;
@@ -250,6 +245,29 @@ export class SshRuntime {
       });
       return api.execute(request.machineId, request, timeoutMs, signal);
     }
+  }
+
+  async stats(
+    client: WorkspaceClient,
+    userId: string,
+    machineId: string,
+    signal?: AbortSignal,
+  ): Promise<SandboxStats> {
+    const api = new DatabricksSandboxClient(client);
+    await this.assertAssigned(api.workspaceScope(), userId, machineId);
+    await this.ensureRunning(api, machineId, signal);
+    const result = await api.execute(
+      machineId,
+      {
+        machineId,
+        command: "python3",
+        args: ["-c", SANDBOX_STATS_SCRIPT, machineId],
+      },
+      this.config.commandTimeoutMs,
+      signal,
+    );
+    if (!result.success) throw new Error(result.stderr || "Sandbox health sample failed");
+    return sandboxStatsSchema.parse(JSON.parse(result.stdout.trim().split("\n").at(-1) ?? ""));
   }
 
   async addRoute(
@@ -332,6 +350,18 @@ export class SshRuntime {
     const api = new DatabricksSandboxClient(client);
     await api.get(machineId);
     await this.ownership.assign(api.workspaceScope(), userId, machineId);
+  }
+
+  /** Verify ownership and ensure a machine is running for a native viewer transport. */
+  async prepareMachine(
+    client: WorkspaceClient,
+    userId: string,
+    machineId: string,
+    signal?: AbortSignal,
+  ): Promise<SandboxEntry> {
+    const api = new DatabricksSandboxClient(client);
+    await this.assertAssigned(api.workspaceScope(), userId, machineId);
+    return this.ensureRunning(api, machineId, signal);
   }
 
   /** Remove one explicit AppKit user-to-machine assignment. */
@@ -417,7 +447,7 @@ export class SshRuntime {
     return session;
   }
 
-  private async provisionService(
+  private async prepareBuiltInService(
     client: WorkspaceClient,
     userId: string,
     request: SshMachineServiceAction,
@@ -425,39 +455,21 @@ export class SshRuntime {
     signal?: AbortSignal,
   ): Promise<SshMachineService> {
     const key = serviceKey(userId, request.machineId, request.service);
-    logger.warn("SSH machine service provisioning started", {
+    logger.warn("Sandbox machine viewer preparation started", {
       userId,
       machineId: request.machineId,
       service: request.service,
       path: starting.path,
     });
     try {
-      const api = new DatabricksSandboxClient(client);
-      await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
-      const machine = await this.ensureRunning(api, request.machineId, signal);
-      const session = await this.ensureSession(client, userId, machine, signal);
-      const target = await ensureSshService(
-        session,
-        request.service,
-        starting.path,
-        Math.max(this.config.commandTimeoutMs, 600_000),
-        signal,
-      );
-      await this.routes.add(session, {
-        ownerId: userId,
-        machineId: request.machineId,
-        path: starting.path,
-        ...target,
-      });
+      await this.prepareMachine(client, userId, request.machineId, signal);
       const ready: SshMachineService = { ...starting, state: "ready" };
       this.services.set(key, ready);
-      logger.warn("SSH machine service provisioning succeeded", {
+      logger.warn("Sandbox machine viewer preparation succeeded", {
         userId,
         machineId: request.machineId,
         service: request.service,
         path: ready.path,
-        remoteHost: target.remoteHost,
-        remotePort: target.remotePort,
       });
       return ready;
     } catch (error) {
@@ -467,7 +479,7 @@ export class SshRuntime {
         error: error instanceof Error ? error.message : String(error),
       };
       this.services.set(key, failed);
-      logger.warn("SSH machine service provisioning failed", {
+      logger.warn("Sandbox machine viewer preparation failed", {
         userId,
         machineId: request.machineId,
         service: request.service,
@@ -550,8 +562,7 @@ export class SshRuntime {
   }
 
   private servicePath(machineId: string, kind: SshMachineService["kind"]): string {
-    const prefix = this.config.routePrefix.replace(/\/$/, "");
-    return `${prefix}/${machinePathSegment(machineId)}/${kind}`;
+    return sandboxMachineServicePath(machinePathSegment(machineId), kind, this.config.routePrefix);
   }
 }
 
@@ -567,6 +578,47 @@ function machinePathSegment(machineId: string): string {
       .replace(/^-|-$/g, "") || "machine"
   );
 }
+
+const SANDBOX_STATS_SCRIPT = `
+import datetime, json, os, sys
+
+def ratio(used, total):
+    return round((used / total) * 100, 1) if total else 0
+
+meminfo = {}
+with open('/proc/meminfo', encoding='utf-8') as handle:
+    for line in handle:
+        key, value = line.split(':', 1)
+        meminfo[key] = int(value.strip().split()[0]) * 1024
+
+memory_total = meminfo.get('MemTotal', 0)
+memory_available = meminfo.get('MemAvailable', 0)
+memory_used = max(0, memory_total - memory_available)
+disk = os.statvfs('/')
+disk_total = disk.f_blocks * disk.f_frsize
+disk_available = disk.f_bavail * disk.f_frsize
+disk_used = max(0, disk_total - disk_available)
+
+print(json.dumps({
+    'machineId': sys.argv[1],
+    'sampledAt': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
+    'uptimeSeconds': float(open('/proc/uptime', encoding='utf-8').read().split()[0]),
+    'cpuCount': os.cpu_count() or 1,
+    'loadAverage': list(os.getloadavg()),
+    'memory': {
+        'totalBytes': memory_total,
+        'availableBytes': memory_available,
+        'usedBytes': memory_used,
+        'usedPercent': ratio(memory_used, memory_total),
+    },
+    'disk': {
+        'totalBytes': disk_total,
+        'availableBytes': disk_available,
+        'usedBytes': disk_used,
+        'usedPercent': ratio(disk_used, disk_total),
+    },
+}))
+`.trim();
 
 async function waitForStatus(
   api: DatabricksSandboxClient,
