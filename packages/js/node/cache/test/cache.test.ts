@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import type { KeyvStoreAdapter } from "cacheable";
-import KeyvFile from "keyv-file";
+import { KeyvFile } from "keyv-file";
 
 import {
   cachePath,

@@ -18,7 +18,7 @@ import {
 import { projectUtils } from "@dbx-tools/core";
 import { errorUtils, log } from "@dbx-tools/shared-core";
 import envPaths from "env-paths";
-import KeyvFile from "keyv-file";
+import { KeyvFile } from "keyv-file";
 
 const DEFAULT_MAX_ENTRIES = 1_000;
 const DEFAULT_WRITE_DELAY_MS = 25;
