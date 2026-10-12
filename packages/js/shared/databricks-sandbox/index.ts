@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-databricks-sandbox";
-export const PACKAGE_VERSION = "0.9.118";
+export const PACKAGE_VERSION = "0.9.119";
 export * as schemas from "./src/schemas.ts";
 export { sshMachineStatusSchema, sshRouteSchema, sshMachineServiceKindSchema, sshMachineServiceSchema, sshMachineSchema, sshMachinesResponseSchema, createSshMachineRequestSchema, sshMachineActionSchema, deleteSshMachineResponseSchema, sshMachineServiceActionSchema, sshCommandRequestSchema, sshCommandResultSchema, addSshRouteRequestSchema, removeSshRouteRequestSchema, sshRouteResponseSchema, sshRoutesResponseSchema } from "./src/schemas.ts";
 export type { SshMachineStatus, SshRoute, SshMachineServiceKind, SshMachineService, SshMachine, SshMachinesResponse, CreateSshMachineRequest, SshMachineAction, DeleteSshMachineResponse, SshMachineServiceAction, SshCommandRequest, SshCommandResult, AddSshRouteRequest, RemoveSshRouteRequest, SshRouteResponse, SshRoutesResponse } from "./src/schemas.ts";
