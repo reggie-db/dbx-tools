@@ -907,6 +907,74 @@ describe("agent workspace selection", () => {
     });
   });
 
+  it("runs independent inherited tools concurrently through QuickJS", async () => {
+    let active = 0;
+    let peak = 0;
+    const delayedTool = (id: string) =>
+      createTool({
+        id,
+        description: `Run ${id}.`,
+        inputSchema: z.object({ value: z.string() }),
+        execute: async ({ value }) => {
+          active += 1;
+          peak = Math.max(peak, active);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          active -= 1;
+          return `${id}:${value}`;
+        },
+      });
+    const workspace = databricksWorkspace({ assistantPaths: false });
+    const built = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            tools: {
+              first: delayedTool("first"),
+              second: delayedTool("second"),
+            },
+            workspace,
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+    const requestContext = new RequestContext();
+    const tools = await built.agents.analyst?.listTools({ requestContext });
+    const codeModeTool = tools?.execute_typescript;
+    assert.ok(codeModeTool && "execute" in codeModeTool);
+
+    const result = await codeModeTool.execute?.(
+      {
+        code: [
+          "const [first, second] = await Promise.all([",
+          "  external_first({ value: 'a' }),",
+          "  external_second({ value: 'b' }),",
+          "]);",
+          "return { first, second };",
+        ].join("\n"),
+      },
+      {
+        requestContext,
+        workspace,
+        observe: {
+          span: (_name: string, execute: () => unknown) => execute(),
+          log: () => undefined,
+        },
+      } as never,
+    );
+
+    assert.equal(peak, 2);
+    assert.deepEqual(result, {
+      success: true,
+      result: { first: "first:a", second: "second:b" },
+      logs: [],
+    });
+  });
+
   it("executes native workspace list and read tools entirely through Code Mode", async () => {
     const root = await mkdtemp(join(tmpdir(), "dbx-tools-code-mode-"));
     await writeFile(join(root, "alpha.txt"), "alpha");

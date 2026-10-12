@@ -438,9 +438,9 @@ mastra({
 
 For Databricks Sandbox over SSH, use `sshWorkspaceSandbox(runtime)` from
 `@dbx-tools/appkit-databricks-sandbox/workspace`. Share that runtime with the
-Databricks Sandbox AppKit plugin so Code Mode, agent tools, terminal and health
-routes all use the same transport and machine assignments. That package owns
-Sandbox lifecycle, SSH keys, authentication fallback, and route forwarding.
+Databricks Sandbox AppKit plugin so agent commands, terminal and health routes
+use the same transport and machine assignments. That package owns Sandbox
+lifecycle, SSH keys, authentication fallback, and route forwarding.
 
 The default local Monty Python runtime accepts Python source or `python3 -c` and
 has no host filesystem, network, environment variables, shell, or third-party
@@ -474,19 +474,52 @@ An agent-level workspace overrides the plugin-level sandbox setting. Returning
 
 ### Batch Tools With Code Mode
 
-Mastra Code Mode is enabled by default when an agent has explicitly supplied
-executable tools. It adds an
-`execute_typescript` tool so the model can batch independent calls, aggregate
-their results, and perform calculations in one sandboxed program. Only tools
-declared on that agent are exposed as `external_*` functions; plugin-level
-tools and native workspace tools are not added implicitly.
+Mastra Code Mode is enabled by default when an agent has executable tools. It
+adds an `execute_typescript` tool so the model can batch independent calls,
+aggregate their results, and perform calculations in one isolated program.
+Agent, plugin-level, and enabled native workspace tools are exposed as
+`external_*` functions for the current request.
 
 The plugin selects Mastra's `IsolatedVmCodeModeTransport` once during startup.
 If the native addon cannot initialize in the current runtime, startup selects
 Mastra's QuickJS WebAssembly transport instead. Both transports expose no
 filesystem, network, process, timer, or module access beyond the explicitly
-supplied tools. Set `codeMode: false` to opt out, or pass `{ id, timeout }` to
-tune Mastra's generated tool.
+supplied tools. QuickJS supports concurrent external calls, so generated code
+can use `Promise.all` for independent operations.
+
+The automatic Code Mode remains available when the workspace uses Databricks
+Sandbox because QuickJS or isolated-vm executes the orchestration program
+independently of the workspace command sandbox. SSH is used only if the program
+calls an exposed SSH-backed tool.
+
+Callers may also use native Mastra `createCodeMode` directly when they want
+multiple explicitly scoped orchestration tools, or when the TypeScript program
+itself must execute in a supplied Sandbox:
+
+```ts
+const sales = createCodeMode({
+  id: "sales_code",
+  tools: { listRecentOrders, getCustomer },
+  sandbox,
+});
+const inventory = createCodeMode({
+  id: "inventory_code",
+  tools: { listProducts, getSupplier },
+  sandbox,
+});
+
+const agent = new Agent({
+  id: "ops-assistant",
+  name: "ops-assistant",
+  instructions: ["You are an ops assistant.", sales.instructions, inventory.instructions],
+  model: "openai/gpt-5.6-sol",
+  tools: { sales_code: sales.tool, inventory_code: inventory.tool },
+});
+```
+
+This is native Mastra `createCodeMode`; the plugin does not wrap or re-export it.
+Set plugin `codeMode: false` to disable the automatic Code Mode, or pass
+`{ id, timeout }` to tune its generated tool.
 
 ## Remote Skills
 
@@ -1052,10 +1085,12 @@ The main plugin options are:
 - `sandbox` defaults to Monty for auto-created workspaces. `false` disables
   command execution; `true` or `"monty"` selects Monty; a native Mastra
   sandbox or resolver supplies another transport.
-- `codeMode` exposes each agent's explicitly supplied executable tools through
-  native Mastra Code Mode. It defaults on when such tools exist, selecting
-  isolated-vm once at startup and falling back to QuickJS only when unavailable.
-  Pass `false` to disable it.
+- `codeMode` exposes all executable tools available to the current request,
+  including enabled native workspace tools, through native Mastra Code Mode. It
+  defaults on when such tools exist, selecting isolated-vm once at startup and
+  falling back to QuickJS only when unavailable. Both transports support
+  concurrent external calls without SSH; an SSH connection is needed only when
+  an exposed SSH-backed tool is called. Pass `false` to disable it.
 - `workspaceSkills` enables Mastra's native on-demand skill search by default.
   Pass `false` to disable it or an object with `topK`, `minScore`, and `ttlMs`
   overrides.

@@ -18,6 +18,12 @@ import {
 } from "@mastra/core/workspace";
 import type { SshRuntime } from "./runtime.ts";
 
+const ROUTING_INSTRUCTIONS = `Remote web services must be exposed through add_ssh_route. Never give the user a localhost, 127.0.0.1, 0.0.0.0, or direct Sandbox URL; those addresses are reachable only inside the Sandbox or AppKit bridge. Bind the remote process to Sandbox loopback, then return the registered AppKit path.
+
+Every service must work behind its registered path. Prefer stripPrefix: true for applications that serve from / and use relative asset/API URLs. Use stripPrefix: false only after configuring the application with the full public base path. Do not emit root-absolute links such as /api or /assets unless the application base path includes the registered route.
+
+WebSockets are supported only through the registered HTTP route's standard Upgrade flow. Browser clients must derive ws:// or wss:// from the current public origin and include the registered route path; never connect to Sandbox loopback directly. With stripPrefix: true, AppKit removes the route prefix from both HTTP and WebSocket requests before forwarding. Raw TCP, UDP, and WebSocket servers that cannot operate behind a path prefix are not browser-routable through add_ssh_route.`;
+
 /** Options for selecting and naming the SSH-backed Mastra workspace sandbox. */
 export interface SshWorkspaceSandboxOptions {
   machineId?: string | ((context: { requestContext: RequestContext }) => string | undefined);
@@ -110,7 +116,7 @@ export class SshWorkspaceSandbox extends MastraSandbox {
   }
 
   getInstructions(): string {
-    return `Commands run on Databricks Sandbox ${this.id} over SSH. Prefer reusing this existing Sandbox. Create another only when the user explicitly requests a separate Sandbox.`;
+    return `Commands run on Databricks Sandbox ${this.id} over SSH. Prefer reusing this existing Sandbox. Create another only when the user explicitly requests a separate Sandbox.\n\n${ROUTING_INSTRUCTIONS}`;
   }
 
   private withAuth<T>(
@@ -188,12 +194,12 @@ class MissingSshWorkspaceSandbox extends MastraSandbox {
 
   override async executeCommand(): Promise<CommandResult> {
     throw new Error(
-      "No Databricks Sandbox exists for this user. Reuse an existing Sandbox when available, or create one only when the user requests code execution.",
+      "No Databricks Sandbox exists for this user. Continue with direct tools and native Code Mode; reuse or create a Sandbox only for an explicitly requested SSH-backed operation.",
     );
   }
 
   getInstructions(): string {
-    return "No Databricks Sandbox currently exists for this user. Continue normal chat without code execution. Before creating one, list Sandboxes and prefer an existing Sandbox; create a new Sandbox only when the user explicitly requests it.";
+    return `No Databricks Sandbox currently exists for this user. Continue normal chat, direct tool calls, and native Code Mode; QuickJS or isolated-vm orchestration does not require SSH. Do not create a Sandbox merely to enable code execution. If the user explicitly requests an SSH-backed Sandbox operation, list Sandboxes first and prefer an existing one.\n\nIf a Sandbox is created and starts a web service, follow these routing requirements:\n${ROUTING_INSTRUCTIONS}`;
   }
 }
 

@@ -10,7 +10,8 @@ before installing system packages.
 
 Prefer TigerVNC plus noVNC because noVNC supplies touch controls and lets the
 client select its WebSocket path. Bind both VNC and websockify to loopback.
-Never expose either port directly.
+Never expose either port directly, and never return a localhost or direct
+Sandbox URL to the user.
 
 1. Use `execute_ssh_command` to install or locate a VNC server, noVNC, and
    websockify, then create a user-owned startup script under
@@ -25,6 +26,8 @@ Never expose either port directly.
 The `path` query value is relative to the public origin and must include the
 full registered route without a leading slash. AppKit owns the WebSocket
 upgrade and strips the registered prefix before forwarding `/websockify`.
+Do not use a hard-coded `ws://localhost` URL; the browser must use the current
+public origin and the registered AppKit path.
 
 Keep credentials in the remote VNC password file with user-only permissions.
 Do not place passwords or tokens in the route URL.

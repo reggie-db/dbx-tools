@@ -2,8 +2,8 @@
 
 AppKit plugin for Databricks Sandboxes. It provides user-scoped creation,
 discovery, lifecycle controls, deletion, SSH command execution, Mastra tools,
-Code Mode sandbox transport, and dynamic routes to HTTP servers running in a
-Sandbox.
+Mastra workspace sandbox transport, and dynamic routes to HTTP servers running
+in a Sandbox.
 
 The plugin uses the Databricks Lakebox REST API for creation, discovery,
 lifecycle controls, deletion, and SSH-key registration. It does not invoke the
@@ -40,6 +40,12 @@ const plugins = [
   }),
 ];
 ```
+
+The SSH workspace is an execution target only when a workspace or Sandbox tool
+needs it. Automatic Mastra Code Mode continues to use isolated-vm or QuickJS,
+including concurrent external tool calls, and does not require an SSH machine.
+An SSH connection is opened only when Code Mode or the agent calls an exposed
+SSH-backed tool.
 
 ## Requirements
 
@@ -89,6 +95,18 @@ over shorter paths. Route paths and deletion are scoped to the current user.
 `stripPrefix` defaults to `true` for non-root paths and `false` for `/`, matching
 the existing tunnel/Caddy reverse-proxy behavior. Set it to `false` when the
 remote server expects the full registered AppKit path.
+
+The remote process may bind to Sandbox loopback, but agents and browser clients
+must never use or return `localhost`, `127.0.0.1`, `0.0.0.0`, or a direct
+Sandbox URL. The registered AppKit path is the only browser-facing address.
+Services must use relative asset/API URLs with `stripPrefix: true`, or be
+configured with the full registered base path when `stripPrefix: false`.
+
+WebSocket clients must derive `ws://` or `wss://` from the public page origin
+and connect through the same registered route. The bridge forwards standard
+HTTP Upgrade requests and applies `stripPrefix` to WebSocket paths too. It does
+not expose arbitrary TCP/UDP services, and applications that require a fixed
+root WebSocket path must be configured for the route prefix or use stripping.
 
 The forwarding bridge uses a Unix socket for HTTP on Unix systems and an
 ephemeral loopback TCP port on Windows. WebSocket upgrades use a separate

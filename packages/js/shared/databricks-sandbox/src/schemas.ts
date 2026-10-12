@@ -144,19 +144,29 @@ export const addSshRouteRequestSchema = z
   .object({
     machineId: z.string().min(1).describe("Machine hosting the remote web server."),
     remotePort: z.number().int().min(1).max(65535).describe("Remote HTTP port."),
-    remoteHost: z.string().min(1).default("127.0.0.1").describe("Remote bind host."),
+    remoteHost: z
+      .string()
+      .min(1)
+      .default("127.0.0.1")
+      .describe(
+        "Sandbox-side host reached by the SSH bridge, normally loopback; never a browser-facing URL.",
+      ),
     path: z
       .string()
       .startsWith("/")
       .optional()
-      .describe("Requested AppKit path, automatically scoped beneath the route prefix."),
+      .describe(
+        "Public AppKit path, automatically scoped beneath the route prefix; return this path instead of localhost.",
+      ),
     stripPrefix: z
       .boolean()
       .optional()
-      .describe("Remove the registered path before forwarding; defaults true off root."),
+      .describe(
+        "Remove the registered HTTP and WebSocket path before forwarding; defaults true off root. Set false only when the service is configured for the full public base path.",
+      ),
   })
   .strict()
-  .describe("Request to expose a remote HTTP server through AppKit.");
+  .describe("Request to expose a path-prefix-aware remote HTTP/WebSocket server through AppKit.");
 export type AddSshRouteRequest = z.input<typeof addSshRouteRequestSchema>;
 
 export const removeSshRouteRequestSchema = z

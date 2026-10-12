@@ -21,8 +21,52 @@ describe("sshWorkspaceSandbox", () => {
 
     const sandbox = await sshWorkspaceSandbox(runtime)({ requestContext });
 
-    assert.match(sandbox.getInstructions?.() ?? "", /Continue normal chat without code execution/);
+    const instructions = sandbox.getInstructions?.() ?? "";
+    assert.match(instructions, /Continue normal chat, direct tool calls, and native Code Mode/);
+    assert.match(instructions, /does not require SSH/);
+    assert.match(instructions, /Do not create a Sandbox merely to enable code execution/);
+    assert.match(instructions, /Never give the user a localhost/);
+    assert.match(instructions, /stripPrefix: true/);
+    assert.match(instructions, /WebSockets are supported only through the registered HTTP route/);
     assert.ok(sandbox.executeCommand);
-    await assert.rejects(sandbox.executeCommand("pwd"), /No Databricks Sandbox exists/);
+    await assert.rejects(
+      sandbox.executeCommand("pwd"),
+      /reuse or create a Sandbox only for an explicitly requested SSH-backed operation/,
+    );
+  });
+
+  it("instructs assigned Sandboxes to expose services only through prefix-aware routes", async () => {
+    const runtime = {
+      withAuthFallback: async (_operation: unknown, attempts: { user?: () => Promise<unknown> }) =>
+        attempts.user?.(),
+      listMachines: async () => ({
+        auto: true,
+        supported: true,
+        machines: [
+          {
+            id: "sandbox-1",
+            name: "sandbox-1",
+            provider: "databricks-sandbox",
+            status: "running",
+            gatewayHost: "gateway.example",
+            routes: [],
+            services: [],
+          },
+        ],
+      }),
+    } as unknown as SshRuntime;
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_USER_KEY, {
+      id: "user@example.com",
+      executionContext: { client: {} as WorkspaceClient },
+    });
+
+    const sandbox = await sshWorkspaceSandbox(runtime)({ requestContext });
+    const instructions = sandbox.getInstructions?.() ?? "";
+
+    assert.match(instructions, /return the registered AppKit path/);
+    assert.match(instructions, /relative asset\/API URLs/);
+    assert.match(instructions, /derive ws:\/\/ or wss:\/\//);
+    assert.match(instructions, /Raw TCP, UDP/);
   });
 });

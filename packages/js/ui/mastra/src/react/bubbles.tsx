@@ -393,10 +393,9 @@ export const AssistantBubble = ({
     status,
     hasText || activityItems.length > 0 || pendingApprovals.length > 0,
   );
-  const showFooter =
-    showResponseStatus ||
-    (hasText &&
-      (isLast || Boolean(onExport) || Boolean(onFeedback) || Boolean(mlflowExperimentUrl)));
+  const hasFooterActions =
+    hasText && (isLast || Boolean(onExport) || Boolean(onFeedback) || Boolean(mlflowExperimentUrl));
+  const showFooter = showResponseStatus || hasFooterActions;
   // Charts and tables are placed at inline marker positions in
   // the assistant's prose. `prepare_chart` / `render_data` mint
   // a `chartId` and the model embeds `[chart:<chartId>]`; for raw
@@ -512,7 +511,7 @@ export const AssistantBubble = ({
               </Tooltip>
             )}
             {showResponseStatus && (
-              <div className="ml-auto flex items-center text-muted-foreground">
+              <div className="flex items-center text-muted-foreground">
                 <AssistantResponseSpinner />
               </div>
             )}

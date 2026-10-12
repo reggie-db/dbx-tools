@@ -229,10 +229,12 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   memory?: boolean | MastraMemoryConfig;
   /**
-   * Expose executable tools from each agent definition through native Mastra
-   * Code Mode. Defaults on whenever the agent has executable tools. The plugin
-   * selects Mastra's isolated-vm transport once during startup and falls back
-   * to Mastra QuickJS when the native transport is unavailable. Set `false` to
+   * Expose executable tools available to the current request through native
+   * Mastra Code Mode. Defaults on whenever the request has executable tools.
+   * The plugin selects Mastra's isolated-vm transport once during startup and
+   * falls back to Mastra QuickJS when the native transport is unavailable.
+   * These transports do not execute through the workspace command sandbox;
+   * SSH is used only when an exposed SSH-backed tool is called. Set `false` to
    * opt out.
    */
   codeMode?: boolean | MastraCodeModeConfig;
@@ -697,7 +699,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     codeMode: {
       type: ["boolean", "object"],
       description:
-        "Expose all executable tools available to the current request, including native workspace tools, through dynamically generated Mastra Code Mode for sandboxed TypeScript batching, aggregation, and arithmetic. The plugin selects Mastra isolated-vm once during startup and falls back to Mastra QuickJS when native initialization is unavailable. False disables it.",
+        "Expose all executable tools available to the current request through native Mastra Code Mode for TypeScript batching, aggregation, and arithmetic. The plugin uses Mastra isolated-vm with the existing QuickJS fallback; neither transport runs through the workspace command sandbox, so SSH is used only when an SSH-backed tool is called. False disables it.",
     },
     sandbox: {
       type: ["boolean", "string", "object"],

@@ -494,7 +494,8 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
           ),
       }),
       add_ssh_route: defineTool({
-        description: "Expose a remote HTTP port beneath the AppKit SSH route prefix.",
+        description:
+          "Expose a Sandbox loopback HTTP port at an AppKit path. Never return localhost or a direct Sandbox URL. The service must either tolerate the registered prefix or use stripPrefix; WebSockets must use the same public route and standard HTTP Upgrade.",
         schema: addSshRouteRequestSchema,
         annotations: { effect: "write", requiresUserContext: true },
         execute: async (input, signal) => ({

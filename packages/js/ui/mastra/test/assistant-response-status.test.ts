@@ -28,7 +28,7 @@ describe("AssistantResponseSpinner", () => {
     assert.equal(shouldShowAssistantResponseStatus(true, "error", true), false);
   });
 
-  it("keeps response actions and the active spinner on one footer line", () => {
+  it("places the active spinner directly after the last footer action", () => {
     const html = renderToStaticMarkup(
       createElement(AssistantBubble, {
         message: {
@@ -39,15 +39,44 @@ describe("AssistantResponseSpinner", () => {
         isLast: true,
         status: "streaming",
         onExport: () => undefined,
+        mlflowExperimentUrl: "https://example.com/mlflow",
       }),
     );
 
     const copyIndex = html.indexOf('aria-label="Copy"');
     const exportIndex = html.indexOf('aria-label="Export message"');
-    const statusIndex = html.indexOf("ml-auto");
+    const debugIndex = html.indexOf('aria-label="Open MLflow experiment"');
+    const statusIndex = html.indexOf("Response in progress");
     assert.ok(copyIndex >= 0 && copyIndex < statusIndex);
     assert.ok(exportIndex >= 0 && exportIndex < statusIndex);
+    assert.ok(debugIndex >= 0 && debugIndex < statusIndex);
     assert.match(html, /Response in progress/);
+    assert.doesNotMatch(html, /ml-auto/);
     assert.doesNotMatch(html, /Thinking\.\.\.|animate-pulse/);
+  });
+
+  it("keeps a tool-only spinner left until footer actions become available", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantBubble, {
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "dynamic-tool",
+              toolCallId: "tool-1",
+              toolName: "lookup_store",
+              state: "input-available",
+              input: {},
+            },
+          ],
+        },
+        isLast: true,
+        status: "streaming",
+      }),
+    );
+
+    assert.match(html, /Response in progress/);
+    assert.doesNotMatch(html, /ml-auto/);
   });
 });

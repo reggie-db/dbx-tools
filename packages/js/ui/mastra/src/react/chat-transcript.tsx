@@ -12,6 +12,7 @@ import {
   Spinner,
 } from "@dbx-tools/ui/react";
 import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import { isToolUIPart } from "ai";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
 import type { ChatViewProps } from "./types.ts";
@@ -185,8 +186,10 @@ export const ChatTranscript = ({
   const lastAssistantHasContent =
     lastAssistantParts.some(
       (part) =>
-        (part.type === "text" || part.type === "reasoning") &&
-        Boolean((part as { text?: string }).text),
+        ((part.type === "text" || part.type === "reasoning") &&
+          Boolean((part as { text?: string }).text)) ||
+        isToolUIPart(part) ||
+        part.type === "data-tool-call-approval",
     ) || (lastEvents?.length ?? 0) > 0;
   const showWaitingIndicator = isRunning && !lastAssistantHasContent;
 
