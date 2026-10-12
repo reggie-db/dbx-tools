@@ -345,8 +345,8 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
               ) : (
                 <div className="divide-y border-t">
                   {machines.map((machine) => (
-                    <div key={machine.id} className="grid min-w-0 gap-2.5 px-3 py-2.5 sm:px-4">
-                      <div className="flex min-w-0 items-start gap-2.5">
+                    <div key={machine.id} className="min-w-0 overflow-hidden">
+                      <div className="flex min-w-0 items-start gap-2.5 px-3 py-2.5 sm:px-4">
                         <span
                           className={cn(
                             "mt-1.5 size-2.5 shrink-0 rounded-full",
@@ -364,7 +364,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           </p>
                         </div>
                       </div>
-                      <div className="flex min-w-0 flex-wrap items-center gap-1 pl-5">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1 border-t bg-muted/20 px-3 py-2 sm:px-4">
                         {isMachineBusy(machine.id) ? <Spinner className="mr-1 size-4" /> : null}
                         {machine.canStart ? (
                           <Button
