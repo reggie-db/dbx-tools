@@ -115,6 +115,50 @@ describe("addArgs", () => {
       else process.env.DATABRICKS_HOST = previous;
     }
   });
+
+  it("defers fields with hidden help defaults until parsing", async () => {
+    const configured = z.object({
+      profile: z
+        .string()
+        .optional()
+        .describe("Databricks profile")
+        .meta({ env: "DATABRICKS_CONFIG_PROFILE", helpDefault: false }),
+      host: z
+        .string()
+        .optional()
+        .describe("Databricks host")
+        .meta({ env: "DATABRICKS_HOST", flag: false, helpDefault: false }),
+    });
+    let reads = 0;
+    const options = {
+      scope: [] as const,
+      sources: ["config"] as const,
+      get data() {
+        reads += 1;
+        return {
+          DATABRICKS_CONFIG_PROFILE: "DEFAULT",
+          DATABRICKS_HOST: "https://workspace.example.com",
+        };
+      },
+    };
+    const helpCommand = addArgs(new Command("demo").exitOverride(), configured, options);
+    helpCommand.configureOutput({ writeOut: () => undefined, writeErr: () => undefined });
+    helpCommand.helpInformation();
+    assert.equal(reads, 0);
+    await assert.rejects(
+      helpCommand.parseAsync(["--help"], { from: "user" }),
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "commander.helpDisplayed",
+    );
+    assert.equal(reads, 0);
+    const command = addArgs(new Command("demo"), configured, options);
+    await command.parseAsync([], { from: "user" });
+    assert.deepEqual(parseArgs(command, configured), {
+      profile: "DEFAULT",
+      host: "https://workspace.example.com",
+    });
+    assert.ok(reads > 0);
+  });
 });
 
 describe("parseArgs", () => {

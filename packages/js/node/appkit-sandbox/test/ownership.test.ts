@@ -8,7 +8,9 @@ import {
   OWNERSHIP_SCHEMA_PREFIX,
   ownershipSchemaName,
   type MachineAssignment,
+  type MachineServiceProjectRecord,
   type NewMachineAssignment,
+  type NewMachineServiceProjectRecord,
   type NewSandboxProjectRecord,
   type SandboxProjectRecord,
 } from "../src/ownership.ts";
@@ -33,6 +35,8 @@ const unusedSession = {
 class MemoryOwnershipStore {
   readonly assignments: MachineAssignment[] = [];
   readonly projects: SandboxProjectRecord[] = [];
+  readonly serviceProjects: MachineServiceProjectRecord[] = [];
+  serviceLockCount = 0;
 
   async listAssignments(workspaceScope: string, userId?: string): Promise<MachineAssignment[]> {
     return this.assignments.filter(
@@ -132,6 +136,8 @@ class MemoryOwnershipStore {
     const now = new Date().toISOString();
     const record = {
       ...input,
+      route: input.route ?? true,
+      serviceDependencies: input.serviceDependencies ?? [],
       createdAt: existing >= 0 ? this.projects[existing]!.createdAt : now,
       updatedAt: now,
     };
@@ -158,6 +164,101 @@ class MemoryOwnershipStore {
     const removed = this.projects.length - retained.length;
     this.projects.splice(0, this.projects.length, ...retained);
     return removed;
+  }
+
+  async deleteProjectsForOwnerMachine(
+    workspaceScope: string,
+    userId: string,
+    machineId: string,
+  ): Promise<number> {
+    const retained = this.projects.filter(
+      (project) =>
+        project.workspaceScope !== workspaceScope ||
+        project.userId !== userId ||
+        project.machineId !== machineId,
+    );
+    const removed = this.projects.length - retained.length;
+    this.projects.splice(0, this.projects.length, ...retained);
+    return removed;
+  }
+
+  async listMachineServiceProjects(
+    workspaceScope: string,
+    machineId?: string,
+  ): Promise<MachineServiceProjectRecord[]> {
+    return this.serviceProjects.filter(
+      (project) =>
+        project.workspaceScope === workspaceScope &&
+        (machineId === undefined || project.machineId === machineId),
+    );
+  }
+
+  async getMachineServiceProject(
+    workspaceScope: string,
+    machineId: string,
+    serviceKind: MachineServiceProjectRecord["serviceKind"],
+  ): Promise<MachineServiceProjectRecord | undefined> {
+    return this.serviceProjects.find(
+      (project) =>
+        project.workspaceScope === workspaceScope &&
+        project.machineId === machineId &&
+        project.serviceKind === serviceKind,
+    );
+  }
+
+  async upsertMachineServiceProject(input: NewMachineServiceProjectRecord): Promise<void> {
+    const existing = this.serviceProjects.findIndex(
+      (project) =>
+        project.workspaceScope === input.workspaceScope &&
+        project.machineId === input.machineId &&
+        project.serviceKind === input.serviceKind,
+    );
+    const now = new Date().toISOString();
+    const record = {
+      ...input,
+      createdAt: existing >= 0 ? this.serviceProjects[existing]!.createdAt : now,
+      updatedAt: now,
+    };
+    if (existing >= 0) this.serviceProjects.splice(existing, 1, record);
+    else this.serviceProjects.push(record);
+  }
+
+  async deleteMachineServiceProject(
+    workspaceScope: string,
+    machineId: string,
+    serviceKind: MachineServiceProjectRecord["serviceKind"],
+  ): Promise<boolean> {
+    const index = this.serviceProjects.findIndex(
+      (project) =>
+        project.workspaceScope === workspaceScope &&
+        project.machineId === machineId &&
+        project.serviceKind === serviceKind,
+    );
+    if (index < 0) return false;
+    this.serviceProjects.splice(index, 1);
+    return true;
+  }
+
+  async deleteMachineServiceProjectsForMachine(
+    workspaceScope: string,
+    machineId: string,
+  ): Promise<number> {
+    const retained = this.serviceProjects.filter(
+      (project) => project.workspaceScope !== workspaceScope || project.machineId !== machineId,
+    );
+    const removed = this.serviceProjects.length - retained.length;
+    this.serviceProjects.splice(0, this.serviceProjects.length, ...retained);
+    return removed;
+  }
+
+  async withMachineServiceProjectLock<T>(
+    _workspaceScope: string,
+    _machineId: string,
+    _serviceKind: MachineServiceProjectRecord["serviceKind"],
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    this.serviceLockCount += 1;
+    return operation();
   }
 
   async withReaperLock<T>(_workspaceScope: string, operation: () => Promise<T>): Promise<T> {
@@ -302,12 +403,25 @@ describe("managed Sandbox ownership", () => {
     assert.ok(statements.some((statement) => statement.includes("managed_name TEXT")));
     assert.ok(statements.some((statement) => statement.includes("expires_at TIMESTAMPTZ")));
     assert.ok(statements.some((statement) => statement.includes("machine_assignments_expiry_idx")));
-    assert.ok(statements.some((statement) => statement.includes(`"${OWNERSHIP_SCHEMA}"."projects"`)));
+    assert.ok(
+      statements.some((statement) => statement.includes(`"${OWNERSHIP_SCHEMA}"."projects"`)),
+    );
     assert.ok(statements.some((statement) => statement.includes("open_path TEXT")));
     assert.ok(statements.some((statement) => statement.includes("project_config JSONB")));
+    assert.ok(statements.some((statement) => statement.includes("route_enabled BOOLEAN")));
+    assert.ok(statements.some((statement) => statement.includes("service_dependencies JSONB")));
     assert.ok(statements.some((statement) => statement.includes("sandbox_projects_machine_idx")));
     assert.ok(
       statements.some((statement) => statement.includes("sandbox_projects_machine_port_idx")),
+    );
+    assert.ok(
+      statements.some((statement) =>
+        statement.includes(`"${OWNERSHIP_SCHEMA}"."machine_service_projects"`),
+      ),
+    );
+    assert.ok(statements.some((statement) => statement.includes("definition_version INTEGER")));
+    assert.ok(
+      statements.some((statement) => statement.includes("machine_service_projects_machine_idx")),
     );
   });
 
@@ -317,8 +431,12 @@ describe("managed Sandbox ownership", () => {
       statements.push(text);
       if (text.includes("information_schema.tables")) {
         return {
-          rows: [{ table_name: "machine_assignments" }, { table_name: "projects" }],
-          rowCount: 2,
+          rows: [
+            { table_name: "machine_assignments" },
+            { table_name: "projects" },
+            { table_name: "machine_service_projects" },
+          ],
+          rowCount: 3,
         };
       }
       if (text.includes("INSERT INTO") && text.includes("ON CONFLICT DO NOTHING")) {
@@ -344,6 +462,13 @@ describe("managed Sandbox ownership", () => {
           statement.includes(`FROM ${quotedLegacy}.projects`),
       ),
     );
+    assert.ok(
+      statements.some(
+        (statement) =>
+          statement.includes(`INSERT INTO "${OWNERSHIP_SCHEMA}"."machine_service_projects"`) &&
+          statement.includes(`FROM ${quotedLegacy}.machine_service_projects`),
+      ),
+    );
   });
 
   it("writes, reads, and deletes persisted project records", async () => {
@@ -366,7 +491,10 @@ describe("managed Sandbox ownership", () => {
     };
     const pool = ownershipPool(async (text, values) => {
       queries.push({ text, values });
-      if (text.includes("SELECT workspace_scope") && text.includes(`"${OWNERSHIP_SCHEMA}"."projects"`)) {
+      if (
+        text.includes("SELECT workspace_scope") &&
+        text.includes(`"${OWNERSHIP_SCHEMA}"."projects"`)
+      ) {
         return { rows: [row], rowCount: 1 };
       }
       if (text.includes(`DELETE FROM "${OWNERSHIP_SCHEMA}"."projects"`)) {
@@ -399,11 +527,85 @@ describe("managed Sandbox ownership", () => {
     assert.equal(projects[0]?.openPath, "open.html");
     assert.equal(await store.deleteProject("workspace", "user-a", "project-1"), true);
     assert.ok(
-      queries.some(({ text }) =>
-        text.includes(`INSERT INTO "${OWNERSHIP_SCHEMA}"."projects"`),
-      ),
+      queries.some(({ text }) => text.includes(`INSERT INTO "${OWNERSHIP_SCHEMA}"."projects"`)),
     );
     assert.ok(queries.some(({ text }) => text.includes("updated_at = now()")));
+  });
+
+  it("writes, reads, locks, and deletes machine-owned service projects", async () => {
+    const queries: Array<{ text: string; values?: unknown[] }> = [];
+    const row = {
+      workspace_scope: "workspace",
+      machine_id: "machine-1",
+      service_kind: "desktop",
+      definition_version: 2,
+      directory_path: "~/.dbx-tools/services/desktop",
+      route_path: "/sandbox/desktop/machine-1",
+      open_path: "vnc.html?autoconnect=1",
+      port: 8443,
+      project_config: { tasks: { start: { run: "start-desktop" } } },
+      strip_prefix: true,
+      created_at: new Date("2026-10-12T10:00:00.000Z"),
+      updated_at: new Date("2026-10-12T10:01:00.000Z"),
+    };
+    const pool = ownershipPool(async (text, values) => {
+      queries.push({ text, values });
+      if (
+        text.includes("SELECT workspace_scope") &&
+        text.includes(`"${OWNERSHIP_SCHEMA}"."machine_service_projects"`)
+      ) {
+        return { rows: [row], rowCount: 1 };
+      }
+      if (text.includes(`DELETE FROM "${OWNERSHIP_SCHEMA}"."machine_service_projects"`)) {
+        return { rows: [], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const store = await LakebaseMachineOwnershipStore.create(pool);
+    const input: NewMachineServiceProjectRecord = {
+      workspaceScope: "workspace",
+      machineId: "machine-1",
+      serviceKind: "desktop",
+      definitionVersion: 2,
+      directory: "~/.dbx-tools/services/desktop",
+      path: "/sandbox/desktop/machine-1",
+      openPath: "vnc.html?autoconnect=1",
+      port: 8443,
+      config: { tasks: { start: { run: "start-desktop" } } },
+      stripPrefix: true,
+    };
+
+    await store.upsertMachineServiceProject(input);
+    const project = await store.getMachineServiceProject("workspace", "machine-1", "desktop");
+    const listed = await store.listMachineServiceProjects("workspace", "machine-1");
+    const locked = await store.withMachineServiceProjectLock(
+      "workspace",
+      "machine-1",
+      "desktop",
+      async () => "locked",
+    );
+
+    assert.equal(project?.definitionVersion, 2);
+    assert.equal(project?.serviceKind, "desktop");
+    assert.deepEqual(listed, [project] as MachineServiceProjectRecord[]);
+    assert.equal(locked, "locked");
+    assert.equal(
+      await store.deleteMachineServiceProject("workspace", "machine-1", "desktop"),
+      true,
+    );
+    assert.equal(await store.deleteMachineServiceProjectsForMachine("workspace", "machine-1"), 1);
+    assert.ok(
+      queries.some(
+        ({ text, values }) =>
+          text.includes(`INSERT INTO "${OWNERSHIP_SCHEMA}"."machine_service_projects"`) &&
+          values?.[2] === "desktop",
+      ),
+    );
+    assert.ok(
+      queries.some(
+        ({ text }) => text.includes("pg_advisory_lock") && !text.includes("pg_advisory_unlock"),
+      ),
+    );
   });
 
   it("creates generated names and persists ownership in Lakebase", async () => {
@@ -471,6 +673,124 @@ describe("managed Sandbox ownership", () => {
     });
     assert.deepEqual([...entries.keys()], ["owned"]);
     assert.equal(store.assignments.length, 2);
+  });
+
+  it("removes expired owners and their projects while retaining a shared machine", async () => {
+    const now = Date.now();
+    const managedName = createSandboxName("00112233");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(
+      assignment("expired-user", "owned", managedName, now - 1_000),
+      assignment("active-user", "owned", managedName, now + 60_000),
+    );
+    await store.upsertProject({
+      workspaceScope: "workspace",
+      userId: "expired-user",
+      projectId: "expired-project",
+      name: "expired-project",
+      machineId: "owned",
+      directory: "~/projects/expired-project",
+      projectPath: "expired-project",
+      path: "/sandbox/expired/project",
+      port: 8_080,
+      config: {},
+      stripPrefix: true,
+    });
+    const { client, entries } = sandboxClient([
+      { sandboxId: "owned", status: "RUNNING", name: managedName },
+    ]);
+    const ssh = runtime(store);
+    Object.defineProperty(ssh, "ensureSession", { value: async () => unusedSession });
+
+    assert.deepEqual(await ssh.reapMachines(client), {
+      scanned: 1,
+      deleted: 0,
+      removedAssignments: 1,
+      failures: 0,
+    });
+    assert.deepEqual([...entries.keys()], ["owned"]);
+    assert.deepEqual(
+      store.assignments.map((candidate) => candidate.userId),
+      ["active-user"],
+    );
+    assert.deepEqual(store.projects, []);
+  });
+
+  it("persists hidden service projects and locks provisioning across owners", async () => {
+    const now = Date.now();
+    const managedName = createSandboxName("00112233");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(
+      assignment("user-a", "owned", managedName, now + 60_000),
+      assignment("user-b", "owned", managedName, now + 60_000),
+      assignment("user-c", "owned", managedName, now + 60_000),
+    );
+    const { client } = sandboxClient([
+      {
+        sandboxId: "owned",
+        status: "RUNNING",
+        name: managedName,
+        gatewayHost: "gateway.example",
+      },
+    ]);
+    const ssh = runtime(store, { machineSoftware: [] });
+    const setupCommands: string[] = [];
+    const session = {
+      ...unusedSession,
+      execute: async (command: string, args: string[]) => {
+        setupCommands.push(args[1] ?? "");
+        return {
+          success: true,
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          executionTimeMs: 0,
+          command,
+          args,
+        };
+      },
+    } as unknown as SshSession;
+    Object.defineProperty(ssh, "ensureSession", { value: async () => session });
+
+    const first = await ssh.startService(client, "user-a", {
+      machineId: "owned",
+      service: "desktop",
+    });
+    const repeated = await ssh.startService(client, "user-a", {
+      machineId: "owned",
+      service: "desktop",
+    });
+    const shared = await ssh.startService(client, "user-b", {
+      machineId: "owned",
+      service: "desktop",
+    });
+    store.serviceProjects[0] = {
+      ...store.serviceProjects[0]!,
+      path: "/old/sandbox/desktop/owned",
+    };
+    const reconfigured = await ssh.startService(client, "user-c", {
+      machineId: "owned",
+      service: "desktop",
+    });
+
+    assert.equal(first.state, "ready");
+    assert.equal(repeated.state, "ready");
+    assert.equal(shared.state, "ready");
+    assert.equal(reconfigured.state, "ready");
+    assert.equal(store.serviceLockCount, 4);
+    assert.equal(setupCommands.length, 4);
+    assert.match(setupCommands[0] ?? "", /'start' 'true'$/);
+    assert.match(setupCommands[1] ?? "", /'start' 'false'$/);
+    assert.match(setupCommands[2] ?? "", /'start' 'false'$/);
+    assert.match(setupCommands[3] ?? "", /'start' 'true'$/);
+    assert.equal(store.serviceProjects.length, 1);
+    assert.equal(store.serviceProjects[0]?.definitionVersion, 9);
+    assert.equal(store.serviceProjects[0]?.directory, "~/projects/.sandbox-services/desktop");
+    assert.deepEqual(
+      ssh.routes.list("owned", "user-b", { includeInternal: true }).map((route) => route.path),
+      ["/sandbox/desktop/owned"],
+    );
+    await ssh.close();
   });
 
   it("retains a successful SSH connection after its connect promise settles", async () => {
@@ -553,6 +873,36 @@ describe("managed Sandbox ownership", () => {
       updated.openUrl,
       `${ssh.projectPathPrefix("user-a")}/demo/dashboard.html?mode=full`,
     );
+    const startedServices: string[] = [];
+    Object.defineProperty(ssh, "startService", {
+      value: async (_client: WorkspaceClient, _userId: string, input: { service: string }) => {
+        startedServices.push(input.service);
+        return {
+          kind: input.service,
+          path: `/sandbox/${input.service}/owned`,
+          openUrl: `/sandbox/${input.service}/owned`,
+          state: "ready",
+        };
+      },
+    });
+    const routeLess = await ssh.addProject(client, "user-a", {
+      machineId: "owned",
+      projectId: created.id,
+      route: false,
+      serviceDependencies: ["desktop"],
+    });
+    assert.equal(routeLess.openUrl, undefined);
+    assert.equal(routeLess.state, "ready");
+    assert.equal(store.projects[0]?.route, false);
+    assert.deepEqual(store.projects[0]?.serviceDependencies, ["desktop"]);
+    assert.deepEqual(startedServices, ["desktop"]);
+    const retained = await ssh.addProject(client, "user-a", {
+      machineId: "owned",
+      projectId: created.id,
+      config: { env: { MODE: "desktop" } },
+    });
+    assert.equal(retained.openUrl, undefined);
+    assert.equal(store.projects[0]?.route, false);
     assert.equal(store.projects.length, 1);
     assert.equal(await ssh.removeProject(client, "user-a", created.id), true);
     assert.deepEqual(store.projects, []);
@@ -614,6 +964,15 @@ describe("managed Sandbox ownership", () => {
         machineId: "owned",
         name: "other-port",
         port: 65_000,
+      }),
+      /port .* already in use/,
+    );
+    await assert.rejects(
+      ssh.addProject(client, "user-a", {
+        machineId: "owned",
+        name: "desktop-port",
+        port: 6_080,
+        route: false,
       }),
       /port .* already in use/,
     );
@@ -824,12 +1183,7 @@ describe("managed Sandbox ownership", () => {
     const result = await ssh.reapMachines(client);
 
     assert.deepEqual(result, { scanned: 5, deleted: 1, removedAssignments: 2, failures: 0 });
-    assert.deepEqual([...entries.keys()].sort(), [
-      "foreign",
-      "legacy",
-      "marker-foreign",
-      "orphan",
-    ]);
+    assert.deepEqual([...entries.keys()].sort(), ["foreign", "legacy", "marker-foreign", "orphan"]);
     assert.equal(store.assignments.length, 1);
     assert.equal(store.assignments[0]?.machineId, "legacy");
   });

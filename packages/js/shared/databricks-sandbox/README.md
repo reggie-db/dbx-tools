@@ -23,8 +23,9 @@ import { addSshProjectRequestSchema } from "@dbx-tools/shared-databricks-sandbox
 
 const request = addSshProjectRequestSchema.parse({
   machineId: "sandbox-id",
-  name: "demo",
-  openPath: "index.html",
+  name: "desktop-tool",
+  route: false,
+  serviceDependencies: ["desktop"],
   config: {
     tools: { node: "lts" },
   },
@@ -34,6 +35,9 @@ const request = addSshProjectRequestSchema.parse({
 The server generates omitted names, paths, and ports. Project paths are scoped
 beneath the authenticated user's route prefix. `config` is serialized to
 `mise.toml`. The server injects the reserved Project environment values.
+`route: false` keeps lifecycle-only projects out of the HTTP proxy.
+`serviceDependencies` starts typed built-in services and adds hidden
+`sandbox:<kind>` mise task dependencies.
 
 Use these schemas at browser and server boundaries. SSH sessions, private keys,
 Lakebase persistence, and proxy transports remain in

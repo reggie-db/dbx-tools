@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { sshCommandRequestSchema } from "@dbx-tools/shared-databricks-sandbox";
+import {
+  addSshProjectRequestSchema,
+  sshCommandRequestSchema,
+  sshProjectSchema,
+} from "@dbx-tools/shared-databricks-sandbox";
 import { parse } from "smol-toml";
 import {
   generateProjectPort,
@@ -54,6 +58,34 @@ describe("Sandbox project configuration", () => {
     );
   });
 
+  it("injects hidden service tasks and adds them to the start dependencies", () => {
+    const toml = renderProjectMiseConfig(
+      {
+        tasks: {
+          prepare: { run: "prepare-project" },
+          start: { depends: ["prepare"], run: "start-project" },
+        },
+      },
+      { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
+      ["desktop", "terminal", "desktop"],
+    );
+    const parsed = parse(toml) as {
+      tasks: Record<string, { depends?: string[]; hide?: boolean; run?: string }>;
+    };
+
+    assert.deepEqual(parsed.tasks.start?.depends, [
+      "prepare",
+      "sandbox:desktop",
+      "sandbox:terminal",
+    ]);
+    assert.equal(parsed.tasks["sandbox:desktop"]?.hide, true);
+    assert.equal(parsed.tasks["sandbox:terminal"]?.hide, true);
+    assert.match(
+      parsed.tasks["sandbox:desktop"]?.run ?? "",
+      /projects\/\.sandbox-services\/desktop.*mise" run start/,
+    );
+  });
+
   it("runs optional mise stop and uninstall before deleting the project directory", () => {
     assert.match(PROJECT_REMOVE_SCRIPT, /for task in stop uninstall; do/);
     assert.match(
@@ -66,6 +98,41 @@ describe("Sandbox project configuration", () => {
     assert.match(PROJECT_REMOVE_SCRIPT, /readlink "\$proc\/cwd"/);
     assert.match(PROJECT_REMOVE_SCRIPT, /kill -KILL/);
     assert.match(PROJECT_REMOVE_SCRIPT, /rm -rf -- "\$project_directory"/);
+  });
+});
+
+describe("Sandbox project contracts", () => {
+  it("leaves update defaults to the runtime and accepts typed service dependencies", () => {
+    const request = addSshProjectRequestSchema.parse({
+      machineId: "sandbox-id",
+      serviceDependencies: ["desktop", "terminal"],
+    });
+
+    assert.equal(request.route, undefined);
+    assert.deepEqual(request.serviceDependencies, ["desktop", "terminal"]);
+    assert.throws(
+      () =>
+        addSshProjectRequestSchema.parse({
+          machineId: "sandbox-id",
+          serviceDependencies: ["unknown"],
+        }),
+      /Invalid option/,
+    );
+  });
+
+  it("accepts route-less project output without an open URL", () => {
+    assert.doesNotThrow(() =>
+      sshProjectSchema.parse({
+        id: "project-id",
+        name: "worker",
+        machineId: "sandbox-id",
+        directory: "~/projects/worker",
+        path: "/sandbox/abc/worker",
+        port: 8080,
+        stripPrefix: true,
+        state: "stopped",
+      }),
+    );
   });
 });
 

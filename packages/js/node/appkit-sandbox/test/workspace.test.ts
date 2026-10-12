@@ -64,7 +64,10 @@ describe("sshWorkspaceSandbox", () => {
     const sandbox = await sshWorkspaceSandbox(runtime)({ requestContext });
     const instructions = sandbox.getInstructions?.() ?? "";
 
-    assert.match(instructions, /Return openUrl/);
+    assert.match(instructions, /return openUrl/i);
+    assert.match(instructions, /route: false/);
+    assert.match(instructions, /serviceDependencies/);
+    assert.match(instructions, /sandbox:<kind>/);
     assert.match(instructions, /relative asset and API URLs/);
     assert.match(instructions, /derive ws:\/\/ or wss:\/\//);
     assert.match(instructions, /Raw TCP, UDP/);

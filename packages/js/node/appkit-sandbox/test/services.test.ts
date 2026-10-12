@@ -1,132 +1,137 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { brandUtils } from "@dbx-tools/shared-core";
 import type { SshCommandResult } from "@dbx-tools/shared-databricks-sandbox";
 import { dbxToolsAssetSvg } from "@dbx-tools/ui/branding/assets";
-import { ensureSshService, projectTerminalOpenUrl } from "../src/services.ts";
+import { parse } from "smol-toml";
+import {
+  ensureSshService,
+  loadSshServiceDefinition,
+  projectTerminalOpenUrl,
+  type SshServiceDefinition,
+} from "../src/services.ts";
 import type { SshSession } from "../src/session.ts";
 
 const success: SshCommandResult = {
-  command: "bash",
+  command: "sh",
   args: ["-lc"],
   exitCode: 0,
   stdout: "",
   stderr: "",
   success: true,
-  durationMs: 1,
+  executionTimeMs: 1,
 };
 
-describe("ensureSshService", () => {
-  it("installs pinned ttyd and serves it beneath the public route path", async () => {
-    let script = "";
-    const session = {
-      execute: async (_command: string, args: string[]) => {
-        script = args[1] ?? "";
-        return success;
-      },
-    } as unknown as SshSession;
+interface MiseServiceDocument {
+  hooks: {
+    postinstall: string;
+  };
+  tasks: {
+    start: {
+      hide: boolean;
+      run: string;
+    };
+    stop: {
+      hide: boolean;
+      run: string;
+    };
+  };
+}
 
-    const target = await ensureSshService(session, "terminal", "/sandbox/terminal/machine", 1_000);
+function serviceDocument(definition: SshServiceDefinition): MiseServiceDocument {
+  return parse(definition.miseToml) as unknown as MiseServiceDocument;
+}
 
-    assert.match(script, /TTYD_VERSION=1\.7\.7/);
-    assert.match(script, /ttyd\.version/);
-    assert.match(script, /aarch64\) checksum=b38acadd/);
-    assert.match(script, /x86_64\) checksum=8a217c96/);
-    assert.match(script, /releases\/download\/\{version\}\/ttyd\.\{architecture\}/);
-    assert.match(script, /ttyd checksum mismatch/);
-    assert.match(script, /dbx-tools-shell/);
-    assert.match(script, /dbx-tools-bashrc/);
-    assert.match(script, /unset BASH_ENV ENV PROMPT_COMMAND/);
-    assert.match(script, /--noprofile --rcfile/);
-    assert.doesNotMatch(script, /bash -i -l/);
-    assert.match(script, /--writable --url-arg/);
-    assert.match(script, /--interface 127\.0\.0\.1/);
-    assert.match(script, /--client-option rendererType=webgl/);
-    assert.match(script, /legacy_pid_file="\$runtime\/dinotty\.pid"/);
-    assert.match(script, /kill "\$\(cat "\$file"\)"/);
-    assert.equal(target.stripPrefix, true);
-    assert.equal(target.redirectToSlash, true);
-    assert.equal(target.openUrl, "/sandbox/terminal/machine/");
+describe("packaged Sandbox services", () => {
+  it("loads a pinned ttyd definition with hidden lifecycle tasks", () => {
+    const definition = loadSshServiceDefinition("terminal", "/sandbox/terminal/machine");
+    const document = serviceDocument(definition);
+
+    assert.equal(definition.directory, "~/projects/.sandbox-services/terminal");
+    assert.match(document.hooks.postinstall, /version="1\.7\.7"/);
+    assert.match(
+      document.hooks.postinstall,
+      /aarch64\) checksum="b38acadd89d1d396a0f5649aa52c539edbad07f4bc7348b27b4f4b7219dd4165"/,
+    );
+    assert.match(
+      document.hooks.postinstall,
+      /x86_64\) checksum="8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55"/,
+    );
+    assert.match(document.hooks.postinstall, /github\.com\/tsl0922\/ttyd\/releases\/download/);
+    assert.match(document.hooks.postinstall, /ttyd checksum mismatch/);
+    assert.match(document.hooks.postinstall, /dbx-tools-shell/);
+    assert.match(document.hooks.postinstall, /dbx-tools-bashrc/);
+    assert.match(document.tasks.start.run, /--interface 127\.0\.0\.1 --port 7681/);
+    assert.match(document.tasks.start.run, /--writable --url-arg/);
+    assert.match(document.tasks.start.run, /--client-option rendererType=webgl/);
+    assert.match(document.tasks.start.run, /ttyd did not become ready/);
+    assert.match(document.tasks.stop.run, /stop-ttyd/);
+    assert.equal(document.tasks.start.hide, true);
+    assert.equal(document.tasks.stop.hide, true);
+    assert.equal(definition.target.remotePort, 7681);
+    assert.equal(definition.target.stripPrefix, true);
+    assert.equal(definition.target.redirectToSlash, true);
+    assert.equal(definition.target.openUrl, "/sandbox/terminal/machine/");
   });
 
-  it("provisions the branded loopback desktop idempotently", async () => {
-    let script = "";
-    const session = {
-      execute: async (_command: string, args: string[]) => {
-        script = args[1] ?? "";
-        return success;
-      },
-    } as unknown as SshSession;
+  it("loads an optimized official KasmVNC desktop definition", () => {
+    const definition = loadSshServiceDefinition("desktop", "/sandbox/desktop/machine");
+    const document = serviceDocument(definition);
+    const install = document.hooks.postinstall;
+    const start = document.tasks.start.run;
 
-    const target = await ensureSshService(session, "desktop", "/sandbox/desktop/machine", 1_000);
-
-    assert.match(script, /noble-amd64\) package_checksum=/);
-    assert.match(script, /package_name="kasmvncserver_\$\{codename\}_1\.5\.0_\$architecture\.deb"/);
-    assert.match(script, /f599fe02e2175b9817b6165f74a5d2bebdc73118dde9181ba3410963bed7ae1e/);
-    assert.match(script, /kasmvncserver :20 -fg/);
-    assert.match(script, /-select-de xfce -xstartup/);
-    assert.match(script, /-websocketPort 6080/);
-    assert.match(script, /-disableBasicAuth -SecurityTypes None/);
-    assert.match(script, /allow_resize: true/);
-    assert.match(script, /pem_certificate:\n    pem_key:\n    require_ssl: false/);
-    assert.match(script, /video_streaming_mode:\n    codec: h264/);
-    assert.match(script, /enter_video_encoding_mode:\n      time_threshold: 1/);
-    assert.match(script, /Cross-Origin-Embedder-Policy=require-corp/);
-    assert.match(script, /Cross-Origin-Opener-Policy=same-origin/);
-    assert.doesNotMatch(script, /tigervnc-standalone-server|websockify --web|\/usr\/share\/novnc/);
-    assert.match(script, /dbx-tools-wallpaper\.svg/);
-    assert.match(script, /epiphany-browser/);
-    assert.match(script, /WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1/);
-    assert.match(script, /dbx-tools-browser\.desktop/);
-    assert.match(script, /WebBrowser=dbx-tools-browser/);
-    assert.match(script, /gsettings set org\.gnome\.Epiphany homepage-url/);
-    assert.match(script, /browser-homepage/);
-    const encodedHomepage = script.match(
-      /printf %s '([^']+)' \| base64 -d >"\$browser_homepage"/,
-    )?.[1];
-    assert.ok(encodedHomepage);
-    assert.equal(
-      Buffer.from(encodedHomepage, "base64").toString("utf8"),
-      brandUtils.defaultBrandContext.links.website,
+    assert.match(install, /kasmvnc_version="1\.5\.0"/);
+    assert.match(
+      install,
+      /package_name="kasmvncserver_\$\{codename\}_\$\{kasmvnc_version\}_\$architecture\.deb"/,
     );
-    assert.match(script, /rm -f "\$HOME\/Desktop\/Web Browser\.desktop"/);
-    assert.doesNotMatch(script, /cat >"\$HOME\/Desktop\/Web Browser\.desktop"/);
-    assert.match(script, /desktop_environment="\$runtime\/environment"/);
-    assert.match(script, /desktop_runner="\$runtime\/run"/);
-    assert.match(script, /printf 'export DISPLAY=:%s\\n' '20'/);
-    assert.match(script, /\. "\$HOME\/\.dbx-tools\/runtime\/desktop\/environment"/);
-    assert.match(script, /exec "\$@"/);
-    assert.doesNotMatch(script, /ls \/tmp\/\.X11-unix|sed .*DISPLAY/);
-    assert.match(script, /dbx-tools-terminal\.desktop/);
-    assert.match(script, /Icon=\$terminal_icon/);
-    assert.match(script, /rm -f "\$HOME\/Desktop\/Terminal\.desktop"/);
-    assert.doesNotMatch(script, /cat >"\$HOME\/Desktop\/Terminal\.desktop"/);
-    const encodedTerminalIcon = script.match(
-      /printf %s '([^']+)' \| base64 -d >"\$terminal_icon_svg"/,
-    )?.[1];
-    assert.ok(encodedTerminalIcon);
-    assert.match(Buffer.from(encodedTerminalIcon, "base64").toString("utf8"), /<svg/);
-    assert.match(script, /arc-theme/);
-    assert.match(script, /libavcodec-dev/);
-    assert.match(script, /libavformat-dev/);
-    assert.match(script, /libswscale-dev/);
-    assert.match(script, /papirus-icon-theme/);
-    assert.match(script, /xfce4-whiskermenu-plugin/);
-    assert.match(script, /Arc-Dark/);
-    assert.match(script, /Papirus-Dark/);
-    assert.match(script, /button-title string 'dbx tools'/);
-    assert.match(script, /xfce4-panel/);
-    assert.match(script, /xfdesktop/);
-    assert.match(script, /xfwm4/);
-    assert.match(script, /exec dbus-run-session -- "\$0"/);
-    assert.match(script, /startxfce4 >>"\$log_file"/);
-    assert.match(script, /grep -E '\/\(last-image\|image-path\)\$'/);
-    assert.match(script, /Xfce desktop session did not become ready/);
-    assert.match(script, /urllib\.request\.urlopen/);
-    assert.match(script, /KasmVNC web client did not become ready/);
-    const encodedWallpaper = script.match(/printf %s '([^']+)' \| base64 -d/)?.[1];
-    assert.ok(encodedWallpaper);
-    const wallpaper = Buffer.from(encodedWallpaper, "base64").toString("utf8");
+    assert.match(
+      install,
+      /https:\/\/github\.com\/kasmtech\/KasmVNC\/releases\/download\/v\$\{kasmvnc_version\}/,
+    );
+    assert.match(
+      install,
+      /noble-amd64\) package_checksum="f599fe02e2175b9817b6165f74a5d2bebdc73118dde9181ba3410963bed7ae1e"/,
+    );
+    assert.match(
+      install,
+      /noble-arm64\) package_checksum="c9199cf4753208bfb69fd016a9780242bebfc43370cc38c97d61e90a3c783e04"/,
+    );
+    assert.doesNotMatch(install, /libav(?:codec|format|util)|libswscale/i);
+    assert.doesNotMatch(install, /papirus/i);
+    assert.match(install, /hicolor-icon-theme/);
+    assert.equal(install.match(/apt-get update/g)?.length, 1);
+    assert.equal(install.match(/apt-get install/g)?.length, 1);
+    assert.ok(install.indexOf("python3 - <<'PY' &") < install.indexOf("apt-get update"));
+    assert.ok(install.indexOf("apt-get update") < install.indexOf('wait "$package_download_pid"'));
+    assert.match(install, /cmp -s "\$temporary" "\$destination"/);
+    assert.equal(install.match(/rsvg-convert --width/g)?.length, 3);
+    assert.match(install, /desktop_runner="\$runtime\/run"/);
+    assert.match(install, /printf 'export DISPLAY=:%s\\n' '20'/);
+    assert.match(install, /\. "\$HOME\/\.dbx-tools\/runtime\/desktop\/environment"/);
+    assert.match(install, /exec "\$@"/);
+    assert.doesNotMatch(install, /ls \/tmp\/\.X11-unix|sed .*DISPLAY/);
+    assert.match(install, /dbx-tools-browser\.desktop/);
+    assert.match(install, /dbx-tools-terminal\.desktop/);
+    assert.match(install, /WebBrowser=dbx-tools-browser/);
+    assert.match(install, /Arc-Dark/);
+    assert.match(install, /IconThemeName string hicolor/);
+    assert.match(install, /exec dbus-run-session --/);
+    assert.match(install, /startxfce4/);
+    assert.match(install, /Xfce desktop shell did not become ready/);
+    assert.match(start, /kasmvncserver :20 -fg/);
+    assert.match(start, /-select-de xfce -xstartup/);
+    assert.match(start, /-websocketPort 6080/);
+    assert.match(start, /-disableBasicAuth -SecurityTypes None/);
+    assert.match(start, /KasmVNC web client did not become ready/);
+    assert.equal(document.tasks.start.hide, true);
+    assert.equal(document.tasks.stop.hide, true);
+
+    const wallpaper = Buffer.from(
+      definition.environment.DBX_TOOLS_DESKTOP_WALLPAPER_BASE64 ?? "",
+      "base64",
+    ).toString("utf8");
     for (const color of [
       brandUtils.defaultBrandContext.colors.primary,
       brandUtils.defaultBrandContext.colors.primaryHover,
@@ -141,45 +146,88 @@ describe("ensureSshService", () => {
       wallpaper,
       new RegExp(dbxToolsAssetSvg.logoDark.match(/<path d="([^"]+)"/)?.[1] ?? "$^"),
     );
-    assert.doesNotMatch(wallpaper, /M24 27h50v12/);
-    assert.doesNotMatch(wallpaper, /BUILD · TEST · EXPLORE/);
-    assert.match(script, /version_file/);
-    assert.equal(target.remotePort, 6080);
-    assert.equal(target.stripPrefix, true);
-    assert.equal(target.redirectToSlash, true);
-    assert.match(target.htmlHead ?? "", /dbx-tools-desktop-brand/);
-    assert.match(target.htmlHead ?? "", /\.noVNC_logo[^}]*display:none!important/);
-    assert.match(target.htmlHead ?? "", /KasmVNC Learn More/);
-    assert.match(target.htmlHead ?? "", /document\.title="dbx tools Desktop"/);
-    assert.match(target.htmlHead ?? "", /data:image\/svg\+xml;base64/);
+
+    assert.equal(definition.target.remotePort, 6080);
+    assert.equal(definition.target.stripPrefix, true);
+    assert.equal(definition.target.redirectToSlash, true);
+    assert.match(definition.target.htmlHead ?? "", /dbx-tools-desktop-brand/);
+    assert.match(definition.target.htmlHead ?? "", /KasmVNC Learn More/);
+    assert.match(definition.target.htmlHead ?? "", /document\.title="dbx tools Desktop"/);
     assert.equal(
-      target.openUrl,
+      definition.target.openUrl,
       "/sandbox/desktop/machine/?autoconnect=1&resize=remote&show_dot=1&clipboard_seamless=0&enable_webp=0&kasmvnc_mode_preference=-1027&path=sandbox%2Fdesktop%2Fmachine%2Fwebsockify",
     );
   });
 
-  it("adds dynamic viewport sizing to the Glances document", async () => {
+  it("loads Glances installation, lifecycle, and route metadata", () => {
+    const definition = loadSshServiceDefinition("stats", "/sandbox/metrics/machine");
+    const document = serviceDocument(definition);
+
+    assert.match(document.hooks.postinstall, /version="4\.5\.6"/);
+    assert.match(document.hooks.postinstall, /glances\[web\]==\$version/);
+    assert.match(document.hooks.postinstall, /url_prefix=\$\{DBX_TOOLS_SERVICE_PATH%\/\}\//);
+    assert.match(document.tasks.start.run, /--bind 127\.0\.0\.1/);
+    assert.match(document.tasks.start.run, /--port 61208/);
+    assert.match(document.tasks.start.run, /Glances did not become ready/);
+    assert.match(document.tasks.stop.run, /stop-glances/);
+    assert.equal(definition.environment.DBX_TOOLS_SERVICE_PATH, "/sandbox/metrics/machine");
+    assert.equal(definition.target.remotePort, 61208);
+    assert.equal(definition.target.stripPrefix, false);
+    assert.equal(definition.target.redirectToSlash, true);
+    assert.match(definition.target.htmlHead ?? "", /dbx-tools-glances-viewport/);
+    assert.match(definition.target.htmlHead ?? "", /100svh/);
+    assert.match(definition.target.htmlHead ?? "", /#processlist\{height:auto!important/);
+    assert.equal(definition.target.openUrl, "/sandbox/metrics/machine/");
+  });
+
+  it("materializes packaged mise through the generic runner", async () => {
+    let command = "";
+    let args: string[] = [];
+    let environment: Readonly<Record<string, string>> | undefined;
     const session = {
-      execute: async () => success,
+      execute: async (
+        value: string,
+        values: string[],
+        options: { env?: Readonly<Record<string, string>> },
+      ) => {
+        command = value;
+        args = values;
+        environment = options.env;
+        return success;
+      },
     } as unknown as SshSession;
 
-    const target = await ensureSshService(session, "stats", "/sandbox/metrics/machine", 1_000);
+    const target = await ensureSshService(session, "terminal", "/sandbox/terminal/machine", 1_000);
 
-    assert.equal(target.redirectToSlash, true);
-    assert.match(target.htmlHead ?? "", /dbx-tools-glances-viewport/);
-    assert.match(target.htmlHead ?? "", /100svh/);
-    assert.match(target.htmlHead ?? "", /#processlist\{height:auto!important/);
-    assert.match(target.htmlHead ?? "", /#processlist-table\{[^}]*overflow-x:auto/);
-    assert.doesNotMatch(target.htmlHead ?? "", /table-layout:fixed/);
-    assert.equal(target.openUrl, "/sandbox/metrics/machine/");
+    assert.equal(command, "sh");
+    assert.equal(args[0], "-lc");
+    const encodedRunner = args[1]?.match(/^printf %s '([^']+)'/)?.[1];
+    assert.ok(encodedRunner);
+    const runner = Buffer.from(encodedRunner, "base64").toString("utf8");
+    assert.match(
+      runner,
+      /service_directory="\$HOME\/projects\/\.sandbox-services\/\$service_kind"/,
+    );
+    assert.match(runner, /"\$mise_bin" install/);
+    assert.match(runner, /\[ "\$task" = start \] && \[ "\$install" = true \]/);
+    assert.match(runner, /"\$mise_bin" run "\$task"/);
+    assert.equal(environment?.DBX_TOOLS_SERVICE_PATH, "/sandbox/terminal/machine");
+    assert.equal(target.remotePort, 7681);
+  });
+
+  it("keeps remote provisioning shell out of TypeScript", async () => {
+    const [servicesSource, desktopSource] = await Promise.all([
+      readFile(new URL("../src/services.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/desktop.ts", import.meta.url), "utf8"),
+    ]);
+    for (const source of [servicesSource, desktopSource]) {
+      assert.doesNotMatch(source, /apt-get|kasmvncserver :|nohup "\$|python3 - <<'PY'/);
+    }
   });
 
   it("opens ttyd in the requested project directory", () => {
     assert.equal(
-      projectTerminalOpenUrl(
-        "/sandbox/terminal/machine/",
-        "/home/sandbox/projects/demo directory",
-      ),
+      projectTerminalOpenUrl("/sandbox/terminal/machine/", "/home/sandbox/projects/demo directory"),
       "/sandbox/terminal/machine/?arg=%2Fhome%2Fsandbox%2Fprojects%2Fdemo+directory",
     );
   });

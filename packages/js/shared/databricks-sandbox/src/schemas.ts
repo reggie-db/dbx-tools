@@ -15,6 +15,7 @@ export const sshProjectSchema = z
     openUrl: z
       .string()
       .startsWith("/")
+      .optional()
       .describe("AppKit URL opened by project links, including any configured entry page."),
     port: z
       .number()
@@ -212,6 +213,18 @@ export const addSshProjectRequestSchema = z
       .optional()
       .describe(
         "Mise configuration represented as JSON. The server serializes it to mise.toml and injects reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT environment values.",
+      ),
+    route: z
+      .boolean()
+      .optional()
+      .describe(
+        "Whether AppKit exposes the project server through an authenticated route. Defaults true when creating and retains the stored value when updating.",
+      ),
+    serviceDependencies: z
+      .array(sshMachineServiceKindSchema)
+      .optional()
+      .describe(
+        "Built-in machine services that must be available before the project starts. Defaults empty when creating and retains the stored value when updating.",
       ),
     stripPrefix: z
       .boolean()

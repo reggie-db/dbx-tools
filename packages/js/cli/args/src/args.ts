@@ -21,7 +21,7 @@ export interface CliArgMeta {
   readonly env?: string | readonly string[];
   /** Set false to resolve the field from config without generating a Commander flag. */
   readonly flag?: boolean;
-  /** Set false to keep schema and configured defaults out of generated help. */
+  /** Set false to hide defaults and defer layered configuration loading until parsing. */
   readonly helpDefault?: boolean;
   /** One-character short flag without a dash, or false to disable automatic generation. */
   readonly short?: string | false;
@@ -70,7 +70,7 @@ export function addArgs<TSchema extends CliObjectSchema>(
     const envKeys = fieldEnvKeys(field);
     const envName = envArgName(field, envKeys, options);
     const flags = argFlags(field, shortFlags.get(field.key));
-    const sourced = configValue(field, envKeys, options);
+    const sourced = field.helpDefault === false ? undefined : configValue(field, envKeys, options);
     const fallback = sourced ?? field.fallback;
     const option = new Option(flags, field.description);
     Object.defineProperty(option, "schemaHelpDefault", {

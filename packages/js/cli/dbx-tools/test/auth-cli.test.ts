@@ -142,8 +142,10 @@ describe("auth CLI", () => {
     let capturedOptions: DatabricksAuthOptions | undefined;
     const previousAuthType = process.env.DATABRICKS_AUTH_TYPE;
     const previousGroupId = process.env.DATABRICKS_GROUP_ID;
+    const previousHost = process.env.DATABRICKS_HOST;
     process.env.DATABRICKS_AUTH_TYPE = AuthType.OAuthM2M;
     process.env.DATABRICKS_GROUP_ID = "group";
+    process.env.DATABRICKS_HOST = "workspace.example.com";
     try {
       await buildProgram("dbx auth", {
         createAuthClient: async (options) => {
@@ -177,12 +179,15 @@ describe("auth CLI", () => {
       else process.env.DATABRICKS_AUTH_TYPE = previousAuthType;
       if (previousGroupId === undefined) delete process.env.DATABRICKS_GROUP_ID;
       else process.env.DATABRICKS_GROUP_ID = previousGroupId;
+      if (previousHost === undefined) delete process.env.DATABRICKS_HOST;
+      else process.env.DATABRICKS_HOST = previousHost;
     }
 
     assert.equal(capturedOptions?.profile, "TEST");
     assert.equal(capturedOptions?.target, "workspace");
     assert.equal(capturedOptions?.authType, AuthType.OAuthM2M);
     assert.equal(capturedOptions?.groupId, "group");
+    assert.equal(capturedOptions?.host, "https://workspace.example.com");
     assert.equal(capturedOptions?.preferUserToMachine, false);
     assert.deepEqual(capturedOptions?.scopes, ["scope-a", "scope-b", "scope-c"]);
     assert.equal(capturedOptions?.auth?.lockTimeoutMs, 12);

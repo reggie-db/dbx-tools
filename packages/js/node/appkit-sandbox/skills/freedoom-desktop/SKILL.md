@@ -7,8 +7,8 @@ description: Launch the redistributable Freedoom game in the built-in browser de
 
 Call `list_ssh_machines` first and use only a returned machine `id`. Reuse an
 existing project on that machine when `projects` already contains this recipe.
-Call `start_ssh_machine_service` with
-`service: "desktop"` before game setup. Do not install or configure KasmVNC,
+Use a route-less project with the built-in desktop as a declared service
+dependency. Do not install or configure KasmVNC,
 another VNC server, a window manager, a VNC password, or another desktop route.
 The built-in service owns those concerns and returns the desktop `openUrl`.
 It also owns the display assignment. Never enumerate `/tmp/.X11-unix`, infer a
@@ -17,9 +17,9 @@ display.
 
 Game installation and runtime tasks come from the project's mise config.
 `hooks.postinstall` installs the game, while `tasks.start` and `tasks.stop`
-own its runtime lifecycle. After
-the desktop service is ready, pass the setup options below to
-`add_ssh_project`. Do not install packages, write launch scripts, or start the
+own its runtime lifecycle. Pass the setup options below to `add_ssh_project`.
+It starts the declared desktop dependency and returns only after that service
+is ready. Do not install packages, write launch scripts, or start the
 game with an ad-hoc command. Use `execute_ssh_command` only to invoke the
 documented mise task or inspect logs, with `cwd` set to the returned
 `directory`. Before running a task, call `execute_ssh_command` with
@@ -30,8 +30,9 @@ not write game files under `~/.dbx-tools/runtime`.
 
 ## Setup project options
 
-Call `add_ssh_project` with `machineId`, `name: "freedoom-desktop"`, and this
-mise configuration as the `config` object:
+Call `add_ssh_project` with `machineId`, `name: "freedoom-desktop"`,
+`route: false`, `serviceDependencies: ["desktop"]`, and this mise
+configuration as the `config` object:
 
 ```toml
 [hooks]
@@ -93,8 +94,9 @@ pkill -x prboom-plus 2>/dev/null || true
 
 The install hook installs only the distribution's freely redistributable
 Freedoom data and a maintained engine (Crispy Doom, falling back to PrBoom+).
-After `add_ssh_project` completes, list the project tasks, confirm `start` is
-present. From the returned `directory`, call `execute_ssh_command` with
+After `add_ssh_project` completes, list the project tasks and confirm `start`
+and its hidden `sandbox:desktop` dependency are present. From the returned
+`directory`, call `execute_ssh_command` with
 `command: "sh"` and
 `args: ["-lc", "\"$HOME/.local/bin/mise\" run start"]`. The `start` task
 locates `freedoom2.wad` or `freedoom1.wad` instead of assuming a
@@ -107,5 +109,5 @@ directory with `args: ["-lc", "\"$HOME/.local/bin/mise\" run stop"]`.
 Project removal invokes `stop` automatically when available. Do not download
 or request proprietary Doom data.
 
-Return the desktop service `openUrl`, not the project's HTTP route, localhost,
-or a direct Sandbox URL.
+Return the ready desktop service `openUrl` from the machine state. This project
+does not have an HTTP route. Never return localhost or a direct Sandbox URL.

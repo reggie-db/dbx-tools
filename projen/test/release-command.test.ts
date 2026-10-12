@@ -176,33 +176,12 @@ describe("direct release tags", () => {
     }
   });
 
-  it("requires an explicit profile before starting demo deployment", async () => {
-    const { root } = fixture();
-    try {
-      await assert.rejects(
-        runRelease({
-          root,
-          branch: "main",
-          prefix: "v",
-          remote: "origin",
-          localPublish: false,
-          demoDeploy: true,
-          releaseNotes: false,
-        }),
-        /--demo-deploy requires --profile <name>/,
-      );
-      assert.equal(git(root, "log", "-1", "--pretty=%s"), "initial");
-    } finally {
-      rmSync(join(root, ".."), { recursive: true, force: true });
-    }
-  });
-
-  it("runs demo:deploy with the selected profile after tagging", async () => {
+  it("passes the demo profile through the environment without forwarding arguments", async () => {
     const { remote, root } = fixture();
     try {
       writeFileSync(
         join(root, "demo-deploy.mjs"),
-        'import { writeFileSync } from "node:fs";\nwriteFileSync("demo-deployed", process.argv.slice(2).join("\\n"));\n',
+        'import { writeFileSync } from "node:fs";\nwriteFileSync("demo-deployed", JSON.stringify({ argv: process.argv.slice(2), profile: process.env.DATABRICKS_CONFIG_PROFILE }));\n',
       );
       writeFileSync(
         join(root, "package.json"),
@@ -229,10 +208,13 @@ describe("direct release tags", () => {
         remote: "origin",
         localPublish: false,
         demoDeploy: true,
-        demoProfile: "TEST",
+        demoProfile: "FEVM-REGGIE-PIERCE-AWS",
         releaseNotes: false,
       });
-      assert.equal(readFileSync(join(root, "demo-deployed"), "utf8"), "--profile\nTEST");
+      assert.deepEqual(JSON.parse(readFileSync(join(root, "demo-deployed"), "utf8")), {
+        argv: [],
+        profile: "FEVM-REGGIE-PIERCE-AWS",
+      });
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
     }

@@ -233,7 +233,7 @@ export async function runRelease(
     readonly validationTasks?: readonly string[];
     /** After tagging, stage and deploy the AppKit demo app. Off by default. */
     readonly demoDeploy?: boolean;
-    /** Explicit Databricks CLI profile used by the optional demo deployment. */
+    /** Databricks CLI profile used only by the optional local demo deployment. */
     readonly demoProfile?: string;
     /** Write `docs/releases/vX.Y.Z.md` via Genie, with a git-log fallback. On by default. */
     readonly releaseNotes?: boolean;
@@ -249,11 +249,7 @@ export async function runRelease(
   const { branch, prefix, remote, root } = options;
   const selection = releaseStepSelection(options);
   const install = options.install ?? "auto";
-  const demoProfile = options.demoProfile?.trim();
 
-  if (options.demoDeploy && !demoProfile) {
-    throw new Error("--demo-deploy requires --profile <name>");
-  }
   if (options.releaseNotesText !== undefined && options.releaseNotesFile !== undefined) {
     throw new Error("--release-notes-text and --release-notes-file are mutually exclusive");
   }
@@ -364,8 +360,13 @@ export async function runRelease(
     });
   }
 
-  if (options.demoDeploy && demoProfile) {
-    runTaskCommand(root, "bun", ["run", "demo:deploy", "--profile", demoProfile]);
+  if (options.demoDeploy) {
+    runTaskCommand(root, "bun", ["run", "demo:deploy"], {
+      env: {
+        ...process.env,
+        ...(options.demoProfile ? { DATABRICKS_CONFIG_PROFILE: options.demoProfile } : {}),
+      },
+    });
   }
 
   return tag;
@@ -420,8 +421,7 @@ export const ReleaseOptionsSchema = z.object({
     .trim()
     .min(1)
     .optional()
-    .describe("Explicit Databricks CLI profile for demo deployment")
-    .meta({ env: [], helpDefault: false }),
+    .describe("Databricks CLI profile for the optional demo deployment"),
   localPublish: z.boolean().default(true).describe("Publish to configured local registries"),
   localRegistry: z
     .string()

@@ -124,11 +124,11 @@ dependencies remain ordinary registry dependencies installed by the Apps build;
 the deploy never uploads `node_modules`.
 
 From the repository root, `bun run demo:deploy` compiles the workspace, stages
-the tree, resolves the configured/default workspace profile through
+the tree, resolves default environment or configured credentials through
 `@dbx-tools/auth`, force-refreshes its token with interactive login fallback,
-and passes that profile explicitly to bundle
-validate/deploy/`demo_app`. Pass `--demo-deploy` on `bun run release` to do the
-same after tagging (off by default).
+and passes the resolved profile to bundle validate/deploy/`demo_app` when auth
+selected one. Pass `--demo-deploy` on `bun run release` to do the same after
+tagging (off by default).
 
 ```bash
 bun run demo:deploy
@@ -162,11 +162,12 @@ Two things worth knowing before changing this flow:
   `.gitignore`, and this repo ignores every `dist` directory. If staging happens there,
   `bundle deploy` warns "There are no files to sync" and ships an app with no
   source.
-- **Pass the detected profile explicitly.** `DATABRICKS_CONFIG_PROFILE` can
-  otherwise retarget bundle commands. `scripts/demo-deploy.ts` resolves the
-  configured/default local profile through `@dbx-tools/auth` and passes both
-  target and profile to every workspace call. The profile owns the workspace
-  host; the bundle does not duplicate it.
+- **Keep auth resolution centralized.** `scripts/demo-deploy.ts` calls
+  `createAuthClient()` without parallel environment parsing, so
+  `DATABRICKS_CONFIG_PROFILE`, `DATABRICKS_HOST`, and the other auth options
+  follow `@dbx-tools/auth` precedence. When auth selects a profile, the script
+  passes it explicitly to every workspace call. The bundle does not duplicate
+  the workspace host.
 - **The deployed server runs under Node.** `app.yaml` launches `src/server.ts`
   through Node's `--import tsx` support. The staging tree includes the source and
   installs `tsx` as a normal runtime dependency. Local development, compilation,

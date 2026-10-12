@@ -5,9 +5,11 @@ description: Start or open the built-in ttyd browser terminal on an assigned Dat
 
 # ttyd Terminal
 
-This built-in service is the only non-Project path. Do not use
-`execute_ssh_command` to install a replacement terminal or create a manual
-route. If the request requires custom files or another server, call
+This built-in service is a hidden, machine-owned mise project with a reserved
+route. `start_ssh_machine_service` owns its installation, lifecycle, readiness,
+and route. Do not use `execute_ssh_command` to install a replacement terminal
+or create a manual route. If the request requires custom files or another
+server, call
 `add_ssh_project` with a mise config whose `hooks.postinstall` performs only
 installation or preparation and whose `tasks.start` and `tasks.stop` own the
 workload lifecycle. Before invoking a project task, use the
@@ -19,7 +21,8 @@ Use `list_ssh_machines` to identify an assigned machine. Use
 `start_ssh_machine_service` with `service: "terminal"`. Do not install another
 terminal server or create a parallel route.
 
-Return the service path from the tool result. The AppKit proxy owns HTTP,
+The tool returns only after ttyd and its authenticated route are ready. Return
+the service `openUrl`; no additional health check is required. The AppKit proxy owns HTTP,
 WebSocket, authentication, and the route path used by ttyd.
 
 If startup fails, report the tool error and inspect the remote

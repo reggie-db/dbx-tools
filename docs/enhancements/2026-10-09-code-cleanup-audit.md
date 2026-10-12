@@ -11,7 +11,7 @@ The automated duplicate and unused-dependency results are dominated by generated
 - `/tmp` is an explicitly writable Mastra workspace mount and no longer requires approval for filesystem mutations. User workspace paths retain the existing ownership check, and every other absolute path still requires approval.
 - `sharedFS.cache()` can cache `readFile` only under declared filesystem-relative roots. AppKit Mastra passes resolved skill roots into that option, so skill files use the existing process-local `FilesCachePlugin` LRU while ordinary file reads remain live.
 - Workspace decoration is tracked in a `WeakSet` instead of mutating Mastra `Workspace` instances with a private symbol property.
-- Demo deployment requires an explicit Databricks profile before release preparation mutates Git state. The selected profile is forwarded to every Databricks bundle command.
+- Demo deployment resolves default environment or configured credentials directly through `@dbx-tools/auth`, including profile, host, and the other auth options. A resolved profile is forwarded to every Databricks bundle command when present.
 
 ## Ownership findings
 
@@ -35,7 +35,7 @@ Generated Graphiti source contains the duplicate blocks reported by the scanner.
 
 The build graph is large but follows repository ownership: Projen defines package tasks, generated files are synthesized, and Python source synchronization is attached to package compile and test phases. No second build orchestrator was found.
 
-The custom release transaction is complex because it owns branch preparation, synchronized versioning, validation selection, release notes, local publication, annotated tags, and optional demo deployment. That complexity is concentrated in `projen/tasks/release.ts` instead of duplicated across workflows. The implicit Databricks profile was the main unsafe edge and is now fail-closed. Future cleanup should split pure selection and validation helpers from side-effecting Git operations only when tests can preserve the transaction order.
+The custom release transaction is complex because it owns branch preparation, synchronized versioning, validation selection, release notes, local publication, annotated tags, and optional demo deployment. That complexity is concentrated in `projen/tasks/release.ts` instead of duplicated across workflows. Demo authentication remains owned by `scripts/demo-deploy.ts` and `@dbx-tools/auth`, rather than by the release transaction. Future cleanup should split pure selection and validation helpers from side-effecting Git operations only when tests can preserve the transaction order.
 
 ## Remaining work
 

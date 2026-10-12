@@ -495,7 +495,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
         request.headers[USER_EMAIL_HEADER] = userId;
       }
     }
-    if (!this.runtime.routes.handleUpgrade(request, socket, head)) socket.destroy();
+    if (!(await this.runtime.routes.handleUpgrade(request, socket, head))) socket.destroy();
   }
 
   private async withRequestAuth<T>(

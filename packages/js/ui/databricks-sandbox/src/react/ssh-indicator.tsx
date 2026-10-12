@@ -18,7 +18,14 @@ import {
   TooltipTrigger,
   cn,
 } from "@dbx-tools/ui/react";
-import { HeartPulseIcon, PlayIcon, ServerIcon, SquareIcon, SquareTerminalIcon } from "lucide-react";
+import {
+  HeartPulseIcon,
+  MonitorIcon,
+  PlayIcon,
+  ServerIcon,
+  SquareIcon,
+  SquareTerminalIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SshClient } from "./client.ts";
 import { resolveServiceUrl } from "./service-url.ts";
@@ -68,9 +75,9 @@ export function SshIndicator({
     try {
       if (action === "start") await client.start(machine.id);
       if (action === "stop") await client.stop(machine.id);
-      if (action === "terminal" || action === "stats") {
+      if (action === "terminal" || action === "desktop" || action === "stats") {
         const service = await client.startService(machine.id, action);
-        window.open(resolveServiceUrl(service.path), "_blank", "noopener,noreferrer");
+        window.open(resolveServiceUrl(service.openUrl), "_blank", "noopener,noreferrer");
       }
       await refresh();
       return true;
@@ -227,6 +234,9 @@ function MachineRow({
           ) : null}
           <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("terminal")}>
             <SquareTerminalIcon className="size-3.5" /> Terminal
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("desktop")}>
+            <MonitorIcon className="size-3.5" /> Desktop
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("stats")}>
             <HeartPulseIcon className="size-3.5" /> Stats

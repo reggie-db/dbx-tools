@@ -5,13 +5,22 @@ import {
   type PgQueryable,
 } from "@dbx-tools/postgres";
 import { hash, log } from "@dbx-tools/shared-core";
-import type { AddSshProjectRequest } from "@dbx-tools/shared-databricks-sandbox";
+import {
+  sshMachineServiceKindSchema,
+  type AddSshProjectRequest,
+  type SshMachineServiceKind,
+} from "@dbx-tools/shared-databricks-sandbox";
 import { z } from "zod";
 type ProjectConfig = NonNullable<AddSshProjectRequest["config"]>;
 const logger = log.logger("appkit-sandbox:ownership");
 
 const MIGRATION_LOCK = ["appkit-sandbox", "machine-ownership", "migrations"] as const;
 const REAPER_LOCK = ["appkit-sandbox", "machine-ownership", "reaper"] as const;
+const MACHINE_SERVICE_PROJECT_LOCK = [
+  "appkit-sandbox",
+  "machine-ownership",
+  "service-project",
+] as const;
 /** Shared prefix; each Lakebase connector owns `${prefix}_${hash(current_user)}`. */
 export const OWNERSHIP_SCHEMA_PREFIX = "dbx_tools_databricks_sandbox";
 
@@ -44,7 +53,9 @@ export const MachineAssignmentSchema = z
       .string()
       .min(1)
       .optional()
-      .describe("Databricks Sandbox name recorded at create time. Owner and expiration live in this row, not in the name."),
+      .describe(
+        "Databricks Sandbox name recorded at create time. Owner and expiration live in this row, not in the name.",
+      ),
     expiresAt: z
       .string()
       .datetime()
@@ -78,6 +89,14 @@ export const SandboxProjectRecordSchema = z
     config: z
       .record(z.string(), z.json())
       .describe("JSON representation of the project's mise configuration."),
+    route: z
+      .boolean()
+      .default(true)
+      .describe("Whether AppKit exposes this project's loopback server."),
+    serviceDependencies: z
+      .array(sshMachineServiceKindSchema)
+      .default([])
+      .describe("Built-in machine services required by this project."),
     stripPrefix: z.boolean().describe("Whether AppKit strips the project route prefix."),
     createdAt: z.string().datetime().describe("Time the project was first persisted."),
     updatedAt: z.string().datetime().describe("Time the project configuration last changed."),
@@ -92,7 +111,42 @@ export const NewSandboxProjectRecordSchema = SandboxProjectRecordSchema.omit({
   updatedAt: true,
 }).describe("Sandbox project configuration written to Lakebase.");
 
-export type NewSandboxProjectRecord = z.infer<typeof NewSandboxProjectRecordSchema>;
+export type NewSandboxProjectRecord = z.input<typeof NewSandboxProjectRecordSchema>;
+
+export const MachineServiceProjectRecordSchema = z
+  .object({
+    workspaceScope: z.string().min(1).describe("Workspace identity that contains the machine."),
+    machineId: z.string().min(1).describe("Databricks Sandbox that hosts the service."),
+    serviceKind: sshMachineServiceKindSchema.describe(
+      "Built-in machine service represented by the project.",
+    ),
+    definitionVersion: z
+      .number()
+      .int()
+      .positive()
+      .describe("Version of the built-in service project definition."),
+    directory: z.string().min(1).describe("Machine-owned service project directory."),
+    path: z.string().startsWith("/").describe("AppKit route path for the service."),
+    openPath: z.string().min(1).optional().describe("Optional service-relative entry URL."),
+    port: z.number().int().min(1).max(65535).describe("Sandbox-side loopback port."),
+    config: z
+      .record(z.string(), z.json())
+      .describe("JSON representation of the service project's mise configuration."),
+    stripPrefix: z.boolean().describe("Whether AppKit strips the service route prefix."),
+    createdAt: z.string().datetime().describe("Time the service project was first persisted."),
+    updatedAt: z.string().datetime().describe("Time the service project definition last changed."),
+  })
+  .strict()
+  .describe("One Lakebase-persisted machine-owned service project.");
+
+export type MachineServiceProjectRecord = z.infer<typeof MachineServiceProjectRecordSchema>;
+
+export const NewMachineServiceProjectRecordSchema = MachineServiceProjectRecordSchema.omit({
+  createdAt: true,
+  updatedAt: true,
+}).describe("Machine-owned service project configuration written to Lakebase.");
+
+export type NewMachineServiceProjectRecord = z.infer<typeof NewMachineServiceProjectRecordSchema>;
 
 type LakebasePool = PgPoolLike & PgQueryable;
 
@@ -109,7 +163,7 @@ export class LakebaseMachineOwnershipStore {
   private constructor(
     private readonly pool: LakebasePool,
     readonly schema: string,
-  ) { }
+  ) {}
 
   /** Detects the connecting Lakebase role, then creates tables in its schema. */
   static async create(pool: LakebasePool): Promise<LakebaseMachineOwnershipStore> {
@@ -120,7 +174,7 @@ export class LakebaseMachineOwnershipStore {
   }
 
   /** Schema-qualified table name for this connector's partition. */
-  private table(name: "machine_assignments" | "projects"): string {
+  private table(name: "machine_assignments" | "projects" | "machine_service_projects"): string {
     return `${quotePostgresIdentifier(this.schema)}.${quotePostgresIdentifier(name)}`;
   }
 
@@ -210,7 +264,8 @@ export class LakebaseMachineOwnershipStore {
     const result = await this.pool.query<ProjectRow>(
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
-              project_config, strip_prefix, created_at, updated_at
+              project_config, route_enabled, service_dependencies, strip_prefix,
+              created_at, updated_at
        FROM ${this.table("projects")}
        WHERE ${conditions.join(" AND ")}
        ORDER BY created_at, project_id`,
@@ -228,7 +283,8 @@ export class LakebaseMachineOwnershipStore {
     const result = await this.pool.query<ProjectRow>(
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
-              project_config, strip_prefix, created_at, updated_at
+              project_config, route_enabled, service_dependencies, strip_prefix,
+              created_at, updated_at
        FROM ${this.table("projects")}
        WHERE workspace_scope = $1 AND user_id = $2 AND project_id = $3`,
       [workspaceScope, userId, projectId],
@@ -246,7 +302,8 @@ export class LakebaseMachineOwnershipStore {
     const result = await this.pool.query<ProjectRow>(
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
-              project_config, strip_prefix, created_at, updated_at
+              project_config, route_enabled, service_dependencies, strip_prefix,
+              created_at, updated_at
        FROM ${this.table("projects")}
        WHERE workspace_scope = $1 AND user_id = $2 AND machine_id = $3 AND project_name = $4`,
       [workspaceScope, userId, machineId, name],
@@ -260,8 +317,9 @@ export class LakebaseMachineOwnershipStore {
     await this.pool.query(
       `INSERT INTO ${this.table("projects")}
          (workspace_scope, user_id, project_id, project_name, machine_id,
-          directory_path, project_path, route_path, open_path, port, project_config, strip_prefix)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          directory_path, project_path, route_path, open_path, port, project_config,
+          route_enabled, service_dependencies, strip_prefix)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        ON CONFLICT (workspace_scope, user_id, project_id)
        DO UPDATE SET project_name = EXCLUDED.project_name,
                      machine_id = EXCLUDED.machine_id,
@@ -271,6 +329,8 @@ export class LakebaseMachineOwnershipStore {
                      open_path = EXCLUDED.open_path,
                      port = EXCLUDED.port,
                      project_config = EXCLUDED.project_config,
+                     route_enabled = EXCLUDED.route_enabled,
+                     service_dependencies = EXCLUDED.service_dependencies,
                      strip_prefix = EXCLUDED.strip_prefix,
                      updated_at = now()`,
       [
@@ -285,6 +345,8 @@ export class LakebaseMachineOwnershipStore {
         project.openPath ?? null,
         project.port,
         project.config,
+        project.route,
+        project.serviceDependencies,
         project.stripPrefix,
       ],
     );
@@ -309,6 +371,131 @@ export class LakebaseMachineOwnershipStore {
     return result.rowCount ?? 0;
   }
 
+  /** Deletes one owner's persisted projects for a shared Sandbox. */
+  async deleteProjectsForOwnerMachine(
+    workspaceScope: string,
+    userId: string,
+    machineId: string,
+  ): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM ${this.table("projects")}
+       WHERE workspace_scope = $1 AND user_id = $2 AND machine_id = $3`,
+      [workspaceScope, userId, machineId],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /** Lists machine-owned service projects in one workspace, optionally for one Sandbox. */
+  async listMachineServiceProjects(
+    workspaceScope: string,
+    machineId?: string,
+  ): Promise<MachineServiceProjectRecord[]> {
+    const values = machineId ? [workspaceScope, machineId] : [workspaceScope];
+    const condition = machineId
+      ? "workspace_scope = $1 AND machine_id = $2"
+      : "workspace_scope = $1";
+    const result = await this.pool.query<MachineServiceProjectRow>(
+      `SELECT workspace_scope, machine_id, service_kind, definition_version,
+              directory_path, route_path, open_path, port,
+              project_config, strip_prefix, created_at, updated_at
+       FROM ${this.table("machine_service_projects")}
+       WHERE ${condition}
+       ORDER BY created_at, machine_id, service_kind`,
+      values,
+    );
+    return result.rows.map(parseMachineServiceProjectRow);
+  }
+
+  /** Returns one machine-owned service project by workspace, Sandbox, and service kind. */
+  async getMachineServiceProject(
+    workspaceScope: string,
+    machineId: string,
+    serviceKind: SshMachineServiceKind,
+  ): Promise<MachineServiceProjectRecord | undefined> {
+    const result = await this.pool.query<MachineServiceProjectRow>(
+      `SELECT workspace_scope, machine_id, service_kind, definition_version,
+              directory_path, route_path, open_path, port,
+              project_config, strip_prefix, created_at, updated_at
+       FROM ${this.table("machine_service_projects")}
+       WHERE workspace_scope = $1 AND machine_id = $2 AND service_kind = $3`,
+      [workspaceScope, machineId, serviceKind],
+    );
+    return result.rows[0] ? parseMachineServiceProjectRow(result.rows[0]) : undefined;
+  }
+
+  /** Inserts or updates one machine-owned service project. */
+  async upsertMachineServiceProject(input: NewMachineServiceProjectRecord): Promise<void> {
+    const project = NewMachineServiceProjectRecordSchema.parse(input);
+    await this.pool.query(
+      `INSERT INTO ${this.table("machine_service_projects")}
+         (workspace_scope, machine_id, service_kind, definition_version,
+          directory_path, route_path, open_path, port, project_config, strip_prefix)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (workspace_scope, machine_id, service_kind)
+       DO UPDATE SET definition_version = EXCLUDED.definition_version,
+                     directory_path = EXCLUDED.directory_path,
+                     route_path = EXCLUDED.route_path,
+                     open_path = EXCLUDED.open_path,
+                     port = EXCLUDED.port,
+                     project_config = EXCLUDED.project_config,
+                     strip_prefix = EXCLUDED.strip_prefix,
+                     updated_at = now()`,
+      [
+        project.workspaceScope,
+        project.machineId,
+        project.serviceKind,
+        project.definitionVersion,
+        project.directory,
+        project.path,
+        project.openPath ?? null,
+        project.port,
+        project.config,
+        project.stripPrefix,
+      ],
+    );
+  }
+
+  /** Deletes one machine-owned service project and returns whether a row was removed. */
+  async deleteMachineServiceProject(
+    workspaceScope: string,
+    machineId: string,
+    serviceKind: SshMachineServiceKind,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM ${this.table("machine_service_projects")}
+       WHERE workspace_scope = $1 AND machine_id = $2 AND service_kind = $3`,
+      [workspaceScope, machineId, serviceKind],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  /** Deletes all machine-owned service projects for one Sandbox. */
+  async deleteMachineServiceProjectsForMachine(
+    workspaceScope: string,
+    machineId: string,
+  ): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM ${this.table("machine_service_projects")}
+       WHERE workspace_scope = $1 AND machine_id = $2`,
+      [workspaceScope, machineId],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /** Runs one service-project operation under its machine- and service-scoped advisory lock. */
+  async withMachineServiceProjectLock<T>(
+    workspaceScope: string,
+    machineId: string,
+    serviceKind: SshMachineServiceKind,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return advisoryLock.withAdvisoryLock(
+      this.pool,
+      [...MACHINE_SERVICE_PROJECT_LOCK, this.schema, workspaceScope, machineId, serviceKind],
+      operation,
+    );
+  }
+
   /** Runs one reconciliation pass while holding a workspace-scoped advisory lock. */
   async withReaperLock<T>(workspaceScope: string, operation: () => Promise<T>): Promise<T> {
     return advisoryLock.withAdvisoryLock(
@@ -319,11 +506,12 @@ export class LakebaseMachineOwnershipStore {
   }
 
   /** Releases store-owned resources without closing the caller-owned pool. */
-  async close(): Promise<void> { }
+  async close(): Promise<void> {}
 
   private async migrate(): Promise<void> {
     const assignments = this.table("machine_assignments");
     const projects = this.table("projects");
+    const machineServiceProjects = this.table("machine_service_projects");
     await advisoryLock.withAdvisoryLock(
       this.pool,
       [...MIGRATION_LOCK, this.schema],
@@ -361,6 +549,8 @@ export class LakebaseMachineOwnershipStore {
           open_path TEXT,
           port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
           project_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+          route_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+          service_dependencies JSONB NOT NULL DEFAULT '[]'::jsonb,
           remote_host TEXT,
           remote_port INTEGER,
           strip_prefix BOOLEAN NOT NULL,
@@ -373,6 +563,12 @@ export class LakebaseMachineOwnershipStore {
         await client.query(`ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS port INTEGER`);
         await client.query(
           `ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS project_config JSONB NOT NULL DEFAULT '{}'::jsonb`,
+        );
+        await client.query(
+          `ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS route_enabled BOOLEAN NOT NULL DEFAULT TRUE`,
+        );
+        await client.query(
+          `ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS service_dependencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
         );
         await client.query(`ALTER TABLE ${projects} ALTER COLUMN remote_host DROP NOT NULL`);
         await client.query(`ALTER TABLE ${projects} ALTER COLUMN remote_port DROP NOT NULL`);
@@ -404,7 +600,28 @@ export class LakebaseMachineOwnershipStore {
           `CREATE UNIQUE INDEX IF NOT EXISTS sandbox_projects_machine_port_idx
          ON ${projects} (workspace_scope, machine_id, port)`,
         );
-        await this.copyLegacyOwnership(client, assignments, projects);
+        await client.query(`
+        CREATE TABLE IF NOT EXISTS ${machineServiceProjects} (
+          workspace_scope TEXT NOT NULL,
+          machine_id TEXT NOT NULL,
+          service_kind TEXT NOT NULL,
+          definition_version INTEGER NOT NULL CHECK (definition_version > 0),
+          directory_path TEXT NOT NULL,
+          route_path TEXT NOT NULL,
+          open_path TEXT,
+          port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+          project_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+          strip_prefix BOOLEAN NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          PRIMARY KEY (workspace_scope, machine_id, service_kind)
+        )
+      `);
+        await client.query(
+          `CREATE INDEX IF NOT EXISTS machine_service_projects_machine_idx
+         ON ${machineServiceProjects} (workspace_scope, machine_id)`,
+        );
+        await this.copyLegacyOwnership(client, assignments, projects, machineServiceProjects);
       },
     );
   }
@@ -419,6 +636,7 @@ export class LakebaseMachineOwnershipStore {
     client: PgQueryable,
     assignments: string,
     projects: string,
+    machineServiceProjects: string,
   ): Promise<void> {
     if (this.schema === OWNERSHIP_SCHEMA_PREFIX) return;
     const legacy = quotePostgresIdentifier(OWNERSHIP_SCHEMA_PREFIX);
@@ -426,7 +644,8 @@ export class LakebaseMachineOwnershipStore {
       const existing = await client.query<{ table_name: string }>(
         `SELECT table_name
          FROM information_schema.tables
-         WHERE table_schema = $1 AND table_name IN ('machine_assignments', 'projects')`,
+         WHERE table_schema = $1
+           AND table_name IN ('machine_assignments', 'projects', 'machine_service_projects')`,
         [OWNERSHIP_SCHEMA_PREFIX],
       );
       const tables = new Set(existing.rows.map((row) => row.table_name));
@@ -466,6 +685,24 @@ export class LakebaseMachineOwnershipStore {
           });
         }
       }
+      if (tables.has("machine_service_projects")) {
+        const copied = await client.query(
+          `INSERT INTO ${machineServiceProjects} (
+             workspace_scope, machine_id, service_kind, definition_version, directory_path,
+             route_path, open_path, port, project_config, strip_prefix, created_at, updated_at
+           )
+           SELECT workspace_scope, machine_id, service_kind, definition_version, directory_path,
+             route_path, open_path, port, project_config, strip_prefix, created_at, updated_at
+           FROM ${legacy}.machine_service_projects
+           ON CONFLICT DO NOTHING`,
+        );
+        if ((copied.rowCount ?? 0) > 0) {
+          logger.info("Copied legacy Sandbox service projects into the role ownership schema", {
+            schema: this.schema,
+            rowCount: copied.rowCount,
+          });
+        }
+      }
     } catch (error) {
       logger.warn("Could not copy legacy Sandbox ownership into the role schema", {
         schema: this.schema,
@@ -496,6 +733,23 @@ interface ProjectRow {
   open_path: string | null;
   port: number;
   project_config: ProjectConfig;
+  route_enabled: boolean;
+  service_dependencies: unknown;
+  strip_prefix: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+interface MachineServiceProjectRow {
+  workspace_scope: string;
+  machine_id: string;
+  service_kind: string;
+  definition_version: number;
+  directory_path: string;
+  route_path: string;
+  open_path: string | null;
+  port: number;
+  project_config: ProjectConfig;
   strip_prefix: boolean;
   created_at: Date | string;
   updated_at: Date | string;
@@ -521,6 +775,26 @@ function parseProjectRow(row: ProjectRow): SandboxProjectRecord {
     machineId: row.machine_id,
     directory: row.directory_path,
     projectPath: row.project_path,
+    path: row.route_path,
+    ...(row.open_path ? { openPath: row.open_path } : {}),
+    port: row.port,
+    config: row.project_config,
+    route: row.route_enabled,
+    serviceDependencies: row.service_dependencies,
+    stripPrefix: row.strip_prefix,
+    createdAt: isoTimestamp(row.created_at),
+    updatedAt: isoTimestamp(row.updated_at),
+  });
+}
+
+/** Parse one persisted machine-owned service project row. */
+function parseMachineServiceProjectRow(row: MachineServiceProjectRow): MachineServiceProjectRecord {
+  return MachineServiceProjectRecordSchema.parse({
+    workspaceScope: row.workspace_scope,
+    machineId: row.machine_id,
+    serviceKind: row.service_kind,
+    definitionVersion: row.definition_version,
+    directory: row.directory_path,
     path: row.route_path,
     ...(row.open_path ? { openPath: row.open_path } : {}),
     port: row.port,

@@ -1,22 +1,24 @@
+import { readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { SshCommandResult, SshMachineServiceKind } from "@dbx-tools/shared-databricks-sandbox";
-import { dbxToolsAssetDataUrls } from "@dbx-tools/ui/branding/assets";
-import { desktopOpenUrl, desktopPorts, desktopScript } from "./desktop.ts";
+import { parse } from "smol-toml";
+import { packageScriptCommand } from "./_projects.ts";
+import {
+  desktopBrowserMetadata,
+  desktopMiseEnvironment,
+  desktopOpenUrl,
+  desktopPorts,
+} from "./desktop.ts";
 import type { SshSession } from "./session.ts";
 
-const TTYD_VERSION = "1.7.7";
-const TTYD_CHECKSUMS = {
-  aarch64: "b38acadd89d1d396a0f5649aa52c539edbad07f4bc7348b27b4f4b7219dd4165",
-  x86_64: "8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55",
-} as const;
-const GLANCES_VERSION = "4.5.6";
 const TTYD_PORT = 7681;
 const GLANCES_PORT = 61208;
-const DESKTOP_BRAND_HEAD = `<style id="dbx-tools-desktop-brand">
-.noVNC_logo,h1.noVNC_logo,a[title="KasmVNC Learn More"]{display:none!important}
-</style>
-<link data-dbx-tools-desktop-icon rel="icon" href="${dbxToolsAssetDataUrls.iconDark}">
-<script id="dbx-tools-desktop-brand-script">(()=>{const icon=${JSON.stringify(dbxToolsAssetDataUrls.iconDark)};const rewrite=(root)=>{if(root.nodeType===Node.TEXT_NODE){if(root.nodeValue?.includes("KasmVNC"))root.nodeValue=root.nodeValue.replaceAll("KasmVNC","dbx tools Desktop");return}const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode())if(node.nodeValue?.includes("KasmVNC"))node.nodeValue=node.nodeValue.replaceAll("KasmVNC","dbx tools Desktop")};const apply=()=>{document.title="dbx tools Desktop";for(const link of document.querySelectorAll('link[rel~="icon"],link[rel="apple-touch-icon"]'))link.setAttribute("href",icon);if(document.body)rewrite(document.body)};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply,{once:true});else apply();new MutationObserver((entries)=>{for(const entry of entries){if(entry.type==="characterData")rewrite(entry.target);else for(const node of entry.addedNodes)rewrite(node)}}).observe(document.documentElement,{childList:true,subtree:true,characterData:true})})();</script>`;
-const GLANCES_VIEWPORT_HEAD = `<style id="dbx-tools-glances-viewport">
+const SERVICE_SETUP_SCRIPT = readPackageResource("scripts", "setup-service.sh");
+const GLANCES_VIEWPORT_HEAD =
+  // ============================================================================
+  /*html*/ `
+<style id="dbx-tools-glances-viewport">
 html,body,#app{width:100%;max-width:100vw;height:100%;height:100svh;max-height:100svh;min-height:0;overflow:hidden}
 body{position:fixed;inset:0;margin:0}
 #app>main{display:flex;width:100%;max-width:100vw;height:100%;min-width:0;min-height:0;flex-direction:column;overflow:hidden}
@@ -25,7 +27,17 @@ body{position:fixed;inset:0;margin:0}
 .sidebar-min,.sidebar-max{height:100%!important;min-height:0!important}
 #processlist{height:auto!important;max-width:100%;overflow:visible}
 #processlist-table{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
-</style>`;
+</style>
+`
+    // ============================================================================
+    .trim();
+
+/** Fixed loopback ports reserved by hidden machine service projects. */
+export const sshServicePorts = {
+  terminal: TTYD_PORT,
+  desktop: desktopPorts.web,
+  stats: GLANCES_PORT,
+} as const satisfies Record<SshMachineServiceKind, number>;
 
 /** Loopback service endpoint and routing behavior discovered after remote startup. */
 export interface SshServiceTarget {
@@ -43,13 +55,62 @@ export interface SshServiceTarget {
   openUrl: string;
 }
 
+/** Packaged mise configuration and browser metadata for one built-in service. */
+export interface SshServiceDefinition {
+  /** Built-in service identifier. */
+  kind: SshMachineServiceKind;
+  /** Persisted definition version used to reconcile upgrades. */
+  definitionVersion: number;
+  /** Remote directory that owns the service mise configuration. */
+  directory: string;
+  /** Packaged mise configuration installed on the Sandbox. */
+  miseToml: string;
+  /** Installation environment consumed by the mise postinstall hook. */
+  environment: Readonly<Record<string, string>>;
+  /** Loopback and browser routing metadata. */
+  target: SshServiceTarget;
+}
+
+interface ServiceMetadata {
+  fileName: string;
+  definitionVersion: number;
+  environment?: () => Readonly<Record<string, string>>;
+  target: (path: string) => SshServiceTarget;
+}
+
 /**
- * Starts an idempotent built-in browser service on an SSH machine.
+ * Loads one packaged service definition and resolves its route-specific metadata.
  *
- * Repeated calls reuse the service's stable runtime files and return the
- * loopback target that {@link SshRouteRegistry} publishes through AppKit.
+ * The source TOML owns installation in `hooks.postinstall` and process
+ * lifecycle in hidden `tasks.start` and `tasks.stop` tasks.
+ */
+export function loadSshServiceDefinition(
+  kind: SshMachineServiceKind,
+  path: string,
+): SshServiceDefinition {
+  const metadata = serviceMetadata(kind);
+  const miseToml = readPackageResource("src", "service-definitions", metadata.fileName);
+  assertMiseServiceDefinition(kind, miseToml);
+  return {
+    kind,
+    definitionVersion: metadata.definitionVersion,
+    directory: `~/projects/.sandbox-services/${kind}`,
+    miseToml,
+    environment: {
+      DBX_TOOLS_SERVICE_PATH: path.replace(/\/+$/, ""),
+      ...metadata.environment?.(),
+    },
+    target: metadata.target(path),
+  };
+}
+
+/**
+ * Installs and starts an idempotent built-in browser service on an SSH machine.
  *
- * @throws When the remote startup command exits unsuccessfully.
+ * The packaged runner only materializes the selected mise configuration and
+ * invokes its install and start lifecycle.
+ *
+ * @throws When the remote mise lifecycle exits unsuccessfully.
  */
 export async function ensureSshService(
   session: SshSession,
@@ -57,39 +118,23 @@ export async function ensureSshService(
   path: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  install = true,
 ): Promise<SshServiceTarget> {
-  const result = await session.execute("bash", ["-lc", serviceScript(kind, path)], {
-    timeoutMs,
-    signal,
-  });
+  const definition = loadSshServiceDefinition(kind, path);
+  const result = await executeServiceTask(session, definition, "start", timeoutMs, signal, install);
   assertServiceStarted(kind, result);
-  if (kind === "terminal") {
-    return {
-      remoteHost: "127.0.0.1",
-      remotePort: TTYD_PORT,
-      stripPrefix: true,
-      redirectToSlash: true,
-      openUrl: `${path.replace(/\/+$/, "")}/`,
-    };
-  }
-  if (kind === "desktop") {
-    return {
-      remoteHost: "127.0.0.1",
-      remotePort: desktopPorts.web,
-      stripPrefix: true,
-      redirectToSlash: true,
-      htmlHead: DESKTOP_BRAND_HEAD,
-      openUrl: desktopOpenUrl(path),
-    };
-  }
-  return {
-    remoteHost: "127.0.0.1",
-    remotePort: GLANCES_PORT,
-    stripPrefix: false,
-    redirectToSlash: true,
-    htmlHead: GLANCES_VIEWPORT_HEAD,
-    openUrl: `${path.replace(/\/+$/, "")}/`,
-  };
+  return definition.target;
+}
+
+/** Stops one materialized built-in service through its packaged mise lifecycle. */
+export async function stopSshService(
+  session: SshSession,
+  definition: SshServiceDefinition,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  const result = await executeServiceTask(session, definition, "stop", timeoutMs, signal, false);
+  assertServiceStarted(definition.kind, result);
 }
 
 /** Return a ttyd URL that starts the shell in one owned project directory. */
@@ -99,6 +144,76 @@ export function projectTerminalOpenUrl(openUrl: string, directory: string): stri
   return `${url.pathname}${url.search}`;
 }
 
+function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
+  switch (kind) {
+    case "terminal":
+      return {
+        fileName: "terminal.mise.toml",
+        definitionVersion: 1,
+        target: (path) => ({
+          remoteHost: "127.0.0.1",
+          remotePort: TTYD_PORT,
+          stripPrefix: true,
+          redirectToSlash: true,
+          openUrl: `${path.replace(/\/+$/, "")}/`,
+        }),
+      };
+    case "desktop":
+      return {
+        fileName: "desktop.mise.toml",
+        definitionVersion: 9,
+        environment: desktopMiseEnvironment,
+        target: (path) => ({
+          ...desktopBrowserMetadata,
+          openUrl: desktopOpenUrl(path),
+        }),
+      };
+    case "stats":
+      return {
+        fileName: "stats.mise.toml",
+        definitionVersion: 1,
+        target: (path) => ({
+          remoteHost: "127.0.0.1",
+          remotePort: GLANCES_PORT,
+          stripPrefix: false,
+          redirectToSlash: true,
+          htmlHead: GLANCES_VIEWPORT_HEAD,
+          openUrl: `${path.replace(/\/+$/, "")}/`,
+        }),
+      };
+  }
+}
+
+function assertMiseServiceDefinition(kind: SshMachineServiceKind, source: string): void {
+  const document = parse(source);
+  const hooks = objectField(document, "hooks");
+  const tasks = objectField(document, "tasks");
+  const start = objectField(tasks, "start");
+  const stop = objectField(tasks, "stop");
+  if (
+    typeof hooks.postinstall !== "string" ||
+    typeof start.run !== "string" ||
+    start.hide !== true ||
+    typeof stop.run !== "string" ||
+    stop.hide !== true
+  ) {
+    throw new Error(
+      `Packaged ${kind} service must define postinstall and hidden start and stop tasks`,
+    );
+  }
+}
+
+function objectField(
+  source: Readonly<Record<string, unknown>>,
+  name: string,
+): Readonly<Record<string, unknown>> {
+  const value = source[name];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Packaged service configuration is missing ${name}`);
+  }
+  return value as Readonly<Record<string, unknown>>;
+}
+
 function assertServiceStarted(kind: SshMachineServiceKind, result: SshCommandResult): void {
   if (result.success) return;
   throw new Error(
@@ -106,156 +221,36 @@ function assertServiceStarted(kind: SshMachineServiceKind, result: SshCommandRes
   );
 }
 
-function serviceScript(kind: SshMachineServiceKind, path: string): string {
-  if (kind === "terminal") return ttydScript();
-  if (kind === "desktop") return desktopScript();
-  return glancesScript(path);
+function executeServiceTask(
+  session: SshSession,
+  definition: SshServiceDefinition,
+  task: "start" | "stop",
+  timeoutMs: number,
+  signal?: AbortSignal,
+  install = true,
+): Promise<SshCommandResult> {
+  return session.execute(
+    "sh",
+    [
+      "-lc",
+      packageScriptCommand(SERVICE_SETUP_SCRIPT, [
+        definition.kind,
+        Buffer.from(definition.miseToml).toString("base64"),
+        task,
+        String(install),
+      ]),
+    ],
+    {
+      env: { ...definition.environment },
+      timeoutMs,
+      signal,
+    },
+  );
 }
 
-function ttydScript(): string {
-  const checksums = Object.entries(TTYD_CHECKSUMS)
-    .map(([architecture, checksum]) => `  ${architecture}) checksum=${checksum} ;;`)
-    .join("\n");
-  return `set -euo pipefail
-runtime="$HOME/.dbx-tools/runtime"
-bin="$runtime/bin/ttyd"
-pid_file="$runtime/ttyd.pid"
-legacy_pid_file="$runtime/dinotty.pid"
-log_file="$runtime/ttyd.log"
-version_file="$runtime/ttyd.version"
-shell_wrapper="$runtime/bin/dbx-tools-shell"
-bashrc="$runtime/bin/dbx-tools-bashrc"
-mkdir -p "$runtime/bin"
-stop_pid() {
-  file="$1"
-  if [ -s "$file" ] && kill -0 "$(cat "$file")" 2>/dev/null; then
-    kill "$(cat "$file")"
-    for _ in $(seq 1 40); do
-      kill -0 "$(cat "$file")" 2>/dev/null || break
-      sleep 0.25
-    done
-  fi
-  rm -f "$file"
-}
-stop_pid "$legacy_pid_file"
-if [ ! -x "$bin" ] || [ ! -f "$version_file" ] || [ "$(cat "$version_file")" != "${TTYD_VERSION}" ]; then
-  stop_pid "$pid_file"
-  case "$(uname -m)" in
-${checksums}
-    *) echo "Unsupported ttyd architecture: $(uname -m)" >&2; exit 1 ;;
-  esac
-  TTYD_VERSION=${TTYD_VERSION} TTYD_ARCHITECTURE="$(uname -m)" TTYD_CHECKSUM="$checksum" TTYD_DESTINATION="$bin" python3 - <<'PY'
-import hashlib
-import os
-import stat
-import urllib.request
-from pathlib import Path
-
-version = os.environ["TTYD_VERSION"]
-architecture = os.environ["TTYD_ARCHITECTURE"]
-url = f"https://github.com/tsl0922/ttyd/releases/download/{version}/ttyd.{architecture}"
-with urllib.request.urlopen(url) as response:
-    payload = response.read()
-if hashlib.sha256(payload).hexdigest() != os.environ["TTYD_CHECKSUM"]:
-    raise RuntimeError("ttyd checksum mismatch")
-destination = Path(os.environ["TTYD_DESTINATION"])
-temporary = destination.with_suffix(".tmp")
-temporary.write_bytes(payload)
-temporary.chmod(temporary.stat().st_mode | stat.S_IXUSR)
-os.replace(temporary, destination)
-PY
-  printf '%s\n' "${TTYD_VERSION}" >"$version_file"
-fi
-cat >"$bashrc" <<'EOF'
-# Interactive ttyd rc: user bashrc without login motd, sudo hint, or export dumps.
-if [ -f "\${HOME}/.bashrc" ]; then
-  . "\${HOME}/.bashrc" >/dev/null 2>&1
-fi
-EOF
-cat >"$shell_wrapper" <<'EOF'
-#!/bin/sh
-unset BASH_ENV ENV PROMPT_COMMAND
-directory="\${1:-$HOME}"
-case "$directory" in
-  "$HOME"|"$HOME"/*) ;;
-  *) directory="$HOME" ;;
-esac
-cd -- "$directory"
-exec /bin/bash --noprofile --rcfile "\${HOME}/.dbx-tools/runtime/bin/dbx-tools-bashrc" -i
-EOF
-chmod 600 "$bashrc"
-chmod 700 "$shell_wrapper"
-if ! [ -s "$pid_file" ] || ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-  nohup "$bin" --interface 127.0.0.1 --port ${TTYD_PORT} --writable --url-arg \
-    --client-option term=xterm-256color --client-option rendererType=webgl \
-    --client-option cursorStyle=bar --client-option copyOnSelect=true \
-    --client-option rightClickSelectsWord=true --client-option disableLeaveAlert=true \
-    --client-option disableResizeOverlay=true "$shell_wrapper" >"$log_file" 2>&1 </dev/null &
-  echo $! >"$pid_file"
-fi
-python3 - ${TTYD_PORT} <<'PY'
-import socket
-import sys
-import time
-
-port = int(sys.argv[1])
-for _ in range(120):
-    try:
-        with socket.create_connection(("127.0.0.1", port), timeout=1):
-            raise SystemExit(0)
-    except OSError:
-        time.sleep(0.5)
-raise SystemExit("ttyd did not become ready")
-PY`;
-}
-
-function glancesScript(path: string): string {
-  return `set -euo pipefail
-runtime="$HOME/.dbx-tools/runtime"
-venv="$runtime/glances"
-pid_file="$runtime/glances.pid"
-log_file="$runtime/glances.log"
-config="$runtime/glances.conf"
-mkdir -p "$runtime"
-if [ ! -x "$venv/bin/glances" ] || [ ! -f "$venv/.version" ] || [ "$(cat "$venv/.version")" != "${GLANCES_VERSION}" ]; then
-  rm -rf "$venv"
-  if command -v uv >/dev/null 2>&1; then
-    uv venv --python python3 "$venv"
-    uv pip install --python "$venv/bin/python" --no-cache "glances[web]==${GLANCES_VERSION}"
-  else
-    if ! python3 -m venv "$venv"; then
-      sudo -n apt-get update
-      sudo -n apt-get install -y python3-venv
-      python3 -m venv "$venv"
-    fi
-    "$venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir "glances[web]==${GLANCES_VERSION}"
-  fi
-  printf '%s\\n' "${GLANCES_VERSION}" >"$venv/.version"
-fi
-cat >"$config" <<'EOF'
-[global]
-webui_allowed_hosts=127.0.0.1,localhost
-
-[outputs]
-url_prefix=${path}/
-EOF
-if ! [ -s "$pid_file" ] || ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-  nohup "$venv/bin/glances" --config "$config" --webserver --bind 127.0.0.1 \
-    --port ${GLANCES_PORT} --disable-autodiscover >"$log_file" 2>&1 </dev/null &
-  echo $! >"$pid_file"
-fi
-python3 - ${GLANCES_PORT} <<'PY'
-import socket
-import sys
-import time
-
-port = int(sys.argv[1])
-for _ in range(240):
-    try:
-        with socket.create_connection(("127.0.0.1", port), timeout=1):
-            raise SystemExit(0)
-    except OSError:
-        time.sleep(0.5)
-raise SystemExit("Glances did not become ready")
-PY`;
+function readPackageResource(...segments: string[]): string {
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const parent = dirname(moduleDirectory);
+  const packageRoot = basename(parent) === "lib" ? dirname(parent) : parent;
+  return readFileSync(join(packageRoot, ...segments), "utf8");
 }

@@ -43,7 +43,13 @@ import {
 } from "./ownership.ts";
 import { DatabricksSandboxClient, isSandboxUnavailable, type SandboxEntry } from "./rest.ts";
 import { SshRouteRegistry } from "./routes.ts";
-import { ensureSshService, projectTerminalOpenUrl } from "./services.ts";
+import {
+  ensureSshService,
+  loadSshServiceDefinition,
+  projectTerminalOpenUrl,
+  sshServicePorts,
+  stopSshService,
+} from "./services.ts";
 import { SshSession } from "./session.ts";
 
 const POLL_INTERVAL_MS = 1_000;
@@ -294,13 +300,7 @@ export class SshRuntime {
       userId,
       machineId,
     });
-    return this.toMachine(
-      final,
-      api.workspaceScope(),
-      userId,
-      owned.assignment,
-      projects,
-    );
+    return this.toMachine(final, api.workspaceScope(), userId, owned.assignment, projects);
   }
 
   /**
@@ -362,21 +362,24 @@ export class SshRuntime {
   ): Promise<SshMachine> {
     const api = new DatabricksSandboxClient(client);
     const owned = await this.requireOwnedMachine(api, userId, machineId, signal);
-    const final = await this.convergeMachine(api, machineId, "stopped", owned.entry, signal, () =>
-      this.clearMachineRuntime(api.workspaceScope(), machineId),
+    const final = await this.convergeMachine(
+      api,
+      machineId,
+      "stopped",
+      owned.entry,
+      signal,
+      () => this.clearMachineRuntime(api.workspaceScope(), machineId),
+      (entry) =>
+        normalizeStatus(entry.status) === "running"
+          ? this.stopMachineServices(client, api, userId, entry, signal)
+          : Promise.resolve(),
     );
     await this.assertAssigned(api.workspaceScope(), userId, machineId);
     const projects = await this.ownershipStore().listProjects(api.workspaceScope(), {
       userId,
       machineId,
     });
-    return this.toMachine(
-      final,
-      api.workspaceScope(),
-      userId,
-      owned.assignment,
-      projects,
-    );
+    return this.toMachine(final, api.workspaceScope(), userId, owned.assignment, projects);
   }
 
   /** Deletes one assigned Sandbox, removes all assignments, and clears local runtime state. */
@@ -392,6 +395,7 @@ export class SshRuntime {
     await api.delete(machineId, signal);
     await Promise.all([
       this.ownershipStore().deleteProjectsForMachine(api.workspaceScope(), machineId),
+      this.ownershipStore().deleteMachineServiceProjectsForMachine(api.workspaceScope(), machineId),
       this.ownershipStore().unassignAll(api.workspaceScope(), machineId),
     ]);
     return { deleted: true };
@@ -410,18 +414,8 @@ export class SshRuntime {
     const request = sshMachineServiceActionSchema.parse(input);
     const api = new DatabricksSandboxClient(client);
     const workspaceScope = api.workspaceScope();
-    const owned = await this.requireOwnedMachine(api, userId, request.machineId, signal);
+    await this.requireOwnedMachine(api, userId, request.machineId, signal);
     const key = serviceKey(workspaceScope, userId, request.machineId, request.service);
-    const current = this.services.get(key);
-    if (
-      normalizeStatus(owned.entry.status) === "running" &&
-      current?.state === "ready" &&
-      this.routes
-        .list(request.machineId, userId, { includeInternal: true })
-        .some((route) => route.path === current.path)
-    ) {
-      return current;
-    }
     const pending = this.startingServices.get(key);
     if (pending) return pending;
     const starting: SshMachineService = {
@@ -481,9 +475,10 @@ export class SshRuntime {
     const workspaceScope = api.workspaceScope();
     await this.assertAssigned(workspaceScope, userId, request.machineId);
     const ownership = this.ownershipStore();
-    const machineProjects = await ownership.listProjects(workspaceScope, {
-      machineId: request.machineId,
-    });
+    const [machineProjects, serviceProjects] = await Promise.all([
+      ownership.listProjects(workspaceScope, { machineId: request.machineId }),
+      ownership.listMachineServiceProjects(workspaceScope, request.machineId),
+    ]);
     const requestedName = request.name ? normalizeProjectName(request.name) : undefined;
     const existing = request.projectId
       ? await ownership.getProject(workspaceScope, userId, request.projectId)
@@ -514,8 +509,18 @@ export class SshRuntime {
     const port =
       request.port ??
       existing?.port ??
-      generateProjectPort(new Set(otherProjects.map((project) => project.port)));
-    if (otherProjects.some((project) => project.port === port)) {
+      generateProjectPort(
+        new Set([
+          ...otherProjects.map((project) => project.port),
+          ...serviceProjects.map((project) => project.port),
+          ...Object.values(sshServicePorts),
+        ]),
+      );
+    if (
+      otherProjects.some((project) => project.port === port) ||
+      serviceProjects.some((project) => project.port === port) ||
+      Object.values(sshServicePorts).some((reservedPort) => reservedPort === port)
+    ) {
       throw new Error(`Sandbox project port ${port} is already in use on this machine`);
     }
     const openPath =
@@ -524,8 +529,15 @@ export class SshRuntime {
         : existing?.openPath;
     const stripPrefix = request.stripPrefix ?? existing?.stripPrefix ?? true;
     const config = request.config ?? existing?.config ?? {};
+    const routeEnabled = input.route ?? existing?.route ?? true;
+    const serviceDependencies = input.serviceDependencies ?? existing?.serviceDependencies ?? [];
+    await Promise.all(
+      serviceDependencies.map((service) =>
+        this.startService(client, userId, { machineId: request.machineId, service }, signal),
+      ),
+    );
     const path = `${this.routes.userPathPrefix(userId)}/${projectPath}`;
-    const miseToml = renderProjectMiseConfig(config, { name, path, port });
+    const miseToml = renderProjectMiseConfig(config, { name, path, port }, serviceDependencies);
     const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
     const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
     const session = await this.ensureSession(client, userId, machine, epoch, signal);
@@ -543,7 +555,10 @@ export class SshRuntime {
     const projectId = existing?.projectId ?? randomBytes(16).toString("hex");
     const routeChanged = Boolean(
       existing &&
-      (existing.path !== path || existing.port !== port || existing.stripPrefix !== stripPrefix),
+      (existing.path !== path ||
+        existing.port !== port ||
+        existing.stripPrefix !== stripPrefix ||
+        existing.route !== routeEnabled),
     );
     if (routeChanged) await this.routes.remove(projectId, userId);
     const record: NewSandboxProjectRecord = {
@@ -558,20 +573,26 @@ export class SshRuntime {
       ...(openPath ? { openPath } : {}),
       port,
       config,
+      route: routeEnabled,
+      serviceDependencies,
       stripPrefix,
     };
     try {
-      const route = await this.routes.add(session, {
-        id: projectId,
-        ownerId: userId,
-        machineId: request.machineId,
-        remoteHost: "127.0.0.1",
-        remotePort: port,
-        path: projectPath,
-        stripPrefix,
-      });
-      record.path = route.path;
-      record.stripPrefix = route.stripPrefix;
+      if (routeEnabled) {
+        const route = await this.routes.add(session, {
+          id: projectId,
+          ...(await this.userRouteAuthorization(workspaceScope, userId, request.machineId)),
+          machineId: request.machineId,
+          remoteHost: "127.0.0.1",
+          remotePort: port,
+          path: projectPath,
+          stripPrefix,
+        });
+        record.path = route.path;
+        record.stripPrefix = route.stripPrefix;
+      } else {
+        await this.routes.remove(projectId, userId);
+      }
       await this.assertAssigned(workspaceScope, userId, request.machineId);
       this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
       await ownership.upsertProject(record);
@@ -590,10 +611,12 @@ export class SshRuntime {
       return this.toProject(
         {
           ...record,
+          route: routeEnabled,
+          serviceDependencies,
           createdAt: existing?.createdAt ?? new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
-        true,
+        routeEnabled,
       );
     } catch (error) {
       await this.routes.remove(projectId, userId);
@@ -668,11 +691,15 @@ export class SshRuntime {
       const session = await this.ensureSession(client, userId, machine, epoch, signal);
       await this.ensureMachineSoftware(workspaceScope, project.machineId, session, signal);
       await this.removeProjectDirectory(session, project.projectPath, signal);
-      const miseToml = renderProjectMiseConfig(project.config, {
-        name: project.name,
-        path: project.path,
-        port: project.port,
-      });
+      const miseToml = renderProjectMiseConfig(
+        project.config,
+        {
+          name: project.name,
+          path: project.path,
+          port: project.port,
+        },
+        project.serviceDependencies,
+      );
       const directory = await this.prepareProjectDirectory(
         session,
         project.projectPath,
@@ -682,7 +709,7 @@ export class SshRuntime {
       );
       const updated = { ...project, directory };
       await this.restoreProjectRoute(session, updated);
-      reset = this.toProject(updated, wasRunning);
+      reset = this.toProject(updated, project.route && wasRunning);
     } finally {
       if (!wasRunning) {
         await this.convergeMachine(
@@ -812,11 +839,12 @@ export class SshRuntime {
     const workspaceScope = api.workspaceScope();
     const ownership = this.ownershipStore();
     return ownership.withReaperLock(workspaceScope, async () =>
-      this.performLockedReap(api, ownership, workspaceScope, signal),
+      this.performLockedReap(client, api, ownership, workspaceScope, signal),
     );
   }
 
   private async performLockedReap(
+    client: WorkspaceClient,
     api: DatabricksSandboxClient,
     ownership: LakebaseMachineOwnershipStore,
     workspaceScope: string,
@@ -847,6 +875,7 @@ export class SshRuntime {
         await this.clearMachineRuntime(workspaceScope, machineId);
         await Promise.all([
           ownership.deleteProjectsForMachine(workspaceScope, machineId),
+          ownership.deleteMachineServiceProjectsForMachine(workspaceScope, machineId),
           ownership.unassignAll(workspaceScope, machineId).then((count) => {
             removedAssignments += count;
           }),
@@ -863,8 +892,65 @@ export class SshRuntime {
 
     const now = Date.now();
     for (const entry of entries) {
-      const machineAssignments = assignmentsByMachine.get(entry.sandboxId) ?? [];
+      let machineAssignments = assignmentsByMachine.get(entry.sandboxId) ?? [];
       if (machineAssignments.length === 0) continue;
+      const activeAssignments = machineAssignments.filter(
+        (candidate) => candidate.expiresAt && Date.parse(candidate.expiresAt) > now,
+      );
+      if (activeAssignments.length > 0) {
+        const expiredAssignments = machineAssignments.filter(
+          (candidate) => !candidate.expiresAt || Date.parse(candidate.expiresAt) <= now,
+        );
+        for (const assignment of expiredAssignments) {
+          try {
+            const expiredSessionKey = sessionKey(
+              workspaceScope,
+              assignment.userId,
+              entry.sandboxId,
+            );
+            const expiredSession = this.sessions.get(expiredSessionKey);
+            this.bumpEpoch(this.ownerEpochs, expiredSessionKey);
+            if (expiredSession) this.sessions.delete(expiredSessionKey);
+            this.connecting.delete(expiredSessionKey);
+            await this.cleanupExpiredSharedAssignment(
+              client,
+              api,
+              ownership,
+              activeAssignments[0]!,
+              assignment,
+              entry,
+              signal,
+            );
+            await Promise.all([
+              this.routes.removeMachine(entry.sandboxId, assignment.userId),
+              ownership.deleteProjectsForOwnerMachine(
+                workspaceScope,
+                assignment.userId,
+                entry.sandboxId,
+              ),
+              ownership
+                .unassign(workspaceScope, assignment.userId, entry.sandboxId)
+                .then((removed) => {
+                  if (removed) removedAssignments += 1;
+                }),
+            ]);
+            if (expiredSession) {
+              void this.routes
+                .whenSessionDrained(expiredSession)
+                .then(() => expiredSession.close());
+            }
+          } catch (error) {
+            failures += 1;
+            logger.warn("Sandbox reaper could not remove expired shared assignment", {
+              userId: assignment.userId,
+              machineId: entry.sandboxId,
+              ...authErrorMetadata(errorUtils.toError(error)),
+            });
+          }
+        }
+        machineAssignments = activeAssignments;
+        assignmentsByMachine.set(entry.sandboxId, activeAssignments);
+      }
       const expired = machineAssignments.every(
         (candidate) => !candidate.expiresAt || Date.parse(candidate.expiresAt) <= now,
       );
@@ -875,6 +961,7 @@ export class SshRuntime {
         await api.delete(entry.sandboxId, signal);
         await Promise.all([
           ownership.deleteProjectsForMachine(workspaceScope, entry.sandboxId),
+          ownership.deleteMachineServiceProjectsForMachine(workspaceScope, entry.sandboxId),
           ownership.unassignAll(workspaceScope, entry.sandboxId).then((count) => {
             removedAssignments += count;
           }),
@@ -893,6 +980,67 @@ export class SshRuntime {
     }
 
     return { scanned: entries.length, deleted, removedAssignments, failures };
+  }
+
+  private async cleanupExpiredSharedAssignment(
+    client: WorkspaceClient,
+    api: DatabricksSandboxClient,
+    ownership: LakebaseMachineOwnershipStore,
+    activeAssignment: MachineAssignment,
+    expiredAssignment: MachineAssignment,
+    entry: SandboxEntry,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const workspaceScope = api.workspaceScope();
+    const [projects, serviceProjects] = await Promise.all([
+      ownership.listProjects(workspaceScope, {
+        userId: expiredAssignment.userId,
+        machineId: entry.sandboxId,
+      }),
+      ownership.listMachineServiceProjects(workspaceScope, entry.sandboxId),
+    ]);
+    const wasRunning = normalizeStatus(entry.status) === "running";
+    if (wasRunning) {
+      await Promise.all(
+        serviceProjects.map((project) =>
+          this.startService(
+            client,
+            activeAssignment.userId,
+            { machineId: entry.sandboxId, service: project.serviceKind },
+            signal,
+          ),
+        ),
+      );
+    }
+    if (projects.length === 0) return;
+    const machine = wasRunning
+      ? entry
+      : await this.ensureRunning(api, activeAssignment.userId, entry.sandboxId, signal, true);
+    try {
+      const epoch = this.runtimeEpoch(workspaceScope, activeAssignment.userId, entry.sandboxId);
+      const session = await this.ensureSession(
+        client,
+        activeAssignment.userId,
+        machine,
+        epoch,
+        signal,
+      );
+      for (const project of projects) {
+        await this.removeProjectDirectory(session, project.projectPath, signal);
+        await this.routes.remove(project.projectId, expiredAssignment.userId);
+      }
+    } finally {
+      if (!wasRunning) {
+        await this.convergeMachine(
+          api,
+          entry.sandboxId,
+          "stopped",
+          await api.get(entry.sandboxId),
+          signal,
+          () => this.clearMachineRuntime(workspaceScope, entry.sandboxId),
+        );
+      }
+    }
   }
 
   private async ensureRunning(
@@ -919,6 +1067,7 @@ export class SshRuntime {
     current: SandboxEntry,
     signal?: AbortSignal,
     after?: () => Promise<void>,
+    before?: (entry: SandboxEntry) => Promise<void>,
   ): Promise<SandboxEntry> {
     const key = machineRuntimeKey(api.workspaceScope(), machineId);
     const previous = this.machineTransitions.get(key);
@@ -928,6 +1077,7 @@ export class SshRuntime {
         await previous.catch(() => undefined);
         entry = await api.get(machineId, signal);
       }
+      await before?.(entry);
       const entryAtExpected =
         expected === "running"
           ? ensureMachineStarted(api, machineId, entry, signal)
@@ -982,10 +1132,11 @@ export class SshRuntime {
   private async restoreRunningProjects(client: WorkspaceClient): Promise<void> {
     const api = new DatabricksSandboxClient(client);
     const workspaceScope = api.workspaceScope();
-    const [entries, assignments, projects] = await Promise.all([
+    const [entries, assignments, projects, serviceProjects] = await Promise.all([
       api.list(),
       this.ownershipStore().listAssignments(workspaceScope),
       this.ownershipStore().listProjects(workspaceScope),
+      this.ownershipStore().listMachineServiceProjects(workspaceScope),
     ]);
     const entriesById = new Map(entries.map((entry) => [entry.sandboxId, entry]));
     const assignmentsByOwner = new Map(
@@ -1013,17 +1164,42 @@ export class SshRuntime {
         machine,
       });
     }
-    await Promise.all(
-      [...owners.values()].map(({ userId, machine }) =>
-        this.restoreMachineProjects(client, api, userId, machine).catch((error) => {
-          logger.warn("Sandbox project restoration failed", {
-            userId,
-            machineId: machine.sandboxId,
-            ...authErrorMetadata(errorUtils.toError(error)),
-          });
-        }),
-      ),
+    const projectRestores = [...owners.values()].map(({ userId, machine }) =>
+      this.restoreMachineProjects(client, api, userId, machine).catch((error) => {
+        logger.warn("Sandbox project restoration failed", {
+          userId,
+          machineId: machine.sandboxId,
+          ...authErrorMetadata(errorUtils.toError(error)),
+        });
+      }),
     );
+    const now = Date.now();
+    const serviceRestores = serviceProjects
+      .filter((project) => project.serviceKind !== "desktop")
+      .flatMap((project) => {
+        const machine = entriesById.get(project.machineId);
+        const assignment = assignments.find(
+          (candidate) =>
+            candidate.machineId === project.machineId &&
+            candidate.expiresAt &&
+            Date.parse(candidate.expiresAt) > now,
+        );
+        if (!machine || normalizeStatus(machine.status) !== "running" || !assignment) return [];
+        return [
+          this.startService(client, assignment.userId, {
+            machineId: project.machineId,
+            service: project.serviceKind,
+          }).catch((error) => {
+            logger.warn("Sandbox machine service restoration failed", {
+              userId: assignment.userId,
+              machineId: project.machineId,
+              service: project.serviceKind,
+              ...authErrorMetadata(errorUtils.toError(error)),
+            });
+          }),
+        ];
+      });
+    await Promise.all([...projectRestores, ...serviceRestores]);
   }
 
   private async restoreMachineProjects(
@@ -1044,11 +1220,15 @@ export class SshRuntime {
     await this.ensureMachineSoftware(workspaceScope, machine.sandboxId, session, signal);
     for (const project of projects) {
       try {
-        const miseToml = renderProjectMiseConfig(project.config, {
-          name: project.name,
-          path: project.path,
-          port: project.port,
-        });
+        const miseToml = renderProjectMiseConfig(
+          project.config,
+          {
+            name: project.name,
+            path: project.path,
+            port: project.port,
+          },
+          project.serviceDependencies,
+        );
         await this.prepareProjectDirectory(
           session,
           project.projectPath,
@@ -1160,14 +1340,80 @@ export class SshRuntime {
     session: SshSession,
     project: SandboxProjectRecord,
   ): Promise<void> {
+    if (!project.route) return;
     await this.routes.add(session, {
       id: project.projectId,
-      ownerId: project.userId,
+      ...(await this.userRouteAuthorization(
+        project.workspaceScope,
+        project.userId,
+        project.machineId,
+      )),
       machineId: project.machineId,
       remoteHost: "127.0.0.1",
       remotePort: project.port,
       path: project.path,
       stripPrefix: project.stripPrefix,
+    });
+  }
+
+  private async userRouteAuthorization(
+    workspaceScope: string,
+    userId: string,
+    machineId: string,
+  ): Promise<{
+    ownerId: string;
+    ownerExpirations: Record<string, number>;
+  }> {
+    const ownership = this.ownershipStore();
+    const assignment = await ownership.get(workspaceScope, userId, machineId);
+    if (!assignment || !this.assignmentIsCurrent(assignment)) {
+      throw new Error(`SSH machine ${machineId} is not assigned to the current user`);
+    }
+    return {
+      ownerId: userId,
+      ownerExpirations: { [userId]: Date.parse(assignment.expiresAt!) },
+    };
+  }
+
+  private async stopMachineServices(
+    client: WorkspaceClient,
+    api: DatabricksSandboxClient,
+    userId: string,
+    machine: SandboxEntry,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const workspaceScope = api.workspaceScope();
+    const ownership = this.ownershipStore();
+    const projects = await ownership.listMachineServiceProjects(workspaceScope, machine.sandboxId);
+    if (projects.length === 0) return;
+    const epoch = this.runtimeEpoch(workspaceScope, userId, machine.sandboxId);
+    const session = await this.ensureSession(client, userId, machine, epoch, signal);
+    const results = await Promise.allSettled(
+      projects.map((project) =>
+        ownership.withMachineServiceProjectLock(
+          workspaceScope,
+          machine.sandboxId,
+          project.serviceKind,
+          async () => {
+            const definition = loadSshServiceDefinition(project.serviceKind, project.path);
+            await stopSshService(
+              session,
+              definition,
+              Math.max(this.config.commandTimeoutMs, 600_000),
+              signal,
+            );
+          },
+        ),
+      ),
+    );
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") return;
+      logger.warn("Sandbox machine service stop failed", {
+        userId,
+        machineId: machine.sandboxId,
+        service: projects[index]?.serviceKind,
+        ...authErrorMetadata(errorUtils.toError(result.reason)),
+      });
     });
   }
 
@@ -1194,28 +1440,87 @@ export class SshRuntime {
       epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
       const session = await this.ensureSession(client, userId, machine, epoch, signal);
       await this.ensureMachineSoftware(workspaceScope, request.machineId, session, signal);
-      await this.restoreMachineProjects(client, api, userId, machine, signal);
-      const target = await ensureSshService(
-        session,
+      const ownership = this.ownershipStore();
+      const { target } = await ownership.withMachineServiceProjectLock(
+        workspaceScope,
+        request.machineId,
         request.service,
-        starting.path,
-        Math.max(this.config.commandTimeoutMs, 600_000),
-        signal,
+        async () => {
+          await this.assertAssigned(workspaceScope, userId, request.machineId);
+          this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
+          const definition = loadSshServiceDefinition(request.service, starting.path);
+          const persisted = await ownership.getMachineServiceProject(
+            workspaceScope,
+            request.machineId,
+            request.service,
+          );
+          const serviceConfig = {
+            miseToml: definition.miseToml,
+            environment: { ...definition.environment },
+          };
+          const install =
+            persisted?.definitionVersion !== definition.definitionVersion ||
+            persisted.path !== starting.path ||
+            JSON.stringify(persisted.config) !== JSON.stringify(serviceConfig);
+          const conflictingProject = (
+            await ownership.listProjects(workspaceScope, { machineId: request.machineId })
+          ).find((project) => project.port === definition.target.remotePort);
+          if (conflictingProject) {
+            throw new Error(
+              `Sandbox service ${request.service} requires port ${definition.target.remotePort}, which is reserved by project ${conflictingProject.name}`,
+            );
+          }
+          const target = await ensureSshService(
+            session,
+            request.service,
+            starting.path,
+            Math.max(this.config.commandTimeoutMs, 600_000),
+            signal,
+            install,
+          );
+          await ownership.upsertMachineServiceProject({
+            workspaceScope,
+            machineId: request.machineId,
+            serviceKind: request.service,
+            definitionVersion: definition.definitionVersion,
+            directory: definition.directory,
+            path: starting.path,
+            port: target.remotePort,
+            config: serviceConfig,
+            stripPrefix: target.stripPrefix,
+          });
+          const now = Date.now();
+          const activeAssignments = (await ownership.listAssignments(workspaceScope)).filter(
+            (assignment) =>
+              assignment.machineId === request.machineId &&
+              assignment.expiresAt &&
+              Date.parse(assignment.expiresAt) > now,
+          );
+          const ownerIds = activeAssignments.map((assignment) => assignment.userId);
+          const ownerExpirations = Object.fromEntries(
+            activeAssignments.map((assignment) => [
+              assignment.userId,
+              Date.parse(assignment.expiresAt!),
+            ]),
+          );
+          return {
+            route: await this.routes.add(session, {
+              ownerIds,
+              ownerExpirations,
+              machineId: request.machineId,
+              path: starting.path,
+              internal: true,
+              ...target,
+            }),
+            target,
+          };
+        },
       );
-      await this.assertAssigned(workspaceScope, userId, request.machineId);
-      this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
-      const route = await this.routes.add(session, {
-        ownerId: userId,
-        machineId: request.machineId,
-        path: starting.path,
-        internal: true,
-        ...target,
-      });
       try {
         await this.assertAssigned(workspaceScope, userId, request.machineId);
         this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
       } catch (error) {
-        await this.routes.remove(route.id, userId);
+        this.routes.revokeOwner(request.machineId, userId);
         throw error;
       }
       const ready: SshMachineService = { ...starting, openUrl: target.openUrl, state: "ready" };
@@ -1296,6 +1601,7 @@ export class SshRuntime {
   }
 
   private projectRouteReady(project: SandboxProjectRecord): boolean {
+    if (!project.route) return true;
     return this.routes
       .list(project.machineId, project.userId)
       .some((route) => route.id === project.projectId);
@@ -1308,10 +1614,10 @@ export class SshRuntime {
       machineId: project.machineId,
       directory: project.directory,
       path: project.path,
-      openUrl: projectOpenUrl(project.path, project.openPath),
+      ...(project.route ? { openUrl: projectOpenUrl(project.path, project.openPath) } : {}),
       port: project.port,
       stripPrefix: project.stripPrefix,
-      state: ready ? "ready" : "stopped",
+      state: !project.route || ready ? "ready" : "stopped",
     };
   }
 

@@ -51,7 +51,7 @@ describe("databricksSandboxSkillMounts", () => {
       );
     }
 
-    for (const skill of ["freedoom-desktop", "vnc-server"]) {
+    for (const skill of ["vnc-server"]) {
       assert.ok(directories.includes(skill), `missing packaged skill ${skill}`);
       const source = await readFile(`${mount.root}/${skill}/SKILL.md`, "utf8");
       assert.match(source, /start_ssh_machine_service/);
@@ -63,6 +63,9 @@ describe("databricksSandboxSkillMounts", () => {
     const freedoom = await readFile(`${mount.root}/freedoom-desktop/SKILL.md`, "utf8");
     assert.match(freedoom, /list_ssh_machines/);
     assert.match(freedoom, /add_ssh_project/);
+    assert.match(freedoom, /route: false/);
+    assert.match(freedoom, /serviceDependencies: \["desktop"\]/);
+    assert.match(freedoom, /sandbox:desktop/);
     assert.match(freedoom, /## Setup project options/);
     assert.match(freedoom, /\[hooks\]\npostinstall = '''/);
     assert.match(freedoom, /\[tasks\.start\]\nrun = '''/);

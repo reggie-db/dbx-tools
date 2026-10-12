@@ -2,7 +2,10 @@ import { randomBytes, randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AddSshProjectRequest } from "@dbx-tools/shared-databricks-sandbox";
+import type {
+  AddSshProjectRequest,
+  SshMachineServiceKind,
+} from "@dbx-tools/shared-databricks-sandbox";
 import { stringify, type TomlTableWithoutBigInt } from "smol-toml";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
@@ -102,6 +105,7 @@ export function normalizeProjectOpenPath(value: string | undefined): string | un
 export function renderProjectMiseConfig(
   config: ProjectConfig | undefined,
   environment: ProjectEnvironment,
+  serviceDependencies: readonly SshMachineServiceKind[] = [],
 ): string {
   const resolved = structuredClone(config ?? {}) as ProjectConfig;
   const configuredEnvironment = resolved.env;
@@ -127,6 +131,7 @@ export function renderProjectMiseConfig(
     env[name] = expected;
   }
   resolved.env = env;
+  injectServiceTasks(resolved, serviceDependencies);
   try {
     return `${stringify(resolved as TomlTableWithoutBigInt).trimEnd()}\n`;
   } catch (error) {
@@ -155,6 +160,58 @@ function readPackageScript(name: string): string {
   const parent = dirname(moduleDirectory);
   const packageRoot = basename(parent) === "lib" ? dirname(parent) : parent;
   return readFileSync(join(packageRoot, "scripts", name), "utf8");
+}
+
+/** Add server-owned service dependency markers to one rendered mise configuration. */
+function injectServiceTasks(
+  config: ProjectConfig,
+  serviceDependencies: readonly SshMachineServiceKind[],
+): void {
+  const kinds = [...new Set(serviceDependencies)];
+  if (kinds.length === 0) return;
+  const configuredTasks = config.tasks;
+  if (configuredTasks !== undefined && !isConfigTable(configuredTasks)) {
+    throw new Error("Sandbox project config.tasks must be an object");
+  }
+  const tasks = (configuredTasks ?? {}) as Record<string, ProjectConfigValue>;
+  const dependencyTasks = kinds.map((kind) => `sandbox:${kind}`);
+  for (const kind of kinds) {
+    const taskName = `sandbox:${kind}`;
+    if (tasks[taskName] !== undefined) {
+      throw new Error(`Sandbox project config.tasks.${taskName} is reserved`);
+    }
+    tasks[taskName] = {
+      hide: true,
+      run: `cd "$HOME/projects/.sandbox-services/${kind}" && "$HOME/.local/bin/mise" run start`,
+    };
+  }
+  const configuredStart = tasks.start;
+  if (configuredStart !== undefined) {
+    if (isConfigTable(configuredStart)) {
+      const configuredDepends = configuredStart.depends;
+      const depends =
+        configuredDepends === undefined
+          ? []
+          : Array.isArray(configuredDepends)
+            ? configuredDepends
+            : [configuredDepends];
+      tasks.start = {
+        ...configuredStart,
+        depends: [
+          ...depends,
+          ...dependencyTasks.filter((dependency) => !depends.includes(dependency)),
+        ],
+      };
+    } else {
+      tasks.start = { run: configuredStart, depends: dependencyTasks };
+    }
+  }
+  config.tasks = tasks;
+}
+
+/** Return whether one JSON mise value can be handled as a TOML table. */
+function isConfigTable(value: ProjectConfigValue): value is Record<string, ProjectConfigValue> {
+  return value !== null && !Array.isArray(value) && typeof value === "object";
 }
 
 function shellQuote(value: string): string {

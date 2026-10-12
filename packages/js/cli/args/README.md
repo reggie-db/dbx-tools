@@ -24,7 +24,9 @@ const options = parseArgs(program, OptionsSchema);
 Help defaults come from Zod and from layered `@dbx-tools/core` configuration
 (environment, `.env`, bundle, and app YAML). Use `.meta({ env, flag, helpDefault })`
 when a field needs an exact environment name, should stay off the flag list, or
-should hide its default.
+should hide its default. A field with `helpDefault: false` defers layered
+configuration loading until `parseArgs`, so rendering `--help` does not resolve
+that value.
 
 ## Serialize Options Back To Argv
 

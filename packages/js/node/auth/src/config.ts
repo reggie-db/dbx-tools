@@ -5,6 +5,7 @@ import { z } from "zod";
 const text = (description: string) => z.string().trim().min(1).optional().describe(description);
 const safeInteger = (description: string) =>
   z.coerce.number<number>().int().safe().describe(description);
+const authTypeOptionMeta = options.DatabricksOptionsSchema.shape.authType.meta() ?? {};
 
 export const AuthOptionsSchema = z
   .object({
@@ -31,7 +32,10 @@ export const DatabricksAuthOptionsSchema = z
     clientSecret: options.DatabricksOptionsSchema.shape.clientSecret,
     accessToken: options.DatabricksOptionsSchema.shape.accessToken,
     groupId: options.DatabricksOptionsSchema.shape.groupId,
-    authType: authTypeSchema.optional().describe("Databricks authentication type."),
+    authType: authTypeSchema
+      .optional()
+      .describe("Databricks authentication type.")
+      .meta(authTypeOptionMeta),
     scopes: z.array(z.string().trim().min(1)).optional().describe("OAuth scopes."),
     target: targetKindSchema.optional().describe("OAuth target."),
     auth: AuthOptionsSchema.optional().describe("Token lifecycle overrides."),

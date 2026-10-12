@@ -80,6 +80,8 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   const [port, setPort] = useState("");
   const [path, setPath] = useState("");
   const [openPath, setOpenPath] = useState("");
+  const [route, setRoute] = useState(true);
+  const [projectServices, setProjectServices] = useState<SshMachineServiceKind[]>([]);
   const [stripPrefix, setStripPrefix] = useState(true);
   const refreshing = useRef(false);
   const deletingMachineIds = useRef(new Set<string>());
@@ -232,6 +234,8 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     const entry = openPath.trim();
     const input: AddSshProjectRequest = {
       machineId,
+      route,
+      serviceDependencies: projectServices,
       stripPrefix,
       ...(name ? { name } : {}),
       ...(requestedPort !== undefined ? { port: requestedPort } : {}),
@@ -244,6 +248,8 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
       setPort("");
       setPath("");
       setOpenPath("");
+      setRoute(true);
+      setProjectServices([]);
       setProjectFormOpen(false);
       await refresh();
     } catch (caught) {
@@ -554,7 +560,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                         id="ssh-project-open-path"
                         value={openPath}
                         placeholder="open.html"
-                        disabled={isBusy(CREATE_PROJECT_OPERATION)}
+                        disabled={!route || isBusy(CREATE_PROJECT_OPERATION)}
                         onChange={(event) => setOpenPath(event.target.value)}
                       />
                     </div>
@@ -574,7 +580,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           className="h-8 min-w-0 rounded-none border-0 px-2 shadow-none focus-visible:ring-0"
                           value={path}
                           placeholder="Auto"
-                          disabled={isBusy(CREATE_PROJECT_OPERATION)}
+                          disabled={!route || isBusy(CREATE_PROJECT_OPERATION)}
                           onChange={(event) => setPath(event.target.value)}
                         />
                       </div>
@@ -588,22 +594,34 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                         max={65535}
                         value={port}
                         placeholder="Auto"
-                        disabled={isBusy(CREATE_PROJECT_OPERATION)}
+                        disabled={!route || isBusy(CREATE_PROJECT_OPERATION)}
                         onChange={(event) => setPort(event.target.value)}
                       />
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="size-4"
-                        checked={stripPrefix}
-                        disabled={isBusy(CREATE_PROJECT_OPERATION)}
-                        onChange={(event) => setStripPrefix(event.target.checked)}
-                      />
-                      <span>Strip prefix</span>
-                    </label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="size-4"
+                          checked={route}
+                          disabled={isBusy(CREATE_PROJECT_OPERATION)}
+                          onChange={(event) => setRoute(event.target.checked)}
+                        />
+                        <span>Expose route</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="size-4"
+                          checked={stripPrefix}
+                          disabled={!route || isBusy(CREATE_PROJECT_OPERATION)}
+                          onChange={(event) => setStripPrefix(event.target.checked)}
+                        />
+                        <span>Strip prefix</span>
+                      </label>
+                    </div>
                     <Button
                       type="submit"
                       size="sm"
@@ -617,6 +635,27 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                       Add project
                     </Button>
                   </div>
+                  <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <legend className="mb-1 text-sm font-medium">Service dependencies</legend>
+                    {(["terminal", "desktop", "stats"] as const).map((service) => (
+                      <label key={service} className="flex items-center gap-2 text-sm capitalize">
+                        <input
+                          type="checkbox"
+                          className="size-4"
+                          checked={projectServices.includes(service)}
+                          disabled={isBusy(CREATE_PROJECT_OPERATION)}
+                          onChange={(event) =>
+                            setProjectServices((current) =>
+                              event.target.checked
+                                ? [...current, service]
+                                : current.filter((candidate) => candidate !== service),
+                            )
+                          }
+                        />
+                        <span>{service}</span>
+                      </label>
+                    ))}
+                  </fieldset>
                 </form>
               ) : null}
               {projects.length === 0 ? (
@@ -635,12 +674,14 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           </Badge>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
-                          <Button type="button" variant="outline" size="sm" asChild>
-                            <a href={project.openUrl} target="_blank" rel="noopener noreferrer">
-                              <ExternalLinkIcon className="size-3.5" />
-                              Open
-                            </a>
-                          </Button>
+                          {project.openUrl ? (
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <a href={project.openUrl} target="_blank" rel="noopener noreferrer">
+                                <ExternalLinkIcon className="size-3.5" />
+                                Open
+                              </a>
+                            </Button>
+                          ) : null}
                           <Button
                             type="button"
                             variant="outline"
@@ -694,19 +735,25 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           value={machineName(machines, project.machineId)}
                           secondary={project.machineId}
                         />
-                        <ProjectDetail label="Port" value={String(project.port)} code />
                         <ProjectDetail label="Directory" value={project.directory} code wide />
-                        <ProjectDetail label="Route" value={project.path} code wide />
-                        <ProjectDetail
-                          label="Open URL"
-                          value={project.openUrl}
-                          href={project.openUrl}
-                          wide
-                        />
-                        <ProjectDetail
-                          label="Strip prefix"
-                          value={project.stripPrefix ? "Yes" : "No"}
-                        />
+                        {project.openUrl ? (
+                          <>
+                            <ProjectDetail label="Port" value={String(project.port)} code />
+                            <ProjectDetail label="Route" value={project.path} code wide />
+                            <ProjectDetail
+                              label="Open URL"
+                              value={project.openUrl}
+                              href={project.openUrl}
+                              wide
+                            />
+                            <ProjectDetail
+                              label="Strip prefix"
+                              value={project.stripPrefix ? "Yes" : "No"}
+                            />
+                          </>
+                        ) : (
+                          <ProjectDetail label="Route" value="Not exposed" wide />
+                        )}
                       </dl>
                     </div>
                   ))}

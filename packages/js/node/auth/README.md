@@ -14,10 +14,14 @@ workspace client for the capability being called.
 ```ts
 import { client } from "@dbx-tools/auth";
 
-const auth = await client.createAuthClient({ profile: "DEFAULT" });
+const auth = await client.createAuthClient();
 const headers = await auth.headers();
 await fetch(`${auth.host}/api/2.0/clusters/list`, { headers });
 ```
+
+With no options, `createAuthClient()` resolves the standard `DATABRICKS_*`
+environment values and configured default profile together. Explicit options
+override those default sources.
 
 ## Features
 
@@ -40,7 +44,7 @@ and credential persistence.
 ```ts
 import { client, profile } from "@dbx-tools/auth";
 
-const auth = await client.createAuthClient({ profile: "DEFAULT" });
+const auth = await client.createAuthClient();
 const token = await auth.token();
 const headers = await auth.headers();
 const host = auth.host;

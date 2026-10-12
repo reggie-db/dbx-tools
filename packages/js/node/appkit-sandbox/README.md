@@ -83,6 +83,14 @@ unique for the machine, creates `~/projects/<path>`, writes `mise.toml`, runs
 `mise trust` and `mise install`, and returns the project `directory`, public
 `path`, loopback `port`, and `openUrl`.
 
+Set `route: false` for a project that does not serve HTTP. Route-less projects
+still receive a directory, mise environment, and lifecycle tasks, but they do
+not register an AppKit proxy route or return an `openUrl`. Declare required
+built-in services with `serviceDependencies`, for example
+`serviceDependencies: ["desktop"]`. The runtime starts each dependency before
+project setup and writes hidden `sandbox:<kind>` dependency tasks into the
+project's `mise.toml`.
+
 Keep `hooks.postinstall` limited to installation or preparation that belongs
 to `mise install`. Put runtime lifecycle behavior in `tasks.start` and
 `tasks.stop`; use a visible `tasks.uninstall` only when the project has
@@ -152,17 +160,37 @@ resolveSshPluginConfig({
 
 Pass an empty array to disable automatic machine setup.
 
+## Built-in services
+
+Terminal, desktop, and stats are hidden, machine-owned mise projects under
+`~/projects/.sandbox-services`. Their packaged `mise.toml` files own
+installation and `start`/`stop` lifecycle tasks. Lakebase stores their
+definitions separately from user projects, so they do not appear in project
+lists or counts.
+
+Service setup uses a workspace-, machine-, and service-scoped Lakebase advisory
+lock. Concurrent in-process calls share one operation; after acquiring the
+distributed lock, the runtime rechecks the persisted definition and skips
+installation when it is current. Packaged lifecycle tasks recheck remote PID
+and version state while holding the lock. A service returned as `ready` has
+completed its process and endpoint readiness check and has a usable
+authenticated route.
+
+Terminal and stats start with an explicitly started machine. Desktop remains
+on demand unless machine creation passes `desktop: true` or a project declares
+the desktop service dependency. KasmVNC is downloaded only from its pinned,
+checksummed official GitHub release.
+
 ## Machine lifecycle
 
 The AppKit server identity must be able to use the Sandbox REST API and manage
 SSH keys. The AppKit host must provide OpenSSH on `PATH`. Direct HTTP and
 WebSocket forwarding uses `ssh2`.
 
-The runtime records an absolute expiration in Lakebase and the managed Sandbox
-name. The
+The runtime records ownership and absolute expiration in Lakebase. The
 [`SshRuntime` reaper](https://docs.dbx.tools/api/appkit-sandbox/src-runtime-class-sshruntime/)
-runs at startup and on the configured interval. It deletes expired or invalid
-managed Sandboxes, removes records for missing Sandboxes, and leaves unrelated
+runs at startup and on the configured interval. It deletes expired assigned
+Sandboxes, removes records for missing Sandboxes, and leaves unrelated
 workspace Sandboxes unchanged.
 
 Stopping a machine closes local SSH sessions and forwarding bridges. Persisted

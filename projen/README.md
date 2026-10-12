@@ -508,19 +508,26 @@ bun run release --publish pypi --no-docs
 bun run release --no-npm --no-local-publish
 bun run release --publish local --install never
 bun run release --local-registry false --local-pypi auto
-bun run release --demo-deploy
+bun run release --demo-deploy --profile FEVM-REGGIE-PIERCE-AWS
 bun run release --no-release-notes
 bun run release --release-notes-text "# Release 1.2.3"
 bun run release --release-notes-file ./notes.md
 bun run release --release-notes-instructions "Focus on operator-visible changes."
 ```
 
-`--demo-deploy` is off by default and requires `--profile <name>`. After tagging
-and any local registry publication it runs `bun run demo:deploy`, which stages
-the AppKit demo from locally compiled Node packages and locally built Python
-wheels, resolves only the selected workspace profile through `@dbx-tools/auth`,
-force-refreshes its token with interactive login fallback, and deploys it. That
-step is local only and is not recorded in the annotated tag.
+`--demo-deploy` is off by default. After tagging and any local registry
+publication it runs `bun run demo:deploy`, which stages the AppKit demo from
+locally compiled Node packages and locally built Python wheels, resolves
+the default environment or configured credentials through
+`@dbx-tools/auth`, including `DATABRICKS_CONFIG_PROFILE`, `DATABRICKS_HOST`,
+and the other auth options, force-refreshes its token with interactive login
+fallback, and deploys it. When auth selects a profile, the deploy passes that
+resolved profile explicitly to every bundle command. That step is local only
+and is not recorded in the annotated tag.
+
+Pass `--profile <name>` to set `DATABRICKS_CONFIG_PROFILE` only for that local
+demo deployment. The profile is not forwarded as a release subcommand
+argument or stored in the release tag.
 
 After bump and configured validation, release writes
 `docs/releases/vX.Y.Z.md` with `dbx genie exec -C "$PWD" --sandbox read-only
@@ -618,7 +625,7 @@ release [options]
 | `--release-notes-instructions <value>` | Append instructions to the Genie release-note prompt (env: PROJEN_RELEASE_RELEASE_NOTES_INSTRUCTIONS)                      |
 | `--demo-deploy`                        | Deploy the AppKit demo after tagging and local publication (env: PROJEN_RELEASE_DEMO_DEPLOY)                               |
 | `--no-demo-deploy`                     | Disable deploy the appkit demo after tagging and local publication                                                         |
-| `--profile <value>`                    | Explicit Databricks CLI profile for demo deployment                                                                        |
+| `--profile <value>`                    | Databricks CLI profile for the optional demo deployment                                                                     |
 | `--local-publish`                      | Publish to configured local registries (default: true, env: PROJEN_RELEASE_LOCAL_PUBLISH)                                  |
 | `--no-local-publish`                   | Disable publish to configured local registries                                                                             |
 | `--local-registry <value>`             | Local npm registry selection: auto, false, or URL (default: "auto", env: PROJEN_RELEASE_LOCAL_REGISTRY)                    |

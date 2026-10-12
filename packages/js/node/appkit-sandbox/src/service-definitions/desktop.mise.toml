@@ -1,0 +1,484 @@
+[hooks]
+postinstall = '''
+set -eu
+: "${DBX_TOOLS_DESKTOP_WALLPAPER_BASE64:?DBX_TOOLS_DESKTOP_WALLPAPER_BASE64 is required}"
+: "${DBX_TOOLS_DESKTOP_BRAND_ICON_BASE64:?DBX_TOOLS_DESKTOP_BRAND_ICON_BASE64 is required}"
+: "${DBX_TOOLS_DESKTOP_TERMINAL_ICON_BASE64:?DBX_TOOLS_DESKTOP_TERMINAL_ICON_BASE64 is required}"
+: "${DBX_TOOLS_DESKTOP_HOMEPAGE_BASE64:?DBX_TOOLS_DESKTOP_HOMEPAGE_BASE64 is required}"
+: "${DBX_TOOLS_DESKTOP_PRIMARY:?DBX_TOOLS_DESKTOP_PRIMARY is required}"
+: "${DBX_TOOLS_DESKTOP_PRIMARY_HOVER:?DBX_TOOLS_DESKTOP_PRIMARY_HOVER is required}"
+: "${DBX_TOOLS_DESKTOP_SURFACE:?DBX_TOOLS_DESKTOP_SURFACE is required}"
+: "${DBX_TOOLS_DESKTOP_FONT:?DBX_TOOLS_DESKTOP_FONT is required}"
+
+runtime="$HOME/.dbx-tools/runtime/desktop"
+version="9"
+kasmvnc_version="1.5.0"
+kasmvnc_package_version="$kasmvnc_version-1"
+version_file="$runtime/version"
+session_script="$runtime/start-xfce.sh"
+stop_script="$runtime/stop"
+browser_script="$runtime/open-browser"
+browser_homepage="$runtime/browser-homepage"
+desktop_environment="$runtime/environment"
+desktop_runner="$runtime/run"
+log_file="$runtime/desktop.log"
+wallpaper_svg="$runtime/dbx-tools-wallpaper.svg"
+wallpaper_png="$runtime/dbx-tools-wallpaper.png"
+brand_icon_svg="$runtime/dbx-tools-icon.svg"
+brand_icon="$runtime/dbx-tools-icon.png"
+terminal_icon_svg="$runtime/dbx-tools-terminal.svg"
+terminal_icon="$runtime/dbx-tools-terminal.png"
+
+mkdir -p "$runtime" "$HOME/.vnc" "$HOME/.config/gtk-3.0" \
+  "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml" "$HOME/.config/xfce4" \
+  "$HOME/.local/share/applications" "$HOME/.local/share/xfce4/helpers" "$HOME/Desktop"
+
+need_packages=false
+for command in startxfce4 xfce4-panel xfdesktop xfwm4 xfce4-terminal \
+  rsvg-convert dbus-run-session epiphany exo-open; do
+  command -v "$command" >/dev/null 2>&1 || need_packages=true
+done
+for package in arc-theme hicolor-icon-theme xfce4-whiskermenu-plugin; do
+  dpkg-query -W -f='${Status}' "$package" 2>/dev/null | \
+    grep -q 'install ok installed' || need_packages=true
+done
+
+installed_kasmvnc="$(dpkg-query -W -f='${Version}' kasmvncserver 2>/dev/null || true)"
+need_kasmvnc=false
+package_file=
+package_temporary=
+package_checksum=
+package_download_pid=
+
+if [ "$installed_kasmvnc" != "$kasmvnc_package_version" ]; then
+  need_kasmvnc=true
+  test -r /etc/os-release || {
+    printf 'KasmVNC setup requires /etc/os-release.\n' >&2
+    exit 2
+  }
+  . /etc/os-release
+  codename="$VERSION_CODENAME"
+  architecture="$(dpkg --print-architecture)"
+  package_target="$codename-$architecture"
+  case "$package_target" in
+    focal-amd64) package_checksum="a2951daaa48aa52d09c04a0c6438ab43fe2e7d420485b1bfc36253772799c83c" ;;
+    focal-arm64) package_checksum="d0188b4e65706f5143fcb000bb29e97d90a3848e7290c9155f7df20585957558" ;;
+    jammy-amd64) package_checksum="485c190b1d9269fc40fc7205f850ecf71292d737cdb5482e778f2e52f128cd8a" ;;
+    jammy-arm64) package_checksum="9b21779ee16e514bccd2971dcb3983cd8019a94c8614149dbd717d3702c8dbb5" ;;
+    noble-amd64) package_checksum="f599fe02e2175b9817b6165f74a5d2bebdc73118dde9181ba3410963bed7ae1e" ;;
+    noble-arm64) package_checksum="c9199cf4753208bfb69fd016a9780242bebfc43370cc38c97d61e90a3c783e04" ;;
+    *)
+      printf 'KasmVNC %s does not provide a package for %s.\n' \
+        "$kasmvnc_version" "$package_target" >&2
+      exit 2
+      ;;
+  esac
+  package_name="kasmvncserver_${codename}_${kasmvnc_version}_$architecture.deb"
+  package_file="$runtime/$package_name"
+  package_temporary="$package_file.tmp"
+  package_url="https://github.com/kasmtech/KasmVNC/releases/download/v${kasmvnc_version}/$package_name"
+  if ! printf '%s  %s\n' "$package_checksum" "$package_file" | \
+    sha256sum --check --status 2>/dev/null; then
+    rm -f "$package_temporary"
+    PACKAGE_URL="$package_url" PACKAGE_DESTINATION="$package_temporary" python3 - <<'PY' &
+import os
+import urllib.request
+
+request = urllib.request.Request(
+    os.environ["PACKAGE_URL"],
+    headers={"User-Agent": "dbx-tools-appkit-sandbox"},
+)
+with urllib.request.urlopen(request) as response:
+    with open(os.environ["PACKAGE_DESTINATION"], "wb") as destination:
+        while chunk := response.read(1024 * 1024):
+            destination.write(chunk)
+PY
+    package_download_pid=$!
+  fi
+fi
+
+if [ "$need_packages" = true ] || [ "$need_kasmvnc" = true ]; then
+  if ! command -v apt-get >/dev/null 2>&1; then
+    printf 'The built-in desktop currently requires an apt-based Sandbox image.\n' >&2
+    exit 2
+  fi
+  sudo -n apt-get update
+  if [ -n "$package_download_pid" ]; then
+    wait "$package_download_pid"
+    package_download_pid=
+    printf '%s  %s\n' "$package_checksum" "$package_temporary" | \
+      sha256sum --check --status || {
+        printf 'KasmVNC package checksum verification failed.\n' >&2
+        exit 1
+      }
+    mv "$package_temporary" "$package_file"
+  fi
+  install_desktop_packages() {
+    sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      arc-theme ca-certificates dbus-daemon dbus-x11 epiphany-browser exo-utils \
+      fonts-dejavu-core hicolor-icon-theme librsvg2-bin thunar xfce4-whiskermenu-plugin \
+      x11-utils x11-xserver-utils xdg-utils xfce4-panel xfce4-session xfce4-settings \
+      xfce4-terminal xfdesktop4 xfwm4 "$@"
+  }
+  if [ "$need_kasmvnc" = true ]; then
+    printf '%s  %s\n' "$package_checksum" "$package_file" | \
+      sha256sum --check --status || {
+        printf 'KasmVNC package checksum verification failed.\n' >&2
+        exit 1
+      }
+    install_desktop_packages "$package_file"
+  else
+    install_desktop_packages
+  fi
+fi
+
+test -x "$(command -v kasmvncserver)" || {
+  printf 'kasmvncserver is unavailable after package setup.\n' >&2
+  exit 1
+}
+test -x "$(command -v kasmvncpasswd)" || {
+  printf 'kasmvncpasswd is unavailable after package setup.\n' >&2
+  exit 1
+}
+test -r /usr/share/kasmvnc/www/index.html || {
+  printf 'KasmVNC web client is unavailable after package setup.\n' >&2
+  exit 1
+}
+
+write_base64_asset() {
+  encoded="$1"
+  destination="$2"
+  temporary="$destination.tmp.$$"
+  printf '%s' "$encoded" | base64 -d >"$temporary"
+  if [ -f "$destination" ] && cmp -s "$temporary" "$destination"; then
+    rm -f "$temporary"
+    return 1
+  fi
+  mv "$temporary" "$destination"
+  return 0
+}
+
+if write_base64_asset "$DBX_TOOLS_DESKTOP_WALLPAPER_BASE64" "$wallpaper_svg" || \
+  [ ! -s "$wallpaper_png" ]; then
+  rsvg-convert --width 1600 --height 1000 "$wallpaper_svg" >"$wallpaper_png"
+fi
+if write_base64_asset "$DBX_TOOLS_DESKTOP_BRAND_ICON_BASE64" "$brand_icon_svg" || \
+  [ ! -s "$brand_icon" ]; then
+  rsvg-convert --width 64 --height 64 "$brand_icon_svg" >"$brand_icon"
+fi
+if write_base64_asset "$DBX_TOOLS_DESKTOP_TERMINAL_ICON_BASE64" "$terminal_icon_svg" || \
+  [ ! -s "$terminal_icon" ]; then
+  rsvg-convert --width 64 --height 64 "$terminal_icon_svg" >"$terminal_icon"
+fi
+write_base64_asset "$DBX_TOOLS_DESKTOP_HOMEPAGE_BASE64" "$browser_homepage" || true
+
+printf 'export DISPLAY=:%s\n' '20' >"$desktop_environment"
+chmod 600 "$desktop_environment"
+cat >"$desktop_runner" <<'EOF'
+#!/bin/sh
+set -eu
+. "$HOME/.dbx-tools/runtime/desktop/environment"
+exec "$@"
+EOF
+chmod 700 "$desktop_runner"
+
+cat >"$browser_script" <<'EOF'
+#!/bin/sh
+export GTK_A11Y=none
+export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+if [ "$#" -eq 0 ]; then
+  set -- "$(cat "$HOME/.dbx-tools/runtime/desktop/browser-homepage")"
+fi
+exec epiphany "$@"
+EOF
+chmod 700 "$browser_script"
+
+cat >"$HOME/.config/gtk-3.0/gtk.css" <<EOF
+#XfcePanelWindow {
+  background-color: $DBX_TOOLS_DESKTOP_PRIMARY;
+  color: $DBX_TOOLS_DESKTOP_SURFACE;
+}
+#XfcePanelWindow button {
+  color: $DBX_TOOLS_DESKTOP_SURFACE;
+  border-color: transparent;
+  background-color: transparent;
+  border-radius: 8px;
+  margin: 3px;
+}
+#XfcePanelWindow button:hover,
+#XfcePanelWindow button:checked {
+  background-color: $DBX_TOOLS_DESKTOP_PRIMARY_HOVER;
+}
+EOF
+
+if [ -r /etc/xdg/xfce4/panel/default.xml ]; then
+  cp /etc/xdg/xfce4/panel/default.xml \
+    "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml"
+fi
+
+cat >"$HOME/.config/mimeapps.list" <<'EOF'
+[Default Applications]
+text/html=dbx-tools-browser.desktop
+x-scheme-handler/http=dbx-tools-browser.desktop
+x-scheme-handler/https=dbx-tools-browser.desktop
+EOF
+
+cat >"$HOME/.local/share/applications/dbx-tools-browser.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=dbx tools Browser
+Comment=Browse the web from the Sandbox desktop
+Exec=$browser_script %U
+Icon=$brand_icon
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
+EOF
+
+cat >"$HOME/.local/share/xfce4/helpers/dbx-tools-browser.desktop" <<EOF
+[Desktop Entry]
+Version=1.0
+Icon=$brand_icon
+Type=X-XFCE-Helper
+Name=dbx tools Browser
+StartupNotify=true
+X-XFCE-Binaries=$browser_script;
+X-XFCE-Category=WebBrowser
+X-XFCE-Commands=$browser_script;
+X-XFCE-CommandsWithParameter=$browser_script "%s";
+EOF
+
+cat >"$HOME/.config/xfce4/helpers.rc" <<'EOF'
+WebBrowser=dbx-tools-browser
+EOF
+rm -f "$HOME/Desktop/Web Browser.desktop"
+
+cat >"$HOME/.local/share/applications/dbx-tools-terminal.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Terminal
+Comment=Open the Sandbox desktop terminal
+Exec=xfce4-terminal
+Icon=$terminal_icon
+Terminal=false
+Categories=System;TerminalEmulator;
+EOF
+chmod 700 "$HOME/.local/share/applications/dbx-tools-terminal.desktop"
+rm -f "$HOME/Desktop/Terminal.desktop"
+
+cat >"$HOME/.vnc/kasmvnc.yaml" <<'EOF'
+desktop:
+  resolution:
+    width: 1600
+    height: 1000
+  allow_resize: true
+  pixel_depth: 24
+network:
+  protocol: http
+  interface: 127.0.0.1
+  websocket_port: 6080
+  use_ipv4: true
+  use_ipv6: false
+  ssl:
+    pem_certificate:
+    pem_key:
+    require_ssl: false
+encoding:
+  max_frame_rate: 30
+  rect_encoding_mode:
+    min_quality: 7
+    max_quality: 9
+    consider_lossless_quality: 10
+    rectangle_compress_threads: auto
+  video_encoding_mode:
+    jpeg_quality: -1
+    webp_quality: -1
+    max_resolution:
+      width: 1920
+      height: 1080
+    enter_video_encoding_mode:
+      time_threshold: 1
+      area_threshold: 45%
+    exit_video_encoding_mode:
+      time_threshold: 2
+    scaling_algorithm: progressive_bilinear
+    webp_encoding_time: 30
+  video_streaming_mode:
+    codec: h264
+server:
+  http:
+    headers:
+      - Cross-Origin-Embedder-Policy=require-corp
+      - Cross-Origin-Opener-Policy=same-origin
+    httpd_directory: /usr/share/kasmvnc/www
+  auto_shutdown:
+    no_user_session_timeout: never
+    active_user_session_timeout: never
+    inactive_user_session_timeout: never
+command_line:
+  prompt: false
+EOF
+
+if [ ! -s "$HOME/.kasmpasswd" ]; then
+  kasm_password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  printf '%s\n%s\n' "$kasm_password" "$kasm_password" | \
+    kasmvncpasswd -u dbx-tools -r -w "$HOME/.kasmpasswd" >/dev/null
+fi
+
+cat >"$session_script" <<EOF
+#!/bin/sh
+set -eu
+runtime="\$HOME/.dbx-tools/runtime/desktop"
+ready="\$runtime/session.ready"
+log_file="\$runtime/desktop.log"
+wallpaper="\$runtime/dbx-tools-wallpaper.png"
+brand_icon="\$runtime/dbx-tools-icon.svg"
+rm -f "\$ready"
+if [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  exec dbus-run-session -- "\$0"
+fi
+startxfce4 >>"\$log_file" 2>&1 &
+xfce_pid=\$!
+for _ in \$(seq 1 160); do
+  if pgrep -x xfce4-panel >/dev/null 2>&1 && \
+    pgrep -x xfdesktop >/dev/null 2>&1 && pgrep -x xfwm4 >/dev/null 2>&1; then
+    set_xfconf() {
+      channel="\$1"
+      property="\$2"
+      type="\$3"
+      value="\$4"
+      if xfconf-query -c "\$channel" -p "\$property" >/dev/null 2>&1; then
+        xfconf-query -c "\$channel" -p "\$property" -s "\$value" >/dev/null 2>&1 || true
+      else
+        xfconf-query -c "\$channel" -p "\$property" --create -t "\$type" \
+          -s "\$value" >/dev/null 2>&1 || true
+      fi
+    }
+    xdg-mime default dbx-tools-browser.desktop text/html >/dev/null 2>&1 || true
+    xdg-mime default dbx-tools-browser.desktop x-scheme-handler/http >/dev/null 2>&1 || true
+    xdg-mime default dbx-tools-browser.desktop x-scheme-handler/https >/dev/null 2>&1 || true
+    xdg-settings set default-web-browser dbx-tools-browser.desktop >/dev/null 2>&1 || true
+    gsettings set org.gnome.Epiphany homepage-url \
+      "\$(cat "\$runtime/browser-homepage")" >/dev/null 2>&1 || true
+    set_xfconf xsettings /Net/ThemeName string Arc-Dark
+    set_xfconf xsettings /Net/IconThemeName string hicolor
+    set_xfconf xsettings /Gtk/FontName string '$DBX_TOOLS_DESKTOP_FONT 10'
+    set_xfconf xfwm4 /general/theme string Arc-Dark
+    set_xfconf xfce4-panel /panels/panel-1/size uint 36
+    set_xfconf xfce4-panel /plugins/plugin-1 string whiskermenu
+    set_xfconf xfce4-panel /plugins/plugin-1/button-icon string "\$brand_icon"
+    set_xfconf xfce4-panel /plugins/plugin-1/button-title string 'dbx tools'
+    set_xfconf xfce4-panel /plugins/plugin-1/show-button-title bool true
+    properties=\$(xfconf-query -c xfce4-desktop -l 2>/dev/null | \
+      grep -E '/(last-image|image-path)\$' || true)
+    if [ -z "\$properties" ]; then
+      properties='/backdrop/screen0/monitor0/workspace0/last-image
+/backdrop/screen0/monitorVNC-0/workspace0/last-image
+/backdrop/screen0/monitorDefault-0/workspace0/last-image'
+    fi
+    printf '%s\n' "\$properties" | while IFS= read -r property; do
+      [ -n "\$property" ] || continue
+      xfconf-query -c xfce4-desktop -p "\$property" --create -t string \
+        -s "\$wallpaper" >/dev/null 2>&1 || true
+      style=\$(printf '%s' "\$property" | sed -E 's/(last-image|image-path)\$/image-style/')
+      xfconf-query -c xfce4-desktop -p "\$style" --create -t int -s 5 >/dev/null 2>&1 || true
+    done
+    xfdesktop --reload >/dev/null 2>&1 || true
+    xfce4-panel --restart >/dev/null 2>&1 || true
+    touch "\$ready"
+    break
+  fi
+  kill -0 "\$xfce_pid" 2>/dev/null || exit 1
+  sleep 0.25
+done
+test -f "\$ready" || {
+  printf 'Xfce desktop shell did not become ready.\n' >&2
+  exit 1
+}
+wait "\$xfce_pid"
+EOF
+chmod 700 "$session_script"
+
+cat >"$stop_script" <<'EOF'
+#!/bin/sh
+set -eu
+runtime="$HOME/.dbx-tools/runtime/desktop"
+stop_pid() {
+  pid_file="$1"
+  if [ -s "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+    kill "$(cat "$pid_file")"
+    for _ in $(seq 1 40); do
+      kill -0 "$(cat "$pid_file")" 2>/dev/null || break
+      sleep 0.25
+    done
+  fi
+  rm -f "$pid_file"
+}
+stop_pid "$runtime/kasmvncserver.pid"
+stop_pid "$runtime/websockify.pid"
+stop_pid "$runtime/session.pid"
+stop_pid "$runtime/xvnc.pid"
+kasmvncserver -kill :20 >/dev/null 2>&1 || true
+rm -f "$runtime/session.ready"
+EOF
+chmod 700 "$stop_script"
+'''
+
+[tasks.start]
+hide = true
+run = '''
+set -eu
+runtime="$HOME/.dbx-tools/runtime/desktop"
+version="9"
+version_file="$runtime/version"
+server_pid="$runtime/kasmvncserver.pid"
+session_ready="$runtime/session.ready"
+session_script="$runtime/start-xfce.sh"
+stop_script="$runtime/stop"
+log_file="$runtime/desktop.log"
+
+if [ ! -f "$version_file" ] || [ "$(cat "$version_file")" != "$version" ]; then
+  "$stop_script"
+fi
+if ! [ -s "$server_pid" ] || ! kill -0 "$(cat "$server_pid")" 2>/dev/null; then
+  kasmvncserver -kill :20 >/dev/null 2>&1 || true
+  rm -f "$session_ready"
+  nohup kasmvncserver :20 -fg -select-de xfce -xstartup "$session_script" \
+    -geometry 1600x1000 -depth 24 -interface 127.0.0.1 -websocketPort 6080 \
+    -disableBasicAuth -SecurityTypes None >"$log_file" 2>&1 </dev/null &
+  echo $! >"$server_pid"
+fi
+
+for _ in $(seq 1 160); do
+  [ -f "$session_ready" ] && break
+  kill -0 "$(cat "$server_pid")" 2>/dev/null || break
+  sleep 0.25
+done
+[ -f "$session_ready" ] || {
+  printf 'Xfce desktop session did not become ready.\n' >&2
+  tail -80 "$log_file" >&2
+  exit 1
+}
+
+python3 - 6080 <<'PY'
+import sys
+import time
+import urllib.request
+
+port = int(sys.argv[1])
+for _ in range(240):
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as response:
+            body = response.read(65536)
+            if response.status == 200 and b"KasmVNC" in body:
+                raise SystemExit(0)
+    except Exception:
+        time.sleep(0.5)
+raise SystemExit("KasmVNC web client did not become ready")
+PY
+printf '%s\n' "$version" >"$version_file"
+'''
+
+[tasks.stop]
+hide = true
+run = '''"$HOME/.dbx-tools/runtime/desktop/stop"'''

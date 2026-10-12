@@ -10,13 +10,15 @@ import type { ClientChannel } from "ssh2";
 import type { SshSession } from "./session.ts";
 
 const MAX_PENDING_BYTES = 1024 * 1024;
+const MAX_TIMER_DELAY_MS = 2_147_000_000;
 const logger = log.logger("appkit-sandbox:routes");
 
 type UpgradeSocket = Socket & { destroySoon?: () => void };
 
 interface RouteInput {
   id?: string;
-  ownerId: string;
+  ownerId?: string;
+  ownerIds?: readonly string[];
   machineId: string;
   remoteHost: string;
   remotePort: number;
@@ -25,6 +27,8 @@ interface RouteInput {
   redirectToSlash?: boolean;
   htmlHead?: string;
   internal?: boolean;
+  authorizeOwner?: (ownerId: string) => Promise<boolean>;
+  ownerExpirations?: Readonly<Record<string, number>>;
 }
 
 /** In-process forwarding state used by the AppKit proxy. */
@@ -40,14 +44,19 @@ export interface SshForwardedRoute {
 
 interface RouteTarget {
   route: SshForwardedRoute;
-  ownerId: string;
+  ownerIds: Set<string>;
   session: SshSession;
   target?: { host: string; port: number; protocol: string };
   server?: Server;
+  retiredServers: Set<Server>;
   sockets: Set<Socket>;
+  retiredSockets: Set<Socket>;
+  ownerSockets: Map<string, Set<Socket>>;
+  ownerTimers: Map<string, ReturnType<typeof setTimeout>>;
   redirectToSlash: boolean;
   htmlHead?: string;
   internal: boolean;
+  authorizeOwner?: (ownerId: string) => Promise<boolean>;
 }
 
 interface RouteMatch {
@@ -64,6 +73,8 @@ interface RouteMatch {
  */
 export class SshRouteRegistry {
   private readonly routes = new Map<string, RouteTarget>();
+  private readonly retiredSessionSockets = new Map<SshSession, Set<Socket>>();
+  private readonly sessionDrainWaiters = new Map<SshSession, Set<() => void>>();
   private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
   private readonly outboundPaths = new WeakMap<IncomingMessage, string>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
@@ -106,7 +117,7 @@ export class SshRouteRegistry {
     options: { includeInternal?: boolean } = {},
   ): SshForwardedRoute[] {
     return [...this.routes.values()]
-      .filter((entry) => !ownerId || entry.ownerId === ownerId)
+      .filter((entry) => !ownerId || entry.ownerIds.has(ownerId))
       .filter((entry) => options.includeInternal || !entry.internal)
       .map((entry) => entry.route)
       .filter((route) => !machineId || route.machineId === machineId);
@@ -125,41 +136,108 @@ export class SshRouteRegistry {
    */
   async add(session: SshSession, input: RouteInput): Promise<SshForwardedRoute> {
     const prepared = this.prepare(input);
-    if (prepared.previous) return prepared.previous.route;
+    if (prepared.previous) {
+      const previous = prepared.previous;
+      if (previous.session !== session) {
+        const sockets = new Set<Socket>();
+        const bridge = createBridge(session, input, sockets);
+        const target = await listenTarget(bridge);
+        const previousServer = previous.server;
+        const previousSession = previous.session;
+        for (const socket of previous.sockets) {
+          previous.retiredSockets.add(socket);
+          socket.once("close", () => previous.retiredSockets.delete(socket));
+        }
+        this.trackRetiredSession(previousSession, previous.sockets);
+        previous.session = session;
+        previous.target = target;
+        previous.server = bridge;
+        previous.sockets = sockets;
+        this.notifySessionDrained(previousSession);
+        if (previousServer) {
+          previous.retiredServers.add(previousServer);
+          previousServer.close(() => previous.retiredServers.delete(previousServer));
+        }
+      }
+      this.updateOwners(previous, input);
+      return previous.route;
+    }
     const sockets = new Set<Socket>();
     const bridge = createBridge(session, input, sockets);
     const target = await listenTarget(bridge);
     this.routes.set(prepared.route.id, {
       route: prepared.route,
-      ownerId: input.ownerId,
+      ownerIds: routeOwners(input),
       session,
       target,
       server: bridge,
+      retiredServers: new Set(),
       sockets,
+      retiredSockets: new Set(),
+      ownerSockets: new Map(),
+      ownerTimers: new Map(),
       redirectToSlash: input.redirectToSlash ?? false,
       ...optionalHtmlHead(input.htmlHead),
       internal: input.internal ?? false,
+      ...(input.authorizeOwner ? { authorizeOwner: input.authorizeOwner } : {}),
     });
+    this.updateOwners(this.routes.get(prepared.route.id)!, input);
     return prepared.route;
   }
 
   /** Removes an owned route, closes active sockets, and deletes its local bridge. */
   async remove(routeId: string, ownerId?: string): Promise<boolean> {
     const entry = this.routes.get(routeId);
-    if (!entry || (ownerId && entry.ownerId !== ownerId)) return false;
+    if (!entry || (ownerId && !entry.ownerIds.has(ownerId))) return false;
     this.routes.delete(routeId);
+    entry.ownerTimers.forEach((timer) => clearTimeout(timer));
+    entry.ownerTimers.clear();
+    entry.ownerSockets.forEach((sockets) => sockets.forEach((socket) => socket.destroy()));
+    entry.ownerSockets.clear();
     entry.sockets.forEach((socket) => socket.destroy());
-    if (entry.server) await closeServer(entry.server);
+    entry.retiredSockets.forEach((socket) => socket.destroy());
+    entry.retiredSockets.clear();
+    await Promise.all([
+      ...(entry.server ? [closeServer(entry.server)] : []),
+      ...[...entry.retiredServers].map(closeServer),
+    ]);
+    entry.retiredServers.clear();
+    this.notifySessionDrained(entry.session);
     return true;
   }
 
   /** Removes every matching route for one machine and optional owner. */
   async removeMachine(machineId: string, ownerId?: string): Promise<void> {
-    const routeIds = [...this.routes.values()]
-      .filter((entry) => !ownerId || entry.ownerId === ownerId)
-      .filter((entry) => entry.route.machineId === machineId)
+    const entries = [...this.routes.values()].filter(
+      (entry) => entry.route.machineId === machineId,
+    );
+    if (ownerId) {
+      entries
+        .filter((entry) => entry.internal)
+        .forEach((entry) => this.revokeRouteOwner(entry, ownerId));
+    }
+    const routeIds = entries
+      .filter((entry) => !ownerId || (!entry.internal && entry.ownerIds.has(ownerId)))
       .map((entry) => entry.route.id);
     await Promise.all(routeIds.map((routeId) => this.remove(routeId, ownerId)));
+  }
+
+  /** Revokes one owner's active and future access to machine-owned service routes. */
+  revokeOwner(machineId: string, ownerId: string): void {
+    for (const entry of this.routes.values()) {
+      if (entry.route.machineId !== machineId || !entry.internal) continue;
+      this.revokeRouteOwner(entry, ownerId);
+    }
+  }
+
+  /** Resolves after a replaced SSH session no longer backs routes or forwarded sockets. */
+  whenSessionDrained(session: SshSession): Promise<void> {
+    if (!this.sessionInUse(session)) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const waiters = this.sessionDrainWaiters.get(session) ?? new Set<() => void>();
+      waiters.add(resolve);
+      this.sessionDrainWaiters.set(session, waiters);
+    });
   }
 
   /**
@@ -167,10 +245,10 @@ export class SshRouteRegistry {
    * HTTP requests. Unmatched requests continue to the next AppKit handler.
    */
   middleware() {
-    return (request: Request, response: Response, next: NextFunction) => {
+    return async (request: Request, response: Response, next: NextFunction) => {
       const requestUser = request.header(USER_ID_HEADER) ?? request.header(USER_EMAIL_HEADER);
       const direct = this.directRoute(request.path);
-      if (direct && requestUser !== direct.ownerId) {
+      if (direct && !(await ownerIsAuthorized(direct, requestUser))) {
         response.statusCode = 404;
         response.end("Not Found");
         return;
@@ -205,17 +283,18 @@ export class SshRouteRegistry {
   }
 
   /** Proxies an authorized matching HTTP Upgrade request, including WebSockets. */
-  handleUpgrade(request: IncomingMessage, socket: Socket, head: Buffer): boolean {
+  async handleUpgrade(request: IncomingMessage, socket: Socket, head: Buffer): Promise<boolean> {
     const url = new URL(request.url ?? "/", "http://localhost");
     const requestUser =
       headerValue(request.headers[USER_ID_HEADER]) ??
       headerValue(request.headers[USER_EMAIL_HEADER]);
     const match = this.match(url.pathname, requestUser);
     if (!match) return false;
+    if (!(await ownerIsAuthorized(match.entry, requestUser))) return false;
     if (match.stripPrefix) {
       this.outboundPaths.set(request, outboundPath(request.url, match.stripPrefix));
     }
-    proxyWebSocket(request, socket, head, match.entry, this.proxy);
+    proxyWebSocket(request, socket, head, match.entry, requestUser!, this.proxy);
     return true;
   }
 
@@ -230,6 +309,84 @@ export class SshRouteRegistry {
     this.proxy.close();
   }
 
+  private updateOwners(entry: RouteTarget, input: RouteInput): void {
+    const owners = routeOwners(input);
+    [...entry.ownerIds]
+      .filter((ownerId) => !owners.has(ownerId))
+      .forEach((ownerId) => this.revokeRouteOwner(entry, ownerId));
+    entry.ownerIds = owners;
+    entry.authorizeOwner = input.authorizeOwner;
+    entry.ownerTimers.forEach((timer) => clearTimeout(timer));
+    entry.ownerTimers.clear();
+    for (const ownerId of owners) {
+      const expiresAt = input.ownerExpirations?.[ownerId];
+      if (expiresAt === undefined) continue;
+      const delay = expiresAt - Date.now();
+      if (delay <= 0) {
+        this.revokeRouteOwner(entry, ownerId);
+        continue;
+      }
+      this.scheduleOwnerExpiration(entry, ownerId, expiresAt);
+    }
+  }
+
+  private revokeRouteOwner(entry: RouteTarget, ownerId: string): void {
+    entry.ownerIds.delete(ownerId);
+    const timer = entry.ownerTimers.get(ownerId);
+    if (timer) clearTimeout(timer);
+    entry.ownerTimers.delete(ownerId);
+    entry.ownerSockets.get(ownerId)?.forEach((socket) => socket.destroy());
+    entry.ownerSockets.delete(ownerId);
+    if (entry.ownerIds.size === 0) void this.remove(entry.route.id);
+  }
+
+  private scheduleOwnerExpiration(entry: RouteTarget, ownerId: string, expiresAt: number): void {
+    const schedule = () => {
+      if (!entry.ownerIds.has(ownerId)) return;
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) {
+        this.revokeRouteOwner(entry, ownerId);
+        return;
+      }
+      const timer = setTimeout(schedule, Math.min(remaining, MAX_TIMER_DELAY_MS));
+      timer.unref?.();
+      entry.ownerTimers.set(ownerId, timer);
+    };
+    schedule();
+  }
+
+  private trackRetiredSession(session: SshSession, sockets: ReadonlySet<Socket>): void {
+    if (sockets.size === 0) {
+      this.notifySessionDrained(session);
+      return;
+    }
+    const tracked = this.retiredSessionSockets.get(session) ?? new Set<Socket>();
+    this.retiredSessionSockets.set(session, tracked);
+    for (const socket of sockets) {
+      tracked.add(socket);
+      socket.once("close", () => {
+        tracked.delete(socket);
+        if (tracked.size === 0) {
+          this.retiredSessionSockets.delete(session);
+          this.notifySessionDrained(session);
+        }
+      });
+    }
+  }
+
+  private sessionInUse(session: SshSession): boolean {
+    return (
+      [...this.routes.values()].some((entry) => entry.session === session) ||
+      (this.retiredSessionSockets.get(session)?.size ?? 0) > 0
+    );
+  }
+
+  private notifySessionDrained(session: SshSession): void {
+    if (this.sessionInUse(session)) return;
+    this.sessionDrainWaiters.get(session)?.forEach((resolve) => resolve());
+    this.sessionDrainWaiters.delete(session);
+  }
+
   private prepare(input: RouteInput): { route: SshForwardedRoute; previous?: RouteTarget } {
     const path = input.internal
       ? normalizeRoutePath(requiredInternalPath(input.path))
@@ -237,7 +394,8 @@ export class SshRouteRegistry {
     const stripPrefix = input.stripPrefix ?? path !== "/";
     const previous = [...this.routes.values()].find((entry) => entry.route.path === path);
     if (previous) {
-      if (previous.ownerId !== input.ownerId) {
+      const owners = routeOwners(input);
+      if (!previous.internal && !sameOwners(previous.ownerIds, owners)) {
         throw new Error(`SSH route path ${path} is already owned by another user`);
       }
       if (
@@ -272,6 +430,7 @@ export class SshRouteRegistry {
   }
 
   private userRoutePath(input: RouteInput): string {
+    if (!input.ownerId) throw new Error("User SSH routes require one owner");
     const prefix = this.userPathPrefix(input.ownerId);
     if (!input.path) {
       return normalizeRoutePath(`${prefix}/${slug(input.machineId)}-${input.remotePort}`);
@@ -286,7 +445,7 @@ export class SshRouteRegistry {
 
   private match(path: string, requestUser: string | undefined): RouteMatch | undefined {
     const direct = this.directRoute(path);
-    if (direct && requestUser === direct.ownerId) {
+    if (direct && requestUser && direct.ownerIds.has(requestUser)) {
       return {
         entry: direct,
         ...(direct.route.stripPrefix ? { stripPrefix: direct.route.path } : {}),
@@ -300,6 +459,28 @@ export class SshRouteRegistry {
       .filter((entry) => path === entry.route.path || path.startsWith(`${entry.route.path}/`))
       .sort((left, right) => right.route.path.length - left.route.path.length)[0];
   }
+}
+
+async function ownerIsAuthorized(
+  entry: RouteTarget,
+  ownerId: string | undefined,
+): Promise<boolean> {
+  return Boolean(
+    ownerId &&
+    entry.ownerIds.has(ownerId) &&
+    (!entry.authorizeOwner || (await entry.authorizeOwner(ownerId))),
+  );
+}
+
+function routeOwners(input: RouteInput): Set<string> {
+  const owners = new Set(input.ownerIds ?? []);
+  if (input.ownerId) owners.add(input.ownerId);
+  if (owners.size === 0) throw new Error("SSH routes require at least one owner");
+  return owners;
+}
+
+function sameOwners(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && [...left].every((owner) => right.has(owner));
 }
 
 function replayParsedJsonBody(request: Request): Readable | undefined {
@@ -461,14 +642,20 @@ function proxyWebSocket(
   socket: Socket,
   head: Buffer,
   entry: RouteTarget,
+  ownerId: string,
   proxy: { ws: (request: IncomingMessage, socket: Socket, head: Buffer, options?: object) => void },
 ): void {
   if (!entry.target) {
     socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
     return;
   }
-  entry.sockets.add(socket);
-  socket.once("close", () => entry.sockets.delete(socket));
+  const ownerSockets = entry.ownerSockets.get(ownerId) ?? new Set<Socket>();
+  ownerSockets.add(socket);
+  entry.ownerSockets.set(ownerId, ownerSockets);
+  socket.once("close", () => {
+    ownerSockets.delete(socket);
+    if (ownerSockets.size === 0) entry.ownerSockets.delete(ownerId);
+  });
   stripWebsocketIdentityHeaders(request);
   request.headers.origin = `http://${entry.route.remoteHost}:${entry.route.remotePort}`;
   const upgradeSocket = socket as UpgradeSocket;
