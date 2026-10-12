@@ -84,7 +84,7 @@ describe("unified release workflow", () => {
     );
     assert.equal(step(verifyJob, "Verify workspace versions").run, "bun run version:check");
     assert.match(step(verifyJob, "Setup bun").uses ?? "", /^oven-sh\/setup-bun@/);
-    assert.deepEqual(step(verifyJob, "Setup bun").with, { "bun-version": "1.3.14" });
+    assert.deepEqual(step(verifyJob, "Setup bun").with, { "bun-version": "1.4.2" });
     const names = verifyJob.steps.map((candidate) => candidate.name);
     assert.ok(
       names.indexOf("Install CLI documentation parser") <
@@ -115,7 +115,7 @@ describe("unified release workflow", () => {
     assert.ok(job.if?.includes("outputs.npm == 'true'"));
     assert.deepEqual(job.permissions, { contents: "read", "id-token": "write" });
     assert.equal(job.env?.BUN_VERSION, undefined);
-    assert.deepEqual(step(job, "Setup Bun").with, { "bun-version": "1.3.14" });
+    assert.deepEqual(step(job, "Setup Bun").with, { "bun-version": "1.4.2" });
     assert.deepEqual(step(job, "Setup Node.js").with, {
       "node-version": "24",
       "registry-url": "https://registry.npmjs.org",

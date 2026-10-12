@@ -177,6 +177,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     "fs",
     "fs/promises",
     "os",
+    "path",
     "process",
     "readline",
   ]);

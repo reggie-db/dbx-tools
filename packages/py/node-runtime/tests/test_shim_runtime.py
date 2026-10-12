@@ -41,6 +41,14 @@ def test_shared_runtime_and_bundle_registry() -> None:
     }
     assert first.invoke_positioned_sync("fixture", "add", [(0, 2), (1, 3)]) == 5
     assert second.invoke_positioned_sync("fixture", "multiply", [(0, 4), (1, 5)]) == 20
+    assert first._exports["runSync"](
+        sys.executable,
+        ["-c", "import sys; sys.stdout.write('runtime-ok')"],
+    ) == {
+        "status": 0,
+        "stdout": "runtime-ok",
+        "stderr": "",
+    }
 
 
 def test_python_environment_is_available_at_runtime_start() -> None:

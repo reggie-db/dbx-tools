@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { finished } from "node:stream/promises";
 import { PassThrough, Transform } from "node:stream";
+import { finished } from "node:stream/promises";
 import { appkit } from "@dbx-tools/appkit";
 import { configUtils } from "@dbx-tools/core";
 import { devWatch } from "@dbx-tools/projen";
@@ -16,6 +16,8 @@ const logger = log.logger("demo");
 const ROOT = process.cwd();
 const DEMO_BUNDLE = path.join(ROOT, "packages/example/server/appkit-demo/databricks.yml");
 const DEMO_SERVER = path.join(path.dirname(DEMO_BUNDLE), "src/server.ts");
+const DEMO_CLIENT = "@dbx-tools/demo-appkit-app";
+const DEMO_CLIENT_PORT = 5173;
 const ANSI_SEQUENCE = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 
 let resolvedDemoEnv: Promise<NodeJS.ProcessEnv> | undefined;
@@ -26,9 +28,8 @@ function demoEnv(): Promise<NodeJS.ProcessEnv> {
     delete process.env.FORCE_COLOR;
     process.env.LAKEBASE_ENDPOINT ??= await demoLakebaseEndpoint();
     process.env.CLIENT_DIST = path.join(ROOT, "packages/example/app/appkit-demo/dist");
+    process.env.CLIENT_DEV_URL ??= `http://127.0.0.1:${DEMO_CLIENT_PORT}`;
     process.env.PYTHON = path.join(ROOT, ".venv/bin/python");
-    process.env.PORTR_TOKEN = "";
-    process.env.TUNNEL_PUBLIC_DOMAIN = "";
     await appkit.autoConfigure({ autoConfigure: "env" });
     return {
       ...process.env,
@@ -56,52 +57,6 @@ async function demoLakebaseEndpoint(): Promise<string> {
     }
     return value;
   });
-}
-
-/** Return non-Lakebase build environment while the client compiles. */
-function buildEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    BUN_CONFIG_ELIDE_LINES: "0",
-    NODE_ENV: "development",
-  };
-  delete env.FORCE_COLOR;
-  return env;
-}
-
-/** Run a finite command and fail when it exits unsuccessfully. */
-async function run(
-  command: string[],
-  options: Bun.SpawnOptions.OptionsObject<"inherit", "inherit", "inherit">,
-): Promise<void> {
-  const child = Bun.spawn(command, options);
-  const exitCode = await child.exited;
-  if (exitCode !== 0) {
-    throw new Error(`${command[0]} exited with code ${exitCode}`);
-  }
-}
-
-/** Build the static client served by AppKit on the API port. */
-async function buildClient(): Promise<void> {
-  await run(
-    [
-      process.execPath,
-      "--env-file=.env",
-      "--env-file=.env.local",
-      "run",
-      "--elide-lines=0",
-      "--filter",
-      "@dbx-tools/demo-appkit-app",
-      "compile",
-    ],
-    {
-      cwd: ROOT,
-      env: buildEnv(),
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    },
-  );
 }
 
 /** Create a terminal stream with a matching ANSI-free file stream. */
@@ -157,10 +112,14 @@ export function demoServerCommand(watch?: boolean): string {
   return `${command} bun ${JSON.stringify(path.relative(ROOT, DEMO_SERVER))}`;
 }
 
-/** Build the client, then run the AppKit server. */
+/** Root task command for Bun's React HMR development server. */
+export function demoClientCommand(): string {
+  return `bun --env-file=.env --env-file=.env.local run --elide-lines=0 --filter ${DEMO_CLIENT} dev`;
+}
+
+/** Run the Bun client HMR server and AppKit backend together. */
 async function runDemo(): Promise<void> {
   delete process.env.FORCE_COLOR;
-  await buildClient();
   const { default: concurrently } = await import("concurrently");
   const { output, close } = await createLoggedOutput();
   const env = await demoEnv();
@@ -168,6 +127,15 @@ async function runDemo(): Promise<void> {
   const wasRaw = stdin.isTTY ? Boolean(stdin.isRaw) : false;
   const { result } = concurrently(
     [
+      {
+        command: demoClientCommand(),
+        name: "client",
+        prefixColor: "magenta",
+        env: {
+          ...process.env,
+          PORT: String(DEMO_CLIENT_PORT),
+        },
+      },
       {
         command: demoServerCommand(),
         name: "server",

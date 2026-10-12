@@ -153,7 +153,7 @@
     },
     "demo": {
       "name": "demo",
-      "description": "Build the demo client and run the local AppKit server",
+      "description": "Run the demo client with HMR and the local AppKit server",
       "env": {
         "NODE_ENV": "development",
         "BUN_CONFIG_ELIDE_LINES": "0"

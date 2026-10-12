@@ -5,6 +5,7 @@
       "path": "packages/js/node/appkit",
       "dependencies": [
         "@dbx-tools/auth",
+        "@dbx-tools/cache",
         "@dbx-tools/core",
         "@dbx-tools/lakebase",
         "@dbx-tools/postgres",
@@ -13,6 +14,7 @@
         "@dbx-tools/shared-fs"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-databricks-sandbox",
         "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-web-search",
@@ -25,6 +27,21 @@
         "@dbx-tools/search",
         "@dbx-tools/teams",
         "@dbx-tools/tunnel"
+      ]
+    },
+    {
+      "name": "@dbx-tools/appkit-databricks-sandbox",
+      "path": "packages/js/node/appkit-databricks-sandbox",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/core",
+        "@dbx-tools/postgres",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-databricks-sandbox"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-server"
       ]
     },
     {
@@ -48,6 +65,7 @@
       "path": "packages/js/node/appkit-mastra",
       "dependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/cache",
         "@dbx-tools/core",
         "@dbx-tools/databricks",
         "@dbx-tools/fs",
@@ -63,6 +81,7 @@
         "@dbx-tools/shared-model"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-databricks-sandbox",
         "@dbx-tools/appkit-graphiti",
         "@dbx-tools/demo-appkit-server"
       ]
@@ -129,6 +148,19 @@
       ]
     },
     {
+      "name": "@dbx-tools/cache",
+      "path": "packages/js/node/cache",
+      "dependencies": [
+        "@dbx-tools/core",
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/model"
+      ]
+    },
+    {
       "name": "@dbx-tools/cli",
       "path": "packages/js/cli/dbx-tools",
       "dependencies": [
@@ -185,11 +217,13 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-databricks-sandbox",
         "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
+        "@dbx-tools/cache",
         "@dbx-tools/cli",
         "@dbx-tools/cli-args",
         "@dbx-tools/cli-service",
@@ -237,6 +271,7 @@
       "dependencies": [
         "@dbx-tools/shared-core",
         "@dbx-tools/ui",
+        "@dbx-tools/ui-databricks-sandbox",
         "@dbx-tools/ui-mastra",
         "@dbx-tools/ui-teams"
       ],
@@ -247,6 +282,7 @@
       "path": "packages/example/server/appkit-demo",
       "dependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-databricks-sandbox",
         "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-web-search",
@@ -322,6 +358,7 @@
       "dependencies": [
         "@dbx-tools/appkit",
         "@dbx-tools/auth",
+        "@dbx-tools/cache",
         "@dbx-tools/shared-auth",
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-model"
@@ -370,6 +407,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-databricks-sandbox",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/auth-gate",
         "@dbx-tools/cli",
@@ -429,12 +467,14 @@
       "dependencies": [],
       "reverseDependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-databricks-sandbox",
         "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
+        "@dbx-tools/cache",
         "@dbx-tools/cli",
         "@dbx-tools/cli-args",
         "@dbx-tools/cli-service",
@@ -465,6 +505,15 @@
         "@dbx-tools/ui",
         "@dbx-tools/ui-mastra",
         "@dbx-tools/ui-teams"
+      ]
+    },
+    {
+      "name": "@dbx-tools/shared-databricks-sandbox",
+      "path": "packages/js/shared/databricks-sandbox",
+      "dependencies": [],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-databricks-sandbox",
+        "@dbx-tools/ui-databricks-sandbox"
       ]
     },
     {
@@ -642,8 +691,20 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/demo-appkit-app",
+        "@dbx-tools/ui-databricks-sandbox",
         "@dbx-tools/ui-mastra",
         "@dbx-tools/ui-teams"
+      ]
+    },
+    {
+      "name": "@dbx-tools/ui-databricks-sandbox",
+      "path": "packages/js/ui/databricks-sandbox",
+      "dependencies": [
+        "@dbx-tools/shared-databricks-sandbox",
+        "@dbx-tools/ui"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-app"
       ]
     },
     {

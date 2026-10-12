@@ -31,6 +31,10 @@ import { authGate, tunnelInterceptor } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
 import { configureStaticDelivery } from "./_static-delivery.ts";
+import {
+  createClientDevelopmentProxy,
+  type ClientDevelopmentProxy,
+} from "./_client-development.ts";
 import { busDemo } from "./bus-demo.ts";
 
 /** Default search index used by both AppKit resource validation and the plugin. */
@@ -82,7 +86,6 @@ const graphitiEnabled =
 const busEnabled = configUtils.boolean(undefined, "BUS_ENABLED", configUtils.ENV_ONLY) ?? true;
 const remoteSkillsEnabled =
   configUtils.boolean(undefined, "REMOTE_SKILLS_ENABLED", configUtils.ENV_ONLY) ?? true;
-const localDevelopment = process.env.NODE_ENV === "development";
 const databricksSandboxRuntime = new SshRuntime(
   resolveSshPluginConfig({
     fallbackToServicePrincipal: true,
@@ -107,6 +110,9 @@ const databricksSandboxRuntime = new SshRuntime(
 const clientDist =
   process.env.CLIENT_DIST ??
   path.resolve(projectUtils.root() ?? process.cwd(), "packages/example/app/appkit-demo/dist");
+const clientDevUrl = configUtils.string(undefined, "CLIENT_DEV_URL", configUtils.ENV_ONLY);
+let clientDevelopmentProxy: ClientDevelopmentProxy | undefined;
+let appServer: { getServer(): import("node:http").Server } | undefined;
 
 // AppKit demo wiring for `@dbx-tools/appkit-mastra`.
 //
@@ -413,14 +419,24 @@ await appkit.createApp({
     }),
   ],
   onPluginsReady(appkit) {
+    appServer = appkit.server;
+    if (clientDevUrl) {
+      clientDevelopmentProxy = createClientDevelopmentProxy(clientDevUrl, appkit.authGate);
+      appkit.server.extend(clientDevelopmentProxy.configure);
+    }
     appkit.server.extend((application) => configureStaticDelivery(application, clientDist));
   },
   // Front the app with a public portr tunnel IN-PROCESS: `tunnelInterceptor`
   // applies the computed DATABRICKS_HOST, launches portr pointed at this app's
-  // public port, and binds it so the app and portr live/die as one. Local
-  // development omits the tunnel so localhost never enters the OTP flow.
-  interceptor: !localDevelopment ? tunnelInterceptor() : undefined,
+  // public port, and binds it so the app and portr live/die as one. Without
+  // PORTR_TOKEN and TUNNEL_PUBLIC_DOMAIN it remains inactive, while localhost
+  // continues to bypass the host-scoped OTP gate.
+  interceptor: tunnelInterceptor(),
   cache: {
     enabled: true,
   },
 });
+
+if (clientDevelopmentProxy && appServer) {
+  clientDevelopmentProxy.attach(appServer.getServer());
+}

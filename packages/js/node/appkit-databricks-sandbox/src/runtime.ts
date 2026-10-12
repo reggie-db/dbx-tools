@@ -1,5 +1,5 @@
 import type { WorkspaceClient } from "@databricks/appkit";
-import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
 import {
   addSshRouteRequestSchema,
   createSshMachineRequestSchema,
@@ -595,8 +595,8 @@ function sessionKey(workspaceScope: string, userId: string, machineId: string): 
 }
 
 function authErrorMetadata(error: unknown): Record<string, unknown> {
-  const record = isRecord(error) ? error : {};
-  const response = isRecord(record.response) ? record.response : {};
+  const record = object.isRecord(error) ? error : {};
+  const response = object.isRecord(record.response) ? record.response : {};
   const body = record.body ?? response.body ?? response.data;
   return {
     errorName: error instanceof Error ? error.name : undefined,
@@ -611,7 +611,7 @@ function authErrorMetadata(error: unknown): Record<string, unknown> {
 }
 
 function bodyField(value: unknown, key: string): unknown {
-  return isRecord(value) ? value[key] : undefined;
+  return object.isRecord(value) ? value[key] : undefined;
 }
 
 function safeBody(value: unknown): string | undefined {
@@ -626,8 +626,4 @@ function safeBody(value: unknown): string | undefined {
   } catch {
     return String(value).slice(0, 4_000);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }

@@ -37,7 +37,7 @@ describe("authentication debug logging", () => {
       stderr: "pipe",
       stdout: "pipe",
     });
-    const output = result.stderr.toString();
+    const output = result.stdout.toString();
     assert.equal(result.exitCode, 0, output);
     assert.match(output, /DEBUG \[auth:lifecycle\] checked credential cache/);
     assert.match(output, /DEBUG \[auth:lifecycle\] credential saved/);

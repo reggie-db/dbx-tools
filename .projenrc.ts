@@ -1265,6 +1265,7 @@ project.applyToProjects(
       "@mastra/otel-bridge@catalog:",
       "@mastra/pg@catalog:",
       "@opentelemetry/api@catalog:",
+      "http-proxy-3@catalog:",
       "zod@catalog:",
       "compression@^1.8.1",
       "pg@^8.22.0",
@@ -1452,9 +1453,10 @@ for (const task of [SCOPE, "dbx"]) {
   root.setScript(task, command);
 }
 
-// Build the demo client, then run the AppKit server with the shared local
+// Run the Bun client HMR server and AppKit backend with the shared local
 // environment. Both JavaScript apps are workspace members, so there is no nested
-// projen synth or registry install.
+// projen synth or registry install. `--no-server-watch` leaves client HMR active
+// while keeping the backend, sidecars, and authenticated tunnel stable.
 // `.env` is the committed-shape local secret file; `.env.local` optionally
 // overlays it. Both `--env-file` flags are missing-file tolerant under bun, so
 // a laptop with only `.env` still supplies the email plugin's SMTP settings.
@@ -1465,7 +1467,7 @@ root.addTask("demo", {
   },
   exec: "bun scripts/run-demo.ts",
   receiveArgs: true,
-  description: "Build the demo client and run the local AppKit server",
+  description: "Run the demo client with HMR and the local AppKit server",
 });
 root.addTask("demo:deploy", {
   exec: "bun scripts/demo-deploy.ts",

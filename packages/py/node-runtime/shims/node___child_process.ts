@@ -4,8 +4,16 @@ import { Readable, Writable } from "node:stream";
 import { pythonHost, type PythonProcessHandle } from "./host.ts";
 
 interface SpawnOptions {
+  cwd?: string;
   env?: Record<string, string>;
+  input?: string;
   signal?: AbortSignal;
+}
+
+interface SpawnSyncResult {
+  status: number;
+  stdout: string;
+  stderr: string;
 }
 
 class PythonChildProcess extends EventEmitter {
@@ -87,10 +95,23 @@ export function execFile(
     );
 }
 
-export function spawnSync(): never {
-  throw Object.assign(new Error("Synchronous subprocesses are unavailable in PythonMonkey"), {
-    code: "ENOSYS",
-  });
+export function spawnSync(
+  command: string,
+  args: string[] = [],
+  options: SpawnOptions = {},
+): SpawnSyncResult {
+  const result = pythonHost().process.run(
+    command,
+    args,
+    options.env,
+    options.input,
+    options.cwd,
+  );
+  return {
+    status: result.exitCode,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+  };
 }
 
 export default { execFile, spawn, spawnSync };

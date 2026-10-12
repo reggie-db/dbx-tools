@@ -29,14 +29,15 @@ import {
   HeartPulseIcon,
   PlayIcon,
   PlusIcon,
-  RefreshCwIcon,
   SquareIcon,
   SquareTerminalIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SshClient } from "./client.ts";
 import { resolveServiceUrl } from "./service-url.ts";
+
+const REFRESH_INTERVAL_MS = 5_000;
 
 /** Props for the full SSH machine and route management surface. */
 export interface SshManagerProps {
@@ -55,19 +56,22 @@ export function SshManager({
   const [machines, setMachines] = useState<SshMachine[]>([]);
   const [routes, setRoutes] = useState<SshRoute[]>([]);
   const [supported, setSupported] = useState(true);
-  const [auto, setAuto] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string>();
   const [error, setError] = useState<string>();
   const [machineId, setMachineId] = useState("");
   const [newMachineName, setNewMachineName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SshMachine>();
+  const [routeFormOpen, setRouteFormOpen] = useState(false);
   const [remotePort, setRemotePort] = useState(String(defaultRemotePort));
   const [path, setPath] = useState("");
   const [stripPrefix, setStripPrefix] = useState(true);
+  const refreshing = useRef(false);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (showLoading = false) => {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    if (showLoading) setLoading(true);
     setError(undefined);
     try {
       const [machineResponse, routeResponse] = await Promise.all([
@@ -75,7 +79,6 @@ export function SshManager({
         client.listRoutes(),
       ]);
       setSupported(machineResponse.supported);
-      setAuto(machineResponse.auto);
       setMachines(machineResponse.machines);
       setRoutes(routeResponse);
       setMachineId((current) =>
@@ -86,12 +89,22 @@ export function SshManager({
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setLoading(false);
+      refreshing.current = false;
+      if (showLoading) setLoading(false);
     }
   }, [client]);
 
   useEffect(() => {
-    void refresh();
+    void refresh(true);
+    const refreshVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    const interval = window.setInterval(refreshVisible, REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refreshVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshVisible);
+    };
   }, [refresh]);
 
   const manageMachine = async (machine: SshMachine, action: "start" | "stop") => {
@@ -158,6 +171,7 @@ export function SshManager({
     try {
       await client.addRoute(input);
       setPath("");
+      setRouteFormOpen(false);
       await refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -195,19 +209,6 @@ export function SshManager({
 
   return (
     <div className={cn("space-y-3", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span>{machines.length} machines</span>
-          <span aria-hidden="true">·</span>
-          <span>{routes.length} routes</span>
-          <Badge variant="outline">auto {auto ? "on" : "off"}</Badge>
-        </div>
-        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={refresh}>
-          {loading ? <Spinner className="size-3.5" /> : <RefreshCwIcon className="size-3.5" />}
-          Refresh
-        </Button>
-      </div>
-
       {error ? (
         <div
           role="alert"
@@ -224,20 +225,48 @@ export function SshManager({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
-          <Card>
-            <CardHeader className="px-4 py-3 sm:px-5">
-              <CardTitle className="text-base">Machines</CardTitle>
+        <div className="grid items-start gap-3 lg:grid-cols-2">
+          <Card className="gap-0 py-0">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-2.5 sm:px-4">
+              <CardTitle className="text-sm">Machines</CardTitle>
+              <Badge variant="secondary">{machines.length}</Badge>
             </CardHeader>
             <CardContent className="p-0">
-              {machines.length === 0 && !loading ? (
-                <p className="px-4 pb-4 text-sm text-muted-foreground">No existing machines.</p>
+              <form
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t px-3 py-2 sm:px-4"
+                onSubmit={createMachine}
+              >
+                <Label className="sr-only" htmlFor="sandbox-name">
+                  Sandbox name
+                </Label>
+                <Input
+                  id="sandbox-name"
+                  value={newMachineName}
+                  maxLength={256}
+                  placeholder="Sandbox name (optional)"
+                  disabled={Boolean(busyId)}
+                  onChange={(event) => setNewMachineName(event.target.value)}
+                />
+                <Button type="submit" size="sm" disabled={Boolean(busyId)}>
+                  {busyId === "new-machine" ? (
+                    <Spinner className="size-3.5" />
+                  ) : (
+                    <PlusIcon className="size-3.5" />
+                  )}
+                  Create
+                </Button>
+              </form>
+              {machines.length === 0 ? (
+                <div className="flex min-h-16 items-center justify-center gap-2 border-t px-4 py-4 text-sm text-muted-foreground">
+                  {loading ? <Spinner className="size-4" /> : null}
+                  <span>{loading ? "Loading sandboxes" : "No sandboxes yet"}</span>
+                </div>
               ) : (
-                <div className="divide-y">
+                <div className="divide-y border-t">
                   {machines.map((machine) => (
                     <div
                       key={machine.id}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:flex-nowrap sm:px-5"
+                      className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-3 py-2 sm:flex-nowrap sm:px-4"
                     >
                       <span
                         className={cn(
@@ -336,45 +365,34 @@ export function SshManager({
             </CardContent>
           </Card>
 
-          <div className="space-y-3">
-            <Card>
-              <CardHeader className="px-4 pb-2 pt-3">
-                <CardTitle className="text-base">Create sandbox</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-3">
-                <form className="flex items-center gap-2" onSubmit={createMachine}>
-                  <div className="min-w-0 flex-1">
-                    <Label className="sr-only" htmlFor="sandbox-name">
-                      Name
-                    </Label>
-                    <Input
-                      id="sandbox-name"
-                      value={newMachineName}
-                      maxLength={256}
-                      placeholder="Optional"
-                      disabled={Boolean(busyId)}
-                      onChange={(event) => setNewMachineName(event.target.value)}
-                    />
-                  </div>
-                  <Button className="shrink-0" type="submit" disabled={Boolean(busyId)}>
-                    {busyId === "new-machine" ? (
-                      <Spinner className="size-3.5" />
-                    ) : (
-                      <PlusIcon className="size-3.5" />
-                    )}
-                    Create
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Add route</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form className="space-y-4" onSubmit={addRoute}>
-                  <div className="space-y-2">
+          <Card className="gap-0 py-0">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-2 sm:px-4">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-sm">Routes</CardTitle>
+                <Badge variant="secondary">{routes.length}</Badge>
+              </div>
+              <Button
+                type="button"
+                variant={routeFormOpen ? "ghost" : "outline"}
+                size="sm"
+                className="h-8"
+                aria-expanded={routeFormOpen}
+                aria-controls="ssh-route-form"
+                disabled={machines.length === 0 || Boolean(busyId)}
+                onClick={() => setRouteFormOpen((open) => !open)}
+              >
+                <PlusIcon className="size-3.5" />
+                {routeFormOpen ? "Cancel" : "Add route"}
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {routeFormOpen ? (
+                <form
+                  id="ssh-route-form"
+                  className="space-y-2.5 border-t px-3 py-2.5 sm:px-4"
+                  onSubmit={addRoute}
+                >
+                  <div className="space-y-1.5">
                     <Label htmlFor="ssh-machine">Machine</Label>
                     <select
                       id="ssh-machine"
@@ -390,8 +408,8 @@ export function SshManager({
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-[1fr_8rem] gap-3">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
+                    <div className="space-y-1.5">
                       <Label htmlFor="ssh-path">Path</Label>
                       <Input
                         id="ssh-path"
@@ -401,8 +419,8 @@ export function SshManager({
                         onChange={(event) => setPath(event.target.value)}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ssh-port">Remote port</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ssh-port">Port</Label>
                       <Input
                         id="ssh-port"
                         type="number"
@@ -414,84 +432,83 @@ export function SshManager({
                       />
                     </div>
                   </div>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 size-4"
-                      checked={stripPrefix}
-                      disabled={Boolean(busyId)}
-                      onChange={(event) => setStripPrefix(event.target.checked)}
-                    />
-                    <span>
-                      <span className="block font-medium">Strip route prefix</span>
-                      <span className="block text-xs text-muted-foreground">
-                        Forward the path after the registered route, matching the Caddy proxy
-                        default.
-                      </span>
-                    </span>
-                  </label>
-                  <Button type="submit" disabled={!machineId || Boolean(busyId)}>
-                    {busyId === "new-route" ? (
-                      <Spinner className="size-4" />
-                    ) : (
-                      <PlusIcon className="size-4" />
-                    )}
-                    Add route
-                  </Button>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="size-4"
+                        checked={stripPrefix}
+                        disabled={Boolean(busyId)}
+                        onChange={(event) => setStripPrefix(event.target.checked)}
+                      />
+                      <span>Strip prefix</span>
+                    </label>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={!machineId || Boolean(busyId)}
+                    >
+                      {busyId === "new-route" ? (
+                        <Spinner className="size-3.5" />
+                      ) : (
+                        <PlusIcon className="size-3.5" />
+                      )}
+                      Add route
+                    </Button>
+                  </div>
                 </form>
-              </CardContent>
-            </Card>
-          </div>
+              ) : null}
+              {routes.length === 0 ? (
+                <div className="flex min-h-16 items-center justify-center border-t px-4 py-4 text-sm text-muted-foreground">
+                  No routes yet
+                </div>
+              ) : (
+                <div className="divide-y border-t">
+                  {routes.map((route) => (
+                    <div
+                      key={route.id}
+                      className="flex items-center gap-3 px-3 py-2.5 sm:px-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <a
+                          className="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-medium text-primary hover:underline"
+                          href={route.path}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <span className="truncate">{route.path}</span>
+                          <ExternalLinkIcon className="size-3.5 shrink-0" />
+                        </a>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {machineName(machines, route.machineId)} · {route.remoteHost}:
+                          {route.remotePort}
+                        </p>
+                      </div>
+                      <Badge variant={route.state === "ready" ? "secondary" : "outline"}>
+                        {route.state}
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove ${route.path}`}
+                        disabled={Boolean(busyId)}
+                        onClick={() => void removeRoute(route)}
+                      >
+                        {busyId === route.id ? (
+                          <Spinner className="size-4" />
+                        ) : (
+                          <Trash2Icon className="size-4" />
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
-
-      {routes.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Registered routes</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {routes.map((route) => (
-                <div key={route.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-                  <div className="min-w-0 flex-1">
-                    <a
-                      className="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-medium text-primary hover:underline"
-                      href={route.path}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <span className="truncate">{route.path}</span>
-                      <ExternalLinkIcon className="size-3.5 shrink-0" />
-                    </a>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {machineName(machines, route.machineId)} · {route.remoteHost}:
-                      {route.remotePort} · prefix {route.stripPrefix ? "stripped" : "preserved"}
-                    </p>
-                  </div>
-                  <Badge variant={route.state === "ready" ? "secondary" : "outline"}>
-                    {route.state}
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove ${route.path}`}
-                    disabled={Boolean(busyId)}
-                    onClick={() => void removeRoute(route)}
-                  >
-                    {busyId === route.id ? (
-                      <Spinner className="size-4" />
-                    ) : (
-                      <Trash2Icon className="size-4" />
-                    )}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
 
       <AlertDialog
         open={Boolean(deleteTarget)}
@@ -499,7 +516,7 @@ export function SshManager({
           if (!open && !busyId) setDeleteTarget(undefined);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this sandbox?</AlertDialogTitle>
             <AlertDialogDescription>

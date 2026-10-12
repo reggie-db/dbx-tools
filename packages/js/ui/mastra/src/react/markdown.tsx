@@ -20,6 +20,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid.tsx";
 import { copyText } from "../support/clipboard.ts";
+import { ExternalLinkDialog } from "./_external-link-dialog.tsx";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
 // wired with shiki highlighting and AppKit table primitives, plus the
@@ -183,6 +184,14 @@ const TOOL_MARKDOWN_COMPONENTS = {
  */
 const SHIKI_PLUGIN = { code: createShikiPlugin() };
 
+/** Keep Streamdown's link confirmation while matching the chat's AppKit UI. */
+const LINK_SAFETY = {
+  enabled: true,
+  renderModal: (props: React.ComponentProps<typeof ExternalLinkDialog>) => (
+    <ExternalLinkDialog {...props} />
+  ),
+};
+
 /**
  * Per-word fade-in applied while a reply is still streaming. Streamdown
  * wraps each newly arrived token in a `[data-sd-animate]` span and only
@@ -235,6 +244,7 @@ export const AssistantMarkdown = ({
     components={MARKDOWN_COMPONENTS}
     plugins={SHIKI_PLUGIN}
     controls={false}
+    linkSafety={LINK_SAFETY}
     animated={animate ? ANIMATE_OPTIONS : false}
     isAnimating={animate}
     className={cn(
@@ -269,6 +279,7 @@ export const ToolMarkdown = ({ children, className }: { children: string; classN
     components={TOOL_MARKDOWN_COMPONENTS}
     plugins={SHIKI_PLUGIN}
     controls={false}
+    linkSafety={LINK_SAFETY}
     className={cn(
       "prose prose-sm dark:prose-invert max-w-none break-words",
       "text-xs leading-snug text-muted-foreground",

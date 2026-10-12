@@ -32,6 +32,8 @@ Canonical instructions for coding agents and contributors.
 
 `dbx-tools` provides companion packages for Databricks Apps, AppKit backends, Mastra agents, Genie workflows, Model Serving, Lakebase, approval-gated communication, and AppKit-oriented React UI.
 
+For UI-only demo iteration, run `bun run demo -- --no-server-watch` so client changes use Bun HMR without restarting the AppKit server, its sidecars, or its authenticated tunnel. `SERVER_WATCH_DISABLED` controls only the backend `dev:watch` wrapper; the root demo's client HMR process remains active.
+
 Primary ownership:
 
 - `packages/js/shared/core/src/options.ts` owns common Databricks environment metadata, normalized URL and TCP/listener schemas, and schema-level option parse/serialization. `packages/js/cli/args` (`@dbx-tools/cli-args`) owns Commander argument binding and argv serialization.

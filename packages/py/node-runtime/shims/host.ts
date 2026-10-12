@@ -94,6 +94,13 @@ export interface PythonRuntimeHost {
     ): Promise<{ status: number; headers: Record<string, string>; body: number[] }>;
   };
   process: {
+    run(
+      command: string,
+      args: string[],
+      environment: Record<string, string> | undefined,
+      input: string | undefined,
+      cwd: string | undefined,
+    ): PythonProcessResult;
     start(
       command: string,
       args: string[],
@@ -156,6 +163,9 @@ const statPath = evaluate<PythonFunction>(
 );
 const popen = evaluate<PythonFunction>(
   "lambda command, args, environment, input_text: __import__('subprocess').Popen([command, *list(args)], env=dict(environment) if environment is not None else None, stdin=(__import__('subprocess').PIPE if input_text is not None else None), stdout=__import__('subprocess').PIPE, stderr=__import__('subprocess').PIPE, text=True)",
+);
+const runProcess = evaluate<PythonFunction>(
+  "lambda command, args, environment, input_text, cwd: (lambda result: {'returncode': result.returncode, 'stdout': result.stdout, 'stderr': result.stderr})(__import__('subprocess').run([command, *list(args)], env=dict(environment) if environment is not None else None, input=input_text, cwd=cwd, stdout=__import__('subprocess').PIPE, stderr=__import__('subprocess').PIPE, text=True, check=False))",
 );
 const communicate = evaluate<PythonFunction>(
   "lambda proc, input_text: (lambda out: {'returncode': proc.returncode, 'stdout': out[0], 'stderr': out[1]})(proc.communicate(input=input_text))",
@@ -286,6 +296,14 @@ const host: PythonRuntimeHost = {
     resolve: (parts) => String(osPath.resolve(parts)),
   },
   process: {
+    run(command, args, environment, input, cwd) {
+      const result = runProcess(command, args, environment, input, cwd) as PythonCompletedProcess;
+      return {
+        exitCode: result.returncode,
+        ...(result.stdout === null ? {} : { stdout: result.stdout }),
+        ...(result.stderr === null ? {} : { stderr: result.stderr }),
+      };
+    },
     start(command, args, environment, input) {
       // Popen (not subprocess.run) so the child is killable: an aborted caller
       // can terminate it instead of leaking a background process. There is no

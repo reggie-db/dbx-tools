@@ -47,13 +47,13 @@ it("logs prolonged waits every five seconds until acquisition", async () => {
   });
   await started;
 
-  const originalWrite = process.stderr.write;
+  const originalWrite = process.stdout.write;
   const originalSetInterval = globalThis.setInterval;
   let output = "";
-  process.stderr.write = ((chunk: string | Uint8Array) => {
+  process.stdout.write = ((chunk: string | Uint8Array) => {
     output += chunk.toString();
     return true;
-  }) as typeof process.stderr.write;
+  }) as typeof process.stdout.write;
   // Accelerate only the wait logger; the file lock continues using its normal timeout polling.
   globalThis.setInterval = ((callback: () => void) =>
     originalSetInterval(callback, 20)) as typeof setInterval;
@@ -79,7 +79,7 @@ it("logs prolonged waits every five seconds until acquisition", async () => {
     try {
       await Promise.all([holder, waiter]);
     } finally {
-      process.stderr.write = originalWrite;
+      process.stdout.write = originalWrite;
       globalThis.setInterval = originalSetInterval;
       rmSync(root, { recursive: true, force: true });
     }

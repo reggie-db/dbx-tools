@@ -67,5 +67,11 @@ module.exports = {
     });
     return response.text();
   },
+  runSync: (command, args) => {
+    const result = globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")].modules[
+      "node:child_process"
+    ].spawnSync(command, args);
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+  },
   runtimeAbi: () => globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")].abiVersion,
 };

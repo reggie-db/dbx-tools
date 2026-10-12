@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "bun:test";
 import { devWatch } from "@dbx-tools/projen";
-import { demoServerCommand, serverWatchDisabled } from "./run-demo.ts";
+import { demoClientCommand, demoServerCommand, serverWatchDisabled } from "./run-demo.ts";
 
 describe("demo server watch", () => {
   const previous = process.env[devWatch.SERVER_WATCH_DISABLED_ENV];
@@ -22,5 +22,12 @@ describe("demo server watch", () => {
     process.env[devWatch.SERVER_WATCH_DISABLED_ENV] = "1";
     assert.equal(serverWatchDisabled(), true);
     assert.doesNotMatch(demoServerCommand(), new RegExp(` ${devWatch.DEV_WATCH_TASK} `));
+  });
+
+  it("keeps the client HMR task independent of server watching", () => {
+    process.env[devWatch.SERVER_WATCH_DISABLED_ENV] = "1";
+    assert.match(demoClientCommand(), /demo-appkit-app'?(?:\s|$)/);
+    assert.match(demoClientCommand(), / dev$/);
+    assert.doesNotMatch(demoClientCommand(), new RegExp(devWatch.DEV_WATCH_TASK));
   });
 });
