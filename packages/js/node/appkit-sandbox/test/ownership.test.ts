@@ -9,6 +9,8 @@ import {
 } from "../src/managed-name.ts";
 import {
   LakebaseMachineOwnershipStore,
+  OWNERSHIP_SCHEMA_PREFIX,
+  ownershipSchemaName,
   type MachineAssignment,
   type NewMachineAssignment,
   type NewSandboxProjectRecord,
@@ -251,7 +253,33 @@ interface SessionRuntimeInternals {
   createSession(): Promise<SshSession>;
 }
 
+const CONNECTING_ROLE = "app-sp";
+const OWNERSHIP_SCHEMA = ownershipSchemaName(CONNECTING_ROLE);
+
+function ownershipPool(
+  queryImpl?: (text: string, values?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }>,
+): Parameters<typeof LakebaseMachineOwnershipStore.create>[0] {
+  const query = async (text: string, values?: unknown[]) => {
+    if (text.includes("current_user")) {
+      return { rows: [{ role: CONNECTING_ROLE }], rowCount: 1 };
+    }
+    if (text.includes("pg_advisory_unlock")) {
+      return { rows: [{ unlocked: true }], rowCount: 1 };
+    }
+    return queryImpl ? queryImpl(text, values) : { rows: [], rowCount: 0 };
+  };
+  return {
+    connect: async () => ({ query, release: () => undefined }),
+    query,
+  } as unknown as Parameters<typeof LakebaseMachineOwnershipStore.create>[0];
+}
+
 describe("managed Sandbox ownership", () => {
+  it("appends the connecting Lakebase role hash to the existing schema name", () => {
+    assert.equal(OWNERSHIP_SCHEMA.startsWith(`${OWNERSHIP_SCHEMA_PREFIX}_`), true);
+    assert.notEqual(ownershipSchemaName("user@example.com"), ownershipSchemaName("app-sp"));
+  });
+
   it("encodes a fun name, stable user identity, and expiration", () => {
     const expiresAtMs = 1_800_000_000_000;
     const name = createManagedSandboxName("user@example.com", expiresAtMs, "00112233");
@@ -270,31 +298,19 @@ describe("managed Sandbox ownership", () => {
 
   it("migrates Lakebase ownership rows with managed names and expirations", async () => {
     const statements: string[] = [];
-    const pool = {
-      connect: async () => ({
-        query: async (text: string) => {
-          statements.push(text);
-          if (text.includes("pg_advisory_unlock")) {
-            return { rows: [{ unlocked: true }], rowCount: 1 };
-          }
-          return { rows: [], rowCount: 0 };
-        },
-        release: () => undefined,
-      }),
-      query: async (text: string) => {
-        statements.push(text);
-        return { rows: [], rowCount: 0 };
-      },
-    } as unknown as Parameters<typeof LakebaseMachineOwnershipStore.create>[0];
+    const pool = ownershipPool(async (text) => {
+      statements.push(text);
+      return { rows: [], rowCount: 0 };
+    });
 
-    await LakebaseMachineOwnershipStore.create(pool);
+    const store = await LakebaseMachineOwnershipStore.create(pool);
 
+    assert.equal(store.schema, OWNERSHIP_SCHEMA);
+    assert.ok(statements.some((statement) => statement.includes(`"${OWNERSHIP_SCHEMA}"`)));
     assert.ok(statements.some((statement) => statement.includes("managed_name TEXT")));
     assert.ok(statements.some((statement) => statement.includes("expires_at TIMESTAMPTZ")));
     assert.ok(statements.some((statement) => statement.includes("machine_assignments_expiry_idx")));
-    assert.ok(
-      statements.some((statement) => statement.includes("dbx_tools_databricks_sandbox.projects")),
-    );
+    assert.ok(statements.some((statement) => statement.includes(`"${OWNERSHIP_SCHEMA}"."projects"`)));
     assert.ok(statements.some((statement) => statement.includes("open_path TEXT")));
     assert.ok(statements.some((statement) => statement.includes("project_config JSONB")));
     assert.ok(statements.some((statement) => statement.includes("sandbox_projects_machine_idx")));
@@ -321,26 +337,16 @@ describe("managed Sandbox ownership", () => {
       created_at: new Date("2026-10-12T10:00:00.000Z"),
       updated_at: new Date("2026-10-12T10:01:00.000Z"),
     };
-    const query = async (text: string, values?: unknown[]) => {
+    const pool = ownershipPool(async (text, values) => {
       queries.push({ text, values });
-      if (text.includes("pg_advisory_unlock")) {
-        return { rows: [{ unlocked: true }], rowCount: 1 };
-      }
-      if (
-        text.includes("SELECT workspace_scope") &&
-        text.includes("FROM dbx_tools_databricks_sandbox.projects")
-      ) {
+      if (text.includes("SELECT workspace_scope") && text.includes(`"${OWNERSHIP_SCHEMA}"."projects"`)) {
         return { rows: [row], rowCount: 1 };
       }
-      if (text.includes("DELETE FROM dbx_tools_databricks_sandbox.projects")) {
+      if (text.includes(`DELETE FROM "${OWNERSHIP_SCHEMA}"."projects"`)) {
         return { rows: [], rowCount: 1 };
       }
       return { rows: [], rowCount: 0 };
-    };
-    const pool = {
-      connect: async () => ({ query, release: () => undefined }),
-      query,
-    } as unknown as Parameters<typeof LakebaseMachineOwnershipStore.create>[0];
+    });
     const store = await LakebaseMachineOwnershipStore.create(pool);
 
     await store.upsertProject({
@@ -367,7 +373,7 @@ describe("managed Sandbox ownership", () => {
     assert.equal(await store.deleteProject("workspace", "user-a", "project-1"), true);
     assert.ok(
       queries.some(({ text }) =>
-        text.includes("INSERT INTO dbx_tools_databricks_sandbox.projects"),
+        text.includes(`INSERT INTO "${OWNERSHIP_SCHEMA}"."projects"`),
       ),
     );
     assert.ok(queries.some(({ text }) => text.includes("updated_at = now()")));

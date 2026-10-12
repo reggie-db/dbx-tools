@@ -1,4 +1,9 @@
-import { advisoryLock, quotePostgresIdentifier, type PgPoolLike, type PgQueryable } from "@dbx-tools/postgres";
+import {
+  advisoryLock,
+  quotePostgresIdentifier,
+  type PgPoolLike,
+  type PgQueryable,
+} from "@dbx-tools/postgres";
 import { hash } from "@dbx-tools/shared-core";
 import type { AddSshProjectRequest } from "@dbx-tools/shared-databricks-sandbox";
 import { z } from "zod";
@@ -23,7 +28,9 @@ export async function connectingLakebaseRole(pool: PgQueryable): Promise<string>
   const result = await pool.query<{ role: string }>("SELECT current_user AS role");
   const role = result.rows[0]?.role?.trim();
   if (!role) {
-    throw new Error("Lakebase ownership could not resolve the connecting user or service principal");
+    throw new Error(
+      "Lakebase ownership could not resolve the connecting user or service principal",
+    );
   }
   return role;
 }
@@ -90,11 +97,13 @@ export type NewSandboxProjectRecord = z.infer<typeof NewSandboxProjectRecordSche
 type LakebasePool = PgPoolLike & PgQueryable;
 
 /**
- * Lakebase-backed ownership and expiration records shared by every app instance.
+ * Lakebase-backed ownership and expiration records for one connecting role.
  *
- * The runtime treats these records as its application-level machine visibility
- * boundary. Databricks workspace authorization remains authoritative for the
- * underlying REST and SSH operations.
+ * Tables live in `dbx_tools_databricks_sandbox_<hash(current_user)>` so each
+ * workspace user or app service principal owns its partition. The runtime
+ * treats these records as its application-level machine visibility boundary.
+ * Databricks workspace authorization remains authoritative for the underlying
+ * REST and SSH operations.
  */
 export class LakebaseMachineOwnershipStore {
   private constructor(
@@ -302,17 +311,26 @@ export class LakebaseMachineOwnershipStore {
 
   /** Runs one reconciliation pass while holding a workspace-scoped advisory lock. */
   async withReaperLock<T>(workspaceScope: string, operation: () => Promise<T>): Promise<T> {
-    return advisoryLock.withAdvisoryLock(this.pool, [...REAPER_LOCK, workspaceScope], operation);
+    return advisoryLock.withAdvisoryLock(
+      this.pool,
+      [...REAPER_LOCK, this.schema, workspaceScope],
+      operation,
+    );
   }
 
   /** Releases store-owned resources without closing the caller-owned pool. */
   async close(): Promise<void> {}
 
   private async migrate(): Promise<void> {
-    await advisoryLock.withAdvisoryLock(this.pool, MIGRATION_LOCK, async (client) => {
-      await client.query(`CREATE SCHEMA IF NOT EXISTS ${SCHEMA}`);
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS ${TABLE} (
+    const assignments = this.table("machine_assignments");
+    const projects = this.table("projects");
+    await advisoryLock.withAdvisoryLock(
+      this.pool,
+      [...MIGRATION_LOCK, this.schema],
+      async (client) => {
+        await client.query(`CREATE SCHEMA IF NOT EXISTS ${quotePostgresIdentifier(this.schema)}`);
+        await client.query(`
+        CREATE TABLE IF NOT EXISTS ${assignments} (
           workspace_scope TEXT NOT NULL,
           user_id TEXT NOT NULL,
           machine_id TEXT NOT NULL,
@@ -322,14 +340,16 @@ export class LakebaseMachineOwnershipStore {
           PRIMARY KEY (workspace_scope, user_id, machine_id)
         )
       `);
-      await client.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS managed_name TEXT`);
-      await client.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
-      await client.query(
-        `CREATE INDEX IF NOT EXISTS machine_assignments_expiry_idx
-         ON ${TABLE} (workspace_scope, expires_at)`,
-      );
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS ${PROJECTS_TABLE} (
+        await client.query(`ALTER TABLE ${assignments} ADD COLUMN IF NOT EXISTS managed_name TEXT`);
+        await client.query(
+          `ALTER TABLE ${assignments} ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+        );
+        await client.query(
+          `CREATE INDEX IF NOT EXISTS machine_assignments_expiry_idx
+         ON ${assignments} (workspace_scope, expires_at)`,
+        );
+        await client.query(`
+        CREATE TABLE IF NOT EXISTS ${projects} (
           workspace_scope TEXT NOT NULL,
           user_id TEXT NOT NULL,
           project_id TEXT NOT NULL,
@@ -349,17 +369,15 @@ export class LakebaseMachineOwnershipStore {
           PRIMARY KEY (workspace_scope, user_id, project_id)
         )
       `);
-      await client.query(
-        `ALTER TABLE ${PROJECTS_TABLE} ADD COLUMN IF NOT EXISTS project_path TEXT`,
-      );
-      await client.query(`ALTER TABLE ${PROJECTS_TABLE} ADD COLUMN IF NOT EXISTS port INTEGER`);
-      await client.query(
-        `ALTER TABLE ${PROJECTS_TABLE} ADD COLUMN IF NOT EXISTS project_config JSONB NOT NULL DEFAULT '{}'::jsonb`,
-      );
-      await client.query(`ALTER TABLE ${PROJECTS_TABLE} ALTER COLUMN remote_host DROP NOT NULL`);
-      await client.query(`ALTER TABLE ${PROJECTS_TABLE} ALTER COLUMN remote_port DROP NOT NULL`);
-      await client.query(
-        `UPDATE ${PROJECTS_TABLE}
+        await client.query(`ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS project_path TEXT`);
+        await client.query(`ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS port INTEGER`);
+        await client.query(
+          `ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS project_config JSONB NOT NULL DEFAULT '{}'::jsonb`,
+        );
+        await client.query(`ALTER TABLE ${projects} ALTER COLUMN remote_host DROP NOT NULL`);
+        await client.query(`ALTER TABLE ${projects} ALTER COLUMN remote_port DROP NOT NULL`);
+        await client.query(
+          `UPDATE ${projects}
          SET project_path = COALESCE(project_path, project_name),
              port = COALESCE(port, remote_port),
              directory_path = CASE
@@ -367,26 +385,27 @@ export class LakebaseMachineOwnershipStore {
                ELSE directory_path
              END
          WHERE project_path IS NULL OR port IS NULL`,
-      );
-      await client.query(`ALTER TABLE ${PROJECTS_TABLE} ALTER COLUMN project_path SET NOT NULL`);
-      await client.query(`ALTER TABLE ${PROJECTS_TABLE} ALTER COLUMN port SET NOT NULL`);
-      await client.query(
-        `CREATE INDEX IF NOT EXISTS sandbox_projects_machine_idx
-         ON ${PROJECTS_TABLE} (workspace_scope, machine_id)`,
-      );
-      await client.query(
-        `CREATE UNIQUE INDEX IF NOT EXISTS sandbox_projects_machine_name_idx
-         ON ${PROJECTS_TABLE} (workspace_scope, machine_id, project_name)`,
-      );
-      await client.query(
-        `CREATE UNIQUE INDEX IF NOT EXISTS sandbox_projects_machine_path_idx
-         ON ${PROJECTS_TABLE} (workspace_scope, machine_id, project_path)`,
-      );
-      await client.query(
-        `CREATE UNIQUE INDEX IF NOT EXISTS sandbox_projects_machine_port_idx
-         ON ${PROJECTS_TABLE} (workspace_scope, machine_id, port)`,
-      );
-    });
+        );
+        await client.query(`ALTER TABLE ${projects} ALTER COLUMN project_path SET NOT NULL`);
+        await client.query(`ALTER TABLE ${projects} ALTER COLUMN port SET NOT NULL`);
+        await client.query(
+          `CREATE INDEX IF NOT EXISTS sandbox_projects_machine_idx
+         ON ${projects} (workspace_scope, machine_id)`,
+        );
+        await client.query(
+          `CREATE UNIQUE INDEX IF NOT EXISTS sandbox_projects_machine_name_idx
+         ON ${projects} (workspace_scope, machine_id, project_name)`,
+        );
+        await client.query(
+          `CREATE UNIQUE INDEX IF NOT EXISTS sandbox_projects_machine_path_idx
+         ON ${projects} (workspace_scope, machine_id, project_path)`,
+        );
+        await client.query(
+          `CREATE UNIQUE INDEX IF NOT EXISTS sandbox_projects_machine_port_idx
+         ON ${projects} (workspace_scope, machine_id, port)`,
+        );
+      },
+    );
   }
 }
 
