@@ -49,6 +49,8 @@ describe("ensureSshService", () => {
 
     assert.equal(target.redirectToSlash, true);
     assert.match(target.htmlHead ?? "", /dbx-tools-glances-viewport/);
-    assert.match(target.htmlHead ?? "", /100dvh/);
+    assert.match(target.htmlHead ?? "", /100svh/);
+    assert.match(target.htmlHead ?? "", /#processlist\{height:auto!important/);
+    assert.match(target.htmlHead ?? "", /table-layout:fixed/);
   });
 });

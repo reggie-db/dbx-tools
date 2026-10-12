@@ -51,7 +51,6 @@ interface RouteMatch {
 /** Owns user-scoped AppKit paths that proxy to HTTP ports over SSH forwarding. */
 export class SshRouteRegistry {
   private readonly routes = new Map<string, RouteTarget>();
-  private readonly activeBrowserRoutes = new Map<string, string>();
   private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
   private readonly websocketServer = new WebSocketServer({ noServer: true });
@@ -107,9 +106,6 @@ export class SshRouteRegistry {
     const entry = this.routes.get(routeId);
     if (!entry || (ownerId && entry.ownerId !== ownerId)) return false;
     this.routes.delete(routeId);
-    if (this.activeBrowserRoutes.get(entry.ownerId) === routeId) {
-      this.activeBrowserRoutes.delete(entry.ownerId);
-    }
     entry.sockets.forEach((socket) => socket.destroy());
     if (entry.server) await closeServer(entry.server);
     if (entry.target?.socketPath) await rm(entry.target.socketPath, { force: true });
@@ -132,7 +128,6 @@ export class SshRouteRegistry {
       );
       if (!match) return next();
       if (request.path === match.entry.route.path && match.entry.browserRelayPath) {
-        this.activeBrowserRoutes.set(match.entry.ownerId, match.entry.route.id);
         response.setHeader("set-cookie", routeCookie(match.entry.route.id));
         sendBrowserRelayBootstrap(response, match.entry.route.path, match.entry.route.id);
         return;
@@ -246,7 +241,6 @@ export class SshRouteRegistry {
 
     const cookieRouteId = cookieValue(headers.cookie, ROUTE_COOKIE);
     const referer = headerValue(headers.referer);
-    const activeRouteId = requestUser ? this.activeBrowserRoutes.get(requestUser) : undefined;
     const browserRelay = [...this.routes.values()].find(
       (entry) =>
         entry.browserRelayPath &&
@@ -260,7 +254,6 @@ export class SshRouteRegistry {
       .filter(
         (entry) =>
           cookieRouteId === entry.route.id ||
-          activeRouteId === entry.route.id ||
           Boolean(referer && pathMatches(refererPath(referer) ?? "", entry.route.path)),
       )
       .map((entry) => ({ entry }))[0];

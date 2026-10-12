@@ -267,7 +267,7 @@ describe("SshRouteRegistry", () => {
         remotePort,
         path: "/sandbox/sandbox-1/terminal",
         browserRelay: true,
-        browserPaths: ["/api", "/ws"],
+        browserPaths: ["/assets", "/icons"],
       });
       const root = await fetch(`http://127.0.0.1:${proxyPort}${route.path}`, {
         redirect: "manual",
@@ -289,13 +289,19 @@ describe("SshRouteRegistry", () => {
         "/",
       );
       assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/api/info`, {
+        await fetch(`http://127.0.0.1:${proxyPort}/assets/app.js`, {
           headers: {
             cookie,
             [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com",
           },
         }).then((response) => response.text()),
-        "/api/info",
+        "/assets/app.js",
+      );
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}/assets/app.js`, {
+          headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+        }).then((response) => response.status),
+        404,
       );
       const upgradeResponse = await sendWebsocketUpgrade(
         proxyPort,

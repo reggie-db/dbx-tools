@@ -6,11 +6,18 @@ const GLANCES_VERSION = "4.5.6";
 const DINOTTY_PORT = 7681;
 const GLANCES_PORT = 61208;
 const GLANCES_VIEWPORT_HEAD = `<style id="dbx-tools-glances-viewport">
-html,body,#app{width:100%;height:100%;height:100dvh;min-height:0;overflow:hidden}
-body{margin:0}
-#app>main{display:flex;width:100%;height:100%;min-height:0;flex-direction:column;overflow:hidden}
-.bottom{min-height:0;flex:1;overflow:hidden}.bottom>.row{height:100%;min-height:0}.bottom .col{height:100%;min-height:0;overflow:auto}
+html,body,#app{width:100%;max-width:100vw;height:100%;height:100svh;max-height:100svh;min-height:0;overflow:hidden}
+body{position:fixed;inset:0;margin:0}
+#app>main{display:flex;width:100%;max-width:100vw;height:100%;min-width:0;min-height:0;flex-direction:column;overflow:hidden}
+.top,.bottom,.bottom>.row,.bottom .col{max-width:100%;min-width:0}
+.bottom{min-height:0;flex:1;overflow:hidden}.bottom>.row{height:100%;min-height:0;margin-right:0;margin-left:0}.bottom .col{height:100%;min-height:0;padding-right:0;padding-left:0;overflow-x:hidden;overflow-y:auto}
 .sidebar-min,.sidebar-max{height:100%!important;min-height:0!important}
+#processlist{height:auto!important;max-width:100%;overflow:visible}
+#processlist-table{width:100%;max-width:100%;overflow-x:hidden}
+#processlist-table table{width:100%;max-width:100%;table-layout:fixed}
+#processlist-table td{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#processlist-table td:nth-child(1),#processlist-table td:nth-child(2){width:3.5em}
+#processlist-table td:nth-child(3){width:4.5em}
 </style>`;
 
 /** Loopback service endpoint and routing behavior discovered after remote startup. */
