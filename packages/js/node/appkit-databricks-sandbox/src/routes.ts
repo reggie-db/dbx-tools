@@ -28,6 +28,7 @@ interface RouteInput {
   browserRelay?: boolean;
   redirectToSlash?: boolean;
   htmlHead?: string;
+  internal?: boolean;
 }
 
 interface RouteTarget {
@@ -41,6 +42,7 @@ interface RouteTarget {
   browserRelayPath?: string;
   redirectToSlash: boolean;
   htmlHead?: string;
+  internal: boolean;
 }
 
 interface RouteMatch {
@@ -74,9 +76,14 @@ export class SshRouteRegistry {
     });
   }
 
-  list(machineId?: string, ownerId?: string): SshRoute[] {
+  list(
+    machineId?: string,
+    ownerId?: string,
+    options: { includeInternal?: boolean } = {},
+  ): SshRoute[] {
     return [...this.routes.values()]
       .filter((entry) => !ownerId || entry.ownerId === ownerId)
+      .filter((entry) => options.includeInternal || !entry.internal)
       .map((entry) => entry.route)
       .filter((route) => !machineId || route.machineId === machineId);
   }
@@ -97,7 +104,8 @@ export class SshRouteRegistry {
       browserPaths: normalizeBrowserPaths(input.browserPaths),
       ...(input.browserRelay ? { browserRelayPath: browserRelayPath(prepared.route.id) } : {}),
       redirectToSlash: input.redirectToSlash ?? false,
-      ...(input.htmlHead ? { htmlHead: input.htmlHead } : {}),
+      ...optionalHtmlHead(routeHtmlHead(prepared.route.id, input.browserRelay, input.htmlHead)),
+      internal: input.internal ?? false,
     });
     return prepared.route;
   }
@@ -121,14 +129,21 @@ export class SshRouteRegistry {
 
   middleware() {
     return (request: Request, response: Response, next: NextFunction) => {
+      const requestUser = request.header(USER_ID_HEADER) ?? request.header(USER_EMAIL_HEADER);
       const match = this.match(
         request.path,
         request.headers,
-        request.header(USER_ID_HEADER) ?? request.header(USER_EMAIL_HEADER),
+        requestUser,
       );
       if (!match) return next();
-      if (request.path === match.entry.route.path && match.entry.browserRelayPath) {
+      if (
+        match.entry.browserRelayPath &&
+        requestUser === match.entry.ownerId &&
+        pathMatches(request.path, match.entry.route.path)
+      ) {
         response.setHeader("set-cookie", routeCookie(match.entry.route.id));
+      }
+      if (request.path === match.entry.route.path && match.entry.browserRelayPath) {
         sendBrowserRelayBootstrap(response, match.entry.route.path, match.entry.route.id);
         return;
       }
@@ -163,8 +178,14 @@ export class SshRouteRegistry {
     const requestUser =
       headerValue(request.headers[USER_ID_HEADER]) ??
       headerValue(request.headers[USER_EMAIL_HEADER]);
-    const match = this.match(url.pathname, request.headers, requestUser, true);
-    if (!match) return false;
+    const match = this.match(url.pathname, request.headers, requestUser);
+    if (!match) {
+      if (pathMatches(url.pathname, "/__srv")) {
+        socket.destroy();
+        return true;
+      }
+      return false;
+    }
     if (match.stripPrefix) rewriteIncomingUrl(request, match.stripPrefix, url.pathname);
     proxyWebSocket(request, socket, head, match.entry, this.websocketServer);
     return true;
@@ -204,7 +225,8 @@ export class SshRouteRegistry {
       if (
         Boolean(input.browserRelay) !== Boolean(previous.browserRelayPath) ||
         (input.redirectToSlash ?? false) !== previous.redirectToSlash ||
-        input.htmlHead !== previous.htmlHead
+        routeHtmlHead(previous.route.id, input.browserRelay, input.htmlHead) !== previous.htmlHead ||
+        (input.internal ?? false) !== previous.internal
       ) {
         throw new Error(`SSH route path ${path} already has different browser behavior`);
       }
@@ -228,7 +250,6 @@ export class SshRouteRegistry {
     path: string,
     headers: IncomingMessage["headers"],
     requestUser: string | undefined,
-    allowHeaderlessStaleBrowserRelay = false,
   ): RouteMatch | undefined {
     const direct = [...this.routes.values()]
       .filter((entry) => path === entry.route.path || path.startsWith(`${entry.route.path}/`))
@@ -246,18 +267,9 @@ export class SshRouteRegistry {
       (entry) =>
         entry.browserRelayPath &&
         pathMatches(path, entry.browserRelayPath) &&
-        (!requestUser || requestUser === entry.ownerId),
+        (requestUser ? requestUser === entry.ownerId : cookieRouteId === entry.route.id),
     );
     if (browserRelay) return { entry: browserRelay, stripPrefix: browserRelay.browserRelayPath };
-    const staleBrowserRelayPath = browserRelayRequestPath(path);
-    if (staleBrowserRelayPath && (requestUser || allowHeaderlessStaleBrowserRelay)) {
-      const ownedBrowserRelays = [...this.routes.values()].filter(
-        (entry) => entry.browserRelayPath && (!requestUser || entry.ownerId === requestUser),
-      );
-      if (ownedBrowserRelays.length === 1) {
-        return { entry: ownedBrowserRelays[0]!, stripPrefix: staleBrowserRelayPath };
-      }
-    }
     return [...this.routes.values()]
       .filter((entry) => !requestUser || requestUser === entry.ownerId)
       .filter((entry) => entry.browserPaths.some((alias) => pathMatches(path, alias)))
@@ -332,7 +344,7 @@ function pathMatches(path: string, prefix: string): boolean {
 }
 
 function routeCookie(routeId: string): string {
-  return `${ROUTE_COOKIE}=${encodeURIComponent(routeId)}; Path=/; HttpOnly; SameSite=Lax`;
+  return `${ROUTE_COOKIE}=${encodeURIComponent(routeId)}; Path=/; HttpOnly; Secure; SameSite=Lax`;
 }
 
 function routeRedirectUrl(url: string, routePath: string): string {
@@ -345,10 +357,19 @@ function browserRelayPath(routeId: string): string {
   return `/__srv/${routeId}`;
 }
 
-function browserRelayRequestPath(path: string): string | undefined {
-  const segments = path.split("/");
-  const routeId = segments[2];
-  return segments[1] === "__srv" && routeId ? `/__srv/${routeId}` : undefined;
+function routeHtmlHead(
+  routeId: string,
+  browserRelay: boolean | undefined,
+  htmlHead: string | undefined,
+): string | undefined {
+  const relayHead = browserRelay
+    ? `<script>localStorage.setItem("dinotty_device_active_server_v1",${JSON.stringify(routeId)})</script>`
+    : "";
+  return `${htmlHead ?? ""}${relayHead}` || undefined;
+}
+
+function optionalHtmlHead(htmlHead: string | undefined): { htmlHead?: string } {
+  return htmlHead ? { htmlHead } : {};
 }
 
 function sendBrowserRelayBootstrap(response: Response, routePath: string, routeId: string): void {

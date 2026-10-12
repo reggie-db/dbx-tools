@@ -20,7 +20,7 @@ variables:
   secret_scope:
     default: dbx-tools-demo
   tunnel_auth_allow:
-    default: reggie.pierce@databricks.com
+    default: databricks.com
   lakebase_endpoint:
     default: projects/${var.lakebase_project_id}/branches/production/endpoints/primary
   genie_identity:

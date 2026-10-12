@@ -18,6 +18,7 @@ describe("allowlist", () => {
   it("matches domain shortcut, glob, and regex patterns", () => {
     assert.equal(matchesAllowlist("a@example.com", ["example.com"]), true);
     assert.equal(matchesAllowlist("a@example.com", ["@example.com"]), true);
+    assert.equal(matchesAllowlist("xyz+demo@databricks.com", ["databricks.com"]), true);
     assert.equal(matchesAllowlist("bot@ci.example.com", ["*.example.com"]), true);
     assert.equal(matchesAllowlist("Ada@Example.com", ["/@example\\.com$/"]), true);
     assert.equal(matchesAllowlist("x@evil.com", ["example.com"]), false);

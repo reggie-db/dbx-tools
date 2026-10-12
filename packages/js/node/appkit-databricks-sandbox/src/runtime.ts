@@ -199,7 +199,9 @@ export class SshRuntime {
     const current = this.services.get(key);
     if (
       current?.state === "ready" &&
-      this.routes.list(request.machineId, userId).some((route) => route.path === current.path)
+      this.routes
+        .list(request.machineId, userId, { includeInternal: true })
+        .some((route) => route.path === current.path)
     ) {
       return current;
     }
@@ -382,6 +384,7 @@ export class SshRuntime {
         ownerId: userId,
         machineId: request.machineId,
         path: starting.path,
+        internal: true,
         ...target,
       });
       const ready: SshMachineService = { ...starting, state: "ready" };
