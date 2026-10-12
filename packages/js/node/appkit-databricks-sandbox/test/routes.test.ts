@@ -177,13 +177,13 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/metrics/sandbox-1",
+        path: "/sandbox/metrics/sandbox-1",
         stripPrefix: true,
         htmlHead: '<style id="viewport">html{height:100dvh}</style>',
         internal: true,
       });
       const headers = { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" };
-      const document = await fetch(`http://127.0.0.1:${proxyPort}/metrics/sandbox-1/`, {
+      const document = await fetch(`http://127.0.0.1:${proxyPort}/sandbox/metrics/sandbox-1/`, {
         headers,
       });
       assert.equal(document.status, 200);
@@ -192,7 +192,7 @@ describe("SshRouteRegistry", () => {
         /<style id="viewport">html\{height:100dvh\}<\/style><\/head>/,
       );
       assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/metrics/sandbox-1/asset.js`, {
+        await fetch(`http://127.0.0.1:${proxyPort}/sandbox/metrics/sandbox-1/asset.js`, {
           headers,
         }).then((response) => response.text()),
         "console.log('asset')",
@@ -238,17 +238,20 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/terminal/sandbox-1",
+        path: "/sandbox/terminal/sandbox-1",
         internal: true,
       });
-      const response = await fetch(`http://127.0.0.1:${proxyPort}/terminal/sandbox-1/api/tabs`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com",
+      const response = await fetch(
+        `http://127.0.0.1:${proxyPort}/sandbox/terminal/sandbox-1/api/tabs`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com",
+          },
+          body: JSON.stringify({ title: "Shell" }),
         },
-        body: JSON.stringify({ title: "Shell" }),
-      });
+      );
       assert.deepEqual(await response.json(), { title: "Shell" });
     } finally {
       await registry.close();
@@ -303,7 +306,7 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/terminal/sandbox-1",
+        path: "/sandbox/terminal/sandbox-1",
         browserRelay: true,
         browserPaths: ["/assets", "/icons"],
         internal: true,
@@ -393,7 +396,7 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-2",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/terminal/sandbox-2",
+        path: "/sandbox/terminal/sandbox-2",
         browserRelay: true,
         internal: true,
       });

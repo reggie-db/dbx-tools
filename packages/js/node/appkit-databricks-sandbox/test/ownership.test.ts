@@ -96,12 +96,12 @@ describe("machine ownership", () => {
     assert.deepEqual(visible.machines[0]?.services, [
       {
         kind: "terminal",
-        path: "/terminal/assigned",
+        path: "/sandbox/terminal/assigned",
         state: "stopped",
       },
       {
         kind: "stats",
-        path: "/metrics/assigned",
+        path: "/sandbox/metrics/assigned",
         state: "stopped",
       },
     ]);

@@ -24,7 +24,7 @@ describe("ensureSshService", () => {
       },
     } as unknown as SshSession;
 
-    const target = await ensureSshService(session, "terminal", "/terminal/machine", 1_000);
+    const target = await ensureSshService(session, "terminal", "/sandbox/terminal/machine", 1_000);
 
     assert.match(script, /DINOTTY_VERSION=0\.29\.0/);
     assert.match(script, /dinotty\.version/);
@@ -47,7 +47,7 @@ describe("ensureSshService", () => {
       execute: async () => success,
     } as unknown as SshSession;
 
-    const target = await ensureSshService(session, "stats", "/metrics/machine", 1_000);
+    const target = await ensureSshService(session, "stats", "/sandbox/metrics/machine", 1_000);
 
     assert.equal(target.redirectToSlash, true);
     assert.match(target.htmlHead ?? "", /dbx-tools-glances-viewport/);

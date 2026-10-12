@@ -533,7 +533,8 @@ export class SshRuntime {
 
   private servicePath(machineId: string, kind: SshMachineService["kind"]): string {
     const service = kind === "terminal" ? "terminal" : "metrics";
-    return `/${service}/${machinePathSegment(machineId)}`;
+    const routePrefix = this.config.routePrefix.replace(/\/+$/, "");
+    return `${routePrefix}/${service}/${machinePathSegment(machineId)}`;
   }
 }
 

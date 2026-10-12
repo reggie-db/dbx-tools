@@ -20,7 +20,7 @@ import type { SshRuntime } from "./runtime.ts";
 
 const ROUTING_INSTRUCTIONS = `Remote web services must be exposed through add_ssh_route. Never give the user a localhost, 127.0.0.1, 0.0.0.0, or direct Sandbox URL; those addresses are reachable only inside the Sandbox or AppKit bridge. Bind the remote process to Sandbox loopback, then return the registered AppKit path.
 
-User-created routes are automatically placed beneath a short user-hash prefix. Request a suffix such as /hello-world and use the route returned by add_ssh_route. The hash only prevents path collisions; it is not a security boundary, and the existing authenticated owner checks remain authoritative. Built-in services use reserved paths at /terminal/<machine-id> and /metrics/<machine-id>.
+User-created routes are automatically placed beneath a short user-hash prefix. Request a suffix such as /hello-world and use the route returned by add_ssh_route. The hash only prevents path collisions; it is not a security boundary, and the existing authenticated owner checks remain authoritative. Built-in services use reserved paths beneath the Sandbox route root at /sandbox/terminal/<machine-id> and /sandbox/metrics/<machine-id>.
 
 Every service must work behind its registered path. Prefer stripPrefix: true for applications that serve from / and use relative asset/API URLs. Use stripPrefix: false only after configuring the application with the full public base path. Do not emit root-absolute links such as /api or /assets unless the application base path includes the registered route.
 

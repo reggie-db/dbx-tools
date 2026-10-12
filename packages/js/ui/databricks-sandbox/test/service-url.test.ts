@@ -6,10 +6,10 @@ describe("resolveServiceUrl", () => {
   it("opens AppKit service paths on the current origin", () => {
     assert.equal(
       resolveServiceUrl(
-        "/metrics/machine-1",
+        "/sandbox/metrics/machine-1",
         "https://dbx-tools-demo.example.databricksapps.com/chat/1",
       ),
-      "https://dbx-tools-demo.example.databricksapps.com/metrics/machine-1",
+      "https://dbx-tools-demo.example.databricksapps.com/sandbox/metrics/machine-1",
     );
   });
 });

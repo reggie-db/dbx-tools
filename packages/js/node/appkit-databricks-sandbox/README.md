@@ -118,11 +118,11 @@ proxy paths.
 
 ## Built-in browser services
 
-Every assigned machine advertises two stable reserved paths outside the
-user-route namespace:
+Every assigned machine advertises two stable reserved paths beneath the
+Sandbox route root and outside the user-hash namespace:
 
-- `/terminal/<machine-id>` forwards the DinoTTY mobile web terminal.
-- `/metrics/<machine-id>` forwards the full Glances Web UI.
+- `/sandbox/terminal/<machine-id>` forwards the DinoTTY mobile web terminal.
+- `/sandbox/metrics/<machine-id>` forwards the full Glances Web UI.
 
 Starting a machine provisions both services over SSH under
 `~/.dbx-tools/runtime`, binds them to loopback, and registers owner-scoped proxy
