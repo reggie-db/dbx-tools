@@ -1,27 +1,5 @@
-import { resolve } from "node:path";
 import type { BasePluginConfig } from "@databricks/appkit";
-import envPaths from "env-paths";
 import { z } from "zod";
-
-const defaultOwnershipPath = resolve(
-  envPaths("dbx-tools", { suffix: "" }).data,
-  "databricks-sandbox",
-  "machine-assignments.json",
-);
-
-export const SshMachineAssignmentSeedSchema = z
-  .object({
-    userId: z.string().trim().min(1).describe("AppKit user identity assigned to the machine."),
-    machineId: z.string().trim().min(1).describe("Existing Databricks Sandbox identifier."),
-    workspaceScope: z
-      .string()
-      .trim()
-      .min(1)
-      .optional()
-      .describe("Optional workspace id or host restriction for this assignment."),
-  })
-  .strict()
-  .describe("Configured user-to-machine assignment seeded into persistent storage.");
 
 export const SshPluginConfigSchema = z
   .object({
@@ -33,19 +11,18 @@ export const SshPluginConfigSchema = z
       .boolean()
       .default(false)
       .describe("Retry failed request-scoped OBO calls as the app service principal."),
-    ownershipStorage: z
-      .enum(["auto", "lakebase", "disk"])
-      .default("auto")
-      .describe("Persistent user-to-machine assignment storage backend."),
-    ownershipPath: z
-      .string()
-      .min(1)
-      .default(defaultOwnershipPath)
-      .describe("Disk fallback path for persistent user-to-machine assignments."),
-    machineAssignments: z
-      .array(SshMachineAssignmentSeedSchema)
-      .default([])
-      .describe("Explicit user-to-machine assignments seeded at runtime."),
+    sandboxLifetimeSeconds: z
+      .number()
+      .int()
+      .positive()
+      .default(86_400)
+      .describe("Lifetime encoded into each service-managed Sandbox name."),
+    reaperIntervalSeconds: z
+      .number()
+      .int()
+      .nonnegative()
+      .default(300)
+      .describe("Interval between expiration scans; zero disables scheduled scans."),
     routePrefix: z
       .string()
       .startsWith("/")
@@ -88,7 +65,6 @@ export const SshPluginConfigSchema = z
 
 export type SerializableSshPluginConfig = z.input<typeof SshPluginConfigSchema>;
 export type ResolvedSshPluginConfig = z.output<typeof SshPluginConfigSchema>;
-export type SshMachineAssignmentSeed = z.infer<typeof SshMachineAssignmentSeedSchema>;
 /** Configuration accepted by the AppKit SSH plugin. */
 export type SshPluginConfig = BasePluginConfig &
   SerializableSshPluginConfig & {

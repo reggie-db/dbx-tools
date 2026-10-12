@@ -85,16 +85,6 @@ const remoteSkillsEnabled =
 const databricksSandboxRuntime = new SshRuntime(
   resolveSshPluginConfig({
     fallbackToServicePrincipal: true,
-    machineAssignments: [
-      {
-        userId: "4739182178671968@7474652124440999",
-        machineId: "strapping-gemsbok-3103",
-      },
-      {
-        userId: "reggie.pierce@databricks.com",
-        machineId: "strapping-gemsbok-3103",
-      },
-    ],
   }),
 );
 

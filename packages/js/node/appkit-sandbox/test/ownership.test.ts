@@ -1,291 +1,270 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, it } from "node:test";
+import { describe, it } from "node:test";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { resolveSshPluginConfig } from "../src/config.ts";
-import { DiskMachineOwnershipStore, LakebaseMachineOwnershipStore } from "../src/ownership.ts";
+import {
+  createManagedSandboxName,
+  parseManagedSandboxName,
+  sandboxUserId,
+} from "../src/managed-name.ts";
+import {
+  LakebaseMachineOwnershipStore,
+  type MachineAssignment,
+  type NewMachineAssignment,
+} from "../src/ownership.ts";
 import { SshRuntime } from "../src/runtime.ts";
+import type { SandboxEntry } from "../src/rest.ts";
 import type { SshSession } from "../src/session.ts";
 
-const temporaryDirectories: string[] = [];
 const unusedSession = {
   close: () => undefined,
   forwardOut: async () => assert.fail("not used"),
 } as unknown as SshSession;
 
-afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true })));
-});
+class MemoryOwnershipStore {
+  readonly assignments: MachineAssignment[] = [];
 
-async function temporaryPath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "dbx-tools-ssh-ownership-"));
-  temporaryDirectories.push(directory);
-  return join(directory, "assignments.json");
+  async listAssignments(workspaceScope: string, userId?: string): Promise<MachineAssignment[]> {
+    return this.assignments.filter(
+      (assignment) =>
+        assignment.workspaceScope === workspaceScope &&
+        (userId === undefined || assignment.userId === userId),
+    );
+  }
+
+  async get(
+    workspaceScope: string,
+    userId: string,
+    machineId: string,
+  ): Promise<MachineAssignment | undefined> {
+    return this.assignments.find(
+      (assignment) =>
+        assignment.workspaceScope === workspaceScope &&
+        assignment.userId === userId &&
+        assignment.machineId === machineId,
+    );
+  }
+
+  async assign(input: NewMachineAssignment): Promise<void> {
+    await this.unassign(input.workspaceScope, input.userId, input.machineId);
+    this.assignments.push({ ...input, createdAt: new Date().toISOString() });
+  }
+
+  async unassign(workspaceScope: string, userId: string, machineId: string): Promise<boolean> {
+    const index = this.assignments.findIndex(
+      (assignment) =>
+        assignment.workspaceScope === workspaceScope &&
+        assignment.userId === userId &&
+        assignment.machineId === machineId,
+    );
+    if (index < 0) return false;
+    this.assignments.splice(index, 1);
+    return true;
+  }
+
+  async unassignAll(workspaceScope: string, machineId: string): Promise<number> {
+    const retained = this.assignments.filter(
+      (assignment) =>
+        assignment.workspaceScope !== workspaceScope || assignment.machineId !== machineId,
+    );
+    const removed = this.assignments.length - retained.length;
+    this.assignments.splice(0, this.assignments.length, ...retained);
+    return removed;
+  }
+
+  async withReaperLock<T>(_workspaceScope: string, operation: () => Promise<T>): Promise<T> {
+    return operation();
+  }
+
+  async close(): Promise<void> {}
 }
 
-describe("machine ownership", () => {
-  it("provisions the Lakebase table in its owning schema", async () => {
+function assignment(
+  userId: string,
+  machineId: string,
+  managedName: string,
+  expiresAtMs: number,
+): MachineAssignment {
+  return {
+    workspaceScope: "workspace",
+    userId,
+    machineId,
+    managedName,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    createdAt: new Date(0).toISOString(),
+  };
+}
+
+function sandboxClient(initial: SandboxEntry[]) {
+  const entries = new Map(initial.map((entry) => [entry.sandboxId, entry]));
+  const requests: Array<Record<string, unknown>> = [];
+  const client = {
+    config: { workspaceId: "workspace", host: "https://example.databricks.com" },
+    apiClient: {
+      request: async (request: Record<string, unknown>) => {
+        requests.push(request);
+        const path = String(request.path);
+        const method = String(request.method);
+        if (path.endsWith("/sandboxes") && method === "GET") {
+          return { sandboxes: [...entries.values()] };
+        }
+        if (path.endsWith("/sandboxes") && method === "POST") {
+          const name = (request.payload as { sandbox: { name: string } }).sandbox.name;
+          const entry = { sandboxId: `created-${entries.size + 1}`, status: "STOPPED", name };
+          entries.set(entry.sandboxId, entry);
+          return entry;
+        }
+        const match = path.match(/\/sandboxes\/([^/]+)(?:\/(start|stop))?$/);
+        if (!match) throw new Error(`Unexpected Sandbox request ${method} ${path}`);
+        const machineId = decodeURIComponent(match[1]!);
+        const action = match[2];
+        const current = entries.get(machineId);
+        if (method === "DELETE") {
+          entries.delete(machineId);
+          return {};
+        }
+        if (!current) throw Object.assign(new Error("missing"), { status: 404 });
+        if (method === "POST" && action) {
+          const updated = {
+            ...current,
+            status: action === "start" ? "RUNNING" : "STOPPED",
+          };
+          entries.set(machineId, updated);
+          return updated;
+        }
+        return current;
+      },
+    },
+  } as unknown as WorkspaceClient;
+  return { client, entries, requests };
+}
+
+function runtime(
+  store: MemoryOwnershipStore,
+  config: Parameters<typeof resolveSshPluginConfig>[0] = {},
+) {
+  return new SshRuntime(
+    resolveSshPluginConfig(config),
+    store as unknown as LakebaseMachineOwnershipStore,
+  );
+}
+
+describe("managed Sandbox ownership", () => {
+  it("encodes a fun name, stable user identity, and expiration", () => {
+    const expiresAtMs = 1_800_000_000_000;
+    const name = createManagedSandboxName("user@example.com", expiresAtMs, "00112233");
+    const parsed = parseManagedSandboxName(name);
+
+    assert.equal(
+      name,
+      `dbx-bright-falcon-00112233_uid_${sandboxUserId("user@example.com")}_exp_1800000000000`,
+    );
+    assert.deepEqual(parsed, {
+      displayName: "bright-falcon-00112233",
+      ownerId: sandboxUserId("user@example.com"),
+      expiresAtMs,
+    });
+  });
+
+  it("migrates Lakebase ownership rows with managed names and expirations", async () => {
     const statements: string[] = [];
     const pool = {
       connect: async () => ({
         query: async (text: string) => {
           statements.push(text);
+          if (text.includes("pg_advisory_unlock")) {
+            return { rows: [{ unlocked: true }], rowCount: 1 };
+          }
           return { rows: [], rowCount: 0 };
         },
         release: () => undefined,
       }),
       query: async (text: string) => {
         statements.push(text);
-        return { rows: [], rowCount: text.startsWith("DELETE") ? 2 : 0 };
+        return { rows: [], rowCount: 0 };
       },
     } as unknown as Parameters<typeof LakebaseMachineOwnershipStore.create>[0];
 
-    const ownership = await LakebaseMachineOwnershipStore.create(pool);
+    await LakebaseMachineOwnershipStore.create(pool);
 
-    assert.ok(
-      statements.some((statement) =>
-        statement.includes("CREATE SCHEMA IF NOT EXISTS dbx_tools_databricks_sandbox"),
-      ),
-    );
-    assert.ok(
-      statements.some((statement) =>
-        statement.includes(
-          "CREATE TABLE IF NOT EXISTS dbx_tools_databricks_sandbox.machine_assignments",
-        ),
-      ),
-    );
-    assert.equal(await ownership.unassignAll("workspace", "machine"), 2);
-    assert.ok(
-      statements.some((statement) =>
-        statement.includes(
-          "DELETE FROM dbx_tools_databricks_sandbox.machine_assignments WHERE workspace_scope = $1 AND machine_id = $2",
-        ),
-      ),
-    );
+    assert.ok(statements.some((statement) => statement.includes("managed_name TEXT")));
+    assert.ok(statements.some((statement) => statement.includes("expires_at TIMESTAMPTZ")));
+    assert.ok(statements.some((statement) => statement.includes("machine_assignments_expiry_idx")));
   });
 
-  it("persists user-scoped assignments on disk", async () => {
-    const path = await temporaryPath();
-    const first = new DiskMachineOwnershipStore(path);
-    await first.assign("workspace", "user-a", "machine-a");
-    await first.assign("workspace", "user-a", "machine-a");
-    await first.assign("workspace", "user-b", "machine-b");
+  it("creates generated names and persists ownership in Lakebase", async () => {
+    const store = new MemoryOwnershipStore();
+    const { client, requests } = sandboxClient([]);
+    const ssh = runtime(store, { sandboxLifetimeSeconds: 3_600 });
 
-    const reopened = new DiskMachineOwnershipStore(path);
-    assert.deepEqual([...(await reopened.listMachineIds("workspace", "user-a"))], ["machine-a"]);
-    assert.equal(await reopened.has("workspace", "user-b", "machine-a"), false);
-    assert.equal(await reopened.unassign("workspace", "user-a", "machine-a"), true);
-    assert.equal(await reopened.has("workspace", "user-a", "machine-a"), false);
-    await reopened.assign("workspace", "user-a", "machine-b");
-    await reopened.assign("workspace", "user-b", "machine-b");
-    assert.equal(await reopened.unassignAll("workspace", "machine-b"), 2);
-    assert.equal(await reopened.has("workspace", "user-a", "machine-b"), false);
-    assert.equal(await reopened.has("workspace", "user-b", "machine-b"), false);
+    const created = await ssh.createMachine(client, "user-a");
+    const row = store.assignments[0]!;
+    const payloadName = (requests[0]?.payload as { sandbox: { name: string } }).sandbox.name;
+
+    assert.equal(row.machineId, created.id);
+    assert.equal(row.userId, "user-a");
+    assert.equal(row.managedName, payloadName);
+    assert.equal(created.name, parseManagedSandboxName(payloadName)?.displayName);
+    assert.equal(created.expiresAt, row.expiresAt);
+    assert.ok(Date.parse(created.expiresAt) > Date.now());
   });
 
-  it("filters service-principal discovery and rejects unassigned lifecycle access", async () => {
-    const path = await temporaryPath();
-    const requests: Array<Record<string, unknown>> = [];
-    const client = {
-      config: { workspaceId: "workspace", host: "https://example.databricks.com" },
-      apiClient: {
-        request: async (request: Record<string, unknown>) => {
-          requests.push(request);
-          return {
-            sandboxes: [
-              { sandboxId: "assigned", status: "RUNNING" },
-              { sandboxId: "other", status: "RUNNING" },
-            ],
-          };
-        },
-      },
-    } as unknown as WorkspaceClient;
-    const runtime = new SshRuntime(
-      resolveSshPluginConfig({
-        ownershipPath: path,
-        machineAssignments: [{ userId: "user-a", machineId: "assigned" }],
-      }),
-    );
-
-    const visible = await runtime.listMachines(client, "user-a");
-    assert.deepEqual(
-      visible.machines.map((machine) => machine.id),
-      ["assigned"],
-    );
-    assert.deepEqual(visible.machines[0]?.services, [
-      {
-        kind: "terminal",
-        path: "/sandbox/terminal/assigned",
-        state: "stopped",
-      },
-      {
-        kind: "stats",
-        path: "/sandbox/metrics/assigned",
-        state: "stopped",
-      },
+  it("filters discovery and lifecycle operations through Lakebase ownership", async () => {
+    const now = Date.now();
+    const ownedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const otherName = createManagedSandboxName("user-b", now + 60_000, "44556677");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "owned", ownedName, now + 60_000));
+    store.assignments.push(assignment("user-b", "other", otherName, now + 60_000));
+    const { client } = sandboxClient([
+      { sandboxId: "owned", status: "STOPPED", name: ownedName },
+      { sandboxId: "other", status: "STOPPED", name: otherName },
     ]);
-    assert.deepEqual((await runtime.listMachines(client, "user-b")).machines, []);
-    await assert.rejects(
-      runtime.startMachine(client, "user-b", "assigned"),
-      /not assigned to the current user/,
+    const ssh = runtime(store);
+
+    assert.deepEqual(
+      (await ssh.listMachines(client, "user-a")).machines.map((machine) => machine.id),
+      ["owned"],
     );
-    assert.equal(requests.length, 2);
-    await runtime.close();
+    await assert.rejects(ssh.startMachine(client, "user-a", "other"), /not assigned/);
+    await assert.rejects(ssh.startMachine(client, "user-b", "owned"), /not assigned/);
   });
 
-  it("starts a machine even when optional browser services cannot be provisioned", async () => {
-    const path = await temporaryPath();
-    const client = {
-      config: { workspaceId: "workspace", host: "https://example.databricks.com" },
-      apiClient: {
-        request: async (request: { path: string; method: string }) => ({
-          sandboxId: "assigned",
-          status: request.method === "POST" ? "RUNNING" : "STOPPED",
-        }),
-      },
-    } as unknown as WorkspaceClient;
-    const runtime = new SshRuntime(
-      resolveSshPluginConfig({
-        ownershipPath: path,
-        machineAssignments: [{ userId: "user-a", machineId: "assigned" }],
-      }),
-    );
-    const attempted: string[] = [];
-    runtime.startService = async (_client, _userId, input) => {
-      attempted.push(input.service);
-      throw new Error(`${input.service} unavailable`);
-    };
+  it("reaps expired, malformed, orphaned, and missing managed records", async () => {
+    const now = Date.now();
+    const expiredName = createManagedSandboxName("user-a", now - 1_000, "00112233");
+    const orphanName = createManagedSandboxName("user-c", now + 60_000, "44556677");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "expired", expiredName, now - 1_000));
+    store.assignments.push(assignment("user-b", "legacy", "legacy-name", now + 60_000));
+    store.assignments.push(assignment("user-d", "missing", "missing-name", now + 60_000));
+    const { client, entries } = sandboxClient([
+      { sandboxId: "expired", status: "STOPPED", name: expiredName },
+      { sandboxId: "legacy", status: "STOPPED", name: "legacy-name" },
+      { sandboxId: "orphan", status: "STOPPED", name: orphanName },
+      { sandboxId: "foreign", status: "STOPPED", name: "manual-sandbox" },
+      { sandboxId: "marker-foreign", status: "STOPPED", name: "manual_uid_name_exp_123" },
+    ]);
+    const ssh = runtime(store);
 
-    const machine = await runtime.startMachine(client, "user-a", "assigned");
+    const result = await ssh.reapMachines(client);
 
-    assert.equal(machine.status, "running");
-    assert.deepEqual(attempted.sort(), ["stats", "terminal"]);
-    await runtime.close();
+    assert.deepEqual(result, { scanned: 5, deleted: 3, removedAssignments: 3, failures: 0 });
+    assert.deepEqual([...entries.keys()], ["foreign", "marker-foreign"]);
+    assert.deepEqual(store.assignments, []);
   });
 
-  it("assigns created machines to the caller and only lets that caller delete them", async () => {
-    const path = await temporaryPath();
-    const ownership = new DiskMachineOwnershipStore(path);
-    const requests: Array<{ path: string; method: string; payload?: unknown }> = [];
-    const client = {
-      config: { workspaceId: "workspace", host: "https://example.databricks.com" },
-      apiClient: {
-        request: async (request: { path: string; method: string; payload?: unknown }) => {
-          requests.push(request);
-          if (request.method === "POST") {
-            return { sandboxId: "created", status: "Running", name: "project" };
-          }
-          return {};
-        },
-      },
-    } as unknown as WorkspaceClient;
-    const runtime = new SshRuntime(resolveSshPluginConfig({ ownershipPath: path }), ownership);
-
-    const created = await runtime.createMachine(client, "user-a", { name: "project" });
-    await assert.rejects(
-      runtime.deleteMachine(client, "user-b", created.id),
-      /not assigned to the current user/,
-    );
-    await ownership.assign("workspace", "user-b", created.id);
-    await runtime.routes.add(unusedSession, {
-      ownerId: "user-a",
-      machineId: created.id,
-      remoteHost: "127.0.0.1",
-      remotePort: 3000,
-      path: "/project-a",
-    });
-    await runtime.routes.add(unusedSession, {
-      ownerId: "user-b",
-      machineId: created.id,
-      remoteHost: "127.0.0.1",
-      remotePort: 3000,
-      path: "/project-b",
-    });
-    assert.deepEqual(await runtime.deleteMachine(client, "user-a", created.id), {
-      deleted: true,
-    });
-
-    assert.equal(created.id, "created");
-    assert.equal(await ownership.has("workspace", "user-a", created.id), false);
-    assert.equal(await ownership.has("workspace", "user-b", created.id), false);
-    assert.deepEqual(runtime.routeList(), []);
-    assert.deepEqual(requests[0]?.payload, { sandbox: { name: "project" } });
-    assert.equal(requests.at(-1)?.method, "DELETE");
-    await runtime.close();
-  });
-
-  it("revokes one user's routes immediately when its assignment is removed", async () => {
-    const path = await temporaryPath();
-    const ownership = new DiskMachineOwnershipStore(path);
-    await ownership.assign("workspace", "user-a", "assigned");
-    const client = {
-      config: { workspaceId: "workspace", host: "https://example.databricks.com" },
-    } as unknown as WorkspaceClient;
-    const runtime = new SshRuntime(resolveSshPluginConfig({ ownershipPath: path }), ownership);
-    await runtime.routes.add(unusedSession, {
-      ownerId: "user-a",
-      machineId: "assigned",
-      remoteHost: "127.0.0.1",
-      remotePort: 3000,
-      path: "/project",
-    });
-
-    assert.equal(await runtime.unassignMachine(client, "user-a", "assigned"), true);
-    assert.deepEqual(runtime.routeList("user-a"), []);
-    assert.equal(await ownership.has("workspace", "user-a", "assigned"), false);
-    await runtime.close();
-  });
-
-  it("clears every user's runtime routes when a shared machine stops", async () => {
-    const path = await temporaryPath();
-    const ownership = new DiskMachineOwnershipStore(path);
-    await ownership.assign("workspace", "user-a", "assigned");
-    await ownership.assign("workspace", "user-b", "assigned");
-    const client = {
-      config: { workspaceId: "workspace", host: "https://example.databricks.com" },
-      apiClient: {
-        request: async (request: { method: string }) => ({
-          sandboxId: "assigned",
-          status: request.method === "POST" ? "STOPPED" : "RUNNING",
-        }),
-      },
-    } as unknown as WorkspaceClient;
-    const runtime = new SshRuntime(resolveSshPluginConfig({ ownershipPath: path }), ownership);
-    for (const userId of ["user-a", "user-b"]) {
-      await runtime.routes.add(unusedSession, {
-        ownerId: userId,
-        machineId: "assigned",
-        remoteHost: "127.0.0.1",
-        remotePort: 3000,
-        path: `/${userId}`,
-      });
-    }
-
-    await runtime.stopMachine(client, "user-a", "assigned");
-
-    assert.deepEqual(runtime.routeList(), []);
-    assert.equal(await ownership.has("workspace", "user-a", "assigned"), true);
-    assert.equal(await ownership.has("workspace", "user-b", "assigned"), true);
-    await runtime.close();
-  });
-
-  it("removes a route created concurrently with assignment revocation", async () => {
-    const path = await temporaryPath();
-    const ownership = new DiskMachineOwnershipStore(path);
-    await ownership.assign("workspace", "user-a", "assigned");
-    const client = {
-      config: { workspaceId: "workspace", host: "https://example.databricks.com" },
-      apiClient: {
-        request: async () => ({ sandboxId: "assigned", status: "RUNNING" }),
-      },
-    } as unknown as WorkspaceClient;
-    const runtime = new SshRuntime(resolveSshPluginConfig({ ownershipPath: path }), ownership);
-    Object.defineProperty(runtime, "ensureSession", {
-      value: async () => unusedSession,
-    });
-    const originalAdd = runtime.routes.add.bind(runtime.routes);
+  it("removes a route created concurrently with expiration reaping", async () => {
+    const now = Date.now();
+    const futureName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "owned", futureName, now + 60_000));
+    const { client, entries } = sandboxClient([
+      { sandboxId: "owned", status: "RUNNING", name: futureName },
+    ]);
+    const ssh = runtime(store);
+    Object.defineProperty(ssh, "ensureSession", { value: async () => unusedSession });
+    const originalAdd = ssh.routes.add.bind(ssh.routes);
     let routeAdded!: () => void;
     let resumeAdd!: () => void;
     const routeWasAdded = new Promise<void>((resolve) => {
@@ -294,24 +273,27 @@ describe("machine ownership", () => {
     const resumeRouteAdd = new Promise<void>((resolve) => {
       resumeAdd = resolve;
     });
-    runtime.routes.add = async (session, input) => {
+    ssh.routes.add = async (session, input) => {
       const route = await originalAdd(session, input);
       routeAdded();
       await resumeRouteAdd;
       return route;
     };
 
-    const pendingRoute = runtime.addRoute(client, "user-a", {
-      machineId: "assigned",
+    const pendingRoute = ssh.addRoute(client, "user-a", {
+      machineId: "owned",
       remotePort: 3000,
       path: "/project",
     });
     await routeWasAdded;
-    await runtime.unassignMachine(client, "user-a", "assigned");
+    const expiredAt = now - 1_000;
+    const expiredName = createManagedSandboxName("user-a", expiredAt, "00112233");
+    store.assignments[0] = assignment("user-a", "owned", expiredName, expiredAt);
+    entries.set("owned", { sandboxId: "owned", status: "RUNNING", name: expiredName });
+    await ssh.reapMachines(client);
     resumeAdd();
 
-    await assert.rejects(pendingRoute, /not assigned to the current user|operation was revoked/);
-    assert.deepEqual(runtime.routeList("user-a"), []);
-    await runtime.close();
+    await assert.rejects(pendingRoute, /not assigned|operation was revoked/);
+    assert.deepEqual(ssh.routeList("user-a"), []);
   });
 });

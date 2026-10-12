@@ -92,7 +92,6 @@
       "dependencies": [
         "@dbx-tools/appkit",
         "@dbx-tools/appkit-mastra",
-        "@dbx-tools/core",
         "@dbx-tools/postgres",
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-databricks-sandbox"
@@ -219,7 +218,6 @@
         "@dbx-tools/appkit",
         "@dbx-tools/appkit-graphiti",
         "@dbx-tools/appkit-mastra",
-        "@dbx-tools/appkit-sandbox",
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",

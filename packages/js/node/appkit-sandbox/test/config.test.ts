@@ -6,9 +6,8 @@ describe("resolveSshPluginConfig", () => {
   it("strips AppKit runtime fields and resolves auth fallback defaults", () => {
     const config = resolveSshPluginConfig({ context: {} as never });
     assert.equal(config.fallbackToServicePrincipal, false);
-    assert.equal(config.ownershipStorage, "auto");
-    assert.match(config.ownershipPath, /dbx-tools.*sandbox.*machine-assignments\.json/);
-    assert.deepEqual(config.machineAssignments, []);
+    assert.equal(config.sandboxLifetimeSeconds, 86_400);
+    assert.equal(config.reaperIntervalSeconds, 300);
     assert.equal(config.routePrefix, "/sandbox");
     assert.equal("context" in config, false);
 

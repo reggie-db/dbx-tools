@@ -61,7 +61,6 @@ export function SshManager({
   const [busyId, setBusyId] = useState<string>();
   const [error, setError] = useState<string>();
   const [machineId, setMachineId] = useState("");
-  const [newMachineName, setNewMachineName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SshMachine>();
   const [routeFormOpen, setRouteFormOpen] = useState(false);
   const [remotePort, setRemotePort] = useState(String(defaultRemotePort));
@@ -125,15 +124,11 @@ export function SshManager({
     }
   };
 
-  const createMachine = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const createMachine = async () => {
     setBusyId("new-machine");
     setError(undefined);
     try {
-      const created = await client.create(
-        newMachineName.trim() ? { name: newMachineName.trim() } : {},
-      );
-      setNewMachineName("");
+      const created = await client.create();
       setMachines((current) => [
         created,
         ...current.filter((machine) => machine.id !== created.id),
@@ -234,34 +229,26 @@ export function SshManager({
         <div className="grid items-start gap-3 lg:grid-cols-2">
           <Card className="gap-0 py-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-2.5 sm:px-4">
-              <CardTitle className="text-sm">Machines</CardTitle>
-              <Badge variant="secondary">{machines.length}</Badge>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-sm">Machines</CardTitle>
+                <Badge variant="secondary">{machines.length}</Badge>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8"
+                disabled={Boolean(busyId)}
+                onClick={() => void createMachine()}
+              >
+                {busyId === "new-machine" ? (
+                  <Spinner className="size-3.5" />
+                ) : (
+                  <PlusIcon className="size-3.5" />
+                )}
+                Create
+              </Button>
             </CardHeader>
             <CardContent className="p-0">
-              <form
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t px-3 py-2 sm:px-4"
-                onSubmit={createMachine}
-              >
-                <Label className="sr-only" htmlFor="sandbox-name">
-                  Sandbox name
-                </Label>
-                <Input
-                  id="sandbox-name"
-                  value={newMachineName}
-                  maxLength={256}
-                  placeholder="Sandbox name (optional)"
-                  disabled={Boolean(busyId)}
-                  onChange={(event) => setNewMachineName(event.target.value)}
-                />
-                <Button type="submit" size="sm" disabled={Boolean(busyId)}>
-                  {busyId === "new-machine" ? (
-                    <Spinner className="size-3.5" />
-                  ) : (
-                    <PlusIcon className="size-3.5" />
-                  )}
-                  Create
-                </Button>
-              </form>
               {machines.length === 0 ? (
                 <div className="flex min-h-16 items-center justify-center gap-2 border-t px-4 py-4 text-sm text-muted-foreground">
                   {loading ? <Spinner className="size-4" /> : null}
@@ -286,7 +273,8 @@ export function SshManager({
                           <Badge variant="secondary">{machine.status}</Badge>
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
-                          {machine.id} · {machine.routes.length} routes
+                          {machine.id} · expires {formatExpiration(machine.expiresAt)} ·{" "}
+                          {machine.routes.length} routes
                         </p>
                       </div>
                       <div className="flex w-full shrink-0 items-center justify-end gap-1 overflow-x-auto sm:w-auto sm:overflow-visible">
@@ -559,6 +547,15 @@ export function SshManager({
 
 function machineName(machines: SshMachine[], machineId: string): string {
   return machines.find((machine) => machine.id === machineId)?.name ?? machineId;
+}
+
+function formatExpiration(value: string): string {
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function errorMessage(error: unknown): string {

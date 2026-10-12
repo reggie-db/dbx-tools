@@ -48,6 +48,7 @@ export const sshMachineSchema = z
     status: sshMachineStatusSchema.describe("Normalized machine lifecycle state."),
     gatewayHost: z.string().optional().describe("Databricks Sandbox SSH gateway hostname."),
     createdAt: z.string().optional().describe("ISO-8601 machine creation time."),
+    expiresAt: z.string().datetime().describe("ISO-8601 service-managed expiration time."),
     lastStartedAt: z.string().optional().describe("ISO-8601 last start time."),
     autoStopSeconds: z.number().int().nonnegative().optional().describe("Configured idle timeout."),
     routes: z.array(sshRouteSchema).describe("Routes currently exposed for the machine."),
@@ -79,16 +80,9 @@ export const sshMachinesResponseSchema = z
 export type SshMachinesResponse = z.infer<typeof sshMachinesResponseSchema>;
 
 export const createSshMachineRequestSchema = z
-  .object({
-    name: z
-      .string()
-      .trim()
-      .max(256)
-      .optional()
-      .describe("Optional display name for the new Databricks Sandbox."),
-  })
+  .object({})
   .strict()
-  .describe("Request to create a Databricks Sandbox for the current user.");
+  .describe("Request to create an automatically named Databricks Sandbox for the current user.");
 export type CreateSshMachineRequest = z.infer<typeof createSshMachineRequestSchema>;
 
 export const sshMachineActionSchema = z

@@ -21,17 +21,20 @@ import { SshRuntime } from "@dbx-tools/appkit-sandbox/runtime";
 import { sshWorkspaceSandbox } from "@dbx-tools/appkit-sandbox/workspace";
 import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-sandbox/skills";
 import { mastra } from "@dbx-tools/appkit-mastra";
+import { lakebase } from "@databricks/appkit";
 
 const sshRuntime = new SshRuntime(
   resolveSshPluginConfig({
     auto: true,
     routePrefix: "/sandbox",
     defaultRemotePort: 3000,
-    machineAssignments: [{ userId: "user-id", machineId: "sandbox-id" }],
+    sandboxLifetimeSeconds: 86_400,
+    reaperIntervalSeconds: 300,
   }),
 );
 
 const plugins = [
+  lakebase(),
   databricksSandbox({ runtime: sshRuntime }),
   mastra({
     codeMode: true,
@@ -50,6 +53,9 @@ SSH-backed tool.
 ## Requirements
 
 - The workspace must expose the Databricks Sandbox REST API.
+- The AppKit application must register `lakebase()` before the Sandbox plugin.
+  Lakebase is the authoritative ownership and expiration store shared by every
+  app instance.
 - The AppKit server identity must be able to list and manage the current user's
   Sandboxes and SSH keys.
 - The AppKit server host must provide `ssh` on `PATH`. Command sessions use the
@@ -62,8 +68,17 @@ SSH-backed tool.
 explicit user or tool action in either mode.
 
 The Lakebox API supports idle auto-stop configuration but does not expose a
-maximum wall-clock runtime. This package does not emulate a maximum runtime
-with process-local timers because that would not survive app restarts.
+maximum wall-clock runtime. This package records an absolute expiration in
+Lakebase and in the generated Sandbox name. A reaper runs at startup and every
+`reaperIntervalSeconds` to enforce the wall-clock lifetime across app restarts
+and replicas. The default lifetime is 24 hours and the default scan interval is
+five minutes. Set the interval to zero to disable scheduled scans; creation and
+authorization still require unexpired Lakebase records.
+
+Service-managed names reserve the `dbx-` prefix. The reaper deletes expired or
+malformed `dbx-` Sandboxes and Sandboxes referenced by invalid or orphaned
+Lakebase assignments. It leaves unrelated unassigned workspace Sandboxes
+unchanged. The name is reconciliation metadata, not an authorization control.
 
 `fallbackToServicePrincipal: true` keeps HTTP requests OBO-first, then retries a
 failed workspace call with the app service principal. The default is `false` so
@@ -168,24 +183,27 @@ behavior as the tools and REST routes.
 
 ## Security and storage
 
-Every machine is hidden and unusable until it is assigned to the current AppKit
-user. User-created Sandboxes are assigned immediately after creation. This
-protects service-principal fallback from exposing all workspace Sandboxes to
-every caller. Configure bootstrap assignments with `machineAssignments`, or
-use the plugin export's `assignMachine(userId, machineId)` and
-`unassignMachine(userId, machineId)` operations from trusted server code.
-Assignment is enforced for discovery, lifecycle, deletion, commands, routes,
-Mastra tools, and Code Mode.
+Every machine is hidden and unusable until an unexpired Lakebase assignment
+matches the current AppKit user, Sandbox id, and generated Sandbox name. A
+creation request writes the assignment immediately after the Lakebox API
+returns; if the Lakebase write fails, the new Sandbox is deleted. Assignment is
+enforced for discovery, lifecycle, deletion, commands, routes, Mastra tools,
+and Code Mode.
 
-Assignment storage uses the registered AppKit `lakebase()` pool when available.
-If Lakebase initialization fails in `auto` mode, it falls back to an atomic
-locked JSON file in the operating system's application-data directory. Set
-`ownershipStorage` to `lakebase` or `disk` to require one backend, and use
-`ownershipPath` to override the disk location. Multiple user identities may be
-assigned to the same machine when an app has both platform and external-gate
-identity forms.
+Names use
+`<adjective>-<animal>-<nonce>_uid_<sha256-user-id>_exp_<epoch-ms>`. The user
+component is a SHA-256 digest rather than a raw email or platform identity. The
+name duplicates the Lakebase owner and expiration for reconciliation; it is not
+an authorization boundary.
 
-This assignment store is an application-level stopgap because the current
+The reaper deletes expired managed Sandboxes, managed names without a matching
+Lakebase row, and assigned Sandboxes whose stored and API names no longer
+match. It also removes Lakebase rows whose Sandbox no longer exists. Legacy
+assignment rows without a managed name or expiration are treated as invalid and
+their Sandboxes are deleted. Sandboxes with unrelated names and no Lakebase
+assignment are not owned by this service and are left unchanged.
+
+This Lakebase assignment store is an application-level stopgap because the current
 Sandbox API does not expose native per-user Sandbox scopes. It limits which
 machines the plugin reveals and operates when using either OBO credentials or
 service-principal fallback, but it does not replace Databricks authorization.

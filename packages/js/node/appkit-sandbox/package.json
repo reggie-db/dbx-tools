@@ -31,12 +31,10 @@
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:^",
     "@dbx-tools/appkit-mastra": "workspace:^",
-    "@dbx-tools/core": "workspace:^",
     "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-databricks-sandbox": "workspace:^",
     "@mastra/core": "catalog:",
-    "env-paths": "catalog:",
     "http-proxy-3": "catalog:",
     "ssh2": "catalog:",
     "ws": "catalog:",
@@ -60,6 +58,10 @@
       "./key-store": {
         "types": "./lib/src/key-store.d.ts",
         "default": "./lib/src/key-store.js"
+      },
+      "./managed-name": {
+        "types": "./lib/src/managed-name.d.ts",
+        "default": "./lib/src/managed-name.js"
       },
       "./ownership": {
         "types": "./lib/src/ownership.d.ts",
@@ -116,6 +118,7 @@
     ".": "./index.ts",
     "./config": "./src/config.ts",
     "./key-store": "./src/key-store.ts",
+    "./managed-name": "./src/managed-name.ts",
     "./ownership": "./src/ownership.ts",
     "./plugin": "./src/plugin.ts",
     "./rest": "./src/rest.ts",

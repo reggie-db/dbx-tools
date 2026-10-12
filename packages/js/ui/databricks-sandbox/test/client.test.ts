@@ -34,6 +34,7 @@ describe("SshClient", () => {
           name: "project",
           provider: "databricks-sandbox",
           status: "running",
+          expiresAt: "2026-10-13T00:00:00.000Z",
           routes: [],
           services: [],
           canStart: false,
@@ -45,11 +46,11 @@ describe("SshClient", () => {
     }) as typeof fetch;
     const client = new SshClient();
 
-    await client.create({ name: "project" });
+    await client.create();
     await client.delete("machine-1");
 
     assert.equal(requests[0]?.method, "POST");
-    assert.deepEqual(await requests[0]?.json(), { name: "project" });
+    assert.deepEqual(await requests[0]?.json(), {});
     assert.equal(requests[1]?.method, "DELETE");
     assert.equal(requests[1]?.url, "http://localhost/api/databricks-sandbox/machines/machine-1");
   });

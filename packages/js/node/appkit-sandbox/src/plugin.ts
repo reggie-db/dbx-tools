@@ -87,8 +87,11 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
 
   override async setup(): Promise<void> {
     this.context?.onLifecycle("setup:complete", async () => {
-      const pool = pluginRegistry.instance(this.context, lakebase)?.exports().pool;
+      const pool = pluginRegistry
+        .require(this.context, lakebase, AppKitSshPlugin.manifest)
+        .exports().pool;
       await this.runtime.initializeOwnership(pool);
+      await this.runtime.startReaper(createWorkspaceClient());
       const server = this.context?.getPlugins().get("server") as ServerExtension | undefined;
       if (!server || this.mounted) return;
       this.upgradeIdentityGate = resolveUpgradeIdentityGate(
@@ -336,10 +339,6 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
         this.startMachineService(userId, input),
       addRoute: (userId: string, input: AddSshRouteRequest) => this.addRoute(userId, input),
       removeRoute: (userId: string, routeId: string) => this.runtime.removeRoute(userId, routeId),
-      assignMachine: (userId: string, machineId: string) =>
-        this.runtime.assignMachine(this.workspaceClient(), userId, machineId),
-      unassignMachine: (userId: string, machineId: string) =>
-        this.runtime.unassignMachine(this.workspaceClient(), userId, machineId),
       toolkit: (options?: ToolkitOptions) => this.toolkit(options),
     };
   }

@@ -19,10 +19,13 @@ import {
 import type { ResolvedSshPluginConfig } from "./config.ts";
 import { SshKeyStore } from "./key-store.ts";
 import {
-  createMachineOwnershipStore,
-  DiskMachineOwnershipStore,
-  type MachineOwnershipStore,
-} from "./ownership.ts";
+  createManagedSandboxName,
+  isManagedSandboxNameCandidate,
+  parseManagedSandboxName,
+  sandboxUserId,
+  type ManagedSandboxName,
+} from "./managed-name.ts";
+import { LakebaseMachineOwnershipStore, type MachineAssignment } from "./ownership.ts";
 import { DatabricksSandboxClient, isSandboxUnavailable, type SandboxEntry } from "./rest.ts";
 import { SshRouteRegistry } from "./routes.ts";
 import { ensureSshService } from "./services.ts";
@@ -48,41 +51,76 @@ interface RuntimeEpoch {
   owner: number;
 }
 
+/** Result of one Lakebase-to-Sandbox reconciliation pass. */
+export interface SandboxReaperResult {
+  scanned: number;
+  deleted: number;
+  removedAssignments: number;
+  failures: number;
+}
+
 /** Coordinates Sandbox REST operations, SSH sessions, command execution, and web routes. */
 export class SshRuntime {
   readonly routes: SshRouteRegistry;
   private readonly keys: SshKeyStore;
   private readonly sessions = new Map<string, SshSession>();
   private readonly connecting = new Map<string, Promise<SshSession>>();
-  private ownership: MachineOwnershipStore;
-  private readonly seededWorkspaces = new Set<string>();
+  private ownership?: LakebaseMachineOwnershipStore;
   private readonly services = new Map<string, SshMachineService>();
   private readonly startingServices = new Map<string, Promise<SshMachineService>>();
   private readonly machineEpochs = new Map<string, number>();
   private readonly ownerEpochs = new Map<string, number>();
+  private reaperTimer?: ReturnType<typeof setInterval>;
+  private reaping?: Promise<SandboxReaperResult>;
 
   constructor(
     readonly config: ResolvedSshPluginConfig,
-    ownership: MachineOwnershipStore = new DiskMachineOwnershipStore(config.ownershipPath),
+    ownership?: LakebaseMachineOwnershipStore,
   ) {
     this.keys = new SshKeyStore(config.keyDirectory);
     this.routes = new SshRouteRegistry(config.routePrefix);
     this.ownership = ownership;
   }
 
-  /** Select Lakebase ownership storage when available, otherwise retain disk storage. */
+  /** Initialize the Lakebase ownership and expiration store. */
   async initializeOwnership(
-    pool?: Parameters<typeof createMachineOwnershipStore>[0]["pool"],
+    pool?: Parameters<typeof LakebaseMachineOwnershipStore.create>[0],
   ): Promise<void> {
-    const next = await createMachineOwnershipStore({
-      mode: this.config.ownershipStorage,
-      path: this.config.ownershipPath,
-      ...(pool ? { pool } : {}),
-    });
+    if (!pool) {
+      throw new Error("Databricks Sandbox management requires the AppKit Lakebase plugin");
+    }
+    const next = await LakebaseMachineOwnershipStore.create(pool);
     const previous = this.ownership;
     this.ownership = next;
-    this.seededWorkspaces.clear();
-    await previous.close();
+    await previous?.close();
+  }
+
+  /** Start the immediate and periodic expiration reaper. */
+  async startReaper(client: WorkspaceClient): Promise<SandboxReaperResult> {
+    if (this.config.reaperIntervalSeconds > 0 && !this.reaperTimer) {
+      this.reaperTimer = setInterval(() => {
+        void this.reapMachines(client).catch((error) => {
+          logger.warn("Sandbox reaper failed", authErrorMetadata(error));
+        });
+      }, this.config.reaperIntervalSeconds * 1_000);
+      this.reaperTimer.unref?.();
+    }
+    try {
+      return await this.reapMachines(client);
+    } catch (error) {
+      logger.warn("Initial Sandbox reaper pass failed", authErrorMetadata(error));
+      return { scanned: 0, deleted: 0, removedAssignments: 0, failures: 1 };
+    }
+  }
+
+  /** Reconcile Lakebase assignments with service-managed Sandbox names and expirations. */
+  reapMachines(client: WorkspaceClient, signal?: AbortSignal): Promise<SandboxReaperResult> {
+    if (this.reaping) return this.reaping;
+    const operation = this.performReap(client, signal).finally(() => {
+      if (this.reaping === operation) this.reaping = undefined;
+    });
+    this.reaping = operation;
+    return operation;
   }
 
   /** Runs an OBO workspace operation and transparently retries it as the app service principal. */
@@ -140,15 +178,21 @@ export class SshRuntime {
   ): Promise<SshMachinesResponse> {
     const api = new DatabricksSandboxClient(client);
     try {
-      await this.seedAssignments(api.workspaceScope());
-      const assigned = await this.ownership.listMachineIds(api.workspaceScope(), userId);
+      const assignments = await this.ownershipStore().listAssignments(api.workspaceScope(), userId);
+      const assigned = new Map(assignments.map((assignment) => [assignment.machineId, assignment]));
       const entries = await api.list(signal);
       return {
         auto: this.config.auto,
         supported: true,
-        machines: entries
-          .filter((entry) => assigned.has(entry.sandboxId))
-          .map((entry) => this.toMachine(entry, api.workspaceScope(), userId)),
+        machines: entries.flatMap((entry) => {
+          const assignment = assigned.get(entry.sandboxId);
+          const managed = assignment
+            ? this.validateManagedMachine(entry, assignment, userId)
+            : undefined;
+          return assignment && managed
+            ? [this.toMachine(entry, api.workspaceScope(), userId, assignment, managed)]
+            : [];
+        }),
       };
     } catch (error) {
       if (isSandboxUnavailable(error)) {
@@ -165,8 +209,8 @@ export class SshRuntime {
     signal?: AbortSignal,
   ): Promise<SshMachine> {
     const api = new DatabricksSandboxClient(client);
-    await this.assertAssigned(api.workspaceScope(), userId, machineId);
-    const current = await api.get(machineId, signal);
+    const owned = await this.requireOwnedMachine(api, userId, machineId, signal);
+    const current = owned.entry;
     const updated =
       normalizeStatus(current.status) === "running" ? current : await api.start(machineId, signal);
     const final = await waitForStatus(api, machineId, "running", updated, signal);
@@ -175,7 +219,8 @@ export class SshRuntime {
         this.startService(client, userId, { machineId, service }, signal),
       ),
     );
-    return this.toMachine(final, api.workspaceScope(), userId);
+    await this.assertAssigned(api.workspaceScope(), userId, machineId);
+    return this.toMachine(final, api.workspaceScope(), userId, owned.assignment, owned.managed);
   }
 
   async createMachine(
@@ -184,19 +229,32 @@ export class SshRuntime {
     input: CreateSshMachineRequest = {},
     signal?: AbortSignal,
   ): Promise<SshMachine> {
-    const request = createSshMachineRequestSchema.parse(input);
+    createSshMachineRequestSchema.parse(input);
     const api = new DatabricksSandboxClient(client);
-    const created = await api.create(request.name, signal);
+    const expiresAtMs = Date.now() + this.config.sandboxLifetimeSeconds * 1_000;
+    const managedName = createManagedSandboxName(userId, expiresAtMs);
+    const expiresAt = new Date(expiresAtMs).toISOString();
+    const created = await api.create(managedName, signal);
+    const assignment = {
+      workspaceScope: api.workspaceScope(),
+      userId,
+      machineId: created.sandboxId,
+      managedName,
+      expiresAt,
+    };
     try {
-      await this.ownership.assign(api.workspaceScope(), userId, created.sandboxId);
+      await this.ownershipStore().assign(assignment);
     } catch (error) {
       await api.delete(created.sandboxId, signal).catch(() => undefined);
       throw error;
     }
+    const managed = parseManagedSandboxName(managedName)!;
     return this.toMachine(
-      { ...created, ...(request.name ? { name: request.name } : {}) },
+      { ...created, name: managedName },
       api.workspaceScope(),
       userId,
+      { ...assignment, createdAt: new Date().toISOString() },
+      managed,
     );
   }
 
@@ -207,13 +265,14 @@ export class SshRuntime {
     signal?: AbortSignal,
   ): Promise<SshMachine> {
     const api = new DatabricksSandboxClient(client);
-    await this.assertAssigned(api.workspaceScope(), userId, machineId);
-    const current = await api.get(machineId, signal);
+    const owned = await this.requireOwnedMachine(api, userId, machineId, signal);
+    const current = owned.entry;
     const updated =
       normalizeStatus(current.status) === "stopped" ? current : await api.stop(machineId, signal);
     const final = await waitForStatus(api, machineId, "stopped", updated, signal);
     await this.clearMachineRuntime(api.workspaceScope(), machineId);
-    return this.toMachine(final, api.workspaceScope(), userId);
+    await this.assertAssigned(api.workspaceScope(), userId, machineId);
+    return this.toMachine(final, api.workspaceScope(), userId, owned.assignment, owned.managed);
   }
 
   async deleteMachine(
@@ -225,7 +284,7 @@ export class SshRuntime {
     const api = new DatabricksSandboxClient(client);
     await this.assertAssigned(api.workspaceScope(), userId, machineId);
     await api.delete(machineId, signal);
-    await this.ownership.unassignAll(api.workspaceScope(), machineId);
+    await this.ownershipStore().unassignAll(api.workspaceScope(), machineId);
     await this.clearMachineRuntime(api.workspaceScope(), machineId);
     return { deleted: true };
   }
@@ -283,7 +342,7 @@ export class SshRuntime {
     const api = new DatabricksSandboxClient(client);
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
     const epoch = this.runtimeEpoch(api.workspaceScope(), userId, request.machineId);
-    const machine = await this.ensureRunning(api, request.machineId, signal);
+    const machine = await this.ensureRunning(api, userId, request.machineId, signal);
     const timeoutMs = request.timeoutMs ?? this.config.commandTimeoutMs;
     const session = await this.ensureSession(client, userId, machine, epoch, signal);
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
@@ -306,7 +365,7 @@ export class SshRuntime {
     const api = new DatabricksSandboxClient(client);
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
     const epoch = this.runtimeEpoch(api.workspaceScope(), userId, request.machineId);
-    const machine = await this.ensureRunning(api, request.machineId, signal);
+    const machine = await this.ensureRunning(api, userId, request.machineId, signal);
     const session = await this.ensureSession(client, userId, machine, epoch, signal);
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
     this.assertRuntimeEpoch(api.workspaceScope(), userId, request.machineId, epoch);
@@ -333,25 +392,6 @@ export class SshRuntime {
     return this.routes.userPathPrefix(userId);
   }
 
-  /** Manually assign one existing machine to an AppKit user. */
-  async assignMachine(client: WorkspaceClient, userId: string, machineId: string): Promise<void> {
-    const api = new DatabricksSandboxClient(client);
-    await api.get(machineId);
-    await this.ownership.assign(api.workspaceScope(), userId, machineId);
-  }
-
-  /** Remove one explicit AppKit user-to-machine assignment. */
-  async unassignMachine(
-    client: WorkspaceClient,
-    userId: string,
-    machineId: string,
-  ): Promise<boolean> {
-    const api = new DatabricksSandboxClient(client);
-    const removed = await this.ownership.unassign(api.workspaceScope(), userId, machineId);
-    if (removed) await this.clearOwnerRuntime(api.workspaceScope(), userId, machineId);
-    return removed;
-  }
-
   disconnect(workspaceScope: string, userId: string, machineId: string): void {
     const key = sessionKey(workspaceScope, userId, machineId);
     this.bumpEpoch(this.ownerEpochs, key);
@@ -361,6 +401,9 @@ export class SshRuntime {
   }
 
   async close(): Promise<void> {
+    if (this.reaperTimer) clearInterval(this.reaperTimer);
+    this.reaperTimer = undefined;
+    await this.reaping?.catch(() => undefined);
     for (const session of this.sessions.values()) session.close();
     this.sessions.clear();
     this.connecting.clear();
@@ -369,16 +412,7 @@ export class SshRuntime {
     this.machineEpochs.clear();
     this.ownerEpochs.clear();
     await this.routes.close();
-    await this.ownership.close();
-  }
-
-  private async seedAssignments(workspaceScope: string): Promise<void> {
-    if (this.seededWorkspaces.has(workspaceScope)) return;
-    for (const assignment of this.config.machineAssignments) {
-      if (assignment.workspaceScope && assignment.workspaceScope !== workspaceScope) continue;
-      await this.ownership.assign(workspaceScope, assignment.userId, assignment.machineId);
-    }
-    this.seededWorkspaces.add(workspaceScope);
+    await this.ownership?.close();
   }
 
   private async assertAssigned(
@@ -386,17 +420,152 @@ export class SshRuntime {
     userId: string,
     machineId: string,
   ): Promise<void> {
-    await this.seedAssignments(workspaceScope);
-    if (await this.ownership.has(workspaceScope, userId, machineId)) return;
+    const assignment = await this.ownershipStore().get(workspaceScope, userId, machineId);
+    if (assignment?.expiresAt && Date.parse(assignment.expiresAt) > Date.now()) return;
     throw new Error(`SSH machine ${machineId} is not assigned to the current user`);
+  }
+
+  private ownershipStore(): LakebaseMachineOwnershipStore {
+    if (!this.ownership) {
+      throw new Error("Databricks Sandbox ownership is not initialized in Lakebase");
+    }
+    return this.ownership;
+  }
+
+  private async requireOwnedMachine(
+    api: DatabricksSandboxClient,
+    userId: string,
+    machineId: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    entry: SandboxEntry;
+    assignment: MachineAssignment;
+    managed: ManagedSandboxName;
+  }> {
+    const assignment = await this.ownershipStore().get(api.workspaceScope(), userId, machineId);
+    const entry = assignment ? await api.get(machineId, signal) : undefined;
+    const managed =
+      entry && assignment ? this.validateManagedMachine(entry, assignment, userId) : undefined;
+    if (!entry || !assignment || !managed) {
+      throw new Error(
+        `SSH machine ${machineId} is not assigned to the current user or has expired`,
+      );
+    }
+    return { entry, assignment, managed };
+  }
+
+  private validateManagedMachine(
+    entry: SandboxEntry,
+    assignment: MachineAssignment,
+    userId: string,
+    now = Date.now(),
+  ): ManagedSandboxName | undefined {
+    if (!assignment.managedName || !assignment.expiresAt) return undefined;
+    if (entry.name !== assignment.managedName) return undefined;
+    const managed = parseManagedSandboxName(entry.name);
+    if (!managed || managed.ownerId !== sandboxUserId(userId)) return undefined;
+    const assignedExpiration = Date.parse(assignment.expiresAt);
+    if (managed.expiresAtMs !== assignedExpiration || assignedExpiration <= now) return undefined;
+    return managed;
+  }
+
+  private async performReap(
+    client: WorkspaceClient,
+    signal?: AbortSignal,
+  ): Promise<SandboxReaperResult> {
+    const api = new DatabricksSandboxClient(client);
+    const workspaceScope = api.workspaceScope();
+    const ownership = this.ownershipStore();
+    return ownership.withReaperLock(workspaceScope, async () =>
+      this.performLockedReap(api, ownership, workspaceScope, signal),
+    );
+  }
+
+  private async performLockedReap(
+    api: DatabricksSandboxClient,
+    ownership: LakebaseMachineOwnershipStore,
+    workspaceScope: string,
+    signal?: AbortSignal,
+  ): Promise<SandboxReaperResult> {
+    const [entries, assignments] = await Promise.all([
+      api.list(signal),
+      ownership.listAssignments(workspaceScope),
+    ]);
+    const assignmentsByMachine = new Map<string, MachineAssignment[]>();
+    for (const assignment of assignments) {
+      const current = assignmentsByMachine.get(assignment.machineId) ?? [];
+      current.push(assignment);
+      assignmentsByMachine.set(assignment.machineId, current);
+    }
+
+    let deleted = 0;
+    let removedAssignments = 0;
+    let failures = 0;
+    const existingMachineIds = new Set(entries.map((entry) => entry.sandboxId));
+    const missingMachineIds = new Set(
+      assignments
+        .map((assignment) => assignment.machineId)
+        .filter((machineId) => !existingMachineIds.has(machineId)),
+    );
+    for (const machineId of missingMachineIds) {
+      try {
+        removedAssignments += await ownership.unassignAll(workspaceScope, machineId);
+        assignmentsByMachine.delete(machineId);
+      } catch (error) {
+        failures += 1;
+        logger.warn("Sandbox reaper could not remove missing machine assignments", {
+          machineId,
+          ...authErrorMetadata(error),
+        });
+      }
+    }
+
+    const now = Date.now();
+    for (const entry of entries) {
+      const managed = parseManagedSandboxName(entry.name);
+      const machineAssignments = assignmentsByMachine.get(entry.sandboxId) ?? [];
+      const assignment = machineAssignments.find(
+        (candidate) =>
+          candidate.managedName === entry.name &&
+          candidate.expiresAt !== undefined &&
+          managed?.ownerId === sandboxUserId(candidate.userId) &&
+          managed.expiresAtMs === Date.parse(candidate.expiresAt),
+      );
+      const serviceManaged =
+        isManagedSandboxNameCandidate(entry.name) || machineAssignments.length > 0;
+      const expired = Boolean(managed && managed.expiresAtMs <= now);
+      const invalid =
+        serviceManaged && (!managed || !assignment || machineAssignments.length !== 1);
+      if (!expired && !invalid) continue;
+
+      try {
+        await api.delete(entry.sandboxId, signal);
+        removedAssignments += await ownership.unassignAll(workspaceScope, entry.sandboxId);
+        await this.clearMachineRuntime(workspaceScope, entry.sandboxId);
+        deleted += 1;
+        logger.warn("Sandbox reaper deleted managed machine", {
+          machineId: entry.sandboxId,
+          reason: expired ? "expired" : "invalid-managed-name-or-assignment",
+        });
+      } catch (error) {
+        failures += 1;
+        logger.warn("Sandbox reaper could not delete managed machine", {
+          machineId: entry.sandboxId,
+          ...authErrorMetadata(error),
+        });
+      }
+    }
+
+    return { scanned: entries.length, deleted, removedAssignments, failures };
   }
 
   private async ensureRunning(
     api: DatabricksSandboxClient,
+    userId: string,
     machineId: string,
     signal?: AbortSignal,
   ): Promise<SandboxEntry> {
-    const current = await api.get(machineId, signal);
+    const current = (await this.requireOwnedMachine(api, userId, machineId, signal)).entry;
     if (normalizeStatus(current.status) === "running") return current;
     if (!this.config.auto) {
       throw new Error(
@@ -461,7 +630,7 @@ export class SshRuntime {
     try {
       await this.assertAssigned(workspaceScope, userId, request.machineId);
       this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
-      const machine = await this.ensureRunning(api, request.machineId, signal);
+      const machine = await this.ensureRunning(api, userId, request.machineId, signal);
       const session = await this.ensureSession(client, userId, machine, epoch, signal);
       const target = await ensureSshService(
         session,
@@ -563,15 +732,22 @@ export class SshRuntime {
     return session;
   }
 
-  private toMachine(entry: SandboxEntry, workspaceScope: string, userId: string): SshMachine {
+  private toMachine(
+    entry: SandboxEntry,
+    workspaceScope: string,
+    userId: string,
+    assignment: MachineAssignment,
+    managed: ManagedSandboxName,
+  ): SshMachine {
     const status = normalizeStatus(entry.status);
     return {
       id: entry.sandboxId,
-      name: entry.name?.trim() || entry.sandboxId,
+      name: managed.displayName,
       provider: "databricks-sandbox",
       status,
       ...(entry.gatewayHost ? { gatewayHost: entry.gatewayHost } : {}),
       ...(entry.createTime ? { createdAt: entry.createTime } : {}),
+      expiresAt: assignment.expiresAt!,
       ...(entry.lastStartTime ? { lastStartedAt: entry.lastStartTime } : {}),
       ...(idleTimeoutSeconds(entry.idleTimeout) !== undefined
         ? { autoStopSeconds: idleTimeoutSeconds(entry.idleTimeout) }
@@ -622,20 +798,6 @@ export class SshRuntime {
   ): void {
     if (this.runtimeEpochMatches(workspaceScope, userId, machineId, epoch)) return;
     throw new Error(`SSH machine ${machineId} operation was revoked`);
-  }
-
-  private async clearOwnerRuntime(
-    workspaceScope: string,
-    userId: string,
-    machineId: string,
-  ): Promise<void> {
-    this.disconnect(workspaceScope, userId, machineId);
-    await this.routes.removeMachine(machineId, userId);
-    for (const kind of ["terminal", "stats"] as const) {
-      const key = serviceKey(workspaceScope, userId, machineId, kind);
-      this.services.delete(key);
-      this.startingServices.delete(key);
-    }
   }
 
   private async clearMachineRuntime(workspaceScope: string, machineId: string): Promise<void> {
