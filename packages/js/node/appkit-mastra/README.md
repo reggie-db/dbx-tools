@@ -558,12 +558,13 @@ one source to log and skip it.
 
 ### Refresh policy
 
-Downloaded sources are reused for seven days by default. Set `refreshTtlMs` to a
-shorter interval or `0` to download on every boot:
+AI Tools uses the shared `@dbx-tools/cache` project cache and refreshes daily by
+default. Other downloaded sources are reused for seven days. Set
+`refreshTtlMs` to override either interval or `0` to download on every boot:
 
 ```ts
 mastra({
-  // Re-pull at most once an hour instead of once every seven days.
+  // Re-pull AI Tools at most once an hour instead of once a day.
   remoteSkills: { sources: ["aitools"], refreshTtlMs: 60 * 60 * 1000 },
 });
 
@@ -614,10 +615,11 @@ Per-source options for `"aitools"`:
 - `experimental` - include the repo's `experimental/` skills (off by default).
 - `ref` - pin a tag / branch / sha. Defaults to `main`.
 
-When the workspace destination is unavailable, local backing storage remains
-read-only and hidden behind stable workspace paths. AI Tools mounts at
-`/.databricks/skills`; other sources mount below `/.skills`, using the explicit
-per-source `name` when supplied or a stable source identifier otherwise.
+AI Tools is hydrated from the daily cache snapshot into one shared read-only
+memory filesystem at `/.databricks/skills` and served to every auto-created
+workspace. Other sources mount below `/.skills` when their Databricks workspace
+destination is unavailable, using the explicit per-source `name` when supplied
+or a stable source identifier otherwise.
 
 ## Genie Tools
 
@@ -1102,8 +1104,8 @@ The main plugin options are:
 - `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
   list, or an options bag with `failOnError`, `userEmail`,
-  `databricksBasePath`, and `refreshTtlMs` (how long a provisioned tree is
-  reused before re-downloading, seven days by default). A source is `"aitools"` (see
+  `databricksBasePath`, and `refreshTtlMs` (one day by default for AI Tools,
+  seven days for other sources). A source is `"aitools"` (see
   [Databricks AI Tools](#databricks-ai-tools)) or any URL-like.
 - `genieSpaces` maps aliases to Genie Space IDs (or to
   `{ spaceId, hint }` objects). Those aliases flow into tool names,
@@ -1160,13 +1162,12 @@ Clients that call these routes can import the browser-safe schemas from
   Databricks paths, opt-in user-scoped temp paths, and caller-supplied mounts;
   `filesystems(fs)` wraps any `@dbx-tools/shared-fs` `FileSystem` (including
   `@dbx-tools/databricks` / `@dbx-tools/fs`) as a Mastra mount.
-- `remote-skills` - startup provisioning of remote `SKILL.md` sources into the
-  Databricks Assistant skills tree (or read-only local backing storage exposed
-  at stable virtual mounts): the `"aitools"`
-  constant reads Databricks' own skill repo directly, and any other source goes
-  through the optional `skills` CLI or a direct fetch. Each tree carries a
-  `.metadata.json` so a source is re-downloaded at most once every seven days
-  (`refreshTtlMs`).
+- `remote-skills` - startup provisioning of remote `SKILL.md` sources. The
+  `"aitools"` constant reads Databricks' public skill repo through a daily
+  `@dbx-tools/cache` snapshot and serves one shared in-memory
+  `/.databricks/skills` tree. Other sources go through the optional `skills` CLI
+  or a direct fetch and use the Databricks Assistant tree or a read-only local
+  fallback. `refreshTtlMs` overrides the source default.
 - `mcp` - MCP server construction.
 - `observability` / `mlflow` / `telemetry` - tracing, feedback, and stamping chat
   turn I/O onto the HTTP root span for MLflow's UC `*_trace_unified` view.

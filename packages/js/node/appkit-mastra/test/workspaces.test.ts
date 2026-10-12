@@ -402,6 +402,19 @@ describe("databricksWorkspace skill source identity", () => {
         (await catalogue.list()).map(({ name }) => name),
         ["databricks-apps"],
       );
+      await rm(root, { recursive: true, force: true });
+
+      const secondWorkspace = databricksWorkspace({
+        assistantPaths: false,
+        sandbox: false,
+        extraSkillMounts: [{ root, mountPath: "/.skills/databricks" }],
+      });
+      const sharedCatalogue = await resolveWorkspaceSkills(secondWorkspace, new RequestContext());
+      assert.deepEqual(
+        (await sharedCatalogue.list()).map(({ name }) => name),
+        ["databricks-apps"],
+        "a second workspace reuses the process-memory skill tree after the source disappears",
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }

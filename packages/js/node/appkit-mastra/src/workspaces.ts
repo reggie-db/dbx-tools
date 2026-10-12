@@ -24,7 +24,7 @@ import {
 } from "@dbx-tools/appkit/files-cache";
 import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
 import { LocalFileSystem } from "@dbx-tools/fs";
-import { match, type PathMatchInput } from "@dbx-tools/path";
+import { find, match, type PathMatchInput } from "@dbx-tools/path";
 import { errorUtils, log, object, stringUtils, token } from "@dbx-tools/shared-core";
 import {
   fs as sharedFS,
@@ -77,6 +77,7 @@ const CACHEABLE_FILESYSTEM_OPERATIONS = [
 const logger = log.logger("mastra/workspaces");
 let workspaceSourceSequence = 0;
 const databricksWorkspaceOptions = new WeakMap<Workspace, DatabricksWorkspaceOptions>();
+const sharedSkillFilesystems = new Map<string, Promise<FileSystem>>();
 
 /* -------------------------------- types -------------------------------- */
 
@@ -794,23 +795,56 @@ function userTempFilesystem(
 function localSkillMountResolvers(mounts: readonly LocalSkillMount[]): WorkspaceMountResolver[] {
   const unique = new Map<string, LocalSkillMount>();
   for (const entry of mounts) {
-    const root = entry.root.trim();
-    if (!root) continue;
-    unique.set(`${entry.mountPath}\0${root}`, { root, mountPath: entry.mountPath });
+    const identity = "root" in entry ? entry.root.trim() : entry.filesystem.id;
+    if (!identity) continue;
+    unique.set(`${entry.mountPath}\0${identity}`, entry);
   }
-  return [...unique.values()].map(({ root, mountPath }) => {
-    const mount = posixPath.normalizeRoot(mountPath);
-    const source = new LocalFileSystem({
-      root,
-      readOnly: true,
-      createRoot: false,
-    });
-    const filesystem = filesystems(source, { readOnly: true });
-    return () => ({
-      mounts: { [mount]: filesystem },
-      skillPaths: [mount],
-    });
+  return [...unique.values()].map((entry) => {
+    const mount = posixPath.normalizeRoot(entry.mountPath);
+    const filesystem = inMemorySkillFilesystem(entry);
+    return async () => {
+      const source = await filesystem;
+      return {
+        mounts: { [mount]: filesystems(source, { readOnly: true }) },
+        skillPaths: [mount],
+      };
+    };
   });
+}
+
+function inMemorySkillFilesystem(mount: LocalSkillMount): Promise<FileSystem> {
+  const key = "root" in mount ? `root:${mount.root}` : `filesystem:${mount.filesystem.id}`;
+  const existing = sharedSkillFilesystems.get(key);
+  if (existing) return existing;
+  const loaded = loadInMemorySkillFilesystem(mount).catch((error) => {
+    if (sharedSkillFilesystems.get(key) === loaded) sharedSkillFilesystems.delete(key);
+    throw error;
+  });
+  sharedSkillFilesystems.set(key, loaded);
+  return loaded;
+}
+
+async function loadInMemorySkillFilesystem(mount: LocalSkillMount): Promise<FileSystem> {
+  if ("filesystem" in mount) {
+    await mount.filesystem.init();
+    return mount.filesystem;
+  }
+  const source = new LocalFileSystem({
+    root: mount.root,
+    readOnly: true,
+    createRoot: false,
+  });
+  await source.init();
+  const memory = new MemoryFileSystem({
+    id: `skills-${createHash("sha256").update(mount.root).digest("hex").slice(0, 16)}`,
+    root: "/",
+  });
+  await memory.init();
+  for (const relative of find.findFiles("**/*", { cwd: mount.root, nodir: true })) {
+    await memory.writeFile(relative, await source.readFile(relative), { overwrite: true });
+  }
+  await source.close();
+  return memory;
 }
 
 /**

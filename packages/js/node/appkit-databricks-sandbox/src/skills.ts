@@ -1,13 +1,13 @@
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { LocalSkillMount } from "@dbx-tools/appkit-mastra";
+import type { LocalSkillDirectoryMount } from "@dbx-tools/appkit-mastra";
 
 /** Default agent-workspace path for packaged Databricks Sandbox recipes. */
 export const DATABRICKS_SANDBOX_SKILLS_MOUNT = "/.dbx-tools/skills";
 
 /** Returns the packaged Databricks Sandbox recipe tree as a Mastra local skill mount. */
-export function databricksSandboxSkillMounts(): LocalSkillMount[] {
+export function databricksSandboxSkillMounts(): LocalSkillDirectoryMount[] {
   return [{ root: databricksSandboxSkillsRoot(), mountPath: DATABRICKS_SANDBOX_SKILLS_MOUNT }];
 }
 

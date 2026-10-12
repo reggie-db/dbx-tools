@@ -5,7 +5,7 @@
  * {@link AITOOLS_SOURCE} constant, a GitHub `owner/repo`, any git / GitLab URL,
  * or a direct download URL - and optional per-source policy.
  * {@link provisionRemoteSkills} materializes every source into a local
- * `SKILL.md` tree at app boot and returns read-only backing directories plus
+ * `SKILL.md` tree at app boot and returns read-only filesystem backings plus
  * their stable virtual workspace mounts.
  *
  * Resolution per source, in order:
@@ -26,25 +26,16 @@
  * source (or the top-level call) sets `failOnError: false`, in which case it is
  * logged and skipped so one bad source never takes the app down.
  *
- * Every provisioned tree carries a {@link METADATA_FILE} recording when each
- * source was last downloaded, and a source is only re-downloaded once that
- * record is older than {@link DEFAULT_REFRESH_TTL_MS} (seven days). This runs at app
- * BOOT, so without it a container that restarts a dozen times an hour re-pulls
- * the whole AI Tools set a dozen times for content that changes rarely. The
- * record travels WITH the tree rather than in process memory, so the reuse
- * survives a restart - which is the only way it helps a Databricks App at all.
- * Pass `refreshTtlMs: 0` to download on every boot.
+ * AI Tools uses the shared `@dbx-tools/cache` project cache with a one-day TTL,
+ * then hydrates one process-memory filesystem mounted at
+ * {@link AITOOLS_SKILLS_MOUNT} for every default workspace. Other sources keep
+ * a {@link METADATA_FILE} beside their provisioned tree and default to a
+ * seven-day refresh window. Pass `refreshTtlMs: 0` to download on every boot.
  *
- * The default destination is the Databricks workspace Assistant skills tree
- * (`/Workspace/.assistant/skills`), so provisioned skills persist across restarts and are
- * discovered by the built-in Assistant-skills mount. Pass `userEmail` (or an
- * explicit `databricksBasePath`) to target `/Workspace/Users/<email>/.assistant/skills`
- * instead. When no Databricks client is resolvable at startup - or the resolved
- * identity cannot WRITE the destination, which is the normal case for a
- * Databricks App service principal against the admin-owned shared tree (see
- * {@link openWritableWorkspace}) - the tree is written under
- * {@link localFS.tmpFS} and exposed through a stable read-only virtual mount
- * for the current process. Storage location degrades; the skills themselves do not.
+ * For non-AI-Tools sources, the default destination is the Databricks workspace
+ * Assistant skills tree (`/Workspace/.assistant/skills`). Pass `userEmail` or
+ * `databricksBasePath` to select another destination. When it is unavailable,
+ * the tree is exposed through a stable read-only local mount instead.
  *
  * @module
  */
@@ -55,6 +46,7 @@ import { dirname, join, posix } from "node:path";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import type { WorkspaceClientLike } from "@dbx-tools/appkit";
+import { flushCache, getOrSet, projectCache } from "@dbx-tools/cache/cache";
 import { exec } from "@dbx-tools/core";
 import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
 import { localFS, type LocalFileSystem } from "@dbx-tools/fs";
@@ -70,7 +62,7 @@ import {
   stringUtils,
 } from "@dbx-tools/shared-core";
 import type { OneOrMany } from "@dbx-tools/shared-core";
-import type { FileSystem } from "@dbx-tools/shared-fs";
+import { MemoryFileSystem, type FileSystem } from "@dbx-tools/shared-fs";
 
 import { ORGANIZATION_SKILLS_PATH, personalSkillsPath } from "./skill-paths.ts";
 
@@ -116,8 +108,16 @@ const METADATA_FILE = ".metadata.json";
 /** Shape marker for {@link METADATA_FILE}; an unknown version is ignored, not read. */
 const METADATA_VERSION = 1;
 
-/** How long a provisioned source is reused before being downloaded again. */
+/** How long a general provisioned source is reused before being downloaded again. */
 const DEFAULT_REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** How long the shared Databricks AI Tools snapshot is reused. */
+export const AITOOLS_REFRESH_TTL_MS = 24 * 60 * 60 * 1000;
+
+const aiToolsCache = projectCache("mastra-aitools", {
+  ttl: AITOOLS_REFRESH_TTL_MS,
+  maxEntries: 32,
+});
 
 /* ------------------------------ AI Tools ------------------------------ */
 
@@ -203,13 +203,24 @@ export type RemoteSkillsOption =
 /** A source entry with its `source` flattened to a plain string. */
 type NormalizedSource = Omit<RemoteSkillSourceOptions, "source"> & { source: string };
 
-/** Read-only local backing storage exposed at a stable virtual workspace path. */
-export interface LocalSkillMount {
+/** Read-only local directory exposed at a stable virtual workspace path. */
+export interface LocalSkillDirectoryMount {
   /** Physical local directory containing the provisioned `SKILL.md` tree. */
   root: string;
   /** Virtual path agents see inside the composed Mastra workspace. */
   mountPath: string;
 }
+
+/** Read-only process-local filesystem exposed at a stable virtual workspace path. */
+export interface MemorySkillMount {
+  /** Process-shared filesystem containing the provisioned `SKILL.md` tree. */
+  filesystem: FileSystem;
+  /** Virtual path agents see inside the composed Mastra workspace. */
+  mountPath: string;
+}
+
+/** Local skill backing accepted by every auto-created workspace. */
+export type LocalSkillMount = LocalSkillDirectoryMount | MemorySkillMount;
 
 /** Top-level remote-skills provisioning options. */
 export interface ProvisionRemoteSkillsOptions {
@@ -233,8 +244,8 @@ export interface ProvisionRemoteSkillsOptions {
   maxDownloadBytes?: number;
   /**
    * How long a provisioned tree is reused before its source is downloaded
-   * again, in milliseconds. Defaults to seven days; `0` re-downloads on every
-   * boot. A per-source `refreshTtlMs` wins over this.
+   * again, in milliseconds. AI Tools defaults to one day and other sources to
+   * seven days; `0` re-downloads on every boot. A per-source `refreshTtlMs` wins.
    */
   refreshTtlMs?: number;
 }
@@ -242,9 +253,10 @@ export interface ProvisionRemoteSkillsOptions {
 /** What {@link provisionRemoteSkills} resolved. */
 export interface ProvisionedRemoteSkills {
   /**
-   * Extra read-only LOCAL skill mounts to hand Mastra when a source couldn't
-   * be written to Databricks. Physical temp/cache paths remain hidden behind
-   * stable virtual workspace paths.
+   * Extra read-only local or process-memory skill mounts to hand Mastra. AI
+   * Tools always uses process memory; other sources use this fallback when
+   * they could not be written to Databricks. Physical paths remain hidden
+   * behind stable virtual workspace paths.
    */
   localSkillMounts: LocalSkillMount[];
   /** Absolute Databricks destination each source was written to, if any. */
@@ -257,8 +269,8 @@ export interface ProvisionedRemoteSkills {
 }
 
 /**
- * What one source's last download left behind, as recorded in
- * {@link METADATA_FILE}.
+ * Metadata for one resolved source snapshot. General remote sources store it
+ * in {@link METADATA_FILE}; AI Tools stores it with the cache-package value.
  */
 export interface RemoteSkillCacheEntry {
   /** The source string this entry was downloaded from, for readability. */
@@ -279,6 +291,20 @@ export interface RemoteSkillCacheEntry {
 export interface RemoteSkillsMetadata {
   version: number;
   sources: Record<string, RemoteSkillCacheEntry>;
+}
+
+interface CachedSkillFile {
+  path: string;
+  content: string;
+}
+
+interface CachedAiToolsTree {
+  files: CachedSkillFile[];
+  record: RemoteSkillCacheEntry;
+}
+
+interface ResolvedAiToolsTree extends CachedAiToolsTree {
+  cached: boolean;
 }
 
 /* ------------------------------- helpers ------------------------------- */
@@ -381,12 +407,16 @@ function remoteSourceIdentifier(source: string): string {
   return `${url.hostname}-${path}`;
 }
 
-/** The effective reuse window: per-source, then top-level, then seven days. */
+/** The effective reuse window: per-source, top-level, then the source default. */
 function resolveRefreshTtl(
   sourceOptions: NormalizedSource,
   options: ProvisionRemoteSkillsOptions,
 ): number {
-  return sourceOptions.refreshTtlMs ?? options.refreshTtlMs ?? DEFAULT_REFRESH_TTL_MS;
+  return (
+    sourceOptions.refreshTtlMs ??
+    options.refreshTtlMs ??
+    (isAiToolsSource(sourceOptions.source) ? AITOOLS_REFRESH_TTL_MS : DEFAULT_REFRESH_TTL_MS)
+  );
 }
 
 /**
@@ -465,12 +495,17 @@ export async function provisionRemoteSkills(
   if (!options) return empty;
 
   const failDefault = options.failOnError !== false;
+  const sources = (Array.isArray(options.sources) ? options.sources : [options.sources]).map(
+    toSourceOptions,
+  );
   const client = options.client ?? appkit.tryGetExecutionContext()?.client;
   // Probed rather than assumed: an identity that cannot write the workspace
   // tree falls back to the local one instead of failing startup. The probe also
   // creates the root, which the first cache READ needs - `copySkillDirs` would
   // otherwise be the first thing to create it, which is too late.
-  const requestedBasePath = resolveDatabricksBasePath(options, client);
+  const requestedBasePath = sources.some((source) => !isAiToolsSource(source.source))
+    ? resolveDatabricksBasePath(options, client)
+    : undefined;
   const destination = requestedBasePath
     ? await openWritableWorkspace(requestedBasePath, client as WorkspaceClient)
     : undefined;
@@ -481,15 +516,30 @@ export async function provisionRemoteSkills(
   let staging: LocalFileSystem | undefined;
 
   try {
-    const sources = Array.isArray(options.sources) ? options.sources : [options.sources];
-    for (const entry of sources) {
-      const sourceOptions = toSourceOptions(entry);
+    for (const sourceOptions of sources) {
       const failOnError = sourceOptions.failOnError ?? failDefault;
       try {
         // Where this source's bookkeeping lives: the shared Databricks tree, or
         // the source's own stable local dir.
         const key = cacheKey(sourceOptions);
         const mountPath = localSkillMountPath(sourceOptions, key);
+        if (isAiToolsSource(sourceOptions.source)) {
+          staging ??= await initializedScratch("mastra-remote-skills");
+          const tree = await cachedAiToolsTree(sourceOptions, staging.root, options, key);
+          localSkillMounts.push({
+            filesystem: await memorySkillTree(tree.files, `aitools-${key}`),
+            mountPath,
+          });
+          skillNames.push(...tree.record.skills);
+          logger.info("remote skill ready", {
+            source: sourceOptions.source,
+            destination: mountPath,
+            downloadedAt: tree.record.downloadedAt,
+            skills: tree.record.skills,
+            cached: tree.cached,
+          });
+          continue;
+        }
         const cacheFS = destination ?? localSkillsFS(key);
         const metadata = await readMetadata(cacheFS);
         const cached = metadata?.sources[key];
@@ -563,17 +613,87 @@ export async function provisionRemoteSkills(
   return { localSkillMounts, databricksBasePath, skillNames };
 }
 
+async function cachedAiToolsTree(
+  sourceOptions: NormalizedSource,
+  stagingRoot: string,
+  options: ProvisionRemoteSkillsOptions,
+  key: string,
+): Promise<ResolvedAiToolsTree> {
+  const ttl = resolveRefreshTtl(sourceOptions, options);
+  let loaded = false;
+  const load = async (): Promise<CachedAiToolsTree> => {
+    loaded = true;
+    const stagedDir = await stageAiTools(
+      sourceOptions,
+      join(stagingRoot, `aitools-${hash.id()}`),
+      options,
+    );
+    const staged = await collectSkillDirs(stagedDir);
+    if (staged.length === 0) {
+      throw new Error(`no SKILL.md found for source "${sourceOptions.source}"`);
+    }
+    const policy = cachePolicy(sourceOptions);
+    return {
+      files: await serializeSkillDirs(staged),
+      record: {
+        source: sourceOptions.source,
+        downloadedAt: new Date().toISOString(),
+        skills: staged.map((dir) => dir.name),
+        ...(policy ? { policy } : {}),
+      },
+    };
+  };
+  const tree =
+    ttl <= 0
+      ? await load()
+      : await getOrSet(aiToolsCache, key, load, {
+          ttl,
+          throwErrors: true,
+        });
+  if (!tree) throw new Error(`AI Tools cache returned no tree for ${key}`);
+  await flushCache(aiToolsCache);
+  return { ...tree, cached: !loaded };
+}
+
+async function serializeSkillDirs(dirs: readonly StagedSkillDir[]): Promise<CachedSkillFile[]> {
+  const files: CachedSkillFile[] = [];
+  for (const dir of dirs) {
+    for (const relative of find.findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
+      files.push({
+        path: posix.join(dir.name, relative.split(/[\\/]/).join("/")),
+        content: (await readFile(join(dir.absolutePath, relative))).toString("base64"),
+      });
+    }
+  }
+  return files;
+}
+
+async function memorySkillTree(
+  files: readonly CachedSkillFile[],
+  id: string,
+): Promise<MemoryFileSystem> {
+  const filesystem = new MemoryFileSystem({ id, root: "/" });
+  await filesystem.init();
+  for (const file of files) {
+    await filesystem.writeFile(file.path, Buffer.from(file.content, "base64"), {
+      overwrite: true,
+    });
+  }
+  return filesystem;
+}
+
 /** Fail before workspace composition when two sources claim one virtual mount. */
 function assertUniqueLocalSkillMounts(mounts: readonly LocalSkillMount[]): void {
   const rootsByMount = new Map<string, string>();
   for (const mount of mounts) {
+    const identity = "root" in mount ? mount.root : mount.filesystem.id;
     const previousRoot = rootsByMount.get(mount.mountPath);
-    if (previousRoot && previousRoot !== mount.root) {
+    if (previousRoot && previousRoot !== identity) {
       throw new Error(
         `multiple remote skill sources resolve to virtual mount "${mount.mountPath}"; give each source a unique name`,
       );
     }
-    rootsByMount.set(mount.mountPath, mount.root);
+    rootsByMount.set(mount.mountPath, identity);
   }
 }
 

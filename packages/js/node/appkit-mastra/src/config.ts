@@ -639,10 +639,10 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * without it, a URL source is fetched directly. A source that resolves
    * through neither fails startup unless `failOnError: false`.
    *
-   * Provisioned skills are written to the Databricks user's Assistant skills
-   * folder (`/Workspace/Users/<email>/.assistant/skills`, the personal skill
-   * target) so they persist and are picked up by the built-in Assistant-skills
-   * mount. With no writable workspace, they go to a local temp dir instead.
+   * AI Tools is cached daily with `@dbx-tools/cache` and served to every
+   * auto-created workspace from the shared `/.databricks/skills` memory mount.
+   * Other sources are written to the Databricks user's Assistant skills folder
+   * when writable, with a read-only local-memory fallback.
    *
    * @example
    * ```ts
@@ -684,7 +684,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     remoteSkills: {
       type: ["string", "array", "object"],
       description:
-        'Remote Agent-Skill sources provisioned at startup: "aitools" for Databricks\' own skill set (read from the public databricks/databricks-agent-skills repo, no CLI needed), a GitHub owner/repo, a git/GitLab URL, or a direct SKILL.md/archive URL. Non-aitools sources prefer the optional `skills` npm CLI, else a direct fetch; fails startup on error unless failOnError:false. Written to the Databricks user Assistant skills folder, or read-only local backing storage exposed at stable virtual workspace mounts.',
+        'Remote Agent-Skill sources provisioned at startup: "aitools" for Databricks\' own skill set (daily @dbx-tools/cache snapshot served from the shared in-memory /.databricks/skills mount), a GitHub owner/repo, a git/GitLab URL, or a direct SKILL.md/archive URL. Non-aitools sources prefer the optional `skills` npm CLI, else a direct fetch; fails startup on error unless failOnError:false. Other sources write to the Databricks user Assistant skills folder or a read-only local-memory fallback.',
     },
     storage: {
       type: ["boolean", "object"],

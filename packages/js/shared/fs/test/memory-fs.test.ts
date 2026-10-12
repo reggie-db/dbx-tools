@@ -38,6 +38,14 @@ describe("MemoryFileSystem", () => {
     assert.equal(await fs.exists("src"), false);
   });
 
+  it("lists direct children when rooted at the virtual root", async () => {
+    const fs = new MemoryFileSystem({ root: "/" });
+    await fs.writeFile("skills/example/SKILL.md", "example");
+
+    assert.deepEqual(await fs.readdir("/"), [{ name: "skills", type: "directory" }]);
+    assert.deepEqual(await fs.readdir("skills"), [{ name: "example", type: "directory" }]);
+  });
+
   it("blocks path escapes and honors read-only", async () => {
     const fs = new MemoryFileSystem();
     assert.throws(

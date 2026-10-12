@@ -136,7 +136,7 @@ export class MemoryFileSystem extends BaseFileSystem<"memory"> {
     if (!this.dirs.has(resolvedPath)) {
       throw new FileSystemError("NOT_FOUND", `Not found: ${resolvedPath}`, resolvedPath);
     }
-    const prefix = `${resolvedPath}/`;
+    const prefix = resolvedPath === "/" ? "/" : `${resolvedPath}/`;
     const names = new Map<string, FileEntry>();
 
     for (const dir of this.dirs) {

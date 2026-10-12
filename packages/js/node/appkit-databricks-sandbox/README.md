@@ -129,9 +129,24 @@ Starting a machine provisions both services over SSH under
 routes. Opening either viewer rechecks the service and route before opening a
 new browser tab.
 
-`databricksSandboxSkillMounts()` exposes the packaged DinoTTY, Glances, and
-reverse-proxy-aware noVNC recipes at `/.dbx-tools/skills` through Mastra's
-native local-skill mount contract.
+`databricksSandboxSkillMounts()` exposes packaged DinoTTY, Glances, noVNC,
+browser speed-test, Freedoom desktop, JupyterLab, collaborative whiteboard,
+fractal explorer, particle simulation, and Web Audio synth recipes at
+`/.dbx-tools/skills`. Mastra copies the package tree into one shared read-only
+memory filesystem used by every auto-created workspace. Showcase recipes bind
+to Sandbox loopback and publish only the authenticated, user-prefixed path
+returned by `add_ssh_route`.
+
+Try these chat prompts:
+
+- “Start Doom.”
+- “Launch a speed test.”
+- “Open a browser desktop.”
+- “Start JupyterLab.”
+- “Make a collaborative whiteboard.”
+- “Show me an interactive fractal.”
+- “Launch the particle physics demo.”
+- “Open the browser synth.”
 
 ## Mastra tools
 

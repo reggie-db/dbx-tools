@@ -7,12 +7,19 @@ import { after, before, describe, it } from "node:test";
 import { osPath } from "@dbx-tools/fs";
 
 import {
+  AITOOLS_REFRESH_TTL_MS,
   AITOOLS_SOURCE,
   AITOOLS_SKILLS_MOUNT,
   normalizeRemoteSkillsOption,
   provisionRemoteSkills,
+  type LocalSkillMount,
   type RemoteSkillsMetadata,
 } from "../src/remote-skills.ts";
+
+function directoryRoot(mount: LocalSkillMount | undefined): string {
+  assert.ok(mount && "root" in mount, "expected a directory-backed skill mount");
+  return mount.root;
+}
 
 describe("normalizeRemoteSkillsOption", () => {
   it("returns undefined for missing / empty input", () => {
@@ -58,7 +65,58 @@ describe("normalizeRemoteSkillsOption", () => {
   it("exposes aitools as a plain constant callers can spell out", () => {
     assert.equal(AITOOLS_SOURCE, "aitools");
     assert.equal(AITOOLS_SKILLS_MOUNT, "/.databricks/skills");
+    assert.equal(AITOOLS_REFRESH_TTL_MS, 24 * 60 * 60 * 1000);
     assert.deepEqual(normalizeRemoteSkillsOption("aitools")?.sources, ["aitools"]);
+  });
+
+  it("serves AI Tools from the cache package through a shared memory filesystem", async () => {
+    const originalFetch = globalThis.fetch;
+    const ref = `test-${Date.now()}-${Math.random()}`;
+    let requests = 0;
+    globalThis.fetch = async (input) => {
+      requests += 1;
+      const url = String(input);
+      if (url.endsWith("/manifest.json")) {
+        return new Response(
+          JSON.stringify({
+            skills: {
+              "demo-ai-tool": { files: ["SKILL.md"], repo_dir: "skills" },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.endsWith("/skills/demo-ai-tool/SKILL.md")) {
+        return new Response(
+          "---\nname: demo-ai-tool\ndescription: Cached AI Tool\n---\n\n# Demo\n",
+          { status: 200 },
+        );
+      }
+      return new Response("Not Found", { status: 404 });
+    };
+
+    try {
+      const options = {
+        sources: [{ source: AITOOLS_SOURCE, ref }],
+        client: undefined,
+      } as const;
+      const first = await provisionRemoteSkills(options);
+      const requestCount = requests;
+      const mount = first.localSkillMounts[0];
+      assert.equal(mount?.mountPath, AITOOLS_SKILLS_MOUNT);
+      assert.ok(mount && "filesystem" in mount);
+      assert.match(
+        await mount.filesystem.readFile("demo-ai-tool/SKILL.md", { encoding: "utf8" }),
+        /name: demo-ai-tool/,
+      );
+
+      const second = await provisionRemoteSkills(options);
+      assert.equal(requests, requestCount, "the cache package suppresses a second download");
+      assert.deepEqual(second.skillNames, ["demo-ai-tool"]);
+      assert.ok(second.localSkillMounts[0] && "filesystem" in second.localSkillMounts[0]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
@@ -175,7 +233,7 @@ describe("remote skill caching", () => {
     assert.match(first.localSkillMounts[0]!.mountPath, /^\/\.skills\//);
     assert.ok(first.skillNames.length > 0);
 
-    const [entry] = Object.values(metadataAt(first.localSkillMounts[0]!.root).sources);
+    const [entry] = Object.values(metadataAt(directoryRoot(first.localSkillMounts[0])).sources);
     assert.equal(entry?.source, source);
     assert.deepEqual(entry?.skills, first.skillNames);
     // Recent enough that a restart within the window reuses it.
@@ -183,10 +241,14 @@ describe("remote skill caching", () => {
   });
 
   it("reuses the provisioned tree on the next boot instead of downloading again", async () => {
-    const before = downloadedAt(first.localSkillMounts[0]!.root);
+    const before = downloadedAt(directoryRoot(first.localSkillMounts[0]));
     const result = await provisionRemoteSkills({ sources: [source], client: undefined });
 
-    assert.equal(downloadedAt(first.localSkillMounts[0]!.root), before, "nothing re-provisioned");
+    assert.equal(
+      downloadedAt(directoryRoot(first.localSkillMounts[0])),
+      before,
+      "nothing re-provisioned",
+    );
     // A cache hit still has to report what a download would have, or the agent
     // silently loses the skills it had on the previous boot.
     assert.deepEqual(result.skillNames, first.skillNames);
@@ -194,7 +256,7 @@ describe("remote skill caching", () => {
   });
 
   it("reuses a six-day-old provisioned tree under the default policy", async () => {
-    const root = first.localSkillMounts[0]!.root;
+    const root = directoryRoot(first.localSkillMounts[0]);
     const metadata = metadataAt(root);
     const aged = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
     for (const entry of Object.values(metadata.sources)) entry.downloadedAt = aged;
@@ -206,7 +268,7 @@ describe("remote skill caching", () => {
   });
 
   it("downloads again once the recorded timestamp falls outside the window", async () => {
-    const root = first.localSkillMounts[0]!.root;
+    const root = directoryRoot(first.localSkillMounts[0]);
     const metadata = metadataAt(root);
     const aged = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
     for (const entry of Object.values(metadata.sources)) entry.downloadedAt = aged;
@@ -218,7 +280,7 @@ describe("remote skill caching", () => {
   });
 
   it("honors refreshTtlMs: 0 as download on every boot", async () => {
-    const root = first.localSkillMounts[0]!.root;
+    const root = directoryRoot(first.localSkillMounts[0]);
     const before = downloadedAt(root);
     await provisionRemoteSkills({ sources: [source], client: undefined, refreshTtlMs: 0 });
     const between = downloadedAt(root);
@@ -238,7 +300,7 @@ describe("remote skill caching", () => {
     });
     assert.notDeepEqual(result.localSkillMounts, first.localSkillMounts, "its own tree");
 
-    const [entry] = Object.values(metadataAt(result.localSkillMounts[0]!.root).sources);
+    const [entry] = Object.values(metadataAt(directoryRoot(result.localSkillMounts[0])).sources);
     assert.deepEqual(entry?.policy, { skills: ["demo-skill"] });
   });
 
@@ -252,7 +314,7 @@ describe("remote skill caching", () => {
   });
 
   it("re-downloads rather than failing when the record is corrupt", async () => {
-    const root = first.localSkillMounts[0]!.root;
+    const root = directoryRoot(first.localSkillMounts[0]);
     writeFileSync(join(root, ".metadata.json"), "{ not json");
 
     const result = await provisionRemoteSkills({ sources: [source], client: undefined });
