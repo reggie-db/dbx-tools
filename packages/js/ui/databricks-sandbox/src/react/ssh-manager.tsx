@@ -68,7 +68,6 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   const [busyOperations, setBusyOperations] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState<string>();
   const [machineId, setMachineId] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<SshMachine>();
   const [resetTarget, setResetTarget] = useState<SshProject>();
   const [projectFormOpen, setProjectFormOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -77,6 +76,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   const [openPath, setOpenPath] = useState("");
   const [stripPrefix, setStripPrefix] = useState(true);
   const refreshing = useRef(false);
+  const deletingMachineIds = useRef(new Set<string>());
 
   const setOperationBusy = useCallback((operation: string, busy: boolean) => {
     setBusyOperations((current) => {
@@ -104,14 +104,20 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
           client.listMachines(),
           client.listProjects(),
         ]);
+        const visibleMachines = machineResponse.machines.filter(
+          (machine) => !deletingMachineIds.current.has(machine.id),
+        );
+        const visibleProjects = projectResponse.projects.filter(
+          (project) => !deletingMachineIds.current.has(project.machineId),
+        );
         setSupported(machineResponse.supported);
-        setMachines(machineResponse.machines);
-        setProjects(projectResponse.projects);
+        setMachines(visibleMachines);
+        setProjects(visibleProjects);
         setProjectPathPrefix(projectResponse.pathPrefix);
         setMachineId((current) =>
-          current && machineResponse.machines.some((machine) => machine.id === current)
+          current && visibleMachines.some((machine) => machine.id === current)
             ? current
-            : (machineResponse.machines[0]?.id ?? ""),
+            : (visibleMachines[0]?.id ?? ""),
         );
       } catch (caught) {
         setError(errorMessage(caught));
@@ -167,18 +173,25 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     }
   };
 
-  const deleteMachine = async () => {
-    if (!deleteTarget) return;
-    const operation = machineOperation(deleteTarget.id, "delete");
+  const deleteMachine = async (machine: SshMachine) => {
+    const operation = machineOperation(machine.id, "delete");
     setOperationBusy(operation, true);
     setError(undefined);
+    deletingMachineIds.current.add(machine.id);
+    setMachines((current) => {
+      const remaining = current.filter((candidate) => candidate.id !== machine.id);
+      setMachineId((selected) => (selected === machine.id ? (remaining[0]?.id ?? "") : selected));
+      return remaining;
+    });
+    setProjects((current) => current.filter((project) => project.machineId !== machine.id));
     try {
-      await client.delete(deleteTarget.id);
-      setDeleteTarget(undefined);
-      await refresh();
+      await client.delete(machine.id);
     } catch (caught) {
+      deletingMachineIds.current.delete(machine.id);
       setError(errorMessage(caught));
+      await refresh();
     } finally {
+      deletingMachineIds.current.delete(machine.id);
       setOperationBusy(operation, false);
     }
   };
@@ -288,7 +301,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-foreground"
         >
           {error}
         </div>
@@ -334,25 +347,27 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                   {machines.map((machine) => (
                     <div
                       key={machine.id}
-                      className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-3 py-2 sm:flex-nowrap sm:px-4"
+                      className="grid gap-2.5 px-3 py-2.5 sm:px-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center"
                     >
-                      <span
-                        className={cn(
-                          "size-2.5 shrink-0 rounded-full",
-                          statusColor(machine.status),
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate text-sm font-medium">{machine.name}</span>
-                          <Badge variant="secondary">{machine.status}</Badge>
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <span
+                          className={cn(
+                            "mt-1.5 size-2.5 shrink-0 rounded-full",
+                            statusColor(machine.status),
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate text-sm font-medium">{machine.name}</span>
+                            <Badge variant="secondary">{machine.status}</Badge>
+                          </div>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {machine.id} · expires {formatExpiration(machine.expiresAt)} ·{" "}
+                            {machine.projects.length} projects
+                          </p>
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {machine.id} · expires {formatExpiration(machine.expiresAt)} ·{" "}
-                          {machine.projects.length} projects
-                        </p>
                       </div>
-                      <div className="flex w-full shrink-0 items-center justify-end gap-1 overflow-x-auto sm:w-auto sm:overflow-visible">
+                      <div className="flex flex-wrap items-center gap-1 pl-5 xl:justify-end xl:pl-0">
                         {isMachineBusy(machine.id) ? <Spinner className="mr-1 size-4" /> : null}
                         {machine.canStart ? (
                           <Button
@@ -361,7 +376,10 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                             className="shrink-0 px-2 sm:px-3"
                             aria-label={`Start ${machine.name}`}
                             title="Start"
-                            disabled={isMachineBusy(machine.id)}
+                            disabled={
+                              isBusy(machineOperation(machine.id, "start")) ||
+                              isBusy(machineOperation(machine.id, "delete"))
+                            }
                             onClick={() => void manageMachine(machine, "start")}
                           >
                             <PlayIcon className="size-3.5" />
@@ -375,7 +393,10 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                             className="shrink-0 px-2 sm:px-3"
                             aria-label={`Stop ${machine.name}`}
                             title="Stop"
-                            disabled={isMachineBusy(machine.id)}
+                            disabled={
+                              isBusy(machineOperation(machine.id, "stop")) ||
+                              isBusy(machineOperation(machine.id, "delete"))
+                            }
                             onClick={() => void manageMachine(machine, "stop")}
                           >
                             <SquareIcon className="size-3.5" />
@@ -390,8 +411,6 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           title="Desktop"
                           disabled={
                             isBusy(machineOperation(machine.id, "desktop")) ||
-                            isBusy(machineOperation(machine.id, "start")) ||
-                            isBusy(machineOperation(machine.id, "stop")) ||
                             isBusy(machineOperation(machine.id, "delete"))
                           }
                           onClick={() => void openService(machine, "desktop")}
@@ -411,8 +430,6 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           title="Terminal"
                           disabled={
                             isBusy(machineOperation(machine.id, "terminal")) ||
-                            isBusy(machineOperation(machine.id, "start")) ||
-                            isBusy(machineOperation(machine.id, "stop")) ||
                             isBusy(machineOperation(machine.id, "delete"))
                           }
                           onClick={() => void openService(machine, "terminal")}
@@ -432,8 +449,6 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           title="Stats"
                           disabled={
                             isBusy(machineOperation(machine.id, "stats")) ||
-                            isBusy(machineOperation(machine.id, "start")) ||
-                            isBusy(machineOperation(machine.id, "stop")) ||
                             isBusy(machineOperation(machine.id, "delete"))
                           }
                           onClick={() => void openService(machine, "stats")}
@@ -451,8 +466,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           className="shrink-0 px-2 text-destructive hover:text-destructive sm:px-3"
                           aria-label={`Delete ${machine.name}`}
                           title="Delete"
-                          disabled={isMachineBusy(machine.id)}
-                          onClick={() => setDeleteTarget(machine)}
+                          onClick={() => void deleteMachine(machine)}
                         >
                           <Trash2Icon className="size-3.5" />
                           <span className="hidden sm:inline">Delete</span>
@@ -687,52 +701,6 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
           </Card>
         </div>
       )}
-
-      <AlertDialog
-        open={Boolean(deleteTarget)}
-        onOpenChange={(open) => {
-          if (!open && (!deleteTarget || !isBusy(machineOperation(deleteTarget.id, "delete")))) {
-            setDeleteTarget(undefined);
-          }
-        }}
-      >
-        <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this sandbox?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTarget
-                ? `${deleteTarget.name} and its persistent files will be permanently deleted.`
-                : "This sandbox and its persistent files will be permanently deleted."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={Boolean(
-                deleteTarget && isBusy(machineOperation(deleteTarget.id, "delete")),
-              )}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={Boolean(
-                deleteTarget && isBusy(machineOperation(deleteTarget.id, "delete")),
-              )}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(event) => {
-                event.preventDefault();
-                void deleteMachine();
-              }}
-            >
-              {deleteTarget && isBusy(machineOperation(deleteTarget.id, "delete")) ? (
-                <Spinner className="size-3.5" />
-              ) : (
-                <Trash2Icon className="size-3.5" />
-              )}
-              Delete sandbox
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog
         open={Boolean(resetTarget)}

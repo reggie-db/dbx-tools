@@ -41,7 +41,7 @@ export { BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE, BUN_APP_OVERRIDES, RootBunfigFile
 export { BUN_VERSION } from "./src/bun-workflow.ts";
 export { DBXToolsConfigDataSchema, DBXToolsConfig } from "./src/dbx-tools-config.ts";
 export type { DBXToolsConfigOptions, DBXToolsConfigData } from "./src/dbx-tools-config.ts";
-export { DEV_WATCH_TASK, DEV_WATCH_SCRIPT, DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY, SERVER_WATCH_DISABLED_ENV } from "./src/dev-watch.ts";
+export { DEV_WATCH_TASK, DEV_WATCH_SCRIPT, DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY } from "./src/dev-watch.ts";
 export { resolvePkgRoot } from "./src/engine-root.ts";
 export { PYTHON_GENERATED_PACKAGE, PYTHON_SYNC_PACKAGE } from "./src/generated.ts";
 export type { HeaderOpts } from "./src/generated.ts";

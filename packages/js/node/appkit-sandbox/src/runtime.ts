@@ -100,6 +100,7 @@ export class SshRuntime {
   private ownership?: LakebaseMachineOwnershipStore;
   private readonly services = new Map<string, SshMachineService>();
   private readonly startingServices = new Map<string, Promise<SshMachineService>>();
+  private readonly machineTransitions = new Map<string, Promise<SandboxEntry>>();
   private readonly machineEpochs = new Map<string, number>();
   private readonly ownerEpochs = new Map<string, number>();
   private readonly machineSetup = new Map<string, Promise<void>>();
@@ -289,10 +290,7 @@ export class SshRuntime {
   ): Promise<SshMachine> {
     const api = new DatabricksSandboxClient(client);
     const owned = await this.requireOwnedMachine(api, userId, machineId, signal);
-    const current = owned.entry;
-    const updated =
-      normalizeStatus(current.status) === "running" ? current : await api.start(machineId, signal);
-    const final = await waitForStatus(api, machineId, "running", updated, signal);
+    const final = await this.convergeMachine(api, machineId, "running", owned.entry, signal);
     await Promise.allSettled(
       (["terminal", "stats"] as const).map((service) =>
         this.startService(client, userId, { machineId, service }, signal),
@@ -375,11 +373,9 @@ export class SshRuntime {
   ): Promise<SshMachine> {
     const api = new DatabricksSandboxClient(client);
     const owned = await this.requireOwnedMachine(api, userId, machineId, signal);
-    const current = owned.entry;
-    const updated =
-      normalizeStatus(current.status) === "stopped" ? current : await api.stop(machineId, signal);
-    const final = await waitForStatus(api, machineId, "stopped", updated, signal);
-    await this.clearMachineRuntime(api.workspaceScope(), machineId);
+    const final = await this.convergeMachine(api, machineId, "stopped", owned.entry, signal, () =>
+      this.clearMachineRuntime(api.workspaceScope(), machineId),
+    );
     await this.assertAssigned(api.workspaceScope(), userId, machineId);
     const projects = await this.ownershipStore().listProjects(api.workspaceScope(), {
       userId,
@@ -426,11 +422,11 @@ export class SshRuntime {
     const request = sshMachineServiceActionSchema.parse(input);
     const api = new DatabricksSandboxClient(client);
     const workspaceScope = api.workspaceScope();
-    await this.assertAssigned(workspaceScope, userId, request.machineId);
-    const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
+    const owned = await this.requireOwnedMachine(api, userId, request.machineId, signal);
     const key = serviceKey(workspaceScope, userId, request.machineId, request.service);
     const current = this.services.get(key);
     if (
+      normalizeStatus(owned.entry.status) === "running" &&
       current?.state === "ready" &&
       this.routes
         .list(request.machineId, userId, { includeInternal: true })
@@ -447,16 +443,11 @@ export class SshRuntime {
       state: "starting",
     };
     this.services.set(key, starting);
-    const operation = this.provisionService(
-      client,
-      userId,
-      request,
-      starting,
-      epoch,
-      signal,
-    ).finally(() => {
-      this.startingServices.delete(key);
-    });
+    const operation = this.provisionService(client, userId, request, starting, signal).finally(
+      () => {
+        this.startingServices.delete(key);
+      },
+    );
     this.startingServices.set(key, operation);
     return operation;
   }
@@ -474,8 +465,8 @@ export class SshRuntime {
     const request = sshCommandRequestSchema.parse(input);
     const api = new DatabricksSandboxClient(client);
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
-    const epoch = this.runtimeEpoch(api.workspaceScope(), userId, request.machineId);
     const machine = await this.ensureRunning(api, userId, request.machineId, signal);
+    const epoch = this.runtimeEpoch(api.workspaceScope(), userId, request.machineId);
     const timeoutMs = request.timeoutMs ?? this.config.commandTimeoutMs;
     const session = await this.ensureSession(client, userId, machine, epoch, signal);
     await this.ensureMachineSoftware(api.workspaceScope(), request.machineId, session, signal);
@@ -547,8 +538,8 @@ export class SshRuntime {
     const config = request.config ?? existing?.config ?? {};
     const path = `${this.routes.userPathPrefix(userId)}/${projectPath}`;
     const miseToml = renderProjectMiseConfig(config, { name, path, port });
-    const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
     const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
+    const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
     const session = await this.ensureSession(client, userId, machine, epoch, signal);
     await this.ensureMachineSoftware(workspaceScope, request.machineId, session, signal);
     await this.restoreMachineProjects(client, api, userId, machine, signal);
@@ -636,29 +627,27 @@ export class SshRuntime {
     if (!project) return false;
     const owned = await this.requireOwnedMachine(api, userId, project.machineId, signal);
     const wasRunning = normalizeStatus(owned.entry.status) === "running";
-    const machine = wasRunning
-      ? owned.entry
-      : await waitForStatus(
-          api,
-          project.machineId,
-          "running",
-          await api.start(project.machineId, signal),
-          signal,
-        );
+    const machine = await this.convergeMachine(
+      api,
+      project.machineId,
+      "running",
+      owned.entry,
+      signal,
+    );
     try {
       const epoch = this.runtimeEpoch(workspaceScope, userId, project.machineId);
       const session = await this.ensureSession(client, userId, machine, epoch, signal);
       await this.removeProjectDirectory(session, project.projectPath, signal);
     } finally {
       if (!wasRunning) {
-        await waitForStatus(
+        await this.convergeMachine(
           api,
           project.machineId,
           "stopped",
-          await api.stop(project.machineId, signal),
+          await api.get(project.machineId),
           signal,
+          () => this.clearMachineRuntime(workspaceScope, project.machineId),
         );
-        await this.clearMachineRuntime(workspaceScope, project.machineId);
       }
     }
     await this.routes.remove(projectId, userId);
@@ -678,15 +667,13 @@ export class SshRuntime {
     if (!project) throw new Error(`Sandbox project ${projectId} was not found`);
     const owned = await this.requireOwnedMachine(api, userId, project.machineId, signal);
     const wasRunning = normalizeStatus(owned.entry.status) === "running";
-    const machine = wasRunning
-      ? owned.entry
-      : await waitForStatus(
-          api,
-          project.machineId,
-          "running",
-          await api.start(project.machineId, signal),
-          signal,
-        );
+    const machine = await this.convergeMachine(
+      api,
+      project.machineId,
+      "running",
+      owned.entry,
+      signal,
+    );
     let reset: SshProject | undefined;
     try {
       const epoch = this.runtimeEpoch(workspaceScope, userId, project.machineId);
@@ -710,14 +697,14 @@ export class SshRuntime {
       reset = this.toProject(updated, wasRunning);
     } finally {
       if (!wasRunning) {
-        await waitForStatus(
+        await this.convergeMachine(
           api,
           project.machineId,
           "stopped",
-          await api.stop(project.machineId, signal),
+          await api.get(project.machineId),
           signal,
+          () => this.clearMachineRuntime(workspaceScope, project.machineId),
         );
-        await this.clearMachineRuntime(workspaceScope, project.machineId);
       }
     }
     if (!reset) throw new Error(`Sandbox project ${projectId} reset did not complete`);
@@ -966,8 +953,39 @@ export class SshRuntime {
         `SSH machine ${machineId} is ${current.status}; start it explicitly because auto is false`,
       );
     }
-    const started = await api.start(machineId, signal);
-    return waitForStatus(api, machineId, "running", started, signal);
+    return this.convergeMachine(api, machineId, "running", current, signal);
+  }
+
+  private async convergeMachine(
+    api: DatabricksSandboxClient,
+    machineId: string,
+    expected: "running" | "stopped",
+    current: SandboxEntry,
+    signal?: AbortSignal,
+    after?: () => Promise<void>,
+  ): Promise<SandboxEntry> {
+    const key = machineRuntimeKey(api.workspaceScope(), machineId);
+    const previous = this.machineTransitions.get(key);
+    const operation = (async () => {
+      let entry = current;
+      if (previous) {
+        await previous.catch(() => undefined);
+        entry = await api.get(machineId, signal);
+      }
+      const entryAtExpected =
+        expected === "running"
+          ? ensureMachineStarted(api, machineId, entry, signal)
+          : ensureMachineStopped(api, machineId, entry, signal);
+      const result = await entryAtExpected;
+      await after?.();
+      return result;
+    })();
+    this.machineTransitions.set(key, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.machineTransitions.get(key) === operation) this.machineTransitions.delete(key);
+    }
   }
 
   private async ensureSession(
@@ -1202,12 +1220,12 @@ export class SshRuntime {
     userId: string,
     request: SshMachineServiceAction,
     starting: SshMachineService,
-    epoch: RuntimeEpoch,
     signal?: AbortSignal,
   ): Promise<SshMachineService> {
     const api = new DatabricksSandboxClient(client);
     const workspaceScope = api.workspaceScope();
     const key = serviceKey(workspaceScope, userId, request.machineId, request.service);
+    let epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
     logger.info("SSH machine service provisioning started", {
       userId,
       machineId: request.machineId,
@@ -1216,8 +1234,8 @@ export class SshRuntime {
     });
     try {
       await this.assertAssigned(workspaceScope, userId, request.machineId);
-      this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
       const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
+      epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
       const session = await this.ensureSession(client, userId, machine, epoch, signal);
       await this.ensureMachineSoftware(workspaceScope, request.machineId, session, signal);
       await this.restoreMachineProjects(client, api, userId, machine, signal);
@@ -1373,7 +1391,7 @@ export class SshRuntime {
           },
       ),
       canStart: status === "stopped" || status === "unknown" || status === "error",
-      canStop: status === "running" || status === "starting",
+      canStop: status === "running" || status === "starting" || status === "stopping",
       canConnect: Boolean(entry.gatewayHost) && status === "running",
     };
   }
@@ -1498,10 +1516,44 @@ async function waitForStatus(
     if (Date.now() >= deadline) {
       throw new Error(`Timed out waiting for ${machineId} to become ${expected}`);
     }
-    await asyncUtils.sleep(POLL_INTERVAL_MS, signal);
     entry = await api.get(machineId, signal);
+    if (normalizeStatus(entry.status) !== expected) {
+      await asyncUtils.sleep(POLL_INTERVAL_MS, signal);
+    }
   }
   return entry;
+}
+
+async function ensureMachineStarted(
+  api: DatabricksSandboxClient,
+  machineId: string,
+  current: SandboxEntry,
+  signal?: AbortSignal,
+): Promise<SandboxEntry> {
+  let entry = current;
+  const status = normalizeStatus(entry.status);
+  if (status === "running") return entry;
+  if (status === "starting") return waitForStatus(api, machineId, "running", entry, signal);
+  if (status === "stopping") {
+    entry = await waitForStatus(api, machineId, "stopped", entry, signal);
+  }
+  return waitForStatus(api, machineId, "running", await api.start(machineId, signal), signal);
+}
+
+async function ensureMachineStopped(
+  api: DatabricksSandboxClient,
+  machineId: string,
+  current: SandboxEntry,
+  signal?: AbortSignal,
+): Promise<SandboxEntry> {
+  let entry = current;
+  const status = normalizeStatus(entry.status);
+  if (status === "stopped") return entry;
+  if (status === "stopping") return waitForStatus(api, machineId, "stopped", entry, signal);
+  if (status === "starting") {
+    entry = await waitForStatus(api, machineId, "running", entry, signal);
+  }
+  return waitForStatus(api, machineId, "stopped", await api.stop(machineId, signal), signal);
 }
 
 function normalizeStatus(value: string): SshMachine["status"] {

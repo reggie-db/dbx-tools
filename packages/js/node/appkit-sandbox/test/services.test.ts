@@ -56,15 +56,24 @@ describe("ensureSshService", () => {
 
     const target = await ensureSshService(session, "desktop", "/sandbox/desktop/machine", 1_000);
 
-    assert.match(script, /tigervnc-standalone-server/);
-    assert.match(script, /websockify --web=\/usr\/share\/novnc 127\.0\.0\.1:6080/);
-    assert.match(script, /-localhost yes -SecurityTypes None/);
+    assert.match(script, /noble-amd64\) package_checksum=/);
+    assert.match(script, /package_name="kasmvncserver_\$\{codename\}_1\.5\.0_\$architecture\.deb"/);
+    assert.match(script, /f599fe02e2175b9817b6165f74a5d2bebdc73118dde9181ba3410963bed7ae1e/);
+    assert.match(script, /kasmvncserver :20 -fg/);
+    assert.match(script, /-websocketPort 6080/);
+    assert.match(script, /-disableBasicAuth -SecurityTypes None/);
+    assert.match(script, /allow_resize: true/);
+    assert.doesNotMatch(script, /tigervnc-standalone-server|websockify --web|\/usr\/share\/novnc/);
     assert.match(script, /dbx-tools-wallpaper\.svg/);
     assert.match(script, /epiphany-browser/);
     assert.match(script, /org\.gnome\.Epiphany\.desktop/);
+    assert.match(script, /xfce4-panel/);
+    assert.match(script, /xfdesktop/);
+    assert.match(script, /xfwm4/);
+    assert.match(script, /dbus-run-session -- startxfce4/);
+    assert.match(script, /Xfce desktop session did not become ready/);
     assert.match(script, /urllib\.request\.urlopen/);
-    assert.match(script, /noVNC web client did not become ready/);
-    assert.match(script, /feh --no-fehbg --bg-scale/);
+    assert.match(script, /KasmVNC web client did not become ready/);
     const encodedWallpaper = script.match(/printf %s '([^']+)' \| base64 -d/)?.[1];
     assert.ok(encodedWallpaper);
     const wallpaper = Buffer.from(encodedWallpaper, "base64").toString("utf8");
@@ -83,13 +92,14 @@ describe("ensureSshService", () => {
       new RegExp(dbxToolsAssetSvg.logoDark.match(/<path d="([^"]+)"/)?.[1] ?? "$^"),
     );
     assert.doesNotMatch(wallpaper, /M24 27h50v12/);
+    assert.doesNotMatch(wallpaper, /BUILD · TEST · EXPLORE/);
     assert.match(script, /version_file/);
     assert.equal(target.remotePort, 6080);
     assert.equal(target.stripPrefix, true);
     assert.equal(target.redirectToSlash, true);
     assert.equal(
       target.openUrl,
-      "/sandbox/desktop/machine/vnc.html?autoconnect=1&resize=remote&show_dot=1&keep_device_awake=1&path=sandbox%2Fdesktop%2Fmachine%2Fwebsockify",
+      "/sandbox/desktop/machine/?autoconnect=1&resize=remote&show_dot=1&path=sandbox%2Fdesktop%2Fmachine%2Fwebsockify",
     );
   });
 

@@ -6,8 +6,8 @@ description: Launch the redistributable Freedoom game in the built-in browser de
 # Freedoom Desktop
 
 Reuse an assigned Sandbox. Call `start_ssh_machine_service` with
-`service: "desktop"` before game setup. Do not install or configure TigerVNC,
-noVNC, websockify, a window manager, a VNC password, or another desktop route.
+`service: "desktop"` before game setup. Do not install or configure KasmVNC,
+another VNC server, a window manager, a VNC password, or another desktop route.
 The built-in service owns those concerns and returns the desktop `openUrl`.
 
 Call `add_ssh_project` with `name: "freedoom-desktop"` before using

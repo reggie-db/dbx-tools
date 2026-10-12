@@ -1,18 +1,14 @@
 #!/usr/bin/env -S bun
 /** Restart a development command after relevant workspace changes settle. */
 import { isAbsolute, relative, resolve } from "node:path";
+import { serializeArgs } from "@dbx-tools/cli-args";
 import * as exec from "@dbx-tools/core/exec";
 import { watch as pathWatch } from "@dbx-tools/path";
 import { errorUtils, log } from "@dbx-tools/shared-core";
 import { CommanderError } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand, taskPositionals } from "./cli.ts";
-import {
-  DEV_RESTART_DEBOUNCE_MS,
-  DEV_RESTART_KEY,
-  DEV_WATCH_TASK,
-  SERVER_WATCH_DISABLED_ENV,
-} from "../src/dev-watch.ts";
+import { DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY, DEV_WATCH_TASK } from "../src/dev-watch.ts";
 import {
   readPackageManifest,
   recordedPackages,
@@ -22,14 +18,6 @@ import {
 
 const logger = log.logger("projen:dev-watch");
 const SHUTDOWN_TIMEOUT_MS = 2_000;
-
-export interface DevWatchOptions {
-  readonly command: readonly string[];
-  readonly debounceMs: number;
-  readonly restartKey: string;
-  /** When true, run the command once and skip file-change restarts. */
-  readonly serverWatchDisabled: boolean;
-}
 
 export const DevWatchOptionsSchema = z.object({
   debounceMs: z.coerce
@@ -43,12 +31,22 @@ export const DevWatchOptionsSchema = z.object({
     .refine((value) => Array.from(value).length === 1, "Restart key must be exactly one character")
     .default(DEV_RESTART_KEY)
     .describe("Interactive immediate-restart key"),
-  serverWatchDisabled: z
-    .boolean()
-    .default(false)
-    .describe("Run the command once without watching")
-    .meta({ env: SERVER_WATCH_DISABLED_ENV }),
+  watchInclude: z
+    .array(z.string())
+    .default([])
+    .describe("Glob patterns to watch; replaces the default workspace-package directories")
+    .meta({ env: "DEV_WATCH_INCLUDE", short: "i" }),
+  watchExclude: z
+    .array(z.string())
+    .default([])
+    .describe("Glob patterns to ignore after the include set is chosen")
+    .meta({ env: "DEV_WATCH_EXCLUDE", short: "e" }),
 });
+
+/** Parsed watcher flags plus the pass-through command argv. */
+export type DevWatchOptions = z.output<typeof DevWatchOptionsSchema> & {
+  readonly command: readonly string[];
+};
 
 interface WorkspacePackage {
   readonly dir: string;
@@ -76,13 +74,44 @@ export function parseDevWatchOptions(args: readonly string[]): DevWatchOptions {
     .parse([...args], { from: "user" });
   const options = parsedTaskOptions(program, DevWatchOptionsSchema);
   const [command, commandArgs = []] = taskPositionals(program) as [string, string[]?];
-  if (options.serverWatchDisabled) process.env[SERVER_WATCH_DISABLED_ENV] = "1";
   return {
+    ...options,
     command: [command, ...commandArgs],
-    debounceMs: options.debounceMs,
-    restartKey: options.restartKey,
-    serverWatchDisabled: options.serverWatchDisabled,
   };
+}
+
+/**
+ * Parse `--watch-include` / `--watch-exclude` from argv that may contain unrelated
+ * tokens (the root demo forwards only these flags into `dev:watch`).
+ */
+export function parseWatchGlobOptions(
+  args: readonly string[],
+): Pick<DevWatchOptions, "watchInclude" | "watchExclude"> {
+  const program = taskCommand(
+    import.meta.url,
+    "Restart a development command after watched changes settle",
+    DevWatchOptionsSchema,
+  )
+    .name(DEV_WATCH_TASK)
+    .exitOverride()
+    .allowUnknownOption(true)
+    .allowExcessArguments(true)
+    .parse([...args], { from: "user" });
+  const options = parsedTaskOptions(program, DevWatchOptionsSchema);
+  return {
+    watchInclude: options.watchInclude,
+    watchExclude: options.watchExclude,
+  };
+}
+
+/** Serialize include/exclude globs as Commander flags for a nested `dev:watch`. */
+export function serializedWatchGlobArgs(
+  options: Pick<DevWatchOptions, "watchInclude" | "watchExclude">,
+): string[] {
+  return serializeArgs({
+    watchInclude: options.watchInclude,
+    watchExclude: options.watchExclude,
+  });
 }
 
 function containsPath(parent: string, candidate: string): boolean {
@@ -156,6 +185,23 @@ export function devWatchDirectories(
   return dependencies.length > 0 ? dependencies : [owner.dir];
 }
 
+/**
+ * Choose watch paths for {@link pathWatch.watchFiles}.
+ * Default workspace-package directories apply until `--watch-include` is set;
+ * `--watch-exclude` is always passed through as ignore globs.
+ */
+export function devWatchTargets(
+  command: readonly string[],
+  cwd: string,
+  include: readonly string[] = [],
+  exclude: readonly string[] = [],
+): { paths: readonly string[]; ignore: readonly string[] } {
+  return {
+    paths: include.length > 0 ? [...include] : devWatchDirectories(command, cwd),
+    ignore: [...exclude],
+  };
+}
+
 /** Compare one raw terminal character with the configured restart key. */
 export function isRestartKey(key: string, restartKey: string): boolean {
   return key === restartKey || key.toLocaleLowerCase() === restartKey.toLocaleLowerCase();
@@ -172,22 +218,13 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     return;
   }
   const cwd = process.cwd();
-  if (options.serverWatchDisabled) {
-    logger.info(`${SERVER_WATCH_DISABLED_ENV} is set; running without file watching`);
-    const [command, ...commandArgs] = options.command;
-    const { exitCode } = await exec.spawn(command!, commandArgs, {
-      cwd,
-      stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
-      check: false,
-    });
-    if (exitCode !== 0) process.exitCode = exitCode;
-    return;
-  }
-
   const root = resolveRepoRoot(cwd);
-  const watchDirectories = devWatchDirectories(options.command, cwd);
+  const { paths: watchPaths, ignore: watchIgnore } = devWatchTargets(
+    options.command,
+    cwd,
+    options.watchInclude,
+    options.watchExclude,
+  );
   const commandLabel = options.command.map((part) => JSON.stringify(part)).join(" ");
   let child: exec.ChildProcessResult | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -195,9 +232,13 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   let restarting = false;
   let stopping = false;
 
-  const watcher = await pathWatch.watchFiles(watchDirectories, {
+  const watcher = await pathWatch.watchFiles([...watchPaths], {
     cwd: root,
+    ignore: watchIgnore.length > 0 ? [...watchIgnore] : undefined,
     ignoreInitial: true,
+    ignoreOptions: {
+      git: true,
+    },
   });
 
   async function stopChild(): Promise<void> {
@@ -273,9 +314,10 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   watcher.on("all", scheduleRestart);
   watcher.on("error", (err) => logger.error("watcher error", { error: errorUtils.toError(err) }));
   watcher.on("ready", () => {
-    const packages = watchDirectories.length;
+    const count = watchPaths.length;
+    const source = options.watchInclude.length > 0 ? "include glob" : "workspace directory";
     logger.info(
-      `watching ${packages} workspace ${packages === 1 ? "directory" : "directories"} with ${options.debounceMs}ms restart debounce`,
+      `watching ${count} ${source}${count === 1 ? "" : "s"} with ${options.debounceMs}ms restart debounce`,
     );
     logger.info(`press ${JSON.stringify(options.restartKey)} to restart; Ctrl-C to stop`);
   });

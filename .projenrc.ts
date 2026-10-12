@@ -1461,8 +1461,9 @@ for (const task of [SCOPE, "dbx"]) {
 
 // Run the Bun client HMR server and AppKit backend with the shared local
 // environment. Both JavaScript apps are workspace members, so there is no nested
-// projen synth or registry install. `--no-server-watch` leaves client HMR active
-// while keeping the backend, sidecars, and authenticated tunnel stable.
+// projen synth or registry install. `--watch-exclude '**'` leaves client HMR
+// active while keeping the backend, sidecars, and authenticated tunnel stable.
+// `--watch-include` replaces the default workspace-package watch set.
 // `.env` is the committed-shape local secret file; `.env.local` optionally
 // overlays it. Both `--env-file` flags are missing-file tolerant under bun, so
 // a laptop with only `.env` still supplies the email plugin's SMTP settings.

@@ -185,7 +185,7 @@ function assignment(
   };
 }
 
-function sandboxClient(initial: SandboxEntry[]) {
+function sandboxClient(initial: SandboxEntry[], transitions: Record<string, SandboxEntry[]> = {}) {
   const entries = new Map(initial.map((entry) => [entry.sandboxId, entry]));
   const requests: Array<Record<string, unknown>> = [];
   const client = {
@@ -222,6 +222,8 @@ function sandboxClient(initial: SandboxEntry[]) {
           entries.set(machineId, updated);
           return updated;
         }
+        const transition = transitions[machineId]?.shift();
+        if (transition) entries.set(machineId, transition);
         return current;
       },
     },
@@ -672,6 +674,57 @@ describe("managed Sandbox ownership", () => {
 
     assert.deepEqual(await ssh.deleteMachine(client, "user-a", "owned"), { deleted: true });
     assert.deepEqual(store.projects, []);
+  });
+
+  it("converges lifecycle requests across starting and stopping states", async () => {
+    const now = Date.now();
+    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
+    const stopping = { sandboxId: "owned", status: "STOPPING", name: managedName };
+    const stopped = { ...stopping, status: "STOPPED" };
+    const startClient = sandboxClient([stopping], { owned: [stopped] });
+    const ssh = runtime(store, { machineSoftware: [] });
+    Object.defineProperty(ssh, "startService", {
+      value: async (_client: WorkspaceClient, _userId: string, input: { service: string }) => ({
+        kind: input.service,
+        path: `/sandbox/${input.service}/owned`,
+        openUrl: `/sandbox/${input.service}/owned`,
+        state: "ready",
+      }),
+    });
+
+    assert.equal((await ssh.startMachine(startClient.client, "user-a", "owned")).status, "running");
+    assert.ok(
+      startClient.requests.some((request) => String(request.path).endsWith("/owned/start")),
+    );
+
+    const starting = { sandboxId: "owned", status: "STARTING", name: managedName };
+    const running = { ...starting, status: "RUNNING" };
+    const stopClient = sandboxClient([starting], { owned: [running] });
+    assert.equal((await ssh.stopMachine(stopClient.client, "user-a", "owned")).status, "stopped");
+    assert.ok(stopClient.requests.some((request) => String(request.path).endsWith("/owned/stop")));
+
+    const stoppingAgain = { sandboxId: "owned", status: "STOPPING", name: managedName };
+    const idempotentClient = sandboxClient([stoppingAgain], { owned: [stopped] });
+    assert.equal(
+      (await ssh.stopMachine(idempotentClient.client, "user-a", "owned")).status,
+      "stopped",
+    );
+    assert.equal(
+      idempotentClient.requests.filter((request) => String(request.path).endsWith("/owned/stop"))
+        .length,
+      0,
+    );
+
+    const queuedClient = sandboxClient([
+      { sandboxId: "owned", status: "RUNNING", name: managedName },
+    ]);
+    const stop = ssh.stopMachine(queuedClient.client, "user-a", "owned");
+    const restart = ssh.startMachine(queuedClient.client, "user-a", "owned");
+    assert.equal((await stop).status, "stopped");
+    assert.equal((await restart).status, "running");
+    assert.equal(queuedClient.entries.get("owned")?.status, "RUNNING");
   });
 
   it("restores persisted project routes after the runtime restarts", async () => {

@@ -32,7 +32,7 @@ Canonical instructions for coding agents and contributors.
 
 `dbx-tools` provides companion packages for Databricks Apps, AppKit backends, Mastra agents, Genie workflows, Model Serving, Lakebase, approval-gated communication, and AppKit-oriented React UI.
 
-For UI-only demo iteration, run `bun run demo -- --no-server-watch` so client changes use Bun HMR without restarting the AppKit server, its sidecars, or its authenticated tunnel. `SERVER_WATCH_DISABLED` controls only the backend `dev:watch` wrapper; the root demo's client HMR process remains active.
+For UI-only demo iteration, run `bun run demo -- --watch-exclude '**'` so client changes use Bun HMR without restarting the AppKit server, its sidecars, or its authenticated tunnel. `dev:watch` watches the default workspace-package directories unless `--watch-include` globs are set, then drops `--watch-exclude` matches; the root demo's client HMR process remains active.
 
 Primary ownership:
 
