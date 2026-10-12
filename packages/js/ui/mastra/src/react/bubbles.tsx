@@ -26,6 +26,10 @@ import {
   XIcon,
 } from "lucide-react";
 import { useState } from "react";
+import {
+  AssistantResponsePulse,
+  shouldShowAssistantResponsePulse,
+} from "./_assistant-response-pulse.tsx";
 import { MarkdownWithEmbeds } from "./embed-slots.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { FeedbackControls } from "./feedback-controls.tsx";
@@ -394,6 +398,11 @@ export const AssistantBubble = ({
   // `error`, or a newer message has taken over the `isLast` slot.
   const isStreamingThisBubble = isLast && (status === "streaming" || status === "submitted");
   const suggestions = isStreamingThisBubble ? [] : collectSuggestions(events);
+  const showResponsePulse = shouldShowAssistantResponsePulse(
+    isLast,
+    status,
+    hasText || Boolean(reasoning) || toolEvents.length > 0 || pendingApprovals.length > 0,
+  );
   // Charts and tables are placed at inline marker positions in
   // the assistant's prose. `prepare_chart` / `render_data` mint
   // a `chartId` and the model embeds `[chart:<chartId>]`; for raw
@@ -459,6 +468,7 @@ export const AssistantBubble = ({
             onResolve={onResolveToolApproval}
           />
         ))}
+        {showResponsePulse && <AssistantResponsePulse />}
         {hasText && (isLast || onExport || onFeedback || mlflowExperimentUrl) && (
           <div className="flex items-center gap-1">
             {isLast && regenerate && (
