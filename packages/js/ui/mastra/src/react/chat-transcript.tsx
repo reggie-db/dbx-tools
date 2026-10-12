@@ -11,8 +11,8 @@ import {
   EmptyTitle,
   Spinner,
 } from "@dbx-tools/ui/react";
-import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { isToolUIPart } from "ai";
+import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
 import type { ChatViewProps } from "./types.ts";

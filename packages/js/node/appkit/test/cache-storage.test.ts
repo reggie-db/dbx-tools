@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { createCache } from "@dbx-tools/cache/cache";
 import {
   AppKitCacheStorage,
   loadPersistentStorage,
@@ -8,7 +9,6 @@ import {
   softenInitialize,
   type PersistentStorageBase,
 } from "../src/cache-storage.ts";
-import { createCache } from "@dbx-tools/cache/cache";
 
 function storageWithInit(
   initialize: () => Promise<void>,

@@ -69,32 +69,35 @@ export function SshManager({
   const [stripPrefix, setStripPrefix] = useState(true);
   const refreshing = useRef(false);
 
-  const refresh = useCallback(async (showLoading = false) => {
-    if (refreshing.current) return;
-    refreshing.current = true;
-    if (showLoading) setLoading(true);
-    setError(undefined);
-    try {
-      const [machineResponse, routeResponse] = await Promise.all([
-        client.listMachines(),
-        client.listRoutes(),
-      ]);
-      setSupported(machineResponse.supported);
-      setMachines(machineResponse.machines);
-      setRoutes(routeResponse.routes);
-      setRoutePathPrefix(routeResponse.pathPrefix);
-      setMachineId((current) =>
-        current && machineResponse.machines.some((machine) => machine.id === current)
-          ? current
-          : (machineResponse.machines[0]?.id ?? ""),
-      );
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      refreshing.current = false;
-      if (showLoading) setLoading(false);
-    }
-  }, [client]);
+  const refresh = useCallback(
+    async (showLoading = false) => {
+      if (refreshing.current) return;
+      refreshing.current = true;
+      if (showLoading) setLoading(true);
+      setError(undefined);
+      try {
+        const [machineResponse, routeResponse] = await Promise.all([
+          client.listMachines(),
+          client.listRoutes(),
+        ]);
+        setSupported(machineResponse.supported);
+        setMachines(machineResponse.machines);
+        setRoutes(routeResponse.routes);
+        setRoutePathPrefix(routeResponse.pathPrefix);
+        setMachineId((current) =>
+          current && machineResponse.machines.some((machine) => machine.id === current)
+            ? current
+            : (machineResponse.machines[0]?.id ?? ""),
+        );
+      } catch (caught) {
+        setError(errorMessage(caught));
+      } finally {
+        refreshing.current = false;
+        if (showLoading) setLoading(false);
+      }
+    },
+    [client],
+  );
 
   useEffect(() => {
     void refresh(true);
@@ -455,11 +458,7 @@ export function SshManager({
                       />
                       <span>Strip prefix</span>
                     </label>
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={!machineId || Boolean(busyId)}
-                    >
+                    <Button type="submit" size="sm" disabled={!machineId || Boolean(busyId)}>
                       {busyId === "new-route" ? (
                         <Spinner className="size-3.5" />
                       ) : (
@@ -477,10 +476,7 @@ export function SshManager({
               ) : (
                 <div className="divide-y border-t">
                   {routes.map((route) => (
-                    <div
-                      key={route.id}
-                      className="flex items-center gap-3 px-3 py-2.5 sm:px-4"
-                    >
+                    <div key={route.id} className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
                       <div className="min-w-0 flex-1">
                         <a
                           className="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-medium text-primary hover:underline"

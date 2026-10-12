@@ -624,8 +624,16 @@ export class MastraPluginClient extends MastraClient {
 
 async function assertChatResponse(response: Response): Promise<void> {
   if (response.ok) return;
-  const body = await response.clone().json().catch(() => undefined);
-  const message = responseErrorMessage(body) ?? (await response.clone().text().catch(() => ""));
+  const body = await response
+    .clone()
+    .json()
+    .catch(() => undefined);
+  const message =
+    responseErrorMessage(body) ??
+    (await response
+      .clone()
+      .text()
+      .catch(() => ""));
   throw new Error(message.trim() || `Chat request failed (${response.status})`);
 }
 

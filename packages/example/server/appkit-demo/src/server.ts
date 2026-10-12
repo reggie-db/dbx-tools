@@ -3,14 +3,6 @@ import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
-import {
-  AppKitSshPlugin,
-  databricksSandbox,
-  SshRuntime,
-} from "@dbx-tools/appkit-sandbox";
-import { resolveSshPluginConfig } from "@dbx-tools/appkit-sandbox/config";
-import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-sandbox/skills";
-import { sshWorkspaceSandbox } from "@dbx-tools/appkit-sandbox/workspace";
 import { graphiti } from "@dbx-tools/appkit-graphiti";
 import {
   agents,
@@ -20,6 +12,10 @@ import {
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
+import { AppKitSshPlugin, databricksSandbox, SshRuntime } from "@dbx-tools/appkit-sandbox";
+import { resolveSshPluginConfig } from "@dbx-tools/appkit-sandbox/config";
+import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-sandbox/skills";
+import { sshWorkspaceSandbox } from "@dbx-tools/appkit-sandbox/workspace";
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
@@ -30,11 +26,11 @@ import { teams } from "@dbx-tools/teams";
 import { authGate, tunnelInterceptor } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
-import { configureStaticDelivery } from "./_static-delivery.ts";
 import {
   createClientDevelopmentProxy,
   type ClientDevelopmentProxy,
 } from "./_client-development.ts";
+import { configureStaticDelivery } from "./_static-delivery.ts";
 import { busDemo } from "./bus-demo.ts";
 
 /** Default search index used by both AppKit resource validation and the plugin. */

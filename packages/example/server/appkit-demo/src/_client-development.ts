@@ -51,8 +51,9 @@ export function createClientDevelopmentProxy(
       }
       void canProxy(request)
         .then((allowed) => {
-          if (!allowed) next();
-          else if (request.path.startsWith(BUN_PATH_PREFIX)) {
+          if (!allowed) {
+            next();
+          } else if (request.path.startsWith(BUN_PATH_PREFIX)) {
             proxy.web(request, response, (error) => next(error));
           } else {
             void serveHtml(request, response).catch(next);
@@ -85,7 +86,10 @@ export function createClientDevelopmentProxy(
     });
     const body = injectAppKitConfig(html, await configScripts);
     response.status(upstream.status);
-    response.set("Content-Type", upstream.headers.get("content-type") ?? "text/html; charset=utf-8");
+    response.set(
+      "Content-Type",
+      upstream.headers.get("content-type") ?? "text/html; charset=utf-8",
+    );
     response.set("Cache-Control", "no-store");
     if (request.method === "HEAD") response.end();
     else response.send(body);

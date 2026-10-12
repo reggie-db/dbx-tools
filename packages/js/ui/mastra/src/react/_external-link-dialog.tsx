@@ -35,9 +35,10 @@ export function resolveLinkPresentation(url: string, baseUrl?: string): LinkPres
     const resolved = base ? new URL(url, base) : new URL(url);
     const baseOrigin = base ? new URL(base).origin : undefined;
     const isWebLink = resolved.protocol === "http:" || resolved.protocol === "https:";
-    const displayUrl = isWebLink && resolved.origin === baseOrigin
-      ? `${resolved.pathname}${resolved.search}${resolved.hash}` || "/"
-      : resolved.href;
+    const displayUrl =
+      isWebLink && resolved.origin === baseOrigin
+        ? `${resolved.pathname}${resolved.search}${resolved.hash}` || "/"
+        : resolved.href;
     return { displayUrl, absoluteUrl: resolved.href };
   } catch {
     return fallback;
@@ -45,12 +46,7 @@ export function resolveLinkPresentation(url: string, baseUrl?: string): LinkPres
 }
 
 /** AppKit-styled confirmation shown before opening a link from assistant markdown. */
-export const ExternalLinkDialog = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  url,
-}: LinkSafetyModalProps) => {
+export const ExternalLinkDialog = ({ isOpen, onClose, onConfirm, url }: LinkSafetyModalProps) => {
   const link = useMemo(() => resolveLinkPresentation(url), [url]);
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

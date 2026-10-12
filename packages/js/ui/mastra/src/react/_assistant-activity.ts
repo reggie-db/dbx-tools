@@ -1,7 +1,7 @@
 import { isToolUIPart, type UIMessage } from "ai";
 
-import { compactReasoningText } from "../support/tool-events.ts";
 import type { ToolEvent } from "./types.ts";
+import { compactReasoningText } from "../support/tool-events.ts";
 
 /** One ordered activity entry rendered before an assistant's answer text. */
 export type AssistantActivityItem =

@@ -7,8 +7,8 @@
 import { createCache, getOrSet } from "@dbx-tools/cache/cache";
 import * as log from "@dbx-tools/shared-core/log";
 
-import { MODEL_METADATA_TTL_MS } from "./_metadata-contract.ts";
 import { modelMetadataCache } from "./_cache.ts";
+import { MODEL_METADATA_TTL_MS } from "./_metadata-contract.ts";
 
 const logger = log.logger("model/metadata-cache");
 

@@ -6,6 +6,8 @@
 
 import { EventEmitter } from "node:events";
 import { join } from "node:path";
+import { projectUtils } from "@dbx-tools/core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import {
   Cacheable,
   CacheableHooks,
@@ -15,8 +17,6 @@ import {
   type GetOrSetFunctionOptions,
   type KeyvStoreAdapter,
 } from "cacheable";
-import { projectUtils } from "@dbx-tools/core";
-import { errorUtils, log } from "@dbx-tools/shared-core";
 import envPaths from "env-paths";
 import { KeyvFile } from "keyv-file";
 
@@ -59,8 +59,10 @@ export interface CacheLevel {
 }
 
 /** Options for an AppKit-independent memory-first cache. */
-export interface CacheOptions
-  extends Pick<CacheableOptions, "cacheId" | "maxTtl" | "namespace" | "stats" | "tags" | "ttl"> {
+export interface CacheOptions extends Pick<
+  CacheableOptions,
+  "cacheId" | "maxTtl" | "namespace" | "stats" | "tags" | "ttl"
+> {
   /** Additional ordered persistence levels. No levels creates a memory-only cache. */
   readonly levels?: readonly CacheLevel[];
   /** Maximum entries retained in the memory primary. Defaults to 1,000. */
@@ -161,7 +163,9 @@ class TieredStoreAdapter extends EventEmitter implements KeyvStoreAdapter {
     const pending = this.pending.get(key);
     if (pending) return pending.kind === "set";
     for (const level of this.levels) {
-      if (level.store.has ? await level.store.has(key) : (await level.store.get(key)) !== undefined) {
+      if (
+        level.store.has ? await level.store.has(key) : (await level.store.get(key)) !== undefined
+      ) {
         return true;
       }
     }
@@ -329,11 +333,7 @@ export function projectCache(scope: string, options: ProjectCacheOptions = {}): 
       name: "disk",
       store: new KeyvFile({
         filename: path,
-        writeDelay: nonNegativeInteger(
-          options.diskWriteDelayMs,
-          100,
-          "diskWriteDelayMs",
-        ),
+        writeDelay: nonNegativeInteger(options.diskWriteDelayMs, 100, "diskWriteDelayMs"),
       }),
     });
   }
@@ -438,10 +438,10 @@ function unwrap(value: unknown): unknown {
 function isEnvelope(value: unknown): value is ValueEnvelope {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      "__dbxToolsCacheEnvelope" in value &&
-      (value as ValueEnvelope).__dbxToolsCacheEnvelope === ENVELOPE_VERSION &&
-      "value" in value,
+    typeof value === "object" &&
+    "__dbxToolsCacheEnvelope" in value &&
+    (value as ValueEnvelope).__dbxToolsCacheEnvelope === ENVELOPE_VERSION &&
+    "value" in value,
   );
 }
 

@@ -39,8 +39,8 @@ import { profile as authProfile } from "@dbx-tools/auth";
 import { asyncUtils, environmentUtils, log } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
-import { createAppKitCacheStorage } from "./cache-storage.ts";
 import { loadBrandContext } from "./brand-context.ts";
+import { createAppKitCacheStorage } from "./cache-storage.ts";
 import {
   createInterceptorContext,
   type Interceptor,

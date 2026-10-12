@@ -12,8 +12,7 @@ describe("resolveLinkPresentation", () => {
       ),
     ).toEqual({
       displayUrl: "/sandbox/machine-1/terminal?mode=full#session",
-      absoluteUrl:
-        "https://local-demo.apps.dbx.tools/sandbox/machine-1/terminal?mode=full#session",
+      absoluteUrl: "https://local-demo.apps.dbx.tools/sandbox/machine-1/terminal?mode=full#session",
     });
   });
 

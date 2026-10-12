@@ -33,8 +33,8 @@ import {
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_ranking.ts";
 import { modelCatalogueCache } from "./_cache.ts";
+import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_ranking.ts";
 
 const { ModelClass } = model;
 

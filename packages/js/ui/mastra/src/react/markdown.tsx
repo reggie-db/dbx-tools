@@ -18,9 +18,9 @@ import {
 import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
+import { ExternalLinkDialog } from "./_external-link-dialog.tsx";
 import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid.tsx";
 import { copyText } from "../support/clipboard.ts";
-import { ExternalLinkDialog } from "./_external-link-dialog.tsx";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
 // wired with shiki highlighting and AppKit table primitives, plus the
