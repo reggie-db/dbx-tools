@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-databricks-sandbox";
-export const PACKAGE_VERSION = "0.9.120";
+export const PACKAGE_VERSION = "0.9.121";
 export * as schemas from "./src/schemas.ts";
 export { sshMachineStatusSchema, sshProjectSchema, sshMachineServiceKindSchema, sshMachineServiceSchema, sshMachineSchema, sshMachinesResponseSchema, createSshMachineRequestSchema, sshMachineActionSchema, deleteSshMachineResponseSchema, sshMachineServiceActionSchema, sshCommandRequestSchema, sshCommandResultSchema, addSshProjectRequestSchema, removeSshProjectRequestSchema, listSshProjectsRequestSchema, sshProjectActionSchema, sshProjectResponseSchema, sshProjectTerminalResponseSchema, removeSshProjectResponseSchema, sshProjectsResponseSchema, listSshMachinesOperationSchema, createSshMachineOperationSchema, startSshMachineOperationSchema, stopSshMachineOperationSchema, deleteSshMachineOperationSchema, executeSshCommandOperationSchema, startSshMachineServiceOperationSchema, listSshProjectsOperationSchema, addSshProjectOperationSchema, openSshProjectTerminalOperationSchema, resetSshProjectOperationSchema, removeSshProjectOperationSchema } from "./src/schemas.ts";
 export type { SshMachineStatus, SshProject, SshMachineServiceKind, SshMachineService, SshMachine, SshMachinesResponse, CreateSshMachineRequest, SshMachineAction, DeleteSshMachineResponse, SshMachineServiceAction, SshCommandRequest, SshCommandResult, AddSshProjectRequest, RemoveSshProjectRequest, ListSshProjectsRequest, SshProjectAction, SshProjectResponse, SshProjectTerminalResponse, RemoveSshProjectResponse, SshProjectsResponse } from "./src/schemas.ts";
