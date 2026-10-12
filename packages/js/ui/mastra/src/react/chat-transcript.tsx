@@ -255,9 +255,13 @@ export const ChatTranscript = ({
               return <UserBubble key={message.id} message={message} />;
             })}
             {showWaitingIndicator && (
-              <div className="flex h-7 items-center gap-2 px-3 text-xs text-muted-foreground">
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex h-7 items-center px-3 text-muted-foreground"
+              >
                 <Spinner className="size-3" />
-                <span className="animate-pulse">Thinking...</span>
+                <span className="sr-only">Response in progress</span>
               </div>
             )}
             {status === "error" && (

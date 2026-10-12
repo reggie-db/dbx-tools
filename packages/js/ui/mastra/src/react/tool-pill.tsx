@@ -124,8 +124,8 @@ type MessageGroup = {
  * are resolved out-of-band via the chart cache; suggestions live at
  * message scope.
  *
- * Genie `thinking` and `text` entries render in the assistant bubble's
- * consolidated Thoughts panel and are intentionally omitted here.
+ * Genie `thinking` entries render as interleaved Thoughts disclosures in the
+ * assistant activity timeline and are intentionally omitted here.
  *
  * `groups` preserves first-seen order so the rendered detail view
  * walks Genie sub-calls in the order the LLM dispatched them.
@@ -190,7 +190,7 @@ const summarizeProgress = (progress: ToolProgress[]): ToolDetailSummary => {
         break;
       }
       case "thinking": {
-        // Reasoning is rendered once in the assistant bubble's Thoughts panel.
+        // Reasoning is rendered once in the assistant activity timeline.
         break;
       }
       case "query": {

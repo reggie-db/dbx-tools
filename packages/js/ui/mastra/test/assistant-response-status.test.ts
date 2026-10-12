@@ -1,0 +1,53 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import {
+  AssistantResponseSpinner,
+  shouldShowAssistantResponseStatus,
+} from "../src/react/_assistant-response-status.tsx";
+import { AssistantBubble } from "../src/react/bubbles.tsx";
+
+describe("AssistantResponseSpinner", () => {
+  it("renders a compact accessible spinner without visible status text", () => {
+    const html = renderToStaticMarkup(createElement(AssistantResponseSpinner));
+
+    assert.match(html, /role="status"/);
+    assert.match(html, /Response in progress/);
+    assert.match(html, /animate-spin/);
+    assert.doesNotMatch(html, /animate-pulse/);
+  });
+
+  it("shows only for the latest active assistant response with visible content", () => {
+    assert.equal(shouldShowAssistantResponseStatus(true, "submitted", true), true);
+    assert.equal(shouldShowAssistantResponseStatus(true, "streaming", true), true);
+    assert.equal(shouldShowAssistantResponseStatus(true, "streaming", false), false);
+    assert.equal(shouldShowAssistantResponseStatus(false, "streaming", true), false);
+    assert.equal(shouldShowAssistantResponseStatus(true, "ready", true), false);
+    assert.equal(shouldShowAssistantResponseStatus(true, "error", true), false);
+  });
+
+  it("keeps response actions and the active spinner on one footer line", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantBubble, {
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          parts: [{ type: "text", text: "Partial answer" }],
+        },
+        isLast: true,
+        status: "streaming",
+        onExport: () => undefined,
+      }),
+    );
+
+    const copyIndex = html.indexOf('aria-label="Copy"');
+    const exportIndex = html.indexOf('aria-label="Export message"');
+    const statusIndex = html.indexOf("ml-auto");
+    assert.ok(copyIndex >= 0 && copyIndex < statusIndex);
+    assert.ok(exportIndex >= 0 && exportIndex < statusIndex);
+    assert.match(html, /Response in progress/);
+    assert.doesNotMatch(html, /Thinking\.\.\.|animate-pulse/);
+  });
+});

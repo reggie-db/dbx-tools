@@ -18,7 +18,6 @@ import type { UIMessage } from "ai";
 import {
   BugIcon,
   CheckIcon,
-  ChevronDownIcon,
   CopyIcon,
   MessageSquareIcon,
   RefreshCcwIcon,
@@ -26,10 +25,11 @@ import {
   XIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { assistantActivityItems } from "./_assistant-activity.ts";
 import {
-  AssistantResponsePulse,
-  shouldShowAssistantResponsePulse,
-} from "./_assistant-response-pulse.tsx";
+  AssistantResponseSpinner,
+  shouldShowAssistantResponseStatus,
+} from "./_assistant-response-status.tsx";
 import { MarkdownWithEmbeds } from "./embed-slots.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { FeedbackControls } from "./feedback-controls.tsx";
@@ -47,23 +47,11 @@ import type {
   ToolEvent,
 } from "./types.ts";
 import { copyText } from "../support/clipboard.ts";
-import {
-  compactReasoningText,
-  genieReasoningText,
-  mergeToolEvents,
-  toolEventsFromParts,
-} from "../support/tool-events.ts";
+import { mergeToolEvents, toolEventsFromParts } from "../support/tool-events.ts";
 
 // User / assistant message bubbles plus the inline approval card and
 // the helpers that surface approval-gated tool calls out of a message's
 // parts.
-
-const getReasoningText = (parts: UIMessage["parts"]): string =>
-  parts
-    .filter((p): p is { type: "reasoning"; text: string } => p.type === "reasoning")
-    .map((p) => compactReasoningText(p.text))
-    .filter(Boolean)
-    .join("\n");
 
 const UserAvatar = () => (
   <Avatar className="size-7">
@@ -71,6 +59,19 @@ const UserAvatar = () => (
       <UserIcon className="size-4" />
     </AvatarFallback>
   </Avatar>
+);
+
+const ThoughtsDisclosure = ({ text }: { text: string }) => (
+  <Collapsible>
+    <CollapsibleTrigger className="w-fit cursor-pointer rounded-md border border-border/40 bg-background/30 px-2 py-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      Thoughts
+    </CollapsibleTrigger>
+    <CollapsibleContent>
+      <div className="mt-1 border-l-2 border-border/60 pl-2.5 text-xs text-muted-foreground">
+        <ToolMarkdown className="prose-p:my-0 [&_p]:!my-0">{text}</ToolMarkdown>
+      </div>
+    </CollapsibleContent>
+  </Collapsible>
 );
 
 /** A tool-call input shaped like an outbound email (the `send_email` tool). */
@@ -364,18 +365,7 @@ export const AssistantBubble = ({
         ? "done"
         : undefined;
   const toolEvents = mergeToolEvents(toolEventsFromParts(message.parts), events, terminalToolState);
-  const reasoning = [getReasoningText(message.parts), genieReasoningText(toolEvents)]
-    .filter(Boolean)
-    .join("\n");
-  const isReasoningStreaming =
-    isLast &&
-    status === "streaming" &&
-    (message.parts.at(-1)?.type === "reasoning" ||
-      toolEvents.some(
-        (event) =>
-          event.status === "running" &&
-          event.progress?.some((progress) => progress.type === "thinking"),
-      ));
+  const activityItems = assistantActivityItems(message.parts, toolEvents);
   const textParts = message.parts.filter(
     (p): p is { type: "text"; text: string } => p.type === "text",
   );
@@ -398,11 +388,15 @@ export const AssistantBubble = ({
   // `error`, or a newer message has taken over the `isLast` slot.
   const isStreamingThisBubble = isLast && (status === "streaming" || status === "submitted");
   const suggestions = isStreamingThisBubble ? [] : collectSuggestions(events);
-  const showResponsePulse = shouldShowAssistantResponsePulse(
+  const showResponseStatus = shouldShowAssistantResponseStatus(
     isLast,
     status,
-    hasText || Boolean(reasoning) || toolEvents.length > 0 || pendingApprovals.length > 0,
+    hasText || activityItems.length > 0 || pendingApprovals.length > 0,
   );
+  const showFooter =
+    showResponseStatus ||
+    (hasText &&
+      (isLast || Boolean(onExport) || Boolean(onFeedback) || Boolean(mlflowExperimentUrl)));
   // Charts and tables are placed at inline marker positions in
   // the assistant's prose. `prepare_chart` / `render_data` mint
   // a `chartId` and the model embeds `[chart:<chartId>]`; for raw
@@ -421,26 +415,13 @@ export const AssistantBubble = ({
        * `min-width: auto`, which sizes to content and overflows.
        */}
       <ItemContent className="min-w-0 gap-1.5">
-        {/*
-         * Tool session pill leads the message. Charts and tables are
-         * embedded inline in the prose (via `[chart:<id>]` / `[data:<id>]`
-         * markers rendered by {@link MarkdownWithEmbeds}), so keeping the
-         * pill above the text parts guarantees the "what the agent did"
-         * summary always sits before its resulting charts and answer.
-         */}
-        {toolEvents.length > 0 && <ToolSessionPill events={toolEvents} />}
-        {reasoning && (
-          <Collapsible>
-            <CollapsibleTrigger className="group flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ChevronDownIcon className="size-3 transition-transform group-data-[state=closed]:-rotate-90" />
-              <span>{isReasoningStreaming ? "Thinking..." : "Thoughts"}</span>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="mt-1 border-l-2 border-border/60 pl-2.5 text-xs text-muted-foreground">
-                <ToolMarkdown className="prose-p:my-0 [&_p]:!my-0">{reasoning}</ToolMarkdown>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+        {/* Tool calls and their thought events stay in arrival order above the answer text. */}
+        {activityItems.map((item) =>
+          item.type === "tool" ? (
+            <ToolSessionPill key={item.key} events={[item.event]} />
+          ) : (
+            <ThoughtsDisclosure key={item.key} text={item.text} />
+          ),
         )}
         {/*
          * Render each text part as its own block. A multi-step turn
@@ -468,10 +449,9 @@ export const AssistantBubble = ({
             onResolve={onResolveToolApproval}
           />
         ))}
-        {showResponsePulse && <AssistantResponsePulse />}
-        {hasText && (isLast || onExport || onFeedback || mlflowExperimentUrl) && (
-          <div className="flex items-center gap-1">
-            {isLast && regenerate && (
+        {showFooter && (
+          <div className="flex min-h-7 items-center gap-1">
+            {hasText && isLast && regenerate && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -488,7 +468,7 @@ export const AssistantBubble = ({
                 <TooltipContent>Retry</TooltipContent>
               </Tooltip>
             )}
-            {isLast && (
+            {hasText && isLast && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -505,14 +485,16 @@ export const AssistantBubble = ({
                 <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
               </Tooltip>
             )}
-            {onExport && <ExportMenu onExport={onExport} iconOnly tooltip="Export message" />}
-            {onFeedback && (
+            {hasText && onExport && (
+              <ExportMenu onExport={onExport} iconOnly tooltip="Export message" />
+            )}
+            {hasText && onFeedback && (
               <FeedbackControls
                 onSubmit={onFeedback}
                 {...(feedbackValue ? { value: feedbackValue } : {})}
               />
             )}
-            {mlflowExperimentUrl && (
+            {hasText && mlflowExperimentUrl && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button asChild type="button" size="icon" variant="ghost" className="size-7">
@@ -528,6 +510,11 @@ export const AssistantBubble = ({
                 </TooltipTrigger>
                 <TooltipContent>Open MLflow experiment</TooltipContent>
               </Tooltip>
+            )}
+            {showResponseStatus && (
+              <div className="ml-auto flex items-center text-muted-foreground">
+                <AssistantResponseSpinner />
+              </div>
             )}
           </div>
         )}
