@@ -3,7 +3,11 @@ import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
-import { databricksSandbox, SshRuntime } from "@dbx-tools/appkit-databricks-sandbox";
+import {
+  AppKitSshPlugin,
+  databricksSandbox,
+  SshRuntime,
+} from "@dbx-tools/appkit-databricks-sandbox";
 import { resolveSshPluginConfig } from "@dbx-tools/appkit-databricks-sandbox/config";
 import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-databricks-sandbox/skills";
 import { sshWorkspaceSandbox } from "@dbx-tools/appkit-databricks-sandbox/workspace";
@@ -228,7 +232,7 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
       // record without forcing that useless cross-tool type expansion.
       const agentTools = Object.assign({}, await demoGenieTools(plugins, agentMode)) as MastraTools;
       Object.assign(agentTools, await plugins.graphiti?.toolkit());
-      Object.assign(agentTools, await plugins.ssh?.toolkit());
+      Object.assign(agentTools, await plugins[AppKitSshPlugin.manifest.name]?.toolkit());
       Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
       Object.assign(
         agentTools,
@@ -327,12 +331,15 @@ await appkit.createApp({
     // The email-OTP access gate for the public portr tunnel. Registers the
     // `/api/email/auth/*` login routes + a gating middleware on THIS server that
     // gates only tunnel traffic (identified by the `Host` header matching
-    // `TUNNEL_PUBLIC_DOMAIN`); the platform front door passes through. `allow`
-    // comes from `TUNNEL_AUTH_ALLOW`, `publicDomain` from `TUNNEL_PUBLIC_DOMAIN`
-    // (both set on the deployed app). Codes send through the `email()` transport
-    // above. Localhost gets an explicit disabled status because its Host header
-    // never matches the tunnel domain.
-    authGate(),
+    // `TUNNEL_PUBLIC_DOMAIN`); the platform front door passes through. Dynamic
+    // Sandbox routes also need the verified tunnel identity before their strict
+    // owner check, so protect the runtime-owned route prefix rather than letting
+    // those requests fall through to the SPA. `allow` comes from
+    // `TUNNEL_AUTH_ALLOW`, `publicDomain` from `TUNNEL_PUBLIC_DOMAIN` (both set
+    // on the deployed app). Codes send through the `email()` transport above.
+    // Localhost gets an explicit disabled status because its Host header never
+    // matches the tunnel domain.
+    authGate({ gatePaths: [databricksSandboxRuntime.config.routePrefix] }),
     // Web-search runtime for the `web_search` / `web_fetch` tools. The
     // web-search model defaults to Gemini, then GPT (the native web-search
     // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,

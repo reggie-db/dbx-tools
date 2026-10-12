@@ -50,6 +50,7 @@ function isAuthGateApi(value: unknown): value is AuthGateApi {
     object.isRecord(value) &&
     typeof value.basePath === "string" &&
     typeof value.passkeysEnabled === "boolean" &&
+    typeof value.isProtectedHost === "function" &&
     typeof value.handler === "function" &&
     typeof value.session === "function" &&
     typeof value.status === "function" &&

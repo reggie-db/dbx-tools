@@ -386,14 +386,14 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
 
-// AppKit management for existing Databricks Sandboxes. The current transport
-// uses the lakebox REST surface for discovery/lifecycle, OpenSSH for command
+// AppKit management for Databricks Sandboxes. The current transport uses the
+// lakebox REST surface for create/discovery/lifecycle/delete, OpenSSH for command
 // sessions, ssh2 for direct forwarding, and the existing proxy dependency for
 // remote web routes.
 project.applyToProjects(root, { identifierName: "appkit-databricks-sandbox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "AppKit management, Mastra tools, and remote routing for existing Databricks Sandboxes",
+    "AppKit management, Mastra tools, and remote routing for Databricks Sandboxes",
   );
   p.addDeps(
     "@databricks/appkit@catalog:",

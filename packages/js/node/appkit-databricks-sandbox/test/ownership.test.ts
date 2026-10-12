@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { resolveSshPluginConfig } from "../src/config.ts";
-import { DiskMachineOwnershipStore } from "../src/ownership.ts";
+import { DiskMachineOwnershipStore, LakebaseMachineOwnershipStore } from "../src/ownership.ts";
 import { SshRuntime } from "../src/runtime.ts";
 
 const temporaryDirectories: string[] = [];
@@ -21,6 +21,35 @@ async function temporaryPath(): Promise<string> {
 }
 
 describe("machine ownership", () => {
+  it("provisions the Lakebase table in its owning schema", async () => {
+    const statements: string[] = [];
+    const pool = {
+      connect: async () => ({
+        query: async (text: string) => {
+          statements.push(text);
+          return { rows: [], rowCount: 0 };
+        },
+        release: () => undefined,
+      }),
+      query: async () => ({ rows: [], rowCount: 0 }),
+    } as unknown as Parameters<typeof LakebaseMachineOwnershipStore.create>[0];
+
+    await LakebaseMachineOwnershipStore.create(pool);
+
+    assert.ok(
+      statements.some((statement) =>
+        statement.includes("CREATE SCHEMA IF NOT EXISTS dbx_tools_databricks_sandbox"),
+      ),
+    );
+    assert.ok(
+      statements.some((statement) =>
+        statement.includes(
+          "CREATE TABLE IF NOT EXISTS dbx_tools_databricks_sandbox.machine_assignments",
+        ),
+      ),
+    );
+  });
+
   it("persists user-scoped assignments on disk", async () => {
     const path = await temporaryPath();
     const first = new DiskMachineOwnershipStore(path);
@@ -112,6 +141,38 @@ describe("machine ownership", () => {
 
     assert.equal(machine.status, "running");
     assert.deepEqual(attempted.sort(), ["stats", "terminal"]);
+    await runtime.close();
+  });
+
+  it("assigns created machines to the caller and only lets that caller delete them", async () => {
+    const path = await temporaryPath();
+    const requests: Array<{ path: string; method: string; payload?: unknown }> = [];
+    const client = {
+      config: { workspaceId: "workspace", host: "https://example.databricks.com" },
+      apiClient: {
+        request: async (request: { path: string; method: string; payload?: unknown }) => {
+          requests.push(request);
+          if (request.method === "POST") {
+            return { sandboxId: "created", status: "Running", name: "project" };
+          }
+          return {};
+        },
+      },
+    } as unknown as WorkspaceClient;
+    const runtime = new SshRuntime(resolveSshPluginConfig({ ownershipPath: path }));
+
+    const created = await runtime.createMachine(client, "user-a", { name: "project" });
+    await assert.rejects(
+      runtime.deleteMachine(client, "user-b", created.id),
+      /not assigned to the current user/,
+    );
+    assert.deepEqual(await runtime.deleteMachine(client, "user-a", created.id), {
+      deleted: true,
+    });
+
+    assert.equal(created.id, "created");
+    assert.deepEqual(requests[0]?.payload, { sandbox: { name: "project" } });
+    assert.equal(requests.at(-1)?.method, "DELETE");
     await runtime.close();
   });
 });

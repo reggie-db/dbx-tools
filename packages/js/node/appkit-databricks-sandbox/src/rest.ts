@@ -1,6 +1,6 @@
 import type { WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
-import { log } from "@dbx-tools/shared-core";
+import { log, net } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 const SANDBOX_ROOT = "/api/2.0/lakebox";
@@ -19,6 +19,14 @@ const sandboxEntrySchema = z
     lastStartTime: z.string().optional(),
     idleTimeout: z.string().optional(),
     noAutostop: z.boolean().optional(),
+  })
+  .passthrough();
+const sandboxCreateResponseSchema = z
+  .object({
+    sandboxId: z.string(),
+    status: z.string(),
+    gatewayHost: z.string().optional(),
+    name: z.string().optional(),
   })
   .passthrough();
 const sandboxListSchema = z
@@ -45,10 +53,16 @@ type RequestMethod = "GET" | "POST" | "DELETE";
 
 /** REST client for existing Databricks Sandboxes and their registered SSH keys. */
 export class DatabricksSandboxClient {
-  constructor(private readonly client: WorkspaceClient) {}
+  private readonly scope: string;
+
+  constructor(private readonly client: WorkspaceClient) {
+    const workspaceId = client.config.workspaceId || process.env.DATABRICKS_WORKSPACE_ID;
+    const host = client.config.host || process.env.DATABRICKS_HOST;
+    this.scope = workspaceId || net.urlBuilder(host)?.origin || "workspace";
+  }
 
   workspaceScope(): string {
-    return this.client.config.workspaceId || this.client.config.host || "workspace";
+    return this.scope;
   }
 
   async list(signal?: AbortSignal): Promise<SandboxEntry[]> {
@@ -71,6 +85,19 @@ export class DatabricksSandboxClient {
     return sandboxEntrySchema.parse(
       await this.request("GET", `${SANDBOX_PATH}/${encodeURIComponent(id)}`, { signal }),
     );
+  }
+
+  async create(name?: string, signal?: AbortSignal): Promise<SandboxEntry> {
+    return sandboxCreateResponseSchema.parse(
+      await this.request("POST", SANDBOX_PATH, {
+        payload: { sandbox: { ...(name ? { name } : {}) } },
+        signal,
+      }),
+    );
+  }
+
+  async delete(id: string, signal?: AbortSignal): Promise<void> {
+    await this.request("DELETE", `${SANDBOX_PATH}/${encodeURIComponent(id)}`, { signal });
   }
 
   async start(id: string, signal?: AbortSignal): Promise<SandboxEntry> {

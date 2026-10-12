@@ -1,10 +1,13 @@
 import {
+  deleteSshMachineResponseSchema,
   sshMachineSchema,
   sshMachineServiceSchema,
   sshMachinesResponseSchema,
   sshRouteResponseSchema,
   sshRoutesResponseSchema,
   type AddSshRouteRequest,
+  type CreateSshMachineRequest,
+  type DeleteSshMachineResponse,
   type SshMachine,
   type SshMachineService,
   type SshMachineServiceKind,
@@ -20,6 +23,10 @@ export class SshClient {
     return this.request("/machines", sshMachinesResponseSchema.parse, { signal });
   }
 
+  create(input: CreateSshMachineRequest = {}): Promise<SshMachine> {
+    return this.request("/machines", sshMachineSchema.parse, { method: "POST", body: input });
+  }
+
   start(machineId: string): Promise<SshMachine> {
     return this.request(
       `/machines/${encodeURIComponent(machineId)}/start`,
@@ -32,6 +39,14 @@ export class SshClient {
     return this.request(`/machines/${encodeURIComponent(machineId)}/stop`, sshMachineSchema.parse, {
       method: "POST",
     });
+  }
+
+  delete(machineId: string): Promise<DeleteSshMachineResponse> {
+    return this.request(
+      `/machines/${encodeURIComponent(machineId)}`,
+      deleteSshMachineResponseSchema.parse,
+      { method: "DELETE" },
+    );
   }
 
   startService(machineId: string, service: SshMachineServiceKind): Promise<SshMachineService> {

@@ -1,6 +1,6 @@
 # @dbx-tools/ui-databricks-sandbox
 
-Compact React controls for listing, starting, stopping, and opening AppKit SSH machines.
+Compact React controls for creating, listing, starting, stopping, deleting, and opening AppKit SSH machines.
 
 ## Render machine and route management
 
@@ -12,9 +12,9 @@ export function SshPage() {
 }
 ```
 
-The manager starts and stops existing machines, adds routes with optional path
-prefix stripping, lists registered routes, opens them in a new tab, and removes
-them.
+The manager creates and permanently deletes user-owned Sandboxes, starts and
+stops machines, adds routes with optional path prefix stripping, lists
+registered routes, opens them in a new tab, and removes them.
 
 ## Render the machine indicator
 

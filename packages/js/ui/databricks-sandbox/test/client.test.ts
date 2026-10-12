@@ -22,4 +22,38 @@ describe("SshClient", () => {
       /connect EHOSTUNREACH 192\.168\.200\.10:2222/,
     );
   });
+
+  it("creates and deletes the current user's sandboxes", async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(new URL(String(input), "http://localhost"), init);
+      requests.push(request);
+      if (request.method === "POST") {
+        return Response.json({
+          id: "machine-1",
+          name: "project",
+          provider: "databricks-sandbox",
+          status: "running",
+          routes: [],
+          services: [],
+          canStart: false,
+          canStop: true,
+          canConnect: true,
+        });
+      }
+      return Response.json({ deleted: true });
+    }) as typeof fetch;
+    const client = new SshClient();
+
+    await client.create({ name: "project" });
+    await client.delete("machine-1");
+
+    assert.equal(requests[0]?.method, "POST");
+    assert.deepEqual(await requests[0]?.json(), { name: "project" });
+    assert.equal(requests[1]?.method, "DELETE");
+    assert.equal(requests[1]?.url, "http://localhost/api/databricks-sandbox/machines/machine-1");
+  });
 });

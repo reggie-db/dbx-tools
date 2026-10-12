@@ -256,7 +256,10 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
 }
 
 /** The owning passwordless runtime exposed by {@link AuthGatePlugin.exports}. */
-export type AuthGateApi = PasswordlessAuthRuntime;
+export interface AuthGateApi extends PasswordlessAuthRuntime {
+  /** Whether these headers target a public host protected by this gate. */
+  isProtectedHost(headers: Headers): boolean;
+}
 
 /**
  * AppKit plugin adapting `@dbx-tools/auth-gate` to tunnel traffic. On `setup()` it registers the login
@@ -423,6 +426,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     return {
       basePath: AUTH_BASE_PATH,
       passkeysEnabled: [...this.runtimes.values()].some((entry) => entry.passkeysEnabled),
+      isProtectedHost: (headers) => this.runtimes.has((headers.get("host") ?? "").toLowerCase()),
       handler: (request) =>
         runtime(request.headers, request)?.handler(request) ??
         Promise.resolve(new Response("Not Found", { status: 404 })),

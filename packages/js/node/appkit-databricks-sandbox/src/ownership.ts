@@ -8,7 +8,8 @@ import { z } from "zod";
 const logger = log.logger("appkit-databricks-sandbox:ownership");
 const MIGRATION_LOCK = ["appkit-databricks-sandbox", "machine-ownership", "migrations"] as const;
 const DISK_LOCK = ["appkit-databricks-sandbox", "machine-ownership", "disk"] as const;
-const TABLE = "dbx_tools_databricks_sandbox.machine_assignments";
+const SCHEMA = "dbx_tools_databricks_sandbox";
+const TABLE = `${SCHEMA}.machine_assignments`;
 
 export const MachineAssignmentSchema = z
   .object({
@@ -132,7 +133,7 @@ export class LakebaseMachineOwnershipStore implements MachineOwnershipStore {
 
   static async create(pool: LakebasePool): Promise<LakebaseMachineOwnershipStore> {
     await advisoryLock.withAdvisoryTransactionLock(pool, MIGRATION_LOCK, async (client) => {
-      await client.query("CREATE SCHEMA IF NOT EXISTS dbx_tools_ssh");
+      await client.query(`CREATE SCHEMA IF NOT EXISTS ${SCHEMA}`);
       await client.query(`
         CREATE TABLE IF NOT EXISTS ${TABLE} (
           workspace_scope TEXT NOT NULL,

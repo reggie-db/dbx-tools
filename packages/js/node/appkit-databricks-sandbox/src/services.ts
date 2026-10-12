@@ -49,14 +49,7 @@ export async function ensureSshService(
         remotePort: DINOTTY_PORT,
         stripPrefix: true,
         browserRelay: true,
-        browserPaths: [
-          "/assets",
-          "/icons",
-          "/manifest.json",
-          "/logo.png",
-          "/preview",
-          "/mcp",
-        ],
+        browserPaths: ["/assets", "/icons", "/manifest.json", "/logo.png", "/preview", "/mcp"],
         htmlHead: DINOTTY_RELAY_HEAD,
       }
     : {

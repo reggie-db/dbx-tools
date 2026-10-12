@@ -110,7 +110,7 @@ export class SshWorkspaceSandbox extends MastraSandbox {
   }
 
   getInstructions(): string {
-    return `Commands run on existing Databricks Sandbox ${this.id} over SSH. This transport never creates or deletes sandboxes.`;
+    return `Commands run on Databricks Sandbox ${this.id} over SSH. Prefer reusing this existing Sandbox. Create another only when the user explicitly requests a separate Sandbox.`;
   }
 
   private withAuth<T>(
@@ -156,12 +156,13 @@ export function sshWorkspaceSandbox(
       ? machines.machines.find((candidate) => candidate.id === configured)
       : preferredMachine(machines.machines);
     if (!machine) {
-      throw ConfigurationError.resourceNotFound(
-        "existing SSH machine",
-        configured
-          ? `No Databricks Sandbox named ${configured} exists.`
-          : "No Databricks Sandbox exists for this user.",
-      );
+      if (configured) {
+        throw ConfigurationError.resourceNotFound(
+          "existing SSH machine",
+          `No Databricks Sandbox named ${configured} exists.`,
+        );
+      }
+      return new MissingSshWorkspaceSandbox();
     }
     return new SshWorkspaceSandbox(
       machine.id,
@@ -171,6 +172,29 @@ export function sshWorkspaceSandbox(
       user.id,
     );
   };
+}
+
+class MissingSshWorkspaceSandbox extends MastraSandbox {
+  readonly id = "unassigned";
+  readonly name = "Databricks Sandbox unavailable";
+  readonly provider = "appkit-databricks-sandbox";
+  status: WorkspaceSandbox["status"] = "stopped";
+
+  constructor() {
+    super({ name: "Databricks Sandbox unavailable" });
+  }
+
+  async snapshot(): Promise<void> {}
+
+  override async executeCommand(): Promise<CommandResult> {
+    throw new Error(
+      "No Databricks Sandbox exists for this user. Reuse an existing Sandbox when available, or create one only when the user requests code execution.",
+    );
+  }
+
+  getInstructions(): string {
+    return "No Databricks Sandbox currently exists for this user. Continue normal chat without code execution. Before creating one, list Sandboxes and prefer an existing Sandbox; create a new Sandbox only when the user explicitly requests it.";
+  }
 }
 
 function preferredMachine(machines: SshMachine[]): SshMachine | undefined {

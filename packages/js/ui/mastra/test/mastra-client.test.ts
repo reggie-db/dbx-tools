@@ -86,6 +86,28 @@ describe("MastraPluginClient AI SDK transport", () => {
     assert.deepEqual(body.requestContext, { storeId: "store-1" });
   });
 
+  it("rejects non-streaming chat errors instead of leaving the turn pending", async () => {
+    globalThis.fetch = (async () =>
+      Response.json(
+        { error: { message: "No Databricks Sandbox exists for this user." } },
+        { status: 500 },
+      )) as typeof fetch;
+    const client = new MastraPluginClient({
+      basePath: "/api/mastra",
+      defaultAgent: "support",
+      agents: ["support"],
+    });
+
+    await assert.rejects(
+      client.streamAgent({
+        agentId: "support",
+        messages: [{ id: "user-1", role: "user", parts: [{ type: "text", text: "hello" }] }],
+        runId: "run-1",
+      }),
+      /No Databricks Sandbox exists for this user/,
+    );
+  });
+
   it("reuses the run context for approval continuation", async () => {
     let received!: Request;
     globalThis.fetch = (async (input, init) => {

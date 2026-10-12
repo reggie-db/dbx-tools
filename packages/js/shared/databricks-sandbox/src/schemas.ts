@@ -78,11 +78,30 @@ export const sshMachinesResponseSchema = z
   .describe("SSH machine discovery response.");
 export type SshMachinesResponse = z.infer<typeof sshMachinesResponseSchema>;
 
+export const createSshMachineRequestSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .max(256)
+      .optional()
+      .describe("Optional display name for the new Databricks Sandbox."),
+  })
+  .strict()
+  .describe("Request to create a Databricks Sandbox for the current user.");
+export type CreateSshMachineRequest = z.infer<typeof createSshMachineRequestSchema>;
+
 export const sshMachineActionSchema = z
   .object({ machineId: z.string().min(1).describe("Machine to manage.") })
   .strict()
   .describe("Machine lifecycle request.");
 export type SshMachineAction = z.infer<typeof sshMachineActionSchema>;
+
+export const deleteSshMachineResponseSchema = z
+  .object({ deleted: z.boolean().describe("Whether the Sandbox was deleted.") })
+  .strict()
+  .describe("Databricks Sandbox deletion response.");
+export type DeleteSshMachineResponse = z.infer<typeof deleteSshMachineResponseSchema>;
 
 export const sshMachineServiceActionSchema = z
   .object({

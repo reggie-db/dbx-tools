@@ -210,7 +210,7 @@ describe("Python Node task components", () => {
 
       const cached = runBindingTask(directory, "--check");
       assert.equal(cached.exitCode, 0, cached.stderr.toString());
-      assert.match(cached.stderr.toString(), /verified .* from fingerprints/);
+      assert.match(cached.stdout.toString(), /verified .* from fingerprints/);
 
       const pyproject = join(directory, "python/pyproject.toml");
       writeFileSync(
@@ -223,7 +223,7 @@ describe("Python Node task components", () => {
         0,
         unrelatedPyprojectChange.stderr.toString(),
       );
-      assert.match(unrelatedPyprojectChange.stderr.toString(), /verified .* from fingerprints/);
+      assert.match(unrelatedPyprojectChange.stdout.toString(), /verified .* from fingerprints/);
 
       chmodSync(runtime, 0o644);
       writeFileSync(runtime, `${readFileSync(runtime, "utf8")}\n// modified\n`);

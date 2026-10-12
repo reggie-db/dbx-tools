@@ -162,9 +162,27 @@ const NavRouteStrip = ({ routes, pathname }: { routes: readonly RouteDef[]; path
     };
   }, [routes]);
 
+  useEffect(() => {
+    const element = scrollRef.current;
+    const activeRoute = element?.querySelector<HTMLElement>('[aria-current="page"]');
+    activeRoute?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [pathname]);
+
+  const scroll = (direction: -1 | 1) => {
+    const element = scrollRef.current;
+    if (!element) return;
+    element.scrollBy({
+      left: direction * Math.max(120, element.clientWidth * 0.7),
+      behavior: "smooth",
+    });
+  };
+
   return (
     <div className="relative min-w-0 flex-1">
-      <div ref={scrollRef} className="flex min-w-0 items-center gap-1 overflow-x-auto">
+      <div
+        ref={scrollRef}
+        className="flex min-w-0 scroll-smooth items-center gap-1 overflow-x-auto"
+      >
         {routes.map((route) => (
           <Button
             key={route.path}
@@ -172,17 +190,35 @@ const NavRouteStrip = ({ routes, pathname }: { routes: readonly RouteDef[]; path
             size="sm"
             variant={pathname === route.path ? "default" : "ghost"}
           >
-            <Link to={route.path} title={route.description}>
+            <Link
+              to={route.path}
+              title={route.description}
+              aria-current={pathname === route.path ? "page" : undefined}
+            >
               {route.label}
             </Link>
           </Button>
         ))}
       </div>
       {overflow.left ? (
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-7 bg-gradient-to-r from-background via-background/90 to-transparent sm:hidden" />
+        <button
+          type="button"
+          className="absolute inset-y-0 left-0 flex w-8 items-center justify-start bg-gradient-to-r from-background via-background/95 to-transparent pl-0.5 text-lg font-semibold sm:hidden"
+          aria-label="Show previous navigation tabs"
+          onClick={() => scroll(-1)}
+        >
+          <span aria-hidden="true">‹</span>
+        </button>
       ) : null}
       {overflow.right ? (
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-9 bg-gradient-to-l from-background via-background/90 to-transparent sm:hidden" />
+        <button
+          type="button"
+          className="absolute inset-y-0 right-0 flex w-8 items-center justify-end bg-gradient-to-l from-background via-background/95 to-transparent pr-0.5 text-lg font-semibold sm:hidden"
+          aria-label="Show more navigation tabs"
+          onClick={() => scroll(1)}
+        >
+          <span aria-hidden="true">›</span>
+        </button>
       ) : null}
     </div>
   );

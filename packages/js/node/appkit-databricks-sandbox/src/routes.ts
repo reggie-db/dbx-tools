@@ -130,11 +130,13 @@ export class SshRouteRegistry {
   middleware() {
     return (request: Request, response: Response, next: NextFunction) => {
       const requestUser = request.header(USER_ID_HEADER) ?? request.header(USER_EMAIL_HEADER);
-      const match = this.match(
-        request.path,
-        request.headers,
-        requestUser,
-      );
+      const direct = this.directRoute(request.path);
+      if (direct && requestUser !== direct.ownerId) {
+        response.statusCode = 404;
+        response.end("Not Found");
+        return;
+      }
+      const match = this.match(request.path, request.headers, requestUser);
       if (!match) return next();
       if (
         match.entry.browserRelayPath &&
@@ -191,6 +193,16 @@ export class SshRouteRegistry {
     return true;
   }
 
+  /** Whether an upgrade path belongs to a registered route. */
+  canHandleUpgrade(path: string): boolean {
+    if (this.directRoute(path)) return true;
+    return [...this.routes.values()].some(
+      (entry) =>
+        Boolean(entry.browserRelayPath && pathMatches(path, entry.browserRelayPath)) ||
+        entry.browserPaths.some((alias) => pathMatches(path, alias)),
+    );
+  }
+
   async close(): Promise<void> {
     await Promise.all([...this.routes.keys()].map((routeId) => this.remove(routeId)));
     this.proxy.close();
@@ -225,7 +237,8 @@ export class SshRouteRegistry {
       if (
         Boolean(input.browserRelay) !== Boolean(previous.browserRelayPath) ||
         (input.redirectToSlash ?? false) !== previous.redirectToSlash ||
-        routeHtmlHead(previous.route.id, input.browserRelay, input.htmlHead) !== previous.htmlHead ||
+        routeHtmlHead(previous.route.id, input.browserRelay, input.htmlHead) !==
+          previous.htmlHead ||
         (input.internal ?? false) !== previous.internal
       ) {
         throw new Error(`SSH route path ${path} already has different browser behavior`);
@@ -251,9 +264,7 @@ export class SshRouteRegistry {
     headers: IncomingMessage["headers"],
     requestUser: string | undefined,
   ): RouteMatch | undefined {
-    const direct = [...this.routes.values()]
-      .filter((entry) => path === entry.route.path || path.startsWith(`${entry.route.path}/`))
-      .sort((left, right) => right.route.path.length - left.route.path.length)[0];
+    const direct = this.directRoute(path);
     if (direct && requestUser === direct.ownerId) {
       return {
         entry: direct,
@@ -280,6 +291,12 @@ export class SshRouteRegistry {
       )
       .map((entry) => ({ entry }))[0];
   }
+
+  private directRoute(path: string): RouteTarget | undefined {
+    return [...this.routes.values()]
+      .filter((entry) => path === entry.route.path || path.startsWith(`${entry.route.path}/`))
+      .sort((left, right) => right.route.path.length - left.route.path.length)[0];
+  }
 }
 
 function replayParsedJsonBody(request: Request): Readable | undefined {
@@ -304,7 +321,9 @@ async function injectHtmlHead(
     const source = Buffer.concat(chunks).toString("utf8");
     const body = source.includes("</head>") ? source.replace("</head>", `${head}</head>`) : source;
     for (const [name, value] of Object.entries(proxyResponse.headers)) {
-      if (value === undefined || name === "content-length" || name === "transfer-encoding") continue;
+      if (value === undefined || name === "content-length" || name === "transfer-encoding") {
+        continue;
+      }
       response.setHeader(name, value);
     }
     response.statusCode = proxyResponse.statusCode ?? 200;

@@ -2,9 +2,12 @@ import type { WorkspaceClient } from "@databricks/appkit";
 import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
 import {
   addSshRouteRequestSchema,
+  createSshMachineRequestSchema,
   sshCommandRequestSchema,
   sshMachineServiceActionSchema,
   type AddSshRouteRequest,
+  type CreateSshMachineRequest,
+  type DeleteSshMachineResponse,
   type SshCommandRequest,
   type SshCommandResult,
   type SshMachine,
@@ -168,6 +171,24 @@ export class SshRuntime {
     return this.toMachine(final, userId);
   }
 
+  async createMachine(
+    client: WorkspaceClient,
+    userId: string,
+    input: CreateSshMachineRequest = {},
+    signal?: AbortSignal,
+  ): Promise<SshMachine> {
+    const request = createSshMachineRequestSchema.parse(input);
+    const api = new DatabricksSandboxClient(client);
+    const created = await api.create(request.name, signal);
+    try {
+      await this.ownership.assign(api.workspaceScope(), userId, created.sandboxId);
+    } catch (error) {
+      await api.delete(created.sandboxId, signal).catch(() => undefined);
+      throw error;
+    }
+    return this.toMachine({ ...created, ...(request.name ? { name: request.name } : {}) }, userId);
+  }
+
   async stopMachine(
     client: WorkspaceClient,
     userId: string,
@@ -186,6 +207,24 @@ export class SshRuntime {
       this.services.delete(serviceKey(userId, machineId, kind));
     }
     return this.toMachine(final, userId);
+  }
+
+  async deleteMachine(
+    client: WorkspaceClient,
+    userId: string,
+    machineId: string,
+    signal?: AbortSignal,
+  ): Promise<DeleteSshMachineResponse> {
+    const api = new DatabricksSandboxClient(client);
+    await this.assertAssigned(api.workspaceScope(), userId, machineId);
+    await api.delete(machineId, signal);
+    this.disconnect(api.workspaceScope(), userId, machineId);
+    await this.routes.removeMachine(machineId, userId);
+    for (const kind of ["terminal", "stats"] as const) {
+      this.services.delete(serviceKey(userId, machineId, kind));
+    }
+    await this.ownership.unassign(api.workspaceScope(), userId, machineId);
+    return { deleted: true };
   }
 
   async startService(

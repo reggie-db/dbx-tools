@@ -1,11 +1,12 @@
 # @dbx-tools/appkit-databricks-sandbox
 
-AppKit plugin for existing Databricks Sandboxes. It provides machine discovery,
-lifecycle controls, SSH command execution, Mastra tools, Code Mode sandbox
-transport, and dynamic routes to HTTP servers running in a Sandbox.
+AppKit plugin for Databricks Sandboxes. It provides user-scoped creation,
+discovery, lifecycle controls, deletion, SSH command execution, Mastra tools,
+Code Mode sandbox transport, and dynamic routes to HTTP servers running in a
+Sandbox.
 
-The plugin never creates or deletes a Sandbox. It uses the Databricks REST API
-for discovery, start, stop, and SSH-key registration. It does not invoke the
+The plugin uses the Databricks Lakebox REST API for creation, discovery,
+lifecycle controls, deletion, and SSH-key registration. It does not invoke the
 Databricks CLI.
 
 ## AppKit setup
@@ -51,8 +52,12 @@ const plugins = [
 - `ssh2` remains the transport for direct TCP forwarding to remote web servers.
 
 `auto: true` starts a stopped Sandbox when a command or route needs it.
-`auto: false` requires an explicit start operation. Neither setting creates a
-new Sandbox.
+`auto: false` requires an explicit start operation. Creation remains an
+explicit user or tool action in either mode.
+
+The Lakebox API supports idle auto-stop configuration but does not expose a
+maximum wall-clock runtime. This package does not emulate a maximum runtime
+with process-local timers because that would not survive app restarts.
 
 `fallbackToServicePrincipal: true` keeps HTTP requests OBO-first, then retries a
 failed workspace call with the app service principal. The default is `false` so
@@ -111,8 +116,10 @@ native local-skill mount contract.
 The plugin registers these AppKit tool-provider entries:
 
 - `databricks-sandbox.list_ssh_machines`
+- `databricks-sandbox.create_ssh_machine`
 - `databricks-sandbox.start_ssh_machine`
 - `databricks-sandbox.stop_ssh_machine`
+- `databricks-sandbox.delete_ssh_machine`
 - `databricks-sandbox.execute_ssh_command`
 - `databricks-sandbox.start_ssh_machine_service`
 - `databricks-sandbox.add_ssh_route`
@@ -124,13 +131,14 @@ behavior as the tools and REST routes.
 
 ## Security and storage
 
-Every machine is hidden and unusable until it is explicitly assigned to the
-current AppKit user. This protects service-principal fallback from exposing all
-workspace Sandboxes to every caller. Configure bootstrap assignments with
-`machineAssignments`, or use the plugin export's `assignMachine(userId,
-machineId)` and `unassignMachine(userId, machineId)` operations from trusted
-server code. Assignment is enforced for discovery, lifecycle, commands,
-routes, Mastra tools, and Code Mode.
+Every machine is hidden and unusable until it is assigned to the current AppKit
+user. User-created Sandboxes are assigned immediately after creation. This
+protects service-principal fallback from exposing all workspace Sandboxes to
+every caller. Configure bootstrap assignments with `machineAssignments`, or
+use the plugin export's `assignMachine(userId, machineId)` and
+`unassignMachine(userId, machineId)` operations from trusted server code.
+Assignment is enforced for discovery, lifecycle, deletion, commands, routes,
+Mastra tools, and Code Mode.
 
 Assignment storage uses the registered AppKit `lakebase()` pool when available.
 If Lakebase initialization fails in `auto` mode, it falls back to an atomic

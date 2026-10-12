@@ -105,12 +105,7 @@ describe("SshRouteRegistry", () => {
         registry
           .list("sandbox-1", "reggie.pierce@databricks.com", { includeInternal: true })
           .map((route) => route.path),
-        [
-          "/sandbox/stripped",
-          "/sandbox/preserved",
-          "/sandbox/internal",
-          "/sandbox/redirected",
-        ],
+        ["/sandbox/stripped", "/sandbox/preserved", "/sandbox/internal", "/sandbox/redirected"],
       );
       assert.equal(
         await fetch(`http://127.0.0.1:${proxyPort}/sandbox/stripped/assets?q=1`, {
@@ -123,6 +118,12 @@ describe("SshRouteRegistry", () => {
           headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
         }).then((res) => res.text()),
         "/sandbox/preserved/assets?q=1",
+      );
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}/sandbox/stripped`, {
+          headers: { [USER_EMAIL_HEADER]: "other@databricks.com" },
+        }).then(async (response) => `${response.status}:${await response.text()}`),
+        "404:Not Found",
       );
       const redirect = await fetch(`http://127.0.0.1:${proxyPort}${redirected.path}`, {
         redirect: "manual",
@@ -139,7 +140,10 @@ describe("SshRouteRegistry", () => {
 
   it("injects route-owned HTML head content only into the service document", async () => {
     const remote = createHttpServer((request, response) => {
-      response.setHeader("content-type", request.url === "/asset.js" ? "text/javascript" : "text/html");
+      response.setHeader(
+        "content-type",
+        request.url === "/asset.js" ? "text/javascript" : "text/html",
+      );
       response.end(
         request.url === "/asset.js"
           ? "console.log('asset')"
@@ -174,12 +178,14 @@ describe("SshRouteRegistry", () => {
         htmlHead: '<style id="viewport">html{height:100dvh}</style>',
       });
       const headers = { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" };
-      const document = await fetch(
-        `http://127.0.0.1:${proxyPort}/sandbox/sandbox-1/stats/`,
-        { headers },
-      );
+      const document = await fetch(`http://127.0.0.1:${proxyPort}/sandbox/sandbox-1/stats/`, {
+        headers,
+      });
       assert.equal(document.status, 200);
-      assert.match(await document.text(), /<style id="viewport">html\{height:100dvh\}<\/style><\/head>/);
+      assert.match(
+        await document.text(),
+        /<style id="viewport">html\{height:100dvh\}<\/style><\/head>/,
+      );
       assert.equal(
         await fetch(`http://127.0.0.1:${proxyPort}/sandbox/sandbox-1/stats/asset.js`, {
           headers,
@@ -254,7 +260,9 @@ describe("SshRouteRegistry", () => {
     let upgradeHandled = false;
     const remote = createHttpServer((request, response) => {
       response.end(
-        request.url === "/" ? "<!doctype html><html><head></head><body></body></html>" : request.url,
+        request.url === "/"
+          ? "<!doctype html><html><head></head><body></body></html>"
+          : request.url,
       );
     });
     const remoteWebSockets = new WebSocketServer({ noServer: true });
@@ -385,12 +393,7 @@ describe("SshRouteRegistry", () => {
         browserRelay: true,
       });
       assert.equal(
-        await sendWebsocketUpgrade(
-          proxyPort,
-          "/__srv/ambiguous-stale/ws/events",
-          undefined,
-          false,
-        ),
+        await sendWebsocketUpgrade(proxyPort, "/__srv/ambiguous-stale/ws/events", undefined, false),
         "closed",
       );
       assert.equal(upgradeHandled, true);

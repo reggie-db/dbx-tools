@@ -130,6 +130,7 @@ export class MastraPluginClient extends MastraClient {
       fetch: async (input, init) => {
         const response = await fetch(input, init);
         headers = new Headers(response.headers);
+        await assertChatResponse(response);
         return response;
       },
     });
@@ -160,6 +161,7 @@ export class MastraPluginClient extends MastraClient {
       fetch: async (input, init) => {
         const response = await fetch(input, init);
         headers = new Headers(response.headers);
+        await assertChatResponse(response);
         return response;
       },
     });
@@ -618,6 +620,27 @@ export class MastraPluginClient extends MastraClient {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return parse(await res.json());
   }
+}
+
+async function assertChatResponse(response: Response): Promise<void> {
+  if (response.ok) return;
+  const body = await response.clone().json().catch(() => undefined);
+  const message = responseErrorMessage(body) ?? (await response.clone().text().catch(() => ""));
+  throw new Error(message.trim() || `Chat request failed (${response.status})`);
+}
+
+function responseErrorMessage(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const record = body as Record<string, unknown>;
+  for (const field of ["error", "message"] as const) {
+    const value = record[field];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (value && typeof value === "object") {
+      const nested = (value as Record<string, unknown>).message;
+      if (typeof nested === "string" && nested.trim()) return nested.trim();
+    }
+  }
+  return undefined;
 }
 
 /**

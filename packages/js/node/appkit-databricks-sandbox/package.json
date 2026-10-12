@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/appkit-databricks-sandbox",
-  "description": "AppKit management, Mastra tools, and remote routing for existing Databricks Sandboxes",
+  "description": "AppKit management, Mastra tools, and remote routing for Databricks Sandboxes",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",

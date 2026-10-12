@@ -28,6 +28,7 @@ function fakeGate(overrides: Partial<AuthGateApi> = {}): AuthGateApi {
   return {
     basePath: AUTH_BASE_PATH,
     passkeysEnabled: true,
+    isProtectedHost: (headers) => headers.get("host") === PUBLIC_DOMAIN,
     handler: async () => new globalThis.Response("{}", { status: 200 }),
     session: async (headers) =>
       headers.get("cookie")?.includes(`${SESSION_COOKIE_NAME}=tok`)
@@ -284,14 +285,17 @@ describe("gate middleware", () => {
   it("lets a `gatePaths` prefix through with a valid session", async () => {
     const { middleware } = mount({ gatePaths: ["/ws"] });
     let nexted = false;
+    const req = makeReq(PUBLIC_DOMAIN, "/ws", `${SESSION_COOKIE_NAME}=tok`);
     await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
-      makeReq(PUBLIC_DOMAIN, "/ws", `${SESSION_COOKIE_NAME}=tok`),
+      req,
       makeRes(),
       () => {
         nexted = true;
       },
     );
     assert.equal(nexted, true);
+    assert.equal(req.headers["x-forwarded-user"], "user@example.com");
+    assert.equal(req.headers["x-forwarded-email"], "user@example.com");
   });
 
   it("in app-gating mode, denies an unauthenticated browser navigation (for the login page)", async () => {

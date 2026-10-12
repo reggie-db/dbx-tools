@@ -17,6 +17,8 @@ import {
 } from "@databricks/appkit/beta";
 import {
   ACCESS_TOKEN_HEADER,
+  USER_EMAIL_HEADER,
+  USER_ID_HEADER,
   appkit,
   pluginRegistry,
   toolkitEntries,
@@ -25,11 +27,13 @@ import {
 } from "@dbx-tools/appkit";
 import {
   addSshRouteRequestSchema,
+  createSshMachineRequestSchema,
   removeSshRouteRequestSchema,
   sshCommandRequestSchema,
   sshMachineActionSchema,
   sshMachineServiceActionSchema,
   type AddSshRouteRequest,
+  type CreateSshMachineRequest,
   type SshCommandRequest,
   type SshMachineServiceAction,
 } from "@dbx-tools/shared-databricks-sandbox";
@@ -44,15 +48,20 @@ interface ServerExtension {
   getServer(): HttpServer;
 }
 
+interface UpgradeIdentityGate {
+  isProtectedHost(headers: Headers): boolean;
+  session(headers: Headers): Promise<string | undefined>;
+}
+
 const SSH_CONFIG_SCHEMA = z.toJSONSchema(SshPluginConfigSchema) as JSONSchema7;
 
-/** AppKit plugin for existing Databricks Sandbox lifecycle, SSH, and route operations. */
+/** AppKit plugin for Databricks Sandbox lifecycle, SSH, and route operations. */
 export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   static manifest = {
     name: "databricks-sandbox",
     displayName: "Sandboxes",
     description:
-      "Discovers and manages existing Databricks Sandboxes over REST and SSH, with remote web routing and Mastra tools.",
+      "Creates and manages Databricks Sandboxes over REST and SSH, with remote web routing and Mastra tools.",
     stability: "beta",
     resources: { required: [], optional: [] },
     config: { schema: SSH_CONFIG_SCHEMA },
@@ -62,8 +71,10 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   private mounted = false;
   private httpServer?: HttpServer;
   private upgradeAttachTimer?: ReturnType<typeof setTimeout>;
-  private readonly upgradeHandler = (request: IncomingMessage, socket: Socket, head: Buffer) =>
-    this.runtime.routes.handleUpgrade(request, socket, head);
+  private upgradeIdentityGate?: UpgradeIdentityGate;
+  private readonly upgradeHandler = (request: IncomingMessage, socket: Socket, head: Buffer) => {
+    void this.handleUpgrade(request, socket, head);
+  };
 
   constructor(config: SshPluginConfig = {}) {
     super(config);
@@ -80,6 +91,9 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       await this.runtime.initializeOwnership(pool);
       const server = this.context?.getPlugins().get("server") as ServerExtension | undefined;
       if (!server || this.mounted) return;
+      this.upgradeIdentityGate = resolveUpgradeIdentityGate(
+        this.context?.getPlugins().get("authGate"),
+      );
       server.addExtension((application) => application.use(this.runtime.routes.middleware()));
       this.mounted = true;
       this.attachUpgradeHandler(server);
@@ -99,6 +113,23 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
             "listMachines",
             (plugin) => plugin.listMachines(userId),
             () => this.runtime.listMachines(createWorkspaceClient(), userId),
+          ),
+        );
+      },
+    });
+    this.route(router, {
+      name: "createMachine",
+      method: "post",
+      path: "/machines",
+      handler: async (req, res) => {
+        const userId = this.resolveUserId(req);
+        const input = createSshMachineRequestSchema.parse(req.body ?? {});
+        res.json(
+          await this.withRequestAuth(
+            req,
+            "createMachine",
+            (plugin) => plugin.createMachine(userId, input),
+            () => this.runtime.createMachine(createWorkspaceClient(), userId, input),
           ),
         );
       },
@@ -133,6 +164,23 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
             "stopMachine",
             (plugin) => plugin.stopMachine(userId, input.machineId),
             () => this.runtime.stopMachine(createWorkspaceClient(), userId, input.machineId),
+          ),
+        );
+      },
+    });
+    this.route(router, {
+      name: "deleteMachine",
+      method: "delete",
+      path: "/machines/:machineId",
+      handler: async (req, res) => {
+        const userId = this.resolveUserId(req);
+        const input = sshMachineActionSchema.parse({ machineId: req.params.machineId });
+        res.json(
+          await this.withRequestAuth(
+            req,
+            "deleteMachine",
+            (plugin) => plugin.deleteMachine(userId, input.machineId),
+            () => this.runtime.deleteMachine(createWorkspaceClient(), userId, input.machineId),
           ),
         );
       },
@@ -225,12 +273,20 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     return this.runtime.listMachines(this.workspaceClient(), userId);
   }
 
+  async createMachine(userId: string, input: CreateSshMachineRequest = {}) {
+    return this.runtime.createMachine(this.workspaceClient(), userId, input);
+  }
+
   async startMachine(userId: string, machineId: string) {
     return this.runtime.startMachine(this.workspaceClient(), userId, machineId);
   }
 
   async stopMachine(userId: string, machineId: string) {
     return this.runtime.stopMachine(this.workspaceClient(), userId, machineId);
+  }
+
+  async deleteMachine(userId: string, machineId: string) {
+    return this.runtime.deleteMachine(this.workspaceClient(), userId, machineId);
   }
 
   async executeCommand(userId: string, input: SshCommandRequest) {
@@ -266,6 +322,8 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   exports() {
     return {
       listMachines: (userId: string) => this.listMachines(userId),
+      createMachine: (userId: string, input: CreateSshMachineRequest) =>
+        this.createMachine(userId, input),
       startMachine: (userId: string, machineId: string) => this.startMachine(userId, machineId),
       stopMachine: (userId: string, machineId: string) => this.stopMachine(userId, machineId),
       executeCommand: (userId: string, input: SshCommandRequest) =>
@@ -302,6 +360,27 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       }, 10);
       this.upgradeAttachTimer.unref?.();
     }
+  }
+
+  private async handleUpgrade(request: IncomingMessage, socket: Socket, head: Buffer): Promise<void> {
+    const path = new URL(request.url ?? "/", "http://localhost").pathname;
+    if (!this.runtime.routes.canHandleUpgrade(path)) return;
+    const gate = this.upgradeIdentityGate;
+    if (gate) {
+      const headers = requestHeaders(request);
+      if (gate.isProtectedHost(headers)) {
+        delete request.headers[USER_ID_HEADER];
+        delete request.headers[USER_EMAIL_HEADER];
+        const userId = await gate.session(headers);
+        if (!userId) {
+          socket.destroy();
+          return;
+        }
+        request.headers[USER_ID_HEADER] = userId;
+        request.headers[USER_EMAIL_HEADER] = userId;
+      }
+    }
+    if (!this.runtime.routes.handleUpgrade(request, socket, head)) socket.destroy();
   }
 
   private async withRequestAuth<T>(
@@ -350,12 +429,23 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     };
     return {
       list_ssh_machines: defineTool({
-        description: "List existing Databricks Sandbox SSH machines without creating one.",
+        description:
+          "List the current user's Databricks Sandboxes. Always check this first and prefer an existing Sandbox unless the user explicitly requests another.",
         schema: z.object({}).strict(),
         annotations: { effect: "read", requiresUserContext: true },
         execute: (_args, signal) =>
           execute("listMachines", (client, resolvedUserId) =>
             this.runtime.listMachines(client, resolvedUserId, signal),
+          ),
+      }),
+      create_ssh_machine: defineTool({
+        description:
+          "Create a new Databricks Sandbox for the current user only when they explicitly request a new Sandbox or no existing Sandbox meets the request.",
+        schema: createSshMachineRequestSchema,
+        annotations: { effect: "write", requiresUserContext: true },
+        execute: (input, signal) =>
+          execute("createMachine", (client, resolvedUserId) =>
+            this.runtime.createMachine(client, resolvedUserId, input, signal),
           ),
       }),
       start_ssh_machine: defineTool({
@@ -374,6 +464,15 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
         execute: (input, signal) =>
           execute("stopMachine", (client, resolvedUserId) =>
             this.runtime.stopMachine(client, resolvedUserId, input.machineId, signal),
+          ),
+      }),
+      delete_ssh_machine: defineTool({
+        description: "Permanently delete one Databricks Sandbox owned by the current user.",
+        schema: sshMachineActionSchema,
+        annotations: { effect: "write", requiresUserContext: true },
+        execute: (input, signal) =>
+          execute("deleteMachine", (client, resolvedUserId) =>
+            this.runtime.deleteMachine(client, resolvedUserId, input.machineId, signal),
           ),
       }),
       execute_ssh_command: defineTool({
@@ -420,6 +519,29 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     if (!context) throw new Error("SSH tools require an AppKit execution context");
     return "userId" in context ? context.userId : context.serviceUserId;
   }
+}
+
+function resolveUpgradeIdentityGate(plugin: unknown): UpgradeIdentityGate | undefined {
+  const exports = (plugin as { exports?: () => unknown } | undefined)?.exports?.();
+  if (
+    typeof (exports as UpgradeIdentityGate | undefined)?.isProtectedHost !== "function" ||
+    typeof (exports as UpgradeIdentityGate | undefined)?.session !== "function"
+  ) {
+    return undefined;
+  }
+  return exports as UpgradeIdentityGate;
+}
+
+function requestHeaders(request: IncomingMessage): Headers {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(name, item);
+    } else if (value !== undefined) {
+      headers.set(name, value);
+    }
+  }
+  return headers;
 }
 
 /** AppKit plugin factory for {@link AppKitSshPlugin}. */
