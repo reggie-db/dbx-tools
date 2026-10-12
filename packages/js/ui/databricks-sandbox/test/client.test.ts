@@ -94,4 +94,52 @@ describe("SshClient", () => {
     assert.equal(project.port, 18080);
     assert.deepEqual(await request?.json(), { machineId: "machine-1" });
   });
+
+  it("opens project terminals and resets projects through their action routes", async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(new URL(String(input), "http://localhost"), init);
+      requests.push(request);
+      const project = {
+        id: "project-1",
+        name: "demo",
+        machineId: "machine-1",
+        directory: "/home/sandbox/projects/demo",
+        path: "/sandbox/user/demo",
+        openUrl: "/sandbox/user/demo",
+        port: 18080,
+        stripPrefix: true,
+        state: "ready",
+      };
+      if (request.url.endsWith("/terminal")) {
+        return Response.json({
+          project,
+          service: {
+            kind: "terminal",
+            path: "/sandbox/terminal/machine-1",
+            openUrl: "/sandbox/terminal/machine-1",
+            state: "ready",
+          },
+        });
+      }
+      return Response.json({ project });
+    }) as typeof fetch;
+    const client = new SshClient();
+
+    const terminal = await client.openProjectTerminal("project-1");
+    const reset = await client.resetProject("project-1");
+
+    assert.equal(terminal.service.kind, "terminal");
+    assert.equal(reset.id, "project-1");
+    assert.deepEqual(
+      requests.map((request) => [request.method, request.url]),
+      [
+        ["POST", "http://localhost/api/databricks-sandbox/projects/project-1/terminal"],
+        ["POST", "http://localhost/api/databricks-sandbox/projects/project-1/reset"],
+      ],
+    );
+  });
 });

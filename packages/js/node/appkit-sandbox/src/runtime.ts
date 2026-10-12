@@ -16,6 +16,7 @@ import {
   type SshMachineServiceAction,
   type SshMachinesResponse,
   type SshProject,
+  type SshProjectTerminalResponse,
 } from "@dbx-tools/shared-databricks-sandbox";
 import {
   generateProjectName,
@@ -31,6 +32,7 @@ import {
   renderProjectMiseConfig,
 } from "./_projects.ts";
 import type { ResolvedSshPluginConfig } from "./config.ts";
+import { desktopOpenUrl } from "./desktop.ts";
 import { SshKeyStore } from "./key-store.ts";
 import {
   createManagedSandboxName,
@@ -47,7 +49,7 @@ import {
 } from "./ownership.ts";
 import { DatabricksSandboxClient, isSandboxUnavailable, type SandboxEntry } from "./rest.ts";
 import { SshRouteRegistry } from "./routes.ts";
-import { ensureSshService } from "./services.ts";
+import { ensureSshService, openDinoTtyProjectTab } from "./services.ts";
 import { SshSession } from "./session.ts";
 
 const POLL_INTERVAL_MS = 1_000;
@@ -322,7 +324,7 @@ export class SshRuntime {
     input: CreateSshMachineRequest = {},
     signal?: AbortSignal,
   ): Promise<SshMachine> {
-    createSshMachineRequestSchema.parse(input);
+    const request = createSshMachineRequestSchema.parse(input);
     const api = new DatabricksSandboxClient(client);
     const expiresAtMs = Date.now() + this.config.sandboxLifetimeSeconds * 1_000;
     const managedName = createManagedSandboxName(userId, expiresAtMs);
@@ -342,7 +344,7 @@ export class SshRuntime {
       throw error;
     }
     const managed = parseManagedSandboxName(managedName)!;
-    return this.toMachine(
+    const machine = this.toMachine(
       { ...created, name: managedName },
       api.workspaceScope(),
       userId,
@@ -350,6 +352,18 @@ export class SshRuntime {
       managed,
       [],
     );
+    if (!request.desktop) return machine;
+    const started = await this.startMachine(client, userId, created.sandboxId, signal);
+    const desktop = await this.startService(
+      client,
+      userId,
+      { machineId: created.sandboxId, service: "desktop" },
+      signal,
+    );
+    return {
+      ...started,
+      services: started.services.map((service) => (service.kind === "desktop" ? desktop : service)),
+    };
   }
 
   /** Stops one assigned Sandbox, waits for it to stop, and clears local runtime state. */
@@ -429,6 +443,7 @@ export class SshRuntime {
     const starting: SshMachineService = {
       kind: request.service,
       path: this.servicePath(request.machineId, request.service),
+      openUrl: this.serviceOpenUrl(request.machineId, request.service),
       state: "starting",
     };
     this.services.set(key, starting);
@@ -533,7 +548,7 @@ export class SshRuntime {
     const path = `${this.routes.userPathPrefix(userId)}/${projectPath}`;
     const miseToml = renderProjectMiseConfig(config, { name, path, port });
     const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
-    const machine = await this.ensureRunning(api, userId, request.machineId, signal);
+    const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
     const session = await this.ensureSession(client, userId, machine, epoch, signal);
     await this.ensureMachineSoftware(workspaceScope, request.machineId, session, signal);
     await this.restoreMachineProjects(client, api, userId, machine, signal);
@@ -648,6 +663,95 @@ export class SshRuntime {
     }
     await this.routes.remove(projectId, userId);
     return this.ownershipStore().deleteProject(workspaceScope, userId, projectId);
+  }
+
+  /** Recreates one persisted project's directory from its saved mise configuration. */
+  async resetProject(
+    client: WorkspaceClient,
+    userId: string,
+    projectId: string,
+    signal?: AbortSignal,
+  ): Promise<SshProject> {
+    const api = new DatabricksSandboxClient(client);
+    const workspaceScope = api.workspaceScope();
+    const project = await this.ownershipStore().getProject(workspaceScope, userId, projectId);
+    if (!project) throw new Error(`Sandbox project ${projectId} was not found`);
+    const owned = await this.requireOwnedMachine(api, userId, project.machineId, signal);
+    const wasRunning = normalizeStatus(owned.entry.status) === "running";
+    const machine = wasRunning
+      ? owned.entry
+      : await waitForStatus(
+          api,
+          project.machineId,
+          "running",
+          await api.start(project.machineId, signal),
+          signal,
+        );
+    let reset: SshProject | undefined;
+    try {
+      const epoch = this.runtimeEpoch(workspaceScope, userId, project.machineId);
+      const session = await this.ensureSession(client, userId, machine, epoch, signal);
+      await this.ensureMachineSoftware(workspaceScope, project.machineId, session, signal);
+      await this.removeProjectDirectory(session, project.projectPath, signal);
+      const miseToml = renderProjectMiseConfig(project.config, {
+        name: project.name,
+        path: project.path,
+        port: project.port,
+      });
+      const directory = await this.prepareProjectDirectory(
+        session,
+        project.projectPath,
+        miseToml,
+        undefined,
+        signal,
+      );
+      const updated = { ...project, directory };
+      await this.restoreProjectRoute(session, updated);
+      reset = this.toProject(updated, wasRunning);
+    } finally {
+      if (!wasRunning) {
+        await waitForStatus(
+          api,
+          project.machineId,
+          "stopped",
+          await api.stop(project.machineId, signal),
+          signal,
+        );
+        await this.clearMachineRuntime(workspaceScope, project.machineId);
+      }
+    }
+    if (!reset) throw new Error(`Sandbox project ${projectId} reset did not complete`);
+    return reset;
+  }
+
+  /** Opens a new DinoTTY tab rooted at one persisted project directory. */
+  async openProjectTerminal(
+    client: WorkspaceClient,
+    userId: string,
+    projectId: string,
+    signal?: AbortSignal,
+  ): Promise<SshProjectTerminalResponse> {
+    const api = new DatabricksSandboxClient(client);
+    const workspaceScope = api.workspaceScope();
+    const project = await this.ownershipStore().getProject(workspaceScope, userId, projectId);
+    if (!project) throw new Error(`Sandbox project ${projectId} was not found`);
+    const terminal = await this.startService(
+      client,
+      userId,
+      { machineId: project.machineId, service: "terminal" },
+      signal,
+    );
+    const machine = await this.ensureRunning(api, userId, project.machineId, signal, true);
+    const epoch = this.runtimeEpoch(workspaceScope, userId, project.machineId);
+    const session = await this.ensureSession(client, userId, machine, epoch, signal);
+    await openDinoTtyProjectTab(
+      session,
+      project.directory,
+      project.name,
+      this.config.commandTimeoutMs,
+      signal,
+    );
+    return { project: this.toProject(project, this.projectRouteReady(project)), service: terminal };
   }
 
   /** Lists persisted projects for one AppKit user. */
@@ -853,10 +957,11 @@ export class SshRuntime {
     userId: string,
     machineId: string,
     signal?: AbortSignal,
+    explicit = false,
   ): Promise<SandboxEntry> {
     const current = (await this.requireOwnedMachine(api, userId, machineId, signal)).entry;
     if (normalizeStatus(current.status) === "running") return current;
-    if (!this.config.auto) {
+    if (!this.config.auto && !explicit) {
       throw new Error(
         `SSH machine ${machineId} is ${current.status}; start it explicitly because auto is false`,
       );
@@ -1112,7 +1217,7 @@ export class SshRuntime {
     try {
       await this.assertAssigned(workspaceScope, userId, request.machineId);
       this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
-      const machine = await this.ensureRunning(api, userId, request.machineId, signal);
+      const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
       const session = await this.ensureSession(client, userId, machine, epoch, signal);
       await this.ensureMachineSoftware(workspaceScope, request.machineId, session, signal);
       await this.restoreMachineProjects(client, api, userId, machine, signal);
@@ -1139,7 +1244,7 @@ export class SshRuntime {
         await this.routes.remove(route.id, userId);
         throw error;
       }
-      const ready: SshMachineService = { ...starting, state: "ready" };
+      const ready: SshMachineService = { ...starting, openUrl: target.openUrl, state: "ready" };
       this.services.set(key, ready);
       logger.info("SSH machine service provisioning succeeded", {
         userId,
@@ -1258,11 +1363,12 @@ export class SshRuntime {
         ? { autoStopSeconds: idleTimeoutSeconds(entry.idleTimeout) }
         : {}),
       projects: projects.map((project) => this.toProject(project, this.projectRouteReady(project))),
-      services: (["terminal", "stats"] as const).map(
+      services: (["terminal", "desktop", "stats"] as const).map(
         (kind): SshMachineService =>
           this.services.get(serviceKey(workspaceScope, userId, entry.sandboxId, kind)) ?? {
             kind,
             path: this.servicePath(entry.sandboxId, kind),
+            openUrl: this.serviceOpenUrl(entry.sandboxId, kind),
             state: "stopped",
           },
       ),
@@ -1273,9 +1379,15 @@ export class SshRuntime {
   }
 
   private servicePath(machineId: string, kind: SshMachineService["kind"]): string {
-    const service = kind === "terminal" ? "terminal" : "metrics";
+    const service = kind === "terminal" ? "terminal" : kind === "desktop" ? "desktop" : "metrics";
     const routePrefix = this.config.routePrefix.replace(/\/+$/, "");
     return `${routePrefix}/${service}/${machinePathSegment(machineId)}`;
+  }
+
+  private serviceOpenUrl(machineId: string, kind: SshMachineService["kind"]): string {
+    const path = this.servicePath(machineId, kind);
+    if (kind !== "desktop") return kind === "stats" ? `${path}/` : path;
+    return desktopOpenUrl(path);
   }
 
   private runtimeEpoch(workspaceScope: string, userId: string, machineId: string): RuntimeEpoch {

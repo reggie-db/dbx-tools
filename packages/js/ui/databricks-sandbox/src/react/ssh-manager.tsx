@@ -27,8 +27,10 @@ import {
 import {
   ExternalLinkIcon,
   HeartPulseIcon,
+  MonitorIcon,
   PlayIcon,
   PlusIcon,
+  RefreshCwIcon,
   SquareIcon,
   SquareTerminalIcon,
   Trash2Icon,
@@ -57,6 +59,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   const [error, setError] = useState<string>();
   const [machineId, setMachineId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SshMachine>();
+  const [resetTarget, setResetTarget] = useState<SshProject>();
   const [projectFormOpen, setProjectFormOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [port, setPort] = useState("");
@@ -198,7 +201,36 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     setError(undefined);
     try {
       const result = await client.startService(machine.id, service);
-      window.open(resolveServiceUrl(result.path), "_blank", "noopener,noreferrer");
+      window.open(resolveServiceUrl(result.openUrl), "_blank", "noopener,noreferrer");
+      await refresh();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusyId(undefined);
+    }
+  };
+
+  const openProjectTerminal = async (project: SshProject) => {
+    setBusyId(`${project.id}:terminal`);
+    setError(undefined);
+    try {
+      const result = await client.openProjectTerminal(project.id);
+      window.open(resolveServiceUrl(result.service.openUrl), "_blank", "noopener,noreferrer");
+      await refresh();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusyId(undefined);
+    }
+  };
+
+  const resetProject = async () => {
+    if (!resetTarget) return;
+    setBusyId(`${resetTarget.id}:reset`);
+    setError(undefined);
+    try {
+      await client.resetProject(resetTarget.id);
+      setResetTarget(undefined);
       await refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -319,6 +351,22 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                             <span className="hidden sm:inline">Stop</span>
                           </Button>
                         ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0 px-2 sm:px-3"
+                          aria-label={`Open desktop for ${machine.name}`}
+                          title="Desktop"
+                          disabled={Boolean(busyId)}
+                          onClick={() => void openService(machine, "desktop")}
+                        >
+                          {busyId === `${machine.id}:desktop` ? (
+                            <Spinner className="size-3.5" />
+                          ) : (
+                            <MonitorIcon className="size-3.5" />
+                          )}
+                          <span className="hidden sm:inline">Desktop</span>
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -516,6 +564,36 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           </Button>
                           <Button
                             type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Open terminal for ${project.name}`}
+                            disabled={Boolean(busyId)}
+                            onClick={() => void openProjectTerminal(project)}
+                          >
+                            {busyId === `${project.id}:terminal` ? (
+                              <Spinner className="size-3.5" />
+                            ) : (
+                              <SquareTerminalIcon className="size-3.5" />
+                            )}
+                            Terminal
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Reset ${project.name}`}
+                            title="Reset project"
+                            disabled={Boolean(busyId)}
+                            onClick={() => setResetTarget(project)}
+                          >
+                            {busyId === `${project.id}:reset` ? (
+                              <Spinner className="size-4" />
+                            ) : (
+                              <RefreshCwIcon className="size-4" />
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
                             variant="ghost"
                             size="icon"
                             aria-label={`Remove ${project.name}`}
@@ -591,6 +669,42 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                 <Trash2Icon className="size-3.5" />
               )}
               Delete sandbox
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(resetTarget)}
+        onOpenChange={(open) => {
+          if (!open && !busyId) setResetTarget(undefined);
+        }}
+      >
+        <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset this project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {resetTarget
+                ? `${resetTarget.name}'s files will be permanently deleted and its saved environment will be recreated.`
+                : "The project files will be permanently deleted and its saved environment will be recreated."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(busyId)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={Boolean(busyId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                void resetProject();
+              }}
+            >
+              {resetTarget && busyId === `${resetTarget.id}:reset` ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <RefreshCwIcon className="size-3.5" />
+              )}
+              Reset project
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

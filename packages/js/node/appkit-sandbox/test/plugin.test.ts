@@ -39,6 +39,8 @@ describe("AppKitSshPlugin", () => {
       "GET:/projects",
       "POST:/projects",
       "DELETE:/projects/:projectId",
+      "POST:/projects/:projectId/terminal",
+      "POST:/projects/:projectId/reset",
     ]);
     assert.deepEqual(
       plugin.getAgentTools().map(({ name }) => name),
@@ -50,10 +52,23 @@ describe("AppKitSshPlugin", () => {
         "delete_ssh_machine",
         "execute_ssh_command",
         "start_ssh_machine_service",
+        "list_ssh_projects",
         "add_ssh_project",
+        "open_ssh_project_terminal",
+        "reset_ssh_project",
         "remove_ssh_project",
       ],
     );
+    const tools = new Map(plugin.getAgentTools().map((tool) => [tool.name, tool]));
+    assert.equal(tools.get("delete_ssh_machine")?.annotations?.destructive, true);
+    assert.equal(tools.get("reset_ssh_project")?.annotations?.destructive, true);
+    assert.equal(tools.get("remove_ssh_project")?.annotations?.destructive, true);
+    const operations = plugin.exports().operations("user@example.com");
+    assert.deepEqual(
+      Object.keys(operations),
+      plugin.getAgentTools().map(({ name }) => name),
+    );
+    assert.equal(operations.reset_ssh_project.schema.meta()?.appkitTool?.agentTool, true);
     assert.deepEqual(plugin.clientConfig(), { routePrefix: "/sandbox" });
     assert.equal(AppKitSshPlugin.manifest.name, "databricks-sandbox");
     assert.equal(AppKitSshPlugin.manifest.stability, "beta");

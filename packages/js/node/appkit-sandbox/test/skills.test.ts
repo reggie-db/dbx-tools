@@ -6,12 +6,10 @@ import { databricksSandboxSkillMounts } from "../src/skills.ts";
 const showcaseSkills = [
   "browser-synth",
   "fractal-lab",
-  "freedoom-desktop",
   "jupyter-lab",
   "network-speed-test",
   "particle-physics-lab",
   "realtime-whiteboard",
-  "vnc-server",
 ];
 
 describe("databricksSandboxSkillMounts", () => {
@@ -36,5 +34,21 @@ describe("databricksSandboxSkillMounts", () => {
       assert.match(source, /openUrl/);
       assert.match(source, /mise/i);
     }
+
+    for (const skill of ["freedoom-desktop", "vnc-server"]) {
+      assert.ok(directories.includes(skill), `missing packaged skill ${skill}`);
+      const source = await readFile(`${mount.root}/${skill}/SKILL.md`, "utf8");
+      assert.match(source, /start_ssh_machine_service/);
+      assert.match(source, /service: "desktop"/);
+      assert.match(source, /openUrl/);
+      assert.match(source, /built-in/i);
+      assert.doesNotMatch(source, /apt-get/);
+    }
+
+    const freedoom = await readFile(`${mount.root}/freedoom-desktop/SKILL.md`, "utf8");
+    assert.match(freedoom, /add_ssh_project/);
+    assert.match(freedoom, /DISPLAY=:20/);
+    const desktop = await readFile(`${mount.root}/vnc-server/SKILL.md`, "utf8");
+    assert.doesNotMatch(desktop, /add_ssh_project/);
   });
 });

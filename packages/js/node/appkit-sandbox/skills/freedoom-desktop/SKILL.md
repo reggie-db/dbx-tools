@@ -1,40 +1,27 @@
 ---
 name: freedoom-desktop
-description: Launch the redistributable Freedoom game in a browser-accessible Sandbox desktop.
+description: Launch the redistributable Freedoom game in the built-in browser desktop on an assigned Sandbox.
 ---
 
 # Freedoom Desktop
 
-Project workflow is required. Call `add_ssh_project` before any
-`execute_ssh_command` used to install or launch the desktop. Use only the
-returned `directory`, `port`, `path`, and `openUrl`. Do not write launch files
-under `~/.dbx-tools/runtime`, invent a route, publish a direct Sandbox URL, or
-create or display a VNC password. A direct SSH-only launch is incomplete.
+Reuse an assigned Sandbox. Call `start_ssh_machine_service` with
+`service: "desktop"` before game setup. Do not install or configure TigerVNC,
+noVNC, websockify, a window manager, a VNC password, or another desktop route.
+The built-in service owns those concerns and returns the desktop `openUrl`.
 
-Reuse an assigned Sandbox. Call `add_ssh_project` with
-`name: "freedoom-desktop"`. Use its returned `directory` for scripts and logs
-and its generated `port` for noVNC.
+Call `add_ssh_project` with `name: "freedoom-desktop"` before using
+`execute_ssh_command` for game-specific files or launch scripts. Keep those
+files in the returned `directory`; do not write them under
+`~/.dbx-tools/runtime`.
 
-Keep user-space tools and launch tasks in the project's mise config when they
-are available through mise. Use system packages only for desktop and game
-components that mise does not provide.
+Inspect the operating system and package manager before installing game
+packages. Install only the distribution's freely redistributable Freedoom data
+and a compatible maintained engine such as Crispy Doom or PrBoom+. Do not
+download or request proprietary Doom data. Locate `freedoom1.wad` or
+`freedoom2.wad` instead of assuming a distribution-specific path.
 
-Before installing system packages, inspect the operating system and package
-manager and obtain confirmation. Install a minimal window manager, TigerVNC,
-noVNC/websockify, GNOME Web (`epiphany-browser`) or another maintained browser,
-the distribution's Freedoom data package, and a compatible engine such as
-Crispy Doom or PrBoom+.
-
-Use only the freely redistributable `freedoom1.wad` or `freedoom2.wad` from the
-installed package. Do not download or request proprietary Doom data. Locate the
-IWAD instead of assuming a distribution-specific path.
-
-Bind VNC and websockify to loopback. Use the VNC server's no-auth mode only on
-loopback. Do not create a VNC password because the AppKit project route already
-authenticates browser access. Launch the desktop and Freedoom from scripts in
-the project directory.
-
-When noVNC is ready, update the same project by calling `add_ssh_project` with its
-`projectId` and
-`openPath: "vnc.html?autoconnect=1&resize=remote&path=<project-path-without-leading-slash>/websockify"`.
-Return the updated `openUrl`.
+Launch the game on the built-in desktop display with `DISPLAY=:20` from a
+project-local script. Keep the process detached and write its log in the
+project directory. Return the desktop service `openUrl`, not the project's HTTP
+route, localhost, or a direct Sandbox URL.

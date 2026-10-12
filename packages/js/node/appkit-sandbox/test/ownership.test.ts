@@ -583,6 +583,64 @@ describe("managed Sandbox ownership", () => {
     );
   });
 
+  it("resets a persisted project and opens its directory in DinoTTY", async () => {
+    const now = Date.now();
+    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
+    const { client } = sandboxClient([
+      { sandboxId: "owned", status: "RUNNING", name: managedName },
+    ]);
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const session = {
+      close: () => undefined,
+      execute: async (command: string, args: string[]) => {
+        commands.push({ command, args });
+        return {
+          success: true,
+          exitCode: 0,
+          stdout: args[1]?.includes("sh -s -- 'demo' ''")
+            ? "__DBX_PROJECT_DIRECTORY__=/home/sandbox/projects/demo\n"
+            : "",
+          stderr: "",
+          executionTimeMs: 0,
+          command,
+          args,
+        };
+      },
+      forwardOut: async () => assert.fail("not used"),
+    } as unknown as SshSession;
+    const ssh = runtime(store, { machineSoftware: [] });
+    Object.defineProperty(ssh, "ensureSession", { value: async () => session });
+    const project = await ssh.addProject(client, "user-a", {
+      machineId: "owned",
+      name: "demo",
+      config: { tools: { node: "lts" } },
+    });
+    commands.length = 0;
+
+    const reset = await ssh.resetProject(client, "user-a", project.id);
+
+    assert.equal(reset.directory, "/home/sandbox/projects/demo");
+    assert.equal(reset.state, "ready");
+    assert.ok(commands.some(({ args }) => args[1]?.endsWith("sh -s -- 'demo'")));
+    assert.ok(commands.some(({ args }) => args[1]?.includes("sh -s -- 'demo' ''")));
+    Object.defineProperty(ssh, "startService", {
+      value: async () => ({
+        kind: "terminal",
+        path: "/sandbox/terminal/owned",
+        openUrl: "/sandbox/terminal/owned",
+        state: "ready",
+      }),
+    });
+
+    const terminal = await ssh.openProjectTerminal(client, "user-a", project.id);
+
+    assert.equal(terminal.project.id, project.id);
+    assert.equal(terminal.service.kind, "terminal");
+    assert.ok(commands.some(({ command, args }) => command === "python3" && args[0] === "-c"));
+  });
+
   it("preserves projects when a machine stops and deletes records with the machine", async () => {
     const now = Date.now();
     const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");

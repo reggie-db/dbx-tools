@@ -56,6 +56,10 @@
         "types": "./lib/src/config.d.ts",
         "default": "./lib/src/config.js"
       },
+      "./desktop": {
+        "types": "./lib/src/desktop.d.ts",
+        "default": "./lib/src/desktop.js"
+      },
       "./key-store": {
         "types": "./lib/src/key-store.d.ts",
         "default": "./lib/src/key-store.js"
@@ -118,6 +122,7 @@
   "exports": {
     ".": "./index.ts",
     "./config": "./src/config.ts",
+    "./desktop": "./src/desktop.ts",
     "./key-store": "./src/key-store.ts",
     "./managed-name": "./src/managed-name.ts",
     "./ownership": "./src/ownership.ts",

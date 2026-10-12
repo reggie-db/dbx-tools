@@ -9,7 +9,6 @@ import {
   type WorkspaceClient,
 } from "@databricks/appkit";
 import {
-  defineTool,
   executeFromRegistry,
   type ToolkitEntry,
   type ToolkitOptions,
@@ -23,16 +22,24 @@ import {
   lakebaseResolver,
   pluginRegistry,
   toolkitEntries,
+  toolOperations,
   ToolRegistryPlugin,
   type AgentToolExecutionContext,
 } from "@dbx-tools/appkit";
 import {
-  addSshProjectRequestSchema,
-  createSshMachineRequestSchema,
-  removeSshProjectRequestSchema,
-  sshCommandRequestSchema,
-  sshMachineActionSchema,
-  sshMachineServiceActionSchema,
+  addSshProjectOperationSchema,
+  createSshMachineOperationSchema,
+  deleteSshMachineOperationSchema,
+  executeSshCommandOperationSchema,
+  listSshMachinesOperationSchema,
+  listSshProjectsOperationSchema,
+  openSshProjectTerminalOperationSchema,
+  removeSshProjectOperationSchema,
+  resetSshProjectOperationSchema,
+  sshProjectActionSchema,
+  startSshMachineOperationSchema,
+  startSshMachineServiceOperationSchema,
+  stopSshMachineOperationSchema,
   type AddSshProjectRequest,
   type CreateSshMachineRequest,
   type SshCommandRequest,
@@ -135,7 +142,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/machines",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = createSshMachineRequestSchema.parse(req.body ?? {});
+        const input = createSshMachineOperationSchema.parse(req.body ?? {});
         res.json(
           await this.withRequestAuth(
             req,
@@ -152,7 +159,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/machines/:machineId/start",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = sshMachineActionSchema.parse({ machineId: req.params.machineId });
+        const input = startSshMachineOperationSchema.parse({ machineId: req.params.machineId });
         res.json(
           await this.withRequestAuth(
             req,
@@ -169,7 +176,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/machines/:machineId/stop",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = sshMachineActionSchema.parse({ machineId: req.params.machineId });
+        const input = stopSshMachineOperationSchema.parse({ machineId: req.params.machineId });
         res.json(
           await this.withRequestAuth(
             req,
@@ -186,7 +193,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/machines/:machineId",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = sshMachineActionSchema.parse({ machineId: req.params.machineId });
+        const input = deleteSshMachineOperationSchema.parse({ machineId: req.params.machineId });
         res.json(
           await this.withRequestAuth(
             req,
@@ -203,7 +210,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/machines/:machineId/services/:service/start",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = sshMachineServiceActionSchema.parse({
+        const input = startSshMachineServiceOperationSchema.parse({
           machineId: req.params.machineId,
           service: req.params.service,
         });
@@ -223,7 +230,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/machines/:machineId/commands",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = sshCommandRequestSchema.parse({
+        const input = executeSshCommandOperationSchema.parse({
           ...req.body,
           machineId: req.params.machineId,
         });
@@ -255,7 +262,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/projects",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = addSshProjectRequestSchema.parse(req.body);
+        const input = addSshProjectOperationSchema.parse(req.body);
         res.json({
           project: await this.withRequestAuth(
             req,
@@ -272,13 +279,48 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/projects/:projectId",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = removeSshProjectRequestSchema.parse({ projectId: req.params.projectId });
+        const input = removeSshProjectOperationSchema.parse({ projectId: req.params.projectId });
         res.json({
           removed: await this.withRequestAuth(
             req,
             "removeProject",
             (plugin) => plugin.removeProject(userId, input.projectId),
             () => this.runtime.removeProject(createWorkspaceClient(), userId, input.projectId),
+          ),
+        });
+      },
+    });
+    this.route(router, {
+      name: "openProjectTerminal",
+      method: "post",
+      path: "/projects/:projectId/terminal",
+      handler: async (req, res) => {
+        const userId = this.resolveUserId(req);
+        const input = sshProjectActionSchema.parse({ projectId: req.params.projectId });
+        res.json(
+          await this.withRequestAuth(
+            req,
+            "openProjectTerminal",
+            (plugin) => plugin.openProjectTerminal(userId, input.projectId),
+            () =>
+              this.runtime.openProjectTerminal(createWorkspaceClient(), userId, input.projectId),
+          ),
+        );
+      },
+    });
+    this.route(router, {
+      name: "resetProject",
+      method: "post",
+      path: "/projects/:projectId/reset",
+      handler: async (req, res) => {
+        const userId = this.resolveUserId(req);
+        const input = sshProjectActionSchema.parse({ projectId: req.params.projectId });
+        res.json({
+          project: await this.withRequestAuth(
+            req,
+            "resetProject",
+            (plugin) => plugin.resetProject(userId, input.projectId),
+            () => this.runtime.resetProject(createWorkspaceClient(), userId, input.projectId),
           ),
         });
       },
@@ -335,6 +377,24 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     return this.runtime.removeProject(this.workspaceClient(), userId, projectId);
   }
 
+  /** Lists persisted projects owned by one AppKit user. */
+  async listProjects(userId: string) {
+    return {
+      pathPrefix: this.runtime.projectPathPrefix(userId),
+      projects: await this.runtime.projectList(this.workspaceClient(), userId),
+    };
+  }
+
+  /** Opens a DinoTTY tab rooted at one persisted project. */
+  async openProjectTerminal(userId: string, projectId: string) {
+    return this.runtime.openProjectTerminal(this.workspaceClient(), userId, projectId);
+  }
+
+  /** Wipes and recreates one persisted project from its saved configuration. */
+  async resetProject(userId: string, projectId: string) {
+    return this.runtime.resetProject(this.workspaceClient(), userId, projectId);
+  }
+
   /** Returns selected AppKit toolkit entries backed by this plugin's agent tools. */
   toolkit(options?: ToolkitOptions): Record<string, ToolkitEntry> {
     return toolkitEntries.entries("databricks-sandbox", this.getAgentTools(), options);
@@ -366,12 +426,19 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
         this.createMachine(userId, input),
       startMachine: (userId: string, machineId: string) => this.startMachine(userId, machineId),
       stopMachine: (userId: string, machineId: string) => this.stopMachine(userId, machineId),
+      deleteMachine: (userId: string, machineId: string) => this.deleteMachine(userId, machineId),
       executeCommand: (userId: string, input: SshCommandRequest) =>
         this.executeCommand(userId, input),
       startMachineService: (userId: string, input: SshMachineServiceAction) =>
         this.startMachineService(userId, input),
       addProject: (userId: string, input: AddSshProjectRequest) => this.addProject(userId, input),
+      listProjects: (userId: string) => this.listProjects(userId),
+      openProjectTerminal: (userId: string, projectId: string) =>
+        this.openProjectTerminal(userId, projectId),
+      resetProject: (userId: string, projectId: string) => this.resetProject(userId, projectId),
       removeProject: (userId: string, projectId: string) => this.removeProject(userId, projectId),
+      operations: (userId: string, userClient?: WorkspaceClient) =>
+        this.operations(userId, userClient),
       toolkit: (options?: ToolkitOptions) => this.toolkit(options),
     };
   }
@@ -452,7 +519,8 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     return appkit.tryGetExecutionContext()?.client as WorkspaceClient | undefined;
   }
 
-  private createToolRegistry(userId?: string, userClient?: WorkspaceClient): ToolRegistry {
+  /** Returns the Zod-owned operation contracts used by REST, plugins, and agent tools. */
+  operations(userId?: string, userClient?: WorkspaceClient) {
     const identity = () => userId ?? this.executionUserId();
     const execute = <T>(
       operation: string,
@@ -468,96 +536,100 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
         },
       );
     };
-    return {
-      list_ssh_machines: defineTool({
-        description:
-          "List the current user's Databricks Sandboxes. Always check this first and prefer an existing Sandbox unless the user explicitly requests another.",
-        schema: z.object({}).strict(),
-        annotations: { effect: "read", requiresUserContext: true },
-        execute: (_args, signal) =>
+    return toolOperations.defineOperations({
+      list_ssh_machines: {
+        schema: listSshMachinesOperationSchema,
+        execute: (_input, signal) =>
           execute("listMachines", (client, resolvedUserId) =>
             this.runtime.listMachines(client, resolvedUserId, signal),
           ),
-      }),
-      create_ssh_machine: defineTool({
-        description:
-          "Create a new Databricks Sandbox for the current user only when they explicitly request a new Sandbox or no existing Sandbox meets the request.",
-        schema: createSshMachineRequestSchema,
-        annotations: { effect: "write", requiresUserContext: true },
+      },
+      create_ssh_machine: {
+        schema: createSshMachineOperationSchema,
         execute: (input, signal) =>
           execute("createMachine", (client, resolvedUserId) =>
             this.runtime.createMachine(client, resolvedUserId, input, signal),
           ),
-      }),
-      start_ssh_machine: defineTool({
-        description: "Start an existing SSH machine and connect the AppKit transport.",
-        schema: sshMachineActionSchema,
-        annotations: { effect: "write", requiresUserContext: true },
+      },
+      start_ssh_machine: {
+        schema: startSshMachineOperationSchema,
         execute: (input, signal) =>
           execute("startMachine", (client, resolvedUserId) =>
             this.runtime.startMachine(client, resolvedUserId, input.machineId, signal),
           ),
-      }),
-      stop_ssh_machine: defineTool({
-        description: "Stop an existing SSH machine.",
-        schema: sshMachineActionSchema,
-        annotations: { effect: "write", requiresUserContext: true },
+      },
+      stop_ssh_machine: {
+        schema: stopSshMachineOperationSchema,
         execute: (input, signal) =>
           execute("stopMachine", (client, resolvedUserId) =>
             this.runtime.stopMachine(client, resolvedUserId, input.machineId, signal),
           ),
-      }),
-      delete_ssh_machine: defineTool({
-        description: "Permanently delete one Databricks Sandbox owned by the current user.",
-        schema: sshMachineActionSchema,
-        annotations: { effect: "write", requiresUserContext: true },
+      },
+      delete_ssh_machine: {
+        schema: deleteSshMachineOperationSchema,
         execute: (input, signal) =>
           execute("deleteMachine", (client, resolvedUserId) =>
             this.runtime.deleteMachine(client, resolvedUserId, input.machineId, signal),
           ),
-      }),
-      execute_ssh_command: defineTool({
-        description:
-          "Execute a maintenance command on an existing SSH machine. For any app, demo, server, desktop, or persistent files, call add_ssh_project first and run commands only from its returned directory using its port and mise environment. Never use this tool alone to invent a route, write under ~/.dbx-tools/runtime, expose a direct Sandbox URL, or create an extra password or token.",
-        schema: sshCommandRequestSchema,
-        annotations: { effect: "write", requiresUserContext: true },
+      },
+      execute_ssh_command: {
+        schema: executeSshCommandOperationSchema,
         execute: (input, signal) =>
           execute("executeCommand", (client, resolvedUserId) =>
             this.runtime.execute(client, resolvedUserId, input, signal),
           ),
-      }),
-      start_ssh_machine_service: defineTool({
-        description: "Start the built-in DinoTTY terminal or Glances health service.",
-        schema: sshMachineServiceActionSchema,
-        annotations: { effect: "write", requiresUserContext: true },
+      },
+      start_ssh_machine_service: {
+        schema: startSshMachineServiceOperationSchema,
         execute: (input, signal) =>
           execute("startMachineService", (client, resolvedUserId) =>
             this.runtime.startService(client, resolvedUserId, input, signal),
           ),
-      }),
-      add_ssh_project: defineTool({
-        description:
-          "Required first step for any Sandbox app, demo, server, desktop, or persistent files. Create or update a persisted Sandbox project before execute_ssh_command. Omitted name, path, and port values are generated uniquely for the machine. The tool creates ~/projects/<path>, writes and installs the supplied mise config, reserves a loopback port, and returns directory, path, port, and openUrl. Pass projectId to update the same project, including its openPath.",
-        schema: addSshProjectRequestSchema,
-        annotations: { effect: "write", requiresUserContext: true },
+      },
+      list_ssh_projects: {
+        schema: listSshProjectsOperationSchema,
+        execute: () =>
+          execute("listProjects", async (client, resolvedUserId) => ({
+            pathPrefix: this.runtime.projectPathPrefix(resolvedUserId),
+            projects: await this.runtime.projectList(client, resolvedUserId),
+          })),
+      },
+      add_ssh_project: {
+        schema: addSshProjectOperationSchema,
         execute: async (input, signal) => ({
           project: await execute("addProject", (client, resolvedUserId) =>
             this.runtime.addProject(client, resolvedUserId, input, signal),
           ),
         }),
-      }),
-      remove_ssh_project: defineTool({
-        description:
-          "Remove one Sandbox project, its AppKit route, and its isolated project directory.",
-        schema: removeSshProjectRequestSchema,
-        annotations: { effect: "write", requiresUserContext: true },
+      },
+      open_ssh_project_terminal: {
+        schema: openSshProjectTerminalOperationSchema,
+        execute: (input, signal) =>
+          execute("openProjectTerminal", (client, resolvedUserId) =>
+            this.runtime.openProjectTerminal(client, resolvedUserId, input.projectId, signal),
+          ),
+      },
+      reset_ssh_project: {
+        schema: resetSshProjectOperationSchema,
+        execute: async (input, signal) => ({
+          project: await execute("resetProject", (client, resolvedUserId) =>
+            this.runtime.resetProject(client, resolvedUserId, input.projectId, signal),
+          ),
+        }),
+      },
+      remove_ssh_project: {
+        schema: removeSshProjectOperationSchema,
         execute: async (input, signal) => ({
           removed: await execute("removeProject", (client, resolvedUserId) =>
             this.runtime.removeProject(client, resolvedUserId, input.projectId, signal),
           ),
         }),
-      }),
-    };
+      },
+    });
+  }
+
+  private createToolRegistry(userId?: string, userClient?: WorkspaceClient): ToolRegistry {
+    return toolOperations.toolRegistryFromOperations(this.operations(userId, userClient));
   }
 
   private executionUserId(): string {

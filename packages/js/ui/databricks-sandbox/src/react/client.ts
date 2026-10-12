@@ -1,9 +1,11 @@
 import {
   deleteSshMachineResponseSchema,
+  removeSshProjectResponseSchema,
   sshMachineSchema,
   sshMachineServiceSchema,
   sshMachinesResponseSchema,
   sshProjectResponseSchema,
+  sshProjectTerminalResponseSchema,
   sshProjectsResponseSchema,
   type AddSshProjectRequest,
   type CreateSshMachineRequest,
@@ -13,6 +15,7 @@ import {
   type SshMachineServiceKind,
   type SshMachinesResponse,
   type SshProject,
+  type SshProjectTerminalResponse,
   type SshProjectsResponse,
 } from "@dbx-tools/shared-databricks-sandbox";
 
@@ -73,10 +76,27 @@ export class SshClient {
   async removeProject(projectId: string): Promise<boolean> {
     const response = await this.request(
       `/projects/${encodeURIComponent(projectId)}`,
-      (value) => value as { removed: boolean },
+      removeSshProjectResponseSchema.parse,
       { method: "DELETE" },
     );
     return response.removed;
+  }
+
+  openProjectTerminal(projectId: string): Promise<SshProjectTerminalResponse> {
+    return this.request(
+      `/projects/${encodeURIComponent(projectId)}/terminal`,
+      sshProjectTerminalResponseSchema.parse,
+      { method: "POST" },
+    );
+  }
+
+  async resetProject(projectId: string): Promise<SshProject> {
+    const response = await this.request(
+      `/projects/${encodeURIComponent(projectId)}/reset`,
+      sshProjectResponseSchema.parse,
+      { method: "POST" },
+    );
+    return response.project;
   }
 
   private async request<T>(

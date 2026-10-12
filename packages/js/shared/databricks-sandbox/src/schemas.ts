@@ -35,7 +35,7 @@ export const sshProjectSchema = z
 export type SshProject = z.infer<typeof sshProjectSchema>;
 
 export const sshMachineServiceKindSchema = z
-  .enum(["terminal", "stats"])
+  .enum(["terminal", "desktop", "stats"])
   .describe("Built-in browser service available on a Databricks Sandbox.");
 export type SshMachineServiceKind = z.infer<typeof sshMachineServiceKindSchema>;
 
@@ -43,6 +43,10 @@ export const sshMachineServiceSchema = z
   .object({
     kind: sshMachineServiceKindSchema.describe("Service type."),
     path: z.string().startsWith("/").describe("Stable AppKit path for the service."),
+    openUrl: z
+      .string()
+      .startsWith("/")
+      .describe("AppKit URL that opens the service at its intended entry page."),
     state: z
       .enum(["stopped", "starting", "ready", "error"])
       .describe("Current service provisioning state."),
@@ -92,7 +96,12 @@ export const sshMachinesResponseSchema = z
 export type SshMachinesResponse = z.infer<typeof sshMachinesResponseSchema>;
 
 export const createSshMachineRequestSchema = z
-  .object({})
+  .object({
+    desktop: z
+      .boolean()
+      .optional()
+      .describe("Start the Sandbox and provision its built-in browser desktop before returning."),
+  })
   .strict()
   .describe("Request to create an automatically named Databricks Sandbox for the current user.");
 export type CreateSshMachineRequest = z.infer<typeof createSshMachineRequestSchema>;
@@ -202,11 +211,38 @@ export const removeSshProjectRequestSchema = z
   .describe("Request to remove a Sandbox project and its directory.");
 export type RemoveSshProjectRequest = z.infer<typeof removeSshProjectRequestSchema>;
 
+export const listSshProjectsRequestSchema = z
+  .object({})
+  .strict()
+  .describe("Request to list persisted Sandbox projects owned by the current user.");
+export type ListSshProjectsRequest = z.infer<typeof listSshProjectsRequestSchema>;
+
+export const sshProjectActionSchema = z
+  .object({ projectId: z.string().min(1).describe("Sandbox project to manage.") })
+  .strict()
+  .describe("Sandbox project action request.");
+export type SshProjectAction = z.infer<typeof sshProjectActionSchema>;
+
 export const sshProjectResponseSchema = z
   .object({ project: sshProjectSchema.describe("Created or updated project.") })
   .strict()
   .describe("Sandbox project response.");
 export type SshProjectResponse = z.infer<typeof sshProjectResponseSchema>;
+
+export const sshProjectTerminalResponseSchema = z
+  .object({
+    project: sshProjectSchema.describe("Project opened in the terminal."),
+    service: sshMachineServiceSchema.describe("DinoTTY service containing the new project tab."),
+  })
+  .strict()
+  .describe("Project terminal response.");
+export type SshProjectTerminalResponse = z.infer<typeof sshProjectTerminalResponseSchema>;
+
+export const removeSshProjectResponseSchema = z
+  .object({ removed: z.boolean().describe("Whether the project was removed.") })
+  .strict()
+  .describe("Sandbox project removal response.");
+export type RemoveSshProjectResponse = z.infer<typeof removeSshProjectResponseSchema>;
 
 export const sshProjectsResponseSchema = z
   .object({
@@ -219,3 +255,108 @@ export const sshProjectsResponseSchema = z
   .strict()
   .describe("Persisted Sandbox projects response.");
 export type SshProjectsResponse = z.infer<typeof sshProjectsResponseSchema>;
+
+export const listSshMachinesOperationSchema = z
+  .object({})
+  .strict()
+  .describe(
+    "List the current user's Databricks Sandboxes. Check this first and prefer an existing Sandbox unless the user explicitly requests another.",
+  )
+  .meta({ appkitTool: { agentTool: true, effect: "read", requiresUserContext: true } });
+
+export const createSshMachineOperationSchema = createSshMachineRequestSchema
+  .describe(
+    "Create a Databricks Sandbox for the current user. Set desktop true to start it and provision the built-in branded browser desktop before returning.",
+  )
+  .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
+
+export const startSshMachineOperationSchema = sshMachineActionSchema
+  .describe("Start an existing Databricks Sandbox assigned to the current user.")
+  .meta({
+    appkitTool: {
+      agentTool: true,
+      effect: "write",
+      requiresUserContext: true,
+      idempotent: true,
+    },
+  });
+
+export const stopSshMachineOperationSchema = sshMachineActionSchema
+  .describe("Stop an existing Databricks Sandbox assigned to the current user.")
+  .meta({
+    appkitTool: {
+      agentTool: true,
+      effect: "write",
+      requiresUserContext: true,
+      idempotent: true,
+    },
+  });
+
+export const deleteSshMachineOperationSchema = sshMachineActionSchema
+  .describe("Permanently delete one Databricks Sandbox and all of its persisted projects.")
+  .meta({
+    appkitTool: {
+      agentTool: true,
+      effect: "destructive",
+      approval: true,
+      requiresUserContext: true,
+    },
+  });
+
+export const executeSshCommandOperationSchema = sshCommandRequestSchema
+  .describe(
+    "Execute a maintenance command on an assigned Sandbox. Create or select a persisted project first for app, demo, server, desktop, or persistent file work, and run from that project directory.",
+  )
+  .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
+
+export const startSshMachineServiceOperationSchema = sshMachineServiceActionSchema
+  .describe(
+    "Idempotently start the built-in DinoTTY terminal, branded noVNC desktop, or Glances health service, provisioning it only when needed.",
+  )
+  .meta({
+    appkitTool: {
+      agentTool: true,
+      effect: "write",
+      requiresUserContext: true,
+      idempotent: true,
+    },
+  });
+
+export const listSshProjectsOperationSchema = listSshProjectsRequestSchema
+  .describe("List the current user's persisted Sandbox projects and their public AppKit routes.")
+  .meta({ appkitTool: { agentTool: true, effect: "read", requiresUserContext: true } });
+
+export const addSshProjectOperationSchema = addSshProjectRequestSchema
+  .describe(
+    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route.",
+  )
+  .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
+
+export const openSshProjectTerminalOperationSchema = sshProjectActionSchema
+  .describe("Open a new DinoTTY tab rooted at a persisted Sandbox project's directory.")
+  .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
+
+export const resetSshProjectOperationSchema = sshProjectActionSchema
+  .describe(
+    "Permanently wipe a persisted Sandbox project's directory and recreate it from its saved mise configuration.",
+  )
+  .meta({
+    appkitTool: {
+      agentTool: true,
+      effect: "destructive",
+      approval: true,
+      requiresUserContext: true,
+      idempotent: true,
+    },
+  });
+
+export const removeSshProjectOperationSchema = removeSshProjectRequestSchema
+  .describe("Permanently remove a Sandbox project, its route, and its isolated directory.")
+  .meta({
+    appkitTool: {
+      agentTool: true,
+      effect: "destructive",
+      approval: true,
+      requiresUserContext: true,
+    },
+  });

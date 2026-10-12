@@ -5,6 +5,7 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-sandbox";
 export const PACKAGE_VERSION = "0.9.119";
 export * as config from "./src/config.ts";
+export * as desktop from "./src/desktop.ts";
 export * as keyStore from "./src/key-store.ts";
 export * as managedName from "./src/managed-name.ts";
 export * as ownership from "./src/ownership.ts";
@@ -18,6 +19,7 @@ export * as skills from "./src/skills.ts";
 export * as workspace from "./src/workspace.ts";
 export { MachineSoftwareSchema, SshPluginConfigSchema } from "./src/config.ts";
 export type { MachineSoftware, SerializableSshPluginConfig, ResolvedSshPluginConfig, SshPluginConfig } from "./src/config.ts";
+export { desktopPorts } from "./src/desktop.ts";
 export { SshKeyStore } from "./src/key-store.ts";
 export type { ManagedSandboxName } from "./src/managed-name.ts";
 export { MachineAssignmentSchema, NewMachineAssignmentSchema, SandboxProjectRecordSchema, NewSandboxProjectRecordSchema, LakebaseMachineOwnershipStore } from "./src/ownership.ts";

@@ -1,4 +1,5 @@
 import type { SshCommandResult, SshMachineServiceKind } from "@dbx-tools/shared-databricks-sandbox";
+import { desktopOpenUrl, desktopPorts, desktopScript } from "./desktop.ts";
 import type { SshSession } from "./session.ts";
 
 const DINOTTY_VERSION = "0.29.0";
@@ -35,6 +36,8 @@ export interface SshServiceTarget {
   redirectToSlash?: boolean;
   /** Optional markup injected into proxied HTML heads. */
   htmlHead?: string;
+  /** AppKit URL that opens the service at its intended entry page. */
+  openUrl: string;
 }
 
 /**
@@ -57,22 +60,65 @@ export async function ensureSshService(
     signal,
   });
   assertServiceStarted(kind, result);
-  return kind === "terminal"
-    ? {
-        remoteHost: "127.0.0.1",
-        remotePort: DINOTTY_PORT,
-        stripPrefix: true,
-        browserRelay: true,
-        browserPaths: ["/assets", "/icons", "/manifest.json", "/logo.png", "/preview", "/mcp"],
-        htmlHead: DINOTTY_RELAY_HEAD,
-      }
-    : {
-        remoteHost: "127.0.0.1",
-        remotePort: GLANCES_PORT,
-        stripPrefix: false,
-        redirectToSlash: true,
-        htmlHead: GLANCES_VIEWPORT_HEAD,
-      };
+  if (kind === "terminal") {
+    return {
+      remoteHost: "127.0.0.1",
+      remotePort: DINOTTY_PORT,
+      stripPrefix: true,
+      browserRelay: true,
+      browserPaths: ["/assets", "/icons", "/manifest.json", "/logo.png", "/preview", "/mcp"],
+      htmlHead: DINOTTY_RELAY_HEAD,
+      openUrl: path,
+    };
+  }
+  if (kind === "desktop") {
+    return {
+      remoteHost: "127.0.0.1",
+      remotePort: desktopPorts.web,
+      stripPrefix: true,
+      redirectToSlash: true,
+      openUrl: desktopOpenUrl(path),
+    };
+  }
+  return {
+    remoteHost: "127.0.0.1",
+    remotePort: GLANCES_PORT,
+    stripPrefix: false,
+    redirectToSlash: true,
+    htmlHead: GLANCES_VIEWPORT_HEAD,
+    openUrl: `${path.replace(/\/+$/, "")}/`,
+  };
+}
+
+/** Create and activate a DinoTTY tab rooted at one persisted project directory. */
+export async function openDinoTtyProjectTab(
+  session: SshSession,
+  directory: string,
+  title: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  const payload = Buffer.from(JSON.stringify({ cwd: directory, title })).toString("base64");
+  const result = await session.execute(
+    "python3",
+    [
+      "-c",
+      `import base64, json, urllib.request
+data = base64.b64decode(${JSON.stringify(payload)})
+request = urllib.request.Request(
+    "http://127.0.0.1:${DINOTTY_PORT}/api/tabs",
+    data=data,
+    method="POST",
+    headers={"Authorization": "Bearer databricks-app-oauth", "Content-Type": "application/json"},
+)
+with urllib.request.urlopen(request, timeout=30) as response:
+    body = json.loads(response.read())
+if not body.get("tab_id"):
+    raise RuntimeError("DinoTTY did not create a project tab")`,
+    ],
+    { timeoutMs, signal },
+  );
+  assertServiceStarted("terminal", result);
 }
 
 function assertServiceStarted(kind: SshMachineServiceKind, result: SshCommandResult): void {
@@ -83,7 +129,9 @@ function assertServiceStarted(kind: SshMachineServiceKind, result: SshCommandRes
 }
 
 function serviceScript(kind: SshMachineServiceKind, path: string): string {
-  return kind === "terminal" ? dinottyScript() : glancesScript(path);
+  if (kind === "terminal") return dinottyScript();
+  if (kind === "desktop") return desktopScript();
+  return glancesScript(path);
 }
 
 function dinottyScript(): string {
