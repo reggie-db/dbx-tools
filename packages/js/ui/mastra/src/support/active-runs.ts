@@ -21,6 +21,7 @@ export const StoredActiveRunSchema = z
   .strict()
   .describe("Reload-recoverable Mastra background run metadata.");
 
+/** Reload-recoverable metadata for one active Mastra background run. */
 export type StoredActiveRun = Omit<z.infer<typeof StoredActiveRunSchema>, "userMessage"> & {
   userMessage: UIMessage;
 };
@@ -35,6 +36,7 @@ const StoredActiveRunFileSchema = z
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
+/** Build the browser storage key for one Mastra agent's active runs. */
 export const activeRunStorageKey = (basePath: string, agentId: string): string =>
   `dbx-mastra-active-runs:${basePath}:${agentId}`;
 
