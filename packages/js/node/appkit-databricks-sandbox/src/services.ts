@@ -13,11 +13,7 @@ body{position:fixed;inset:0;margin:0}
 .bottom{min-height:0;flex:1;overflow:hidden}.bottom>.row{height:100%;min-height:0;margin-right:0;margin-left:0}.bottom .col{height:100%;min-height:0;padding-right:0;padding-left:0;overflow-x:hidden;overflow-y:auto}
 .sidebar-min,.sidebar-max{height:100%!important;min-height:0!important}
 #processlist{height:auto!important;max-width:100%;overflow:visible}
-#processlist-table{width:100%;max-width:100%;overflow-x:hidden}
-#processlist-table table{width:100%;max-width:100%;table-layout:fixed}
-#processlist-table td{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#processlist-table td:nth-child(1),#processlist-table td:nth-child(2){width:3.5em}
-#processlist-table td:nth-child(3){width:4.5em}
+#processlist-table{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 </style>`;
 
 /** Loopback service endpoint and routing behavior discovered after remote startup. */
