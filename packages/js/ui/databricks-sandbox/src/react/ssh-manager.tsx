@@ -40,6 +40,16 @@ import { SshClient } from "./client.ts";
 import { resolveServiceUrl } from "./service-url.ts";
 
 const REFRESH_INTERVAL_MS = 5_000;
+const CREATE_MACHINE_OPERATION = "machine:create";
+const CREATE_PROJECT_OPERATION = "project:create";
+
+function machineOperation(machineId: string, action: string): string {
+  return `machine:${machineId}:${action}`;
+}
+
+function projectOperation(projectId: string, action: string): string {
+  return `project:${projectId}:${action}`;
+}
 
 /** Props for the full SSH machine and project management surface. */
 export interface SshManagerProps {
@@ -55,7 +65,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   const [projectPathPrefix, setProjectPathPrefix] = useState("/sandbox");
   const [supported, setSupported] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string>();
+  const [busyOperations, setBusyOperations] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState<string>();
   const [machineId, setMachineId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SshMachine>();
@@ -67,6 +77,21 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   const [openPath, setOpenPath] = useState("");
   const [stripPrefix, setStripPrefix] = useState(true);
   const refreshing = useRef(false);
+
+  const setOperationBusy = useCallback((operation: string, busy: boolean) => {
+    setBusyOperations((current) => {
+      const next = new Set(current);
+      if (busy) next.add(operation);
+      else next.delete(operation);
+      return next;
+    });
+  }, []);
+
+  const isBusy = (operation: string) => busyOperations.has(operation);
+  const isMachineBusy = (machineId: string) =>
+    [...busyOperations].some((operation) => operation.startsWith(`machine:${machineId}:`));
+  const isProjectBusy = (projectId: string) =>
+    [...busyOperations].some((operation) => operation.startsWith(`project:${projectId}:`));
 
   const refresh = useCallback(
     async (showLoading = false) => {
@@ -112,7 +137,8 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   }, [refresh]);
 
   const manageMachine = async (machine: SshMachine, action: "start" | "stop") => {
-    setBusyId(machine.id);
+    const operation = machineOperation(machine.id, action);
+    setOperationBusy(operation, true);
     setError(undefined);
     try {
       await client[action](machine.id);
@@ -120,12 +146,12 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setBusyId(undefined);
+      setOperationBusy(operation, false);
     }
   };
 
   const createMachine = async () => {
-    setBusyId("new-machine");
+    setOperationBusy(CREATE_MACHINE_OPERATION, true);
     setError(undefined);
     try {
       const created = await client.create();
@@ -137,13 +163,14 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setBusyId(undefined);
+      setOperationBusy(CREATE_MACHINE_OPERATION, false);
     }
   };
 
   const deleteMachine = async () => {
     if (!deleteTarget) return;
-    setBusyId(deleteTarget.id);
+    const operation = machineOperation(deleteTarget.id, "delete");
+    setOperationBusy(operation, true);
     setError(undefined);
     try {
       await client.delete(deleteTarget.id);
@@ -152,7 +179,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setBusyId(undefined);
+      setOperationBusy(operation, false);
     }
   };
 
@@ -169,7 +196,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     ) {
       return;
     }
-    setBusyId("new-project");
+    setOperationBusy(CREATE_PROJECT_OPERATION, true);
     setError(undefined);
     const suffix = path.trim().replace(/^\/+|\/+$/g, "");
     const entry = openPath.trim();
@@ -192,12 +219,13 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setBusyId(undefined);
+      setOperationBusy(CREATE_PROJECT_OPERATION, false);
     }
   };
 
   const openService = async (machine: SshMachine, service: SshMachineServiceKind) => {
-    setBusyId(`${machine.id}:${service}`);
+    const operation = machineOperation(machine.id, service);
+    setOperationBusy(operation, true);
     setError(undefined);
     try {
       const result = await client.startService(machine.id, service);
@@ -206,12 +234,13 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setBusyId(undefined);
+      setOperationBusy(operation, false);
     }
   };
 
   const openProjectTerminal = async (project: SshProject) => {
-    setBusyId(`${project.id}:terminal`);
+    const operation = projectOperation(project.id, "terminal");
+    setOperationBusy(operation, true);
     setError(undefined);
     try {
       const result = await client.openProjectTerminal(project.id);
@@ -220,13 +249,14 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setBusyId(undefined);
+      setOperationBusy(operation, false);
     }
   };
 
   const resetProject = async () => {
     if (!resetTarget) return;
-    setBusyId(`${resetTarget.id}:reset`);
+    const operation = projectOperation(resetTarget.id, "reset");
+    setOperationBusy(operation, true);
     setError(undefined);
     try {
       await client.resetProject(resetTarget.id);
@@ -235,12 +265,13 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setBusyId(undefined);
+      setOperationBusy(operation, false);
     }
   };
 
   const removeProject = async (project: SshProject) => {
-    setBusyId(project.id);
+    const operation = projectOperation(project.id, "remove");
+    setOperationBusy(operation, true);
     setError(undefined);
     try {
       await client.removeProject(project.id);
@@ -248,7 +279,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      setBusyId(undefined);
+      setOperationBusy(operation, false);
     }
   };
 
@@ -281,10 +312,10 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                 type="button"
                 size="sm"
                 className="h-8"
-                disabled={Boolean(busyId)}
+                disabled={isBusy(CREATE_MACHINE_OPERATION)}
                 onClick={() => void createMachine()}
               >
-                {busyId === "new-machine" ? (
+                {isBusy(CREATE_MACHINE_OPERATION) ? (
                   <Spinner className="size-3.5" />
                 ) : (
                   <PlusIcon className="size-3.5" />
@@ -322,7 +353,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                         </p>
                       </div>
                       <div className="flex w-full shrink-0 items-center justify-end gap-1 overflow-x-auto sm:w-auto sm:overflow-visible">
-                        {busyId === machine.id ? <Spinner className="mr-1 size-4" /> : null}
+                        {isMachineBusy(machine.id) ? <Spinner className="mr-1 size-4" /> : null}
                         {machine.canStart ? (
                           <Button
                             size="sm"
@@ -330,7 +361,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                             className="shrink-0 px-2 sm:px-3"
                             aria-label={`Start ${machine.name}`}
                             title="Start"
-                            disabled={Boolean(busyId)}
+                            disabled={isMachineBusy(machine.id)}
                             onClick={() => void manageMachine(machine, "start")}
                           >
                             <PlayIcon className="size-3.5" />
@@ -344,7 +375,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                             className="shrink-0 px-2 sm:px-3"
                             aria-label={`Stop ${machine.name}`}
                             title="Stop"
-                            disabled={Boolean(busyId)}
+                            disabled={isMachineBusy(machine.id)}
                             onClick={() => void manageMachine(machine, "stop")}
                           >
                             <SquareIcon className="size-3.5" />
@@ -357,10 +388,15 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           className="shrink-0 px-2 sm:px-3"
                           aria-label={`Open desktop for ${machine.name}`}
                           title="Desktop"
-                          disabled={Boolean(busyId)}
+                          disabled={
+                            isBusy(machineOperation(machine.id, "desktop")) ||
+                            isBusy(machineOperation(machine.id, "start")) ||
+                            isBusy(machineOperation(machine.id, "stop")) ||
+                            isBusy(machineOperation(machine.id, "delete"))
+                          }
                           onClick={() => void openService(machine, "desktop")}
                         >
-                          {busyId === `${machine.id}:desktop` ? (
+                          {isBusy(machineOperation(machine.id, "desktop")) ? (
                             <Spinner className="size-3.5" />
                           ) : (
                             <MonitorIcon className="size-3.5" />
@@ -373,10 +409,15 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           className="shrink-0 px-2 sm:px-3"
                           aria-label={`Open terminal for ${machine.name}`}
                           title="Terminal"
-                          disabled={Boolean(busyId)}
+                          disabled={
+                            isBusy(machineOperation(machine.id, "terminal")) ||
+                            isBusy(machineOperation(machine.id, "start")) ||
+                            isBusy(machineOperation(machine.id, "stop")) ||
+                            isBusy(machineOperation(machine.id, "delete"))
+                          }
                           onClick={() => void openService(machine, "terminal")}
                         >
-                          {busyId === `${machine.id}:terminal` ? (
+                          {isBusy(machineOperation(machine.id, "terminal")) ? (
                             <Spinner className="size-3.5" />
                           ) : (
                             <SquareTerminalIcon className="size-3.5" />
@@ -389,10 +430,15 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           className="shrink-0 px-2 sm:px-3"
                           aria-label={`Open stats for ${machine.name}`}
                           title="Stats"
-                          disabled={Boolean(busyId)}
+                          disabled={
+                            isBusy(machineOperation(machine.id, "stats")) ||
+                            isBusy(machineOperation(machine.id, "start")) ||
+                            isBusy(machineOperation(machine.id, "stop")) ||
+                            isBusy(machineOperation(machine.id, "delete"))
+                          }
                           onClick={() => void openService(machine, "stats")}
                         >
-                          {busyId === `${machine.id}:stats` ? (
+                          {isBusy(machineOperation(machine.id, "stats")) ? (
                             <Spinner className="size-3.5" />
                           ) : (
                             <HeartPulseIcon className="size-3.5" />
@@ -405,7 +451,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           className="shrink-0 px-2 text-destructive hover:text-destructive sm:px-3"
                           aria-label={`Delete ${machine.name}`}
                           title="Delete"
-                          disabled={Boolean(busyId)}
+                          disabled={isMachineBusy(machine.id)}
                           onClick={() => setDeleteTarget(machine)}
                         >
                           <Trash2Icon className="size-3.5" />
@@ -432,7 +478,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                 className="h-8"
                 aria-expanded={projectFormOpen}
                 aria-controls="ssh-project-form"
-                disabled={machines.length === 0 || Boolean(busyId)}
+                disabled={machines.length === 0 || isBusy(CREATE_PROJECT_OPERATION)}
                 onClick={() => setProjectFormOpen((open) => !open)}
               >
                 <PlusIcon className="size-3.5" />
@@ -452,7 +498,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                       id="ssh-machine"
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                       value={machineId}
-                      disabled={machines.length === 0 || Boolean(busyId)}
+                      disabled={machines.length === 0 || isBusy(CREATE_PROJECT_OPERATION)}
                       onChange={(event) => setMachineId(event.target.value)}
                     >
                       {machines.map((machine) => (
@@ -469,7 +515,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                         id="ssh-project-name"
                         value={projectName}
                         placeholder="Auto"
-                        disabled={Boolean(busyId)}
+                        disabled={isBusy(CREATE_PROJECT_OPERATION)}
                         onChange={(event) => setProjectName(event.target.value)}
                       />
                     </div>
@@ -479,7 +525,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                         id="ssh-project-open-path"
                         value={openPath}
                         placeholder="open.html"
-                        disabled={Boolean(busyId)}
+                        disabled={isBusy(CREATE_PROJECT_OPERATION)}
                         onChange={(event) => setOpenPath(event.target.value)}
                       />
                     </div>
@@ -499,7 +545,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           className="h-8 min-w-0 rounded-none border-0 px-2 shadow-none focus-visible:ring-0"
                           value={path}
                           placeholder="Auto"
-                          disabled={Boolean(busyId)}
+                          disabled={isBusy(CREATE_PROJECT_OPERATION)}
                           onChange={(event) => setPath(event.target.value)}
                         />
                       </div>
@@ -513,7 +559,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                         max={65535}
                         value={port}
                         placeholder="Auto"
-                        disabled={Boolean(busyId)}
+                        disabled={isBusy(CREATE_PROJECT_OPERATION)}
                         onChange={(event) => setPort(event.target.value)}
                       />
                     </div>
@@ -524,13 +570,17 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                         type="checkbox"
                         className="size-4"
                         checked={stripPrefix}
-                        disabled={Boolean(busyId)}
+                        disabled={isBusy(CREATE_PROJECT_OPERATION)}
                         onChange={(event) => setStripPrefix(event.target.checked)}
                       />
                       <span>Strip prefix</span>
                     </label>
-                    <Button type="submit" size="sm" disabled={!machineId || Boolean(busyId)}>
-                      {busyId === "new-project" ? (
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={!machineId || isBusy(CREATE_PROJECT_OPERATION)}
+                    >
+                      {isBusy(CREATE_PROJECT_OPERATION) ? (
                         <Spinner className="size-3.5" />
                       ) : (
                         <PlusIcon className="size-3.5" />
@@ -567,10 +617,10 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                             variant="outline"
                             size="sm"
                             aria-label={`Open terminal for ${project.name}`}
-                            disabled={Boolean(busyId)}
+                            disabled={isProjectBusy(project.id)}
                             onClick={() => void openProjectTerminal(project)}
                           >
-                            {busyId === `${project.id}:terminal` ? (
+                            {isBusy(projectOperation(project.id, "terminal")) ? (
                               <Spinner className="size-3.5" />
                             ) : (
                               <SquareTerminalIcon className="size-3.5" />
@@ -583,10 +633,10 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                             size="icon"
                             aria-label={`Reset ${project.name}`}
                             title="Reset project"
-                            disabled={Boolean(busyId)}
+                            disabled={isProjectBusy(project.id)}
                             onClick={() => setResetTarget(project)}
                           >
-                            {busyId === `${project.id}:reset` ? (
+                            {isBusy(projectOperation(project.id, "reset")) ? (
                               <Spinner className="size-4" />
                             ) : (
                               <RefreshCwIcon className="size-4" />
@@ -597,10 +647,10 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                             variant="ghost"
                             size="icon"
                             aria-label={`Remove ${project.name}`}
-                            disabled={Boolean(busyId)}
+                            disabled={isProjectBusy(project.id)}
                             onClick={() => void removeProject(project)}
                           >
-                            {busyId === project.id ? (
+                            {isBusy(projectOperation(project.id, "remove")) ? (
                               <Spinner className="size-4" />
                             ) : (
                               <Trash2Icon className="size-4" />
@@ -641,7 +691,9 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
       <AlertDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => {
-          if (!open && !busyId) setDeleteTarget(undefined);
+          if (!open && (!deleteTarget || !isBusy(machineOperation(deleteTarget.id, "delete")))) {
+            setDeleteTarget(undefined);
+          }
         }}
       >
         <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10">
@@ -654,16 +706,24 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={Boolean(busyId)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              disabled={Boolean(
+                deleteTarget && isBusy(machineOperation(deleteTarget.id, "delete")),
+              )}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              disabled={Boolean(busyId)}
+              disabled={Boolean(
+                deleteTarget && isBusy(machineOperation(deleteTarget.id, "delete")),
+              )}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={(event) => {
                 event.preventDefault();
                 void deleteMachine();
               }}
             >
-              {deleteTarget && busyId === deleteTarget.id ? (
+              {deleteTarget && isBusy(machineOperation(deleteTarget.id, "delete")) ? (
                 <Spinner className="size-3.5" />
               ) : (
                 <Trash2Icon className="size-3.5" />
@@ -677,7 +737,9 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
       <AlertDialog
         open={Boolean(resetTarget)}
         onOpenChange={(open) => {
-          if (!open && !busyId) setResetTarget(undefined);
+          if (!open && (!resetTarget || !isBusy(projectOperation(resetTarget.id, "reset")))) {
+            setResetTarget(undefined);
+          }
         }}
       >
         <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10">
@@ -690,16 +752,20 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={Boolean(busyId)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              disabled={Boolean(resetTarget && isBusy(projectOperation(resetTarget.id, "reset")))}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              disabled={Boolean(busyId)}
+              disabled={Boolean(resetTarget && isBusy(projectOperation(resetTarget.id, "reset")))}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={(event) => {
                 event.preventDefault();
                 void resetProject();
               }}
             >
-              {resetTarget && busyId === `${resetTarget.id}:reset` ? (
+              {resetTarget && isBusy(projectOperation(resetTarget.id, "reset")) ? (
                 <Spinner className="size-3.5" />
               ) : (
                 <RefreshCwIcon className="size-3.5" />

@@ -402,6 +402,7 @@ project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }
     "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-databricks-sandbox@workspace:^",
+    "@dbx-tools/ui@workspace:^",
     "@mastra/core@catalog:",
     "http-proxy-3@catalog:",
     "smol-toml@1.8.0",

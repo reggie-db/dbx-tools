@@ -16,7 +16,8 @@ available.
 
 Return the service `openUrl`. The built-in service owns the loopback-only VNC
 listener, noVNC proxy, AppKit route, authentication boundary, dbx.tools desktop
-theme, and branded wallpaper.
+theme, branded wallpaper, mobile remote-resize settings, and default Epiphany
+browser. It returns only after the full noVNC web client is responding.
 
 If startup fails, report the tool error. Inspect
 `~/.dbx-tools/runtime/desktop/desktop.log` with `execute_ssh_command` only for

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { brandUtils } from "@dbx-tools/shared-core";
 import type { SshCommandResult } from "@dbx-tools/shared-databricks-sandbox";
+import { dbxToolsAssetSvg } from "@dbx-tools/ui/branding/assets";
 import { ensureSshService, openDinoTtyProjectTab } from "../src/services.ts";
 import type { SshSession } from "../src/session.ts";
 
@@ -58,21 +60,36 @@ describe("ensureSshService", () => {
     assert.match(script, /websockify --web=\/usr\/share\/novnc 127\.0\.0\.1:6080/);
     assert.match(script, /-localhost yes -SecurityTypes None/);
     assert.match(script, /dbx-tools-wallpaper\.svg/);
-    assert.match(script, /#1b3139/);
-    assert.match(script, /#0e538b/);
+    assert.match(script, /epiphany-browser/);
+    assert.match(script, /org\.gnome\.Epiphany\.desktop/);
+    assert.match(script, /urllib\.request\.urlopen/);
+    assert.match(script, /noVNC web client did not become ready/);
+    assert.match(script, /feh --no-fehbg --bg-scale/);
     const encodedWallpaper = script.match(/printf %s '([^']+)' \| base64 -d/)?.[1];
     assert.ok(encodedWallpaper);
     const wallpaper = Buffer.from(encodedWallpaper, "base64").toString("utf8");
-    assert.match(wallpaper, /#00a972/);
-    assert.match(wallpaper, /#ff3621/);
-    assert.match(wallpaper, /dbx\.tools/);
+    for (const color of [
+      brandUtils.defaultBrandContext.colors.primary,
+      brandUtils.defaultBrandContext.colors.primaryHover,
+      brandUtils.defaultBrandContext.colors.accent,
+      brandUtils.defaultBrandContext.colors.surface,
+      brandUtils.defaultBrandContext.colors.muted,
+    ]) {
+      assert.match(wallpaper, new RegExp(color, "i"));
+    }
+    assert.match(wallpaper, /dbx tools logo/);
+    assert.match(
+      wallpaper,
+      new RegExp(dbxToolsAssetSvg.logoDark.match(/<path d="([^"]+)"/)?.[1] ?? "$^"),
+    );
+    assert.doesNotMatch(wallpaper, /M24 27h50v12/);
     assert.match(script, /version_file/);
     assert.equal(target.remotePort, 6080);
     assert.equal(target.stripPrefix, true);
     assert.equal(target.redirectToSlash, true);
     assert.equal(
       target.openUrl,
-      "/sandbox/desktop/machine/vnc.html?autoconnect=1&resize=remote&path=sandbox%2Fdesktop%2Fmachine%2Fwebsockify",
+      "/sandbox/desktop/machine/vnc.html?autoconnect=1&resize=remote&show_dot=1&keep_device_awake=1&path=sandbox%2Fdesktop%2Fmachine%2Fwebsockify",
     );
   });
 

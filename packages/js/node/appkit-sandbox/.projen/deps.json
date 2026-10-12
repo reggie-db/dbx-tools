@@ -66,6 +66,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/ui",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@mastra/core",
       "version": "catalog:",
       "type": "runtime"
