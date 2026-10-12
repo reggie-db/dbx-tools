@@ -269,6 +269,10 @@ export const indexInfoSchema = z.object({
   columns: z.array(z.string()).describe("Columns available on the index."),
   ready: z.boolean().describe("True when the index has finished provisioning and can be queried."),
   rowCount: z.number().int().optional().describe("Number of indexed rows, when known."),
+  directAccess: z
+    .boolean()
+    .optional()
+    .describe("True for a DIRECT_ACCESS index that stores caller-supplied vectors."),
 });
 
 /** A resolved index definition ({@link indexInfoSchema}). */

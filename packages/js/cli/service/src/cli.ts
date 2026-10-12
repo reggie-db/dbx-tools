@@ -9,10 +9,15 @@
 
 import * as exec from "@dbx-tools/core/exec";
 import { Command } from "commander";
-import { z } from "zod";
 
 import type { CliServiceDefinition } from "./definition.ts";
-import { CliService, type CliServiceLifecycle } from "./service.ts";
+import {
+  CliService,
+  CliServiceInstallOptionsSchema,
+  type CliServiceLifecycle,
+} from "./service.ts";
+
+export { CliServiceInstallOptionsSchema, type CliServiceInstallOptions } from "./service.ts";
 
 /** Static definition or action-time factory used by a service command group. */
 export type CliServiceDefinitionSource = CliServiceDefinition | (() => CliServiceDefinition);
@@ -34,24 +39,6 @@ const DEFAULT_DEPENDENCIES = {
     await exec.spawn(command, arguments_, { check: true });
   },
 } satisfies CliServiceCliDependencies;
-
-export const CliServiceInstallOptionsSchema = z
-  .object({
-    start: z.boolean().default(true).describe("Start the service after installation."),
-    pythonProject: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("Local Python project installed instead of the registry package."),
-    offline: z
-      .boolean()
-      .default(false)
-      .describe("Install Python packages from the uv cache without network access."),
-  })
-  .strict()
-  .describe("Options for installing a current-user CLI service.");
-
-export type CliServiceInstallOptions = z.output<typeof CliServiceInstallOptionsSchema>;
 
 /** Build install, start, stop, restart, status, logs, and uninstall commands for a service. */
 export function buildServiceCommand(

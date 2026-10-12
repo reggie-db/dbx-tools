@@ -238,19 +238,27 @@ export function parseOpts<T extends z.ZodRawShape>(
 /** Supported listener transport schemes. */
 export type ListenScheme = "tcp" | "unix";
 
+export const TcpListenAddressSchema = z
+  .object({
+    scheme: z.literal("tcp"),
+    host: z.string().trim().toLowerCase().min(1),
+    port: tcpPortOrZeroSchema,
+  })
+  .strict()
+  .describe("TCP listener address.");
+
+export const UnixListenAddressSchema = z
+  .object({
+    scheme: z.literal("unix"),
+    path: z.string().trim().min(1),
+  })
+  .strict()
+  .describe("Unix-domain listener address.");
+
 /** TCP listener returned by {@link listenAddressSchema}. */
-export interface TcpListenAddress {
-  readonly scheme: "tcp";
-  readonly host: string;
-  readonly port: number;
-}
-
+export type TcpListenAddress = z.output<typeof TcpListenAddressSchema>;
 /** Unix-domain listener returned by {@link listenAddressSchema}. */
-export interface UnixListenAddress {
-  readonly scheme: "unix";
-  readonly path: string;
-}
-
+export type UnixListenAddress = z.output<typeof UnixListenAddressSchema>;
 /** Transport-aware listener address. */
 export type ListenAddress = TcpListenAddress | UnixListenAddress;
 
@@ -300,19 +308,11 @@ export function listenAddressSchema(
     .preprocess(
       (value) => parseListenAddress(value, defaults, options.scheme ?? "tcp"),
       z.discriminatedUnion("scheme", [
-        z
-          .object({
-            scheme: z.literal("tcp"),
-            host: z.string().trim().toLowerCase().min(1).default(defaults.host),
-            port: tcpPortOrZeroSchema.default(defaults.port),
-          })
-          .strict(),
-        z
-          .object({
-            scheme: z.literal("unix"),
-            path: z.string().trim().min(1),
-          })
-          .strict(),
+        TcpListenAddressSchema.extend({
+          host: TcpListenAddressSchema.shape.host.default(defaults.host),
+          port: TcpListenAddressSchema.shape.port.default(defaults.port),
+        }),
+        UnixListenAddressSchema,
       ]),
     )
     .refine((address) => allowed.has(address.scheme), "Listener scheme is not allowed.")

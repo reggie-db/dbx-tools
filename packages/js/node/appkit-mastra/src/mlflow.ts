@@ -693,18 +693,10 @@ async function resolveExperimentId(client: WorkspaceClient): Promise<string | un
 }
 
 /** Parameters for {@link logFeedback}. */
-export interface LogFeedbackParams {
-  /** MLflow trace id the assessment attaches to (`tr-<hex>`). */
-  traceId: string;
-  /** Assessment name; defaults per whether a value or a comment is sent. */
-  name?: string;
-  /** Thumbs / rating / label value. Omit for a comment-only submission. */
-  value?: boolean | number | string;
-  /** Freeform comment: the rationale alongside a value, or the value itself when none. */
-  comment?: string;
+export type LogFeedbackParams = feedback.MastraFeedbackRequest & {
   /** Identity the feedback is attributed to (user email / id). */
   sourceId?: string;
-}
+};
 
 /**
  * Log a HUMAN feedback assessment to a trace. Returns the created

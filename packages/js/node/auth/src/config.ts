@@ -18,7 +18,7 @@ export const AuthOptionsSchema = z
   .describe("Token lifecycle timing configuration.");
 
 /** Token lifecycle timing configuration in milliseconds. */
-export interface AuthOptions extends z.input<typeof AuthOptionsSchema> {}
+export type AuthOptions = z.input<typeof AuthOptionsSchema>;
 
 export const DatabricksAuthOptionsSchema = z
   .object({
@@ -49,12 +49,7 @@ export const DatabricksAuthOptionsSchema = z
   .describe("Databricks profile and credential-source options.");
 
 /** Databricks profile and credential-source options. */
-export interface DatabricksAuthOptions extends Omit<
-  z.input<typeof DatabricksAuthOptionsSchema>,
-  "auth"
-> {
-  auth?: AuthOptions;
-}
+export type DatabricksAuthOptions = z.input<typeof DatabricksAuthOptionsSchema>;
 
 /** Default token refresh, lock, and interactive login timing values. */
 export const AUTH_DEFAULTS = Object.freeze(AuthOptionsSchema.parse({}));

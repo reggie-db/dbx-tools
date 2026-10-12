@@ -18,6 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import * as bin from "@dbx-tools/core/bin";
 import { asyncUtils } from "@dbx-tools/shared-core";
+import { z } from "zod";
 import { compileWithBun } from "./_compile.ts";
 import { readServiceDefinition, writeServiceDefinition } from "./_config.ts";
 import { requestServiceControl } from "./_control.ts";
@@ -97,15 +98,24 @@ export interface CliServiceRuntimeOptions {
   readonly trayExecutable?: string;
 }
 
+export const CliServiceInstallOptionsSchema = z
+  .object({
+    start: z.boolean().default(true).describe("Start the service after installation."),
+    pythonProject: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Local Python project installed instead of the registry package."),
+    offline: z
+      .boolean()
+      .default(false)
+      .describe("Install Python packages from the uv cache without network access."),
+  })
+  .strict()
+  .describe("Options for installing a current-user CLI service.");
+
 /** Options controlling service installation. */
-export interface CliServiceInstallOptions {
-  /** Start the service immediately after writing its configuration and login entry. */
-  readonly start?: boolean;
-  /** Install the primary Python package from this local project instead of the registry. */
-  readonly pythonProject?: string;
-  /** Resolve and install Python packages only from the uv cache. */
-  readonly offline?: boolean;
-}
+export type CliServiceInstallOptions = z.input<typeof CliServiceInstallOptionsSchema>;
 
 /** Current installation and process state for a system-tray service. */
 export interface CliServiceStatus {

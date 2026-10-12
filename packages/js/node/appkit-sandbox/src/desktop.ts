@@ -206,6 +206,8 @@ network:
   use_ipv4: true
   use_ipv6: false
   ssl:
+    pem_certificate:
+    pem_key:
     require_ssl: false
 server:
   http:
@@ -264,7 +266,7 @@ chmod 700 "$session_script"
 if ! [ -s "$server_pid" ] || ! kill -0 "$(cat "$server_pid")" 2>/dev/null; then
   kasmvncserver -kill :${DESKTOP_DISPLAY} >/dev/null 2>&1 || true
   rm -f "$session_ready"
-  nohup kasmvncserver :${DESKTOP_DISPLAY} -fg -xstartup "$session_script" \
+  nohup kasmvncserver :${DESKTOP_DISPLAY} -fg -select-de xfce -xstartup "$session_script" \
     -geometry 1600x1000 -depth 24 -interface 127.0.0.1 -websocketPort ${DESKTOP_WEB_PORT} \
     -disableBasicAuth -SecurityTypes None >"$log_file" 2>&1 </dev/null &
   echo $! >"$server_pid"

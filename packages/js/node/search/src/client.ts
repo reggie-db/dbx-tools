@@ -26,6 +26,7 @@ import { invoke, resolve as modelResolve, modelCatalog } from "@dbx-tools/model"
 import { asyncUtils, json, log, stringUtils } from "@dbx-tools/shared-core";
 import { ModelClass } from "@dbx-tools/shared-model";
 import type {
+  IndexInfo,
   SearchDocument,
   SearchHit,
   SearchMode,
@@ -141,16 +142,7 @@ export class SearchIndex {
 }
 
 /** A resolved live index definition. */
-export interface IndexInfo {
-  name: string;
-  endpoint?: string;
-  primaryKey?: string;
-  columns: string[];
-  ready: boolean;
-  rowCount?: number;
-  /** True for a DIRECT_ACCESS index (you supply vectors; queries embed client-side). */
-  directAccess?: boolean;
-}
+export type { IndexInfo };
 
 /**
  * Options for {@link SearchClient.createIndex} / {@link SearchClient.ensureIndex}.

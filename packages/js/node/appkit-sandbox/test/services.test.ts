@@ -60,9 +60,11 @@ describe("ensureSshService", () => {
     assert.match(script, /package_name="kasmvncserver_\$\{codename\}_1\.5\.0_\$architecture\.deb"/);
     assert.match(script, /f599fe02e2175b9817b6165f74a5d2bebdc73118dde9181ba3410963bed7ae1e/);
     assert.match(script, /kasmvncserver :20 -fg/);
+    assert.match(script, /-select-de xfce -xstartup/);
     assert.match(script, /-websocketPort 6080/);
     assert.match(script, /-disableBasicAuth -SecurityTypes None/);
     assert.match(script, /allow_resize: true/);
+    assert.match(script, /pem_certificate:\n    pem_key:\n    require_ssl: false/);
     assert.doesNotMatch(script, /tigervnc-standalone-server|websockify --web|\/usr\/share\/novnc/);
     assert.match(script, /dbx-tools-wallpaper\.svg/);
     assert.match(script, /epiphany-browser/);
