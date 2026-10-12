@@ -31,7 +31,6 @@ import type { AnyMastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
 import type { LocalSkillMount, RemoteSkillsOption } from "./remote-skills.ts";
-import type { DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the
@@ -239,17 +238,11 @@ export interface MastraPluginConfig extends BasePluginConfig {
   codeMode?: boolean | MastraCodeModeConfig;
   /**
    * Sandbox for auto-created agent workspaces. Defaults to Monty. `false`
-   * disables command execution; `true`, `"databricks"`, or an object
-   * selects/configures Databricks Sandbox. An agent with an explicit custom
-   * `workspace` keeps that workspace and its sandbox.
+   * disables command execution; `true` or `"monty"` selects Monty; an explicit
+   * Mastra sandbox or resolver supplies a remote transport. An agent with an
+   * explicit custom `workspace` keeps that workspace and its sandbox.
    */
-  sandbox?:
-    | boolean
-    | "databricks"
-    | "monty"
-    | DatabricksWorkspaceSandboxOptions
-    | WorkspaceSandbox
-    | WorkspaceSandboxResolver;
+  sandbox?: boolean | "monty" | WorkspaceSandbox | WorkspaceSandboxResolver;
   /** Add user-scoped `/tmp` only when no configured workspace path mounts writable. */
   workspaceFallbackToTmp?: boolean;
   /** Native Mastra workspace tool availability, approval, and hook configuration. */
@@ -709,7 +702,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     sandbox: {
       type: ["boolean", "string", "object"],
       description:
-        'Command sandbox for auto-created agent workspaces. Defaults to Monty. False disables command execution; true, "databricks", or an object selects/configures Databricks Sandbox.',
+        'Command sandbox for auto-created agent workspaces. Defaults to Monty. False disables command execution; true or "monty" selects Monty; an explicit sandbox or resolver supplies another transport.',
     },
     workspaceFallbackToTmp: {
       type: "boolean",

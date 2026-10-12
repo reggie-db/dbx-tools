@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SshClient } from "./client.ts";
+import { resolveServiceUrl } from "./service-url.ts";
 
 /** Props for the full SSH machine and route management surface. */
 export interface SshManagerProps {
@@ -124,7 +125,7 @@ export function SshManager({
     setError(undefined);
     try {
       const result = await client.startService(machine.id, service);
-      window.open(result.path, "_blank", "noopener,noreferrer");
+      window.open(resolveServiceUrl(result.path), "_blank", "noopener,noreferrer");
       await refresh();
     } catch (caught) {
       setError(errorMessage(caught));

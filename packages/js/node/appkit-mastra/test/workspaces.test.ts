@@ -24,7 +24,6 @@ import { buildAgents } from "../src/agents.ts";
 import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY } from "../src/config.ts";
 import { filesystems } from "../src/filesystems.ts";
 import { MontySandbox } from "../src/monty-sandbox.ts";
-import { DatabricksSandbox } from "../src/sandbox.ts";
 import { ORGANIZATION_ASSISTANT_PATH } from "../src/skill-paths.ts";
 import {
   databricksWorkspace,
@@ -147,22 +146,16 @@ describe("databricksWorkspace sandbox", () => {
     const replaced = databricksWorkspace({ assistantPaths: false, sandbox: custom });
     assert.equal(await replaced.resolveSandbox({ requestContext: new RequestContext() }), custom);
 
-    const databricks = databricksWorkspace({
+    const remote = databricksWorkspace({
       assistantPaths: false,
       id: "analyst",
-      sandbox: "databricks",
+      sandbox: ({ requestContext: current }) => {
+        assert.equal(current, requestContext);
+        return custom;
+      },
     });
     const requestContext = new RequestContext();
-    const client = {} as WorkspaceClient;
-    requestContext.set(MASTRA_USER_KEY, {
-      id: "user-1",
-      executionContext: { client, isUserContext: true },
-    });
-    const resolved = await databricks.resolveSandbox({ requestContext });
-    assert.ok(resolved instanceof DatabricksSandbox);
-    assert.equal(resolved.provider, "databricks");
-    assert.match(resolved.id, /^mastra-[a-f0-9]{32}$/);
-    assert.equal((resolved as unknown as { client: WorkspaceClient }).client, client);
+    assert.equal(await remote.resolveSandbox({ requestContext }), custom);
   });
 });
 

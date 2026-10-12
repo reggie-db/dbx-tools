@@ -164,10 +164,6 @@
         "types": "./lib/src/rest.d.ts",
         "default": "./lib/src/rest.js"
       },
-      "./sandbox": {
-        "types": "./lib/src/sandbox.d.ts",
-        "default": "./lib/src/sandbox.js"
-      },
       "./server": {
         "types": "./lib/src/server.d.ts",
         "default": "./lib/src/server.js"
@@ -253,7 +249,6 @@
     "./processors": "./src/processors.ts",
     "./remote-skills": "./src/remote-skills.ts",
     "./rest": "./src/rest.ts",
-    "./sandbox": "./src/sandbox.ts",
     "./server": "./src/server.ts",
     "./serving": "./src/serving.ts",
     "./skill-paths": "./src/skill-paths.ts",

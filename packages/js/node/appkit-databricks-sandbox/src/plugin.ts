@@ -61,6 +61,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   readonly runtime: SshRuntime;
   private mounted = false;
   private httpServer?: HttpServer;
+  private upgradeAttachTimer?: ReturnType<typeof setTimeout>;
   private readonly upgradeHandler = (request: IncomingMessage, socket: Socket, head: Buffer) =>
     this.runtime.routes.handleUpgrade(request, socket, head);
 
@@ -81,12 +82,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       if (!server || this.mounted) return;
       server.addExtension((application) => application.use(this.runtime.routes.middleware()));
       this.mounted = true;
-    });
-    this.context?.onLifecycle("server:ready", () => {
-      const server = this.context?.getPlugins().get("server") as ServerExtension | undefined;
-      if (!server || this.httpServer) return;
-      this.httpServer = server.getServer();
-      this.httpServer.on("upgrade", this.upgradeHandler);
+      this.attachUpgradeHandler(server);
     });
   }
 
@@ -287,9 +283,25 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   }
 
   async shutdown(): Promise<void> {
+    if (this.upgradeAttachTimer) clearTimeout(this.upgradeAttachTimer);
+    this.upgradeAttachTimer = undefined;
     this.httpServer?.off("upgrade", this.upgradeHandler);
     this.httpServer = undefined;
     await this.runtime.close();
+  }
+
+  private attachUpgradeHandler(server: ServerExtension): void {
+    if (this.httpServer || this.upgradeAttachTimer) return;
+    try {
+      this.httpServer = server.getServer();
+      this.httpServer.on("upgrade", this.upgradeHandler);
+    } catch {
+      this.upgradeAttachTimer = setTimeout(() => {
+        this.upgradeAttachTimer = undefined;
+        this.attachUpgradeHandler(server);
+      }, 10);
+      this.upgradeAttachTimer.unref?.();
+    }
   }
 
   private async withRequestAuth<T>(

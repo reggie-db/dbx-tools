@@ -1,9 +1,29 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
+import { log } from "@dbx-tools/shared-core";
 import type { SshCommandResult } from "@dbx-tools/shared-databricks-sandbox";
 import ssh2, { type Client as Ssh2Client, type ClientChannel } from "ssh2";
+import { z } from "zod";
 
 const { Client } = ssh2;
+const logger = log.logger("appkit-databricks-sandbox:ssh");
+const SERVICE_DIRECT_SUFFIX = ".service-direct.cloud.databricks.com";
+
+const DnsAnswerSchema = z
+  .object({
+    type: z.number().int().describe("DNS record type number."),
+    data: z.string().describe("DNS record value."),
+  })
+  .passthrough()
+  .describe("One DNS-over-HTTPS answer record.");
+
+const DnsResponseSchema = z
+  .object({
+    Answer: z.array(DnsAnswerSchema).optional().describe("Resolved DNS answer records."),
+  })
+  .passthrough()
+  .describe("Google DNS-over-HTTPS JSON response.");
 
 /** Connection, key, host-verification, and command settings for one SSH machine. */
 export interface SshSessionOptions {
@@ -17,24 +37,68 @@ export interface SshSessionOptions {
   knownHost?: string;
   rememberHost?: (fingerprint: string, key: Buffer) => Promise<void>;
   sshCommand?: string;
+  resolvePublicAddresses?: (host: string) => Promise<string[]>;
 }
 
 /** Verified SSH transport using OpenSSH commands and ssh2 direct forwarding. */
 export class SshSession {
   private client?: Ssh2Client;
   private connecting?: Promise<Ssh2Client>;
+  private connectedHost?: string;
 
   constructor(private readonly options: SshSessionOptions) {}
 
   async connect(): Promise<Ssh2Client> {
     if (this.client) return this.client;
     if (this.connecting) return this.connecting;
-    this.connecting = new Promise<Ssh2Client>((resolve, reject) => {
+    this.connecting = this.connectWithFallback().catch((error) => {
+      this.connecting = undefined;
+      throw error;
+    });
+    return this.connecting;
+  }
+
+  private async connectWithFallback(): Promise<Ssh2Client> {
+    try {
+      return await this.connectHost(this.options.host);
+    } catch (error) {
+      if (!shouldResolvePublicGateway(this.options.host, error)) throw error;
+      const resolveAddresses = this.options.resolvePublicAddresses ?? resolvePublicGatewayAddresses;
+      let addresses: string[];
+      try {
+        addresses = await resolveAddresses(this.options.host);
+      } catch (resolveError) {
+        logger.warn("public Sandbox gateway resolution failed", {
+          host: this.options.host,
+          error: resolveError,
+        });
+        throw error;
+      }
+      logger.warn("private Sandbox gateway unreachable; retrying public addresses", {
+        host: this.options.host,
+        addressCount: addresses.length,
+      });
+      let lastError: unknown = error;
+      for (const address of addresses) {
+        try {
+          return await this.connectHost(address);
+        } catch (connectError) {
+          lastError = connectError;
+        }
+      }
+      throw lastError;
+    }
+  }
+
+  private connectHost(host: string): Promise<Ssh2Client> {
+    return new Promise<Ssh2Client>((resolve, reject) => {
       const client = new Client();
       let verifiedHost: { fingerprint: string; key: Buffer } | undefined;
       const cleanup = () => {
+        if (this.client !== client) return;
         this.client = undefined;
         this.connecting = undefined;
+        this.connectedHost = undefined;
       };
       client.once("ready", () => {
         const finish = async () => {
@@ -42,22 +106,21 @@ export class SshSession {
             await this.options.rememberHost?.(verifiedHost.fingerprint, verifiedHost.key);
           }
           this.client = client;
+          this.connectedHost = host;
           this.connecting = undefined;
           resolve(client);
         };
         void finish().catch((error) => {
           client.end();
-          cleanup();
           reject(error);
         });
       });
       client.once("error", (error) => {
-        cleanup();
         reject(error);
       });
       client.once("close", cleanup);
       client.connect({
-        host: this.options.host,
+        host,
         port: this.options.port,
         username: this.options.username,
         privateKey: this.options.privateKey,
@@ -72,7 +135,6 @@ export class SshSession {
         },
       });
     });
-    return this.connecting;
   }
 
   async execute(
@@ -89,9 +151,11 @@ export class SshSession {
     await this.connect();
     const script = commandScript(command, args, options.cwd, options.env);
     return new Promise<SshCommandResult>((resolve, reject) => {
-      const child = spawn(this.options.sshCommand ?? "ssh", nativeSshArgs(this.options, script), {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      const child = spawn(
+        this.options.sshCommand ?? "ssh",
+        nativeSshArgs(this.options, script, this.connectedHost ?? this.options.host),
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
       let stdout = "";
       let stderr = "";
       let timedOut = false;
@@ -151,7 +215,37 @@ export class SshSession {
     this.client?.end();
     this.client = undefined;
     this.connecting = undefined;
+    this.connectedHost = undefined;
   }
+}
+
+/** Resolve the public IPv4 addresses behind a Databricks service-direct gateway. */
+export async function resolvePublicGatewayAddresses(
+  host: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string[]> {
+  if (!host.toLowerCase().endsWith(SERVICE_DIRECT_SUFFIX)) return [];
+  const response = await fetcher(
+    `https://dns.google/resolve?name=${encodeURIComponent(host)}&type=A`,
+    { headers: { Accept: "application/dns-json" }, signal: AbortSignal.timeout(5_000) },
+  );
+  if (!response.ok) throw new Error(`Public DNS resolution failed (${response.status})`);
+  const payload = DnsResponseSchema.parse(await response.json());
+  return [
+    ...new Set(
+      (payload.Answer ?? [])
+        .filter((answer) => answer.type === 1 && isIP(answer.data) === 4)
+        .map((answer) => answer.data),
+    ),
+  ];
+}
+
+function shouldResolvePublicGateway(host: string, error: unknown): boolean {
+  if (!host.toLowerCase().endsWith(SERVICE_DIRECT_SUFFIX)) return false;
+  const code =
+    (error as { code?: unknown; cause?: { code?: unknown } })?.code ??
+    (error as { cause?: { code?: unknown } })?.cause?.code;
+  return code === "EHOSTUNREACH" || code === "ENETUNREACH" || code === "ETIMEDOUT";
 }
 
 function commandScript(
@@ -181,7 +275,7 @@ function environmentName(value: string): string {
   return value;
 }
 
-function nativeSshArgs(options: SshSessionOptions, script: string): string[] {
+function nativeSshArgs(options: SshSessionOptions, script: string, connectHost: string): string[] {
   return [
     "-i",
     options.privateKeyPath,
@@ -199,6 +293,8 @@ function nativeSshArgs(options: SshSessionOptions, script: string): string[] {
     "-o",
     `UserKnownHostsFile=${options.knownHostsPath}`,
     "-o",
+    `HostKeyAlias=[${options.host}]:${options.port}`,
+    "-o",
     "LogLevel=ERROR",
     "-o",
     `ConnectTimeout=${Math.max(1, Math.ceil(options.connectTimeoutMs / 1_000))}`,
@@ -206,7 +302,7 @@ function nativeSshArgs(options: SshSessionOptions, script: string): string[] {
     "ServerAliveInterval=15",
     "-o",
     "ServerAliveCountMax=3",
-    `${options.username}@${options.host}`,
+    `${options.username}@${connectHost}`,
     script,
   ];
 }

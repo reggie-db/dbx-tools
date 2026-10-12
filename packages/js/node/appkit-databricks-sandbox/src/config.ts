@@ -33,10 +33,6 @@ export const SshPluginConfigSchema = z
       .boolean()
       .default(false)
       .describe("Retry failed request-scoped OBO calls as the app service principal."),
-    fallbackToSandboxExec: z
-      .boolean()
-      .default(true)
-      .describe("Use the Sandbox execution REST API when the SSH gateway is unreachable."),
     ownershipStorage: z
       .enum(["auto", "lakebase", "disk"])
       .default("auto")

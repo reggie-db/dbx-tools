@@ -98,6 +98,7 @@ const root = new project.DBXToolsNodeProject({
     "@mlflow/core": "0.4.0",
     "http-proxy-3": "^1.23.1",
     "ssh2": "^1.17.0",
+    "ws": "^8.21.0",
     "better-auth": "1.7.6",
     "@better-auth/passkey": "1.7.6",
     "@simplewebauthn/browser": "13.3.0",
@@ -406,12 +407,14 @@ project.applyToProjects(root, { identifierName: "appkit-databricks-sandbox", tag
     "env-paths@catalog:",
     "http-proxy-3@catalog:",
     "ssh2@catalog:",
+    "ws@catalog:",
     "zod@catalog:",
   );
   p.addDevDeps(
     "@types/express@catalog:",
     "@types/json-schema@^7",
     "@types/ssh2@^1",
+    "@types/ws@^8",
     "vitest@catalog:",
   );
   projectJs.addPackageFiles(p, "skills");

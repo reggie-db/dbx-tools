@@ -3,8 +3,10 @@ import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
-import { databricksSandbox } from "@dbx-tools/appkit-databricks-sandbox";
+import { databricksSandbox, SshRuntime } from "@dbx-tools/appkit-databricks-sandbox";
+import { resolveSshPluginConfig } from "@dbx-tools/appkit-databricks-sandbox/config";
 import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-databricks-sandbox/skills";
+import { sshWorkspaceSandbox } from "@dbx-tools/appkit-databricks-sandbox/workspace";
 import { graphiti } from "@dbx-tools/appkit-graphiti";
 import {
   agents,
@@ -77,6 +79,21 @@ const busEnabled = configUtils.boolean(undefined, "BUS_ENABLED", configUtils.ENV
 const remoteSkillsEnabled =
   configUtils.boolean(undefined, "REMOTE_SKILLS_ENABLED", configUtils.ENV_ONLY) ?? true;
 const localDevelopment = process.env.NODE_ENV === "development";
+const databricksSandboxRuntime = new SshRuntime(
+  resolveSshPluginConfig({
+    fallbackToServicePrincipal: true,
+    machineAssignments: [
+      {
+        userId: "4739182178671968@7474652124440999",
+        machineId: "strapping-gemsbok-3103",
+      },
+      {
+        userId: "reggie.pierce@databricks.com",
+        machineId: "strapping-gemsbok-3103",
+      },
+    ],
+  }),
+);
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
 // `server({ staticPath })` serves it on the same port as the API. Locally the
@@ -297,19 +314,7 @@ await appkit.createApp({
     genie(),
     lakebase({ pool: postgresConnectionOptions({}) }),
     filesCache(),
-    databricksSandbox({
-      fallbackToServicePrincipal: true,
-      machineAssignments: [
-        {
-          userId: "4739182178671968@7474652124440999",
-          machineId: "strapping-gemsbok-3103",
-        },
-        {
-          userId: "reggie.pierce@databricks.com",
-          machineId: "strapping-gemsbok-3103",
-        },
-      ],
-    }),
+    databricksSandbox({ runtime: databricksSandboxRuntime }),
     ...(graphitiEnabled ? [graphiti()] : []),
     // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
     // Lakebase connection and fans topic broadcasts out to its browser viewers.
@@ -377,6 +382,7 @@ await appkit.createApp({
       agents: { support, "support-polling": supportPolling },
       defaultAgent: "support",
       genieAgentMode: true,
+      sandbox: sshWorkspaceSandbox(databricksSandboxRuntime),
       workspaceFallbackToTmp: true,
       // Chat runs on-behalf-of the signed-in user by default, so the caller must
       // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or

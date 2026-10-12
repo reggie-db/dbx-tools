@@ -15,7 +15,6 @@
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConfigurationError } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { appkit, pluginRegistry } from "@dbx-tools/appkit";
 import {
@@ -61,7 +60,6 @@ import {
 } from "./filesystems.ts";
 import { MontySandbox } from "./monty-sandbox.ts";
 import type { LocalSkillMount } from "./remote-skills.ts";
-import { DatabricksSandbox, type DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
 import { ORGANIZATION_ASSISTANT_PATH, personalWorkspacePath } from "./skill-paths.ts";
 
 /* ------------------------------ constants ------------------------------ */
@@ -174,16 +172,10 @@ type WorkspaceMountResolver = (
 
 /**
  * Sandbox selection for {@link databricksWorkspace}. Monty is the default;
- * command execution can be disabled or replaced with Databricks Sandbox or any
- * Mastra provider/resolver.
+ * command execution can be disabled or replaced with any Mastra provider/resolver.
  */
 export type WorkspaceSandboxSelection =
-  | false
-  | "databricks"
-  | "monty"
-  | DatabricksWorkspaceSandboxOptions
-  | WorkspaceSandbox
-  | WorkspaceSandboxResolver;
+  false | true | "monty" | WorkspaceSandbox | WorkspaceSandboxResolver;
 
 /** Native Mastra workspace options plus Databricks path shortcuts. */
 export interface DatabricksWorkspaceOptions extends Omit<
@@ -208,9 +200,8 @@ export interface DatabricksWorkspaceOptions extends Omit<
   /** AppKit plugin context used to discover optional sibling capabilities. */
   pluginContext?: pluginRegistry.PluginContextLike;
   /**
-   * Command sandbox. Defaults to Monty. Pass `false` to disable it,
-   * `"databricks"` or Databricks Sandbox options to select the remote provider,
-   * or an explicit Mastra sandbox/provider resolver.
+   * Command sandbox. Defaults to Monty. Pass `false` to disable it, or an
+   * explicit Mastra sandbox/provider resolver for a remote transport.
    */
   sandbox?: WorkspaceSandboxSelection;
   /** Add user-scoped `/tmp` only when no configured Databricks path mounts writable. */
@@ -418,49 +409,9 @@ function resolveWorkspaceSandbox(
 ): WorkspaceSandbox | WorkspaceSandboxResolver | undefined {
   const configured = selection ?? "monty";
   if (configured === false) return undefined;
-  if (configured === "monty") return new MontySandbox();
+  if (configured === true || configured === "monty") return new MontySandbox();
   if (typeof configured === "function" || isSandbox(configured)) return configured;
-
-  const options: DatabricksWorkspaceSandboxOptions =
-    configured === "databricks" ? { provider: "databricks" } : configured;
-  return ({ requestContext }) => {
-    const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
-    if (!user) {
-      throw ConfigurationError.resourceNotFound(
-        "Databricks sandbox user context",
-        "Invoke command tools from an agent turn served by the Mastra plugin.",
-      );
-    }
-    const configuredId =
-      typeof options.sandboxId === "function"
-        ? options.sandboxId({ requestContext })
-        : options.sandboxId;
-    const sandboxId = configuredId ?? defaultSandboxId(workspaceId, user.id);
-    const client =
-      typeof options.client === "function"
-        ? options.client({ requestContext })
-        : (options.client ?? (user.executionContext.client as WorkspaceClient));
-    const {
-      provider: _provider,
-      sandboxId: _sandboxId,
-      client: _client,
-      ...sandboxOptions
-    } = options;
-    return new DatabricksSandbox({
-      ...sandboxOptions,
-      client,
-      sandboxId,
-      displayName: options.displayName ?? `Mastra ${workspaceName}`,
-    });
-  };
-}
-
-function defaultSandboxId(workspaceId: string, userId: string): string {
-  const digest = createHash("sha256")
-    .update(object.toStableKey({ workspaceId, userId }))
-    .digest("hex")
-    .slice(0, 32);
-  return `mastra-${digest}`;
+  throw new TypeError(`Unsupported workspace sandbox for ${workspaceId} (${workspaceName})`);
 }
 
 function isSandbox(value: unknown): value is WorkspaceSandbox {
@@ -471,10 +422,9 @@ function isSandbox(value: unknown): value is WorkspaceSandbox {
 
 function sandboxName(selection: WorkspaceSandboxSelection | undefined): string {
   if (selection === undefined || selection === false) return "disabled";
-  if (selection === "monty") return "monty";
-  if (selection === "databricks") return "databricks";
+  if (selection === true || selection === "monty") return "monty";
   if (typeof selection === "function") return "resolver";
-  return isSandbox(selection) ? selection.provider : (selection.provider ?? "databricks");
+  return selection.provider;
 }
 
 /**

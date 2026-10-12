@@ -13,7 +13,6 @@ import {
   type SshMachinesResponse,
   type SshRoute,
 } from "@dbx-tools/shared-databricks-sandbox";
-import { z } from "zod";
 import type { ResolvedSshPluginConfig } from "./config.ts";
 import { SshKeyStore } from "./key-store.ts";
 import {
@@ -29,12 +28,6 @@ import { SshSession } from "./session.ts";
 const POLL_INTERVAL_MS = 1_000;
 const LIFECYCLE_TIMEOUT_MS = 180_000;
 const logger = log.logger("appkit-databricks-sandbox:auth");
-const sandboxHttpResponseSchema = z.object({
-  status: z.number().int(),
-  headers: z.record(z.string(), z.string()),
-  body: z.string(),
-});
-
 interface WorkspaceAuthAttempt<T> {
   user?: () => Promise<T>;
   servicePrincipal: () => Promise<T>;
@@ -238,23 +231,13 @@ export class SshRuntime {
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
     const machine = await this.ensureRunning(api, request.machineId, signal);
     const timeoutMs = request.timeoutMs ?? this.config.commandTimeoutMs;
-    try {
-      const session = await this.ensureSession(client, userId, machine, signal);
-      return await session.execute(request.command, request.args, {
-        ...(request.cwd ? { cwd: request.cwd } : {}),
-        ...(request.env ? { env: request.env } : {}),
-        timeoutMs,
-        signal,
-      });
-    } catch (error) {
-      if (!this.config.fallbackToSandboxExec || !isSshGatewayUnavailable(error)) throw error;
-      logger.warn("SSH gateway unavailable; using Sandbox execution REST API", {
-        machineId: request.machineId,
-        userId,
-        ...authErrorMetadata(error),
-      });
-      return api.execute(request.machineId, request, timeoutMs, signal);
-    }
+    const session = await this.ensureSession(client, userId, machine, signal);
+    return session.execute(request.command, request.args, {
+      ...(request.cwd ? { cwd: request.cwd } : {}),
+      ...(request.env ? { env: request.env } : {}),
+      timeoutMs,
+      signal,
+    });
   }
 
   async addRoute(
@@ -267,61 +250,8 @@ export class SshRuntime {
     const api = new DatabricksSandboxClient(client);
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
     const machine = await this.ensureRunning(api, request.machineId, signal);
-    try {
-      const session = await this.ensureSession(client, userId, machine, signal);
-      return await this.routes.add(session, { ...request, ownerId: userId });
-    } catch (error) {
-      if (!this.config.fallbackToSandboxExec || !isSshGatewayUnavailable(error)) throw error;
-      logger.warn("SSH gateway unavailable; using Sandbox HTTP execution proxy", {
-        machineId: request.machineId,
-        userId,
-        ...authErrorMetadata(error),
-      });
-      return this.routes.addExecutor({ ...request, ownerId: userId }, async ({ method, url }) => {
-        if (method !== "GET" && method !== "HEAD") {
-          return {
-            status: 405,
-            headers: { "content-type": "text/plain; charset=utf-8" },
-            body: new TextEncoder().encode("Sandbox execution proxy supports GET and HEAD"),
-          };
-        }
-        const target = new URL(
-          url,
-          `http://${request.remoteHost}:${request.remotePort}`,
-        ).toString();
-        const script = [
-          "import base64, json, sys, urllib.error, urllib.request",
-          "request = urllib.request.Request(sys.argv[1], method=sys.argv[2])",
-          "try:",
-          "    response = urllib.request.urlopen(request, timeout=30)",
-          "except urllib.error.HTTPError as error:",
-          "    response = error",
-          "body = response.read()",
-          "print(json.dumps({'status': response.status, 'headers': dict(response.headers.items()), 'body': base64.b64encode(body).decode()}))",
-        ].join("\n");
-        const result = await api.execute(
-          request.machineId,
-          {
-            machineId: request.machineId,
-            command: "python3",
-            args: ["-c", script, target, method],
-          },
-          this.config.commandTimeoutMs,
-          signal,
-        );
-        if (!result.success) {
-          throw new Error(result.stderr || `Sandbox HTTP proxy exited ${result.exitCode}`);
-        }
-        const response = sandboxHttpResponseSchema.parse(
-          JSON.parse(result.stdout.trim().split("\n").at(-1) ?? ""),
-        );
-        return {
-          status: response.status,
-          headers: response.headers,
-          body: Uint8Array.from(Buffer.from(response.body, "base64")),
-        };
-      });
-    }
+    const session = await this.ensureSession(client, userId, machine, signal);
+    return this.routes.add(session, { ...request, ownerId: userId });
   }
 
   removeRoute(userId: string, routeId: string): Promise<boolean> {
@@ -658,26 +588,4 @@ function safeBody(value: unknown): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isSshGatewayUnavailable(error: unknown): boolean {
-  const pending: unknown[] = [error];
-  const visited = new Set<unknown>();
-  while (pending.length > 0) {
-    const current = pending.shift();
-    if (visited.has(current)) continue;
-    visited.add(current);
-    if (!isRecord(current)) continue;
-    if (
-      current.code === "EHOSTUNREACH" ||
-      current.code === "ENETUNREACH" ||
-      current.code === "ECONNREFUSED" ||
-      current.code === "ETIMEDOUT"
-    ) {
-      return true;
-    }
-    if (current.cause) pending.push(current.cause);
-    if (Array.isArray(current.errors)) pending.push(...current.errors);
-  }
-  return false;
 }

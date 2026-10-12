@@ -767,7 +767,7 @@ export async function buildAgents(opts: {
         fallbackToTmp: config.workspaceFallbackToTmp,
         ...(config.workspaceTools !== undefined ? { tools: config.workspaceTools } : {}),
         pluginContext: context,
-        sandbox: config.sandbox === true ? "databricks" : config.sandbox,
+        sandbox: config.sandbox,
       });
       markDefaultWorkspace(workspace);
     } else if (workspace) {

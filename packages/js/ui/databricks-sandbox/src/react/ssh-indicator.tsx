@@ -13,6 +13,7 @@ import {
 import { HeartPulseIcon, PlayIcon, ServerIcon, SquareIcon, SquareTerminalIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SshClient } from "./client.ts";
+import { resolveServiceUrl } from "./service-url.ts";
 
 /** Props for the compact SSH machine status and control popover. */
 export interface SshIndicatorProps {
@@ -60,7 +61,7 @@ export function SshIndicator({
       if (action === "stop") await client.stop(machine.id);
       if (action === "terminal" || action === "stats") {
         const service = await client.startService(machine.id, action);
-        window.open(service.path, "_blank", "noopener,noreferrer");
+        window.open(resolveServiceUrl(service.path), "_blank", "noopener,noreferrer");
       }
       await refresh();
     } catch (caught) {

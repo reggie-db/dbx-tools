@@ -9,7 +9,7 @@ chart and table embeds, MLflow feedback, and MCP exposure.
 
 ## Quick Start
 
-Add an agent and run its command tools in a per-user Databricks Sandbox:
+Add an agent and run its command tools in the default Monty runtime:
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
@@ -19,9 +19,7 @@ const analyst = agents.createAgent({
   instructions: "Answer questions and use Python when analysis requires it.",
 });
 
-await createApp({
-  plugins: [server(), mastra({ agents: { analyst }, sandbox: "databricks" })],
-});
+await createApp({ plugins: [server(), mastra({ agents: { analyst } })] });
 ```
 
 Add Lakebase, Genie, Analytics, or other AppKit plugins when the agent needs
@@ -304,8 +302,7 @@ const workspace = workspaces.databricksWorkspace({
     {
       path: "/Workspace/Shared/templates",
     },
-    ({ requestContext }) =>
-      requestContext.get("team") === "platform" ? "~/platform" : false,
+    ({ requestContext }) => (requestContext.get("team") === "platform" ? "~/platform" : false),
   ],
 });
 ```
@@ -399,9 +396,9 @@ const workspace = workspaces.databricksWorkspace({
 ### Configure File Approvals
 
 Workspace tools are enabled and run without approval by default. This applies to
-file mutations and command execution with either Monty or Databricks Sandbox.
-Databricks permissions still decide whether a workspace file operation
-succeeds. Opt into approval for the tools that need it:
+file mutations and command execution with either Monty or a supplied sandbox
+transport. Databricks permissions still decide whether a workspace file
+operation succeeds. Opt into approval for the tools that need it:
 
 ```ts
 import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
@@ -427,46 +424,23 @@ policies. Cached metadata never grants Databricks access.
 
 ## Workspace Sandbox
 
-Run command tools in a per-user Beta
-[Databricks Sandbox](https://docs.databricks.com/aws/en/compute/serverless/sandbox):
+Auto-created workspaces use Monty by default. Supply any native Mastra
+`WorkspaceSandbox` or request-scoped resolver to use a remote transport:
 
 ```ts
+const remoteSandbox = ({ requestContext }) => resolveRemoteSandbox(requestContext);
+
 mastra({
   agents: { analyst },
-  sandbox: "databricks",
+  sandbox: remoteSandbox,
 });
 ```
 
-Use `sandbox: true` for the same selection. Pass options to set startup and
-command limits or to fall back to the local Python runtime when the workspace
-does not have the preview:
-
-```ts
-mastra({
-  agents: { analyst },
-  sandbox: {
-    inactivityTimeout: "1800s",
-    startupTimeoutMs: 180_000,
-    commandTimeoutMs: 60_000,
-    fallback: "monty",
-  },
-});
-```
-
-The sandbox is created on the first command and reused for the attributed user.
-Commands return the normal Mastra stdout, stderr, exit, timeout, and truncation
-fields. Authentication, permission, and network failures are returned to the
-caller; only a definitive unavailable-preview response uses the configured
-fallback.
-
-Enable Databricks Sandbox in the workspace Previews page before selecting it.
-The adapter creates its own AppKit client through the normal
-environment/profile chain, so a Databricks App uses its service principal even
-when the agent turn uses OBO. Databricks Apps user authorization does not
-currently expose the Sandbox API scope. Outside Apps, a caller that supplies an
-explicit OBO client must request the Sandbox API's `sandbox` scope. The Sandbox
-filesystem is separate from Databricks Workspace skill mounts; command code must
-copy data explicitly when it needs both.
+For Databricks Sandbox over SSH, use `sshWorkspaceSandbox(runtime)` from
+`@dbx-tools/appkit-databricks-sandbox/workspace`. Share that runtime with the
+Databricks Sandbox AppKit plugin so Code Mode, agent tools, terminal and health
+routes all use the same transport and machine assignments. That package owns
+Sandbox lifecycle, SSH keys, authentication fallback, and route forwarding.
 
 The default local Monty Python runtime accepts Python source or `python3 -c` and
 has no host filesystem, network, environment variables, shell, or third-party
@@ -481,12 +455,11 @@ mastra({
 });
 ```
 
-Disable command execution, select Databricks, or provide any Mastra sandbox on
-one agent:
+Disable command execution or provide any Mastra sandbox on one agent:
 
 ```ts
 mastra({ agents: analyst, sandbox: false });
-mastra({ agents: analyst, sandbox: "databricks" });
+mastra({ agents: analyst, sandbox: remoteSandbox });
 
 const localAgent = agents.createAgent({
   instructions: "Run only trusted local commands.",
@@ -1077,8 +1050,8 @@ The main plugin options are:
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
 - `sandbox` defaults to Monty for auto-created workspaces. `false` disables
-  command execution, while `true`, `"databricks"`, or an object
-  selects/configures Databricks Sandbox.
+  command execution; `true` or `"monty"` selects Monty; a native Mastra
+  sandbox or resolver supplies another transport.
 - `codeMode` exposes each agent's explicitly supplied executable tools through
   native Mastra Code Mode. It defaults on when such tools exist, selecting
   isolated-vm once at startup and falling back to QuickJS only when unavailable.
@@ -1146,8 +1119,6 @@ Clients that call these routes can import the browser-safe schemas from
   style block, the summarizer, and the thread titler all append, so a summary or
   a thread title cannot drift from the prose it sits beside.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
-- `sandbox` - Databricks Sandbox lifecycle, fallback policy, and command-result
-  adapter.
 - `montySandbox` - Python-only Pydantic Monty fallback using Node subprocess
   workers.
 - `workspaces` / `filesystems` - native Mastra workspace configuration from

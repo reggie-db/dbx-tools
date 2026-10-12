@@ -205,6 +205,7 @@
     "@mlflow/core": "0.4.0",
     "http-proxy-3": "^1.23.1",
     "ssh2": "^1.17.0",
+    "ws": "^8.21.0",
     "better-auth": "1.7.6",
     "@better-auth/passkey": "1.7.6",
     "@simplewebauthn/browser": "13.3.0",

@@ -12,6 +12,8 @@ export interface SshServiceTarget {
   remotePort: number;
   stripPrefix: boolean;
   browserPaths?: string[];
+  browserRelay?: boolean;
+  redirectToSlash?: boolean;
 }
 
 /** Starts an idempotent built-in browser service on an SSH machine. */
@@ -32,6 +34,7 @@ export async function ensureSshService(
         remoteHost: "127.0.0.1",
         remotePort: DINOTTY_PORT,
         stripPrefix: true,
+        browserRelay: true,
         browserPaths: [
           "/api",
           "/ws",
@@ -47,6 +50,7 @@ export async function ensureSshService(
         remoteHost: "127.0.0.1",
         remotePort: GLANCES_PORT,
         stripPrefix: false,
+        redirectToSlash: true,
       };
 }
 
@@ -158,8 +162,17 @@ config="$runtime/glances.conf"
 mkdir -p "$runtime"
 if [ ! -x "$venv/bin/glances" ] || [ ! -f "$venv/.version" ] || [ "$(cat "$venv/.version")" != "${GLANCES_VERSION}" ]; then
   rm -rf "$venv"
-  python3 -m venv "$venv"
-  "$venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir "glances[web]==${GLANCES_VERSION}"
+  if command -v uv >/dev/null 2>&1; then
+    uv venv --python python3 "$venv"
+    uv pip install --python "$venv/bin/python" --no-cache "glances[web]==${GLANCES_VERSION}"
+  else
+    if ! python3 -m venv "$venv"; then
+      sudo -n apt-get update
+      sudo -n apt-get install -y python3-venv
+      python3 -m venv "$venv"
+    fi
+    "$venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir "glances[web]==${GLANCES_VERSION}"
+  fi
   printf '%s\\n' "${GLANCES_VERSION}" >"$venv/.version"
 fi
 cat >"$config" <<'EOF'

@@ -1,13 +1,11 @@
 import type { WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
 import { log } from "@dbx-tools/shared-core";
-import type { SshCommandRequest, SshCommandResult } from "@dbx-tools/shared-databricks-sandbox";
 import { z } from "zod";
 
 const SANDBOX_ROOT = "/api/2.0/lakebox";
 const SANDBOX_PATH = `${SANDBOX_ROOT}/sandboxes`;
 const SSH_KEYS_PATH = `${SANDBOX_ROOT}/ssh-keys`;
-const SANDBOX_EXEC_PATH = "/api/2.0/sandbox-exec/sandboxes";
 const ORG_ID_HEADER = "X-Databricks-Org-Id";
 const logger = log.logger("appkit-databricks-sandbox:rest");
 
@@ -37,15 +35,6 @@ const sshKeySchema = z
   })
   .passthrough();
 const sshKeyListSchema = z.object({ sshKeys: z.array(sshKeySchema).default([]) }).passthrough();
-const executeResponseSchema = z
-  .object({
-    exit_code: z.number().int().optional(),
-    status: z.string(),
-    stdout: z.string().optional(),
-    stderr: z.string().optional(),
-    truncated: z.boolean().optional(),
-  })
-  .passthrough();
 
 /** Databricks Sandbox record returned by the Lakebox REST API. */
 export type SandboxEntry = z.infer<typeof sandboxEntrySchema>;
@@ -114,41 +103,6 @@ export class DatabricksSandboxClient {
         signal,
       }),
     );
-  }
-
-  async execute(
-    id: string,
-    input: SshCommandRequest,
-    timeoutMs: number,
-    signal?: AbortSignal,
-  ): Promise<SshCommandResult> {
-    const startedAt = performance.now();
-    const args = input.args ?? [];
-    const invocation = [input.command, ...args].map(shellQuote).join(" ");
-    const script = input.cwd ? `cd -- ${shellQuote(input.cwd)} && ${invocation}` : invocation;
-    const response = executeResponseSchema.parse(
-      await this.request("POST", `${SANDBOX_EXEC_PATH}/${encodeURIComponent(id)}/exec-sync`, {
-        payload: {
-          cmd: "/bin/bash",
-          args: ["-lc", script],
-          envs: input.env ?? {},
-          execution_timeout: `${Math.max(1, Math.ceil(timeoutMs / 1_000))}s`,
-        },
-        signal,
-      }),
-    );
-    const timedOut = response.status === "EXECUTE_COMMAND_STATUS_TIMED_OUT";
-    const exitCode = response.exit_code ?? -1;
-    return {
-      command: input.command,
-      args,
-      success: response.status === "EXECUTE_COMMAND_STATUS_COMPLETED" && exitCode === 0,
-      exitCode,
-      stdout: response.stdout ?? "",
-      stderr: response.stderr ?? "",
-      executionTimeMs: performance.now() - startedAt,
-      ...(timedOut ? { timedOut: true } : {}),
-    };
   }
 
   private async request(
@@ -256,8 +210,4 @@ function safeBody(value: unknown): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
