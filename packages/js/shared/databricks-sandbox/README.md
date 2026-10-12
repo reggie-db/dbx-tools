@@ -1,40 +1,46 @@
 # @dbx-tools/shared-databricks-sandbox
 
-Browser-safe Zod contracts shared by the AppKit SSH server and React controls.
+Browser-safe Zod contracts for Databricks Sandbox machines, services, commands,
+and persisted Projects.
 
-## Parse machine discovery
+## Parse machines
 
 ```ts
 import { sshMachinesResponseSchema } from "@dbx-tools/shared-databricks-sandbox";
 
 const response = sshMachinesResponseSchema.parse(
-  await fetch("/api/databricks-sandbox/machines").then((res) => res.json()),
+  await fetch("/api/databricks-sandbox/machines").then((result) => result.json()),
 );
-for (const machine of response.machines) {
-  console.log(machine.id, machine.status);
-}
 ```
 
-## Validate a route request
+Each machine includes its lifecycle state, expiration, built-in services, and
+persisted Projects.
+
+## Validate a Project request
 
 ```ts
-import { addSshRouteRequestSchema } from "@dbx-tools/shared-databricks-sandbox";
+import { addSshProjectRequestSchema } from "@dbx-tools/shared-databricks-sandbox";
 
-const route = addSshRouteRequestSchema.parse({
+const request = addSshProjectRequestSchema.parse({
   machineId: "sandbox-id",
-  remotePort: 3000,
-  path: "/my-service",
-  stripPrefix: true,
+  name: "demo",
+  openPath: "index.html",
+  config: {
+    tools: { node: "lts" },
+  },
 });
 ```
 
-`stripPrefix` follows the tunnel/Caddy routing default when omitted: non-root
-route paths are removed before forwarding, while `/` is preserved.
-Requested suffixes are automatically scoped beneath the configured route prefix
-and the authenticated user's short FNV hash. With the default prefix,
-`/my-service` becomes `/sandbox/<user-hash>/my-service`. The hash prevents route
-name collisions; authenticated owner checks remain the security boundary.
+The server generates omitted names, paths, and ports. Project paths are scoped
+beneath the authenticated user's route prefix. `config` is serialized to
+`mise.toml`. The server injects the reserved Project environment values.
 
-Use these schemas for browser/server boundaries. Server-only REST clients,
-private keys, SSH sessions, and proxy transports belong to
+Use these schemas at browser and server boundaries. SSH sessions, private keys,
+Lakebase persistence, and proxy transports remain in
 `@dbx-tools/appkit-sandbox`.
+
+See the
+[`addSshProjectRequestSchema` API](https://docs.dbx.tools/api/shared-databricks-sandbox/src-schemas-variable-addsshprojectrequestschema/)
+and
+[`sshProjectSchema` API](https://docs.dbx.tools/api/shared-databricks-sandbox/src-schemas-variable-sshprojectschema/)
+for field-level descriptions.

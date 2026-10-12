@@ -76,6 +76,11 @@
       "type": "runtime"
     },
     {
+      "name": "smol-toml",
+      "version": "1.8.0",
+      "type": "runtime"
+    },
+    {
       "name": "ssh2",
       "version": "catalog:",
       "type": "runtime"

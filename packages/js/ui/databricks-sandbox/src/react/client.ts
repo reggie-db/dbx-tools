@@ -3,20 +3,20 @@ import {
   sshMachineSchema,
   sshMachineServiceSchema,
   sshMachinesResponseSchema,
-  sshRouteResponseSchema,
-  sshRoutesResponseSchema,
-  type AddSshRouteRequest,
+  sshProjectResponseSchema,
+  sshProjectsResponseSchema,
+  type AddSshProjectRequest,
   type CreateSshMachineRequest,
   type DeleteSshMachineResponse,
   type SshMachine,
   type SshMachineService,
   type SshMachineServiceKind,
   type SshMachinesResponse,
-  type SshRoute,
-  type SshRoutesResponse,
+  type SshProject,
+  type SshProjectsResponse,
 } from "@dbx-tools/shared-databricks-sandbox";
 
-/** Browser client for the AppKit SSH plugin's machine and route APIs. */
+/** Browser client for the AppKit SSH plugin's machine and project APIs. */
 export class SshClient {
   constructor(readonly basePath = "/api/databricks-sandbox") {}
 
@@ -58,21 +58,21 @@ export class SshClient {
     );
   }
 
-  listRoutes(signal?: AbortSignal): Promise<SshRoutesResponse> {
-    return this.request("/routes", sshRoutesResponseSchema.parse, { signal });
+  listProjects(signal?: AbortSignal): Promise<SshProjectsResponse> {
+    return this.request("/projects", sshProjectsResponseSchema.parse, { signal });
   }
 
-  async addRoute(input: AddSshRouteRequest): Promise<SshRoute> {
-    const response = await this.request("/routes", sshRouteResponseSchema.parse, {
+  async addProject(input: AddSshProjectRequest): Promise<SshProject> {
+    const response = await this.request("/projects", sshProjectResponseSchema.parse, {
       method: "POST",
       body: input,
     });
-    return response.route;
+    return response.project;
   }
 
-  async removeRoute(routeId: string): Promise<boolean> {
+  async removeProject(projectId: string): Promise<boolean> {
     const response = await this.request(
-      `/routes/${encodeURIComponent(routeId)}`,
+      `/projects/${encodeURIComponent(projectId)}`,
       (value) => value as { removed: boolean },
       { method: "DELETE" },
     );

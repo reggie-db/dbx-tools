@@ -1370,8 +1370,8 @@ def main():
         asyncio.run(run_mcp_server())
     except KeyboardInterrupt:
         logger.info('Server shutting down...')
-    except Exception as e:
-        logger.error(f'Error initializing Graphiti MCP server: {str(e)}')
+    except Exception:
+        logger.exception('Error initializing Graphiti MCP server')
         raise
 
 

@@ -1,36 +1,27 @@
 ---
 name: network-speed-test
-description: Build a polished browser speed-test demo that measures the authenticated AppKit path to an assigned Databricks Sandbox.
+description: Measure browser-to-AppKit-to-Sandbox HTTP throughput through a persisted Sandbox project.
 ---
 
-# Sandbox Speed Test
+# Network Speed Test
 
-Build this demo on an assigned machine. Reuse a running machine when possible
-and bind the server to `127.0.0.1`; never expose a public listener or return a
-localhost or direct Sandbox URL.
+Project workflow is required. Call `add_ssh_project` before any
+`execute_ssh_command` used to create, install, or launch this demo. Use only
+the returned `directory`, `port`, `path`, and `openUrl`. Do not write demo
+files under `~/.dbx-tools/runtime`, invent a route, publish a direct Sandbox
+URL, or add a second password or token.
 
-Create a dependency-free HTTP service under
-`~/.dbx-tools/runtime/speed-test/`. Prefer the available Python standard
-library so the demo does not depend on a package registry. The service should
-provide:
+Reuse an assigned Sandbox. Call `add_ssh_project` with `name: "speed-test"`
+and `config: { "tools": { "python": "3.12" } }`. Put all files in the
+returned `directory`.
 
-- A responsive single-page meter at `GET /`.
-- A streamed, non-cacheable payload at `GET /download?bytes=<size>`.
-- An upload sink at `POST /upload` that drains the body and reports received
-  bytes as JSON.
-- A small latency endpoint such as `GET /ping` with `Cache-Control: no-store`.
+Create a local page and server that measure download throughput, upload
+throughput, request latency, and jitter. Generate payloads locally, cap transfer
+sizes, and show the sample count and elapsed time. Do not call public speed-test
+services or external CDNs.
 
-The browser should run a short warmup followed by several timed samples, show
-latency, download Mbps, upload Mbps, progress, and a clear rerun control. Use
-`performance.now()`, validate payload sizes on the server, cap individual
-transfers, and use relative URLs for every request. Do not load fonts, scripts,
-or styles from external CDNs.
+Bind the server to loopback at `127.0.0.1:$PROJECT_PORT` and run it with `mise exec`. Use
+relative fetch URLs and return the project's `openUrl`.
 
-Register the loopback port with `add_ssh_route` using the suffix `/speed-test`
-and `stripPrefix: true`. Return the exact registered path from the tool result.
-The user-hash prefix prevents route collisions; it is not an authentication or
-security mechanism.
-
-Label the result accurately: it measures the authenticated browser-to-AppKit-
-to-Sandbox route, including proxy and tunnel overhead. It is not a general ISP,
-workspace backbone, or raw Sandbox network benchmark.
+Label the result as browser-to-AppKit-to-Sandbox performance, including proxy
+and SSH forwarding overhead. It is not an ISP or raw workspace network test.

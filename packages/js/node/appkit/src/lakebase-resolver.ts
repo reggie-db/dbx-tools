@@ -40,6 +40,7 @@ import {
   ExecutionError,
   getUsernameWithApiLookup,
   getWorkspaceClient,
+  type LakebasePool,
   ValidationError,
 } from "@databricks/appkit";
 import { configUtils, projectUtils } from "@dbx-tools/core";
@@ -112,6 +113,23 @@ export interface LakebaseResolverInputs extends LakebaseConnectionInputs {
 export interface LakebaseConnection extends LakebaseConnectionInputs {
   port: number;
   sslMode: SslMode;
+}
+
+/**
+ * Capture AppKit's existing service-principal Lakebase pool.
+ *
+ * Call this during `setup:complete`, outside any `asUser()` scope. AppKit's
+ * exported pool routes dynamically by request context, but its runtime
+ * `activePool()` method returns the already-created underlying pool selected in
+ * the current context. Capturing it once at startup pins application-owned
+ * storage to the service principal without creating another pool or connection.
+ *
+ * A future AppKit version may export a fixed pool directly; in that case the
+ * pool has no `activePool()` method and is returned unchanged.
+ */
+export function captureServicePrincipalPool(pool: LakebasePool): LakebasePool {
+  const routingPool = pool as LakebasePool & { activePool?: () => LakebasePool };
+  return routingPool.activePool?.call(pool) ?? pool;
 }
 
 /**

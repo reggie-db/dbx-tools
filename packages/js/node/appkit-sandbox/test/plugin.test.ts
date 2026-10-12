@@ -36,9 +36,9 @@ describe("AppKitSshPlugin", () => {
       "DELETE:/machines/:machineId",
       "POST:/machines/:machineId/services/:service/start",
       "POST:/machines/:machineId/commands",
-      "GET:/routes",
-      "POST:/routes",
-      "DELETE:/routes/:routeId",
+      "GET:/projects",
+      "POST:/projects",
+      "DELETE:/projects/:projectId",
     ]);
     assert.deepEqual(
       plugin.getAgentTools().map(({ name }) => name),
@@ -50,11 +50,11 @@ describe("AppKitSshPlugin", () => {
         "delete_ssh_machine",
         "execute_ssh_command",
         "start_ssh_machine_service",
-        "add_ssh_route",
-        "remove_ssh_route",
+        "add_ssh_project",
+        "remove_ssh_project",
       ],
     );
-    assert.deepEqual(plugin.clientConfig(), { routePrefix: "/sandbox", defaultRemotePort: 3000 });
+    assert.deepEqual(plugin.clientConfig(), { routePrefix: "/sandbox" });
     assert.equal(AppKitSshPlugin.manifest.name, "databricks-sandbox");
     assert.equal(AppKitSshPlugin.manifest.stability, "beta");
   });

@@ -20,19 +20,20 @@ import {
   USER_EMAIL_HEADER,
   USER_ID_HEADER,
   appkit,
+  lakebaseResolver,
   pluginRegistry,
   toolkitEntries,
   ToolRegistryPlugin,
   type AgentToolExecutionContext,
 } from "@dbx-tools/appkit";
 import {
-  addSshRouteRequestSchema,
+  addSshProjectRequestSchema,
   createSshMachineRequestSchema,
-  removeSshRouteRequestSchema,
+  removeSshProjectRequestSchema,
   sshCommandRequestSchema,
   sshMachineActionSchema,
   sshMachineServiceActionSchema,
-  type AddSshRouteRequest,
+  type AddSshProjectRequest,
   type CreateSshMachineRequest,
   type SshCommandRequest,
   type SshMachineServiceAction,
@@ -60,8 +61,8 @@ const SSH_CONFIG_SCHEMA = z.toJSONSchema(SshPluginConfigSchema) as JSONSchema7;
  *
  * The plugin registers owner-scoped REST routes, AppKit agent tools, HTTP proxy
  * middleware, and WebSocket upgrade handling. It initializes
- * {@link SshRuntime} with the AppKit Lakebase pool captured outside request
- * scope and starts the expiration reaper during setup.
+ * {@link SshRuntime} with the existing service-principal Lakebase pool captured
+ * during setup and starts the expiration reaper.
  */
 export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   static manifest = {
@@ -98,7 +99,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       const pool = pluginRegistry
         .require(this.context, lakebase, AppKitSshPlugin.manifest)
         .exports().pool;
-      await this.runtime.initializeOwnership(pool);
+      await this.runtime.initializeOwnership(lakebaseResolver.captureServicePrincipalPool(pool));
       await this.runtime.startReaper(createWorkspaceClient());
       const server = this.context?.getPlugins().get("server") as ServerExtension | undefined;
       if (!server || this.mounted) return;
@@ -237,52 +238,56 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       },
     });
     this.route(router, {
-      name: "routes",
+      name: "projects",
       method: "get",
-      path: "/routes",
+      path: "/projects",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         res.json({
-          pathPrefix: this.runtime.routePathPrefix(userId),
-          routes: this.runtime.routeList(userId),
+          pathPrefix: this.runtime.projectPathPrefix(userId),
+          projects: await this.runtime.projectList(createWorkspaceClient(), userId),
         });
       },
     });
     this.route(router, {
-      name: "addRoute",
+      name: "addProject",
       method: "post",
-      path: "/routes",
+      path: "/projects",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = addSshRouteRequestSchema.parse(req.body);
+        const input = addSshProjectRequestSchema.parse(req.body);
         res.json({
-          route: await this.withRequestAuth(
+          project: await this.withRequestAuth(
             req,
-            "addRoute",
-            (plugin) => plugin.addRoute(userId, input),
-            () => this.runtime.addRoute(createWorkspaceClient(), userId, input),
+            "addProject",
+            (plugin) => plugin.addProject(userId, input),
+            () => this.runtime.addProject(createWorkspaceClient(), userId, input),
           ),
         });
       },
     });
     this.route(router, {
-      name: "removeRoute",
+      name: "removeProject",
       method: "delete",
-      path: "/routes/:routeId",
+      path: "/projects/:projectId",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        const input = removeSshRouteRequestSchema.parse({ routeId: req.params.routeId });
-        res.json({ removed: await this.runtime.removeRoute(userId, input.routeId) });
+        const input = removeSshProjectRequestSchema.parse({ projectId: req.params.projectId });
+        res.json({
+          removed: await this.withRequestAuth(
+            req,
+            "removeProject",
+            (plugin) => plugin.removeProject(userId, input.projectId),
+            () => this.runtime.removeProject(createWorkspaceClient(), userId, input.projectId),
+          ),
+        });
       },
     });
   }
 
   /** Returns browser-safe route defaults published through AppKit client config. */
   clientConfig(): Record<string, unknown> {
-    return {
-      routePrefix: this.runtime.config.routePrefix,
-      defaultRemotePort: this.runtime.config.defaultRemotePort,
-    };
+    return { routePrefix: this.runtime.config.routePrefix };
   }
 
   /** Lists valid assigned machines through the plugin's active workspace identity. */
@@ -320,9 +325,14 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     return this.runtime.startService(this.workspaceClient(), userId, input);
   }
 
-  /** Publishes a Sandbox HTTP or WebSocket service through an owner-scoped route. */
-  async addRoute(userId: string, input: AddSshRouteRequest) {
-    return this.runtime.addRoute(this.workspaceClient(), userId, input);
+  /** Creates or updates one isolated Sandbox project with a persisted route. */
+  async addProject(userId: string, input: AddSshProjectRequest) {
+    return this.runtime.addProject(this.workspaceClient(), userId, input);
+  }
+
+  /** Removes one Sandbox project and its isolated directory. */
+  async removeProject(userId: string, projectId: string) {
+    return this.runtime.removeProject(this.workspaceClient(), userId, projectId);
   }
 
   /** Returns selected AppKit toolkit entries backed by this plugin's agent tools. */
@@ -360,8 +370,8 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
         this.executeCommand(userId, input),
       startMachineService: (userId: string, input: SshMachineServiceAction) =>
         this.startMachineService(userId, input),
-      addRoute: (userId: string, input: AddSshRouteRequest) => this.addRoute(userId, input),
-      removeRoute: (userId: string, routeId: string) => this.runtime.removeRoute(userId, routeId),
+      addProject: (userId: string, input: AddSshProjectRequest) => this.addProject(userId, input),
+      removeProject: (userId: string, projectId: string) => this.removeProject(userId, projectId),
       toolkit: (options?: ToolkitOptions) => this.toolkit(options),
     };
   }
@@ -507,7 +517,8 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
           ),
       }),
       execute_ssh_command: defineTool({
-        description: "Execute a command on an existing SSH machine.",
+        description:
+          "Execute a maintenance command on an existing SSH machine. For any app, demo, server, desktop, or persistent files, call add_ssh_project first and run commands only from its returned directory using its port and mise environment. Never use this tool alone to invent a route, write under ~/.dbx-tools/runtime, expose a direct Sandbox URL, or create an extra password or token.",
         schema: sshCommandRequestSchema,
         annotations: { effect: "write", requiresUserContext: true },
         execute: (input, signal) =>
@@ -524,23 +535,26 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
             this.runtime.startService(client, resolvedUserId, input, signal),
           ),
       }),
-      add_ssh_route: defineTool({
+      add_ssh_project: defineTool({
         description:
-          "Expose a Sandbox loopback HTTP port at an AppKit path beneath the current user's non-security collision-avoidance prefix. Supply a suffix and use the returned route. Never return localhost or a direct Sandbox URL. The service must either tolerate the registered prefix or use stripPrefix; WebSockets must use the same public route and standard HTTP Upgrade.",
-        schema: addSshRouteRequestSchema,
+          "Required first step for any Sandbox app, demo, server, desktop, or persistent files. Create or update a persisted Sandbox project before execute_ssh_command. Omitted name, path, and port values are generated uniquely for the machine. The tool creates ~/projects/<path>, writes and installs the supplied mise config, reserves a loopback port, and returns directory, path, port, and openUrl. Pass projectId to update the same project, including its openPath.",
+        schema: addSshProjectRequestSchema,
         annotations: { effect: "write", requiresUserContext: true },
         execute: async (input, signal) => ({
-          route: await execute("addRoute", (client, resolvedUserId) =>
-            this.runtime.addRoute(client, resolvedUserId, input, signal),
+          project: await execute("addProject", (client, resolvedUserId) =>
+            this.runtime.addProject(client, resolvedUserId, input, signal),
           ),
         }),
       }),
-      remove_ssh_route: defineTool({
-        description: "Remove one forwarded AppKit SSH route owned by the current user.",
-        schema: removeSshRouteRequestSchema,
+      remove_ssh_project: defineTool({
+        description:
+          "Remove one Sandbox project, its AppKit route, and its isolated project directory.",
+        schema: removeSshProjectRequestSchema,
         annotations: { effect: "write", requiresUserContext: true },
-        execute: async (input) => ({
-          removed: await this.runtime.removeRoute(identity(), input.routeId),
+        execute: async (input, signal) => ({
+          removed: await execute("removeProject", (client, resolvedUserId) =>
+            this.runtime.removeProject(client, resolvedUserId, input.projectId, signal),
+          ),
         }),
       }),
     };

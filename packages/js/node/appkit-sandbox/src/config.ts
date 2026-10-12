@@ -1,5 +1,32 @@
 import type { BasePluginConfig } from "@databricks/appkit";
 import { z } from "zod";
+import { MISE_INSTALL_SCRIPT } from "./_projects.ts";
+
+export const MachineSoftwareSchema = z
+  .object({
+    name: z.string().min(1).describe("Stable software name used in setup diagnostics."),
+    checkCommand: z
+      .string()
+      .min(1)
+      .describe("Idempotent shell condition that succeeds when the software is available."),
+    installCommand: z
+      .string()
+      .min(1)
+      .describe("Trusted shell command that installs the software for the Sandbox user."),
+  })
+  .strict()
+  .describe("One configurable user-space software setup step for a Sandbox machine.");
+
+export type MachineSoftware = z.infer<typeof MachineSoftwareSchema>;
+
+const DEFAULT_MACHINE_SOFTWARE: MachineSoftware[] = [
+  {
+    name: "mise",
+    checkCommand:
+      'test -x "$HOME/.local/bin/mise" && grep -Fq "# dbx-tools mise path" "$HOME/.profile" && grep -Fq "# dbx-tools mise activation" "$HOME/.bashrc" && grep -Fq "# dbx-tools mise activation" "$HOME/.zshrc"',
+    installCommand: MISE_INSTALL_SCRIPT,
+  },
+];
 
 export const SshPluginConfigSchema = z
   .object({
@@ -36,13 +63,6 @@ export const SshPluginConfigSchema = z
       .startsWith("/")
       .default("/sandbox")
       .describe("AppKit root path for remote web routes. Defaults to /sandbox."),
-    defaultRemotePort: z
-      .number()
-      .int()
-      .min(1)
-      .max(65535)
-      .default(3000)
-      .describe("Default remote web service port. Defaults to 3000."),
     gatewayPort: z
       .number()
       .int()
@@ -62,6 +82,12 @@ export const SshPluginConfigSchema = z
       .positive()
       .default(120_000)
       .describe("Default remote command timeout in milliseconds. Defaults to 120000."),
+    machineSoftware: z
+      .array(MachineSoftwareSchema)
+      .default(DEFAULT_MACHINE_SOFTWARE)
+      .describe(
+        "User-space software installed when a running Sandbox is first used. Defaults to mise; pass an empty array to disable setup.",
+      ),
     keyDirectory: z
       .string()
       .min(1)

@@ -5,22 +5,34 @@ export const sshMachineStatusSchema = z
   .describe("Normalized lifecycle state of a Databricks Sandbox.");
 export type SshMachineStatus = z.infer<typeof sshMachineStatusSchema>;
 
-export const sshRouteSchema = z
+export const sshProjectSchema = z
   .object({
-    id: z.string().min(1).describe("Stable identifier for the forwarded route."),
-    machineId: z.string().min(1).describe("Machine that receives forwarded traffic."),
-    path: z.string().startsWith("/").describe("AppKit path that exposes the remote server."),
-    remoteHost: z.string().min(1).describe("Host resolved from the SSH machine."),
-    remotePort: z.number().int().min(1).max(65535).describe("Remote TCP port."),
+    id: z.string().min(1).describe("Stable identifier for the Sandbox project."),
+    name: z.string().min(1).describe("Project display name."),
+    machineId: z.string().min(1).describe("Machine that hosts the project."),
+    directory: z.string().min(1).describe("Project directory below the Sandbox user's home."),
+    path: z.string().startsWith("/").describe("AppKit path that exposes the project server."),
+    openUrl: z
+      .string()
+      .startsWith("/")
+      .describe("AppKit URL opened by project links, including any configured entry page."),
+    port: z
+      .number()
+      .int()
+      .min(1)
+      .max(65535)
+      .describe("Loopback HTTP port reserved for the project."),
     stripPrefix: z
       .boolean()
       .describe("Whether the registered AppKit path is removed before forwarding."),
-    state: z.enum(["starting", "ready", "error"]).describe("Current forwarding state."),
+    state: z
+      .enum(["stopped", "starting", "ready", "error"])
+      .describe("Current project route state."),
     error: z.string().optional().describe("Latest forwarding failure."),
   })
   .strict()
-  .describe("One AppKit path forwarded to a Databricks Sandbox.");
-export type SshRoute = z.infer<typeof sshRouteSchema>;
+  .describe("One persisted Sandbox project and its AppKit route.");
+export type SshProject = z.infer<typeof sshProjectSchema>;
 
 export const sshMachineServiceKindSchema = z
   .enum(["terminal", "stats"])
@@ -51,7 +63,7 @@ export const sshMachineSchema = z
     expiresAt: z.string().datetime().describe("ISO-8601 service-managed expiration time."),
     lastStartedAt: z.string().optional().describe("ISO-8601 last start time."),
     autoStopSeconds: z.number().int().nonnegative().optional().describe("Configured idle timeout."),
-    routes: z.array(sshRouteSchema).describe("Routes currently exposed for the machine."),
+    projects: z.array(sshProjectSchema).describe("Projects persisted for the machine."),
     services: z
       .array(sshMachineServiceSchema)
       .describe("Built-in terminal and health services for the machine."),
@@ -134,23 +146,44 @@ export const sshCommandResultSchema = z
   .describe("SSH command execution result.");
 export type SshCommandResult = z.infer<typeof sshCommandResultSchema>;
 
-export const addSshRouteRequestSchema = z
+export const addSshProjectRequestSchema = z
   .object({
-    machineId: z.string().min(1).describe("Machine hosting the remote web server."),
-    remotePort: z.number().int().min(1).max(65535).describe("Remote HTTP port."),
-    remoteHost: z
+    machineId: z.string().min(1).describe("Machine that hosts the project."),
+    projectId: z
       .string()
       .min(1)
-      .default("127.0.0.1")
-      .describe(
-        "Sandbox-side host reached by the SSH bridge, normally loopback; never a browser-facing URL.",
-      ),
+      .optional()
+      .describe("Stable project identifier to update. Omit when creating a project."),
+    name: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9._-]*$/)
+      .optional()
+      .describe("Lowercase project name. A unique name is generated when omitted."),
+    port: z
+      .number()
+      .int()
+      .min(1)
+      .max(65535)
+      .optional()
+      .describe("Loopback HTTP port. An unused machine-local port is generated when omitted."),
     path: z
       .string()
-      .startsWith("/")
+      .min(1)
       .optional()
       .describe(
-        "Requested path suffix or full assigned user path. The server scopes suffixes beneath its short user-hash prefix and rejects another user's prefix.",
+        "Project path suffix beneath the user's prefix. Defaults to the project name and must be unique on the Sandbox.",
+      ),
+    openPath: z
+      .string()
+      .optional()
+      .describe(
+        "Optional project-relative entry URL, such as open.html or vnc.html?autoconnect=1. An empty string or slash opens the route root. External URLs and parent-directory traversal are rejected.",
+      ),
+    config: z
+      .record(z.string(), z.json())
+      .optional()
+      .describe(
+        "Mise configuration represented as JSON. The server serializes it to mise.toml and injects reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT environment values.",
       ),
     stripPrefix: z
       .boolean()
@@ -160,29 +193,29 @@ export const addSshRouteRequestSchema = z
       ),
   })
   .strict()
-  .describe("Request to expose a path-prefix-aware remote HTTP/WebSocket server through AppKit.");
-export type AddSshRouteRequest = z.input<typeof addSshRouteRequestSchema>;
+  .describe("Request to create or update an isolated, mise-managed Sandbox project.");
+export type AddSshProjectRequest = z.input<typeof addSshProjectRequestSchema>;
 
-export const removeSshRouteRequestSchema = z
-  .object({ routeId: z.string().min(1).describe("Forwarded route to remove.") })
+export const removeSshProjectRequestSchema = z
+  .object({ projectId: z.string().min(1).describe("Sandbox project to remove.") })
   .strict()
-  .describe("Request to remove a forwarded route.");
-export type RemoveSshRouteRequest = z.infer<typeof removeSshRouteRequestSchema>;
+  .describe("Request to remove a Sandbox project and its directory.");
+export type RemoveSshProjectRequest = z.infer<typeof removeSshProjectRequestSchema>;
 
-export const sshRouteResponseSchema = z
-  .object({ route: sshRouteSchema.describe("Created or updated route.") })
+export const sshProjectResponseSchema = z
+  .object({ project: sshProjectSchema.describe("Created or updated project.") })
   .strict()
-  .describe("Forwarded route response.");
-export type SshRouteResponse = z.infer<typeof sshRouteResponseSchema>;
+  .describe("Sandbox project response.");
+export type SshProjectResponse = z.infer<typeof sshProjectResponseSchema>;
 
-export const sshRoutesResponseSchema = z
+export const sshProjectsResponseSchema = z
   .object({
     pathPrefix: z
       .string()
       .startsWith("/")
       .describe("Non-security collision-avoidance path prefix assigned to the authenticated user."),
-    routes: z.array(sshRouteSchema).describe("Registered routes owned by the user."),
+    projects: z.array(sshProjectSchema).describe("Persisted projects owned by the user."),
   })
   .strict()
-  .describe("Registered SSH routes response.");
-export type SshRoutesResponse = z.infer<typeof sshRoutesResponseSchema>;
+  .describe("Persisted Sandbox projects response.");
+export type SshProjectsResponse = z.infer<typeof sshProjectsResponseSchema>;

@@ -254,8 +254,9 @@ With `lakebase()` registered, both default to enabled:
 
 - storage uses a per-agent schema for durable threads and messages;
 - memory uses a shared vector index for semantic recall;
-- AppKit's service-principal pool is captured outside any request so OBO user
-  identities are not captured in background storage work.
+- the existing service-principal pool is captured from `lakebase()` during
+  startup, so request-scoped OBO credentials never reach storage work and no
+  additional PostgreSQL pool is created.
 
 Without `lakebase()`, agents are stateless unless you provide explicit storage
 and memory configs.

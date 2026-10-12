@@ -1,29 +1,27 @@
 ---
 name: jupyter-lab
-description: Launch a prefix-aware JupyterLab workspace through an authenticated route on an assigned Databricks Sandbox.
+description: Run JupyterLab through an authenticated Sandbox project without a separate Jupyter password or token.
 ---
 
 # JupyterLab
 
-Use an assigned machine and inspect the available Python environment first.
-Prefer an existing JupyterLab installation. If installation is needed, use a
-user-owned virtual environment under `~/.dbx-tools/runtime/jupyter/`, the
-machine's configured package registry, and obtain confirmation before adding
-packages.
+Project workflow is required. Call `add_ssh_project` before any
+`execute_ssh_command` used to create, install, or launch JupyterLab. Use only
+the returned `directory`, `port`, `path`, and `openUrl`. Do not write project
+files under `~/.dbx-tools/runtime`, invent a route, publish a direct Sandbox
+URL, or add a second password or token.
 
-Reserve the route with `add_ssh_route` using the suffix `/lab` and
-`stripPrefix: false`, then configure JupyterLab with the exact returned path as
-its `ServerApp.base_url`. Bind to `127.0.0.1`, disable automatic browser launch,
-keep runtime files and logs under `~/.dbx-tools/runtime/jupyter/`, and return
-the registered path after the server responds successfully.
+Reuse an assigned Sandbox. Call `add_ssh_project` with `name: "jupyter-lab"`,
+`openPath: "lab"`, and
+`config: { "tools": { "python": "3.12", "uv": "latest" } }`.
 
-For a seamless demo, Jupyter's own token may be disabled only while all of the
-following remain true: the listener is loopback-only, the route is the
-owner-scoped AppKit route, and no alternate direct port is exposed. Otherwise
-retain Jupyter authentication and never place credentials in a shared URL.
+Work in the returned `directory`. Create a project-local environment and
+install JupyterLab with `mise exec -- uv venv` and
+`mise exec -- uv pip install jupyterlab`.
 
-JupyterLab uses WebSockets for kernels and terminals. `stripPrefix: false` and
-the matching `base_url` are required so HTTP assets, API calls, and socket paths
-all retain the registered user-prefixed route. If extensions emit root-
-absolute paths that ignore `base_url`, report the limitation rather than
-adding an unauthenticated alias.
+Start JupyterLab on `127.0.0.1:$PROJECT_PORT` with its base URL set to `/` and
+with Jupyter token and password authentication disabled. The service is
+loopback-only and the AppKit project route supplies authenticated access. Do
+not create or display a second password, token, or direct Sandbox URL.
+
+Use relative notebook and extension URLs. Return the project's `openUrl`.

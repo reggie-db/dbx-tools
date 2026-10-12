@@ -218,8 +218,10 @@ class QueueService:
 
                 logger.info(f'Successfully processed episode {uuid} for group {group_id}')
 
-            except Exception as e:
-                logger.error(f'Failed to process episode {uuid} for group {group_id}: {str(e)}')
+            except Exception:
+                logger.exception(
+                    'Failed to process episode %s for group %s', uuid, group_id
+                )
                 raise
 
         # Use the existing add_episode_task method to queue the processing

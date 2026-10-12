@@ -1,8 +1,8 @@
 import type {
-  AddSshRouteRequest,
+  AddSshProjectRequest,
   SshMachine,
   SshMachineServiceKind,
-  SshRoute,
+  SshProject,
 } from "@dbx-tools/shared-databricks-sandbox";
 import {
   AlertDialog,
@@ -39,32 +39,29 @@ import { resolveServiceUrl } from "./service-url.ts";
 
 const REFRESH_INTERVAL_MS = 5_000;
 
-/** Props for the full SSH machine and route management surface. */
+/** Props for the full SSH machine and project management surface. */
 export interface SshManagerProps {
   basePath?: string;
-  defaultRemotePort?: number;
   className?: string;
 }
 
-/** Manages existing SSH machines and their registered AppKit proxy routes. */
-export function SshManager({
-  basePath = "/api/databricks-sandbox",
-  defaultRemotePort = 3000,
-  className,
-}: SshManagerProps) {
+/** Manages existing SSH machines and their persisted Sandbox projects. */
+export function SshManager({ basePath = "/api/databricks-sandbox", className }: SshManagerProps) {
   const client = useMemo(() => new SshClient(basePath), [basePath]);
   const [machines, setMachines] = useState<SshMachine[]>([]);
-  const [routes, setRoutes] = useState<SshRoute[]>([]);
-  const [routePathPrefix, setRoutePathPrefix] = useState("/sandbox");
+  const [projects, setProjects] = useState<SshProject[]>([]);
+  const [projectPathPrefix, setProjectPathPrefix] = useState("/sandbox");
   const [supported, setSupported] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string>();
   const [error, setError] = useState<string>();
   const [machineId, setMachineId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SshMachine>();
-  const [routeFormOpen, setRouteFormOpen] = useState(false);
-  const [remotePort, setRemotePort] = useState(String(defaultRemotePort));
+  const [projectFormOpen, setProjectFormOpen] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [port, setPort] = useState("");
   const [path, setPath] = useState("");
+  const [openPath, setOpenPath] = useState("");
   const [stripPrefix, setStripPrefix] = useState(true);
   const refreshing = useRef(false);
 
@@ -75,14 +72,14 @@ export function SshManager({
       if (showLoading) setLoading(true);
       setError(undefined);
       try {
-        const [machineResponse, routeResponse] = await Promise.all([
+        const [machineResponse, projectResponse] = await Promise.all([
           client.listMachines(),
-          client.listRoutes(),
+          client.listProjects(),
         ]);
         setSupported(machineResponse.supported);
         setMachines(machineResponse.machines);
-        setRoutes(routeResponse.routes);
-        setRoutePathPrefix(routeResponse.pathPrefix);
+        setProjects(projectResponse.projects);
+        setProjectPathPrefix(projectResponse.pathPrefix);
         setMachineId((current) =>
           current && machineResponse.machines.some((machine) => machine.id === current)
             ? current
@@ -156,23 +153,38 @@ export function SshManager({
     }
   };
 
-  const addRoute = async (event: React.FormEvent) => {
+  const addProject = async (event: React.FormEvent) => {
     event.preventDefault();
-    const port = Number(remotePort);
-    if (!machineId || !Number.isInteger(port) || port < 1 || port > 65535) return;
-    setBusyId("new-route");
+    const name = projectName.trim().toLowerCase();
+    const requestedPort = port.trim() ? Number(port) : undefined;
+    if (!machineId || (name && !/^[a-z0-9][a-z0-9._-]*$/.test(name))) {
+      return;
+    }
+    if (
+      requestedPort !== undefined &&
+      (!Number.isInteger(requestedPort) || requestedPort < 1 || requestedPort > 65535)
+    ) {
+      return;
+    }
+    setBusyId("new-project");
     setError(undefined);
     const suffix = path.trim().replace(/^\/+|\/+$/g, "");
-    const input: AddSshRouteRequest = {
+    const entry = openPath.trim();
+    const input: AddSshProjectRequest = {
       machineId,
-      remotePort: port,
       stripPrefix,
-      ...(suffix ? { path: `/${suffix}` } : {}),
+      ...(name ? { name } : {}),
+      ...(requestedPort !== undefined ? { port: requestedPort } : {}),
+      ...(suffix ? { path: suffix } : {}),
+      ...(entry ? { openPath: entry } : {}),
     };
     try {
-      await client.addRoute(input);
+      await client.addProject(input);
+      setProjectName("");
+      setPort("");
       setPath("");
-      setRouteFormOpen(false);
+      setOpenPath("");
+      setProjectFormOpen(false);
       await refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -195,11 +207,11 @@ export function SshManager({
     }
   };
 
-  const removeRoute = async (route: SshRoute) => {
-    setBusyId(route.id);
+  const removeProject = async (project: SshProject) => {
+    setBusyId(project.id);
     setError(undefined);
     try {
-      await client.removeRoute(route.id);
+      await client.removeProject(project.id);
       await refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -274,7 +286,7 @@ export function SshManager({
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
                           {machine.id} · expires {formatExpiration(machine.expiresAt)} ·{" "}
-                          {machine.routes.length} routes
+                          {machine.projects.length} projects
                         </p>
                       </div>
                       <div className="flex w-full shrink-0 items-center justify-end gap-1 overflow-x-auto sm:w-auto sm:overflow-visible">
@@ -362,29 +374,29 @@ export function SshManager({
           <Card className="gap-0 py-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-2 sm:px-4">
               <div className="flex items-center gap-2">
-                <CardTitle className="text-sm">Routes</CardTitle>
-                <Badge variant="secondary">{routes.length}</Badge>
+                <CardTitle className="text-sm">Projects</CardTitle>
+                <Badge variant="secondary">{projects.length}</Badge>
               </div>
               <Button
                 type="button"
-                variant={routeFormOpen ? "ghost" : "outline"}
+                variant={projectFormOpen ? "ghost" : "outline"}
                 size="sm"
                 className="h-8"
-                aria-expanded={routeFormOpen}
-                aria-controls="ssh-route-form"
+                aria-expanded={projectFormOpen}
+                aria-controls="ssh-project-form"
                 disabled={machines.length === 0 || Boolean(busyId)}
-                onClick={() => setRouteFormOpen((open) => !open)}
+                onClick={() => setProjectFormOpen((open) => !open)}
               >
                 <PlusIcon className="size-3.5" />
-                {routeFormOpen ? "Cancel" : "Add route"}
+                {projectFormOpen ? "Cancel" : "Add project"}
               </Button>
             </CardHeader>
             <CardContent className="p-0">
-              {routeFormOpen ? (
+              {projectFormOpen ? (
                 <form
-                  id="ssh-route-form"
+                  id="ssh-project-form"
                   className="space-y-2.5 border-t px-3 py-2.5 sm:px-4"
-                  onSubmit={addRoute}
+                  onSubmit={addProject}
                 >
                   <div className="space-y-1.5">
                     <Label htmlFor="ssh-machine">Machine</Label>
@@ -402,15 +414,37 @@ export function SshManager({
                       ))}
                     </select>
                   </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ssh-project-name">Project name</Label>
+                      <Input
+                        id="ssh-project-name"
+                        value={projectName}
+                        placeholder="Auto"
+                        disabled={Boolean(busyId)}
+                        onChange={(event) => setProjectName(event.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ssh-project-open-path">Open path</Label>
+                      <Input
+                        id="ssh-project-open-path"
+                        value={openPath}
+                        placeholder="open.html"
+                        disabled={Boolean(busyId)}
+                        onChange={(event) => setOpenPath(event.target.value)}
+                      />
+                    </div>
+                  </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
                     <div className="space-y-1.5">
                       <Label htmlFor="ssh-path">Path suffix</Label>
                       <div className="flex h-9 min-w-0 items-center rounded-md border border-input bg-transparent focus-within:ring-1 focus-within:ring-ring">
                         <span
                           className="max-w-[55%] shrink-0 truncate border-r px-2 font-mono text-xs text-muted-foreground"
-                          title={routePathPrefix}
+                          title={projectPathPrefix}
                         >
-                          {routePathPrefix}/
+                          {projectPathPrefix}/
                         </span>
                         <Input
                           id="ssh-path"
@@ -429,9 +463,10 @@ export function SshManager({
                         type="number"
                         min={1}
                         max={65535}
-                        value={remotePort}
+                        value={port}
+                        placeholder="Auto"
                         disabled={Boolean(busyId)}
-                        onChange={(event) => setRemotePort(event.target.value)}
+                        onChange={(event) => setPort(event.target.value)}
                       />
                     </div>
                   </div>
@@ -447,56 +482,75 @@ export function SshManager({
                       <span>Strip prefix</span>
                     </label>
                     <Button type="submit" size="sm" disabled={!machineId || Boolean(busyId)}>
-                      {busyId === "new-route" ? (
+                      {busyId === "new-project" ? (
                         <Spinner className="size-3.5" />
                       ) : (
                         <PlusIcon className="size-3.5" />
                       )}
-                      Add route
+                      Add project
                     </Button>
                   </div>
                 </form>
               ) : null}
-              {routes.length === 0 ? (
+              {projects.length === 0 ? (
                 <div className="flex min-h-16 items-center justify-center border-t px-4 py-4 text-sm text-muted-foreground">
-                  No routes yet
+                  No projects yet
                 </div>
               ) : (
                 <div className="divide-y border-t">
-                  {routes.map((route) => (
-                    <div key={route.id} className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
-                      <div className="min-w-0 flex-1">
-                        <a
-                          className="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-medium text-primary hover:underline"
-                          href={route.path}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <span className="truncate">{route.path}</span>
-                          <ExternalLinkIcon className="size-3.5 shrink-0" />
-                        </a>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {machineName(machines, route.machineId)} · {route.remoteHost}:
-                          {route.remotePort}
-                        </p>
+                  {projects.map((project) => (
+                    <div key={project.id} className="px-3 py-3 sm:px-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-medium">{project.name}</p>
+                          <Badge variant={project.state === "ready" ? "secondary" : "outline"}>
+                            {project.state}
+                          </Badge>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button type="button" variant="outline" size="sm" asChild>
+                            <a href={project.openUrl} target="_blank" rel="noopener noreferrer">
+                              <ExternalLinkIcon className="size-3.5" />
+                              Open
+                            </a>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Remove ${project.name}`}
+                            disabled={Boolean(busyId)}
+                            onClick={() => void removeProject(project)}
+                          >
+                            {busyId === project.id ? (
+                              <Spinner className="size-4" />
+                            ) : (
+                              <Trash2Icon className="size-4" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                      <Badge variant={route.state === "ready" ? "secondary" : "outline"}>
-                        {route.state}
-                      </Badge>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Remove ${route.path}`}
-                        disabled={Boolean(busyId)}
-                        onClick={() => void removeRoute(route)}
-                      >
-                        {busyId === route.id ? (
-                          <Spinner className="size-4" />
-                        ) : (
-                          <Trash2Icon className="size-4" />
-                        )}
-                      </Button>
+                      <dl className="mt-3 grid gap-x-5 gap-y-3 sm:grid-cols-2">
+                        <ProjectDetail label="Project ID" value={project.id} code wide />
+                        <ProjectDetail
+                          label="Machine"
+                          value={machineName(machines, project.machineId)}
+                          secondary={project.machineId}
+                        />
+                        <ProjectDetail label="Port" value={String(project.port)} code />
+                        <ProjectDetail label="Directory" value={project.directory} code wide />
+                        <ProjectDetail label="Route" value={project.path} code wide />
+                        <ProjectDetail
+                          label="Open URL"
+                          value={project.openUrl}
+                          href={project.openUrl}
+                          wide
+                        />
+                        <ProjectDetail
+                          label="Strip prefix"
+                          value={project.stripPrefix ? "Yes" : "No"}
+                        />
+                      </dl>
                     </div>
                   ))}
                 </div>
@@ -547,6 +601,48 @@ export function SshManager({
 
 function machineName(machines: SshMachine[], machineId: string): string {
   return machines.find((machine) => machine.id === machineId)?.name ?? machineId;
+}
+
+function ProjectDetail({
+  label,
+  value,
+  secondary,
+  href,
+  code = false,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  secondary?: string;
+  href?: string;
+  code?: boolean;
+  wide?: boolean;
+}) {
+  const valueClassName = cn("break-all text-sm", code && "font-mono");
+  return (
+    <div className={cn("min-w-0", wide && "sm:col-span-2")}>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 min-w-0">
+        {href ? (
+          <a
+            className={cn(valueClassName, "text-primary hover:underline")}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {value}
+          </a>
+        ) : (
+          <span className={valueClassName}>{value}</span>
+        )}
+        {secondary ? (
+          <span className="mt-0.5 block break-all font-mono text-sm text-muted-foreground">
+            {secondary}
+          </span>
+        ) : null}
+      </dd>
+    </div>
+  );
 }
 
 function formatExpiration(value: string): string {

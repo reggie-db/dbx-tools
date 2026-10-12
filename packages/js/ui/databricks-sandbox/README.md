@@ -1,22 +1,22 @@
 # @dbx-tools/ui-databricks-sandbox
 
-Compact React controls for creating, listing, starting, stopping, deleting, and opening AppKit SSH machines.
+React controls for assigned Databricks Sandboxes and persisted Projects.
 
-## Render machine and route management
+## Render the manager
 
 ```tsx
 import { SshManager } from "@dbx-tools/ui-databricks-sandbox/react";
 
-export function SshPage() {
-  return <SshManager basePath="/api/databricks-sandbox" defaultRemotePort={3000} />;
+export function SandboxPage() {
+  return <SshManager basePath="/api/databricks-sandbox" />;
 }
 ```
 
-The manager creates and permanently deletes user-owned Sandboxes, starts and
-stops machines, adds routes with optional path prefix stripping, lists
-registered routes, opens them in a new tab, and removes them.
+The manager creates, starts, stops, and deletes Sandboxes. It also creates
+Projects with optional names, path suffixes, ports, and open paths. Empty fields
+use server-generated defaults. Project links open the persisted `openUrl`.
 
-## Render the machine indicator
+## Render the indicator
 
 ```tsx
 import { SshIndicator } from "@dbx-tools/ui-databricks-sandbox/react";
@@ -26,15 +26,8 @@ export function ChatHeader() {
 }
 ```
 
-The indicator lists existing machines and exposes start, stop, and open
-actions. Open creates or reuses a route through the AppKit SSH plugin.
+Place the indicator in a chat header or history control slot. Pointer selection
+and touch long-press expose the same machine actions.
 
-## Place the controls
-
-Render `SshIndicator` in a chat header or history control slot. On pointer
-devices, selecting a machine expands its actions. On touch devices, a long
-press expands the same controls without triggering the synthetic click that
-follows the press.
-
-The component uses the current AppKit session and does not accept credentials
-or private SSH material.
+Both components use the current AppKit session. They never accept Databricks
+credentials, SSH keys, or project configuration secrets.

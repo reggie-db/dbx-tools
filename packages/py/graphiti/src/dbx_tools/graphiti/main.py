@@ -515,6 +515,7 @@ async def add_memory_sync(
             message=f"Episode '{name}' persisted in group '{effective_group_id or ''}'"
         )
     except Exception as error:  # noqa: BLE001
+        _LOGGER.exception("Graphiti add-memory request failed")
         return graphiti_mcp.ErrorResponse(error=f"Error adding episode: {error}")
 
 
@@ -583,6 +584,7 @@ async def runtime_status() -> graphiti_mcp.StatusResponse:
             message=f"Graphiti runtime is running and connected to {provider} database",
         )
     except Exception as error:  # noqa: BLE001
+        _LOGGER.exception("Graphiti database status check failed")
         return graphiti_mcp.StatusResponse(
             status="error",
             message=f"Graphiti runtime database connection failed: {error}",

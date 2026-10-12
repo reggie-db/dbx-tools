@@ -15,7 +15,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/appkit-graphiti` - Run Graphiti as an AppKit plugin or supervise the same Python runtime directly from Node. The package root exposes the plugin; the runtime and options subpaths expose the underlying lifecycle and configuration contracts. Source: `packages/js/node/appkit-graphiti`.
 - `@dbx-tools/appkit-mastra` - AppKit plugin and server-side toolkit for hosting Mastra agents inside a Databricks App. Source: `packages/js/node/appkit-mastra`.
 - `@dbx-tools/appkit-model-gateway` - Give OpenAI-, Anthropic-, and Codex-compatible clients one endpoint for the models available in a Databricks workspace. The AppKit plugin discovers the workspace catalogue, exposes familiar model APIs, and chooses a compatible Databricks route for each request. Source: `packages/js/node/appkit-model-gateway`.
-- `@dbx-tools/appkit-sandbox` - AppKit plugin for Databricks Sandboxes. It provides user-scoped machine management, SSH command execution, Mastra tools, Mastra workspace transport, and authenticated routes to HTTP services running in a Sandbox. Source: `packages/js/node/appkit-sandbox`.
+- `@dbx-tools/appkit-sandbox` - AppKit integration for Databricks Sandboxes. It manages assigned machines, executes SSH commands, provisions browser services, and persists isolated Projects in Lakebase. Source: `packages/js/node/appkit-sandbox`.
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
 - `@dbx-tools/auth` - Databricks profile resolution and token or authentication-header production for Node.js and Bun. Source: `packages/js/node/auth`.
 - `@dbx-tools/auth-gate` - Passwordless authentication runtime built on Better Auth, email OTP, passkeys, and caller-provided identity policy and delivery. Source: `packages/js/node/auth-gate`.
@@ -44,7 +44,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 
 - `@dbx-tools/shared-auth` - Keep passwordless sign-in, passkey controls, and Databricks profile selectors consistent across browser and server packages. The package provides shared schemas for validating responses at the network boundary plus browser helpers that work with @dbx-tools/auth-gate. Source: `packages/js/shared/auth`.
 - `@dbx-tools/shared-core` - Browser-safe utility base for @dbx-tools/* packages. Source: `packages/js/shared/core`.
-- `@dbx-tools/shared-databricks-sandbox` - Browser-safe Zod contracts shared by the AppKit SSH server and React controls. Source: `packages/js/shared/databricks-sandbox`.
+- `@dbx-tools/shared-databricks-sandbox` - Browser-safe Zod contracts for Databricks Sandbox machines, services, commands, and persisted Projects. Source: `packages/js/shared/databricks-sandbox`.
 - `@dbx-tools/shared-email` - Browser-safe email sending schemas and inferred types. Source: `packages/js/shared/email`.
 - `@dbx-tools/shared-email-template` - Universal React Email presentation shared by dbx-tools server and browser email surfaces. Source: `packages/js/shared/email-template`.
 - `@dbx-tools/shared-fs` - Browser-safe filesystem contract and abstract base for rooted storage backends. Source: `packages/js/shared/fs`.
@@ -60,6 +60,6 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 ## React UI
 
 - `@dbx-tools/ui` - Use one tree-shakeable React package for the shared AppKit UI foundation, branding, passwordless authentication, email surfaces, and AI Search controls. Mastra chat and Teams Adaptive Cards remain separate packages because they have larger optional dependency families. Source: `packages/js/ui/appkit`.
-- `@dbx-tools/ui-databricks-sandbox` - Compact React controls for creating, listing, starting, stopping, deleting, and opening AppKit SSH machines. Source: `packages/js/ui/databricks-sandbox`.
+- `@dbx-tools/ui-databricks-sandbox` - React controls for assigned Databricks Sandboxes and persisted Projects. Source: `packages/js/ui/databricks-sandbox`.
 - `@dbx-tools/ui-mastra` - React chat UI for the AppKit-Mastra plugin. Source: `packages/js/ui/mastra`.
 - `@dbx-tools/ui-teams` - React surface for the Teams add-on: render Microsoft Teams Adaptive Cards in the browser with the adaptivecards JavaScript renderer. Source: `packages/js/ui/teams`.

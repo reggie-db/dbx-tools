@@ -35,7 +35,7 @@ describe("SshClient", () => {
           provider: "databricks-sandbox",
           status: "running",
           expiresAt: "2026-10-13T00:00:00.000Z",
-          routes: [],
+          projects: [],
           services: [],
           canStart: false,
           canStop: true,
@@ -55,14 +55,43 @@ describe("SshClient", () => {
     assert.equal(requests[1]?.url, "http://localhost/api/databricks-sandbox/machines/machine-1");
   });
 
-  it("returns the authenticated user's route prefix", async () => {
+  it("returns the authenticated user's project prefix", async () => {
     globalThis.fetch = (async () =>
-      Response.json({ pathPrefix: "/sandbox/22padc", routes: [] })) as typeof fetch;
+      Response.json({ pathPrefix: "/sandbox/22padc", projects: [] })) as typeof fetch;
     const client = new SshClient();
 
-    assert.deepEqual(await client.listRoutes(), {
+    assert.deepEqual(await client.listProjects(), {
       pathPrefix: "/sandbox/22padc",
-      routes: [],
+      projects: [],
     });
+  });
+
+  it("creates a project with server-generated defaults", async () => {
+    let request: Request | undefined;
+    globalThis.fetch = (async (input, init) => {
+      request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(new URL(String(input), "http://localhost"), init);
+      return Response.json({
+        project: {
+          id: "project-1",
+          name: "project-a1b2c3",
+          machineId: "machine-1",
+          directory: "/home/sandbox/projects/project-a1b2c3",
+          path: "/sandbox/22padc/project-a1b2c3",
+          openUrl: "/sandbox/22padc/project-a1b2c3",
+          port: 18080,
+          stripPrefix: true,
+          state: "ready",
+        },
+      });
+    }) as typeof fetch;
+    const client = new SshClient();
+
+    const project = await client.addProject({ machineId: "machine-1" });
+
+    assert.equal(project.port, 18080);
+    assert.deepEqual(await request?.json(), { machineId: "machine-1" });
   });
 });

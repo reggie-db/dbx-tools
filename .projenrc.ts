@@ -393,7 +393,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
 project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "AppKit management, Mastra tools, and remote routing for Databricks Sandboxes",
+    "AppKit management, Mastra tools, and persisted Projects for Databricks Sandboxes",
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
@@ -404,6 +404,7 @@ project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }
     "@dbx-tools/shared-databricks-sandbox@workspace:^",
     "@mastra/core@catalog:",
     "http-proxy-3@catalog:",
+    "smol-toml@1.8.0",
     "ssh2@catalog:",
     "ws@catalog:",
     "zod@catalog:",
@@ -416,6 +417,7 @@ project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }
     "vitest@catalog:",
   );
   projectJs.addPackageFiles(p, "skills");
+  projectJs.addPackageFiles(p, "scripts");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -1359,6 +1361,10 @@ const pythonPackages: project.PythonPackageOptions[] = [
             "                    logger.exception(\n                        'Error processing queued episode for group_id %s', group_id\n                    )\n                    self._queue_errors.setdefault(group_id, []).append(e)",
           "            logger.error(f'Unexpected error in queue worker for group_id {group_id}: {str(e)}')":
             "            logger.exception(\n                'Unexpected error in queue worker for group_id %s', group_id\n            )",
+          "            except Exception as e:\n                logger.error(f'Failed to process episode {uuid} for group {group_id}: {str(e)}')":
+            "            except Exception:\n                logger.exception(\n                    'Failed to process episode %s for group %s', uuid, group_id\n                )",
+          "    except Exception as e:\n        logger.error(f'Error initializing Graphiti MCP server: {str(e)}')":
+            "    except Exception:\n        logger.exception('Error initializing Graphiti MCP server')",
           "            self._queue_workers[group_id] = False\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')":
             "            self._queue_workers[group_id] = False\n            self._worker_tasks.pop(group_id, None)\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')",
           "    def get_queue_size(self, group_id: str) -> int:\n":

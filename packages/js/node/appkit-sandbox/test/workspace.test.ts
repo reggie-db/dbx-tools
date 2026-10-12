@@ -25,9 +25,9 @@ describe("sshWorkspaceSandbox", () => {
     assert.match(instructions, /Continue normal chat, direct tool calls, and native Code Mode/);
     assert.match(instructions, /does not require SSH/);
     assert.match(instructions, /Do not create a Sandbox merely to enable code execution/);
-    assert.match(instructions, /Never give the user a localhost/);
-    assert.match(instructions, /stripPrefix: true/);
-    assert.match(instructions, /WebSockets are supported only through the registered HTTP route/);
+    assert.match(instructions, /Never return localhost/);
+    assert.match(instructions, /generates a unique name, path, and port/);
+    assert.match(instructions, /PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT/);
     assert.ok(sandbox.executeCommand);
     await assert.rejects(
       sandbox.executeCommand("pwd"),
@@ -49,7 +49,7 @@ describe("sshWorkspaceSandbox", () => {
             provider: "databricks-sandbox",
             status: "running",
             gatewayHost: "gateway.example",
-            routes: [],
+            projects: [],
             services: [],
           },
         ],
@@ -64,8 +64,8 @@ describe("sshWorkspaceSandbox", () => {
     const sandbox = await sshWorkspaceSandbox(runtime)({ requestContext });
     const instructions = sandbox.getInstructions?.() ?? "";
 
-    assert.match(instructions, /return the registered AppKit path/);
-    assert.match(instructions, /relative asset\/API URLs/);
+    assert.match(instructions, /Return openUrl/);
+    assert.match(instructions, /relative asset and API URLs/);
     assert.match(instructions, /derive ws:\/\/ or wss:\/\//);
     assert.match(instructions, /Raw TCP, UDP/);
   });

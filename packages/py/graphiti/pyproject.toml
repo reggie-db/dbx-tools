@@ -97,6 +97,14 @@ include = [
             logger.exception(
                 'Unexpected error in queue worker for group_id %s', group_id
             )"""
+  "            except Exception as e:\n                logger.error(f'Failed to process episode {uuid} for group {group_id}: {str(e)}')" = """
+            except Exception:
+                logger.exception(
+                    'Failed to process episode %s for group %s', uuid, group_id
+                )"""
+  "    except Exception as e:\n        logger.error(f'Error initializing Graphiti MCP server: {str(e)}')" = """
+    except Exception:
+        logger.exception('Error initializing Graphiti MCP server')"""
   "            self._queue_workers[group_id] = False\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')" = """
             self._queue_workers[group_id] = False
             self._worker_tasks.pop(group_id, None)

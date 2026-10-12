@@ -5,6 +5,11 @@ description: Start or open the full Glances Web UI for an assigned Databricks Sa
 
 # Machine Health
 
+This built-in service is the only non-Project path. Do not use
+`execute_ssh_command` to install a replacement dashboard or create a manual
+route. If the request requires custom files or another server, call
+`add_ssh_project` first and use its returned directory, port, and open URL.
+
 Use `list_ssh_machines` to identify an assigned machine. Use
 `start_ssh_machine_service` with `service: "stats"` and return the service path
 from the result.

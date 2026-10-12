@@ -7,7 +7,6 @@ import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { ACCESS_TOKEN_HEADER, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
 import { errorUtils, hash, log } from "@dbx-tools/shared-core";
-import type { SshRoute } from "@dbx-tools/shared-databricks-sandbox";
 import type { NextFunction, Request, Response } from "express";
 import ProxyModule from "http-proxy-3";
 import type { ClientChannel } from "ssh2";
@@ -18,6 +17,7 @@ const MAX_PENDING_BYTES = 1024 * 1024;
 const logger = log.logger("appkit-sandbox:routes");
 
 interface RouteInput {
+  id?: string;
   ownerId: string;
   machineId: string;
   remoteHost: string;
@@ -31,8 +31,19 @@ interface RouteInput {
   internal?: boolean;
 }
 
+/** In-process forwarding state used by the AppKit proxy. */
+export interface SshForwardedRoute {
+  id: string;
+  machineId: string;
+  path: string;
+  remoteHost: string;
+  remotePort: number;
+  stripPrefix: boolean;
+  state: "ready";
+}
+
 interface RouteTarget {
-  route: SshRoute;
+  route: SshForwardedRoute;
   ownerId: string;
   session: SshSession;
   target?: { host: string; port: number; protocol: string; socketPath?: string };
@@ -87,7 +98,7 @@ export class SshRouteRegistry {
     machineId?: string,
     ownerId?: string,
     options: { includeInternal?: boolean } = {},
-  ): SshRoute[] {
+  ): SshForwardedRoute[] {
     return [...this.routes.values()]
       .filter((entry) => !ownerId || entry.ownerId === ownerId)
       .filter((entry) => options.includeInternal || !entry.internal)
@@ -106,7 +117,7 @@ export class SshRouteRegistry {
    * User-created paths are placed beneath {@link userPathPrefix}. Internal
    * built-in service paths must provide their complete reserved path.
    */
-  async add(session: SshSession, input: RouteInput): Promise<SshRoute> {
+  async add(session: SshSession, input: RouteInput): Promise<SshForwardedRoute> {
     const prepared = this.prepare(input);
     if (prepared.previous) return prepared.previous.route;
     const sockets = new Set<Socket>();
@@ -234,7 +245,7 @@ export class SshRouteRegistry {
     this.proxy.close();
   }
 
-  private prepare(input: RouteInput): { route: SshRoute; previous?: RouteTarget } {
+  private prepare(input: RouteInput): { route: SshForwardedRoute; previous?: RouteTarget } {
     const path = input.internal
       ? normalizeRoutePath(requiredInternalPath(input.path))
       : this.userRoutePath(input);
@@ -267,7 +278,7 @@ export class SshRouteRegistry {
       }
       return { route: previous.route, previous };
     }
-    const id = randomBytes(16).toString("hex");
+    const id = input.id ?? randomBytes(16).toString("hex");
     return {
       route: {
         id,

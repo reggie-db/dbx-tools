@@ -1,7 +1,34 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ValidationError } from "@databricks/appkit";
-import { nextPollDelay, parsePort, parseSslMode, pollDelay } from "../src/lakebase-resolver.ts";
+import { type LakebasePool, ValidationError } from "@databricks/appkit";
+import {
+  captureServicePrincipalPool,
+  nextPollDelay,
+  parsePort,
+  parseSslMode,
+  pollDelay,
+} from "../src/lakebase-resolver.ts";
+
+describe("service-principal Lakebase pool capture", () => {
+  it("captures the routing pool's existing active pool without opening another one", () => {
+    const servicePool = {} as LakebasePool;
+    let captures = 0;
+    const routingPool = {
+      activePool: () => {
+        captures += 1;
+        return servicePool;
+      },
+    } as unknown as LakebasePool;
+
+    assert.equal(captureServicePrincipalPool(routingPool), servicePool);
+    assert.equal(captures, 1);
+  });
+
+  it("keeps a fixed pool unchanged", () => {
+    const pool = {} as LakebasePool;
+    assert.equal(captureServicePrincipalPool(pool), pool);
+  });
+});
 
 describe("PGPORT validation", () => {
   it("accepts a numeric string and a number", () => {

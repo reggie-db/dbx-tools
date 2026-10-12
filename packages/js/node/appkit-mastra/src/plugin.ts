@@ -56,7 +56,7 @@ import {
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import { pluginRegistry } from "@dbx-tools/appkit";
+import { lakebaseResolver, pluginRegistry } from "@dbx-tools/appkit";
 import { modelCatalog } from "@dbx-tools/model";
 import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import {
@@ -1039,12 +1039,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   }
 
   private async buildAgentAndServer(): Promise<void> {
-    // Capture AppKit's service-principal pool after plugin setup completes and
-    // outside every `asUser` request scope. AppKit owns its lifecycle. Its
-    // public pool is pg-compatible even though AppKit's declaration omits
-    // pg.Pool's internal bookkeeping fields.
     const memoryPool = needsLakebase(this.config)
-      ? (pluginRegistry.require(this.context, lakebase, this.config).exports().pool as Pool)
+      ? (lakebaseResolver.captureServicePrincipalPool(
+          pluginRegistry.require(this.context, lakebase, this.config).exports().pool,
+        ) as Pool)
       : undefined;
     const memoryBuilder = memoryPool ? createMemoryBuilder(this.config, memoryPool) : undefined;
 

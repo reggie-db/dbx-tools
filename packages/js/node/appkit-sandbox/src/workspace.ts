@@ -18,13 +18,15 @@ import {
 } from "@mastra/core/workspace";
 import type { SshRuntime } from "./runtime.ts";
 
-const ROUTING_INSTRUCTIONS = `Remote web services must be exposed through add_ssh_route. Never give the user a localhost, 127.0.0.1, 0.0.0.0, or direct Sandbox URL; those addresses are reachable only inside the Sandbox or AppKit bridge. Bind the remote process to Sandbox loopback, then return the registered AppKit path.
+const ROUTING_INSTRUCTIONS = `Use add_ssh_project before creating a web project. The tool generates a unique name, path, and port when omitted, creates ~/projects/<path>, writes mise.toml from config, and returns the directory, public path, port, and openUrl. Re-call it with projectId to update any project field.
 
-User-created routes are automatically placed beneath a short user-hash prefix. Request a suffix such as /hello-world and use the route returned by add_ssh_route. The hash only prevents path collisions; it is not a security boundary, and the existing authenticated owner checks remain authoritative. Built-in services use reserved paths beneath the Sandbox route root at /sandbox/terminal/<machine-id> and /sandbox/metrics/<machine-id>.
+Run project commands from the returned directory with the project-local mise environment. Use config for tools, dependencies, tasks, hooks, and environment values. PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT are injected into mise.env. Bind HTTP services to 127.0.0.1 and PROJECT_PORT.
 
-Every service must work behind its registered path. Prefer stripPrefix: true for applications that serve from / and use relative asset/API URLs. Use stripPrefix: false only after configuring the application with the full public base path. Do not emit root-absolute links such as /api or /assets unless the application base path includes the registered route.
+Return openUrl to the user. Never return localhost, 127.0.0.1, 0.0.0.0, or a direct Sandbox URL. Applications should use relative asset and API URLs. Prefer stripPrefix: true unless the application is configured for the full public project path.
 
-WebSockets are supported only through the registered HTTP route's standard Upgrade flow. Browser clients must derive ws:// or wss:// from the current public origin and include the registered route path; never connect to Sandbox loopback directly. With stripPrefix: true, AppKit removes the route prefix from both HTTP and WebSocket requests before forwarding. Raw TCP, UDP, and WebSocket servers that cannot operate behind a path prefix are not browser-routable through add_ssh_route.`;
+WebSocket clients must derive ws:// or wss:// from the public origin and include the project path. Raw TCP, UDP, and servers that cannot operate behind a path prefix are not browser-routable.
+
+remove_ssh_project removes the project route, Lakebase record, and ~/projects/<path> directory. Stopping a Sandbox preserves projects. Deleting or expiring a Sandbox removes its project records.`;
 
 /** Options for selecting and naming the SSH-backed Mastra workspace sandbox. */
 export interface SshWorkspaceSandboxOptions {
@@ -130,7 +132,7 @@ export class SshWorkspaceSandbox extends MastraSandbox {
       status: this.status,
       createdAt: machine.createdAt ? new Date(machine.createdAt) : new Date(0),
       ...(machine.lastStartedAt ? { lastUsedAt: new Date(machine.lastStartedAt) } : {}),
-      metadata: { gatewayHost: machine.gatewayHost, routes: machine.routes },
+      metadata: { gatewayHost: machine.gatewayHost, projects: machine.projects },
     };
   }
 

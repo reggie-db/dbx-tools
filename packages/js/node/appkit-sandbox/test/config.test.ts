@@ -9,9 +9,18 @@ describe("resolveSshPluginConfig", () => {
     assert.equal(config.sandboxLifetimeSeconds, 86_400);
     assert.equal(config.reaperIntervalSeconds, 300);
     assert.equal(config.routePrefix, "/sandbox");
+    assert.deepEqual(
+      config.machineSoftware.map((software) => software.name),
+      ["mise"],
+    );
+    assert.match(config.machineSoftware[0]?.installCommand ?? "", /mise activation/);
+    assert.match(config.machineSoftware[0]?.checkCommand ?? "", /\.zshrc/);
     assert.equal("context" in config, false);
 
     const fallback = resolveSshPluginConfig({ fallbackToServicePrincipal: true });
     assert.equal(fallback.fallbackToServicePrincipal, true);
+
+    const withoutSetup = resolveSshPluginConfig({ machineSoftware: [] });
+    assert.deepEqual(withoutSetup.machineSoftware, []);
   });
 });

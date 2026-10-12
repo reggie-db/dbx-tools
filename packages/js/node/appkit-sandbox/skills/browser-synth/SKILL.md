@@ -5,23 +5,22 @@ description: Create an interactive Web Audio synthesizer and oscilloscope demo s
 
 # Browser Synth
 
-Create a self-contained browser synthesizer under
-`~/.dbx-tools/runtime/browser-synth/` on an assigned machine. The page should
-use the Web Audio API and canvas directly, with no external packages, fonts,
-samples, or CDNs.
+Project workflow is required. Call `add_ssh_project` before any
+`execute_ssh_command` used to create, install, or launch this demo. Use only
+the returned `directory`, `port`, `path`, and `openUrl`. Do not write demo
+files under `~/.dbx-tools/runtime`, invent a route, publish a direct Sandbox
+URL, or add a second password or token.
 
-Build a compact instrument with an on-screen keyboard, computer-key bindings,
-oscillator selection, attack and release controls, filter cutoff and
-resonance, master volume, and live oscilloscope plus spectrum views. Require an
-explicit user gesture before creating or resuming the audio context, provide a
-visible mute control, and stop oscillators when keys or pointer captures are
-released.
+Reuse an assigned Sandbox. Call `add_ssh_project` with `name: "browser-synth"`
+and `config: { "tools": { "python": "3.12" } }`.
 
-Serve the files from a loopback-only static HTTP server. Keep every asset and
-navigation URL relative so the app works beneath its registered prefix. Use
-`add_ssh_route` with the suffix `/synth` and `stripPrefix: true`, then return the
-exact registered path from the tool result.
+Create the app in the returned `directory`. Use one self-contained HTML file
+with Web Audio and canvas. Include an on-screen keyboard, computer-key input,
+oscillator selection, envelope and filter controls, volume, mute, oscilloscope,
+and spectrum views. Stop oscillators on key and pointer release. Do not use
+external packages, fonts, samples, or CDNs.
 
-Audio is generated locally by the user's browser; the Sandbox serves the app
-but does not stream audio. This avoids the audio limitation of noVNC and makes
-the demo responsive even through a proxied route.
+From the project directory, start a loopback server with
+`mise exec -- python -m http.server "$PROJECT_PORT" --bind 127.0.0.1`. Use
+relative URLs so the page works below the project path. Return the project's
+`openUrl`.

@@ -219,13 +219,15 @@ export interface MastraPluginConfig extends BasePluginConfig {
   /** AI SDK provider-options namespace. Defaults to `"openai"`; no env fallback. */
   providerId?: string;
   /**
-   * PostgresStore for Mastra threads/messages. `true` reuses the
-   * `lakebase` plugin's pool; an object opens a dedicated store.
+   * PostgresStore for Mastra threads/messages. `true` captures the
+   * `lakebase` plugin's existing service-principal pool; an object opens a
+   * separately configured store.
    */
   storage?: boolean | PostgresStoreConfig;
   /**
-   * PgVector store for Mastra memory recall. `true` reuses the
-   * `lakebase` plugin's pool; an object opens a dedicated store.
+   * PgVector store for Mastra memory recall. `true` captures the
+   * `lakebase` plugin's existing service-principal pool; an object opens a
+   * separately configured store.
    */
   memory?: boolean | MastraMemoryConfig;
   /**
@@ -689,12 +691,12 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     storage: {
       type: ["boolean", "object"],
       description:
-        "PostgresStore for Mastra threads / messages. `true` reuses the `lakebase` plugin's pool, an object opens a dedicated store. Auto-enabled when the `lakebase` plugin is registered.",
+        "PostgresStore for Mastra threads / messages. `true` captures the `lakebase` plugin's existing service-principal pool; an object opens a separately configured store. Auto-enabled when the `lakebase` plugin is registered.",
     },
     memory: {
       type: ["boolean", "object"],
       description:
-        "PgVector store for Mastra semantic recall. `true` reuses the `lakebase` plugin's pool, an object opens a dedicated store. Auto-enabled when the `lakebase` plugin is registered.",
+        "PgVector store for Mastra semantic recall. `true` captures the `lakebase` plugin's existing service-principal pool; an object opens a separately configured store. Auto-enabled when the `lakebase` plugin is registered.",
     },
     codeMode: {
       type: ["boolean", "object"],

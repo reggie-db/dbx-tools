@@ -5,22 +5,22 @@ description: Create a self-contained interactive Mandelbrot and Julia-set browse
 
 # Fractal Lab
 
-Create a visually polished, dependency-free fractal explorer under
-`~/.dbx-tools/runtime/fractal-lab/` on an assigned machine. Reuse an existing
-machine and avoid external CDNs.
+Project workflow is required. Call `add_ssh_project` before any
+`execute_ssh_command` used to create, install, or launch this demo. Use only
+the returned `directory`, `port`, `path`, and `openUrl`. Do not write demo
+files under `~/.dbx-tools/runtime`, invent a route, publish a direct Sandbox
+URL, or add a second password or token.
 
-Use one HTML document with local CSS and JavaScript. Render Mandelbrot and
-Julia sets to a canvas with an inline Web Worker so zooming and palette changes
-do not block the interface. Include pointer-centered zoom, drag-to-pan, reset,
-iteration and palette controls, current coordinates, render duration, and a
-small preset gallery. Adapt resolution or iteration count while interacting,
-then refine the image after input settles.
+Reuse an assigned Sandbox. Call `add_ssh_project` with `name: "fractal-lab"`
+and `config: { "tools": { "python": "3.12" } }`. Create the app in the
+returned `directory`.
 
-Serve the directory from a loopback-only static HTTP server. Use relative
-assets and browser APIs only; do not emit root-absolute `/api`, `/assets`, or
-worker URLs. Register the port with `add_ssh_route` using the suffix
-`/fractal-lab` and `stripPrefix: true`, then return the exact registered path.
+Use one local HTML document with CSS, JavaScript, canvas, and an inline Web
+Worker. Include Mandelbrot and Julia modes, pointer-centered zoom, pan, reset,
+iteration and palette controls, coordinates, render duration, and presets.
+Reduce work during interaction and refine after input settles. Do not use
+external CDNs, fonts, packages, or root-absolute URLs.
 
-This demo needs ordinary HTTP only. Do not add a WebSocket server, framework,
-or build step unless the user asks for collaborative or server-rendered
-features.
+Start the loopback server from the project directory with
+`mise exec -- python -m http.server "$PROJECT_PORT" --bind 127.0.0.1`. Return
+the project's `openUrl`.

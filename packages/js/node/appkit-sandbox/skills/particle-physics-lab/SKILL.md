@@ -5,21 +5,23 @@ description: Create an interactive browser particle and gravity simulation serve
 
 # Particle Physics Lab
 
-Create a self-contained visual simulation under
-`~/.dbx-tools/runtime/particle-physics/` on an assigned machine. Use canvas or
-WebGL directly with local JavaScript and CSS; do not add external CDNs, fonts,
-or a build step.
+Project workflow is required. Call `add_ssh_project` before any
+`execute_ssh_command` used to create, install, or launch this demo. Use only
+the returned `directory`, `port`, `path`, and `openUrl`. Do not write demo
+files under `~/.dbx-tools/runtime`, invent a route, publish a direct Sandbox
+URL, or add a second password or token.
 
-Include several presets such as orbit, fountain, attractor, and collision box.
-Provide controls for particle count, gravity, drag, trails, color mode, pause,
-reset, and frame timing. Support pointer-created attractors and touch input.
-Keep the animation stable by using a bounded timestep, cap particle counts to
-the device's observed frame rate, and move expensive updates to a worker when
-the browser supports it.
+Reuse an assigned Sandbox. Call `add_ssh_project` with
+`name: "particle-physics"` and
+`config: { "tools": { "python": "3.12" } }`. Work in the returned
+`directory`.
 
-Serve the files from a loopback-only static HTTP server. Use relative assets
-and navigation paths, register the port with `add_ssh_route` using the suffix
-`/particles` and `stripPrefix: true`, and return the exact registered path.
+Build a self-contained canvas or WebGL simulation with orbit, fountain,
+attractor, and collision-box presets. Include particle count, gravity, drag,
+trails, color, pause, reset, frame timing, pointer attractors, and touch input.
+Use a bounded timestep and reduce particle count when frame timing degrades. Do
+not use external CDNs, fonts, packages, or root-absolute URLs.
 
-This demo uses ordinary HTTP after loading. Do not add WebSockets or a server
-framework unless the user asks for synchronized multi-viewer controls.
+Start a loopback server from the project directory with
+`mise exec -- python -m http.server "$PROJECT_PORT" --bind 127.0.0.1`. Return
+the project's `openUrl`.
