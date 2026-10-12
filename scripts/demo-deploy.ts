@@ -3,15 +3,14 @@
  * Stage the AppKit demo app outside the repo and deploy it with the bundle.
  *
  * Compile current workspace artifacts, materialize a self-contained tree, then
- * resolve the explicitly selected profile through `@dbx-tools/auth` before running
- * `bundle deploy` and `bundle run demo_app`.
+ * resolve the environment-selected or configured default profile through
+ * `@dbx-tools/auth` before running `bundle deploy` and `bundle run demo_app`.
  */
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import { client as authClient, profile as authProfile } from "@dbx-tools/auth";
 import { log } from "@dbx-tools/shared-core";
-import { Command } from "commander";
 import { parse } from "yaml";
 
 const logger = log.logger("demo:deploy");
@@ -41,16 +40,16 @@ function bundleTarget(config: BundleConfig): { name: string; target: BundleTarge
   throw new Error("Databricks bundle must declare one default target or DATABRICKS_BUNDLE_TARGET");
 }
 
-async function deploymentAuth(
-  profile: string,
-): Promise<{ host: string; profile: string; target: string }> {
+async function deploymentAuth(): Promise<{ host: string; profile: string; target: string }> {
   const config = parse(
     readFileSync(path.join(STAGE_DIR, "databricks.yml"), "utf8"),
   ) as BundleConfig;
   const selected = bundleTarget(config);
-  const resolved = authProfile.resolveProfile({ profile });
+  const resolved = authProfile.resolveProfile();
   if (!resolved?.host) {
-    throw new Error(`Databricks workspace profile ${profile} was not found or has no host`);
+    throw new Error(
+      "No Databricks workspace profile was selected by DATABRICKS_CONFIG_PROFILE or the local configuration",
+    );
   }
   const client = await authClient.createAuthClient({ profile: resolved.name });
   await client.token({ login: true, refresh: true });
@@ -72,18 +71,13 @@ async function run(command: string[], cwd: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const options = new Command()
-    .name("demo:deploy")
-    .requiredOption("--profile <name>", "Databricks CLI profile")
-    .parse()
-    .opts<{ profile: string }>();
   logger.info("compiling demo client");
   await run([process.execPath, "run", "--filter", "@dbx-tools/demo-appkit-app", "compile"], ROOT);
   logger.info("compiling workspace packages for local deployment");
   await run([process.execPath, "run", "compile"], ROOT);
   logger.info("staging deploy tree");
   await run([process.execPath, "stage-deploy.ts"], SERVER_DIR);
-  const auth = await deploymentAuth(options.profile);
+  const auth = await deploymentAuth();
   logger.info("deploying demo app", { ...auth, stageDir: STAGE_DIR });
   const selection = ["-t", auth.target, "--profile", auth.profile];
   await run(["databricks", "bundle", "validate", ...selection], STAGE_DIR);
