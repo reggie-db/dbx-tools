@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { ACCESS_TOKEN_HEADER, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
-import { log } from "@dbx-tools/shared-core";
+import { hash, log } from "@dbx-tools/shared-core";
 import type { SshRoute } from "@dbx-tools/shared-databricks-sandbox";
 import type { NextFunction, Request, Response } from "express";
 import ProxyModule from "http-proxy-3";
@@ -86,6 +86,11 @@ export class SshRouteRegistry {
       .filter((entry) => options.includeInternal || !entry.internal)
       .map((entry) => entry.route)
       .filter((route) => !machineId || route.machineId === machineId);
+  }
+
+  /** Collision-avoidance namespace assigned to one authenticated user. */
+  userPathPrefix(ownerId: string): string {
+    return normalizeRoutePath(`${this.prefix}/${hash.fnvHash(ownerId)}`);
   }
 
   async add(session: SshSession, input: RouteInput): Promise<SshRoute> {
@@ -209,13 +214,9 @@ export class SshRouteRegistry {
   }
 
   private prepare(input: RouteInput): { route: SshRoute; previous?: RouteTarget } {
-    const requestedPath = normalizeRoutePath(
-      input.path ?? `${this.prefix}/${slug(input.machineId)}-${input.remotePort}`,
-    );
-    const path =
-      requestedPath === this.prefix || requestedPath.startsWith(`${this.prefix}/`)
-        ? requestedPath
-        : normalizeRoutePath(`${this.prefix}/${requestedPath}`);
+    const path = input.internal
+      ? normalizeRoutePath(requiredInternalPath(input.path))
+      : this.userRoutePath(input);
     const stripPrefix = input.stripPrefix ?? path !== "/";
     const previous = [...this.routes.values()].find((entry) => entry.route.path === path);
     if (previous) {
@@ -257,6 +258,19 @@ export class SshRouteRegistry {
         state: "ready",
       },
     };
+  }
+
+  private userRoutePath(input: RouteInput): string {
+    const prefix = this.userPathPrefix(input.ownerId);
+    if (!input.path) {
+      return normalizeRoutePath(`${prefix}/${slug(input.machineId)}-${input.remotePort}`);
+    }
+    const requested = normalizeRoutePath(input.path);
+    if (pathMatches(requested, prefix) && requested !== prefix) return requested;
+    if (pathMatches(requested, normalizeRoutePath(this.prefix))) {
+      throw new Error(`SSH route path ${requested} must be beneath ${prefix}`);
+    }
+    return normalizeRoutePath(`${prefix}/${requested}`);
   }
 
   private match(
@@ -464,6 +478,11 @@ function normalizeRoutePath(path: string): string {
 
 function normalizePath(path: string): string {
   return `/${path.split("/").filter(Boolean).join("/")}`;
+}
+
+function requiredInternalPath(path: string | undefined): string {
+  if (!path) throw new Error("Internal SSH routes require an explicit path");
+  return path;
 }
 
 function slug(value: string): string {

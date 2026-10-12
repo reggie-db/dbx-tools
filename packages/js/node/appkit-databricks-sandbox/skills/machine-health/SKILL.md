@@ -11,7 +11,8 @@ from the result.
 
 The built-in service installs Glances with its web extras in an isolated remote
 virtual environment, binds it to loopback, configures the machine-specific
-`/sandbox/.../stats/` prefix, and exposes it only through the owner-scoped proxy.
+`/metrics/<machine-id>/` prefix, and exposes it only through the owner-scoped
+proxy.
 
 If startup fails, inspect `~/.dbx-tools/runtime/glances.log` with
 `execute_ssh_command` before retrying.

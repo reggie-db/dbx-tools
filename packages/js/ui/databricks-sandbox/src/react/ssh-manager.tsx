@@ -55,6 +55,7 @@ export function SshManager({
   const client = useMemo(() => new SshClient(basePath), [basePath]);
   const [machines, setMachines] = useState<SshMachine[]>([]);
   const [routes, setRoutes] = useState<SshRoute[]>([]);
+  const [routePathPrefix, setRoutePathPrefix] = useState("/sandbox");
   const [supported, setSupported] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string>();
@@ -80,7 +81,8 @@ export function SshManager({
       ]);
       setSupported(machineResponse.supported);
       setMachines(machineResponse.machines);
-      setRoutes(routeResponse);
+      setRoutes(routeResponse.routes);
+      setRoutePathPrefix(routeResponse.pathPrefix);
       setMachineId((current) =>
         current && machineResponse.machines.some((machine) => machine.id === current)
           ? current
@@ -162,11 +164,12 @@ export function SshManager({
     if (!machineId || !Number.isInteger(port) || port < 1 || port > 65535) return;
     setBusyId("new-route");
     setError(undefined);
+    const suffix = path.trim().replace(/^\/+|\/+$/g, "");
     const input: AddSshRouteRequest = {
       machineId,
       remotePort: port,
       stripPrefix,
-      ...(path.trim() ? { path: path.trim() } : {}),
+      ...(suffix ? { path: `/${suffix}` } : {}),
     };
     try {
       await client.addRoute(input);
@@ -410,14 +413,23 @@ export function SshManager({
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
                     <div className="space-y-1.5">
-                      <Label htmlFor="ssh-path">Path</Label>
-                      <Input
-                        id="ssh-path"
-                        value={path}
-                        placeholder="Auto"
-                        disabled={Boolean(busyId)}
-                        onChange={(event) => setPath(event.target.value)}
-                      />
+                      <Label htmlFor="ssh-path">Path suffix</Label>
+                      <div className="flex h-9 min-w-0 items-center rounded-md border border-input bg-transparent focus-within:ring-1 focus-within:ring-ring">
+                        <span
+                          className="max-w-[55%] shrink-0 truncate border-r px-2 font-mono text-xs text-muted-foreground"
+                          title={routePathPrefix}
+                        >
+                          {routePathPrefix}/
+                        </span>
+                        <Input
+                          id="ssh-path"
+                          className="h-8 min-w-0 rounded-none border-0 px-2 shadow-none focus-visible:ring-0"
+                          value={path}
+                          placeholder="Auto"
+                          disabled={Boolean(busyId)}
+                          onChange={(event) => setPath(event.target.value)}
+                        />
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="ssh-port">Port</Label>

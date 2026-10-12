@@ -13,6 +13,7 @@ import {
   type SshMachineServiceKind,
   type SshMachinesResponse,
   type SshRoute,
+  type SshRoutesResponse,
 } from "@dbx-tools/shared-databricks-sandbox";
 
 /** Browser client for the AppKit SSH plugin's machine and route APIs. */
@@ -57,9 +58,8 @@ export class SshClient {
     );
   }
 
-  async listRoutes(signal?: AbortSignal): Promise<SshRoute[]> {
-    const response = await this.request("/routes", sshRoutesResponseSchema.parse, { signal });
-    return response.routes;
+  listRoutes(signal?: AbortSignal): Promise<SshRoutesResponse> {
+    return this.request("/routes", sshRoutesResponseSchema.parse, { signal });
   }
 
   async addRoute(input: AddSshRouteRequest): Promise<SshRoute> {

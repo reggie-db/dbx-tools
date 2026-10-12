@@ -230,7 +230,11 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       method: "get",
       path: "/routes",
       handler: async (req, res) => {
-        res.json({ routes: this.runtime.routeList(this.resolveUserId(req)) });
+        const userId = this.resolveUserId(req);
+        res.json({
+          pathPrefix: this.runtime.routePathPrefix(userId),
+          routes: this.runtime.routeList(userId),
+        });
       },
     });
     this.route(router, {
@@ -362,7 +366,11 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     }
   }
 
-  private async handleUpgrade(request: IncomingMessage, socket: Socket, head: Buffer): Promise<void> {
+  private async handleUpgrade(
+    request: IncomingMessage,
+    socket: Socket,
+    head: Buffer,
+  ): Promise<void> {
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     if (!this.runtime.routes.canHandleUpgrade(path)) return;
     const gate = this.upgradeIdentityGate;
@@ -495,7 +503,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       }),
       add_ssh_route: defineTool({
         description:
-          "Expose a Sandbox loopback HTTP port at an AppKit path. Never return localhost or a direct Sandbox URL. The service must either tolerate the registered prefix or use stripPrefix; WebSockets must use the same public route and standard HTTP Upgrade.",
+          "Expose a Sandbox loopback HTTP port at an AppKit path beneath the current user's non-security collision-avoidance prefix. Supply a suffix and use the returned route. Never return localhost or a direct Sandbox URL. The service must either tolerate the registered prefix or use stripPrefix; WebSockets must use the same public route and standard HTTP Upgrade.",
         schema: addSshRouteRequestSchema,
         annotations: { effect: "write", requiresUserContext: true },
         execute: async (input, signal) => ({

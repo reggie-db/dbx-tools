@@ -23,19 +23,17 @@ describe("SshRouteRegistry", () => {
         remoteHost: "127.0.0.1",
         remotePort: 3000,
       });
-      assert.equal(route.path, "/sandbox/sandbox-1-3000");
+      assert.equal(route.path, "/sandbox/22padc/sandbox-1-3000");
       assert.equal(route.stripPrefix, true);
       assert.deepEqual(registry.list("sandbox-1", "reggie.pierce@databricks.com"), [route]);
       assert.deepEqual(registry.list("sandbox-1", "other@databricks.com"), []);
-      await assert.rejects(
-        registry.add(unusedSession, {
-          ownerId: "other@databricks.com",
-          machineId: "sandbox-1",
-          remoteHost: "127.0.0.1",
-          remotePort: 3000,
-        }),
-        /owned by another user/,
-      );
+      const otherRoute = await registry.add(unusedSession, {
+        ownerId: "other@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort: 3000,
+      });
+      assert.equal(otherRoute.path, "/sandbox/1g9rdt/sandbox-1-3000");
       assert.equal(await registry.remove(route.id, "other@databricks.com"), false);
       assert.equal(await registry.remove(route.id, "reggie.pierce@databricks.com"), true);
       assert.equal(await registry.remove(route.id), false);
@@ -64,19 +62,20 @@ describe("SshRouteRegistry", () => {
     });
     const proxyPort = await listen(proxy);
     try {
+      const pathPrefix = registry.userPathPrefix("reggie.pierce@databricks.com");
       const stripped = await registry.add(session, {
         ownerId: "reggie.pierce@databricks.com",
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/sandbox/stripped",
+        path: "/stripped",
       });
       const preserved = await registry.add(session, {
         ownerId: "reggie.pierce@databricks.com",
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/sandbox/preserved",
+        path: "/preserved",
         stripPrefix: false,
       });
       await registry.add(session, {
@@ -84,7 +83,7 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/sandbox/internal",
+        path: "/internal/test",
         internal: true,
       });
       const redirected = await registry.add(session, {
@@ -92,35 +91,40 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/sandbox/redirected",
+        path: "/redirected",
         redirectToSlash: true,
       });
       assert.equal(stripped.stripPrefix, true);
       assert.equal(preserved.stripPrefix, false);
       assert.deepEqual(
         registry.list("sandbox-1", "reggie.pierce@databricks.com").map((route) => route.path),
-        ["/sandbox/stripped", "/sandbox/preserved", "/sandbox/redirected"],
+        [`${pathPrefix}/stripped`, `${pathPrefix}/preserved`, `${pathPrefix}/redirected`],
       );
       assert.deepEqual(
         registry
           .list("sandbox-1", "reggie.pierce@databricks.com", { includeInternal: true })
           .map((route) => route.path),
-        ["/sandbox/stripped", "/sandbox/preserved", "/sandbox/internal", "/sandbox/redirected"],
+        [
+          `${pathPrefix}/stripped`,
+          `${pathPrefix}/preserved`,
+          "/internal/test",
+          `${pathPrefix}/redirected`,
+        ],
       );
       assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/sandbox/stripped/assets?q=1`, {
+        await fetch(`http://127.0.0.1:${proxyPort}${stripped.path}/assets?q=1`, {
           headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
         }).then((res) => res.text()),
         "/assets?q=1",
       );
       assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/sandbox/preserved/assets?q=1`, {
+        await fetch(`http://127.0.0.1:${proxyPort}${preserved.path}/assets?q=1`, {
           headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
         }).then((res) => res.text()),
-        "/sandbox/preserved/assets?q=1",
+        `${preserved.path}/assets?q=1`,
       );
       assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/sandbox/stripped`, {
+        await fetch(`http://127.0.0.1:${proxyPort}${stripped.path}`, {
           headers: { [USER_EMAIL_HEADER]: "other@databricks.com" },
         }).then(async (response) => `${response.status}:${await response.text()}`),
         "404:Not Found",
@@ -173,12 +177,13 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/sandbox/sandbox-1/stats",
+        path: "/metrics/sandbox-1",
         stripPrefix: true,
         htmlHead: '<style id="viewport">html{height:100dvh}</style>',
+        internal: true,
       });
       const headers = { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" };
-      const document = await fetch(`http://127.0.0.1:${proxyPort}/sandbox/sandbox-1/stats/`, {
+      const document = await fetch(`http://127.0.0.1:${proxyPort}/metrics/sandbox-1/`, {
         headers,
       });
       assert.equal(document.status, 200);
@@ -187,7 +192,7 @@ describe("SshRouteRegistry", () => {
         /<style id="viewport">html\{height:100dvh\}<\/style><\/head>/,
       );
       assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/sandbox/sandbox-1/stats/asset.js`, {
+        await fetch(`http://127.0.0.1:${proxyPort}/metrics/sandbox-1/asset.js`, {
           headers,
         }).then((response) => response.text()),
         "console.log('asset')",
@@ -233,19 +238,17 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/sandbox/sandbox-1/terminal",
+        path: "/terminal/sandbox-1",
+        internal: true,
       });
-      const response = await fetch(
-        `http://127.0.0.1:${proxyPort}/sandbox/sandbox-1/terminal/api/tabs`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com",
-          },
-          body: JSON.stringify({ title: "Shell" }),
+      const response = await fetch(`http://127.0.0.1:${proxyPort}/terminal/sandbox-1/api/tabs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com",
         },
-      );
+        body: JSON.stringify({ title: "Shell" }),
+      });
       assert.deepEqual(await response.json(), { title: "Shell" });
     } finally {
       await registry.close();
@@ -300,9 +303,10 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-1",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/sandbox/sandbox-1/terminal",
+        path: "/terminal/sandbox-1",
         browserRelay: true,
         browserPaths: ["/assets", "/icons"],
+        internal: true,
       });
       const root = await fetch(`http://127.0.0.1:${proxyPort}${route.path}`, {
         redirect: "manual",
@@ -389,8 +393,9 @@ describe("SshRouteRegistry", () => {
         machineId: "sandbox-2",
         remoteHost: "127.0.0.1",
         remotePort,
-        path: "/sandbox/sandbox-2/terminal",
+        path: "/terminal/sandbox-2",
         browserRelay: true,
+        internal: true,
       });
       assert.equal(
         await sendWebsocketUpgrade(proxyPort, "/__srv/ambiguous-stale/ws/events", undefined, false),
@@ -405,7 +410,7 @@ describe("SshRouteRegistry", () => {
     }
   });
 
-  it("scopes paths beneath the Sandbox namespace and rejects API overlap", async () => {
+  it("scopes paths beneath the user namespace and rejects other full prefixes", async () => {
     const registry = new SshRouteRegistry("/sandbox");
     try {
       const route = await registry.add(unusedSession, {
@@ -415,7 +420,17 @@ describe("SshRouteRegistry", () => {
         remotePort: 3000,
         path: "/hello-world",
       });
-      assert.equal(route.path, "/sandbox/hello-world");
+      assert.equal(route.path, "/sandbox/22padc/hello-world");
+      await assert.rejects(
+        registry.add(unusedSession, {
+          ownerId: "reggie.pierce@databricks.com",
+          machineId: "sandbox-1",
+          remoteHost: "127.0.0.1",
+          remotePort: 3000,
+          path: "/sandbox/1g9rdt/hello-world",
+        }),
+        /must be beneath \/sandbox\/22padc/,
+      );
       await assert.rejects(
         registry.add(unusedSession, {
           ownerId: "reggie.pierce@databricks.com",

@@ -17,10 +17,7 @@ describe("SshClient", () => {
       )) as typeof fetch;
     const client = new SshClient();
 
-    await assert.rejects(
-      client.start("machine-1"),
-      /connect EHOSTUNREACH 192\.168\.200\.10:2222/,
-    );
+    await assert.rejects(client.start("machine-1"), /connect EHOSTUNREACH 192\.168\.200\.10:2222/);
   });
 
   it("creates and deletes the current user's sandboxes", async () => {
@@ -55,5 +52,16 @@ describe("SshClient", () => {
     assert.deepEqual(await requests[0]?.json(), { name: "project" });
     assert.equal(requests[1]?.method, "DELETE");
     assert.equal(requests[1]?.url, "http://localhost/api/databricks-sandbox/machines/machine-1");
+  });
+
+  it("returns the authenticated user's route prefix", async () => {
+    globalThis.fetch = (async () =>
+      Response.json({ pathPrefix: "/sandbox/22padc", routes: [] })) as typeof fetch;
+    const client = new SshClient();
+
+    assert.deepEqual(await client.listRoutes(), {
+      pathPrefix: "/sandbox/22padc",
+      routes: [],
+    });
   });
 });

@@ -156,7 +156,7 @@ export const addSshRouteRequestSchema = z
       .startsWith("/")
       .optional()
       .describe(
-        "Public AppKit path, automatically scoped beneath the route prefix; return this path instead of localhost.",
+        "Requested path suffix or full assigned user path. The server scopes suffixes beneath its short user-hash prefix and rejects another user's prefix.",
       ),
     stripPrefix: z
       .boolean()
@@ -182,7 +182,13 @@ export const sshRouteResponseSchema = z
 export type SshRouteResponse = z.infer<typeof sshRouteResponseSchema>;
 
 export const sshRoutesResponseSchema = z
-  .object({ routes: z.array(sshRouteSchema).describe("Registered routes owned by the user.") })
+  .object({
+    pathPrefix: z
+      .string()
+      .startsWith("/")
+      .describe("Non-security collision-avoidance path prefix assigned to the authenticated user."),
+    routes: z.array(sshRouteSchema).describe("Registered routes owned by the user."),
+  })
   .strict()
   .describe("Registered SSH routes response.");
 export type SshRoutesResponse = z.infer<typeof sshRoutesResponseSchema>;

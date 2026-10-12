@@ -23,15 +23,17 @@ import { addSshRouteRequestSchema } from "@dbx-tools/shared-databricks-sandbox";
 const route = addSshRouteRequestSchema.parse({
   machineId: "sandbox-id",
   remotePort: 3000,
-  path: "/sandbox/my-service",
+  path: "/my-service",
   stripPrefix: true,
 });
 ```
 
 `stripPrefix` follows the tunnel/Caddy routing default when omitted: non-root
 route paths are removed before forwarding, while `/` is preserved.
-Paths outside the configured route prefix are automatically scoped beneath it;
-with the default prefix, `/my-service` becomes `/sandbox/my-service`.
+Requested suffixes are automatically scoped beneath the configured route prefix
+and the authenticated user's short FNV hash. With the default prefix,
+`/my-service` becomes `/sandbox/<user-hash>/my-service`. The hash prevents route
+name collisions; authenticated owner checks remain the security boundary.
 
 Use these schemas for browser/server boundaries. Server-only REST clients,
 private keys, SSH sessions, and proxy transports belong to

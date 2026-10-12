@@ -74,23 +74,26 @@ bounded response bodies; credentials and headers are redacted.
 ## Remote web routes
 
 `add_ssh_route` forwards an HTTP port from a Sandbox into the AppKit server. A
-request for port `3000` can be exposed at `/sandbox/my-service`:
+request for port `3000` can ask for the `/my-service` suffix:
 
 ```json
 {
   "machineId": "sandbox-id",
   "remoteHost": "127.0.0.1",
   "remotePort": 3000,
-  "path": "/sandbox/my-service",
+  "path": "/my-service",
   "stripPrefix": true
 }
 ```
 
-Routes are scoped beneath `routePrefix` and cannot overlap `/api`. For example,
-requesting `/my-service` with the default prefix registers
-`/sandbox/my-service`. The dynamic dispatcher is mounted after plugin API
+User routes are registered beneath `routePrefix` and a stable six-character FNV
+hash of the authenticated user. For example, `/my-service` becomes
+`/sandbox/<user-hash>/my-service`. A caller may reuse its full assigned prefix,
+but another prefix is rejected. The hash is only a collision-avoidance
+namespace, not a security measure; authenticated owner checks continue to
+control access and deletion. The dynamic dispatcher is mounted after plugin API
 routes and before the static SPA fallback. Longer route paths take precedence
-over shorter paths. Route paths and deletion are scoped to the current user.
+over shorter paths.
 
 `stripPrefix` defaults to `true` for non-root paths and `false` for `/`, matching
 the existing tunnel/Caddy reverse-proxy behavior. Set it to `false` when the
@@ -115,10 +118,11 @@ proxy paths.
 
 ## Built-in browser services
 
-Every assigned machine advertises two stable paths:
+Every assigned machine advertises two stable reserved paths outside the
+user-route namespace:
 
-- `/sandbox/<machine-id>/terminal` forwards the DinoTTY mobile web terminal.
-- `/sandbox/<machine-id>/stats` forwards the full Glances Web UI.
+- `/terminal/<machine-id>` forwards the DinoTTY mobile web terminal.
+- `/metrics/<machine-id>` forwards the full Glances Web UI.
 
 Starting a machine provisions both services over SSH under
 `~/.dbx-tools/runtime`, binds them to loopback, and registers owner-scoped proxy

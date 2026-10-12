@@ -303,6 +303,10 @@ export class SshRuntime {
     return this.routes.list(undefined, userId);
   }
 
+  routePathPrefix(userId: string): string {
+    return this.routes.userPathPrefix(userId);
+  }
+
   /** Manually assign one existing machine to an AppKit user. */
   async assignMachine(client: WorkspaceClient, userId: string, machineId: string): Promise<void> {
     const api = new DatabricksSandboxClient(client);
@@ -528,8 +532,8 @@ export class SshRuntime {
   }
 
   private servicePath(machineId: string, kind: SshMachineService["kind"]): string {
-    const prefix = this.config.routePrefix.replace(/\/$/, "");
-    return `${prefix}/${machinePathSegment(machineId)}/${kind}`;
+    const service = kind === "terminal" ? "terminal" : "metrics";
+    return `/${service}/${machinePathSegment(machineId)}`;
   }
 }
 
