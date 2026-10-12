@@ -27,6 +27,7 @@
     "@dbx-tools/shared-core": "workspace:^",
     "chokidar": "^4.0.3",
     "glob": "^13.0.6",
+    "ignore": "^7.0.12",
     "minimatch": "^10.2.5"
   },
   "main": "index.ts",
@@ -43,6 +44,10 @@
       "./find": {
         "types": "./lib/src/find.d.ts",
         "default": "./lib/src/find.js"
+      },
+      "./git-ignore": {
+        "types": "./lib/src/git-ignore.d.ts",
+        "default": "./lib/src/git-ignore.js"
       },
       "./ignore": {
         "types": "./lib/src/ignore.d.ts",
@@ -82,6 +87,7 @@
   "exports": {
     ".": "./index.ts",
     "./find": "./src/find.ts",
+    "./git-ignore": "./src/git-ignore.ts",
     "./ignore": "./src/ignore.ts",
     "./match": "./src/match.ts",
     "./pattern": "./src/pattern.ts",

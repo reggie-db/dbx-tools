@@ -125,7 +125,7 @@ async function cancelResponse(
       agentId,
       conversationId,
       responseId,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
   } finally {
     clearTimeout(timeout);

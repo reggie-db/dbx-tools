@@ -6,72 +6,92 @@ export const SshPluginConfigSchema = z
     auto: z
       .boolean()
       .default(true)
-      .describe("Automatically start stopped machines before SSH use."),
+      .describe(
+        "Whether commands, services, and routes start a stopped machine before SSH use. Defaults to true; machine creation remains explicit.",
+      ),
     fallbackToServicePrincipal: z
       .boolean()
       .default(false)
-      .describe("Retry failed request-scoped OBO calls as the app service principal."),
+      .describe(
+        "Whether a failed request-scoped OBO REST operation retries with the app service principal. Defaults to false.",
+      ),
     sandboxLifetimeSeconds: z
       .number()
       .int()
       .positive()
       .default(86_400)
-      .describe("Lifetime encoded into each service-managed Sandbox name."),
+      .describe(
+        "Absolute service-managed Sandbox lifetime in seconds. Defaults to 86400 seconds and is recorded in Lakebase and the managed name.",
+      ),
     reaperIntervalSeconds: z
       .number()
       .int()
       .nonnegative()
       .default(300)
-      .describe("Interval between expiration scans; zero disables scheduled scans."),
+      .describe(
+        "Interval between expiration scans in seconds. Defaults to 300 seconds; zero disables scheduled scans.",
+      ),
     routePrefix: z
       .string()
       .startsWith("/")
       .default("/sandbox")
-      .describe("Root path for remote web routes."),
+      .describe("AppKit root path for remote web routes. Defaults to /sandbox."),
     defaultRemotePort: z
       .number()
       .int()
       .min(1)
       .max(65535)
       .default(3000)
-      .describe("Default remote web port."),
+      .describe("Default remote web service port. Defaults to 3000."),
     gatewayPort: z
       .number()
       .int()
       .min(1)
       .max(65535)
       .default(2222)
-      .describe("Databricks Sandbox SSH gateway port."),
+      .describe("Databricks Sandbox SSH gateway port. Defaults to 2222."),
     connectTimeoutMs: z
       .number()
       .int()
       .positive()
       .default(30_000)
-      .describe("SSH connection timeout."),
+      .describe("SSH connection timeout in milliseconds. Defaults to 30000."),
     commandTimeoutMs: z
       .number()
       .int()
       .positive()
       .default(120_000)
-      .describe("Default remote command timeout."),
+      .describe("Default remote command timeout in milliseconds. Defaults to 120000."),
     keyDirectory: z
       .string()
       .min(1)
       .optional()
-      .describe("Server-side directory for user-scoped SSH keys."),
+      .describe(
+        "Optional server-side root directory for user-scoped SSH keys, fingerprints, and known-host files.",
+      ),
   })
   .strict()
   .describe("Serializable AppKit SSH plugin configuration.");
 
 export type SerializableSshPluginConfig = z.input<typeof SshPluginConfigSchema>;
 export type ResolvedSshPluginConfig = z.output<typeof SshPluginConfigSchema>;
-/** Configuration accepted by the AppKit SSH plugin. */
+/**
+ * Configuration accepted by {@link AppKitSshPlugin}.
+ *
+ * Pass a shared {@link SshRuntime} when the AppKit plugin and Mastra workspace
+ * resolver must use the same sessions, routes, ownership store, and reaper.
+ */
 export type SshPluginConfig = BasePluginConfig &
   SerializableSshPluginConfig & {
     runtime?: import("./runtime.ts").SshRuntime;
   };
 
-/** Resolves serializable SSH plugin defaults and removes AppKit-only fields. */
+/**
+ * Resolves serializable defaults and removes AppKit-only fields such as
+ * {@link SshPluginConfig.runtime}.
+ *
+ * @throws A Zod validation error when a field has an invalid type or range.
+ */
 export function resolveSshPluginConfig(config: SshPluginConfig = {}): ResolvedSshPluginConfig {
   const {
     runtime: _runtime,

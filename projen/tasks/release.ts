@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { Command } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand } from "./cli.ts";
@@ -149,7 +149,7 @@ function pushAnnotatedReleaseTag(options: {
   } catch (error) {
     if (remoteRefCreated) throw error;
     logger.warn("GitHub API tag creation failed; using git push", {
-      error,
+      error: errorUtils.toError(error),
       repository: githubAccount.remote.repository,
     });
     runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);

@@ -340,6 +340,7 @@ type AssistantBubbleProps = {
   mlflowExperimentUrl?: string;
 };
 
+/** Render one assistant message with tool progress, actions, and optional feedback. */
 export const AssistantBubble = ({
   message,
   isLast,
@@ -523,6 +524,7 @@ export const AssistantBubble = ({
   );
 };
 
+/** Render one user message, including text and image attachments. */
 export const UserBubble = ({ message }: { message: UIMessage }) => {
   const text = message.parts
     .filter((p): p is { type: "text"; text: string } => p.type === "text")

@@ -93,7 +93,7 @@ export async function getGenieSpace(
     if (!serialized || !isSerializedSpaceForbidden(err)) throw err;
     logger.debug("serialized-space:forbidden", {
       spaceId,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     raw = await request(false);
   }

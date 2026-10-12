@@ -11,25 +11,27 @@ import { LakebaseAiSearchPlugin, type LakebaseAiSearchConfig } from "../src/lake
 function plugin(config: LakebaseAiSearchConfig) {
   const instance = new LakebaseAiSearchPlugin(config);
   const writes: unknown[][] = [];
-  Object.assign(instance, {
-    backend: {
-      async search() {
-        return {
-          hits: [
-            {
-              id: "1",
-              score: 1,
-              fields: { title: "Visible", internal: "secret" },
-            },
-          ],
-          count: 1,
-        };
-      },
-      async addDocuments(_index: string, documents: unknown[]) {
-        writes.push(documents);
-        return { index: "docs", count: documents.length };
-      },
+  const backend = {
+    async search() {
+      return {
+        hits: [
+          {
+            id: "1",
+            score: 1,
+            fields: { title: "Visible", internal: "secret" },
+          },
+        ],
+        count: 1,
+      };
     },
+    async addDocuments(_index: string, documents: unknown[]) {
+      writes.push(documents);
+      return { index: "docs", count: documents.length };
+    },
+  };
+  Object.assign(instance, {
+    servicePrincipalBackend: backend,
+    userBackend: backend,
   });
   return { instance, writes };
 }
@@ -75,6 +77,31 @@ describe("Lakebase AI Search HTTP policy", () => {
     });
 
     assert.deepEqual(result.results[0]?.data, { id: "1", internal: "secret" });
+  });
+
+  it("uses the service-principal backend unless an index explicitly enables OBO", async () => {
+    const instance = new LakebaseAiSearchPlugin({
+      indexes: {
+        shared: {},
+        private: { auth: "on-behalf-of-user" },
+      },
+    });
+    const identities: string[] = [];
+    const backend = (identity: string) => ({
+      async search() {
+        identities.push(identity);
+        return { hits: [], count: 0 };
+      },
+    });
+    Object.assign(instance, {
+      servicePrincipalBackend: backend("service-principal"),
+      userBackend: backend("user-obo"),
+    });
+
+    await instance.query("shared", { queryText: "shared" });
+    await instance.query("private", { queryText: "private" });
+
+    assert.deepEqual(identities, ["service-principal", "user-obo"]);
   });
 
   it("enters OBO scope for query and write routes", async () => {

@@ -335,7 +335,7 @@ export class TeamsPlugin extends ToolRegistryPlugin<TeamsPluginConfig> {
     } catch (err) {
       // Deliberately terse: a caller failing authentication learns only that it
       // failed, while the reason goes to the logs.
-      logger.warn("rejected an unauthenticated request", { error: errorUtils.errorMessage(err) });
+      logger.warn("rejected an unauthenticated request", { error: errorUtils.toError(err) });
       res.status(401).json({ error: "unauthorized" });
       return;
     }

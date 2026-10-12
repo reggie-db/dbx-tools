@@ -247,7 +247,7 @@ export class FilesCacheManager {
       state.group.timer = undefined;
       void this.flushInvalidations(state.group).catch((error) => {
         logger.warn("filesystem cache invalidation batch failed", {
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
       });
     }, this.config.invalidationBatchMs);

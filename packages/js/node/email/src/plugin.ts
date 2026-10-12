@@ -38,7 +38,7 @@ import {
 } from "@databricks/appkit";
 import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
 import { brandContext, ToolRegistryPlugin } from "@dbx-tools/appkit";
-import { log, stringUtils, token } from "@dbx-tools/shared-core";
+import { errorUtils, log, stringUtils, token } from "@dbx-tools/shared-core";
 import {
   email as sharedEmail,
   type EmailMessage,
@@ -164,7 +164,7 @@ export class EmailPlugin extends ToolRegistryPlugin<EmailPluginConfig> {
         host: config.host,
         port: config.port,
         status: verified.status,
-        error: verified.message,
+        error: errorUtils.toError(verified.message),
       });
       throw ConfigurationError.invalidConnection(
         "SMTP",

@@ -616,7 +616,7 @@ function codeModeTransport(): Promise<CodeModeTransport> {
       return transport;
     } catch (caught) {
       codeModeLogger.warn("isolated-vm unavailable; using QuickJS", {
-        error: errorUtils.errorMessage(caught),
+        error: errorUtils.toError(caught),
       });
       return new QuickJsCodeModeTransport();
     }
@@ -854,8 +854,7 @@ function toolErrorLoggingProcessor(logger: log.Logger): OutputProcessor {
         logger.error("tool execution failed", {
           toolName: part.payload.toolName,
           toolCallId: part.payload.toolCallId,
-          error: error.message,
-          stack: error.stack,
+          error,
         });
       }
       return part;

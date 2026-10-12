@@ -23,6 +23,7 @@ import type { FeedbackSubmission, FeedbackValue } from "./types.ts";
 // wires feedback (which only happens when MLflow logging is enabled and
 // the turn has a captured trace id).
 
+/** Render per-message rating and comment controls for an MLflow-backed trace. */
 export const FeedbackControls = ({
   value,
   onSubmit,

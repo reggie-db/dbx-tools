@@ -17,7 +17,7 @@
  */
 import { isAbsolute, resolve } from "node:path";
 import { watch as pathWatch } from "@dbx-tools/path";
-import { asyncUtils, log } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
 import { isGeneratedFile, recordedRoots, repoRoot } from "./packages.ts";
 import { withWorkspaceMutationLock } from "./workspace-lock.ts";
 
@@ -90,12 +90,12 @@ export interface WatchLoopOptions {
   check?: (changed: string[]) => boolean | Promise<boolean>;
 }
 
-export function watchLoop(
+export async function watchLoop(
   tag: string,
   paths: string[],
   onBatch: (changed: string[]) => void | Promise<void>,
   config: WatchLoopOptions = {},
-): void {
+): Promise<void> {
   const { ignoreOptions, check } = config;
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -119,7 +119,7 @@ export function watchLoop(
         });
       }
     } catch (err) {
-      logger.error(`${tag} cycle failed:`, err instanceof Error ? err.message : err);
+      logger.error(`${tag} cycle failed`, { error: errorUtils.toError(err) });
     } finally {
       running = false;
       if (rerun) {
@@ -129,7 +129,7 @@ export function watchLoop(
     }
   }
 
-  const watcher = pathWatch.watchFiles(paths, {
+  const watcher = await pathWatch.watchFiles(paths, {
     cwd: repoRoot,
     ignoreInitial: true,
     ignore: (path) => ignoredPath(path),
@@ -156,7 +156,7 @@ export function watchLoop(
     timer = setTimeout(() => void flush(), DEBOUNCE_MS);
   });
   watcher.on("error", (err) => {
-    logger.error(`${tag} watcher error:`, err);
+    logger.error(`${tag} watcher error`, { error: errorUtils.toError(err) });
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code === undefined || !FATAL_WATCH_ERROR_CODES.has(code)) return;
     logger.error(`${tag}: ${code} leaves the watcher blind - exiting so it is restarted`);

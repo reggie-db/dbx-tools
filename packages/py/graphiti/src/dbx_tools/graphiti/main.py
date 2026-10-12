@@ -487,8 +487,10 @@ async def add_memory_sync(
             try:
                 episode_type = graphiti_mcp.EpisodeType[source.lower()]
             except (KeyError, AttributeError):
-                logging.getLogger(__name__).warning(
-                    "Unknown source type %r, using text as default", source
+                _LOGGER.warning(
+                    "Unknown source type %r, using text as default",
+                    source,
+                    exc_info=True,
                 )
         effective_group_id = group_id or graphiti_mcp.config.graphiti.group_id or None
         await runtime.graphiti.add_episode(

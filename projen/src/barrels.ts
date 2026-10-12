@@ -339,14 +339,14 @@ export function isGeneratedBarrel(file: string): boolean {
 
 /** Public direct modules and child-directory facades for one generated barrel. */
 function barrelCandidates(barrelDir: string): string[] {
-  const files = [...find.findFiles("*", { cwd: barrelDir })]
+  const files = [...find.findFilesSync("*", { cwd: barrelDir })]
     .map(toPosix)
     .filter((file) => !file.includes("/"))
     .filter((file) => file !== "index.ts" && file !== CUSTOM_EXPORTS_FILE)
     .filter((file) => isModuleFile(file))
     .filter((file) => !isExcluded(file, barrelDir))
     .filter((file) => hasExport(join(barrelDir, file)));
-  const childIndexes = [...find.findFiles("*/index.ts", { cwd: barrelDir })]
+  const childIndexes = [...find.findFilesSync("*/index.ts", { cwd: barrelDir })]
     .map(toPosix)
     .filter((file) => file.split("/").length === 2)
     .filter((file) => !isExcluded(file, barrelDir))
@@ -424,7 +424,7 @@ function generateForPackage(pkgDir: string): number {
   const srcDir = join(pkgDir, "src");
   if (!existsSync(srcDir)) return 0;
 
-  const sourceFiles = [...find.findFiles("**/*", { cwd: srcDir })]
+  const sourceFiles = [...find.findFilesSync("**/*", { cwd: srcDir })]
     .map(toPosix)
     .filter((file) => isModuleFile(file) || /(^|\/)index\.ts$/.test(file));
   const manifest = json.parseRecord(readFileSync(join(pkgDir, "package.json"), "utf8"));

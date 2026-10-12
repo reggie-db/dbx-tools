@@ -14,10 +14,24 @@ interface StoredKey {
   keyHash: string;
 }
 
-/** Stores user-scoped SSH keys and trusted Databricks gateway host keys. */
+/**
+ * Stores user-scoped SSH keys and trusted Databricks gateway host keys.
+ *
+ * Each workspace and AppKit user receives a separate Ed25519 key pair. The
+ * store writes private keys, gateway fingerprints, and OpenSSH known-host files
+ * with owner-only permissions beneath the configured root directory.
+ */
 export class SshKeyStore {
+  /** Creates a key store rooted at the default AppKit application-data path. */
   constructor(private readonly root = join(homedir(), ".dbx-tools", "appkit-databricks-sandbox")) {}
 
+  /**
+   * Loads or creates the user's key pair and registers its public key when the
+   * workspace does not already contain the matching key hash.
+   *
+   * @returns The local key material and the gateway host returned by Databricks,
+   * when available.
+   */
   async ensureRegistered(
     api: DatabricksSandboxClient,
     userId: string,
@@ -40,6 +54,7 @@ export class SshKeyStore {
     };
   }
 
+  /** Returns the stored SHA-256 gateway fingerprint, or `undefined` when untrusted. */
   async knownHost(
     scope: string,
     userId: string,
@@ -54,10 +69,15 @@ export class SshKeyStore {
     }
   }
 
+  /** Returns the OpenSSH known-host file path for one workspace, user, and gateway. */
   knownHostsPath(scope: string, userId: string, host: string, port: number): string {
     return join(this.directory(scope, userId), `host-${digest(`${host}\0${port}`)}.known_hosts`);
   }
 
+  /**
+   * Stores the accepted gateway fingerprint and OpenSSH host-key entry with
+   * owner-only file permissions.
+   */
   async rememberHost(
     scope: string,
     userId: string,

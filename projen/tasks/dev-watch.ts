@@ -3,7 +3,7 @@
 import { isAbsolute, relative, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
 import { watch as pathWatch } from "@dbx-tools/path";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import { CommanderError } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand, taskPositionals } from "./cli.ts";
@@ -195,7 +195,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   let restarting = false;
   let stopping = false;
 
-  const watcher = pathWatch.watchFiles(watchDirectories, {
+  const watcher = await pathWatch.watchFiles(watchDirectories, {
     cwd: root,
     ignoreInitial: true,
   });
@@ -210,7 +210,9 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
         forceTimeoutMs: SHUTDOWN_TIMEOUT_MS,
       });
     } catch (err) {
-      logger.error("failed to stop command process tree:", err);
+      logger.error("failed to stop command process tree", {
+        error: errorUtils.toError(err),
+      });
     }
   }
 
@@ -236,7 +238,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       .catch((err) => {
         if (child !== current || stopping) return;
         child = undefined;
-        logger.error("command failed:", err);
+        logger.error("command failed", { error: errorUtils.toError(err) });
       });
   }
 
@@ -269,7 +271,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   }
 
   watcher.on("all", scheduleRestart);
-  watcher.on("error", (err) => logger.error("watcher error:", err));
+  watcher.on("error", (err) => logger.error("watcher error", { error: errorUtils.toError(err) }));
   watcher.on("ready", () => {
     const packages = watchDirectories.length;
     logger.info(

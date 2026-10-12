@@ -68,7 +68,7 @@ const montyContext = functionUtils.memoize(async (): Promise<MontyContext> => {
     } catch (error) {
       errors.push(errorUtils.toError(error));
       logger.debug(`${target.name} unavailable`, {
-        error: errorUtils.errorMessage(error),
+        error: errorUtils.toError(error),
       });
     }
   }

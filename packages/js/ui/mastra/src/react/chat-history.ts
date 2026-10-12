@@ -116,7 +116,7 @@ export function useChatHistory({
           .catch((error: unknown) => {
             if ((error as { name?: string }).name === "AbortError") throw error;
             logger.warn("suspended-run discovery error", {
-              error: errorUtils.errorMessage(error),
+              error: errorUtils.toError(error),
             });
             return { runs: [], total: 0 };
           });
@@ -140,7 +140,7 @@ export function useChatHistory({
       .catch((error: unknown) => {
         if (cancelled || (error as { name?: string }).name === "AbortError") return;
         logger.error("history load error", {
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
         updateSession(threadId, (current) => ({
           ...current,
@@ -181,7 +181,7 @@ export function useChatHistory({
       .catch((error: unknown) => {
         logger.error("history load-more error", {
           page,
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
         updateSession(threadId, (current) => ({
           ...current,

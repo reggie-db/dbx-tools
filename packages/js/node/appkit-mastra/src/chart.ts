@@ -516,7 +516,7 @@ async function writeChart(entry: Chart, userKey: string): Promise<void> {
   } catch (err) {
     logger.warn("write-error", {
       chartId: entry.chartId,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
   }
 }
@@ -534,7 +534,7 @@ async function readChart(chartId: string, userKey: string): Promise<Chart | unde
   } catch (err) {
     logger.warn("read-error", {
       chartId,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     return undefined;
   }
@@ -629,7 +629,7 @@ async function runPrepareChart(chartId: string, opts: PrepareChartOptions): Prom
       elapsedMs: Date.now() - startedAt,
     });
   } catch (err) {
-    logger.warn("error", { chartId, error: errorUtils.errorMessage(err) });
+    logger.warn("error", { chartId, error: errorUtils.toError(err) });
     // The entry's `error` is rendered in the chat, so only an AppKitError's
     // own message travels; anything else could carry upstream provider detail.
     const errText = err instanceof AppKitError ? err.message : CHART_FAILED_MESSAGE;

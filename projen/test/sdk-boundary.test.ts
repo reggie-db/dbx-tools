@@ -17,13 +17,14 @@ const ALLOWED = new Set([
 const SDK_IMPORT = /^\s*import\b[^\n]*["']@databricks\/sdk-experimental["']/m;
 
 describe("Databricks SDK boundary", () => {
-  it("rejects direct imports outside compatibility modules", () => {
-    const imports = [
-      ...find.findFiles("packages/js/**/*.ts", {
-        cwd: ROOT,
-        ignoreOptions: { test: false },
-      }),
-    ].filter((file) => SDK_IMPORT.test(readFileSync(resolve(ROOT, file), "utf8")));
+  it("rejects direct imports outside compatibility modules", async () => {
+    const imports: string[] = [];
+    for await (const file of find.findFiles("packages/js/**/*.ts", {
+      cwd: ROOT,
+      ignoreOptions: { test: false },
+    })) {
+      if (SDK_IMPORT.test(readFileSync(resolve(ROOT, file), "utf8"))) imports.push(file);
+    }
 
     assert.deepEqual(imports.sort(), [...ALLOWED].sort());
   });

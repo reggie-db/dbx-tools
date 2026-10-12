@@ -38,6 +38,25 @@ describe("log", () => {
     assert.doesNotMatch(result.stderr, /INFO \[split\] out/);
   });
 
+  it("includes error stacks in structured logs", () => {
+    const moduleUrl = new URL("../src/log.ts", import.meta.url).href;
+    const result = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        `import { logger } from ${JSON.stringify(moduleUrl)}; logger("stack").error("failed", { error: new Error("boom") });`,
+      ],
+      {
+        encoding: "utf8",
+        env: { ...process.env, LOG_BUN_CONSOLE_DISABLED: "1" },
+      },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /Error: boom/);
+    assert.match(result.stderr, /\bat\b/);
+  });
+
   it("exposes the active threshold through binding-safe functions", () => {
     const originalLevel = process.env.LOG_LEVEL;
     process.env.LOG_LEVEL = "warn";

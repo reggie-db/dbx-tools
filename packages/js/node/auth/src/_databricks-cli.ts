@@ -1,4 +1,5 @@
 import * as exec from "@dbx-tools/core/exec";
+import * as errorUtils from "@dbx-tools/shared-core/error-utils";
 import * as stringUtils from "@dbx-tools/shared-core/string-utils";
 
 import { AuthError } from "./_errors.ts";
@@ -53,7 +54,7 @@ async function compatibleDatabricksCli(executable: string): Promise<boolean> {
   } catch (cause) {
     logger.debug("Databricks CLI version probe unavailable", {
       executable,
-      error: failureMetadata(cause),
+      ...failureMetadata(errorUtils.toError(cause)),
     });
     return false;
   }

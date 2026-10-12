@@ -55,7 +55,14 @@ interface UpgradeIdentityGate {
 
 const SSH_CONFIG_SCHEMA = z.toJSONSchema(SshPluginConfigSchema) as JSONSchema7;
 
-/** AppKit plugin for Databricks Sandbox lifecycle, SSH, and route operations. */
+/**
+ * AppKit plugin for Databricks Sandbox lifecycle, SSH, service, and route operations.
+ *
+ * The plugin registers owner-scoped REST routes, AppKit agent tools, HTTP proxy
+ * middleware, and WebSocket upgrade handling. It initializes
+ * {@link SshRuntime} with the AppKit Lakebase pool captured outside request
+ * scope and starts the expiration reaper during setup.
+ */
 export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   static manifest = {
     name: "databricks-sandbox",
@@ -76,6 +83,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     void this.handleUpgrade(request, socket, head);
   };
 
+  /** Creates a plugin with a supplied shared runtime or a runtime from resolved config. */
   constructor(config: SshPluginConfig = {}) {
     super(config);
     this.runtime = config.runtime ?? new SshRuntime(resolveSshPluginConfig(config));
@@ -269,6 +277,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     });
   }
 
+  /** Returns browser-safe route defaults published through AppKit client config. */
   clientConfig(): Record<string, unknown> {
     return {
       routePrefix: this.runtime.config.routePrefix,
@@ -276,42 +285,52 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     };
   }
 
+  /** Lists valid assigned machines through the plugin's active workspace identity. */
   async listMachines(userId: string) {
     return this.runtime.listMachines(this.workspaceClient(), userId);
   }
 
+  /** Creates and assigns a managed Sandbox to one AppKit user. */
   async createMachine(userId: string, input: CreateSshMachineRequest = {}) {
     return this.runtime.createMachine(this.workspaceClient(), userId, input);
   }
 
+  /** Starts one assigned Sandbox. */
   async startMachine(userId: string, machineId: string) {
     return this.runtime.startMachine(this.workspaceClient(), userId, machineId);
   }
 
+  /** Stops one assigned Sandbox. */
   async stopMachine(userId: string, machineId: string) {
     return this.runtime.stopMachine(this.workspaceClient(), userId, machineId);
   }
 
+  /** Deletes one assigned Sandbox. */
   async deleteMachine(userId: string, machineId: string) {
     return this.runtime.deleteMachine(this.workspaceClient(), userId, machineId);
   }
 
+  /** Runs one command on an assigned Sandbox. */
   async executeCommand(userId: string, input: SshCommandRequest) {
     return this.runtime.execute(this.workspaceClient(), userId, input);
   }
 
+  /** Starts or reuses one built-in terminal or metrics service. */
   async startMachineService(userId: string, input: SshMachineServiceAction) {
     return this.runtime.startService(this.workspaceClient(), userId, input);
   }
 
+  /** Publishes a Sandbox HTTP or WebSocket service through an owner-scoped route. */
   async addRoute(userId: string, input: AddSshRouteRequest) {
     return this.runtime.addRoute(this.workspaceClient(), userId, input);
   }
 
+  /** Returns selected AppKit toolkit entries backed by this plugin's agent tools. */
   toolkit(options?: ToolkitOptions): Record<string, ToolkitEntry> {
     return toolkitEntries.entries("databricks-sandbox", this.getAgentTools(), options);
   }
 
+  /** Executes one registered agent tool with the request resource and workspace identity. */
   override executeAgentTool(
     name: string,
     args: unknown,
@@ -326,6 +345,10 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     );
   }
 
+  /**
+   * Returns the typed sibling-plugin API for machine, command, service, route,
+   * and toolkit operations.
+   */
   exports() {
     return {
       listMachines: (userId: string) => this.listMachines(userId),
@@ -343,6 +366,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     };
   }
 
+  /** Detaches WebSocket handling and closes the shared runtime. */
   async shutdown(): Promise<void> {
     if (this.upgradeAttachTimer) clearTimeout(this.upgradeAttachTimer);
     this.upgradeAttachTimer = undefined;
@@ -552,5 +576,10 @@ function requestHeaders(request: IncomingMessage): Headers {
   return headers;
 }
 
-/** AppKit plugin factory for {@link AppKitSshPlugin}. */
+/**
+ * AppKit plugin factory for {@link AppKitSshPlugin}.
+ *
+ * Register AppKit `lakebase()` before this plugin so setup can initialize
+ * ownership storage and the expiration reaper.
+ */
 export const databricksSandbox = toPlugin(AppKitSshPlugin);

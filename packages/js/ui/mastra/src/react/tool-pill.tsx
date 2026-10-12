@@ -424,6 +424,7 @@ const RawToolPayload = ({
   );
 };
 
+/** Compact source-code preview extracted from a tool request payload. */
 export type ToolInputPresentation = {
   label: "Code" | "Command" | "Output";
   language: "typescript" | "javascript" | "python" | "sql" | "json" | "bash" | "text";
@@ -511,6 +512,7 @@ const ToolInputSource = ({ presentation }: { presentation: ToolInputPresentation
 
 type ToolStatusProgress = Extract<ToolProgress, { type: "tool_status" }>;
 
+/** One native web-search request and the result progress events associated with it. */
 export type WebSearchProgressGroup = {
   key: string;
   search?: ToolStatusProgress;

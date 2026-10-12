@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import { runTaskMain } from "./cli.ts";
 
 const logger = log.logger("projen:compile");
@@ -116,7 +116,9 @@ export async function main(): Promise<void> {
   let failed = false;
   for (const [index, result] of results.entries()) {
     if (result.status === "rejected") {
-      logger.error(`${jobs[index]!.name} compile failed:`, result.reason);
+      logger.error(`${jobs[index]!.name} compile failed`, {
+        error: errorUtils.toError(result.reason),
+      });
       failed = true;
     } else if (result.value.exitCode !== 0) {
       logger.error(`${jobs[index]!.name} compile exited with ${result.value.exitCode}`);

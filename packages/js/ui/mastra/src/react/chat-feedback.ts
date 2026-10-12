@@ -51,7 +51,7 @@ export function useChatFeedback({
       } catch (error) {
         logger.error("feedback error", {
           traceId,
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
       }
     },

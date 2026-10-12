@@ -98,7 +98,7 @@ import {
   type MastraIdentityMode,
 } from "./identity.ts";
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
-import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
+import { createMemoryBuilder, needsLakebase } from "./memory.ts";
 import {
   flushDirectMlflowTracing,
   logFeedback,
@@ -123,13 +123,6 @@ import { invalidFields } from "./validation.ts";
 
 const GENIE_MANIFEST = pluginRegistry.data(genie).plugin.manifest;
 const LAKEBASE_MANIFEST = pluginRegistry.data(lakebase).plugin.manifest;
-
-/**
- * Budget for draining the memory service-principal pool on shutdown. Well
- * inside AppKit's 15s graceful-shutdown window, so a stuck connection can
- * never be what holds the process open.
- */
-const POOL_DRAIN_TIMEOUT_MS = 5_000;
 
 /** Ceiling on the `?timeoutMs=` long-poll budget a client may request. */
 const MAX_EMBED_POLL_TIMEOUT_MS = 5 * 60_000;
@@ -243,15 +236,6 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * boot rather than the first request, and so every request agrees.
    */
   private identityMode: MastraIdentityMode = "user";
-  /**
-   * Dedicated service-principal Lakebase pool backing Mastra memory /
-   * storage. Built once in {@link buildAgentAndServer} (outside any
-   * `asUser` scope, so it never inherits a request's OBO identity) and
-   * drained in {@link shutdown}. `null` until setup runs or when
-   * Lakebase isn't needed.
-   */
-  private servicePrincipalPool: Pool | null = null;
-
   override async setup(): Promise<void> {
     // Resolve the identity mode up front so an invalid `genieIdentity` fails the
     // app boot with a clear message rather than 500-ing the first chat request.
@@ -298,44 +282,19 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     if (this.config.memory === undefined) this.config.memory = true;
   }
 
-  /**
-   * Drain the memory service-principal pool. Idempotent: the handle is
-   * cleared before the drain starts, so a second call is a no-op and a
-   * later `setup()` rebuilds the pool. Bounded by
-   * {@link POOL_DRAIN_TIMEOUT_MS} to stay well inside the 15s graceful
-   * shutdown budget.
-   */
+  /** Flush pending direct MLflow traces during graceful shutdown. */
   async shutdown(): Promise<void> {
     try {
       await flushDirectMlflowTracing();
     } catch (err) {
       this.logger.warn("error flushing direct MLflow traces", {
-        error: errorUtils.errorMessage(err),
+        error: errorUtils.toError(err),
       });
-    }
-    const pool = this.servicePrincipalPool;
-    if (!pool) return;
-    this.servicePrincipalPool = null;
-    this.logger.info("closing memory SP pool");
-    // The budget timer is cancelled on the way out so a drain that finished
-    // early cannot hold the event loop open for the rest of the window.
-    const budget = new AbortController();
-    try {
-      await Promise.race([pool.end(), asyncUtils.sleep(POOL_DRAIN_TIMEOUT_MS, budget.signal)]);
-    } catch (err) {
-      this.logger.error("error closing memory SP pool", {
-        error: errorUtils.errorMessage(err),
-      });
-    } finally {
-      budget.abort();
     }
   }
 
   /**
-   * Abort in-flight work. AppKit's graceful shutdown calls this hook
-   * synchronously and never awaits {@link shutdown}, so the pool drain is
-   * started here too; it cannot be awaited from a `void` hook, and
-   * {@link shutdown} is idempotent so the duplicate call is free.
+   * Abort in-flight work and start the asynchronous trace flush.
    */
   override abortActiveOperations(): void {
     super.abortActiveOperations();
@@ -719,7 +678,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         // the upstream status. Log and degrade.
         this.logger.warn("suggestions:error", {
           status: result.status,
-          error: result.message,
+          error: errorUtils.toError(result.message),
         });
         res.json({ questions: [] });
         return;
@@ -765,7 +724,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         if (!parsed.success) {
           // A Zod issue string quotes the received body back, so only the
           // offending field names travel; the full issue list is logged.
-          this.logger.warn("feedback:invalid", { error: parsed.error.message });
+          this.logger.warn("feedback:invalid", { error: parsed.error });
           res.status(400).json({
             ok: false,
             error: INVALID_FEEDBACK_MESSAGE,
@@ -856,7 +815,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   ): void {
     this.logger.warn(`${operation}:error`, {
       status: result.status,
-      error: result.message,
+      error: errorUtils.toError(result.message),
     });
     if (res.headersSent) return;
     res.status(result.status).json({ error: clientMessage });
@@ -1074,32 +1033,20 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     if (result.ok) return result.data;
     this.logger.warn("listModels:error", {
       status: result.status,
-      error: result.message,
+      error: errorUtils.toError(result.message),
     });
     throw new ExecutionError(MODEL_CATALOGUE_FAILED_MESSAGE);
   }
 
   private async buildAgentAndServer(): Promise<void> {
-    // Per-agent memory factory. When any storage / memory setting needs
-    // Postgres, stand up a dedicated service-principal pool first so
-    // memory acts as the app SP (owner of the `mastra_*` schemas),
-    // never the per-request OBO identity the chat turn runs under.
-    // `getPgConfig()` is read here, outside any `asUser` scope, so it
-    // returns the SP connection target + token refresh plus any
-    // `lakebase({ pool })` overrides; `require` turns a missing
-    // sibling into a clear wiring error. The builder caches the shared
-    // `PgVector` singleton so registering N agents stays cheap. See
-    // `./memory.js`.
-    if (needsLakebase(this.config)) {
-      const spPgConfig = pluginRegistry
-        .require(this.context, lakebase, this.config)
-        .exports()
-        .getPgConfig();
-      this.servicePrincipalPool = await createServicePrincipalPool(spPgConfig);
-    }
-    const memoryBuilder = this.servicePrincipalPool
-      ? createMemoryBuilder(this.config, this.servicePrincipalPool)
+    // Capture AppKit's service-principal pool after plugin setup completes and
+    // outside every `asUser` request scope. AppKit owns its lifecycle. Its
+    // public pool is pg-compatible even though AppKit's declaration omits
+    // pg.Pool's internal bookkeeping fields.
+    const memoryPool = needsLakebase(this.config)
+      ? (pluginRegistry.require(this.context, lakebase, this.config).exports().pool as Pool)
       : undefined;
+    const memoryBuilder = memoryPool ? createMemoryBuilder(this.config, memoryPool) : undefined;
 
     // Build every agent declared in `config.agents` (or the built-in
     // fallback when none are declared). Each agent's `model` resolves

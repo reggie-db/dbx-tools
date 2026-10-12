@@ -24,7 +24,7 @@ function pythonVersion(path: string): string | undefined {
   return typeof manifest.project?.version === "string" ? manifest.project.version : undefined;
 }
 
-export function main(): void {
+export async function main(): Promise<void> {
   const root = projectUtils.root() ?? process.cwd();
   const version = readWorkspaceVersion(root);
   const mismatches: string[] = [];
@@ -37,7 +37,7 @@ export function main(): void {
     check(`${pkg.path}/package.json`, manifestVersion(join(pkg.dir, "package.json")));
   }
 
-  for (const path of find.findFiles("**/pyproject.toml", { cwd: root })) {
+  for await (const path of find.findFiles("**/pyproject.toml", { cwd: root })) {
     check(path, pythonVersion(join(root, path)));
   }
   if (mismatches.length > 0) {

@@ -770,6 +770,7 @@ project.applyToProjects(root, { identifierName: "path", tags: "node" }, (p) => {
     "@dbx-tools/shared-core@workspace:^",
     "glob@^13.0.6",
     "chokidar@^4.0.3",
+    "ignore@^7.0.12",
     "minimatch@^10.2.5",
   );
 });

@@ -288,6 +288,7 @@ export function ReviewChat(props: ChatViewProps) {
 sidebar, transcript, tool progress, approval cards, suggestions, export controls,
 feedback controls, and composer from props. Use it when your app already has a
 transport or needs to combine Mastra messages with another state model.
+
 `MastraChat` shows a spinner in the model control while its live default model
 is being resolved. The picker groups endpoints into
 model-family submenus. Its compact first popup shows only the current

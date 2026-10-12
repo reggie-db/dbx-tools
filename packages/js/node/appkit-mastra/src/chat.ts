@@ -133,7 +133,7 @@ export function agentChatRoutes() {
 function serializeChatStreamError(error: unknown): string {
   if (isStaleMastraResumeError(error)) {
     logger.warn("ignored stale mastra resume", {
-      error: errorUtils.errorMessage(error),
+      error: errorUtils.toError(error),
     });
     return STALE_MASTRA_RESUME_STREAM_TEXT;
   }

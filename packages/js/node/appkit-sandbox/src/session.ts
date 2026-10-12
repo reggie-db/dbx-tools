@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { SshCommandResult } from "@dbx-tools/shared-databricks-sandbox";
 import ssh2, { type Client as Ssh2Client, type ClientChannel } from "ssh2";
 import { z } from "zod";
@@ -27,27 +27,53 @@ const DnsResponseSchema = z
 
 /** Connection, key, host-verification, and command settings for one SSH machine. */
 export interface SshSessionOptions {
+  /** Databricks Sandbox gateway hostname. */
   host: string;
+  /** SSH gateway port. */
   port: number;
+  /** SSH username accepted by the Sandbox gateway. */
   username: string;
+  /** In-memory private key used by `ssh2` forwarding. */
   privateKey: string;
+  /** Private key file used by native OpenSSH commands. */
   privateKeyPath: string;
+  /** Dedicated OpenSSH known-host file for this workspace, user, and gateway. */
   knownHostsPath: string;
+  /** Connection timeout in milliseconds. */
   connectTimeoutMs: number;
+  /** Previously trusted SHA-256 host-key fingerprint. */
   knownHost?: string;
+  /** Persists the first accepted host key after a successful connection. */
   rememberHost?: (fingerprint: string, key: Buffer) => Promise<void>;
+  /** Native OpenSSH executable. Defaults to `ssh`. */
   sshCommand?: string;
+  /** Resolves public fallback addresses for a service-direct gateway. */
   resolvePublicAddresses?: (host: string) => Promise<string[]>;
 }
 
-/** Verified SSH transport using OpenSSH commands and ssh2 direct forwarding. */
+/**
+ * Verified SSH transport using OpenSSH commands and `ssh2` direct forwarding.
+ *
+ * The first successful connection can persist a gateway fingerprint through
+ * {@link SshSessionOptions.rememberHost}. Later connections reject a changed
+ * fingerprint. Native commands use the dedicated
+ * {@link SshSessionOptions.knownHostsPath} instead of disabling verification.
+ */
 export class SshSession {
   private client?: Ssh2Client;
   private connecting?: Promise<Ssh2Client>;
   private connectedHost?: string;
 
+  /** Creates a disconnected session. Call {@link connect} or another operation to connect. */
   constructor(private readonly options: SshSessionOptions) {}
 
+  /**
+   * Opens or reuses a verified SSH connection.
+   *
+   * A failed private service-direct hostname can retry its resolved public IPv4
+   * addresses while preserving host-key verification against the original
+   * gateway identity.
+   */
   async connect(): Promise<Ssh2Client> {
     if (this.client) return this.client;
     if (this.connecting) return this.connecting;
@@ -70,7 +96,7 @@ export class SshSession {
       } catch (resolveError) {
         logger.warn("public Sandbox gateway resolution failed", {
           host: this.options.host,
-          error: resolveError,
+          error: errorUtils.toError(resolveError),
         });
         throw error;
       }
@@ -137,6 +163,10 @@ export class SshSession {
     });
   }
 
+  /**
+   * Runs one command through native OpenSSH and captures stdout, stderr, exit
+   * status, duration, and timeout state.
+   */
   async execute(
     command: string,
     args: string[],
@@ -202,6 +232,7 @@ export class SshSession {
     });
   }
 
+  /** Opens an SSH direct-tcpip channel to a host and port inside the Sandbox. */
   async forwardOut(remoteHost: string, remotePort: number): Promise<ClientChannel> {
     const client = await this.connect();
     return new Promise((resolve, reject) => {
@@ -211,6 +242,7 @@ export class SshSession {
     });
   }
 
+  /** Closes the active `ssh2` connection and clears pending connection state. */
   close(): void {
     this.client?.end();
     this.client = undefined;
@@ -219,7 +251,12 @@ export class SshSession {
   }
 }
 
-/** Resolve the public IPv4 addresses behind a Databricks service-direct gateway. */
+/**
+ * Resolves public IPv4 addresses for a Databricks service-direct gateway.
+ *
+ * Returns an empty list for other hostnames. DNS-over-HTTPS requests time out
+ * after five seconds and reject invalid responses.
+ */
 export async function resolvePublicGatewayAddresses(
   host: string,
   fetcher: typeof fetch = fetch,

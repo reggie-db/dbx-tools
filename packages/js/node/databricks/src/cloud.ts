@@ -132,7 +132,7 @@ export async function loadProviderRanges(): Promise<ProviderRanges[]> {
     if (result.status === "fulfilled") {
       out.push(result.value);
     } else {
-      logger.warn("provider range load failed", { error: errorUtils.errorMessage(result.reason) });
+      logger.warn("provider range load failed", { error: errorUtils.toError(result.reason) });
     }
   }
   return out;

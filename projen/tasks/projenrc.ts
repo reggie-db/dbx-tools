@@ -26,8 +26,8 @@ function resynthWatchPaths(): string[] {
 // makes the watch intelligent vs stock `projen --watch`, which re-synths on any tree
 // change. `{ dot: false }` keeps the default dotfile ignore group from pruning dotfile
 // targets. (A one-shot "projenrc" is just a synth, i.e. `bun run default`.)
-export function main(): void {
-  watchLoop(
+export async function main(): Promise<void> {
+  await watchLoop(
     "projenrc",
     resynthWatchPaths(),
     () => {

@@ -128,7 +128,7 @@ export async function provisionCacheSchema(
   } catch (err) {
     logger.warn("autopg: cache provisioning failed (continuing)", {
       schema: CACHE_SCHEMA,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
   } finally {
     await pool.end().catch(() => {});

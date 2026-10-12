@@ -366,7 +366,7 @@ export async function initializeAppMlflowTraceInfo(client?: WorkspaceClient): Pr
     return true;
   } catch (err) {
     logger.warn("Databricks Apps MLflow trace-info promotion disabled", {
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     return false;
   }
@@ -424,7 +424,7 @@ export function persistAppMlflowTraceInfo(params: AppMlflowTraceInfo): void {
     .catch((err) => {
       logger.warn("Databricks Apps MLflow trace-info promotion failed", {
         traceId: params.traceId,
-        error: errorUtils.errorMessage(err),
+        error: errorUtils.toError(err),
       });
     })
     .finally(() => pendingAppMlflowTraceInfo.delete(pending));
@@ -466,7 +466,7 @@ async function detectedDirectMlflowTraceLocation(
   } catch (err) {
     logger.warn("direct MLflow UC trace-location detection failed", {
       experimentId,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     return undefined;
   }
@@ -530,7 +530,7 @@ export async function initializeDirectMlflowTracing(): Promise<boolean> {
     return true;
   } catch (err) {
     logger.warn("direct MLflow tracing disabled", {
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     return false;
   }
@@ -751,7 +751,7 @@ export async function logFeedback(
       logger.warn("feedback request failed", {
         traceId: params.traceId,
         assessmentTraceId,
-        error: errorUtils.errorMessage(err),
+        error: errorUtils.toError(err),
       });
       return undefined;
     }

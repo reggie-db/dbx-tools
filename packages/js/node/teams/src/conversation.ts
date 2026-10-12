@@ -566,7 +566,7 @@ const formatAsCard = async (
       }
       logger.warn("card formatting pass failed", {
         attempt: attempt + 1,
-        error: errorUtils.errorMessage(err),
+        error: errorUtils.toError(err),
       });
     }
   }

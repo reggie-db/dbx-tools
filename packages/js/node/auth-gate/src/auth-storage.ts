@@ -11,7 +11,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileLock } from "@dbx-tools/core";
 import { advisoryLock, type PgPoolLike } from "@dbx-tools/postgres";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { BetterAuthOptions } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import envPaths from "env-paths";
@@ -130,7 +130,9 @@ export async function createAuthStorage(
     };
   } catch (error) {
     if (resolved.mode === "sqlite") throw error;
-    logger.warn("sqlite unavailable for auth storage; using in-memory adapter", { error });
+    logger.warn("sqlite unavailable for auth storage; using in-memory adapter", {
+      error: errorUtils.toError(error),
+    });
     const { memoryAdapter } = await import("better-auth/adapters/memory");
     return {
       kind: "memory",

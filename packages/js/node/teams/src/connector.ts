@@ -22,7 +22,7 @@
  * @module
  */
 
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { teamsActivity } from "@dbx-tools/shared-teams";
 
 const logger = log.logger("teams:connector");
@@ -97,7 +97,7 @@ export const sendTyping = async (target: ConnectorTarget): Promise<void> => {
   } catch (err) {
     logger.debug("typing indicator failed", {
       conversation: target.conversationId,
-      error: (err as Error).message,
+      error: errorUtils.toError(err),
     });
   }
 };

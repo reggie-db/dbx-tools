@@ -1,3 +1,4 @@
+import * as errorUtils from "@dbx-tools/shared-core/error-utils";
 import * as oauth from "oauth4webapi";
 
 import { AuthError } from "./_errors.ts";
@@ -86,7 +87,7 @@ export class DatabricksServicePrincipalProvider implements TokenProvider {
       return token;
     } catch (cause) {
       logger.debug("service-principal token request failed", {
-        error: failureMetadata(cause),
+        ...failureMetadata(errorUtils.toError(cause)),
       });
       throw new AuthError("oauth", "Databricks service-principal authentication failed", {
         cause,

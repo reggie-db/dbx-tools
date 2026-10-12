@@ -237,7 +237,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
         rowCount: info.rowCount ?? 0,
       });
     } catch (cause) {
-      logger.warn("ensure-failed", { index, message: errorUtils.errorMessage(cause) });
+      logger.warn("ensure-failed", { index, error: errorUtils.toError(cause) });
     }
   }
 
@@ -358,7 +358,10 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
       res.json(await run());
     } catch (cause) {
       const message = errorUtils.errorMessage(cause);
-      logger.warn("route-failed", { operation, message });
+      logger.warn("route-failed", {
+        operation,
+        error: errorUtils.toError(cause),
+      });
       res.status(500).json({ error: message });
     }
   }

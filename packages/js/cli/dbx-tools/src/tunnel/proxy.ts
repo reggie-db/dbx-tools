@@ -19,7 +19,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import {
   gate as tunnelGate,
   headers as tunnelHeaders,
@@ -144,7 +144,7 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
       }
       proxy.web(request, response);
     })().catch((error: unknown) => {
-      logger.error("proxy request failed", { error });
+      logger.error("proxy request failed", { error: errorUtils.toError(error) });
       if (!response.headersSent) sendJson(response, 502, { error: "bad gateway" });
       else response.end();
     });

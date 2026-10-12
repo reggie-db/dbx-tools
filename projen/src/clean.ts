@@ -37,9 +37,9 @@ const CLEAN_SKIP_FILES: ReadonlySet<string> = new Set([".gitignore"]);
  * ignores AND every dot-prefixed folder (`.projen`, `.vscode`, `.github`, ...), and
  * {@link CLEAN_SKIP_FILES} entry (`.gitignore`).
  */
-function nativeGeneratedFiles(root: string): string[] {
+async function nativeGeneratedFiles(root: string): Promise<string[]> {
   const files = new Set<string>();
-  for (const manifestPath of find.findFiles("**/.projen/files.json", {
+  for await (const manifestPath of find.findFiles("**/.projen/files.json", {
     cwd: root,
     ignoreOptions: { dot: false },
   })) {
@@ -54,12 +54,14 @@ function nativeGeneratedFiles(root: string): string[] {
   return [...files];
 }
 
-export function listGeneratedFiles(root: string = resolveRepoRoot()): string[] {
+export async function listGeneratedFiles(root: string = resolveRepoRoot()): Promise<string[]> {
   const rel = (f: string): string => toPosix(relative(root, f));
-  const custom = [...find.findFiles("**/*", { cwd: root })]
-    .map((f) => join(root, f))
-    .filter(isGenerated);
-  return [...new Set([...nativeGeneratedFiles(root), ...custom])]
+  const custom: string[] = [];
+  for await (const file of find.findFiles("**/*", { cwd: root })) {
+    const absolute = join(root, file);
+    if (isGenerated(absolute)) custom.push(absolute);
+  }
+  return [...new Set([...(await nativeGeneratedFiles(root)), ...custom])]
     .filter(existsSync)
     .filter(
       (file) =>
@@ -79,12 +81,17 @@ export function listGeneratedFiles(root: string = resolveRepoRoot()): string[] {
  * own - removing the top-level dir takes it along. Other vendor/build/VCS dirs are
  * skipped for speed.
  */
-export function listNodeModulesDirs(root: string = resolveRepoRoot()): string[] {
+export async function listNodeModulesDirs(root: string = resolveRepoRoot()): Promise<string[]> {
   if (!existsSync(root)) return [];
   const rel = (f: string): string => toPosix(relative(root, f));
-  return [...find.findFiles("**/node_modules", { cwd: root, ignoreOptions: { dot: false } })]
-    .map((match) => join(root, match))
-    .sort((a, b) => rel(a).localeCompare(rel(b)));
+  const directories: string[] = [];
+  for await (const match of find.findFiles("**/node_modules", {
+    cwd: root,
+    ignoreOptions: { dot: false },
+  })) {
+    directories.push(join(root, match));
+  }
+  return directories.sort((a, b) => rel(a).localeCompare(rel(b)));
 }
 
 /**

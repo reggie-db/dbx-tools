@@ -21,16 +21,30 @@ body{position:fixed;inset:0;margin:0}
 
 /** Loopback service endpoint and routing behavior discovered after remote startup. */
 export interface SshServiceTarget {
+  /** Remote loopback host. */
   remoteHost: string;
+  /** Remote service port. */
   remotePort: number;
+  /** Whether AppKit removes the public route prefix before forwarding. */
   stripPrefix: boolean;
+  /** Browser paths that the proxy must treat as navigation targets. */
   browserPaths?: string[];
+  /** Whether the route injects the browser relay used by the terminal. */
   browserRelay?: boolean;
+  /** Whether requests without a trailing slash redirect before forwarding. */
   redirectToSlash?: boolean;
+  /** Optional markup injected into proxied HTML heads. */
   htmlHead?: string;
 }
 
-/** Starts an idempotent built-in browser service on an SSH machine. */
+/**
+ * Starts an idempotent built-in browser service on an SSH machine.
+ *
+ * Repeated calls reuse the service's stable runtime files and return the
+ * loopback target that {@link SshRouteRegistry} publishes through AppKit.
+ *
+ * @throws When the remote startup command exits unsuccessfully.
+ */
 export async function ensureSshService(
   session: SshSession,
   kind: SshMachineServiceKind,

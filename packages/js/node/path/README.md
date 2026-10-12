@@ -12,14 +12,17 @@ and documentation tooling.
 ```ts
 import { find, ignore } from "@dbx-tools/path";
 
-const files = find
-  .findFiles(["packages/**/src/**/*.ts"], {
-    ignore: ignore.ignorePatterns(),
-  })
-  .toArray();
+for await (const file of find.findFiles(["packages/**/src/**/*.ts"], {
+  ignore: ignore.ignorePatterns(),
+})) {
+  await processFile(file);
+}
+
+const files = find.findFilesSync(["packages/**/src/**/*.ts"]).toArray();
 ```
 
-`find.findFiles()` returns a lazy `Sequence<string>` from
+`find.findFiles()` streams matches asynchronously. `find.findFilesSync()`
+returns a lazy `Sequence<string>` from
 [`@dbx-tools/shared-core`](../../shared/core), so callers can map/filter without
 materializing immediately.
 
@@ -81,7 +84,7 @@ like synthesis does.
 ```ts
 import { watch } from "@dbx-tools/path";
 
-const watcher = watch.watchFiles(["packages/**/src/**/*.ts"], {
+const watcher = await watch.watchFiles(["packages/**/src/**/*.ts"], {
   ignoreInitial: true,
 });
 

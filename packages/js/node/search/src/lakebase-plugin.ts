@@ -89,25 +89,30 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
   } satisfies PluginManifest<"aiSearch">;
 
   declare protected config: LakebaseAiSearchConfig;
-  private backend: LakebaseSearchBackend | undefined;
+  private servicePrincipalBackend: LakebaseSearchBackend | undefined;
+  private userBackend: LakebaseSearchBackend | undefined;
 
   override async setup(): Promise<void> {
     const indexes = this.indexes();
     for (const index of indexes) this.validateAuth(index);
-    const lake = pluginRegistry.require(this.context, lakebase, this);
-    this.backend = new LakebaseSearchBackend(
-      { managedPool: () => lake.exports().pool },
-      stringUtils.trimToNull(this.config.schema) ?? "public",
-    );
-    for (const index of indexes) {
-      await this.backend.provision(index.indexName, {
-        textColumn: index.config.textColumn ?? "text",
-        ...(index.config.documents ? { seed: index.config.documents } : {}),
+    this.context?.onLifecycle("setup:complete", async () => {
+      const lake = pluginRegistry.require(this.context, lakebase, this);
+      const schema = stringUtils.trimToNull(this.config.schema) ?? "public";
+      this.servicePrincipalBackend = new LakebaseSearchBackend(lake.exports().pool, schema);
+      this.userBackend = new LakebaseSearchBackend(
+        { managedPool: () => lake.exports().pool },
+        schema,
+      );
+      for (const index of indexes) {
+        await this.servicePrincipalBackend.provision(index.indexName, {
+          textColumn: index.config.textColumn ?? "text",
+          ...(index.config.documents ? { seed: index.config.documents } : {}),
+        });
+      }
+      logger.info("ready", {
+        indexes: this.indexes().map((index) => index.alias),
+        schema,
       });
-    }
-    logger.info("ready", {
-      indexes: this.indexes().map((index) => index.alias),
-      schema: stringUtils.trimToNull(this.config.schema) ?? "public",
     });
   }
 
@@ -181,7 +186,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
     }
     const index = this.resolveIndex(alias);
     const startedAt = performance.now();
-    const result = await this.requireBackend().search(index.indexName, request.queryText, {
+    const result = await this.requireBackend(index).search(index.indexName, request.queryText, {
       limit: request.numResults ?? index.config.numResults ?? 20,
       ...(request.filters ? { filter: request.filters } : {}),
     });
@@ -204,7 +209,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
       throw new ValidationError("Lakebase AI Search writes are disabled");
     }
     const index = this.resolveIndex(alias);
-    return this.requireBackend().addDocuments(
+    return this.requireBackend(index).addDocuments(
       index.indexName,
       documents.filter(object.isRecord),
       index.config.textColumn ?? "text",
@@ -230,8 +235,9 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
   }
 
   async shutdown(): Promise<void> {
-    await this.backend?.close();
-    this.backend = undefined;
+    await Promise.all([this.servicePrincipalBackend?.close(), this.userBackend?.close()]);
+    this.servicePrincipalBackend = undefined;
+    this.userBackend = undefined;
   }
 
   private indexes(): ResolvedLakebaseIndex[] {
@@ -259,9 +265,13 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
     return index.config.auth === "on-behalf-of-user" ? this.asUser(req) : this;
   }
 
-  private requireBackend(): LakebaseSearchBackend {
-    if (!this.backend) throw new ValidationError("Lakebase AI Search is not initialized");
-    return this.backend;
+  private requireBackend(index: ResolvedLakebaseIndex): LakebaseSearchBackend {
+    const backend =
+      index.config.auth === "on-behalf-of-user"
+        ? this.userBackend
+        : this.servicePrincipalBackend;
+    if (!backend) throw new ValidationError("Lakebase AI Search is not initialized");
+    return backend;
   }
 
   private project(

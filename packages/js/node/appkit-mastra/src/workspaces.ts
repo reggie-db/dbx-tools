@@ -840,7 +840,7 @@ async function loadInMemorySkillFilesystem(mount: LocalSkillMount): Promise<File
     root: "/",
   });
   await memory.init();
-  for (const relative of find.findFiles("**/*", { cwd: mount.root, nodir: true })) {
+  for await (const relative of find.findFiles("**/*", { cwd: mount.root, nodir: true })) {
     await memory.writeFile(relative, await source.readFile(relative), { overwrite: true });
   }
   await source.close();
@@ -896,7 +896,7 @@ async function databricksFilesystem(
     logger.debug("databricks-mount:skipped", {
       root,
       readOnly,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
   }
   return undefined;
@@ -945,7 +945,7 @@ function verifyFirstFileSystemAccess<TFileSystem extends FileSystem>(
       readCheck = undefined;
       logger.debug("databricks-mount:read-check-failed", {
         root,
-        error: errorUtils.errorMessage(error),
+        error: errorUtils.toError(error),
       });
       throw error;
     }
@@ -976,7 +976,7 @@ function verifyFirstFileSystemAccess<TFileSystem extends FileSystem>(
             if (!writeVerified) {
               logger.debug("databricks-mount:write-check-failed", {
                 root,
-                error: errorUtils.errorMessage(error),
+                error: errorUtils.toError(error),
               });
             }
             throw error;
@@ -1079,7 +1079,7 @@ async function resolveDistinctSkillPaths(
     } catch (error) {
       logger.debug("skill-path:skipped", {
         path,
-        error: errorUtils.errorMessage(error),
+        error: errorUtils.toError(error),
       });
     }
   }

@@ -32,7 +32,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   await withWorkspaceMutationLock(repoRoot, build);
   logger.success("built shared Python Node runtime");
 
-  watchLoop("python-node-runtime", [buildScript, shimDirectory], () => {
+  await watchLoop("python-node-runtime", [buildScript, shimDirectory], () => {
     build();
     logger.success("rebuilt shared Python Node runtime");
   });

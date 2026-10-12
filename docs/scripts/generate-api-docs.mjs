@@ -5,6 +5,7 @@ import { availableParallelism } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { asyncUtils, object } from "@dbx-tools/shared-core";
+import { addApiGuideLink, apiSymbolLinks, linkPackageGuideApi } from "./api-guide-links.mjs";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import {
   discoverJavaScriptPackages,
@@ -277,7 +278,7 @@ function buildApiIndex(packages) {
     .join("\n");
   return [
     "---",
-    'title: "API Reference"',
+    'title: "API reference"',
     'description: "Generated TypeScript and Python API reference for dbx-tools packages."',
     'source: "packages"',
     "editUrl: false",
@@ -295,6 +296,21 @@ function buildApiIndex(packages) {
     rows,
     "",
   ].join("\n");
+}
+
+function enrichPackageGuide(pkg) {
+  const apiDirectory = path.join(apiRoot, pkg.slug);
+  const apiIndex = path.join(apiDirectory, "index.md");
+  const packageGuide = path.join(docsRoot, "packages", `${pkg.slug}.md`);
+  const guideRoute = withBase(`/packages/${pkg.slug}/`);
+
+  if (fs.existsSync(apiIndex)) {
+    write(apiIndex, addApiGuideLink(read(apiIndex), pkg.name, guideRoute));
+  }
+  if (fs.existsSync(packageGuide)) {
+    const symbols = apiSymbolLinks(apiDirectory, pkg.slug, base);
+    write(packageGuide, linkPackageGuideApi(read(packageGuide), symbols));
+  }
 }
 
 /**
@@ -545,6 +561,8 @@ async function main() {
     ),
   ]);
   const generated = [...typescriptGenerated.filter(Boolean), ...pythonGenerated.filter(Boolean)];
+
+  for (const pkg of generated) enrichPackageGuide(pkg);
 
   write(
     path.join(apiRoot, "index.md"),

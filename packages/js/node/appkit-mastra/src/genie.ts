@@ -248,7 +248,7 @@ async function readCachedConversationId(cacheKey: string | undefined): Promise<s
     return v ?? undefined;
   } catch (err) {
     logger.warn("conversation-cache:read-error", {
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     return undefined;
   }
@@ -272,7 +272,7 @@ async function saveCachedConversationId(
     });
   } catch (err) {
     logger.warn("conversation-cache:write-error", {
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
   }
 }
@@ -284,7 +284,7 @@ async function evictCachedConversationId(cacheKey: string | undefined): Promise<
     await CacheManager.getInstanceSync().delete(cacheKey);
   } catch (err) {
     logger.warn("conversation-cache:delete-error", {
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
   }
 }
@@ -515,7 +515,7 @@ function buildAskGenieTool(opts: {
             logger.warn("conversation-cache:stale, resetting", {
               spaceId,
               conversationId: rejectedConversationId,
-              error: errorUtils.errorMessage(err),
+              error: errorUtils.toError(err),
             });
             if (ownsReusableConversation) {
               await evictCachedConversationId(cacheKey);
@@ -1140,7 +1140,7 @@ export async function collectSpaceSuggestions(opts: {
       } catch (err) {
         logger.warn("suggestions:fetch-error", {
           spaceId,
-          error: errorUtils.errorMessage(err),
+          error: errorUtils.toError(err),
         });
         questions = [];
       }

@@ -9,6 +9,7 @@ import {
   discoverRepositoryPackages,
   escapeRegExp,
   packageReadmeIssues,
+  proseParagraphs,
   stripLeadingH1,
   summaryText,
   walk,
@@ -131,6 +132,58 @@ describe("repository docs catalogue", () => {
         "use a task or decision heading instead of a defensive 'Why' heading",
       ],
     );
+  });
+
+  it("reports wall-of-text prose but ignores fenced code and list continuations", () => {
+    const longParagraph = Array.from({ length: 121 }, () => "word").join(" ");
+    const longCode = Array.from({ length: 220 }, () => "code").join(" ");
+    const markdown = [
+      "# Widget",
+      "",
+      "Build useful widgets without repeated application setup or transport code.",
+      "",
+      "## Quick start",
+      "",
+      "```ts",
+      longCode,
+      "```",
+      "",
+      "## Configure behavior",
+      "",
+      "- Choose a mode and retain the wrapped details.",
+      `  ${longCode}`,
+      "",
+      longParagraph,
+    ].join("\n");
+
+    assert.deepEqual(proseParagraphs(markdown).at(-1), longParagraph);
+    assert.deepEqual(packageReadmeIssues(markdown), [
+      "split prose paragraphs longer than 120 words (found 121)",
+    ]);
+  });
+
+  it("rejects standalone API-map tables", () => {
+    const markdown = [
+      "# Widget",
+      "",
+      "Build useful widgets without repeated application setup or transport code.",
+      "",
+      "## Quick start",
+      "",
+      "```ts",
+      "createWidget();",
+      "```",
+      "",
+      "## API map",
+      "",
+      "| Use case | API |",
+      "| --- | --- |",
+      "| Create a widget | `createWidget()` |",
+    ].join("\n");
+
+    assert.deepEqual(packageReadmeIssues(markdown), [
+      "link APIs where they are discussed instead of adding an API-map table",
+    ]);
   });
 
   it("lets callers skip generated output trees", () => {

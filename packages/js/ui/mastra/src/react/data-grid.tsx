@@ -50,6 +50,7 @@ export type DataRow = Record<string, unknown>;
  */
 const DELTA_PATTERN = /^([+\u2212-])\s*\d[\d,.\s]*(?:%|\s*pts?)?$/i;
 
+/** Apply success or destructive text color to a signed numeric delta string. */
 export function colorizeDelta(content: React.ReactNode): React.ReactNode {
   if (typeof content !== "string") return content;
   const text = content.trim();

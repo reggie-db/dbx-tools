@@ -1,6 +1,6 @@
 import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
 import type { ChildProcessResult } from "@dbx-tools/core/exec";
-import { asyncUtils, type Logger } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, type Logger } from "@dbx-tools/shared-core";
 
 const STABLE_CONNECTION_MS = 60_000;
 /** How long to wait after a child start before the first public liveness probe. */
@@ -51,9 +51,11 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
   const terminateChild = () => {
     const stoppingProcess = managedProcess;
     if (!stoppingProcess) return;
-    void stoppingProcess
-      .shutdown()
-      .catch((error) => options.logger.error(`${options.name} did not stop`, { error }));
+    void stoppingProcess.shutdown().catch((error) =>
+      options.logger.error(`${options.name} did not stop`, {
+        error: errorUtils.toError(error),
+      }),
+    );
   };
 
   const stop = () => {
@@ -78,7 +80,7 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
         if (!child) throw new Error(`${options.name} did not start a child process`);
         outcome = await processOutcome(managedProcess, child, controller.signal, options);
       } catch (error) {
-        outcome = { error };
+        outcome = { error: errorUtils.toError(error) };
       } finally {
         managedProcess = undefined;
       }
@@ -94,7 +96,11 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
     }
   };
 
-  void run().catch((error) => options.logger.error(`${options.name} supervisor failed`, { error }));
+  void run().catch((error) =>
+    options.logger.error(`${options.name} supervisor failed`, {
+      error: errorUtils.toError(error),
+    }),
+  );
   return {
     stop,
   };
@@ -145,7 +151,9 @@ function processOutcome(
       } catch (error) {
         // Probe errors (DNS blips, timeouts) are not proof the tunnel is dead;
         // only an explicit unhealthy result triggers a restart.
-        options.logger.debug(`${options.name} health probe errored; ignoring`, { error });
+        options.logger.debug(`${options.name} health probe errored; ignoring`, {
+          error: errorUtils.toError(error),
+        });
         healthy = true;
       }
       if (settled || signal.aborted) return;
@@ -171,7 +179,9 @@ function processOutcome(
       void managedProcess.shutdown().then(
         () => finish(outcome),
         (error) => {
-          options.logger.error(`${options.name} did not stop`, { error });
+          options.logger.error(`${options.name} did not stop`, {
+            error: errorUtils.toError(error),
+          });
           finish(outcome);
         },
       );

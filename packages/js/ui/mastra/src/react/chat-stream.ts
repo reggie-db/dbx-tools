@@ -127,7 +127,7 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
         if (error instanceof StreamAborted || signal.aborted) return;
         if (isStaleMastraResumeError(error)) {
           logger.warn("ignored stale mastra resume", {
-            error: errorUtils.errorMessage(error),
+            error: errorUtils.toError(error),
           });
           return;
         }

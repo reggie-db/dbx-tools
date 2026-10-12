@@ -157,7 +157,7 @@ export async function* genieChat(
         if (yielded || !isAgentModeUnavailable(err)) throw err;
         logger.warn("agent-mode:unavailable, falling back to polling", {
           space_id,
-          error: errorUtils.errorMessage(err),
+          error: errorUtils.toError(err),
         });
       }
     }

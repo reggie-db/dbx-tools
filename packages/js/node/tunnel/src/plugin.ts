@@ -24,7 +24,10 @@ import {
   type ResourceRequirement,
   ResourceType,
 } from "@databricks/appkit";
-import { pluginRegistry, brandContext } from "@dbx-tools/appkit";
+import {
+  brandContext,
+  pluginRegistry,
+} from "@dbx-tools/appkit";
 import {
   auth as passwordlessAuth,
   authStorage,
@@ -322,42 +325,39 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     if (this.resolved.insecure) {
       logger.warn("insecure mode - the tunnel runs OPEN with no auth gate");
     } else {
-      const lakebasePlugin = pluginRegistry.instance(this.context, lakebase);
       const { key } = await signingKey(this.resolved.sessionCutoffMs);
       const origins = this.resolved.publicDomains.length
         ? this.resolved.publicDomains.map(authOrigin)
         : [authOrigin(this.resolved.publicDomain)];
-      for (const origin of new Set(origins)) {
-        const storage = await authStorage.createAuthStorage(
-          this.resolved,
-          lakebasePlugin?.exports().pool,
-        );
-        this.runtimes.set(
-          new URL(origin).host.toLowerCase(),
-          await passwordlessAuth.createPasswordlessAuth({
-            storage,
-            baseURL: origin,
-            trustedOrigins: [origin],
-            basePath: AUTH_BASE_PATH,
-            appName: this.resolved.brandName,
-            secret: Buffer.from(key).toString("base64url"),
-            sessionTtlSeconds: this.resolved.sessionTtlSeconds,
-            sessionCutoffMs: this.resolved.sessionCutoffMs,
-            logoutRedirectPath: this.resolved.logoutRedirectPath,
-            codeTtlSeconds: this.resolved.codeTtlSeconds,
-            maxAttempts: this.resolved.maxAttempts,
-            authorizeIdentity: (email) => this.authorizeIdentity(email),
-            sendCode: (email, code, options) => this.sendCode(email, code, options),
-            subject: this.resolved.subject,
-            message: this.resolved.message,
-          }),
-        );
-      }
       // `server()` is deferred, so it does not exist during this plugin's setup.
-      // At `setup:complete` the Express app exists but has not injected plugin
-      // routes or static handling yet, which is the one point the gate can mount
-      // ahead of every protected route.
+      // At `setup:complete`, capture Lakebase's ambient service-principal pool
+      // before mounting the gate. Request-scoped `asUser` context cannot change
+      // the storage identity after this point.
       this.context?.onLifecycle("setup:complete", async () => {
+        const pool = pluginRegistry.instance(this.context, lakebase)?.exports().pool;
+        for (const origin of new Set(origins)) {
+          const storage = await authStorage.createAuthStorage(this.resolved, pool);
+          this.runtimes.set(
+            new URL(origin).host.toLowerCase(),
+            await passwordlessAuth.createPasswordlessAuth({
+              storage,
+              baseURL: origin,
+              trustedOrigins: [origin],
+              basePath: AUTH_BASE_PATH,
+              appName: this.resolved.brandName,
+              secret: Buffer.from(key).toString("base64url"),
+              sessionTtlSeconds: this.resolved.sessionTtlSeconds,
+              sessionCutoffMs: this.resolved.sessionCutoffMs,
+              logoutRedirectPath: this.resolved.logoutRedirectPath,
+              codeTtlSeconds: this.resolved.codeTtlSeconds,
+              maxAttempts: this.resolved.maxAttempts,
+              authorizeIdentity: (email) => this.authorizeIdentity(email),
+              sendCode: (email, code, options) => this.sendCode(email, code, options),
+              subject: this.resolved.subject,
+              message: this.resolved.message,
+            }),
+          );
+        }
         this.mountGateRoutes();
         // Fail fast once the sibling email plugin has primed its transport: a
         // gate that cannot email a code lets nobody in.

@@ -5,12 +5,15 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/path";
 export const PACKAGE_VERSION = "0.9.119";
 export * as find from "./src/find.ts";
+export * as gitIgnore from "./src/git-ignore.ts";
 export * as ignore from "./src/ignore.ts";
 export * as match from "./src/match.ts";
 export * as pattern from "./src/pattern.ts";
 export * as scan from "./src/scan.ts";
 export * as watch from "./src/watch.ts";
 export type { FileFindOptions } from "./src/find.ts";
+export { GitIgnore } from "./src/git-ignore.ts";
+export type { GitIgnoreLoadOptions } from "./src/git-ignore.ts";
 export type { IgnorePatternOptions } from "./src/ignore.ts";
 export type { PathMatchPredicate, PathMatcher, PathMatchInput } from "./src/match.ts";
 export { FOLLOW_SYMLINKS_DEFAULT } from "./src/scan.ts";

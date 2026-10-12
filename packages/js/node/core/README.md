@@ -60,9 +60,10 @@ const executable = await bin.ensure("tool", releaseUrl, {
 for a different layout. An existing executable returns immediately, so
 a URL resolver is only called when installation is necessary. Concurrent
 callers use a file lock with a check-lock-check-load sequence, preventing
-duplicate downloads across processes and worker threads. After the lock, a
-function URL receives `{ tempDir }` so a local installer can write under that
-directory. Direct HTTP downloads are selected by default. A `file://` URL is
+duplicate downloads across processes and worker threads.
+
+After the lock, a function URL receives `{ tempDir }` so a local installer can
+write under that directory. Direct HTTP downloads are selected by default. A `file://` URL is
 copied without fetching or unpacking. Zip, tar, tar.gz, and tgz archives can
 be unpacked automatically; a single-file archive needs no selector, while a
 selector can choose a binary from a larger archive. The selected file is
@@ -141,13 +142,14 @@ profile. Parsed dotenv records are cached by file path; parsed bundle output is
 cached by bundle path plus profile. App YAML lookup runs only if the bundle did
 not resolve the key and reads `env[].value` entries. Bundle `value_from` and App
 YAML `valueFrom` references resolve supported fields from their named
-`sql_warehouse`, `genie_space`, or `postgres` resource. Config-file discovery and parsed results
-are single-attempt per source key: found paths, missing files, empty records,
-invalid records, and `undefined` results all cache. Root bundle `variables` are NOT a
-config source: they are authoring inputs interpolated into the bundle's own
-targets, resources, and paths, so reading one as a process setting resolves names
-the deployed App never sees. Reference a variable from `config.env` to make it
-one.
+`sql_warehouse`, `genie_space`, or `postgres` resource.
+
+Config-file discovery and parsed results are single-attempt per source key:
+found paths, missing files, empty records, invalid records, and `undefined`
+results all cache. Root bundle `variables` are not a config source. They are
+authoring inputs interpolated into the bundle's targets, resources, and paths,
+so reading one as a process setting resolves names the deployed App never sees.
+Reference a variable from `config.env` to make it one.
 
 Bundle lookup is not coupled to AppKit installation or execution context. If
 earlier sources miss during local development, the configured working directory
@@ -362,9 +364,11 @@ packument `dependencies` map through HTTP GETs. `resolveVersion()` accepts a
 package name, `name@version` / `name@range`, a second specifier string, or
 `{ name, version?, range? }` (`semver` is an alias for `version`). An exact
 version that exists is unchanged, and a range is kept when a published version
-satisfies it. `resolveDependencies()` copies the record and pins unavailable
-registry packages (or their parents) until that graph is complete. No installer
-is invoked. Dependency maps may use raw strings or the same structured objects.
+satisfies it.
+
+`resolveDependencies()` copies the record and pins unavailable registry
+packages, or their parents, until that graph is complete. No installer is
+invoked. Dependency maps may use raw strings or the same structured objects.
 Each returned map entry is `{ name, version, range? }`. The input object is
 unchanged. Workspace, catalog, file, and git specifiers are left alone. Use
 this when a mirror or delayed proxy 404s versions that public npm already has.

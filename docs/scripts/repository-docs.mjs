@@ -87,6 +87,43 @@ export function summaryText(markdown) {
     .replace(/`([^`]*)`/g, "$1");
 }
 
+/** Prose paragraphs, excluding fenced code, headings, lists, tables, quotes, and HTML blocks. */
+export function proseParagraphs(markdown) {
+  const paragraphs = [];
+  let current = [];
+  let fenced = false;
+  let skipIndentedContinuation = false;
+  const flush = () => {
+    if (current.length > 0) paragraphs.push(current.join(" ").replace(/\s+/g, " ").trim());
+    current = [];
+  };
+
+  for (const line of markdown.replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/)) {
+    if (/^\s*(?:```|~~~)/.test(line)) {
+      flush();
+      fenced = !fenced;
+      skipIndentedContinuation = false;
+      continue;
+    }
+    if (fenced) continue;
+    if (line.trim() === "") {
+      flush();
+      skipIndentedContinuation = false;
+      continue;
+    }
+    if (/^\s*(?:#{1,6}\s|>|[-*+]\s|\d+[.)]\s|\||<)/.test(line)) {
+      flush();
+      skipIndentedContinuation = /^\s*(?:[-*+]\s|\d+[.)]\s|\|)/.test(line);
+      continue;
+    }
+    if (skipIndentedContinuation && /^\s{2,}/.test(line)) continue;
+    skipIndentedContinuation = false;
+    current.push(line.trim());
+  }
+  flush();
+  return paragraphs.filter(Boolean);
+}
+
 /** Structural quality issues that make a package README unsuitable as a docs page. */
 export function packageReadmeIssues(markdown) {
   const issues = [];
@@ -113,6 +150,16 @@ export function packageReadmeIssues(markdown) {
   }
   if (/^## Why (?:Not Just|Use This|This Over)/im.test(markdown)) {
     issues.push("use a task or decision heading instead of a defensive 'Why' heading");
+  }
+  if (/^## API map\s*$/im.test(markdown) || /^\|\s*Use case\s*\|\s*API\s*\|/im.test(markdown)) {
+    issues.push("link APIs where they are discussed instead of adding an API-map table");
+  }
+  const longestParagraph = Math.max(
+    0,
+    ...proseParagraphs(markdown).map((paragraph) => paragraph.split(/\s+/).length),
+  );
+  if (longestParagraph > 120) {
+    issues.push(`split prose paragraphs longer than 120 words (found ${longestParagraph})`);
   }
   return issues;
 }

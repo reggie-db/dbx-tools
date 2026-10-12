@@ -42,6 +42,7 @@ export type ThreadSession = {
 /** Map key for the classic single-thread chat (no explicit thread id). */
 export const DEFAULT_THREAD_SESSION_KEY = "__session__";
 
+/** Create the empty transcript and run state used for a new conversation thread. */
 export function createThreadSession(): ThreadSession {
   return {
     messages: [],
@@ -61,6 +62,7 @@ export function createThreadSession(): ThreadSession {
   };
 }
 
+/** Return whether a thread has a submitted or actively streaming run. */
 export function isSessionRunning(session: ThreadSession): boolean {
   return session.status === "submitted" || session.status === "streaming";
 }
@@ -98,6 +100,7 @@ export function reorderSteers<T extends QueuedSteer>(queue: T[], orderedIds: str
   return next;
 }
 
+/** Resolve an explicit thread id or the shared key used by single-thread chat. */
 export function sessionKey(activeThreadId: string | undefined): string {
   return activeThreadId ?? DEFAULT_THREAD_SESSION_KEY;
 }

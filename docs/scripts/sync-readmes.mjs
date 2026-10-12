@@ -511,7 +511,7 @@ function main() {
     const packagePage = generatedPage(pkg.readme, read(pkg.readme), pkg.name, pkg.dir, mappings);
     write(
       path.join(docsContentRoot, "packages", `${pkg.slug}.md`),
-      `${packagePage.trimEnd()}\n\n## API Reference\n\n[Open the generated API reference](${withBase(`/api/${pkg.slug}/`)})\n`,
+      `${packagePage.trimEnd()}\n\n## See more\n\n[Open the complete API reference](${withBase(`/api/${pkg.slug}/`)})\n`,
     );
   }
 

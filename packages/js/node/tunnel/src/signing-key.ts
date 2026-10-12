@@ -45,7 +45,7 @@
 import { randomBytes } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
 import { configUtils } from "@dbx-tools/core";
-import { log, object } from "@dbx-tools/shared-core";
+import { errorUtils, log, object } from "@dbx-tools/shared-core";
 import { TUNNEL_CONFIG } from "./_config.ts";
 
 const logger = log.logger("tunnel:signing-key");
@@ -196,7 +196,7 @@ export function signingKey(configuredCutoff?: string | number | Date): Promise<S
     } catch (error) {
       logger.warn(
         `no ${configUtils.name("TUNNEL_AUTH_JWT_SECRET", TUNNEL_CONFIG)} and the cache is unavailable - using an ephemeral per-process key; sessions will not survive a restart`,
-        { error },
+        { error: errorUtils.toError(error) },
       );
       return { key: new Uint8Array(randomBytes(KEY_BYTES)), cutoffMs };
     }

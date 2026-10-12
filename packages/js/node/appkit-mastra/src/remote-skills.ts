@@ -436,7 +436,7 @@ async function readMetadata(fs: FileSystem): Promise<RemoteSkillsMetadata | unde
     if (!object.isRecord(parsed) || parsed.version !== METADATA_VERSION) return undefined;
     return object.isRecord(parsed.sources) ? parsed : undefined;
   } catch (err) {
-    logger.debug("cache:unreadable", { error: errorUtils.errorMessage(err) });
+    logger.debug("cache:unreadable", { error: errorUtils.toError(err) });
     return undefined;
   }
 }
@@ -599,7 +599,7 @@ export async function provisionRemoteSkills(
         }
         logger.warn("source:skipped", {
           source: sourceOptions.source,
-          error: errorUtils.errorMessage(err),
+          error: errorUtils.toError(err),
         });
       }
     }
@@ -658,7 +658,10 @@ async function cachedAiToolsTree(
 async function serializeSkillDirs(dirs: readonly StagedSkillDir[]): Promise<CachedSkillFile[]> {
   const files: CachedSkillFile[] = [];
   for (const dir of dirs) {
-    for (const relative of find.findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
+    for await (const relative of find.findFiles("**/*", {
+      cwd: dir.absolutePath,
+      nodir: true,
+    })) {
       files.push({
         path: posix.join(dir.name, relative.split(/[\\/]/).join("/")),
         content: (await readFile(join(dir.absolutePath, relative))).toString("base64"),
@@ -752,7 +755,7 @@ async function openWritableWorkspace(
   } catch (err) {
     logger.warn("destination:unwritable", {
       destination: basePath,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     return undefined;
   }
@@ -996,7 +999,10 @@ async function collectSkillDirs(root: string): Promise<StagedSkillDir[]> {
 async function copySkillDirs(destination: FileSystem, dirs: StagedSkillDir[]): Promise<void> {
   await destination.init();
   for (const dir of dirs) {
-    for (const relative of find.findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
+    for await (const relative of find.findFiles("**/*", {
+      cwd: dir.absolutePath,
+      nodir: true,
+    })) {
       const buffer = await readFile(join(dir.absolutePath, relative));
       const skillPath = posix.join(dir.name, relative.split(/[\\/]/).join("/"));
       await destination.writeFile(skillPath, buffer, { overwrite: true });

@@ -3,8 +3,8 @@
 import { runTaskMain } from "./cli.ts";
 import { formatSharedCoreUsage, sharedCoreExportUsage } from "../src/shared-core-usage.ts";
 
-export function main(): void {
-  process.stdout.write(formatSharedCoreUsage(sharedCoreExportUsage()));
+export async function main(): Promise<void> {
+  process.stdout.write(formatSharedCoreUsage(await sharedCoreExportUsage()));
 }
 
 await runTaskMain(import.meta, main);

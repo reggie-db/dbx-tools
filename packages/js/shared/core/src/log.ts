@@ -184,6 +184,17 @@ function consoleLoggerFactory(
             if (seen.has(value)) return "[Circular]";
             seen.add(value);
           }
+          if (value instanceof Error) {
+            const error = value as Error & { cause?: unknown; errors?: unknown };
+            return {
+              ...Object.fromEntries(Object.entries(error)),
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+              ...(error.cause === undefined ? {} : { cause: error.cause }),
+              ...(error.errors === undefined ? {} : { errors: error.errors }),
+            };
+          }
           return value;
         });
       }
@@ -397,6 +408,7 @@ function extractLoggerName(loggerName: NameLike | string | undefined): string | 
  * const logger = log.logger("genie/chat");
  * logger.info("starting");
  * logger.warn("missing optional config", { reason: "no env var" });
+ * logger.error("request failed", { error: errorUtils.toError(cause) });
  */
 export function logger(loggerName: NameLike | string | undefined): Logger {
   const name = extractLoggerName(loggerName);

@@ -189,7 +189,7 @@ async function pingEmbeddingDimension(
     logger.warn("embedding ping returned no vector", { name });
     return undefined;
   } catch (err) {
-    logger.warn("embedding ping failed", { name, error: errorUtils.errorMessage(err) });
+    logger.warn("embedding ping failed", { name, error: errorUtils.toError(err) });
     return undefined;
   }
 }

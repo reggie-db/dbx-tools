@@ -78,6 +78,8 @@ resources:
   #   - genie                     -> Genie Agent Mode responses.
   #   - dashboards.genie          -> Conversation API polling and space metadata.
   #   - sql                       -> warehouse queries behind the Genie/SQL tools.
+  #   - postgres                  -> Lakebase OAuth credentials for per-user
+  #                                  Sandbox assignment storage.
   apps:
     demo_app:
       name: ${var.app_name}
@@ -179,6 +181,7 @@ resources:
         - ai-gateway
         - model-serving
         - sql
+        - postgres
         - genie
         - dashboards.genie
         - serving.serving-endpoints

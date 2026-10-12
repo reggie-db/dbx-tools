@@ -53,13 +53,24 @@ interface RuntimeEpoch {
 
 /** Result of one Lakebase-to-Sandbox reconciliation pass. */
 export interface SandboxReaperResult {
+  /** Number of workspace Sandboxes examined. */
   scanned: number;
+  /** Number of invalid or expired managed Sandboxes deleted. */
   deleted: number;
+  /** Number of orphaned Lakebase assignment rows removed. */
   removedAssignments: number;
+  /** Number of cleanup operations that failed and were logged. */
   failures: number;
 }
 
-/** Coordinates Sandbox REST operations, SSH sessions, command execution, and web routes. */
+/**
+ * Coordinates Sandbox REST operations, Lakebase assignments, SSH sessions,
+ * command execution, built-in services, and web routes.
+ *
+ * Every machine operation verifies an unexpired assignment for the workspace,
+ * AppKit user, Sandbox ID, and managed name. Runtime epochs invalidate pending
+ * session, service, and route work after stop, delete, or reconciliation.
+ */
 export class SshRuntime {
   readonly routes: SshRouteRegistry;
   private readonly keys: SshKeyStore;
@@ -73,6 +84,7 @@ export class SshRuntime {
   private reaperTimer?: ReturnType<typeof setInterval>;
   private reaping?: Promise<SandboxReaperResult>;
 
+  /** Creates a runtime with optional preinitialized ownership storage. */
   constructor(
     readonly config: ResolvedSshPluginConfig,
     ownership?: LakebaseMachineOwnershipStore,
@@ -82,7 +94,11 @@ export class SshRuntime {
     this.ownership = ownership;
   }
 
-  /** Initialize the Lakebase ownership and expiration store. */
+  /**
+   * Initializes the Lakebase ownership and expiration store.
+   *
+   * @throws When the AppKit Lakebase plugin did not provide a pool.
+   */
   async initializeOwnership(
     pool?: Parameters<typeof LakebaseMachineOwnershipStore.create>[0],
   ): Promise<void> {
@@ -95,12 +111,17 @@ export class SshRuntime {
     await previous?.close();
   }
 
-  /** Start the immediate and periodic expiration reaper. */
+  /**
+   * Runs an immediate reconciliation pass and starts the periodic reaper when
+   * {@link ResolvedSshPluginConfig.reaperIntervalSeconds} is greater than zero.
+   * Initial failures are logged and returned as one failure instead of
+   * preventing AppKit startup.
+   */
   async startReaper(client: WorkspaceClient): Promise<SandboxReaperResult> {
     if (this.config.reaperIntervalSeconds > 0 && !this.reaperTimer) {
       this.reaperTimer = setInterval(() => {
         void this.reapMachines(client).catch((error) => {
-          logger.warn("Sandbox reaper failed", authErrorMetadata(error));
+          logger.warn("Sandbox reaper failed", authErrorMetadata(errorUtils.toError(error)));
         });
       }, this.config.reaperIntervalSeconds * 1_000);
       this.reaperTimer.unref?.();
@@ -108,12 +129,19 @@ export class SshRuntime {
     try {
       return await this.reapMachines(client);
     } catch (error) {
-      logger.warn("Initial Sandbox reaper pass failed", authErrorMetadata(error));
+      logger.warn(
+        "Initial Sandbox reaper pass failed",
+        authErrorMetadata(errorUtils.toError(error)),
+      );
       return { scanned: 0, deleted: 0, removedAssignments: 0, failures: 1 };
     }
   }
 
-  /** Reconcile Lakebase assignments with service-managed Sandbox names and expirations. */
+  /**
+   * Reconciles Lakebase assignments with managed Sandbox names and expirations.
+   * Concurrent calls share one in-flight pass, and replicas serialize through
+   * the workspace-scoped Lakebase advisory lock.
+   */
   reapMachines(client: WorkspaceClient, signal?: AbortSignal): Promise<SandboxReaperResult> {
     if (this.reaping) return this.reaping;
     const operation = this.performReap(client, signal).finally(() => {
@@ -123,19 +151,26 @@ export class SshRuntime {
     return operation;
   }
 
-  /** Runs an OBO workspace operation and transparently retries it as the app service principal. */
+  /**
+   * Runs a workspace operation with OBO credentials first and optionally retries
+   * it with the app service principal.
+   *
+   * Service-principal retry occurs only when
+   * {@link ResolvedSshPluginConfig.fallbackToServicePrincipal} is enabled.
+   * Both attempts emit sanitized diagnostics.
+   */
   async withAuthFallback<T>(
     operation: WorkspaceAuthOperation,
     attempt: WorkspaceAuthAttempt<T>,
   ): Promise<T> {
     if (attempt.user) {
-      logger.warn("SSH workspace auth attempt", {
+      logger.debug("SSH workspace auth attempt", {
         ...operation,
         identity: "user-obo",
       });
       try {
         const result = await attempt.user();
-        logger.warn("SSH workspace auth succeeded", {
+        logger.debug("SSH workspace auth succeeded", {
           ...operation,
           identity: "user-obo",
         });
@@ -144,19 +179,19 @@ export class SshRuntime {
         logger.warn("SSH workspace OBO failed", {
           ...operation,
           identity: "user-obo",
-          ...authErrorMetadata(error),
+          ...authErrorMetadata(errorUtils.toError(error)),
         });
         if (!this.config.fallbackToServicePrincipal) throw error;
       }
     }
 
-    logger.warn("SSH workspace auth fallback", {
+    logger.info("SSH workspace auth fallback", {
       ...operation,
       identity: "app-service-principal",
     });
     try {
       const result = await attempt.servicePrincipal();
-      logger.warn("SSH workspace auth succeeded", {
+      logger.debug("SSH workspace auth succeeded", {
         ...operation,
         identity: "app-service-principal",
       });
@@ -165,12 +200,17 @@ export class SshRuntime {
       logger.warn("SSH workspace service-principal failed", {
         ...operation,
         identity: "app-service-principal",
-        ...authErrorMetadata(error),
+        ...authErrorMetadata(errorUtils.toError(error)),
       });
       throw error;
     }
   }
 
+  /**
+   * Lists only valid, unexpired Sandboxes assigned to one AppKit user.
+   * Returns `supported: false` when the workspace or region does not expose the
+   * Sandbox API.
+   */
   async listMachines(
     client: WorkspaceClient,
     userId: string,
@@ -202,6 +242,10 @@ export class SshRuntime {
     }
   }
 
+  /**
+   * Starts one assigned Sandbox, waits for the running state, and attempts to
+   * provision its terminal and metrics services.
+   */
   async startMachine(
     client: WorkspaceClient,
     userId: string,
@@ -223,6 +267,10 @@ export class SshRuntime {
     return this.toMachine(final, api.workspaceScope(), userId, owned.assignment, owned.managed);
   }
 
+  /**
+   * Creates a managed Sandbox and persists its assignment before returning it.
+   * If the Lakebase write fails, the newly created Sandbox is deleted.
+   */
   async createMachine(
     client: WorkspaceClient,
     userId: string,
@@ -258,6 +306,7 @@ export class SshRuntime {
     );
   }
 
+  /** Stops one assigned Sandbox, waits for it to stop, and clears local runtime state. */
   async stopMachine(
     client: WorkspaceClient,
     userId: string,
@@ -275,6 +324,7 @@ export class SshRuntime {
     return this.toMachine(final, api.workspaceScope(), userId, owned.assignment, owned.managed);
   }
 
+  /** Deletes one assigned Sandbox, removes all assignments, and clears local runtime state. */
   async deleteMachine(
     client: WorkspaceClient,
     userId: string,
@@ -289,6 +339,10 @@ export class SshRuntime {
     return { deleted: true };
   }
 
+  /**
+   * Starts or reuses one built-in browser service and its owner-scoped AppKit
+   * route. Concurrent requests for the same service share one operation.
+   */
   async startService(
     client: WorkspaceClient,
     userId: string,
@@ -332,6 +386,10 @@ export class SshRuntime {
     return operation;
   }
 
+  /**
+   * Executes a command on an assigned Sandbox, starting the machine first when
+   * `auto` is enabled and rejecting stale work after ownership changes.
+   */
   async execute(
     client: WorkspaceClient,
     userId: string,
@@ -355,6 +413,11 @@ export class SshRuntime {
     });
   }
 
+  /**
+   * Publishes an HTTP or WebSocket service from an assigned Sandbox through an
+   * owner-scoped AppKit route. A failed post-registration assignment check
+   * removes the new route before rejecting.
+   */
   async addRoute(
     client: WorkspaceClient,
     userId: string,
@@ -380,18 +443,22 @@ export class SshRuntime {
     }
   }
 
+  /** Removes one route only when it belongs to the given AppKit user. */
   removeRoute(userId: string, routeId: string): Promise<boolean> {
     return this.routes.remove(routeId, userId);
   }
 
+  /** Lists public routes, optionally restricted to one AppKit user. */
   routeList(userId?: string): SshRoute[] {
     return this.routes.list(undefined, userId);
   }
 
+  /** Returns the user-scoped route prefix beneath the configured root path. */
   routePathPrefix(userId: string): string {
     return this.routes.userPathPrefix(userId);
   }
 
+  /** Invalidates and closes one cached SSH session without changing the remote Sandbox. */
   disconnect(workspaceScope: string, userId: string, machineId: string): void {
     const key = sessionKey(workspaceScope, userId, machineId);
     this.bumpEpoch(this.ownerEpochs, key);
@@ -400,6 +467,7 @@ export class SshRuntime {
     this.connecting.delete(key);
   }
 
+  /** Stops the reaper and closes sessions, routes, service state, and ownership resources. */
   async close(): Promise<void> {
     if (this.reaperTimer) clearInterval(this.reaperTimer);
     this.reaperTimer = undefined;
@@ -515,7 +583,7 @@ export class SshRuntime {
         failures += 1;
         logger.warn("Sandbox reaper could not remove missing machine assignments", {
           machineId,
-          ...authErrorMetadata(error),
+          ...authErrorMetadata(errorUtils.toError(error)),
         });
       }
     }
@@ -543,7 +611,7 @@ export class SshRuntime {
         removedAssignments += await ownership.unassignAll(workspaceScope, entry.sandboxId);
         await this.clearMachineRuntime(workspaceScope, entry.sandboxId);
         deleted += 1;
-        logger.warn("Sandbox reaper deleted managed machine", {
+        logger.info("Sandbox reaper deleted managed machine", {
           machineId: entry.sandboxId,
           reason: expired ? "expired" : "invalid-managed-name-or-assignment",
         });
@@ -551,7 +619,7 @@ export class SshRuntime {
         failures += 1;
         logger.warn("Sandbox reaper could not delete managed machine", {
           machineId: entry.sandboxId,
-          ...authErrorMetadata(error),
+          ...authErrorMetadata(errorUtils.toError(error)),
         });
       }
     }
@@ -621,7 +689,7 @@ export class SshRuntime {
     const api = new DatabricksSandboxClient(client);
     const workspaceScope = api.workspaceScope();
     const key = serviceKey(workspaceScope, userId, request.machineId, request.service);
-    logger.warn("SSH machine service provisioning started", {
+    logger.info("SSH machine service provisioning started", {
       userId,
       machineId: request.machineId,
       service: request.service,
@@ -657,7 +725,7 @@ export class SshRuntime {
       }
       const ready: SshMachineService = { ...starting, state: "ready" };
       this.services.set(key, ready);
-      logger.warn("SSH machine service provisioning succeeded", {
+      logger.info("SSH machine service provisioning succeeded", {
         userId,
         machineId: request.machineId,
         service: request.service,
@@ -683,7 +751,7 @@ export class SshRuntime {
         machineId: request.machineId,
         service: request.service,
         path: failed.path,
-        ...authErrorMetadata(error),
+        ...authErrorMetadata(errorUtils.toError(error)),
       });
       throw new Error(message, { cause: error });
     }
@@ -905,19 +973,17 @@ function sessionKey(workspaceScope: string, userId: string, machineId: string): 
   return `${workspaceScope}\0${userId}\0${machineId}`;
 }
 
-function authErrorMetadata(error: unknown): Record<string, unknown> {
-  const record = object.isRecord(error) ? error : {};
-  const response = object.isRecord(record.response) ? record.response : {};
+function authErrorMetadata(error: Error): Record<string, unknown> {
+  const record: Record<string, unknown> = object.isRecord(error) ? error : {};
+  const response: Record<string, unknown> = object.isRecord(record.response) ? record.response : {};
   const body = record.body ?? response.body ?? response.data;
   return {
-    errorName: error instanceof Error ? error.name : undefined,
-    errorMessage: errorUtils.errorMessage(error),
+    error,
     status: record.status ?? record.statusCode ?? response.status,
     statusText: response.statusText,
     errorCode: record.errorCode ?? record.error_code ?? bodyField(body, "error_code"),
     requestId: record.requestId ?? record.request_id ?? bodyField(body, "request_id"),
     responseBody: safeBody(body),
-    cause: error instanceof Error && error.cause ? safeBody(error.cause) : undefined,
   };
 }
 

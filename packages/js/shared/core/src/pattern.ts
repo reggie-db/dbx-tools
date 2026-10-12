@@ -36,6 +36,7 @@
  * @module
  */
 
+import * as errorUtils from "./error-utils.ts";
 import { logger } from "./log.ts";
 import * as predicate from "./predicate.ts";
 import { parseList } from "./string-utils.ts";
@@ -75,7 +76,10 @@ function compileRegexLiteral(pattern: string, caseSensitive: boolean): RegExp | 
   try {
     return new RegExp(body, caseSensitive || flags.includes("i") ? flags : `${flags}i`);
   } catch (error) {
-    log.warn("ignoring invalid regex pattern", { pattern, error });
+    log.warn("ignoring invalid regex pattern", {
+      pattern,
+      error: errorUtils.toError(error),
+    });
     return undefined;
   }
 }

@@ -20,7 +20,7 @@ export type { StoredActiveRun } from "./active-runs.ts";
 export { LIGHT_CHART_CHROME } from "./chart-theme.ts";
 export type { ChartChrome } from "./chart-theme.ts";
 export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from "./export.ts";
-export { MastraPluginClient, useMastraConfig, useMastraClient, useMastraMlflowExperiment, useMastraModels, useMastraDefaultModel, useMastraSuggestions, useMastraThreads, useChartFetch, useStatementFetch } from "./mastra-client.ts";
+export { MastraChatRequestError, MastraPluginClient, useMastraConfig, useMastraClient, useMastraMlflowExperiment, useMastraModels, useMastraDefaultModel, useMastraSuggestions, useMastraThreads, useChartFetch, useStatementFetch } from "./mastra-client.ts";
 export type { MastraStreamResponse, MastraMemoryThread, ByIdFetchState } from "./mastra-client.ts";
 export { defaultReasoningEffort, modelStorageKey, readStoredModel, storeSelectedModel } from "./model-selection.ts";
 export type { MastraRequestContextInput, MastraRequestContextSource, MastraRequestContextSnapshot } from "./request-context.ts";

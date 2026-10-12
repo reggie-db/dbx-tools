@@ -32,9 +32,7 @@
  * @module
  */
 
-import { getUsernameWithApiLookup } from "@databricks/appkit";
 import { migration as appkitMigration } from "@dbx-tools/appkit";
-import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { hash, log } from "@dbx-tools/shared-core";
 import type { AgentMemoryOption } from "@mastra/core/agent";
 import {
@@ -45,7 +43,7 @@ import {
 import { fastembed } from "@mastra/fastembed";
 import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
-import { Pool, type PoolConfig } from "pg";
+import type { Pool } from "pg";
 
 import type { AnyMastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
 import type { MastraPluginConfig } from "./config.ts";
@@ -132,34 +130,6 @@ export function withSoftStorageInit(store: PostgresStore): PostgresStore {
   return store;
 }
 
-/**
- * Build a dedicated **service-principal** Lakebase pool for Mastra
- * memory from the lakebase plugin's resolved SP pg config.
- *
- * The plugin's `exports().pool` is a `RoutingPool` that switches to
- * the per-user (OBO) pool whenever a query runs inside an `asUser`
- * scope - exactly the context the mastra plugin establishes around
- * every chat turn. Memory (threads / messages + semantic recall) must
- * instead always act as the app service principal: it owns the
- * auto-created `mastra_*` schemas (a per-user role usually can't
- * `CREATE SCHEMA`) and is shared across users, so it cannot inherit a
- * request's OBO identity.
- *
- * `pgConfig` must be the plugin's `exports().getPgConfig()` evaluated
- * **outside** any `asUser` scope (i.e. during setup), so it carries
- * the SP connection target, OAuth token-refresh `password` callback,
- * and any `lakebase({ pool })` tuning overrides - all of which this
- * pool inherits. See the call site in `plugin.ts`.
- */
-export async function createServicePrincipalPool(pgConfig: PoolConfig): Promise<Pool> {
-  // `getPgConfig()` resolves the SP username synchronously from
-  // `PGUSER` / `DATABRICKS_CLIENT_ID`; fall back to the async API
-  // lookup (e.g. local dev authenticating via PAT) so the pool always
-  // has an identity to connect with.
-  const user = pgConfig.user ?? (await getUsernameWithApiLookup());
-  return new Pool(postgresConnectionOptions({ ...pgConfig, user }));
-}
-
 /** Effective per-knob setting after the plugin/agent cascade. */
 type StorageSetting = AnyMastraAgentDefinition["storage"];
 type MemorySetting = AnyMastraAgentDefinition["memory"];
@@ -179,7 +149,7 @@ export function needsLakebase(config: MastraPluginConfig): boolean {
 
 /**
  * Construct a per-agent {@link Memory} factory bound to the supplied
- * service-principal pool (see {@link createServicePrincipalPool}).
+ * service-principal pool.
  * Caches the shared `PgVector` singleton (built on first need) so each
  * agent build is O(1) after the first.
  */

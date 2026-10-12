@@ -20,7 +20,7 @@
  */
 
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { LakebaseConnection } from "./lakebase-resolver.ts";
 
 const logger = log.logger("interceptor");
@@ -120,7 +120,10 @@ export function createInterceptorContext(env: ResolvedAppEnv): InterceptorRuntim
       } catch (error) {
         // Match AppKit: a failing lifecycle handler is logged, never fatal, and
         // never blocks its siblings.
-        logger.warn("lifecycle handler failed", { event, error });
+        logger.warn("lifecycle handler failed", {
+          event,
+          error: errorUtils.toError(error),
+        });
       }
     }
   };

@@ -63,7 +63,7 @@ export async function main(): Promise<void> {
   await withWorkspaceMutationLock(repoRoot, () => generatePythonNodeBindings(repoRoot));
   logger.success("generated all Python Node bindings");
 
-  watchLoop(
+  await watchLoop(
     "python-node-bindings",
     watchPaths(configs),
     (changed) => {

@@ -240,7 +240,7 @@ const resolveFlock = functionUtils.memoize(async (): Promise<FlockFn | undefined
     });
     return lib.symbols.flock;
   } catch (cause) {
-    logger.debug("flock FFI unavailable", { error: errorUtils.errorMessage(cause) });
+    logger.debug("flock FFI unavailable", { error: errorUtils.toError(cause) });
     return undefined;
   }
 });

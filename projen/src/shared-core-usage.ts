@@ -6,7 +6,7 @@
  * unused exports and duplicated owned helpers.
  */
 import { readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { find } from "@dbx-tools/path";
 import * as core from "@dbx-tools/shared-core";
 import { PACKAGE_IDENTIFIER, object } from "@dbx-tools/shared-core";
@@ -59,7 +59,7 @@ function namespaceMap(coreDir: string): Readonly<Record<string, string>> {
   );
 }
 
-function sourceFiles(root: string, includeGenerated: boolean): string[] {
+async function sourceFiles(root: string, includeGenerated: boolean): Promise<string[]> {
   const ignore = [
     "**/node_modules/**",
     "**/lib/**",
@@ -69,7 +69,11 @@ function sourceFiles(root: string, includeGenerated: boolean): string[] {
     "**/_runtime.js",
   ];
   if (!includeGenerated) ignore.push(`**/${PYTHON_GENERATED_PACKAGE}/**`);
-  return [...find.findFiles(SOURCE_PATTERN, { cwd: root, ignore })].sort();
+  const files: string[] = [];
+  for await (const file of find.findFiles(SOURCE_PATTERN, { cwd: root, ignore })) {
+    files.push(resolve(root, file));
+  }
+  return files.sort();
 }
 
 function classifyFile(
@@ -114,11 +118,13 @@ function mentionsExport(
 }
 
 /** Classify every namespace runtime export against repository callers. */
-export function sharedCoreExportUsage(root: string = repoRoot): SharedCoreExportUsage[] {
+export async function sharedCoreExportUsage(
+  root: string = repoRoot,
+): Promise<SharedCoreExportUsage[]> {
   const coreDir = sharedCorePackageDir(root);
   const coreDirRel = relative(root, coreDir);
   const namespaces = namespaceMap(coreDir);
-  const files = sourceFiles(root, true).map((file) => ({
+  const files = (await sourceFiles(root, true)).map((file) => ({
     path: relative(root, file),
     text: readFileSync(file, "utf8"),
   }));
@@ -152,9 +158,9 @@ export function sharedCoreExportUsage(root: string = repoRoot): SharedCoreExport
 }
 
 /** Local copies of helpers owned by shared-core. */
-export function duplicatedOwnedHelpers(root: string = repoRoot): string[] {
+export async function duplicatedOwnedHelpers(root: string = repoRoot): Promise<string[]> {
   const duplicates: string[] = [];
-  for (const file of sourceFiles(root, false)) {
+  for (const file of await sourceFiles(root, false)) {
     const relativePath = relative(root, file);
     if (OWNED_HELPER_FILES.has(relativePath)) continue;
     if (relativePath.startsWith("packages/js/shared/core/test/")) continue;

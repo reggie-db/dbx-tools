@@ -6,7 +6,7 @@
 
 import { getExecutionContext } from "@databricks/appkit";
 import { workspaceClient } from "@dbx-tools/databricks";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import { openaiChat } from "@dbx-tools/shared-model";
 import { upstreamUrl, type GatewayRoute } from "@dbx-tools/shared-model-gateway";
 
@@ -112,7 +112,7 @@ export async function fetchDatabricks(request: DatabricksTransportRequest): Prom
   } catch (error) {
     logger.error("upstream fetch failed", {
       elapsedMs: Date.now() - startedAt,
-      error,
+      error: errorUtils.toError(error),
       model: request.route.upstreamModel,
       upstreamProtocol: request.route.upstreamProtocol,
     });
@@ -169,7 +169,10 @@ async function logUpstreamFailureBody(
       truncated: bytes >= ERROR_PREVIEW_BYTES,
     });
   } catch (error) {
-    logger.debug("could not read upstream error body", { ...details, error });
+    logger.debug("could not read upstream error body", {
+      ...details,
+      error: errorUtils.toError(error),
+    });
   } finally {
     await reader.cancel().catch(() => undefined);
   }

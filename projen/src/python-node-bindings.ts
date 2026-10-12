@@ -328,7 +328,7 @@ export function resolveAllPythonNodeBindings(
 export function pythonNodeBindingProjects(projectRoot: string): string[] {
   return [
     ...find
-      .findFiles("**/pyproject.toml", { cwd: projectRoot })
+      .findFilesSync("**/pyproject.toml", { cwd: projectRoot })
       .filter((file) => {
         const manifest = parse(readFileSync(resolve(projectRoot, file), "utf8")) as {
           tool?: { dbx_tools?: { node_bindings?: unknown } };

@@ -27,8 +27,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     args,
   );
 
-  const files = listGeneratedFiles();
-  const nodeModules = listNodeModulesDirs();
+  const [files, nodeModules] = await Promise.all([listGeneratedFiles(), listNodeModulesDirs()]);
   const targets = [...files, ...nodeModules];
 
   if (targets.length === 0) {

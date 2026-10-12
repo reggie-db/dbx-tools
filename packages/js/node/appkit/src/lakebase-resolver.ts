@@ -45,6 +45,7 @@ import {
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import {
   asyncUtils,
+  errorUtils,
   log,
   object,
   options as sharedOptions,
@@ -778,7 +779,10 @@ function isAlreadyExistsError(error: unknown): boolean {
  * echo request context, so it goes to the log instead.
  */
 function operationFailed(opName: string, opError: unknown): ExecutionError {
-  logger.error("autopg: operation failed", { operation: opName, error: opError });
+  logger.error("autopg: operation failed", {
+    operation: opName,
+    error: errorUtils.toError(opError),
+  });
   const code = object.isRecord(opError) ? (opError.code ?? opError.reason) : undefined;
   return new ExecutionError(`Lakebase operation failed: ${opName}`, {
     context: {

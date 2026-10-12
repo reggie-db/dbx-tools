@@ -3,7 +3,7 @@
 This directory holds the docs-site generator. Any `docs/*.md` added beside it
 becomes a hand-written guide on the site; there are none today.
 
-## Write Package Guides For Users
+## Write package guides for users
 
 Package READMEs are product guides, not implementation notes. Follow the same
 progression as AppKit documentation:
@@ -15,10 +15,14 @@ progression as AppKit documentation:
 3. Organize the rest around user tasks, choices, expected behavior, and limits.
 4. Put module lists and generated API references last.
 
-Prefer headings such as `Quick Start`, `Choose A Target`, `Run As A Service`,
-and `Handle Errors`. Avoid leading with ownership boundaries, internal classes,
+Prefer sentence-case headings such as `Quick start`, `Choose a target`,
+`Run as a service`, and `Handle errors`. Avoid leading with ownership boundaries, internal classes,
 dependency graphs, protocol routing, caches, or build details. Include those
 only when they change how a caller uses or operates the package.
+
+Keep each prose paragraph focused on one decision or behavior. Split paragraphs
+that exceed 120 words into subsections, lists, tables, or shorter paragraphs.
+The README validator rejects longer paragraphs.
 
 Write for the person using the package. Do not tell them which repository layer
 "owns" a type, which package another contributor should prefer, or where an
@@ -35,6 +39,13 @@ Public TypeScript declarations need JSDoc that explains caller-visible purpose,
 inputs, outputs, errors, and lifecycle constraints where relevant. Public Python
 classes and functions need equivalent docstrings. Generated API pages should
 add detail to the README rather than compensate for missing task guidance.
+
+The API generator links the first bare public identifier in each H2 section to
+its exact generated reference page. Write public API names as inline code, such
+as `createClient()` or `ClientOptions`, where the guide explains how to use
+them. Do not replace contextual links with an API-map table. A short `See more`
+link to the complete package reference is appropriate at the end of a guide.
+The generator also adds a package-guide backlink to each API landing page.
 
 Development policies, dependency-installation safeguards, and implementation
 history belong in contributor instructions, not package product guides.

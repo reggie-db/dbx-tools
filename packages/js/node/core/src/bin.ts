@@ -247,7 +247,7 @@ async function isValidBin(path: string, options: BinOptions): Promise<boolean> {
   } catch (cause) {
     logger.debug("binary version command failed", {
       path,
-      error: errorUtils.errorMessage(cause),
+      error: errorUtils.toError(cause),
     });
     return false;
   }

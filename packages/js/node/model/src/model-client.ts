@@ -15,6 +15,7 @@ import {
 } from "@dbx-tools/auth/client";
 import { listProfiles as listAuthProfiles } from "@dbx-tools/auth/profile";
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
+import * as errorUtils from "@dbx-tools/shared-core/error-utils";
 import * as log from "@dbx-tools/shared-core/log";
 import * as object from "@dbx-tools/shared-core/object";
 import {
@@ -274,7 +275,7 @@ class DefaultModelClient implements ModelClient {
         } catch (error) {
           logger.warn("embedding dimension probe failed", {
             model: endpoint.name,
-            error,
+            error: errorUtils.toError(error),
           });
           return endpoint;
         }

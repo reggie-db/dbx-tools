@@ -75,7 +75,7 @@ function resolveEnvironmentMetadata(): Promise<Record<string, string>> {
     try {
       metadata.publicIp = await databricksNet.getPublicIp();
     } catch (cause) {
-      logger.warn("public IP unavailable", { error: errorUtils.errorMessage(cause) });
+      logger.warn("public IP unavailable", { error: errorUtils.toError(cause) });
     }
     return metadata;
   })();
@@ -106,7 +106,7 @@ class BusDemoPlugin extends Plugin {
       this.bus = new PostgresTopicBus(lake.exports().pool, {
         metadata: resolveEnvironmentMetadata,
         onError: (cause) =>
-          logger.error("topic listener failed", { error: errorUtils.errorMessage(cause) }),
+          logger.error("topic listener failed", { error: errorUtils.toError(cause) }),
         persist: { ttl: "7 days" },
       });
       await this.bus.start();

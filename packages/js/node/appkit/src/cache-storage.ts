@@ -217,7 +217,7 @@ export function loadPersistentStorage(): PersistentStorageConstructor | undefine
     return loaded;
   } catch (err) {
     logger.debug("soft persistent cache skipped (PersistentStorage unavailable)", {
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     persistentStorageCtor = undefined;
     return undefined;
@@ -330,7 +330,7 @@ async function createPersistentStorage(
     return storage;
   } catch (err) {
     logger.debug("soft persistent cache unavailable", {
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     if (pool) {
       await pool.end().catch(() => {});

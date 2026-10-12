@@ -11,7 +11,7 @@
 import { passkey } from "@better-auth/passkey";
 import { configUtils } from "@dbx-tools/core";
 import { type AuthStatus, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import { APIError, betterAuth, type BetterAuthOptions } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
 
@@ -168,7 +168,10 @@ export async function createPasswordlessAuth(
           }
           logger.info("sending verification code", { email: address });
           void config.sendCode(address, otp, emailOptions).catch((error: unknown) => {
-            logger.error("verification email failed", { email: address, error });
+            logger.error("verification email failed", {
+              email: address,
+              error: errorUtils.toError(error),
+            });
           });
         },
       }),

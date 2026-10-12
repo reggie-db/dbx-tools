@@ -124,7 +124,7 @@ export const deliverTurn = async (options: DeliverTurnOptions): Promise<void> =>
   } catch (err) {
     // No token means nothing can be delivered - not even the apology - so this
     // is the one failure that can only be logged.
-    logger.error("could not obtain a connector token", { error: errorUtils.errorMessage(err) });
+    logger.error("could not obtain a connector token", { error: errorUtils.toError(err) });
     return;
   }
 
@@ -145,13 +145,13 @@ export const deliverTurn = async (options: DeliverTurnOptions): Promise<void> =>
   } catch (err) {
     logger.error("turn failed", {
       conversation: conversationId,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
     try {
       await sendActivity({ type: "message", text: FAILURE_TEXT }, target);
     } catch (postErr) {
       logger.error("could not report the failure to the channel", {
-        error: errorUtils.errorMessage(postErr),
+        error: errorUtils.toError(postErr),
       });
     }
   }

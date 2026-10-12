@@ -17,7 +17,7 @@
  */
 
 import type { Interceptor, InterceptorContext } from "@dbx-tools/appkit";
-import { log, object, options as sharedOptions } from "@dbx-tools/shared-core";
+import { errorUtils, log, object, options as sharedOptions } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { installFrp, resolveFrpConfig, superviseFrp, writeFrpConfig } from "./frp.ts";
 import { startPathProxy } from "./path-proxy.ts";
@@ -175,7 +175,9 @@ export function tunnelInterceptor(
     void Promise.allSettled(initializers).then((results) => {
       for (const result of results) {
         if (result.status === "rejected") {
-          logger.error("tunnel failed to start", { error: result.reason });
+          logger.error("tunnel failed to start", {
+            error: errorUtils.toError(result.reason),
+          });
           continue;
         }
         if (stopped) result.value.stop();

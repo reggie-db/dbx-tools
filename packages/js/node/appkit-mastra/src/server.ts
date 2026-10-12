@@ -484,7 +484,7 @@ export function attachStaleResumeRecovery(app: express.Express): void {
       }
       logger.warn("ignored stale mastra resume", {
         path: req.path,
-        error: errorUtils.errorMessage(error),
+        error: errorUtils.toError(error),
       });
       if (res.headersSent) {
         res.end();

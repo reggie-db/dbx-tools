@@ -27,6 +27,7 @@ import {
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,
+  MastraChatRequestError,
   type MastraMemoryThread,
   type MastraStreamResponse,
 } from "../support/mastra-client.ts";
@@ -479,6 +480,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           if (
             controller.signal.aborted ||
             getSession(threadId).runToken !== token ||
+            initialError instanceof MastraChatRequestError ||
             !mastraClient.backgroundTurns ||
             !runId
           ) {
@@ -486,7 +488,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           }
           logger.warn("chat stream disconnected; reconnecting to background run", {
             runId,
-            error: errorUtils.errorMessage(initialError),
+            error: errorUtils.toError(initialError),
           });
           const messagesBeforeReplay = getSession(threadId).messages;
           writeMessages(
@@ -528,7 +530,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         if (getSession(threadId).runToken !== token) return;
         if (isStaleMastraResumeError(caught)) {
           logger.warn("ignored stale mastra resume", {
-            error: errorUtils.errorMessage(caught),
+            error: errorUtils.toError(caught),
           });
           updateSession(threadId, (session) => {
             if (session.runToken !== token) return session;
@@ -548,7 +550,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           return;
         }
         logger.error("stream error", {
-          error: errorUtils.errorMessage(caught),
+          error: errorUtils.toError(caught),
         });
         updateSession(threadId, (session) => ({
           ...session,
@@ -557,6 +559,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           abortController: session.abortController === controller ? null : session.abortController,
           runId: runIdRef.current,
         }));
+        const failedRunId = runIdRef.current;
+        if (failedRunId) removeStoredActiveRun(activeRunsKey, failedRunId);
       }
     },
     [
@@ -699,7 +703,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           .catch((error: unknown) => {
             logger.warn("failed to abort background run", {
               runId: current.runId,
-              error: errorUtils.errorMessage(error),
+              error: errorUtils.toError(error),
             });
           });
       }
@@ -841,7 +845,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       logger.info("history cleared", { threadId });
     } catch (error) {
       logger.error("history clear error", {
-        error: errorUtils.errorMessage(error),
+        error: errorUtils.toError(error),
       });
     }
     resetSession(threadId, true);
@@ -882,7 +886,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("thread delete error", {
           threadId,
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
       }
       removeSession(threadId);
@@ -927,7 +931,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("thread rename error", {
           threadId,
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
         setRenamedThreads((prev) => {
           if (!(threadId in prev)) return prev;
@@ -970,7 +974,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       .catch((error: unknown) => {
         logger.error("regenerate cleanup error", {
           threadId,
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
         updateSession(threadId, (session) => ({
           ...session,
@@ -1040,7 +1044,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("conversation export error", {
           format,
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
       }
     },
@@ -1062,7 +1066,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("message export error", {
           format,
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
       }
     },

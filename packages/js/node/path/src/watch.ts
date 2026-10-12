@@ -10,13 +10,18 @@
  */
 
 import { Stats } from "fs";
+import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "path";
-import { ChokidarOptions, MatchFunction, watch } from "chokidar";
+import { errorUtils, log } from "@dbx-tools/shared-core";
+import { ChokidarOptions, MatchFunction, watch, type FSWatcher } from "chokidar";
 import { hasMagic } from "glob";
 import { findFiles, type FileFindOptions } from "./find.ts";
+import { GitIgnore } from "./git-ignore.ts";
 import { ignorePathMatcher } from "./ignore.ts";
 import { pathMatchTests } from "./match.ts";
 import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan.ts";
+
+const logger = log.logger("path/watch");
 
 /** Chokidar options extended with the shared dbx-tools ignore configuration. */
 export interface FileWatchOptions
@@ -25,6 +30,7 @@ export interface FileWatchOptions
 }
 
 interface NormalizedFileWatchOptions extends Omit<FileWatchOptions, "ignore" | "ignoreOptions"> {
+  gitIgnore?: GitIgnore;
   ignored: MatchFunction;
 }
 
@@ -33,15 +39,18 @@ interface NormalizedFileWatchOptions extends Omit<FileWatchOptions, "ignore" | "
  * ignore groups so it prunes the same paths {@link findFiles} skips for the
  * same patterns.
  */
-export function watchFiles(paths: string | string[], options?: FileWatchOptions) {
-  const normalized = toNormalizedFileWatchOptions(options);
-  const { ignored, cwd, followSymlinks, ...chokidarOptions } = normalized;
+export async function watchFiles(
+  paths: string | string[],
+  options?: FileWatchOptions,
+): Promise<FSWatcher> {
+  const normalized = await toNormalizedFileWatchOptions(options);
+  const { gitIgnore, ignored, cwd, followSymlinks, ...chokidarOptions } = normalized;
   const { paths: literals, globs } = partitionPaths(paths);
 
   let watchPaths: string[];
   if (globs.length > 0) {
     const distinctWatchPaths = new Set(literals);
-    for (const path of findFiles(globs, toFindFilesOptions(normalized))) {
+    for await (const path of findFiles(globs, toFindFilesOptions(normalized))) {
       distinctWatchPaths.add(path);
     }
     watchPaths = [...distinctWatchPaths];
@@ -49,12 +58,21 @@ export function watchFiles(paths: string | string[], options?: FileWatchOptions)
     watchPaths = literals;
   }
 
-  return watch(watchPaths, {
+  const watcher = watch(watchPaths, {
     ...chokidarOptions,
     cwd,
     followSymlinks,
     ignored,
   });
+  if (gitIgnore) {
+    attachGitIgnoreWatcher(watcher, gitIgnore, watchPaths, {
+      cwd,
+      followSymlinks,
+      ignoreOptions: options?.ignoreOptions,
+      persistent: chokidarOptions.persistent,
+    });
+  }
+  return watcher;
 }
 
 function partitionPaths(paths: string | string[]): { paths: string[]; globs: string[] } {
@@ -71,16 +89,23 @@ function partitionPaths(paths: string | string[]): { paths: string[]; globs: str
  * built-in groups are consolidated into one chokidar {@link MatchFunction}. When
  * `stats` marks a directory, the matcher also tests `path + "/"` for pruning.
  */
-function toNormalizedFileWatchOptions(options?: FileWatchOptions): NormalizedFileWatchOptions & {
-  cwd: string;
-  followSymlinks: boolean;
-} {
+async function toNormalizedFileWatchOptions(options?: FileWatchOptions): Promise<
+  NormalizedFileWatchOptions & {
+    cwd: string;
+    followSymlinks: boolean;
+  }
+> {
   const { cwd, ignore, followSymlinks, ignoreOptions, ...chokidarOptions } = options ?? {};
+  const root = cwd ?? process.cwd();
+  const gitIgnore = ignoreOptions?.git
+    ? await GitIgnore.load(root, { ignoreOptions, followSymlinks })
+    : undefined;
   return {
     ...chokidarOptions,
-    cwd: cwd ?? process.cwd(),
+    cwd: root,
     followSymlinks: followSymlinks ?? FOLLOW_SYMLINKS_DEFAULT,
-    ignored: toWatchMatchFunction(ignore, ignoreOptions, cwd ?? process.cwd()),
+    ...(gitIgnore ? { gitIgnore } : {}),
+    ignored: toWatchMatchFunction(ignore, ignoreOptions, root, gitIgnore),
   };
 }
 
@@ -105,6 +130,7 @@ function toWatchMatchFunction(
   ignore: FileWatchOptions["ignore"] | undefined,
   ignoreOptions: FileScanIgnoreOptions | undefined,
   cwd: string,
+  gitIgnore?: GitIgnore,
 ): MatchFunction {
   const patterns: string[] = [];
   const functions: MatchFunction[] = [];
@@ -121,6 +147,7 @@ function toWatchMatchFunction(
 
   const matchPath = (path: string, stats?: Stats): boolean => {
     const rel = toCwdRelativePath(path, cwd);
+    if (gitIgnore?.ignores(rel, stats?.isDirectory() ?? false)) return true;
     if (matcher(rel)) return true;
     for (const fn of functions) {
       if (fn(rel, stats)) return true;
@@ -138,6 +165,59 @@ function toWatchMatchFunction(
   return matchPath;
 }
 
+function attachGitIgnoreWatcher(
+  watcher: FSWatcher,
+  gitIgnore: GitIgnore,
+  watchPaths: readonly string[],
+  options: {
+    cwd: string;
+    followSymlinks: boolean;
+    ignoreOptions?: FileScanIgnoreOptions;
+    persistent?: boolean;
+  },
+): void {
+  const builtInIgnore = ignorePathMatcher(options.ignoreOptions);
+  const controls = watch(".", {
+    atomic: false,
+    cwd: options.cwd,
+    followSymlinks: options.followSymlinks,
+    ignoreInitial: true,
+    persistent: options.persistent,
+    ignored(path, stats) {
+      const relativePath = toCwdRelativePath(path, options.cwd);
+      if (GitIgnore.isFile(relativePath)) return false;
+      if (builtInIgnore(relativePath) || builtInIgnore(`${relativePath}/`)) return true;
+      return stats ? !stats.isDirectory() : false;
+    },
+  });
+  const reload = (path: string): void => {
+    void readFile(resolve(options.cwd, path), "utf8")
+      .then((content) => {
+        gitIgnore.set(path, content);
+        watcher.add([...watchPaths]);
+        logger.debug(".gitignore updated", { path });
+      })
+      .catch((error) => {
+        logger.warn("failed to reload .gitignore", {
+          path,
+          error: errorUtils.toError(error),
+        });
+      });
+  };
+  controls.on("add", reload);
+  controls.on("change", reload);
+  controls.on("unlink", (path) => {
+    gitIgnore.delete(path);
+    watcher.add([...watchPaths]);
+    logger.debug(".gitignore removed", { path });
+  });
+  controls.on("error", (error) => watcher.emit("error", error));
+  const close = watcher.close.bind(watcher);
+  watcher.close = async () => {
+    await Promise.all([close(), controls.close()]);
+  };
+}
+
 /** Aligns chokidar paths with the cwd-relative form {@link findFiles} uses. */
 function toCwdRelativePath(path: string, cwd: string): string {
   if (!isAbsolute(path)) return path;
@@ -152,7 +232,7 @@ if (import.meta.main) {
   console.log("--- Starting File Watcher ---");
   console.log(`Working Directory: ${cwd}`);
 
-  const watcher = watchFiles("**/src/**", {
+  const watcher = await watchFiles("**/src/**", {
     cwd,
     ignoreInitial: false,
     ignore: ["**/index.ts", "**/core/**"],

@@ -8,7 +8,7 @@
  * @module
  */
 
-import { IgnorePatternOptions } from "./ignore.ts";
+import type { IgnorePatternOptions } from "./ignore.ts";
 import { PathMatchInput } from "./match.ts";
 
 /** Shared default used by file discovery and watching to avoid traversing symlinks. */
@@ -43,5 +43,11 @@ export interface FileScanOptions {
   signal?: AbortSignal;
 }
 
-/** Options controlling the generated ignore pattern list. */
-export type FileScanIgnoreOptions = IgnorePatternOptions;
+/** Options controlling built-in and repository `.gitignore` matching. */
+export interface FileScanIgnoreOptions extends IgnorePatternOptions {
+  /**
+   * Load root and nested `.gitignore` files using Git-compatible semantics.
+   * Defaults to false.
+   */
+  git?: boolean;
+}

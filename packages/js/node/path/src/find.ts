@@ -1,22 +1,29 @@
 /**
  * Repository-consistent file discovery over `glob`.
  *
- * Reuse {@link findFiles} when package discovery, generation, cleanup, or docs
- * tooling must honor the same ignore catalogue and symlink defaults as watchers.
- * Direct `glob` calls should be reserved for behavior that intentionally differs.
+ * Reuse {@link findFiles} or {@link findFilesSync} when package discovery,
+ * generation, cleanup, or docs tooling must honor the same ignore catalogue and
+ * symlink defaults as watchers. Direct `glob` calls should be reserved for
+ * behavior that intentionally differs.
  *
  * @module
  */
 
 import { object, type Sequence } from "@dbx-tools/shared-core";
-import { globIterateSync, IgnoreLike, type GlobOptionsWithFileTypesUnset } from "glob";
+import {
+  globIterate,
+  globIterateSync,
+  IgnoreLike,
+  type GlobOptionsWithFileTypesUnset,
+} from "glob";
+import { GitIgnore } from "./git-ignore.ts";
 import { ignorePathMatcher } from "./ignore.ts";
 import { PathMatcher, PathMatchInput, pathMatchTests, toPathMatcher } from "./match.ts";
 import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan.ts";
 
 type FileFindIgnore = PathMatchInput | readonly PathMatchInput[] | IgnoreLike;
 
-/** Glob, root, ignore, and symlink options for {@link findFiles}. */
+/** Glob, root, ignore, and symlink options for {@link findFiles} and {@link findFilesSync}. */
 export interface FileFindOptions
   extends
     Omit<
@@ -33,17 +40,51 @@ export interface FileFindOptions
  * in which case only that predicate applies). The ignore list mirrors what
  * {@link watchFiles} feeds through its matchers.
  */
-export function findFiles(pattern: string | string[], options?: FileFindOptions): Sequence<string> {
-  return object.sequence(globIterateSync(pattern, toGlobOptions(options)));
+export async function* findFiles(
+  pattern: string | string[],
+  options?: FileFindOptions,
+): AsyncGenerator<string> {
+  yield* globIterate(pattern, await toGlobOptions(options));
 }
 
-function toGlobOptions(options: FileFindOptions | undefined): GlobOptionsWithFileTypesUnset {
+/** Synchronous counterpart to {@link findFiles}. */
+export function findFilesSync(
+  pattern: string | string[],
+  options?: FileFindOptions,
+): Sequence<string> {
+  return object.sequence(globIterateSync(pattern, toGlobOptionsSync(options)));
+}
+
+async function toGlobOptions(
+  options: FileFindOptions | undefined,
+): Promise<GlobOptionsWithFileTypesUnset> {
+  const { cwd, ignoreOptions, followSymlinks } = options ?? {};
+  const root = cwd ?? process.cwd();
+  const gitIgnore = ignoreOptions?.git
+    ? await GitIgnore.load(root, { ignoreOptions, followSymlinks })
+    : undefined;
+  return buildGlobOptions(options, gitIgnore);
+}
+
+function toGlobOptionsSync(options: FileFindOptions | undefined): GlobOptionsWithFileTypesUnset {
+  const { cwd, ignoreOptions, followSymlinks } = options ?? {};
+  const root = cwd ?? process.cwd();
+  const gitIgnore = ignoreOptions?.git
+    ? GitIgnore.loadSync(root, { ignoreOptions, followSymlinks })
+    : undefined;
+  return buildGlobOptions(options, gitIgnore);
+}
+
+function buildGlobOptions(
+  options: FileFindOptions | undefined,
+  gitIgnore: GitIgnore | undefined,
+): GlobOptionsWithFileTypesUnset {
   const { cwd, ignore, ignoreOptions, followSymlinks, ...restOptions } = options ?? {};
   return {
     ...restOptions,
     cwd: cwd ?? process.cwd(),
     follow: followSymlinks ?? FOLLOW_SYMLINKS_DEFAULT,
-    ignore: normalizeIgnore(ignore, ignoreOptions),
+    ignore: normalizeIgnore(ignore, ignoreOptions, gitIgnore),
   };
 }
 
@@ -66,7 +107,7 @@ function isIgnoreLike(value: unknown): value is IgnoreLike {
   return false;
 }
 /**
- * Builds the {@link IgnoreLike} object {@link findFiles} hands to `glob`.
+ * Builds the {@link IgnoreLike} object file discovery hands to `glob`.
  *
  * A caller-supplied `IgnoreLike` (an object, not string/array) is consulted
  * first - its `ignored`/`childrenIgnored` win - after which the shared
@@ -78,6 +119,7 @@ function isIgnoreLike(value: unknown): value is IgnoreLike {
 function normalizeIgnore(
   ignore: FileFindIgnore | undefined,
   ignoreOptions: FileScanIgnoreOptions | undefined,
+  gitIgnore: GitIgnore | undefined,
 ): IgnoreLike {
   const ignoreLike: IgnoreLike | undefined = isIgnoreLike(ignore) ? ignore : undefined;
   const ignorePathMatcherInputs: PathMatchInput[] | undefined =
@@ -96,6 +138,7 @@ function normalizeIgnore(
     ignored(path) {
       if (ignoreLike?.ignored?.(path)) return true;
       const patheRelative = path.relative();
+      if (gitIgnore?.ignores(patheRelative, path.isDirectory())) return true;
       const ignore = ignoreMatcher(patheRelative);
       return ignore;
     },
@@ -103,6 +146,7 @@ function normalizeIgnore(
       if (ignoreLike?.childrenIgnored?.(path)) return true;
       const patheRelative = path.relative();
       if (patheRelative) {
+        if (gitIgnore?.ignores(patheRelative, true)) return true;
         if (ignoreMatcher(patheRelative)) {
           return true;
         } else if (ignoreMatcher(patheRelative + "/")) {
@@ -131,7 +175,7 @@ if (import.meta.main) {
       test: true,
     },
   });
-  for (const file of files) {
+  for await (const file of files) {
     console.log(file);
   }
   const elapsed = performance.now() - startTime;

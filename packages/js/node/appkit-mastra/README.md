@@ -254,7 +254,7 @@ With `lakebase()` registered, both default to enabled:
 
 - storage uses a per-agent schema for durable threads and messages;
 - memory uses a shared vector index for semantic recall;
-- the service-principal pool is created outside any request so OBO user
+- AppKit's service-principal pool is captured outside any request so OBO user
   identities are not captured in background storage work.
 
 Without `lakebase()`, agents are stateless unless you provide explicit storage
@@ -857,40 +857,46 @@ cancellation, reports complete tool names/arguments and trace IDs, and starts a
 new thread on `reset()`. It deliberately does not replace production feedback,
 MLflow reporting, OTel tracing, or the official AI SDK chat route.
 
-## Feedback And Observability
+## Feedback and observability
 
 `observability.buildObservability()` wires Mastra tracing when OTLP export is
 configured. `mlflow.resolveFeedbackEnabled()` turns MLflow feedback on when both
 trace export and an MLflow experiment are configured, unless the plugin config
 forces a value. Explicit `feedback: true` requires `MLFLOW_EXPERIMENT_ID` or
-`MLFLOW_EXPERIMENT_NAME` and fails app startup when neither is available. The
-plugin also stamps each chat turn's request/response onto
-the request's exported root span via `telemetry.attachChatTurnTelemetry()` so
-MLflow's UC `*_trace_unified` view can show them. It uses AppKit's HTTP server
-span when present and creates one request-lifetime fallback span otherwise.
-Mastra's own `mastra.agent_run.*` attributes sit on a child span that the view
-never reads. Text-only turns use raw prompt and answer previews, while
-`appkit.mastra.chat.messages` and `appkit.mastra.chat.response` retain the
-serialized envelopes. `appkit.mastra.identity.mode` records `obo` versus
-`service-principal`. The experiment UI's User and Tags columns read the OTel
-attributes Databricks documents for inbound traces: `user.id` (forwarded email
-or user id), `session.id` (Mastra thread id), `mlflow.spanType` (`AGENT` on the
-root, `GENIE` on `ask_genie`), `mlflow.traceTag.agent=<first model id>` on every
-chat, and `mlflow.traceTag.genie=true` when the turn called Genie. Model changes
-later in the turn do not replace the `agent` tag, and no separate `model` tag is
-written. `obo_auth=true` and `sp_auth=true` independently record whether each
-Databricks authentication mode was invoked during the turn, so a mixed-auth
-turn keeps both tags. `local=true` is added automatically when
-`isDatabricksAppEnv()` is false. The `@dbx-tools/tunnel` AppKit plugin injects
-`tunnel=portr|frp` and `tunnel_subdomain=<name>` through AppKit's generic
-request-tag context when the public host matches its tunnel configuration.
-Other AppKit plugins can use `injectRequestTag(s)`, and direct middleware callers
-can seed `ChatTurnTelemetryOptions.tags`; package and application code can then
-add or replace tags anywhere inside the active request with
-`recordActiveTraceTag(name, value)` or `recordActiveTraceTags({ name: value })`.
-The reserved `mlflow.traceTag.` prefix persists these as trace tags rather than
-ordinary span metadata.
-`appkit.mastra.genie.used` remains as a searchable custom attribute.
+`MLFLOW_EXPERIMENT_NAME` and fails app startup when neither is available.
+
+`telemetry.attachChatTurnTelemetry()` writes each chat request and response to
+the exported root span so MLflow's UC `*_trace_unified` view can display the
+turn. It uses AppKit's HTTP server span when present and creates one
+request-lifetime fallback span otherwise. Mastra's `mastra.agent_run.*`
+attributes remain on a child span.
+
+### Trace fields and tags
+
+- Text-only turns use raw prompt and answer previews.
+  `appkit.mastra.chat.messages` and `appkit.mastra.chat.response` retain the
+  serialized envelopes.
+- `appkit.mastra.identity.mode` records `obo` or `service-principal`.
+- `user.id` records the forwarded email or user ID, and `session.id` records the
+  Mastra thread ID.
+- `mlflow.spanType` is `AGENT` on the root and `GENIE` on `ask_genie`.
+- `mlflow.traceTag.agent` records the first model ID for the turn.
+  `mlflow.traceTag.genie=true` is added when the turn calls Genie. Later model
+  changes do not replace the `agent` tag, and the plugin does not write a
+  separate `model` tag.
+- `obo_auth=true` and `sp_auth=true` independently record which Databricks
+  authentication modes ran. A mixed-auth turn retains both tags.
+- `local=true` is added when `isDatabricksAppEnv()` is false.
+- `@dbx-tools/tunnel` adds `tunnel=portr|frp` and
+  `tunnel_subdomain=<name>` when the public host matches its tunnel config.
+- Other AppKit plugins can call `injectRequestTag()` or `injectRequestTags()`.
+  Direct middleware callers can seed `ChatTurnTelemetryOptions.tags`.
+  Application code can update active-request tags with
+  `recordActiveTraceTag()` or `recordActiveTraceTags()`.
+
+The reserved `mlflow.traceTag.` prefix persists values as trace tags instead of
+ordinary span metadata. `appkit.mastra.genie.used` remains a searchable custom
+attribute.
 
 ```ts
 mastra({
@@ -919,7 +925,7 @@ UC-linked experiment. Inside a Databricks App (`isDatabricksAppEnv()`), this
 provider stays off so AppKit remains the single global OTel provider and the
 platform telemetry sidecar owns export.
 
-### Databricks Apps -> Unity Catalog (the supported path)
+### Export Databricks Apps traces to Unity Catalog
 
 Managed MLflow has **no** OTLP ingest endpoint. Do not set
 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to the workspace host - probes of

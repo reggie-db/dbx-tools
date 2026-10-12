@@ -174,7 +174,7 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
 }
 
 /**
- * Package dirs under `rootAbs`, found with a single `find.findFiles` scan from
+ * Package dirs under `rootAbs`, found with a single `find.findFilesSync` scan from
  * `@dbx-tools/path` for module files beneath any `src/`. A package is the
  * folder that OWNS the `src/` - the segments before the FIRST `src/` - so a package's
  * own subfolders never become nested packages (outermost wins). Barrels/tests/decls
@@ -184,7 +184,7 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
  */
 function collectPackageDirs(rootAbs: string): string[] {
   const owners = new Set<string>();
-  for (const file of find.findFiles(SRC_MODULE_GLOB, { cwd: rootAbs })) {
+  for (const file of find.findFilesSync(SRC_MODULE_GLOB, { cwd: rootAbs })) {
     if (!isModuleFile(file)) continue;
     const segs = toPosix(file).split("/");
     const srcIdx = segs.indexOf("src");

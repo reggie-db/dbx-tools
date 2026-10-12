@@ -57,7 +57,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     // Watch the package roots; a source edit inside a package rebuilds just that
     // package's `index.ts` barrel (no re-synth - the projenrc watcher owns that).
     // watchLoop already drops generated paths, so a barrel write never re-triggers us.
-    watchLoop(
+    await watchLoop(
       "barrels",
       watchRoots(),
       (changed) => {

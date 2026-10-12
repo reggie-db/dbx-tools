@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { ACCESS_TOKEN_HEADER, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
-import { hash, log } from "@dbx-tools/shared-core";
+import { errorUtils, hash, log } from "@dbx-tools/shared-core";
 import type { SshRoute } from "@dbx-tools/shared-databricks-sandbox";
 import type { NextFunction, Request, Response } from "express";
 import ProxyModule from "http-proxy-3";
@@ -50,20 +50,26 @@ interface RouteMatch {
   stripPrefix?: string;
 }
 
-/** Owns user-scoped AppKit paths that proxy to HTTP ports over SSH forwarding. */
+/**
+ * Owns user-scoped AppKit paths that proxy to HTTP ports over SSH forwarding.
+ *
+ * Route ownership is checked against AppKit request identity before HTTP or
+ * WebSocket traffic reaches the remote service. User hashes only prevent path
+ * collisions and do not replace ownership checks.
+ */
 export class SshRouteRegistry {
   private readonly routes = new Map<string, RouteTarget>();
   private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
   private readonly websocketServer = new WebSocketServer({ noServer: true });
 
+  /** Creates an empty registry beneath one normalized AppKit route prefix. */
   constructor(private readonly prefix: string) {
     this.proxy.on("error", (error, request, response) => {
       logger.warn("SSH route proxy failed", {
         method: request.method,
         path: request.url,
-        errorName: error.name,
-        errorMessage: error.message,
+        error,
       });
       if ("writeHead" in response && !response.headersSent) response.writeHead(502);
       if ("end" in response) response.end("SSH route unavailable");
@@ -76,6 +82,7 @@ export class SshRouteRegistry {
     });
   }
 
+  /** Lists routes, optionally filtered by machine and owner. Internal routes are excluded by default. */
   list(
     machineId?: string,
     ownerId?: string,
@@ -88,11 +95,17 @@ export class SshRouteRegistry {
       .filter((route) => !machineId || route.machineId === machineId);
   }
 
-  /** Collision-avoidance namespace assigned to one authenticated user. */
+  /** Returns the collision-avoidance path namespace for one authenticated user. */
   userPathPrefix(ownerId: string): string {
     return normalizeRoutePath(`${this.prefix}/${hash.fnvHash(ownerId)}`);
   }
 
+  /**
+   * Registers or reuses a route and starts its local SSH forwarding bridge.
+   *
+   * User-created paths are placed beneath {@link userPathPrefix}. Internal
+   * built-in service paths must provide their complete reserved path.
+   */
   async add(session: SshSession, input: RouteInput): Promise<SshRoute> {
     const prepared = this.prepare(input);
     if (prepared.previous) return prepared.previous.route;
@@ -115,6 +128,7 @@ export class SshRouteRegistry {
     return prepared.route;
   }
 
+  /** Removes an owned route, closes active sockets, and deletes its local bridge. */
   async remove(routeId: string, ownerId?: string): Promise<boolean> {
     const entry = this.routes.get(routeId);
     if (!entry || (ownerId && entry.ownerId !== ownerId)) return false;
@@ -125,6 +139,7 @@ export class SshRouteRegistry {
     return true;
   }
 
+  /** Removes every matching route for one machine and optional owner. */
   async removeMachine(machineId: string, ownerId?: string): Promise<void> {
     const routeIds = [...this.routes.values()]
       .filter((entry) => !ownerId || entry.ownerId === ownerId)
@@ -133,6 +148,10 @@ export class SshRouteRegistry {
     await Promise.all(routeIds.map((routeId) => this.remove(routeId, ownerId)));
   }
 
+  /**
+   * Returns Express middleware that authorizes, rewrites, and proxies matching
+   * HTTP requests. Unmatched requests continue to the next AppKit handler.
+   */
   middleware() {
     return (request: Request, response: Response, next: NextFunction) => {
       const requestUser = request.header(USER_ID_HEADER) ?? request.header(USER_EMAIL_HEADER);
@@ -180,7 +199,7 @@ export class SshRouteRegistry {
     };
   }
 
-  /** Proxies matching HTTP upgrade requests, including WebSocket routes. */
+  /** Proxies an authorized matching HTTP Upgrade request, including WebSockets. */
   handleUpgrade(request: IncomingMessage, socket: Socket, head: Buffer): boolean {
     const url = new URL(request.url ?? "/", "http://localhost");
     const requestUser =
@@ -199,7 +218,7 @@ export class SshRouteRegistry {
     return true;
   }
 
-  /** Whether an upgrade path belongs to a registered route. */
+  /** Returns whether an upgrade path belongs to a registered route or browser relay. */
   canHandleUpgrade(path: string): boolean {
     if (this.directRoute(path)) return true;
     return [...this.routes.values()].some(
@@ -209,6 +228,7 @@ export class SshRouteRegistry {
     );
   }
 
+  /** Removes every route and closes the shared HTTP/WebSocket proxy. */
   async close(): Promise<void> {
     await Promise.all([...this.routes.keys()].map((routeId) => this.remove(routeId)));
     this.proxy.close();
@@ -347,8 +367,7 @@ async function injectHtmlHead(
     response.end(body);
   } catch (error) {
     logger.warn("SSH route HTML injection failed", {
-      errorName: error instanceof Error ? error.name : undefined,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      error: errorUtils.toError(error),
     });
     if (!response.headersSent) response.writeHead(502);
     response.end("SSH route unavailable");
@@ -519,8 +538,7 @@ function bridgeSocket(socket: Socket, channelPromise: Promise<ClientChannel>): v
     },
     (error) => {
       logger.warn("SSH route forwarding channel failed", {
-        errorName: error instanceof Error ? error.name : undefined,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        error: errorUtils.toError(error),
       });
       pending.destroy();
       socket.destroy();
@@ -571,8 +589,7 @@ function proxyWebSocket(
         if (socket.destroyed) return;
         logger.warn("SSH route WebSocket upstream failed", {
           path: request.url,
-          errorName: error.name,
-          errorMessage: error.message,
+          error,
         });
         socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
       });
@@ -580,8 +597,7 @@ function proxyWebSocket(
     .catch((error: unknown) => {
       logger.warn("SSH route WebSocket forwarding failed", {
         path: request.url,
-        errorName: error instanceof Error ? error.name : undefined,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        error: errorUtils.toError(error),
       });
       if (!socket.destroyed) {
         socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");

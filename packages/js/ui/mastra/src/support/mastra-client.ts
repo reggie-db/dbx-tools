@@ -33,6 +33,17 @@ export interface MastraStreamResponse {
   stream: ReadableStream<UIMessageChunk>;
 }
 
+/** Terminal HTTP failure returned before a chat stream was established. */
+export class MastraChatRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "MastraChatRequestError";
+  }
+}
+
 /** One memory thread returned by the native Mastra client. */
 export type MastraMemoryThread = ListMemoryThreadsResponse["threads"][number];
 
@@ -634,7 +645,10 @@ async function assertChatResponse(response: Response): Promise<void> {
       .clone()
       .text()
       .catch(() => ""));
-  throw new Error(message.trim() || `Chat request failed (${response.status})`);
+  throw new MastraChatRequestError(
+    message.trim() || `Chat request failed (${response.status})`,
+    response.status,
+  );
 }
 
 function responseErrorMessage(body: unknown): string | undefined {

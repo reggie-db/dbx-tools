@@ -36,16 +36,24 @@ export type NewMachineAssignment = z.infer<typeof NewMachineAssignmentSchema>;
 
 type LakebasePool = PgPoolLike & PgQueryable;
 
-/** Lakebase-backed ownership and expiration records shared by every app instance. */
+/**
+ * Lakebase-backed ownership and expiration records shared by every app instance.
+ *
+ * The runtime treats these records as its application-level machine visibility
+ * boundary. Databricks workspace authorization remains authoritative for the
+ * underlying REST and SSH operations.
+ */
 export class LakebaseMachineOwnershipStore {
   private constructor(private readonly pool: LakebasePool) {}
 
+  /** Creates the assignments table and returns a store backed by the given pool. */
   static async create(pool: LakebasePool): Promise<LakebaseMachineOwnershipStore> {
     const store = new LakebaseMachineOwnershipStore(pool);
     await store.migrate();
     return store;
   }
 
+  /** Lists assignments in one workspace, optionally restricted to one AppKit user. */
   async listAssignments(workspaceScope: string, userId?: string): Promise<MachineAssignment[]> {
     const values = userId ? [workspaceScope, userId] : [workspaceScope];
     const condition = userId ? "workspace_scope = $1 AND user_id = $2" : "workspace_scope = $1";
@@ -59,6 +67,7 @@ export class LakebaseMachineOwnershipStore {
     return result.rows.map(parseAssignmentRow);
   }
 
+  /** Returns one assignment by workspace, user, and Sandbox ID. */
   async get(
     workspaceScope: string,
     userId: string,
@@ -74,6 +83,7 @@ export class LakebaseMachineOwnershipStore {
     return row ? parseAssignmentRow(row) : undefined;
   }
 
+  /** Inserts or replaces one assignment and its managed name and expiration. */
   async assign(input: NewMachineAssignment): Promise<void> {
     const assignment = NewMachineAssignmentSchema.parse(input);
     await this.pool.query(
@@ -92,6 +102,7 @@ export class LakebaseMachineOwnershipStore {
     );
   }
 
+  /** Removes one user's assignment and returns whether a row was deleted. */
   async unassign(workspaceScope: string, userId: string, machineId: string): Promise<boolean> {
     const result = await this.pool.query(
       `DELETE FROM ${TABLE}
@@ -101,6 +112,7 @@ export class LakebaseMachineOwnershipStore {
     return (result.rowCount ?? 0) > 0;
   }
 
+  /** Removes every assignment for one Sandbox and returns the deleted row count. */
   async unassignAll(workspaceScope: string, machineId: string): Promise<number> {
     const result = await this.pool.query(
       `DELETE FROM ${TABLE} WHERE workspace_scope = $1 AND machine_id = $2`,
@@ -109,10 +121,12 @@ export class LakebaseMachineOwnershipStore {
     return result.rowCount ?? 0;
   }
 
+  /** Runs one reconciliation pass while holding a workspace-scoped advisory lock. */
   async withReaperLock<T>(workspaceScope: string, operation: () => Promise<T>): Promise<T> {
     return advisoryLock.withAdvisoryLock(this.pool, [...REAPER_LOCK, workspaceScope], operation);
   }
 
+  /** Releases store-owned resources. The shared AppKit Lakebase pool remains open. */
   async close(): Promise<void> {}
 
   private async migrate(): Promise<void> {

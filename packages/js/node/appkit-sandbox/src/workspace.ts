@@ -28,11 +28,22 @@ WebSockets are supported only through the registered HTTP route's standard Upgra
 
 /** Options for selecting and naming the SSH-backed Mastra workspace sandbox. */
 export interface SshWorkspaceSandboxOptions {
+  /**
+   * Assigned Sandbox ID or request-scoped resolver. When omitted, a running
+   * assigned machine is preferred, followed by the first assigned machine.
+   */
   machineId?: string | ((context: { requestContext: RequestContext }) => string | undefined);
+  /** Optional display name presented by Mastra instead of the Sandbox name. */
   displayName?: string;
 }
 
-/** Mastra workspace sandbox backed by one existing Databricks Sandbox. */
+/**
+ * Mastra workspace sandbox backed by one existing assigned Databricks Sandbox.
+ *
+ * Lifecycle and command methods delegate to {@link SshRuntime}, so assignment,
+ * authentication fallback, SSH key, and host-verification policy match the
+ * AppKit plugin tools and routes.
+ */
 export class SshWorkspaceSandbox extends MastraSandbox {
   readonly provider = "appkit-sandbox";
   status: WorkspaceSandbox["status"] = "pending";
@@ -47,6 +58,7 @@ export class SshWorkspaceSandbox extends MastraSandbox {
     super({ name });
   }
 
+  /** Starts the assigned Sandbox and reports a connected Mastra outcome. */
   async start(options?: SandboxStartOptions): Promise<SandboxStartResult> {
     await this.withAuth("startMachine", (client) =>
       this.runtime.startMachine(client, this.userId, this.id, options?.abortSignal),
@@ -55,6 +67,7 @@ export class SshWorkspaceSandbox extends MastraSandbox {
     return { outcome: "connected" };
   }
 
+  /** Stops the assigned Sandbox. */
   async stop(): Promise<void> {
     await this.withAuth("stopMachine", (client) =>
       this.runtime.stopMachine(client, this.userId, this.id),
@@ -62,13 +75,16 @@ export class SshWorkspaceSandbox extends MastraSandbox {
     this.status = "stopped";
   }
 
+  /** Disconnects local session state without deleting the remote Sandbox. */
   async destroy(): Promise<void> {
     this.runtime.disconnect(new DatabricksScope(this.client).value, this.userId, this.id);
     this.status = "destroyed";
   }
 
+  /** Mastra snapshot hook. Databricks Sandboxes do not expose snapshot operations. */
   async snapshot(): Promise<void> {}
 
+  /** Runs a command through the shared runtime and current AppKit request identity. */
   override async executeCommand(
     command: string,
     args: string[] = [],
@@ -99,6 +115,7 @@ export class SshWorkspaceSandbox extends MastraSandbox {
     );
   }
 
+  /** Returns the latest assigned machine metadata in Mastra's Sandbox shape. */
   async getInfo(): Promise<SandboxInfo> {
     const response = await this.withAuth("listMachines", (client) =>
       this.runtime.listMachines(client, this.userId),
@@ -117,6 +134,7 @@ export class SshWorkspaceSandbox extends MastraSandbox {
     };
   }
 
+  /** Returns agent instructions for machine reuse and public route requirements. */
   getInstructions(): string {
     return `Commands run on Databricks Sandbox ${this.id} over SSH. Prefer reusing this existing Sandbox. Create another only when the user explicitly requests a separate Sandbox.\n\n${ROUTING_INSTRUCTIONS}`;
   }
@@ -135,7 +153,15 @@ export class SshWorkspaceSandbox extends MastraSandbox {
   }
 }
 
-/** Creates a request-scoped Mastra workspace resolver for existing SSH machines. */
+/**
+ * Creates a request-scoped Mastra workspace resolver for existing assigned
+ * Sandboxes.
+ *
+ * The resolver never creates a Sandbox. Without an assigned machine, it returns
+ * a placeholder that keeps native Code Mode available and rejects only
+ * SSH-backed command execution. A configured but unavailable `machineId`
+ * produces a Mastra resource-not-found error.
+ */
 export function sshWorkspaceSandbox(
   runtime: SshRuntime,
   options: SshWorkspaceSandboxOptions = {},

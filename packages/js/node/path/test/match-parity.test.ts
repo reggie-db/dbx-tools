@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join, relative, sep, isAbsolute } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { findFiles } from "../src/find.ts";
+import { findFiles, findFilesSync } from "../src/find.ts";
 import { watchFiles } from "../src/watch.ts";
 
 const FIXTURE_SOURCE = fileURLToPath(new URL("fixtures/sample-tree", import.meta.url));
@@ -34,15 +34,24 @@ after(() => {
 
 const toPosix = (path: string): string => path.split(sep).join("/");
 
-/** Files fileScan keeps for the fixture (relative, posix) given `ignore`. */
-function scannedFiles(ignore: string | string[] | undefined): Set<string> {
-  return new Set([...findFiles("**", { cwd: root, nodir: true, ignore })].map(toPosix));
+/** Files synchronous discovery keeps for the fixture (relative, posix). */
+function scannedFilesSync(ignore: string | string[] | undefined): Set<string> {
+  return new Set([...findFilesSync("**", { cwd: root, nodir: true, ignore })].map(toPosix));
+}
+
+/** Files asynchronous discovery keeps for the fixture (relative, posix). */
+async function scannedFiles(ignore: string | string[] | undefined): Promise<Set<string>> {
+  const files = new Set<string>();
+  for await (const path of findFiles("**", { cwd: root, nodir: true, ignore })) {
+    files.add(toPosix(path));
+  }
+  return files;
 }
 
 /** Files fileWatch reports for the (static) fixture (relative, posix), then closes. */
 async function watchedFiles(ignore: string | string[] | undefined): Promise<Set<string>> {
   const files = new Set<string>();
-  const watcher = watchFiles(root, {
+  const watcher = await watchFiles(root, {
     cwd: root,
     ignore,
     persistent: false,
@@ -68,8 +77,10 @@ async function watchedFiles(ignore: string | string[] | undefined): Promise<Set<
  * Asserts parity, then returns the (shared) sorted result for concrete checks.
  */
 async function keptByBoth(patterns: string | string[] | undefined): Promise<string[]> {
-  const scanned = [...scannedFiles(patterns)].sort();
+  const scanned = [...(await scannedFiles(patterns))].sort();
+  const scannedSync = [...scannedFilesSync(patterns)].sort();
   const watched = [...(await watchedFiles(patterns))].sort();
+  assert.deepEqual(scanned, scannedSync);
   assert.deepEqual(watched, scanned);
   return scanned;
 }

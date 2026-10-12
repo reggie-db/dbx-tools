@@ -1,6 +1,6 @@
 import type { WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
-import { log, net, object } from "@dbx-tools/shared-core";
+import { errorUtils, log, net, object } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 const SANDBOX_ROOT = "/api/2.0/lakebox";
@@ -51,20 +51,29 @@ export type SshKeyEntry = z.infer<typeof sshKeySchema>;
 
 type RequestMethod = "GET" | "POST" | "DELETE";
 
-/** REST client for existing Databricks Sandboxes and their registered SSH keys. */
+/**
+ * REST client for Databricks Sandboxes and registered SSH keys.
+ *
+ * Responses are validated before they reach the runtime. Requests use the
+ * supplied AppKit workspace client and emit sanitized diagnostics without
+ * access tokens or request headers.
+ */
 export class DatabricksSandboxClient {
   private readonly scope: string;
 
+  /** Creates a client and derives its stable workspace assignment scope. */
   constructor(private readonly client: WorkspaceClient) {
     const workspaceId = client.config.workspaceId || process.env.DATABRICKS_WORKSPACE_ID;
     const host = client.config.host || process.env.DATABRICKS_HOST;
     this.scope = workspaceId || net.urlBuilder(host)?.origin || "workspace";
   }
 
+  /** Returns the workspace identifier used to partition Lakebase assignments. */
   workspaceScope(): string {
     return this.scope;
   }
 
+  /** Lists every Sandbox visible to the workspace client, following pagination. */
   async list(signal?: AbortSignal): Promise<SandboxEntry[]> {
     const entries: SandboxEntry[] = [];
     let pageToken: string | undefined;
@@ -81,12 +90,14 @@ export class DatabricksSandboxClient {
     return entries;
   }
 
+  /** Returns one Sandbox by ID. */
   async get(id: string, signal?: AbortSignal): Promise<SandboxEntry> {
     return sandboxEntrySchema.parse(
       await this.request("GET", `${SANDBOX_PATH}/${encodeURIComponent(id)}`, { signal }),
     );
   }
 
+  /** Creates a Sandbox with an optional service-managed name. */
   async create(name?: string, signal?: AbortSignal): Promise<SandboxEntry> {
     return sandboxCreateResponseSchema.parse(
       await this.request("POST", SANDBOX_PATH, {
@@ -96,10 +107,12 @@ export class DatabricksSandboxClient {
     );
   }
 
+  /** Permanently deletes one Sandbox. */
   async delete(id: string, signal?: AbortSignal): Promise<void> {
     await this.request("DELETE", `${SANDBOX_PATH}/${encodeURIComponent(id)}`, { signal });
   }
 
+  /** Starts one Sandbox and returns its updated record. */
   async start(id: string, signal?: AbortSignal): Promise<SandboxEntry> {
     return sandboxEntrySchema.parse(
       await this.request("POST", `${SANDBOX_PATH}/${encodeURIComponent(id)}/start`, {
@@ -109,6 +122,7 @@ export class DatabricksSandboxClient {
     );
   }
 
+  /** Stops one Sandbox and returns its updated record. */
   async stop(id: string, signal?: AbortSignal): Promise<SandboxEntry> {
     return sandboxEntrySchema.parse(
       await this.request("POST", `${SANDBOX_PATH}/${encodeURIComponent(id)}/stop`, {
@@ -118,11 +132,13 @@ export class DatabricksSandboxClient {
     );
   }
 
+  /** Lists SSH public keys registered in the workspace. */
   async listKeys(signal?: AbortSignal): Promise<SshKeyEntry[]> {
     const response = sshKeyListSchema.parse(await this.request("GET", SSH_KEYS_PATH, { signal }));
     return response.sshKeys;
   }
 
+  /** Registers an SSH public key and returns the Databricks key record. */
   async registerKey(publicKey: string, name: string, signal?: AbortSignal): Promise<SshKeyEntry> {
     return sshKeySchema.parse(
       await this.request("POST", SSH_KEYS_PATH, {
@@ -156,7 +172,7 @@ export class DatabricksSandboxClient {
       queryKeys: options.query ? Object.keys(options.query).sort() : [],
       hasPayload: options.payload !== undefined,
     };
-    logger.warn("sandbox REST request", requestMetadata);
+    logger.debug("sandbox REST request", requestMetadata);
     try {
       const response = await this.client.apiClient.request(
         {
@@ -169,7 +185,7 @@ export class DatabricksSandboxClient {
         },
         options.signal ? databricks.toContext(options.signal) : undefined,
       );
-      logger.warn("sandbox REST response", {
+      logger.debug("sandbox REST response", {
         ...requestMetadata,
         durationMs: Date.now() - startedAt,
       });
@@ -178,14 +194,17 @@ export class DatabricksSandboxClient {
       logger.warn("sandbox REST request failed", {
         ...requestMetadata,
         durationMs: Date.now() - startedAt,
-        ...errorMetadata(error),
+        ...errorMetadata(errorUtils.toError(error)),
       });
       throw error;
     }
   }
 }
 
-/** Returns whether an API error indicates that Sandboxes are unavailable in the workspace. */
+/**
+ * Returns whether an API error indicates that Sandboxes are unavailable in the
+ * workspace or region.
+ */
 export function isSandboxUnavailable(error: unknown): boolean {
   const record = error as {
     status?: number;
@@ -201,19 +220,17 @@ export function isSandboxUnavailable(error: unknown): boolean {
   );
 }
 
-function errorMetadata(error: unknown): Record<string, unknown> {
-  const record = object.isRecord(error) ? error : {};
-  const response = object.isRecord(record.response) ? record.response : {};
+function errorMetadata(error: Error): Record<string, unknown> {
+  const record: Record<string, unknown> = object.isRecord(error) ? error : {};
+  const response: Record<string, unknown> = object.isRecord(record.response) ? record.response : {};
   const body = record.body ?? response.body ?? response.data;
   return {
-    errorName: error instanceof Error ? error.name : undefined,
-    errorMessage: error instanceof Error ? error.message : String(error),
+    error,
     status: record.status ?? record.statusCode ?? response.status,
     statusText: response.statusText,
     errorCode: record.errorCode ?? record.error_code ?? bodyField(body, "error_code"),
     requestId: record.requestId ?? record.request_id ?? bodyField(body, "request_id"),
     responseBody: safeBody(body),
-    cause: error instanceof Error && error.cause ? safeBody(error.cause) : undefined,
   };
 }
 

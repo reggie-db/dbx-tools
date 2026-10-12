@@ -5,6 +5,7 @@ import { Button, cn } from "@dbx-tools/ui/react";
 // the per-message follow-up suggestions use this so the two look and
 // behave identically.
 
+/** Props for the shared starter and follow-up question pill row. */
 export interface SuggestionPillsProps {
   /** Questions to render as clickable pills. Empty renders nothing. */
   questions: string[];

@@ -33,10 +33,10 @@ export function tokenMetadata(token: Token | undefined, now = new Date()): Recor
   };
 }
 
-/** Failure classification without serializing error messages or causes. */
-export function failureMetadata(cause: unknown): Record<string, unknown> {
+/** Failure classification with the normalized exception retained for diagnostics. */
+export function failureMetadata(cause: Error): Record<string, unknown> {
   return {
-    name: cause instanceof Error ? cause.name : typeof cause,
+    error: cause,
     ...(cause instanceof AuthError ? { kind: cause.kind } : {}),
   };
 }

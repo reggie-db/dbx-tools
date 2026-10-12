@@ -219,7 +219,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
       async (error) => {
         if (controller.signal.aborted) throw error;
         this.logger.error("sidecar healthcheck failed", {
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
         await this.failAppkit();
         throw error;

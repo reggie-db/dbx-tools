@@ -44,7 +44,7 @@ export async function safeWriteProgress(
   } catch (err) {
     log.warn("writer:error", {
       ...context,
-      error: errorUtils.errorMessage(err),
+      error: errorUtils.toError(err),
     });
   }
 }

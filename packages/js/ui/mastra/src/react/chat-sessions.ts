@@ -8,13 +8,16 @@ import {
   type ThreadSession,
 } from "../support/thread-sessions.ts";
 
+/** Read or lazily create the mutable session state for one thread. */
 export type ThreadSessionReader = (threadId: string) => ThreadSession;
 
+/** Replace one thread session through a state-producing callback. */
 export type ThreadSessionUpdater = (
   threadId: string,
   updater: (session: ThreadSession) => ThreadSession,
 ) => void;
 
+/** Replace the transcript stored for one thread. */
 export type ThreadMessageWriter = (threadId: string, messages: UIMessage[]) => void;
 
 /** Own the mutable per-thread session registry behind the public chat hook. */

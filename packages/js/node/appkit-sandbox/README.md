@@ -1,25 +1,30 @@
 # @dbx-tools/appkit-sandbox
 
-AppKit plugin for Databricks Sandboxes. It provides user-scoped creation,
-discovery, lifecycle controls, deletion, SSH command execution, Mastra tools,
-Mastra workspace sandbox transport, and dynamic routes to HTTP servers running
-in a Sandbox.
+AppKit plugin for Databricks Sandboxes. It provides user-scoped machine
+management, SSH command execution, Mastra tools, Mastra workspace transport,
+and authenticated routes to HTTP services running in a Sandbox.
 
-The plugin uses the Databricks Lakebox REST API for creation, discovery,
-lifecycle controls, deletion, and SSH-key registration. It does not invoke the
+The plugin uses the Databricks Lakebox REST API. It does not invoke the
 Databricks CLI.
 
-## AppKit setup
+## Install
 
-Create one runtime and share it between the Sandbox plugin and Mastra sandbox
-resolver:
+```bash
+bun add @dbx-tools/appkit-sandbox
+```
+
+## Configure AppKit
+
+Create one
+[`SshRuntime`](https://docs.dbx.tools/api/appkit-sandbox/src-runtime-class-sshruntime/)
+and share it between the AppKit plugin and the Mastra workspace resolver:
 
 ```ts
 import { resolveSshPluginConfig } from "@dbx-tools/appkit-sandbox/config";
 import { databricksSandbox } from "@dbx-tools/appkit-sandbox/plugin";
 import { SshRuntime } from "@dbx-tools/appkit-sandbox/runtime";
-import { sshWorkspaceSandbox } from "@dbx-tools/appkit-sandbox/workspace";
 import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-sandbox/skills";
+import { sshWorkspaceSandbox } from "@dbx-tools/appkit-sandbox/workspace";
 import { mastra } from "@dbx-tools/appkit-mastra";
 import { lakebase } from "@databricks/appkit";
 
@@ -44,52 +49,90 @@ const plugins = [
 ];
 ```
 
-The SSH workspace is an execution target only when a workspace or Sandbox tool
-needs it. Automatic Mastra Code Mode continues to use isolated-vm or QuickJS,
-including concurrent external tool calls, and does not require an SSH machine.
-An SSH connection is opened only when Code Mode or the agent calls an exposed
-SSH-backed tool.
+Register `lakebase()` before `databricksSandbox()`. Lakebase stores machine
+ownership and expiration records that every app instance uses for
+authorization and cleanup.
+
+The SSH workspace is an execution target only when an agent or tool requests
+an SSH-backed operation. Automatic Mastra Code Mode continues to use its native
+isolated runtime for other work.
 
 ## Requirements
 
-- The workspace must expose the Databricks Sandbox REST API.
-- The AppKit application must register `lakebase()` before the Sandbox plugin.
-  Lakebase is the authoritative ownership and expiration store shared by every
-  app instance.
-- The AppKit server identity must be able to list and manage the current user's
-  Sandboxes and SSH keys.
-- The AppKit server host must provide `ssh` on `PATH`. Command sessions use the
-  system OpenSSH client because the Databricks Sandbox gateway does not send the
-  exec request acknowledgement required by `ssh2`.
-- `ssh2` remains the transport for direct TCP forwarding to remote web servers.
+- The workspace exposes the Databricks Sandbox REST API.
+- The AppKit server identity can list and manage the user's Sandboxes and SSH
+  keys.
+- The AppKit server host provides `ssh` on `PATH`.
+- The app registers `lakebase()` before this plugin.
 
-`auto: true` starts a stopped Sandbox when a command or route needs it.
-`auto: false` requires an explicit start operation. Creation remains an
-explicit user or tool action in either mode.
+Command sessions use the system OpenSSH client. Direct TCP forwarding uses
+`ssh2`.
 
-The Lakebox API supports idle auto-stop configuration but does not expose a
-maximum wall-clock runtime. This package records an absolute expiration in
-Lakebase and in the generated Sandbox name. A reaper runs at startup and every
-`reaperIntervalSeconds` to enforce the wall-clock lifetime across app restarts
-and replicas. The default lifetime is 24 hours and the default scan interval is
-five minutes. Set the interval to zero to disable scheduled scans; creation and
-authorization still require unexpired Lakebase records.
+## Configure machine behavior
 
-Service-managed names reserve the `dbx-` prefix. The reaper deletes expired or
-malformed `dbx-` Sandboxes and Sandboxes referenced by invalid or orphaned
-Lakebase assignments. It leaves unrelated unassigned workspace Sandboxes
-unchanged. The name is reconciliation metadata, not an authorization control.
+Pass options through
+[`resolveSshPluginConfig()`](https://docs.dbx.tools/api/appkit-sandbox/src-config-function-resolvesshpluginconfig/).
+The complete schema and field descriptions are in the
+[`SshPluginConfig` API reference](https://docs.dbx.tools/api/appkit-sandbox/src-config-typealias-sshpluginconfig/).
 
-`fallbackToServicePrincipal: true` keeps HTTP requests OBO-first, then retries a
-failed workspace call with the app service principal. The default is `false` so
-applications must opt into the broader shared identity. Both attempts emit
-sanitized warning logs with status, Databricks error codes, request ids, and
-bounded response bodies; credentials and headers are redacted.
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `auto` | `true` | Starts a stopped machine before a command, service, or route uses it. Creation remains explicit. |
+| `fallbackToServicePrincipal` | `false` | Retries a failed request-scoped OBO REST operation with the app service principal. |
+| `sandboxLifetimeSeconds` | `86400` | Sets the absolute lifetime recorded in Lakebase and the managed Sandbox name. |
+| `reaperIntervalSeconds` | `300` | Sets the cleanup scan interval. Set it to `0` to disable scheduled scans. |
+| `routePrefix` | `/sandbox` | Sets the AppKit root path for proxied Sandbox services. |
+| `defaultRemotePort` | `3000` | Sets the default port used by route requests. |
+| `gatewayPort` | `2222` | Sets the Databricks Sandbox SSH gateway port. |
+| `connectTimeoutMs` | `30000` | Sets the SSH connection timeout. |
+| `commandTimeoutMs` | `120000` | Sets the default remote command timeout. |
+| `keyDirectory` | `~/.dbx-tools/appkit-databricks-sandbox` | Overrides the server-side SSH key and known-host directory. |
 
-## Remote web routes
+### Authentication fallback
 
-`add_ssh_route` forwards an HTTP port from a Sandbox into the AppKit server. A
-request for port `3000` can ask for the `/my-service` suffix:
+The plugin performs workspace REST requests with the current user's OBO
+credentials. Set `fallbackToServicePrincipal: true` only when the app must retry
+failed user-scoped requests with its shared service-principal identity.
+
+Fallback applies to REST operations. Machine assignment checks still apply to
+discovery, lifecycle operations, commands, routes, Mastra tools, and Code Mode.
+Logs include sanitized status and request metadata. They exclude credentials
+and headers.
+
+### Machine lifetime and cleanup
+
+The Lakebox API supports idle auto-stop but does not provide an absolute
+wall-clock lifetime. This package records an expiration in Lakebase and in the
+managed Sandbox name. The
+[`SshRuntime` reaper](https://docs.dbx.tools/api/appkit-sandbox/src-runtime-class-sshruntime/)
+runs at startup and at `reaperIntervalSeconds`.
+
+Managed names use this format:
+
+```text
+dbx-<adjective>-<animal>-<nonce>_uid_<sha256-user-id>_exp_<epoch-ms>
+```
+
+The name supports reconciliation. It is not an authorization boundary. The
+reaper applies these rules:
+
+- Delete an expired managed Sandbox.
+- Delete a managed Sandbox with no valid Lakebase assignment.
+- Delete an assigned Sandbox when its stored and API names differ.
+- Remove a Lakebase assignment when its Sandbox no longer exists.
+- Leave an unrelated, unassigned workspace Sandbox unchanged.
+
+See the
+[`LakebaseMachineOwnershipStore` reference](https://docs.dbx.tools/api/appkit-sandbox/src-ownership-class-lakebasemachineownershipstore/)
+for the storage operations and the
+[`managed-name` reference](https://docs.dbx.tools/api/appkit-sandbox/src-managed-name/)
+for name parsing and generation.
+
+## Publish a Sandbox web service
+
+Use the `add_ssh_route` tool to forward an HTTP port through the AppKit server.
+The following request publishes port `3000` at a user-scoped `/my-service`
+path:
 
 ```json
 {
@@ -101,69 +144,65 @@ request for port `3000` can ask for the `/my-service` suffix:
 }
 ```
 
-User routes are registered beneath `routePrefix` and a stable six-character FNV
-hash of the authenticated user. For example, `/my-service` becomes
-`/sandbox/<user-hash>/my-service`. A caller may reuse its full assigned prefix,
-but another prefix is rejected. The hash is only a collision-avoidance
-namespace, not a security measure; authenticated owner checks continue to
-control access and deletion. The dynamic dispatcher is mounted after plugin API
-routes and before the static SPA fallback. Longer route paths take precedence
-over shorter paths.
+The plugin registers user routes beneath `routePrefix` and a stable user hash.
+For example, `/my-service` becomes `/sandbox/<user-hash>/my-service`. The hash
+prevents path collisions. Assignment checks provide authorization.
 
-`stripPrefix` defaults to `true` for non-root paths and `false` for `/`, matching
-the existing tunnel/Caddy reverse-proxy behavior. Set it to `false` when the
-remote server expects the full registered AppKit path.
+`stripPrefix` defaults to `true` for non-root paths and `false` for `/`:
 
-The remote process may bind to Sandbox loopback, but agents and browser clients
-must never use or return `localhost`, `127.0.0.1`, `0.0.0.0`, or a direct
-Sandbox URL. The registered AppKit path is the only browser-facing address.
-Services must use relative asset/API URLs with `stripPrefix: true`, or be
-configured with the full registered base path when `stripPrefix: false`.
+- Use `stripPrefix: true` when the remote app serves relative asset and API
+  URLs.
+- Use `stripPrefix: false` when the remote app is configured with the complete
+  AppKit route as its base path.
 
-WebSocket clients must derive `ws://` or `wss://` from the public page origin
-and connect through the same registered route. The bridge forwards standard
-HTTP Upgrade requests and applies `stripPrefix` to WebSocket paths too. It does
-not expose arbitrary TCP/UDP services, and applications that require a fixed
-root WebSocket path must be configured for the route prefix or use stripping.
+The remote process can bind to Sandbox loopback. Browser clients must use the
+registered AppKit path, not `localhost`, `127.0.0.1`, `0.0.0.0`, or a direct
+Sandbox URL.
 
-The forwarding bridge uses a Unix socket for HTTP on Unix systems and an
-ephemeral loopback TCP port on Windows. WebSocket upgrades use a separate
-loopback bridge when the HTTP bridge is a Unix socket. `http-proxy-3` owns both
-proxy paths.
+The lower-level
+[`SshRouteRegistry` API](https://docs.dbx.tools/api/appkit-sandbox/src-routes-class-sshrouteregistry/)
+documents route registration, removal, HTTP middleware, and WebSocket upgrade
+handling.
 
-## Built-in browser services
+### WebSocket routes
 
-Every assigned machine advertises two stable reserved paths beneath the
-Sandbox route root and outside the user-hash namespace:
+Derive `ws://` or `wss://` from the public page origin and connect through the
+registered AppKit path. The bridge forwards standard HTTP Upgrade requests and
+applies the same prefix-stripping rule.
 
-- `/sandbox/terminal/<machine-id>` forwards the DinoTTY mobile web terminal.
-- `/sandbox/metrics/<machine-id>` forwards the full Glances Web UI.
+The bridge does not expose arbitrary TCP or UDP services. A remote application
+that requires a fixed root WebSocket path must support the registered prefix or
+use `stripPrefix: true`.
 
-Starting a machine provisions both services over SSH under
-`~/.dbx-tools/runtime`, binds them to loopback, and registers owner-scoped proxy
-routes. Opening either viewer rechecks the service and route before opening a
-new browser tab.
+## Use built-in browser services
 
-`databricksSandboxSkillMounts()` exposes packaged DinoTTY, Glances, noVNC,
-browser speed-test, Freedoom desktop, JupyterLab, collaborative whiteboard,
-fractal explorer, particle simulation, and Web Audio synth recipes at
-`/.dbx-tools/skills`. Mastra copies the package tree into one shared read-only
-memory filesystem used by every auto-created workspace. Showcase recipes bind
-to Sandbox loopback and publish only the authenticated, user-prefixed path
-returned by `add_ssh_route`.
+Each assigned machine exposes two owner-scoped paths:
 
-Try these chat prompts:
+- `/sandbox/terminal/<machine-id>` forwards the DinoTTY web terminal.
+- `/sandbox/metrics/<machine-id>` forwards the Glances web interface.
 
-- “Start Doom.”
-- “Launch a speed test.”
-- “Open a browser desktop.”
-- “Start JupyterLab.”
-- “Make a collaborative whiteboard.”
-- “Show me an interactive fractal.”
-- “Launch the particle physics demo.”
-- “Open the browser synth.”
+Starting a machine provisions these services under `~/.dbx-tools/runtime`,
+binds them to loopback, and registers their proxy routes. Opening a viewer
+rechecks the remote service and route first.
 
-## Mastra tools
+[`databricksSandboxSkillMounts()`](https://docs.dbx.tools/api/appkit-sandbox/src-skills-function-databrickssandboxskillmounts/)
+mounts packaged Sandbox recipes at `/.dbx-tools/skills`. The recipes include
+DinoTTY, Glances, noVNC, a browser speed test, Freedoom, JupyterLab, a
+collaborative whiteboard, a fractal explorer, a particle simulation, and a Web
+Audio synth.
+
+Example prompts:
+
+- "Start Doom."
+- "Launch a speed test."
+- "Open a browser desktop."
+- "Start JupyterLab."
+- "Make a collaborative whiteboard."
+- "Show me an interactive fractal."
+- "Launch the particle physics demo."
+- "Open the browser synth."
+
+## Use Mastra tools and Code Mode
 
 The plugin registers these AppKit tool-provider entries:
 
@@ -177,45 +216,55 @@ The plugin registers these AppKit tool-provider entries:
 - `databricks-sandbox.add_ssh_route`
 - `databricks-sandbox.remove_ssh_route`
 
-`sshWorkspaceSandbox()` implements Mastra `WorkspaceSandbox`, so Code Mode uses
-the same machine selection, lifecycle, command, key, and host-verification
-behavior as the tools and REST routes.
+[`sshWorkspaceSandbox()`](https://docs.dbx.tools/api/appkit-sandbox/src-workspace-function-sshworkspacesandbox/)
+implements a request-scoped Mastra `WorkspaceSandbox` resolver. It uses the
+same machine selection, assignment, lifecycle, SSH key, and host-verification
+behavior as the AppKit tools and REST routes.
 
-## Security and storage
+The resolver selects a running assigned machine first, then another assigned
+machine. Set `machineId` when an agent must use a specific Sandbox. The resolver
+does not create a machine when none exists.
 
-Every machine is hidden and unusable until an unexpired Lakebase assignment
-matches the current AppKit user, Sandbox id, and generated Sandbox name. A
-creation request writes the assignment immediately after the Lakebox API
-returns; if the Lakebase write fails, the new Sandbox is deleted. Assignment is
-enforced for discovery, lifecycle, deletion, commands, routes, Mastra tools,
-and Code Mode.
+## Security model
 
-Names use
-`<adjective>-<animal>-<nonce>_uid_<sha256-user-id>_exp_<epoch-ms>`. The user
-component is a SHA-256 digest rather than a raw email or platform identity. The
-name duplicates the Lakebase owner and expiration for reconciliation; it is not
-an authorization boundary.
+### Machine authorization
 
-The reaper deletes expired managed Sandboxes, managed names without a matching
-Lakebase row, and assigned Sandboxes whose stored and API names no longer
-match. It also removes Lakebase rows whose Sandbox no longer exists. Legacy
-assignment rows without a managed name or expiration are treated as invalid and
-their Sandboxes are deleted. Sandboxes with unrelated names and no Lakebase
-assignment are not owned by this service and are left unchanged.
+A machine is available only when an unexpired Lakebase assignment matches all
+of these values:
 
-This Lakebase assignment store is an application-level stopgap because the current
-Sandbox API does not expose native per-user Sandbox scopes. It limits which
-machines the plugin reveals and operates when using either OBO credentials or
-service-principal fallback, but it does not replace Databricks authorization.
-Replace this custom assignment layer with native Sandbox user scopes when the
-platform exposes them.
+- The Databricks workspace scope.
+- The AppKit user ID.
+- The Sandbox ID.
+- The managed Sandbox name.
 
-SSH keys are generated per workspace and AppKit user under
-`~/.dbx-tools/appkit-databricks-sandbox` by default. The plugin registers only the public key.
-Private keys and OpenSSH known-host files remain on the AppKit server with
+Creation writes the assignment immediately after the Lakebox API returns. If
+the Lakebase write fails, the plugin deletes the new Sandbox.
+
+The Sandbox API used by this package does not provide native per-user Sandbox
+scopes. The assignment store limits which machines the application reveals and
+operates. It does not replace Databricks workspace authorization.
+
+### SSH key storage
+
+[`SshKeyStore`](https://docs.dbx.tools/api/appkit-sandbox/src-key-store-class-sshkeystore/)
+creates one Ed25519 key pair for each workspace and AppKit user. The plugin
+registers only the public key. The private key remains on the AppKit server with
 restricted file permissions.
 
-The first successful connection stores the gateway host-key fingerprint.
-Later connections reject a changed key. Native OpenSSH command sessions use the
-stored key through a dedicated `UserKnownHostsFile`; they do not disable host
-verification.
+The default storage root is:
+
+```text
+~/.dbx-tools/appkit-databricks-sandbox
+```
+
+Set `keyDirectory` to use another server-side location.
+
+### SSH host verification
+
+The first successful connection stores the Sandbox gateway host-key
+fingerprint and an OpenSSH known-host entry. Later connections reject a changed
+key.
+
+[`SshSession`](https://docs.dbx.tools/api/appkit-sandbox/src-session-class-sshsession/)
+passes the stored file through OpenSSH `UserKnownHostsFile`. It does not disable
+host verification.

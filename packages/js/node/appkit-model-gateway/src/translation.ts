@@ -15,7 +15,7 @@ import {
   createDatabricksLanguageModel,
   type DatabricksLanguageModelProtocol,
 } from "@dbx-tools/model-protocol/provider";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { GatewayRoute } from "@dbx-tools/shared-model-gateway";
 import { streamText, type LanguageModel, type ToolSet } from "ai";
 
@@ -47,7 +47,10 @@ export async function translateGatewayRequest(
     maxRetries: 0,
     abortSignal: signal,
     onError: ({ error }) => {
-      logger.error("stream failed", { error, model: route.target.id });
+      logger.error("stream failed", {
+        error: errorUtils.toError(error),
+        model: route.target.id,
+      });
     },
     onAbort: () => {
       logger.debug("translation aborted", { model: route.target.id });

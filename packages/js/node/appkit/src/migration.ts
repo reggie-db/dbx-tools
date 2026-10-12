@@ -31,10 +31,8 @@ export function handleOwnershipMigrationError(
   const key = `${options.scope}\0${message}`;
   if (loggedOwnershipErrors.has(key)) return true;
   loggedOwnershipErrors.add(key);
-  if (log.isLevelEnabled("debug")) {
-    options.logger.error(options.event, cause);
-  } else {
-    options.logger.warn(options.event, { error: message, ...options.context });
-  }
+  const error = errorUtils.toError(cause);
+  if (log.isLevelEnabled("debug")) options.logger.error(options.event, { error });
+  else options.logger.warn(options.event, { error, ...options.context });
   return true;
 }
