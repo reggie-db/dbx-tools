@@ -140,10 +140,18 @@ async function runDemo(): Promise<void> {
       prefix: "name",
     },
   );
-  if (stdin.isTTY) stdin.setRawMode(true);
+  const onInterrupt = (chunk: Buffer | string): void => {
+    if (!String(chunk).includes("\u0003")) return;
+    process.emit("SIGINT", "SIGINT");
+  };
+  if (stdin.isTTY) {
+    stdin.setRawMode(true);
+    stdin.on("data", onInterrupt);
+  }
   try {
     await result;
   } finally {
+    stdin.off("data", onInterrupt);
     if (stdin.isTTY) stdin.setRawMode(wasRaw);
     await close();
   }

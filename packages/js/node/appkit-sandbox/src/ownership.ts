@@ -1,4 +1,5 @@
-import { advisoryLock, type PgPoolLike, type PgQueryable } from "@dbx-tools/postgres";
+import { advisoryLock, quotePostgresIdentifier, type PgPoolLike, type PgQueryable } from "@dbx-tools/postgres";
+import { hash } from "@dbx-tools/shared-core";
 import type { AddSshProjectRequest } from "@dbx-tools/shared-databricks-sandbox";
 import { z } from "zod";
 
@@ -6,9 +7,26 @@ type ProjectConfig = NonNullable<AddSshProjectRequest["config"]>;
 
 const MIGRATION_LOCK = ["appkit-sandbox", "machine-ownership", "migrations"] as const;
 const REAPER_LOCK = ["appkit-sandbox", "machine-ownership", "reaper"] as const;
-const SCHEMA = "dbx_tools_databricks_sandbox";
-const TABLE = `${SCHEMA}.machine_assignments`;
-const PROJECTS_TABLE = `${SCHEMA}.projects`;
+/** Shared prefix; each Lakebase connector owns `${prefix}_${hash(current_user)}`. */
+export const OWNERSHIP_SCHEMA_PREFIX = "dbx_tools_databricks_sandbox";
+
+/**
+ * Partition ownership tables under the existing schema name plus a hash of the
+ * Lakebase login (workspace user or app service principal).
+ */
+export function ownershipSchemaName(role: string): string {
+  return `${OWNERSHIP_SCHEMA_PREFIX}_${hash.fnvHash(role.trim())}`;
+}
+
+/** Resolve the Postgres role that is actually connected to Lakebase. */
+export async function connectingLakebaseRole(pool: PgQueryable): Promise<string> {
+  const result = await pool.query<{ role: string }>("SELECT current_user AS role");
+  const role = result.rows[0]?.role?.trim();
+  if (!role) {
+    throw new Error("Lakebase ownership could not resolve the connecting user or service principal");
+  }
+  return role;
+}
 
 export const MachineAssignmentSchema = z
   .object({
@@ -79,13 +97,22 @@ type LakebasePool = PgPoolLike & PgQueryable;
  * underlying REST and SSH operations.
  */
 export class LakebaseMachineOwnershipStore {
-  private constructor(private readonly pool: LakebasePool) {}
+  private constructor(
+    private readonly pool: LakebasePool,
+    readonly schema: string,
+  ) {}
 
-  /** Creates the assignments table and returns a store backed by the given pool. */
+  /** Detects the connecting Lakebase role, then creates tables in its schema. */
   static async create(pool: LakebasePool): Promise<LakebaseMachineOwnershipStore> {
-    const store = new LakebaseMachineOwnershipStore(pool);
+    const role = await connectingLakebaseRole(pool);
+    const store = new LakebaseMachineOwnershipStore(pool, ownershipSchemaName(role));
     await store.migrate();
     return store;
+  }
+
+  /** Schema-qualified table name for this connector's partition. */
+  private table(name: "machine_assignments" | "projects"): string {
+    return `${quotePostgresIdentifier(this.schema)}.${quotePostgresIdentifier(name)}`;
   }
 
   /** Lists assignments in one workspace, optionally restricted to one AppKit user. */
@@ -94,7 +121,7 @@ export class LakebaseMachineOwnershipStore {
     const condition = userId ? "workspace_scope = $1 AND user_id = $2" : "workspace_scope = $1";
     const result = await this.pool.query<AssignmentRow>(
       `SELECT workspace_scope, user_id, machine_id, managed_name, expires_at, created_at
-       FROM ${TABLE}
+       FROM ${this.table("machine_assignments")}
        WHERE ${condition}
        ORDER BY created_at, machine_id`,
       values,
@@ -110,7 +137,7 @@ export class LakebaseMachineOwnershipStore {
   ): Promise<MachineAssignment | undefined> {
     const result = await this.pool.query<AssignmentRow>(
       `SELECT workspace_scope, user_id, machine_id, managed_name, expires_at, created_at
-       FROM ${TABLE}
+       FROM ${this.table("machine_assignments")}
        WHERE workspace_scope = $1 AND user_id = $2 AND machine_id = $3`,
       [workspaceScope, userId, machineId],
     );
@@ -122,7 +149,7 @@ export class LakebaseMachineOwnershipStore {
   async assign(input: NewMachineAssignment): Promise<void> {
     const assignment = NewMachineAssignmentSchema.parse(input);
     await this.pool.query(
-      `INSERT INTO ${TABLE}
+      `INSERT INTO ${this.table("machine_assignments")}
          (workspace_scope, user_id, machine_id, managed_name, expires_at)
        VALUES ($1, $2, $3, $4, $5::timestamptz)
        ON CONFLICT (workspace_scope, user_id, machine_id)
@@ -140,7 +167,7 @@ export class LakebaseMachineOwnershipStore {
   /** Removes one user's assignment and returns whether a row was deleted. */
   async unassign(workspaceScope: string, userId: string, machineId: string): Promise<boolean> {
     const result = await this.pool.query(
-      `DELETE FROM ${TABLE}
+      `DELETE FROM ${this.table("machine_assignments")}
        WHERE workspace_scope = $1 AND user_id = $2 AND machine_id = $3`,
       [workspaceScope, userId, machineId],
     );
@@ -150,7 +177,7 @@ export class LakebaseMachineOwnershipStore {
   /** Removes every assignment for one Sandbox and returns the deleted row count. */
   async unassignAll(workspaceScope: string, machineId: string): Promise<number> {
     const result = await this.pool.query(
-      `DELETE FROM ${TABLE} WHERE workspace_scope = $1 AND machine_id = $2`,
+      `DELETE FROM ${this.table("machine_assignments")} WHERE workspace_scope = $1 AND machine_id = $2`,
       [workspaceScope, machineId],
     );
     return result.rowCount ?? 0;
@@ -175,7 +202,7 @@ export class LakebaseMachineOwnershipStore {
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
               project_config, strip_prefix, created_at, updated_at
-       FROM ${PROJECTS_TABLE}
+       FROM ${this.table("projects")}
        WHERE ${conditions.join(" AND ")}
        ORDER BY created_at, project_id`,
       values,
@@ -193,7 +220,7 @@ export class LakebaseMachineOwnershipStore {
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
               project_config, strip_prefix, created_at, updated_at
-       FROM ${PROJECTS_TABLE}
+       FROM ${this.table("projects")}
        WHERE workspace_scope = $1 AND user_id = $2 AND project_id = $3`,
       [workspaceScope, userId, projectId],
     );
@@ -211,7 +238,7 @@ export class LakebaseMachineOwnershipStore {
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
               project_config, strip_prefix, created_at, updated_at
-       FROM ${PROJECTS_TABLE}
+       FROM ${this.table("projects")}
        WHERE workspace_scope = $1 AND user_id = $2 AND machine_id = $3 AND project_name = $4`,
       [workspaceScope, userId, machineId, name],
     );
@@ -222,7 +249,7 @@ export class LakebaseMachineOwnershipStore {
   async upsertProject(input: NewSandboxProjectRecord): Promise<void> {
     const project = NewSandboxProjectRecordSchema.parse(input);
     await this.pool.query(
-      `INSERT INTO ${PROJECTS_TABLE}
+      `INSERT INTO ${this.table("projects")}
          (workspace_scope, user_id, project_id, project_name, machine_id,
           directory_path, project_path, route_path, open_path, port, project_config, strip_prefix)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -257,7 +284,7 @@ export class LakebaseMachineOwnershipStore {
   /** Deletes one persisted project and returns whether a row was removed. */
   async deleteProject(workspaceScope: string, userId: string, projectId: string): Promise<boolean> {
     const result = await this.pool.query(
-      `DELETE FROM ${PROJECTS_TABLE}
+      `DELETE FROM ${this.table("projects")}
        WHERE workspace_scope = $1 AND user_id = $2 AND project_id = $3`,
       [workspaceScope, userId, projectId],
     );
@@ -267,7 +294,7 @@ export class LakebaseMachineOwnershipStore {
   /** Deletes all persisted projects for one Sandbox. */
   async deleteProjectsForMachine(workspaceScope: string, machineId: string): Promise<number> {
     const result = await this.pool.query(
-      `DELETE FROM ${PROJECTS_TABLE} WHERE workspace_scope = $1 AND machine_id = $2`,
+      `DELETE FROM ${this.table("projects")} WHERE workspace_scope = $1 AND machine_id = $2`,
       [workspaceScope, machineId],
     );
     return result.rowCount ?? 0;

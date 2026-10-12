@@ -4,7 +4,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { serializeArgs } from "@dbx-tools/cli-args";
 import * as exec from "@dbx-tools/core/exec";
 import { watch as pathWatch } from "@dbx-tools/path";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
 import { CommanderError } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand, taskPositionals } from "./cli.ts";
@@ -25,12 +25,18 @@ export const DevWatchOptionsSchema = z.object({
     .int()
     .nonnegative("Debounce must be a non-negative number of milliseconds")
     .default(DEV_RESTART_DEBOUNCE_MS)
-    .describe("Quiet period before restarting the command"),
+    .describe("Quiet period before restarting the command")
+    .meta({ short: false }),
   restartKey: z
     .string()
     .refine((value) => Array.from(value).length === 1, "Restart key must be exactly one character")
     .default(DEV_RESTART_KEY)
     .describe("Interactive immediate-restart key"),
+  watchDisable: z
+    .boolean()
+    .default(false)
+    .describe("Run the command once without watching files or restarting on changes")
+    .meta({ env: "DEV_WATCH_DISABLE", short: "d" }),
   watchInclude: z
     .array(z.string())
     .default([])
@@ -80,13 +86,17 @@ export function parseDevWatchOptions(args: readonly string[]): DevWatchOptions {
   };
 }
 
+/** Watcher flags the root demo may forward into a nested `dev:watch`. */
+export type DevWatchForwardOptions = Pick<
+  DevWatchOptions,
+  "watchDisable" | "watchInclude" | "watchExclude"
+>;
+
 /**
- * Parse `--watch-include` / `--watch-exclude` from argv that may contain unrelated
- * tokens (the root demo forwards only these flags into `dev:watch`).
+ * Parse `--watch-disable` / `--watch-include` / `--watch-exclude` from argv that
+ * may contain unrelated tokens (the root demo forwards only these flags).
  */
-export function parseWatchGlobOptions(
-  args: readonly string[],
-): Pick<DevWatchOptions, "watchInclude" | "watchExclude"> {
+export function parseWatchGlobOptions(args: readonly string[]): DevWatchForwardOptions {
   const program = taskCommand(
     import.meta.url,
     "Restart a development command after watched changes settle",
@@ -99,16 +109,16 @@ export function parseWatchGlobOptions(
     .parse([...args], { from: "user" });
   const options = parsedTaskOptions(program, DevWatchOptionsSchema);
   return {
+    watchDisable: options.watchDisable,
     watchInclude: options.watchInclude,
     watchExclude: options.watchExclude,
   };
 }
 
-/** Serialize include/exclude globs as Commander flags for a nested `dev:watch`. */
-export function serializedWatchGlobArgs(
-  options: Pick<DevWatchOptions, "watchInclude" | "watchExclude">,
-): string[] {
+/** Serialize forwarded watcher flags for a nested `dev:watch`. */
+export function serializedWatchGlobArgs(options: DevWatchForwardOptions): string[] {
   return serializeArgs({
+    ...(options.watchDisable ? { watchDisable: true } : {}),
     watchInclude: options.watchInclude,
     watchExclude: options.watchExclude,
   });
@@ -218,6 +228,21 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     return;
   }
   const cwd = process.cwd();
+  const commandLabel = options.command.map((part) => JSON.stringify(part)).join(" ");
+  if (options.watchDisable) {
+    logger.info(`watch disabled; running ${commandLabel}`);
+    const [command, ...commandArgs] = options.command;
+    const { exitCode } = await exec.spawn(command!, commandArgs, {
+      cwd,
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+      check: false,
+    });
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
+
   const root = resolveRepoRoot(cwd);
   const { paths: watchPaths, ignore: watchIgnore } = devWatchTargets(
     options.command,
@@ -225,7 +250,6 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     options.watchInclude,
     options.watchExclude,
   );
-  const commandLabel = options.command.map((part) => JSON.stringify(part)).join(" ");
   let child: exec.ChildProcessResult | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let restartReason: string | undefined;
@@ -240,6 +264,16 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       git: true,
     },
   });
+
+  function interruptChild(): void {
+    const current = child;
+    if (!current?.pid) return;
+    try {
+      current.kill("SIGINT");
+    } catch {
+      // The command already exited.
+    }
+  }
 
   async function stopChild(): Promise<void> {
     const current = child;
@@ -336,33 +370,37 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       }
     }
   };
+
+  function restoreStdin(): void {
+    stdin.off("data", onInput);
+    if (stdin.isTTY) stdin.setRawMode(wasRaw);
+    stdin.pause();
+  }
+
   if (stdin.isTTY) stdin.setRawMode(true);
   stdin.resume();
   stdin.on("data", onInput);
 
-  let finish!: () => void;
-  const complete = new Promise<void>((resolveComplete) => {
-    finish = resolveComplete;
-  });
-
-  async function shutdown(): Promise<void> {
-    if (stopping) return;
+  async function shutdown(exitCode = 0): Promise<void> {
+    if (stopping) process.exit(exitCode || 130);
     stopping = true;
     clearTimeout(timer);
     restartReason = undefined;
-    stdin.off("data", onInput);
-    if (stdin.isTTY) stdin.setRawMode(wasRaw);
-    stdin.pause();
-    await Promise.allSettled([watcher.close(), stopChild()]);
-    finish();
+    restoreStdin();
+    interruptChild();
+    await Promise.race([
+      Promise.allSettled([watcher.close(), stopChild()]),
+      asyncUtils.sleep(SHUTDOWN_TIMEOUT_MS),
+    ]);
+    process.exit(exitCode);
   }
 
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-    process.once(signal, () => void shutdown());
+    process.on(signal, () => void shutdown());
   }
 
   requestRestart("initial start");
-  await complete;
+  await new Promise<void>(() => {});
 }
 
 await runTaskMain(import.meta, main);

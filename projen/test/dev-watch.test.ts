@@ -21,6 +21,7 @@ describe("development command watcher", () => {
       command: ["bun", "server.ts", "--port", "3000"],
       debounceMs: DEV_RESTART_DEBOUNCE_MS,
       restartKey: DEV_RESTART_KEY,
+      watchDisable: false,
       watchInclude: [],
       watchExclude: [],
     });
@@ -42,10 +43,13 @@ describe("development command watcher", () => {
         command: ["bun", "--hot", "server.ts"],
         debounceMs: 250,
         restartKey: "x",
+        watchDisable: false,
         watchInclude: ["packages/js/ui/**"],
         watchExclude: ["**/*.md"],
       },
     );
+    assert.equal(parseDevWatchOptions(["--watch-disable", "bun", "server.ts"]).watchDisable, true);
+    assert.equal(parseDevWatchOptions(["-d", "bun", "server.ts"]).watchDisable, true);
     assert.deepEqual(
       parseDevWatchOptions([
         "--watch-include",
@@ -63,14 +67,24 @@ describe("development command watcher", () => {
     );
     assert.deepEqual(
       parseWatchGlobOptions(["--watch-exclude", "**", "--profile", "unused"]),
-      { watchInclude: [], watchExclude: ["**"] },
+      { watchDisable: false, watchInclude: [], watchExclude: ["**"] },
     );
+    assert.deepEqual(parseWatchGlobOptions(["-d", "--profile", "unused"]).watchDisable, true);
     assert.deepEqual(
       serializedWatchGlobArgs({
+        watchDisable: false,
         watchInclude: ["packages/js/ui/**"],
         watchExclude: ["**/*.md"],
       }),
       ["--watch-include", "packages/js/ui/**", "--watch-exclude", "**/*.md"],
+    );
+    assert.deepEqual(
+      serializedWatchGlobArgs({
+        watchDisable: true,
+        watchInclude: [],
+        watchExclude: [],
+      }),
+      ["--watch-disable"],
     );
   });
 

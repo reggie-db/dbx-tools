@@ -381,7 +381,8 @@ describe("SshRouteRegistry", () => {
       assert.equal(upgradedPath, "/ws/events");
       assert.equal(upgradedHeaders?.authorization, undefined);
       assert.equal(upgradedHeaders?.cookie, undefined);
-      assert.equal(upgradedHeaders?.origin, undefined);
+      assert.equal(upgradedHeaders?.origin, `http://127.0.0.1:${remotePort}`);
+      assert.equal(upgradedHeaders?.["sec-websocket-protocol"], "binary");
       assert.equal(upgradedHeaders?.[USER_EMAIL_HEADER], undefined);
       assert.match(upgradeResponse, /^HTTP\/1\.1 101 Switching Protocols/);
       assert.equal(
@@ -501,6 +502,7 @@ async function sendWebsocketUpgrade(
           "Authorization: Bearer front-door-token",
           "Sec-WebSocket-Version: 13",
           "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+          "Sec-WebSocket-Protocol: binary",
           ...(cookie ? [`Cookie: ${cookie}`] : []),
           ...(includeOwner ? [`${USER_EMAIL_HEADER}: reggie.pierce@databricks.com`] : []),
           "",

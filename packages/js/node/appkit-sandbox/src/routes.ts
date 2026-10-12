@@ -579,7 +579,10 @@ function proxyWebSocket(
         .filter(Boolean);
       const options = {
         createConnection: () => channel,
-        headers: websocketUpstreamHeaders(request.headers),
+        headers: websocketUpstreamHeaders(
+          request.headers,
+          `http://${entry.route.remoteHost}:${entry.route.remotePort}`,
+        ),
       };
       const upstream = protocols?.length
         ? new WebSocket(
@@ -618,6 +621,7 @@ function proxyWebSocket(
 
 function websocketUpstreamHeaders(
   headers: IncomingMessage["headers"],
+  origin: string,
 ): Record<string, string | string[]> {
   const excluded = new Set([
     "authorization",
@@ -639,12 +643,15 @@ function websocketUpstreamHeaders(
     USER_EMAIL_HEADER,
     USER_ID_HEADER,
   ]);
-  return Object.fromEntries(
-    Object.entries(headers).filter(
-      (entry): entry is [string, string | string[]] =>
-        entry[1] !== undefined && !excluded.has(entry[0]),
+  return {
+    ...Object.fromEntries(
+      Object.entries(headers).filter(
+        (entry): entry is [string, string | string[]] =>
+          entry[1] !== undefined && !excluded.has(entry[0]),
+      ),
     ),
-  );
+    origin,
+  };
 }
 
 function bridgeWebSockets(client: WebSocket, upstream: WebSocket): void {

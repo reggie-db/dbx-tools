@@ -315,7 +315,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
         </Card>
       ) : (
         <div className="grid items-start gap-3 lg:grid-cols-2">
-          <Card className="gap-0 py-0">
+          <Card className="min-w-0 gap-0 py-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-2.5 sm:px-4">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-sm">Machines</CardTitle>
@@ -345,10 +345,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
               ) : (
                 <div className="divide-y border-t">
                   {machines.map((machine) => (
-                    <div
-                      key={machine.id}
-                      className="grid gap-2.5 px-3 py-2.5 sm:px-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center"
-                    >
+                    <div key={machine.id} className="grid min-w-0 gap-2.5 px-3 py-2.5 sm:px-4">
                       <div className="flex min-w-0 items-start gap-2.5">
                         <span
                           className={cn(
@@ -367,7 +364,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           </p>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1 pl-5 xl:justify-end xl:pl-0">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1 pl-5">
                         {isMachineBusy(machine.id) ? <Spinner className="mr-1 size-4" /> : null}
                         {machine.canStart ? (
                           <Button
@@ -479,7 +476,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
             </CardContent>
           </Card>
 
-          <Card className="gap-0 py-0">
+          <Card className="min-w-0 gap-0 py-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-2 sm:px-4">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-sm">Projects</CardTitle>

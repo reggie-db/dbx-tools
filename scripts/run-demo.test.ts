@@ -7,7 +7,7 @@ import { demoClientCommand, demoServerCommand } from "./run-demo.ts";
 describe("demo server watch", () => {
   it("wraps the server with dev:watch by default", () => {
     assert.match(demoServerCommand([]), new RegExp(` ${devWatch.DEV_WATCH_TASK} bun `));
-    assert.doesNotMatch(demoServerCommand([]), /--watch-include|--watch-exclude/);
+    assert.doesNotMatch(demoServerCommand([]), /--watch-include|--watch-exclude|--watch-disable/);
   });
 
   it("forwards include and exclude globs into dev:watch", () => {
@@ -20,6 +20,12 @@ describe("demo server watch", () => {
     assert.match(command, new RegExp(` ${devWatch.DEV_WATCH_TASK} `));
     assert.match(command, /--watch-include" "packages\/js\/ui\/\*\*"/);
     assert.match(command, /--watch-exclude" "\*\*\/\*\.md"/);
+  });
+
+  it("forwards --watch-disable into dev:watch", () => {
+    const command = demoServerCommand(["-d"]);
+    assert.match(command, new RegExp(` ${devWatch.DEV_WATCH_TASK} `));
+    assert.match(command, /--watch-disable/);
   });
 
   it("keeps the client HMR task independent of server watching", () => {

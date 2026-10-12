@@ -1461,7 +1461,7 @@ for (const task of [SCOPE, "dbx"]) {
 
 // Run the Bun client HMR server and AppKit backend with the shared local
 // environment. Both JavaScript apps are workspace members, so there is no nested
-// projen synth or registry install. `--watch-exclude '**'` leaves client HMR
+// projen synth or registry install. `--watch-disable` / `-d` leaves client HMR
 // active while keeping the backend, sidecars, and authenticated tunnel stable.
 // `--watch-include` replaces the default workspace-package watch set.
 // `.env` is the committed-shape local secret file; `.env.local` optionally
