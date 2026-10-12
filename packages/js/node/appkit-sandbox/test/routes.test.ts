@@ -52,6 +52,7 @@ describe("SshRouteRegistry", () => {
       forwardOut: async () => createConnection(remotePort, "127.0.0.1"),
     } as unknown as SshSession;
     const registry = new SshRouteRegistry("/sandbox");
+    const inboundUrls: string[] = [];
     const proxy = createHttpServer((request, response) => {
       Object.defineProperty(request, "path", {
         configurable: true,
@@ -62,6 +63,7 @@ describe("SshRouteRegistry", () => {
         response.statusCode = 404;
         response.end();
       });
+      inboundUrls.push(request.url ?? "");
     });
     const proxyPort = await listen(proxy);
     try {
@@ -119,6 +121,10 @@ describe("SshRouteRegistry", () => {
           headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
         }).then((res) => res.text()),
         "/assets?q=1",
+      );
+      assert.ok(
+        inboundUrls.includes(`${stripped.path}/assets?q=1`),
+        inboundUrls.join(","),
       );
       assert.equal(
         await fetch(`http://127.0.0.1:${proxyPort}${preserved.path}/assets?q=1`, {
@@ -263,7 +269,7 @@ describe("SshRouteRegistry", () => {
     }
   });
 
-  it("proxies owner-scoped browser aliases and WebSocket upgrades", async () => {
+  it("proxies owner-scoped HTTP and WebSocket traffic", async () => {
     let upgradedPath: string | undefined;
     let upgradedHeaders: IncomingHttpHeaders | undefined;
     let upgradeHandled = false;
@@ -310,72 +316,22 @@ describe("SshRouteRegistry", () => {
         remoteHost: "127.0.0.1",
         remotePort,
         path: "/sandbox/terminal/sandbox-1",
-        browserRelay: true,
-        browserPaths: ["/assets", "/icons"],
         internal: true,
       });
       const root = await fetch(`http://127.0.0.1:${proxyPort}${route.path}`, {
-        redirect: "manual",
         headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
       });
       assert.equal(root.status, 200);
-      const bootstrap = await root.text();
-      assert.match(bootstrap, /dinotty_device_active_server_v1/);
-      assert.match(bootstrap, new RegExp(route.id));
-      const cookie = root.headers.getSetCookie()[0]?.split(";", 1)[0];
-      assert.ok(cookie);
-      const page = await fetch(`http://127.0.0.1:${proxyPort}${route.path}/`, {
-        headers: {
-          cookie,
-          [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com",
-        },
-      });
-      assert.match(page.headers.getSetCookie()[0] ?? "", new RegExp(route.id));
-      assert.match(await page.text(), new RegExp(route.id));
+      assert.match(await root.text(), /<!doctype html>/);
       assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/assets/app.js`, {
-          headers: {
-            cookie,
-            [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com",
-          },
+        await fetch(`http://127.0.0.1:${proxyPort}${route.path}/assets/app.js`, {
+          headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
         }).then((response) => response.text()),
         "/assets/app.js",
-      );
-      assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/assets/app.js`, {
-          headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
-        }).then((response) => response.status),
-        404,
-      );
-      assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/__srv/${route.id}/assets/app.js`).then(
-          (response) => response.status,
-        ),
-        404,
-      );
-      assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/__srv/${route.id}/assets/app.js`, {
-          headers: { cookie },
-        }).then((response) => response.text()),
-        "/assets/app.js",
-      );
-      assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/__srv/stale-route/assets/app.js`, {
-          headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
-        }).then((response) => response.status),
-        404,
-      );
-      assert.equal(
-        await fetch(`http://127.0.0.1:${proxyPort}/__srv/stale-route/assets/app.js`).then(
-          (response) => response.status,
-        ),
-        404,
       );
       const upgradeResponse = await sendWebsocketUpgrade(
         proxyPort,
-        `/__srv/${route.id}/ws/events`,
-        cookie,
-        false,
+        `${route.path}/ws/events`,
       );
       assert.equal(upgradeHandled, true);
       assert.equal(upgradedPath, "/ws/events");
@@ -386,34 +342,74 @@ describe("SshRouteRegistry", () => {
       assert.equal(upgradedHeaders?.[USER_EMAIL_HEADER], undefined);
       assert.match(upgradeResponse, /^HTTP\/1\.1 101 Switching Protocols/);
       assert.equal(
-        await sendWebsocketUpgrade(
-          proxyPort,
-          "/__srv/stale-route/ws/events",
-          "dbx_tools_ssh_route=stale-route",
-          false,
-        ),
+        await sendWebsocketUpgrade(proxyPort, "/sandbox/terminal/stale/ws/events"),
         "closed",
       );
-      assert.equal(upgradeHandled, true);
-      await registry.add(session, {
-        ownerId: "other@databricks.com",
-        machineId: "sandbox-2",
-        remoteHost: "127.0.0.1",
-        remotePort,
-        path: "/sandbox/terminal/sandbox-2",
-        browserRelay: true,
-        internal: true,
-      });
-      assert.equal(
-        await sendWebsocketUpgrade(proxyPort, "/__srv/ambiguous-stale/ws/events", undefined, false),
-        "closed",
-      );
-      assert.equal(upgradeHandled, true);
+      assert.equal(upgradeHandled, false);
     } finally {
       await registry.close();
       remoteWebSockets.close();
       await close(proxy);
       await close(remote);
+    }
+  });
+
+  it("returns 502 when the WebSocket upstream is down without crashing the process", async () => {
+    const unhandled: unknown[] = [];
+    const recordUnhandled = (error: unknown) => {
+      unhandled.push(error);
+    };
+    process.on("uncaughtException", recordUnhandled);
+    process.on("unhandledRejection", recordUnhandled);
+    const unused = createHttpServer();
+    const unusedPort = await listen(unused);
+    await close(unused);
+    const session = {
+      forwardOut: async () => createConnection(unusedPort, "127.0.0.1"),
+    } as unknown as SshSession;
+    const registry = new SshRouteRegistry("/sandbox");
+    let upgradeHandled = false;
+    const proxy = createHttpServer((request, response) => {
+      const url = new URL(request.url ?? "/", "http://localhost");
+      Object.assign(request, {
+        path: url.pathname,
+        header: (name: string) => request.headers[name.toLowerCase()],
+      });
+      registry.middleware()(request as never, response as never, () => {
+        response.statusCode = 404;
+        response.end();
+      });
+    });
+    proxy.on("upgrade", (request, socket, head) => {
+      upgradeHandled = registry.handleUpgrade(request, socket, head);
+      if (!upgradeHandled) socket.destroy();
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const route = await registry.add(session, {
+        ownerId: "reggie.pierce@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort: unusedPort,
+        path: "/sandbox/terminal/sandbox-1",
+        internal: true,
+      });
+      const upgradeResponse = await sendWebsocketUpgrade(
+        proxyPort,
+        `${route.path}/ws/sync`,
+      );
+      assert.equal(upgradeHandled, true);
+      assert.ok(
+        upgradeResponse === "closed" || /^HTTP\/1\.1 502 /.test(upgradeResponse),
+        upgradeResponse,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.deepEqual(unhandled, []);
+    } finally {
+      process.off("uncaughtException", recordUnhandled);
+      process.off("unhandledRejection", recordUnhandled);
+      await registry.close();
+      await close(proxy);
     }
   });
 

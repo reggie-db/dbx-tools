@@ -63,8 +63,9 @@ export class DatabricksSandboxClient {
 
   /** Creates a client and derives its stable workspace assignment scope. */
   constructor(private readonly client: WorkspaceClient) {
-    const workspaceId = client.config.workspaceId || process.env.DATABRICKS_WORKSPACE_ID;
-    const host = client.config.host || process.env.DATABRICKS_HOST;
+    const workspaceId =
+      process.env.DATABRICKS_WORKSPACE_ID?.trim() || client.config.workspaceId?.trim();
+    const host = process.env.DATABRICKS_HOST?.trim() || client.config.host;
     this.scope = workspaceId || net.urlBuilder(host)?.origin || "workspace";
   }
 

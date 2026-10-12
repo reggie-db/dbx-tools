@@ -52,9 +52,9 @@
  * @module
  */
 
-import { ConfigurationError } from "@databricks/appkit";
+import { ConfigurationError, Plugin } from "@databricks/appkit";
 import { configUtils } from "@dbx-tools/core";
-import { stringUtils, token } from "@dbx-tools/shared-core";
+import { log, stringUtils, token } from "@dbx-tools/shared-core";
 
 /**
  * Header the Databricks Apps front door forwards the caller's OBO token on.
@@ -157,4 +157,69 @@ export function useServicePrincipal(mode: IdentityMode, req?: HeaderBearing): bo
   if (mode === "service-principal") return true;
   if (mode === "user") return false;
   return requestAccessToken(req) === undefined;
+}
+
+const logger = log.logger("appkit");
+const skippedAsUser = new Set<string>();
+const AS_USER_SKIP_WARN = "Skipping user impersonation";
+const AS_USER_PATCHED = Symbol.for("dbx-tools.appkit.asUserDevLog");
+
+/**
+ * In development, keep AppKit `asUser` behavior. The first missing-token skip
+ * for a forwarded email or user id uses AppKit's own warn; later skips for
+ * that user, and every skip with no forwarded identity, are silent. Request
+ * objects are not a stable key: each plugin call typically has its own `req`.
+ *
+ * No-op outside development, when `Plugin.asUser` is missing or not a
+ * function, or if the prototype cannot be rewritten. Failures never throw:
+ * AppKit keeps its original `asUser`. Extra arguments are forwarded so a
+ * later signature change still reaches the original method.
+ */
+export function installAsUserDevelopmentPatch(): void {
+  if (process.env.NODE_ENV !== "development") return;
+  try {
+    const proto = Plugin.prototype as unknown as Record<PropertyKey, unknown>;
+    if (proto[AS_USER_PATCHED] === true) return;
+    const original = proto.asUser;
+    if (typeof original !== "function") return;
+    proto[AS_USER_PATCHED] = true;
+    proto.asUser = function patchedAsUser(this: unknown, req: unknown, ...rest: unknown[]) {
+      const headers = asHeaderBearing(req);
+      const args = [req, ...rest];
+      if (!headers || requestAccessToken(headers) !== undefined) {
+        return Function.prototype.apply.call(original, this, args);
+      }
+      return withAsUserSkipWarnSuppressed(headers, () =>
+        Function.prototype.apply.call(original, this, args),
+      );
+    };
+  } catch (error) {
+    logger.debug("asUser development patch skipped", { error: String(error) });
+  }
+}
+
+function asHeaderBearing(req: unknown): HeaderBearing | undefined {
+  if (req === null || typeof req !== "object") return undefined;
+  if (typeof (req as HeaderBearing).header !== "function") return undefined;
+  return req as HeaderBearing;
+}
+
+function withAsUserSkipWarnSuppressed<T>(req: HeaderBearing, fn: () => T): T {
+  const user = requestUserEmail(req) ?? requestUserId(req);
+  if (user && !skippedAsUser.has(user)) {
+    skippedAsUser.add(user);
+    return fn();
+  }
+  const warn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    if (!log.isLevelEnabled("debug") && args.some((value) => typeof value === "string" && value.includes(AS_USER_SKIP_WARN))) {
+      return;
+    }
+    warn.apply(console, args as Parameters<typeof console.warn>);
+  };
+  try {
+    return fn();
+  } finally {
+    console.warn = warn;
+  }
 }

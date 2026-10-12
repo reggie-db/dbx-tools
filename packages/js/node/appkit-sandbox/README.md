@@ -68,7 +68,10 @@ Use the `add_ssh_project` tool instead of creating a proxy route directly:
     },
     "tasks": {
       "start": {
-        "run": "node server.mjs"
+        "run": "[ -f server.mjs ] || exit 0\nif [ -f server.pid ] && kill -0 \"$(cat server.pid)\" 2>/dev/null; then exit 0; fi\nnohup node server.mjs > server.log 2>&1 < /dev/null &\necho $! > server.pid\n"
+      },
+      "stop": {
+        "run": "[ -f server.pid ] && kill \"$(cat server.pid)\" 2>/dev/null || true\n"
       }
     }
   }
@@ -79,6 +82,20 @@ Use the `add_ssh_project` tool instead of creating a proxy route directly:
 unique for the machine, creates `~/projects/<path>`, writes `mise.toml`, runs
 `mise trust` and `mise install`, and returns the project `directory`, public
 `path`, loopback `port`, and `openUrl`.
+
+Keep `hooks.postinstall` limited to installation or preparation that belongs
+to `mise install`. Put runtime lifecycle behavior in `tasks.start` and
+`tasks.stop`; use a visible `tasks.uninstall` only when the project has
+additional teardown beyond stopping its workload. Before invoking any task,
+call `execute_ssh_command` from the returned directory with `command: "sh"`
+and
+`args: ["-lc", "\"$HOME/.local/bin/mise\" tasks ls --name-only --hidden"]`.
+Evaluate the available tasks and invoke only the task defined for the requested
+lifecycle action, using the same command and directory with
+`args: ["-lc", "\"$HOME/.local/bin/mise\" run <task>"]`. Never concatenate
+the executable and arguments into `command`. Start detached servers with
+`nohup` and redirected standard streams. The packaged skills under `skills/`
+specify when and where to invoke each task.
 
 The runtime injects these values into `[env]`:
 
@@ -94,10 +111,12 @@ Pass the returned `projectId` to update the name, path, open path, port, config,
 or prefix behavior. An explicit duplicate path or port fails. Omitting a field
 during an update retains its stored value.
 
-`remove_ssh_project` removes the proxy route, Lakebase record, and project
-directory. Stopping a Sandbox preserves Projects. Deleting or expiring a
-Sandbox removes its Project records without starting the machine for remote
-cleanup.
+`remove_ssh_project` runs `mise run stop` and then `mise run uninstall` when
+each task exists. Discovery includes hidden tasks for compatibility, but new
+`uninstall` tasks should remain visible. Failures are logged and ignored before
+the proxy route, Lakebase record, and project directory are removed. Stopping a
+Sandbox preserves Projects. Deleting or expiring a Sandbox removes its Project
+records without starting the machine for remote cleanup.
 
 The browser-safe request and response fields are defined by
 [`addSshProjectRequestSchema`](https://docs.dbx.tools/api/shared-databricks-sandbox/src-schemas-variable-addsshprojectrequestschema/)

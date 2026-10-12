@@ -153,7 +153,7 @@
     },
     "demo": {
       "name": "demo",
-      "description": "Run the demo client with HMR and the local AppKit server",
+      "description": "Run the local AppKit demo with Vite HMR on the AppKit server port",
       "env": {
         "NODE_ENV": "development",
         "BUN_CONFIG_ELIDE_LINES": "0"

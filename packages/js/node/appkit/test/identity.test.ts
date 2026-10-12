@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { ConfigurationError } from "@databricks/appkit";
+import { ConfigurationError, Plugin } from "@databricks/appkit";
 import { token } from "@dbx-tools/shared-core";
 import {
   ACCESS_TOKEN_HEADER,
   DEFAULT_IDENTITY_MODE,
   IDENTITY_MODES,
+  installAsUserDevelopmentPatch,
   requestAccessToken,
   requestUserEmail,
   requestUserId,
@@ -123,5 +124,50 @@ describe("useServicePrincipal", () => {
     assert.equal(useServicePrincipal("auto", req({ "x-forwarded-user": "ada" })), true);
     assert.equal(useServicePrincipal("auto", req()), true);
     assert.equal(useServicePrincipal("auto", undefined), true);
+  });
+});
+
+describe("installAsUserDevelopmentPatch", () => {
+  const originalEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  it("is a no-op outside development", () => {
+    const original = Plugin.prototype.asUser;
+    process.env.NODE_ENV = "production";
+    installAsUserDevelopmentPatch();
+    assert.equal(Plugin.prototype.asUser, original);
+  });
+
+  it("keeps asUser, warns once per forwarded user, and stays silent after", () => {
+    process.env.NODE_ENV = "development";
+    installAsUserDevelopmentPatch();
+    const plugin = new (class extends Plugin {})({ name: "probe" });
+    const first = req({ "x-forwarded-email": "ada@example.com" });
+    const second = req({ "x-forwarded-email": "ada@example.com" });
+    const skipWarn = (args: unknown[]) =>
+      args.some((value) => typeof value === "string" && value.includes("Skipping user impersonation"));
+    const warns: unknown[][] = [];
+    const debugs: unknown[][] = [];
+    const warn = console.warn;
+    const debug = console.debug;
+    console.warn = (...args: unknown[]) => {
+      warns.push(args);
+    };
+    console.debug = (...args: unknown[]) => {
+      debugs.push(args);
+    };
+    try {
+      plugin.asUser(first as never);
+      plugin.asUser(second as never);
+      plugin.asUser(req() as never);
+    } finally {
+      console.warn = warn;
+      console.debug = debug;
+    }
+    assert.equal(warns.filter(skipWarn).length, 1);
+    assert.equal(debugs.filter(skipWarn).length, 0);
   });
 });

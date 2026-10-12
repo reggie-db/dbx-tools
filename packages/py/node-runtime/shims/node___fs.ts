@@ -1,5 +1,6 @@
 import { Readable, Writable } from "node:stream";
 
+import { withPythonPath } from "./fs-errors.ts";
 import * as promises from "./node___fs__promises.ts";
 import { pythonHost } from "./host.ts";
 
@@ -17,11 +18,11 @@ export function existsSync(path: string): boolean {
 }
 
 export function readFileSync(path: string, _encoding?: string): string {
-  return pythonHost().file.readTextSync(String(path));
+  return withPythonPath(path, () => pythonHost().file.readTextSync(String(path)));
 }
 
 export function readdirSync(path: string, options: { withFileTypes?: boolean } = {}): unknown[] {
-  const entries = pythonHost().file.readDirectorySync(String(path));
+  const entries = withPythonPath(path, () => pythonHost().file.readDirectorySync(String(path)));
   if (!options.withFileTypes) return entries.map((entry) => entry.name);
   return entries.map((entry) => ({
     name: entry.name,
@@ -32,17 +33,17 @@ export function readdirSync(path: string, options: { withFileTypes?: boolean } =
 }
 
 export function readlinkSync(path: string): string {
-  return pythonHost().file.readLinkSync(String(path));
+  return withPythonPath(path, () => pythonHost().file.readLinkSync(String(path)));
 }
 
 export function realpathSync(path: string): string {
-  return pythonHost().file.realpathSync(String(path));
+  return withPythonPath(path, () => pythonHost().file.realpathSync(String(path)));
 }
 
 realpathSync.native = realpathSync;
 
 export function lstatSync(path: string): unknown {
-  const value = pythonHost().file.statSync(String(path));
+  const value = withPythonPath(path, () => pythonHost().file.statSync(String(path)));
   return {
     mode: value.mode,
     mtime: new Date(value.mtimeMs),

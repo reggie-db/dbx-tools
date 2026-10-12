@@ -250,10 +250,17 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       path: "/projects",
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
-        res.json({
-          pathPrefix: this.runtime.projectPathPrefix(userId),
-          projects: await this.runtime.projectList(createWorkspaceClient(), userId),
-        });
+        res.json(
+          await this.withRequestAuth(
+            req,
+            "listProjects",
+            (plugin) => plugin.listProjects(userId),
+            async () => ({
+              pathPrefix: this.runtime.projectPathPrefix(userId),
+              projects: await this.runtime.projectList(createWorkspaceClient(), userId),
+            }),
+          ),
+        );
       },
     });
     this.route(router, {
@@ -385,7 +392,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     };
   }
 
-  /** Opens a DinoTTY tab rooted at one persisted project. */
+  /** Opens ttyd rooted at one persisted project. */
   async openProjectTerminal(userId: string, projectId: string) {
     return this.runtime.openProjectTerminal(this.workspaceClient(), userId, projectId);
   }

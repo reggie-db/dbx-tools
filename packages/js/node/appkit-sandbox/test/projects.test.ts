@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { sshCommandRequestSchema } from "@dbx-tools/shared-databricks-sandbox";
 import { parse } from "smol-toml";
 import {
   generateProjectPort,
   normalizeProjectOpenPath,
   normalizeProjectPath,
+  PROJECT_REMOVE_SCRIPT,
   renderProjectMiseConfig,
 } from "../src/_projects.ts";
 
@@ -49,6 +51,40 @@ describe("Sandbox project configuration", () => {
           { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
         ),
       /PROJECT_PORT must equal "8080"/,
+    );
+  });
+
+  it("runs optional mise stop and uninstall before deleting the project directory", () => {
+    assert.match(PROJECT_REMOVE_SCRIPT, /for task in stop uninstall; do/);
+    assert.match(
+      PROJECT_REMOVE_SCRIPT,
+      /if "\$mise_bin" tasks ls --name-only --hidden \| grep -Fxq "\$task"; then/,
+    );
+    assert.match(PROJECT_REMOVE_SCRIPT, /"\$mise_bin" run "\$task"/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /mise run %s failed \(ignored\)/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /stop_project_processes/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /readlink "\$proc\/cwd"/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /kill -KILL/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /rm -rf -- "\$project_directory"/);
+  });
+});
+
+describe("Sandbox command requests", () => {
+  it("keeps the executable separate from its arguments", () => {
+    assert.throws(
+      () =>
+        sshCommandRequestSchema.parse({
+          machineId: "sandbox-id",
+          command: "mise tasks ls --name-only --hidden",
+        }),
+      /one executable name/,
+    );
+    assert.doesNotThrow(() =>
+      sshCommandRequestSchema.parse({
+        machineId: "sandbox-id",
+        command: "sh",
+        args: ["-lc", '"$HOME/.local/bin/mise" tasks ls --name-only --hidden'],
+      }),
     );
   });
 });

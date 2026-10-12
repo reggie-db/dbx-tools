@@ -18,15 +18,15 @@ import {
 } from "@mastra/core/workspace";
 import type { SshRuntime } from "./runtime.ts";
 
-const ROUTING_INSTRUCTIONS = `Use add_ssh_project before creating a web project. The tool generates a unique name, path, and port when omitted, creates ~/projects/<path>, writes mise.toml from config, and returns the directory, public path, port, and openUrl. Re-call it with projectId to update any project field.
+const ROUTING_INSTRUCTIONS = `Call list_ssh_machines first and use only a returned machine id. Reuse that machine's existing project from the Lakebase-backed projects list when one matches; pass its projectId to add_ssh_project. Use add_ssh_project before creating a web project. The tool generates a unique name, path, and port when omitted, creates ~/projects/<path>, writes mise.toml from config, and returns the directory, public path, port, and openUrl. Re-call it with projectId to update any project field.
 
-Run project commands from the returned directory with the project-local mise environment. Use config for tools, dependencies, tasks, hooks, and environment values. PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT are injected into mise.env. Bind HTTP services to 127.0.0.1 and PROJECT_PORT.
+Installation and lifecycle behavior belong in config. Keep hooks.postinstall limited to installation or preparation performed by mise install. Define runtime lifecycle behavior in tasks.start and tasks.stop, and define a visible tasks.uninstall only for additional teardown. Before invoking a project task, use execute_ssh_command from the returned directory with command "sh" and args ["-lc", "\"$HOME/.local/bin/mise\" tasks ls --name-only --hidden"], evaluate the available tasks, and use only the task whose purpose and invocation point are documented by the applicable skill. Invoke one documented task with command "sh" and args ["-lc", "\"$HOME/.local/bin/mise\" run <task>"]. Never pass an executable and its arguments together as command. Prefer mise lifecycle tasks over ad-hoc workload commands. Use execute_ssh_command to write application files in the returned directory, invoke documented mise tasks, and read logs. Start servers detached with nohup and redirected stdin, stdout, and stderr. Use config for tools, dependencies, tasks, hooks, and environment values. PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT are injected into mise.env. Bind HTTP services to 127.0.0.1 and PROJECT_PORT.
 
 Return openUrl to the user. Never return localhost, 127.0.0.1, 0.0.0.0, or a direct Sandbox URL. Applications should use relative asset and API URLs. Prefer stripPrefix: true unless the application is configured for the full public project path.
 
 WebSocket clients must derive ws:// or wss:// from the public origin and include the project path. Raw TCP, UDP, and servers that cannot operate behind a path prefix are not browser-routable.
 
-remove_ssh_project removes the project route, Lakebase record, and ~/projects/<path> directory. Stopping a Sandbox preserves projects. Deleting or expiring a Sandbox removes its project records.`;
+remove_ssh_project attempts mise run stop and then mise run uninstall when each task exists, discovering hidden tasks for compatibility, then removes the project route, Lakebase record, and ~/projects/<path> directory. Stopping a Sandbox preserves projects. Deleting or expiring a Sandbox removes its project records.`;
 
 /** Options for selecting and naming the SSH-backed Mastra workspace sandbox. */
 export interface SshWorkspaceSandboxOptions {

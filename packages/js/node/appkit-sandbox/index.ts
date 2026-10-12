@@ -21,7 +21,6 @@ export { MachineSoftwareSchema, SshPluginConfigSchema } from "./src/config.ts";
 export type { MachineSoftware, SerializableSshPluginConfig, ResolvedSshPluginConfig, SshPluginConfig } from "./src/config.ts";
 export { desktopPorts } from "./src/desktop.ts";
 export { SshKeyStore } from "./src/key-store.ts";
-export type { ManagedSandboxName } from "./src/managed-name.ts";
 export { OWNERSHIP_SCHEMA_PREFIX, MachineAssignmentSchema, NewMachineAssignmentSchema, SandboxProjectRecordSchema, NewSandboxProjectRecordSchema, LakebaseMachineOwnershipStore } from "./src/ownership.ts";
 export type { MachineAssignment, NewMachineAssignment, SandboxProjectRecord, NewSandboxProjectRecord } from "./src/ownership.ts";
 export { AppKitSshPlugin, databricksSandbox } from "./src/plugin.ts";

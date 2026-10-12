@@ -48,7 +48,7 @@ export const SshPluginConfigSchema = z
       .positive()
       .default(86_400)
       .describe(
-        "Absolute service-managed Sandbox lifetime in seconds. Defaults to 86400 seconds and is recorded in Lakebase and the managed name.",
+        "Absolute service-managed Sandbox lifetime in seconds. Defaults to 86400 seconds and is recorded in Lakebase.",
       ),
     reaperIntervalSeconds: z
       .number()

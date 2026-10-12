@@ -129,9 +129,23 @@ export type SshMachineServiceAction = z.infer<typeof sshMachineServiceActionSche
 
 export const sshCommandRequestSchema = z
   .object({
-    machineId: z.string().min(1).describe("Machine that executes the command."),
-    command: z.string().min(1).describe("Executable or shell command."),
-    args: z.array(z.string()).default([]).describe("Arguments passed to the command."),
+    machineId: z
+      .string()
+      .min(1)
+      .describe("Assigned Sandbox id from list_ssh_machines that executes the command."),
+    command: z
+      .string()
+      .min(1)
+      .regex(/^\S+$/, 'Command must be one executable name; use command "sh" for shell syntax.')
+      .describe(
+        'Executable name only. Put arguments in args. For shell syntax, use command "sh" with args ["-lc", "<script>"].',
+      ),
+    args: z
+      .array(z.string())
+      .default([])
+      .describe(
+        "Individual arguments passed to the executable. Never concatenate the executable and its arguments into command.",
+      ),
     cwd: z.string().optional().describe("Remote working directory."),
     env: z.record(z.string(), z.string()).optional().describe("Remote environment overlay."),
     timeoutMs: z.number().int().positive().max(3_600_000).optional().describe("Command timeout."),
@@ -157,7 +171,12 @@ export type SshCommandResult = z.infer<typeof sshCommandResultSchema>;
 
 export const addSshProjectRequestSchema = z
   .object({
-    machineId: z.string().min(1).describe("Machine that hosts the project."),
+    machineId: z
+      .string()
+      .min(1)
+      .describe(
+        "Assigned Sandbox id from list_ssh_machines. Do not invent an id or pick an unlisted sandbox.",
+      ),
     projectId: z
       .string()
       .min(1)
@@ -208,7 +227,9 @@ export type AddSshProjectRequest = z.input<typeof addSshProjectRequestSchema>;
 export const removeSshProjectRequestSchema = z
   .object({ projectId: z.string().min(1).describe("Sandbox project to remove.") })
   .strict()
-  .describe("Request to remove a Sandbox project and its directory.");
+  .describe(
+    "Request to remove a Sandbox project, run its optional mise stop and uninstall tasks in order, and delete its directory.",
+  );
 export type RemoveSshProjectRequest = z.infer<typeof removeSshProjectRequestSchema>;
 
 export const listSshProjectsRequestSchema = z
@@ -305,7 +326,7 @@ export const deleteSshMachineOperationSchema = sshMachineActionSchema
 
 export const executeSshCommandOperationSchema = sshCommandRequestSchema
   .describe(
-    "Execute a maintenance command on an assigned Sandbox. Create or select a persisted project first for app, demo, server, desktop, or persistent file work, and run from that project directory.",
+    "Execute a maintenance command on an assigned Sandbox. Create or select a persisted project first for app, demo, server, desktop, or persistent file work, and run from that project directory. Keep installation in mise hooks.postinstall and prefer documented mise start and stop tasks over ad-hoc workload commands. List available tasks, including hidden tasks, before invoking one.",
   )
   .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
 
@@ -328,7 +349,7 @@ export const listSshProjectsOperationSchema = listSshProjectsRequestSchema
 
 export const addSshProjectOperationSchema = addSshProjectRequestSchema
   .describe(
-    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route.",
+    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route. Every call runs mise install and its installation-only hooks.postinstall. Runtime lifecycle belongs in documented start and stop tasks.",
   )
   .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
 
@@ -338,7 +359,7 @@ export const openSshProjectTerminalOperationSchema = sshProjectActionSchema
 
 export const resetSshProjectOperationSchema = sshProjectActionSchema
   .describe(
-    "Permanently wipe a persisted Sandbox project's directory and recreate it from its saved mise configuration.",
+    "Permanently wipe a persisted Sandbox project's directory, running optional mise stop and uninstall tasks in order, and recreate it from its saved mise configuration.",
   )
   .meta({
     appkitTool: {
@@ -351,7 +372,9 @@ export const resetSshProjectOperationSchema = sshProjectActionSchema
   });
 
 export const removeSshProjectOperationSchema = removeSshProjectRequestSchema
-  .describe("Permanently remove a Sandbox project, its route, and its isolated directory.")
+  .describe(
+    "Permanently remove a Sandbox project, its route, and its isolated directory. Attempts mise run stop and then mise run uninstall when each task exists, including hidden tasks for compatibility, logs and ignores failures, then deletes ~/projects/<path>.",
+  )
   .meta({
     appkitTool: {
       agentTool: true,

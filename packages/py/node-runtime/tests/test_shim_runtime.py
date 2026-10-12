@@ -25,6 +25,16 @@ def test_shared_runtime_and_bundle_registry() -> None:
     assert get_builtin("fs") is not None
     assert get_builtin("node:crypto") is not None
 
+
+def test_read_file_sync_missing_is_enoent() -> None:
+    missing = str(Path("/no/such/dbx-tools/model-catalog.json"))
+    try:
+        get_builtin("fs").readFileSync(missing)
+    except Exception as exc:
+        assert getattr(exc, "code", None) == "ENOENT" or "ENOENT" in str(exc)
+        return
+    raise AssertionError("readFileSync should fail for a missing cache file")
+
     first = load_bundle(FIXTURES / "first.js", bundle_id="first")
     second = load_bundle(FIXTURES / "second.js", bundle_id="second")
 

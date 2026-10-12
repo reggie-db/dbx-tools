@@ -107,6 +107,9 @@ const root = new project.DBXToolsNodeProject({
     "env-paths": "^4.0.0",
     "keyv-file": "5.3.5",
     "tailwindcss": "^4.3.2",
+    "@tailwindcss/vite": "^4.3.2",
+    "vite": "^7.2.4",
+    "@vitejs/plugin-react": "^5.1.1",
     "tw-animate-css": "^1.4.0",
     "lucide-react": "^0.554.0",
     "react-router-dom": "^7.6.2",
@@ -407,7 +410,6 @@ project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }
     "http-proxy-3@catalog:",
     "smol-toml@1.8.0",
     "ssh2@catalog:",
-    "ws@catalog:",
     "zod@catalog:",
   );
   p.addDevDeps(
@@ -416,6 +418,7 @@ project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }
     "@types/ssh2@^1",
     "@types/ws@^8",
     "vitest@catalog:",
+    "ws@catalog:",
   );
   projectJs.addPackageFiles(p, "skills");
   projectJs.addPackageFiles(p, "scripts");
@@ -1274,6 +1277,8 @@ project.applyToProjects(
       "fuse.js@^7.4.2",
       "yaml@^2.9.0",
       "tsx@^4.22.4",
+      "vite@catalog:",
+      "@vitejs/plugin-react@catalog:",
     );
     p.addDevDeps(
       "@dbx-tools/projen@workspace:^",
@@ -1284,10 +1289,12 @@ project.applyToProjects(
   },
 );
 
-// packages/example/app/appkit-demo: the React client. `app` tag supplies react +
-// the bun dev server / `bun build` (Tailwind via bun-plugin-tailwind).
+// packages/example/app/appkit-demo: the React client. Production uses bun build
+// (Tailwind via bun-plugin-tailwind). Local `bun run demo` omits `staticPath` so
+// AppKit `server()` serves this package through Vite middleware HMR.
 project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: "app" }, (p) => {
   p.package.addField("private", true);
+  p.addDevDeps("@dbx-tools/tunnel@workspace:^");
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/ui@workspace:^",
@@ -1299,6 +1306,7 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
     "@databricks/appkit-ui@catalog:",
     "tw-animate-css@catalog:",
     "tailwindcss@catalog:",
+    "@tailwindcss/vite@catalog:",
   );
 });
 
@@ -1459,10 +1467,10 @@ for (const task of [SCOPE, "dbx"]) {
   root.setScript(task, command);
 }
 
-// Run the Bun client HMR server and AppKit backend with the shared local
-// environment. Both JavaScript apps are workspace members, so there is no nested
-// projen synth or registry install. `--watch-disable` / `-d` leaves client HMR
-// active while keeping the backend, sidecars, and authenticated tunnel stable.
+// Run the AppKit backend with its documented Vite middleware HMR. Omit
+// `staticPath` in development so `server()` serves `packages/example/app/appkit-demo`
+// on the same port. `--watch-disable` / `-d` keeps that HMR without restarting
+// sidecars or the authenticated tunnel.
 // `--watch-include` replaces the default workspace-package watch set.
 // `.env` is the committed-shape local secret file; `.env.local` optionally
 // overlays it. Both `--env-file` flags are missing-file tolerant under bun, so
@@ -1474,7 +1482,7 @@ root.addTask("demo", {
   },
   exec: "bun scripts/run-demo.ts",
   receiveArgs: true,
-  description: "Run the demo client with HMR and the local AppKit server",
+  description: "Run the local AppKit demo with Vite HMR on the AppKit server port",
 });
 root.addTask("demo:deploy", {
   exec: "bun scripts/demo-deploy.ts",

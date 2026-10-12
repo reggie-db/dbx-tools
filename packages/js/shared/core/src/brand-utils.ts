@@ -105,12 +105,12 @@ export const BrandContextSchema = z
     voice: BrandVoiceSchema,
     links: z
       .object({
-        website: z.string().url().optional(),
+        website: z.string().url().default("https://dbx.tools"),
         repository: z.string().url().optional(),
         documentation: z.string().url().optional(),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     extensions: z
       .record(nonBlankString, z.unknown())
       .default({})

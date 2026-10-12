@@ -22,4 +22,84 @@ for segment in "$@"; do
   esac
 done
 
-rm -rf -- "$HOME/projects/$project_path"
+list_proc_dirs() {
+  (
+    set +f
+    for proc in /proc/[0-9]*; do
+      [ -d "$proc" ] || continue
+      printf '%s\n' "$proc"
+    done
+  )
+}
+
+kill_tree() {
+  pid="$1"
+  case "$pid" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  if [ "$pid" = "$$" ] || [ "$pid" = "$PPID" ]; then
+    return 0
+  fi
+  list_proc_dirs | while IFS= read -r proc; do
+    ppid=$(awk '/^PPid:/{print $2; exit}' "$proc/status" 2>/dev/null || true)
+    if [ "$ppid" = "$pid" ]; then
+      kill_tree "${proc##*/}"
+    fi
+  done
+  kill "$pid" 2>/dev/null || true
+}
+
+project_pids() {
+  dir="$1"
+  find "$dir" -maxdepth 1 -type f -name '*.pid' 2>/dev/null | while IFS= read -r pidfile; do
+    tr -d ' \n' < "$pidfile"
+    printf '\n'
+  done
+  list_proc_dirs | while IFS= read -r proc; do
+    pid="${proc##*/}"
+    [ "$pid" = "$$" ] && continue
+    cwd=$(readlink "$proc/cwd" 2>/dev/null || true)
+    case "$cwd" in
+      "$dir"|"$dir (deleted)") printf '%s\n' "$pid" ;;
+    esac
+  done
+}
+
+stop_project_processes() {
+  dir="$1"
+  pids=$(project_pids "$dir" || true)
+  [ -n "${pids:-}" ] || return 0
+  for pid in $pids; do
+    kill_tree "$pid"
+  done
+  sleep 1
+  pids=$(project_pids "$dir" || true)
+  [ -n "${pids:-}" ] || return 0
+  for pid in $pids; do
+    case "$pid" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+}
+
+project_directory="$HOME/projects/$project_path"
+if [ -d "$project_directory" ]; then
+  if [ -x "$HOME/.local/bin/mise" ]; then
+    mise_bin="$HOME/.local/bin/mise"
+  else
+    mise_bin="$(command -v mise || true)"
+  fi
+  if [ -n "$mise_bin" ]; then
+    for task in stop uninstall; do
+      (
+        cd "$project_directory"
+        if "$mise_bin" tasks ls --name-only --hidden | grep -Fxq "$task"; then
+          "$mise_bin" run "$task"
+        fi
+      ) || printf 'mise run %s failed (ignored)\n' "$task" >&2
+    done
+  fi
+  stop_project_processes "$project_directory" || printf 'project process teardown failed (ignored)\n' >&2
+fi
+rm -rf -- "$project_directory"

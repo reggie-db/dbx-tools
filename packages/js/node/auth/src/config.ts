@@ -18,7 +18,7 @@ export const AuthOptionsSchema = z
   .describe("Token lifecycle timing configuration.");
 
 /** Token lifecycle timing configuration in milliseconds. */
-export type AuthOptions = z.input<typeof AuthOptionsSchema>;
+export interface AuthOptions extends z.input<typeof AuthOptionsSchema> {}
 
 export const DatabricksAuthOptionsSchema = z
   .object({
@@ -34,7 +34,7 @@ export const DatabricksAuthOptionsSchema = z
     authType: authTypeSchema.optional().describe("Databricks authentication type."),
     scopes: z.array(z.string().trim().min(1)).optional().describe("OAuth scopes."),
     target: targetKindSchema.optional().describe("OAuth target."),
-    auth: AuthOptionsSchema.partial().optional().describe("Token lifecycle overrides."),
+    auth: AuthOptionsSchema.optional().describe("Token lifecycle overrides."),
     requestHeaders: z
       .record(z.string(), z.string())
       .optional()
@@ -48,8 +48,18 @@ export const DatabricksAuthOptionsSchema = z
   .strict()
   .describe("Databricks profile and credential-source options.");
 
-/** Databricks profile and credential-source options. */
-export type DatabricksAuthOptions = z.input<typeof DatabricksAuthOptionsSchema>;
+/**
+ * Databricks profile and credential-source options.
+ *
+ * `auth` is the {@link AuthOptions} interface so nested Zod input does not
+ * collapse to an anonymous object.
+ */
+export interface DatabricksAuthOptions extends Omit<
+  z.input<typeof DatabricksAuthOptionsSchema>,
+  "auth"
+> {
+  auth?: AuthOptions;
+}
 
 /** Default token refresh, lock, and interactive login timing values. */
 export const AUTH_DEFAULTS = Object.freeze(AuthOptionsSchema.parse({}));

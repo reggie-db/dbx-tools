@@ -5,12 +5,41 @@ import { DatabricksSandboxClient, isSandboxUnavailable } from "../src/rest.ts";
 
 describe("DatabricksSandboxClient", () => {
   it("keeps ownership scope stable when the SDK lazily resolves its host", () => {
-    const config = { host: "fevm.example.cloud.databricks.com" };
-    const api = new DatabricksSandboxClient({ config } as unknown as WorkspaceClient);
+    const previousId = process.env.DATABRICKS_WORKSPACE_ID;
+    const previousHost = process.env.DATABRICKS_HOST;
+    delete process.env.DATABRICKS_WORKSPACE_ID;
+    delete process.env.DATABRICKS_HOST;
+    try {
+      const config = { host: "fevm.example.cloud.databricks.com" };
+      const api = new DatabricksSandboxClient({ config } as unknown as WorkspaceClient);
 
-    config.host = "https://different.example.cloud.databricks.com";
+      config.host = "https://different.example.cloud.databricks.com";
 
-    assert.equal(api.workspaceScope(), "https://fevm.example.cloud.databricks.com");
+      assert.equal(api.workspaceScope(), "https://fevm.example.cloud.databricks.com");
+    } finally {
+      if (previousId === undefined) delete process.env.DATABRICKS_WORKSPACE_ID;
+      else process.env.DATABRICKS_WORKSPACE_ID = previousId;
+      if (previousHost === undefined) delete process.env.DATABRICKS_HOST;
+      else process.env.DATABRICKS_HOST = previousHost;
+    }
+  });
+
+  it("uses the process workspace id so OBO and service-principal clients share Lakebase ownership", () => {
+    const previousId = process.env.DATABRICKS_WORKSPACE_ID;
+    process.env.DATABRICKS_WORKSPACE_ID = "shared-workspace";
+    try {
+      const obo = new DatabricksSandboxClient({
+        config: { workspaceId: "obo-only", host: "https://obo.example.cloud.databricks.com" },
+      } as unknown as WorkspaceClient);
+      const servicePrincipal = new DatabricksSandboxClient({
+        config: { host: "https://sp.example.cloud.databricks.com" },
+      } as unknown as WorkspaceClient);
+      assert.equal(obo.workspaceScope(), "shared-workspace");
+      assert.equal(servicePrincipal.workspaceScope(), "shared-workspace");
+    } finally {
+      if (previousId === undefined) delete process.env.DATABRICKS_WORKSPACE_ID;
+      else process.env.DATABRICKS_WORKSPACE_ID = previousId;
+    }
   });
 
   it("lists existing sandboxes through REST with workspace routing and pagination", async () => {

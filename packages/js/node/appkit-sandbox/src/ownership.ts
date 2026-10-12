@@ -4,11 +4,11 @@ import {
   type PgPoolLike,
   type PgQueryable,
 } from "@dbx-tools/postgres";
-import { hash } from "@dbx-tools/shared-core";
+import { hash, log } from "@dbx-tools/shared-core";
 import type { AddSshProjectRequest } from "@dbx-tools/shared-databricks-sandbox";
 import { z } from "zod";
-
 type ProjectConfig = NonNullable<AddSshProjectRequest["config"]>;
+const logger = log.logger("appkit-sandbox:ownership");
 
 const MIGRATION_LOCK = ["appkit-sandbox", "machine-ownership", "migrations"] as const;
 const REAPER_LOCK = ["appkit-sandbox", "machine-ownership", "reaper"] as const;
@@ -44,7 +44,7 @@ export const MachineAssignmentSchema = z
       .string()
       .min(1)
       .optional()
-      .describe("Service-generated Sandbox name; absent only on legacy rows awaiting reaping."),
+      .describe("Databricks Sandbox name recorded at create time. Owner and expiration live in this row, not in the name."),
     expiresAt: z
       .string()
       .datetime()
@@ -109,7 +109,7 @@ export class LakebaseMachineOwnershipStore {
   private constructor(
     private readonly pool: LakebasePool,
     readonly schema: string,
-  ) {}
+  ) { }
 
   /** Detects the connecting Lakebase role, then creates tables in its schema. */
   static async create(pool: LakebasePool): Promise<LakebaseMachineOwnershipStore> {
@@ -319,7 +319,7 @@ export class LakebaseMachineOwnershipStore {
   }
 
   /** Releases store-owned resources without closing the caller-owned pool. */
-  async close(): Promise<void> {}
+  async close(): Promise<void> { }
 
   private async migrate(): Promise<void> {
     const assignments = this.table("machine_assignments");
@@ -404,8 +404,74 @@ export class LakebaseMachineOwnershipStore {
           `CREATE UNIQUE INDEX IF NOT EXISTS sandbox_projects_machine_port_idx
          ON ${projects} (workspace_scope, machine_id, port)`,
         );
+        await this.copyLegacyOwnership(client, assignments, projects);
       },
     );
+  }
+
+  /**
+   * Copies rows from the pre-partition schema `dbx_tools_databricks_sandbox`
+   * into this role's hashed schema. Partitioning stopped sharing that schema
+   * without moving existing assignments, and an empty inventory makes the
+   * reaper treat live `dbx-*` sandboxes as orphans.
+   */
+  private async copyLegacyOwnership(
+    client: PgQueryable,
+    assignments: string,
+    projects: string,
+  ): Promise<void> {
+    if (this.schema === OWNERSHIP_SCHEMA_PREFIX) return;
+    const legacy = quotePostgresIdentifier(OWNERSHIP_SCHEMA_PREFIX);
+    try {
+      const existing = await client.query<{ table_name: string }>(
+        `SELECT table_name
+         FROM information_schema.tables
+         WHERE table_schema = $1 AND table_name IN ('machine_assignments', 'projects')`,
+        [OWNERSHIP_SCHEMA_PREFIX],
+      );
+      const tables = new Set(existing.rows.map((row) => row.table_name));
+      if (tables.has("machine_assignments")) {
+        const copied = await client.query(
+          `INSERT INTO ${assignments} (
+             workspace_scope, user_id, machine_id, managed_name, expires_at, created_at
+           )
+           SELECT workspace_scope, user_id, machine_id, managed_name, expires_at, created_at
+           FROM ${legacy}.machine_assignments
+           ON CONFLICT DO NOTHING`,
+        );
+        if ((copied.rowCount ?? 0) > 0) {
+          logger.info("Copied legacy Sandbox assignments into the role ownership schema", {
+            schema: this.schema,
+            rowCount: copied.rowCount,
+          });
+        }
+      }
+      if (tables.has("projects")) {
+        const copied = await client.query(
+          `INSERT INTO ${projects} (
+             workspace_scope, user_id, project_id, project_name, machine_id, directory_path,
+             project_path, route_path, open_path, port, project_config, remote_host, remote_port,
+             strip_prefix, created_at, updated_at
+           )
+           SELECT workspace_scope, user_id, project_id, project_name, machine_id, directory_path,
+             project_path, route_path, open_path, port, project_config, remote_host, remote_port,
+             strip_prefix, created_at, updated_at
+           FROM ${legacy}.projects
+           ON CONFLICT DO NOTHING`,
+        );
+        if ((copied.rowCount ?? 0) > 0) {
+          logger.info("Copied legacy Sandbox projects into the role ownership schema", {
+            schema: this.schema,
+            rowCount: copied.rowCount,
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn("Could not copy legacy Sandbox ownership into the role schema", {
+        schema: this.schema,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 

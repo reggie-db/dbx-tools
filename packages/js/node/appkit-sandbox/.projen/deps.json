@@ -36,6 +36,11 @@
       "type": "build"
     },
     {
+      "name": "ws",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "@databricks/appkit",
       "version": "catalog:",
       "type": "runtime"
@@ -87,11 +92,6 @@
     },
     {
       "name": "ssh2",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "ws",
       "version": "catalog:",
       "type": "runtime"
     },

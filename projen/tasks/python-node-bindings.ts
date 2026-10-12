@@ -690,7 +690,8 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     path: string,
     preferredName?: string,
   ): PythonRecord | undefined {
-    if (!(type.flags & ts.TypeFlags.Object)) return undefined;
+    // Named intersections (`Omit<...> & { nested?: Named }`) are records.
+    if (!(type.flags & ts.TypeFlags.Object) && !type.isIntersection()) return undefined;
     if (checker.isArrayType(type) || type.getCallSignatures().length > 0) return undefined;
     if (checker.getIndexTypeOfType(type, ts.IndexKind.String)) return undefined;
     const symbolName = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();

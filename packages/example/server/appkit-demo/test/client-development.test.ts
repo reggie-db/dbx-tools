@@ -62,6 +62,15 @@ after(async () => {
 });
 
 describe("development client proxy", () => {
+  it("leaves Chrome DevTools well-known probes for the AppKit server", async () => {
+    const response = await fetch(`${appUrl}/.well-known/appspecific/com.chrome.devtools.json`, {
+      headers: { Accept: "*/*" },
+    });
+
+    assert.equal(response.status, 401);
+    assert.equal(await response.text(), "auth gate");
+  });
+
   it("proxies local HTML requests", async () => {
     const response = await fetch(`${appUrl}/chat`, {
       headers: { Accept: "text/html" },

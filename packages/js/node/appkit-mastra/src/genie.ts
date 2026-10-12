@@ -1115,7 +1115,9 @@ async function writeSuggestionCache(spaceId: string, questions: string[]): Promi
  * questions and a multi-space app round-trips breadth-first up to the
  * cap. A per-space fetch failure degrades to "no questions for that
  * space" (logged, not thrown) so one unreachable space never blanks
- * the whole list. Returns `[]` when no spaces are configured.
+ * the whole list. When `signal` aborts (the HTTP caller disconnected),
+ * collection stops silently and returns what was merged so far.
+ * Returns `[]` when no spaces are configured.
  */
 export async function collectSpaceSuggestions(opts: {
   spaces: Record<string, GenieSpaceConfig>;
@@ -1138,6 +1140,7 @@ export async function collectSpaceSuggestions(opts: {
         questions = genieSpace.genieSampleQuestions(space);
         await writeSuggestionCache(spaceId, questions);
       } catch (err) {
+        if (opts.signal?.aborted) return merged;
         logger.warn("suggestions:fetch-error", {
           spaceId,
           error: errorUtils.toError(err),

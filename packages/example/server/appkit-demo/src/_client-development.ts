@@ -79,7 +79,16 @@ export function createClientDevelopmentProxy(
     const upstream = await fetch(new URL(request.originalUrl, targetUrl), {
       headers: { Accept: "text/html" },
     });
+    const contentType = upstream.headers.get("content-type") ?? "";
     const html = await upstream.text();
+    if (!contentType.includes("text/html")) {
+      response.status(upstream.status);
+      if (contentType) response.set("Content-Type", contentType);
+      response.set("Cache-Control", "no-store");
+      if (request.method === "HEAD") response.end();
+      else response.send(html);
+      return;
+    }
     configScripts ??= appkitConfigScripts().catch((error) => {
       configScripts = undefined;
       throw error;
@@ -88,7 +97,7 @@ export function createClientDevelopmentProxy(
     response.status(upstream.status);
     response.set(
       "Content-Type",
-      upstream.headers.get("content-type") ?? "text/html; charset=utf-8",
+      contentType || "text/html; charset=utf-8",
     );
     response.set("Cache-Control", "no-store");
     if (request.method === "HEAD") response.end();
@@ -141,12 +150,13 @@ function extractAppKitConfigScripts(html: string): string {
 }
 
 function injectAppKitConfig(html: string, scripts: string): string {
-  if (!html.includes("<body>")) throw new Error("Bun client HTML has no body element");
+  if (!html.includes("<body>")) return html;
   return html.replace("<body>", `<body>${scripts}`);
 }
 
 function shouldProxyRequest(request: Request): boolean {
   if (request.path.startsWith(BUN_PATH_PREFIX)) return true;
   if (request.method !== "GET" && request.method !== "HEAD") return false;
+  if (request.path.startsWith("/.well-known/") || request.path.endsWith(".json")) return false;
   return Boolean(request.accepts("html"));
 }

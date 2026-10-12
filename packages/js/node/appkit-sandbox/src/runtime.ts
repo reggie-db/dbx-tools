@@ -34,13 +34,7 @@ import {
 import type { ResolvedSshPluginConfig } from "./config.ts";
 import { desktopOpenUrl } from "./desktop.ts";
 import { SshKeyStore } from "./key-store.ts";
-import {
-  createManagedSandboxName,
-  isManagedSandboxNameCandidate,
-  parseManagedSandboxName,
-  sandboxUserId,
-  type ManagedSandboxName,
-} from "./managed-name.ts";
+import { createSandboxName, sandboxDisplayName } from "./managed-name.ts";
 import {
   LakebaseMachineOwnershipStore,
   type MachineAssignment,
@@ -49,7 +43,7 @@ import {
 } from "./ownership.ts";
 import { DatabricksSandboxClient, isSandboxUnavailable, type SandboxEntry } from "./rest.ts";
 import { SshRouteRegistry } from "./routes.ts";
-import { ensureSshService, openDinoTtyProjectTab } from "./services.ts";
+import { ensureSshService, projectTerminalOpenUrl } from "./services.ts";
 import { SshSession } from "./session.ts";
 
 const POLL_INTERVAL_MS = 1_000;
@@ -76,7 +70,7 @@ interface RuntimeEpoch {
 export interface SandboxReaperResult {
   /** Number of workspace Sandboxes examined. */
   scanned: number;
-  /** Number of invalid or expired managed Sandboxes deleted. */
+  /** Number of expired assigned Sandboxes deleted. */
   deleted: number;
   /** Number of orphaned Lakebase assignment rows removed. */
   removedAssignments: number;
@@ -88,8 +82,8 @@ export interface SandboxReaperResult {
  * Coordinates Sandbox REST operations, Lakebase assignments, SSH sessions,
  * command execution, built-in services, and web routes.
  *
- * Every machine operation verifies an unexpired assignment for the workspace,
- * AppKit user, Sandbox ID, and managed name. Runtime epochs invalidate pending
+ * Every machine operation verifies an unexpired Lakebase assignment for the
+ * workspace, AppKit user, and Sandbox ID. Runtime epochs invalidate pending
  * session, service, and route work after stop, delete, or reconciliation.
  */
 export class SshRuntime {
@@ -255,15 +249,13 @@ export class SshRuntime {
         supported: true,
         machines: entries.flatMap((entry) => {
           const assignment = assigned.get(entry.sandboxId);
-          const managed = assignment ? this.validateManagedMachine(entry, assignment) : undefined;
-          return assignment && managed
+          return assignment && this.assignmentIsCurrent(assignment)
             ? [
                 this.toMachine(
                   entry,
                   api.workspaceScope(),
                   userId,
                   assignment,
-                  managed,
                   projectsByMachine.get(entry.sandboxId) ?? [],
                 ),
               ]
@@ -307,7 +299,6 @@ export class SshRuntime {
       api.workspaceScope(),
       userId,
       owned.assignment,
-      owned.managed,
       projects,
     );
   }
@@ -325,7 +316,7 @@ export class SshRuntime {
     const request = createSshMachineRequestSchema.parse(input);
     const api = new DatabricksSandboxClient(client);
     const expiresAtMs = Date.now() + this.config.sandboxLifetimeSeconds * 1_000;
-    const managedName = createManagedSandboxName(userId, expiresAtMs);
+    const managedName = createSandboxName();
     const expiresAt = new Date(expiresAtMs).toISOString();
     const created = await api.create(managedName, signal);
     const assignment = {
@@ -341,13 +332,11 @@ export class SshRuntime {
       await api.delete(created.sandboxId, signal).catch(() => undefined);
       throw error;
     }
-    const managed = parseManagedSandboxName(managedName)!;
     const machine = this.toMachine(
       { ...created, name: managedName },
       api.workspaceScope(),
       userId,
       { ...assignment, createdAt: new Date().toISOString() },
-      managed,
       [],
     );
     if (!request.desktop) return machine;
@@ -386,7 +375,6 @@ export class SshRuntime {
       api.workspaceScope(),
       userId,
       owned.assignment,
-      owned.managed,
       projects,
     );
   }
@@ -614,7 +602,7 @@ export class SshRuntime {
     }
   }
 
-  /** Removes one project, its local route, and its isolated project directory. */
+  /** Removes one project, runs optional mise stop and uninstall, then deletes its directory and route. */
   async removeProject(
     client: WorkspaceClient,
     userId: string,
@@ -711,7 +699,7 @@ export class SshRuntime {
     return reset;
   }
 
-  /** Opens a new DinoTTY tab rooted at one persisted project directory. */
+  /** Opens ttyd rooted at one persisted project directory. */
   async openProjectTerminal(
     client: WorkspaceClient,
     userId: string,
@@ -728,17 +716,13 @@ export class SshRuntime {
       { machineId: project.machineId, service: "terminal" },
       signal,
     );
-    const machine = await this.ensureRunning(api, userId, project.machineId, signal, true);
-    const epoch = this.runtimeEpoch(workspaceScope, userId, project.machineId);
-    const session = await this.ensureSession(client, userId, machine, epoch, signal);
-    await openDinoTtyProjectTab(
-      session,
-      project.directory,
-      project.name,
-      this.config.commandTimeoutMs,
-      signal,
-    );
-    return { project: this.toProject(project, this.projectRouteReady(project)), service: terminal };
+    return {
+      project: this.toProject(project, this.projectRouteReady(project)),
+      service: {
+        ...terminal,
+        openUrl: projectTerminalOpenUrl(terminal.openUrl, project.directory),
+      },
+    };
   }
 
   /** Lists persisted projects for one AppKit user. */
@@ -804,32 +788,20 @@ export class SshRuntime {
   ): Promise<{
     entry: SandboxEntry;
     assignment: MachineAssignment;
-    managed: ManagedSandboxName;
   }> {
     const assignment = await this.ownershipStore().get(api.workspaceScope(), userId, machineId);
     const entry = assignment ? await api.get(machineId, signal) : undefined;
-    const managed =
-      entry && assignment ? this.validateManagedMachine(entry, assignment) : undefined;
-    if (!entry || !assignment || !managed) {
+    if (!entry || !assignment || !this.assignmentIsCurrent(assignment)) {
       throw new Error(
         `SSH machine ${machineId} is not assigned to the current user or has expired`,
       );
     }
-    return { entry, assignment, managed };
+    return { entry, assignment };
   }
 
-  private validateManagedMachine(
-    entry: SandboxEntry,
-    assignment: MachineAssignment,
-    now = Date.now(),
-  ): ManagedSandboxName | undefined {
-    if (!assignment.managedName || !assignment.expiresAt) return undefined;
-    if (entry.name !== assignment.managedName) return undefined;
-    const managed = parseManagedSandboxName(entry.name);
-    if (!managed) return undefined;
-    const assignedExpiration = Date.parse(assignment.expiresAt);
-    if (managed.expiresAtMs !== assignedExpiration || assignedExpiration <= now) return undefined;
-    return managed;
+  /** Returns whether Lakebase records an unexpired assignment for this machine. */
+  private assignmentIsCurrent(assignment: MachineAssignment, now = Date.now()): boolean {
+    return Boolean(assignment.expiresAt && Date.parse(assignment.expiresAt) > now);
   }
 
   private async performReap(
@@ -891,27 +863,12 @@ export class SshRuntime {
 
     const now = Date.now();
     for (const entry of entries) {
-      const managed = parseManagedSandboxName(entry.name);
       const machineAssignments = assignmentsByMachine.get(entry.sandboxId) ?? [];
-      const canonicalAssignment = machineAssignments.find(
-        (candidate) =>
-          candidate.managedName === entry.name &&
-          candidate.expiresAt !== undefined &&
-          managed?.ownerId === sandboxUserId(candidate.userId) &&
-          managed.expiresAtMs === Date.parse(candidate.expiresAt),
+      if (machineAssignments.length === 0) continue;
+      const expired = machineAssignments.every(
+        (candidate) => !candidate.expiresAt || Date.parse(candidate.expiresAt) <= now,
       );
-      const assignmentsConsistent = machineAssignments.every(
-        (candidate) =>
-          candidate.managedName === entry.name &&
-          candidate.expiresAt !== undefined &&
-          managed?.expiresAtMs === Date.parse(candidate.expiresAt),
-      );
-      const serviceManaged =
-        isManagedSandboxNameCandidate(entry.name) || machineAssignments.length > 0;
-      const expired = Boolean(managed && managed.expiresAtMs <= now);
-      const invalid =
-        serviceManaged && (!managed || !canonicalAssignment || !assignmentsConsistent);
-      if (!expired && !invalid) continue;
+      if (!expired) continue;
 
       try {
         await this.clearMachineRuntime(workspaceScope, entry.sandboxId);
@@ -923,13 +880,12 @@ export class SshRuntime {
           }),
         ]);
         deleted += 1;
-        logger.info("Sandbox reaper deleted managed machine", {
+        logger.info("Sandbox reaper deleted expired machine", {
           machineId: entry.sandboxId,
-          reason: expired ? "expired" : "invalid-managed-name-or-assignment",
         });
       } catch (error) {
         failures += 1;
-        logger.warn("Sandbox reaper could not delete managed machine", {
+        logger.warn("Sandbox reaper could not delete expired machine", {
           machineId: entry.sandboxId,
           ...authErrorMetadata(errorUtils.toError(error)),
         });
@@ -1048,7 +1004,7 @@ export class SshRuntime {
         !machine ||
         normalizeStatus(machine.status) !== "running" ||
         !assignment ||
-        !this.validateManagedMachine(machine, assignment)
+        !this.assignmentIsCurrent(assignment)
       ) {
         continue;
       }
@@ -1364,13 +1320,12 @@ export class SshRuntime {
     workspaceScope: string,
     userId: string,
     assignment: MachineAssignment,
-    managed: ManagedSandboxName,
     projects: SandboxProjectRecord[],
   ): SshMachine {
     const status = normalizeStatus(entry.status);
     return {
       id: entry.sandboxId,
-      name: managed.displayName,
+      name: sandboxDisplayName(assignment.managedName ?? entry.name),
       provider: "databricks-sandbox",
       status,
       ...(entry.gatewayHost ? { gatewayHost: entry.gatewayHost } : {}),

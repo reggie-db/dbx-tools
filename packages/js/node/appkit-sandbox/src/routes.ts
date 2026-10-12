@@ -1,20 +1,18 @@
 import { randomBytes } from "node:crypto";
-import { rm } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer, type Server, type Socket } from "node:net";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { ACCESS_TOKEN_HEADER, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
 import { errorUtils, hash, log } from "@dbx-tools/shared-core";
 import type { NextFunction, Request, Response } from "express";
 import ProxyModule from "http-proxy-3";
 import type { ClientChannel } from "ssh2";
-import WebSocket, { WebSocketServer } from "ws";
 import type { SshSession } from "./session.ts";
 
 const MAX_PENDING_BYTES = 1024 * 1024;
 const logger = log.logger("appkit-sandbox:routes");
+
+type UpgradeSocket = Socket & { destroySoon?: () => void };
 
 interface RouteInput {
   id?: string;
@@ -24,8 +22,6 @@ interface RouteInput {
   remotePort: number;
   path?: string;
   stripPrefix?: boolean;
-  browserPaths?: string[];
-  browserRelay?: boolean;
   redirectToSlash?: boolean;
   htmlHead?: string;
   internal?: boolean;
@@ -46,11 +42,9 @@ interface RouteTarget {
   route: SshForwardedRoute;
   ownerId: string;
   session: SshSession;
-  target?: { host: string; port: number; protocol: string; socketPath?: string };
+  target?: { host: string; port: number; protocol: string };
   server?: Server;
   sockets: Set<Socket>;
-  browserPaths: string[];
-  browserRelayPath?: string;
   redirectToSlash: boolean;
   htmlHead?: string;
   internal: boolean;
@@ -71,8 +65,8 @@ interface RouteMatch {
 export class SshRouteRegistry {
   private readonly routes = new Map<string, RouteTarget>();
   private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
+  private readonly outboundPaths = new WeakMap<IncomingMessage, string>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
-  private readonly websocketServer = new WebSocketServer({ noServer: true });
 
   /** Creates an empty registry beneath one normalized AppKit route prefix. */
   constructor(private readonly prefix: string) {
@@ -82,14 +76,26 @@ export class SshRouteRegistry {
         path: request.url,
         error,
       });
-      if ("writeHead" in response && !response.headersSent) response.writeHead(502);
-      if ("end" in response) response.end("SSH route unavailable");
+      if ("writeHead" in response) {
+        if (!response.headersSent) response.writeHead(502);
+        response.end("SSH route unavailable");
+      } else if (!response.destroyed) {
+        response.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+      }
     });
     this.proxy.on("proxyRes", (proxyResponse, request, response) => {
       const head = this.responseHeadInjections.get(request);
       if (!head) return;
       this.responseHeadInjections.delete(request);
       void injectHtmlHead(proxyResponse, response, head);
+    });
+    this.proxy.on("proxyReq", (proxyRequest, request) => {
+      const path = this.outboundPaths.get(request);
+      if (path) proxyRequest.path = path;
+    });
+    this.proxy.on("proxyReqWs", (proxyRequest, request) => {
+      const path = this.outboundPaths.get(request);
+      if (path) proxyRequest.path = path;
     });
   }
 
@@ -122,7 +128,7 @@ export class SshRouteRegistry {
     if (prepared.previous) return prepared.previous.route;
     const sockets = new Set<Socket>();
     const bridge = createBridge(session, input, sockets);
-    const target = await listenTarget(bridge, prepared.route.id);
+    const target = await listenTarget(bridge);
     this.routes.set(prepared.route.id, {
       route: prepared.route,
       ownerId: input.ownerId,
@@ -130,10 +136,8 @@ export class SshRouteRegistry {
       target,
       server: bridge,
       sockets,
-      browserPaths: normalizeBrowserPaths(input.browserPaths),
-      ...(input.browserRelay ? { browserRelayPath: browserRelayPath(prepared.route.id) } : {}),
       redirectToSlash: input.redirectToSlash ?? false,
-      ...optionalHtmlHead(routeHtmlHead(prepared.route.id, input.browserRelay, input.htmlHead)),
+      ...optionalHtmlHead(input.htmlHead),
       internal: input.internal ?? false,
     });
     return prepared.route;
@@ -146,7 +150,6 @@ export class SshRouteRegistry {
     this.routes.delete(routeId);
     entry.sockets.forEach((socket) => socket.destroy());
     if (entry.server) await closeServer(entry.server);
-    if (entry.target?.socketPath) await rm(entry.target.socketPath, { force: true });
     return true;
   }
 
@@ -172,19 +175,8 @@ export class SshRouteRegistry {
         response.end("Not Found");
         return;
       }
-      const match = this.match(request.path, request.headers, requestUser);
+      const match = this.match(request.path, requestUser);
       if (!match) return next();
-      if (
-        match.entry.browserRelayPath &&
-        requestUser === match.entry.ownerId &&
-        pathMatches(request.path, match.entry.route.path)
-      ) {
-        response.setHeader("set-cookie", routeCookie(match.entry.route.id));
-      }
-      if (request.path === match.entry.route.path && match.entry.browserRelayPath) {
-        sendBrowserRelayBootstrap(response, match.entry.route.path, match.entry.route.id);
-        return;
-      }
       if (request.path === match.entry.route.path && match.entry.redirectToSlash) {
         response.statusCode = 308;
         response.setHeader("location", routeRedirectUrl(request.url, match.entry.route.path));
@@ -195,12 +187,14 @@ export class SshRouteRegistry {
         request.method === "GET" && request.path === `${match.entry.route.path}/`
           ? match.entry.htmlHead
           : undefined;
-      if (match.stripPrefix) rewriteRequestUrl(request, match.stripPrefix);
       if (injectHead) {
         request.headers["accept-encoding"] = "identity";
         this.responseHeadInjections.set(request, injectHead);
       }
       const replayBody = replayParsedJsonBody(request);
+      if (match.stripPrefix) {
+        this.outboundPaths.set(request, outboundPath(request.url, match.stripPrefix));
+      }
       this.proxy.web(request, response, {
         target: match.entry.target!,
         changeOrigin: true,
@@ -216,27 +210,18 @@ export class SshRouteRegistry {
     const requestUser =
       headerValue(request.headers[USER_ID_HEADER]) ??
       headerValue(request.headers[USER_EMAIL_HEADER]);
-    const match = this.match(url.pathname, request.headers, requestUser);
-    if (!match) {
-      if (pathMatches(url.pathname, "/__srv")) {
-        socket.destroy();
-        return true;
-      }
-      return false;
+    const match = this.match(url.pathname, requestUser);
+    if (!match) return false;
+    if (match.stripPrefix) {
+      this.outboundPaths.set(request, outboundPath(request.url, match.stripPrefix));
     }
-    if (match.stripPrefix) rewriteIncomingUrl(request, match.stripPrefix, url.pathname);
-    proxyWebSocket(request, socket, head, match.entry, this.websocketServer);
+    proxyWebSocket(request, socket, head, match.entry, this.proxy);
     return true;
   }
 
   /** Returns whether an upgrade path belongs to a registered route or browser relay. */
   canHandleUpgrade(path: string): boolean {
-    if (this.directRoute(path)) return true;
-    return [...this.routes.values()].some(
-      (entry) =>
-        Boolean(entry.browserRelayPath && pathMatches(path, entry.browserRelayPath)) ||
-        entry.browserPaths.some((alias) => pathMatches(path, alias)),
-    );
+    return Boolean(this.directRoute(path));
   }
 
   /** Removes every route and closes the shared HTTP/WebSocket proxy. */
@@ -263,15 +248,9 @@ export class SshRouteRegistry {
       ) {
         throw new Error(`SSH route path ${path} already forwards to a different target`);
       }
-      const requestedBrowserPaths = normalizeBrowserPaths(input.browserPaths);
-      if (requestedBrowserPaths.join("\0") !== previous.browserPaths.join("\0")) {
-        throw new Error(`SSH route path ${path} already has different browser aliases`);
-      }
       if (
-        Boolean(input.browserRelay) !== Boolean(previous.browserRelayPath) ||
         (input.redirectToSlash ?? false) !== previous.redirectToSlash ||
-        routeHtmlHead(previous.route.id, input.browserRelay, input.htmlHead) !==
-          previous.htmlHead ||
+        input.htmlHead !== previous.htmlHead ||
         (input.internal ?? false) !== previous.internal
       ) {
         throw new Error(`SSH route path ${path} already has different browser behavior`);
@@ -305,11 +284,7 @@ export class SshRouteRegistry {
     return normalizeRoutePath(`${prefix}/${requested}`);
   }
 
-  private match(
-    path: string,
-    headers: IncomingMessage["headers"],
-    requestUser: string | undefined,
-  ): RouteMatch | undefined {
+  private match(path: string, requestUser: string | undefined): RouteMatch | undefined {
     const direct = this.directRoute(path);
     if (direct && requestUser === direct.ownerId) {
       return {
@@ -317,25 +292,7 @@ export class SshRouteRegistry {
         ...(direct.route.stripPrefix ? { stripPrefix: direct.route.path } : {}),
       };
     }
-
-    const cookieRouteId = cookieValue(headers.cookie, ROUTE_COOKIE);
-    const referer = headerValue(headers.referer);
-    const browserRelay = [...this.routes.values()].find(
-      (entry) =>
-        entry.browserRelayPath &&
-        pathMatches(path, entry.browserRelayPath) &&
-        (requestUser ? requestUser === entry.ownerId : cookieRouteId === entry.route.id),
-    );
-    if (browserRelay) return { entry: browserRelay, stripPrefix: browserRelay.browserRelayPath };
-    return [...this.routes.values()]
-      .filter((entry) => !requestUser || requestUser === entry.ownerId)
-      .filter((entry) => entry.browserPaths.some((alias) => pathMatches(path, alias)))
-      .filter(
-        (entry) =>
-          cookieRouteId === entry.route.id ||
-          Boolean(referer && pathMatches(refererPath(referer) ?? "", entry.route.path)),
-      )
-      .map((entry) => ({ entry }))[0];
+    return undefined;
   }
 
   private directRoute(path: string): RouteTarget | undefined {
@@ -397,18 +354,8 @@ async function closeServer(server: Server): Promise<void> {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 }
 
-const ROUTE_COOKIE = "dbx_tools_ssh_route";
-
-function normalizeBrowserPaths(paths: string[] | undefined): string[] {
-  return [...new Set((paths ?? []).map(normalizePath))].sort();
-}
-
 function pathMatches(path: string, prefix: string): boolean {
   return path === prefix || path.startsWith(`${prefix}/`);
-}
-
-function routeCookie(routeId: string): string {
-  return `${ROUTE_COOKIE}=${encodeURIComponent(routeId)}; Path=/; HttpOnly; Secure; SameSite=Lax`;
 }
 
 function routeRedirectUrl(url: string, routePath: string): string {
@@ -417,79 +364,31 @@ function routeRedirectUrl(url: string, routePath: string): string {
   return `${parsed.pathname}${parsed.search}`;
 }
 
-function browserRelayPath(routeId: string): string {
-  return `/__srv/${routeId}`;
-}
-
-function routeHtmlHead(
-  routeId: string,
-  browserRelay: boolean | undefined,
-  htmlHead: string | undefined,
-): string | undefined {
-  const relayHead = browserRelay
-    ? `<script>localStorage.setItem("dinotty_device_active_server_v1",${JSON.stringify(routeId)})</script>`
-    : "";
-  return `${htmlHead ?? ""}${relayHead}` || undefined;
-}
-
 function optionalHtmlHead(htmlHead: string | undefined): { htmlHead?: string } {
   return htmlHead ? { htmlHead } : {};
-}
-
-function sendBrowserRelayBootstrap(response: Response, routePath: string, routeId: string): void {
-  const destination = `${routePath}/`;
-  const script = `localStorage.setItem("dinotty_device_active_server_v1",${JSON.stringify(routeId)});location.replace(${JSON.stringify(destination)});`;
-  response.statusCode = 200;
-  response.setHeader("cache-control", "no-store");
-  response.setHeader("content-type", "text/html; charset=utf-8");
-  response.end(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Opening terminal</title></head><body><script>${script}</script></body></html>`,
-  );
-}
-
-function cookieValue(header: string | undefined, name: string): string | undefined {
-  for (const pair of header?.split(";") ?? []) {
-    const [key, ...value] = pair.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
-  }
-  return undefined;
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function refererPath(value: string): string | undefined {
-  try {
-    return new URL(value).pathname;
-  } catch {
-    return undefined;
-  }
-}
-
-function rewriteRequestUrl(request: Request, routePath: string): void {
-  rewriteIncomingUrl(request, routePath, request.path);
-}
-
-function rewriteIncomingUrl(request: IncomingMessage, routePath: string, path: string): void {
-  const queryIndex = request.url?.indexOf("?") ?? -1;
-  const query = queryIndex >= 0 ? request.url?.slice(queryIndex) : "";
-  request.url = `${path.slice(routePath.length) || "/"}${query ?? ""}`;
+/**
+ * Keep the AppKit request URL on the inbound IncomingMessage so AppKit's
+ * `/metrics` log/trace exclusions still match `/sandbox/metrics/...`. Prefix
+ * stripping is applied only on the outbound proxy request.
+ */
+function outboundPath(requestUrl: string | undefined, stripPrefix?: string): string {
+  const url = requestUrl && requestUrl.length > 0 ? requestUrl : "/";
+  const queryIndex = url.indexOf("?");
+  const pathname = queryIndex >= 0 ? url.slice(0, queryIndex) : url;
+  const query = queryIndex >= 0 ? url.slice(queryIndex) : "";
+  if (!stripPrefix) return url.startsWith("/") ? url : `/${url}`;
+  return `${pathname.slice(stripPrefix.length) || "/"}${query}`;
 }
 
 async function listenTarget(
   server: Server,
-  id: string,
-): Promise<{ host: string; port: number; protocol: string; socketPath?: string }> {
-  if (process.platform !== "win32") {
-    const socketPath = join(tmpdir(), `dbx-tools-ssh-${id}.sock`);
-    await rm(socketPath, { force: true });
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(socketPath, resolve);
-    });
-    return { host: "localhost", port: 80, protocol: "http:", socketPath };
-  }
+): Promise<{ host: string; port: number; protocol: string }> {
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
@@ -562,109 +461,32 @@ function proxyWebSocket(
   socket: Socket,
   head: Buffer,
   entry: RouteTarget,
-  websocketServer: WebSocketServer,
+  proxy: { ws: (request: IncomingMessage, socket: Socket, head: Buffer, options?: object) => void },
 ): void {
+  if (!entry.target) {
+    socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+    return;
+  }
   entry.sockets.add(socket);
   socket.once("close", () => entry.sockets.delete(socket));
-  void entry.session
-    .forwardOut(entry.route.remoteHost, entry.route.remotePort)
-    .then((channel) => {
-      if (socket.destroyed) {
-        channel.destroy();
-        return;
-      }
-      const protocols = headerValue(request.headers["sec-websocket-protocol"])
-        ?.split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
-      const options = {
-        createConnection: () => channel,
-        headers: websocketUpstreamHeaders(
-          request.headers,
-          `http://${entry.route.remoteHost}:${entry.route.remotePort}`,
-        ),
-      };
-      const upstream = protocols?.length
-        ? new WebSocket(
-            `ws://${entry.route.remoteHost}:${entry.route.remotePort}${request.url ?? "/"}`,
-            protocols,
-            options,
-          )
-        : new WebSocket(
-            `ws://${entry.route.remoteHost}:${entry.route.remotePort}${request.url ?? "/"}`,
-            options,
-          );
-      upstream.once("open", () => {
-        websocketServer.handleUpgrade(request, socket, head, (client) => {
-          bridgeWebSockets(client, upstream);
-        });
-      });
-      upstream.once("error", (error) => {
-        if (socket.destroyed) return;
-        logger.warn("SSH route WebSocket upstream failed", {
-          path: request.url,
-          error,
-        });
-        socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
-      });
-    })
-    .catch((error: unknown) => {
-      logger.warn("SSH route WebSocket forwarding failed", {
-        path: request.url,
-        error: errorUtils.toError(error),
-      });
-      if (!socket.destroyed) {
-        socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
-      }
-    });
+  stripWebsocketIdentityHeaders(request);
+  request.headers.origin = `http://${entry.route.remoteHost}:${entry.route.remotePort}`;
+  const upgradeSocket = socket as UpgradeSocket;
+  upgradeSocket.destroySoon ??= () => upgradeSocket.end();
+  proxy.ws(request, upgradeSocket, head, {
+    target: entry.target,
+    changeOrigin: true,
+  });
 }
 
-function websocketUpstreamHeaders(
-  headers: IncomingMessage["headers"],
-  origin: string,
-): Record<string, string | string[]> {
-  const excluded = new Set([
+function stripWebsocketIdentityHeaders(request: IncomingMessage): void {
+  for (const name of [
     "authorization",
-    "connection",
     "cookie",
-    "host",
-    "origin",
-    "referer",
-    "sec-fetch-dest",
-    "sec-fetch-mode",
-    "sec-fetch-site",
-    "sec-fetch-user",
-    "sec-websocket-extensions",
-    "sec-websocket-key",
-    "sec-websocket-protocol",
-    "sec-websocket-version",
-    "upgrade",
     ACCESS_TOKEN_HEADER,
     USER_EMAIL_HEADER,
     USER_ID_HEADER,
-  ]);
-  return {
-    ...Object.fromEntries(
-      Object.entries(headers).filter(
-        (entry): entry is [string, string | string[]] =>
-          entry[1] !== undefined && !excluded.has(entry[0]),
-      ),
-    ),
-    origin,
-  };
-}
-
-function bridgeWebSockets(client: WebSocket, upstream: WebSocket): void {
-  client.on("message", (data, isBinary) => upstream.send(data, { binary: isBinary }));
-  upstream.on("message", (data, isBinary) => client.send(data, { binary: isBinary }));
-  client.once("close", (code, reason) => closeWebSocket(upstream, code, reason));
-  upstream.once("close", (code, reason) => closeWebSocket(client, code, reason));
-  client.once("error", () => upstream.terminate());
-  upstream.once("error", () => client.terminate());
-}
-
-function closeWebSocket(socket: WebSocket, code: number, reason: Buffer): void {
-  if (socket.readyState !== WebSocket.OPEN) return;
-  if (code === 1005 || code === 1006 || code === 1015) socket.close();
-  else socket.close(code, reason);
+  ]) {
+    delete request.headers[name];
+  }
 }

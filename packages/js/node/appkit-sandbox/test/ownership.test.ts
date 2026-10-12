@@ -2,11 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { resolveSshPluginConfig } from "../src/config.ts";
-import {
-  createManagedSandboxName,
-  parseManagedSandboxName,
-  sandboxUserId,
-} from "../src/managed-name.ts";
+import { createSandboxName, sandboxDisplayName } from "../src/managed-name.ts";
 import {
   LakebaseMachineOwnershipStore,
   OWNERSHIP_SCHEMA_PREFIX,
@@ -280,20 +276,16 @@ describe("managed Sandbox ownership", () => {
     assert.notEqual(ownershipSchemaName("user@example.com"), ownershipSchemaName("app-sp"));
   });
 
-  it("encodes a fun name, stable user identity, and expiration", () => {
-    const expiresAtMs = 1_800_000_000_000;
-    const name = createManagedSandboxName("user@example.com", expiresAtMs, "00112233");
-    const parsed = parseManagedSandboxName(name);
-
+  it("generates a display name without encoding owner or expiration", () => {
+    const name = createSandboxName("00112233");
+    assert.equal(name, "dbx-bright-falcon-00112233");
+    assert.equal(sandboxDisplayName(name), "bright-falcon-00112233");
     assert.equal(
-      name,
-      `dbx-bright-falcon-00112233_uid_${sandboxUserId("user@example.com")}_exp_1800000000000`,
+      sandboxDisplayName(
+        "dbx-calm-falcon-d472ea63_uid_6XThSiNANaqfSm4_ZxQU1aBBJMsM_N5DqMREyrWvEVM_exp_1791924464757",
+      ),
+      "calm-falcon-d472ea63",
     );
-    assert.deepEqual(parsed, {
-      displayName: "bright-falcon-00112233",
-      ownerId: sandboxUserId("user@example.com"),
-      expiresAtMs,
-    });
   });
 
   it("migrates Lakebase ownership rows with managed names and expirations", async () => {
@@ -316,6 +308,41 @@ describe("managed Sandbox ownership", () => {
     assert.ok(statements.some((statement) => statement.includes("sandbox_projects_machine_idx")));
     assert.ok(
       statements.some((statement) => statement.includes("sandbox_projects_machine_port_idx")),
+    );
+  });
+
+  it("copies legacy unhashed ownership tables into the hashed role schema", async () => {
+    const statements: string[] = [];
+    const pool = ownershipPool(async (text) => {
+      statements.push(text);
+      if (text.includes("information_schema.tables")) {
+        return {
+          rows: [{ table_name: "machine_assignments" }, { table_name: "projects" }],
+          rowCount: 2,
+        };
+      }
+      if (text.includes("INSERT INTO") && text.includes("ON CONFLICT DO NOTHING")) {
+        return { rows: [], rowCount: 2 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await LakebaseMachineOwnershipStore.create(pool);
+
+    const quotedLegacy = `"${OWNERSHIP_SCHEMA_PREFIX}"`;
+    assert.ok(
+      statements.some(
+        (statement) =>
+          statement.includes(`INSERT INTO "${OWNERSHIP_SCHEMA}"."machine_assignments"`) &&
+          statement.includes(`FROM ${quotedLegacy}.machine_assignments`),
+      ),
+    );
+    assert.ok(
+      statements.some(
+        (statement) =>
+          statement.includes(`INSERT INTO "${OWNERSHIP_SCHEMA}"."projects"`) &&
+          statement.includes(`FROM ${quotedLegacy}.projects`),
+      ),
     );
   });
 
@@ -391,15 +418,16 @@ describe("managed Sandbox ownership", () => {
     assert.equal(row.machineId, created.id);
     assert.equal(row.userId, "user-a");
     assert.equal(row.managedName, payloadName);
-    assert.equal(created.name, parseManagedSandboxName(payloadName)?.displayName);
+    assert.equal(created.name, sandboxDisplayName(payloadName));
+    assert.doesNotMatch(payloadName, /_uid_|_exp_/);
     assert.equal(created.expiresAt, row.expiresAt);
     assert.ok(Date.parse(created.expiresAt) > Date.now());
   });
 
   it("filters discovery and lifecycle operations through Lakebase ownership", async () => {
     const now = Date.now();
-    const ownedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
-    const otherName = createManagedSandboxName("user-b", now + 60_000, "44556677");
+    const ownedName = createSandboxName("00112233");
+    const otherName = createSandboxName("44556677");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", ownedName, now + 60_000));
     store.assignments.push(assignment("user-b", "other", otherName, now + 60_000));
@@ -420,7 +448,7 @@ describe("managed Sandbox ownership", () => {
   it("allows a second identity to use and retain one assigned Sandbox", async () => {
     const now = Date.now();
     const expiresAtMs = now + 60_000;
-    const managedName = createManagedSandboxName("platform-user", expiresAtMs, "00112233");
+    const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(
       assignment("platform-user", "owned", managedName, expiresAtMs),
@@ -447,7 +475,7 @@ describe("managed Sandbox ownership", () => {
 
   it("retains a successful SSH connection after its connect promise settles", async () => {
     const now = Date.now();
-    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
     const { client } = sandboxClient([]);
@@ -476,7 +504,7 @@ describe("managed Sandbox ownership", () => {
 
   it("persists projects, updates open links, and removes only the project directory", async () => {
     const now = Date.now();
-    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
     const { client } = sandboxClient([
@@ -533,7 +561,7 @@ describe("managed Sandbox ownership", () => {
 
   it("generates project defaults and rejects duplicate machine paths and ports", async () => {
     const now = Date.now();
-    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
     const { client } = sandboxClient([
@@ -591,9 +619,9 @@ describe("managed Sandbox ownership", () => {
     );
   });
 
-  it("resets a persisted project and opens its directory in DinoTTY", async () => {
+  it("resets a persisted project and opens its directory in ttyd", async () => {
     const now = Date.now();
-    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
     const { client } = sandboxClient([
@@ -637,7 +665,7 @@ describe("managed Sandbox ownership", () => {
       value: async () => ({
         kind: "terminal",
         path: "/sandbox/terminal/owned",
-        openUrl: "/sandbox/terminal/owned",
+        openUrl: "/sandbox/terminal/owned/",
         state: "ready",
       }),
     });
@@ -646,12 +674,15 @@ describe("managed Sandbox ownership", () => {
 
     assert.equal(terminal.project.id, project.id);
     assert.equal(terminal.service.kind, "terminal");
-    assert.ok(commands.some(({ command, args }) => command === "python3" && args[0] === "-c"));
+    assert.equal(
+      terminal.service.openUrl,
+      "/sandbox/terminal/owned/?arg=%2Fhome%2Fsandbox%2Fprojects%2Fdemo",
+    );
   });
 
   it("preserves projects when a machine stops and deletes records with the machine", async () => {
     const now = Date.now();
-    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
     const first = runtime(store, { machineSoftware: [], reaperIntervalSeconds: 0 });
@@ -684,7 +715,7 @@ describe("managed Sandbox ownership", () => {
 
   it("converges lifecycle requests across starting and stopping states", async () => {
     const now = Date.now();
-    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
     const stopping = { sandboxId: "owned", status: "STOPPING", name: managedName };
@@ -735,7 +766,7 @@ describe("managed Sandbox ownership", () => {
 
   it("restores persisted project routes after the runtime restarts", async () => {
     const now = Date.now();
-    const managedName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
     const first = runtime(store, { machineSoftware: [], reaperIntervalSeconds: 0 });
@@ -769,10 +800,10 @@ describe("managed Sandbox ownership", () => {
     await second.close();
   });
 
-  it("reaps expired, malformed, orphaned, and missing managed records", async () => {
+  it("reaps expired and missing Lakebase assignments without deleting unassigned sandboxes", async () => {
     const now = Date.now();
-    const expiredName = createManagedSandboxName("user-a", now - 1_000, "00112233");
-    const orphanName = createManagedSandboxName("user-c", now + 60_000, "44556677");
+    const expiredName = createSandboxName("00112233");
+    const liveName = createSandboxName("44556677");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "expired", expiredName, now - 1_000));
     store.assignments.push(assignment("user-b", "legacy", "legacy-name", now + 60_000));
@@ -780,22 +811,90 @@ describe("managed Sandbox ownership", () => {
     const { client, entries } = sandboxClient([
       { sandboxId: "expired", status: "STOPPED", name: expiredName },
       { sandboxId: "legacy", status: "STOPPED", name: "legacy-name" },
-      { sandboxId: "orphan", status: "STOPPED", name: orphanName },
+      { sandboxId: "orphan", status: "STOPPED", name: liveName },
       { sandboxId: "foreign", status: "STOPPED", name: "manual-sandbox" },
-      { sandboxId: "marker-foreign", status: "STOPPED", name: "manual_uid_name_exp_123" },
+      {
+        sandboxId: "marker-foreign",
+        status: "STOPPED",
+        name: "dbx-calm-falcon-d472ea63_uid_legacy_exp_123",
+      },
     ]);
     const ssh = runtime(store);
 
     const result = await ssh.reapMachines(client);
 
-    assert.deepEqual(result, { scanned: 5, deleted: 3, removedAssignments: 3, failures: 0 });
-    assert.deepEqual([...entries.keys()], ["foreign", "marker-foreign"]);
-    assert.deepEqual(store.assignments, []);
+    assert.deepEqual(result, { scanned: 5, deleted: 1, removedAssignments: 2, failures: 0 });
+    assert.deepEqual([...entries.keys()].sort(), [
+      "foreign",
+      "legacy",
+      "marker-foreign",
+      "orphan",
+    ]);
+    assert.equal(store.assignments.length, 1);
+    assert.equal(store.assignments[0]?.machineId, "legacy");
+  });
+
+  it("does not delete workspace sandboxes when Lakebase inventory is empty", async () => {
+    const liveName = createSandboxName("00112233");
+    const store = new MemoryOwnershipStore();
+    const { client, entries } = sandboxClient([
+      { sandboxId: "live", status: "STOPPED", name: liveName },
+      {
+        sandboxId: "legacy-named",
+        status: "STOPPED",
+        name: "dbx-calm-falcon-d472ea63_uid_legacy_exp_1791924464757",
+      },
+      { sandboxId: "malformed", status: "STOPPED", name: "dbx-not-a-managed-name" },
+    ]);
+    const ssh = runtime(store);
+
+    const result = await ssh.reapMachines(client);
+
+    assert.deepEqual(result, { scanned: 3, deleted: 0, removedAssignments: 0, failures: 0 });
+    assert.deepEqual([...entries.keys()].sort(), ["legacy-named", "live", "malformed"]);
+  });
+
+  it("lists Lakebase-owned machines whose Databricks names still have a legacy uid_exp suffix", async () => {
+    const now = Date.now();
+    const legacyName =
+      "dbx-calm-falcon-d472ea63_uid_6XThSiNANaqfSm4_ZxQU1aBBJMsM_N5DqMREyrWvEVM_exp_1791924464757";
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "eclectic-lioness-9811", legacyName, now + 60_000));
+    store.projects.push({
+      workspaceScope: "workspace",
+      userId: "user-a",
+      projectId: "6c73da4fc8073da8b58e9c4e08db8104",
+      name: "doom",
+      machineId: "eclectic-lioness-9811",
+      directory: "/home/sandbox-agent/projects/doom",
+      projectPath: "doom",
+      path: "/sandbox/22padc/doom",
+      port: 45656,
+      config: {},
+      stripPrefix: true,
+      createdAt: new Date(now).toISOString(),
+      updatedAt: new Date(now).toISOString(),
+    });
+    const { client } = sandboxClient([
+      { sandboxId: "eclectic-lioness-9811", status: "RUNNING", name: legacyName },
+    ]);
+    const ssh = runtime(store);
+
+    const listed = await ssh.listMachines(client, "user-a");
+    const projects = await ssh.projectList(client, "user-a");
+
+    assert.equal(listed.machines[0]?.id, "eclectic-lioness-9811");
+    assert.equal(listed.machines[0]?.name, "calm-falcon-d472ea63");
+    assert.equal(listed.machines[0]?.projects[0]?.name, "doom");
+    assert.deepEqual(
+      projects.map((project) => project.id),
+      ["6c73da4fc8073da8b58e9c4e08db8104"],
+    );
   });
 
   it("removes a project created concurrently with expiration reaping", async () => {
     const now = Date.now();
-    const futureName = createManagedSandboxName("user-a", now + 60_000, "00112233");
+    const futureName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
     store.assignments.push(assignment("user-a", "owned", futureName, now + 60_000));
     const { client, entries } = sandboxClient([
@@ -827,7 +926,7 @@ describe("managed Sandbox ownership", () => {
     });
     await routeWasAdded;
     const expiredAt = now - 1_000;
-    const expiredName = createManagedSandboxName("user-a", expiredAt, "00112233");
+    const expiredName = createSandboxName("00112233");
     store.assignments[0] = assignment("user-a", "owned", expiredName, expiredAt);
     entries.set("owned", { sandboxId: "owned", status: "RUNNING", name: expiredName });
     await ssh.reapMachines(client);

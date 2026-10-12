@@ -11854,6 +11854,28 @@ __export(exports_node___fs, {
 });
 var import_node_stream2 = __toESM(require_stream_browserify(), 1);
 
+// packages/py/node-runtime/shims/fs-errors.ts
+function nodeError(error, code, path) {
+  return Object.assign(error instanceof Error ? error : new Error(String(error)), { code, path });
+}
+function translatePythonError(cause, path) {
+  const message = String(cause);
+  if (/FileNotFoundError|Errno 2/.test(message))
+    throw nodeError(cause, "ENOENT", path);
+  if (/FileExistsError|Errno 17/.test(message))
+    throw nodeError(cause, "EEXIST", path);
+  if (/PermissionError|Errno 13/.test(message))
+    throw nodeError(cause, "EACCES", path);
+  throw cause;
+}
+function withPythonPath(path, operation) {
+  try {
+    return operation();
+  } catch (cause) {
+    translatePythonError(cause, path);
+  }
+}
+
 // packages/py/node-runtime/shims/node___fs__promises.ts
 var exports_node___fs__promises = {};
 __export(exports_node___fs__promises, {
@@ -11875,19 +11897,6 @@ __export(exports_node___fs__promises, {
   writeFile: () => writeFile
 });
 var import_node_buffer2 = __toESM(require_buffer(), 1);
-function nodeError(error, code, path) {
-  return Object.assign(error instanceof Error ? error : new Error(String(error)), { code, path });
-}
-function translatePythonError(cause, path) {
-  const message = String(cause);
-  if (/FileNotFoundError|Errno 2/.test(message))
-    throw nodeError(cause, "ENOENT", path);
-  if (/FileExistsError|Errno 17/.test(message))
-    throw nodeError(cause, "EEXIST", path);
-  if (/PermissionError|Errno 13/.test(message))
-    throw nodeError(cause, "EACCES", path);
-  throw cause;
-}
 async function access(path) {
   try {
     await pythonHost().file.stat(String(path));
@@ -12018,10 +12027,10 @@ function existsSync(path) {
   return pythonHost().file.exists(String(path));
 }
 function readFileSync(path, _encoding) {
-  return pythonHost().file.readTextSync(String(path));
+  return withPythonPath(path, () => pythonHost().file.readTextSync(String(path)));
 }
 function readdirSync(path, options = {}) {
-  const entries = pythonHost().file.readDirectorySync(String(path));
+  const entries = withPythonPath(path, () => pythonHost().file.readDirectorySync(String(path)));
   if (!options.withFileTypes)
     return entries.map((entry) => entry.name);
   return entries.map((entry) => ({
@@ -12032,14 +12041,14 @@ function readdirSync(path, options = {}) {
   }));
 }
 function readlinkSync(path) {
-  return pythonHost().file.readLinkSync(String(path));
+  return withPythonPath(path, () => pythonHost().file.readLinkSync(String(path)));
 }
 function realpathSync(path) {
-  return pythonHost().file.realpathSync(String(path));
+  return withPythonPath(path, () => pythonHost().file.realpathSync(String(path)));
 }
 realpathSync.native = realpathSync;
 function lstatSync(path) {
-  const value = pythonHost().file.statSync(String(path));
+  const value = withPythonPath(path, () => pythonHost().file.statSync(String(path)));
   return {
     mode: value.mode,
     mtime: new Date(value.mtimeMs),

@@ -156,6 +156,11 @@
       "type": "runtime"
     },
     {
+      "name": "@vitejs/plugin-react",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "compression",
       "version": "^1.8.1",
       "type": "runtime"
@@ -183,6 +188,11 @@
     {
       "name": "tsx",
       "version": "^4.22.4",
+      "type": "runtime"
+    },
+    {
+      "name": "vite",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

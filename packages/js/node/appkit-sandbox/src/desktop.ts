@@ -1,7 +1,7 @@
 import { brandUtils } from "@dbx-tools/shared-core";
 import { dbxToolsAssetSvg } from "@dbx-tools/ui/branding/assets";
 
-const DESKTOP_VERSION = "4";
+const DESKTOP_VERSION = "8";
 const DESKTOP_DISPLAY = 20;
 const DESKTOP_VNC_PORT = 5900 + DESKTOP_DISPLAY;
 const DESKTOP_WEB_PORT = 6080;
@@ -41,16 +41,35 @@ const DBX_TOOLS_WALLPAPER = `<svg xmlns="http://www.w3.org/2000/svg" width="1600
   <text x="800" y="558" text-anchor="middle" fill="${BRAND_COLORS.muted}" font-family="${BRAND.typography.sans}" font-size="24" letter-spacing="5">SANDBOX DESKTOP</text>
 </svg>`;
 
+const DBX_TOOLS_TERMINAL_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect x="4" y="6" width="56" height="52" rx="12" fill="${BRAND_COLORS.primary}"/>
+  <rect x="8" y="10" width="48" height="44" rx="8" fill="${BRAND_COLORS.primaryHover}"/>
+  <path d="m18 23 9 9-9 9" fill="none" stroke="${BRAND_COLORS.surface}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 41h12" fill="none" stroke="${BRAND_COLORS.accent}" stroke-width="4" stroke-linecap="round"/>
+</svg>`;
+
 /** Browser entry URL for the built-in KasmVNC desktop. */
 export function desktopOpenUrl(path: string): string {
   const normalized = path.replace(/\/+$/, "");
   const websocketPath = `${normalized.replace(/^\/+/, "")}/websockify`;
-  return `${normalized}/?autoconnect=1&resize=remote&show_dot=1&path=${encodeURIComponent(websocketPath)}`;
+  const parameters = new URLSearchParams({
+    autoconnect: "1",
+    resize: "remote",
+    show_dot: "1",
+    clipboard_seamless: "0",
+    enable_webp: "0",
+    kasmvnc_mode_preference: "-1027",
+    path: websocketPath,
+  });
+  return `${normalized}/?${parameters.toString()}`;
 }
 
 /** Idempotent remote setup script for the branded dbx.tools browser desktop. */
 export function desktopScript(): string {
   const wallpaper = Buffer.from(DBX_TOOLS_WALLPAPER).toString("base64");
+  const brandIcon = Buffer.from(dbxToolsAssetSvg.iconDark).toString("base64");
+  const brandWebsite = Buffer.from(BRAND.links.website).toString("base64");
+  const terminalIcon = Buffer.from(DBX_TOOLS_TERMINAL_ICON).toString("base64");
   const checksumCases = Object.entries(KASMVNC_CHECKSUMS)
     .map(([target, checksum]) => `  ${target}) package_checksum=${checksum} ;;`)
     .join("\n");
@@ -63,15 +82,28 @@ legacy_session_pid="$runtime/session.pid"
 legacy_web_pid="$runtime/websockify.pid"
 session_ready="$runtime/session.ready"
 session_script="$runtime/start-xfce.sh"
+browser_script="$runtime/open-browser"
+browser_homepage="$runtime/browser-homepage"
+desktop_environment="$runtime/environment"
+desktop_runner="$runtime/run"
 log_file="$runtime/desktop.log"
 wallpaper_svg="$runtime/dbx-tools-wallpaper.svg"
 wallpaper_png="$runtime/dbx-tools-wallpaper.png"
-mkdir -p "$runtime" "$HOME/.vnc" "$HOME/.config/gtk-3.0" "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml" "$HOME/Desktop"
+brand_icon_svg="$runtime/dbx-tools-icon.svg"
+brand_icon="$runtime/dbx-tools-icon.png"
+terminal_icon_svg="$runtime/dbx-tools-terminal.svg"
+terminal_icon="$runtime/dbx-tools-terminal.png"
+mkdir -p "$runtime" "$HOME/.vnc" "$HOME/.config/gtk-3.0" \
+  "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml" "$HOME/.config/xfce4" \
+  "$HOME/.local/share/applications" "$HOME/.local/share/xfce4/helpers" "$HOME/Desktop"
 
 apt_updated=false
 need_packages=false
-for command in curl startxfce4 xfce4-panel xfdesktop xfwm4 xfce4-terminal rsvg-convert dbus-run-session epiphany; do
+for command in curl startxfce4 xfce4-panel xfdesktop xfwm4 xfce4-terminal rsvg-convert dbus-run-session epiphany exo-open; do
   command -v "$command" >/dev/null 2>&1 || need_packages=true
+done
+for package in arc-theme libavcodec-dev libavformat-dev libavutil-dev libswscale-dev papirus-icon-theme xfce4-whiskermenu-plugin; do
+  dpkg-query -W -f='\${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || need_packages=true
 done
 if [ "$need_packages" = true ]; then
   if ! command -v apt-get >/dev/null 2>&1; then
@@ -81,7 +113,9 @@ if [ "$need_packages" = true ]; then
   sudo -n apt-get update
   apt_updated=true
   sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates curl dbus-x11 epiphany-browser fonts-dejavu-core librsvg2-bin thunar \
+    arc-theme ca-certificates curl dbus-x11 epiphany-browser exo-utils fonts-dejavu-core \
+    libavcodec-dev libavformat-dev libavutil-dev librsvg2-bin libswscale-dev \
+    papirus-icon-theme thunar xfce4-whiskermenu-plugin \
     x11-utils x11-xserver-utils xdg-utils \
     xfce4-panel xfce4-session xfce4-settings xfce4-terminal xfdesktop4 xfwm4
 fi
@@ -142,6 +176,32 @@ fi
 
 printf %s '${wallpaper}' | base64 -d >"$wallpaper_svg"
 rsvg-convert --width 1600 --height 1000 "$wallpaper_svg" >"$wallpaper_png"
+printf %s '${brandIcon}' | base64 -d >"$brand_icon_svg"
+rsvg-convert --width 64 --height 64 "$brand_icon_svg" >"$brand_icon"
+printf %s '${brandWebsite}' | base64 -d >"$browser_homepage"
+printf %s '${terminalIcon}' | base64 -d >"$terminal_icon_svg"
+rsvg-convert --width 64 --height 64 "$terminal_icon_svg" >"$terminal_icon"
+
+printf 'export DISPLAY=:%s\\n' '${DESKTOP_DISPLAY}' >"$desktop_environment"
+chmod 600 "$desktop_environment"
+cat >"$desktop_runner" <<'EOF'
+#!/bin/sh
+set -eu
+. "$HOME/.dbx-tools/runtime/desktop/environment"
+exec "$@"
+EOF
+chmod 700 "$desktop_runner"
+
+cat >"$browser_script" <<'EOF'
+#!/bin/sh
+export GTK_A11Y=none
+export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+if [ "$#" -eq 0 ]; then
+  set -- "$(cat "$HOME/.dbx-tools/runtime/desktop/browser-homepage")"
+fi
+exec epiphany "$@"
+EOF
+chmod 700 "$browser_script"
 
 cat >"$HOME/.config/gtk-3.0/gtk.css" <<'EOF'
 #XfcePanelWindow {
@@ -152,6 +212,8 @@ cat >"$HOME/.config/gtk-3.0/gtk.css" <<'EOF'
   color: ${BRAND_COLORS.surface};
   border-color: transparent;
   background-color: transparent;
+  border-radius: 8px;
+  margin: 3px;
 }
 #XfcePanelWindow button:hover,
 #XfcePanelWindow button:checked {
@@ -166,31 +228,54 @@ fi
 
 cat >"$HOME/.config/mimeapps.list" <<'EOF'
 [Default Applications]
-text/html=org.gnome.Epiphany.desktop
-x-scheme-handler/http=org.gnome.Epiphany.desktop
-x-scheme-handler/https=org.gnome.Epiphany.desktop
+text/html=dbx-tools-browser.desktop
+x-scheme-handler/http=dbx-tools-browser.desktop
+x-scheme-handler/https=dbx-tools-browser.desktop
 EOF
 
-cat >"$HOME/Desktop/Web Browser.desktop" <<'EOF'
+cat >"$HOME/.local/share/applications/dbx-tools-browser.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Web Browser
-Comment=Open the default web browser
-Exec=epiphany
-Icon=web-browser
+Name=dbx tools Browser
+Comment=Browse the web from the Sandbox desktop
+Exec=$browser_script %U
+Icon=$brand_icon
 Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
 EOF
 
-cat >"$HOME/Desktop/Terminal.desktop" <<'EOF'
+cat >"$HOME/.local/share/xfce4/helpers/dbx-tools-browser.desktop" <<EOF
+[Desktop Entry]
+Version=1.0
+Icon=$brand_icon
+Type=X-XFCE-Helper
+Name=dbx tools Browser
+StartupNotify=true
+X-XFCE-Binaries=$browser_script;
+X-XFCE-Category=WebBrowser
+X-XFCE-Commands=$browser_script;
+X-XFCE-CommandsWithParameter=$browser_script "%s";
+EOF
+
+cat >"$HOME/.config/xfce4/helpers.rc" <<'EOF'
+WebBrowser=dbx-tools-browser
+EOF
+
+rm -f "$HOME/Desktop/Web Browser.desktop"
+
+cat >"$HOME/.local/share/applications/dbx-tools-terminal.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Terminal
-Comment=Open a terminal
+Comment=Open the Sandbox desktop terminal
 Exec=xfce4-terminal
-Icon=utilities-terminal
+Icon=$terminal_icon
 Terminal=false
+Categories=System;TerminalEmulator;
 EOF
-chmod 700 "$HOME/Desktop/Web Browser.desktop" "$HOME/Desktop/Terminal.desktop"
+chmod 700 "$HOME/.local/share/applications/dbx-tools-terminal.desktop"
+rm -f "$HOME/Desktop/Terminal.desktop"
 
 cat >"$HOME/.vnc/kasmvnc.yaml" <<'EOF'
 desktop:
@@ -209,8 +294,33 @@ network:
     pem_certificate:
     pem_key:
     require_ssl: false
+encoding:
+  max_frame_rate: 30
+  rect_encoding_mode:
+    min_quality: 7
+    max_quality: 9
+    consider_lossless_quality: 10
+    rectangle_compress_threads: auto
+  video_encoding_mode:
+    jpeg_quality: -1
+    webp_quality: -1
+    max_resolution:
+      width: 1920
+      height: 1080
+    enter_video_encoding_mode:
+      time_threshold: 1
+      area_threshold: 45%
+    exit_video_encoding_mode:
+      time_threshold: 2
+    scaling_algorithm: progressive_bilinear
+    webp_encoding_time: 30
+  video_streaming_mode:
+    codec: h264
 server:
   http:
+    headers:
+      - Cross-Origin-Embedder-Policy=require-corp
+      - Cross-Origin-Opener-Policy=same-origin
     httpd_directory: /usr/share/kasmvnc/www
   auto_shutdown:
     no_user_session_timeout: never
@@ -233,13 +343,41 @@ runtime="$HOME/.dbx-tools/runtime/desktop"
 ready="$runtime/session.ready"
 log_file="$runtime/desktop.log"
 wallpaper="$runtime/dbx-tools-wallpaper.png"
+brand_icon="$runtime/dbx-tools-icon.svg"
 rm -f "$ready"
-dbus-run-session -- startxfce4 >>"$log_file" 2>&1 &
+if [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  exec dbus-run-session -- "$0"
+fi
+startxfce4 >>"$log_file" 2>&1 &
 xfce_pid=$!
 for _ in $(seq 1 160); do
   if pgrep -x xfce4-panel >/dev/null 2>&1 && pgrep -x xfdesktop >/dev/null 2>&1 && pgrep -x xfwm4 >/dev/null 2>&1; then
-    xdg-settings set default-web-browser org.gnome.Epiphany.desktop >/dev/null 2>&1 || true
-    properties=$(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep '/last-image$' || true)
+    set_xfconf() {
+      channel="$1"
+      property="$2"
+      type="$3"
+      value="$4"
+      if xfconf-query -c "$channel" -p "$property" >/dev/null 2>&1; then
+        xfconf-query -c "$channel" -p "$property" -s "$value" >/dev/null 2>&1 || true
+      else
+        xfconf-query -c "$channel" -p "$property" --create -t "$type" -s "$value" >/dev/null 2>&1 || true
+      fi
+    }
+    xdg-mime default dbx-tools-browser.desktop text/html >/dev/null 2>&1 || true
+    xdg-mime default dbx-tools-browser.desktop x-scheme-handler/http >/dev/null 2>&1 || true
+    xdg-mime default dbx-tools-browser.desktop x-scheme-handler/https >/dev/null 2>&1 || true
+    xdg-settings set default-web-browser dbx-tools-browser.desktop >/dev/null 2>&1 || true
+    gsettings set org.gnome.Epiphany homepage-url "$(cat "$runtime/browser-homepage")" >/dev/null 2>&1 || true
+    set_xfconf xsettings /Net/ThemeName string Arc-Dark
+    set_xfconf xsettings /Net/IconThemeName string Papirus-Dark
+    set_xfconf xsettings /Gtk/FontName string 'DejaVu Sans 10'
+    set_xfconf xfwm4 /general/theme string Arc-Dark
+    set_xfconf xfce4-panel /panels/panel-1/size uint 36
+    set_xfconf xfce4-panel /plugins/plugin-1 string whiskermenu
+    set_xfconf xfce4-panel /plugins/plugin-1/button-icon string "$brand_icon"
+    set_xfconf xfce4-panel /plugins/plugin-1/button-title string 'dbx tools'
+    set_xfconf xfce4-panel /plugins/plugin-1/show-button-title bool true
+    properties=$(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/(last-image|image-path)$' || true)
     if [ -z "$properties" ]; then
       properties='/backdrop/screen0/monitor0/workspace0/last-image
 /backdrop/screen0/monitorVNC-0/workspace0/last-image
@@ -248,10 +386,11 @@ for _ in $(seq 1 160); do
     printf '%s\n' "$properties" | while IFS= read -r property; do
       [ -n "$property" ] || continue
       xfconf-query -c xfce4-desktop -p "$property" --create -t string -s "$wallpaper" >/dev/null 2>&1 || true
-      style=$(printf '%s' "$property" | sed 's/last-image$/image-style/')
+      style=$(printf '%s' "$property" | sed -E 's/(last-image|image-path)$/image-style/')
       xfconf-query -c xfce4-desktop -p "$style" --create -t int -s 5 >/dev/null 2>&1 || true
     done
     xfdesktop --reload >/dev/null 2>&1 || true
+    xfce4-panel --restart >/dev/null 2>&1 || true
     touch "$ready"
     break
   fi

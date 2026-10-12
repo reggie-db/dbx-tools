@@ -46,6 +46,7 @@
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",
+    "./styles.css": "./src/styles.css",
     "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },

@@ -33,6 +33,36 @@ import {
 import { configureStaticDelivery } from "./_static-delivery.ts";
 import { busDemo } from "./bus-demo.ts";
 
+/**
+ * Drop one-line HTTP access logs (`[16:50:31] GET /path → 200`).
+ * Vite `logLevel: "silent"` and AppKit `telemetry.traces: false` do not
+ * suppress this stream; it is written as raw console/stdout lines.
+ */
+function silenceHttpAccessLogs(): void {
+  const ansi = /\u001b\[[0-9;]*m/g;
+  const access =
+    /^\[[0-2]\d:[0-5]\d:[0-5]\d\] (?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) .+ → \d{3}\s*$/;
+  const skip = (value: string): boolean => access.test(value.replace(ansi, "").trim());
+  const originalLog = console.log.bind(console);
+  console.log = (...args: unknown[]) => {
+    if (args.length === 1 && typeof args[0] === "string" && skip(args[0])) return;
+    originalLog(...args);
+  };
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding, cb?: () => void) => {
+    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString();
+    const lines = text.split(/\r?\n/);
+    const meaningful = lines.filter((line, index) => {
+      if (line === "" && index === lines.length - 1) return false;
+      return true;
+    });
+    if (meaningful.length > 0 && meaningful.every(skip)) return true;
+    return originalWrite(chunk as never, encoding as never, cb as never);
+  }) as typeof process.stdout.write;
+}
+
+silenceHttpAccessLogs();
+
 /** Default search index used by both AppKit resource validation and the plugin. */
 const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";
 const SEARCH_ALIAS = "docs";
@@ -96,7 +126,13 @@ const databricksSandboxRuntime = new SshRuntime(
 const clientDist =
   process.env.CLIENT_DIST ??
   path.resolve(projectUtils.root() ?? process.cwd(), "packages/example/app/appkit-demo/dist");
+const demoClientRoot = path.resolve(
+  projectUtils.root() ?? process.cwd(),
+  "packages/example/app/appkit-demo",
+);
 const clientDevUrl = configUtils.string(undefined, "CLIENT_DEV_URL", configUtils.ENV_ONLY);
+/** AppKit `server()` runs Vite middleware HMR when `staticPath` is omitted. */
+const useAppKitVite = process.env.NODE_ENV === "development" && !clientDevUrl;
 let clientDevelopmentProxy: ClientDevelopmentProxy | undefined;
 let appServer: { getServer(): import("node:http").Server } | undefined;
 
@@ -300,13 +336,20 @@ const searchProvider = USE_VECTOR_SEARCH
       allowWrite: true,
     });
 
+const previousCwd = process.cwd();
+if (useAppKitVite) process.chdir(demoClientRoot);
+try {
 await appkit.createApp({
   plugins: [
     // AppKit's server plugin enables HTTP/Express tracing by default whenever
     // an exporter is active. This demo wants agent traces, not one trace per
     // request; appkit-mastra creates a request-lifetime chat root when the HTTP
     // instrumentation is disabled.
-    server({ host, staticPath: clientDist, telemetry: { traces: false } }),
+    server({
+      host,
+      telemetry: { traces: false, logs: false },
+      ...(useAppKitVite ? {} : { staticPath: clientDist }),
+    }),
     genie(),
     lakebase({ pool: postgresConnectionOptions({}) }),
     filesCache(),
@@ -410,7 +453,9 @@ await appkit.createApp({
       clientDevelopmentProxy = createClientDevelopmentProxy(clientDevUrl, appkit.authGate);
       appkit.server.extend(clientDevelopmentProxy.configure);
     }
-    appkit.server.extend((application) => configureStaticDelivery(application, clientDist));
+    if (!useAppKitVite) {
+      appkit.server.extend((application) => configureStaticDelivery(application, clientDist));
+    }
   },
   // Front the app with a public portr tunnel IN-PROCESS: `tunnelInterceptor`
   // applies the computed DATABRICKS_HOST, launches portr pointed at this app's
@@ -422,6 +467,10 @@ await appkit.createApp({
     enabled: true,
   },
 });
+
+} finally {
+  if (useAppKitVite) process.chdir(previousCwd);
+}
 
 if (clientDevelopmentProxy && appServer) {
   clientDevelopmentProxy.attach(appServer.getServer());

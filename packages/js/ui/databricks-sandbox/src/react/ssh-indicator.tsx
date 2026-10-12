@@ -1,5 +1,13 @@
 import type { SshMachine, SshMachineServiceKind } from "@dbx-tools/shared-databricks-sandbox";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   Button,
   Popover,
   PopoverContent,
@@ -33,6 +41,7 @@ export function SshIndicator({
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string>();
   const [expandedId, setExpandedId] = useState<string>();
+  const [stopTarget, setStopTarget] = useState<SshMachine>();
   const [error, setError] = useState<string>();
 
   const refresh = useCallback(async () => {
@@ -64,8 +73,10 @@ export function SshIndicator({
         window.open(resolveServiceUrl(service.path), "_blank", "noopener,noreferrer");
       }
       await refresh();
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
+      return false;
     } finally {
       setBusyId(undefined);
     }
@@ -91,47 +102,90 @@ export function SshIndicator({
   );
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>{indicator}</PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent>Databricks Sandboxes</TooltipContent>
-      </Tooltip>
-      <PopoverContent align="end" className="w-80 p-0" aria-label="Databricks Sandboxes">
-        <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-sm font-medium">Sandboxes</span>
-          {loading ? (
-            <Spinner className="size-3" />
-          ) : (
-            <span className="text-xs text-muted-foreground">{machines.length}</span>
-          )}
-        </div>
-        {!supported ? (
-          <p className="px-3 py-5 text-sm text-muted-foreground">
-            Databricks Sandbox is not available in this workspace.
-          </p>
-        ) : machines.length === 0 && !loading ? (
-          <p className="px-3 py-5 text-sm text-muted-foreground">No existing sandboxes.</p>
-        ) : (
-          <div className="max-h-80 overflow-y-auto p-1">
-            {machines.map((machine) => (
-              <MachineRow
-                key={machine.id}
-                machine={machine}
-                expanded={expandedId === machine.id}
-                busy={busyId === machine.id}
-                onExpand={() =>
-                  setExpandedId((current) => (current === machine.id ? undefined : machine.id))
-                }
-                onAction={(action) => void act(machine, action)}
-              />
-            ))}
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>{indicator}</PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Databricks Sandboxes</TooltipContent>
+        </Tooltip>
+        <PopoverContent align="end" className="w-80 p-0" aria-label="Databricks Sandboxes">
+          <div className="flex items-center justify-between border-b px-3 py-2">
+            <span className="text-sm font-medium">Sandboxes</span>
+            {loading ? (
+              <Spinner className="size-3" />
+            ) : (
+              <span className="text-xs text-muted-foreground">{machines.length}</span>
+            )}
           </div>
-        )}
-        {error ? <p className="border-t px-3 py-2 text-xs text-destructive">{error}</p> : null}
-      </PopoverContent>
-    </Popover>
+          {!supported ? (
+            <p className="px-3 py-5 text-sm text-muted-foreground">
+              Databricks Sandbox is not available in this workspace.
+            </p>
+          ) : machines.length === 0 && !loading ? (
+            <p className="px-3 py-5 text-sm text-muted-foreground">No existing sandboxes.</p>
+          ) : (
+            <div className="max-h-80 overflow-y-auto p-1">
+              {machines.map((machine) => (
+                <MachineRow
+                  key={machine.id}
+                  machine={machine}
+                  expanded={expandedId === machine.id}
+                  busy={busyId === machine.id}
+                  onExpand={() =>
+                    setExpandedId((current) => (current === machine.id ? undefined : machine.id))
+                  }
+                  onAction={(action) => {
+                    if (action === "stop") setStopTarget(machine);
+                    else void act(machine, action);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {error ? <p className="border-t px-3 py-2 text-xs text-destructive">{error}</p> : null}
+        </PopoverContent>
+      </Popover>
+      <AlertDialog
+        open={Boolean(stopTarget)}
+        onOpenChange={(dialogOpen) => {
+          if (!dialogOpen && (!stopTarget || busyId !== stopTarget.id)) setStopTarget(undefined);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stop {stopTarget?.name ?? "this machine"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Stopping interrupts active desktop, terminal, and forwarded service sessions. Projects
+              and machine files remain available when you restart.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(stopTarget && busyId === stopTarget.id)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={Boolean(stopTarget && busyId === stopTarget.id)}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!stopTarget) return;
+                void act(stopTarget, "stop").then((completed) => {
+                  if (completed) setStopTarget(undefined);
+                });
+              }}
+            >
+              {stopTarget && busyId === stopTarget.id ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <SquareIcon className="size-3.5" />
+              )}
+              Stop machine
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

@@ -48,6 +48,7 @@ import {
   lifecycleBridge,
   type ResolvedAppEnv,
 } from "./interceptor.ts";
+import { installAsUserDevelopmentPatch } from "./identity.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
 
@@ -298,6 +299,7 @@ function interceptorList(interceptor: CreateAppConfig["interceptor"]): Intercept
 export async function createApp<T extends AppKitPlugins>(
   config?: CreateAppConfig<T>,
 ): Promise<PluginMap<T>> {
+  installAsUserDevelopmentPatch();
   const plugins = pluginNames(config);
   const interceptors = interceptorList(config?.interceptor);
   logger.debug("createApp: start", {

@@ -469,6 +469,39 @@ describe("Python Node task components", () => {
     assert.doesNotMatch(runtime, /clone\(util\.mergeDefs\(/);
   });
 
+  it("keeps nested Zod option aliases on named intersections", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    symlinkSync(
+      join(import.meta.dirname, "../../node_modules/zod"),
+      join(directory, "node_modules/zod"),
+      "dir",
+    );
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      [
+        'import { z } from "zod";',
+        "export const TimingSchema = z.object({ timeoutMs: z.number().int().default(1) }).strict();",
+        "export interface Timing extends z.input<typeof TimingSchema> {}",
+        "export const LoadOptionsSchema = z.object({ profile: z.string().optional(), timing: TimingSchema.optional() }).strict();",
+        "export interface LoadOptions extends Omit<z.input<typeof LoadOptionsSchema>, 'timing'> { timing?: Timing }",
+        "export function load(options: LoadOptions = {}): void { void options; }",
+      ].join("\n"),
+    );
+    writeFixturePyproject(directory, ['package = "fixture-entry"']);
+
+    const result = runBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+
+    const bindings = readFileSync(
+      join(directory, "python/src/fixture/runtime/_generated/node/fixture_entry/index.py"),
+      "utf8",
+    );
+    assert.match(bindings, /class Timing:/);
+    assert.match(bindings, /class LoadOptions:/);
+    assert.match(bindings, /timing: Timing \| None/);
+  });
+
   it("fails when JavaScript exports collide in Python", () => {
     const directory = temporaryDirectory();
     const entryDirectory = packageDirectory(directory, "fixture-entry");

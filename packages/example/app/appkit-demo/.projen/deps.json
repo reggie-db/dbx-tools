@@ -1,6 +1,11 @@
 {
   "dependencies": [
     {
+      "name": "@dbx-tools/tunnel",
+      "version": "workspace:^",
+      "type": "build"
+    },
+    {
       "name": "@types/bun",
       "version": "1.4.2",
       "type": "build"
@@ -53,6 +58,11 @@
     {
       "name": "@dbx-tools/ui",
       "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@tailwindcss/vite",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

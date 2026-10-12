@@ -57,6 +57,11 @@ export interface SshManagerProps {
   className?: string;
 }
 
+interface MachineConfirmation {
+  action: "stop" | "delete";
+  machine: SshMachine;
+}
+
 /** Manages existing SSH machines and their persisted Sandbox projects. */
 export function SshManager({ basePath = "/api/databricks-sandbox", className }: SshManagerProps) {
   const client = useMemo(() => new SshClient(basePath), [basePath]);
@@ -68,6 +73,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   const [busyOperations, setBusyOperations] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState<string>();
   const [machineId, setMachineId] = useState("");
+  const [machineConfirmation, setMachineConfirmation] = useState<MachineConfirmation>();
   const [resetTarget, setResetTarget] = useState<SshProject>();
   const [projectFormOpen, setProjectFormOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -107,9 +113,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
         const visibleMachines = machineResponse.machines.filter(
           (machine) => !deletingMachineIds.current.has(machine.id),
         );
-        const visibleProjects = projectResponse.projects.filter(
-          (project) => !deletingMachineIds.current.has(project.machineId),
-        );
+        const visibleProjects = visibleMachines.flatMap((machine) => machine.projects);
         setSupported(machineResponse.supported);
         setMachines(visibleMachines);
         setProjects(visibleProjects);
@@ -149,8 +153,10 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     try {
       await client[action](machine.id);
       await refresh();
+      return true;
     } catch (caught) {
       setError(errorMessage(caught));
+      return false;
     } finally {
       setOperationBusy(operation, false);
     }
@@ -186,14 +192,25 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     setProjects((current) => current.filter((project) => project.machineId !== machine.id));
     try {
       await client.delete(machine.id);
+      return true;
     } catch (caught) {
       deletingMachineIds.current.delete(machine.id);
       setError(errorMessage(caught));
       await refresh();
+      return false;
     } finally {
       deletingMachineIds.current.delete(machine.id);
       setOperationBusy(operation, false);
     }
+  };
+
+  const confirmMachineAction = async () => {
+    if (!machineConfirmation) return;
+    const completed =
+      machineConfirmation.action === "stop"
+        ? await manageMachine(machineConfirmation.machine, "stop")
+        : await deleteMachine(machineConfirmation.machine);
+    if (completed) setMachineConfirmation(undefined);
   };
 
   const addProject = async (event: React.FormEvent) => {
@@ -394,7 +411,7 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                               isBusy(machineOperation(machine.id, "stop")) ||
                               isBusy(machineOperation(machine.id, "delete"))
                             }
-                            onClick={() => void manageMachine(machine, "stop")}
+                            onClick={() => setMachineConfirmation({ action: "stop", machine })}
                           >
                             <SquareIcon className="size-3.5" />
                             <span className="hidden sm:inline">Stop</span>
@@ -463,7 +480,8 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                           className="shrink-0 px-2 text-destructive hover:text-destructive sm:px-3"
                           aria-label={`Delete ${machine.name}`}
                           title="Delete"
-                          onClick={() => void deleteMachine(machine)}
+                          disabled={isMachineBusy(machine.id)}
+                          onClick={() => setMachineConfirmation({ action: "delete", machine })}
                         >
                           <Trash2Icon className="size-3.5" />
                           <span className="hidden sm:inline">Delete</span>
@@ -698,6 +716,71 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
           </Card>
         </div>
       )}
+
+      <AlertDialog
+        open={Boolean(machineConfirmation)}
+        onOpenChange={(open) => {
+          const operation = machineConfirmation
+            ? machineOperation(machineConfirmation.machine.id, machineConfirmation.action)
+            : undefined;
+          if (!open && (!operation || !isBusy(operation))) setMachineConfirmation(undefined);
+        }}
+      >
+        <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {machineConfirmation?.action === "delete"
+                ? `Delete ${machineConfirmation.machine.name}?`
+                : `Stop ${machineConfirmation?.machine.name ?? "this machine"}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {machineConfirmation?.action === "delete"
+                ? `This permanently deletes ${machineConfirmation.machine.name}, its machine files, and every project stored on it. This can't be undone.`
+                : "Stopping interrupts active desktop, terminal, and forwarded service sessions. Projects and machine files remain available when you restart."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={Boolean(
+                machineConfirmation &&
+                isBusy(
+                  machineOperation(machineConfirmation.machine.id, machineConfirmation.action),
+                ),
+              )}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={Boolean(
+                machineConfirmation &&
+                isBusy(
+                  machineOperation(machineConfirmation.machine.id, machineConfirmation.action),
+                ),
+              )}
+              className={cn(
+                machineConfirmation?.action === "delete" &&
+                  "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+              )}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmMachineAction();
+              }}
+            >
+              {machineConfirmation &&
+              isBusy(
+                machineOperation(machineConfirmation.machine.id, machineConfirmation.action),
+              ) ? (
+                <Spinner className="size-3.5" />
+              ) : machineConfirmation?.action === "delete" ? (
+                <Trash2Icon className="size-3.5" />
+              ) : (
+                <SquareIcon className="size-3.5" />
+              )}
+              {machineConfirmation?.action === "delete" ? "Delete machine" : "Stop machine"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={Boolean(resetTarget)}

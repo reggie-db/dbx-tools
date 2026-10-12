@@ -11,17 +11,20 @@ describe("brand context", () => {
     assert.equal(context.colors.primary, "#1B3139");
     assert.equal(context.colors.primaryHover, "#0E538B");
     assert.equal(context.colors.accent, "#00A972");
+    assert.equal(context.links.website, "https://dbx.tools");
   });
 
   it("validates nested overrides and preserves defaults", () => {
     const context = brandUtils.parseBrandContext({
       name: "Example",
       colors: { primary: "#123456" },
+      links: { website: "https://example.com" },
     });
 
     assert.equal(context.name, "Example");
     assert.equal(context.colors.primary, "#123456");
     assert.equal(context.colors.background, "#FFFFFF");
+    assert.equal(context.links.website, "https://example.com");
   });
 
   it("exports schema and prompt forms for LLM consumers", () => {

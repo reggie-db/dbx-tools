@@ -1,14 +1,21 @@
 import type { SshCommandResult, SshMachineServiceKind } from "@dbx-tools/shared-databricks-sandbox";
+import { dbxToolsAssetDataUrls } from "@dbx-tools/ui/branding/assets";
 import { desktopOpenUrl, desktopPorts, desktopScript } from "./desktop.ts";
 import type { SshSession } from "./session.ts";
 
-const DINOTTY_VERSION = "0.29.0";
+const TTYD_VERSION = "1.7.7";
+const TTYD_CHECKSUMS = {
+  aarch64: "b38acadd89d1d396a0f5649aa52c539edbad07f4bc7348b27b4f4b7219dd4165",
+  x86_64: "8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55",
+} as const;
 const GLANCES_VERSION = "4.5.6";
-const DINOTTY_PORT = 7681;
+const TTYD_PORT = 7681;
 const GLANCES_PORT = 61208;
-const DINOTTY_RELAY_HEAD = `<style id="dbx-tools-dinotty-relay">
-.status-bar-server-wrap{display:none!important}
-</style>`;
+const DESKTOP_BRAND_HEAD = `<style id="dbx-tools-desktop-brand">
+.noVNC_logo,h1.noVNC_logo,a[title="KasmVNC Learn More"]{display:none!important}
+</style>
+<link data-dbx-tools-desktop-icon rel="icon" href="${dbxToolsAssetDataUrls.iconDark}">
+<script id="dbx-tools-desktop-brand-script">(()=>{const icon=${JSON.stringify(dbxToolsAssetDataUrls.iconDark)};const rewrite=(root)=>{if(root.nodeType===Node.TEXT_NODE){if(root.nodeValue?.includes("KasmVNC"))root.nodeValue=root.nodeValue.replaceAll("KasmVNC","dbx tools Desktop");return}const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode())if(node.nodeValue?.includes("KasmVNC"))node.nodeValue=node.nodeValue.replaceAll("KasmVNC","dbx tools Desktop")};const apply=()=>{document.title="dbx tools Desktop";for(const link of document.querySelectorAll('link[rel~="icon"],link[rel="apple-touch-icon"]'))link.setAttribute("href",icon);if(document.body)rewrite(document.body)};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply,{once:true});else apply();new MutationObserver((entries)=>{for(const entry of entries){if(entry.type==="characterData")rewrite(entry.target);else for(const node of entry.addedNodes)rewrite(node)}}).observe(document.documentElement,{childList:true,subtree:true,characterData:true})})();</script>`;
 const GLANCES_VIEWPORT_HEAD = `<style id="dbx-tools-glances-viewport">
 html,body,#app{width:100%;max-width:100vw;height:100%;height:100svh;max-height:100svh;min-height:0;overflow:hidden}
 body{position:fixed;inset:0;margin:0}
@@ -28,10 +35,6 @@ export interface SshServiceTarget {
   remotePort: number;
   /** Whether AppKit removes the public route prefix before forwarding. */
   stripPrefix: boolean;
-  /** Browser paths that the proxy must treat as navigation targets. */
-  browserPaths?: string[];
-  /** Whether the route injects the browser relay used by the terminal. */
-  browserRelay?: boolean;
   /** Whether requests without a trailing slash redirect before forwarding. */
   redirectToSlash?: boolean;
   /** Optional markup injected into proxied HTML heads. */
@@ -63,12 +66,10 @@ export async function ensureSshService(
   if (kind === "terminal") {
     return {
       remoteHost: "127.0.0.1",
-      remotePort: DINOTTY_PORT,
+      remotePort: TTYD_PORT,
       stripPrefix: true,
-      browserRelay: true,
-      browserPaths: ["/assets", "/icons", "/manifest.json", "/logo.png", "/preview", "/mcp"],
-      htmlHead: DINOTTY_RELAY_HEAD,
-      openUrl: path,
+      redirectToSlash: true,
+      openUrl: `${path.replace(/\/+$/, "")}/`,
     };
   }
   if (kind === "desktop") {
@@ -77,6 +78,7 @@ export async function ensureSshService(
       remotePort: desktopPorts.web,
       stripPrefix: true,
       redirectToSlash: true,
+      htmlHead: DESKTOP_BRAND_HEAD,
       openUrl: desktopOpenUrl(path),
     };
   }
@@ -90,35 +92,11 @@ export async function ensureSshService(
   };
 }
 
-/** Create and activate a DinoTTY tab rooted at one persisted project directory. */
-export async function openDinoTtyProjectTab(
-  session: SshSession,
-  directory: string,
-  title: string,
-  timeoutMs: number,
-  signal?: AbortSignal,
-): Promise<void> {
-  const payload = Buffer.from(JSON.stringify({ cwd: directory, title })).toString("base64");
-  const result = await session.execute(
-    "python3",
-    [
-      "-c",
-      `import base64, json, urllib.request
-data = base64.b64decode(${JSON.stringify(payload)})
-request = urllib.request.Request(
-    "http://127.0.0.1:${DINOTTY_PORT}/api/tabs",
-    data=data,
-    method="POST",
-    headers={"Authorization": "Bearer databricks-app-oauth", "Content-Type": "application/json"},
-)
-with urllib.request.urlopen(request, timeout=30) as response:
-    body = json.loads(response.read())
-if not body.get("tab_id"):
-    raise RuntimeError("DinoTTY did not create a project tab")`,
-    ],
-    { timeoutMs, signal },
-  );
-  assertServiceStarted("terminal", result);
+/** Return a ttyd URL that starts the shell in one owned project directory. */
+export function projectTerminalOpenUrl(openUrl: string, directory: string): string {
+  const url = new URL(openUrl, "http://localhost");
+  url.searchParams.set("arg", directory);
+  return `${url.pathname}${url.search}`;
 }
 
 function assertServiceStarted(kind: SshMachineServiceKind, result: SshCommandResult): void {
@@ -129,93 +107,93 @@ function assertServiceStarted(kind: SshMachineServiceKind, result: SshCommandRes
 }
 
 function serviceScript(kind: SshMachineServiceKind, path: string): string {
-  if (kind === "terminal") return dinottyScript();
+  if (kind === "terminal") return ttydScript();
   if (kind === "desktop") return desktopScript();
   return glancesScript(path);
 }
 
-function dinottyScript(): string {
+function ttydScript(): string {
+  const checksums = Object.entries(TTYD_CHECKSUMS)
+    .map(([architecture, checksum]) => `  ${architecture}) checksum=${checksum} ;;`)
+    .join("\n");
   return `set -euo pipefail
 runtime="$HOME/.dbx-tools/runtime"
-bin="$runtime/bin/dinotty-server"
-pid_file="$runtime/dinotty.pid"
-log_file="$runtime/dinotty.log"
-version_file="$runtime/dinotty.version"
-mkdir -p "$runtime/bin" "$HOME/.config/dinotty"
-if [ ! -x "$bin" ] || [ ! -f "$version_file" ] || [ "$(cat "$version_file")" != "${DINOTTY_VERSION}" ]; then
-  if [ -s "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-    kill "$(cat "$pid_file")"
+bin="$runtime/bin/ttyd"
+pid_file="$runtime/ttyd.pid"
+legacy_pid_file="$runtime/dinotty.pid"
+log_file="$runtime/ttyd.log"
+version_file="$runtime/ttyd.version"
+shell_wrapper="$runtime/bin/dbx-tools-shell"
+bashrc="$runtime/bin/dbx-tools-bashrc"
+mkdir -p "$runtime/bin"
+stop_pid() {
+  file="$1"
+  if [ -s "$file" ] && kill -0 "$(cat "$file")" 2>/dev/null; then
+    kill "$(cat "$file")"
     for _ in $(seq 1 40); do
-      kill -0 "$(cat "$pid_file")" 2>/dev/null || break
+      kill -0 "$(cat "$file")" 2>/dev/null || break
       sleep 0.25
     done
   fi
-  rm -f "$pid_file"
-  DINOTTY_VERSION=${DINOTTY_VERSION} DINOTTY_DESTINATION="$bin" python3 - <<'PY'
-import io
+  rm -f "$file"
+}
+stop_pid "$legacy_pid_file"
+if [ ! -x "$bin" ] || [ ! -f "$version_file" ] || [ "$(cat "$version_file")" != "${TTYD_VERSION}" ]; then
+  stop_pid "$pid_file"
+  case "$(uname -m)" in
+${checksums}
+    *) echo "Unsupported ttyd architecture: $(uname -m)" >&2; exit 1 ;;
+  esac
+  TTYD_VERSION=${TTYD_VERSION} TTYD_ARCHITECTURE="$(uname -m)" TTYD_CHECKSUM="$checksum" TTYD_DESTINATION="$bin" python3 - <<'PY'
+import hashlib
 import os
-import platform
 import stat
-import tarfile
 import urllib.request
 from pathlib import Path
 
-version = os.environ["DINOTTY_VERSION"]
-architectures = {"aarch64": "arm64", "arm64": "arm64", "x86_64": "amd64"}
-architecture = architectures.get(platform.machine().lower())
-if architecture is None:
-    raise RuntimeError(f"Unsupported DinoTTY architecture: {platform.machine()}")
-url = f"https://github.com/xichan96/dinotty/releases/download/v{version}/dinotty-server_{version}-1_{architecture}.deb"
+version = os.environ["TTYD_VERSION"]
+architecture = os.environ["TTYD_ARCHITECTURE"]
+url = f"https://github.com/tsl0922/ttyd/releases/download/{version}/ttyd.{architecture}"
 with urllib.request.urlopen(url) as response:
-    package = response.read()
-if package[:8] != b"!<arch>\\n":
-    raise RuntimeError("DinoTTY package is not a Debian archive")
-offset = 8
-payload = None
-while offset + 60 <= len(package):
-    header = package[offset:offset + 60]
-    name = header[:16].decode("ascii").strip().rstrip("/")
-    size = int(header[48:58].decode("ascii").strip())
-    offset += 60
-    member = package[offset:offset + size]
-    offset += size + (size % 2)
-    if name.startswith("data.tar"):
-        payload = member
-        break
-if payload is None:
-    raise RuntimeError("DinoTTY package has no data archive")
-destination = Path(os.environ["DINOTTY_DESTINATION"])
-with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as archive:
-    source = archive.extractfile(archive.getmember("./usr/bin/dinotty-server"))
-    if source is None:
-        raise RuntimeError("DinoTTY binary is missing")
-    temporary = destination.with_suffix(".tmp")
-    temporary.write_bytes(source.read())
-    temporary.chmod(temporary.stat().st_mode | stat.S_IXUSR)
-    os.replace(temporary, destination)
+    payload = response.read()
+if hashlib.sha256(payload).hexdigest() != os.environ["TTYD_CHECKSUM"]:
+    raise RuntimeError("ttyd checksum mismatch")
+destination = Path(os.environ["TTYD_DESTINATION"])
+temporary = destination.with_suffix(".tmp")
+temporary.write_bytes(payload)
+temporary.chmod(temporary.stat().st_mode | stat.S_IXUSR)
+os.replace(temporary, destination)
 PY
-  printf '%s\n' "${DINOTTY_VERSION}" >"$version_file"
+  printf '%s\n' "${TTYD_VERSION}" >"$version_file"
 fi
-python3 - <<'PY'
-import json
-from pathlib import Path
-
-path = Path.home() / ".config" / "dinotty" / "settings.json"
-try:
-    settings = json.loads(path.read_text())
-except (FileNotFoundError, json.JSONDecodeError):
-    settings = {}
-settings.setdefault("open_api", {})["enabled"] = True
-settings.setdefault("mcp", {}).update({"http_enabled": True, "stdio_enabled": True})
-settings["ip_whitelist"] = ["127.0.0.1", "::1"]
-path.write_text(json.dumps(settings, indent=2) + "\\n")
-PY
+cat >"$bashrc" <<'EOF'
+# Interactive ttyd rc: user bashrc without login motd, sudo hint, or export dumps.
+if [ -f "\${HOME}/.bashrc" ]; then
+  . "\${HOME}/.bashrc" >/dev/null 2>&1
+fi
+EOF
+cat >"$shell_wrapper" <<'EOF'
+#!/bin/sh
+unset BASH_ENV ENV PROMPT_COMMAND
+directory="\${1:-$HOME}"
+case "$directory" in
+  "$HOME"|"$HOME"/*) ;;
+  *) directory="$HOME" ;;
+esac
+cd -- "$directory"
+exec /bin/bash --noprofile --rcfile "\${HOME}/.dbx-tools/runtime/bin/dbx-tools-bashrc" -i
+EOF
+chmod 600 "$bashrc"
+chmod 700 "$shell_wrapper"
 if ! [ -s "$pid_file" ] || ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-  nohup env DINOTTY_SHELL="$(command -v bash)" DINOTTY_TOKEN="databricks-app-oauth" \
-    "$bin" --port ${DINOTTY_PORT} >"$log_file" 2>&1 </dev/null &
+  nohup "$bin" --interface 127.0.0.1 --port ${TTYD_PORT} --writable --url-arg \
+    --client-option term=xterm-256color --client-option rendererType=webgl \
+    --client-option cursorStyle=bar --client-option copyOnSelect=true \
+    --client-option rightClickSelectsWord=true --client-option disableLeaveAlert=true \
+    --client-option disableResizeOverlay=true "$shell_wrapper" >"$log_file" 2>&1 </dev/null &
   echo $! >"$pid_file"
 fi
-python3 - ${DINOTTY_PORT} <<'PY'
+python3 - ${TTYD_PORT} <<'PY'
 import socket
 import sys
 import time
@@ -227,7 +205,7 @@ for _ in range(120):
             raise SystemExit(0)
     except OSError:
         time.sleep(0.5)
-raise SystemExit("DinoTTY did not become ready")
+raise SystemExit("ttyd did not become ready")
 PY`;
 }
 
