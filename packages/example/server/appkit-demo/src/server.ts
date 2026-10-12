@@ -7,10 +7,10 @@ import {
   AppKitSshPlugin,
   databricksSandbox,
   SshRuntime,
-} from "@dbx-tools/appkit-databricks-sandbox";
-import { resolveSshPluginConfig } from "@dbx-tools/appkit-databricks-sandbox/config";
-import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-databricks-sandbox/skills";
-import { sshWorkspaceSandbox } from "@dbx-tools/appkit-databricks-sandbox/workspace";
+} from "@dbx-tools/appkit-sandbox";
+import { resolveSshPluginConfig } from "@dbx-tools/appkit-sandbox/config";
+import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-sandbox/skills";
+import { sshWorkspaceSandbox } from "@dbx-tools/appkit-sandbox/workspace";
 import { graphiti } from "@dbx-tools/appkit-graphiti";
 import {
   agents,

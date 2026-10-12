@@ -34,7 +34,7 @@ export interface SshWorkspaceSandboxOptions {
 
 /** Mastra workspace sandbox backed by one existing Databricks Sandbox. */
 export class SshWorkspaceSandbox extends MastraSandbox {
-  readonly provider = "appkit-databricks-sandbox";
+  readonly provider = "appkit-sandbox";
   status: WorkspaceSandbox["status"] = "pending";
 
   constructor(
@@ -185,7 +185,7 @@ export function sshWorkspaceSandbox(
 class MissingSshWorkspaceSandbox extends MastraSandbox {
   readonly id = "unassigned";
   readonly name = "Databricks Sandbox unavailable";
-  readonly provider = "appkit-databricks-sandbox";
+  readonly provider = "appkit-sandbox";
   status: WorkspaceSandbox["status"] = "stopped";
 
   constructor() {

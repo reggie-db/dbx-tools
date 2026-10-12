@@ -37,4 +37,4 @@ name collisions; authenticated owner checks remain the security boundary.
 
 Use these schemas for browser/server boundaries. Server-only REST clients,
 private keys, SSH sessions, and proxy transports belong to
-`@dbx-tools/appkit-databricks-sandbox`.
+`@dbx-tools/appkit-sandbox`.

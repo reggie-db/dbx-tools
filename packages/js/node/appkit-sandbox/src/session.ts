@@ -7,7 +7,7 @@ import ssh2, { type Client as Ssh2Client, type ClientChannel } from "ssh2";
 import { z } from "zod";
 
 const { Client } = ssh2;
-const logger = log.logger("appkit-databricks-sandbox:ssh");
+const logger = log.logger("appkit-sandbox:ssh");
 const SERVICE_DIRECT_SUFFIX = ".service-direct.cloud.databricks.com";
 
 const DnsAnswerSchema = z

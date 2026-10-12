@@ -30,7 +30,7 @@ import { SshSession } from "./session.ts";
 
 const POLL_INTERVAL_MS = 1_000;
 const LIFECYCLE_TIMEOUT_MS = 180_000;
-const logger = log.logger("appkit-databricks-sandbox:auth");
+const logger = log.logger("appkit-sandbox:auth");
 interface WorkspaceAuthAttempt<T> {
   user?: () => Promise<T>;
   servicePrincipal: () => Promise<T>;
@@ -43,6 +43,11 @@ interface WorkspaceAuthOperation {
   tokenPresent?: boolean;
 }
 
+interface RuntimeEpoch {
+  machine: number;
+  owner: number;
+}
+
 /** Coordinates Sandbox REST operations, SSH sessions, command execution, and web routes. */
 export class SshRuntime {
   readonly routes: SshRouteRegistry;
@@ -53,6 +58,8 @@ export class SshRuntime {
   private readonly seededWorkspaces = new Set<string>();
   private readonly services = new Map<string, SshMachineService>();
   private readonly startingServices = new Map<string, Promise<SshMachineService>>();
+  private readonly machineEpochs = new Map<string, number>();
+  private readonly ownerEpochs = new Map<string, number>();
 
   constructor(
     readonly config: ResolvedSshPluginConfig,
@@ -141,7 +148,7 @@ export class SshRuntime {
         supported: true,
         machines: entries
           .filter((entry) => assigned.has(entry.sandboxId))
-          .map((entry) => this.toMachine(entry, userId)),
+          .map((entry) => this.toMachine(entry, api.workspaceScope(), userId)),
       };
     } catch (error) {
       if (isSandboxUnavailable(error)) {
@@ -168,7 +175,7 @@ export class SshRuntime {
         this.startService(client, userId, { machineId, service }, signal),
       ),
     );
-    return this.toMachine(final, userId);
+    return this.toMachine(final, api.workspaceScope(), userId);
   }
 
   async createMachine(
@@ -186,7 +193,11 @@ export class SshRuntime {
       await api.delete(created.sandboxId, signal).catch(() => undefined);
       throw error;
     }
-    return this.toMachine({ ...created, ...(request.name ? { name: request.name } : {}) }, userId);
+    return this.toMachine(
+      { ...created, ...(request.name ? { name: request.name } : {}) },
+      api.workspaceScope(),
+      userId,
+    );
   }
 
   async stopMachine(
@@ -201,12 +212,8 @@ export class SshRuntime {
     const updated =
       normalizeStatus(current.status) === "stopped" ? current : await api.stop(machineId, signal);
     const final = await waitForStatus(api, machineId, "stopped", updated, signal);
-    this.disconnect(api.workspaceScope(), userId, machineId);
-    await this.routes.removeMachine(machineId, userId);
-    for (const kind of ["terminal", "stats"] as const) {
-      this.services.delete(serviceKey(userId, machineId, kind));
-    }
-    return this.toMachine(final, userId);
+    await this.clearMachineRuntime(api.workspaceScope(), machineId);
+    return this.toMachine(final, api.workspaceScope(), userId);
   }
 
   async deleteMachine(
@@ -218,12 +225,8 @@ export class SshRuntime {
     const api = new DatabricksSandboxClient(client);
     await this.assertAssigned(api.workspaceScope(), userId, machineId);
     await api.delete(machineId, signal);
-    this.disconnect(api.workspaceScope(), userId, machineId);
-    await this.routes.removeMachine(machineId, userId);
-    for (const kind of ["terminal", "stats"] as const) {
-      this.services.delete(serviceKey(userId, machineId, kind));
-    }
-    await this.ownership.unassign(api.workspaceScope(), userId, machineId);
+    await this.ownership.unassignAll(api.workspaceScope(), machineId);
+    await this.clearMachineRuntime(api.workspaceScope(), machineId);
     return { deleted: true };
   }
 
@@ -234,7 +237,11 @@ export class SshRuntime {
     signal?: AbortSignal,
   ): Promise<SshMachineService> {
     const request = sshMachineServiceActionSchema.parse(input);
-    const key = serviceKey(userId, request.machineId, request.service);
+    const api = new DatabricksSandboxClient(client);
+    const workspaceScope = api.workspaceScope();
+    await this.assertAssigned(workspaceScope, userId, request.machineId);
+    const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
+    const key = serviceKey(workspaceScope, userId, request.machineId, request.service);
     const current = this.services.get(key);
     if (
       current?.state === "ready" &&
@@ -252,11 +259,16 @@ export class SshRuntime {
       state: "starting",
     };
     this.services.set(key, starting);
-    const operation = this.provisionService(client, userId, request, starting, signal).finally(
-      () => {
-        this.startingServices.delete(key);
-      },
-    );
+    const operation = this.provisionService(
+      client,
+      userId,
+      request,
+      starting,
+      epoch,
+      signal,
+    ).finally(() => {
+      this.startingServices.delete(key);
+    });
     this.startingServices.set(key, operation);
     return operation;
   }
@@ -270,9 +282,12 @@ export class SshRuntime {
     const request = sshCommandRequestSchema.parse(input);
     const api = new DatabricksSandboxClient(client);
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
+    const epoch = this.runtimeEpoch(api.workspaceScope(), userId, request.machineId);
     const machine = await this.ensureRunning(api, request.machineId, signal);
     const timeoutMs = request.timeoutMs ?? this.config.commandTimeoutMs;
-    const session = await this.ensureSession(client, userId, machine, signal);
+    const session = await this.ensureSession(client, userId, machine, epoch, signal);
+    await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
+    this.assertRuntimeEpoch(api.workspaceScope(), userId, request.machineId, epoch);
     return session.execute(request.command, request.args, {
       ...(request.cwd ? { cwd: request.cwd } : {}),
       ...(request.env ? { env: request.env } : {}),
@@ -290,9 +305,20 @@ export class SshRuntime {
     const request = addSshRouteRequestSchema.parse(input);
     const api = new DatabricksSandboxClient(client);
     await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
+    const epoch = this.runtimeEpoch(api.workspaceScope(), userId, request.machineId);
     const machine = await this.ensureRunning(api, request.machineId, signal);
-    const session = await this.ensureSession(client, userId, machine, signal);
-    return this.routes.add(session, { ...request, ownerId: userId });
+    const session = await this.ensureSession(client, userId, machine, epoch, signal);
+    await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
+    this.assertRuntimeEpoch(api.workspaceScope(), userId, request.machineId, epoch);
+    const route = await this.routes.add(session, { ...request, ownerId: userId });
+    try {
+      await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
+      this.assertRuntimeEpoch(api.workspaceScope(), userId, request.machineId, epoch);
+      return route;
+    } catch (error) {
+      await this.routes.remove(route.id, userId);
+      throw error;
+    }
   }
 
   removeRoute(userId: string, routeId: string): Promise<boolean> {
@@ -321,11 +347,14 @@ export class SshRuntime {
     machineId: string,
   ): Promise<boolean> {
     const api = new DatabricksSandboxClient(client);
-    return this.ownership.unassign(api.workspaceScope(), userId, machineId);
+    const removed = await this.ownership.unassign(api.workspaceScope(), userId, machineId);
+    if (removed) await this.clearOwnerRuntime(api.workspaceScope(), userId, machineId);
+    return removed;
   }
 
   disconnect(workspaceScope: string, userId: string, machineId: string): void {
     const key = sessionKey(workspaceScope, userId, machineId);
+    this.bumpEpoch(this.ownerEpochs, key);
     this.sessions.get(key)?.close();
     this.sessions.delete(key);
     this.connecting.delete(key);
@@ -337,6 +366,8 @@ export class SshRuntime {
     this.connecting.clear();
     this.services.clear();
     this.startingServices.clear();
+    this.machineEpochs.clear();
+    this.ownerEpochs.clear();
     await this.routes.close();
     await this.ownership.close();
   }
@@ -380,19 +411,32 @@ export class SshRuntime {
     client: WorkspaceClient,
     userId: string,
     machine: SandboxEntry,
+    epoch: RuntimeEpoch,
     signal?: AbortSignal,
   ): Promise<SshSession> {
     const api = new DatabricksSandboxClient(client);
     const key = sessionKey(api.workspaceScope(), userId, machine.sandboxId);
+    this.assertRuntimeEpoch(api.workspaceScope(), userId, machine.sandboxId, epoch);
     const existing = this.sessions.get(key);
     if (existing) return existing;
     const pending = this.connecting.get(key);
     if (pending) return pending;
     const connection = this.createSession(api, userId, machine, signal).finally(() => {
-      this.connecting.delete(key);
+      if (this.connecting.get(key) === connection) this.connecting.delete(key);
     });
     this.connecting.set(key, connection);
     const session = await connection;
+    if (this.connecting.get(key) !== connection) {
+      session.close();
+      throw new Error(`SSH machine ${machine.sandboxId} session was revoked`);
+    }
+    try {
+      await this.assertAssigned(api.workspaceScope(), userId, machine.sandboxId);
+      this.assertRuntimeEpoch(api.workspaceScope(), userId, machine.sandboxId, epoch);
+    } catch (error) {
+      session.close();
+      throw error;
+    }
     this.sessions.set(key, session);
     return session;
   }
@@ -402,9 +446,12 @@ export class SshRuntime {
     userId: string,
     request: SshMachineServiceAction,
     starting: SshMachineService,
+    epoch: RuntimeEpoch,
     signal?: AbortSignal,
   ): Promise<SshMachineService> {
-    const key = serviceKey(userId, request.machineId, request.service);
+    const api = new DatabricksSandboxClient(client);
+    const workspaceScope = api.workspaceScope();
+    const key = serviceKey(workspaceScope, userId, request.machineId, request.service);
     logger.warn("SSH machine service provisioning started", {
       userId,
       machineId: request.machineId,
@@ -412,10 +459,10 @@ export class SshRuntime {
       path: starting.path,
     });
     try {
-      const api = new DatabricksSandboxClient(client);
-      await this.assertAssigned(api.workspaceScope(), userId, request.machineId);
+      await this.assertAssigned(workspaceScope, userId, request.machineId);
+      this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
       const machine = await this.ensureRunning(api, request.machineId, signal);
-      const session = await this.ensureSession(client, userId, machine, signal);
+      const session = await this.ensureSession(client, userId, machine, epoch, signal);
       const target = await ensureSshService(
         session,
         request.service,
@@ -423,13 +470,22 @@ export class SshRuntime {
         Math.max(this.config.commandTimeoutMs, 600_000),
         signal,
       );
-      await this.routes.add(session, {
+      await this.assertAssigned(workspaceScope, userId, request.machineId);
+      this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
+      const route = await this.routes.add(session, {
         ownerId: userId,
         machineId: request.machineId,
         path: starting.path,
         internal: true,
         ...target,
       });
+      try {
+        await this.assertAssigned(workspaceScope, userId, request.machineId);
+        this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
+      } catch (error) {
+        await this.routes.remove(route.id, userId);
+        throw error;
+      }
       const ready: SshMachineService = { ...starting, state: "ready" };
       this.services.set(key, ready);
       logger.warn("SSH machine service provisioning succeeded", {
@@ -442,6 +498,10 @@ export class SshRuntime {
       });
       return ready;
     } catch (error) {
+      if (!this.runtimeEpochMatches(workspaceScope, userId, request.machineId, epoch)) {
+        this.services.delete(key);
+        throw error;
+      }
       const message = errorUtils.errorMessage(error);
       const failed: SshMachineService = {
         ...starting,
@@ -503,7 +563,7 @@ export class SshRuntime {
     return session;
   }
 
-  private toMachine(entry: SandboxEntry, userId: string): SshMachine {
+  private toMachine(entry: SandboxEntry, workspaceScope: string, userId: string): SshMachine {
     const status = normalizeStatus(entry.status);
     return {
       id: entry.sandboxId,
@@ -519,7 +579,7 @@ export class SshRuntime {
       routes: this.routes.list(entry.sandboxId, userId),
       services: (["terminal", "stats"] as const).map(
         (kind): SshMachineService =>
-          this.services.get(serviceKey(userId, entry.sandboxId, kind)) ?? {
+          this.services.get(serviceKey(workspaceScope, userId, entry.sandboxId, kind)) ?? {
             kind,
             path: this.servicePath(entry.sandboxId, kind),
             state: "stopped",
@@ -536,10 +596,94 @@ export class SshRuntime {
     const routePrefix = this.config.routePrefix.replace(/\/+$/, "");
     return `${routePrefix}/${service}/${machinePathSegment(machineId)}`;
   }
+
+  private runtimeEpoch(workspaceScope: string, userId: string, machineId: string): RuntimeEpoch {
+    return {
+      machine: this.machineEpochs.get(machineRuntimeKey(workspaceScope, machineId)) ?? 0,
+      owner: this.ownerEpochs.get(sessionKey(workspaceScope, userId, machineId)) ?? 0,
+    };
+  }
+
+  private runtimeEpochMatches(
+    workspaceScope: string,
+    userId: string,
+    machineId: string,
+    epoch: RuntimeEpoch,
+  ): boolean {
+    const current = this.runtimeEpoch(workspaceScope, userId, machineId);
+    return current.machine === epoch.machine && current.owner === epoch.owner;
+  }
+
+  private assertRuntimeEpoch(
+    workspaceScope: string,
+    userId: string,
+    machineId: string,
+    epoch: RuntimeEpoch,
+  ): void {
+    if (this.runtimeEpochMatches(workspaceScope, userId, machineId, epoch)) return;
+    throw new Error(`SSH machine ${machineId} operation was revoked`);
+  }
+
+  private async clearOwnerRuntime(
+    workspaceScope: string,
+    userId: string,
+    machineId: string,
+  ): Promise<void> {
+    this.disconnect(workspaceScope, userId, machineId);
+    await this.routes.removeMachine(machineId, userId);
+    for (const kind of ["terminal", "stats"] as const) {
+      const key = serviceKey(workspaceScope, userId, machineId, kind);
+      this.services.delete(key);
+      this.startingServices.delete(key);
+    }
+  }
+
+  private async clearMachineRuntime(workspaceScope: string, machineId: string): Promise<void> {
+    this.bumpEpoch(this.machineEpochs, machineRuntimeKey(workspaceScope, machineId));
+    for (const [key, session] of this.sessions) {
+      if (!sessionKeyMatchesMachine(key, workspaceScope, machineId)) continue;
+      session.close();
+      this.sessions.delete(key);
+    }
+    for (const key of this.connecting.keys()) {
+      if (sessionKeyMatchesMachine(key, workspaceScope, machineId)) this.connecting.delete(key);
+    }
+    for (const key of this.services.keys()) {
+      if (serviceKeyMatchesMachine(key, workspaceScope, machineId)) this.services.delete(key);
+    }
+    for (const key of this.startingServices.keys()) {
+      if (serviceKeyMatchesMachine(key, workspaceScope, machineId)) {
+        this.startingServices.delete(key);
+      }
+    }
+    await this.routes.removeMachine(machineId);
+  }
+
+  private bumpEpoch(epochs: Map<string, number>, key: string): void {
+    epochs.set(key, (epochs.get(key) ?? 0) + 1);
+  }
 }
 
-function serviceKey(userId: string, machineId: string, kind: SshMachineService["kind"]): string {
-  return `${userId}\0${machineId}\0${kind}`;
+function serviceKey(
+  workspaceScope: string,
+  userId: string,
+  machineId: string,
+  kind: SshMachineService["kind"],
+): string {
+  return `${sessionKey(workspaceScope, userId, machineId)}\0${kind}`;
+}
+
+function machineRuntimeKey(workspaceScope: string, machineId: string): string {
+  return `${workspaceScope}\0${machineId}`;
+}
+
+function sessionKeyMatchesMachine(key: string, workspaceScope: string, machineId: string): boolean {
+  const [candidateWorkspace, , candidateMachine] = key.split("\0");
+  return candidateWorkspace === workspaceScope && candidateMachine === machineId;
+}
+
+function serviceKeyMatchesMachine(key: string, workspaceScope: string, machineId: string): boolean {
+  return sessionKeyMatchesMachine(key, workspaceScope, machineId);
 }
 
 function machinePathSegment(machineId: string): string {

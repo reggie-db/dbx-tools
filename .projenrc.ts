@@ -390,7 +390,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
 // lakebox REST surface for create/discovery/lifecycle/delete, OpenSSH for command
 // sessions, ssh2 for direct forwarding, and the existing proxy dependency for
 // remote web routes.
-project.applyToProjects(root, { identifierName: "appkit-databricks-sandbox", tags: "node" }, (p) => {
+project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
     "AppKit management, Mastra tools, and remote routing for Databricks Sandboxes",
@@ -1241,7 +1241,7 @@ project.applyToProjects(
       "@dbx-tools/appkit@workspace:^",
       "@dbx-tools/appkit-graphiti@workspace:^",
       "@dbx-tools/appkit-mastra@workspace:^",
-      "@dbx-tools/appkit-databricks-sandbox@workspace:^",
+      "@dbx-tools/appkit-sandbox@workspace:^",
       "@dbx-tools/core@workspace:^",
       "@dbx-tools/databricks@workspace:^",
       "@dbx-tools/postgres@workspace:^",

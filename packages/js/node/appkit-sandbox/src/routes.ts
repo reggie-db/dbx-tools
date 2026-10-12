@@ -15,7 +15,7 @@ import WebSocket, { WebSocketServer } from "ws";
 import type { SshSession } from "./session.ts";
 
 const MAX_PENDING_BYTES = 1024 * 1024;
-const logger = log.logger("appkit-databricks-sandbox:routes");
+const logger = log.logger("appkit-sandbox:routes");
 
 interface RouteInput {
   ownerId: string;
@@ -125,9 +125,10 @@ export class SshRouteRegistry {
     return true;
   }
 
-  async removeMachine(machineId: string, ownerId: string): Promise<void> {
+  async removeMachine(machineId: string, ownerId?: string): Promise<void> {
     const routeIds = [...this.routes.values()]
-      .filter((entry) => entry.ownerId === ownerId && entry.route.machineId === machineId)
+      .filter((entry) => !ownerId || entry.ownerId === ownerId)
+      .filter((entry) => entry.route.machineId === machineId)
       .map((entry) => entry.route.id);
     await Promise.all(routeIds.map((routeId) => this.remove(routeId, ownerId)));
   }

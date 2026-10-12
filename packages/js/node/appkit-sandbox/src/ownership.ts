@@ -5,9 +5,9 @@ import { advisoryLock, type PgPoolLike, type PgQueryable } from "@dbx-tools/post
 import { log } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
-const logger = log.logger("appkit-databricks-sandbox:ownership");
-const MIGRATION_LOCK = ["appkit-databricks-sandbox", "machine-ownership", "migrations"] as const;
-const DISK_LOCK = ["appkit-databricks-sandbox", "machine-ownership", "disk"] as const;
+const logger = log.logger("appkit-sandbox:ownership");
+const MIGRATION_LOCK = ["appkit-sandbox", "machine-ownership", "migrations"] as const;
+const DISK_LOCK = ["appkit-sandbox", "machine-ownership", "disk"] as const;
 const SCHEMA = "dbx_tools_databricks_sandbox";
 const TABLE = `${SCHEMA}.machine_assignments`;
 
@@ -40,6 +40,7 @@ export interface MachineOwnershipStore {
   has(workspaceScope: string, userId: string, machineId: string): Promise<boolean>;
   assign(workspaceScope: string, userId: string, machineId: string): Promise<void>;
   unassign(workspaceScope: string, userId: string, machineId: string): Promise<boolean>;
+  unassignAll(workspaceScope: string, machineId: string): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -95,6 +96,20 @@ export class DiskMachineOwnershipStore implements MachineOwnershipStore {
       if (filtered.length === assignments.length) return false;
       await this.writeUnlocked(filtered);
       return true;
+    });
+  }
+
+  async unassignAll(workspaceScope: string, machineId: string): Promise<number> {
+    return fileLock.withFileLock(DISK_LOCK, async () => {
+      const assignments = await this.readUnlocked();
+      const filtered = assignments.filter(
+        (assignment) =>
+          assignment.workspaceScope !== workspaceScope || assignment.machineId !== machineId,
+      );
+      const removed = assignments.length - filtered.length;
+      if (removed === 0) return 0;
+      await this.writeUnlocked(filtered);
+      return removed;
     });
   }
 
@@ -176,6 +191,14 @@ export class LakebaseMachineOwnershipStore implements MachineOwnershipStore {
       [workspaceScope, userId, machineId],
     );
     return result.rowCount !== 0;
+  }
+
+  async unassignAll(workspaceScope: string, machineId: string): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM ${TABLE} WHERE workspace_scope = $1 AND machine_id = $2`,
+      [workspaceScope, machineId],
+    );
+    return result.rowCount ?? 0;
   }
 
   async close(): Promise<void> {}

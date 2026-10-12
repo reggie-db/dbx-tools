@@ -37,6 +37,9 @@ describe("SshRouteRegistry", () => {
       assert.equal(await registry.remove(route.id, "other@databricks.com"), false);
       assert.equal(await registry.remove(route.id, "reggie.pierce@databricks.com"), true);
       assert.equal(await registry.remove(route.id), false);
+      assert.deepEqual(registry.list("sandbox-1"), [otherRoute]);
+      await registry.removeMachine("sandbox-1");
+      assert.deepEqual(registry.list("sandbox-1"), []);
     } finally {
       await registry.close();
     }

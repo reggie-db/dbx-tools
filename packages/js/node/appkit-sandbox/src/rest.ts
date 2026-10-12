@@ -7,7 +7,7 @@ const SANDBOX_ROOT = "/api/2.0/lakebox";
 const SANDBOX_PATH = `${SANDBOX_ROOT}/sandboxes`;
 const SSH_KEYS_PATH = `${SANDBOX_ROOT}/ssh-keys`;
 const ORG_ID_HEADER = "X-Databricks-Org-Id";
-const logger = log.logger("appkit-databricks-sandbox:rest");
+const logger = log.logger("appkit-sandbox:rest");
 
 const sandboxEntrySchema = z
   .object({

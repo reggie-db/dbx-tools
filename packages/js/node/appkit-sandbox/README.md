@@ -1,4 +1,4 @@
-# @dbx-tools/appkit-databricks-sandbox
+# @dbx-tools/appkit-sandbox
 
 AppKit plugin for Databricks Sandboxes. It provides user-scoped creation,
 discovery, lifecycle controls, deletion, SSH command execution, Mastra tools,
@@ -15,11 +15,11 @@ Create one runtime and share it between the Sandbox plugin and Mastra sandbox
 resolver:
 
 ```ts
-import { resolveSshPluginConfig } from "@dbx-tools/appkit-databricks-sandbox/config";
-import { databricksSandbox } from "@dbx-tools/appkit-databricks-sandbox/plugin";
-import { SshRuntime } from "@dbx-tools/appkit-databricks-sandbox/runtime";
-import { sshWorkspaceSandbox } from "@dbx-tools/appkit-databricks-sandbox/workspace";
-import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-databricks-sandbox/skills";
+import { resolveSshPluginConfig } from "@dbx-tools/appkit-sandbox/config";
+import { databricksSandbox } from "@dbx-tools/appkit-sandbox/plugin";
+import { SshRuntime } from "@dbx-tools/appkit-sandbox/runtime";
+import { sshWorkspaceSandbox } from "@dbx-tools/appkit-sandbox/workspace";
+import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-sandbox/skills";
 import { mastra } from "@dbx-tools/appkit-mastra";
 
 const sshRuntime = new SshRuntime(
@@ -184,6 +184,13 @@ locked JSON file in the operating system's application-data directory. Set
 `ownershipPath` to override the disk location. Multiple user identities may be
 assigned to the same machine when an app has both platform and external-gate
 identity forms.
+
+This assignment store is an application-level stopgap because the current
+Sandbox API does not expose native per-user Sandbox scopes. It limits which
+machines the plugin reveals and operates when using either OBO credentials or
+service-principal fallback, but it does not replace Databricks authorization.
+Replace this custom assignment layer with native Sandbox user scopes when the
+platform exposes them.
 
 SSH keys are generated per workspace and AppKit user under
 `~/.dbx-tools/appkit-databricks-sandbox` by default. The plugin registers only the public key.

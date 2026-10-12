@@ -437,7 +437,7 @@ mastra({
 ```
 
 For Databricks Sandbox over SSH, use `sshWorkspaceSandbox(runtime)` from
-`@dbx-tools/appkit-databricks-sandbox/workspace`. Share that runtime with the
+`@dbx-tools/appkit-sandbox/workspace`. Share that runtime with the
 Databricks Sandbox AppKit plugin so agent commands, terminal and health routes
 use the same transport and machine assignments. That package owns Sandbox
 lifecycle, SSH keys, authentication fallback, and route forwarding.
