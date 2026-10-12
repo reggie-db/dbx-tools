@@ -5,6 +5,9 @@ const DINOTTY_VERSION = "0.29.0";
 const GLANCES_VERSION = "4.5.6";
 const DINOTTY_PORT = 7681;
 const GLANCES_PORT = 61208;
+const DINOTTY_RELAY_HEAD = `<style id="dbx-tools-dinotty-relay">
+.status-bar-server-wrap{display:none!important}
+</style>`;
 const GLANCES_VIEWPORT_HEAD = `<style id="dbx-tools-glances-viewport">
 html,body,#app{width:100%;max-width:100vw;height:100%;height:100svh;max-height:100svh;min-height:0;overflow:hidden}
 body{position:fixed;inset:0;margin:0}
@@ -54,6 +57,7 @@ export async function ensureSshService(
           "/preview",
           "/mcp",
         ],
+        htmlHead: DINOTTY_RELAY_HEAD,
       }
     : {
         remoteHost: "127.0.0.1",

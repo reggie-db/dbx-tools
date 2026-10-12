@@ -38,6 +38,8 @@ describe("ensureSshService", () => {
       "/preview",
       "/mcp",
     ]);
+    assert.match(target.htmlHead ?? "", /dbx-tools-dinotty-relay/);
+    assert.match(target.htmlHead ?? "", /\.status-bar-server-wrap\{display:none!important\}/);
   });
 
   it("adds dynamic viewport sizing to the Glances document", async () => {

@@ -52,11 +52,11 @@ describe("SshRouteRegistry", () => {
     } as unknown as SshSession;
     const registry = new SshRouteRegistry("/sandbox");
     const proxy = createHttpServer((request, response) => {
-      const url = new URL(request.url ?? "/", "http://localhost");
-      Object.assign(request, {
-        path: url.pathname,
-        header: (name: string) => request.headers[name.toLowerCase()],
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
       });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
       registry.middleware()(request as never, response as never, () => {
         response.statusCode = 404;
         response.end();
@@ -129,11 +129,11 @@ describe("SshRouteRegistry", () => {
     } as unknown as SshSession;
     const registry = new SshRouteRegistry("/sandbox");
     const proxy = createHttpServer((request, response) => {
-      const url = new URL(request.url ?? "/", "http://localhost");
-      Object.assign(request, {
-        path: url.pathname,
-        header: (name: string) => request.headers[name.toLowerCase()],
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
       });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
       registry.middleware()(request as never, response as never, () => {
         response.statusCode = 404;
         response.end();
@@ -303,6 +303,18 @@ describe("SshRouteRegistry", () => {
         }).then((response) => response.status),
         404,
       );
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}/__srv/stale-route/assets/app.js`, {
+          headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+        }).then((response) => response.text()),
+        "/assets/app.js",
+      );
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}/__srv/stale-route/assets/app.js`).then(
+          (response) => response.status,
+        ),
+        404,
+      );
       const upgradeResponse = await sendWebsocketUpgrade(
         proxyPort,
         `/__srv/${route.id}/ws/events`,
@@ -316,6 +328,27 @@ describe("SshRouteRegistry", () => {
       assert.equal(upgradedHeaders?.origin, undefined);
       assert.equal(upgradedHeaders?.[USER_EMAIL_HEADER], undefined);
       assert.match(upgradeResponse, /^HTTP\/1\.1 101 Switching Protocols/);
+      const staleUpgradeResponse = await sendWebsocketUpgrade(
+        proxyPort,
+        "/__srv/stale-route/ws/events",
+        undefined,
+        false,
+      );
+      assert.equal(upgradedPath, "/ws/events");
+      assert.match(staleUpgradeResponse, /^HTTP\/1\.1 101 Switching Protocols/);
+      await registry.add(session, {
+        ownerId: "other@databricks.com",
+        machineId: "sandbox-2",
+        remoteHost: "127.0.0.1",
+        remotePort,
+        path: "/sandbox/sandbox-2/terminal",
+        browserRelay: true,
+      });
+      assert.equal(
+        await sendWebsocketUpgrade(proxyPort, "/__srv/ambiguous-stale/ws/events", undefined, false),
+        "closed",
+      );
+      assert.equal(upgradeHandled, false);
     } finally {
       await registry.close();
       remoteWebSockets.close();
@@ -383,6 +416,10 @@ async function sendWebsocketUpgrade(
       clearTimeout(timer);
       reject(error);
     });
+    socket.once("close", () => {
+      clearTimeout(timer);
+      resolve("closed");
+    });
     socket.once("connect", () => {
       socket.write(
         [
@@ -393,7 +430,6 @@ async function sendWebsocketUpgrade(
           "Origin: http://127.0.0.1",
           "Sec-Fetch-Site: same-origin",
           "Authorization: Bearer front-door-token",
-          `${USER_EMAIL_HEADER}: reggie.pierce@databricks.com`,
           "Sec-WebSocket-Version: 13",
           "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
           ...(cookie ? [`Cookie: ${cookie}`] : []),

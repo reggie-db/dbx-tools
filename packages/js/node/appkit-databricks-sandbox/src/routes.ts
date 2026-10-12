@@ -138,11 +138,11 @@ export class SshRouteRegistry {
         response.end();
         return;
       }
-      if (match.stripPrefix) rewriteRequestUrl(request, match.stripPrefix);
       const injectHead =
         request.method === "GET" && request.path === `${match.entry.route.path}/`
           ? match.entry.htmlHead
           : undefined;
+      if (match.stripPrefix) rewriteRequestUrl(request, match.stripPrefix);
       if (injectHead) {
         request.headers["accept-encoding"] = "identity";
         this.responseHeadInjections.set(request, injectHead);
@@ -163,7 +163,7 @@ export class SshRouteRegistry {
     const requestUser =
       headerValue(request.headers[USER_ID_HEADER]) ??
       headerValue(request.headers[USER_EMAIL_HEADER]);
-    const match = this.match(url.pathname, request.headers, requestUser);
+    const match = this.match(url.pathname, request.headers, requestUser, true);
     if (!match) return false;
     if (match.stripPrefix) rewriteIncomingUrl(request, match.stripPrefix, url.pathname);
     proxyWebSocket(request, socket, head, match.entry, this.websocketServer);
@@ -228,6 +228,7 @@ export class SshRouteRegistry {
     path: string,
     headers: IncomingMessage["headers"],
     requestUser: string | undefined,
+    allowHeaderlessStaleBrowserRelay = false,
   ): RouteMatch | undefined {
     const direct = [...this.routes.values()]
       .filter((entry) => path === entry.route.path || path.startsWith(`${entry.route.path}/`))
@@ -248,6 +249,15 @@ export class SshRouteRegistry {
         (!requestUser || requestUser === entry.ownerId),
     );
     if (browserRelay) return { entry: browserRelay, stripPrefix: browserRelay.browserRelayPath };
+    const staleBrowserRelayPath = browserRelayRequestPath(path);
+    if (staleBrowserRelayPath && (requestUser || allowHeaderlessStaleBrowserRelay)) {
+      const ownedBrowserRelays = [...this.routes.values()].filter(
+        (entry) => entry.browserRelayPath && (!requestUser || entry.ownerId === requestUser),
+      );
+      if (ownedBrowserRelays.length === 1) {
+        return { entry: ownedBrowserRelays[0]!, stripPrefix: staleBrowserRelayPath };
+      }
+    }
     return [...this.routes.values()]
       .filter((entry) => !requestUser || requestUser === entry.ownerId)
       .filter((entry) => entry.browserPaths.some((alias) => pathMatches(path, alias)))
@@ -333,6 +343,12 @@ function routeRedirectUrl(url: string, routePath: string): string {
 
 function browserRelayPath(routeId: string): string {
   return `/__srv/${routeId}`;
+}
+
+function browserRelayRequestPath(path: string): string | undefined {
+  const segments = path.split("/");
+  const routeId = segments[2];
+  return segments[1] === "__srv" && routeId ? `/__srv/${routeId}` : undefined;
 }
 
 function sendBrowserRelayBootstrap(response: Response, routePath: string, routeId: string): void {
