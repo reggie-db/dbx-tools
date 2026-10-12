@@ -4,7 +4,10 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import express from "express";
-import { createClientDevelopmentProxy } from "../src/_client-development.ts";
+import {
+  CLIENT_DEVELOPMENT_CONFIG_PATH,
+  createClientDevelopmentProxy,
+} from "../src/_client-development.ts";
 
 const PROTECTED_HEADER = "x-test-protected";
 const SESSION_COOKIE = "session=allowed";
@@ -20,7 +23,7 @@ before(async () => {
     fetch: (request, server) => {
       const url = new URL(request.url);
       if (url.pathname === "/_bun/hmr" && server.upgrade(request)) return;
-      return new Response(`proxied:${url.pathname}`, {
+      return new Response("<!doctype html><html><body><main>client</main></body></html>", {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     },
@@ -36,7 +39,17 @@ before(async () => {
       headers.get("cookie")?.includes(SESSION_COOKIE) ? "user@databricks.com" : undefined,
   });
   developmentProxy.configure(app);
-  app.use((_request, response) => response.status(401).send("auth gate"));
+  app.use((request, response) => {
+    if (request.path === CLIENT_DEVELOPMENT_CONFIG_PATH) {
+      response.send(`<!doctype html><html><body>
+        <script id="__appkit__" type="application/json">{"plugins":{"mastra":{"basePath":"/api/mastra"}}}</script>
+        <script>window.__appkit__ = JSON.parse(document.getElementById("__appkit__")?.textContent || "{}");</script>
+        <main>static</main>
+      </body></html>`);
+      return;
+    }
+    response.status(401).send("auth gate");
+  });
   appServer = app.listen(0, "127.0.0.1");
   await once(appServer, "listening");
   developmentProxy.attach(appServer);
@@ -55,7 +68,10 @@ describe("development client proxy", () => {
     });
 
     assert.equal(response.status, 200);
-    assert.equal(await response.text(), "proxied:/chat");
+    const html = await response.text();
+    assert.match(html, /<main>client<\/main>/);
+    assert.match(html, /<script id="__appkit__"/);
+    assert.match(html, /"basePath":"\/api\/mastra"/);
   });
 
   it("leaves protected HTML requests for the auth gate", async () => {
@@ -77,7 +93,7 @@ describe("development client proxy", () => {
     });
 
     assert.equal(response.status, 200);
-    assert.equal(await response.text(), "proxied:/chat");
+    assert.match(await response.text(), /"basePath":"\/api\/mastra"/);
   });
 
   it("proxies local HMR upgrades", async () => {

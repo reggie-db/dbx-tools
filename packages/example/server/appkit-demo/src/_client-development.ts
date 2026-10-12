@@ -11,6 +11,8 @@ import ProxyModule from "http-proxy-3";
 
 const BUN_PATH_PREFIX = "/_bun/";
 const BUN_HMR_PATH = "/_bun/hmr";
+export const CLIENT_DEVELOPMENT_CONFIG_PATH = "/__dbx_tools_appkit_client_config__";
+const APPKIT_CONFIG_HEADER = "x-dbx-tools-appkit-client-config";
 
 type UpgradeSocket = Socket & { destroySoon?: () => void };
 
@@ -26,6 +28,8 @@ export function createClientDevelopmentProxy(
   authGate?: Pick<AuthGateApi, "isProtectedHost" | "session">,
 ): ClientDevelopmentProxy {
   const targetUrl = new URL(target);
+  let appkitOrigin: string | undefined;
+  let configScripts: Promise<string> | undefined;
   const proxy = ProxyModule.createProxyServer({
     target: targetUrl.origin,
     changeOrigin: true,
@@ -34,6 +38,13 @@ export function createClientDevelopmentProxy(
 
   const configure = (application: Application) => {
     application.use((request: Request, response: Response, next: NextFunction) => {
+      if (
+        request.path === CLIENT_DEVELOPMENT_CONFIG_PATH &&
+        request.header(APPKIT_CONFIG_HEADER) === "1"
+      ) {
+        next();
+        return;
+      }
       if (!shouldProxyRequest(request)) {
         next();
         return;
@@ -41,10 +52,43 @@ export function createClientDevelopmentProxy(
       void canProxy(request)
         .then((allowed) => {
           if (!allowed) next();
-          else proxy.web(request, response, (error) => next(error));
+          else if (request.path.startsWith(BUN_PATH_PREFIX)) {
+            proxy.web(request, response, (error) => next(error));
+          } else {
+            void serveHtml(request, response).catch(next);
+          }
         })
         .catch(next);
     });
+  };
+
+  const appkitConfigScripts = async (): Promise<string> => {
+    if (!appkitOrigin) throw new Error("AppKit server is not attached");
+    const response = await fetch(`${appkitOrigin}${CLIENT_DEVELOPMENT_CONFIG_PATH}`, {
+      headers: {
+        Accept: "text/html",
+        [APPKIT_CONFIG_HEADER]: "1",
+      },
+    });
+    if (!response.ok) throw new Error(`AppKit config HTML returned ${response.status}`);
+    return extractAppKitConfigScripts(await response.text());
+  };
+
+  const serveHtml = async (request: Request, response: Response): Promise<void> => {
+    const upstream = await fetch(new URL(request.originalUrl, targetUrl), {
+      headers: { Accept: "text/html" },
+    });
+    const html = await upstream.text();
+    configScripts ??= appkitConfigScripts().catch((error) => {
+      configScripts = undefined;
+      throw error;
+    });
+    const body = injectAppKitConfig(html, await configScripts);
+    response.status(upstream.status);
+    response.set("Content-Type", upstream.headers.get("content-type") ?? "text/html; charset=utf-8");
+    response.set("Cache-Control", "no-store");
+    if (request.method === "HEAD") response.end();
+    else response.send(body);
   };
 
   const canProxy = async (request: IncomingMessage): Promise<boolean> => {
@@ -54,6 +98,9 @@ export function createClientDevelopmentProxy(
   };
 
   const attach = (server: HttpServer) => {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("AppKit server is not listening");
+    appkitOrigin = `http://127.0.0.1:${address.port}`;
     const upgrade = (request: IncomingMessage, socket: Socket, head: Buffer) => {
       const upgradeSocket = socket as UpgradeSocket;
       upgradeSocket.destroySoon ??= () => upgradeSocket.end();
@@ -75,6 +122,23 @@ export function createClientDevelopmentProxy(
   };
 
   return { configure, attach };
+}
+
+function extractAppKitConfigScripts(html: string): string {
+  const firstStart = html.indexOf('<script id="__appkit__"');
+  if (firstStart < 0) throw new Error("AppKit config script is missing");
+  const firstEnd = html.indexOf("</script>", firstStart);
+  const secondStart = html.indexOf("<script", firstEnd + 9);
+  const secondEnd = html.indexOf("</script>", secondStart);
+  if (firstEnd < 0 || secondStart < 0 || secondEnd < 0) {
+    throw new Error("AppKit config bootstrap is incomplete");
+  }
+  return html.slice(firstStart, secondEnd + 9);
+}
+
+function injectAppKitConfig(html: string, scripts: string): string {
+  if (!html.includes("<body>")) throw new Error("Bun client HTML has no body element");
+  return html.replace("<body>", `<body>${scripts}`);
 }
 
 function shouldProxyRequest(request: Request): boolean {
