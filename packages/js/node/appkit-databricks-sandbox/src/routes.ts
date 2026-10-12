@@ -1,11 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { rm } from "node:fs/promises";
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
-import { USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
+import { PassThrough, Readable } from "node:stream";
+import { ACCESS_TOKEN_HEADER, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
 import { log } from "@dbx-tools/shared-core";
 import type { SshRoute } from "@dbx-tools/shared-databricks-sandbox";
 import type { NextFunction, Request, Response } from "express";
@@ -27,6 +27,7 @@ interface RouteInput {
   browserPaths?: string[];
   browserRelay?: boolean;
   redirectToSlash?: boolean;
+  htmlHead?: string;
 }
 
 interface RouteTarget {
@@ -39,6 +40,7 @@ interface RouteTarget {
   browserPaths: string[];
   browserRelayPath?: string;
   redirectToSlash: boolean;
+  htmlHead?: string;
 }
 
 interface RouteMatch {
@@ -50,6 +52,7 @@ interface RouteMatch {
 export class SshRouteRegistry {
   private readonly routes = new Map<string, RouteTarget>();
   private readonly activeBrowserRoutes = new Map<string, string>();
+  private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
   private readonly websocketServer = new WebSocketServer({ noServer: true });
 
@@ -63,6 +66,12 @@ export class SshRouteRegistry {
       });
       if ("writeHead" in response && !response.headersSent) response.writeHead(502);
       if ("end" in response) response.end("SSH route unavailable");
+    });
+    this.proxy.on("proxyRes", (proxyResponse, request, response) => {
+      const head = this.responseHeadInjections.get(request);
+      if (!head) return;
+      this.responseHeadInjections.delete(request);
+      void injectHtmlHead(proxyResponse, response, head);
     });
   }
 
@@ -89,6 +98,7 @@ export class SshRouteRegistry {
       browserPaths: normalizeBrowserPaths(input.browserPaths),
       ...(input.browserRelay ? { browserRelayPath: browserRelayPath(prepared.route.id) } : {}),
       redirectToSlash: input.redirectToSlash ?? false,
+      ...(input.htmlHead ? { htmlHead: input.htmlHead } : {}),
     });
     return prepared.route;
   }
@@ -134,7 +144,21 @@ export class SshRouteRegistry {
         return;
       }
       if (match.stripPrefix) rewriteRequestUrl(request, match.stripPrefix);
-      this.proxy.web(request, response, { target: match.entry.target!, changeOrigin: true });
+      const injectHead =
+        request.method === "GET" && request.path === `${match.entry.route.path}/`
+          ? match.entry.htmlHead
+          : undefined;
+      if (injectHead) {
+        request.headers["accept-encoding"] = "identity";
+        this.responseHeadInjections.set(request, injectHead);
+      }
+      const replayBody = replayParsedJsonBody(request);
+      this.proxy.web(request, response, {
+        target: match.entry.target!,
+        changeOrigin: true,
+        selfHandleResponse: Boolean(injectHead),
+        ...(replayBody ? { buffer: replayBody } : {}),
+      });
     };
   }
 
@@ -184,7 +208,8 @@ export class SshRouteRegistry {
       }
       if (
         Boolean(input.browserRelay) !== Boolean(previous.browserRelayPath) ||
-        (input.redirectToSlash ?? false) !== previous.redirectToSlash
+        (input.redirectToSlash ?? false) !== previous.redirectToSlash ||
+        input.htmlHead !== previous.htmlHead
       ) {
         throw new Error(`SSH route path ${path} already has different browser behavior`);
       }
@@ -239,6 +264,45 @@ export class SshRouteRegistry {
           Boolean(referer && pathMatches(refererPath(referer) ?? "", entry.route.path)),
       )
       .map((entry) => ({ entry }))[0];
+  }
+}
+
+function replayParsedJsonBody(request: Request): Readable | undefined {
+  if (!request.readableEnded || request.body === undefined) return undefined;
+  if (!request.header("content-type")?.toLowerCase().includes("json")) return undefined;
+  const body = Buffer.from(JSON.stringify(request.body));
+  request.headers["content-length"] = String(body.byteLength);
+  delete request.headers["transfer-encoding"];
+  return Readable.from(body);
+}
+
+async function injectHtmlHead(
+  proxyResponse: IncomingMessage,
+  response: ServerResponse,
+  head: string,
+): Promise<void> {
+  try {
+    const chunks: Buffer[] = [];
+    for await (const chunk of proxyResponse) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const source = Buffer.concat(chunks).toString("utf8");
+    const body = source.includes("</head>") ? source.replace("</head>", `${head}</head>`) : source;
+    for (const [name, value] of Object.entries(proxyResponse.headers)) {
+      if (value === undefined || name === "content-length" || name === "transfer-encoding") continue;
+      response.setHeader(name, value);
+    }
+    response.statusCode = proxyResponse.statusCode ?? 200;
+    if (proxyResponse.statusMessage) response.statusMessage = proxyResponse.statusMessage;
+    response.setHeader("content-length", Buffer.byteLength(body));
+    response.end(body);
+  } catch (error) {
+    logger.warn("SSH route HTML injection failed", {
+      errorName: error instanceof Error ? error.name : undefined,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    if (!response.headersSent) response.writeHead(502);
+    response.end("SSH route unavailable");
   }
 }
 
@@ -460,13 +524,24 @@ function websocketUpstreamHeaders(
   headers: IncomingMessage["headers"],
 ): Record<string, string | string[]> {
   const excluded = new Set([
+    "authorization",
     "connection",
+    "cookie",
     "host",
+    "origin",
+    "referer",
+    "sec-fetch-dest",
+    "sec-fetch-mode",
+    "sec-fetch-site",
+    "sec-fetch-user",
     "sec-websocket-extensions",
     "sec-websocket-key",
     "sec-websocket-protocol",
     "sec-websocket-version",
     "upgrade",
+    ACCESS_TOKEN_HEADER,
+    USER_EMAIL_HEADER,
+    USER_ID_HEADER,
   ]);
   return Object.fromEntries(
     Object.entries(headers).filter(

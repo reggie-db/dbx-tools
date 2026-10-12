@@ -1,10 +1,17 @@
 import type { SshCommandResult, SshMachineServiceKind } from "@dbx-tools/shared-databricks-sandbox";
 import type { SshSession } from "./session.ts";
 
-const DINOTTY_VERSION = "0.25.1";
+const DINOTTY_VERSION = "0.29.0";
 const GLANCES_VERSION = "4.5.6";
 const DINOTTY_PORT = 7681;
 const GLANCES_PORT = 61208;
+const GLANCES_VIEWPORT_HEAD = `<style id="dbx-tools-glances-viewport">
+html,body,#app{width:100%;height:100%;height:100dvh;min-height:0;overflow:hidden}
+body{margin:0}
+#app>main{display:flex;width:100%;height:100%;min-height:0;flex-direction:column;overflow:hidden}
+.bottom{min-height:0;flex:1;overflow:hidden}.bottom>.row{height:100%;min-height:0}.bottom .col{height:100%;min-height:0;overflow:auto}
+.sidebar-min,.sidebar-max{height:100%!important;min-height:0!important}
+</style>`;
 
 /** Loopback service endpoint and routing behavior discovered after remote startup. */
 export interface SshServiceTarget {
@@ -14,6 +21,7 @@ export interface SshServiceTarget {
   browserPaths?: string[];
   browserRelay?: boolean;
   redirectToSlash?: boolean;
+  htmlHead?: string;
 }
 
 /** Starts an idempotent built-in browser service on an SSH machine. */
@@ -36,8 +44,6 @@ export async function ensureSshService(
         stripPrefix: true,
         browserRelay: true,
         browserPaths: [
-          "/api",
-          "/ws",
           "/assets",
           "/icons",
           "/manifest.json",
@@ -51,6 +57,7 @@ export async function ensureSshService(
         remotePort: GLANCES_PORT,
         stripPrefix: false,
         redirectToSlash: true,
+        htmlHead: GLANCES_VIEWPORT_HEAD,
       };
 }
 
@@ -71,8 +78,17 @@ runtime="$HOME/.dbx-tools/runtime"
 bin="$runtime/bin/dinotty-server"
 pid_file="$runtime/dinotty.pid"
 log_file="$runtime/dinotty.log"
+version_file="$runtime/dinotty.version"
 mkdir -p "$runtime/bin" "$HOME/.config/dinotty"
-if [ ! -x "$bin" ]; then
+if [ ! -x "$bin" ] || [ ! -f "$version_file" ] || [ "$(cat "$version_file")" != "${DINOTTY_VERSION}" ]; then
+  if [ -s "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+    kill "$(cat "$pid_file")"
+    for _ in $(seq 1 40); do
+      kill -0 "$(cat "$pid_file")" 2>/dev/null || break
+      sleep 0.25
+    done
+  fi
+  rm -f "$pid_file"
   DINOTTY_VERSION=${DINOTTY_VERSION} DINOTTY_DESTINATION="$bin" python3 - <<'PY'
 import io
 import os
@@ -116,6 +132,7 @@ with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as archive:
     temporary.chmod(temporary.stat().st_mode | stat.S_IXUSR)
     os.replace(temporary, destination)
 PY
+  printf '%s\n' "${DINOTTY_VERSION}" >"$version_file"
 fi
 python3 - <<'PY'
 import json
