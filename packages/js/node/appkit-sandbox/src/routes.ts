@@ -144,10 +144,7 @@ export class SshRouteRegistry {
     });
   }
 
-  private async addUnlocked(
-    session: SshSession,
-    input: RouteInput,
-  ): Promise<SshForwardedRoute> {
+  private async addUnlocked(session: SshSession, input: RouteInput): Promise<SshForwardedRoute> {
     const prepared = this.prepare(input);
     if (prepared.previous) {
       const previous = prepared.previous;
@@ -328,14 +325,7 @@ export class SshRouteRegistry {
     if (!match) return false;
     if (!(await ownerIsAuthorized(match.entry, requestUser))) return false;
     if (match.stripPrefix) request.url = outboundPath(request.url, match.stripPrefix);
-    proxyWebSocket(
-      request,
-      socket,
-      head,
-      match.entry,
-      requestUser!,
-      this.forwardingReadyTimeoutMs,
-    );
+    proxyWebSocket(request, socket, head, match.entry, requestUser!, this.forwardingReadyTimeoutMs);
     return true;
   }
 
@@ -779,9 +769,7 @@ function bridgeSocket(
         logger.warn("SSH route forwarding channel failed", {
           error: errorUtils.toError(error),
         });
-        socket.end(
-          "HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
-        );
+        socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
       }
       pending.destroy();
       if (timedOut || socket.destroyed) socket.destroy();

@@ -3,9 +3,9 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Duplex, PassThrough } from "node:stream";
+import { exec } from "@dbx-tools/core";
 import type { Client as Ssh2Client, ClientChannel } from "ssh2";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { exec } from "@dbx-tools/core";
 import {
   createSshTransport,
   PooledSshTransport,
@@ -758,9 +758,8 @@ class TestPooledTransport extends PooledSshTransport<TestPoolResource> {
   constructor(
     lifecycle: SshResourceLifecycle<TestPoolResource>,
     options: { acquireTimeoutMillis?: number } = {},
-    private readonly connectResource: (
-      resource: TestPoolResource,
-    ) => Promise<Duplex> = async () => new PassThrough(),
+    private readonly connectResource: (resource: TestPoolResource) => Promise<Duplex> = async () =>
+      new PassThrough(),
   ) {
     super(lifecycle, {
       acquireTimeoutMillis: options.acquireTimeoutMillis ?? 1_000,
@@ -920,7 +919,10 @@ async function temporaryDirectory(prefix: string): Promise<string> {
   return directory;
 }
 
-async function waitUntil(condition: () => boolean | Promise<boolean>, timeoutMs = 1_000): Promise<void> {
+async function waitUntil(
+  condition: () => boolean | Promise<boolean>,
+  timeoutMs = 1_000,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!(await condition())) {
     if (Date.now() >= deadline) throw new Error("condition was not met before timeout");

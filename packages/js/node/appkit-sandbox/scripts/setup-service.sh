@@ -42,7 +42,8 @@ operation_log="$operation_directory/lifecycle.log"
 operation_status="$operation_directory/lifecycle.status"
 operation_attempt="$operation_directory/lifecycle.attempt"
 config_digest=$(printf '%s' "$toml_base64" | base64 -d | sha256sum | awk '{print $1}')
-operation_key="$task:$install:$config_digest"
+runner_version=2
+operation_key="$runner_version:$task:$install:$config_digest"
 maximum_attempts=2
 mkdir -p "$operation_directory"
 
@@ -141,8 +142,7 @@ while :; do
   fi
 
   install_marker="$service_directory/.dbx-tools-install.sha256"
-  if [ "$task" = start ] && [ "$install" = true ] &&
-    [ "$(cat "$install_marker" 2>/dev/null || true)" != "$config_digest" ]; then
+  if [ "$task" = start ] && [ "$install" = true ]; then
     if ! (cd "$service_directory" && "$mise_bin" install) >>"$operation_log" 2>&1; then
       record_result error
       rm -rf -- "$service_directory"
@@ -155,6 +155,7 @@ while :; do
   fi
 
   if ! (cd "$service_directory" && "$mise_bin" run "$task") >>"$operation_log" 2>&1; then
+    rm -f -- "$install_marker"
     record_result error
     release_operation_lock
     continue

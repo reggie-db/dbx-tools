@@ -12,7 +12,7 @@ const DEFAULT_HEALTH_CHECK_FAILURES = 2;
 
 /** Handle used to stop a supervised child and its restart loop. */
 export interface ProcessSupervisor {
-  stop(): void;
+  stop(): Promise<void>;
 }
 
 type ProcessOutcome = {
@@ -46,29 +46,31 @@ export interface ProcessSupervisorOptions {
 export function superviseProcessForever(options: ProcessSupervisorOptions): ProcessSupervisor {
   const controller = new AbortController();
   let child: ChildProcessResult | undefined;
+  let stopping: Promise<void> | undefined;
 
-  const terminateChild = () => {
+  const terminateChild = (): Promise<void> => {
     const stoppingChild = child;
-    if (!stoppingChild) return;
-    void stoppingChild.shutdown().catch((error) =>
+    if (!stoppingChild) return Promise.resolve();
+    stopping ??= stoppingChild.shutdown().catch((error) => {
       options.logger.error(`${options.name} did not stop`, {
         error: errorUtils.toError(error),
-      }),
-    );
+      });
+    });
+    return stopping;
   };
 
   const abortRestartLoop = () => {
     if (!controller.signal.aborted) controller.abort();
   };
 
-  const stop = () => {
+  const stop = async () => {
     abortRestartLoop();
-    terminateChild();
+    await terminateChild();
     stopParentSignal();
     process.off("exit", onProcessExit);
   };
   const onProcessExit = () => {
-    terminateChild();
+    void terminateChild();
   };
   process.once("exit", onProcessExit);
   const stopParentSignal = exec.onParentTerminationSignal(() => {
@@ -82,6 +84,7 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
       let outcome: ProcessOutcome;
       try {
         child = options.start();
+        stopping = undefined;
         outcome = await processOutcome(child, controller.signal, options);
       } catch (error) {
         outcome = { error: errorUtils.toError(error) };

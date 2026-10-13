@@ -858,6 +858,22 @@ describe("managed Sandbox ownership", () => {
     assert.equal(closeCount, 1);
   });
 
+  it("does not wait for high-level restore work during shutdown", async () => {
+    const ssh = runtime(new MemoryOwnershipStore());
+    const never = new Promise<void>(() => undefined);
+    (ssh as unknown as { machineSetup: Map<string, Promise<void>> }).machineSetup.set(
+      "pending",
+      never,
+    );
+
+    await Promise.race([
+      ssh.close(),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(() => reject(new Error("runtime shutdown blocked")), 100),
+      ),
+    ]);
+  });
+
   it("returns a live command before runtime session setup completes", async () => {
     const now = Date.now();
     const managedName = createSandboxName("00112233");

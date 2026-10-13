@@ -120,6 +120,7 @@ export class SshRuntime {
   private readonly machineEpochs = new Map<string, number>();
   private readonly ownerEpochs = new Map<string, number>();
   private readonly machineSetup = new Map<string, Promise<void>>();
+  private readonly shutdownController = new AbortController();
   private reaperTimer?: ReturnType<typeof setInterval>;
   private reaping?: Promise<SandboxReaperResult>;
   private closing?: Promise<void>;
@@ -165,17 +166,18 @@ export class SshRuntime {
    * preventing AppKit startup.
    */
   async startReaper(client: WorkspaceClient): Promise<SandboxReaperResult> {
+    const signal = this.shutdownController.signal;
     if (this.config.reaperIntervalSeconds > 0 && !this.reaperTimer) {
       this.reaperTimer = setInterval(() => {
-        void this.reapMachines(client).catch((error) => {
+        void this.reapMachines(client, signal).catch((error) => {
           logger.warn("Sandbox reaper failed", authErrorMetadata(errorUtils.toError(error)));
         });
       }, this.config.reaperIntervalSeconds * 1_000);
       this.reaperTimer.unref?.();
     }
     try {
-      const result = await this.reapMachines(client);
-      await this.restoreRunningProjects(client);
+      const result = await this.reapMachines(client, signal);
+      await this.restoreRunningProjects(client, signal);
       return result;
     } catch (error) {
       logger.warn(
@@ -938,6 +940,7 @@ export class SshRuntime {
   /** Stops the reaper and closes sessions, routes, service state, and ownership resources. */
   close(): Promise<void> {
     this.closed = true;
+    this.abortActiveOperations();
     this.routes.beginShutdown();
     this.closing ??= this.closeResources();
     return this.closing;
@@ -946,21 +949,22 @@ export class SshRuntime {
   private async closeResources(): Promise<void> {
     if (this.reaperTimer) clearInterval(this.reaperTimer);
     this.reaperTimer = undefined;
-    const pendingConnections = [...this.connecting.values()];
-    const pendingOperations = [
+    const pendingOperations: Promise<unknown>[] = [
+      ...this.connecting.values(),
       ...this.startingServices.values(),
       ...this.machineSetup.values(),
       ...this.machineTransitions.values(),
     ];
+    if (this.reaping) pendingOperations.push(this.reaping);
+    pendingOperations.forEach((operation) => void operation.catch(() => undefined));
     this.connecting.clear();
     this.startingServices.clear();
     this.machineSetup.clear();
     this.machineTransitions.clear();
     try {
-      await this.reaping?.catch(() => undefined);
       await this.routes.close();
-      await Promise.all([...this.sessions.values()].map((session) => session.close()));
-      await Promise.allSettled([...pendingConnections, ...pendingOperations]);
+      const sessionClosures = [...this.sessions.values()].map((session) => session.close());
+      void Promise.allSettled(sessionClosures);
       this.sessions.clear();
       this.services.clear();
       this.projectStates.clear();
@@ -971,6 +975,11 @@ export class SshRuntime {
     } finally {
       this.stopParentTerminationSignal();
     }
+  }
+
+  /** Aborts request, reaper, restore, and command work before resource teardown. */
+  abortActiveOperations(): void {
+    if (!this.shutdownController.signal.aborted) this.shutdownController.abort();
   }
 
   private async assertAssigned(
@@ -1161,6 +1170,9 @@ export class SshRuntime {
     signal?: AbortSignal,
   ): Promise<SshSession> {
     if (this.closed) throw new Error("SSH runtime is closed");
+    const operationSignal = signal
+      ? AbortSignal.any([signal, this.shutdownController.signal])
+      : this.shutdownController.signal;
     const api = new DatabricksSandboxClient(client);
     const key = sessionKey(api.workspaceScope(), userId, machine.sandboxId);
     this.assertRuntimeEpoch(api.workspaceScope(), userId, machine.sandboxId, epoch);
@@ -1168,7 +1180,7 @@ export class SshRuntime {
     if (existing) return existing;
     const pending = this.connecting.get(key);
     if (pending) return pending;
-    const connection = this.createSession(api, userId, machine, signal);
+    const connection = this.createSession(api, userId, machine, operationSignal);
     this.connecting.set(key, connection);
     let session: SshSession | undefined;
     try {
@@ -1189,11 +1201,15 @@ export class SshRuntime {
     }
   }
 
-  private async restoreRunningProjects(client: WorkspaceClient): Promise<void> {
+  private async restoreRunningProjects(
+    client: WorkspaceClient,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    signal?.throwIfAborted();
     const api = new DatabricksSandboxClient(client);
     const workspaceScope = api.workspaceScope();
     const [entries, assignments, projects, serviceProjects] = await Promise.all([
-      api.list(),
+      api.list(signal),
       this.ownershipStore().listAssignments(workspaceScope),
       this.ownershipStore().listProjects(workspaceScope),
       this.ownershipStore().listMachineServiceProjects(workspaceScope),
@@ -1225,7 +1241,7 @@ export class SshRuntime {
       });
     }
     const projectRestores = [...owners.values()].map(({ userId, machine }) =>
-      this.restoreMachineProjects(client, api, userId, machine).catch((error) => {
+      this.restoreMachineProjects(client, api, userId, machine, signal).catch((error) => {
         logger.warn("Sandbox project restoration failed", {
           userId,
           machineId: machine.sandboxId,
@@ -1244,10 +1260,15 @@ export class SshRuntime {
       );
       if (!machine || normalizeStatus(machine.status) !== "running" || !assignment) return [];
       return [
-        this.ensureServiceReady(client, assignment.userId, {
-          machineId: project.machineId,
-          service: project.serviceKind,
-        }).catch((error) => {
+        this.ensureServiceReady(
+          client,
+          assignment.userId,
+          {
+            machineId: project.machineId,
+            service: project.serviceKind,
+          },
+          signal,
+        ).catch((error) => {
           logger.warn("Sandbox machine service restoration failed", {
             userId: assignment.userId,
             machineId: project.machineId,

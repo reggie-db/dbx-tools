@@ -57,7 +57,7 @@ export type TunnelTransport = z.infer<typeof TunnelTransportSchema>;
 export type TunnelInterceptorOptions = z.input<typeof TunnelInterceptorOptionsSchema>;
 
 interface TunnelAuxiliary {
-  stop(): void;
+  stop(): void | Promise<void>;
 }
 
 interface TunnelRuntime {
@@ -87,9 +87,8 @@ const defaultRuntime: TunnelRuntime = {
     const configPath = await writeFrpConfig(config, frpEnv);
     const supervisor = superviseFrp(config, frpEnv, configPath);
     return {
-      stop() {
-        supervisor.stop();
-        void pathProxy?.close();
+      async stop() {
+        await Promise.all([supervisor.stop(), pathProxy?.close()]);
       },
     };
   },
@@ -167,12 +166,16 @@ export function tunnelInterceptor(
     if (!initializers.length) return;
     const auxiliaries: TunnelAuxiliary[] = [];
     let stopped = false;
+    let stopping: Promise<void> | undefined;
     const stop = () => {
       stopped = true;
-      for (const auxiliary of auxiliaries) auxiliary.stop();
+      stopping ??= Promise.all(auxiliaries.map((auxiliary) => auxiliary.stop())).then(
+        () => undefined,
+      );
+      return stopping;
     };
     ctx.onLifecycle("shutdown", stop);
-    void Promise.allSettled(initializers).then((results) => {
+    void Promise.allSettled(initializers).then(async (results) => {
       for (const result of results) {
         if (result.status === "rejected") {
           logger.error("tunnel failed to start", {
@@ -180,7 +183,7 @@ export function tunnelInterceptor(
           });
           continue;
         }
-        if (stopped) result.value.stop();
+        if (stopped) await result.value.stop();
         else auxiliaries.push(result.value);
       }
       if (!stopped && auxiliaries.length) logger.info(`tunnel bound: ${transport} -> :${port}`);

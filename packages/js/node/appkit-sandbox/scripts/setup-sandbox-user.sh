@@ -108,6 +108,8 @@ migrate_directory "$legacy/projects" "$home/projects"
 migrate_directory "$legacy/.dbx-tools" "$home/.dbx-tools"
 migrate_directory "$legacy/.local" "$home/.local"
 migrate_directory "$legacy/.config" "$home/.config"
+chown -R --no-dereference "$user:$group" "$home/projects" "$home/.dbx-tools"
+chmod 0750 "$home/projects" "$home/.dbx-tools"
 find "$home/.dbx-tools" -type f -name '*.pid' -delete
 find "$home/.dbx-tools/operations" -type d -name lifecycle.lock -prune -exec rm -rf -- {} +
 

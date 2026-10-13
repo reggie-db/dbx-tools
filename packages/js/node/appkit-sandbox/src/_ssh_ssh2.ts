@@ -64,8 +64,7 @@ export class Ssh2Transport extends PooledSshTransport<Ssh2Resource> {
         fail(error);
       };
       timeout = setTimeout(
-        () =>
-          fail(new Error(`ssh2 forwarding did not open within ${this.connectTimeoutMs}ms`)),
+        () => fail(new Error(`ssh2 forwarding did not open within ${this.connectTimeoutMs}ms`)),
         this.connectTimeoutMs,
       );
       timeout.unref?.();

@@ -25,9 +25,9 @@ const parentBoundNativeOpenSshProcesses = new WeakSet<ChildProcessResult>();
 let stopParentTerminationSignal: (() => void) | undefined;
 let processExitHookInstalled = false;
 /** @internal JavaScript watchdog that terminates one child when its parent pipe closes. */
-export const OPENSSH_PARENT_WATCH_SOURCE = stringUtils.dedent(
-  // ============================================================================
-  /*js*/`
+export const OPENSSH_PARENT_WATCH_SOURCE =
+  stringUtils.dedent(// ============================================================================
+  /*js*/ `
     const { spawn } = require("node:child_process");
 
     const child = spawn(process.argv[1], process.argv.slice(2), {
@@ -51,9 +51,8 @@ export const OPENSSH_PARENT_WATCH_SOURCE = stringUtils.dedent(
       process.stdin.pause();
       process.exit(code ?? (signal ? 1 : 0));
     });
-  `,
-  // ============================================================================
-);
+  `);
+// ============================================================================
 
 /** One authenticated native OpenSSH ControlMaster resource. */
 export interface OpenSshResource {
@@ -382,12 +381,10 @@ async function waitForNativeOpenSshChild(
   let timeout: ReturnType<typeof setTimeout>;
   const timedOut = new Promise<never>((_resolve, reject) => {
     timeout = setTimeout(() => {
-      void child
-        .shutdown({ terminateTimeout: 0, killTimeout: 1_000 })
-        .then(
-          () => reject(new Error(`${operation} timed out after ${OPENSSH_HELPER_TIMEOUT_MS}ms`)),
-          (error) => reject(error),
-        );
+      void child.shutdown({ terminateTimeout: 0, killTimeout: 1_000 }).then(
+        () => reject(new Error(`${operation} timed out after ${OPENSSH_HELPER_TIMEOUT_MS}ms`)),
+        (error) => reject(error),
+      );
     }, OPENSSH_HELPER_TIMEOUT_MS);
     timeout.unref?.();
   });
@@ -415,8 +412,8 @@ function trackNativeOpenSshProcess(
   const untrack = () => {
     if (!tracked) return;
     tracked = false;
-    child.off("exit", untrack);
-    child.off("error", untrack);
+    void child.off("exit", untrack);
+    void child.off("error", untrack);
     activeNativeOpenSshProcesses.delete(child);
     if (activeNativeOpenSshProcesses.size === 0) {
       stopParentTerminationSignal?.();
@@ -425,8 +422,8 @@ function trackNativeOpenSshProcess(
       processExitHookInstalled = false;
     }
   };
-  child.once("exit", untrack);
-  child.once("error", untrack);
+  void child.once("exit", untrack);
+  void child.once("error", untrack);
   return child;
 }
 

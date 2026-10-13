@@ -346,6 +346,7 @@ const previousCwd = process.cwd();
 if (useAppKitVite) process.chdir(demoClientRoot);
 try {
   await appkit.createApp({
+    disableInternalTelemetry: true,
     plugins: [
       // AppKit's server plugin enables HTTP/Express tracing by default whenever
       // an exporter is active. This demo wants agent traces, not one trace per
@@ -353,7 +354,7 @@ try {
       // instrumentation is disabled.
       server({
         host,
-        telemetry: { traces: false, logs: false },
+        telemetry: false,
         ...(useAppKitVite ? {} : { staticPath: clientDist }),
       }),
       genie(),

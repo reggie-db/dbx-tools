@@ -497,6 +497,11 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     };
   }
 
+  /** Cancels reaper, restore, and command work before shutdown tears down resources. */
+  override abortActiveOperations(): void {
+    this.runtime.abortActiveOperations();
+  }
+
   /** Detaches WebSocket handling and closes the shared runtime. */
   async shutdown(): Promise<void> {
     if (this.upgradeAttachTimer) clearTimeout(this.upgradeAttachTimer);

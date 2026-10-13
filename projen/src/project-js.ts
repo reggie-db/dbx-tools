@@ -18,11 +18,7 @@ import type { ReleaseProjectOptions } from "projen/lib/release";
 import { generateBarrels, isGeneratedBarrel } from "./barrels.ts";
 
 import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
-import {
-  BUN_VERSION,
-  BUN_VERSION_CHECK_SCRIPT,
-  MINIMUM_BUN_VERSION,
-} from "./bun-workflow.ts";
+import { BUN_VERSION, BUN_VERSION_CHECK_SCRIPT, MINIMUM_BUN_VERSION } from "./bun-workflow.ts";
 import { codegenModulePaths, generateCodegen } from "./codegen.ts";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
 import { DEV_WATCH_SCRIPT, DEV_WATCH_TASK } from "./dev-watch.ts";
@@ -518,7 +514,7 @@ function configureRootBunRuntime(project: DBXToolsJavaScriptProject): void {
     lines: stringUtils
       .dedent(
         // ============================================================================
-        /*ts*/`
+        /*ts*/ `
           /** Minimum Bun version accepted by this workspace. */
           const MINIMUM_VERSION = ${JSON.stringify(MINIMUM_BUN_VERSION)};
 

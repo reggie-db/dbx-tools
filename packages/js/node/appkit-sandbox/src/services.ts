@@ -230,7 +230,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "terminal":
       return {
         fileName: "terminal.mise.toml",
-        definitionVersion: 6,
+        definitionVersion: 7,
         target: (path) => ({
           remoteHost: "127.0.0.1",
           remotePort: TTYD_PORT,

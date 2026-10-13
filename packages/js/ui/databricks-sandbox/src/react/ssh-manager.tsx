@@ -313,32 +313,28 @@ export function SshManager({ basePath, className }: SshManagerProps) {
   const manageProject = async (
     project: SshProject,
     action: ProjectConfirmation["action"],
-  ): Promise<boolean> => {
+  ): Promise<void> => {
     const operation = projectOperation(project.id, action);
     setOperationBusy(operation, true);
     setError(undefined);
     try {
       if (action === "reset") await client.resetProject(project.id);
       else await client.removeProject(project.id);
-      await refresh();
-      return true;
     } catch (caught) {
       setError(errorMessage(caught));
-      return false;
     } finally {
+      await refresh().catch(() => undefined);
       setOperationBusy(operation, false);
     }
   };
 
   /** Runs the project action selected in the confirmation dialog. */
-  const confirmProjectAction = async () => {
+  const confirmProjectAction = () => {
     if (!projectConfirmation) return;
-    const completed = await manageProject(projectConfirmation.project, projectConfirmation.action);
-    if (completed) setProjectConfirmation(undefined);
+    const confirmation = projectConfirmation;
+    setProjectConfirmation(undefined);
+    void manageProject(confirmation.project, confirmation.action);
   };
-  const projectConfirmationOperation = projectConfirmation
-    ? projectOperation(projectConfirmation.project.id, projectConfirmation.action)
-    : undefined;
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -871,9 +867,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
       <AlertDialog
         open={Boolean(projectConfirmation)}
         onOpenChange={(open) => {
-          if (!open && (!projectConfirmationOperation || !isBusy(projectConfirmationOperation))) {
-            setProjectConfirmation(undefined);
-          }
+          if (!open) setProjectConfirmation(undefined);
         }}
       >
         {displayedProjectConfirmation ? (
@@ -894,26 +888,15 @@ export function SshManager({ basePath, className }: SshManagerProps) {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel
-                disabled={Boolean(
-                  projectConfirmationOperation && isBusy(projectConfirmationOperation),
-                )}
-              >
-                Cancel
-              </AlertDialogCancel>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                disabled={Boolean(
-                  projectConfirmationOperation && isBusy(projectConfirmationOperation),
-                )}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={(event) => {
                   event.preventDefault();
-                  void confirmProjectAction();
+                  confirmProjectAction();
                 }}
               >
-                {projectConfirmationOperation && isBusy(projectConfirmationOperation) ? (
-                  <Spinner className="size-3.5" />
-                ) : displayedProjectConfirmation.action === "remove" ? (
+                {displayedProjectConfirmation.action === "remove" ? (
                   <Trash2Icon className="size-3.5" />
                 ) : (
                   <RefreshCwIcon className="size-3.5" />

@@ -123,10 +123,7 @@ export class SshKeyStore {
         if (!created) throw new Error("SSH key files were not published atomically");
         return created;
       } finally {
-        await Promise.all([
-          rm(stagedPrivate, { force: true }),
-          rm(stagedPublic, { force: true }),
-        ]);
+        await Promise.all([rm(stagedPrivate, { force: true }), rm(stagedPublic, { force: true })]);
       }
     });
   }

@@ -19,26 +19,26 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/express": "catalog:",
+    "@types/express": "^5.0.5",
     "@types/html-to-text": "^9",
     "@types/json-schema": "^7",
-    "@types/node": "catalog:",
+    "@types/node": "^24.6.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@databricks/appkit": "catalog:",
-    "@dbx-tools/appkit": "workspace:^",
-    "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/model": "workspace:^",
-    "@dbx-tools/path": "workspace:^",
-    "@dbx-tools/shared-core": "workspace:^",
-    "@dbx-tools/shared-model": "workspace:^",
-    "@mastra/core": "catalog:",
+    "@databricks/appkit": "0.81.0",
+    "@dbx-tools/appkit": "^0.9.124",
+    "@dbx-tools/core": "^0.9.124",
+    "@dbx-tools/model": "^0.9.124",
+    "@dbx-tools/path": "^0.9.124",
+    "@dbx-tools/shared-core": "^0.9.124",
+    "@dbx-tools/shared-model": "^0.9.124",
+    "@mastra/core": "1.71.0",
     "cheerio": "^1.2.0",
     "entities": "^4.5.0",
     "got-scraping": "^4.2.1",
     "html-to-text": "^9.0.5",
-    "zod": "catalog:"
+    "zod": "4.3.6"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

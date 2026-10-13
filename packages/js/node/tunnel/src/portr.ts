@@ -206,7 +206,7 @@ export function supervisePortr(
   return superviseProcessForever({
     name: "portr",
     logger,
-    start: () => startPortr(config, childEnv, { terminateTimeout: 10_000 }),
+    start: () => startPortr(config, childEnv),
     // Kill + restart when the edge drops the registration while the local
     // process is still alive. Without this, lensiq.apps.dbx.tools (and any
     // other in-process tunnel) stays unregistered until a full app bounce.

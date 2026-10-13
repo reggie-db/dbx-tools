@@ -294,9 +294,7 @@ function installParentSignalHandlers(state: ParentSignalForwarderState): void {
  * @param listener - Called synchronously when a forwarded parent signal arrives
  * @returns Unsubscribe function
  */
-export function onParentTerminationSignal(
-  listener: (signal: NodeJS.Signals) => void,
-): () => void {
+export function onParentTerminationSignal(listener: (signal: NodeJS.Signals) => void): () => void {
   const state = parentSignalForwarderState();
   installParentSignalHandlers(state);
   state.listeners.add(listener);

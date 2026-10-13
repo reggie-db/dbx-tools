@@ -52,7 +52,7 @@ describe("superviseProcessForever", () => {
       children[0]!.emit("exit", 1, null);
       await waitFor(() => children.length === 2);
     } finally {
-      supervisor.stop();
+      await supervisor.stop();
     }
   });
 
@@ -66,7 +66,7 @@ describe("superviseProcessForever", () => {
     });
 
     await waitFor(() => children.length === 1);
-    supervisor.stop();
+    await supervisor.stop();
     await nextTurn();
 
     assert.equal(children[0]!.shutdownCalls, 1);
@@ -89,7 +89,7 @@ describe("superviseProcessForever", () => {
       await waitFor(() => children.length === 2);
       assert.equal(children[0]!.shutdownCalls, 1);
     } finally {
-      supervisor.stop();
+      await supervisor.stop();
     }
   });
 
@@ -117,7 +117,7 @@ describe("superviseProcessForever", () => {
       children[0]!.emit("exit", 1, "SIGTERM");
       await waitFor(() => children.length === 2);
     } finally {
-      supervisor.stop();
+      await supervisor.stop();
     }
   });
 
@@ -141,7 +141,7 @@ describe("superviseProcessForever", () => {
       assert.equal(children[0]!.shutdownCalls, 0);
     } finally {
       process.off("SIGINT", ignore);
-      supervisor.stop();
+      await supervisor.stop();
     }
   });
 
@@ -160,7 +160,7 @@ describe("superviseProcessForever", () => {
       await waitFor(() => children.length === 1);
       process.emit("SIGTERM");
       await nextTurn();
-      supervisor.stop();
+      await supervisor.stop();
       await nextTurn();
 
       assert.equal(children[0]!.shutdownCalls, 1);
@@ -196,7 +196,7 @@ describe("superviseProcessForever", () => {
       assert.equal(children[0]!.shutdownCalls, 0);
       assert.equal(children.length, 1);
     } finally {
-      supervisor.stop();
+      await supervisor.stop();
     }
   });
 });

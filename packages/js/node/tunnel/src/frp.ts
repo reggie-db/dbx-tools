@@ -234,6 +234,6 @@ export function superviseFrp(
   return superviseProcessForever({
     name: "frpc",
     logger,
-    start: () => startFrp(resolved, childEnv, configPath, { terminateTimeout: 10_000 }),
+    start: () => startFrp(resolved, childEnv, configPath),
   });
 }
