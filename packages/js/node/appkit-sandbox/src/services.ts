@@ -149,7 +149,13 @@ export async function inspectSshLifecycleStates(
 ): Promise<SshRemoteLifecycleStates> {
   const result = await session.execute(
     "sh",
-    ["-lc", packageScriptCommand(STATUS_INSPECTION_SCRIPT, [])],
+    [
+      "-lc",
+      packageScriptCommand(STATUS_INSPECTION_SCRIPT, [
+        String(SSH_SERVICE_LOG_DEFAULT_MAX_LINES),
+        String(SSH_SERVICE_LOG_DEFAULT_MAX_CHARS),
+      ]),
+    ],
     { timeoutMs, signal },
   );
   if (!result.success) {

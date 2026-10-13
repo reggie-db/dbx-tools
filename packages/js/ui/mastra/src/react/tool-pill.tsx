@@ -313,7 +313,7 @@ const MessageGroupBody = ({
                 <SourceBlock
                   source={bucket.query.sql}
                   language="sql"
-                  className="max-h-64 border-t border-border/50 px-2 py-1.5 text-foreground"
+                  className="max-h-48 overflow-auto overscroll-contain border-t border-border/50 px-2 py-1.5 text-foreground sm:max-h-64"
                 />
                 {bucket.query.description && (
                   <div className="border-t border-border/50 px-2 py-1.5">
@@ -412,17 +412,19 @@ const RawToolPayload = ({
         <span>{label}</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
-        {structured === undefined ? (
-          <JsonBlock
-            json={formatRawToolPayload(value)}
-            className="max-h-80 border-t border-border/50 px-2 py-2 text-foreground"
-          />
-        ) : (
-          <RecordPreview
-            value={structured}
-            className="max-h-80 max-w-full overflow-auto border-t border-border/50 bg-transparent text-foreground"
-          />
-        )}
+        <div className="max-h-48 max-w-full overflow-auto overscroll-contain sm:max-h-64">
+          {structured === undefined ? (
+            <JsonBlock
+              json={formatRawToolPayload(value)}
+              className="border-t border-border/50 px-2 py-2 text-foreground"
+            />
+          ) : (
+            <RecordPreview
+              value={structured}
+              className="max-w-full border-t border-border/50 bg-transparent text-foreground"
+            />
+          )}
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -507,7 +509,7 @@ const ToolInputSource = ({ presentation }: { presentation: ToolInputPresentation
         <SourceBlock
           source={presentation.source}
           language={presentation.language}
-          className="max-h-64 border-t border-border/50 px-2 py-1.5 text-foreground"
+          className="max-h-48 overflow-auto overscroll-contain border-t border-border/50 px-2 py-1.5 text-foreground sm:max-h-64"
         />
       </CollapsibleContent>
     </Collapsible>
@@ -604,7 +606,7 @@ const ToolStatusProgressDetails = ({ event }: { event: ToolEvent }) => {
     <SourceBlock
       source={detail}
       language="text"
-      className="max-h-64 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words rounded border border-border/50 bg-background/40 p-2 text-foreground"
+      className="max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap break-words rounded border border-border/50 bg-background/40 p-2 text-foreground sm:max-h-64"
     />
   );
 };

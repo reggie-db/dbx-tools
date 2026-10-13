@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 
+maximum_log_lines="$1"
+maximum_log_chars="$2"
+
 for service_kind in terminal desktop stats; do
   operation_directory="$HOME/.dbx-tools/operations/services/$service_kind"
   state=$(cat "$operation_directory/lifecycle.status" 2>/dev/null || true)
@@ -13,7 +16,8 @@ for service_kind in terminal desktop stats; do
   esac
   printf 'service\t%s\t%s\n' "$service_kind" "$state"
   if [ -f "$operation_directory/lifecycle.log" ]; then
-    log_base64=$(base64 <"$operation_directory/lifecycle.log" | tr -d '\n')
+    log_base64=$(tail -n "$maximum_log_lines" "$operation_directory/lifecycle.log" |
+      tail -c "$maximum_log_chars" | base64 | tr -d '\n')
     printf 'service-log\t%s\t%s\n' "$service_kind" "$log_base64"
   fi
 done

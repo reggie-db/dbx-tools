@@ -237,14 +237,18 @@ describe("packaged Sandbox services", () => {
   });
 
   it("reads durable remote service and project states", async () => {
+    let script = "";
     const session = {
-      execute: async (command: string, args: string[]) => ({
-        ...success,
-        command,
-        args,
-        stdout:
-          "service\tterminal\tstarting\nservice-log\tterminal\taW5zdGFsbGluZyB0dHlkCg==\nservice\tdesktop\tready\nproject\tdemo/app\terror\n",
-      }),
+      execute: async (command: string, args: string[]) => {
+        script = args[1] ?? "";
+        return {
+          ...success,
+          command,
+          args,
+          stdout:
+            "service\tterminal\tstarting\nservice-log\tterminal\taW5zdGFsbGluZyB0dHlkCg==\nservice\tdesktop\tready\nproject\tdemo/app\terror\n",
+        };
+      },
     } as unknown as SshSession;
 
     const states = await inspectSshLifecycleStates(session, 1_000);
@@ -253,6 +257,17 @@ describe("packaged Sandbox services", () => {
     assert.equal(states.serviceLogs.get("terminal"), "installing ttyd\n");
     assert.equal(states.services.get("desktop"), "ready");
     assert.equal(states.projects.get("demo/app"), "error");
+    assert.match(script, / '200' '16000'$/);
+  });
+
+  it("bounds lifecycle logs included in machine state inspection", async () => {
+    const source = await readFile(
+      new URL("../scripts/inspect-status.sh", import.meta.url),
+      "utf8",
+    );
+
+    assert.match(source, /tail -n "\$maximum_log_lines"/);
+    assert.match(source, /tail -c "\$maximum_log_chars"/);
   });
 
   it("reads the shared remote service operation log", async () => {
