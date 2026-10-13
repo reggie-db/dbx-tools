@@ -526,12 +526,14 @@ export function sshCommandScript(
   sudo = false,
 ): string {
   assertSafeSshEnvironment(env);
+  const workingDirectory = cwd ?? (sudo ? "/root" : SANDBOX_HOME);
   const invocation = [command, ...scrubLoginShellCommand(command, args)].map(shellQuote).join(" ");
   const environment = Object.entries({
     HOME: sudo ? "/root" : SANDBOX_HOME,
     USER: sudo ? "root" : SANDBOX_USER,
     LOGNAME: sudo ? "root" : SANDBOX_USER,
     SHELL: "/bin/bash",
+    PWD: workingDirectory,
     PATH: sudo
       ? "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       : `${SANDBOX_HOME}/.local/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/bin:/usr/bin:/bin`,
@@ -540,7 +542,7 @@ export function sshCommandScript(
   })
     .map(([name, value]) => `${environmentName(name)}=${shellQuote(value)}`)
     .join(" ");
-  const run = cwd ? `cd -- ${shellQuote(cwd)} && ${invocation}` : invocation;
+  const run = `cd -- ${shellQuote(workingDirectory)} && ${invocation}`;
   const sudoArgs = sudo ? ["-n", "-H"] : ["-n", "-H", "-u", SANDBOX_USER];
   const switched = ["sudo", ...sudoArgs, "--", "env", "-i"].map(shellQuote).join(" ");
   return `${SSH_AUTH_ENVIRONMENT_SCRUB}\nexec ${switched} ${environment} '/bin/sh' '-c' ${shellQuote(run)}`;
@@ -572,6 +574,7 @@ function assertSafeSshEnvironment(env: Readonly<Record<string, string>> | undefi
       name === "USER" ||
       name === "LOGNAME" ||
       name === "SHELL" ||
+      name === "PWD" ||
       name === "PATH" ||
       name.startsWith("SUDO_") ||
       name.startsWith("DATABRICKS_") ||

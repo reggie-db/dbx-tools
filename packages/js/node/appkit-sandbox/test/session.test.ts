@@ -179,6 +179,7 @@ describe("resolvePublicGatewayAddresses", () => {
     expect(script).toContain("export DATABRICKS_CONFIG_FILE=/dev/null");
     expect(script).toContain("'-u' 'sandbox-user'");
     expect(script).toContain("HOME='/home/sandbox-user'");
+    expect(script).toContain("PWD='/home/sandbox-user/project'");
     expect(script).toContain("PROJECT_MODE='demo'");
     expect(script).toContain("/home/sandbox-user/project");
     expect(script.match(/unset "\$__dbx_tools_name"/g)).toHaveLength(2);
@@ -193,6 +194,18 @@ describe("resolvePublicGatewayAddresses", () => {
         DATABRICKS_TOKEN: "service-principal-token",
       }),
     ).toThrow(/cannot replace the Sandbox identity/);
+  });
+
+  it("starts commands without an explicit cwd from the selected user's home", () => {
+    expect(sshCommandScript("brew", ["--version"], undefined, undefined)).toContain(
+      "cd -- '\\''/home/sandbox-user'\\''",
+    );
+    expect(sshCommandScript("brew", ["--version"], undefined, undefined)).toContain(
+      "PWD='/home/sandbox-user'",
+    );
+    expect(sshCommandScript("id", [], undefined, undefined, true)).toContain(
+      "cd -- '\\''/root'\\''",
+    );
   });
 
   it("requires the private capability for privileged commands", () => {

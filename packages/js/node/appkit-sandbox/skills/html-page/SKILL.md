@@ -52,7 +52,7 @@ python = "3.12.12"
 [hooks]
 postinstall = '''
 set -eu
-[ -n "$HTML_CONTENT" ] || {
+[ -n "${HTML_CONTENT:-}" ] || {
   printf 'HTML_CONTENT is required\n' >&2
   exit 1
 }
