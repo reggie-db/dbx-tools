@@ -65,10 +65,11 @@ describe("development command watcher", () => {
       () => parseDevWatchOptions(["--debounce-ms", "-1", "bun", "server.ts"]),
       /non-negative number/,
     );
-    assert.deepEqual(
-      parseWatchGlobOptions(["--watch-exclude", "**", "--profile", "unused"]),
-      { watchDisable: false, watchInclude: [], watchExclude: ["**"] },
-    );
+    assert.deepEqual(parseWatchGlobOptions(["--watch-exclude", "**", "--profile", "unused"]), {
+      watchDisable: false,
+      watchInclude: [],
+      watchExclude: ["**"],
+    });
     assert.deepEqual(parseWatchGlobOptions(["-d", "--profile", "unused"]).watchDisable, true);
     assert.deepEqual(
       serializedWatchGlobArgs({

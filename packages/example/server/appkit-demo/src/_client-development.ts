@@ -95,10 +95,7 @@ export function createClientDevelopmentProxy(
     });
     const body = injectAppKitConfig(html, await configScripts);
     response.status(upstream.status);
-    response.set(
-      "Content-Type",
-      contentType || "text/html; charset=utf-8",
-    );
+    response.set("Content-Type", contentType || "text/html; charset=utf-8");
     response.set("Cache-Control", "no-store");
     if (request.method === "HEAD") response.end();
     else response.send(body);

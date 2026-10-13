@@ -54,7 +54,7 @@
 
 import { ConfigurationError, Plugin } from "@databricks/appkit";
 import { configUtils } from "@dbx-tools/core";
-import { log, stringUtils, token } from "@dbx-tools/shared-core";
+import { errorUtils, log, stringUtils, token } from "@dbx-tools/shared-core";
 
 /**
  * Header the Databricks Apps front door forwards the caller's OBO token on.
@@ -194,7 +194,7 @@ export function installAsUserDevelopmentPatch(): void {
       );
     };
   } catch (error) {
-    logger.debug("asUser development patch skipped", { error: String(error) });
+    logger.debug("asUser development patch skipped", { error: errorUtils.toError(error) });
   }
 }
 
@@ -212,7 +212,10 @@ function withAsUserSkipWarnSuppressed<T>(req: HeaderBearing, fn: () => T): T {
   }
   const warn = console.warn;
   console.warn = (...args: unknown[]) => {
-    if (!log.isLevelEnabled("debug") && args.some((value) => typeof value === "string" && value.includes(AS_USER_SKIP_WARN))) {
+    if (
+      !log.isLevelEnabled("debug") &&
+      args.some((value) => typeof value === "string" && value.includes(AS_USER_SKIP_WARN))
+    ) {
       return;
     }
     warn.apply(console, args as Parameters<typeof console.warn>);

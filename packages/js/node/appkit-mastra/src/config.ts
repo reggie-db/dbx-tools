@@ -658,7 +658,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * ```
    */
   remoteSkills?: RemoteSkillsOption;
-  /** Read-only local skill trees mounted into every default agent workspace. */
+  /** Read-only local skill trees mounted for files and passed as standard agent-level skills. */
   localSkillMounts?: LocalSkillMount[];
 }
 
@@ -686,7 +686,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     remoteSkills: {
       type: ["string", "array", "object"],
       description:
-        'Remote Agent-Skill sources provisioned at startup: "aitools" for Databricks\' own skill set (daily @dbx-tools/cache snapshot served from the shared in-memory /.databricks/skills mount), a GitHub owner/repo, a git/GitLab URL, or a direct SKILL.md/archive URL. Non-aitools sources prefer the optional `skills` npm CLI, else a direct fetch; fails startup on error unless failOnError:false. Other sources write to the Databricks user Assistant skills folder or a read-only local-memory fallback.',
+        'Remote Agent-Skill sources provisioned at startup and passed through Mastra standard agent-level skill tools: "aitools" for Databricks\' own skill set, a GitHub owner/repo, a git/GitLab URL, or a direct SKILL.md/archive URL. Sources retain a process-memory copy even when persisted to the Databricks user Assistant skills folder.',
     },
     storage: {
       type: ["boolean", "object"],

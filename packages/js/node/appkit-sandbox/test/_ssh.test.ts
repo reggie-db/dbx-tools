@@ -9,6 +9,7 @@ import {
   createSshTransport,
   PooledSshTransport,
   SshCommand,
+  SSH_POOL_MAX,
   type SshCommandExecution,
   type SshResourceLifecycle,
   type SshTransport,
@@ -237,6 +238,10 @@ describe("SshCommand", () => {
 });
 
 describe("pooled SSH transport", () => {
+  it("caps each operation pool at ten authenticated resources", () => {
+    expect(SSH_POOL_MAX).toBe(10);
+  });
+
   it("warms one tested command resource and destroys each resource after one operation", async () => {
     const created: TestPoolResource[] = [];
     const destroyed: number[] = [];

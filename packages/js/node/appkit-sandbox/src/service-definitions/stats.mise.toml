@@ -116,5 +116,5 @@ expected="$runtime/glances/bin/glances"
 pid=$(cat "$pid_file")
 [ -r "/proc/$pid/cmdline" ]
 tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "$expected" >/dev/null
-bash -c 'exec 3<>/dev/tcp/127.0.0.1/61208'
+timeout --signal=KILL 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/61208'
 '''

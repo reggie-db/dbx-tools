@@ -11,7 +11,7 @@ export * as reactServiceUrl from "./src/react/service-url.ts";
 export * as reactSshIndicator from "./src/react/ssh-indicator.tsx";
 export * as reactSshManager from "./src/react/ssh-manager.tsx";
 export { BUILT_IN_SERVICE_CONTROLS } from "./src/react/built-in-service-launcher.tsx";
-export type { BuiltInServiceLauncherProps, BuiltInServiceLogProps, BuiltInServiceLogSelection } from "./src/react/built-in-service-launcher.tsx";
+export type { BuiltInServiceLauncherProps, BuiltInServiceLogProps, InstallLogPanelProps, BuiltInServiceLogSelection } from "./src/react/built-in-service-launcher.tsx";
 export { SshClient } from "./src/react/client.ts";
 export type { MachinePowerControl, MachinePowerButtonProps } from "./src/react/machine-power-control.tsx";
 export type { SshIndicatorProps } from "./src/react/ssh-indicator.tsx";

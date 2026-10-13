@@ -115,11 +115,19 @@ built-in services with `serviceDependencies`, for example
 `serviceDependencies: ["desktop"]`. The runtime starts each dependency before
 project setup without writing dependency tasks into the project's `mise.toml`.
 
-Prefer the first-class `tools`, `postinstall`, and `uninstall` options. Raw
-`config` follows `https://mise.jdx.dev/schema/mise.json`; first-class values
-override conflicts in `config.tools`, `config.hooks.postinstall`, and
-`config.tasks.uninstall`. `postinstall` may install, prepare, or intentionally
-launch a workload that runs until uninstall. Use check-lock-check plus a
+`config` accepts a JSON object, a JSON object string, or a complete TOML
+string. String input is checked as JSON first and otherwise parsed as TOML
+before remote setup. First-class `tools`, `env`, `postinstall`, and `uninstall`
+values override conflicts in `config.tools`, `config.env`,
+`config.hooks.postinstall`, and `config.tasks.uninstall`. Reserved
+`PROJECT_NAME`, `PROJECT_PATH`, and `PROJECT_PORT` may be repeated only with
+the injected values. Put generated payloads such as `HTML_CONTENT` in `env`.
+
+Put application file creation, installation,
+preparation, initial workload launch, and readiness checks in `postinstall` so
+setup progress and completion appear in the project lifecycle log. Do not add
+start, stop, or hidden tasks unless the project needs a later explicit operator
+action that cannot belong to setup or uninstall. Use check-lock-check plus a
 completion marker for expensive setup. Project install is idempotent and uses
 one home-owned lifecycle lock and bounded operation log. Concurrent callers
 attach to that log, and a failed attempt may retry once before returning an
@@ -132,8 +140,10 @@ Evaluate the available tasks and invoke only the task defined for the requested
 lifecycle action, using the same command and directory with
 `args: ["-lc", "\"$HOME/.local/bin/mise\" run <task>"]`. Never concatenate
 the executable and arguments into `command`. Start detached servers with
-`nohup` and redirected standard streams. The packaged skills under `skills/`
-specify when and where to invoke each task.
+`nohup` and redirected standard streams. The showcase project recipes under
+`skills/` specify when and where to invoke each task. Built-in terminal,
+desktop, and stats controls are product capabilities and are not packaged as
+skills.
 
 The runtime injects these values into `[env]`:
 
@@ -171,6 +181,7 @@ polling reconnects to owned running machines after an app restart and recovers
 progress plus logs from remote lock, status, and log files. Each machine's
 `services` array is the source of truth for enabled built-ins. The Sandbox view
 groups enabled services into horizontal tabs and displays the same live logs.
+Project rows include a log control before reset so a saved install log can be opened without reinstalling.
 Opening a terminal for a project activates
 that project's interactive mise shell without enabling global directory
 activation.
@@ -188,10 +199,17 @@ terminals, mise hooks, and service lifecycle run as that user. Privileged
 execution is package-private and limited to fixed account and operating-system
 prerequisite scripts; REST, agent tools, and Mastra cannot request sudo.
 
-The default `machineSoftware` configuration installs mise in
-`~/.local/bin`. The installer adds mise activation to the Sandbox user's Bash
-and Zsh startup files, so entering a trusted Project directory activates its
-environment.
+The default `machineSoftware` configuration prepends `~/.local/bin` on PATH,
+then installs mise, Homebrew, and pkgx. mise and pkgx live in `~/.local/bin`.
+Homebrew installs into `/home/linuxbrew/.linuxbrew` without sudo. The account
+bootstrap installs the required operating-system packages (`build-essential`,
+`procps`, `curl`, `file`, and `git`) and creates the prefix owned by
+`sandbox-user`. The `brew` step adds `brew shellenv` to the Bash, Zsh, and login
+profiles. The PATH step is independent of the others. Omit a step or replace
+the array to change setup.
+
+Agents install software without sudo or apt, preferring mise, then Homebrew,
+then pkgx.
 
 Add other idempotent setup steps through
 [`SshPluginConfig`](https://docs.dbx.tools/api/appkit-sandbox/src-config-typealias-sshpluginconfig/):

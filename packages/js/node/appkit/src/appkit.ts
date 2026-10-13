@@ -41,6 +41,7 @@ import { asyncUtils, log } from "@dbx-tools/shared-core";
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
 import { loadBrandContext } from "./brand-context.ts";
 import { createAppKitCacheStorage } from "./cache-storage.ts";
+import { installAsUserDevelopmentPatch } from "./identity.ts";
 import {
   createInterceptorContext,
   type Interceptor,
@@ -48,7 +49,6 @@ import {
   lifecycleBridge,
   type ResolvedAppEnv,
 } from "./interceptor.ts";
-import { installAsUserDevelopmentPatch } from "./identity.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
 

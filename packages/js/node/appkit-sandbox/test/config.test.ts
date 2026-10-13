@@ -13,14 +13,27 @@ describe("resolveSshPluginConfig", () => {
     assert.equal(config.routePrefix, "/sandbox");
     assert.deepEqual(
       config.machineSoftware.map((software) => software.name),
-      ["mise"],
+      ["local-bin-path", "mise", "brew", "pkgx"],
     );
-    assert.match(config.machineSoftware[0]?.installCommand ?? "", /dbx-tools mise path/);
-    assert.doesNotMatch(
-      config.machineSoftware[0]?.installCommand ?? "",
-      /mise activate (?:bash|zsh)/,
-    );
+    assert.match(config.machineSoftware[0]?.installCommand ?? "", /dbx-tools local bin path/);
     assert.match(config.machineSoftware[0]?.checkCommand ?? "", /\.zshrc/);
+    assert.match(config.machineSoftware[1]?.installCommand ?? "", /dbx-tools local bin path/);
+    assert.doesNotMatch(
+      config.machineSoftware[1]?.installCommand ?? "",
+      /dbx-tools mise path|mise activate (?:bash|zsh)/,
+    );
+    assert.match(config.machineSoftware[1]?.checkCommand ?? "", /\.zshrc/);
+    const brew = config.machineSoftware[2]?.installCommand ?? "";
+    assert.match(brew, /cd "\$HOME"/);
+    assert.match(brew, /NONINTERACTIVE=1 \/bin\/bash -c/);
+    assert.match(brew, /raw\.githubusercontent\.com\/Homebrew\/install\/HEAD\/install\.sh/);
+    assert.match(brew, /brew shellenv/);
+    assert.doesNotMatch(brew, /^\s*sudo |apt-get/m);
+    assert.match(config.machineSoftware[2]?.checkCommand ?? "", /dbx-tools homebrew shellenv/);
+    assert.match(
+      config.machineSoftware[3]?.installCommand ?? "",
+      /https:\/\/pkgx\.sh\/\$\(uname\)\/\$\(uname -m\)/,
+    );
     assert.equal("context" in config, false);
 
     const fallback = resolveSshPluginConfig({ fallbackToServicePrincipal: true });

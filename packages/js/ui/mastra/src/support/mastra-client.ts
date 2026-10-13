@@ -22,7 +22,7 @@ import {
   type ListMemoryThreadsResponse,
 } from "@mastra/client-js";
 import { DefaultChatTransport, type UIMessage, type UIMessageChunk } from "ai";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MastraRequestContextSnapshot } from "./request-context.ts";
 
 type NativeAgentClient = ReturnType<MastraClient["getAgent"]>;
@@ -916,19 +916,22 @@ export const useMastraThreads = (
   // the natural deps (client / agentId / enabled).
   const [nonce, setNonce] = useState(0);
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!enabled) {
+      hasLoadedRef.current = false;
       setLoading(false);
       setThreads([]);
       return;
     }
     const controller = new AbortController();
-    setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
     client
       .threads({ agentId, signal: controller.signal })
       .then((res) => {
         if (controller.signal.aborted) return;
+        hasLoadedRef.current = true;
         setThreads(res.threads);
         setError(null);
       })

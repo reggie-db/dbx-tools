@@ -361,11 +361,15 @@ export const workspace = new Workspace({
 });
 ```
 
-Mastra discovers and loads skills only from explicit `skills` paths, including
-the paths declared under the default Assistant paths. Set `workspaceSkills:
-false` to omit the agent's skill-search processor, or pass `{ topK, minScore,
-ttlMs }` to tune it. Set the workspace's `skills` to an empty list when the
-workspace should expose no skills at all.
+Mastra discovers Databricks Workspace skills only from explicit `skills` paths,
+including the paths declared under the default Assistant paths. Those
+potentially slow remote directory listings use the skill-search processor. Set
+`workspaceSkills: false` to omit that processor, or pass `{ topK, minScore,
+ttlMs }` to tune it. Process-memory `localSkillMounts`, AI Tools, and other
+startup-provisioned remote skills are passed as native agent-level skills, so
+Mastra exposes its standard `skill`, `skill_search`, and `skill_read` tools
+without scanning their virtual workspace mounts. Set the workspace's `skills`
+to an empty list when the workspace should expose no Databricks skills.
 
 ### Cache Workspace Metadata
 
@@ -619,10 +623,11 @@ Per-source options for `"aitools"`:
 - `ref` - pin a tag / branch / sha. Defaults to `main`.
 
 AI Tools is hydrated from the daily cache snapshot into one shared read-only
-memory filesystem at `/.databricks/skills` and served to every auto-created
-workspace. Other sources mount below `/.skills` when their Databricks workspace
-destination is unavailable, using the explicit per-source `name` when supplied
-or a stable source identifier otherwise.
+memory filesystem at `/.databricks/skills`. Other sources also receive a
+process-memory copy, including when they persist into a Databricks workspace
+destination. These trees are supplied to every agent as standard agent-level
+skills rather than workspace-search roots. Local filesystem mounts remain
+available below `/.skills` when a Databricks destination is unavailable.
 
 ## Genie Tools
 
@@ -1175,8 +1180,9 @@ Clients that call these routes can import the browser-safe schemas from
   `"aitools"` constant reads Databricks' public skill repo through a daily
   `@dbx-tools/cache` snapshot and serves one shared in-memory
   `/.databricks/skills` tree. Other sources go through the optional `skills` CLI
-  or a direct fetch and use the Databricks Assistant tree or a read-only local
-  fallback. `refreshTtlMs` overrides the source default.
+  or a direct fetch. Every source keeps a process-memory standard-skill copy;
+  Databricks persistence and read-only local mounts are storage options, not
+  runtime search roots. `refreshTtlMs` overrides the source default.
 - `mcp` - MCP server construction.
 - `observability` / `mlflow` / `telemetry` - tracing, feedback, and stamping chat
   turn I/O onto the HTTP root span for MLflow's UC `*_trace_unified` view.

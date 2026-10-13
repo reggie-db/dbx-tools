@@ -11,11 +11,7 @@ import * as exec from "@dbx-tools/core/exec";
 import { Command } from "commander";
 
 import type { CliServiceDefinition } from "./definition.ts";
-import {
-  CliService,
-  CliServiceInstallOptionsSchema,
-  type CliServiceLifecycle,
-} from "./service.ts";
+import { CliService, CliServiceInstallOptionsSchema, type CliServiceLifecycle } from "./service.ts";
 
 export { CliServiceInstallOptionsSchema, type CliServiceInstallOptions } from "./service.ts";
 

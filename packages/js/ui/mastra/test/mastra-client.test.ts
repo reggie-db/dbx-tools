@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import {
-  MastraChatRequestError,
-  MastraPluginClient,
-} from "../src/support/mastra-client.ts";
+import { MastraChatRequestError, MastraPluginClient } from "../src/support/mastra-client.ts";
 
 const originalFetch = globalThis.fetch;
 
@@ -101,16 +98,19 @@ describe("MastraPluginClient AI SDK transport", () => {
       agents: ["support"],
     });
 
-    await assert.rejects(client.streamAgent({
-      agentId: "support",
-      messages: [{ id: "user-1", role: "user", parts: [{ type: "text", text: "hello" }] }],
-      runId: "run-1",
-    }), (error) => {
-      assert.equal(error instanceof MastraChatRequestError, true);
-      assert.equal((error as MastraChatRequestError).status, 500);
-      assert.match((error as Error).message, /No Databricks Sandbox exists for this user/);
-      return true;
-    });
+    await assert.rejects(
+      client.streamAgent({
+        agentId: "support",
+        messages: [{ id: "user-1", role: "user", parts: [{ type: "text", text: "hello" }] }],
+        runId: "run-1",
+      }),
+      (error) => {
+        assert.equal(error instanceof MastraChatRequestError, true);
+        assert.equal((error as MastraChatRequestError).status, 500);
+        assert.match((error as Error).message, /No Databricks Sandbox exists for this user/);
+        return true;
+      },
+    );
   });
 
   it("reuses the run context for approval continuation", async () => {

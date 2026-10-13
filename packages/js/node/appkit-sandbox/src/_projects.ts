@@ -1,24 +1,32 @@
 import { randomBytes, randomInt } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { AddSshProjectRequest } from "@dbx-tools/shared-databricks-sandbox";
-import { stringify, type TomlTableWithoutBigInt } from "smol-toml";
+import { parse, stringify, type TomlTableWithoutBigInt } from "smol-toml";
+import { readPackageResource } from "./_package.ts";
 import { SANDBOX_PROJECTS_ROOT } from "./_sandbox-user.ts";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const PROJECT_PATH_SEGMENT_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const GENERATED_PORT_MIN = 8_000;
 const GENERATED_PORT_MAX = 49_151;
-type ProjectConfig = NonNullable<AddSshProjectRequest["config"]>;
+type ProjectConfigInput = NonNullable<AddSshProjectRequest["config"]>;
+type ProjectConfig = Exclude<ProjectConfigInput, string>;
 type ProjectConfigValue = ProjectConfig[string];
 
 /** @internal */
-export const MISE_INSTALL_SCRIPT = readPackageScript("install-mise.sh");
+export const LOCAL_BIN_PATH_SCRIPT = readPackageResource("scripts", "setup-local-bin-path.sh");
 /** @internal */
-export const PROJECT_SETUP_SCRIPT = readPackageScript("setup-project.sh");
+export const PKGX_INSTALL_SCRIPT = readPackageResource("scripts", "install-pkgx.sh");
 /** @internal */
-export const PROJECT_REMOVE_SCRIPT = readPackageScript("remove-project.sh");
+export const BREW_INSTALL_SCRIPT = readPackageResource("scripts", "install-brew.sh");
+/** @internal */
+export const MISE_INSTALL_SCRIPT = `${LOCAL_BIN_PATH_SCRIPT.trimEnd()}\n\n${readPackageResource(
+  "scripts",
+  "install-mise.sh",
+)}`;
+/** @internal */
+export const PROJECT_SETUP_SCRIPT = readPackageResource("scripts", "setup-project.sh");
+/** @internal */
+export const PROJECT_REMOVE_SCRIPT = readPackageResource("scripts", "remove-project.sh");
 
 /** @internal */
 export interface ProjectEnvironment {
@@ -29,13 +37,17 @@ export interface ProjectEnvironment {
 
 /** @internal */
 export function mergeProjectMiseConfig(
-  config: ProjectConfig | undefined,
-  options: Pick<AddSshProjectRequest, "tools" | "postinstall" | "uninstall">,
+  config: ProjectConfigInput | undefined,
+  options: Pick<AddSshProjectRequest, "tools" | "env" | "postinstall" | "uninstall">,
 ): ProjectConfig {
-  const resolved = structuredClone(config ?? {}) as ProjectConfig;
+  const resolved = parseProjectMiseConfig(config);
   if (options.tools) {
     const configuredTools = objectTable(resolved.tools, "config.tools");
     resolved.tools = { ...configuredTools, ...structuredClone(options.tools) };
+  }
+  if (options.env) {
+    const configuredEnv = objectTable(resolved.env, "config.env");
+    resolved.env = { ...configuredEnv, ...options.env };
   }
   if (options.postinstall) {
     const hooks = objectTable(resolved.hooks, "config.hooks");
@@ -48,7 +60,40 @@ export function mergeProjectMiseConfig(
       uninstall: { run: options.uninstall },
     };
   }
+  assertNonCredentialEnv(objectTable(resolved.env, "config.env"));
   return resolved;
+}
+
+/** @internal Parse a JSON object or TOML document into persisted mise configuration. */
+export function parseProjectMiseConfig(config: ProjectConfigInput | undefined): ProjectConfig {
+  if (config === undefined) return {};
+  if (typeof config !== "string") return structuredClone(config);
+
+  try {
+    const parsedJson: unknown = JSON.parse(config);
+    if (isConfigObject(parsedJson)) return parsedJson as ProjectConfig;
+  } catch {
+    // The TOML parse below owns the final diagnostic for non-JSON strings.
+  }
+
+  let parsedToml: unknown;
+  try {
+    parsedToml = parse(config);
+  } catch (error) {
+    throw new Error("Sandbox project config string must contain a JSON object or valid TOML", {
+      cause: error,
+    });
+  }
+  if (!isConfigObject(parsedToml)) {
+    throw new Error("Sandbox project config must have an object root");
+  }
+  try {
+    return JSON.parse(JSON.stringify(parsedToml)) as ProjectConfig;
+  } catch (error) {
+    throw new Error("Sandbox project TOML config must contain JSON-compatible values", {
+      cause: error,
+    });
+  }
 }
 
 /** @internal */
@@ -175,13 +220,6 @@ export function packageScriptCommand(script: string, args: readonly string[]): s
   return `printf %s ${shellQuote(encodedScript)} | base64 -d | sh -s -- ${args.map(shellQuote).join(" ")}`;
 }
 
-function readPackageScript(name: string): string {
-  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
-  const parent = dirname(moduleDirectory);
-  const packageRoot = basename(parent) === "lib" ? dirname(parent) : parent;
-  return readFileSync(join(packageRoot, "scripts", name), "utf8");
-}
-
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
@@ -195,4 +233,18 @@ function objectTable(
     throw new Error(`Sandbox project ${field} must be an object`);
   }
   return value as Record<string, ProjectConfigValue>;
+}
+
+function isConfigObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function assertNonCredentialEnv(env: Record<string, ProjectConfigValue>): void {
+  for (const name of Object.keys(env)) {
+    if (name.startsWith("DATABRICKS_") || name === "SSH_AUTH_SOCK") {
+      throw new Error(
+        "Sandbox project env cannot restore Databricks or SSH agent credentials; use a dedicated app-mediated OBO capability.",
+      );
+    }
+  }
 }

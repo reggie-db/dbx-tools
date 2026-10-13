@@ -1,6 +1,6 @@
 import { PassThrough, type Duplex, type Readable } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { SshCommandResult } from "@dbx-tools/shared-databricks-sandbox";
 import { createPool, type Factory, type Options, type Pool } from "generic-pool";
 import type { Client as Ssh2Client } from "ssh2";
@@ -8,6 +8,8 @@ import { SANDBOX_HOME, SANDBOX_USER } from "./_sandbox-user.ts";
 import type { Ssh2PatchMode, SshTransportMode } from "./config.ts";
 
 const logger = log.logger("appkit-sandbox:ssh-transport");
+/** Maximum authenticated resources maintained by each SSH operation pool. */
+export const SSH_POOL_MAX = 10;
 
 /** One command execution request after the remote shell script is assembled. */
 export interface SshExecutionOptions {
@@ -301,7 +303,7 @@ export abstract class PooledSshTransport<T> implements SshTransport {
       },
     };
     const defaults: Options = {
-      max: options.max ?? 1000,
+      max: options.max ?? SSH_POOL_MAX,
       acquireTimeoutMillis: options.acquireTimeoutMillis ?? 15_000,
       idleTimeoutMillis: options.idleTimeoutMillis ?? 30_000,
       evictionRunIntervalMillis: options.evictionRunIntervalMillis ?? 10_000,
@@ -408,7 +410,10 @@ export abstract class PooledSshTransport<T> implements SshTransport {
     try {
       await pool.destroy(resource);
     } catch (error) {
-      logger.warn("failed to destroy pooled SSH resource", { kind: this.kind, error });
+      logger.warn("failed to destroy pooled SSH resource", {
+        kind: this.kind,
+        error: errorUtils.toError(error),
+      });
     }
   }
 
@@ -444,13 +449,11 @@ export async function createSshTransport(
   if (transportMode === "ssh2") {
     return factories.createSsh2(options);
   }
-  const useOpenSsh =
-    transportMode === "openssh" ||
-    (transportMode === "auto" && (await factories.supportsOpenSsh(sshCommand)));
-  if (useOpenSsh) {
-    if (!(await factories.supportsOpenSsh(sshCommand))) {
-      throw new Error("Native OpenSSH with SOCKS5 forwarding is unavailable");
-    }
+  const openSshSupported = await factories.supportsOpenSsh(sshCommand);
+  if (transportMode === "openssh" && !openSshSupported) {
+    throw new Error("Native OpenSSH with SOCKS5 forwarding is unavailable");
+  }
+  if (openSshSupported) {
     return factories.createOpenSsh(options, sshCommand);
   }
   if (transportMode !== "auto") {
@@ -495,7 +498,7 @@ export function sshCommandScript(
     SHELL: "/bin/bash",
     PATH: sudo
       ? "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      : `${SANDBOX_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin`,
+      : `${SANDBOX_HOME}/.local/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/bin:/usr/bin:/bin`,
     DATABRICKS_CONFIG_FILE: "/dev/null",
     ...env,
   })

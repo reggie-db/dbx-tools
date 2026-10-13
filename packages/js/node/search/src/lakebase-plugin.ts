@@ -267,9 +267,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
 
   private requireBackend(index: ResolvedLakebaseIndex): LakebaseSearchBackend {
     const backend =
-      index.config.auth === "on-behalf-of-user"
-        ? this.userBackend
-        : this.servicePrincipalBackend;
+      index.config.auth === "on-behalf-of-user" ? this.userBackend : this.servicePrincipalBackend;
     if (!backend) throw new ValidationError("Lakebase AI Search is not initialized");
     return backend;
   }

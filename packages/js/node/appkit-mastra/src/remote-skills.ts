@@ -26,11 +26,11 @@
  * source (or the top-level call) sets `failOnError: false`, in which case it is
  * logged and skipped so one bad source never takes the app down.
  *
- * AI Tools uses the shared `@dbx-tools/cache` project cache with a one-day TTL,
- * then hydrates one process-memory filesystem mounted at
- * {@link AITOOLS_SKILLS_MOUNT} for every default workspace. Other sources keep
- * a {@link METADATA_FILE} beside their provisioned tree and default to a
- * seven-day refresh window. Pass `refreshTtlMs: 0` to download on every boot.
+ * AI Tools uses the shared `@dbx-tools/cache` project cache with a one-day TTL.
+ * Every source hydrates a process-memory filesystem that the plugin converts to
+ * native agent-level skills; persisted workspace copies are not used for
+ * runtime discovery. Other sources keep a {@link METADATA_FILE} beside their
+ * provisioned tree and default to a seven-day refresh window.
  *
  * For non-AI-Tools sources, the default destination is the Databricks workspace
  * Assistant skills tree (`/Workspace/.assistant/skills`). Pass `userEmail` or
@@ -253,12 +253,11 @@ export interface ProvisionRemoteSkillsOptions {
 /** What {@link provisionRemoteSkills} resolved. */
 export interface ProvisionedRemoteSkills {
   /**
-   * Extra read-only local or process-memory skill mounts to hand Mastra. AI
-   * Tools always uses process memory; other sources use this fallback when
-   * they could not be written to Databricks. Physical paths remain hidden
-   * behind stable virtual workspace paths.
+   * Extra read-only filesystem mounts retained for direct workspace file access.
    */
   localSkillMounts: LocalSkillMount[];
+  /** Process-memory trees converted into standard agent-level skills. */
+  standardSkillMounts: LocalSkillMount[];
   /** Absolute Databricks destination each source was written to, if any. */
   databricksBasePath?: string;
   /**
@@ -491,7 +490,11 @@ export async function provisionRemoteSkills(
   option: RemoteSkillsOption | undefined,
 ): Promise<ProvisionedRemoteSkills> {
   const options = normalizeRemoteSkillsOption(option);
-  const empty: ProvisionedRemoteSkills = { localSkillMounts: [], skillNames: [] };
+  const empty: ProvisionedRemoteSkills = {
+    localSkillMounts: [],
+    standardSkillMounts: [],
+    skillNames: [],
+  };
   if (!options) return empty;
 
   const failDefault = options.failOnError !== false;
@@ -512,6 +515,7 @@ export async function provisionRemoteSkills(
   const databricksBasePath = destination ? requestedBasePath : undefined;
 
   const localSkillMounts: LocalSkillMount[] = [];
+  const standardSkillMounts: LocalSkillMount[] = [];
   const skillNames: string[] = [];
   let staging: LocalFileSystem | undefined;
 
@@ -526,10 +530,12 @@ export async function provisionRemoteSkills(
         if (isAiToolsSource(sourceOptions.source)) {
           staging ??= await initializedScratch("mastra-remote-skills");
           const tree = await cachedAiToolsTree(sourceOptions, staging.root, options, key);
-          localSkillMounts.push({
+          const mount = {
             filesystem: await memorySkillTree(tree.files, `aitools-${key}`),
             mountPath,
-          });
+          };
+          localSkillMounts.push(mount);
+          standardSkillMounts.push(mount);
           skillNames.push(...tree.record.skills);
           logger.info("remote skill ready", {
             source: sourceOptions.source,
@@ -545,6 +551,15 @@ export async function provisionRemoteSkills(
         const cached = metadata?.sources[key];
         if (cached && isFresh(cached, resolveRefreshTtl(sourceOptions, options))) {
           skillNames.push(...cached.skills);
+          const standardMount = {
+            filesystem: await memorySkillTreeFromFileSystem(
+              cacheFS,
+              cached.skills,
+              `remote-${key}`,
+            ),
+            mountPath,
+          };
+          standardSkillMounts.push(standardMount);
           if (!destination) localSkillMounts.push({ root: cacheFS.root, mountPath });
           logger.info("remote skill ready", {
             source: sourceOptions.source,
@@ -584,6 +599,10 @@ export async function provisionRemoteSkills(
             mountPath,
           });
         }
+        standardSkillMounts.push({
+          filesystem: await memorySkillTree(await serializeSkillDirs(staged), `remote-${key}`),
+          mountPath,
+        });
         skillNames.push(...record.skills);
         logger.info("remote skill installed", {
           source: sourceOptions.source,
@@ -610,7 +629,7 @@ export async function provisionRemoteSkills(
   }
 
   assertUniqueLocalSkillMounts(localSkillMounts);
-  return { localSkillMounts, databricksBasePath, skillNames };
+  return { localSkillMounts, standardSkillMounts, databricksBasePath, skillNames };
 }
 
 async function cachedAiToolsTree(
@@ -683,6 +702,27 @@ async function memorySkillTree(
     });
   }
   return filesystem;
+}
+
+async function memorySkillTreeFromFileSystem(
+  source: FileSystem,
+  skillNames: readonly string[],
+  id: string,
+): Promise<MemoryFileSystem> {
+  await source.init();
+  const files: CachedSkillFile[] = [];
+  for (const skill of skillNames) {
+    for (const entry of await source.readdir(skill, { recursive: true })) {
+      if (entry.type !== "file") continue;
+      const path = posix.join(skill, entry.name);
+      const content = await source.readFile(path);
+      files.push({
+        path,
+        content: Buffer.from(content).toString("base64"),
+      });
+    }
+  }
+  return memorySkillTree(files, id);
 }
 
 /** Fail before workspace composition when two sources claim one virtual mount. */

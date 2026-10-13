@@ -7,6 +7,7 @@ import {
   BUILT_IN_SERVICE_CONTROLS,
   BuiltInServiceLog,
   BuiltInServiceLauncher,
+  InstallLogPanel,
   type BuiltInServiceLauncherProps,
   selectedBuiltInServiceLog,
   startAndOpenBuiltInService,
@@ -276,5 +277,20 @@ describe("BuiltInServiceLog", () => {
     assert.match(html, /Terminal install logs/);
     assert.match(html, /downloading ttyd/);
     assert.doesNotMatch(html, /aria-label="Hide Terminal logs"/);
+  });
+});
+
+describe("InstallLogPanel", () => {
+  it("renders a saved project install log", () => {
+    const html = renderToStaticMarkup(
+      createElement(InstallLogPanel, {
+        label: "whiteboard",
+        state: "error",
+        log: "mise install failed\n",
+      }),
+    );
+    assert.match(html, /whiteboard install logs/);
+    assert.match(html, /mise install failed/);
+    assert.match(html, />error</);
   });
 });

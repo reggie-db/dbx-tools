@@ -58,6 +58,13 @@ describe("Sandbox project configuration", () => {
         ),
       /PROJECT_PORT must equal "8080"/,
     );
+    const toml = renderProjectMiseConfig(
+      { env: { PROJECT_PORT: "8080", HTML_CONTENT: "<html></html>" } },
+      { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
+    );
+    const parsed = parse(toml) as { env: Record<string, string> };
+    assert.equal(parsed.env.PROJECT_PORT, "8080");
+    assert.equal(parsed.env.HTML_CONTENT, "<html></html>");
   });
 
   it("preserves project tasks without injecting service dependencies", () => {
@@ -110,21 +117,43 @@ describe("Sandbox project configuration", () => {
     const merged = mergeProjectMiseConfig(
       {
         tools: { node: "20", python: "3.12" },
+        env: { MODE: "demo" },
         hooks: { postinstall: "old-install" },
         tasks: { uninstall: { run: "old-uninstall" }, start: { run: "start" } },
       },
       {
         tools: { node: "lts" },
+        env: { HTML_CONTENT: "<html></html>", MODE: "prod" },
         postinstall: "new-install",
         uninstall: "new-uninstall",
       },
     );
     assert.deepEqual(merged.tools, { node: "lts", python: "3.12" });
+    assert.deepEqual(merged.env, { MODE: "prod", HTML_CONTENT: "<html></html>" });
     assert.deepEqual(merged.hooks, { postinstall: "new-install" });
     assert.deepEqual(merged.tasks, {
       uninstall: { run: "new-uninstall" },
       start: { run: "start" },
     });
+  });
+
+  it("parses string config as JSON objects or TOML", () => {
+    assert.deepEqual(mergeProjectMiseConfig('{"tools":{"node":"lts"}}', {}), {
+      tools: { node: "lts" },
+    });
+    assert.deepEqual(mergeProjectMiseConfig('[tools]\nnode = "lts"\n[env]\nMODE = "demo"\n', {}), {
+      tools: { node: "lts" },
+      env: { MODE: "demo" },
+    });
+  });
+
+  it("rejects malformed or non-object string config", () => {
+    assert.throws(() => mergeProjectMiseConfig("[tools\nnode = ", {}), /JSON object or valid TOML/);
+    assert.throws(() => mergeProjectMiseConfig("true", {}), /JSON object or valid TOML/);
+    assert.throws(
+      () => mergeProjectMiseConfig({ env: { DATABRICKS_TOKEN: "token" } }, {}),
+      /Databricks or SSH agent credentials/,
+    );
   });
 });
 
@@ -143,9 +172,31 @@ describe("Sandbox project contracts", () => {
     assert.deepEqual(request.tools, { node: "lts" });
     assert.equal(request.postinstall, "prepare-project");
     assert.equal(request.uninstall, "remove-project");
+    assert.deepEqual(
+      addSshProjectRequestSchema.parse({
+        machineId: "sandbox-id",
+        env: { HTML_CONTENT: "<html></html>" },
+      }).env,
+      { HTML_CONTENT: "<html></html>" },
+    );
+    assert.throws(
+      () =>
+        addSshProjectRequestSchema.parse({
+          machineId: "sandbox-id",
+          env: { DATABRICKS_TOKEN: "token" },
+        }),
+      /Databricks or SSH agent credentials/,
+    );
     assert.match(
       addSshProjectRequestSchema.shape.config.description ?? "",
-      /https:\/\/mise\.jdx\.dev\/schema\/mise\.json/,
+      /JSON object string, or TOML string/,
+    );
+    assert.equal(
+      addSshProjectRequestSchema.parse({
+        machineId: "sandbox-id",
+        config: '[tools]\nnode = "lts"',
+      }).config,
+      '[tools]\nnode = "lts"',
     );
     assert.match(
       addSshProjectRequestSchema.shape.postinstall.description ?? "",
@@ -155,6 +206,7 @@ describe("Sandbox project contracts", () => {
       addSshProjectRequestSchema.shape.uninstall.description ?? "",
       /only this project task/,
     );
+    assert.match(addSshProjectRequestSchema.shape.env.description ?? "", /HTML_CONTENT/);
     assert.throws(
       () =>
         addSshProjectRequestSchema.parse({

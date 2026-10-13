@@ -6,10 +6,10 @@ kasmvnc_package_version="$kasmvnc_version-1"
 installed_kasmvnc=$(dpkg-query -W -f='${Version}' kasmvncserver 2>/dev/null || true)
 missing=false
 for command in startxfce4 xfce4-panel xfdesktop xfwm4 xfce4-terminal \
-  rsvg-convert dbus-run-session epiphany exo-open prboom-plus; do
+  rsvg-convert dbus-run-session epiphany exo-open; do
   command -v "$command" >/dev/null 2>&1 || missing=true
 done
-for package in arc-theme freedoom hicolor-icon-theme xfce4-whiskermenu-plugin; do
+for package in arc-theme hicolor-icon-theme xfce4-whiskermenu-plugin; do
   dpkg-query -W -f='${Status}' "$package" 2>/dev/null |
     grep -q 'install ok installed' || missing=true
 done
@@ -61,6 +61,6 @@ fi
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   arc-theme ca-certificates dbus-daemon dbus-x11 epiphany-browser exo-utils \
-  fonts-dejavu-core freedoom hicolor-icon-theme librsvg2-bin prboom-plus thunar \
+  fonts-dejavu-core hicolor-icon-theme librsvg2-bin thunar \
   xfce4-whiskermenu-plugin x11-utils x11-xserver-utils xdg-utils xfce4-panel \
   xfce4-session xfce4-settings xfce4-terminal xfdesktop4 xfwm4 "$package_file"

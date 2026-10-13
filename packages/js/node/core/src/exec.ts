@@ -54,7 +54,7 @@ import * as readline from "node:readline";
 import { Readable } from "node:stream";
 import { text } from "node:stream/consumers";
 import { finished } from "node:stream/promises";
-import { functionUtils, log } from "@dbx-tools/shared-core";
+import { errorUtils, functionUtils, log } from "@dbx-tools/shared-core";
 
 /** Shell-compatible exit code returned when an executable cannot be found. */
 export const COMMAND_NOT_FOUND_EXIT_CODE = 127;
@@ -581,7 +581,7 @@ async function tryProcessSnapshot(): Promise<ProcessSnapshotEntry[] | undefined>
   try {
     return await processSnapshot();
   } catch (error) {
-    logger.debug("process snapshot failed", { error });
+    logger.debug("process snapshot failed", { error: errorUtils.toError(error) });
     return undefined;
   }
 }

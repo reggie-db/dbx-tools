@@ -9,6 +9,14 @@ else
   mise_bin=$(command -v mise)
 fi
 
+run_status() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --signal=KILL 3 "$mise_bin" run status
+  else
+    "$mise_bin" run status
+  fi
+}
+
 for service_kind in terminal desktop stats; do
   operation_directory="$HOME/.dbx-tools/operations/services/$service_kind"
   service_directory="$HOME/projects/.sandbox-services/$service_kind"
@@ -18,7 +26,7 @@ for service_kind in terminal desktop stats; do
   fi
   if [ "$state" = ready ] &&
     { [ ! -d "$service_directory" ] ||
-      ! (cd "$service_directory" && "$mise_bin" run status >/dev/null 2>&1); }; then
+      ! (cd "$service_directory" && run_status >/dev/null 2>&1); }; then
     state=stopped
     printf '%s\n' "$state" >"$operation_directory/lifecycle.status"
   fi
@@ -53,5 +61,10 @@ if [ -d "$projects_root" ]; then
         *) state=stopped ;;
       esac
       printf 'project\t%s\t%s\n' "$project_path" "$state"
+      if [ -f "$project_directory/lifecycle.log" ]; then
+        log_base64=$(tail -n "$maximum_log_lines" "$project_directory/lifecycle.log" |
+          tail -c "$maximum_log_chars" | base64 | tr -d '\n')
+        printf 'project-log\t%s\t%s\n' "$project_path" "$log_base64"
+      fi
     done
 fi

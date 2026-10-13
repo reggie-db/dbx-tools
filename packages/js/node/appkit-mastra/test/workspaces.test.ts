@@ -10,6 +10,7 @@ import { log } from "@dbx-tools/shared-core";
 import { MemoryFileSystem, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
 import { isEventedAgent } from "@mastra/core/agent/durable";
 import { RequestContext } from "@mastra/core/request-context";
+import { createSkill } from "@mastra/core/skills";
 import { createTool } from "@mastra/core/tools";
 import {
   LocalFilesystem,
@@ -29,6 +30,7 @@ import {
   databricksWorkspace,
   databricksWorkspaceConfig,
   DEFAULT_DATABRICKS_WORKSPACE_PATHS,
+  inlineSkillsFromLocalMounts,
   requestWorkspaceClient,
   resolveDatabricksWorkspacePaths,
   type DatabricksWorkspacePathOptions,
@@ -376,7 +378,7 @@ describe("databricksWorkspace skill source identity", () => {
     await assert.doesNotReject(() => catalogue.search("jobs"));
   });
 
-  it("mounts startup-provisioned local skill paths for search", async () => {
+  it("keeps startup-provisioned local skills out of workspace search", async () => {
     const root = await mkdtemp(join(tmpdir(), "appkit-mastra-skills-"));
     const skill = join(root, "databricks-apps");
     await mkdir(skill);
@@ -391,29 +393,25 @@ describe("databricksWorkspace skill source identity", () => {
       ].join("\n"),
     );
     try {
+      const mounts = [{ root, mountPath: "/.skills/databricks" }];
       const workspace = databricksWorkspace({
         assistantPaths: false,
         sandbox: false,
-        extraSkillMounts: [{ root, mountPath: "/.skills/databricks" }],
+        extraSkillMounts: mounts,
       });
-      const catalogue = await resolveWorkspaceSkills(workspace, new RequestContext());
-
+      assert.equal(workspace.skills, undefined);
+      const skills = await inlineSkillsFromLocalMounts(mounts);
       assert.deepEqual(
-        (await catalogue.list()).map(({ name }) => name),
+        skills.map(({ name }) => name),
         ["databricks-apps"],
       );
       await rm(root, { recursive: true, force: true });
 
-      const secondWorkspace = databricksWorkspace({
-        assistantPaths: false,
-        sandbox: false,
-        extraSkillMounts: [{ root, mountPath: "/.skills/databricks" }],
-      });
-      const sharedCatalogue = await resolveWorkspaceSkills(secondWorkspace, new RequestContext());
+      const sharedSkills = await inlineSkillsFromLocalMounts(mounts);
       assert.deepEqual(
-        (await sharedCatalogue.list()).map(({ name }) => name),
+        sharedSkills.map(({ name }) => name),
         ["databricks-apps"],
-        "a second workspace reuses the process-memory skill tree after the source disappears",
+        "a second agent reuses the process-memory skill tree after the source disappears",
       );
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -1214,6 +1212,29 @@ describe("agent workspace selection", () => {
     assert.deepEqual((renderDataFilter as unknown as { exclude: unknown }).exclude, [
       "render_data",
     ]);
+  });
+
+  it("passes local memory skills as standard agent-level skills", async () => {
+    const built = await buildAgents({
+      config: {},
+      context: undefined,
+      log: log.logger("test/agents"),
+      standardSkills: [
+        createSkill({
+          name: "dbx-tools",
+          description: "Use dbx tools.",
+          instructions: "Follow dbx tools guidance.",
+        }),
+      ],
+      excludedWorkspaceSkillNames: ["dbx-tools"],
+    });
+
+    const tools = await built.agents[built.defaultAgentId]!.listTools();
+    assert.ok("skill" in tools);
+    assert.ok("skill_search" in tools);
+    assert.ok("skill_read" in tools);
+    const processors = await built.agents[built.defaultAgentId]!.listConfiguredInputProcessors();
+    assert.ok(processors.some((processor) => "id" in processor && processor.id === "skill-search"));
   });
 
   it("can disable Mastra's skill search processor explicitly", async () => {

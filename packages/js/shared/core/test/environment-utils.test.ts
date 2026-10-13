@@ -92,10 +92,7 @@ describe("isDatabricksAppEnv", () => {
       true,
     );
     assert.equal(
-      environmentUtils.isDatabricksAppEnv(
-        {},
-        `${environmentUtils.DATABRICKS_APP_SOURCE_ROOT}/src`,
-      ),
+      environmentUtils.isDatabricksAppEnv({}, `${environmentUtils.DATABRICKS_APP_SOURCE_ROOT}/src`),
       true,
     );
   });

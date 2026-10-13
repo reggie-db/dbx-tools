@@ -383,14 +383,14 @@ import time
 import urllib.request
 
 port = int(sys.argv[1])
-for _ in range(240):
+for _ in range(40):
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as response:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=0.5) as response:
             body = response.read(65536)
             if response.status == 200 and b"KasmVNC" in body:
                 raise SystemExit(0)
     except Exception:
-        time.sleep(0.5)
+        time.sleep(0.25)
 raise SystemExit("KasmVNC web client did not become ready")
 PY
 printf '%s\n' "$version" >"$version_file"
@@ -411,5 +411,5 @@ pid_file="$runtime/kasmvncserver.pid"
 pid=$(cat "$pid_file")
 [ -r "/proc/$pid/cmdline" ]
 tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "kasmvncserver" >/dev/null
-bash -c 'exec 3<>/dev/tcp/127.0.0.1/6080'
+timeout --signal=KILL 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6080'
 '''

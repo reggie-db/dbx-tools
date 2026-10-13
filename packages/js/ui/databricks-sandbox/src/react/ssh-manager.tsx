@@ -26,6 +26,7 @@ import {
 } from "@dbx-tools/ui/react";
 import {
   ExternalLinkIcon,
+  FileTextIcon,
   PlusIcon,
   RefreshCwIcon,
   SquareIcon,
@@ -37,6 +38,7 @@ import {
   BUILT_IN_SERVICE_CONTROLS,
   BuiltInServiceLog,
   BuiltInServiceLauncher,
+  InstallLogPanel,
   selectedBuiltInServiceLog,
 } from "./built-in-service-launcher.tsx";
 import { useSshClient } from "./client.ts";
@@ -100,6 +102,9 @@ export function SshManager({ basePath, className }: SshManagerProps) {
   const [selectedServiceLogs, setSelectedServiceLogs] = useState<
     Readonly<Record<string, { kind: SshMachineServiceKind } | undefined>>
   >({});
+  const [selectedProjectLogs, setSelectedProjectLogs] = useState<Readonly<Record<string, boolean>>>(
+    {},
+  );
   const [stripPrefix, setStripPrefix] = useState(true);
   const refreshing = useRef(false);
   const deletingMachineIds = useRef(new Set<string>());
@@ -650,100 +655,140 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                 </div>
               ) : (
                 <div className="divide-y border-t">
-                  {projects.map((project) => (
-                    <div key={project.id} className="px-3 py-3 sm:px-4">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-medium">{project.name}</p>
-                          <Badge variant={project.state === "ready" ? "secondary" : "outline"}>
-                            {project.state}
-                          </Badge>
+                  {projects.map((project) => {
+                    const projectLogOpen = Boolean(selectedProjectLogs[project.id]);
+                    return (
+                      <div key={project.id} className="min-w-0 overflow-hidden">
+                        <div className="px-3 py-3 sm:px-4">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-medium">{project.name}</p>
+                              <Badge variant={project.state === "ready" ? "secondary" : "outline"}>
+                                {project.state}
+                              </Badge>
+                            </div>
+                            <div className="flex w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:shrink-0 sm:flex-nowrap">
+                              {project.openUrl ? (
+                                <Button type="button" variant="outline" size="sm" asChild>
+                                  <a
+                                    href={project.openUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <ExternalLinkIcon className="size-3.5" />
+                                    Open
+                                  </a>
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                aria-label={`Open terminal for ${project.name}`}
+                                disabled={isProjectBusy(project.id)}
+                                onClick={() => void openProjectTerminal(project)}
+                              >
+                                {isBusy(projectOperation(project.id, "terminal")) ? (
+                                  <Spinner className="size-3.5" />
+                                ) : (
+                                  <SquareTerminalIcon className="size-3.5" />
+                                )}
+                                Terminal
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className={cn(projectLogOpen && "bg-muted shadow-inner")}
+                                aria-label={
+                                  projectLogOpen
+                                    ? `Hide install log for ${project.name}`
+                                    : `Show install log for ${project.name}`
+                                }
+                                aria-pressed={projectLogOpen}
+                                title={projectLogOpen ? "Hide install log" : "Show install log"}
+                                onClick={() =>
+                                  setSelectedProjectLogs((current) => ({
+                                    ...current,
+                                    [project.id]: !current[project.id],
+                                  }))
+                                }
+                              >
+                                <FileTextIcon className="size-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Reset ${project.name}`}
+                                title="Reset project"
+                                disabled={isProjectBusy(project.id)}
+                                onClick={() => setProjectConfirmation({ action: "reset", project })}
+                              >
+                                {isBusy(projectOperation(project.id, "reset")) ? (
+                                  <Spinner className="size-4" />
+                                ) : (
+                                  <RefreshCwIcon className="size-4" />
+                                )}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Delete ${project.name}`}
+                                title="Delete project"
+                                disabled={isProjectBusy(project.id)}
+                                onClick={() =>
+                                  setProjectConfirmation({ action: "remove", project })
+                                }
+                              >
+                                {isBusy(projectOperation(project.id, "remove")) ? (
+                                  <Spinner className="size-4" />
+                                ) : (
+                                  <Trash2Icon className="size-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          <dl className="mt-3 grid gap-x-5 gap-y-3 sm:grid-cols-2">
+                            <ProjectDetail label="Project ID" value={project.id} code wide />
+                            <ProjectDetail
+                              label="Machine"
+                              value={machineName(machines, project.machineId)}
+                              secondary={project.machineId}
+                            />
+                            <ProjectDetail label="Directory" value={project.directory} code wide />
+                            {project.openUrl ? (
+                              <>
+                                <ProjectDetail label="Port" value={String(project.port)} code />
+                                <ProjectDetail label="Route" value={project.path} code wide />
+                                <ProjectDetail
+                                  label="Open URL"
+                                  value={project.openUrl}
+                                  href={project.openUrl}
+                                  wide
+                                />
+                                <ProjectDetail
+                                  label="Strip prefix"
+                                  value={project.stripPrefix ? "Yes" : "No"}
+                                />
+                              </>
+                            ) : (
+                              <ProjectDetail label="Route" value="Not exposed" wide />
+                            )}
+                          </dl>
                         </div>
-                        <div className="flex w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:shrink-0 sm:flex-nowrap">
-                          {project.openUrl ? (
-                            <Button type="button" variant="outline" size="sm" asChild>
-                              <a href={project.openUrl} target="_blank" rel="noopener noreferrer">
-                                <ExternalLinkIcon className="size-3.5" />
-                                Open
-                              </a>
-                            </Button>
-                          ) : null}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            aria-label={`Open terminal for ${project.name}`}
-                            disabled={isProjectBusy(project.id)}
-                            onClick={() => void openProjectTerminal(project)}
-                          >
-                            {isBusy(projectOperation(project.id, "terminal")) ? (
-                              <Spinner className="size-3.5" />
-                            ) : (
-                              <SquareTerminalIcon className="size-3.5" />
-                            )}
-                            Terminal
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Reset ${project.name}`}
-                            title="Reset project"
-                            disabled={isProjectBusy(project.id)}
-                            onClick={() => setProjectConfirmation({ action: "reset", project })}
-                          >
-                            {isBusy(projectOperation(project.id, "reset")) ? (
-                              <Spinner className="size-4" />
-                            ) : (
-                              <RefreshCwIcon className="size-4" />
-                            )}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Delete ${project.name}`}
-                            title="Delete project"
-                            disabled={isProjectBusy(project.id)}
-                            onClick={() => setProjectConfirmation({ action: "remove", project })}
-                          >
-                            {isBusy(projectOperation(project.id, "remove")) ? (
-                              <Spinner className="size-4" />
-                            ) : (
-                              <Trash2Icon className="size-4" />
-                            )}
-                          </Button>
-                        </div>
+                        {projectLogOpen ? (
+                          <InstallLogPanel
+                            label={project.name}
+                            state={project.state}
+                            log={project.log}
+                            error={project.error}
+                          />
+                        ) : null}
                       </div>
-                      <dl className="mt-3 grid gap-x-5 gap-y-3 sm:grid-cols-2">
-                        <ProjectDetail label="Project ID" value={project.id} code wide />
-                        <ProjectDetail
-                          label="Machine"
-                          value={machineName(machines, project.machineId)}
-                          secondary={project.machineId}
-                        />
-                        <ProjectDetail label="Directory" value={project.directory} code wide />
-                        {project.openUrl ? (
-                          <>
-                            <ProjectDetail label="Port" value={String(project.port)} code />
-                            <ProjectDetail label="Route" value={project.path} code wide />
-                            <ProjectDetail
-                              label="Open URL"
-                              value={project.openUrl}
-                              href={project.openUrl}
-                              wide
-                            />
-                            <ProjectDetail
-                              label="Strip prefix"
-                              value={project.stripPrefix ? "Yes" : "No"}
-                            />
-                          </>
-                        ) : (
-                          <ProjectDetail label="Route" value="Not exposed" wide />
-                        )}
-                      </dl>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -781,12 +826,9 @@ export function SshManager({ basePath, className }: SshManagerProps) {
               <AlertDialogCancel
                 disabled={Boolean(
                   machineConfirmation &&
-                    isBusy(
-                      machineOperation(
-                        machineConfirmation.machine.id,
-                        machineConfirmation.action,
-                      ),
-                    ),
+                  isBusy(
+                    machineOperation(machineConfirmation.machine.id, machineConfirmation.action),
+                  ),
                 )}
               >
                 Cancel
@@ -794,12 +836,9 @@ export function SshManager({ basePath, className }: SshManagerProps) {
               <AlertDialogAction
                 disabled={Boolean(
                   machineConfirmation &&
-                    isBusy(
-                      machineOperation(
-                        machineConfirmation.machine.id,
-                        machineConfirmation.action,
-                      ),
-                    ),
+                  isBusy(
+                    machineOperation(machineConfirmation.machine.id, machineConfirmation.action),
+                  ),
                 )}
                 className={cn(
                   displayedMachineConfirmation.action === "delete" &&
@@ -879,7 +918,9 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                 ) : (
                   <RefreshCwIcon className="size-3.5" />
                 )}
-                {displayedProjectConfirmation.action === "remove" ? "Delete project" : "Reset project"}
+                {displayedProjectConfirmation.action === "remove"
+                  ? "Delete project"
+                  : "Reset project"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

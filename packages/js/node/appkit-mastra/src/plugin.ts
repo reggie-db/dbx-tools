@@ -120,6 +120,7 @@ import { resolveServingConfig } from "./serving.ts";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
 import { attachChatTurnTelemetry } from "./telemetry.ts";
 import { invalidFields } from "./validation.ts";
+import { inlineSkillsFromLocalMounts } from "./workspaces.ts";
 
 const GENIE_MANIFEST = pluginRegistry.data(genie).plugin.manifest;
 const LAKEBASE_MANIFEST = pluginRegistry.data(lakebase).plugin.manifest;
@@ -1055,23 +1056,34 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // Materialize any remote Agent-Skill sources ONCE at startup. Runs
     // outside a request scope, so it uses the app service principal's client
     // and defaults to the shared workspace Assistant skills tree; a source
-    // backed by local temp storage (no writable workspace) is folded into
-    // every default-workspace agent via `extraSkillMounts`.
+    // backed by local or memory storage is converted into native agent-level
+    // skills; Databricks workspace directories remain search-discovered.
     const provisioned = await provisionRemoteSkills(this.config.remoteSkills);
     if (provisioned.skillNames.length > 0) {
       this.logger.info("remote skills configured", {
         skills: provisioned.skillNames,
         databricksBasePath: provisioned.databricksBasePath,
         localSkillMounts: provisioned.localSkillMounts.length,
+        standardSkillMounts: provisioned.standardSkillMounts.length,
       });
     }
 
+    const localSkillMounts = [
+      ...(this.config.localSkillMounts ?? []),
+      ...provisioned.localSkillMounts,
+    ];
+    const standardSkills = await inlineSkillsFromLocalMounts([
+      ...(this.config.localSkillMounts ?? []),
+      ...provisioned.standardSkillMounts,
+    ]);
     this.built = await buildAgents({
       config: this.config,
       context: this.context,
       memoryBuilder,
       log: this.logger,
-      extraSkillMounts: [...(this.config.localSkillMounts ?? []), ...provisioned.localSkillMounts],
+      extraSkillMounts: localSkillMounts,
+      standardSkills,
+      excludedWorkspaceSkillNames: provisioned.skillNames,
     });
 
     // `mastra.server.apiRoutes` is only honored by Mastra's standalone

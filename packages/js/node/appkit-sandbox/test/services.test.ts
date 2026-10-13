@@ -79,7 +79,10 @@ describe("packaged Sandbox services", () => {
     assert.match(document.tasks.start.run, /ttyd did not become ready/);
     assert.match(document.tasks.stop.run, /stop-ttyd/);
     assert.match(document.tasks.status.run, /ttyd\.pid/);
-    assert.match(document.tasks.status.run, /dev\/tcp\/127\.0\.0\.1\/7681/);
+    assert.match(
+      document.tasks.status.run,
+      /timeout --signal=KILL 1 bash -c 'exec 3<>\/dev\/tcp\/127\.0\.0\.1\/7681'/,
+    );
     assert.equal(document.tasks.start.hide, true);
     assert.equal(document.tasks.stop.hide, true);
     assert.equal(document.tasks.status.hide, true);
@@ -118,8 +121,7 @@ describe("packaged Sandbox services", () => {
       /noble-arm64\) package_checksum="c9199cf4753208bfb69fd016a9780242bebfc43370cc38c97d61e90a3c783e04"/,
     );
     assert.match(prerequisites, /apt-get update/);
-    assert.match(prerequisites, /freedoom/);
-    assert.match(prerequisites, /prboom-plus/);
+    assert.doesNotMatch(prerequisites, /freedoom|prboom-plus/);
     assert.match(prerequisites, /sha256sum --check --status/);
     assert.equal(install.match(/rsvg-convert --width/g)?.length, 3);
     assert.match(install, /desktop_runner="\$runtime\/run"/);
@@ -147,7 +149,10 @@ describe("packaged Sandbox services", () => {
     assert.equal(document.tasks.stop.hide, true);
     assert.match(document.tasks.status.run, /kasmvncserver\.pid/);
     assert.match(document.tasks.status.run, /session\.ready/);
-    assert.match(document.tasks.status.run, /dev\/tcp\/127\.0\.0\.1\/6080/);
+    assert.match(
+      document.tasks.status.run,
+      /timeout --signal=KILL 1 bash -c 'exec 3<>\/dev\/tcp\/127\.0\.0\.1\/6080'/,
+    );
     assert.equal(document.tasks.status.hide, true);
 
     const wallpaper = Buffer.from(
@@ -204,7 +209,10 @@ describe("packaged Sandbox services", () => {
     assert.match(document.tasks.start.run, /\/proc\/\$pid\/cmdline/);
     assert.match(document.tasks.stop.run, /stop-glances/);
     assert.match(document.tasks.status.run, /glances\.pid/);
-    assert.match(document.tasks.status.run, /dev\/tcp\/127\.0\.0\.1\/61208/);
+    assert.match(
+      document.tasks.status.run,
+      /timeout --signal=KILL 1 bash -c 'exec 3<>\/dev\/tcp\/127\.0\.0\.1\/61208'/,
+    );
     assert.equal(document.tasks.status.hide, true);
     assert.equal(definition.environment.DBX_TOOLS_SERVICE_PATH, "/sandbox/metrics/machine");
     assert.equal(definition.target.remotePort, 61208);
@@ -267,7 +275,7 @@ describe("packaged Sandbox services", () => {
         return completedSshCommand(command, args, {
           ...success,
           stdout:
-            "service\tterminal\tstarting\nservice-log\tterminal\taW5zdGFsbGluZyB0dHlkCg==\nservice\tdesktop\tready\nproject\tdemo/app\terror\n",
+            "service\tterminal\tstarting\nservice-log\tterminal\taW5zdGFsbGluZyB0dHlkCg==\nservice\tdesktop\tready\nproject\tdemo/app\terror\nproject-log\tdemo/app\taW5zdGFsbCBmYWlsZWQK\n",
         });
       },
     } as unknown as SshSession;
@@ -278,6 +286,7 @@ describe("packaged Sandbox services", () => {
     assert.equal(states.serviceLogs.get("terminal"), "installing ttyd\n");
     assert.equal(states.services.get("desktop"), "ready");
     assert.equal(states.projects.get("demo/app"), "error");
+    assert.equal(states.projectLogs.get("demo/app"), "install failed\n");
     assert.match(script, / '200' '16000'$/);
   });
 
@@ -286,8 +295,9 @@ describe("packaged Sandbox services", () => {
 
     assert.match(source, /tail -n "\$maximum_log_lines"/);
     assert.match(source, /tail -c "\$maximum_log_chars"/);
-    assert.match(source, /"\$mise_bin" run status/);
+    assert.match(source, /timeout --signal=KILL 3 "\$mise_bin" run status/);
     assert.match(source, /printf '%s\\n' "\$state" >"\$operation_directory\/lifecycle\.status"/);
+    assert.match(source, /printf 'project-log\\t%s\\t%s\\n'/);
   });
 
   it("reads the shared remote service operation log", async () => {

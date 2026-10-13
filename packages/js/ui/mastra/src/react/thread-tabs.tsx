@@ -89,7 +89,7 @@ export const ThreadActions = ({
         </Tooltip>
       )}
       {historyLeadingActions}
-      <Popover open={historyOpen} onOpenChange={setHistoryOpen}>
+      <Popover open={historyOpen} onOpenChange={setHistoryOpen} modal>
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
@@ -106,7 +106,23 @@ export const ThreadActions = ({
           </TooltipTrigger>
           <TooltipContent>Conversation history</TooltipContent>
         </Tooltip>
-        <PopoverContent align="end" aria-label="Conversation history" className="w-72 p-0">
+        <PopoverContent
+          align="end"
+          aria-label="Conversation history"
+          className="w-72 p-0"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          onFocusOutside={(event) => event.preventDefault()}
+          onPointerDownOutside={(event) => {
+            const target = event.target;
+            if (
+              target instanceof Element &&
+              target.closest("[data-radix-popper-content-wrapper]")
+            ) {
+              event.preventDefault();
+            }
+          }}
+        >
           <ThreadSidebar
             {...list}
             onSelect={(id) => {
@@ -171,10 +187,7 @@ export const ThreadTabs = ({
     // in the same centered column as the transcript and composer.
     <div className={cn("w-full border-b border-border text-xs", className)}>
       <div className="mx-auto flex w-full max-w-4xl items-center gap-1 px-2 py-1 md:px-4">
-        <div
-          ref={tabStripRef}
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-        >
+        <div ref={tabStripRef} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {openThreadIds.map((id) => {
             const thread = threads.find((t) => t.id === id) ?? { id };
             const isActive = id === activeThreadId;

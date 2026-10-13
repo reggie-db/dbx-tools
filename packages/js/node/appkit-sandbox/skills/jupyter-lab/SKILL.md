@@ -5,18 +5,10 @@ description: Run JupyterLab through an authenticated Sandbox project without a s
 
 # JupyterLab
 
-Project workflow is required. Installation and runtime tasks come from the
-project's mise config. `hooks.postinstall` installs JupyterLab, while
-`tasks.start` and `tasks.stop` own explicit lifecycle operations and the
-first-class `uninstall` owns automatic removal.
-Do not install packages, write launch scripts, or start
-servers with ad-hoc commands. Use
-`execute_ssh_command` only to invoke the documented mise task or inspect logs,
-with `cwd` set to the returned `directory`. Before running a task, call
-`execute_ssh_command` with
-`command: "sh"` and
-`args: ["-lc", "\"$HOME/.local/bin/mise\" tasks ls --name-only --hidden"]`.
-Evaluate the result; use `start` to launch JupyterLab and `stop` to stop it.
+Project workflow is required. Put installation and the initial JupyterLab
+launch in `hooks.postinstall` so `add_ssh_project` reports setup progress and
+returns only after JupyterLab is ready. Do not define `start`, `stop`, or
+hidden tasks. The first-class `uninstall` owns automatic removal.
 Use only the returned `directory`, `port`, `path`, and `openUrl`.
 Do not write project files under `~/.dbx-tools/runtime`, invent a route,
 publish a direct Sandbox URL, or add a second password or token. All setup and
@@ -27,8 +19,8 @@ tasks run as the fixed, unprivileged `sandbox-user`.
 Call `list_ssh_machines` first and use only a returned machine `id`. Reuse an
 existing project on that machine when `projects` already contains this recipe.
 Call `add_ssh_project` with that `machineId`,
-`name: "jupyter-lab"`, `openPath: "lab"`, and this mise configuration as the
-`config` object:
+`name: "jupyter-lab"`, `openPath: "lab"`, and the complete TOML below as
+`config`:
 
 ```toml
 [tools]
@@ -42,10 +34,6 @@ if [ ! -x .venv/bin/jupyter ]; then
   uv venv > setup.log 2>&1
   uv pip install jupyterlab==4.4.10 >> setup.log 2>&1
 fi
-'''
-
-[tasks.start]
-run = '''
 if [ -f server.pid ]; then
   pid="$(tr -d '[:space:]' < server.pid)"
   case "$pid" in
@@ -67,17 +55,20 @@ nohup setsid .venv/bin/jupyter lab --no-browser --ip 127.0.0.1 --port "$PROJECT_
   --IdentityProvider.token= --PasswordIdentityProvider.hashed_password= \
   > server.log 2>&1 < /dev/null &
 echo $! > server.pid
-'''
-
-[tasks.stop]
-run = '''
-"$HOME/.local/bin/mise" run uninstall
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+  if python -c 'import os, socket; s=socket.create_connection(("127.0.0.1", int(os.environ["PROJECT_PORT"])), 0.2); s.close()' 2>/dev/null; then
+    exit 0
+  fi
+  sleep 0.2
+done
+cat server.log >&2
+exit 1
 '''
 ```
 
-The install hook creates the project-local environment once and installs
-the pinned JupyterLab release. Pass the following script as the first-class
-`uninstall` option:
+The install hook creates the project-local environment once, installs the
+pinned JupyterLab release, launches it on loopback, and waits until it accepts
+connections. Pass the following script as the first-class `uninstall` option:
 
 ```sh
 set -eu
@@ -125,19 +116,12 @@ rm -f server.pid
 Uninstall validates the PID's command and working directory before terminating
 the isolated Jupyter process group, including kernels. It always removes
 malformed, dead, mismatched, or completed PID files, so repeated removal is
-safe. After `add_ssh_project` completes, list the project tasks and
-confirm `start` is present. From the returned `directory`, call
-`execute_ssh_command` with `command: "sh"` and
-`args: ["-lc", "\"$HOME/.local/bin/mise\" run start"]`. The `start` task starts JupyterLab on
-`127.0.0.1:$PROJECT_PORT` with Jupyter
+safe. `add_ssh_project` starts JupyterLab on `127.0.0.1:$PROJECT_PORT` with Jupyter
 token and password authentication disabled. The service is loopback-only and
 the AppKit project route supplies authenticated access. Installation failures
 fail `add_ssh_project`; inspect `setup.log` and `server.log` in the project
-directory with `execute_ssh_command` for diagnostics only. To stop JupyterLab,
-use the same command and directory with
-`args: ["-lc", "\"$HOME/.local/bin/mise\" run stop"]`; `stop` delegates to
-`uninstall`. Project removal invokes `uninstall` automatically and never
-invokes `stop`.
+directory with `execute_ssh_command` for diagnostics only. Project removal
+invokes `uninstall` automatically.
 
 Notebooks live in the returned `directory`. Use relative notebook and extension
-URLs. Return the project's `openUrl`.
+URLs. Return the project's `openUrl` as a Markdown link.

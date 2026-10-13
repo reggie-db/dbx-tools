@@ -105,6 +105,7 @@ describe("normalizeRemoteSkillsOption", () => {
       const mount = first.localSkillMounts[0];
       assert.equal(mount?.mountPath, AITOOLS_SKILLS_MOUNT);
       assert.ok(mount && "filesystem" in mount);
+      assert.equal(first.standardSkillMounts[0], mount);
       assert.match(
         await mount.filesystem.readFile("demo-ai-tool/SKILL.md", { encoding: "utf8" }),
         /name: demo-ai-tool/,
@@ -123,7 +124,11 @@ describe("normalizeRemoteSkillsOption", () => {
 describe("provisionRemoteSkills failure policy", () => {
   it("returns an empty result for no configured sources", async () => {
     const result = await provisionRemoteSkills(undefined);
-    assert.deepEqual(result, { localSkillMounts: [], skillNames: [] });
+    assert.deepEqual(result, {
+      localSkillMounts: [],
+      standardSkillMounts: [],
+      skillNames: [],
+    });
   });
 
   it("throws when a non-URL source can't resolve and failOnError defaults on", async () => {
@@ -144,6 +149,7 @@ describe("provisionRemoteSkills failure policy", () => {
       client: undefined,
     });
     assert.deepEqual(result.localSkillMounts, []);
+    assert.deepEqual(result.standardSkillMounts, []);
     assert.deepEqual(result.skillNames, []);
   });
 });
@@ -395,6 +401,7 @@ describe("remote skill caching", () => {
       assert.equal(result.databricksBasePath, "/Workspace/.assistant/skills");
       // Nothing local to scan: the Assistant tree is already mounted per request.
       assert.deepEqual(result.localSkillMounts, []);
+      assert.equal(result.standardSkillMounts.length, 1);
       assert.ok(
         written.some((path) => path.endsWith(".metadata.json")),
         "the tree landed in the workspace",

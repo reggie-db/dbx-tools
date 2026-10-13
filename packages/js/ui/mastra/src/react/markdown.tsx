@@ -253,6 +253,7 @@ export const AssistantMarkdown = ({
       "leading-snug prose-p:my-1.5 prose-p:leading-snug sm:leading-relaxed sm:prose-p:leading-relaxed",
       "prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5",
       "prose-headings:font-semibold prose-headings:tracking-tight",
+      "prose-a:font-medium prose-a:text-primary prose-a:underline prose-a:decoration-primary/50 prose-a:underline-offset-4 hover:prose-a:decoration-primary",
       "prose-h1:text-lg prose-h1:mt-4 prose-h1:mb-2",
       "prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2",
       "prose-h3:text-sm prose-h3:mt-3 prose-h3:mb-1.5 prose-h3:text-muted-foreground prose-h3:uppercase prose-h3:tracking-wider",

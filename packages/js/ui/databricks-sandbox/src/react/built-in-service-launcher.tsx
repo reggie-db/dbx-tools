@@ -4,13 +4,7 @@ import {
   type SshMachineService,
   type SshMachineServiceKind,
 } from "@dbx-tools/shared-databricks-sandbox";
-import {
-  Button,
-  ButtonGroup,
-  cn,
-  Spinner,
-  useIsMobile,
-} from "@dbx-tools/ui/react";
+import { Button, ButtonGroup, cn, Spinner, useIsMobile } from "@dbx-tools/ui/react";
 import {
   FileTextIcon,
   HeartPulseIcon,
@@ -59,6 +53,14 @@ export interface BuiltInServiceLogProps {
   service: SshMachineService;
 }
 
+/** Trailing lifecycle log panel shared by built-in services and projects. */
+export interface InstallLogPanelProps {
+  label: string;
+  state?: string;
+  log?: string;
+  error?: string;
+}
+
 /** Returns the one built-in service log selected for a machine. */
 export function selectedBuiltInServiceLog(
   machine: SshMachine,
@@ -73,31 +75,43 @@ export interface BuiltInServiceLogSelection {
   kind: SshMachineServiceKind;
 }
 
-/** Renders a built-in service log inside its owning machine row. */
-export function BuiltInServiceLog({ service }: BuiltInServiceLogProps) {
-  const definition = BUILT_IN_SERVICE_CONTROLS.find(
-    (candidate) => candidate.kind === service.kind,
-  )!;
+/** Renders a saved install log inside its owning machine or project row. */
+export function InstallLogPanel({ label, state, log, error }: InstallLogPanelProps) {
   const logRef = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
     if (!logRef.current) return;
     logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [service.log]);
+  }, [log]);
 
   return (
-    <section aria-label={`${definition.label} install logs`} className="border-t bg-zinc-950">
+    <section aria-label={`${label} install logs`} className="border-t bg-zinc-950">
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2 sm:px-4">
-        <span className="text-xs font-medium text-zinc-100">{definition.label} install logs</span>
-        <span className="text-xs text-zinc-400">{service.state}</span>
+        <span className="text-xs font-medium text-zinc-100">{label} install logs</span>
+        {state ? <span className="text-xs text-zinc-400">{state}</span> : null}
       </div>
       <pre
         ref={logRef}
         className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11px] leading-4 text-zinc-100 sm:px-4"
       >
-        {service.log || service.error || `${definition.label} has no recorded output.`}
+        {log || error || `${label} has no recorded output.`}
       </pre>
     </section>
+  );
+}
+
+/** Renders a built-in service log inside its owning machine row. */
+export function BuiltInServiceLog({ service }: BuiltInServiceLogProps) {
+  const definition = BUILT_IN_SERVICE_CONTROLS.find(
+    (candidate) => candidate.kind === service.kind,
+  )!;
+  return (
+    <InstallLogPanel
+      label={definition.label}
+      state={service.state}
+      log={service.log}
+      error={service.error}
+    />
   );
 }
 
@@ -132,7 +146,8 @@ export async function startAndOpenBuiltInService(options: {
     options.label,
     options.onSnapshot,
   );
-  const open = options.openTab ?? ((url: string) => window.open(url, "_blank", "noopener,noreferrer"));
+  const open =
+    options.openTab ?? ((url: string) => window.open(url, "_blank", "noopener,noreferrer"));
   open(resolveServiceUrl(ready.openUrl));
   return ready;
 }
@@ -256,11 +271,7 @@ export function BuiltInServiceLauncher({
         disabled={disabled}
         onClick={logsOpen ? onHideLogs : onSelectLogs}
       >
-        {installing ? (
-          <Spinner className="size-3.5" />
-        ) : (
-          <FileTextIcon className="size-3.5" />
-        )}
+        {installing ? <Spinner className="size-3.5" /> : <FileTextIcon className="size-3.5" />}
       </Button>
     </ButtonGroup>
   );

@@ -356,6 +356,9 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // as soon as the server's auto-generated title lands (see the prune
   // effect below). A manual rename (`renamedThreads`) still wins.
   const [provisionalTitles, setProvisionalTitles] = useState<Record<string, string>>({});
+  // Threads the user just deleted. The server list can lag, so hide them
+  // immediately and drop the overlay once the listing no longer returns them.
+  const [removedThreadIds, setRemovedThreadIds] = useState<ReadonlySet<string>>(() => new Set());
   // Surface the active thread in the sidebar immediately (called when its
   // first message is sent). Upserts an untitled row stamped "now" so it
   // sorts to the top; the server row replaces it on the next refresh.
@@ -880,15 +883,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
 
   const deleteThread = useCallback(
     async (threadId: string) => {
-      try {
-        await mastraClient.removeThread(threadId, { agentId });
-        logger.info("thread deleted", { threadId });
-      } catch (error) {
-        logger.error("thread delete error", {
-          threadId,
-          error: errorUtils.toError(error),
-        });
-      }
+      setRemovedThreadIds((prev) => new Set(prev).add(threadId));
       removeSession(threadId);
       setOptimisticThreads((prev) => {
         if (!prev[threadId]) return prev;
@@ -905,7 +900,22 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         resetSession(id, true);
         setActiveThreadId(id);
       }
-      refreshThreads();
+      try {
+        await mastraClient.removeThread(threadId, { agentId });
+        logger.info("thread deleted", { threadId });
+        refreshThreads();
+      } catch (error) {
+        logger.error("thread delete error", {
+          threadId,
+          error: errorUtils.toError(error),
+        });
+        setRemovedThreadIds((prev) => {
+          if (!prev.has(threadId)) return prev;
+          const next = new Set(prev);
+          next.delete(threadId);
+          return next;
+        });
+      }
     },
     [activeThreadId, agentId, mastraClient, refreshThreads, removeSession, resetSession],
   );
@@ -1094,10 +1104,21 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       .filter((t) => !serverIds.has(t.id))
       .map(withOverlay)
       .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-    return [...pending, ...server];
-  }, [threads, optimisticThreads, renamedThreads, provisionalTitles]);
+    return [...pending, ...server].filter((thread) => !removedThreadIds.has(thread.id));
+  }, [threads, optimisticThreads, renamedThreads, provisionalTitles, removedThreadIds]);
   // Once the server list includes a thread we were tracking optimistically,
   // drop the optimistic copy so the map doesn't grow without bound.
+  useEffect(() => {
+    if (removedThreadIds.size === 0) return;
+    const serverIds = new Set(threads.map((t) => t.id));
+    const settled = [...removedThreadIds].filter((id) => !serverIds.has(id));
+    if (settled.length === 0) return;
+    setRemovedThreadIds((prev) => {
+      const next = new Set(prev);
+      for (const id of settled) next.delete(id);
+      return next;
+    });
+  }, [threads, removedThreadIds]);
   useEffect(() => {
     const serverIds = new Set(threads.map((t) => t.id));
     const stale = Object.keys(optimisticThreads).filter((id) => serverIds.has(id));

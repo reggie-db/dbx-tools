@@ -100,6 +100,7 @@ export const ThreadSidebar = ({
   const [draftTitle, setDraftTitle] = useState("");
 
   const handleDeleteClick = (e: React.MouseEvent, threadId: string) => {
+    e.preventDefault();
     e.stopPropagation();
     if (!onDelete) return;
     if (confirmDeleteId !== threadId) {
@@ -229,7 +230,10 @@ export const ThreadSidebar = ({
                   >
                     <button
                       type="button"
-                      onClick={() => onSelect(thread.id)}
+                      onClick={() => {
+                        setConfirmDeleteId(null);
+                        onSelect(thread.id);
+                      }}
                       aria-current={isActive ? "page" : undefined}
                       className={cn(
                         "min-w-0 flex-1 cursor-pointer text-left transition-[padding] duration-150",
@@ -309,10 +313,8 @@ export const ThreadSidebar = ({
                                 type="button"
                                 variant={isConfirming ? "destructive" : "ghost"}
                                 size="icon"
+                                onMouseDown={(e) => e.preventDefault()}
                                 onClick={(e) => handleDeleteClick(e, thread.id)}
-                                onBlur={() =>
-                                  setConfirmDeleteId((id) => (id === thread.id ? null : id))
-                                }
                                 aria-label={
                                   isConfirming
                                     ? "Confirm delete conversation"

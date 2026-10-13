@@ -1,7 +1,12 @@
 import type { BasePluginConfig } from "@databricks/appkit";
 import { configUtils } from "@dbx-tools/core";
 import { z } from "zod";
-import { MISE_INSTALL_SCRIPT } from "./_projects.ts";
+import {
+  BREW_INSTALL_SCRIPT,
+  LOCAL_BIN_PATH_SCRIPT,
+  MISE_INSTALL_SCRIPT,
+  PKGX_INSTALL_SCRIPT,
+} from "./_projects.ts";
 
 const SSH_TRANSPORT_CONFIG_KEY = "SANDBOX_SSH_TRANSPORT";
 const SSH2_PATCH_CONFIG_KEY = "SANDBOX_SSH_SSH2_PATCH";
@@ -39,10 +44,27 @@ export type MachineSoftware = z.infer<typeof MachineSoftwareSchema>;
 
 const DEFAULT_MACHINE_SOFTWARE: MachineSoftware[] = [
   {
+    name: "local-bin-path",
+    checkCommand:
+      'test -d "$HOME/.local/bin" && grep -Fq "# dbx-tools local bin path" "$HOME/.profile" && grep -Fq "# dbx-tools local bin path" "$HOME/.bashrc" && grep -Fq "# dbx-tools local bin path" "$HOME/.zshrc"',
+    installCommand: LOCAL_BIN_PATH_SCRIPT,
+  },
+  {
     name: "mise",
     checkCommand:
-      'test -x "$HOME/.local/bin/mise" && grep -Fq "# dbx-tools mise path" "$HOME/.profile" && grep -Fq "# dbx-tools mise path" "$HOME/.bashrc" && grep -Fq "# dbx-tools mise path" "$HOME/.zshrc" && ! grep -Fq "# dbx-tools mise activation" "$HOME/.bashrc" && ! grep -Fq "# dbx-tools mise activation" "$HOME/.zshrc"',
+      'test -x "$HOME/.local/bin/mise" && grep -Fq "# dbx-tools local bin path" "$HOME/.profile" && grep -Fq "# dbx-tools local bin path" "$HOME/.bashrc" && grep -Fq "# dbx-tools local bin path" "$HOME/.zshrc" && ! grep -Fq "# dbx-tools mise activation" "$HOME/.bashrc" && ! grep -Fq "# dbx-tools mise activation" "$HOME/.zshrc"',
     installCommand: MISE_INSTALL_SCRIPT,
+  },
+  {
+    name: "brew",
+    checkCommand:
+      'test -x /home/linuxbrew/.linuxbrew/bin/brew && grep -Fq "# dbx-tools homebrew shellenv" "$HOME/.profile" && grep -Fq "# dbx-tools homebrew shellenv" "$HOME/.bashrc" && grep -Fq "# dbx-tools homebrew shellenv" "$HOME/.zshrc"',
+    installCommand: BREW_INSTALL_SCRIPT,
+  },
+  {
+    name: "pkgx",
+    checkCommand: 'test -x "$HOME/.local/bin/pkgx"',
+    installCommand: PKGX_INSTALL_SCRIPT,
   },
 ];
 
@@ -110,7 +132,7 @@ export const SshPluginConfigSchema = z
       .array(MachineSoftwareSchema)
       .default(DEFAULT_MACHINE_SOFTWARE)
       .describe(
-        "User-space software installed when a running Sandbox is first used. Defaults to mise; pass an empty array to disable setup.",
+        "User-space software installed when a running Sandbox is first used. Defaults to local bin PATH, mise, Homebrew, and pkgx; omit a step or pass an empty array to change or disable setup.",
       ),
     keyDirectory: z
       .string()

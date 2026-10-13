@@ -4,14 +4,14 @@ import {
   type PgPoolLike,
   type PgQueryable,
 } from "@dbx-tools/postgres";
-import { hash, log } from "@dbx-tools/shared-core";
+import { errorUtils, hash, log } from "@dbx-tools/shared-core";
 import {
   sshMachineServiceKindSchema,
   type AddSshProjectRequest,
   type SshMachineServiceKind,
 } from "@dbx-tools/shared-databricks-sandbox";
 import { z } from "zod";
-type ProjectConfig = NonNullable<AddSshProjectRequest["config"]>;
+type ProjectConfig = Exclude<NonNullable<AddSshProjectRequest["config"]>, string>;
 const logger = log.logger("appkit-sandbox:ownership");
 
 const MIGRATION_LOCK = ["appkit-sandbox", "machine-ownership", "migrations"] as const;
@@ -749,7 +749,7 @@ export class LakebaseMachineOwnershipStore {
     } catch (error) {
       logger.warn("Could not copy legacy Sandbox ownership into the role schema", {
         schema: this.schema,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorUtils.toError(error),
       });
     }
   }

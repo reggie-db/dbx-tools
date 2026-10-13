@@ -36,6 +36,7 @@ import {
   MemoryFileSystem,
 } from "@dbx-tools/shared-fs";
 import type { RequestContext } from "@mastra/core/request-context";
+import { createSkill, validateSkillContent, type InlineSkill } from "@mastra/core/skills";
 import {
   Workspace,
   type SkillsResolver,
@@ -208,13 +209,12 @@ export interface DatabricksWorkspaceOptions extends Omit<
   /** Add user-scoped `/tmp` only when no configured Databricks path mounts writable. */
   fallbackToTmp?: boolean;
   /**
-   * Extra LOCAL skill trees mounted read-only for every request's skill
-   * discovery. Used by the plugin to expose remote skills from local backing
-   * storage at stable virtual paths (see `remote-skills.ts`). Databricks-hosted
-   * remote skills need no entry here because the built-in Assistant mount
-   * already scans them.
+   * Extra local skill trees mounted read-only for file access. The plugin also
+   * converts them to native agent-level skills without workspace scanning.
    */
   extraSkillMounts?: LocalSkillMount[];
+  /** Skill names provided directly to agents and excluded from workspace search. */
+  excludeSkillNames?: readonly string[];
 }
 
 /* ------------------------------- defaults ------------------------------- */
@@ -292,7 +292,8 @@ export function databricksWorkspaceConfig(
       retainFilesystemSource ? mountFilesCache : undefined,
       filesystemSourceKey,
     );
-  const hasSkillPaths = paths.some(pathMayProvideSkills) || extraSkillMounts.length > 0;
+  const hasSkillPaths = paths.some(pathMayProvideSkills);
+  const excludedSkillNames = new Set(options.excludeSkillNames ?? []);
   const skills: SkillsResolver =
     options.skills ??
     (async ({ requestContext }) => {
@@ -301,6 +302,7 @@ export function databricksWorkspaceConfig(
       return resolveDistinctSkillPaths(
         await resolveFilesystem(context),
         contribution.skillPaths ?? [],
+        excludedSkillNames,
       );
     });
   const checkSkillFileMtime = options.checkSkillFileMtime ?? false;
@@ -318,6 +320,7 @@ export function databricksWorkspaceConfig(
     checkSkillFileMtime,
     bm25,
     extraSkillMounts: extraSkillMounts.length,
+    excludedSkillNames: excludedSkillNames.size,
     sandbox: sandbox ? sandboxName(options.sandbox) : "disabled",
   });
 
@@ -331,6 +334,7 @@ export function databricksWorkspaceConfig(
     sandbox: _sandbox,
     fallbackToTmp: _fallbackToTmp,
     extraSkillMounts: _extraSkillMounts,
+    excludeSkillNames: _excludeSkillNames,
     ...workspaceOptions
   } = options;
   return {
@@ -366,12 +370,22 @@ export function databricksWorkspace(options: DatabricksWorkspaceOptions = {}): W
 export function bindDatabricksWorkspaceContext(
   workspace: Workspace,
   pluginContext: pluginRegistry.PluginContextLike | undefined,
+  excludeSkillNames: readonly string[] = [],
 ): Workspace {
   const options = databricksWorkspaceOptions.get(workspace);
-  if (!options || options.pluginContext !== undefined || pluginContext === undefined) {
+  if (!options) return workspace;
+  const excluded = [...new Set([...(options.excludeSkillNames ?? []), ...excludeSkillNames])];
+  if (
+    (options.pluginContext !== undefined || pluginContext === undefined) &&
+    excluded.length === (options.excludeSkillNames?.length ?? 0)
+  ) {
     return workspace;
   }
-  return databricksWorkspace({ ...options, pluginContext });
+  return databricksWorkspace({
+    ...options,
+    ...(pluginContext !== undefined ? { pluginContext } : {}),
+    ...(excluded.length > 0 ? { excludeSkillNames: excluded } : {}),
+  });
 }
 
 /**
@@ -806,10 +820,58 @@ function localSkillMountResolvers(mounts: readonly LocalSkillMount[]): Workspace
       const source = await filesystem;
       return {
         mounts: { [mount]: filesystems(source, { readOnly: true }) },
-        skillPaths: [mount],
       };
     };
   });
+}
+
+/** Convert fast local or in-memory skill trees into native agent-level skills. */
+export async function inlineSkillsFromLocalMounts(
+  mounts: readonly LocalSkillMount[],
+): Promise<InlineSkill[]> {
+  const selected = new Map<string, InlineSkill>();
+  for (const mount of mounts) {
+    const filesystem = await inMemorySkillFilesystem(mount);
+    const entries = await filesystem.readdir("/");
+    for (const entry of entries) {
+      if (entry.type !== "directory" || selected.has(entry.name)) continue;
+      const skillPath = entry.name;
+      const skillFile = `${skillPath}/SKILL.md`;
+      if (!(await filesystem.exists(skillFile))) continue;
+      const content = await filesystem.readFile(skillFile, { encoding: "utf8" });
+      const parsed = validateSkillContent({
+        content: String(content),
+        directoryName: entry.name,
+      });
+      if (!parsed.valid || !parsed.metadata || parsed.instructions === undefined) {
+        throw new Error(`Invalid local skill ${entry.name}: ${parsed.errors.join("; ")}`);
+      }
+      const references: Record<string, string> = {};
+      for (const file of await filesystem.readdir(skillPath, { recursive: true })) {
+        if (file.type !== "file" || file.name === "SKILL.md") continue;
+        if (!/\.(md|txt|json|ya?ml|toml|sh|[cm]?[jt]sx?|py)$/i.test(file.name)) continue;
+        references[file.name] = String(
+          await filesystem.readFile(`${skillPath}/${file.name}`, { encoding: "utf8" }),
+        );
+      }
+      const metadata = parsed.metadata;
+      selected.set(
+        entry.name,
+        createSkill({
+          name: String(metadata.name),
+          description: String(metadata.description),
+          instructions: parsed.instructions,
+          ...(typeof metadata.license === "string" ? { license: metadata.license } : {}),
+          ...(metadata.compatibility !== undefined
+            ? { compatibility: metadata.compatibility }
+            : {}),
+          ...(object.isRecord(metadata.metadata) ? { metadata: metadata.metadata } : {}),
+          ...(Object.keys(references).length > 0 ? { references } : {}),
+        }),
+      );
+    }
+  }
+  return [...selected.values()];
 }
 
 function inMemorySkillFilesystem(mount: LocalSkillMount): Promise<FileSystem> {
@@ -1062,6 +1124,7 @@ async function resolveWorkspaceFilesystem(
 async function resolveDistinctSkillPaths(
   filesystem: WorkspaceFilesystem,
   paths: readonly string[],
+  excludedSkillNames: ReadonlySet<string>,
 ): Promise<string[]> {
   const selected = new Map<string, string>();
   for (const path of paths) {
@@ -1069,11 +1132,17 @@ async function resolveDistinctSkillPaths(
       const entries = await filesystem.readdir(path);
       if (entries.some((entry) => entry.type === "file" && entry.name === "SKILL.md")) {
         const name = posixPath.basename(path);
-        if (!selected.has(name)) selected.set(name, path);
+        if (!excludedSkillNames.has(name) && !selected.has(name)) selected.set(name, path);
         continue;
       }
       for (const entry of entries) {
-        if (entry.type !== "directory" || selected.has(entry.name)) continue;
+        if (
+          entry.type !== "directory" ||
+          excludedSkillNames.has(entry.name) ||
+          selected.has(entry.name)
+        ) {
+          continue;
+        }
         selected.set(entry.name, posixPath.join(path, entry.name));
       }
     } catch (error) {

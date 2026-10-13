@@ -10,12 +10,7 @@
  */
 
 import { object, type Sequence } from "@dbx-tools/shared-core";
-import {
-  globIterate,
-  globIterateSync,
-  IgnoreLike,
-  type GlobOptionsWithFileTypesUnset,
-} from "glob";
+import { globIterate, globIterateSync, IgnoreLike, type GlobOptionsWithFileTypesUnset } from "glob";
 import { GitIgnore } from "./git-ignore.ts";
 import { ignorePathMatcher } from "./ignore.ts";
 import { PathMatcher, PathMatchInput, pathMatchTests, toPathMatcher } from "./match.ts";

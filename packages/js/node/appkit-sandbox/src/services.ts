@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   SSH_SERVICE_LOG_DEFAULT_MAX_CHARS,
   SSH_SERVICE_LOG_DEFAULT_MAX_LINES,
@@ -10,6 +7,7 @@ import {
   type SshMachineServiceLogsRequest,
 } from "@dbx-tools/shared-databricks-sandbox";
 import { parse } from "smol-toml";
+import { readPackageResource } from "./_package.ts";
 import { packageScriptCommand } from "./_projects.ts";
 import { SANDBOX_PROJECTS_ROOT } from "./_sandbox-user.ts";
 import {
@@ -85,6 +83,7 @@ export interface SshRemoteLifecycleStates {
   services: ReadonlyMap<SshMachineServiceKind, "stopped" | "starting" | "ready" | "error">;
   serviceLogs: ReadonlyMap<SshMachineServiceKind, string>;
   projects: ReadonlyMap<string, "stopped" | "starting" | "ready" | "error">;
+  projectLogs: ReadonlyMap<string, string>;
 }
 
 interface ServiceMetadata {
@@ -165,6 +164,7 @@ export async function inspectSshLifecycleStates(
   const services = new Map<SshMachineServiceKind, "stopped" | "starting" | "ready" | "error">();
   const serviceLogs = new Map<SshMachineServiceKind, string>();
   const projects = new Map<string, "stopped" | "starting" | "ready" | "error">();
+  const projectLogs = new Map<string, string>();
   for (const line of result.stdout.split("\n")) {
     const [category, name, value] = line.split("\t");
     if (!name || value === undefined) continue;
@@ -175,8 +175,11 @@ export async function inspectSshLifecycleStates(
       serviceLogs.set(name, Buffer.from(value, "base64").toString("utf8"));
     }
     if (category === "project" && isLifecycleState(value)) projects.set(name, value);
+    if (category === "project-log") {
+      projectLogs.set(name, Buffer.from(value, "base64").toString("utf8"));
+    }
   }
-  return { services, serviceLogs, projects };
+  return { services, serviceLogs, projects, projectLogs };
 }
 
 /** Reads the fixed lifecycle log shared by all callers of one built-in service. */
@@ -327,13 +330,6 @@ function executeServiceTask(
       signal,
     },
   ).result;
-}
-
-function readPackageResource(...segments: string[]): string {
-  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
-  const parent = dirname(moduleDirectory);
-  const packageRoot = basename(parent) === "lib" ? dirname(parent) : parent;
-  return readFileSync(join(packageRoot, ...segments), "utf8");
 }
 
 function isLifecycleState(

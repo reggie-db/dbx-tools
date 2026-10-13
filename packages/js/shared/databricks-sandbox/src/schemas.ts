@@ -29,6 +29,7 @@ export const sshProjectSchema = z
     state: z
       .enum(["stopped", "starting", "ready", "error"])
       .describe("Current project route state."),
+    log: z.string().optional().describe("Saved trailing contents of the project install log."),
     error: z.string().optional().describe("Latest forwarding failure."),
   })
   .strict()
@@ -220,18 +221,7 @@ export const sshCommandRequestSchema = z
     timeoutMs: z.number().int().positive().max(3_600_000).optional().describe("Command timeout."),
   })
   .strict()
-  .superRefine((request, context) => {
-    for (const name of Object.keys(request.env ?? {})) {
-      if (name.startsWith("DATABRICKS_") || name === "SSH_AUTH_SOCK") {
-        context.addIssue({
-          code: "custom",
-          path: ["env", name],
-          message:
-            "SSH environment overlays cannot restore Databricks or SSH agent credentials; use a dedicated app-mediated OBO capability.",
-        });
-      }
-    }
-  })
+  .superRefine((request, context) => rejectCredentialEnvKeys(request.env, context))
   .describe("SSH command execution request.");
 export type SshCommandRequest = z.input<typeof sshCommandRequestSchema>;
 
@@ -289,10 +279,10 @@ export const addSshProjectRequestSchema = z
         "Optional project-relative entry URL, such as open.html or vnc.html?autoconnect=1. An empty string or slash opens the route root. External URLs and parent-directory traversal are rejected.",
       ),
     config: z
-      .record(z.string(), z.json())
+      .union([z.record(z.string(), z.json()), z.string().trim().min(1)])
       .optional()
       .describe(
-        "Optional raw mise configuration represented as JSON and following https://mise.jdx.dev/schema/mise.json. The server serializes it to mise.toml and injects reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT environment values. First-class tools, postinstall, and uninstall values merge over conflicting raw config fields.",
+        "Optional raw mise configuration as a JSON object, JSON object string, or TOML string. String values are checked as JSON first and otherwise parsed as TOML; malformed input and non-object roots fail project creation. The server injects reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT environment values. First-class tools, env, postinstall, and uninstall values merge over conflicting raw config fields.",
       ),
     tools: z
       .record(z.string().min(1), z.json())
@@ -300,13 +290,19 @@ export const addSshProjectRequestSchema = z
       .describe(
         "Optional mise tools table. Values use the canonical mise JSON schema at https://mise.jdx.dev/schema/mise.json. Entries merge over config.tools with the same tool name.",
       ),
+    env: z
+      .record(z.string().min(1), z.string())
+      .optional()
+      .describe(
+        "Optional mise env table. Use this for large or generated values such as HTML_CONTENT. Entries merge over config.env. Reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT may be repeated only with the injected values; other conflicts fail project creation.",
+      ),
     postinstall: z
       .string()
       .trim()
       .min(1)
       .optional()
       .describe(
-        "Optional mise hooks.postinstall shell script. It may install, prepare, or intentionally launch a workload that remains active until uninstall. It overrides config.hooks.postinstall. Use an idempotent check-lock-check pattern plus a completion marker for expensive work.",
+        "Optional mise hooks.postinstall shell script. Put application file creation, installation, preparation, initial workload launch, and readiness checks here so setup progress and completion are captured in the lifecycle log. It overrides config.hooks.postinstall. Use an idempotent check-lock-check pattern plus a completion marker for expensive work.",
       ),
     uninstall: z
       .string()
@@ -336,6 +332,7 @@ export const addSshProjectRequestSchema = z
       ),
   })
   .strict()
+  .superRefine((request, context) => rejectCredentialEnvKeys(request.env, context))
   .describe("Request to create or update an isolated, mise-managed Sandbox project.");
 export type AddSshProjectRequest = z.input<typeof addSshProjectRequestSchema>;
 
@@ -441,7 +438,7 @@ export const deleteSshMachineOperationSchema = sshMachineActionSchema
 
 export const executeSshCommandOperationSchema = sshCommandRequestSchema
   .describe(
-    "Execute a maintenance command on an assigned Sandbox. Create or select a persisted project first for app, demo, server, desktop, or persistent file work, and run from that project directory. Keep installation in mise hooks.postinstall and prefer documented mise start and stop tasks over ad-hoc workload commands. List available tasks, including hidden tasks, before invoking one.",
+    "Execute a maintenance command on an assigned Sandbox. Create or select a persisted project first for app, demo, server, desktop, or persistent file work, and run from that project directory. Keep file creation, installation, initial startup, and readiness checks in mise hooks.postinstall. Use start, stop, or hidden tasks only when the applicable skill explicitly requires a later operator action. List the applicable tasks before invoking one.",
   )
   .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
 
@@ -470,7 +467,7 @@ export const listSshProjectsOperationSchema = listSshProjectsRequestSchema
 
 export const addSshProjectOperationSchema = addSshProjectRequestSchema
   .describe(
-    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route. Prefer first-class tools, postinstall, and uninstall options; raw config follows https://mise.jdx.dev/schema/mise.json. postinstall may prepare or launch a workload, while only uninstall may be auto-called during removal or reset.",
+    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route. config accepts an object, JSON object string, or TOML string; first-class tools, env, postinstall, and uninstall options merge over it. postinstall owns file creation, installation, initial startup, and readiness checks, while only uninstall may be auto-called during removal or reset.",
   )
   .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
 
@@ -504,3 +501,19 @@ export const removeSshProjectOperationSchema = removeSshProjectRequestSchema
       requiresUserContext: true,
     },
   });
+
+function rejectCredentialEnvKeys(
+  env: Readonly<Record<string, string>> | undefined,
+  context: z.RefinementCtx,
+): void {
+  for (const name of Object.keys(env ?? {})) {
+    if (name.startsWith("DATABRICKS_") || name === "SSH_AUTH_SOCK") {
+      context.addIssue({
+        code: "custom",
+        path: ["env", name],
+        message:
+          "SSH environment overlays cannot restore Databricks or SSH agent credentials; use a dedicated app-mediated OBO capability.",
+      });
+    }
+  }
+}

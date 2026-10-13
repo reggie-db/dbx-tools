@@ -6,7 +6,7 @@ import type { Duplex } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import { exec } from "@dbx-tools/core";
 import type { ChildProcessResult } from "@dbx-tools/core/exec";
-import { log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import { SocksClient } from "socks";
 import {
   PooledSshTransport,
@@ -206,7 +206,7 @@ class NativeOpenSshResource implements OpenSshResource {
     let shutdown: Promise<void> | undefined;
     execution.setCancel(() => {
       shutdown ??= child.shutdown({ terminateTimeout: 0, killTimeout: 1_000 }).catch((error) => {
-        logger.warn("failed to stop native SSH command", { error });
+        logger.warn("failed to stop native SSH command", { error: errorUtils.toError(error) });
       });
       return shutdown;
     });
@@ -238,9 +238,11 @@ class NativeOpenSshResource implements OpenSshResource {
 
   private async closeResource(): Promise<void> {
     await this.control("exit").catch(() => undefined);
-    await this.master
-      .shutdown({ terminateTimeout: 0, killTimeout: 1_000 })
-      .catch((error) => logger.warn("failed to stop native SSH ControlMaster", { error }));
+    await this.master.shutdown({ terminateTimeout: 0, killTimeout: 1_000 }).catch((error) =>
+      logger.warn("failed to stop native SSH ControlMaster", {
+        error: errorUtils.toError(error),
+      }),
+    );
     await rm(this.directory, { recursive: true, force: true });
   }
 

@@ -39,10 +39,11 @@ import { SkillSearchProcessor, ToolCallFilter } from "@mastra/core/processors";
 import type { OutputProcessor } from "@mastra/core/processors";
 import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
 import type { RequestContext } from "@mastra/core/request-context";
+import { resolveAgentSkills, type InlineSkill } from "@mastra/core/skills";
 import type { CodeModeTransport, Tool } from "@mastra/core/tools";
 import { createCodeMode, createTool } from "@mastra/core/tools";
 import type { Workspace } from "@mastra/core/workspace";
-import { createWorkspaceTools } from "@mastra/core/workspace";
+import { createSkillTools, createWorkspaceTools } from "@mastra/core/workspace";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 import { QuickJsCodeModeTransport } from "@mastra/quickjs";
 
@@ -706,13 +707,24 @@ export async function buildAgents(opts: {
   memoryBuilder?: MemoryBuilder;
   log: log.Logger;
   /**
-   * Local skill scan paths (remote skills provisioned to a temp dir at
-   * startup) folded into every agent that uses the auto-created default
-   * workspace.
+   * Local skill filesystems mounted into every auto-created default workspace.
+   * Skill activation comes from {@link standardSkills}, not workspace search.
    */
   extraSkillMounts?: DatabricksWorkspaceOptions["extraSkillMounts"];
+  /** Fast in-memory skills passed through Mastra's standard agent skill tools. */
+  standardSkills?: readonly InlineSkill[];
+  /** Standard skill names omitted from slower Databricks workspace search. */
+  excludedWorkspaceSkillNames?: readonly string[];
 }): Promise<BuiltAgents> {
-  const { config, context, memoryBuilder, log, extraSkillMounts } = opts;
+  const {
+    config,
+    context,
+    memoryBuilder,
+    log,
+    extraSkillMounts,
+    standardSkills = [],
+    excludedWorkspaceSkillNames = [],
+  } = opts;
   const definitions = resolveDefinitions(config);
   const ids = Object.keys(definitions);
   const defaultAgentId = config.defaultAgent ?? ids[0] ?? FALLBACK_AGENT_ID;
@@ -723,13 +735,16 @@ export async function buildAgents(opts: {
   // offloading text condensing to the fast / small chat tier. The
   // user can shadow either by including a same-named tool in their own
   // `config.tools` or per-agent `tools`. Merge order is
-  // `system -> user-ambient -> per-agent`, last write wins.
+  // `system -> standard skills -> user-ambient -> per-agent`, last write wins.
   const systemTools: MastraTools = {
     render_data: buildRenderDataTool(config),
     summarize: buildSummarizeTool(config),
   };
+  const standardSkillTools =
+    standardSkills.length > 0 ? createSkillTools(resolveAgentSkills([...standardSkills])) : {};
   const ambientTools = {
     ...systemTools,
+    ...standardSkillTools,
     ...(config.tools ?? {}),
   };
   const style = resolveStyleInstructions(config);
@@ -764,6 +779,7 @@ export async function buildAgents(opts: {
     ) {
       workspace = databricksWorkspace({
         extraSkillMounts,
+        excludeSkillNames: excludedWorkspaceSkillNames,
         fallbackToTmp: config.workspaceFallbackToTmp,
         ...(config.workspaceTools !== undefined ? { tools: config.workspaceTools } : {}),
         pluginContext: context,
@@ -771,7 +787,7 @@ export async function buildAgents(opts: {
       });
       markDefaultWorkspace(workspace);
     } else if (workspace) {
-      workspace = bindDatabricksWorkspaceContext(workspace, context);
+      workspace = bindDatabricksWorkspaceContext(workspace, context, excludedWorkspaceSkillNames);
     }
     const gated = approvalGatedToolIds(tools);
     if (gated.length > 0) approvalGatedByAgent.push({ agentId: id, toolIds: gated });

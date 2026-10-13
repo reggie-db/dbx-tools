@@ -4,14 +4,25 @@ set -eu
 user=sandbox-user
 group=sandbox-user
 home=/home/sandbox-user
-state=/var/lib/dbx-tools/sandbox-user-v2
+brew_prefix=/home/linuxbrew/.linuxbrew
+brew_packages="build-essential procps curl file git"
+state=/var/lib/dbx-tools/sandbox-user-v3
 lock=/var/lock/dbx-tools-sandbox-user.lock
 sudoers=/etc/sudoers.d/zz-dbx-tools-sandbox-user
 
+brew_packages_installed() {
+  for package in $brew_packages; do
+    dpkg-query -W -f='${Status}' "$package" 2>/dev/null |
+      grep -q 'install ok installed' || return 1
+  done
+}
+
 is_ready() {
   [ -f "$state" ] || return 1
-  command -v pkgx >/dev/null 2>&1 || return 1
   [ -f "$sudoers" ] || return 1
+  brew_packages_installed || return 1
+  [ -d "$brew_prefix" ] || return 1
+  [ "$(stat -c %U "$brew_prefix")" = "$user" ] || return 1
   [ ! -d /root ] || [ "$(stat -c %a /root)" = 700 ] || return 1
   entry=$(getent passwd "$user" 2>/dev/null || true)
   [ -n "$entry" ] || return 1
@@ -44,16 +55,6 @@ trap 'rm -rf -- "$lock"' EXIT HUP INT TERM
 if is_ready; then
   exit 0
 fi
-
-if ! command -v pkgx >/dev/null 2>&1; then
-  if ! command -v curl >/dev/null 2>&1; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ca-certificates curl
-  fi
-  curl -fsS https://pkgx.sh | sh
-fi
-command -v pkgx >/dev/null 2>&1
 
 if id "$user" >/dev/null 2>&1; then
   entry=$(getent passwd "$user")
@@ -109,6 +110,15 @@ migrate_directory "$legacy/.local" "$home/.local"
 migrate_directory "$legacy/.config" "$home/.config"
 find "$home/.dbx-tools" -type f -name '*.pid' -delete
 find "$home/.dbx-tools/operations" -type d -name lifecycle.lock -prune -exec rm -rf -- {} +
+
+if ! brew_packages_installed; then
+  command -v apt-get >/dev/null 2>&1
+  apt-get update
+  # shellcheck disable=SC2086
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $brew_packages
+fi
+install -d -m 0755 "$(dirname "$brew_prefix")"
+install -d -m 0755 -o "$user" -g "$group" "$brew_prefix"
 
 install -d -m 0755 "$(dirname "$state")"
 temporary="$state.tmp.$$"

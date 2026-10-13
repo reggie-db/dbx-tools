@@ -1,41 +1,50 @@
 ---
 name: network-speed-test
-description: Measure browser-to-AppKit-to-Sandbox HTTP throughput through a persisted Sandbox project.
+description: Run LibreSpeed in an assigned Databricks Sandbox to measure browser-to-AppKit-to-Sandbox HTTP throughput.
 ---
 
 # Network Speed Test
 
-Project workflow is required. Explicit runtime tasks come from the project's
-mise config, while its first-class `uninstall` owns automatic removal.
-Do not install packages, write launch scripts, or start
-servers with ad-hoc commands. Use
-`execute_ssh_command` to write the application files below and to invoke the
-documented mise task, with `cwd` set to the returned `directory`. Before
-running a task, call
-`execute_ssh_command` with `command: "sh"` and
-`args: ["-lc", "\"$HOME/.local/bin/mise\" tasks ls --name-only --hidden"]`.
-Evaluate the result; use `start` to launch the server and `stop` to stop it.
+Project workflow is required. Put LibreSpeed launch in `hooks.postinstall` so
+`add_ssh_project` reports setup progress and returns only after the server is
+ready. Do not define `start`, `stop`, or hidden tasks. The first-class
+`uninstall` owns automatic removal.
 Use only the returned `directory`, `port`, `path`, and `openUrl`.
 Do not write demo files under
 `~/.dbx-tools/runtime`, invent a route, publish a direct Sandbox URL, or add a
 second password or token. All setup and tasks run as the fixed, unprivileged
-`sandbox-user`.
+`sandbox-user`. Do not call public speed-test services or external CDNs.
 
 ## Setup project options
 
 Call `list_ssh_machines` first and use only a returned machine `id`. Reuse an
 existing project on that machine when `projects` already contains this recipe.
 Call `add_ssh_project` with that `machineId`,
-`name: "speed-test"`, and this mise configuration as the `config` object:
+`name: "speed-test"`, and the complete TOML below as `config`:
 
 ```toml
 [tools]
-python = "3.12.12"
+"github:librespeed/speedtest-go" = "1.1.6"
 
-[tasks.start]
-run = '''
-[ -f server.py ] || exit 0
-stamp="$(cksum < server.py)"
+[hooks]
+postinstall = '''
+set -eu
+cat > settings.toml <<EOF
+bind_address = "127.0.0.1"
+listen_port = ${PROJECT_PORT}
+server_lat = 1
+server_lng = 1
+database_type = "none"
+EOF
+if command -v speedtest-go >/dev/null 2>&1; then
+  speedtest_bin=speedtest-go
+elif command -v speedtest >/dev/null 2>&1; then
+  speedtest_bin=speedtest
+else
+  printf 'LibreSpeed binary not found on PATH\n' >&2
+  exit 1
+fi
+stamp="$(cksum < settings.toml)"
 if [ -f server.pid ]; then
   pid="$(tr -d '[:space:]' < server.pid)"
   case "$pid" in
@@ -44,7 +53,7 @@ if [ -f server.pid ]; then
       process_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
       process_command="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
       case "$process_command" in
-        *python*server.py*)
+        *speedtest*)
           if kill -0 "$pid" 2>/dev/null && [ "$process_cwd" = "$PWD" ] && \
             [ "$stamp" = "$(cat server.stamp 2>/dev/null)" ]; then exit 0; fi
           ;;
@@ -53,21 +62,23 @@ if [ -f server.pid ]; then
   esac
   "$HOME/.local/bin/mise" run uninstall
 fi
-nohup setsid python server.py > server.log 2>&1 < /dev/null &
+nohup setsid "$speedtest_bin" > server.log 2>&1 < /dev/null &
 echo $! > server.pid
 printf '%s\n' "$stamp" > server.stamp
-'''
-
-[tasks.stop]
-run = '''
-"$HOME/.local/bin/mise" run uninstall
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+  if bash -c 'exec 3<>/dev/tcp/127.0.0.1/'"$PROJECT_PORT" 2>/dev/null; then
+    exit 0
+  fi
+  sleep 0.2
+done
+cat server.log >&2
+exit 1
 '''
 ```
 
-The `start` task waits for `server.py`, starts it, and restarts it only when the
-file changes.
-
-Pass the following script as the first-class `uninstall` option:
+mise installs LibreSpeed from GitHub releases. The postinstall hook writes
+loopback `settings.toml`, starts the binary, and waits until it accepts
+connections. Pass the following script as the first-class `uninstall` option:
 
 ```sh
 set -eu
@@ -79,7 +90,7 @@ if [ -f server.pid ]; then
       process_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
       process_command="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
       case "$process_command" in
-        *python*server.py*) owned=true ;;
+        *speedtest*) owned=true ;;
         *) owned=false ;;
       esac
       if kill -0 "$pid" 2>/dev/null && [ "$process_cwd" = "$PWD" ] && [ "$owned" = true ]; then
@@ -114,26 +125,8 @@ rm -f server.pid server.stamp
 
 Uninstall validates the PID's command and working directory before terminating
 the isolated process group. It always removes malformed, dead, mismatched, or
-completed PID and stamp files, so repeated removal is safe.
-
-## Application
-
-Write `index.html` and `server.py` in the returned `directory`. The page and
-server measure download throughput, upload throughput, request latency, and
-jitter. Generate payloads locally, cap transfer sizes, and show the sample
-count and elapsed time. Do not call public speed-test services or external
-CDNs. `server.py` uses the Python standard library, serves `index.html`, and
-binds to loopback at `127.0.0.1` on `int(os.environ["PROJECT_PORT"])`. Use
-relative fetch URLs.
-
-After writing or changing the files, list the project tasks and confirm
-`start` is present. From the returned `directory`, call
-`execute_ssh_command` with `command: "sh"` and
-`args: ["-lc", "\"$HOME/.local/bin/mise\" run start"]` so the task starts or
-restarts the server. To stop the server, use the same command and directory
-with `args: ["-lc", "\"$HOME/.local/bin/mise\" run stop"]`; `stop` delegates
-to `uninstall`. Project removal invokes `uninstall` automatically and never
-invokes `stop`. Return the project's `openUrl`.
+completed PID and stamp files, so repeated removal is safe. Project removal
+invokes `uninstall` automatically. Return the project's `openUrl` as a Markdown link.
 
 Label the result as browser-to-AppKit-to-Sandbox performance, including proxy
 and SSH forwarding overhead. It is not an ISP or raw workspace network test.

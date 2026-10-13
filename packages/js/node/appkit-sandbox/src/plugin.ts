@@ -601,7 +601,8 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
             ...response,
             machines: response.machines.map((machine) => ({
               ...machine,
-              services: machine.services.map(({ log: _log, ...service }) => service),
+              services: machine.services.map(omitLifecycleLog),
+              projects: machine.projects.map(omitLifecycleLog),
             })),
           };
         },
@@ -664,7 +665,9 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
         execute: () =>
           execute("listProjects", async (client, resolvedUserId) => ({
             pathPrefix: this.runtime.projectPathPrefix(resolvedUserId),
-            projects: await this.runtime.projectList(client, resolvedUserId),
+            projects: (await this.runtime.projectList(client, resolvedUserId)).map(
+              omitLifecycleLog,
+            ),
           })),
       },
       add_ssh_project: {
@@ -759,6 +762,11 @@ async function observeServiceForAgent(
     if (snapshot.state === "error") return { exitCode: 1 };
   }
   return { exitCode: 1 };
+}
+
+/** Drops saved install logs from agent listings so tool results stay small. */
+function omitLifecycleLog<T extends { log?: string }>({ log: _log, ...value }: T): Omit<T, "log"> {
+  return value;
 }
 
 function resolveUpgradeIdentityGate(plugin: unknown): UpgradeIdentityGate | undefined {

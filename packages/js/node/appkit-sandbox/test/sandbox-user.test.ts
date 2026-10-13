@@ -34,12 +34,20 @@ describe("Sandbox user provisioning", () => {
     assert.match(SANDBOX_USER_SETUP_SCRIPT, /chmod 0700 \/root/);
     assert.match(SANDBOX_USER_SETUP_SCRIPT, /find "\$source" -type l/);
     assert.match(SANDBOX_USER_SETUP_SCRIPT, /chown -R --no-dereference/);
+    assert.doesNotMatch(SANDBOX_USER_SETUP_SCRIPT, /pkgx|# dbx-tools local bin path/);
   });
 
-  it("installs pkgx during privileged provisioning", () => {
-    assert.match(SANDBOX_USER_SETUP_SCRIPT, /command -v pkgx/);
-    assert.match(SANDBOX_USER_SETUP_SCRIPT, /apt-get install -y --no-install-recommends/);
-    assert.match(SANDBOX_USER_SETUP_SCRIPT, /ca-certificates curl/);
-    assert.match(SANDBOX_USER_SETUP_SCRIPT, /curl -fsS https:\/\/pkgx\.sh \| sh/);
+  it("installs Homebrew prerequisites and a user-owned prefix", () => {
+    assert.match(SANDBOX_USER_SETUP_SCRIPT, /brew_packages="build-essential procps curl file git"/);
+    assert.match(
+      SANDBOX_USER_SETUP_SCRIPT,
+      /apt-get install -y --no-install-recommends \$brew_packages/,
+    );
+    assert.match(SANDBOX_USER_SETUP_SCRIPT, /brew_prefix=\/home\/linuxbrew\/\.linuxbrew/);
+    assert.match(
+      SANDBOX_USER_SETUP_SCRIPT,
+      /install -d -m 0755 -o "\$user" -g "\$group" "\$brew_prefix"/,
+    );
+    assert.doesNotMatch(SANDBOX_USER_SETUP_SCRIPT, /Homebrew\/install/);
   });
 });

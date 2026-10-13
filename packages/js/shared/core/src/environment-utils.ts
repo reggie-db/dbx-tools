@@ -5,8 +5,7 @@ import { toBoolean } from "./object.ts";
 export const DATABRICKS_APP_SOURCE_ROOT = "/app/python/source_code";
 
 function runtimeProcess():
-  | { env?: Record<string, string | undefined>; cwd?: () => string }
-  | undefined {
+  { env?: Record<string, string | undefined>; cwd?: () => string } | undefined {
   return (
     globalThis as typeof globalThis & {
       process?: { env?: Record<string, string | undefined>; cwd?: () => string };

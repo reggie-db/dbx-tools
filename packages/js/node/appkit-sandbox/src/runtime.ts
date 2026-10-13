@@ -38,6 +38,7 @@ import {
 import {
   DESKTOP_PREREQUISITES_SCRIPT,
   privilegedSandboxExecution,
+  SANDBOX_HOME,
   SANDBOX_USER_SETUP_SCRIPT,
 } from "./_sandbox-user.ts";
 import type { ResolvedSshPluginConfig } from "./config.ts";
@@ -111,6 +112,7 @@ export class SshRuntime {
   private ownership?: LakebaseMachineOwnershipStore;
   private readonly services = new Map<string, SshMachineService>();
   private readonly projectStates = new Map<string, SshProject["state"]>();
+  private readonly projectLogs = new Map<string, string>();
   private readonly startingServices = new Map<string, Promise<SshMachineService>>();
   private readonly machineTransitions = new Map<string, Promise<SandboxEntry>>();
   private readonly machineEpochs = new Map<string, number>();
@@ -908,7 +910,11 @@ export class SshRuntime {
     void this.sessions
       .get(key)
       ?.close()
-      .catch((error) => logger.warn("failed to close disconnected SSH session", { error }));
+      .catch((error) =>
+        logger.warn("failed to close disconnected SSH session", {
+          error: errorUtils.toError(error),
+        }),
+      );
     this.sessions.delete(key);
     this.connecting.delete(key);
   }
@@ -1284,6 +1290,7 @@ export class SshRuntime {
           `if ! (${software.checkCommand}); then\n${software.installCommand}\nfi\n${software.checkCommand}`,
         ],
         {
+          cwd: SANDBOX_HOME,
           timeoutMs: Math.max(this.config.commandTimeoutMs, 600_000),
           signal,
         },
@@ -1647,7 +1654,9 @@ export class SshRuntime {
   }
 
   private toProject(project: SandboxProjectRecord, ready: boolean): SshProject {
-    const remoteState = this.projectStates.get(projectStateKey(project));
+    const key = projectStateKey(project);
+    const remoteState = this.projectStates.get(key);
+    const log = this.projectLogs.get(key);
     return {
       id: project.projectId,
       name: project.name,
@@ -1658,6 +1667,7 @@ export class SshRuntime {
       port: project.port,
       stripPrefix: project.stripPrefix,
       state: remoteState ?? (!project.route || ready ? "ready" : "stopped"),
+      ...(log !== undefined ? { log } : {}),
     };
   }
 
@@ -1768,6 +1778,11 @@ export class SshRuntime {
         this.projectStates.delete(key);
       }
     }
+    for (const key of this.projectLogs.keys()) {
+      if (projectStateKeyMatchesMachine(key, workspaceScope, machineId)) {
+        this.projectLogs.delete(key);
+      }
+    }
     this.machineSetup.delete(machineRuntimeKey(workspaceScope, machineId));
     await this.routes.removeMachine(machineId);
   }
@@ -1810,8 +1825,11 @@ export class SshRuntime {
         }
       }
       for (const project of projects) {
+        const key = projectStateKey(project);
         const state = states.projects.get(project.projectPath);
-        if (state) this.projectStates.set(projectStateKey(project), state);
+        if (state) this.projectStates.set(key, state);
+        const log = states.projectLogs.get(project.projectPath);
+        if (log !== undefined) this.projectLogs.set(key, log);
       }
     } catch (error) {
       logger.debug("Sandbox lifecycle status inspection failed", {

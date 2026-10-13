@@ -148,7 +148,9 @@ describe("installAsUserDevelopmentPatch", () => {
     const first = req({ "x-forwarded-email": "ada@example.com" });
     const second = req({ "x-forwarded-email": "ada@example.com" });
     const skipWarn = (args: unknown[]) =>
-      args.some((value) => typeof value === "string" && value.includes("Skipping user impersonation"));
+      args.some(
+        (value) => typeof value === "string" && value.includes("Skipping user impersonation"),
+      );
     const warns: unknown[][] = [];
     const debugs: unknown[][] = [];
     const warn = console.warn;

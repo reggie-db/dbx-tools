@@ -1,42 +1,47 @@
 ---
 name: realtime-whiteboard
-description: Build a collaborative browser whiteboard that demonstrates owner-scoped WebSocket routing through an assigned Databricks Sandbox.
+description: Run the WBO collaborative whiteboard in an assigned Databricks Sandbox to demonstrate owner-scoped WebSocket routing.
 ---
 
 # Realtime Whiteboard
 
-Project workflow is required. Explicit runtime tasks come from the project's
-mise config, while its first-class `uninstall` owns automatic removal.
-Do not install packages, write launch scripts, or start
-servers with ad-hoc commands. Use
-`execute_ssh_command` to write the application files below and to invoke the
-documented mise task, with `cwd` set to the returned `directory`. Before
-running a task, call
-`execute_ssh_command` with `command: "sh"` and
-`args: ["-lc", "\"$HOME/.local/bin/mise\" tasks ls --name-only --hidden"]`.
-Evaluate the result; use `start` to launch the server and `stop` to stop it.
+Project workflow is required. Put WBO installation and the initial server
+launch in `hooks.postinstall` so `add_ssh_project` reports setup progress and
+returns only after the whiteboard is ready. Do not define `start`, `stop`, or
+hidden tasks. The first-class `uninstall` owns automatic removal.
 Use only the returned `directory`, `port`, `path`, and `openUrl`.
-Do not write demo files under
-`~/.dbx-tools/runtime`, invent a route, publish a direct Sandbox URL, or add a
-second password or token. All setup and tasks run as the fixed, unprivileged
-`sandbox-user`.
+Do not write project files under `~/.dbx-tools/runtime`, invent a route,
+publish a direct Sandbox URL, or add a second password or token. All setup and
+tasks run as the fixed, unprivileged `sandbox-user`.
 
 ## Setup project options
 
 Call `list_ssh_machines` first and use only a returned machine `id`. Reuse an
 existing project on that machine when `projects` already contains this recipe.
 Call `add_ssh_project` with that `machineId`,
-`name: "realtime-whiteboard"`, and this mise configuration as the `config`
-object:
+`name: "realtime-whiteboard"`, and the complete TOML below as `config`:
 
 ```toml
 [tools]
-bun = "1.4.2"
+node = "24"
 
-[tasks.start]
-run = '''
-[ -f server.ts ] || exit 0
-stamp="$(cat server.ts index.html 2>/dev/null | cksum)"
+[env]
+WBO_VERSION = "2.17.1"
+WBO_HISTORY_DIR = "{{config_root}}/boards"
+
+[hooks]
+postinstall = '''
+set -eu
+marker="app/.installed-$WBO_VERSION"
+if [ ! -f "$marker" ]; then
+  rm -rf app
+  mkdir -p app
+  curl -fsSL "https://github.com/lovasoa/whitebophir/archive/refs/tags/v$WBO_VERSION.tar.gz" \
+    | tar -xz --strip-components=1 -C app
+  (cd app && npm install --omit=dev --ignore-scripts --no-audit --no-fund) > setup.log 2>&1
+  touch "$marker"
+fi
+mkdir -p "$WBO_HISTORY_DIR"
 if [ -f server.pid ]; then
   pid="$(tr -d '[:space:]' < server.pid)"
   case "$pid" in
@@ -45,30 +50,35 @@ if [ -f server.pid ]; then
       process_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
       process_command="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
       case "$process_command" in
-        *bun*server.ts*)
-          if kill -0 "$pid" 2>/dev/null && [ "$process_cwd" = "$PWD" ] && \
-            [ "$stamp" = "$(cat server.stamp 2>/dev/null)" ]; then exit 0; fi
+        *node*server/server.mjs*)
+          if kill -0 "$pid" 2>/dev/null && [ "$process_cwd" = "$PWD/app" ]; then exit 0; fi
           ;;
       esac
       ;;
   esac
   "$HOME/.local/bin/mise" run uninstall
 fi
-nohup setsid bun server.ts > server.log 2>&1 < /dev/null &
-echo $! > server.pid
-printf '%s\n' "$stamp" > server.stamp
-'''
-
-[tasks.stop]
-run = '''
-"$HOME/.local/bin/mise" run uninstall
+(
+  cd app
+  HOST=127.0.0.1 PORT="$PROJECT_PORT" \
+    nohup setsid node server/server.mjs > ../server.log 2>&1 < /dev/null &
+  echo $! > ../server.pid
+)
+for _ in $(seq 1 50); do
+  if bash -c 'exec 3<>/dev/tcp/127.0.0.1/'"$PROJECT_PORT" 2>/dev/null; then
+    exit 0
+  fi
+  sleep 0.2
+done
+cat server.log >&2
+exit 1
 '''
 ```
 
-The `start` task waits for `server.ts`, starts it, and restarts it only when the
-server or page changes.
-
-Pass the following script as the first-class `uninstall` option:
+The install hook downloads the pinned WBO release once, installs its
+production dependencies, launches it on loopback, and waits until it accepts
+connections. Boards persist in the project's `boards` directory. Pass the
+following script as the first-class `uninstall` option:
 
 ```sh
 set -eu
@@ -80,10 +90,10 @@ if [ -f server.pid ]; then
       process_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
       process_command="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
       case "$process_command" in
-        *bun*server.ts*) owned=true ;;
+        *node*server/server.mjs*) owned=true ;;
         *) owned=false ;;
       esac
-      if kill -0 "$pid" 2>/dev/null && [ "$process_cwd" = "$PWD" ] && [ "$owned" = true ]; then
+      if kill -0 "$pid" 2>/dev/null && [ "$process_cwd" = "$PWD/app" ] && [ "$owned" = true ]; then
         pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
         if [ "$pgid" = "$pid" ]; then
           kill -TERM -- "-$pid" 2>/dev/null || true
@@ -110,35 +120,11 @@ if [ -f server.pid ]; then
       ;;
   esac
 fi
-rm -f server.pid server.stamp
+rm -f server.pid
 ```
 
 Uninstall validates the PID's command and working directory before terminating
-the isolated process group. It always removes malformed, dead, mismatched, or
-completed PID and stamp files, so repeated removal is safe.
-
-## Application
-
-Write `index.html` and `server.ts` in the returned `directory`. Build one
-self-contained page with pointer and touch drawing, color and stroke controls,
-undo, clear, connection state, and participant count. Use Bun's HTTP and
-WebSocket APIs. Keep bounded in-memory history, validate message shapes, cap
-message sizes, and broadcast drawing operations instead of screenshots.
-
-`server.ts` binds to loopback at `127.0.0.1` on
-`Number(process.env.PROJECT_PORT)`. The browser must derive `ws://` or `wss://`
-from the current public origin and connect below the returned project path.
-Use relative HTTP URLs.
-
-After writing or changing the files, list the project tasks and confirm
-`start` is present. From the returned `directory`, call
-`execute_ssh_command` with `command: "sh"` and
-`args: ["-lc", "\"$HOME/.local/bin/mise\" run start"]` so the task starts or
-restarts the server. To stop the server, use the same command and directory
-with `args: ["-lc", "\"$HOME/.local/bin/mise\" run stop"]`; `stop` delegates
-to `uninstall`. Project removal invokes `uninstall` automatically and never
-invokes `stop`. Return the project's `openUrl`.
-
-AppKit forwards standard HTTP Upgrade requests and strips the project path when
-`stripPrefix` is true. Raw TCP, UDP, fixed-root socket URLs, and a second
-unregistered port are not supported.
+the isolated process group, so repeated removal is safe. Installation failures
+fail `add_ssh_project`; inspect `setup.log` and `server.log` in the project
+directory with `execute_ssh_command` for diagnostics only. Project removal
+invokes `uninstall` automatically. Return the project's `openUrl` as a Markdown link.

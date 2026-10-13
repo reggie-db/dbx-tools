@@ -1,16 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { describe, it } from "node:test";
+import { parse } from "smol-toml";
 import { databricksSandboxSkillMounts } from "../src/skills.ts";
 
-const showcaseSkills = [
-  "browser-synth",
-  "fractal-lab",
-  "jupyter-lab",
-  "network-speed-test",
-  "particle-physics-lab",
-  "realtime-whiteboard",
-];
+const showcaseSkills = ["html-page", "jupyter-lab", "network-speed-test", "realtime-whiteboard"];
 
 describe("databricksSandboxSkillMounts", () => {
   it("packages route-aware showcase recipes", async () => {
@@ -18,18 +12,26 @@ describe("databricksSandboxSkillMounts", () => {
     assert.ok(mount);
     assert.equal(mount.mountPath, "/.dbx-tools/skills");
     const entries = await readdir(mount.root, { withFileTypes: true });
-    const directories = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
+    const directories = (
+      await Promise.all(
+        entries
+          .filter((entry) => entry.isDirectory())
+          .map(async (entry) =>
+            (await readdir(`${mount.root}/${entry.name}`)).includes("SKILL.md")
+              ? entry.name
+              : undefined,
+          ),
+      )
+    )
+      .filter((entry): entry is string => entry !== undefined)
       .sort();
+    assert.deepEqual(directories, showcaseSkills);
 
     for (const skill of showcaseSkills) {
-      assert.ok(directories.includes(skill), `missing packaged skill ${skill}`);
       const source = await readFile(`${mount.root}/${skill}/SKILL.md`, "utf8");
       assert.match(source, /Project workflow is required/);
       assert.match(source, /list_ssh_machines/);
       assert.match(source, /add_ssh_project/);
-      assert.match(source, /execute_ssh_command/);
       assert.match(source, /~\/.dbx-tools\/runtime/);
       assert.match(source, /loopback/i);
       assert.match(source, /openUrl/);
@@ -37,49 +39,39 @@ describe("databricksSandboxSkillMounts", () => {
       assert.match(source, /## Setup project options/);
       assert.match(source, /first-class `uninstall`/);
       assert.match(source, /unprivileged\s+`sandbox-user`/);
-      assert.match(source, /\[tasks\.start\]\nrun = '''/);
-      assert.match(source, /\[tasks\.stop\]\nrun = '''/);
-      assert.match(source, /tasks ls --name-only --hidden/);
-      assert.match(source, /run start/);
-      assert.match(source, /run stop/);
-      assert.match(source, /command: "sh"/);
-      assert.match(source, /args: \["-lc",/);
-      assert.doesNotMatch(source, /command: "mise /);
+      assert.match(source, /\[hooks\]\npostinstall = '''/);
+      assert.match(source, /waits? until/i);
+      assert.match(source, /Markdown link/);
+      assert.doesNotMatch(source, /\[tasks\.start\]/);
+      assert.doesNotMatch(source, /\[tasks\.stop\]/);
+      assert.doesNotMatch(source, /--hidden/);
       assert.doesNotMatch(source, /\[tasks\.run\]/);
       assert.doesNotMatch(source, /hide = true/);
-      assert.doesNotMatch(source, /sudo|apt-get/);
-      assert.match(source, /Do not install\s+packages, write launch scripts, or start\s+servers/);
+      assert.doesNotMatch(source, /\b(?:sudo|apt-get|dnf|yum|pacman|pkexec)\b/);
+      assert.match(source, /Do not define\s+`start`, `stop`, or\s+hidden tasks/);
+      const toml = source.match(/```toml\n([\s\S]*?)\n```/)?.[1];
+      assert.ok(toml);
+      const config = parse(toml) as {
+        hooks?: { postinstall?: string };
+        tasks?: Record<string, unknown>;
+      };
+      assert.ok(config.hooks?.postinstall);
+      assert.equal(config.tasks?.start, undefined);
+      assert.equal(config.tasks?.stop, undefined);
     }
-
-    for (const skill of ["vnc-server"]) {
-      assert.ok(directories.includes(skill), `missing packaged skill ${skill}`);
-      const source = await readFile(`${mount.root}/${skill}/SKILL.md`, "utf8");
-      assert.match(source, /start_ssh_machine_service/);
-      assert.match(source, /service: "desktop"/);
-      assert.match(source, /openUrl/);
-      assert.match(source, /built-in/i);
-    }
-
-    const freedoom = await readFile(`${mount.root}/freedoom-desktop/SKILL.md`, "utf8");
-    assert.match(freedoom, /list_ssh_machines/);
-    assert.match(freedoom, /add_ssh_project/);
-    assert.match(freedoom, /route: false/);
-    assert.match(freedoom, /serviceDependencies: \["desktop"\]/);
-    assert.match(freedoom, /first-class `postinstall`/);
-    assert.match(freedoom, /first-class `uninstall`/);
-    assert.match(freedoom, /check-lock-check/);
-    assert.match(freedoom, /pkill -P "\$pid"/);
-    assert.doesNotMatch(freedoom, /sudo|apt-get/);
-    assert.doesNotMatch(freedoom, /kasmvnc(server)? /i);
-    assert.match(freedoom, /~\/\.dbx-tools\/runtime\/desktop\/run/);
-    assert.doesNotMatch(freedoom, /DISPLAY=:\d+/);
-    assert.doesNotMatch(freedoom, /ls \/tmp\/\.X11-unix/);
-    const jupyter = await readFile(`${mount.root}/jupyter-lab/SKILL.md`, "utf8");
-    assert.match(jupyter, /\[hooks\]\npostinstall = '''/);
-    const desktop = await readFile(`${mount.root}/vnc-server/SKILL.md`, "utf8");
-    assert.doesNotMatch(desktop, /add_ssh_project/);
-    assert.doesNotMatch(desktop, /apt-get/);
-    assert.match(desktop, /~\/\.dbx-tools\/runtime\/desktop\/run/);
-    assert.doesNotMatch(desktop, /DISPLAY=:\d+/);
+    const htmlPage = await readFile(`${mount.root}/html-page/SKILL.md`, "utf8");
+    assert.match(htmlPage, /Web Audio synthesizer/);
+    assert.match(htmlPage, /Mandelbrot and Julia explorer/);
+    assert.match(htmlPage, /particle and gravity simulation/);
+    assert.match(htmlPage, /env\.HTML_CONTENT/);
+    assert.match(htmlPage, /printf %s "\$HTML_CONTENT"/);
+    assert.doesNotMatch(htmlPage, /REPLACE_WITH_COMPLETE_APPLICATION_HTML/);
+    const speedTest = await readFile(`${mount.root}/network-speed-test/SKILL.md`, "utf8");
+    assert.match(speedTest, /github:librespeed\/speedtest-go/);
+    assert.doesNotMatch(speedTest, /REPLACE_WITH_COMPLETE_/);
+    const whiteboard = await readFile(`${mount.root}/realtime-whiteboard/SKILL.md`, "utf8");
+    assert.match(whiteboard, /lovasoa\/whitebophir/);
+    assert.doesNotMatch(whiteboard, /REPLACE_WITH_COMPLETE_/);
+    assert.doesNotMatch(whiteboard, /\bPROJECT_NAME=/);
   });
 });

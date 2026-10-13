@@ -1307,8 +1307,10 @@ project.applyToProjects(
 // (Tailwind via bun-plugin-tailwind). Local `bun run demo` omits `staticPath` so
 // AppKit `server()` serves this package through Vite middleware HMR.
 project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: "app" }, (p) => {
+  projectJs.applyCompilerOptions(p, { rootDir: "." });
+  projectJs.applyIncludes(p, "vite.config.ts");
   p.package.addField("private", true);
-  p.addDevDeps("@dbx-tools/tunnel@workspace:^");
+  p.addDevDeps("@dbx-tools/tunnel@workspace:^", "vite@catalog:");
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/ui@workspace:^",

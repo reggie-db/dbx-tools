@@ -47,10 +47,7 @@ export class GitIgnore {
   }
 
   /** Load every applicable `.gitignore` beneath {@link root}. */
-  static async load(
-    root: string | URL,
-    options: GitIgnoreLoadOptions = {},
-  ): Promise<GitIgnore> {
+  static async load(root: string | URL, options: GitIgnoreLoadOptions = {}): Promise<GitIgnore> {
     const result = new GitIgnore(root);
     for (const path of await glob("**/.gitignore", discoveryOptions(result.root, options))) {
       result.set(path, await readFile(resolve(result.root, path), "utf8"));

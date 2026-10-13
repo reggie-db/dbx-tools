@@ -1,9 +1,9 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import tailwindcss from "@tailwindcss/vite";
-import { plugin as tunnel } from "@dbx-tools/tunnel";
-import { createLogger, defineConfig } from "vite";
 import { log } from "@dbx-tools/shared-core";
+import { plugin as tunnel } from "@dbx-tools/tunnel";
+import tailwindcss from "@tailwindcss/vite";
+import { createLogger, defineConfig } from "vite";
 
 /**
  * Loaded by AppKit `server()` in development when `staticPath` is omitted.

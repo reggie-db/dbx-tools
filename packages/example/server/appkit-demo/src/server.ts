@@ -49,7 +49,11 @@ function silenceHttpAccessLogs(): void {
     originalLog(...args);
   };
   const originalWrite = process.stdout.write.bind(process.stdout);
-  process.stdout.write = ((chunk: string | Uint8Array, encoding?: BufferEncoding, cb?: () => void) => {
+  process.stdout.write = ((
+    chunk: string | Uint8Array,
+    encoding?: BufferEncoding,
+    cb?: () => void,
+  ) => {
     const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString();
     const lines = text.split(/\r?\n/);
     const meaningful = lines.filter((line, index) => {
@@ -341,135 +345,134 @@ const searchProvider = USE_VECTOR_SEARCH
 const previousCwd = process.cwd();
 if (useAppKitVite) process.chdir(demoClientRoot);
 try {
-await appkit.createApp({
-  plugins: [
-    // AppKit's server plugin enables HTTP/Express tracing by default whenever
-    // an exporter is active. This demo wants agent traces, not one trace per
-    // request; appkit-mastra creates a request-lifetime chat root when the HTTP
-    // instrumentation is disabled.
-    server({
-      host,
-      telemetry: { traces: false, logs: false },
-      ...(useAppKitVite ? {} : { staticPath: clientDist }),
-    }),
-    genie(),
-    lakebase({ pool: postgresConnectionOptions({}) }),
-    filesCache(),
-    databricksSandbox({ runtime: databricksSandboxRuntime }),
-    ...(graphitiEnabled ? [graphiti()] : []),
-    // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
-    // Lakebase connection and fans topic broadcasts out to its browser viewers.
-    ...(busEnabled ? [busDemo()] : []),
-    // Validates SMTP config + verifies connectivity at startup, and
-    // primes the transport the approval-gated `send_email` tool reuses.
-    // `brand` styles every rendered email (accent, font, header logo)
-    // with the dbx-tools brand; drop it for the neutral default layout.
-    email({ brand: defaultEmailBrand }),
-    // The email-OTP access gate for the public portr tunnel. Registers the
-    // `/api/email/auth/*` login routes + a gating middleware on THIS server that
-    // gates only tunnel traffic (identified by the `Host` header matching
-    // `TUNNEL_PUBLIC_DOMAIN`); the platform front door passes through. Dynamic
-    // Sandbox routes also need the verified tunnel identity before their strict
-    // owner check, so protect the runtime-owned route prefix rather than letting
-    // those requests fall through to the SPA. `allow` comes from
-    // `TUNNEL_AUTH_ALLOW`, `publicDomain` from `TUNNEL_PUBLIC_DOMAIN` (both set
-    // on the deployed app). Codes send through the `email()` transport above.
-    // Localhost gets an explicit disabled status because its Host header never
-    // matches the tunnel domain.
-    authGate({ gatePaths: [databricksSandboxRuntime.config.routePrefix] }),
-    // Web-search runtime for the `web_search` / `web_fetch` tools. The
-    // web-search model defaults to Gemini, then GPT (the native web-search
-    // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,
-    // or `allowedUrls` to restrict which sites are reachable.
-    webSearch(),
-    // Teams Adaptive Card runtime for the `create_teams_card` tool. Mounts
-    // `POST /api/teams/card` (the Cards page previews through it),
-    // `POST /api/teams/post`, and the Bot Framework messaging endpoint
-    // `POST /api/teams/messages`. Set TEAMS_WEBHOOK_URL to enable posting to a
-    // Teams channel.
-    //
-    // `allowUnauthenticated` lets the Cards page talk to `/messages` - the same
-    // route a real Teams channel would call - with no Azure Bot registration, so
-    // the demo renders live cards out of the box. It is honored ONLY when
-    // NODE_ENV=development (which this demo runs under locally); a real
-    // deployment sets TEAMS_APP_ID / TEAMS_APP_PASSWORD instead and gets the
-    // JWT-validated, Connector-delivered path.
-    teams({ allowUnauthenticated: true }),
-    searchProvider,
-    // The provider registered above owns the AppKit AI Search query contract:
-    // native `aiSearch` when SEARCH_ENDPOINT is configured, otherwise
-    // `lakebaseAiSearch` over PostgreSQL full text. Both expose the same
-    // `/api/ai-search/:alias/query` route and client config consumed by
-    // AppKit's `useAiSearchQuery`.
-    //
-    // This `search` plugin adds agent tools, universal search, and index
-    // lifecycle routes. On the native path, `ensureOnSetup` creates and seeds
-    // the managed Vector Search index in the background. The Lakebase provider
-    // provisions and seeds its own full-text table during setup.
-    search({
-      allowWrite: true,
-      // Native Vector Search uses SEARCH_INDEX (catalog.schema.index). Lakebase
-      // full-text search uses the `docs` alias as the table name when unset.
-      index: searchIndexName,
-      // The endpoint is used only by native Vector Search lifecycle operations.
-      ...(process.env.SEARCH_ENDPOINT ? { endpoint: process.env.SEARCH_ENDPOINT } : {}),
-      indexes: [{ name: searchIndexName, alias: SEARCH_ALIAS, columns: SEARCH_COLUMNS }],
-      columns: SEARCH_COLUMNS,
-      ...(USE_VECTOR_SEARCH ? { ensureOnSetup: { documents: SEARCH_DOCUMENTS } } : {}),
-    }),
-    mastra({
-      storage: mastraStorage,
-      memory: mastraMemory,
-      // Fail boot unless MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME is set.
-      // The deployed app binds `/Shared/dbx-tools-demo` and the Apps OTLP sidecar.
-      feedback: true,
-      agents: { support, "support-polling": supportPolling },
-      defaultAgent: "support",
-      genieAgentMode: true,
-      sandbox: sshWorkspaceSandbox(databricksSandboxRuntime),
-      workspaceFallbackToTmp: true,
-      // Chat runs on-behalf-of the signed-in user by default, so the caller must
-      // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
-      // genieIdentity: "service-principal" here) to run the agents' Databricks
-      // calls as the app service principal instead, so any account user who can
-      // open the app can chat even without workspace membership. The deployed
-      // demo uses `auto`: the Databricks Apps front door supplies OBO credentials,
-      // while the OTP tunnel supplies only caller identity and falls back to the
-      // app service principal.
-      // User attribution still partitions memory, cache, and traces.
-      // Themes charts from the `render_data` / `prepare_chart` tools with the
-      // same brand the client UI (`BrandProvider`) and email layouts use, so a
-      // generated chart matches the surrounding AppKit UI instead of falling
-      // back to Echarts' defaults.
-      brand: defaultBrandContext,
-      localSkillMounts: databricksSandboxSkillMounts(),
-      // Fold Databricks' own AI Tools skills into the agents. Read straight
-      // from the public databricks/databricks-agent-skills repo, so this works
-      // in a deployed App container where the `databricks` CLI is absent.
-      ...(remoteSkillsEnabled ? { remoteSkills: "aitools" as const } : {}),
-    }),
-  ],
-  onPluginsReady(appkit) {
-    appServer = appkit.server;
-    if (clientDevUrl) {
-      clientDevelopmentProxy = createClientDevelopmentProxy(clientDevUrl, appkit.authGate);
-      appkit.server.extend(clientDevelopmentProxy.configure);
-    }
-    if (!useAppKitVite) {
-      appkit.server.extend((application) => configureStaticDelivery(application, clientDist));
-    }
-  },
-  // Front the app with a public portr tunnel IN-PROCESS: `tunnelInterceptor`
-  // applies the computed DATABRICKS_HOST, launches portr pointed at this app's
-  // public port, and binds it so the app and portr live/die as one. Without
-  // PORTR_TOKEN and TUNNEL_PUBLIC_DOMAIN it remains inactive, while localhost
-  // continues to bypass the host-scoped OTP gate.
-  interceptor: tunnelInterceptor(),
-  cache: {
-    enabled: true,
-  },
-});
-
+  await appkit.createApp({
+    plugins: [
+      // AppKit's server plugin enables HTTP/Express tracing by default whenever
+      // an exporter is active. This demo wants agent traces, not one trace per
+      // request; appkit-mastra creates a request-lifetime chat root when the HTTP
+      // instrumentation is disabled.
+      server({
+        host,
+        telemetry: { traces: false, logs: false },
+        ...(useAppKitVite ? {} : { staticPath: clientDist }),
+      }),
+      genie(),
+      lakebase({ pool: postgresConnectionOptions({}) }),
+      filesCache(),
+      databricksSandbox({ runtime: databricksSandboxRuntime }),
+      ...(graphitiEnabled ? [graphiti()] : []),
+      // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
+      // Lakebase connection and fans topic broadcasts out to its browser viewers.
+      ...(busEnabled ? [busDemo()] : []),
+      // Validates SMTP config + verifies connectivity at startup, and
+      // primes the transport the approval-gated `send_email` tool reuses.
+      // `brand` styles every rendered email (accent, font, header logo)
+      // with the dbx-tools brand; drop it for the neutral default layout.
+      email({ brand: defaultEmailBrand }),
+      // The email-OTP access gate for the public portr tunnel. Registers the
+      // `/api/email/auth/*` login routes + a gating middleware on THIS server that
+      // gates only tunnel traffic (identified by the `Host` header matching
+      // `TUNNEL_PUBLIC_DOMAIN`); the platform front door passes through. Dynamic
+      // Sandbox routes also need the verified tunnel identity before their strict
+      // owner check, so protect the runtime-owned route prefix rather than letting
+      // those requests fall through to the SPA. `allow` comes from
+      // `TUNNEL_AUTH_ALLOW`, `publicDomain` from `TUNNEL_PUBLIC_DOMAIN` (both set
+      // on the deployed app). Codes send through the `email()` transport above.
+      // Localhost gets an explicit disabled status because its Host header never
+      // matches the tunnel domain.
+      authGate({ gatePaths: [databricksSandboxRuntime.config.routePrefix] }),
+      // Web-search runtime for the `web_search` / `web_fetch` tools. The
+      // web-search model defaults to Gemini, then GPT (the native web-search
+      // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,
+      // or `allowedUrls` to restrict which sites are reachable.
+      webSearch(),
+      // Teams Adaptive Card runtime for the `create_teams_card` tool. Mounts
+      // `POST /api/teams/card` (the Cards page previews through it),
+      // `POST /api/teams/post`, and the Bot Framework messaging endpoint
+      // `POST /api/teams/messages`. Set TEAMS_WEBHOOK_URL to enable posting to a
+      // Teams channel.
+      //
+      // `allowUnauthenticated` lets the Cards page talk to `/messages` - the same
+      // route a real Teams channel would call - with no Azure Bot registration, so
+      // the demo renders live cards out of the box. It is honored ONLY when
+      // NODE_ENV=development (which this demo runs under locally); a real
+      // deployment sets TEAMS_APP_ID / TEAMS_APP_PASSWORD instead and gets the
+      // JWT-validated, Connector-delivered path.
+      teams({ allowUnauthenticated: true }),
+      searchProvider,
+      // The provider registered above owns the AppKit AI Search query contract:
+      // native `aiSearch` when SEARCH_ENDPOINT is configured, otherwise
+      // `lakebaseAiSearch` over PostgreSQL full text. Both expose the same
+      // `/api/ai-search/:alias/query` route and client config consumed by
+      // AppKit's `useAiSearchQuery`.
+      //
+      // This `search` plugin adds agent tools, universal search, and index
+      // lifecycle routes. On the native path, `ensureOnSetup` creates and seeds
+      // the managed Vector Search index in the background. The Lakebase provider
+      // provisions and seeds its own full-text table during setup.
+      search({
+        allowWrite: true,
+        // Native Vector Search uses SEARCH_INDEX (catalog.schema.index). Lakebase
+        // full-text search uses the `docs` alias as the table name when unset.
+        index: searchIndexName,
+        // The endpoint is used only by native Vector Search lifecycle operations.
+        ...(process.env.SEARCH_ENDPOINT ? { endpoint: process.env.SEARCH_ENDPOINT } : {}),
+        indexes: [{ name: searchIndexName, alias: SEARCH_ALIAS, columns: SEARCH_COLUMNS }],
+        columns: SEARCH_COLUMNS,
+        ...(USE_VECTOR_SEARCH ? { ensureOnSetup: { documents: SEARCH_DOCUMENTS } } : {}),
+      }),
+      mastra({
+        storage: mastraStorage,
+        memory: mastraMemory,
+        // Fail boot unless MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME is set.
+        // The deployed app binds `/Shared/dbx-tools-demo` and the Apps OTLP sidecar.
+        feedback: true,
+        agents: { support, "support-polling": supportPolling },
+        defaultAgent: "support",
+        genieAgentMode: true,
+        sandbox: sshWorkspaceSandbox(databricksSandboxRuntime),
+        workspaceFallbackToTmp: true,
+        // Chat runs on-behalf-of the signed-in user by default, so the caller must
+        // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
+        // genieIdentity: "service-principal" here) to run the agents' Databricks
+        // calls as the app service principal instead, so any account user who can
+        // open the app can chat even without workspace membership. The deployed
+        // demo uses `auto`: the Databricks Apps front door supplies OBO credentials,
+        // while the OTP tunnel supplies only caller identity and falls back to the
+        // app service principal.
+        // User attribution still partitions memory, cache, and traces.
+        // Themes charts from the `render_data` / `prepare_chart` tools with the
+        // same brand the client UI (`BrandProvider`) and email layouts use, so a
+        // generated chart matches the surrounding AppKit UI instead of falling
+        // back to Echarts' defaults.
+        brand: defaultBrandContext,
+        localSkillMounts: databricksSandboxSkillMounts(),
+        // Fold Databricks' own AI Tools skills into the agents. Read straight
+        // from the public databricks/databricks-agent-skills repo, so this works
+        // in a deployed App container where the `databricks` CLI is absent.
+        ...(remoteSkillsEnabled ? { remoteSkills: "aitools" as const } : {}),
+      }),
+    ],
+    onPluginsReady(appkit) {
+      appServer = appkit.server;
+      if (clientDevUrl) {
+        clientDevelopmentProxy = createClientDevelopmentProxy(clientDevUrl, appkit.authGate);
+        appkit.server.extend(clientDevelopmentProxy.configure);
+      }
+      if (!useAppKitVite) {
+        appkit.server.extend((application) => configureStaticDelivery(application, clientDist));
+      }
+    },
+    // Front the app with a public portr tunnel IN-PROCESS: `tunnelInterceptor`
+    // applies the computed DATABRICKS_HOST, launches portr pointed at this app's
+    // public port, and binds it so the app and portr live/die as one. Without
+    // PORTR_TOKEN and TUNNEL_PUBLIC_DOMAIN it remains inactive, while localhost
+    // continues to bypass the host-scoped OTP gate.
+    interceptor: tunnelInterceptor(),
+    cache: {
+      enabled: true,
+    },
+  });
 } finally {
   if (useAppKitVite) process.chdir(previousCwd);
 }

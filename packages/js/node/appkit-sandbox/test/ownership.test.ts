@@ -1296,11 +1296,11 @@ describe("managed Sandbox ownership", () => {
       workspaceScope: "workspace",
       userId: "user-a",
       projectId: "6c73da4fc8073da8b58e9c4e08db8104",
-      name: "doom",
+      name: "demo",
       machineId: "eclectic-lioness-9811",
-      directory: "/home/sandbox-user/projects/doom",
-      projectPath: "doom",
-      path: "/sandbox/22padc/doom",
+      directory: "/home/sandbox-user/projects/demo",
+      projectPath: "demo",
+      path: "/sandbox/22padc/demo",
       port: 45656,
       config: {},
       stripPrefix: true,
@@ -1319,7 +1319,7 @@ describe("managed Sandbox ownership", () => {
 
     assert.equal(listed.machines[0]?.id, "eclectic-lioness-9811");
     assert.equal(listed.machines[0]?.name, "calm-falcon-d472ea63");
-    assert.equal(listed.machines[0]?.projects[0]?.name, "doom");
+    assert.equal(listed.machines[0]?.projects[0]?.name, "demo");
     assert.deepEqual(
       projects.map((project) => project.id),
       ["6c73da4fc8073da8b58e9c4e08db8104"],

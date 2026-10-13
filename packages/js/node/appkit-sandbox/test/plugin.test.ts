@@ -171,7 +171,19 @@ describe("AppKitSshPlugin", () => {
             provider: "databricks-sandbox",
             status: "running",
             expiresAt: "2026-10-13T00:00:00.000Z",
-            projects: [],
+            projects: [
+              {
+                id: "project",
+                name: "project",
+                machineId: "machine",
+                directory: "/home/sandbox-user/projects/project",
+                path: "/sandbox/project",
+                port: 8080,
+                stripPrefix: true,
+                state: "error",
+                log: "large project install log",
+              },
+            ],
             services: [
               {
                 kind: "terminal",
@@ -194,6 +206,7 @@ describe("AppKitSshPlugin", () => {
       .list_ssh_machines.execute({});
 
     assert.equal("log" in result.machines[0]!.services[0]!, false);
+    assert.equal("log" in result.machines[0]!.projects[0]!, false);
     await plugin.shutdown();
   });
 

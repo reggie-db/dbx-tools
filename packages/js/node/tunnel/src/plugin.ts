@@ -24,10 +24,7 @@ import {
   type ResourceRequirement,
   ResourceType,
 } from "@databricks/appkit";
-import {
-  brandContext,
-  pluginRegistry,
-} from "@dbx-tools/appkit";
+import { brandContext, pluginRegistry } from "@dbx-tools/appkit";
 import {
   auth as passwordlessAuth,
   authStorage,
