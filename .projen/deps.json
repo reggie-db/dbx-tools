@@ -111,6 +111,16 @@
       "type": "build"
     },
     {
+      "name": "@typescript-eslint/eslint-plugin",
+      "version": "8.71.0",
+      "type": "override"
+    },
+    {
+      "name": "@typescript-eslint/parser",
+      "version": "8.71.0",
+      "type": "override"
+    },
+    {
       "name": "bun",
       "version": "1.4.2",
       "type": "override"

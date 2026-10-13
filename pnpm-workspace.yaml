@@ -120,6 +120,8 @@ catalog:
   adaptivecards: ^3.0.5
 catalogMode: manual
 overrides:
+  "@typescript-eslint/eslint-plugin": 8.71.0
+  "@typescript-eslint/parser": 8.71.0
   bun: 1.4.2
   glob: ^13.0.0
   p-map: 7.0.8
