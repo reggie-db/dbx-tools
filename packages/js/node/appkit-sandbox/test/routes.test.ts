@@ -290,7 +290,7 @@ describe("SshRouteRegistry", () => {
       assert.equal(document.status, 200);
       assert.match(
         await document.text(),
-        /<style id="viewport">html\{height:100dvh\}<\/style><\/head>/,
+        /<head><style id="viewport">html\{height:100dvh\}<\/style><title>Service<\/title>/,
       );
       assert.equal(
         await fetch(`http://127.0.0.1:${proxyPort}/sandbox/metrics/sandbox-1/asset.js`, {

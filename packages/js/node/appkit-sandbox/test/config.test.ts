@@ -13,7 +13,8 @@ describe("resolveSshPluginConfig", () => {
       config.machineSoftware.map((software) => software.name),
       ["mise"],
     );
-    assert.match(config.machineSoftware[0]?.installCommand ?? "", /mise activation/);
+    assert.match(config.machineSoftware[0]?.installCommand ?? "", /dbx-tools mise path/);
+    assert.doesNotMatch(config.machineSoftware[0]?.installCommand ?? "", /mise activate (?:bash|zsh)/);
     assert.match(config.machineSoftware[0]?.checkCommand ?? "", /\.zshrc/);
     assert.equal("context" in config, false);
 

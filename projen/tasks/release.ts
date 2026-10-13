@@ -233,7 +233,7 @@ export async function runRelease(
     readonly validationTasks?: readonly string[];
     /** After tagging, stage and deploy the AppKit demo app. Off by default. */
     readonly demoDeploy?: boolean;
-    /** Databricks CLI profile used only by the optional local demo deployment. */
+    /** Optional Databricks CLI profile passed to the local demo deployment. */
     readonly demoProfile?: string;
     /** Write `docs/releases/vX.Y.Z.md` via Genie, with a git-log fallback. On by default. */
     readonly releaseNotes?: boolean;
@@ -361,12 +361,11 @@ export async function runRelease(
   }
 
   if (options.demoDeploy) {
-    runTaskCommand(root, "bun", ["run", "demo:deploy"], {
-      env: {
-        ...process.env,
-        ...(options.demoProfile ? { DATABRICKS_CONFIG_PROFILE: options.demoProfile } : {}),
-      },
-    });
+    runTaskCommand(root, "bun", [
+      "run",
+      "demo:deploy",
+      ...(options.demoProfile ? ["--", "--profile", options.demoProfile] : []),
+    ]);
   }
 
   return tag;
@@ -421,7 +420,7 @@ export const ReleaseOptionsSchema = z.object({
     .trim()
     .min(1)
     .optional()
-    .describe("Databricks CLI profile for the optional demo deployment"),
+    .describe("Optional Databricks CLI profile passed to the demo deployment"),
   localPublish: z.boolean().default(true).describe("Publish to configured local registries"),
   localRegistry: z
     .string()

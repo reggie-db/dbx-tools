@@ -6,6 +6,7 @@ bin="$runtime/bin/ttyd"
 version_file="$runtime/ttyd.version"
 shell_wrapper="$runtime/bin/dbx-tools-shell"
 bashrc="$runtime/bin/dbx-tools-bashrc"
+project_bashrc="$runtime/bin/dbx-tools-project-bashrc"
 stop_script="$runtime/bin/stop-ttyd"
 version="1.7.7"
 mkdir -p "$runtime/bin"
@@ -60,7 +61,19 @@ case "$directory" in
   *) directory="$HOME" ;;
 esac
 cd -- "$directory"
+if [ -f mise.toml ] || [ -f .mise.toml ]; then
+  if [ -x "$HOME/.local/bin/mise" ]; then
+    exec /bin/bash --noprofile --rcfile "${HOME}/.dbx-tools/runtime/bin/dbx-tools-project-bashrc" -i
+  fi
+fi
 exec /bin/bash --noprofile --rcfile "${HOME}/.dbx-tools/runtime/bin/dbx-tools-bashrc" -i
+EOF
+
+cat >"$project_bashrc" <<'EOF'
+if [ -f "${HOME}/.dbx-tools/runtime/bin/dbx-tools-bashrc" ]; then
+  . "${HOME}/.dbx-tools/runtime/bin/dbx-tools-bashrc"
+fi
+eval "$("${HOME}/.local/bin/mise" activate bash)"
 EOF
 
 cat >"$stop_script" <<'EOF'
@@ -80,7 +93,7 @@ done
 rm -f "$runtime/ttyd.running-version"
 EOF
 
-chmod 600 "$bashrc"
+chmod 600 "$bashrc" "$project_bashrc"
 chmod 700 "$shell_wrapper" "$stop_script"
 '''
 

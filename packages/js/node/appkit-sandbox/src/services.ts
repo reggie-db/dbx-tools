@@ -1,7 +1,14 @@
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SshCommandResult, SshMachineServiceKind } from "@dbx-tools/shared-databricks-sandbox";
+import {
+  SSH_SERVICE_LOG_DEFAULT_MAX_CHARS,
+  SSH_SERVICE_LOG_DEFAULT_MAX_LINES,
+  SSH_MACHINE_SERVICE_KINDS,
+  type SshCommandResult,
+  type SshMachineServiceKind,
+  type SshMachineServiceLogsRequest,
+} from "@dbx-tools/shared-databricks-sandbox";
 import { parse } from "smol-toml";
 import { packageScriptCommand } from "./_projects.ts";
 import {
@@ -15,6 +22,7 @@ import type { SshSession } from "./session.ts";
 const TTYD_PORT = 7681;
 const GLANCES_PORT = 61208;
 const SERVICE_SETUP_SCRIPT = readPackageResource("scripts", "setup-service.sh");
+const STATUS_INSPECTION_SCRIPT = readPackageResource("scripts", "inspect-status.sh");
 const GLANCES_VIEWPORT_HEAD =
   // ============================================================================
   /*html*/ `
@@ -69,6 +77,13 @@ export interface SshServiceDefinition {
   environment: Readonly<Record<string, string>>;
   /** Loopback and browser routing metadata. */
   target: SshServiceTarget;
+}
+
+/** Remote lifecycle states read from packaged status and lock files. */
+export interface SshRemoteLifecycleStates {
+  services: ReadonlyMap<SshMachineServiceKind, "stopped" | "starting" | "ready" | "error">;
+  serviceLogs: ReadonlyMap<SshMachineServiceKind, string>;
+  projects: ReadonlyMap<string, "stopped" | "starting" | "ready" | "error">;
 }
 
 interface ServiceMetadata {
@@ -126,6 +141,62 @@ export async function ensureSshService(
   return definition.target;
 }
 
+/** Reads refresh-safe service and project lifecycle state from one active SSH session. */
+export async function inspectSshLifecycleStates(
+  session: SshSession,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<SshRemoteLifecycleStates> {
+  const result = await session.execute(
+    "sh",
+    ["-lc", packageScriptCommand(STATUS_INSPECTION_SCRIPT, [])],
+    { timeoutMs, signal },
+  );
+  if (!result.success) {
+    throw new Error(result.stderr.trim() || "Sandbox lifecycle status inspection failed");
+  }
+  const services = new Map<SshMachineServiceKind, "stopped" | "starting" | "ready" | "error">();
+  const serviceLogs = new Map<SshMachineServiceKind, string>();
+  const projects = new Map<string, "stopped" | "starting" | "ready" | "error">();
+  for (const line of result.stdout.split("\n")) {
+    const [category, name, value] = line.split("\t");
+    if (!name || value === undefined) continue;
+    if (category === "service" && isServiceKind(name) && isLifecycleState(value)) {
+      services.set(name, value);
+    }
+    if (category === "service-log" && isServiceKind(name)) {
+      serviceLogs.set(name, Buffer.from(value, "base64").toString("utf8"));
+    }
+    if (category === "project" && isLifecycleState(value)) projects.set(name, value);
+  }
+  return { services, serviceLogs, projects };
+}
+
+/** Reads the fixed lifecycle log shared by all callers of one built-in service. */
+export async function readSshServiceOperationLog(
+  session: SshSession,
+  kind: SshMachineServiceKind,
+  timeoutMs: number,
+  signal?: AbortSignal,
+  limits: Pick<SshMachineServiceLogsRequest, "maxLines" | "maxChars"> = {
+    maxLines: SSH_SERVICE_LOG_DEFAULT_MAX_LINES,
+    maxChars: SSH_SERVICE_LOG_DEFAULT_MAX_CHARS,
+  },
+): Promise<string> {
+  const result = await session.execute(
+    "sh",
+    [
+      "-lc",
+      `log_file="$HOME/.dbx-tools/operations/services/${kind}/lifecycle.log"; if [ -f "$log_file" ]; then tail -n ${limits.maxLines} "$log_file" | tail -c ${limits.maxChars}; fi`,
+    ],
+    { timeoutMs, signal },
+  );
+  if (!result.success) {
+    throw new Error(result.stderr.trim() || "Sandbox service log inspection failed");
+  }
+  return result.stdout;
+}
+
 /** Stops one materialized built-in service through its packaged mise lifecycle. */
 export async function stopSshService(
   session: SshSession,
@@ -149,7 +220,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "terminal":
       return {
         fileName: "terminal.mise.toml",
-        definitionVersion: 1,
+        definitionVersion: 3,
         target: (path) => ({
           remoteHost: "127.0.0.1",
           remotePort: TTYD_PORT,
@@ -161,7 +232,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "desktop":
       return {
         fileName: "desktop.mise.toml",
-        definitionVersion: 9,
+        definitionVersion: 10,
         environment: desktopMiseEnvironment,
         target: (path) => ({
           ...desktopBrowserMetadata,
@@ -253,4 +324,14 @@ function readPackageResource(...segments: string[]): string {
   const parent = dirname(moduleDirectory);
   const packageRoot = basename(parent) === "lib" ? dirname(parent) : parent;
   return readFileSync(join(packageRoot, ...segments), "utf8");
+}
+
+function isLifecycleState(
+  value: string | undefined,
+): value is "stopped" | "starting" | "ready" | "error" {
+  return value === "stopped" || value === "starting" || value === "ready" || value === "error";
+}
+
+function isServiceKind(value: string): value is SshMachineServiceKind {
+  return SSH_MACHINE_SERVICE_KINDS.some((kind) => kind === value);
 }

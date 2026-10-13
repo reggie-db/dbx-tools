@@ -35,8 +35,21 @@ export const sshProjectSchema = z
   .describe("One persisted Sandbox project and its AppKit route.");
 export type SshProject = z.infer<typeof sshProjectSchema>;
 
+/** Stable ordered identifiers for built-in Sandbox browser services. */
+export const SSH_MACHINE_SERVICE_KINDS = ["terminal", "desktop", "stats"] as const;
+
+/** Browser-safe display metadata shared by every built-in service control. */
+export const SSH_MACHINE_SERVICES = [
+  { kind: "terminal", label: "Terminal" },
+  { kind: "desktop", label: "Desktop" },
+  { kind: "stats", label: "Stats" },
+] as const satisfies readonly {
+  kind: (typeof SSH_MACHINE_SERVICE_KINDS)[number];
+  label: string;
+}[];
+
 export const sshMachineServiceKindSchema = z
-  .enum(["terminal", "desktop", "stats"])
+  .enum(SSH_MACHINE_SERVICE_KINDS)
   .describe("Built-in browser service available on a Databricks Sandbox.");
 export type SshMachineServiceKind = z.infer<typeof sshMachineServiceKindSchema>;
 
@@ -51,6 +64,7 @@ export const sshMachineServiceSchema = z
     state: z
       .enum(["stopped", "starting", "ready", "error"])
       .describe("Current service provisioning state."),
+    log: z.string().optional().describe("Current contents of the shared remote lifecycle log."),
     error: z.string().optional().describe("Latest service provisioning failure."),
   })
   .strict()
@@ -128,6 +142,55 @@ export const sshMachineServiceActionSchema = z
   .describe("Request to start one built-in machine service.");
 export type SshMachineServiceAction = z.infer<typeof sshMachineServiceActionSchema>;
 
+/** Default number of lifecycle log lines returned by bounded log reads. */
+export const SSH_SERVICE_LOG_DEFAULT_MAX_LINES = 200;
+/** Hard maximum number of lifecycle log lines accepted by one log read. */
+export const SSH_SERVICE_LOG_MAX_LINES = 1_000;
+/** Default lifecycle log character cap returned by bounded log reads. */
+export const SSH_SERVICE_LOG_DEFAULT_MAX_CHARS = 16_000;
+/** Hard maximum lifecycle log character cap accepted by one log read. */
+export const SSH_SERVICE_LOG_MAX_CHARS = 64_000;
+
+export const sshMachineServiceLogsRequestSchema = sshMachineServiceActionSchema
+  .extend({
+    maxLines: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(SSH_SERVICE_LOG_MAX_LINES)
+      .default(SSH_SERVICE_LOG_DEFAULT_MAX_LINES)
+      .describe("Maximum number of trailing lifecycle log lines to return."),
+    maxChars: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(SSH_SERVICE_LOG_MAX_CHARS)
+      .default(SSH_SERVICE_LOG_DEFAULT_MAX_CHARS)
+      .describe("Maximum number of trailing lifecycle log characters to return."),
+  })
+  .strict()
+  .describe("Bounded lifecycle log request for one built-in Sandbox service.");
+export type SshMachineServiceLogsRequest = z.infer<typeof sshMachineServiceLogsRequestSchema>;
+
+export const sshMachineServiceLogsResponseSchema = z
+  .object({
+    log: z.string().describe("Bounded trailing contents of the service lifecycle log."),
+  })
+  .strict()
+  .describe("Bounded lifecycle log response for one built-in Sandbox service.");
+export type SshMachineServiceLogsResponse = z.infer<typeof sshMachineServiceLogsResponseSchema>;
+
+export const sshMachineServiceStartResultSchema = z
+  .object({
+    exitCode: z
+      .number()
+      .int()
+      .describe("Zero when the service became ready; nonzero when provisioning failed."),
+  })
+  .strict()
+  .describe("Minimal agent result for one built-in service start.");
+export type SshMachineServiceStartResult = z.infer<typeof sshMachineServiceStartResultSchema>;
+
 export const sshCommandRequestSchema = z
   .object({
     machineId: z
@@ -148,10 +211,27 @@ export const sshCommandRequestSchema = z
         "Individual arguments passed to the executable. Never concatenate the executable and its arguments into command.",
       ),
     cwd: z.string().optional().describe("Remote working directory."),
-    env: z.record(z.string(), z.string()).optional().describe("Remote environment overlay."),
+    env: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe(
+        "Non-authentication remote environment overlay applied after inherited Databricks authentication and SSH agent variables are cleared. Databricks credentials require a dedicated app-mediated OBO capability.",
+      ),
     timeoutMs: z.number().int().positive().max(3_600_000).optional().describe("Command timeout."),
   })
   .strict()
+  .superRefine((request, context) => {
+    for (const name of Object.keys(request.env ?? {})) {
+      if (name.startsWith("DATABRICKS_") || name === "SSH_AUTH_SOCK") {
+        context.addIssue({
+          code: "custom",
+          path: ["env", name],
+          message:
+            "SSH environment overlays cannot restore Databricks or SSH agent credentials; use a dedicated app-mediated OBO capability.",
+        });
+      }
+    }
+  })
   .describe("SSH command execution request.");
 export type SshCommandRequest = z.input<typeof sshCommandRequestSchema>;
 
@@ -212,7 +292,29 @@ export const addSshProjectRequestSchema = z
       .record(z.string(), z.json())
       .optional()
       .describe(
-        "Mise configuration represented as JSON. The server serializes it to mise.toml and injects reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT environment values.",
+        "Optional raw mise configuration represented as JSON and following https://mise.jdx.dev/schema/mise.json. The server serializes it to mise.toml and injects reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT environment values. First-class tools, postinstall, and uninstall values merge over conflicting raw config fields.",
+      ),
+    tools: z
+      .record(z.string().min(1), z.json())
+      .optional()
+      .describe(
+        "Optional mise tools table. Values use the canonical mise JSON schema at https://mise.jdx.dev/schema/mise.json. Entries merge over config.tools with the same tool name.",
+      ),
+    postinstall: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional mise hooks.postinstall shell script. It may install, prepare, or intentionally launch a workload that remains active until uninstall. It overrides config.hooks.postinstall. Use an idempotent check-lock-check pattern plus a completion marker for expensive work.",
+      ),
+    uninstall: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional mise tasks.uninstall shell script. Project removal and reset may call only this project task automatically, then still terminate recorded pid files and processes whose working directory is the project. It overrides config.tasks.uninstall.",
       ),
     route: z
       .boolean()
@@ -241,7 +343,7 @@ export const removeSshProjectRequestSchema = z
   .object({ projectId: z.string().min(1).describe("Sandbox project to remove.") })
   .strict()
   .describe(
-    "Request to remove a Sandbox project, run its optional mise stop and uninstall tasks in order, and delete its directory.",
+    "Request to remove a Sandbox project, run its optional mise uninstall task, terminate remaining project processes, and delete its directory.",
   );
 export type RemoveSshProjectRequest = z.infer<typeof removeSshProjectRequestSchema>;
 
@@ -345,7 +447,7 @@ export const executeSshCommandOperationSchema = sshCommandRequestSchema
 
 export const startSshMachineServiceOperationSchema = sshMachineServiceActionSchema
   .describe(
-    "Idempotently start the built-in DinoTTY terminal, branded noVNC desktop, or Glances health service, provisioning it only when needed.",
+    "Idempotently start the built-in terminal, branded desktop, or health service. The agent result contains only an exit code; live lifecycle logs are sent to clients as transient progress and can be fetched separately with bounded limits.",
   )
   .meta({
     appkitTool: {
@@ -356,13 +458,19 @@ export const startSshMachineServiceOperationSchema = sshMachineServiceActionSche
     },
   });
 
+export const getSshMachineServiceLogsOperationSchema = sshMachineServiceLogsRequestSchema
+  .describe(
+    "Read a bounded tail of one built-in Sandbox service lifecycle log. Use this only when install diagnostics are needed; machine listing and service-start results intentionally omit logs.",
+  )
+  .meta({ appkitTool: { agentTool: true, effect: "read", requiresUserContext: true } });
+
 export const listSshProjectsOperationSchema = listSshProjectsRequestSchema
   .describe("List the current user's persisted Sandbox projects and their public AppKit routes.")
   .meta({ appkitTool: { agentTool: true, effect: "read", requiresUserContext: true } });
 
 export const addSshProjectOperationSchema = addSshProjectRequestSchema
   .describe(
-    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route. Every call runs mise install and its installation-only hooks.postinstall. Runtime lifecycle belongs in documented start and stop tasks.",
+    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route. Prefer first-class tools, postinstall, and uninstall options; raw config follows https://mise.jdx.dev/schema/mise.json. postinstall may prepare or launch a workload, while only uninstall may be auto-called during removal or reset.",
   )
   .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
 
@@ -372,7 +480,7 @@ export const openSshProjectTerminalOperationSchema = sshProjectActionSchema
 
 export const resetSshProjectOperationSchema = sshProjectActionSchema
   .describe(
-    "Permanently wipe a persisted Sandbox project's directory, running optional mise stop and uninstall tasks in order, and recreate it from its saved mise configuration.",
+    "Permanently wipe a persisted Sandbox project's directory, run its optional mise uninstall task, terminate remaining project processes, and recreate it from its saved mise configuration.",
   )
   .meta({
     appkitTool: {
@@ -386,7 +494,7 @@ export const resetSshProjectOperationSchema = sshProjectActionSchema
 
 export const removeSshProjectOperationSchema = removeSshProjectRequestSchema
   .describe(
-    "Permanently remove a Sandbox project, its route, and its isolated directory. Attempts mise run stop and then mise run uninstall when each task exists, including hidden tasks for compatibility, logs and ignores failures, then deletes ~/projects/<path>.",
+    "Permanently remove a Sandbox project, its route, and its isolated directory. Attempts only mise run uninstall when present, logs and ignores failures, terminates recorded pid files and processes whose cwd is the project directory, then deletes ~/projects/<path>.",
   )
   .meta({
     appkitTool: {

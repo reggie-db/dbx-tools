@@ -407,14 +407,14 @@ export const AssistantBubble = ({
   // nothing so the prose flows unaffected. Suggested questions
   // stay gated on settle to avoid pop-in mid-stream.
   return (
-    <Item className="items-start gap-0 border-none bg-transparent p-0">
+    <Item className="min-w-0 max-w-full items-start gap-0 overflow-hidden border-none bg-transparent p-0">
       {/*
        * `min-w-0` is required so wide content (markdown tables, long
        * code blocks) can shrink to fit instead of pushing the whole
        * bubble past the chat's `max-w-4xl`. Flex children default to
        * `min-width: auto`, which sizes to content and overflows.
        */}
-      <ItemContent className="min-w-0 gap-1.5">
+      <ItemContent className="min-w-0 max-w-full overflow-hidden gap-1.5">
         {/* Tool calls and their thought events stay in arrival order above the answer text. */}
         {activityItems.map((item) =>
           item.type === "tool" ? (

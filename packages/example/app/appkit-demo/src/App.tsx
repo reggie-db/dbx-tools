@@ -26,6 +26,8 @@ const useVisualViewportShell = () => {
       animationFrame = window.requestAnimationFrame(() => {
         root.style.setProperty("--demo-visual-viewport-height", `${viewport.height}px`);
         root.style.setProperty("--demo-visual-viewport-top", `${viewport.offsetTop}px`);
+        root.style.setProperty("--demo-visual-viewport-width", `${viewport.width}px`);
+        root.style.setProperty("--demo-visual-viewport-left", `${viewport.offsetLeft}px`);
       });
     };
     const schedule = () => {
@@ -45,6 +47,8 @@ const useVisualViewportShell = () => {
       viewport.removeEventListener("scrollend", commit);
       root.style.removeProperty("--demo-visual-viewport-height");
       root.style.removeProperty("--demo-visual-viewport-top");
+      root.style.removeProperty("--demo-visual-viewport-width");
+      root.style.removeProperty("--demo-visual-viewport-left");
     };
   }, []);
 };
@@ -165,7 +169,8 @@ const NavRouteStrip = ({ routes, pathname }: { routes: readonly RouteDef[]; path
   useEffect(() => {
     const element = scrollRef.current;
     const activeRoute = element?.querySelector<HTMLElement>('[aria-current="page"]');
-    activeRoute?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (!element || !activeRoute) return;
+    scrollElementIntoContainer(element, activeRoute);
   }, [pathname]);
 
   const scroll = (direction: -1 | 1) => {
@@ -223,6 +228,16 @@ const NavRouteStrip = ({ routes, pathname }: { routes: readonly RouteDef[]; path
     </div>
   );
 };
+
+function scrollElementIntoContainer(container: HTMLElement, element: HTMLElement): void {
+  const containerRect = container.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  if (elementRect.left < containerRect.left) {
+    container.scrollBy({ left: elementRect.left - containerRect.left, behavior: "smooth" });
+  } else if (elementRect.right > containerRect.right) {
+    container.scrollBy({ left: elementRect.right - containerRect.right, behavior: "smooth" });
+  }
+}
 
 const AssistantRouteContext = () => {
   const { pathname } = useLocation();

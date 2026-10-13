@@ -26,11 +26,17 @@ case ":$PATH:" in
 esac'
 
 append_once "$HOME/.profile" '# dbx-tools mise path' "$path_block"
-append_once "$HOME/.bashrc" '# dbx-tools mise activation' "$path_block
-# dbx-tools mise activation
-eval "$("$HOME/.local/bin/mise" activate bash)""
-append_once "$HOME/.zshrc" '# dbx-tools mise activation' "$path_block
-# dbx-tools mise activation
-eval "$("$HOME/.local/bin/mise" activate zsh)""
+for file in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  if [ -f "$file" ]; then
+    temporary="$file.dbx-tools.$$"
+    awk '
+      $0 == "# dbx-tools mise activation" { skip = 1; next }
+      skip == 1 { skip = 0; next }
+      { print }
+    ' "$file" >"$temporary"
+    mv -- "$temporary" "$file"
+  fi
+  append_once "$file" '# dbx-tools mise path' "$path_block"
+done
 
 "$mise_bin" --version >/dev/null

@@ -63,7 +63,7 @@ export function RecordPreview({ value, className }: RecordPreviewProps) {
   return (
     <div
       className={cn(
-        "relative min-w-0 [&_[data-slot=table-container]]:overflow-x-hidden",
+        "relative min-w-0 max-w-full overflow-hidden [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-x-hidden",
         className,
       )}
     >

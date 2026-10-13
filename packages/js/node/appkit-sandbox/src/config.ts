@@ -23,7 +23,7 @@ const DEFAULT_MACHINE_SOFTWARE: MachineSoftware[] = [
   {
     name: "mise",
     checkCommand:
-      'test -x "$HOME/.local/bin/mise" && grep -Fq "# dbx-tools mise path" "$HOME/.profile" && grep -Fq "# dbx-tools mise activation" "$HOME/.bashrc" && grep -Fq "# dbx-tools mise activation" "$HOME/.zshrc"',
+      'test -x "$HOME/.local/bin/mise" && grep -Fq "# dbx-tools mise path" "$HOME/.profile" && grep -Fq "# dbx-tools mise path" "$HOME/.bashrc" && grep -Fq "# dbx-tools mise path" "$HOME/.zshrc" && ! grep -Fq "# dbx-tools mise activation" "$HOME/.bashrc" && ! grep -Fq "# dbx-tools mise activation" "$HOME/.zshrc"',
     installCommand: MISE_INSTALL_SCRIPT,
   },
 ];

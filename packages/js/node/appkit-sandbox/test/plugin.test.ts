@@ -34,6 +34,7 @@ describe("AppKitSshPlugin", () => {
       "POST:/machines/:machineId/start",
       "POST:/machines/:machineId/stop",
       "DELETE:/machines/:machineId",
+      "GET:/machines/:machineId/services/:service/logs",
       "POST:/machines/:machineId/services/:service/start",
       "POST:/machines/:machineId/commands",
       "GET:/projects",
@@ -52,6 +53,7 @@ describe("AppKitSshPlugin", () => {
         "delete_ssh_machine",
         "execute_ssh_command",
         "start_ssh_machine_service",
+        "get_ssh_machine_service_logs",
         "list_ssh_projects",
         "add_ssh_project",
         "open_ssh_project_terminal",
@@ -72,6 +74,96 @@ describe("AppKitSshPlugin", () => {
     assert.deepEqual(plugin.clientConfig(), { routePrefix: "/sandbox" });
     assert.equal(AppKitSshPlugin.manifest.name, "databricks-sandbox");
     assert.equal(AppKitSshPlugin.manifest.stability, "beta");
+  });
+
+  it("returns only an exit code while streaming transient service progress", async () => {
+    const plugin = new AppKitSshPlugin({ auto: false });
+    Object.defineProperty(plugin.runtime, "observeService", {
+      value: async function* () {
+        yield {
+          kind: "terminal",
+          path: "/sandbox/terminal/machine",
+          openUrl: "/sandbox/terminal/machine/",
+          state: "starting",
+          log: "installing ttyd\n",
+        };
+        yield {
+          kind: "terminal",
+          path: "/sandbox/terminal/machine",
+          openUrl: "/sandbox/terminal/machine/",
+          state: "ready",
+        };
+      },
+    });
+    const progress: Array<{ event: unknown; transient?: boolean }> = [];
+    const operation = plugin.operations("user@example.com", {} as never, {
+      writeProgress: async (event, options) => {
+        progress.push({ event, transient: options?.transient });
+      },
+    }).start_ssh_machine_service;
+    assert.deepEqual(await operation.execute({ machineId: "machine", service: "terminal" }), {
+      exitCode: 0,
+    });
+    assert.deepEqual(progress, [
+      {
+        event: {
+          type: "tool_status",
+          status: "starting",
+          message: "Installing Terminal",
+          detail: "installing ttyd\n",
+        },
+        transient: true,
+      },
+      {
+        event: {
+          type: "tool_status",
+          status: "ready",
+          message: "Terminal ready",
+          detail: "installing ttyd\n",
+        },
+        transient: true,
+      },
+    ]);
+    await plugin.shutdown();
+  });
+
+  it("omits lifecycle logs from agent machine listings", async () => {
+    const plugin = new AppKitSshPlugin({ auto: false });
+    Object.defineProperty(plugin.runtime, "listMachines", {
+      value: async () => ({
+        auto: false,
+        supported: true,
+        machines: [
+          {
+            id: "machine",
+            name: "machine",
+            provider: "databricks-sandbox",
+            status: "running",
+            expiresAt: "2026-10-13T00:00:00.000Z",
+            projects: [],
+            services: [
+              {
+                kind: "terminal",
+                path: "/sandbox/terminal/machine",
+                openUrl: "/sandbox/terminal/machine/",
+                state: "starting",
+                log: "large lifecycle log",
+              },
+            ],
+            canStart: false,
+            canStop: true,
+            canConnect: true,
+          },
+        ],
+      }),
+    });
+
+    const result = await plugin
+      .operations("user@example.com", {} as never)
+      .list_ssh_machines.execute({});
+
+    assert.equal("log" in result.machines[0]!.services[0]!, false);
+    await plugin.shutdown();
   });
 
   it("transparently retries failed OBO operations as the app service principal", async () => {

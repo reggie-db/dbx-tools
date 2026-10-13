@@ -1,4 +1,4 @@
-import type { SshMachine, SshMachineServiceKind } from "@dbx-tools/shared-databricks-sandbox";
+import type { SshMachine } from "@dbx-tools/shared-databricks-sandbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,16 +19,17 @@ import {
   cn,
 } from "@dbx-tools/ui/react";
 import {
-  HeartPulseIcon,
-  MonitorIcon,
   PlayIcon,
   ServerIcon,
   SquareIcon,
-  SquareTerminalIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SshClient } from "./client.ts";
-import { resolveServiceUrl } from "./service-url.ts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  BUILT_IN_SERVICE_CONTROLS,
+  BuiltInServiceLauncher,
+  type BuiltInServiceLauncherProps,
+} from "./built-in-service-launcher.tsx";
+import { useSshClient } from "./client.ts";
 
 /** Props for the compact SSH machine status and control popover. */
 export interface SshIndicatorProps {
@@ -38,10 +39,10 @@ export interface SshIndicatorProps {
 
 /** Renders SSH machine status with start, stop, and open actions. */
 export function SshIndicator({
-  basePath = "/api/databricks-sandbox",
+  basePath,
   className,
 }: SshIndicatorProps) {
-  const client = useMemo(() => new SshClient(basePath), [basePath]);
+  const client = useSshClient(basePath);
   const [open, setOpen] = useState(false);
   const [machines, setMachines] = useState<SshMachine[]>([]);
   const [supported, setSupported] = useState(true);
@@ -69,16 +70,18 @@ export function SshIndicator({
     if (open) void refresh();
   }, [open, refresh]);
 
-  const act = async (machine: SshMachine, action: "start" | "stop" | SshMachineServiceKind) => {
+  useEffect(() => {
+    if (!open || !machines.some(machineIsTransitioning)) return;
+    const interval = window.setInterval(() => void refresh(), 2_000);
+    return () => window.clearInterval(interval);
+  }, [machines, open, refresh]);
+
+  const act = async (machine: SshMachine, action: "start" | "stop") => {
     setBusyId(machine.id);
     setError(undefined);
     try {
       if (action === "start") await client.start(machine.id);
       if (action === "stop") await client.stop(machine.id);
-      if (action === "terminal" || action === "desktop" || action === "stats") {
-        const service = await client.startService(machine.id, action);
-        window.open(resolveServiceUrl(service.openUrl), "_blank", "noopener,noreferrer");
-      }
       await refresh();
       return true;
     } catch (caught) {
@@ -139,7 +142,7 @@ export function SshIndicator({
                   key={machine.id}
                   machine={machine}
                   expanded={expandedId === machine.id}
-                  busy={busyId === machine.id}
+                  busy={busyId === machine.id || machineIsTransitioning(machine)}
                   onExpand={() =>
                     setExpandedId((current) => (current === machine.id ? undefined : machine.id))
                   }
@@ -147,6 +150,26 @@ export function SshIndicator({
                     if (action === "stop") setStopTarget(machine);
                     else void act(machine, action);
                   }}
+                  client={client}
+                  onServiceSnapshot={(snapshot) =>
+                    setMachines((current) =>
+                      current.map((candidate) =>
+                        candidate.id === machine.id
+                          ? {
+                              ...candidate,
+                              services: candidate.services.map((currentService) =>
+                                currentService.kind === snapshot.kind
+                                  ? snapshot
+                                  : currentService,
+                              ),
+                            }
+                          : candidate,
+                      ),
+                    )
+                  }
+                  onServiceBusyChange={(busy) => setBusyId(busy ? machine.id : undefined)}
+                  onServiceError={setError}
+                  onServiceSettled={refresh}
                 />
               ))}
             </div>
@@ -202,12 +225,22 @@ function MachineRow({
   busy,
   onExpand,
   onAction,
+  client,
+  onServiceSnapshot,
+  onServiceBusyChange,
+  onServiceError,
+  onServiceSettled,
 }: {
   machine: SshMachine;
   expanded: boolean;
   busy: boolean;
   onExpand: () => void;
-  onAction: (action: "start" | "stop" | SshMachineServiceKind) => void;
+  onAction: (action: "start" | "stop") => void;
+  client: ReturnType<typeof useSshClient>;
+  onServiceSnapshot: BuiltInServiceLauncherProps["onSnapshot"];
+  onServiceBusyChange: NonNullable<BuiltInServiceLauncherProps["onBusyChange"]>;
+  onServiceError: BuiltInServiceLauncherProps["onError"];
+  onServiceSettled: NonNullable<BuiltInServiceLauncherProps["onSettled"]>;
 }) {
   const longPress = useLongPress(onExpand);
   return (
@@ -232,15 +265,19 @@ function MachineRow({
               <SquareIcon className="size-3.5" /> Stop
             </Button>
           ) : null}
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("terminal")}>
-            <SquareTerminalIcon className="size-3.5" /> Terminal
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("desktop")}>
-            <MonitorIcon className="size-3.5" /> Desktop
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("stats")}>
-            <HeartPulseIcon className="size-3.5" /> Stats
-          </Button>
+          {BUILT_IN_SERVICE_CONTROLS.map(({ kind }) => (
+            <BuiltInServiceLauncher
+              key={kind}
+              client={client}
+              machine={machine}
+              kind={kind}
+              disabled={machine.status !== "running"}
+              onSnapshot={onServiceSnapshot}
+              onBusyChange={onServiceBusyChange}
+              onError={onServiceError}
+              onSettled={onServiceSettled}
+            />
+          ))}
         </div>
       ) : null}
     </div>
@@ -285,4 +322,13 @@ function statusColor(status: SshMachine["status"]): string {
   if (status === "starting" || status === "stopping") return "bg-amber-500";
   if (status === "error") return "bg-destructive";
   return "bg-muted-foreground/40";
+}
+
+function machineIsTransitioning(machine: SshMachine): boolean {
+  return (
+    machine.status === "starting" ||
+    machine.status === "stopping" ||
+    machine.services.some((service) => service.state === "starting") ||
+    machine.projects.some((project) => project.state === "starting")
+  );
 }

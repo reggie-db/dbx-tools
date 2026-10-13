@@ -19,6 +19,7 @@
     "projen": "projen"
   },
   "devDependencies": {
+    "@mastra/isolated-vm": "catalog:",
     "@mlflow/core": "catalog:",
     "@types/express": "catalog:",
     "@types/json-schema": "^7",
@@ -53,7 +54,6 @@
     "@mastra/core": "catalog:",
     "@mastra/express": "catalog:",
     "@mastra/fastembed": "catalog:",
-    "@mastra/isolated-vm": "catalog:",
     "@mastra/mcp": "catalog:",
     "@mastra/memory": "catalog:",
     "@mastra/observability": "catalog:",
@@ -270,6 +270,9 @@
     "exports.ts",
     "lib"
   ],
+  "optionalDependencies": {
+    "@mastra/isolated-vm": "catalog:"
+  },
   "peerDependenciesMeta": {
     "skills": {
       "optional": true

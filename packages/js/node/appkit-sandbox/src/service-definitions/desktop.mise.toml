@@ -11,7 +11,7 @@ set -eu
 : "${DBX_TOOLS_DESKTOP_FONT:?DBX_TOOLS_DESKTOP_FONT is required}"
 
 runtime="$HOME/.dbx-tools/runtime/desktop"
-version="9"
+version="10"
 kasmvnc_version="1.5.0"
 kasmvnc_package_version="$kasmvnc_version-1"
 version_file="$runtime/version"
@@ -360,6 +360,7 @@ for _ in \$(seq 1 160); do
     xdg-settings set default-web-browser dbx-tools-browser.desktop >/dev/null 2>&1 || true
     gsettings set org.gnome.Epiphany homepage-url \
       "\$(cat "\$runtime/browser-homepage")" >/dev/null 2>&1 || true
+    gsettings set org.gnome.Epiphany ask-for-default false >/dev/null 2>&1 || true
     set_xfconf xsettings /Net/ThemeName string Arc-Dark
     set_xfconf xsettings /Net/IconThemeName string hicolor
     set_xfconf xsettings /Gtk/FontName string '$DBX_TOOLS_DESKTOP_FONT 10'
@@ -429,7 +430,7 @@ hide = true
 run = '''
 set -eu
 runtime="$HOME/.dbx-tools/runtime/desktop"
-version="9"
+version="10"
 version_file="$runtime/version"
 server_pid="$runtime/kasmvncserver.pid"
 session_ready="$runtime/session.ready"

@@ -9,6 +9,12 @@ import {
   type ToolRegistry,
 } from "@databricks/appkit/beta";
 
+/** Delivery options for one agent-tool progress event. */
+export interface AgentToolProgressOptions {
+  /** Stream the event to active clients without persisting it in message history. */
+  readonly transient?: boolean;
+}
+
 /** Optional request state supplied by an agent host when dispatching a plugin tool. */
 export interface AgentToolExecutionContext {
   /** Resource identity associated with the current agent turn. */
@@ -16,7 +22,7 @@ export interface AgentToolExecutionContext {
   /** Model endpoint selected for the current agent turn. */
   readonly model?: string;
   /** Best-effort progress sink validated by the hosting integration. */
-  readonly writeProgress?: (event: unknown) => Promise<void>;
+  readonly writeProgress?: (event: unknown, options?: AgentToolProgressOptions) => Promise<void>;
 }
 
 /**

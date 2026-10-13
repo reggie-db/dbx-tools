@@ -18,7 +18,7 @@ import {
 import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
-import { ExternalLinkDialog } from "./_external-link-dialog.tsx";
+import { ExternalLinkDialog, isSandboxLink } from "./_external-link-dialog.tsx";
 import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid.tsx";
 import { copyText } from "../support/clipboard.ts";
 
@@ -187,6 +187,7 @@ const SHIKI_PLUGIN = { code: createShikiPlugin() };
 /** Keep Streamdown's link confirmation while matching the chat's AppKit UI. */
 const LINK_SAFETY = {
   enabled: true,
+  onLinkCheck: isSandboxLink,
   renderModal: (props: React.ComponentProps<typeof ExternalLinkDialog>) => (
     <ExternalLinkDialog {...props} />
   ),
@@ -248,7 +249,7 @@ export const AssistantMarkdown = ({
     animated={animate ? ANIMATE_OPTIONS : false}
     isAnimating={animate}
     className={cn(
-      "prose prose-sm dark:prose-invert max-w-none break-words",
+      "prose prose-sm dark:prose-invert min-w-0 max-w-full overflow-x-hidden break-words",
       "leading-relaxed prose-p:my-1.5 prose-p:leading-relaxed",
       "prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5",
       "prose-headings:font-semibold prose-headings:tracking-tight",
@@ -281,7 +282,7 @@ export const ToolMarkdown = ({ children, className }: { children: string; classN
     controls={false}
     linkSafety={LINK_SAFETY}
     className={cn(
-      "prose prose-sm dark:prose-invert max-w-none break-words",
+      "prose prose-sm dark:prose-invert min-w-0 max-w-full overflow-x-hidden break-words",
       "text-xs leading-snug text-muted-foreground",
       "prose-p:my-0.5 prose-p:leading-snug [&_p]:!leading-snug",
       "prose-ul:my-0.5 prose-ul:pl-4 prose-ol:my-0.5 prose-ol:pl-4",

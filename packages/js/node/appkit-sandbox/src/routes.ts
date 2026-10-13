@@ -76,7 +76,6 @@ export class SshRouteRegistry {
   private readonly retiredSessionSockets = new Map<SshSession, Set<Socket>>();
   private readonly sessionDrainWaiters = new Map<SshSession, Set<() => void>>();
   private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
-  private readonly outboundPaths = new WeakMap<IncomingMessage, string>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
 
   /** Creates an empty registry beneath one normalized AppKit route prefix. */
@@ -99,14 +98,6 @@ export class SshRouteRegistry {
       if (!head) return;
       this.responseHeadInjections.delete(request);
       void injectHtmlHead(proxyResponse, response, head);
-    });
-    this.proxy.on("proxyReq", (proxyRequest, request) => {
-      const path = this.outboundPaths.get(request);
-      if (path) proxyRequest.path = path;
-    });
-    this.proxy.on("proxyReqWs", (proxyRequest, request) => {
-      const path = this.outboundPaths.get(request);
-      if (path) proxyRequest.path = path;
     });
   }
 
@@ -270,9 +261,7 @@ export class SshRouteRegistry {
         this.responseHeadInjections.set(request, injectHead);
       }
       const replayBody = replayParsedJsonBody(request);
-      if (match.stripPrefix) {
-        this.outboundPaths.set(request, outboundPath(request.url, match.stripPrefix));
-      }
+      if (match.stripPrefix) request.url = outboundPath(request.url, match.stripPrefix);
       this.proxy.web(request, response, {
         target: match.entry.target!,
         changeOrigin: true,
@@ -291,9 +280,7 @@ export class SshRouteRegistry {
     const match = this.match(url.pathname, requestUser);
     if (!match) return false;
     if (!(await ownerIsAuthorized(match.entry, requestUser))) return false;
-    if (match.stripPrefix) {
-      this.outboundPaths.set(request, outboundPath(request.url, match.stripPrefix));
-    }
+    if (match.stripPrefix) request.url = outboundPath(request.url, match.stripPrefix);
     proxyWebSocket(request, socket, head, match.entry, requestUser!, this.proxy);
     return true;
   }
@@ -503,7 +490,11 @@ async function injectHtmlHead(
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
     const source = Buffer.concat(chunks).toString("utf8");
-    const body = source.includes("</head>") ? source.replace("</head>", `${head}</head>`) : source;
+    const body = source.includes("<head>")
+      ? source.replace("<head>", `<head>${head}`)
+      : source.includes("</head>")
+        ? source.replace("</head>", `${head}</head>`)
+        : source;
     for (const [name, value] of Object.entries(proxyResponse.headers)) {
       if (value === undefined || name === "content-length" || name === "transfer-encoding") {
         continue;

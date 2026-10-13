@@ -31,7 +31,7 @@ export type { SshForwardedRoute } from "./src/routes.ts";
 export { SshRuntime } from "./src/runtime.ts";
 export type { SandboxReaperResult } from "./src/runtime.ts";
 export { sshServicePorts } from "./src/services.ts";
-export type { SshServiceTarget, SshServiceDefinition } from "./src/services.ts";
+export type { SshServiceTarget, SshServiceDefinition, SshRemoteLifecycleStates } from "./src/services.ts";
 export { SshSession } from "./src/session.ts";
 export type { SshSessionOptions } from "./src/session.ts";
 export { DATABRICKS_SANDBOX_SKILLS_MOUNT } from "./src/skills.ts";

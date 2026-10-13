@@ -20,6 +20,22 @@ export interface LinkPresentation {
   absoluteUrl: string;
 }
 
+/** Return whether a chat URL belongs to the current app's Sandbox route space. */
+export function isSandboxLink(url: string, baseUrl?: string): boolean {
+  const base = baseUrl ?? (typeof window === "undefined" ? undefined : window.location.href);
+  if (!base) return false;
+  try {
+    const resolved = new URL(url, base);
+    const current = new URL(base);
+    return (
+      resolved.origin === current.origin &&
+      (resolved.pathname === "/sandbox" || resolved.pathname.startsWith("/sandbox/"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resolve a chat link for display and copying.
  *

@@ -46,4 +46,4 @@ export type { PluginContextLike } from "./src/plugin-registry.ts";
 export type { RequestTagValue } from "./src/request-tags.ts";
 export type { AppKitToolMeta, AppKitOperationSchemaMeta, AppKitOperation } from "./src/tool-operations.ts";
 export { ToolRegistryPlugin } from "./src/tool-provider.ts";
-export type { AgentToolExecutionContext } from "./src/tool-provider.ts";
+export type { AgentToolProgressOptions, AgentToolExecutionContext } from "./src/tool-provider.ts";

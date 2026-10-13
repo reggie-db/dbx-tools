@@ -2,10 +2,12 @@ import { randomBytes } from "node:crypto";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { asyncUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
 import {
+  SSH_MACHINE_SERVICE_KINDS,
   addSshProjectRequestSchema,
   createSshMachineRequestSchema,
   sshCommandRequestSchema,
   sshMachineServiceActionSchema,
+  sshMachineServiceLogsRequestSchema,
   type AddSshProjectRequest,
   type CreateSshMachineRequest,
   type DeleteSshMachineResponse,
@@ -14,6 +16,8 @@ import {
   type SshMachine,
   type SshMachineService,
   type SshMachineServiceAction,
+  type SshMachineServiceLogsRequest,
+  type SshMachineServiceLogsResponse,
   type SshMachinesResponse,
   type SshProject,
   type SshProjectTerminalResponse,
@@ -24,6 +28,7 @@ import {
   normalizeProjectName,
   normalizeProjectOpenPath,
   normalizeProjectPath,
+  mergeProjectMiseConfig,
   packageScriptCommand,
   PROJECT_REMOVE_SCRIPT,
   PROJECT_SETUP_SCRIPT,
@@ -45,8 +50,10 @@ import { DatabricksSandboxClient, isSandboxUnavailable, type SandboxEntry } from
 import { SshRouteRegistry } from "./routes.ts";
 import {
   ensureSshService,
+  inspectSshLifecycleStates,
   loadSshServiceDefinition,
   projectTerminalOpenUrl,
+  readSshServiceOperationLog,
   sshServicePorts,
   stopSshService,
 } from "./services.ts";
@@ -99,6 +106,7 @@ export class SshRuntime {
   private readonly connecting = new Map<string, Promise<SshSession>>();
   private ownership?: LakebaseMachineOwnershipStore;
   private readonly services = new Map<string, SshMachineService>();
+  private readonly projectStates = new Map<string, SshProject["state"]>();
   private readonly startingServices = new Map<string, Promise<SshMachineService>>();
   private readonly machineTransitions = new Map<string, Promise<SandboxEntry>>();
   private readonly machineEpochs = new Map<string, number>();
@@ -250,6 +258,20 @@ export class SshRuntime {
       const assigned = new Map(assignments.map((assignment) => [assignment.machineId, assignment]));
       const projectsByMachine = groupProjects(projects);
       const entries = await api.list(signal);
+      await Promise.all(
+        entries.map((entry) => {
+          const assignment = assigned.get(entry.sandboxId);
+          if (!assignment || !this.assignmentIsCurrent(assignment)) return Promise.resolve();
+          return this.refreshRemoteLifecycleStates(
+            client,
+            api.workspaceScope(),
+            userId,
+            entry,
+            projectsByMachine.get(entry.sandboxId) ?? [],
+            signal,
+          );
+        }),
+      );
       return {
         auto: this.config.auto,
         supported: true,
@@ -416,14 +438,115 @@ export class SshRuntime {
     const workspaceScope = api.workspaceScope();
     await this.requireOwnedMachine(api, userId, request.machineId, signal);
     const key = serviceKey(workspaceScope, userId, request.machineId, request.service);
+    const current = this.services.get(key);
+    if (current?.state === "ready") return current;
     const pending = this.startingServices.get(key);
-    if (pending) return pending;
+    if (pending) return current ?? this.startingService(request.machineId, request.service);
     const starting: SshMachineService = {
       kind: request.service,
       path: this.servicePath(request.machineId, request.service),
       openUrl: this.serviceOpenUrl(request.machineId, request.service),
       state: "starting",
     };
+    this.services.set(key, starting);
+    const operation = this.provisionService(client, userId, request, starting, signal).finally(
+      () => {
+        this.startingServices.delete(key);
+      },
+    );
+    this.startingServices.set(key, operation);
+    void operation.catch(() => undefined);
+    return starting;
+  }
+
+  /**
+   * Starts or reuses a built-in service and yields its observable lifecycle
+   * snapshots until the current provisioning operation settles.
+   */
+  async observeService(
+    client: WorkspaceClient,
+    userId: string,
+    input: SshMachineServiceAction,
+    signal?: AbortSignal,
+  ): Promise<AsyncIterable<SshMachineService>> {
+    const request = sshMachineServiceActionSchema.parse(input);
+    const initial = await this.startService(client, userId, request, signal);
+    const workspaceScope = new DatabricksSandboxClient(client).workspaceScope();
+    const pending = this.startingServices.get(
+      serviceKey(workspaceScope, userId, request.machineId, request.service),
+    );
+    let sessionPromise: Promise<SshSession> | undefined;
+    const operationLog = async () => {
+      sessionPromise ??= (async () => {
+        const api = new DatabricksSandboxClient(client);
+        const owned = await this.requireOwnedMachine(api, userId, request.machineId, signal);
+        const machine = await this.convergeMachine(
+          api,
+          request.machineId,
+          "running",
+          owned.entry,
+          signal,
+        );
+        const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
+        return this.ensureSession(client, userId, machine, epoch, signal);
+      })();
+      return readSshServiceOperationLog(
+        await sessionPromise,
+        request.service,
+        this.config.commandTimeoutMs,
+        signal,
+      );
+    };
+    return observeServiceStates(
+      initial,
+      pending,
+      () =>
+        this.services.get(serviceKey(workspaceScope, userId, request.machineId, request.service)),
+      operationLog,
+      signal,
+    );
+  }
+
+  /** Reads a bounded lifecycle-log tail for one owned, running machine service. */
+  async readServiceLog(
+    client: WorkspaceClient,
+    userId: string,
+    input: SshMachineServiceLogsRequest,
+    signal?: AbortSignal,
+  ): Promise<SshMachineServiceLogsResponse> {
+    const request = sshMachineServiceLogsRequestSchema.parse(input);
+    const api = new DatabricksSandboxClient(client);
+    const owned = await this.requireOwnedMachine(api, userId, request.machineId, signal);
+    if (normalizeStatus(owned.entry.status) !== "running") return { log: "" };
+    const epoch = this.runtimeEpoch(api.workspaceScope(), userId, request.machineId);
+    const session = await this.ensureSession(client, userId, owned.entry, epoch, signal);
+    return {
+      log: await readSshServiceOperationLog(
+        session,
+        request.service,
+        this.config.commandTimeoutMs,
+        signal,
+        request,
+      ),
+    };
+  }
+
+  private async ensureServiceReady(
+    client: WorkspaceClient,
+    userId: string,
+    input: SshMachineServiceAction,
+    signal?: AbortSignal,
+  ): Promise<SshMachineService> {
+    const request = sshMachineServiceActionSchema.parse(input);
+    const api = new DatabricksSandboxClient(client);
+    const workspaceScope = api.workspaceScope();
+    await this.requireOwnedMachine(api, userId, request.machineId, signal);
+    const key = serviceKey(workspaceScope, userId, request.machineId, request.service);
+    const current = this.services.get(key);
+    if (current?.state === "ready") return current;
+    const pending = this.startingServices.get(key);
+    if (pending) return pending;
+    const starting = this.startingService(request.machineId, request.service);
     this.services.set(key, starting);
     const operation = this.provisionService(client, userId, request, starting, signal).finally(
       () => {
@@ -528,16 +651,16 @@ export class SshRuntime {
         ? normalizeProjectOpenPath(request.openPath)
         : existing?.openPath;
     const stripPrefix = request.stripPrefix ?? existing?.stripPrefix ?? true;
-    const config = request.config ?? existing?.config ?? {};
+    const config = mergeProjectMiseConfig(request.config ?? existing?.config, request);
     const routeEnabled = input.route ?? existing?.route ?? true;
     const serviceDependencies = input.serviceDependencies ?? existing?.serviceDependencies ?? [];
     await Promise.all(
       serviceDependencies.map((service) =>
-        this.startService(client, userId, { machineId: request.machineId, service }, signal),
+        this.ensureServiceReady(client, userId, { machineId: request.machineId, service }, signal),
       ),
     );
     const path = `${this.routes.userPathPrefix(userId)}/${projectPath}`;
-    const miseToml = renderProjectMiseConfig(config, { name, path, port }, serviceDependencies);
+    const miseToml = renderProjectMiseConfig(config, { name, path, port });
     const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
     const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
     const session = await this.ensureSession(client, userId, machine, epoch, signal);
@@ -625,7 +748,7 @@ export class SshRuntime {
     }
   }
 
-  /** Removes one project, runs optional mise stop and uninstall, then deletes its directory and route. */
+  /** Removes one project, runs optional mise uninstall, then deletes its directory and route. */
   async removeProject(
     client: WorkspaceClient,
     userId: string,
@@ -691,15 +814,11 @@ export class SshRuntime {
       const session = await this.ensureSession(client, userId, machine, epoch, signal);
       await this.ensureMachineSoftware(workspaceScope, project.machineId, session, signal);
       await this.removeProjectDirectory(session, project.projectPath, signal);
-      const miseToml = renderProjectMiseConfig(
-        project.config,
-        {
-          name: project.name,
-          path: project.path,
-          port: project.port,
-        },
-        project.serviceDependencies,
-      );
+      const miseToml = renderProjectMiseConfig(project.config, {
+        name: project.name,
+        path: project.path,
+        port: project.port,
+      });
       const directory = await this.prepareProjectDirectory(
         session,
         project.projectPath,
@@ -1174,9 +1293,7 @@ export class SshRuntime {
       }),
     );
     const now = Date.now();
-    const serviceRestores = serviceProjects
-      .filter((project) => project.serviceKind !== "desktop")
-      .flatMap((project) => {
+    const serviceRestores = serviceProjects.flatMap((project) => {
         const machine = entriesById.get(project.machineId);
         const assignment = assignments.find(
           (candidate) =>
@@ -1186,7 +1303,7 @@ export class SshRuntime {
         );
         if (!machine || normalizeStatus(machine.status) !== "running" || !assignment) return [];
         return [
-          this.startService(client, assignment.userId, {
+          this.ensureServiceReady(client, assignment.userId, {
             machineId: project.machineId,
             service: project.serviceKind,
           }).catch((error) => {
@@ -1220,15 +1337,11 @@ export class SshRuntime {
     await this.ensureMachineSoftware(workspaceScope, machine.sandboxId, session, signal);
     for (const project of projects) {
       try {
-        const miseToml = renderProjectMiseConfig(
-          project.config,
-          {
-            name: project.name,
-            path: project.path,
-            port: project.port,
-          },
-          project.serviceDependencies,
-        );
+        const miseToml = renderProjectMiseConfig(project.config, {
+          name: project.name,
+          path: project.path,
+          port: project.port,
+        });
         await this.prepareProjectDirectory(
           session,
           project.projectPath,
@@ -1608,6 +1721,7 @@ export class SshRuntime {
   }
 
   private toProject(project: SandboxProjectRecord, ready: boolean): SshProject {
+    const remoteState = this.projectStates.get(projectStateKey(project));
     return {
       id: project.projectId,
       name: project.name,
@@ -1617,7 +1731,7 @@ export class SshRuntime {
       ...(project.route ? { openUrl: projectOpenUrl(project.path, project.openPath) } : {}),
       port: project.port,
       stripPrefix: project.stripPrefix,
-      state: !project.route || ready ? "ready" : "stopped",
+      state: remoteState ?? (!project.route || ready ? "ready" : "stopped"),
     };
   }
 
@@ -1642,7 +1756,7 @@ export class SshRuntime {
         ? { autoStopSeconds: idleTimeoutSeconds(entry.idleTimeout) }
         : {}),
       projects: projects.map((project) => this.toProject(project, this.projectRouteReady(project))),
-      services: (["terminal", "desktop", "stats"] as const).map(
+      services: SSH_MACHINE_SERVICE_KINDS.map(
         (kind): SshMachineService =>
           this.services.get(serviceKey(workspaceScope, userId, entry.sandboxId, kind)) ?? {
             kind,
@@ -1663,9 +1777,18 @@ export class SshRuntime {
     return `${routePrefix}/${service}/${machinePathSegment(machineId)}`;
   }
 
+  private startingService(machineId: string, kind: SshMachineService["kind"]): SshMachineService {
+    return {
+      kind,
+      path: this.servicePath(machineId, kind),
+      openUrl: this.serviceOpenUrl(machineId, kind),
+      state: "starting",
+    };
+  }
+
   private serviceOpenUrl(machineId: string, kind: SshMachineService["kind"]): string {
     const path = this.servicePath(machineId, kind);
-    if (kind !== "desktop") return kind === "stats" ? `${path}/` : path;
+    if (kind !== "desktop") return `${path}/`;
     return desktopOpenUrl(path);
   }
 
@@ -1714,8 +1837,56 @@ export class SshRuntime {
         this.startingServices.delete(key);
       }
     }
+    for (const key of this.projectStates.keys()) {
+      if (projectStateKeyMatchesMachine(key, workspaceScope, machineId)) {
+        this.projectStates.delete(key);
+      }
+    }
     this.machineSetup.delete(machineRuntimeKey(workspaceScope, machineId));
     await this.routes.removeMachine(machineId);
+  }
+
+  private async refreshRemoteLifecycleStates(
+    client: WorkspaceClient,
+    workspaceScope: string,
+    userId: string,
+    entry: SandboxEntry,
+    projects: readonly SandboxProjectRecord[],
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const key = sessionKey(workspaceScope, userId, entry.sandboxId);
+    if (normalizeStatus(entry.status) !== "running") {
+      this.sessions.get(key)?.close();
+      this.sessions.delete(key);
+      return;
+    }
+    try {
+      const epoch = this.runtimeEpoch(workspaceScope, userId, entry.sandboxId);
+      const session = await this.ensureSession(client, userId, entry, epoch, signal);
+      const states = await inspectSshLifecycleStates(session, this.config.commandTimeoutMs, signal);
+      for (const [kind, state] of states.services) {
+        const key = serviceKey(workspaceScope, userId, entry.sandboxId, kind);
+        const current = this.services.get(key);
+        this.services.set(key, {
+          kind,
+          path: current?.path ?? this.servicePath(entry.sandboxId, kind),
+          openUrl: current?.openUrl ?? this.serviceOpenUrl(entry.sandboxId, kind),
+          state,
+          ...(states.serviceLogs.get(kind) ? { log: states.serviceLogs.get(kind) } : {}),
+          ...(current?.error && state === "error" ? { error: current.error } : {}),
+        });
+      }
+      for (const project of projects) {
+        const state = states.projects.get(project.projectPath);
+        if (state) this.projectStates.set(projectStateKey(project), state);
+      }
+    } catch (error) {
+      logger.debug("Sandbox lifecycle status inspection failed", {
+        userId,
+        machineId: entry.sandboxId,
+        ...authErrorMetadata(errorUtils.toError(error)),
+      });
+    }
   }
 
   private bumpEpoch(epochs: Map<string, number>, key: string): void {
@@ -1731,6 +1902,55 @@ function groupProjects(projects: SandboxProjectRecord[]): Map<string, SandboxPro
     grouped.set(project.machineId, current);
   }
   return grouped;
+}
+
+async function* observeServiceStates(
+  initial: SshMachineService,
+  pending: Promise<SshMachineService> | undefined,
+  current: () => SshMachineService | undefined,
+  operationLog: () => Promise<string>,
+  signal?: AbortSignal,
+): AsyncIterable<SshMachineService> {
+  yield initial;
+  if (initial.state !== "starting" || !pending) return;
+  let observedLog = "";
+  let settled = false;
+  void pending.then(
+    () => {
+      settled = true;
+    },
+    () => {
+      settled = true;
+    },
+  );
+  while (!settled) {
+    try {
+      const log = await operationLog();
+      if (log !== observedLog) {
+        const snapshot = current() ?? initial;
+        yield { ...snapshot, log };
+      }
+      observedLog = log;
+    } catch {
+      // Provisioning owns the final error; transient log reads may race remote setup.
+    }
+    if (!settled) await asyncUtils.sleep(250, signal);
+  }
+  try {
+    const resolved = await pending;
+    try {
+      const log = await operationLog();
+      if (log !== observedLog) {
+        yield { ...resolved, log };
+      }
+    } catch {
+      // The final lifecycle snapshot remains authoritative when the log is unavailable.
+    }
+    yield resolved;
+  } catch {
+    const failed = current();
+    if (failed) yield failed;
+  }
 }
 
 function serviceKey(
@@ -1752,6 +1972,18 @@ function sessionKeyMatchesMachine(key: string, workspaceScope: string, machineId
 }
 
 function serviceKeyMatchesMachine(key: string, workspaceScope: string, machineId: string): boolean {
+  return sessionKeyMatchesMachine(key, workspaceScope, machineId);
+}
+
+function projectStateKey(project: SandboxProjectRecord): string {
+  return `${sessionKey(project.workspaceScope, project.userId, project.machineId)}\0${project.projectPath}`;
+}
+
+function projectStateKeyMatchesMachine(
+  key: string,
+  workspaceScope: string,
+  machineId: string,
+): boolean {
   return sessionKeyMatchesMachine(key, workspaceScope, machineId);
 }
 

@@ -67,7 +67,7 @@ describe("sshWorkspaceSandbox", () => {
     assert.match(instructions, /return openUrl/i);
     assert.match(instructions, /route: false/);
     assert.match(instructions, /serviceDependencies/);
-    assert.match(instructions, /sandbox:<kind>/);
+    assert.match(instructions, /outside the project mise configuration/);
     assert.match(instructions, /relative asset and API URLs/);
     assert.match(instructions, /derive ws:\/\/ or wss:\/\//);
     assert.match(instructions, /Raw TCP, UDP/);

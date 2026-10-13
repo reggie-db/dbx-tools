@@ -61,6 +61,10 @@ export const humanizeToolName = (toolName: string): string => {
  * server-side label generator.
  */
 const runningLabelFor = (event: ToolEvent): string => {
+  const toolStatus = [...(event.progress ?? [])]
+    .reverse()
+    .find((p): p is Extract<ToolProgress, { type: "tool_status" }> => p.type === "tool_status");
+  if (toolStatus?.message.trim()) return toolStatus.message.trim();
   const latest = [...(event.progress ?? [])]
     .reverse()
     .find((p): p is Extract<ToolProgress, { type: "status" }> => p.type === "status");
@@ -402,12 +406,12 @@ const RawToolPayload = ({
 }) => {
   const structured = structuredToolPayload(value);
   return (
-    <Collapsible className="rounded border border-border/60 bg-background/40">
-      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
+    <Collapsible className="min-w-0 max-w-full overflow-hidden rounded border border-border/60 bg-background/40">
+      <CollapsibleTrigger className="group flex w-full min-w-0 items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
         <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
         <span>{label}</span>
       </CollapsibleTrigger>
-      <CollapsibleContent>
+      <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
         {structured === undefined ? (
           <JsonBlock
             json={formatRawToolPayload(value)}
@@ -416,7 +420,7 @@ const RawToolPayload = ({
         ) : (
           <RecordPreview
             value={structured}
-            className="border-t border-border/50 bg-transparent text-foreground"
+            className="max-h-80 max-w-full overflow-auto border-t border-border/50 bg-transparent text-foreground"
           />
         )}
       </CollapsibleContent>
@@ -488,8 +492,8 @@ export function toolOutputPresentation(
 const ToolInputSource = ({ presentation }: { presentation: ToolInputPresentation }) => {
   const lineCount = presentation.source.split("\n").length;
   return (
-    <Collapsible className="rounded border border-border/60 bg-background/40">
-      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
+    <Collapsible className="min-w-0 max-w-full overflow-hidden rounded border border-border/60 bg-background/40">
+      <CollapsibleTrigger className="group flex w-full min-w-0 items-center gap-1.5 px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground">
         <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
         <span className="font-medium text-foreground/80">{presentation.label}</span>
         <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase leading-none tracking-wide">
@@ -499,7 +503,7 @@ const ToolInputSource = ({ presentation }: { presentation: ToolInputPresentation
           {lineCount} {lineCount === 1 ? "line" : "lines"}
         </span>
       </CollapsibleTrigger>
-      <CollapsibleContent>
+      <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
         <SourceBlock
           source={presentation.source}
           language={presentation.language}
@@ -586,6 +590,25 @@ const WebSearchProgressDetails = ({ event }: { event: ToolEvent }) => {
   );
 };
 
+/** Latest cumulative detail emitted by a non-search tool. */
+const ToolStatusProgressDetails = ({ event }: { event: ToolEvent }) => {
+  if (event.toolName === "web_search") return null;
+  const detail = [...(event.progress ?? [])]
+    .reverse()
+    .find(
+      (progress): progress is ToolStatusProgress =>
+        progress.type === "tool_status" && Boolean(progress.detail?.trim()),
+    )?.detail;
+  if (!detail) return null;
+  return (
+    <SourceBlock
+      source={detail}
+      language="text"
+      className="max-h-64 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words rounded border border-border/50 bg-background/40 p-2 text-foreground"
+    />
+  );
+};
+
 /**
  * True when a tool event has anything worth expanding for. The
  * question text already rides on the row header (see
@@ -629,6 +652,7 @@ const ToolCallDetails = ({
         <RawToolPayload label="Request" value={event.input} />
       ) : null}
       <WebSearchProgressDetails event={event} />
+      <ToolStatusProgressDetails event={event} />
       <ToolProgressDetails summary={summary} omitQuestion />
       {outputPresentation?.language === "json" ? (
         <RawToolPayload label="Output" value={outputPresentation.source} />
@@ -698,7 +722,7 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
   }
 
   return (
-    <Collapsible className="rounded border border-border/40 bg-background/30">
+    <Collapsible className="min-w-0 max-w-full overflow-hidden rounded border border-border/40 bg-background/30">
       <CollapsibleTrigger className="group flex w-full items-start gap-2 px-2 py-1 text-left text-xs text-muted-foreground cursor-pointer hover:text-foreground">
         <ChevronDownIcon className="mt-0.5 size-3 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
         <span className="mt-0.5 shrink-0">
@@ -707,7 +731,7 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
         {header}
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="px-2 pb-2">
+        <div className="min-w-0 max-w-full overflow-hidden px-2 pb-2">
           <ToolCallDetails event={event} />
         </div>
       </CollapsibleContent>
@@ -754,7 +778,7 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
   return (
     <div
       className={cn(
-        "rounded-md border bg-background/30 px-2 py-1 transition-colors",
+        "min-w-0 max-w-full overflow-hidden rounded-md border bg-background/30 px-2 py-1 transition-colors",
         // Loud-but-not-jarring "in flight" treatment when any row
         // is running: primary border + soft ring. Failed sessions
         // (no longer running) pick up the destructive border;
@@ -798,8 +822,13 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
             </span>
           )}
         </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className={cn("mt-1.5", events.length > 1 && "flex flex-col gap-1")}>
+        <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
+          <div
+            className={cn(
+              "mt-1.5 min-w-0 max-w-full overflow-hidden",
+              events.length > 1 && "flex flex-col gap-1",
+            )}
+          >
             {events.length === 1 ? (
               <ToolCallDetails event={latest} showQuestion />
             ) : (

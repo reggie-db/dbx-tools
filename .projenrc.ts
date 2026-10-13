@@ -16,7 +16,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { bunWorkflow, project, projectJs } from "@dbx-tools/projen";
-import { Component, javascript } from "projen";
+import { Component, DependencyType, javascript } from "projen";
 
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
@@ -700,7 +700,6 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@mastra/observability@catalog:",
     "@mastra/otel-bridge@catalog:",
     "@mastra/pg@catalog:",
-    "@mastra/isolated-vm@catalog:",
     "@mastra/quickjs@catalog:",
     "@pydantic/monty@catalog:",
     "@opentelemetry/api@catalog:",
@@ -713,11 +712,16 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "yaml@^2.9.0",
   );
   p.addDevDeps(
+    "@mastra/isolated-vm@catalog:",
     "@types/express@catalog:",
     "@types/json-schema@^7",
     "@types/pg@^8",
     "vitest@catalog:",
   );
+  p.deps.addDependency("@mastra/isolated-vm@catalog:", DependencyType.OPTIONAL);
+  p.package.addField("optionalDependencies", {
+    "@mastra/isolated-vm": "catalog:",
+  });
   // `skills` (https://www.npmjs.com/package/skills) is the OPTIONAL Agent-Skills
   // CLI `remote-skills.ts` shells out to when present. Left as an optional peer
   // so consumers opt in; the runtime falls back to a direct fetch when it is
@@ -1486,6 +1490,7 @@ root.addTask("demo", {
 });
 root.addTask("demo:deploy", {
   exec: "bun scripts/demo-deploy.ts",
+  receiveArgs: true,
   description: "Stage local artifacts and deploy the AppKit demo to its configured workspace",
 });
 

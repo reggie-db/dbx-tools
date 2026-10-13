@@ -194,11 +194,11 @@ export const ChatTranscript = ({
   const showWaitingIndicator = isRunning && !lastAssistantHasContent;
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
       <div
         ref={controller.scrollRef}
         onScroll={controller.handleScroll}
-        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]"
+        className="min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-clip overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]"
       >
         {messages.length === 0 && !isLoadingHistory ? (
           <Empty className="mx-auto h-full w-full max-w-4xl px-4 md:px-6">
@@ -217,7 +217,7 @@ export const ChatTranscript = ({
         ) : (
           <div
             ref={controller.contentRef}
-            className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-3 md:px-6"
+            className="mx-auto flex min-w-0 w-full max-w-4xl flex-col gap-3 overflow-x-clip px-4 py-3 md:px-6"
           >
             {(isLoadingMore || isLoadingHistory) && (
               <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground">

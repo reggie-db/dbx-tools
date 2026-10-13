@@ -26,8 +26,6 @@ import {
 } from "@dbx-tools/ui/react";
 import {
   ExternalLinkIcon,
-  HeartPulseIcon,
-  MonitorIcon,
   PlayIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -35,14 +33,19 @@ import {
   SquareTerminalIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SshClient } from "./client.ts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  BUILT_IN_SERVICE_CONTROLS,
+  BuiltInServiceLog,
+  BuiltInServiceLauncher,
+  selectedBuiltInServiceLog,
+} from "./built-in-service-launcher.tsx";
+import { useSshClient } from "./client.ts";
 import { resolveServiceUrl } from "./service-url.ts";
 
 const REFRESH_INTERVAL_MS = 5_000;
 const CREATE_MACHINE_OPERATION = "machine:create";
 const CREATE_PROJECT_OPERATION = "project:create";
-
 function machineOperation(machineId: string, action: string): string {
   return `machine:${machineId}:${action}`;
 }
@@ -63,8 +66,8 @@ interface MachineConfirmation {
 }
 
 /** Manages existing SSH machines and their persisted Sandbox projects. */
-export function SshManager({ basePath = "/api/databricks-sandbox", className }: SshManagerProps) {
-  const client = useMemo(() => new SshClient(basePath), [basePath]);
+export function SshManager({ basePath, className }: SshManagerProps) {
+  const client = useSshClient(basePath);
   const [machines, setMachines] = useState<SshMachine[]>([]);
   const [projects, setProjects] = useState<SshProject[]>([]);
   const [projectPathPrefix, setProjectPathPrefix] = useState("/sandbox");
@@ -82,6 +85,11 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
   const [openPath, setOpenPath] = useState("");
   const [route, setRoute] = useState(true);
   const [projectServices, setProjectServices] = useState<SshMachineServiceKind[]>([]);
+  const [selectedServiceLogs, setSelectedServiceLogs] = useState<
+    Readonly<
+      Record<string, { kind: SshMachineServiceKind; source: "automatic" | "manual" } | undefined>
+    >
+  >({});
   const [stripPrefix, setStripPrefix] = useState(true);
   const refreshing = useRef(false);
   const deletingMachineIds = useRef(new Set<string>());
@@ -100,6 +108,30 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     [...busyOperations].some((operation) => operation.startsWith(`machine:${machineId}:`));
   const isProjectBusy = (projectId: string) =>
     [...busyOperations].some((operation) => operation.startsWith(`project:${projectId}:`));
+
+  useEffect(() => {
+    setSelectedServiceLogs((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const machine of machines) {
+        const selected = current[machine.id];
+        if (selected?.source === "automatic") {
+          const service = machine.services.find((candidate) => candidate.kind === selected.kind);
+          if (service?.state !== "starting") {
+            next[machine.id] = undefined;
+            changed = true;
+          }
+          continue;
+        }
+        if (selected) continue;
+        const starting = machine.services.find((service) => service.state === "starting");
+        if (!starting) continue;
+        next[machine.id] = { kind: starting.kind, source: "automatic" };
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [machines]);
 
   const refresh = useCallback(
     async (showLoading = false) => {
@@ -259,28 +291,15 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
     }
   };
 
-  const openService = async (machine: SshMachine, service: SshMachineServiceKind) => {
-    const operation = machineOperation(machine.id, service);
-    setOperationBusy(operation, true);
-    setError(undefined);
-    try {
-      const result = await client.startService(machine.id, service);
-      window.open(resolveServiceUrl(result.openUrl), "_blank", "noopener,noreferrer");
-      await refresh();
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setOperationBusy(operation, false);
-    }
-  };
-
   const openProjectTerminal = async (project: SshProject) => {
     const operation = projectOperation(project.id, "terminal");
     setOperationBusy(operation, true);
     setError(undefined);
     try {
       const result = await client.openProjectTerminal(project.id);
-      window.open(resolveServiceUrl(result.service.openUrl), "_blank", "noopener,noreferrer");
+      if (result.service.state === "ready") {
+        window.open(resolveServiceUrl(result.service.openUrl), "_blank", "noopener,noreferrer");
+      }
       await refresh();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -367,134 +386,142 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                 </div>
               ) : (
                 <div className="divide-y border-t">
-                  {machines.map((machine) => (
-                    <div key={machine.id} className="min-w-0 overflow-hidden">
-                      <div className="flex min-w-0 items-start gap-2.5 px-3 py-2.5 sm:px-4">
-                        <span
-                          className={cn(
-                            "mt-1.5 size-2.5 shrink-0 rounded-full",
-                            statusColor(machine.status),
-                          )}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="truncate text-sm font-medium">{machine.name}</span>
-                            <Badge variant="secondary">{machine.status}</Badge>
+                  {machines.map((machine) => {
+                    const selectedService = selectedBuiltInServiceLog(
+                      machine,
+                      selectedServiceLogs[machine.id]?.kind,
+                    );
+                    return (
+                      <div key={machine.id} className="min-w-0 overflow-hidden">
+                        <div className="flex min-w-0 items-start gap-2.5 px-3 py-2.5 sm:px-4">
+                          <span
+                            className={cn(
+                              "mt-1.5 size-2.5 shrink-0 rounded-full",
+                              statusColor(machine.status),
+                            )}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="truncate text-sm font-medium">{machine.name}</span>
+                              <Badge variant="secondary">{machine.status}</Badge>
+                            </div>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {machine.id} · expires {formatExpiration(machine.expiresAt)} ·{" "}
+                              {machine.projects.length} projects
+                            </p>
                           </div>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {machine.id} · expires {formatExpiration(machine.expiresAt)} ·{" "}
-                            {machine.projects.length} projects
-                          </p>
                         </div>
-                      </div>
-                      <div className="flex min-w-0 flex-wrap items-center gap-1 border-t bg-muted/20 px-3 py-2 sm:px-4">
-                        {isMachineBusy(machine.id) ? <Spinner className="mr-1 size-4" /> : null}
-                        {machine.canStart ? (
+                        <div className="flex min-w-0 flex-wrap items-center gap-1 border-t bg-muted/20 px-3 py-2 sm:px-4">
+                          {isMachineBusy(machine.id) ? <Spinner className="mr-1 size-4" /> : null}
+                          {machine.canStart ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0 px-2 sm:px-3"
+                              aria-label={`Start ${machine.name}`}
+                              title="Start"
+                              disabled={
+                                isBusy(machineOperation(machine.id, "start")) ||
+                                isBusy(machineOperation(machine.id, "delete"))
+                              }
+                              onClick={() => void manageMachine(machine, "start")}
+                            >
+                              <PlayIcon className="size-3.5" />
+                              <span className="hidden sm:inline">Start</span>
+                            </Button>
+                          ) : null}
+                          {BUILT_IN_SERVICE_CONTROLS.map(({ kind }) => (
+                            <BuiltInServiceLauncher
+                              key={kind}
+                              client={client}
+                              machine={machine}
+                              kind={kind}
+                              disabled={isBusy(machineOperation(machine.id, "delete"))}
+                              onSnapshot={(snapshot) => {
+                                setMachines((current) =>
+                                  current.map((candidate) =>
+                                    candidate.id === machine.id
+                                      ? {
+                                          ...candidate,
+                                          services: candidate.services.map((currentService) =>
+                                            currentService.kind === snapshot.kind
+                                              ? snapshot
+                                              : currentService,
+                                          ),
+                                        }
+                                      : candidate,
+                                  ),
+                                );
+                                setSelectedServiceLogs((current) => {
+                                  if (snapshot.state === "starting") {
+                                    return {
+                                      ...current,
+                                      [machine.id]: { kind: snapshot.kind, source: "automatic" },
+                                    };
+                                  }
+                                  const selected = current[machine.id];
+                                  if (
+                                    selected?.source !== "automatic" ||
+                                    selected.kind !== snapshot.kind
+                                  ) {
+                                    return current;
+                                  }
+                                  return { ...current, [machine.id]: undefined };
+                                });
+                              }}
+                              onBusyChange={(busy) =>
+                                setOperationBusy(machineOperation(machine.id, kind), busy)
+                              }
+                              onError={setError}
+                              onActivate={() =>
+                                setSelectedServiceLogs((current) => ({
+                                  ...current,
+                                  [machine.id]: undefined,
+                                }))
+                              }
+                              onSelectLogs={() =>
+                                setSelectedServiceLogs((current) => ({
+                                  ...current,
+                                  [machine.id]: { kind, source: "manual" },
+                                }))
+                              }
+                              onSettled={refresh}
+                            />
+                          ))}
+                          {machine.canStop ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0 px-2 sm:px-3"
+                              aria-label={`Stop ${machine.name}`}
+                              title="Stop"
+                              disabled={
+                                isBusy(machineOperation(machine.id, "stop")) ||
+                                isBusy(machineOperation(machine.id, "delete"))
+                              }
+                              onClick={() => setMachineConfirmation({ action: "stop", machine })}
+                            >
+                              <SquareIcon className="size-3.5" />
+                              <span className="hidden sm:inline">Stop</span>
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="shrink-0 px-2 sm:px-3"
-                            aria-label={`Start ${machine.name}`}
-                            title="Start"
-                            disabled={
-                              isBusy(machineOperation(machine.id, "start")) ||
-                              isBusy(machineOperation(machine.id, "delete"))
-                            }
-                            onClick={() => void manageMachine(machine, "start")}
+                            variant="ghost"
+                            className="shrink-0 px-2 text-destructive hover:text-destructive sm:px-3"
+                            aria-label={`Delete ${machine.name}`}
+                            title="Delete"
+                            disabled={isMachineBusy(machine.id)}
+                            onClick={() => setMachineConfirmation({ action: "delete", machine })}
                           >
-                            <PlayIcon className="size-3.5" />
-                            <span className="hidden sm:inline">Start</span>
+                            <Trash2Icon className="size-3.5" />
+                            <span className="hidden sm:inline">Delete</span>
                           </Button>
-                        ) : null}
-                        {machine.canStop ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="shrink-0 px-2 sm:px-3"
-                            aria-label={`Stop ${machine.name}`}
-                            title="Stop"
-                            disabled={
-                              isBusy(machineOperation(machine.id, "stop")) ||
-                              isBusy(machineOperation(machine.id, "delete"))
-                            }
-                            onClick={() => setMachineConfirmation({ action: "stop", machine })}
-                          >
-                            <SquareIcon className="size-3.5" />
-                            <span className="hidden sm:inline">Stop</span>
-                          </Button>
-                        ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="shrink-0 px-2 sm:px-3"
-                          aria-label={`Open desktop for ${machine.name}`}
-                          title="Desktop"
-                          disabled={
-                            isBusy(machineOperation(machine.id, "desktop")) ||
-                            isBusy(machineOperation(machine.id, "delete"))
-                          }
-                          onClick={() => void openService(machine, "desktop")}
-                        >
-                          {isBusy(machineOperation(machine.id, "desktop")) ? (
-                            <Spinner className="size-3.5" />
-                          ) : (
-                            <MonitorIcon className="size-3.5" />
-                          )}
-                          <span className="hidden sm:inline">Desktop</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="shrink-0 px-2 sm:px-3"
-                          aria-label={`Open terminal for ${machine.name}`}
-                          title="Terminal"
-                          disabled={
-                            isBusy(machineOperation(machine.id, "terminal")) ||
-                            isBusy(machineOperation(machine.id, "delete"))
-                          }
-                          onClick={() => void openService(machine, "terminal")}
-                        >
-                          {isBusy(machineOperation(machine.id, "terminal")) ? (
-                            <Spinner className="size-3.5" />
-                          ) : (
-                            <SquareTerminalIcon className="size-3.5" />
-                          )}
-                          <span className="hidden sm:inline">Terminal</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="shrink-0 px-2 sm:px-3"
-                          aria-label={`Open stats for ${machine.name}`}
-                          title="Stats"
-                          disabled={
-                            isBusy(machineOperation(machine.id, "stats")) ||
-                            isBusy(machineOperation(machine.id, "delete"))
-                          }
-                          onClick={() => void openService(machine, "stats")}
-                        >
-                          {isBusy(machineOperation(machine.id, "stats")) ? (
-                            <Spinner className="size-3.5" />
-                          ) : (
-                            <HeartPulseIcon className="size-3.5" />
-                          )}
-                          <span className="hidden sm:inline">Stats</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="shrink-0 px-2 text-destructive hover:text-destructive sm:px-3"
-                          aria-label={`Delete ${machine.name}`}
-                          title="Delete"
-                          disabled={isMachineBusy(machine.id)}
-                          onClick={() => setMachineConfirmation({ action: "delete", machine })}
-                        >
-                          <Trash2Icon className="size-3.5" />
-                          <span className="hidden sm:inline">Delete</span>
-                        </Button>
+                        </div>
+                        {selectedService ? <BuiltInServiceLog service={selectedService} /> : null}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -637,22 +664,22 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                   </div>
                   <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <legend className="mb-1 text-sm font-medium">Service dependencies</legend>
-                    {(["terminal", "desktop", "stats"] as const).map((service) => (
-                      <label key={service} className="flex items-center gap-2 text-sm capitalize">
+                    {BUILT_IN_SERVICE_CONTROLS.map(({ kind, label }) => (
+                      <label key={kind} className="flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
                           className="size-4"
-                          checked={projectServices.includes(service)}
+                          checked={projectServices.includes(kind)}
                           disabled={isBusy(CREATE_PROJECT_OPERATION)}
                           onChange={(event) =>
                             setProjectServices((current) =>
                               event.target.checked
-                                ? [...current, service]
-                                : current.filter((candidate) => candidate !== service),
+                                ? [...current, kind]
+                                : current.filter((candidate) => candidate !== kind),
                             )
                           }
                         />
-                        <span>{service}</span>
+                        <span>{label}</span>
                       </label>
                     ))}
                   </fieldset>
@@ -666,14 +693,14 @@ export function SshManager({ basePath = "/api/databricks-sandbox", className }: 
                 <div className="divide-y border-t">
                   {projects.map((project) => (
                     <div key={project.id} className="px-3 py-3 sm:px-4">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <p className="truncate text-sm font-medium">{project.name}</p>
                           <Badge variant={project.state === "ready" ? "secondary" : "outline"}>
                             {project.state}
                           </Badge>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1">
+                        <div className="flex w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:shrink-0 sm:flex-nowrap">
                           {project.openUrl ? (
                             <Button type="button" variant="outline" size="sm" asChild>
                               <a href={project.openUrl} target="_blank" rel="noopener noreferrer">

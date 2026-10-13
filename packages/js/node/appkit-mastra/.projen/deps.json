@@ -1,6 +1,11 @@
 {
   "dependencies": [
     {
+      "name": "@mastra/isolated-vm",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "@mlflow/core",
       "version": "catalog:",
       "type": "build"
@@ -39,6 +44,11 @@
       "name": "vitest",
       "version": "catalog:",
       "type": "build"
+    },
+    {
+      "name": "@mastra/isolated-vm",
+      "version": "catalog:",
+      "type": "optional"
     },
     {
       "name": "@mlflow/core",
@@ -147,11 +157,6 @@
     },
     {
       "name": "@mastra/fastembed",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "@mastra/isolated-vm",
       "version": "catalog:",
       "type": "runtime"
     },

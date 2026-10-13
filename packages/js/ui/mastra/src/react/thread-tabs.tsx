@@ -151,9 +151,19 @@ export const ThreadTabs = ({
   ...list
 }: ThreadTabsProps) => {
   const { threads, activeThreadId, streamingThreadIds = [], onSelect } = list;
+  const tabStripRef = useRef<HTMLDivElement | null>(null);
   const activeTabRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    activeTabRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const container = tabStripRef.current;
+    const activeTab = activeTabRef.current;
+    if (!container || !activeTab) return;
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = activeTab.getBoundingClientRect();
+    if (tabRect.left < containerRect.left) {
+      container.scrollBy({ left: tabRect.left - containerRect.left, behavior: "smooth" });
+    } else if (tabRect.right > containerRect.right) {
+      container.scrollBy({ left: tabRect.right - containerRect.right, behavior: "smooth" });
+    }
   }, [activeThreadId]);
 
   return (
@@ -161,7 +171,10 @@ export const ThreadTabs = ({
     // in the same centered column as the transcript and composer.
     <div className={cn("w-full border-b border-border text-xs", className)}>
       <div className="mx-auto flex w-full max-w-4xl items-center gap-1 px-2 py-1 md:px-4">
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+        <div
+          ref={tabStripRef}
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+        >
           {openThreadIds.map((id) => {
             const thread = threads.find((t) => t.id === id) ?? { id };
             const isActive = id === activeThreadId;

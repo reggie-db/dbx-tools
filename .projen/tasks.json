@@ -170,7 +170,8 @@
       "description": "Stage local artifacts and deploy the AppKit demo to its configured workspace",
       "steps": [
         {
-          "exec": "bun scripts/demo-deploy.ts"
+          "exec": "bun scripts/demo-deploy.ts",
+          "receiveArgs": true
         }
       ]
     },

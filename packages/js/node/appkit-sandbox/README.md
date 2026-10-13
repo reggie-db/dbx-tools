@@ -62,17 +62,14 @@ Use the `add_ssh_project` tool instead of creating a proxy route directly:
   "machineId": "sandbox-id",
   "name": "demo",
   "openPath": "index.html",
+  "tools": {
+    "node": "lts"
+  },
+  "postinstall": "[ -f server.mjs ] || exit 0\nif [ -f server.pid ] && kill -0 \"$(cat server.pid)\" 2>/dev/null; then exit 0; fi\nnohup node server.mjs > server.log 2>&1 < /dev/null &\necho $! > server.pid\n",
+  "uninstall": "[ -f server.pid ] && kill \"$(cat server.pid)\" 2>/dev/null || true\n",
   "config": {
-    "tools": {
-      "node": "lts"
-    },
-    "tasks": {
-      "start": {
-        "run": "[ -f server.mjs ] || exit 0\nif [ -f server.pid ] && kill -0 \"$(cat server.pid)\" 2>/dev/null; then exit 0; fi\nnohup node server.mjs > server.log 2>&1 < /dev/null &\necho $! > server.pid\n"
-      },
-      "stop": {
-        "run": "[ -f server.pid ] && kill \"$(cat server.pid)\" 2>/dev/null || true\n"
-      }
+    "settings": {
+      "experimental": true
     }
   }
 }
@@ -88,14 +85,19 @@ still receive a directory, mise environment, and lifecycle tasks, but they do
 not register an AppKit proxy route or return an `openUrl`. Declare required
 built-in services with `serviceDependencies`, for example
 `serviceDependencies: ["desktop"]`. The runtime starts each dependency before
-project setup and writes hidden `sandbox:<kind>` dependency tasks into the
-project's `mise.toml`.
+project setup without writing dependency tasks into the project's `mise.toml`.
 
-Keep `hooks.postinstall` limited to installation or preparation that belongs
-to `mise install`. Put runtime lifecycle behavior in `tasks.start` and
-`tasks.stop`; use a visible `tasks.uninstall` only when the project has
-additional teardown beyond stopping its workload. Before invoking any task,
-call `execute_ssh_command` from the returned directory with `command: "sh"`
+Prefer the first-class `tools`, `postinstall`, and `uninstall` options. Raw
+`config` follows `https://mise.jdx.dev/schema/mise.json`; first-class values
+override conflicts in `config.tools`, `config.hooks.postinstall`, and
+`config.tasks.uninstall`. `postinstall` may install, prepare, or intentionally
+launch a workload that runs until uninstall. Use check-lock-check plus a
+completion marker for expensive setup. Project install is idempotent and uses
+one home-owned lifecycle lock and bounded operation log. Concurrent callers
+attach to that log, and a failed attempt may retry once before returning an
+error.
+
+Before invoking any additional task, call `execute_ssh_command` from the returned directory with `command: "sh"`
 and
 `args: ["-lc", "\"$HOME/.local/bin/mise\" tasks ls --name-only --hidden"]`.
 Evaluate the available tasks and invoke only the task defined for the requested
@@ -119,12 +121,31 @@ Pass the returned `projectId` to update the name, path, open path, port, config,
 or prefix behavior. An explicit duplicate path or port fails. Omitting a field
 during an update retains its stored value.
 
-`remove_ssh_project` runs `mise run stop` and then `mise run uninstall` when
-each task exists. Discovery includes hidden tasks for compatibility, but new
-`uninstall` tasks should remain visible. Failures are logged and ignored before
+`remove_ssh_project` may run only `mise run uninstall` when that task exists.
+Uninstall is idempotent and does not wait for an active install: it terminates
+the lock owner, removes the lock, and continues teardown. Failures are logged and ignored before
 the proxy route, Lakebase record, and project directory are removed. Stopping a
 Sandbox preserves Projects. Deleting or expiring a Sandbox removes its Project
 records without starting the machine for remote cleanup.
+
+Remote commands do not inherit authentication from the Sandbox image. The SSH
+transport clears Databricks environment variables, disables SSH agent
+forwarding, and ignores the default Databricks config file before project,
+service, or user commands run. Generic `execute_ssh_command.env` overlays cannot
+restore Databricks credentials. Sandbox Databricks access requires a dedicated
+app callback that obtains short-lived authorization for the current user through
+OBO; the app service principal is never exposed to the machine.
+
+Agent, plugin, and browser service starts share an async iterator that yields
+`starting`, the current shared home-owned operation `log`,
+and then `ready` or `error`; the browser route transports it with SSE. List
+polling reconnects to owned running machines after an app restart and recovers
+progress plus logs from remote lock, status, and log files. Each machine's
+`services` array is the source of truth for enabled built-ins. The Sandbox view
+groups enabled services into horizontal tabs and displays the same live logs.
+Opening a terminal for a project activates
+that project's interactive mise shell without enabling global directory
+activation.
 
 The browser-safe request and response fields are defined by
 [`addSshProjectRequestSchema`](https://docs.dbx.tools/api/shared-databricks-sandbox/src-schemas-variable-addsshprojectrequestschema/)
@@ -171,8 +192,10 @@ lists or counts.
 Service setup uses a workspace-, machine-, and service-scoped Lakebase advisory
 lock. Concurrent in-process calls share one operation; after acquiring the
 distributed lock, the runtime rechecks the persisted definition and skips
-installation when it is current. Packaged lifecycle tasks recheck remote PID
-and version state while holding the lock. A service returned as `ready` has
+installation when it is current. Packaged lifecycle tasks use home-owned
+check-lock-check state, truncate one shared log only while holding the lock,
+emit attempt/result records, and bound failed retries. Callers that arrive
+during an attempt follow the same log rather than starting parallel work. A service returned as `ready` has
 completed its process and endpoint readiness check and has a usable
 authenticated route.
 

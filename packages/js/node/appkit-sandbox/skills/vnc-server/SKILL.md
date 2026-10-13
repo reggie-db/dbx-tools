@@ -12,16 +12,13 @@ another VNC server, a window manager, or a parallel desktop route.
 Use `list_ssh_machines` to identify an assigned machine. Call
 `start_ssh_machine_service` with `service: "desktop"`. The operation is
 idempotent and performs just-in-time setup when the desktop is not already
-available. It returns only after the desktop process and authenticated route
-are ready; no additional health check is required.
+available. It returns an async lifecycle iterator. Observe it through `starting` until the desktop service is `ready` or `error`; remote status files preserve the same progress for refreshed JSON clients.
 
 The service owns the display assignment. Never enumerate `/tmp/.X11-unix`,
 infer a display number, set or rewrite `DISPLAY`, edit a project launcher to
 target a display, or start, stop, replace, or reconfigure the desktop stack.
 When a graphical application must run on the desktop, create a route-less
-project with `serviceDependencies: ["desktop"]`. Its mise `hooks.postinstall`
-installs the application and `tasks.start` and `tasks.stop` own its runtime
-lifecycle through the service-owned
+project with `serviceDependencies: ["desktop"]`. Its first-class `postinstall` may install and launch the application, while `uninstall` owns teardown through the service-owned
 `~/.dbx-tools/runtime/desktop/run` wrapper. Follow the
 `freedoom-desktop` recipe for the setup project options. Before invoking a
 project task, use the `execute_ssh_command` command and argument shape specified

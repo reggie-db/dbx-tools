@@ -10,9 +10,7 @@ route. `start_ssh_machine_service` owns its installation, lifecycle, readiness,
 and route. Do not use `execute_ssh_command` to install a replacement dashboard
 or create a manual route. If the request requires custom files or another
 server, call
-`add_ssh_project` with a mise config whose `hooks.postinstall` performs only
-installation or preparation and whose `tasks.start` and `tasks.stop` own the
-workload lifecycle. Before invoking a project task, use the
+`add_ssh_project` with a mise config using first-class `tools`, `postinstall`, and `uninstall` options when practical. Raw `config` follows https://mise.jdx.dev/schema/mise.json. `postinstall` may prepare or launch a workload that remains active until `uninstall`; removal never auto-runs `start` or `stop`. Before invoking a project task, use the
 `execute_ssh_command` command and argument shape specified by the applicable
 skill to list tasks, then run only its documented lifecycle task. Use the
 returned directory, port, and open URL.

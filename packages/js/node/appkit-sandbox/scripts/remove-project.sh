@@ -84,6 +84,15 @@ stop_project_processes() {
 }
 
 project_directory="$HOME/projects/$project_path"
+operation_directory="$HOME/.dbx-tools/operations/projects/$project_path"
+operation_lock="$operation_directory/lifecycle.lock"
+
+if [ -d "$operation_lock" ]; then
+  operation_pid=$(cat "$operation_lock/pid" 2>/dev/null || true)
+  kill_tree "$operation_pid"
+  rm -rf -- "$operation_lock"
+fi
+
 if [ -d "$project_directory" ]; then
   if [ -x "$HOME/.local/bin/mise" ]; then
     mise_bin="$HOME/.local/bin/mise"
@@ -91,15 +100,14 @@ if [ -d "$project_directory" ]; then
     mise_bin="$(command -v mise || true)"
   fi
   if [ -n "$mise_bin" ]; then
-    for task in stop uninstall; do
-      (
-        cd "$project_directory"
-        if "$mise_bin" tasks ls --name-only --hidden | grep -Fxq "$task"; then
-          "$mise_bin" run "$task"
-        fi
-      ) || printf 'mise run %s failed (ignored)\n' "$task" >&2
-    done
+    (
+      cd "$project_directory"
+      if "$mise_bin" tasks ls --name-only --hidden | grep -Fxq uninstall; then
+        "$mise_bin" run uninstall
+      fi
+    ) || printf 'mise run uninstall failed (ignored)\n' >&2
   fi
   stop_project_processes "$project_directory" || printf 'project process teardown failed (ignored)\n' >&2
 fi
 rm -rf -- "$project_directory"
+rm -rf -- "$operation_directory"

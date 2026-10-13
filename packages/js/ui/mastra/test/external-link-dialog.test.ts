@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveLinkPresentation } from "../src/react/_external-link-dialog.tsx";
+import { isSandboxLink, resolveLinkPresentation } from "../src/react/_external-link-dialog.tsx";
 
 const baseUrl = "https://local-demo.apps.dbx.tools/chat/thread-1";
 
@@ -35,5 +35,20 @@ describe("resolveLinkPresentation", () => {
       displayUrl: "mailto:user@example.com",
       absoluteUrl: "mailto:user@example.com",
     });
+  });
+});
+
+describe("isSandboxLink", () => {
+  test("allows same-origin Sandbox routes without confirmation", () => {
+    expect(isSandboxLink("/sandbox/machine-1/terminal", baseUrl)).toBe(true);
+    expect(
+      isSandboxLink("https://local-demo.apps.dbx.tools/sandbox/machine-1/terminal", baseUrl),
+    ).toBe(true);
+  });
+
+  test("keeps confirmation for external and non-Sandbox routes", () => {
+    expect(isSandboxLink("https://example.com/sandbox/machine-1", baseUrl)).toBe(false);
+    expect(isSandboxLink("/settings/profile", baseUrl)).toBe(false);
+    expect(isSandboxLink("/sandboxed", baseUrl)).toBe(false);
   });
 });

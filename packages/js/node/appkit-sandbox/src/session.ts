@@ -179,7 +179,7 @@ export class SshSession {
   ): Promise<SshCommandResult> {
     const startedAt = Date.now();
     await this.connect();
-    const script = commandScript(command, args, options.cwd, options.env);
+    const script = sshCommandScript(command, args, options.cwd, options.env);
     return new Promise<SshCommandResult>((resolve, reject) => {
       const child = spawn(
         this.options.sshCommand ?? "ssh",
@@ -285,12 +285,14 @@ function shouldResolvePublicGateway(host: string, error: unknown): boolean {
   return code === "EHOSTUNREACH" || code === "ENETUNREACH" || code === "ETIMEDOUT";
 }
 
-function commandScript(
+/** @internal Builds a remote command after clearing inherited machine credentials. */
+export function sshCommandScript(
   command: string,
   args: string[],
   cwd: string | undefined,
   env: Record<string, string> | undefined,
 ): string {
+  assertSafeSshEnvironment(env);
   const invocation = [command, ...args].map(shellQuote).join(" ");
   const environment = env
     ? Object.entries(env)
@@ -298,7 +300,27 @@ function commandScript(
         .join(" ")
     : "";
   const executable = environment ? `${environment} ${invocation}` : invocation;
-  return cwd ? `cd -- ${shellQuote(cwd)} && ${executable}` : executable;
+  const run = cwd ? `cd -- ${shellQuote(cwd)} && ${executable}` : executable;
+  return `${SSH_AUTH_ENVIRONMENT_SCRUB}\n${run}`;
+}
+
+const SSH_AUTH_ENVIRONMENT_SCRUB = `for __dbx_tools_name in $(env | sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p'); do
+  case "$__dbx_tools_name" in
+    DATABRICKS_*|SSH_AUTH_SOCK)
+      unset "$__dbx_tools_name"
+      ;;
+  esac
+done
+export DATABRICKS_CONFIG_FILE=/dev/null`;
+
+function assertSafeSshEnvironment(env: Readonly<Record<string, string>> | undefined): void {
+  for (const name of Object.keys(env ?? {})) {
+    if (name.startsWith("DATABRICKS_") || name === "SSH_AUTH_SOCK") {
+      throw new Error(
+        "SSH environment overlays cannot restore Databricks or SSH agent credentials; use a dedicated app-mediated OBO capability.",
+      );
+    }
+  }
 }
 
 function shellQuote(value: string): string {
@@ -323,6 +345,8 @@ function nativeSshArgs(options: SshSessionOptions, script: string, connectHost: 
     "BatchMode=yes",
     "-o",
     "IdentitiesOnly=yes",
+    "-o",
+    "ForwardAgent=no",
     "-o",
     "PreferredAuthentications=publickey",
     "-o",

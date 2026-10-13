@@ -176,12 +176,12 @@ describe("direct release tags", () => {
     }
   });
 
-  it("passes the demo profile through the environment without forwarding arguments", async () => {
+  it("passes an optional demo profile through without requiring it", async () => {
     const { remote, root } = fixture();
     try {
       writeFileSync(
         join(root, "demo-deploy.mjs"),
-        'import { writeFileSync } from "node:fs";\nwriteFileSync("demo-deployed", JSON.stringify({ argv: process.argv.slice(2), profile: process.env.DATABRICKS_CONFIG_PROFILE }));\n',
+        'import { writeFileSync } from "node:fs";\nwriteFileSync("demo-deployed", JSON.stringify(process.argv.slice(2)));\n',
       );
       writeFileSync(
         join(root, "package.json"),
@@ -211,10 +211,50 @@ describe("direct release tags", () => {
         demoProfile: "FEVM-REGGIE-PIERCE-AWS",
         releaseNotes: false,
       });
-      assert.deepEqual(JSON.parse(readFileSync(join(root, "demo-deployed"), "utf8")), {
-        argv: [],
-        profile: "FEVM-REGGIE-PIERCE-AWS",
+      assert.deepEqual(JSON.parse(readFileSync(join(root, "demo-deployed"), "utf8")), [
+        "--profile",
+        "FEVM-REGGIE-PIERCE-AWS",
+      ]);
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
+
+  it("runs demo deployment without a profile override", async () => {
+    const { remote, root } = fixture();
+    try {
+      writeFileSync(
+        join(root, "demo-deploy.mjs"),
+        'import { writeFileSync } from "node:fs";\nwriteFileSync("demo-deployed", JSON.stringify(process.argv.slice(2)));\n',
+      );
+      writeFileSync(
+        join(root, "package.json"),
+        `${JSON.stringify(
+          {
+            name: "fixture",
+            private: true,
+            scripts: {
+              bump: "node bump.mjs",
+              "version:check": "true",
+              "demo:deploy": "node demo-deploy.mjs",
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      git(root, "add", "package.json");
+      git(root, "commit", "-m", "add demo:deploy");
+      await runRelease({
+        root,
+        branch: "main",
+        prefix: "v",
+        remote: "origin",
+        localPublish: false,
+        demoDeploy: true,
+        releaseNotes: false,
       });
+      assert.deepEqual(JSON.parse(readFileSync(join(root, "demo-deployed"), "utf8")), []);
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
     }

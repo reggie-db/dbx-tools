@@ -42,11 +42,14 @@ class RecordsPlugin extends Plugin<RecordsPluginConfig> {
       model: context?.model,
       resourceId: context?.resourceId,
     });
-    await context?.writeProgress?.({
-      type: "tool_status",
-      status: "working",
-      message: "Looking up record",
-    });
+    await context?.writeProgress?.(
+      {
+        type: "tool_status",
+        status: "working",
+        message: "Looking up record",
+      },
+      { transient: true },
+    );
     return args;
   }
 }
@@ -178,6 +181,7 @@ describe("AppKit toolkit adaptation", () => {
     assert.deepEqual(progress, [
       {
         type: TOOL_PROGRESS_PART_TYPE,
+        transient: true,
         data: {
           toolCallId: "tool-7",
           event: {

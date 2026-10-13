@@ -346,7 +346,7 @@ export class LakebaseMachineOwnershipStore {
         project.port,
         project.config,
         project.route,
-        project.serviceDependencies,
+        JSON.stringify(project.serviceDependencies),
         project.stripPrefix,
       ],
     );
@@ -780,11 +780,32 @@ function parseProjectRow(row: ProjectRow): SandboxProjectRecord {
     port: row.port,
     config: row.project_config,
     route: row.route_enabled,
-    serviceDependencies: row.service_dependencies,
+    serviceDependencies: parsePersistedServiceDependencies(row.service_dependencies),
     stripPrefix: row.strip_prefix,
     createdAt: isoTimestamp(row.created_at),
     updatedAt: isoTimestamp(row.updated_at),
   });
+}
+
+function parsePersistedServiceDependencies(value: unknown): SshMachineServiceKind[] {
+  const direct = z.array(sshMachineServiceKindSchema).safeParse(value);
+  if (direct.success) return direct.data;
+  if (typeof value === "string") {
+    try {
+      return parsePersistedServiceDependencies(JSON.parse(value));
+    } catch {
+      return [];
+    }
+  }
+  if (!value || typeof value !== "object") return [];
+  const candidates = Object.entries(value).flatMap(([key, entry]) => [
+    key,
+    ...(typeof entry === "string" ? [entry] : []),
+  ]);
+  return [...new Set(candidates.flatMap((candidate) => {
+    const parsed = sshMachineServiceKindSchema.safeParse(candidate);
+    return parsed.success ? [parsed.data] : [];
+  }))];
 }
 
 /** Parse one persisted machine-owned service project row. */

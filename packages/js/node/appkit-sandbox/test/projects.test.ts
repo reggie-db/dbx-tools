@@ -8,9 +8,11 @@ import {
 import { parse } from "smol-toml";
 import {
   generateProjectPort,
+  mergeProjectMiseConfig,
   normalizeProjectOpenPath,
   normalizeProjectPath,
   PROJECT_REMOVE_SCRIPT,
+  PROJECT_SETUP_SCRIPT,
   renderProjectMiseConfig,
 } from "../src/_projects.ts";
 
@@ -58,7 +60,7 @@ describe("Sandbox project configuration", () => {
     );
   });
 
-  it("injects hidden service tasks and adds them to the start dependencies", () => {
+  it("preserves project tasks without injecting service dependencies", () => {
     const toml = renderProjectMiseConfig(
       {
         tasks: {
@@ -67,37 +69,62 @@ describe("Sandbox project configuration", () => {
         },
       },
       { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
-      ["desktop", "terminal", "desktop"],
     );
     const parsed = parse(toml) as {
       tasks: Record<string, { depends?: string[]; hide?: boolean; run?: string }>;
     };
 
-    assert.deepEqual(parsed.tasks.start?.depends, [
-      "prepare",
-      "sandbox:desktop",
-      "sandbox:terminal",
-    ]);
-    assert.equal(parsed.tasks["sandbox:desktop"]?.hide, true);
-    assert.equal(parsed.tasks["sandbox:terminal"]?.hide, true);
-    assert.match(
-      parsed.tasks["sandbox:desktop"]?.run ?? "",
-      /projects\/\.sandbox-services\/desktop.*mise" run start/,
-    );
+    assert.deepEqual(parsed.tasks.start?.depends, ["prepare"]);
+    assert.equal(parsed.tasks["sandbox:desktop"], undefined);
   });
 
-  it("runs optional mise stop and uninstall before deleting the project directory", () => {
-    assert.match(PROJECT_REMOVE_SCRIPT, /for task in stop uninstall; do/);
+  it("runs only optional mise uninstall before deleting the project directory", () => {
     assert.match(
       PROJECT_REMOVE_SCRIPT,
-      /if "\$mise_bin" tasks ls --name-only --hidden \| grep -Fxq "\$task"; then/,
+      /if "\$mise_bin" tasks ls --name-only --hidden \| grep -Fxq uninstall; then/,
     );
-    assert.match(PROJECT_REMOVE_SCRIPT, /"\$mise_bin" run "\$task"/);
-    assert.match(PROJECT_REMOVE_SCRIPT, /mise run %s failed \(ignored\)/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /"\$mise_bin" run uninstall/);
+    assert.doesNotMatch(PROJECT_REMOVE_SCRIPT, /run stop/);
     assert.match(PROJECT_REMOVE_SCRIPT, /stop_project_processes/);
     assert.match(PROJECT_REMOVE_SCRIPT, /readlink "\$proc\/cwd"/);
     assert.match(PROJECT_REMOVE_SCRIPT, /kill -KILL/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /operation_lock=.*lifecycle\.lock/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /operation_pid=\$\(cat "\$operation_lock\/pid"/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /kill_tree "\$operation_pid"/);
     assert.match(PROJECT_REMOVE_SCRIPT, /rm -rf -- "\$project_directory"/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /rm -rf -- "\$operation_directory"/);
+  });
+
+  it("runs project install through a bounded home-level lifecycle log", () => {
+    assert.match(PROJECT_SETUP_SCRIPT, /\.dbx-tools\/operations\/projects/);
+    assert.match(PROJECT_SETUP_SCRIPT, /lifecycle\.lock/);
+    assert.match(PROJECT_SETUP_SCRIPT, /lifecycle\.log/);
+    assert.match(PROJECT_SETUP_SCRIPT, /maximum_attempts=2/);
+    assert.match(PROJECT_SETUP_SCRIPT, /__DBX_TOOLS_ATTEMPT__/);
+    assert.match(PROJECT_SETUP_SCRIPT, /__DBX_TOOLS_RESULT__/);
+    assert.match(PROJECT_SETUP_SCRIPT, /install_is_complete/);
+    assert.match(PROJECT_SETUP_SCRIPT, /rm -rf -- "\$project_directory"/);
+  });
+
+  it("merges first-class mise options over raw config", () => {
+    const merged = mergeProjectMiseConfig(
+      {
+        tools: { node: "20", python: "3.12" },
+        hooks: { postinstall: "old-install" },
+        tasks: { uninstall: { run: "old-uninstall" }, start: { run: "start" } },
+      },
+      {
+        tools: { node: "lts" },
+        postinstall: "new-install",
+        uninstall: "new-uninstall",
+      },
+    );
+    assert.deepEqual(merged.tools, { node: "lts", python: "3.12" });
+    assert.deepEqual(merged.hooks, { postinstall: "new-install" });
+    assert.deepEqual(merged.tasks, {
+      uninstall: { run: "new-uninstall" },
+      start: { run: "start" },
+    });
   });
 });
 
@@ -106,10 +133,25 @@ describe("Sandbox project contracts", () => {
     const request = addSshProjectRequestSchema.parse({
       machineId: "sandbox-id",
       serviceDependencies: ["desktop", "terminal"],
+      tools: { node: "lts" },
+      postinstall: "prepare-project",
+      uninstall: "remove-project",
     });
 
     assert.equal(request.route, undefined);
     assert.deepEqual(request.serviceDependencies, ["desktop", "terminal"]);
+    assert.deepEqual(request.tools, { node: "lts" });
+    assert.equal(request.postinstall, "prepare-project");
+    assert.equal(request.uninstall, "remove-project");
+    assert.match(
+      addSshProjectRequestSchema.shape.config.description ?? "",
+      /https:\/\/mise\.jdx\.dev\/schema\/mise\.json/,
+    );
+    assert.match(addSshProjectRequestSchema.shape.postinstall.description ?? "", /check-lock-check/);
+    assert.match(
+      addSshProjectRequestSchema.shape.uninstall.description ?? "",
+      /only this project task/,
+    );
     assert.throws(
       () =>
         addSshProjectRequestSchema.parse({
@@ -152,6 +194,18 @@ describe("Sandbox command requests", () => {
         command: "sh",
         args: ["-lc", '"$HOME/.local/bin/mise" tasks ls --name-only --hidden'],
       }),
+    );
+  });
+
+  it("rejects Databricks credential environment overlays", () => {
+    assert.throws(
+      () =>
+        sshCommandRequestSchema.parse({
+          machineId: "sandbox-id",
+          command: "sh",
+          env: { DATABRICKS_TOKEN: "service-principal-token" },
+        }),
+      /dedicated app-mediated OBO capability/,
     );
   });
 });

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
+import { SSH_DEFAULT_BASE_PATH, SshClientConfigSchema } from "@dbx-tools/shared-databricks-sandbox";
 import { SshClient } from "../src/react/client.ts";
 
 const originalFetch = globalThis.fetch;
@@ -9,6 +10,13 @@ afterEach(() => {
 });
 
 describe("SshClient", () => {
+  it("defaults the shared API mount without publishing it through AppKit config", () => {
+    assert.deepEqual(SshClientConfigSchema.parse({ routePrefix: "/sandbox" }), {
+      basePath: SSH_DEFAULT_BASE_PATH,
+      routePrefix: "/sandbox",
+    });
+  });
+
   it("surfaces AppKit error response messages", async () => {
     globalThis.fetch = (async () =>
       Response.json(
@@ -64,6 +72,47 @@ describe("SshClient", () => {
       pathPrefix: "/sandbox/22padc",
       projects: [],
     });
+  });
+
+  it("observes service lifecycle snapshots over SSE", async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        'data: {"kind":"terminal","path":"/sandbox/terminal/machine-1","openUrl":"/sandbox/terminal/machine-1/","state":"starting"}\n\ndata: {"kind":"terminal","path":"/sandbox/terminal/machine-1","openUrl":"/sandbox/terminal/machine-1/","state":"starting","log":"installing ttyd\\n"}\n\ndata: {"kind":"terminal","path":"/sandbox/terminal/machine-1","openUrl":"/sandbox/terminal/machine-1/","state":"ready"}\n\ndata: [DONE]\n\n',
+        { headers: { "content-type": "text/event-stream" } },
+      )) as typeof fetch;
+    const client = new SshClient();
+    const events: Array<{ state: string; log?: string }> = [];
+
+    for await (const snapshot of client.startService("machine-1", "terminal")) {
+      events.push({ state: snapshot.state, ...(snapshot.log ? { log: snapshot.log } : {}) });
+    }
+
+    assert.deepEqual(events, [
+      { state: "starting" },
+      { state: "starting", log: "installing ttyd\n" },
+      { state: "ready" },
+    ]);
+  });
+
+  it("reads bounded service logs through the dedicated route", async () => {
+    let request: Request | undefined;
+    globalThis.fetch = (async (input, init) => {
+      request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(new URL(String(input), "http://localhost"), init);
+      return Response.json({ log: "installing ttyd\n" });
+    }) as typeof fetch;
+    const client = new SshClient();
+
+    assert.deepEqual(
+      await client.serviceLogs("machine-1", "terminal", { maxLines: 25, maxChars: 2_000 }),
+      { log: "installing ttyd\n" },
+    );
+    assert.equal(
+      request?.url,
+      "http://localhost/api/databricks-sandbox/machines/machine-1/services/terminal/logs?maxLines=25&maxChars=2000",
+    );
   });
 
   it("creates a project with server-generated defaults", async () => {

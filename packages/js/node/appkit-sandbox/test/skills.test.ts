@@ -65,12 +65,9 @@ describe("databricksSandboxSkillMounts", () => {
     assert.match(freedoom, /add_ssh_project/);
     assert.match(freedoom, /route: false/);
     assert.match(freedoom, /serviceDependencies: \["desktop"\]/);
-    assert.match(freedoom, /sandbox:desktop/);
-    assert.match(freedoom, /## Setup project options/);
-    assert.match(freedoom, /\[hooks\]\npostinstall = '''/);
-    assert.match(freedoom, /\[tasks\.start\]\nrun = '''/);
-    assert.match(freedoom, /\[tasks\.stop\]\nrun = '''/);
-    assert.doesNotMatch(freedoom, /\[tasks\.uninstall\]/);
+    assert.match(freedoom, /first-class `postinstall`/);
+    assert.match(freedoom, /first-class `uninstall`/);
+    assert.match(freedoom, /check-lock-check/);
     assert.match(freedoom, /pkill -P "\$pid"/);
     assert.match(freedoom, /pkill -x crispy-doom/);
     assert.match(freedoom, /pkill -x prboom-plus/);

@@ -31,19 +31,27 @@ import {
   createSshMachineOperationSchema,
   deleteSshMachineOperationSchema,
   executeSshCommandOperationSchema,
+  getSshMachineServiceLogsOperationSchema,
   listSshMachinesOperationSchema,
   listSshProjectsOperationSchema,
   openSshProjectTerminalOperationSchema,
   removeSshProjectOperationSchema,
   resetSshProjectOperationSchema,
+  SSH_MACHINE_SERVICES,
+  SSH_PLUGIN_NAME,
+  SSH_ROUTES,
   sshProjectActionSchema,
+  sshMachineServiceLogsRequestSchema,
   startSshMachineOperationSchema,
   startSshMachineServiceOperationSchema,
   stopSshMachineOperationSchema,
   type AddSshProjectRequest,
   type CreateSshMachineRequest,
   type SshCommandRequest,
+  type SshClientConfigInput,
   type SshMachineServiceAction,
+  type SshMachineServiceLogsRequest,
+  type SshMachineServiceStartResult,
 } from "@dbx-tools/shared-databricks-sandbox";
 import type { Application, Request } from "express";
 import type { JSONSchema7 } from "json-schema";
@@ -62,6 +70,7 @@ interface UpgradeIdentityGate {
 }
 
 const SSH_CONFIG_SCHEMA = z.toJSONSchema(SshPluginConfigSchema) as JSONSchema7;
+const SERVICE_PROGRESS_INTERVAL_MS = 750;
 
 /**
  * AppKit plugin for Databricks Sandbox lifecycle, SSH, service, and route operations.
@@ -73,14 +82,14 @@ const SSH_CONFIG_SCHEMA = z.toJSONSchema(SshPluginConfigSchema) as JSONSchema7;
  */
 export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   static manifest = {
-    name: "databricks-sandbox",
+    name: SSH_PLUGIN_NAME,
     displayName: "Sandboxes",
     description:
       "Creates and manages Databricks Sandboxes over REST and SSH, with remote web routing and Mastra tools.",
     stability: "beta",
     resources: { required: [], optional: [] },
     config: { schema: SSH_CONFIG_SCHEMA },
-  } satisfies PluginManifest<"databricks-sandbox">;
+  } satisfies PluginManifest<typeof SSH_PLUGIN_NAME>;
 
   readonly runtime: SshRuntime;
   private mounted = false;
@@ -123,7 +132,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "machines",
       method: "get",
-      path: "/machines",
+      path: SSH_ROUTES.machines,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         res.json(
@@ -139,7 +148,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "createMachine",
       method: "post",
-      path: "/machines",
+      path: SSH_ROUTES.machines,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = createSshMachineOperationSchema.parse(req.body ?? {});
@@ -156,7 +165,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "startMachine",
       method: "post",
-      path: "/machines/:machineId/start",
+      path: SSH_ROUTES.machineStart,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = startSshMachineOperationSchema.parse({ machineId: req.params.machineId });
@@ -173,7 +182,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "stopMachine",
       method: "post",
-      path: "/machines/:machineId/stop",
+      path: SSH_ROUTES.machineStop,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = stopSshMachineOperationSchema.parse({ machineId: req.params.machineId });
@@ -190,7 +199,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "deleteMachine",
       method: "delete",
-      path: "/machines/:machineId",
+      path: SSH_ROUTES.machine,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = deleteSshMachineOperationSchema.parse({ machineId: req.params.machineId });
@@ -205,29 +214,60 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       },
     });
     this.route(router, {
+      name: "machineServiceLogs",
+      method: "get",
+      path: SSH_ROUTES.machineServiceLogs,
+      handler: async (req, res) => {
+        const userId = this.resolveUserId(req);
+        const input = sshMachineServiceLogsRequestSchema.parse({
+          machineId: req.params.machineId,
+          service: req.params.service,
+          maxLines: req.query.maxLines,
+          maxChars: req.query.maxChars,
+        });
+        res.json(
+          await this.withRequestAuth(
+            req,
+            "machineServiceLogs",
+            (plugin) => plugin.machineServiceLogs(userId, input),
+            () => this.runtime.readServiceLog(createWorkspaceClient(), userId, input),
+          ),
+        );
+      },
+    });
+    this.route(router, {
       name: "startMachineService",
       method: "post",
-      path: "/machines/:machineId/services/:service/start",
+      path: SSH_ROUTES.machineServiceStart,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = startSshMachineServiceOperationSchema.parse({
           machineId: req.params.machineId,
           service: req.params.service,
         });
-        res.json(
-          await this.withRequestAuth(
-            req,
-            "startMachineService",
-            (plugin) => plugin.startMachineService(userId, input),
-            () => this.runtime.startService(createWorkspaceClient(), userId, input),
-          ),
+        const observation = await this.withRequestAuth(
+          req,
+          "startMachineService",
+          (plugin) => plugin.startMachineService(userId, input),
+          () => this.runtime.observeService(createWorkspaceClient(), userId, input),
         );
+        res.statusCode = 200;
+        res.setHeader("content-type", "text/event-stream; charset=utf-8");
+        res.setHeader("cache-control", "no-cache, no-transform");
+        res.setHeader("connection", "keep-alive");
+        res.setHeader("x-accel-buffering", "no");
+        res.flushHeaders?.();
+        for await (const snapshot of observation) {
+          res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
+        }
+        res.write("data: [DONE]\n\n");
+        res.end();
       },
     });
     this.route(router, {
       name: "executeCommand",
       method: "post",
-      path: "/machines/:machineId/commands",
+      path: SSH_ROUTES.machineCommands,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = executeSshCommandOperationSchema.parse({
@@ -247,7 +287,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "projects",
       method: "get",
-      path: "/projects",
+      path: SSH_ROUTES.projects,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         res.json(
@@ -266,7 +306,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "addProject",
       method: "post",
-      path: "/projects",
+      path: SSH_ROUTES.projects,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = addSshProjectOperationSchema.parse(req.body);
@@ -283,7 +323,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "removeProject",
       method: "delete",
-      path: "/projects/:projectId",
+      path: SSH_ROUTES.project,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = removeSshProjectOperationSchema.parse({ projectId: req.params.projectId });
@@ -300,7 +340,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "openProjectTerminal",
       method: "post",
-      path: "/projects/:projectId/terminal",
+      path: SSH_ROUTES.projectTerminal,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = sshProjectActionSchema.parse({ projectId: req.params.projectId });
@@ -318,7 +358,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     this.route(router, {
       name: "resetProject",
       method: "post",
-      path: "/projects/:projectId/reset",
+      path: SSH_ROUTES.projectReset,
       handler: async (req, res) => {
         const userId = this.resolveUserId(req);
         const input = sshProjectActionSchema.parse({ projectId: req.params.projectId });
@@ -335,7 +375,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   }
 
   /** Returns browser-safe route defaults published through AppKit client config. */
-  clientConfig(): Record<string, unknown> {
+  clientConfig(): SshClientConfigInput {
     return { routePrefix: this.runtime.config.routePrefix };
   }
 
@@ -369,9 +409,14 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     return this.runtime.execute(this.workspaceClient(), userId, input);
   }
 
-  /** Starts or reuses one built-in terminal or metrics service. */
+  /** Observes one built-in terminal, desktop, or metrics service until it settles. */
   async startMachineService(userId: string, input: SshMachineServiceAction) {
-    return this.runtime.startService(this.workspaceClient(), userId, input);
+    return this.runtime.observeService(this.workspaceClient(), userId, input);
+  }
+
+  /** Reads a bounded lifecycle-log tail for one built-in service. */
+  async machineServiceLogs(userId: string, input: SshMachineServiceLogsRequest) {
+    return this.runtime.readServiceLog(this.workspaceClient(), userId, input);
   }
 
   /** Creates or updates one isolated Sandbox project with a persisted route. */
@@ -404,7 +449,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
 
   /** Returns selected AppKit toolkit entries backed by this plugin's agent tools. */
   toolkit(options?: ToolkitOptions): Record<string, ToolkitEntry> {
-    return toolkitEntries.entries("databricks-sandbox", this.getAgentTools(), options);
+    return toolkitEntries.entries(SSH_PLUGIN_NAME, this.getAgentTools(), options);
   }
 
   /** Executes one registered agent tool with the request resource and workspace identity. */
@@ -415,7 +460,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     context?: AgentToolExecutionContext,
   ): Promise<unknown> {
     return executeFromRegistry(
-      this.createToolRegistry(context?.resourceId, this.executionWorkspaceClient()),
+      this.createToolRegistry(context?.resourceId, this.executionWorkspaceClient(), context),
       name,
       args,
       signal,
@@ -438,6 +483,8 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
         this.executeCommand(userId, input),
       startMachineService: (userId: string, input: SshMachineServiceAction) =>
         this.startMachineService(userId, input),
+      machineServiceLogs: (userId: string, input: SshMachineServiceLogsRequest) =>
+        this.machineServiceLogs(userId, input),
       addProject: (userId: string, input: AddSshProjectRequest) => this.addProject(userId, input),
       listProjects: (userId: string) => this.listProjects(userId),
       openProjectTerminal: (userId: string, projectId: string) =>
@@ -527,7 +574,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
   }
 
   /** Returns the Zod-owned operation contracts used by REST, plugins, and agent tools. */
-  operations(userId?: string, userClient?: WorkspaceClient) {
+  operations(userId?: string, userClient?: WorkspaceClient, context?: AgentToolExecutionContext) {
     const identity = () => userId ?? this.executionUserId();
     const execute = <T>(
       operation: string,
@@ -546,10 +593,18 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     return toolOperations.defineOperations({
       list_ssh_machines: {
         schema: listSshMachinesOperationSchema,
-        execute: (_input, signal) =>
-          execute("listMachines", (client, resolvedUserId) =>
+        execute: async (_input, signal) => {
+          const response = await execute("listMachines", (client, resolvedUserId) =>
             this.runtime.listMachines(client, resolvedUserId, signal),
-          ),
+          );
+          return {
+            ...response,
+            machines: response.machines.map((machine) => ({
+              ...machine,
+              services: machine.services.map(({ log: _log, ...service }) => service),
+            })),
+          };
+        },
       },
       create_ssh_machine: {
         schema: createSshMachineOperationSchema,
@@ -588,9 +643,18 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       },
       start_ssh_machine_service: {
         schema: startSshMachineServiceOperationSchema,
+        execute: async (input, signal) => {
+          const observation = await execute("startMachineService", (client, resolvedUserId) =>
+            this.runtime.observeService(client, resolvedUserId, input, signal),
+          );
+          return observeServiceForAgent(observation, input.service, context?.writeProgress);
+        },
+      },
+      get_ssh_machine_service_logs: {
+        schema: getSshMachineServiceLogsOperationSchema,
         execute: (input, signal) =>
-          execute("startMachineService", (client, resolvedUserId) =>
-            this.runtime.startService(client, resolvedUserId, input, signal),
+          execute("machineServiceLogs", (client, resolvedUserId) =>
+            this.runtime.readServiceLog(client, resolvedUserId, input, signal),
           ),
       },
       list_ssh_projects: {
@@ -635,8 +699,12 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     });
   }
 
-  private createToolRegistry(userId?: string, userClient?: WorkspaceClient): ToolRegistry {
-    return toolOperations.toolRegistryFromOperations(this.operations(userId, userClient));
+  private createToolRegistry(
+    userId?: string,
+    userClient?: WorkspaceClient,
+    context?: AgentToolExecutionContext,
+  ): ToolRegistry {
+    return toolOperations.toolRegistryFromOperations(this.operations(userId, userClient, context));
   }
 
   private executionUserId(): string {
@@ -644,6 +712,51 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
     if (!context) throw new Error("SSH tools require an AppKit execution context");
     return "userId" in context ? context.userId : context.serviceUserId;
   }
+}
+
+async function observeServiceForAgent(
+  observation: AsyncIterable<{
+    state: "stopped" | "starting" | "ready" | "error";
+    log?: string;
+  }>,
+  kind: SshMachineServiceAction["service"],
+  writeProgress?: AgentToolExecutionContext["writeProgress"],
+): Promise<SshMachineServiceStartResult> {
+  const label = SSH_MACHINE_SERVICES.find((service) => service.kind === kind)?.label ?? kind;
+  let lastProgressAt = 0;
+  let latestLog: string | undefined;
+  let lastEmittedState: string | undefined;
+  for await (const snapshot of observation) {
+    if (snapshot.log !== undefined) latestLog = snapshot.log;
+    const terminal = snapshot.state === "ready" || snapshot.state === "error";
+    const now = Date.now();
+    if (
+      writeProgress &&
+      (terminal ||
+        lastEmittedState === undefined ||
+        now - lastProgressAt >= SERVICE_PROGRESS_INTERVAL_MS)
+    ) {
+      await writeProgress(
+        {
+          type: "tool_status",
+          status: snapshot.state,
+          message:
+            snapshot.state === "ready"
+              ? `${label} ready`
+              : snapshot.state === "error"
+                ? `${label} failed`
+                : `Installing ${label}`,
+          ...(latestLog ? { detail: latestLog } : {}),
+        },
+        { transient: true },
+      );
+      lastProgressAt = now;
+      lastEmittedState = snapshot.state;
+    }
+    if (snapshot.state === "ready") return { exitCode: 0 };
+    if (snapshot.state === "error") return { exitCode: 1 };
+  }
+  return { exitCode: 1 };
 }
 
 function resolveUpgradeIdentityGate(plugin: unknown): UpgradeIdentityGate | undefined {

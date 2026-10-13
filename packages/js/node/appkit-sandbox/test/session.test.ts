@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolvePublicGatewayAddresses } from "../src/session.ts";
+import { resolvePublicGatewayAddresses, sshCommandScript } from "../src/session.ts";
 
 describe("resolvePublicGatewayAddresses", () => {
   it("resolves unique public IPv4 gateway addresses", async () => {
@@ -39,5 +39,30 @@ describe("resolvePublicGatewayAddresses", () => {
       resolvePublicGatewayAddresses("example.com", fetcher as typeof fetch),
     ).resolves.toEqual([]);
     expect(called).toBe(false);
+  });
+
+  it("clears inherited machine auth before applying non-auth command environment", () => {
+    const script = sshCommandScript("sh", ["-lc", "env"], "/home/sandbox/project", {
+      PROJECT_MODE: "demo",
+    });
+
+    expect(script).toContain("DATABRICKS_*");
+    expect(script).not.toContain("*_TOKEN");
+    expect(script).toContain('unset "$__dbx_tools_name"');
+    expect(script).toContain("export DATABRICKS_CONFIG_FILE=/dev/null");
+    expect(script).toContain(
+      "cd -- '/home/sandbox/project' && PROJECT_MODE='demo' 'sh' '-lc' 'env'",
+    );
+    expect(script.indexOf('unset "$__dbx_tools_name"')).toBeLessThan(
+      script.indexOf("PROJECT_MODE='demo'"),
+    );
+  });
+
+  it("rejects attempts to restore Databricks credentials", () => {
+    expect(() =>
+      sshCommandScript("sh", ["-lc", "env"], undefined, {
+        DATABRICKS_TOKEN: "service-principal-token",
+      }),
+    ).toThrow(/dedicated app-mediated OBO capability/);
   });
 });

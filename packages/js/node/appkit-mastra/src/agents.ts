@@ -1249,7 +1249,7 @@ function toolkitEntryToMastraTool(entry: ToolkitEntry, plugin: ContextualToolPro
             abortSignal?: AbortSignal;
             requestContext?: { get(key: string): unknown };
             writer?: {
-              custom(part: { type: string; data: unknown }): Promise<void>;
+              custom(part: { type: string; data: unknown; transient?: boolean }): Promise<void>;
             };
           }
         | undefined;
@@ -1262,12 +1262,13 @@ function toolkitEntryToMastraTool(entry: ToolkitEntry, plugin: ContextualToolPro
         ...(typeof model === "string" ? { model } : {}),
         ...(writer && toolCallId
           ? {
-              writeProgress: async (event: unknown) => {
+              writeProgress: async (event, options) => {
                 const parsed = ToolProgressEventSchema.parse(event);
                 await writer
                   .custom({
                     type: TOOL_PROGRESS_PART_TYPE,
                     data: { toolCallId, event: parsed },
+                    ...(options?.transient ? { transient: true } : {}),
                   })
                   .catch(() => undefined);
               },

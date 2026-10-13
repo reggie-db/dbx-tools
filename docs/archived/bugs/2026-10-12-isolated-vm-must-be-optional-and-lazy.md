@@ -1,6 +1,12 @@
 # Native Code Mode transport blocks unsupported local installations
 
-Status: Open
+Status: Resolved in v0.9.122
+
+## Resolution
+
+`@mastra/isolated-vm` is published as an optional dependency and retained as a
+development dependency for type checking. Runtime selection remains lazy and
+falls back to QuickJS when the native package is unsupported or unavailable.
 
 ## Summary
 

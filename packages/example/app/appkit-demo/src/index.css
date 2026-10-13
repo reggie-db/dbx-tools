@@ -10,6 +10,8 @@ html,
 body,
 #root {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   height: 100%;
 }
 
@@ -37,10 +39,11 @@ body {
 #root {
   position: fixed;
   top: var(--demo-visual-viewport-top, 0px);
-  right: 0;
-  left: 0;
+  left: var(--demo-visual-viewport-left, 0px);
   height: var(--demo-visual-viewport-height, 100dvh);
-  max-width: 100vw;
+  width: var(--demo-visual-viewport-width, 100%);
+  min-width: 0;
+  max-width: var(--demo-visual-viewport-width, 100%);
   overflow: hidden;
   overscroll-behavior: none;
 }

@@ -7,8 +7,10 @@ import { dbxToolsAssetSvg } from "@dbx-tools/ui/branding/assets";
 import { parse } from "smol-toml";
 import {
   ensureSshService,
+  inspectSshLifecycleStates,
   loadSshServiceDefinition,
   projectTerminalOpenUrl,
+  readSshServiceOperationLog,
   type SshServiceDefinition,
 } from "../src/services.ts";
 import type { SshSession } from "../src/session.ts";
@@ -62,6 +64,8 @@ describe("packaged Sandbox services", () => {
     assert.match(document.hooks.postinstall, /ttyd checksum mismatch/);
     assert.match(document.hooks.postinstall, /dbx-tools-shell/);
     assert.match(document.hooks.postinstall, /dbx-tools-bashrc/);
+    assert.match(document.hooks.postinstall, /dbx-tools-project-bashrc/);
+    assert.match(document.hooks.postinstall, /mise" activate bash/);
     assert.match(document.tasks.start.run, /--interface 127\.0\.0\.1 --port 7681/);
     assert.match(document.tasks.start.run, /--writable --url-arg/);
     assert.match(document.tasks.start.run, /--client-option rendererType=webgl/);
@@ -121,6 +125,7 @@ describe("packaged Sandbox services", () => {
     assert.match(install, /startxfce4/);
     assert.match(install, /Xfce desktop shell did not become ready/);
     assert.match(start, /kasmvncserver :20 -fg/);
+    assert.match(install, /org\.gnome\.Epiphany ask-for-default false/);
     assert.match(start, /-select-de xfce -xstartup/);
     assert.match(start, /-websocketPort 6080/);
     assert.match(start, /-disableBasicAuth -SecurityTypes None/);
@@ -152,6 +157,14 @@ describe("packaged Sandbox services", () => {
     assert.equal(definition.target.redirectToSlash, true);
     assert.match(definition.target.htmlHead ?? "", /dbx-tools-desktop-brand/);
     assert.match(definition.target.htmlHead ?? "", /KasmVNC Learn More/);
+    assert.match(definition.target.htmlHead ?? "", /dbx-tools-kasm-mobile-guard/);
+    assert.match(definition.target.htmlHead ?? "", /Can't find variable: W\[0-9A-F\]/);
+    assert.match(definition.target.htmlHead ?? "", /stopImmediatePropagation/);
+    assert.match(definition.target.htmlHead ?? "", /visualViewport/);
+    assert.match(definition.target.htmlHead ?? "", /--dbx-tools-viewport-width/);
+    assert.match(definition.target.htmlHead ?? "", /orientationchange/);
+    assert.match(definition.target.htmlHead ?? "", /setTimeout\(sync,750\)/);
+    assert.match(definition.target.htmlHead ?? "", /overflow-wrap:anywhere/);
     assert.match(definition.target.htmlHead ?? "", /document\.title="dbx tools Desktop"/);
     assert.equal(
       definition.target.openUrl,
@@ -209,10 +222,59 @@ describe("packaged Sandbox services", () => {
       /service_directory="\$HOME\/projects\/\.sandbox-services\/\$service_kind"/,
     );
     assert.match(runner, /"\$mise_bin" install/);
+    assert.match(runner, /\.dbx-tools\/operations\/services/);
+    assert.match(runner, /lifecycle\.lock/);
+    assert.match(runner, /lifecycle\.log/);
+    assert.match(runner, /lifecycle\.status/);
+    assert.match(runner, /maximum_attempts=2/);
+    assert.match(runner, /__DBX_TOOLS_ATTEMPT__/);
+    assert.match(runner, /__DBX_TOOLS_RESULT__/);
+    assert.match(runner, /\.dbx-tools-install\.sha256/);
     assert.match(runner, /\[ "\$task" = start \] && \[ "\$install" = true \]/);
     assert.match(runner, /"\$mise_bin" run "\$task"/);
     assert.equal(environment?.DBX_TOOLS_SERVICE_PATH, "/sandbox/terminal/machine");
     assert.equal(target.remotePort, 7681);
+  });
+
+  it("reads durable remote service and project states", async () => {
+    const session = {
+      execute: async (command: string, args: string[]) => ({
+        ...success,
+        command,
+        args,
+        stdout:
+          "service\tterminal\tstarting\nservice-log\tterminal\taW5zdGFsbGluZyB0dHlkCg==\nservice\tdesktop\tready\nproject\tdemo/app\terror\n",
+      }),
+    } as unknown as SshSession;
+
+    const states = await inspectSshLifecycleStates(session, 1_000);
+
+    assert.equal(states.services.get("terminal"), "starting");
+    assert.equal(states.serviceLogs.get("terminal"), "installing ttyd\n");
+    assert.equal(states.services.get("desktop"), "ready");
+    assert.equal(states.projects.get("demo/app"), "error");
+  });
+
+  it("reads the shared remote service operation log", async () => {
+    let script = "";
+    const session = {
+      execute: async (command: string, args: string[]) => {
+        script = args[1] ?? "";
+        return {
+          ...success,
+          command,
+          args,
+          stdout: "__DBX_TOOLS_ATTEMPT__=1\ninstalling ttyd\n",
+        };
+      },
+    } as unknown as SshSession;
+
+    assert.equal(
+      await readSshServiceOperationLog(session, "terminal", 1_000),
+      "__DBX_TOOLS_ATTEMPT__=1\ninstalling ttyd\n",
+    );
+    assert.match(script, /tail -n 200/);
+    assert.match(script, /tail -c 16000/);
   });
 
   it("keeps remote provisioning shell out of TypeScript", async () => {
