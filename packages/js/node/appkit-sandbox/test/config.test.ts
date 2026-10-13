@@ -6,6 +6,8 @@ describe("resolveSshPluginConfig", () => {
   it("strips AppKit runtime fields and resolves auth fallback defaults", () => {
     const config = resolveSshPluginConfig({ context: {} as never });
     assert.equal(config.fallbackToServicePrincipal, false);
+    assert.equal(config.sshTransport, "auto");
+    assert.equal(config.ssh2Patch, "auto");
     assert.equal(config.sandboxLifetimeSeconds, 86_400);
     assert.equal(config.reaperIntervalSeconds, 300);
     assert.equal(config.routePrefix, "/sandbox");
@@ -14,7 +16,10 @@ describe("resolveSshPluginConfig", () => {
       ["mise"],
     );
     assert.match(config.machineSoftware[0]?.installCommand ?? "", /dbx-tools mise path/);
-    assert.doesNotMatch(config.machineSoftware[0]?.installCommand ?? "", /mise activate (?:bash|zsh)/);
+    assert.doesNotMatch(
+      config.machineSoftware[0]?.installCommand ?? "",
+      /mise activate (?:bash|zsh)/,
+    );
     assert.match(config.machineSoftware[0]?.checkCommand ?? "", /\.zshrc/);
     assert.equal("context" in config, false);
 
@@ -24,4 +29,36 @@ describe("resolveSshPluginConfig", () => {
     const withoutSetup = resolveSshPluginConfig({ machineSoftware: [] });
     assert.deepEqual(withoutSetup.machineSoftware, []);
   });
+
+  it("resolves case-insensitive SSH policy from scoped configUtils keys", () => {
+    const previousTransport = process.env.DBX_TOOLS_SANDBOX_SSH_TRANSPORT;
+    const previousPatch = process.env.DBX_TOOLS_SANDBOX_SSH_SSH2_PATCH;
+    process.env.DBX_TOOLS_SANDBOX_SSH_TRANSPORT = " SsH2 ";
+    process.env.DBX_TOOLS_SANDBOX_SSH_SSH2_PATCH = " TrUe ";
+    try {
+      const configured = resolveSshPluginConfig();
+      assert.equal(configured.sshTransport, "ssh2");
+      assert.equal(configured.ssh2Patch, "true");
+
+      const explicit = resolveSshPluginConfig({
+        sshTransport: "OPENSSH",
+        ssh2Patch: "FALSE",
+      });
+      assert.equal(explicit.sshTransport, "openssh");
+      assert.equal(explicit.ssh2Patch, "false");
+    } finally {
+      restoreEnvironment("DBX_TOOLS_SANDBOX_SSH_TRANSPORT", previousTransport);
+      restoreEnvironment("DBX_TOOLS_SANDBOX_SSH_SSH2_PATCH", previousPatch);
+    }
+  });
+
+  it("rejects invalid SSH policy values", () => {
+    assert.throws(() => resolveSshPluginConfig({ sshTransport: "native" }));
+    assert.throws(() => resolveSshPluginConfig({ ssh2Patch: "yes" }));
+  });
 });
+
+function restoreEnvironment(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}

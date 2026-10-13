@@ -20,9 +20,8 @@
 
 import { StringDecoder } from "node:string_decoder";
 
-import { appkit } from "@dbx-tools/appkit";
 import { getRequestTags } from "@dbx-tools/appkit/request-tags";
-import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
+import { environmentUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
 import { context, createContextKey, SpanKind, trace, type Span } from "@opentelemetry/api";
 import { getRPCMetadata, RPCType } from "@opentelemetry/core";
@@ -488,7 +487,7 @@ export function chatTurnTelemetryMiddleware(
   }
   const traceState: ChatTraceState = { tags: new Map() };
   const traceRequestTime = Date.now();
-  if (!appkit.isDatabricksAppEnv()) {
+  if (!environmentUtils.isDatabricksAppEnv()) {
     setChatTraceTag(traceState, MLFLOW_LOCAL_TAG, true);
   }
   for (const [name, value] of Object.entries(getRequestTags(req))) {

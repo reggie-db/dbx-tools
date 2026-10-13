@@ -8,7 +8,6 @@ export * as appkit from "./src/appkit.ts";
 export * as brandContext from "./src/brand-context.ts";
 export * as bundle from "./src/bundle.ts";
 export * as cacheStorage from "./src/cache-storage.ts";
-export * as childProcess from "./src/child-process.ts";
 export * as databricks from "./src/databricks.ts";
 export * as filesCache from "./src/files-cache.ts";
 export * as identity from "./src/identity.ts";
@@ -28,8 +27,6 @@ export { bundleAppResourceSchema, flattenAppYamlEnv, flattenAppEnv, getBundlePat
 export type { BundleValidateJson, ConfigFile, ConfigMapValue, ConfigSource, ResolveConfigValueOptions } from "./src/bundle.ts";
 export { AppKitCacheStorage } from "./src/cache-storage.ts";
 export type { AppKitCacheStorageOptions, PersistentStorageBase } from "./src/cache-storage.ts";
-export { AppKitChildProcess } from "./src/child-process.ts";
-export type { AppKitSpawnArgs, AppKitChildProcessHealthCheckContext, AppKitChildProcessHealthCheck, AppKitChildProcessOptions, AppKitChildProcessRunOptions } from "./src/child-process.ts";
 export type { ContextLike } from "./src/databricks.ts";
 export { FilesCacheManager, FilesCachePlugin } from "./src/files-cache.ts";
 export type { FilesCachePluginConfig, FilesCacheScope, FilesCacheSourceIdentity, FilesCacheExports } from "./src/files-cache.ts";

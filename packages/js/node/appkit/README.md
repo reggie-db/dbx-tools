@@ -314,58 +314,6 @@ hard-code registered names or casts at every call site. A missing required
 plugin throws AppKit's `ConfigurationError`, naming both the caller and the
 plugin to register.
 
-## Supervise AppKit Subprocesses
-
-`AppKitChildProcess` starts a long-running sibling process through
-`@dbx-tools/core/exec` and owns its shutdown escalation. Its spawn tuple accepts
-core exec options, including line handlers and optional output capture.
-
-```ts
-import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
-
-const worker = new AppKitChildProcess(
-  [
-    "bun",
-    ["run", "worker.ts"],
-    {
-      stdout: { onLine: (line) => logger.info(line), capture: false },
-      stderr: { onLine: (line) => logger.error(line), capture: false },
-    },
-  ],
-  {
-    healthCheck: async ({ signal }) => {
-      try {
-        return (await fetch("http://127.0.0.1:3000/health", { signal })).ok;
-      } catch (error) {
-        if (signal.aborted) throw error;
-        return false;
-      }
-    },
-    healthCheckTimeoutMs: 30_000,
-  },
-);
-
-await worker.start();
-this.context.onLifecycle("shutdown", () => worker.shutdown());
-```
-
-When configured, `start()` polls `healthCheck` until it returns `true` and
-rejects when the process exits, the check throws, or the readiness timeout
-expires. The callback receives the live process, attempt number, and an
-`AbortSignal` suitable for `fetch`.
-
-Standalone foreground entrypoints can await `run()` instead of wiring
-`start()`, process signal handlers, process completion, and `shutdown()`
-separately. It shuts down the tree before re-raising `SIGINT`, `SIGTERM`, or
-`SIGHUP`. `SIGKILL` cannot be intercepted by Node.
-
-`shutdown()` is idempotent. It aborts an active readiness check, then delegates
-tree termination to `@dbx-tools/core`: every discovered process receives
-`SIGTERM`, surviving and newly discovered descendants receive `SIGKILL`, and
-shutdown fails if anything remains after the configured timeouts. Pass a
-non-`SIGKILL` signal to run only that graceful tree phase, or pass `SIGKILL` to
-skip directly to forced polling.
-
 ## Provision Lakebase Cache Schema
 
 `provision.provisionCacheSchema()` grants the AppKit cache schema in Lakebase to

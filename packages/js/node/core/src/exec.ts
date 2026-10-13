@@ -54,15 +54,24 @@ import * as readline from "node:readline";
 import { Readable } from "node:stream";
 import { text } from "node:stream/consumers";
 import { finished } from "node:stream/promises";
+import { functionUtils, log } from "@dbx-tools/shared-core";
 
 /** Shell-compatible exit code returned when an executable cannot be found. */
 export const COMMAND_NOT_FOUND_EXIT_CODE = 127;
 
-const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
-const DEFAULT_FORCE_TIMEOUT_MS = 4_000;
+const DEFAULT_TERMINATE_TIMEOUT_MS = 8_000;
+const DEFAULT_KILL_TIMEOUT_MS = 4_000;
 const DEFAULT_KILL_POLL_INTERVAL_MS = 100;
+const DEFAULT_TERMINATE_SIGNAL: NodeJS.Signals = "SIGTERM";
+const DEFAULT_KILL_SIGNAL: NodeJS.Signals = "SIGKILL";
+const FORWARDED_PARENT_SIGNALS = (
+  process.platform === "win32"
+    ? ["SIGINT", "SIGTERM", "SIGBREAK"]
+    : ["SIGHUP", "SIGINT", "SIGTERM", "SIGQUIT"]
+) satisfies readonly NodeJS.Signals[];
 const WINDOWS_PROCESS_SNAPSHOT_SCRIPT =
   "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, $_.CreationDate.ToFileTimeUtc() }";
+const logger = log.logger("core:exec");
 
 /** Stdio mode for a subprocess fd. */
 export type ExecStdio = "inherit" | "pipe" | "ignore";
@@ -122,7 +131,7 @@ export type ExecResult = {
  * This is additive - the object still satisfies `Promise<ExecResult>`, so every
  * existing `await spawn(...)` / `spawn(...).then(...)` caller is unchanged. What
  * is new is that the same value is the live child: callers that want to supervise
- * it can read `.pid`, call `.kill(signal)`, and listen for `exit` without a
+ * it can read `.pid`, call `.shutdown()`, and listen for `exit` without a
  * second spawn.
  *
  * @example Await it (unchanged)
@@ -130,48 +139,51 @@ export type ExecResult = {
  *
  * @example Supervise it
  * const proc = spawn("bun", ["src/server.ts"]);
- * const shutdown = () => kill(proc);
+ * const shutdown = () => proc.shutdown();
  * const { exitCode } = await proc;
  */
-export type ChildProcessResult = ChildProcess & Promise<ExecResult>;
+export type ChildProcessResult = ChildProcess &
+  Promise<ExecResult> & {
+    /** Stop the child process tree once using the configured termination policy. */
+    shutdown(options?: ChildProcessTerminationOptions): Promise<void>;
+  };
+
+/** Process-tree termination policy used by {@link ChildProcessResult.shutdown}. */
+export interface ChildProcessTerminationOptions {
+  /** Time to wait for operating-system termination. Defaults to 8 seconds. */
+  terminateTimeout?: number;
+  /** Time to poll and force-kill remaining descendants. Defaults to 4 seconds. */
+  killTimeout?: number;
+}
 
 /** Options for {@link spawn}. Extends `SpawnOptions` except `stdio`, which is driven by `stdin` / `stdout` / `stderr`. */
-export type ExecOptions = Omit<SpawnOptions, "stdio"> & {
-  /** `"inherit"` by default; `"pipe"` / `"ignore"` select modes, any other string is input. */
-  stdin?: ExecStdio | string;
-  stdout?: StdioOption;
-  stderr?: StdioOption;
-  /** Throw when the process exits with a non-zero code. */
-  check?: boolean;
-  /**
-   * Omitted — adaptive trim ({@link spawnSync} drops one spawn trailing newline,
-   * {@link spawn} does not); `true` — strip all leading/trailing whitespace;
-   * `false` — leave captured output unchanged.
-   */
-  trim?: boolean;
-};
-
-/** Graceful and forced shutdown policy for {@link kill}. */
-export interface KillOptions {
-  /** Signal sent to the snapshotted process tree. `false` skips this phase. Defaults to `SIGTERM`. */
-  gracefulSignal?: NodeJS.Signals | false;
-  /** Processes receiving the graceful signal. Defaults to the complete process tree. */
-  gracefulSignalTarget?: "root" | "tree";
-  /** Time to wait for graceful shutdown. Defaults to 10 seconds. */
-  gracefulTimeoutMs?: number;
-  /** Signal sent to survivors. `false` disables forced termination. Defaults to `SIGKILL`. */
-  forceSignal?: NodeJS.Signals | false;
-  /** Time to poll and force newly discovered descendants. Defaults to 4 seconds. */
-  forceTimeoutMs?: number;
-  /** Interval used to refresh and poll the process tree. Defaults to 100 milliseconds. */
-  pollIntervalMs?: number;
-}
+export type ExecOptions = Omit<SpawnOptions, "stdio" | "killSignal"> &
+  ChildProcessTerminationOptions & {
+    /** `"inherit"` by default; `"pipe"` / `"ignore"` select modes, any other string is input. */
+    stdin?: ExecStdio | string;
+    stdout?: StdioOption;
+    stderr?: StdioOption;
+    /**
+     * Forward parent termination signals to this child. Defaults to `true`.
+     * Set to `false` to skip the shared signal trap; on POSIX, the child is also
+     * detached by default so terminal process-group signals are not inherited.
+     */
+    forwardTerminationSignals?: boolean;
+    /** Throw when the process exits with a non-zero code. */
+    check?: boolean;
+    /**
+     * Omitted — adaptive trim ({@link spawnSync} drops one spawn trailing newline,
+     * {@link spawn} does not); `true` — strip all leading/trailing whitespace;
+     * `false` — leave captured output unchanged.
+     */
+    trim?: boolean;
+  };
 
 /** Stdio mode for {@link spawnSync} (no per-line callbacks). */
 export type SyncExecStdio = ExecStdio | "capture";
 
 /** Options for {@link spawnSync}. Same shape as {@link ExecOptions} but without line-handler stdio. */
-export type SyncExecOptions = Omit<SpawnOptions, "stdio"> & {
+export type SyncExecOptions = Omit<SpawnOptions, "stdio" | "killSignal"> & {
   /** `"inherit"` by default; `"pipe"` / `"ignore"` select modes, any other string is input. */
   stdin?: ExecStdio | string;
   stdout?: SyncExecStdio;
@@ -221,6 +233,151 @@ interface ProcessSnapshotEntry {
 interface RefreshedProcessTree {
   processes: ProcessSnapshotEntry[];
   discovered: ProcessSnapshotEntry[];
+}
+
+interface ParentSignalForwarderState {
+  readonly children: Map<number, ChildProcessResult>;
+  readonly handlers: Map<NodeJS.Signals, () => void>;
+  readonly forwardingSignals: Set<NodeJS.Signals>;
+}
+
+interface SignalExitEmitter {
+  count?: unknown;
+}
+
+interface ProcessWithSignalExitEmitter extends NodeJS.Process {
+  __signal_exit_emitter__?: SignalExitEmitter;
+}
+
+type ParentSignalShutdown = (signal: NodeJS.Signals) => Promise<void>;
+
+const parentSignalForwarderState = functionUtils.memoize((): ParentSignalForwarderState => ({
+  children: new Map(),
+  handlers: new Map(),
+  forwardingSignals: new Set(),
+}));
+const parentSignalShutdowns = new WeakMap<ChildProcessResult, ParentSignalShutdown>();
+
+function registerParentSignalForwarding(child: ChildProcessResult): (() => void) | undefined {
+  const pid = child.pid;
+  if (pid === undefined) return undefined;
+  const state = parentSignalForwarderState();
+  installParentSignalHandlers(state);
+  state.children.set(pid, child);
+  return () => {
+    if (state.children.get(pid) === child) state.children.delete(pid);
+  };
+}
+
+function installParentSignalHandlers(state: ParentSignalForwarderState): void {
+  if (state.handlers.size > 0) return;
+  for (const signal of FORWARDED_PARENT_SIGNALS) {
+    const handler = () => {
+      try {
+        forwardParentSignal(state, signal);
+      } catch (error) {
+        reportParentSignalError(signal, undefined, error);
+      }
+    };
+    state.handlers.set(signal, handler);
+    process.prependListener(signal, handler);
+  }
+}
+
+function forwardParentSignal(state: ParentSignalForwarderState, signal: NodeJS.Signals): void {
+  if (state.forwardingSignals.has(signal)) return;
+  const shutdowns: Promise<void>[] = [];
+  for (const [pid, child] of state.children) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      state.children.delete(pid);
+      continue;
+    }
+    shutdowns.push(shutdownChildForParentSignal(child, pid, signal));
+  }
+
+  const handler = state.handlers.get(signal);
+  const completed = Promise.all(shutdowns).catch((error) => {
+    reportParentSignalError(signal, undefined, error);
+  });
+  if (!handler || process.listenerCount(signal) !== passiveSignalListenerCount() + 1) {
+    void completed;
+    return;
+  }
+  state.forwardingSignals.add(signal);
+  void completed
+    .then(() => {
+      process.off(signal, handler);
+      state.handlers.delete(signal);
+      state.forwardingSignals.delete(signal);
+      try {
+        process.kill(process.pid, signal);
+      } catch (error) {
+        reportParentSignalError(signal, process.pid, error);
+      }
+    })
+    .catch((error) => {
+      reportParentSignalError(signal, undefined, error);
+    });
+}
+
+function shutdownChildForParentSignal(
+  child: ChildProcessResult,
+  pid: number,
+  signal: NodeJS.Signals,
+): Promise<void> {
+  try {
+    const shutdown = parentSignalShutdowns.get(child);
+    return (shutdown ? shutdown(signal) : child.shutdown()).catch((error) => {
+      reportParentSignalError(signal, pid, error);
+    });
+  } catch (error) {
+    reportParentSignalError(signal, pid, error);
+    return Promise.resolve();
+  }
+}
+
+function reportParentSignalError(
+  signal: NodeJS.Signals,
+  pid: number | undefined,
+  error: unknown,
+): void {
+  if (isExpectedProcessShutdownError(error)) return;
+  try {
+    logger.warn("failed to forward parent signal", {
+      signal,
+      ...(pid === undefined ? {} : { pid }),
+      error,
+    });
+  } catch {
+    // Signal forwarding must never prevent other process listeners from running.
+  }
+}
+
+function isExpectedProcessShutdownError(error: unknown): boolean {
+  if (isMissingProcessError(error)) return true;
+  return error instanceof AggregateError && error.errors.every(isExpectedProcessShutdownError);
+}
+
+function passiveSignalListenerCount(): number {
+  const legacyEmitter = (process as ProcessWithSignalExitEmitter).__signal_exit_emitter__;
+  const modernEmitter = (globalThis as typeof globalThis & Record<symbol, unknown>)[
+    Symbol.for("signal-exit emitter")
+  ] as SignalExitEmitter | undefined;
+  return signalExitEmitterCount(legacyEmitter) + signalExitEmitterCount(modernEmitter);
+}
+
+function signalExitEmitterCount(emitter: SignalExitEmitter | undefined): number {
+  return typeof emitter?.count === "number" ? emitter.count : 0;
+}
+
+function resolveDetached(
+  detached: boolean | undefined,
+  forwardTerminationSignals: boolean,
+): boolean | undefined {
+  if (detached !== undefined || forwardTerminationSignals || process.platform === "win32") {
+    return detached;
+  }
+  return true;
 }
 
 function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpawnArgs<T> {
@@ -321,12 +478,13 @@ function timeoutValue(value: number, name: string): number {
   return value;
 }
 
-/** Validate a finite positive polling interval. */
-function pollIntervalValue(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new RangeError("pollIntervalMs must be a finite positive number");
-  }
-  return value;
+/** Reject caller-selected signals so platform shutdown policy stays internal. */
+function rejectSignalOptions(options: object): void {
+  const unsupported = options as { terminateSignal?: unknown; killSignal?: unknown };
+  if (unsupported.terminateSignal === undefined && unsupported.killSignal === undefined) return;
+  throw new TypeError(
+    "Process signals are selected internally; configure terminateTimeout and killTimeout instead",
+  );
 }
 
 /** Parse the common `pid parentPid identity` process-snapshot format. */
@@ -389,7 +547,8 @@ async function linuxProcessSnapshot(): Promise<ProcessSnapshotEntry[]> {
  *
  * Linux reads exact start ticks from `/proc`. Windows uses the built-in
  * PowerShell CIM provider. macOS and other POSIX platforms combine `ps`
- * process start time and executable name.
+ * process start time and executable name. The helper process is detached so a
+ * terminal SIGINT to this process group cannot abort the snapshot.
  */
 async function processSnapshot(): Promise<ProcessSnapshotEntry[]> {
   if (process.platform === "linux") return linuxProcessSnapshot();
@@ -402,6 +561,7 @@ async function processSnapshot(): Promise<ProcessSnapshotEntry[]> {
   const proc = nodeSpawn(command, args, {
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
+    detached: true,
   });
   const stdout = text(proc.stdout!);
   const stderr = text(proc.stderr!);
@@ -414,6 +574,16 @@ async function processSnapshot(): Promise<ProcessSnapshotEntry[]> {
     );
   }
   return parseProcessSnapshot(linesFromCapturedOutput(stdoutText));
+}
+
+/** Read a process snapshot, or `undefined` when the process table cannot be listed. */
+async function tryProcessSnapshot(): Promise<ProcessSnapshotEntry[] | undefined> {
+  try {
+    return await processSnapshot();
+  } catch (error) {
+    logger.debug("process snapshot failed", { error });
+    return undefined;
+  }
 }
 
 /** Group a process snapshot by parent PID. */
@@ -551,7 +721,12 @@ async function waitForProcessTreeExit(
     const remainingMs = deadline - Date.now();
     if (remainingMs > 0) await delay(Math.min(pollIntervalMs, remainingMs));
 
-    const refreshed = refreshProcessTree(retained, await processSnapshot());
+    const snapshot = await tryProcessSnapshot();
+    if (snapshot === undefined) {
+      if (Date.now() >= deadline) break;
+      continue;
+    }
+    const refreshed = refreshProcessTree(retained, snapshot);
     if (signalDiscovered && refreshed.discovered.length > 0) {
       signalProcesses(refreshed.discovered, signal, signaled);
     }
@@ -827,90 +1002,75 @@ function linesFromCapturedOutput(output: string): string[] {
  * The initial tree is retained before signaling so descendants remain
  * targetable after their parent exits or they are reparented. Polling refreshes
  * the process table, merges newly created descendants, and sends each one the
- * active shutdown signal once. Either phase can be disabled for graceful-only
- * or force-only termination. macOS and other POSIX platforms use `ps`; Windows
- * uses the built-in PowerShell CIM process provider.
+ * active shutdown signal once. macOS and other POSIX platforms use `ps`;
+ * Windows uses the built-in PowerShell CIM process provider.
  *
  * Windows does not implement POSIX signal semantics. Node terminates processes
  * unconditionally for supported signals there, including `SIGTERM`.
  *
  * @param child - Root child process whose snapshotted tree should stop
- * @param options - Graceful signal, force signal, timeout, and polling policy
- * @throws When the process table cannot be captured, a signal cannot be sent,
- * or identity-matched processes remain after the final enabled phase
+ * @param options - Graceful and forced shutdown timeout policy
+ * @param terminateSignal - Internal signal selected from the parent event or platform default
  */
-export async function kill(child: ChildProcess, options: KillOptions = {}): Promise<void> {
+async function terminateProcessTree(
+  child: ChildProcess,
+  options: ChildProcessTerminationOptions = {},
+  terminateSignal: NodeJS.Signals = DEFAULT_TERMINATE_SIGNAL,
+): Promise<void> {
   if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
     return;
   }
 
-  const gracefulTimeoutMs = timeoutValue(
-    options.gracefulTimeoutMs ?? DEFAULT_GRACEFUL_TIMEOUT_MS,
-    "gracefulTimeoutMs",
+  const terminateTimeout = timeoutValue(
+    options.terminateTimeout ?? DEFAULT_TERMINATE_TIMEOUT_MS,
+    "terminateTimeout",
   );
-  const forceTimeoutMs = timeoutValue(
-    options.forceTimeoutMs ?? DEFAULT_FORCE_TIMEOUT_MS,
-    "forceTimeoutMs",
-  );
-  const pollIntervalMs = pollIntervalValue(options.pollIntervalMs ?? DEFAULT_KILL_POLL_INTERVAL_MS);
-  const snapshot = await processSnapshot();
+  const killTimeout = timeoutValue(options.killTimeout ?? DEFAULT_KILL_TIMEOUT_MS, "killTimeout");
+  const pollIntervalMs = DEFAULT_KILL_POLL_INTERVAL_MS;
+  const snapshot = await tryProcessSnapshot();
   if (child.exitCode !== null || child.signalCode !== null) return;
+  if (snapshot === undefined) {
+    try {
+      process.kill(child.pid, terminateSignal);
+    } catch (error) {
+      if (!isMissingProcessError(error)) throw error;
+    }
+    return;
+  }
   const tree = processTree(snapshot, child.pid);
   const retained = new Map(tree.map((entry) => [entry.pid, entry]));
-  const gracefulSignal = options.gracefulSignal === undefined ? "SIGTERM" : options.gracefulSignal;
-  const gracefulSignalTarget = options.gracefulSignalTarget ?? "tree";
-  const forceSignal = options.forceSignal === undefined ? "SIGKILL" : options.forceSignal;
-  if (gracefulSignalTarget !== "root" && gracefulSignalTarget !== "tree") {
-    throw new RangeError("gracefulSignalTarget must be root or tree");
-  }
-  if (gracefulSignal === false && forceSignal === false) {
-    throw new Error("At least one process-tree termination signal must be enabled");
-  }
 
-  let forceTargets = tree;
-  if (gracefulSignal !== false) {
-    const gracefulSignaled = new Set<string>();
-    const gracefulTargets = gracefulSignalTarget === "root" ? [tree.at(-1)!] : tree;
-    signalProcesses(gracefulTargets, gracefulSignal, gracefulSignaled);
-    forceTargets = await waitForProcessTreeExit(
-      retained,
-      tree,
-      gracefulSignal,
-      gracefulSignaled,
-      gracefulTimeoutMs,
-      pollIntervalMs,
-      gracefulSignalTarget === "tree",
-    );
-  }
-  if (forceTargets.length === 0) return;
-  if (forceSignal === false) {
-    if (gracefulSignal === false) {
-      throw new Error("At least one process-tree termination signal must be enabled");
-    }
-    throw processTerminationError(gracefulSignal, forceTargets);
-  }
-
-  const forceSignaled = new Set<string>();
-  signalProcesses(forceTargets, forceSignal, forceSignaled);
-  const forcedSurvivors = await waitForProcessTreeExit(
+  const terminated = new Set<string>();
+  signalProcesses(tree, terminateSignal, terminated);
+  const killTargets = await waitForProcessTreeExit(
     retained,
-    forceTargets,
-    forceSignal,
-    forceSignaled,
-    forceTimeoutMs,
+    tree,
+    terminateSignal,
+    terminated,
+    terminateTimeout,
     pollIntervalMs,
     true,
   );
-  if (forcedSurvivors.length > 0) throw processTerminationError(forceSignal, forcedSurvivors);
-}
+  if (killTargets.length === 0) return;
 
-function processTerminationError(
-  signal: NodeJS.Signals,
-  processes: readonly ProcessSnapshotEntry[],
-): Error {
-  return new Error(
-    `Processes did not terminate after ${signal}: ${processes.map((entry) => entry.pid).join(", ")}`,
+  const killed = new Set<string>();
+  signalProcesses(killTargets, DEFAULT_KILL_SIGNAL, killed);
+  const survivors = await waitForProcessTreeExit(
+    retained,
+    killTargets,
+    DEFAULT_KILL_SIGNAL,
+    killed,
+    killTimeout,
+    pollIntervalMs,
+    true,
   );
+  if (survivors.length === 0) return;
+  logger.warn("process tree still running after kill timeout", {
+    rootPid: child.pid,
+    survivorPids: survivors.map((entry) => entry.pid),
+    killSignal: DEFAULT_KILL_SIGNAL,
+    killTimeout,
+  });
 }
 
 /**
@@ -921,7 +1081,7 @@ function processTerminationError(
  * exit (and any line reads / stdin write), then resolves to the {@link ExecResult}
  * or rejects (spawn error other than a missing executable, or `check` on non-zero
  * exit). Existing `await spawn(...)` callers are unaffected. The handle half lets a
- * caller supervise the process (`.pid`, `.kill(signal)`, `exit` event) without a
+ * caller supervise the process (`.pid`, `.shutdown()`, `exit` event) without a
  * second spawn.
  *
  * @param command - Executable to run (resolved on `PATH` when `shell` is set on options)
@@ -933,7 +1093,22 @@ function processTerminationError(
  */
 export function spawn(...args: SpawnArgs<ExecOptions>): ChildProcessResult {
   const { command, commandArgs, options = {} } = parseSpawnArgs(args);
-  const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options;
+  rejectSignalOptions(options);
+  const {
+    stdin,
+    stdout,
+    stderr,
+    forwardTerminationSignals = true,
+    terminateTimeout,
+    killTimeout,
+    check,
+    trim,
+    ...spawnOpts
+  } = options;
+  const terminationOptions: ChildProcessTerminationOptions = {
+    terminateTimeout,
+    killTimeout,
+  };
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
   const stdoutHandler = resolveStdio(stdout, stdoutLines);
@@ -942,8 +1117,13 @@ export function spawn(...args: SpawnArgs<ExecOptions>): ChildProcessResult {
 
   const proc = nodeSpawn(command, commandArgs, {
     ...spawnOpts,
+    detached: resolveDetached(spawnOpts.detached, forwardTerminationSignals),
     stdio: [stdinMode, stdoutHandler.mode, stderrHandler.mode],
   });
+  const child = attachProcessControls(proc, terminationOptions);
+  const unregisterSignalForwarding = forwardTerminationSignals
+    ? registerParentSignalForwarding(child)
+    : undefined;
 
   const stdinWrite = writeStdin(proc, stdin);
 
@@ -952,38 +1132,61 @@ export function spawn(...args: SpawnArgs<ExecOptions>): ChildProcessResult {
   queueLineReads(reads, proc.stderr, stderrHandler);
 
   const completion = (async (): Promise<ExecResult> => {
-    let exitCode = 1;
-    let commandNotFoundError: NodeJS.ErrnoException | undefined;
     try {
-      exitCode = await waitForExit(proc);
-      await Promise.all([stdinWrite, ...reads]);
-    } catch (err) {
-      if (!isCommandNotFoundError(err)) {
-        await Promise.allSettled([stdinWrite, ...reads]);
+      let exitCode = 1;
+      let commandNotFoundError: NodeJS.ErrnoException | undefined;
+      try {
+        exitCode = await waitForExit(proc);
+        await Promise.all([stdinWrite, ...reads]);
+      } catch (err) {
+        if (!isCommandNotFoundError(err)) {
+          await Promise.allSettled([stdinWrite, ...reads]);
+          throw err;
+        }
+        proc.stdin?.destroy();
+        proc.stdout?.destroy();
+        proc.stderr?.destroy();
+        await Promise.allSettled([stdinWrite]);
+        for (const read of reads) void read.catch(() => undefined);
+        commandNotFoundError = err;
+        exitCode = COMMAND_NOT_FOUND_EXIT_CODE;
+      }
+
+      const result = createExecResult(exitCode, stdoutLines, stderrLines, trim);
+      if (check && result.exitCode !== 0) {
+        const err = execError(command, commandArgs, result);
+        if (commandNotFoundError) err.cause = commandNotFoundError;
         throw err;
       }
-      proc.stdin?.destroy();
-      proc.stdout?.destroy();
-      proc.stderr?.destroy();
-      await Promise.allSettled([stdinWrite]);
-      for (const read of reads) void read.catch(() => undefined);
-      commandNotFoundError = err;
-      exitCode = COMMAND_NOT_FOUND_EXIT_CODE;
+      return result;
+    } finally {
+      unregisterSignalForwarding?.();
     }
-
-    const result = createExecResult(exitCode, stdoutLines, stderrLines, trim);
-    if (check && result.exitCode !== 0) {
-      const err = execError(command, commandArgs, result);
-      if (commandNotFoundError) err.cause = commandNotFoundError;
-      throw err;
-    }
-    return result;
   })();
 
   // Attach the promise interface onto the live child so ONE object is both. The
   // methods are bound to `completion` so `this` is the real promise; the child
   // owns no conflicting `then`/`catch`/`finally`, so this is purely additive.
-  return attachPromise(proc, completion);
+  return attachPromise(child, completion);
+}
+
+function attachProcessControls(
+  child: ChildProcess,
+  defaults: ChildProcessTerminationOptions,
+): ChildProcessResult {
+  const controlled = child as ChildProcessResult;
+  let shutdownPromise: Promise<void> | undefined;
+  const shutdown = (
+    options: ChildProcessTerminationOptions,
+    terminateSignal = DEFAULT_TERMINATE_SIGNAL,
+  ): Promise<void> => {
+    rejectSignalOptions(options);
+    shutdownPromise ??= terminateProcessTree(child, { ...defaults, ...options }, terminateSignal);
+    return shutdownPromise;
+  };
+  controlled.shutdown = (options = {}) => shutdown(options);
+  parentSignalShutdowns.set(controlled, (signal) => shutdown({}, signal));
+  return controlled;
 }
 
 /**
@@ -1014,6 +1217,7 @@ function attachPromise<T extends object, R>(target: T, promise: Promise<R>): T &
  */
 export function spawnSync(...args: SpawnArgs<SyncExecOptions>): ExecResult {
   const { command, commandArgs, options = {} } = parseSpawnArgs(args);
+  rejectSignalOptions(options);
   const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options;
   const stdinMode: ExecStdio = isStdinPayload(stdin) ? "pipe" : (stdin ?? "inherit");
   const captureStdout = stdout === "capture";

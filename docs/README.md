@@ -93,8 +93,9 @@ Source of truth:
 - The generated Starlight app under `.docs-build/site/` configures navigation,
   static search, edit links, and the GitHub Pages build output.
 
-The API build requires Python 3.11 or newer in addition to Bun. Start locally
-while editing content:
+The API build requires Python 3.11 or newer and Node 22.12 or newer. Install
+the generated site with Bun; TypeDoc and Astro run under Node (not npm, and not
+Bun's `#!/usr/bin/env node` rewrite). Start locally while editing content:
 
 ```sh
 bun docs/scripts/sync-readmes.mjs
@@ -113,7 +114,7 @@ bun docs/scripts/check-source-docs.mjs
 bun docs/scripts/generate-api-docs.mjs
 bun run --cwd .docs-build/site build
 bun run --cwd .docs-build/site check-links
-cd .docs-build/site && bun x astro preview --host 127.0.0.1
+bun run --cwd .docs-build/site preview
 ```
 
 Build locally:

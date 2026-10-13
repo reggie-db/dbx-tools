@@ -157,10 +157,11 @@ contains a bundle, and bundle reads are enabled, validation runs. This keeps
 pre-boot callers such as `@dbx-tools/appkit` auto-configuration on the same
 deterministic path as CLIs and ordinary Node consumers.
 
-Deployed Apps skip dotenv, bundle, and app YAML lookup after `isDatabricksAppEnv()`
-recognizes the required App name, HTTP(S) host, and valid port. Set
-`DBX_TOOLS_DATABRICKS_APP_ENV=true` or `false` to force that result; unrecognized
-values leave automatic detection in place.
+Deployed Apps skip dotenv, bundle, and app YAML lookup after
+`environmentUtils.isDatabricksAppEnv()` from `@dbx-tools/shared-core` recognizes
+the required App name, HTTP(S) host, and valid port, or the Apps container source
+tree. Set `DBX_TOOLS_DATABRICKS_APP_ENV=true` or `false` to force that result;
+unrecognized values leave automatic detection in place.
 
 `DBX_TOOLS_CONFIG_DOTENV`, `DBX_TOOLS_CONFIG_BUNDLE`, and
 `DBX_TOOLS_CONFIG_APP` independently force those file sources on or off. A
@@ -218,7 +219,12 @@ if (result.exitCode !== 0) {
 
 `exec.spawn()` supports inherited, piped, ignored, captured, and line-callback
 stdio. It accepts string stdin and abort signals, making it useful for CLIs and
-watch tasks.
+watch tasks. The returned live child is also awaitable and exposes a memoized
+`shutdown()` method that asks the operating system to terminate its process
+tree, waits 8 seconds, then force-kills survivors and polls for 4 more seconds.
+Callers may override those timeouts but not the platform signal policy. Parent
+termination signals are forwarded through one process-global trap unless
+`forwardTerminationSignals: false` is set.
 
 When an executable is missing, `spawn()` and `spawnSync()` return
 `exec.COMMAND_NOT_FOUND_EXIT_CODE` (`127`) unless `check: true` is set. With
@@ -239,7 +245,9 @@ const rev = exec
 ```
 
 Use `spawnSync()` during projen synthesis or config discovery where async
-control flow is not available.
+control flow is not available. Synchronous children remain in the parent's
+process group so terminal signals reach both processes. JavaScript signal traps
+cannot run while the parent is blocked in `spawnSync()`.
 
 ## Split Shell-Like Commands
 

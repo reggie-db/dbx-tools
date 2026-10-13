@@ -9,6 +9,7 @@ schema packages. Modules are exported as namespaces so call sites stay explicit:
 import {
   asyncUtils,
   brandUtils,
+  environmentUtils,
   errorUtils,
   hash,
   http,
@@ -431,3 +432,5 @@ stay in production code without paying formatting cost when disabled.
 - `functionUtils` - memoization.
 - `log` - tagged leveled logging.
 - `brandUtils` - Zod schema, defaults, JSON Schema, and LLM prompt serialization.
+- `environmentUtils` - Databricks App runtime detection from App env vars or the
+  Apps container source tree.

@@ -12,8 +12,6 @@ set -eu
 
 runtime="$HOME/.dbx-tools/runtime/desktop"
 version="10"
-kasmvnc_version="1.5.0"
-kasmvnc_package_version="$kasmvnc_version-1"
 version_file="$runtime/version"
 session_script="$runtime/start-xfce.sh"
 stop_script="$runtime/stop"
@@ -32,105 +30,6 @@ terminal_icon="$runtime/dbx-tools-terminal.png"
 mkdir -p "$runtime" "$HOME/.vnc" "$HOME/.config/gtk-3.0" \
   "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml" "$HOME/.config/xfce4" \
   "$HOME/.local/share/applications" "$HOME/.local/share/xfce4/helpers" "$HOME/Desktop"
-
-need_packages=false
-for command in startxfce4 xfce4-panel xfdesktop xfwm4 xfce4-terminal \
-  rsvg-convert dbus-run-session epiphany exo-open; do
-  command -v "$command" >/dev/null 2>&1 || need_packages=true
-done
-for package in arc-theme hicolor-icon-theme xfce4-whiskermenu-plugin; do
-  dpkg-query -W -f='${Status}' "$package" 2>/dev/null | \
-    grep -q 'install ok installed' || need_packages=true
-done
-
-installed_kasmvnc="$(dpkg-query -W -f='${Version}' kasmvncserver 2>/dev/null || true)"
-need_kasmvnc=false
-package_file=
-package_temporary=
-package_checksum=
-package_download_pid=
-
-if [ "$installed_kasmvnc" != "$kasmvnc_package_version" ]; then
-  need_kasmvnc=true
-  test -r /etc/os-release || {
-    printf 'KasmVNC setup requires /etc/os-release.\n' >&2
-    exit 2
-  }
-  . /etc/os-release
-  codename="$VERSION_CODENAME"
-  architecture="$(dpkg --print-architecture)"
-  package_target="$codename-$architecture"
-  case "$package_target" in
-    focal-amd64) package_checksum="a2951daaa48aa52d09c04a0c6438ab43fe2e7d420485b1bfc36253772799c83c" ;;
-    focal-arm64) package_checksum="d0188b4e65706f5143fcb000bb29e97d90a3848e7290c9155f7df20585957558" ;;
-    jammy-amd64) package_checksum="485c190b1d9269fc40fc7205f850ecf71292d737cdb5482e778f2e52f128cd8a" ;;
-    jammy-arm64) package_checksum="9b21779ee16e514bccd2971dcb3983cd8019a94c8614149dbd717d3702c8dbb5" ;;
-    noble-amd64) package_checksum="f599fe02e2175b9817b6165f74a5d2bebdc73118dde9181ba3410963bed7ae1e" ;;
-    noble-arm64) package_checksum="c9199cf4753208bfb69fd016a9780242bebfc43370cc38c97d61e90a3c783e04" ;;
-    *)
-      printf 'KasmVNC %s does not provide a package for %s.\n' \
-        "$kasmvnc_version" "$package_target" >&2
-      exit 2
-      ;;
-  esac
-  package_name="kasmvncserver_${codename}_${kasmvnc_version}_$architecture.deb"
-  package_file="$runtime/$package_name"
-  package_temporary="$package_file.tmp"
-  package_url="https://github.com/kasmtech/KasmVNC/releases/download/v${kasmvnc_version}/$package_name"
-  if ! printf '%s  %s\n' "$package_checksum" "$package_file" | \
-    sha256sum --check --status 2>/dev/null; then
-    rm -f "$package_temporary"
-    PACKAGE_URL="$package_url" PACKAGE_DESTINATION="$package_temporary" python3 - <<'PY' &
-import os
-import urllib.request
-
-request = urllib.request.Request(
-    os.environ["PACKAGE_URL"],
-    headers={"User-Agent": "dbx-tools-appkit-sandbox"},
-)
-with urllib.request.urlopen(request) as response:
-    with open(os.environ["PACKAGE_DESTINATION"], "wb") as destination:
-        while chunk := response.read(1024 * 1024):
-            destination.write(chunk)
-PY
-    package_download_pid=$!
-  fi
-fi
-
-if [ "$need_packages" = true ] || [ "$need_kasmvnc" = true ]; then
-  if ! command -v apt-get >/dev/null 2>&1; then
-    printf 'The built-in desktop currently requires an apt-based Sandbox image.\n' >&2
-    exit 2
-  fi
-  sudo -n apt-get update
-  if [ -n "$package_download_pid" ]; then
-    wait "$package_download_pid"
-    package_download_pid=
-    printf '%s  %s\n' "$package_checksum" "$package_temporary" | \
-      sha256sum --check --status || {
-        printf 'KasmVNC package checksum verification failed.\n' >&2
-        exit 1
-      }
-    mv "$package_temporary" "$package_file"
-  fi
-  install_desktop_packages() {
-    sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      arc-theme ca-certificates dbus-daemon dbus-x11 epiphany-browser exo-utils \
-      fonts-dejavu-core hicolor-icon-theme librsvg2-bin thunar xfce4-whiskermenu-plugin \
-      x11-utils x11-xserver-utils xdg-utils xfce4-panel xfce4-session xfce4-settings \
-      xfce4-terminal xfdesktop4 xfwm4 "$@"
-  }
-  if [ "$need_kasmvnc" = true ]; then
-    printf '%s  %s\n' "$package_checksum" "$package_file" | \
-      sha256sum --check --status || {
-        printf 'KasmVNC package checksum verification failed.\n' >&2
-        exit 1
-      }
-    install_desktop_packages "$package_file"
-  else
-    install_desktop_packages
-  fi
-fi
 
 test -x "$(command -v kasmvncserver)" || {
   printf 'kasmvncserver is unavailable after package setup.\n' >&2
@@ -500,3 +399,17 @@ printf '%s\n' "$version" >"$version_file"
 [tasks.stop]
 hide = true
 run = '''"$HOME/.dbx-tools/runtime/desktop/stop"'''
+
+[tasks.status]
+hide = true
+run = '''
+set -eu
+runtime="$HOME/.dbx-tools/runtime/desktop"
+pid_file="$runtime/kasmvncserver.pid"
+[ -f "$runtime/session.ready" ]
+[ -s "$pid_file" ]
+pid=$(cat "$pid_file")
+[ -r "/proc/$pid/cmdline" ]
+tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "kasmvncserver" >/dev/null
+bash -c 'exec 3<>/dev/tcp/127.0.0.1/6080'
+'''

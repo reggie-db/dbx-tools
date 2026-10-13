@@ -7,6 +7,7 @@ import { USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
 import { resolveSshPluginConfig } from "../src/config.ts";
 import { AppKitSshPlugin } from "../src/plugin.ts";
 import { SshRuntime } from "../src/runtime.ts";
+import { SshCommand } from "../src/session.ts";
 
 interface UpgradeTestInternals {
   upgradeIdentityGate?: {
@@ -124,6 +125,36 @@ describe("AppKitSshPlugin", () => {
         transient: true,
       },
     ]);
+    await plugin.shutdown();
+  });
+
+  it("returns the serialized command result from the agent boundary", async () => {
+    const plugin = new AppKitSshPlugin({ auto: false });
+    Object.defineProperty(plugin.runtime, "execute", {
+      value: () =>
+        new SshCommand("printf", ["ok"], { timeoutMs: 1_000 }, async (execution) => {
+          execution.stdout("ok");
+          return 0;
+        }),
+    });
+
+    const result = await plugin
+      .operations("user@example.com", {} as never)
+      .execute_ssh_command.execute({
+        machineId: "machine",
+        command: "printf",
+        args: ["ok"],
+      });
+
+    assert.deepEqual(result, {
+      success: true,
+      exitCode: 0,
+      stdout: "ok",
+      stderr: "",
+      executionTimeMs: result.executionTimeMs,
+      command: "printf",
+      args: ["ok"],
+    });
     await plugin.shutdown();
   });
 

@@ -11,6 +11,7 @@ import {
 } from "@dbx-tools/shared-databricks-sandbox";
 import { parse } from "smol-toml";
 import { packageScriptCommand } from "./_projects.ts";
+import { SANDBOX_PROJECTS_ROOT } from "./_sandbox-user.ts";
 import {
   desktopBrowserMetadata,
   desktopMiseEnvironment,
@@ -109,7 +110,7 @@ export function loadSshServiceDefinition(
   return {
     kind,
     definitionVersion: metadata.definitionVersion,
-    directory: `~/projects/.sandbox-services/${kind}`,
+    directory: `${SANDBOX_PROJECTS_ROOT}/.sandbox-services/${kind}`,
     miseToml,
     environment: {
       DBX_TOOLS_SERVICE_PATH: path.replace(/\/+$/, ""),
@@ -157,7 +158,7 @@ export async function inspectSshLifecycleStates(
       ]),
     ],
     { timeoutMs, signal },
-  );
+  ).result;
   if (!result.success) {
     throw new Error(result.stderr.trim() || "Sandbox lifecycle status inspection failed");
   }
@@ -196,7 +197,7 @@ export async function readSshServiceOperationLog(
       `log_file="$HOME/.dbx-tools/operations/services/${kind}/lifecycle.log"; if [ -f "$log_file" ]; then tail -n ${limits.maxLines} "$log_file" | tail -c ${limits.maxChars}; fi`,
     ],
     { timeoutMs, signal },
-  );
+  ).result;
   if (!result.success) {
     throw new Error(result.stderr.trim() || "Sandbox service log inspection failed");
   }
@@ -226,7 +227,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "terminal":
       return {
         fileName: "terminal.mise.toml",
-        definitionVersion: 4,
+        definitionVersion: 6,
         target: (path) => ({
           remoteHost: "127.0.0.1",
           remotePort: TTYD_PORT,
@@ -238,7 +239,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "desktop":
       return {
         fileName: "desktop.mise.toml",
-        definitionVersion: 11,
+        definitionVersion: 13,
         environment: desktopMiseEnvironment,
         target: (path) => ({
           ...desktopBrowserMetadata,
@@ -248,7 +249,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "stats":
       return {
         fileName: "stats.mise.toml",
-        definitionVersion: 2,
+        definitionVersion: 4,
         target: (path) => ({
           remoteHost: "127.0.0.1",
           remotePort: GLANCES_PORT,
@@ -267,15 +268,18 @@ function assertMiseServiceDefinition(kind: SshMachineServiceKind, source: string
   const tasks = objectField(document, "tasks");
   const start = objectField(tasks, "start");
   const stop = objectField(tasks, "stop");
+  const status = objectField(tasks, "status");
   if (
     typeof hooks.postinstall !== "string" ||
     typeof start.run !== "string" ||
     start.hide !== true ||
     typeof stop.run !== "string" ||
-    stop.hide !== true
+    stop.hide !== true ||
+    typeof status.run !== "string" ||
+    status.hide !== true
   ) {
     throw new Error(
-      `Packaged ${kind} service must define postinstall and hidden start and stop tasks`,
+      `Packaged ${kind} service must define postinstall and hidden start, stop, and status tasks`,
     );
   }
 }
@@ -322,7 +326,7 @@ function executeServiceTask(
       timeoutMs,
       signal,
     },
-  );
+  ).result;
 }
 
 function readPackageResource(...segments: string[]): string {

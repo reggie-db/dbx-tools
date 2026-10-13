@@ -22,9 +22,8 @@
  */
 
 import { createLakebasePool, getWorkspaceClient, ValidationError } from "@databricks/appkit";
-import { configUtils } from "@dbx-tools/core";
 import { postgresConnectionOptions, quotePostgresIdentifier } from "@dbx-tools/postgres";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { environmentUtils, errorUtils, log } from "@dbx-tools/shared-core";
 
 const defaultLogger = log.logger("provision");
 
@@ -90,7 +89,7 @@ export async function provisionCacheSchema(
   role: string | undefined,
   logger: log.Logger = defaultLogger,
 ): Promise<void> {
-  if (configUtils.isDatabricksAppEnv()) {
+  if (environmentUtils.isDatabricksAppEnv()) {
     logger.debug("autopg: skip cache provisioning (inside a Databricks App)");
     return;
   }

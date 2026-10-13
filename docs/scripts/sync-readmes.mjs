@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as brandFiles from "../../packages/js/node/core/src/brand-files.ts";
 import * as projectUtils from "../../packages/js/node/core/src/project-utils.ts";
-import { loadDocsToolchain } from "./docs-toolchain.mjs";
+import { docsAstroScript, loadDocsToolchain } from "./docs-toolchain.mjs";
 import {
   discoverRepositoryPackages,
   groupTitle,
@@ -328,8 +328,9 @@ function docsPackageJson() {
       private: true,
       type: "module",
       scripts: {
-        dev: "astro dev --host 127.0.0.1",
-        build: "astro build",
+        dev: docsAstroScript("dev", "--host", "127.0.0.1"),
+        build: docsAstroScript("build"),
+        preview: docsAstroScript("preview", "--host", "127.0.0.1"),
         "check-links": "bun ../../docs/scripts/check-dist-links.mjs ../dist",
       },
       dependencies: docsToolchain,

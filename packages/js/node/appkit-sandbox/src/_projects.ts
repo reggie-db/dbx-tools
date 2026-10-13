@@ -4,6 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AddSshProjectRequest } from "@dbx-tools/shared-databricks-sandbox";
 import { stringify, type TomlTableWithoutBigInt } from "smol-toml";
+import { SANDBOX_PROJECTS_ROOT } from "./_sandbox-user.ts";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const PROJECT_PATH_SEGMENT_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
@@ -160,7 +161,7 @@ export function renderProjectMiseConfig(
 
 /** @internal */
 export function projectDirectory(path: string): string {
-  return `~/projects/${path}`;
+  return `${SANDBOX_PROJECTS_ROOT}/${path}`;
 }
 
 /** @internal */

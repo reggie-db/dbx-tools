@@ -14,11 +14,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
 
-import {
-  AppKitChildProcess,
-  type AppKitChildProcessOptions,
-} from "@dbx-tools/appkit/child-process";
-import { bin, configUtils } from "@dbx-tools/core";
+import { bin, configUtils, exec } from "@dbx-tools/core";
+import type { ChildProcessResult, ChildProcessTerminationOptions } from "@dbx-tools/core/exec";
 import { log, options as sharedOptions } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { TUNNEL_CONFIG } from "./_config.ts";
@@ -210,25 +207,22 @@ export async function writeFrpConfig(
 }
 
 /** Launch frpc as a child process (caller supervises and terminates it). */
-export async function startFrp(
+export function startFrp(
   resolved: FrpConfig,
   childEnv: NodeJS.ProcessEnv,
   configPath: string,
-  options: AppKitChildProcessOptions = {},
-): Promise<AppKitChildProcess> {
+  options: ChildProcessTerminationOptions = {},
+): ChildProcessResult {
   logger.info(
     `frpc tunneling https://${resolved.publicDomain}${resolved.path === "/" ? "" : resolved.path} -> :${resolved.port}`,
   );
-  const child = new AppKitChildProcess(
-    [
-      "frpc",
-      ["-c", configPath],
-      { env: childEnv, stdin: "inherit", stdout: "inherit", stderr: "inherit" },
-    ],
-    options,
-  );
-  await child.start();
-  return child;
+  return exec.spawn("frpc", ["-c", configPath], {
+    ...options,
+    env: childEnv,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
 }
 
 /** Supervise the FRP client for a resolved tunnel configuration. */
@@ -240,6 +234,6 @@ export function superviseFrp(
   return superviseProcessForever({
     name: "frpc",
     logger,
-    start: () => startFrp(resolved, childEnv, configPath, { gracefulTimeoutMs: 10_000 }),
+    start: () => startFrp(resolved, childEnv, configPath, { terminateTimeout: 10_000 }),
   });
 }

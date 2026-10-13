@@ -79,6 +79,10 @@ export const PostgresOptionsSchema = z
   .strict()
   .describe("Shared PostgreSQL session options.");
 
+export const PostgresConfigOptionsSchema = PostgresOptionsSchema.safeExtend({
+  postgresRole: PostgresOptionsSchema.shape.postgresRole.meta({ env: "POSTGRES_ROLE" }),
+}).describe("PostgreSQL options resolved through scoped configuration.");
+
 export type PostgresOptions = z.input<typeof PostgresOptionsSchema>;
 
 export const tcpPortSchema = z.coerce

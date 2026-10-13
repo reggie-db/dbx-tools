@@ -18,11 +18,7 @@ import {
   TooltipTrigger,
   cn,
 } from "@dbx-tools/ui/react";
-import {
-  PlayIcon,
-  ServerIcon,
-  SquareIcon,
-} from "lucide-react";
+import { ServerIcon, SquareIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BUILT_IN_SERVICE_CONTROLS,
@@ -30,6 +26,7 @@ import {
   type BuiltInServiceLauncherProps,
 } from "./built-in-service-launcher.tsx";
 import { useSshClient } from "./client.ts";
+import { MachinePowerButton } from "./machine-power-control.tsx";
 
 /** Props for the compact SSH machine status and control popover. */
 export interface SshIndicatorProps {
@@ -38,10 +35,7 @@ export interface SshIndicatorProps {
 }
 
 /** Renders SSH machine status with start, stop, and open actions. */
-export function SshIndicator({
-  basePath,
-  className,
-}: SshIndicatorProps) {
+export function SshIndicator({ basePath, className }: SshIndicatorProps) {
   const client = useSshClient(basePath);
   const [open, setOpen] = useState(false);
   const [machines, setMachines] = useState<SshMachine[]>([]);
@@ -158,9 +152,7 @@ export function SshIndicator({
                           ? {
                               ...candidate,
                               services: candidate.services.map((currentService) =>
-                                currentService.kind === snapshot.kind
-                                  ? snapshot
-                                  : currentService,
+                                currentService.kind === snapshot.kind ? snapshot : currentService,
                               ),
                             }
                           : candidate,
@@ -255,16 +247,6 @@ function MachineRow({
       </button>
       {expanded ? (
         <div className="mt-2 flex flex-wrap items-center gap-1 pl-4">
-          {machine.canStart ? (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("start")}>
-              <PlayIcon className="size-3.5" /> Start
-            </Button>
-          ) : null}
-          {machine.canStop ? (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("stop")}>
-              <SquareIcon className="size-3.5" /> Stop
-            </Button>
-          ) : null}
           {BUILT_IN_SERVICE_CONTROLS.map(({ kind }) => (
             <BuiltInServiceLauncher
               key={kind}
@@ -278,6 +260,12 @@ function MachineRow({
               onSettled={onServiceSettled}
             />
           ))}
+          <MachinePowerButton
+            machine={machine}
+            busy={busy}
+            onStart={() => onAction("start")}
+            onStop={() => onAction("stop")}
+          />
         </div>
       ) : null}
     </div>

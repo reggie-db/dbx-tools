@@ -625,7 +625,7 @@ release [options]
 | `--release-notes-instructions <value>` | Append instructions to the Genie release-note prompt (env: PROJEN_RELEASE_RELEASE_NOTES_INSTRUCTIONS)                      |
 | `--demo-deploy`                        | Deploy the AppKit demo after tagging and local publication (env: PROJEN_RELEASE_DEMO_DEPLOY)                               |
 | `--no-demo-deploy`                     | Disable deploy the appkit demo after tagging and local publication                                                         |
-| `--profile <value>`                    | Databricks CLI profile for the optional demo deployment                                                                     |
+| `--profile <value>`                    | Optional Databricks CLI profile passed to the demo deployment (env: PROJEN_RELEASE_PROFILE)                                |
 | `--local-publish`                      | Publish to configured local registries (default: true, env: PROJEN_RELEASE_LOCAL_PUBLISH)                                  |
 | `--no-local-publish`                   | Disable publish to configured local registries                                                                             |
 | `--local-registry <value>`             | Local npm registry selection: auto, false, or URL (default: "auto", env: PROJEN_RELEASE_LOCAL_REGISTRY)                    |

@@ -3,12 +3,24 @@ set -eu
 
 maximum_log_lines="$1"
 maximum_log_chars="$2"
+if [ -x "$HOME/.local/bin/mise" ]; then
+  mise_bin="$HOME/.local/bin/mise"
+else
+  mise_bin=$(command -v mise)
+fi
 
 for service_kind in terminal desktop stats; do
   operation_directory="$HOME/.dbx-tools/operations/services/$service_kind"
+  service_directory="$HOME/projects/.sandbox-services/$service_kind"
   state=$(cat "$operation_directory/lifecycle.status" 2>/dev/null || true)
   if [ -d "$operation_directory/lifecycle.lock" ]; then
     state=starting
+  fi
+  if [ "$state" = ready ] &&
+    { [ ! -d "$service_directory" ] ||
+      ! (cd "$service_directory" && "$mise_bin" run status >/dev/null 2>&1); }; then
+    state=stopped
+    printf '%s\n' "$state" >"$operation_directory/lifecycle.status"
   fi
   case "$state" in
     starting|ready|error|stopped) ;;

@@ -56,7 +56,7 @@ export const ModelGatewayOptionsSchema = ModelSelectionOptionsSchema.safeExtend(
     .optional()
     .describe("Optional bearer token required by every gateway route.")
     .meta({
-      env: "DBX_TOOLS_MODEL_GATEWAY_BEARER_TOKEN",
+      env: "MODEL_GATEWAY_BEARER_TOKEN",
       flag: false,
       helpDefault: false,
     }),

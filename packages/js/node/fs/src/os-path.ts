@@ -4,7 +4,7 @@
  * Home order (mkdir + write/delete probe; failure skips):
  * 1. `os.homedir()`
  * 2. `HOME` / `USERPROFILE`
- * 3. `/home/app` when {@link config.isDatabricksAppEnv}
+ * 3. `/home/app` when {@link environmentUtils.isDatabricksAppEnv}
  * 4. `./.home` under cwd
  *
  * Temp order (same ensure/probe/skip):
@@ -22,10 +22,9 @@
 import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { configUtils } from "@dbx-tools/core";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { environmentUtils, stringUtils } from "@dbx-tools/shared-core";
 
-/** Databricks Apps container home when {@link config.isDatabricksAppEnv}. */
+/** Databricks Apps container home when {@link environmentUtils.isDatabricksAppEnv}. */
 export const APP_HOME = "/home/app";
 
 /** Resolved home + temp for one cwd. */
@@ -92,7 +91,7 @@ function resolveHome(env: NodeJS.ProcessEnv, cwd: string, options: ResolveOsPath
     tryCall(options.homeDir ?? homedir),
     env.HOME?.trim(),
     env.USERPROFILE?.trim(),
-    configUtils.isDatabricksAppEnv(env) ? (options.appHome ?? APP_HOME) : undefined,
+    environmentUtils.isDatabricksAppEnv(env) ? (options.appHome ?? APP_HOME) : undefined,
   ];
 
   for (const candidate of candidates) {

@@ -23,8 +23,9 @@
  */
 
 import { createServer } from "node:net";
-import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
 import { addArgs, parseArgs } from "@dbx-tools/cli-args";
+import { exec } from "@dbx-tools/core";
+import type { ChildProcessResult } from "@dbx-tools/core/exec";
 import { log } from "@dbx-tools/shared-core";
 import { frp, interceptor, portr } from "@dbx-tools/tunnel";
 import { Command, CommanderError } from "commander";
@@ -54,12 +55,12 @@ function freePort(): Promise<number> {
 }
 
 /**
- * Tie the wrapper's lifetime to its children's, in both directions: a child that
- * exits takes the wrapper down with its code, and a signal to the wrapper is
- * forwarded before it leaves. Without this a crashed app leaves a portr tunnel
- * serving a dead port, which looks like a hang rather than a failure.
+ * Tie the wrapper's lifetime to its children: a child that exits takes the
+ * wrapper down with its code. Core exec owns parent termination forwarding for
+ * every spawned child. Without this a crashed app leaves a portr tunnel serving
+ * a dead port, which looks like a hang rather than a failure.
  */
-function supervise(children: readonly AppKitChildProcess[]): void {
+function supervise(children: readonly ChildProcessResult[]): void {
   let stopping = false;
   const stop = (code: number): void => {
     if (stopping) return;
@@ -69,17 +70,14 @@ function supervise(children: readonly AppKitChildProcess[]): void {
     });
   };
   for (const child of children) {
-    void child.process?.on("exit", (code) => stop(code ?? 1));
-  }
-  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
-    process.on(signal, () => stop(0));
+    void child.on("exit", (code) => stop(code ?? 1));
   }
 }
 
 async function run(raw: TunnelOptions, command: readonly string[]): Promise<void> {
   const [executable, ...args] = command;
   const resolved = resolveTunnelOptions(raw);
-  const children: AppKitChildProcess[] = [];
+  const children: ChildProcessResult[] = [];
 
   // Two upstream modes:
   //   - WRAP: a command after `--`. The wrapper spawns it on a private loopback
@@ -91,25 +89,18 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
   let appPort: number;
   if (executable) {
     appPort = resolved.appPort ?? (await freePort());
-    const app = new AppKitChildProcess(
-      [
-        executable,
-        args,
-        {
-          env: {
-            ...process.env,
-            DATABRICKS_APP_PORT: String(appPort),
-            PORT: String(appPort),
-            HOST: "127.0.0.1",
-          },
-          stdin: "inherit",
-          stdout: "inherit",
-          stderr: "inherit",
-        },
-      ],
-      { gracefulTimeoutMs: 10_000 },
-    );
-    await app.start();
+    const app = exec.spawn(executable, args, {
+      env: {
+        ...process.env,
+        DATABRICKS_APP_PORT: String(appPort),
+        PORT: String(appPort),
+        HOST: "127.0.0.1",
+      },
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+      terminateTimeout: 10_000,
+    });
     children.push(app);
   } else if (resolved.appPort) {
     appPort = resolved.appPort;
@@ -147,12 +138,12 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
   if ((resolved.transport === "portr" || resolved.transport === "both") && resolved.portr) {
     const portrEnv = await portr.installPortr();
     await portr.writePortrConfig(resolved.portr, portrEnv);
-    children.push(await portr.startPortr(resolved.portr, portrEnv));
+    children.push(portr.startPortr(resolved.portr, portrEnv));
   }
   if ((resolved.transport === "frp" || resolved.transport === "both") && resolved.frp) {
     const frpEnv = await frp.installFrp();
     const configPath = await frp.writeFrpConfig(resolved.frp, frpEnv);
-    children.push(await frp.startFrp(resolved.frp, frpEnv, configPath));
+    children.push(frp.startFrp(resolved.frp, frpEnv, configPath));
   }
   const activeTunnelCount = children.length - (executable ? 1 : 0);
   if (!activeTunnelCount) {

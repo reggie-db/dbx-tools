@@ -53,6 +53,34 @@ export const plugins = [
 The Mastra resolver uses a Sandbox only for an explicit SSH-backed operation.
 Other Code Mode work continues to use Mastra's normal isolated runtime.
 
+## Run commands
+
+`SshRuntime.execute()` and `SshSession.execute()` return an `SshCommand`
+immediately, including while machine, session, and project setup continues. Read
+`stdout` and `stderr` as live async iterables, await the command for its numeric
+exit code, or await `result` for the complete serialized command result:
+
+```ts
+const command = runtime.execute(client, userId, {
+  machineId,
+  command: "sh",
+  args: ["-lc", "mise tasks ls --name-only --hidden"],
+});
+
+for await (const chunk of command.stdout) {
+  consume(chunk);
+}
+
+const exitCode = await command;
+const result = await command.result;
+```
+
+`cancel()` stops an active command and resolves it with exit code 130. A timeout
+resolves with exit code 124 and sets `result.timedOut`. REST, AppKit plugin, and
+agent-tool boundaries continue to return only the completed serialized result.
+The Mastra workspace adapter forwards live chunks through `onStdout` and
+`onStderr`.
+
 ## Create a Project
 
 Use the `add_ssh_project` tool instead of creating a proxy route directly:
@@ -76,7 +104,7 @@ Use the `add_ssh_project` tool instead of creating a proxy route directly:
 ```
 
 `name`, `path`, and `port` are optional. The runtime generates values that are
-unique for the machine, creates `~/projects/<path>`, writes `mise.toml`, runs
+unique for the machine, creates `/home/sandbox-user/projects/<path>`, writes `mise.toml`, runs
 `mise trust` and `mise install`, and returns the project `directory`, public
 `path`, loopback `port`, and `openUrl`.
 
@@ -154,6 +182,12 @@ and
 
 ## Provision machine software
 
+The runtime first creates a locked `sandbox-user` account with home
+`/home/sandbox-user` and no sudo-group membership. Public commands, projects,
+terminals, mise hooks, and service lifecycle run as that user. Privileged
+execution is package-private and limited to fixed account and operating-system
+prerequisite scripts; REST, agent tools, and Mastra cannot request sudo.
+
 The default `machineSoftware` configuration installs mise in
 `~/.local/bin`. The installer adds mise activation to the Sandbox user's Bash
 and Zsh startup files, so entering a trusted Project directory activates its
@@ -184,7 +218,7 @@ Pass an empty array to disable automatic machine setup.
 ## Built-in services
 
 Terminal, desktop, and stats are hidden, machine-owned mise projects under
-`~/projects/.sandbox-services`. Their packaged `mise.toml` files own
+`/home/sandbox-user/projects/.sandbox-services`. Their packaged `mise.toml` files own
 installation and `start`/`stop` lifecycle tasks. Lakebase stores their
 definitions separately from user projects, so they do not appear in project
 lists or counts.
@@ -197,7 +231,9 @@ check-lock-check state, truncate one shared log only while holding the lock,
 emit attempt/result records, and bound failed retries. Callers that arrive
 during an attempt follow the same log rather than starting parallel work. A service returned as `ready` has
 completed its process and endpoint readiness check and has a usable
-authenticated route.
+authenticated route. List polling also runs each packaged hidden `status` task
+before accepting a persisted `ready` marker and changes dead services to
+`stopped`.
 
 Terminal and stats start with an explicitly started machine. Desktop remains
 on demand unless machine creation passes `desktop: true` or a project declares
@@ -207,10 +243,32 @@ checksummed official GitHub release.
 ## Machine lifecycle
 
 The AppKit server identity must be able to use the Sandbox REST API and manage
-SSH keys. The AppKit host must provide OpenSSH on `PATH`. Direct HTTP and
-WebSocket forwarding uses `ssh2`.
+SSH keys. When native OpenSSH is available and supports dynamic forwarding,
+commands use pooled ControlMaster connections and forwarding uses their SOCKS5
+listeners. The ssh2 transport pools verified clients and uses direct TCP
+forwarding. Both transports keep one tested command connection warm, expand to
+ten connections under command concurrency, and use a separate zero-minimum
+forwarding pool so long-lived browser connections do not consume the warm
+command connection. A borrowed connection is destroyed after its command or
+forwarded stream because the Databricks Russh gateway may allow only one
+operation during a connection's lifetime. Dead idle resources fail validation
+before use and are replaced.
 
-The runtime records ownership and absolute expiration in Lakebase. The
+`DBX_TOOLS_SANDBOX_SSH_TRANSPORT` accepts `auto`, `openssh`, or `ssh2`; `auto`
+prefers OpenSSH and otherwise selects ssh2 without later fallback.
+`DBX_TOOLS_SANDBOX_SSH_SSH2_PATCH` accepts `auto`, `true`, or `false`. Patch
+mode `auto` attempts the Databricks exec-reply workaround only in development,
+`true` requires it, and `false` leaves ssh2 unchanged.
+
+Direct localhost navigation does not pass through a front door that injects the
+Databricks user headers. In non-production mode, a loopback request to a
+single-owner route uses that sole owner. Every non-loopback request still
+requires an explicit authenticated identity.
+
+The runtime records one owner and an absolute expiration for each workspace
+Sandbox in Lakebase. Assignment migration retains the earliest owner when old
+data contains duplicate owners, removes the losing owners' project records,
+and enforces uniqueness by workspace and machine. The
 [`SshRuntime` reaper](https://docs.dbx.tools/api/appkit-sandbox/src-runtime-class-sshruntime/)
 runs at startup and on the configured interval. It deletes expired assigned
 Sandboxes, removes records for missing Sandboxes, and leaves unrelated
@@ -239,13 +297,14 @@ does not replace Databricks workspace authorization.
 
 [`SshKeyStore`](https://docs.dbx.tools/api/appkit-sandbox/src-key-store-class-sshkeystore/)
 creates one Ed25519 key pair for each workspace and AppKit user. Only the public
-key is registered. Private keys and known-host files remain on the AppKit server
-under `~/.dbx-tools/appkit-databricks-sandbox` by default.
+key is registered. Private keys and trusted host fingerprints remain on the
+AppKit server under `~/.dbx-tools/appkit-databricks-sandbox` by default.
 
 The first successful connection records the gateway host key. Later connections
 reject a changed key.
 [`SshSession`](https://docs.dbx.tools/api/appkit-sandbox/src-session-class-sshsession/)
-passes the stored file through OpenSSH `UserKnownHostsFile`. Host verification
+checks that fingerprint during every verified handshake and writes the matching
+OpenSSH known-host entry. Host verification
 is never disabled.
 
 ## Agent integration

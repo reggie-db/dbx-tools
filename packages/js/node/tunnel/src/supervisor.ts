@@ -1,4 +1,3 @@
-import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
 import type { ChildProcessResult } from "@dbx-tools/core/exec";
 import { asyncUtils, errorUtils, type Logger } from "@dbx-tools/shared-core";
 
@@ -9,7 +8,6 @@ const DEFAULT_HEALTH_CHECK_GRACE_MS = 45_000;
 const DEFAULT_HEALTH_CHECK_INTERVAL_MS = 30_000;
 /** Consecutive failed probes required before killing a still-running child. */
 const DEFAULT_HEALTH_CHECK_FAILURES = 2;
-type ManagedProcess = Pick<AppKitChildProcess, "process" | "shutdown">;
 
 /** Handle used to stop a supervised child and its restart loop. */
 export interface ProcessSupervisor {
@@ -28,7 +26,7 @@ type ProcessOutcome = {
 export interface ProcessSupervisorOptions {
   name: string;
   logger: Logger;
-  start: () => ManagedProcess | Promise<ManagedProcess>;
+  start: () => ChildProcessResult;
   retryDelaysMs?: readonly number[];
   /**
    * Optional public liveness probe. When it returns `false` while the child is
@@ -46,12 +44,12 @@ export interface ProcessSupervisorOptions {
 /** Supervise and restart a long-running child process until explicitly stopped. */
 export function superviseProcessForever(options: ProcessSupervisorOptions): ProcessSupervisor {
   const controller = new AbortController();
-  let managedProcess: ManagedProcess | undefined;
+  let child: ChildProcessResult | undefined;
 
   const terminateChild = () => {
-    const stoppingProcess = managedProcess;
-    if (!stoppingProcess) return;
-    void stoppingProcess.shutdown().catch((error) =>
+    const stoppingChild = child;
+    if (!stoppingChild) return;
+    void stoppingChild.shutdown().catch((error) =>
       options.logger.error(`${options.name} did not stop`, {
         error: errorUtils.toError(error),
       }),
@@ -75,14 +73,12 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
       const startedAt = Date.now();
       let outcome: ProcessOutcome;
       try {
-        managedProcess = await options.start();
-        const child = managedProcess.process;
-        if (!child) throw new Error(`${options.name} did not start a child process`);
-        outcome = await processOutcome(managedProcess, child, controller.signal, options);
+        child = options.start();
+        outcome = await processOutcome(child, controller.signal, options);
       } catch (error) {
         outcome = { error: errorUtils.toError(error) };
       } finally {
-        managedProcess = undefined;
+        child = undefined;
       }
       if (controller.signal.aborted) return;
       if (Date.now() - startedAt >= STABLE_CONNECTION_MS) failures = 0;
@@ -107,7 +103,6 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
 }
 
 function processOutcome(
-  managedProcess: ManagedProcess,
   child: ChildProcessResult,
   signal: AbortSignal,
   options: ProcessSupervisorOptions,
@@ -176,7 +171,7 @@ function processOutcome(
     };
 
     const finishAfterShutdown = (outcome: ProcessOutcome) => {
-      void managedProcess.shutdown().then(
+      void child.shutdown().then(
         () => finish(outcome),
         (error) => {
           options.logger.error(`${options.name} did not stop`, {

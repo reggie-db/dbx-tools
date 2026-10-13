@@ -1,30 +1,23 @@
 /** Coverage for demo server watch wrapping. */
 import assert from "node:assert/strict";
 import { describe, it } from "bun:test";
-import { devWatch } from "@dbx-tools/projen";
-import { demoServerCommand } from "./run-demo.ts";
+import { demoWatchArgs } from "./run-demo.ts";
 
 describe("demo server watch", () => {
-  it("wraps the server with dev:watch by default", () => {
-    const command = demoServerCommand([]);
-    const task = command.indexOf(devWatch.DEV_WATCH_TASK);
-    assert.ok(task > 0);
-    assert.equal(command[task + 1], "bun");
-    assert.ok(
-      !command.some((part) => /--watch-include|--watch-exclude|--watch-disable/.test(part)),
-    );
+  it("runs the server through the imported watcher by default", () => {
+    const args = demoWatchArgs([]);
+    assert.equal(args[0], "bun");
+    assert.match(args[1] ?? "", /packages\/example\/server\/appkit-demo\/src\/server\.ts/);
   });
 
   it("forwards include and exclude globs into dev:watch", () => {
-    const command = demoServerCommand([
+    const args = demoWatchArgs([
       "--watch-include",
       "packages/js/ui/**",
       "--watch-exclude",
       "**/*.md",
     ]);
-    const task = command.indexOf(devWatch.DEV_WATCH_TASK);
-    assert.ok(task > 0);
-    assert.deepEqual(command.slice(task + 1, task + 5), [
+    assert.deepEqual(args.slice(0, 4), [
       "--watch-include",
       "packages/js/ui/**",
       "--watch-exclude",
@@ -33,8 +26,6 @@ describe("demo server watch", () => {
   });
 
   it("forwards --watch-disable into dev:watch", () => {
-    const command = demoServerCommand(["-d"]);
-    assert.ok(command.includes(devWatch.DEV_WATCH_TASK));
-    assert.ok(command.includes("--watch-disable"));
+    assert.deepEqual(demoWatchArgs(["-d"]).slice(0, 2), ["-d", "bun"]);
   });
 });

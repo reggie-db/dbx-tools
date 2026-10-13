@@ -18,11 +18,11 @@ import {
 } from "@mastra/core/workspace";
 import type { SshRuntime } from "./runtime.ts";
 
-const ROUTING_INSTRUCTIONS = `Call list_ssh_machines first and use only a returned machine id. Reuse that machine's existing project from the Lakebase-backed projects list when one matches; pass its projectId to add_ssh_project. Use add_ssh_project before creating persistent project files. The tool generates a unique name, path, and port when omitted, creates ~/projects/<path>, writes mise.toml, and returns the directory plus route fields when enabled. Set route: false for projects that do not serve HTTP. Declare built-in requirements such as desktop through the typed serviceDependencies option; the runtime waits for those services outside the project mise configuration. Re-call add_ssh_project with projectId to update any project field.
+const ROUTING_INSTRUCTIONS = `Call list_ssh_machines first and use only a returned machine id. Reuse that machine's existing project from the Lakebase-backed projects list when one matches; pass its projectId to add_ssh_project. Use add_ssh_project before creating persistent project files. The tool generates a unique name, path, and port when omitted, creates /home/sandbox-user/projects/<path>, writes mise.toml, and returns the directory plus route fields when enabled. Set route: false for projects that do not serve HTTP. Declare built-in requirements such as desktop through the typed serviceDependencies option; the runtime waits for those services outside the project mise configuration. Re-call add_ssh_project with projectId to update any project field.
 
 For mise, prefer the first-class tools, postinstall, and uninstall options. Use config only for additional canonical mise fields described by https://mise.jdx.dev/schema/mise.json. First-class fields merge over conflicting config.tools, config.hooks.postinstall, and config.tasks.uninstall values. The runtime injects PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT. postinstall may install, prepare, or intentionally start a workload that remains active until uninstall. Expensive setup must use a check-lock-check pattern and a completion marker. Project install is idempotent and serialized through one home-owned lifecycle lock and bounded log. Project removal and reset may automatically call only uninstall; uninstall is idempotent, preempts any active install instead of waiting, then terminates remaining *.pid processes and processes whose cwd is the project directory. Never assume start or stop runs automatically.
 
-Before running a project task, call execute_ssh_command from the returned directory with command: "sh" and args: ["-lc", "$HOME/.local/bin/mise tasks ls --name-only --hidden"]. Invoke only a task whose purpose and invocation point are defined by the applicable skill, using command: "sh" and args: ["-lc", "$HOME/.local/bin/mise run <task>"]. Never combine an executable and its arguments in command. Opening the built-in terminal for a project activates that project's interactive mise shell without global directory activation.
+All public commands, projects, terminals, and service lifecycle run as the locked non-sudo user sandbox-user with home /home/sandbox-user. Before running a project task, call execute_ssh_command from the returned directory with command: "sh" and args: ["-lc", "$HOME/.local/bin/mise tasks ls --name-only --hidden"]. Invoke only a task whose purpose and invocation point are defined by the applicable skill, using command: "sh" and args: ["-lc", "$HOME/.local/bin/mise run <task>"]. Never combine an executable and its arguments in command. Opening the built-in terminal for a project activates that project's interactive mise shell without global directory activation.
 
 SSH commands never inherit authentication injected into the Sandbox machine. The transport clears Databricks environment variables, disables agent forwarding, and ignores the default Databricks config file before running remote code. Generic execute_ssh_command env overlays cannot restore Databricks credentials. Databricks access from a Sandbox requires a dedicated app-mediated capability that obtains the current user's short-lived OBO authorization for that operation; never expose the app service principal in the Sandbox.
 
@@ -94,8 +94,8 @@ export class SshWorkspaceSandbox extends MastraSandbox {
     args: string[] = [],
     options: ExecuteCommandOptions = {},
   ): Promise<CommandResult> {
-    return this.withAuth("executeCommand", (client) =>
-      this.runtime.execute(
+    return this.withAuth("executeCommand", async (client) => {
+      const sshCommand = this.runtime.execute(
         client,
         this.userId,
         {
@@ -115,8 +115,28 @@ export class SshWorkspaceSandbox extends MastraSandbox {
           ...(options.timeout ? { timeoutMs: options.timeout } : {}),
         },
         options.abortSignal,
-      ),
-    );
+      );
+      if (options.onStdout) {
+        sshCommand.stdout.on("data", (chunk: string) => options.onStdout?.(chunk));
+      }
+      if (options.onStderr) {
+        sshCommand.stderr.on("data", (chunk: string) => options.onStderr?.(chunk));
+      }
+      const result = await sshCommand.result;
+      const stdout = retainCommandOutput(result.stdout, options.maxRetainedBytes);
+      const stderr = retainCommandOutput(result.stderr, options.maxRetainedBytes);
+      return {
+        ...result,
+        stdout: stdout.value,
+        stderr: stderr.value,
+        ...(stdout.droppedBytes > 0
+          ? { stdoutTruncated: true, stdoutDroppedBytes: stdout.droppedBytes }
+          : {}),
+        ...(stderr.droppedBytes > 0
+          ? { stderrTruncated: true, stderrDroppedBytes: stderr.droppedBytes }
+          : {}),
+      };
+    });
   }
 
   /** Returns the latest assigned machine metadata in Mastra's Sandbox shape. */
@@ -241,6 +261,26 @@ function preferredMachine(machines: SshMachine[]): SshMachine | undefined {
 
 function providerStatus(status: SshMachine["status"]): WorkspaceSandbox["status"] {
   return status === "unknown" ? "pending" : status;
+}
+
+function retainCommandOutput(
+  output: string,
+  maxRetainedBytes: number | undefined,
+): { value: string; droppedBytes: number } {
+  if (maxRetainedBytes === undefined || maxRetainedBytes === Infinity) {
+    return { value: output, droppedBytes: 0 };
+  }
+  const limit = Number.isFinite(maxRetainedBytes) ? Math.max(0, Math.floor(maxRetainedBytes)) : 0;
+  const bytes = Buffer.from(output);
+  if (bytes.length <= limit) return { value: output, droppedBytes: 0 };
+  let retainedStart = bytes.length - limit;
+  while (retainedStart < bytes.length && (bytes[retainedStart]! & 0xc0) === 0x80) {
+    retainedStart++;
+  }
+  return {
+    value: bytes.subarray(retainedStart).toString("utf8"),
+    droppedBytes: retainedStart,
+  };
 }
 
 class DatabricksScope {

@@ -11,7 +11,8 @@
  * read after the bundle source also missed.
  *
  * Inside a deployed Databricks App all three file sources are skipped by default
- * ({@link isDatabricksAppEnv}): the platform has already turned them into real
+ * ({@link environmentUtils.isDatabricksAppEnv}): the platform has already turned
+ * them into real
  * environment variables, there is no bundle to validate, and the `databricks`
  * CLI is not on the image. Boolean environment overrides can force either file
  * source on or off when a tool needs different behavior.
@@ -254,20 +255,6 @@ export function getBundlePath(data: Record<string, unknown>, path: string): stri
     current = next;
   }
   return undefined;
-}
-
-/**
- * Detect a Databricks App runtime from its required name, host, and port.
- *
- * `DBX_TOOLS_DATABRICKS_APP_ENV` takes precedence when it contains a recognized
- * boolean value. This lets local tools emulate the deployed runtime (`true`) or
- * lets unusual deployed processes retain local config lookup (`false`). An
- * absent or unrecognized override falls back to structural detection.
- */
-export function isDatabricksAppEnv(
-  source: Record<string, string | undefined> = process.env,
-): boolean {
-  return environmentUtils.isDatabricksAppEnv(source);
 }
 
 /** Exact, uppercase, and tokenized-uppercase names for a human-friendly key. */
@@ -527,7 +514,8 @@ export function bundleFile(cwd?: string | null, profile?: string | null): Config
   if (override === false) return undefined;
   if (
     override === undefined &&
-    (process.env.NODE_ENV?.trim().toLowerCase() === "production" || isDatabricksAppEnv())
+    (process.env.NODE_ENV?.trim().toLowerCase() === "production" ||
+      environmentUtils.isDatabricksAppEnv())
   ) {
     return undefined;
   }
@@ -537,7 +525,8 @@ export function bundleFile(cwd?: string | null, profile?: string | null): Config
 
 /** The parsed `app.yaml` / `app.yml` for `cwd`, when local App config reads are enabled. */
 export function appFile(cwd?: string | null): ConfigFile | undefined {
-  const enabled = object.toBoolean(process.env[CONFIG_APP_KEY]) ?? !isDatabricksAppEnv();
+  const enabled =
+    object.toBoolean(process.env[CONFIG_APP_KEY]) ?? !environmentUtils.isDatabricksAppEnv();
   if (!enabled) return undefined;
   return loadAppFile(resolveWorkingDirectory(cwd));
 }
@@ -566,7 +555,8 @@ function sourceData(
 
 /** Parsed `.env` for `cwd`, or `{}`; parsed file data is cached by path. */
 function dotenv(cwd?: string | null): Record<string, string | undefined> {
-  const enabled = object.toBoolean(process.env[CONFIG_DOTENV_KEY]) ?? !isDatabricksAppEnv();
+  const enabled =
+    object.toBoolean(process.env[CONFIG_DOTENV_KEY]) ?? !environmentUtils.isDatabricksAppEnv();
   if (!enabled) return {};
   const resolved = resolveWorkingDirectory(cwd);
   return loadDotenv(resolved, nodeEnvNames(process.env.NODE_ENV));

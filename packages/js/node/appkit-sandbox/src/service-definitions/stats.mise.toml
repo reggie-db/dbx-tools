@@ -1,3 +1,7 @@
+[tools]
+python = "3.12"
+uv = "0.8.22"
+
 [hooks]
 postinstall = '''
 set -eu
@@ -12,18 +16,8 @@ mkdir -p "$runtime/bin"
 
 if [ ! -x "$venv/bin/glances" ] || [ ! -f "$version_file" ] || [ "$(cat "$version_file")" != "$version" ]; then
   rm -rf "$venv"
-  if command -v uv >/dev/null 2>&1; then
-    uv venv --python python3 "$venv"
-    uv pip install --python "$venv/bin/python" --no-cache "glances[web]==$version"
-  else
-    if ! python3 -m venv "$venv"; then
-      sudo -n apt-get update
-      sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-venv
-      python3 -m venv "$venv"
-    fi
-    "$venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir \
-      "glances[web]==$version"
-  fi
+  uv venv --python python3 "$venv"
+  uv pip install --python "$venv/bin/python" --no-cache "glances[web]==$version"
   printf '%s\n' "$version" >"$version_file"
 fi
 
@@ -110,3 +104,17 @@ PY
 [tasks.stop]
 hide = true
 run = '''"$HOME/.dbx-tools/runtime/bin/stop-glances"'''
+
+[tasks.status]
+hide = true
+run = '''
+set -eu
+runtime="$HOME/.dbx-tools/runtime"
+pid_file="$runtime/glances.pid"
+expected="$runtime/glances/bin/glances"
+[ -s "$pid_file" ]
+pid=$(cat "$pid_file")
+[ -r "/proc/$pid/cmdline" ]
+tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "$expected" >/dev/null
+bash -c 'exec 3<>/dev/tcp/127.0.0.1/61208'
+'''

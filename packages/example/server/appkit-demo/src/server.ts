@@ -63,11 +63,11 @@ function silenceHttpAccessLogs(): void {
 
 silenceHttpAccessLogs();
 
-/** Default search index used by both AppKit resource validation and the plugin. */
-const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";
 const SEARCH_ALIAS = "docs";
 const SEARCH_COLUMNS = ["id", "title", "text", "url"];
+const SEARCH_INDEX = process.env.SEARCH_INDEX;
 const USE_VECTOR_SEARCH = Boolean(process.env.SEARCH_ENDPOINT);
+const searchIndexName = SEARCH_INDEX ?? SEARCH_ALIAS;
 const SEARCH_DOCUMENTS = [
   {
     id: "1",
@@ -309,13 +309,15 @@ const supportPolling = createAgent<DemoRequestContext>(buildSupportDefinition(fa
 
 const host = process.env.HOST ?? "127.0.0.1";
 
-// Keep the provider and extension plugin on the same resolved index value.
-process.env.SEARCH_INDEX ??= DEFAULT_SEARCH_INDEX;
+if (USE_VECTOR_SEARCH && !SEARCH_INDEX) {
+  throw new Error("SEARCH_INDEX is required when SEARCH_ENDPOINT is set");
+}
+
 const searchProvider = USE_VECTOR_SEARCH
   ? aiSearch({
       indexes: {
         [SEARCH_ALIAS]: {
-          indexName: process.env.SEARCH_INDEX,
+          indexName: searchIndexName,
           columns: SEARCH_COLUMNS,
           queryType: "hybrid",
           numResults: 10,
@@ -325,7 +327,7 @@ const searchProvider = USE_VECTOR_SEARCH
   : lakebaseAiSearch({
       indexes: {
         [SEARCH_ALIAS]: {
-          indexName: process.env.SEARCH_INDEX,
+          indexName: searchIndexName,
           columns: SEARCH_COLUMNS,
           queryType: "full_text",
           numResults: 10,
@@ -406,12 +408,12 @@ await appkit.createApp({
     // provisions and seeds its own full-text table during setup.
     search({
       allowWrite: true,
-      // Full UC name for the Vector Search path; the Lakebase provider derives
-      // a Postgres table name from the last segment (`docs`).
-      index: process.env.SEARCH_INDEX,
+      // Native Vector Search uses SEARCH_INDEX (catalog.schema.index). Lakebase
+      // full-text search uses the `docs` alias as the table name when unset.
+      index: searchIndexName,
       // The endpoint is used only by native Vector Search lifecycle operations.
       ...(process.env.SEARCH_ENDPOINT ? { endpoint: process.env.SEARCH_ENDPOINT } : {}),
-      indexes: [{ name: process.env.SEARCH_INDEX, alias: SEARCH_ALIAS, columns: SEARCH_COLUMNS }],
+      indexes: [{ name: searchIndexName, alias: SEARCH_ALIAS, columns: SEARCH_COLUMNS }],
       columns: SEARCH_COLUMNS,
       ...(USE_VECTOR_SEARCH ? { ensureOnSetup: { documents: SEARCH_DOCUMENTS } } : {}),
     }),

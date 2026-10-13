@@ -56,6 +56,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/core",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/postgres",
       "version": "workspace:^",
       "type": "runtime"
@@ -81,6 +86,11 @@
       "type": "runtime"
     },
     {
+      "name": "generic-pool",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "http-proxy-3",
       "version": "catalog:",
       "type": "runtime"
@@ -88,6 +98,11 @@
     {
       "name": "smol-toml",
       "version": "1.8.0",
+      "type": "runtime"
+    },
+    {
+      "name": "socks",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

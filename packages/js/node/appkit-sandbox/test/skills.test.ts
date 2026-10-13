@@ -35,6 +35,8 @@ describe("databricksSandboxSkillMounts", () => {
       assert.match(source, /openUrl/);
       assert.match(source, /mise/i);
       assert.match(source, /## Setup project options/);
+      assert.match(source, /first-class `uninstall`/);
+      assert.match(source, /unprivileged\s+`sandbox-user`/);
       assert.match(source, /\[tasks\.start\]\nrun = '''/);
       assert.match(source, /\[tasks\.stop\]\nrun = '''/);
       assert.match(source, /tasks ls --name-only --hidden/);
@@ -45,10 +47,8 @@ describe("databricksSandboxSkillMounts", () => {
       assert.doesNotMatch(source, /command: "mise /);
       assert.doesNotMatch(source, /\[tasks\.run\]/);
       assert.doesNotMatch(source, /hide = true/);
-      assert.match(
-        source,
-        /Do not install\s+packages, write launch scripts, or start\s+servers/,
-      );
+      assert.doesNotMatch(source, /sudo|apt-get/);
+      assert.match(source, /Do not install\s+packages, write launch scripts, or start\s+servers/);
     }
 
     for (const skill of ["vnc-server"]) {
@@ -69,8 +69,7 @@ describe("databricksSandboxSkillMounts", () => {
     assert.match(freedoom, /first-class `uninstall`/);
     assert.match(freedoom, /check-lock-check/);
     assert.match(freedoom, /pkill -P "\$pid"/);
-    assert.match(freedoom, /pkill -x crispy-doom/);
-    assert.match(freedoom, /pkill -x prboom-plus/);
+    assert.doesNotMatch(freedoom, /sudo|apt-get/);
     assert.doesNotMatch(freedoom, /kasmvnc(server)? /i);
     assert.match(freedoom, /~\/\.dbx-tools\/runtime\/desktop\/run/);
     assert.doesNotMatch(freedoom, /DISPLAY=:\d+/);

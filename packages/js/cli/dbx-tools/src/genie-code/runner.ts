@@ -4,7 +4,7 @@
  * @module
  */
 
-import { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
+import { exec } from "@dbx-tools/core";
 import { asyncUtils, log } from "@dbx-tools/shared-core";
 import { GenieCodeRunnerOptionsSchema } from "@dbx-tools/shared-genie-code/options";
 
@@ -65,27 +65,19 @@ export async function runGenieCodeChild(
     executable: options.executable,
     home: options.home,
   });
-  const child = new AppKitChildProcess(
-    [
-      options.executable,
-      [...options.arguments],
-      {
-        cwd: process.cwd(),
-        env: {
-          ...environment,
-          GENIE_HOME: options.home,
-        },
-        stdin: "inherit",
-        stdout: "inherit",
-        stderr: "inherit",
-      },
-    ],
-    {
-      gracefulTimeoutMs: 5_000,
-      forceTimeoutMs: 1_000,
+  const child = exec.spawn(options.executable, [...options.arguments], {
+    cwd: process.cwd(),
+    env: {
+      ...environment,
+      GENIE_HOME: options.home,
     },
-  );
-  const result = await child.run();
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+    terminateTimeout: 5_000,
+    killTimeout: 1_000,
+  });
+  const result = await child;
   if (result.exitCode !== 0) process.exitCode = result.exitCode;
 }
 

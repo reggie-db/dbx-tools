@@ -167,3 +167,17 @@ PY
 [tasks.stop]
 hide = true
 run = '''"$HOME/.dbx-tools/runtime/bin/stop-ttyd"'''
+
+[tasks.status]
+hide = true
+run = '''
+set -eu
+runtime="$HOME/.dbx-tools/runtime"
+pid_file="$runtime/ttyd.pid"
+expected="$runtime/bin/ttyd"
+[ -s "$pid_file" ]
+pid=$(cat "$pid_file")
+[ -r "/proc/$pid/cmdline" ]
+tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "$expected" >/dev/null
+bash -c 'exec 3<>/dev/tcp/127.0.0.1/7681'
+'''

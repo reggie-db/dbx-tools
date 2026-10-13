@@ -44,7 +44,7 @@ export const GraphitiOptionsSchema = z
       .positive()
       .default(180_000)
       .describe("Maximum milliseconds allowed for the Graphiti runtime to become ready.")
-      .meta({ env: "DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS" }),
+      .meta({ env: "GRAPHITI_STARTUP_TIMEOUT_MS" }),
     listen: options
       .listenAddressSchema({
         host: "127.0.0.1",
@@ -64,10 +64,17 @@ export const GraphitiOptionsSchema = z
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Database schema must be a PostgreSQL identifier.")
       .default("dbx_tools_graphiti")
       .meta({ env: "GRAPHITI_DATABASE_SCHEMA" }),
-    ...options.PostgresOptionsSchema.shape,
+    ...options.PostgresConfigOptionsSchema.shape,
   })
   .strict()
   .describe("Graphiti options accepted by Node, CLI, AppKit, and browser callers.");
+
+const GraphitiProcessEnvironmentSchema = GraphitiOptionsSchema.safeExtend({
+  startupTimeoutMs: GraphitiOptionsSchema.shape.startupTimeoutMs.meta({
+    env: "DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS",
+  }),
+  postgresRole: options.PostgresOptionsSchema.shape.postgresRole,
+});
 
 /** Graphiti options represented as Commander flags. */
 export const GraphitiCliOptionsSchema = GraphitiOptionsSchema.describe(
@@ -111,12 +118,12 @@ export function resolveGraphitiOptions(options: GraphitiOptions = {}): ResolvedG
 export function graphitiOptionsFromEnvironment(
   environment: Readonly<Record<string, string | undefined>>,
 ): GraphitiOptions {
-  return options.parseOpts(GraphitiOptionsSchema, null, environment);
+  return options.parseOpts(GraphitiProcessEnvironmentSchema, null, environment);
 }
 
 /** Serialize one Graphiti configuration for the Python process environment. */
 export function graphitiOptionsEnvironment(
   value: GraphitiOptions = {},
 ): Readonly<Record<string, string>> {
-  return options.serializeOptsEnvironment(GraphitiOptionsSchema, value);
+  return options.serializeOptsEnvironment(GraphitiProcessEnvironmentSchema, value);
 }

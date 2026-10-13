@@ -1,16 +1,16 @@
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer, type Server, type Socket } from "node:net";
-import { PassThrough, Readable } from "node:stream";
+import { type Duplex, PassThrough, Readable } from "node:stream";
 import { ACCESS_TOKEN_HEADER, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
 import { errorUtils, hash, log } from "@dbx-tools/shared-core";
 import type { NextFunction, Request, Response } from "express";
 import ProxyModule from "http-proxy-3";
-import type { ClientChannel } from "ssh2";
 import type { SshSession } from "./session.ts";
 
 const MAX_PENDING_BYTES = 1024 * 1024;
 const MAX_TIMER_DELAY_MS = 2_147_000_000;
+const FORWARDING_READY_TIMEOUT_MS = 15_000;
 const logger = log.logger("appkit-sandbox:routes");
 
 type UpgradeSocket = Socket & { destroySoon?: () => void };
@@ -18,7 +18,6 @@ type UpgradeSocket = Socket & { destroySoon?: () => void };
 interface RouteInput {
   id?: string;
   ownerId?: string;
-  ownerIds?: readonly string[];
   machineId: string;
   remoteHost: string;
   remotePort: number;
@@ -77,10 +76,19 @@ export class SshRouteRegistry {
   private readonly sessionDrainWaiters = new Map<SshSession, Set<() => void>>();
   private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
+  private closing?: Promise<void>;
+  private shuttingDown = false;
 
   /** Creates an empty registry beneath one normalized AppKit route prefix. */
-  constructor(private readonly prefix: string) {
+  constructor(
+    private readonly prefix: string,
+    private readonly forwardingReadyTimeoutMs = FORWARDING_READY_TIMEOUT_MS,
+  ) {
     this.proxy.on("error", (error, request, response) => {
+      if (this.shuttingDown && isConnectionClosureError(error)) {
+        response.destroy();
+        return;
+      }
       logger.warn("SSH route proxy failed", {
         method: request.method,
         path: request.url,
@@ -131,7 +139,7 @@ export class SshRouteRegistry {
       const previous = prepared.previous;
       if (previous.session !== session) {
         const sockets = new Set<Socket>();
-        const bridge = createBridge(session, input, sockets);
+        const bridge = createBridge(session, input, sockets, this.forwardingReadyTimeoutMs);
         const target = await listenTarget(bridge);
         const previousServer = previous.server;
         const previousSession = previous.session;
@@ -154,7 +162,7 @@ export class SshRouteRegistry {
       return previous.route;
     }
     const sockets = new Set<Socket>();
-    const bridge = createBridge(session, input, sockets);
+    const bridge = createBridge(session, input, sockets, this.forwardingReadyTimeoutMs);
     const target = await listenTarget(bridge);
     this.routes.set(prepared.route.id, {
       route: prepared.route,
@@ -237,8 +245,11 @@ export class SshRouteRegistry {
    */
   middleware() {
     return async (request: Request, response: Response, next: NextFunction) => {
-      const requestUser = request.header(USER_ID_HEADER) ?? request.header(USER_EMAIL_HEADER);
       const direct = this.directRoute(request.path);
+      const requestUser =
+        request.header(USER_ID_HEADER) ??
+        request.header(USER_EMAIL_HEADER) ??
+        localDevelopmentOwner(request.header("host"), direct);
       if (direct && !(await ownerIsAuthorized(direct, requestUser))) {
         response.statusCode = 404;
         response.end("Not Found");
@@ -274,9 +285,11 @@ export class SshRouteRegistry {
   /** Proxies an authorized matching HTTP Upgrade request, including WebSockets. */
   async handleUpgrade(request: IncomingMessage, socket: Socket, head: Buffer): Promise<boolean> {
     const url = new URL(request.url ?? "/", "http://localhost");
+    const direct = this.directRoute(url.pathname);
     const requestUser =
       headerValue(request.headers[USER_ID_HEADER]) ??
-      headerValue(request.headers[USER_EMAIL_HEADER]);
+      headerValue(request.headers[USER_EMAIL_HEADER]) ??
+      localDevelopmentOwner(headerValue(request.headers.host), direct);
     const match = this.match(url.pathname, requestUser);
     if (!match) return false;
     if (!(await ownerIsAuthorized(match.entry, requestUser))) return false;
@@ -291,7 +304,14 @@ export class SshRouteRegistry {
   }
 
   /** Removes every route and closes the shared HTTP/WebSocket proxy. */
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    if (this.closing) return this.closing;
+    this.shuttingDown = true;
+    this.closing = this.closeRoutes();
+    return this.closing;
+  }
+
+  private async closeRoutes(): Promise<void> {
     await Promise.all([...this.routes.keys()].map((routeId) => this.remove(routeId)));
     this.proxy.close();
   }
@@ -459,11 +479,44 @@ async function ownerIsAuthorized(
   );
 }
 
+/**
+ * Allows direct loopback navigation when no front door exists to inject the
+ * owner header. Multiple-owner and non-loopback routes remain fail-closed.
+ */
+function localDevelopmentOwner(
+  host: string | undefined,
+  entry: RouteTarget | undefined,
+): string | undefined {
+  if (!entry || entry.ownerIds.size !== 1 || !isDevelopmentLoopbackHost(host)) return undefined;
+  return entry.ownerIds.values().next().value;
+}
+
+function isDevelopmentLoopbackHost(host: string | undefined): boolean {
+  if (process.env.NODE_ENV?.trim().toLowerCase() === "production" || !host) return false;
+  try {
+    const hostname = new URL(`http://${host}`).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+function isConnectionClosureError(error: unknown): boolean {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : undefined;
+  return (
+    code === "ECONNRESET" ||
+    code === "EPIPE" ||
+    code === "ERR_STREAM_PREMATURE_CLOSE" ||
+    code === "ERR_STREAM_DESTROYED"
+  );
+}
+
 function routeOwners(input: RouteInput): Set<string> {
-  const owners = new Set(input.ownerIds ?? []);
-  if (input.ownerId) owners.add(input.ownerId);
-  if (owners.size === 0) throw new Error("SSH routes require at least one owner");
-  return owners;
+  if (!input.ownerId) throw new Error("SSH routes require one owner");
+  return new Set([input.ownerId]);
 }
 
 function sameOwners(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
@@ -514,11 +567,16 @@ async function injectHtmlHead(
   }
 }
 
-function createBridge(session: SshSession, input: RouteInput, sockets: Set<Socket>): Server {
+function createBridge(
+  session: SshSession,
+  input: RouteInput,
+  sockets: Set<Socket>,
+  readyTimeoutMs: number,
+): Server {
   return createServer((socket) => {
     sockets.add(socket);
     socket.once("close", () => sockets.delete(socket));
-    bridgeSocket(socket, session.forwardOut(input.remoteHost, input.remotePort));
+    bridgeSocket(socket, session.forwardOut(input.remoteHost, input.remotePort), readyTimeoutMs);
   });
 }
 
@@ -596,29 +654,48 @@ function slug(value: string): string {
   );
 }
 
-function bridgeSocket(socket: Socket, channelPromise: Promise<ClientChannel>): void {
+function bridgeSocket(
+  socket: Socket,
+  channelPromise: Promise<Duplex>,
+  readyTimeoutMs: number,
+): void {
   const pending = new PassThrough({ highWaterMark: MAX_PENDING_BYTES });
-  let channel: ClientChannel | undefined;
+  let channel: Duplex | undefined;
+  let timedOut = false;
+  const readyTimeout = setTimeout(() => {
+    timedOut = true;
+    pending.destroy();
+    channel?.destroy();
+    if (!socket.destroyed) {
+      socket.end("HTTP/1.1 504 Gateway Timeout\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+    }
+  }, readyTimeoutMs);
+  readyTimeout.unref?.();
+  const clearReadyTimeout = () => clearTimeout(readyTimeout);
   socket.pipe(pending);
   socket.once("close", () => {
+    clearReadyTimeout();
     pending.destroy();
     channel?.destroy();
   });
 
   void channelPromise.then(
     (openedChannel) => {
-      if (socket.destroyed) {
+      if (timedOut || socket.destroyed) {
         pending.destroy();
         openedChannel.destroy();
         return;
       }
       channel = openedChannel;
+      channel.once("data", clearReadyTimeout);
+      channel.once("close", clearReadyTimeout);
       socket.once("error", () => channel?.destroy());
       channel.once("error", () => socket.destroy());
       channel.pipe(socket);
       pending.pipe(channel);
     },
     (error) => {
+      clearReadyTimeout();
       logger.warn("SSH route forwarding channel failed", {
         error: errorUtils.toError(error),
       });

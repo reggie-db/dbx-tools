@@ -96,7 +96,9 @@ const root = new project.DBXToolsNodeProject({
     "@opentelemetry/sdk-trace-base": "2.8.0",
     "@opentelemetry/sdk-trace-node": "2.8.0",
     "@mlflow/core": "0.4.0",
+    "generic-pool": "^3.9.0",
     "http-proxy-3": "^1.23.1",
+    socks: "^2.8.10",
     "ssh2": "^1.17.0",
     "ws": "^8.21.0",
     "better-auth": "1.7.6",
@@ -136,6 +138,11 @@ const root = new project.DBXToolsNodeProject({
     siteUrl: "https://docs.dbx.tools",
     base: "/",
     prepareSteps: [
+      {
+        name: "Setup Node.js",
+        uses: "actions/setup-node@v7",
+        with: { "node-version": "24" },
+      },
       { name: "Configure Pages", uses: "actions/configure-pages@v5" },
       { name: "Generate docs from READMEs", run: "bun docs/scripts/sync-readmes.mjs" },
       {
@@ -390,9 +397,9 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
 });
 
 // AppKit management for Databricks Sandboxes. The current transport uses the
-// lakebox REST surface for create/discovery/lifecycle/delete, OpenSSH for command
-// sessions, ssh2 for direct forwarding, and the existing proxy dependency for
-// remote web routes.
+// lakebox REST surface for create/discovery/lifecycle/delete, pooled native
+// OpenSSH ControlMaster and ssh2 resources, and the existing proxy dependency
+// for remote web routes.
 project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
@@ -402,13 +409,16 @@ project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/appkit-mastra@workspace:^",
+    "@dbx-tools/core@workspace:^",
     "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-databricks-sandbox@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "@mastra/core@catalog:",
+    "generic-pool@catalog:",
     "http-proxy-3@catalog:",
     "smol-toml@1.8.0",
+    "socks@catalog:",
     "ssh2@catalog:",
     "zod@catalog:",
   );

@@ -279,7 +279,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
             req,
             "executeCommand",
             (plugin) => plugin.executeCommand(userId, input),
-            () => this.runtime.execute(createWorkspaceClient(), userId, input),
+            () => this.runtime.execute(createWorkspaceClient(), userId, input).result,
           ),
         );
       },
@@ -406,7 +406,7 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
 
   /** Runs one command on an assigned Sandbox. */
   async executeCommand(userId: string, input: SshCommandRequest) {
-    return this.runtime.execute(this.workspaceClient(), userId, input);
+    return this.runtime.execute(this.workspaceClient(), userId, input).result;
   }
 
   /** Observes one built-in terminal, desktop, or metrics service until it settles. */
@@ -637,8 +637,10 @@ export class AppKitSshPlugin extends ToolRegistryPlugin<SshPluginConfig> {
       execute_ssh_command: {
         schema: executeSshCommandOperationSchema,
         execute: (input, signal) =>
-          execute("executeCommand", (client, resolvedUserId) =>
-            this.runtime.execute(client, resolvedUserId, input, signal),
+          execute(
+            "executeCommand",
+            (client, resolvedUserId) =>
+              this.runtime.execute(client, resolvedUserId, input, signal).result,
           ),
       },
       start_ssh_machine_service: {

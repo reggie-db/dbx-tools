@@ -452,13 +452,13 @@ dbx lakebase-proxy [options] [command]
 
 #### Options
 
-| Option                                  | Description                                                                  |
-| --------------------------------------- | ---------------------------------------------------------------------------- |
-| `-V, --version`                         | output the version number                                                    |
-| `--postgres-role <value>`               | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE) |
-| `-l, --listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN)      |
-| `-s, --startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS)      |
-| `--profile <value>`                     | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)                   |
+| Option                                  | Description                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `-V, --version`                         | output the version number                                               |
+| `--postgres-role <value>`               | PostgreSQL role assumed after authentication. (env: POSTGRES_ROLE)      |
+| `-l, --listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN) |
+| `-s, --startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS) |
+| `--profile <value>`                     | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)              |
 
 #### Commands
 
@@ -512,15 +512,15 @@ dbx lakebase-proxy service install [options]
 
 #### Options
 
-| Option                                  | Description                                                                  |
-| --------------------------------------- | ---------------------------------------------------------------------------- |
-| `--no-start`                            | Do not start the service after installation                                  |
-| `--python-project <path>`               | Install a local Python project instead of the registry package               |
-| `--offline`                             | Install Python packages from the uv cache without network access             |
-| `--postgres-role <value>`               | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE) |
-| `-l, --listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN)      |
-| `-s, --startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS)      |
-| `--profile <value>`                     | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)                   |
+| Option                                  | Description                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `--no-start`                            | Do not start the service after installation                             |
+| `--python-project <path>`               | Install a local Python project instead of the registry package          |
+| `--offline`                             | Install Python packages from the uv cache without network access        |
+| `--postgres-role <value>`               | PostgreSQL role assumed after authentication. (env: POSTGRES_ROLE)      |
+| `-l, --listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN) |
+| `-s, --startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS) |
+| `--profile <value>`                     | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)              |
 
 ### `dbx lakebase-proxy service start`
 
@@ -735,11 +735,11 @@ dbx graphiti [options] [command]
 | `-m, --model-class <value>`        | Optional chat capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", default: "chat-fast", env: MODEL_CLASS) |
 | `-t, --temperature <value>`        | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                                                            |
 | `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE)                                            |
-| `--startup-timeout-ms <value>`     | Maximum milliseconds allowed for the Graphiti runtime to become ready. (default: 180000, env: DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS)                                 |
+| `--startup-timeout-ms <value>`     | Maximum milliseconds allowed for the Graphiti runtime to become ready. (default: 180000, env: GRAPHITI_STARTUP_TIMEOUT_MS)                                           |
 | `-l, --listen <value>`             | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                                                                        |
 | `--database-url <value>`           | PostgreSQL URL or Lakebase target. Omit it to use persistent embedded PostgreSQL. (env: LAKEBASE_ENDPOINT)                                                           |
 | `--database-schema <value>`        | PostgreSQL schema used for Lakebase graph tables. (default: "dbx_tools_graphiti", env: GRAPHITI_DATABASE_SCHEMA)                                                     |
-| `--postgres-role <value>`          | PostgreSQL role assumed after authentication. (env: DBX_TOOLS_POSTGRES_ROLE)                                                                                         |
+| `--postgres-role <value>`          | PostgreSQL role assumed after authentication. (env: POSTGRES_ROLE)                                                                                                   |
 
 #### Commands
 

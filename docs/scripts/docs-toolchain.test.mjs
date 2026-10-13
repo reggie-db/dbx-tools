@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { loadDocsToolchain } from "./docs-toolchain.mjs";
+import { DOCS_NODE, docsAstroScript, loadDocsToolchain } from "./docs-toolchain.mjs";
 
 const complete = {
   "@astrojs/starlight": "0.41.11",
@@ -24,6 +24,15 @@ function withToolchain(value, callback) {
 }
 
 describe("documentation toolchain", () => {
+  it("runs TypeDoc and Astro with node, not bun", () => {
+    assert.equal(DOCS_NODE, "node");
+    assert.equal(docsAstroScript("build"), "node ./node_modules/astro/bin/astro.mjs build");
+    assert.equal(
+      docsAstroScript("dev", "--host", "127.0.0.1"),
+      "node ./node_modules/astro/bin/astro.mjs dev --host 127.0.0.1",
+    );
+  });
+
   it("accepts the complete exact-version set", () => {
     withToolchain(complete, (file) => assert.deepEqual(loadDocsToolchain(file), complete));
   });

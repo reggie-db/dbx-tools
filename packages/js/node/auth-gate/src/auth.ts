@@ -9,9 +9,8 @@
  */
 
 import { passkey } from "@better-auth/passkey";
-import { configUtils } from "@dbx-tools/core";
 import { type AuthStatus, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { environmentUtils, errorUtils, log } from "@dbx-tools/shared-core";
 import { APIError, betterAuth, type BetterAuthOptions } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
 
@@ -75,7 +74,7 @@ export async function createPasswordlessAuth(
   const trustedOrigins = [
     ...new Set([origin, ...(config.trustedOrigins ?? []).map((value) => new URL(value).origin)]),
   ];
-  const allowDatabricksAppOrigins = configUtils.isDatabricksAppEnv();
+  const allowDatabricksAppOrigins = environmentUtils.isDatabricksAppEnv();
   const rpID = new URL(origin).hostname;
   const basePath = config.basePath ?? "/api/auth";
   const logoutRedirectPath = normalizeLogoutRedirectPath(config.logoutRedirectPath);

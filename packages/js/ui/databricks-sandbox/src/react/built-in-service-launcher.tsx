@@ -7,15 +7,11 @@ import {
 import {
   Button,
   ButtonGroup,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  cn,
   Spinner,
   useIsMobile,
 } from "@dbx-tools/ui/react";
 import {
-  ChevronDownIcon,
   FileTextIcon,
   HeartPulseIcon,
   MonitorIcon,
@@ -32,6 +28,14 @@ const SERVICE_ICONS: Record<SshMachineServiceKind, LucideIcon> = {
   stats: HeartPulseIcon,
 };
 
+/** Visual and accessible status metadata for built-in service controls. */
+const SERVICE_STATUS = {
+  stopped: { label: "Not installed", className: "bg-muted-foreground/40" },
+  starting: { label: "Not installed", className: "bg-muted-foreground/40" },
+  ready: { label: "Installed", className: "bg-emerald-500" },
+  error: { label: "Unhealthy", className: "bg-destructive" },
+} as const satisfies Record<SshMachineService["state"], { label: string; className: string }>;
+
 export const BUILT_IN_SERVICE_CONTROLS = SSH_MACHINE_SERVICES.map((service) => ({
   ...service,
   Icon: SERVICE_ICONS[service.kind],
@@ -45,8 +49,9 @@ export interface BuiltInServiceLauncherProps {
   onSnapshot: (snapshot: SshMachineService) => void;
   onBusyChange?: (busy: boolean) => void;
   onError: (message: string | undefined) => void;
-  onActivate?: () => void;
+  logsOpen?: boolean;
   onSelectLogs?: () => void;
+  onHideLogs?: () => void;
   onSettled?: () => void | Promise<void>;
 }
 
@@ -60,7 +65,12 @@ export function selectedBuiltInServiceLog(
   selectedKind?: SshMachineServiceKind,
 ): SshMachineService | undefined {
   if (!selectedKind) return undefined;
-  return machine.services.find((service) => service.kind === selectedKind);
+  return machine.services.find((candidate) => candidate.kind === selectedKind);
+}
+
+/** Which built-in service log is visible for a machine. Logs stay closed until chosen. */
+export interface BuiltInServiceLogSelection {
+  kind: SshMachineServiceKind;
 }
 
 /** Renders a built-in service log inside its owning machine row. */
@@ -76,9 +86,9 @@ export function BuiltInServiceLog({ service }: BuiltInServiceLogProps) {
   }, [service.log]);
 
   return (
-    <section aria-label={`${definition.label} logs`} className="border-t bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2 sm:px-4">
-        <span className="text-xs font-medium text-zinc-100">{definition.label} logs</span>
+    <section aria-label={`${definition.label} install logs`} className="border-t bg-zinc-950">
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2 sm:px-4">
+        <span className="text-xs font-medium text-zinc-100">{definition.label} install logs</span>
         <span className="text-xs text-zinc-400">{service.state}</span>
       </div>
       <pre
@@ -110,6 +120,23 @@ export async function waitForBuiltInServiceReady(
   throw new Error(finalSnapshot?.error || `${label} did not become ready.`);
 }
 
+/** Installs a built-in service and opens it only after the lifecycle stream is ready. */
+export async function startAndOpenBuiltInService(options: {
+  snapshots: AsyncIterable<SshMachineService>;
+  label: string;
+  onSnapshot: (snapshot: SshMachineService) => void;
+  openTab?: (url: string) => Window | null;
+}): Promise<SshMachineService> {
+  const ready = await waitForBuiltInServiceReady(
+    options.snapshots,
+    options.label,
+    options.onSnapshot,
+  );
+  const open = options.openTab ?? ((url: string) => window.open(url, "_blank", "noopener,noreferrer"));
+  open(resolveServiceUrl(ready.openUrl));
+  return ready;
+}
+
 export function BuiltInServiceLauncher({
   client,
   machine,
@@ -118,8 +145,9 @@ export function BuiltInServiceLauncher({
   onSnapshot,
   onBusyChange,
   onError,
-  onActivate,
+  logsOpen = false,
   onSelectLogs,
+  onHideLogs,
   onSettled,
 }: BuiltInServiceLauncherProps) {
   const isMobile = useIsMobile();
@@ -127,16 +155,23 @@ export function BuiltInServiceLauncher({
   const definition = BUILT_IN_SERVICE_CONTROLS.find((candidate) => candidate.kind === kind)!;
   const Icon = definition.Icon;
   const [busy, setBusy] = useState(false);
-  const longPress = useLongPress(() => onSelectLogs?.());
+  const status = SERVICE_STATUS[service?.state ?? "stopped"];
+  const installing = busy || service?.state === "starting";
+  const canSelectLogs =
+    onSelectLogs !== undefined &&
+    (installing ||
+      service?.state === "ready" ||
+      service?.state === "error" ||
+      Boolean(service?.log));
 
   const launch = async () => {
     if (disabled || busy) return;
-    onActivate?.();
     setBusy(true);
     onBusyChange?.(true);
     onError(undefined);
+    let ready: SshMachineService | undefined;
     try {
-      await waitForBuiltInServiceReady(
+      ready = await waitForBuiltInServiceReady(
         client.startService(machine.id, kind),
         definition.label,
         onSnapshot,
@@ -148,117 +183,85 @@ export function BuiltInServiceLauncher({
       onBusyChange?.(false);
       await onSettled?.();
     }
+    if (!ready) return;
+    window.open(resolveServiceUrl(ready.openUrl), "_blank", "noopener,noreferrer");
   };
 
-  const primaryContent = busy || service?.state === "starting" ? (
-    <Spinner className="size-3.5" />
-  ) : (
-    <Icon className="size-3.5" />
-  );
   const primaryLabel = <span className={isMobile ? "sr-only" : undefined}>{definition.label}</span>;
-  const primary = service?.state === "ready" ? (
-    <Button
-      size="sm"
-      variant="outline"
-      className={isMobile ? "shrink-0 px-2" : "shrink-0"}
-      aria-label={`Open ${definition.label}`}
-      disabled={disabled}
-      asChild
-    >
-      <a
-        href={resolveServiceUrl(service.openUrl)}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-disabled={disabled}
-        tabIndex={disabled ? -1 : undefined}
-        onClick={(event) => {
-          if (disabled) {
-            event.preventDefault();
-            return;
-          }
-          onActivate?.();
-        }}
-      >
-        {primaryContent}
-        {primaryLabel}
-      </a>
-    </Button>
-  ) : (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      className={isMobile ? "shrink-0 px-2" : "shrink-0"}
-      aria-label={`Start ${definition.label}`}
-      disabled={disabled || busy}
-      onClick={(event) => {
-        if (longPress.shouldSuppressClick()) {
-          event.preventDefault();
-          return;
-        }
-        void launch();
-      }}
-      {...(isMobile ? longPress.handlers : {})}
-    >
-      {primaryContent}
-      {primaryLabel}
-    </Button>
+  const statusIndicator = (
+    <span
+      aria-hidden="true"
+      title={`${definition.label}: ${status.label}`}
+      className={cn("size-1.5 shrink-0 rounded-full", status.className)}
+    />
   );
+  const primary =
+    service?.state === "ready" ? (
+      <Button
+        size="sm"
+        variant="outline"
+        className={isMobile ? "shrink-0 px-2" : "shrink-0"}
+        aria-label={`Open ${definition.label} (${status.label})`}
+        title={`${definition.label}: ${status.label}`}
+        disabled={disabled}
+        asChild
+      >
+        <a
+          href={resolveServiceUrl(service.openUrl)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={disabled}
+          tabIndex={disabled ? -1 : undefined}
+          onClick={(event) => {
+            if (!disabled) return;
+            event.preventDefault();
+          }}
+        >
+          <Icon className="size-3.5" />
+          {primaryLabel}
+          {statusIndicator}
+        </a>
+      </Button>
+    ) : (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className={isMobile ? "shrink-0 px-2" : "shrink-0"}
+        aria-label={`Start ${definition.label} (${status.label})`}
+        title={`${definition.label}: ${status.label}`}
+        disabled={disabled || busy}
+        onClick={() => void launch()}
+      >
+        <Icon className="size-3.5" />
+        {primaryLabel}
+        {statusIndicator}
+      </Button>
+    );
 
-  if (isMobile) return primary;
+  const canToggleLogs = logsOpen ? onHideLogs !== undefined : canSelectLogs;
+  if (!canToggleLogs) return primary;
 
   return (
     <ButtonGroup>
       {primary}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="w-8 px-0"
-            aria-label={`${definition.label} options`}
-            disabled={disabled}
-          >
-            <ChevronDownIcon className="size-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onSelectLogs}>
-            <FileTextIcon className="size-3.5" />
-            Logs
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className={cn("w-8 px-0", logsOpen && "bg-muted shadow-inner")}
+        aria-label={logsOpen ? `Hide ${definition.label} logs` : `Show ${definition.label} logs`}
+        aria-pressed={logsOpen}
+        title={logsOpen ? "Hide logs" : "Show logs"}
+        disabled={disabled}
+        onClick={logsOpen ? onHideLogs : onSelectLogs}
+      >
+        {installing ? (
+          <Spinner className="size-3.5" />
+        ) : (
+          <FileTextIcon className="size-3.5" />
+        )}
+      </Button>
     </ButtonGroup>
   );
-}
-
-function useLongPress(onLongPress: () => void) {
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const suppressClick = useRef(false);
-  const clear = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = undefined;
-  };
-  return {
-    handlers: {
-      onPointerDown: () => {
-        suppressClick.current = false;
-        clear();
-        timer.current = setTimeout(() => {
-          suppressClick.current = true;
-          onLongPress();
-        }, 500);
-      },
-      onPointerUp: clear,
-      onPointerCancel: clear,
-      onPointerLeave: clear,
-    },
-    shouldSuppressClick: () => {
-      const suppress = suppressClick.current;
-      suppressClick.current = false;
-      return suppress;
-    },
-  };
 }

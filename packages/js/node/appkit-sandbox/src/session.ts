@@ -1,10 +1,14 @@
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
+import type { Duplex } from "node:stream";
 import { errorUtils, log } from "@dbx-tools/shared-core";
-import type { SshCommandResult } from "@dbx-tools/shared-databricks-sandbox";
-import ssh2, { type Client as Ssh2Client, type ClientChannel } from "ssh2";
+import ssh2, { type Client as Ssh2Client } from "ssh2";
 import { z } from "zod";
+import { isPrivilegedSandboxExecution, type PrivilegedSandboxExecution } from "./_sandbox-user.ts";
+import { createSshTransport, SshCommand, sshCommandScript, type SshTransport } from "./_ssh.ts";
+import type { Ssh2PatchMode, SshTransportMode } from "./config.ts";
+
+export { SshCommand, sshCommandScript } from "./_ssh.ts";
 
 const { Client } = ssh2;
 const logger = log.logger("appkit-sandbox:ssh");
@@ -33,49 +37,56 @@ export interface SshSessionOptions {
   port: number;
   /** SSH username accepted by the Sandbox gateway. */
   username: string;
-  /** In-memory private key used by `ssh2` forwarding. */
+  /** In-memory private key used for the verified SSH handshake and ssh2 fallback. */
   privateKey: string;
-  /** Private key file used by native OpenSSH commands. */
+  /** Private key file used by native OpenSSH. */
   privateKeyPath: string;
   /** Dedicated OpenSSH known-host file for this workspace, user, and gateway. */
   knownHostsPath: string;
   /** Connection timeout in milliseconds. */
   connectTimeoutMs: number;
+  /** SSH transport selected for this session. */
+  sshTransport: SshTransportMode;
+  /** ssh2 missing-exec-reply patch policy. */
+  ssh2Patch: Ssh2PatchMode;
   /** Previously trusted SHA-256 host-key fingerprint. */
   knownHost?: string;
-  /** Persists the first accepted host key after a successful connection. */
+  /** Persists the accepted host key for both ssh2 and native OpenSSH. */
   rememberHost?: (fingerprint: string, key: Buffer) => Promise<void>;
-  /** Native OpenSSH executable. Defaults to `ssh`. */
+  /** Native OpenSSH executable. Defaults to `ssh` on `PATH`. */
   sshCommand?: string;
   /** Resolves public fallback addresses for a service-direct gateway. */
   resolvePublicAddresses?: (host: string) => Promise<string[]>;
 }
 
 /**
- * Verified SSH transport using OpenSSH commands and `ssh2` direct forwarding.
+ * Verified SSH session that delegates commands and remote TCP connections to
+ * the transport selected by `src/_ssh.ts`.
  *
- * The first successful connection can persist a gateway fingerprint through
- * {@link SshSessionOptions.rememberHost}. Later connections reject a changed
- * fingerprint. Native commands use the dedicated
- * {@link SshSessionOptions.knownHostsPath} instead of disabling verification.
+ * The initial ssh2 handshake verifies and persists the Databricks gateway host
+ * key. The selected transport then starts its pooled command and forwarding
+ * resources. Resolved transport and patch policy determine whether the verified
+ * client seeds the ssh2 pool or is replaced by native OpenSSH ControlMasters.
  */
 export class SshSession {
-  private client?: Ssh2Client;
-  private connecting?: Promise<Ssh2Client>;
-  private connectedHost?: string;
+  private readonly activeCommands = new Set<SshCommand>();
+  private transport?: SshTransport;
+  private connecting?: Promise<void>;
+  private knownHost?: string;
+  private closed = false;
 
   /** Creates a disconnected session. Call {@link connect} or another operation to connect. */
-  constructor(private readonly options: SshSessionOptions) {}
+  constructor(private readonly options: SshSessionOptions) {
+    this.knownHost = options.knownHost;
+  }
 
   /**
-   * Opens or reuses a verified SSH connection.
-   *
-   * A failed private service-direct hostname can retry its resolved public IPv4
-   * addresses while preserving host-key verification against the original
-   * gateway identity.
+   * Verifies the gateway, resolves its public fallback when necessary, and
+   * selects the command and forwarding transport.
    */
-  async connect(): Promise<Ssh2Client> {
-    if (this.client) return this.client;
+  async connect(): Promise<void> {
+    if (this.closed) throw new Error("SSH session is closed");
+    if (this.transport) return;
     if (this.connecting) return this.connecting;
     this.connecting = this.connectWithFallback().catch((error) => {
       this.connecting = undefined;
@@ -84,9 +95,9 @@ export class SshSession {
     return this.connecting;
   }
 
-  private async connectWithFallback(): Promise<Ssh2Client> {
+  private async connectWithFallback(): Promise<void> {
     try {
-      return await this.connectHost(this.options.host);
+      await this.connectHost(this.options.host);
     } catch (error) {
       if (!shouldResolvePublicGateway(this.options.host, error)) throw error;
       const resolveAddresses = this.options.resolvePublicAddresses ?? resolvePublicGatewayAddresses;
@@ -107,7 +118,8 @@ export class SshSession {
       let lastError: unknown = error;
       for (const address of addresses) {
         try {
-          return await this.connectHost(address);
+          await this.connectHost(address);
+          return;
         } catch (connectError) {
           lastError = connectError;
         }
@@ -116,37 +128,74 @@ export class SshSession {
     }
   }
 
-  private connectHost(host: string): Promise<Ssh2Client> {
-    return new Promise<Ssh2Client>((resolve, reject) => {
+  private async connectHost(connectHost: string): Promise<void> {
+    const client = await this.createVerifiedClient(connectHost, true);
+    if (this.closed) {
+      client.destroy();
+      throw new Error("SSH session is closed");
+    }
+    try {
+      const transport = await createSshTransport({
+        host: this.options.host,
+        connectHost,
+        port: this.options.port,
+        username: this.options.username,
+        privateKeyPath: this.options.privateKeyPath,
+        knownHostsPath: this.options.knownHostsPath,
+        connectTimeoutMs: this.options.connectTimeoutMs,
+        ssh2Client: client,
+        createSsh2CommandClient: () => this.createVerifiedClient(connectHost, false),
+        transport: this.options.sshTransport,
+        ssh2Patch: this.options.ssh2Patch,
+        ...(this.options.sshCommand ? { sshCommand: this.options.sshCommand } : {}),
+      });
+      if (this.closed) {
+        await transport.close();
+        throw new Error("SSH session is closed");
+      }
+      this.transport = transport;
+      this.connecting = undefined;
+      if (transport.kind === "openssh") client.destroy();
+    } catch (error) {
+      client.destroy();
+      throw error;
+    }
+  }
+
+  private createVerifiedClient(connectHost: string, rememberHost: boolean): Promise<Ssh2Client> {
+    return new Promise((resolve, reject) => {
       const client = new Client();
       let verifiedHost: { fingerprint: string; key: Buffer } | undefined;
-      const cleanup = () => {
-        if (this.client !== client) return;
-        this.client = undefined;
-        this.connecting = undefined;
-        this.connectedHost = undefined;
-      };
+      let settled = false;
       client.once("ready", () => {
         const finish = async () => {
-          if (verifiedHost) {
+          if (!verifiedHost) throw new Error("SSH gateway did not provide a verified host key");
+          this.knownHost = verifiedHost.fingerprint;
+          if (rememberHost) {
             await this.options.rememberHost?.(verifiedHost.fingerprint, verifiedHost.key);
           }
-          this.client = client;
-          this.connectedHost = host;
-          this.connecting = undefined;
+          settled = true;
           resolve(client);
         };
         void finish().catch((error) => {
-          client.end();
+          client.destroy();
+          if (settled) return;
+          settled = true;
           reject(error);
         });
       });
       client.once("error", (error) => {
+        if (settled) return;
+        settled = true;
         reject(error);
       });
-      client.once("close", cleanup);
+      client.once("close", () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error("SSH gateway closed before authentication completed"));
+      });
       client.connect({
-        host,
+        host: connectHost,
         port: this.options.port,
         username: this.options.username,
         privateKey: this.options.privateKey,
@@ -155,7 +204,7 @@ export class SshSession {
         keepaliveCountMax: 3,
         hostVerifier: (key: Buffer) => {
           const fingerprint = createHash("sha256").update(key).digest("base64");
-          if (this.options.knownHost && fingerprint !== this.options.knownHost) return false;
+          if (this.knownHost && fingerprint !== this.knownHost) return false;
           verifiedHost = { fingerprint, key: Buffer.from(key) };
           return true;
         },
@@ -163,11 +212,8 @@ export class SshSession {
     });
   }
 
-  /**
-   * Runs one command through native OpenSSH and captures stdout, stderr, exit
-   * status, duration, and timeout state.
-   */
-  async execute(
+  /** Starts one command and returns its live output and completion state immediately. */
+  execute(
     command: string,
     args: string[],
     options: {
@@ -176,78 +222,78 @@ export class SshSession {
       timeoutMs: number;
       signal?: AbortSignal;
     },
-  ): Promise<SshCommandResult> {
-    const startedAt = Date.now();
+  ): SshCommand {
+    return this.startCommand(command, args, options, false);
+  }
+
+  /** @internal Starts one fixed package-owned privileged command. */
+  executePrivileged(
+    command: string,
+    args: string[],
+    options: {
+      timeoutMs: number;
+      signal?: AbortSignal;
+    },
+    privilege: PrivilegedSandboxExecution,
+  ): SshCommand {
+    if (!isPrivilegedSandboxExecution(privilege)) {
+      throw new Error("Privileged Sandbox execution requires the package-owned capability");
+    }
+    return this.startCommand(command, args, options, true);
+  }
+
+  private startCommand(
+    command: string,
+    args: string[],
+    options: {
+      cwd?: string;
+      env?: Record<string, string>;
+      timeoutMs: number;
+      signal?: AbortSignal;
+    },
+    sudo: boolean,
+  ): SshCommand {
+    const script = sshCommandScript(command, args, options.cwd, options.env, sudo);
+    const sshCommand = new SshCommand(command, args, options, async (execution) => {
+      await this.connect();
+      if (execution.signal.aborted) return 130;
+      const transport = this.transport;
+      if (!transport) throw new Error("SSH transport did not initialize");
+      return transport.run(script, execution);
+    });
+    this.activeCommands.add(sshCommand);
+    const remove = () => this.activeCommands.delete(sshCommand);
+    void sshCommand.result.then(remove, remove);
+    return sshCommand;
+  }
+
+  /** Opens a remote TCP connection through native SOCKS5 or ssh2 direct forwarding. */
+  async forwardOut(remoteHost: string, remotePort: number): Promise<Duplex> {
     await this.connect();
-    const script = sshCommandScript(command, args, options.cwd, options.env);
-    return new Promise<SshCommandResult>((resolve, reject) => {
-      const child = spawn(
-        this.options.sshCommand ?? "ssh",
-        nativeSshArgs(this.options, script, this.connectedHost ?? this.options.host),
-        { stdio: ["ignore", "pipe", "pipe"] },
-      );
-      let stdout = "";
-      let stderr = "";
-      let timedOut = false;
-      let settled = false;
-      const cleanup = () => {
-        clearTimeout(timer);
-        options.signal?.removeEventListener("abort", abort);
-      };
-      const abort = () => {
-        timedOut = true;
-        child.kill();
-      };
-      const timer = setTimeout(abort, options.timeoutMs);
-      timer.unref?.();
-      options.signal?.addEventListener("abort", abort, { once: true });
-      child.stdout.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-      child.once("error", (error) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(error);
-      });
-      child.once("close", (code) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        const exitCode = timedOut ? 124 : (code ?? 1);
-        resolve({
-          success: exitCode === 0 && !timedOut,
-          exitCode,
-          stdout,
-          stderr,
-          executionTimeMs: Date.now() - startedAt,
-          ...(timedOut ? { timedOut: true } : {}),
-          command,
-          args,
-        });
-      });
-    });
+    const transport = this.transport;
+    if (!transport) throw new Error("SSH transport did not initialize");
+    return transport.connect(remoteHost, remotePort);
   }
 
-  /** Opens an SSH direct-tcpip channel to a host and port inside the Sandbox. */
-  async forwardOut(remoteHost: string, remotePort: number): Promise<ClientChannel> {
-    const client = await this.connect();
-    return new Promise((resolve, reject) => {
-      client.forwardOut("127.0.0.1", 0, remoteHost, remotePort, (error, channel) =>
-        error ? reject(error) : resolve(channel),
-      );
-    });
-  }
-
-  /** Closes the active `ssh2` connection and clears pending connection state. */
-  close(): void {
-    this.client?.end();
-    this.client = undefined;
+  /** Cancels active commands, closes the selected transport, and clears connection state. */
+  async close(): Promise<void> {
+    this.closed = true;
+    const cancellations = [...this.activeCommands].map((command) => command.cancel());
+    this.activeCommands.clear();
+    const transport = this.transport;
+    this.transport = undefined;
     this.connecting = undefined;
-    this.connectedHost = undefined;
+    const results = await Promise.allSettled([
+      ...cancellations,
+      ...(transport ? [transport.close()] : []),
+    ]);
+    for (const result of results) {
+      if (result.status === "rejected") {
+        logger.warn("failed to close SSH session resource", {
+          error: errorUtils.toError(result.reason),
+        });
+      }
+    }
   }
 }
 
@@ -283,87 +329,4 @@ function shouldResolvePublicGateway(host: string, error: unknown): boolean {
     (error as { code?: unknown; cause?: { code?: unknown } })?.code ??
     (error as { cause?: { code?: unknown } })?.cause?.code;
   return code === "EHOSTUNREACH" || code === "ENETUNREACH" || code === "ETIMEDOUT";
-}
-
-/** @internal Builds a remote command after clearing inherited machine credentials. */
-export function sshCommandScript(
-  command: string,
-  args: string[],
-  cwd: string | undefined,
-  env: Record<string, string> | undefined,
-): string {
-  assertSafeSshEnvironment(env);
-  const invocation = [command, ...args].map(shellQuote).join(" ");
-  const environment = env
-    ? Object.entries(env)
-        .map(([name, value]) => `${environmentName(name)}=${shellQuote(value)}`)
-        .join(" ")
-    : "";
-  const executable = environment ? `${environment} ${invocation}` : invocation;
-  const run = cwd ? `cd -- ${shellQuote(cwd)} && ${executable}` : executable;
-  return `${SSH_AUTH_ENVIRONMENT_SCRUB}\n${run}`;
-}
-
-const SSH_AUTH_ENVIRONMENT_SCRUB = `for __dbx_tools_name in $(env | sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p'); do
-  case "$__dbx_tools_name" in
-    DATABRICKS_*|SSH_AUTH_SOCK)
-      unset "$__dbx_tools_name"
-      ;;
-  esac
-done
-export DATABRICKS_CONFIG_FILE=/dev/null`;
-
-function assertSafeSshEnvironment(env: Readonly<Record<string, string>> | undefined): void {
-  for (const name of Object.keys(env ?? {})) {
-    if (name.startsWith("DATABRICKS_") || name === "SSH_AUTH_SOCK") {
-      throw new Error(
-        "SSH environment overlays cannot restore Databricks or SSH agent credentials; use a dedicated app-mediated OBO capability.",
-      );
-    }
-  }
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function environmentName(value: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
-    throw new Error(`Invalid SSH environment variable name: ${value}`);
-  }
-  return value;
-}
-
-function nativeSshArgs(options: SshSessionOptions, script: string, connectHost: string): string[] {
-  return [
-    "-i",
-    options.privateKeyPath,
-    "-p",
-    String(options.port),
-    "-T",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "IdentitiesOnly=yes",
-    "-o",
-    "ForwardAgent=no",
-    "-o",
-    "PreferredAuthentications=publickey",
-    "-o",
-    "StrictHostKeyChecking=yes",
-    "-o",
-    `UserKnownHostsFile=${options.knownHostsPath}`,
-    "-o",
-    `HostKeyAlias=[${options.host}]:${options.port}`,
-    "-o",
-    "LogLevel=ERROR",
-    "-o",
-    `ConnectTimeout=${Math.max(1, Math.ceil(options.connectTimeoutMs / 1_000))}`,
-    "-o",
-    "ServerAliveInterval=15",
-    "-o",
-    "ServerAliveCountMax=3",
-    `${options.username}@${connectHost}`,
-    script,
-  ];
 }

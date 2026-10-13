@@ -11,4 +11,4 @@ export * as runtime from "./src/runtime.ts";
 export { GRAPHITI_CONFIG_SCHEMA } from "./src/config.ts";
 export type { GraphitiPluginConfig, ResolvedGraphitiPluginConfig } from "./src/config.ts";
 export { GraphitiPlugin, graphiti } from "./src/plugin.ts";
-export type { GraphitiHealthCheck, GraphitiRuntimeOptions, GraphitiPythonCommand } from "./src/runtime.ts";
+export type { GraphitiHealthCheckContext, GraphitiHealthCheck, GraphitiChildProcess, GraphitiRuntimeOptions, GraphitiPythonCommand } from "./src/runtime.ts";

@@ -9,17 +9,11 @@
  *
  * @module
  */
-import { execFile } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
-import { promisify } from "node:util";
-
-import {
-  AppKitChildProcess,
-  type AppKitChildProcessOptions,
-} from "@dbx-tools/appkit/child-process";
-import { bin, configUtils } from "@dbx-tools/core";
+import { bin, configUtils, exec } from "@dbx-tools/core";
+import type { ChildProcessResult, ChildProcessTerminationOptions } from "@dbx-tools/core/exec";
 import { log, options as sharedOptions, stringUtils } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { TUNNEL_CONFIG } from "./_config.ts";
@@ -29,7 +23,6 @@ const logger = log.logger("tunnel:portr");
 const PORTR_VERSION = "1.0.15-sse.2";
 const PORTR_RELEASE_URL = `https://github.com/reggie-db/portr/releases/download/v${PORTR_VERSION}`;
 const PORTR_MIN_VERSION = "v1.0.15";
-const execFileAsync = promisify(execFile);
 
 const EMOJI = /\p{Extended_Pictographic}\uFE0F?/gu;
 
@@ -160,36 +153,32 @@ export async function writePortrConfig(
 }
 
 /** Launch `portr start` as a child process (caller supervises + kills it). */
-export async function startPortr(
+export function startPortr(
   config: PortrConfig,
   childEnv: NodeJS.ProcessEnv,
-  options: AppKitChildProcessOptions = {},
-): Promise<AppKitChildProcess> {
+  options: ChildProcessTerminationOptions = {},
+): ChildProcessResult {
   // Reclaim the subdomain from any portr left by a previous boot in this container.
-  await execFileAsync("pkill", ["-x", "portr"]).catch(() => undefined);
+  exec.spawnSync("pkill", ["-x", "portr"], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  });
 
   logger.info(`portr tunneling https://${config.subdomain}.${config.server} -> :${config.port}`);
-  const child = new AppKitChildProcess(
-    [
-      "portr",
-      ["start"],
-      {
-        env: childEnv,
-        stdin: "inherit",
-        stdout: {
-          onLine: (line) => process.stdout.write(`${normalizePortrOutput(line)}\n`),
-          capture: false,
-        },
-        stderr: {
-          onLine: (line) => process.stderr.write(`${normalizePortrOutput(line)}\n`),
-          capture: false,
-        },
-      },
-    ],
-    options,
-  );
-  await child.start();
-  return child;
+  return exec.spawn("portr", ["start"], {
+    ...options,
+    env: childEnv,
+    stdin: "inherit",
+    stdout: {
+      onLine: (line) => process.stdout.write(`${normalizePortrOutput(line)}\n`),
+      capture: false,
+    },
+    stderr: {
+      onLine: (line) => process.stderr.write(`${normalizePortrOutput(line)}\n`),
+      capture: false,
+    },
+  });
 }
 
 /**
@@ -217,7 +206,7 @@ export function supervisePortr(
   return superviseProcessForever({
     name: "portr",
     logger,
-    start: () => startPortr(config, childEnv, { gracefulTimeoutMs: 10_000 }),
+    start: () => startPortr(config, childEnv, { terminateTimeout: 10_000 }),
     // Kill + restart when the edge drops the registration while the local
     // process is still alive. Without this, lensiq.apps.dbx.tools (and any
     // other in-process tunnel) stays unregistered until a full app bounce.

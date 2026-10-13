@@ -74,10 +74,7 @@ export class SshKeyStore {
     return join(this.directory(scope, userId), `host-${digest(`${host}\0${port}`)}.known_hosts`);
   }
 
-  /**
-   * Stores the accepted gateway fingerprint and OpenSSH host-key entry with
-   * owner-only file permissions.
-   */
+  /** Stores the accepted gateway fingerprint and OpenSSH host-key entry. */
   async rememberHost(
     scope: string,
     userId: string,

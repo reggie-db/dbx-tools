@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WorkspaceClient } from "@databricks/appkit";
+import { completedSshCommand } from "./ssh-command.ts";
 import { resolveSshPluginConfig } from "../src/config.ts";
 import { createSandboxName, sandboxDisplayName } from "../src/managed-name.ts";
 import {
@@ -16,19 +17,12 @@ import {
 } from "../src/ownership.ts";
 import type { SandboxEntry } from "../src/rest.ts";
 import { SshRuntime } from "../src/runtime.ts";
-import type { SshSession } from "../src/session.ts";
+import { SshCommand, type SshSession } from "../src/session.ts";
 
 const unusedSession = {
   close: () => undefined,
-  execute: async (command: string, args: string[]) => ({
-    success: true,
-    exitCode: 0,
-    stdout: "",
-    stderr: "",
-    executionTimeMs: 0,
-    command,
-    args,
-  }),
+  execute: (command: string, args: string[]) => completedSshCommand(command, args),
+  executePrivileged: (command: string, args: string[]) => completedSshCommand(command, args),
   forwardOut: async () => assert.fail("not used"),
 } as unknown as SshSession;
 
@@ -59,7 +53,21 @@ class MemoryOwnershipStore {
     );
   }
 
+  async getByMachine(
+    workspaceScope: string,
+    machineId: string,
+  ): Promise<MachineAssignment | undefined> {
+    return this.assignments.find(
+      (assignment) =>
+        assignment.workspaceScope === workspaceScope && assignment.machineId === machineId,
+    );
+  }
+
   async assign(input: NewMachineAssignment): Promise<void> {
+    const owner = await this.getByMachine(input.workspaceScope, input.machineId);
+    if (owner && owner.userId !== input.userId) {
+      throw new Error(`SSH machine ${input.machineId} is already assigned to another user`);
+    }
     await this.unassign(input.workspaceScope, input.userId, input.machineId);
     this.assignments.push({ ...input, createdAt: new Date().toISOString() });
   }
@@ -469,6 +477,16 @@ describe("managed Sandbox ownership", () => {
           statement.includes(`FROM ${quotedLegacy}.machine_service_projects`),
       ),
     );
+    assert.ok(
+      statements.some(
+        (statement) =>
+          statement.includes("DELETE FROM") &&
+          statement.includes("(winner.created_at, winner.user_id) <"),
+      ),
+    );
+    assert.ok(
+      statements.some((statement) => statement.includes("machine_assignments_machine_owner_idx")),
+    );
   });
 
   it("writes, reads, and deletes persisted project records", async () => {
@@ -479,7 +497,7 @@ describe("managed Sandbox ownership", () => {
       project_id: "project-1",
       project_name: "demo",
       machine_id: "machine-1",
-      directory_path: "~/projects/demo",
+      directory_path: "/home/sandbox-user/projects/demo",
       project_path: "demo",
       route_path: "/sandbox/hash/demo",
       open_path: "open.html",
@@ -512,7 +530,7 @@ describe("managed Sandbox ownership", () => {
       projectId: "project-1",
       name: "demo",
       machineId: "machine-1",
-      directory: "~/projects/demo",
+      directory: "/home/sandbox-user/projects/demo",
       projectPath: "demo",
       path: "/sandbox/hash/demo",
       openPath: "open.html",
@@ -651,32 +669,24 @@ describe("managed Sandbox ownership", () => {
     await assert.rejects(ssh.startMachine(client, "user-b", "owned"), /not assigned/);
   });
 
-  it("allows a second identity to use and retain one assigned Sandbox", async () => {
+  it("rejects a second owner for one assigned Sandbox", async () => {
     const now = Date.now();
     const expiresAtMs = now + 60_000;
     const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
-    store.assignments.push(
-      assignment("platform-user", "owned", managedName, expiresAtMs),
-      assignment("user@example.com", "owned", managedName, expiresAtMs),
-    );
-    const { client, entries } = sandboxClient([
-      { sandboxId: "owned", status: "RUNNING", name: managedName },
-    ]);
-    const ssh = runtime(store);
+    store.assignments.push(assignment("platform-user", "owned", managedName, expiresAtMs));
 
-    assert.deepEqual(
-      (await ssh.listMachines(client, "user@example.com")).machines.map((machine) => machine.id),
-      ["owned"],
+    await assert.rejects(
+      store.assign({
+        workspaceScope: "workspace",
+        userId: "user@example.com",
+        machineId: "owned",
+        managedName,
+        expiresAt: new Date(expiresAtMs).toISOString(),
+      }),
+      /already assigned/,
     );
-    assert.deepEqual(await ssh.reapMachines(client), {
-      scanned: 1,
-      deleted: 0,
-      removedAssignments: 0,
-      failures: 0,
-    });
-    assert.deepEqual([...entries.keys()], ["owned"]);
-    assert.equal(store.assignments.length, 2);
+    assert.equal(store.assignments.length, 1);
   });
 
   it("recovers built-in service state and logs after a runtime restart", async () => {
@@ -694,16 +704,11 @@ describe("managed Sandbox ownership", () => {
     const ssh = runtime(store);
     const session = {
       ...unusedSession,
-      execute: async (command: string, args: string[]) => ({
-        success: true,
-        exitCode: 0,
-        stdout:
-          "service\tterminal\tstarting\nservice-log\tterminal\taW5zdGFsbGluZyB0dHlkCg==\nservice\tdesktop\tstopped\nservice\tstats\tstopped\n",
-        stderr: "",
-        executionTimeMs: 0,
-        command,
-        args,
-      }),
+      execute: (command: string, args: string[]) =>
+        completedSshCommand(command, args, {
+          stdout:
+            "service\tterminal\tstarting\nservice-log\tterminal\taW5zdGFsbGluZyB0dHlkCg==\nservice\tdesktop\tstopped\nservice\tstats\tstopped\n",
+        }),
     } as unknown as SshSession;
     Object.defineProperty(ssh, "ensureSession", { value: async () => session });
 
@@ -715,21 +720,18 @@ describe("managed Sandbox ownership", () => {
     assert.equal(terminal?.log, "installing ttyd\n");
   });
 
-  it("removes expired owners and their projects while retaining a shared machine", async () => {
+  it("removes an expired sole owner and deletes its machine and projects", async () => {
     const now = Date.now();
     const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
-    store.assignments.push(
-      assignment("expired-user", "owned", managedName, now - 1_000),
-      assignment("active-user", "owned", managedName, now + 60_000),
-    );
+    store.assignments.push(assignment("expired-user", "owned", managedName, now - 1_000));
     await store.upsertProject({
       workspaceScope: "workspace",
       userId: "expired-user",
       projectId: "expired-project",
       name: "expired-project",
       machineId: "owned",
-      directory: "~/projects/expired-project",
+      directory: "/home/sandbox-user/projects/expired-project",
       projectPath: "expired-project",
       path: "/sandbox/expired/project",
       port: 8_080,
@@ -744,27 +746,20 @@ describe("managed Sandbox ownership", () => {
 
     assert.deepEqual(await ssh.reapMachines(client), {
       scanned: 1,
-      deleted: 0,
+      deleted: 1,
       removedAssignments: 1,
       failures: 0,
     });
-    assert.deepEqual([...entries.keys()], ["owned"]);
-    assert.deepEqual(
-      store.assignments.map((candidate) => candidate.userId),
-      ["active-user"],
-    );
+    assert.deepEqual([...entries.keys()], []);
+    assert.deepEqual(store.assignments, []);
     assert.deepEqual(store.projects, []);
   });
 
-  it("persists hidden service projects and locks provisioning across owners", async () => {
+  it("persists hidden service projects for the sole machine owner", async () => {
     const now = Date.now();
     const managedName = createSandboxName("00112233");
     const store = new MemoryOwnershipStore();
-    store.assignments.push(
-      assignment("user-a", "owned", managedName, now + 60_000),
-      assignment("user-b", "owned", managedName, now + 60_000),
-      assignment("user-c", "owned", managedName, now + 60_000),
-    );
+    store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
     const { client } = sandboxClient([
       {
         sandboxId: "owned",
@@ -782,31 +777,18 @@ describe("managed Sandbox ownership", () => {
     });
     const session = {
       ...unusedSession,
-      execute: async (command: string, args: string[]) => {
-        const script = args[1] ?? "";
-        if (script.includes("/lifecycle.log") && script.includes("tail -n")) {
-          return {
-            success: true,
-            exitCode: 0,
-            stdout: operationLog,
-            stderr: "",
-            executionTimeMs: 0,
-            command,
-            args,
-          };
-        }
-        setupCommands.push(script);
-        if (setupCommands.length === 1) await firstSetup;
-        return {
-          success: true,
-          exitCode: 0,
-          stdout: "",
-          stderr: "",
-          executionTimeMs: 0,
-          command,
-          args,
-        };
-      },
+      execute: (command: string, args: string[]) =>
+        new SshCommand(command, args, { timeoutMs: 1_000 }, async (execution) => {
+          const script = args[1] ?? "";
+          if (script.includes("/lifecycle.log") && script.includes("tail -n")) {
+            execution.stdout(operationLog);
+            return 0;
+          }
+          if (!script.endsWith("'start' 'true'")) return 0;
+          setupCommands.push(script);
+          if (setupCommands.length === 1) await firstSetup;
+          return 0;
+        }),
     } as unknown as SshSession;
     Object.defineProperty(ssh, "ensureSession", { value: async () => session });
 
@@ -829,34 +811,19 @@ describe("managed Sandbox ownership", () => {
       machineId: "owned",
       service: "desktop",
     });
-    const shared = await ssh.startService(client, "user-b", {
-      machineId: "owned",
-      service: "desktop",
-    });
-    assert.equal(shared.state, "starting");
-    await waitUntil(() => setupCommands.length === 2);
-    store.serviceProjects[0] = {
-      ...store.serviceProjects[0]!,
-      path: "/old/sandbox/desktop/owned",
-    };
-    const reconfigured = await ssh.startService(client, "user-c", {
-      machineId: "owned",
-      service: "desktop",
-    });
-    assert.equal(reconfigured.state, "starting");
-    await waitUntil(() => setupCommands.length === 3);
 
     assert.equal(repeated.state, "ready");
-    assert.equal(store.serviceLockCount, 3);
-    assert.equal(setupCommands.length, 3);
+    assert.equal(store.serviceLockCount, 1);
+    assert.equal(setupCommands.length, 1);
     assert.match(setupCommands[0] ?? "", /'start' 'true'$/);
-    assert.match(setupCommands[1] ?? "", /'start' 'false'$/);
-    assert.match(setupCommands[2] ?? "", /'start' 'true'$/);
     assert.equal(store.serviceProjects.length, 1);
-    assert.equal(store.serviceProjects[0]?.definitionVersion, 11);
-    assert.equal(store.serviceProjects[0]?.directory, "~/projects/.sandbox-services/desktop");
+    assert.equal(store.serviceProjects[0]?.definitionVersion, 13);
+    assert.equal(
+      store.serviceProjects[0]?.directory,
+      "/home/sandbox-user/projects/.sandbox-services/desktop",
+    );
     assert.deepEqual(
-      ssh.routes.list("owned", "user-b", { includeInternal: true }).map((route) => route.path),
+      ssh.routes.list("owned", "user-a", { includeInternal: true }).map((route) => route.path),
       ["/sandbox/desktop/owned"],
     );
     await ssh.close();
@@ -891,6 +858,39 @@ describe("managed Sandbox ownership", () => {
     assert.equal(closeCount, 1);
   });
 
+  it("returns a live command before runtime session setup completes", async () => {
+    const now = Date.now();
+    const managedName = createSandboxName("00112233");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
+    const { client } = sandboxClient([
+      { sandboxId: "owned", status: "RUNNING", name: managedName },
+    ]);
+    const ssh = runtime(store, { machineSoftware: [] });
+    let finishSetup!: () => void;
+    const setup = new Promise<void>((resolve) => {
+      finishSetup = resolve;
+    });
+    Object.defineProperty(ssh, "ensureSession", {
+      value: async () => {
+        await setup;
+        return unusedSession;
+      },
+    });
+
+    const command = ssh.execute(client, "user-a", {
+      machineId: "owned",
+      command: "echo",
+      args: ["ready"],
+    });
+
+    assert.ok(command instanceof SshCommand);
+    assert.equal(command.exitCode, undefined);
+    finishSetup();
+    assert.equal(await command, 0);
+    await ssh.close();
+  });
+
   it("persists projects, updates open links, and removes only the project directory", async () => {
     const now = Date.now();
     const managedName = createSandboxName("00112233");
@@ -902,17 +902,9 @@ describe("managed Sandbox ownership", () => {
     const commands: string[] = [];
     const session = {
       close: () => undefined,
-      execute: async (command: string, args: string[]) => {
+      execute: (command: string, args: string[]) => {
         commands.push(`${command} ${args.join(" ")}`);
-        return {
-          success: true,
-          exitCode: 0,
-          stdout: "",
-          stderr: "",
-          executionTimeMs: 0,
-          command,
-          args,
-        };
+        return completedSshCommand(command, args);
       },
       forwardOut: async () => assert.fail("not used"),
     } as unknown as SshSession;
@@ -934,7 +926,7 @@ describe("managed Sandbox ownership", () => {
       openPath: "dashboard.html?mode=full",
     });
 
-    assert.equal(created.directory, "~/projects/demo");
+    assert.equal(created.directory, "/home/sandbox-user/projects/demo");
     assert.equal(created.openUrl, `${ssh.projectPathPrefix("user-a")}/demo/open.html`);
     assert.equal(updated.id, created.id);
     assert.equal(updated.port, 8081);
@@ -991,7 +983,7 @@ describe("managed Sandbox ownership", () => {
 
     const generated = await ssh.addProject(client, "user-a", { machineId: "owned" });
     assert.match(generated.name, /^project-[a-f0-9]{6}$/);
-    assert.equal(generated.directory, `~/projects/${generated.name}`);
+    assert.equal(generated.directory, `/home/sandbox-user/projects/${generated.name}`);
     assert.equal(generated.path, `${ssh.projectPathPrefix("user-a")}/${generated.name}`);
     assert.ok(generated.port >= 8_000 && generated.port <= 49_151);
 
@@ -1015,7 +1007,7 @@ describe("managed Sandbox ownership", () => {
       openPath: "",
     });
     assert.equal(renamed.name, "renamed-project");
-    assert.equal(renamed.directory, "~/projects/nested/renamed-project");
+    assert.equal(renamed.directory, "/home/sandbox-user/projects/nested/renamed-project");
     assert.equal(renamed.path, `${ssh.projectPathPrefix("user-a")}/nested/renamed-project`);
     assert.equal(renamed.openUrl, renamed.path);
     assert.equal(renamed.port, 65_000);
@@ -1058,19 +1050,13 @@ describe("managed Sandbox ownership", () => {
     const commands: Array<{ command: string; args: string[] }> = [];
     const session = {
       close: () => undefined,
-      execute: async (command: string, args: string[]) => {
+      execute: (command: string, args: string[]) => {
         commands.push({ command, args });
-        return {
-          success: true,
-          exitCode: 0,
+        return completedSshCommand(command, args, {
           stdout: args[1]?.includes("sh -s -- 'demo' ''")
-            ? "__DBX_PROJECT_DIRECTORY__=/home/sandbox/projects/demo\n"
+            ? "__DBX_PROJECT_DIRECTORY__=/home/sandbox-user/projects/demo\n"
             : "",
-          stderr: "",
-          executionTimeMs: 0,
-          command,
-          args,
-        };
+        });
       },
       forwardOut: async () => assert.fail("not used"),
     } as unknown as SshSession;
@@ -1085,7 +1071,7 @@ describe("managed Sandbox ownership", () => {
 
     const reset = await ssh.resetProject(client, "user-a", project.id);
 
-    assert.equal(reset.directory, "/home/sandbox/projects/demo");
+    assert.equal(reset.directory, "/home/sandbox-user/projects/demo");
     assert.equal(reset.state, "ready");
     assert.ok(commands.some(({ args }) => args[1]?.endsWith("sh -s -- 'demo'")));
     assert.ok(commands.some(({ args }) => args[1]?.includes("sh -s -- 'demo' ''")));
@@ -1104,7 +1090,7 @@ describe("managed Sandbox ownership", () => {
     assert.equal(terminal.service.kind, "terminal");
     assert.equal(
       terminal.service.openUrl,
-      "/sandbox/terminal/owned/?arg=%2Fhome%2Fsandbox%2Fprojects%2Fdemo",
+      "/sandbox/terminal/owned/?arg=%2Fhome%2Fsandbox-user%2Fprojects%2Fdemo",
     );
   });
 
@@ -1120,7 +1106,7 @@ describe("managed Sandbox ownership", () => {
       projectId: "project-1",
       name: "demo",
       machineId: "owned",
-      directory: "~/projects/demo",
+      directory: "/home/sandbox-user/projects/demo",
       projectPath: "demo",
       path: `${first.projectPathPrefix("user-a")}/demo`,
       port: 8080,
@@ -1204,7 +1190,7 @@ describe("managed Sandbox ownership", () => {
       projectId: "project-1",
       name: "demo",
       machineId: "owned",
-      directory: "~/projects/demo",
+      directory: "/home/sandbox-user/projects/demo",
       projectPath: "demo",
       path: `${first.projectPathPrefix("user-a")}/demo`,
       openPath: "open.html",
@@ -1217,7 +1203,7 @@ describe("managed Sandbox ownership", () => {
       machineId: "owned",
       serviceKind: "desktop",
       definitionVersion: 11,
-      directory: "~/projects/.sandbox-services/desktop",
+      directory: "/home/sandbox-user/projects/.sandbox-services/desktop",
       path: "/sandbox/desktop/owned",
       port: 6080,
       config: {},
@@ -1312,12 +1298,14 @@ describe("managed Sandbox ownership", () => {
       projectId: "6c73da4fc8073da8b58e9c4e08db8104",
       name: "doom",
       machineId: "eclectic-lioness-9811",
-      directory: "/home/sandbox-agent/projects/doom",
+      directory: "/home/sandbox-user/projects/doom",
       projectPath: "doom",
       path: "/sandbox/22padc/doom",
       port: 45656,
       config: {},
       stripPrefix: true,
+      route: true,
+      serviceDependencies: [],
       createdAt: new Date(now).toISOString(),
       updatedAt: new Date(now).toISOString(),
     });
@@ -1382,11 +1370,3 @@ describe("managed Sandbox ownership", () => {
     assert.deepEqual(store.projects, []);
   });
 });
-
-async function waitUntil(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 1));
-  }
-  assert.fail("condition did not become true");
-}

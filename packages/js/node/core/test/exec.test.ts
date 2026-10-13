@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawn as nativeSpawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { exec } from "../index.ts";
 
 const MISSING_COMMAND = `dbx-tools-missing-command-${process.pid}`;
@@ -12,6 +15,14 @@ const QUIET_STDIO = {
   stderr: "ignore",
 } as const;
 const PROCESS_TREE_FIXTURE = join(import.meta.dirname, "fixtures", "process-tree.cjs");
+const SIGNAL_FORWARDING_FIXTURE = join(import.meta.dirname, "fixtures", "signal-forwarding.ts");
+
+interface SignalFixtureState {
+  parentPid: number;
+  pids: number[];
+  listenerCount: number;
+  baselineListenerCount?: number;
+}
 
 function processExists(pid: number): boolean {
   try {
@@ -30,6 +41,30 @@ function forceKill(pid: number | undefined): void {
   } catch (error) {
     if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
   }
+}
+
+async function signalFixtureState(path: string): Promise<SignalFixtureState> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (existsSync(path)) return JSON.parse(readFileSync(path, "utf8")) as SignalFixtureState;
+    await delay(10);
+  }
+  throw new Error(`Signal fixture did not become ready: ${path}`);
+}
+
+async function signalLines(path: string, count: number): Promise<string[]> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (existsSync(path)) {
+      const lines = readFileSync(path, "utf8").trim().split("\n").filter(Boolean);
+      if (lines.length >= count) return lines;
+    }
+    await delay(10);
+  }
+  throw new Error(`Signal fixture did not record ${count} signals: ${path}`);
+}
+
+async function childExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await once(child, "exit");
 }
 
 function processTreeFixture(mode: "graceful" | "force" | "late") {
@@ -199,11 +234,41 @@ describe("live process handle", () => {
     assert.equal(typeof proc.pid, "number");
     assert.equal(proc.killed, false);
 
-    // Promise half: awaiting it resolves to the ExecResult once we kill it.
-    proc.kill("SIGTERM");
+    // Promise half: awaiting it resolves to the ExecResult once we shut it down.
+    await proc.shutdown({ terminateTimeout: 0, killTimeout: 1_000 });
     const result = await proc;
     assert.ok("exitCode" in result);
-    assert.equal(proc.killed, true);
+    assert.equal(proc.exitCode !== null || proc.signalCode !== null, true);
+  });
+
+  it("keeps process signal selection internal", async () => {
+    assert.throws(
+      () =>
+        exec.spawn(process.execPath, ["-e", ""], {
+          ...QUIET_STDIO,
+          killSignal: "SIGKILL",
+        } as never),
+      /Process signals are selected internally/,
+    );
+    assert.throws(
+      () =>
+        exec.spawnSync(process.execPath, ["-e", ""], {
+          ...QUIET_STDIO,
+          killSignal: "SIGKILL",
+        } as never),
+      /Process signals are selected internally/,
+    );
+
+    const child = exec.spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], QUIET_STDIO);
+    try {
+      assert.throws(
+        () => child.shutdown({ terminateSignal: "SIGINT" } as never),
+        /Process signals are selected internally/,
+      );
+    } finally {
+      await child.shutdown({ terminateTimeout: 0, killTimeout: 1_000 });
+      await child;
+    }
   });
 
   it("resolves the SAME ExecResult whether awaited directly or via then()", async () => {
@@ -231,17 +296,175 @@ describe("live process handle", () => {
   });
 });
 
+describe("parent signal forwarding", () => {
+  it("uses one global listener and shuts down every tracked child", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "dbx-tools-signals-"));
+    const readyPath = join(directory, "ready.json");
+    const signalPath = join(directory, "signals.log");
+    const parent = nativeSpawn(
+      process.execPath,
+      [SIGNAL_FORWARDING_FIXTURE, "async-default", readyPath, signalPath],
+      { stdio: "ignore" },
+    );
+    let state: SignalFixtureState | undefined;
+    try {
+      state = await signalFixtureState(readyPath);
+      assert.equal(state.listenerCount - (state.baselineListenerCount ?? 0), 1);
+      assert.equal(state.pids.length, 2);
+
+      process.kill(parent.pid!, "SIGTERM");
+      await childExit(parent);
+      const lines = await signalLines(signalPath, 2);
+
+      assert.deepEqual(lines.toSorted(), ["0:SIGTERM", "1:SIGTERM"]);
+      assert.equal(
+        state.pids.every((pid) => !processExists(pid)),
+        true,
+      );
+    } finally {
+      forceKill(parent.pid);
+      for (const pid of state?.pids ?? []) forceKill(pid);
+      await childExit(parent);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not install or forward signals when disabled", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "dbx-tools-signals-disabled-"));
+    const readyPath = join(directory, "ready.json");
+    const signalPath = join(directory, "signals.log");
+    const parent = nativeSpawn(
+      process.execPath,
+      [SIGNAL_FORWARDING_FIXTURE, "async-disabled", readyPath, signalPath],
+      { stdio: "ignore" },
+    );
+    let state: SignalFixtureState | undefined;
+    try {
+      state = await signalFixtureState(readyPath);
+      assert.equal(state.listenerCount - (state.baselineListenerCount ?? 0), 0);
+
+      process.kill(parent.pid!, "SIGTERM");
+      await childExit(parent);
+      await delay(50);
+
+      assert.equal(existsSync(signalPath), false);
+      assert.equal(processExists(state.pids[0]!), true);
+    } finally {
+      forceKill(parent.pid);
+      for (const pid of state?.pids ?? []) forceKill(pid);
+      await childExit(parent);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("isolates shutdown failures and still runs later signal listeners", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "dbx-tools-signals-errors-"));
+    const readyPath = join(directory, "ready.json");
+    const signalPath = join(directory, "signals.log");
+    const parent = nativeSpawn(
+      process.execPath,
+      [SIGNAL_FORWARDING_FIXTURE, "async-errors", readyPath, signalPath],
+      { stdio: "ignore" },
+    );
+    let state: SignalFixtureState | undefined;
+    try {
+      state = await signalFixtureState(readyPath);
+      assert.equal(state.listenerCount - (state.baselineListenerCount ?? 0), 2);
+
+      process.kill(parent.pid!, "SIGTERM");
+      await childExit(parent);
+      const lines = await signalLines(signalPath, 2);
+
+      assert.equal(lines.includes("parent-listener:SIGTERM"), true);
+      assert.equal(lines.includes("2:SIGTERM"), true);
+      assert.equal(lines.includes("unhandled-rejection"), false);
+      assert.equal(processExists(state.pids[2]!), false);
+    } finally {
+      forceKill(parent.pid);
+      for (const pid of state?.pids ?? []) forceKill(pid);
+      await childExit(parent);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it(
+    "snapshots during a foreground process-group SIGINT",
+    { skip: process.platform === "win32" },
+    async () => {
+      const directory = mkdtempSync(join(tmpdir(), "dbx-tools-signals-sigint-"));
+      const readyPath = join(directory, "ready.json");
+      const signalPath = join(directory, "signals.log");
+      const parent = nativeSpawn(
+        process.execPath,
+        [SIGNAL_FORWARDING_FIXTURE, "async-default", readyPath, signalPath],
+        { stdio: ["ignore", "ignore", "pipe"], detached: true },
+      );
+      let stderr = "";
+      parent.stderr?.on("data", (chunk: Buffer | string) => {
+        stderr += String(chunk);
+      });
+      let state: SignalFixtureState | undefined;
+      try {
+        state = await signalFixtureState(readyPath);
+        process.kill(-parent.pid!, "SIGINT");
+        await childExit(parent);
+        const lines = await signalLines(signalPath, 2);
+
+        assert.deepEqual(lines.toSorted(), ["0:SIGINT", "1:SIGINT"]);
+        assert.doesNotMatch(stderr, /failed to forward parent signal/);
+        assert.equal(
+          state.pids.every((pid) => !processExists(pid)),
+          true,
+        );
+      } finally {
+        forceKill(parent.pid);
+        for (const pid of state?.pids ?? []) forceKill(pid);
+        await childExit(parent);
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it(
+    "lets spawnSync inherit foreground process-group signals",
+    { skip: process.platform === "win32" },
+    async () => {
+      const directory = mkdtempSync(join(tmpdir(), "dbx-tools-signals-sync-"));
+      const readyPath = join(directory, "ready.json");
+      const signalPath = join(directory, "signals.log");
+      const parent = nativeSpawn(
+        process.execPath,
+        [SIGNAL_FORWARDING_FIXTURE, "sync-default", readyPath, signalPath],
+        { stdio: "ignore", detached: true },
+      );
+      let state: SignalFixtureState | undefined;
+      try {
+        state = await signalFixtureState(readyPath);
+        process.kill(-parent.pid!, "SIGTERM");
+        await childExit(parent);
+        assert.deepEqual(await signalLines(signalPath, 1), ["sync:SIGTERM"]);
+      } finally {
+        forceKill(parent.pid);
+        for (const pid of state?.pids ?? []) forceKill(pid);
+        await childExit(parent);
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+});
+
 describe("process tree termination", () => {
   it("snapshots and gracefully stops a child and its descendants", async () => {
     const { child, started } = processTreeFixture("graceful");
     let descendantPid: number | undefined;
     try {
       descendantPid = await started;
-      await exec.kill(child, {
-        gracefulTimeoutMs: 1_000,
-        forceTimeoutMs: 1_000,
-        pollIntervalMs: 10,
+      const shutdown = child.shutdown({
+        terminateTimeout: 1_000,
+        killTimeout: 1_000,
       });
+      assert.equal(child.shutdown(), shutdown);
+      await shutdown;
       await child;
 
       assert.equal(processExists(child.pid!), false);
@@ -261,10 +484,9 @@ describe("process tree termination", () => {
       let descendantPid: number | undefined;
       try {
         descendantPid = await started;
-        await exec.kill(child, {
-          gracefulTimeoutMs: 25,
-          forceTimeoutMs: 1_000,
-          pollIntervalMs: 5,
+        await child.shutdown({
+          terminateTimeout: 25,
+          killTimeout: 1_000,
         });
         await child;
 
@@ -280,88 +502,7 @@ describe("process tree termination", () => {
   );
 
   it(
-    "supports graceful-only tree signaling without forced escalation",
-    { skip: process.platform === "win32" },
-    async () => {
-      const { child, started, gracefulSignals } = processTreeFixture("force");
-      let descendantPid: number | undefined;
-      try {
-        descendantPid = await started;
-        await assert.rejects(
-          exec.kill(child, {
-            forceSignal: false,
-            gracefulTimeoutMs: 25,
-            pollIntervalMs: 5,
-          }),
-          /did not terminate after SIGTERM/,
-        );
-
-        assert.equal(processExists(child.pid!), true);
-        assert.equal(processExists(descendantPid), true);
-        assert.deepEqual(gracefulSignals.toSorted(), ["child", "parent"]);
-      } finally {
-        forceKill(descendantPid);
-        forceKill(child.pid);
-        await child.catch(() => undefined);
-      }
-    },
-  );
-
-  it(
-    "gracefully signals only the root before forcing surviving descendants",
-    { skip: process.platform === "win32" },
-    async () => {
-      const { child, started, gracefulSignals } = processTreeFixture("force");
-      let descendantPid: number | undefined;
-      try {
-        descendantPid = await started;
-        await exec.kill(child, {
-          gracefulSignalTarget: "root",
-          gracefulTimeoutMs: 25,
-          forceTimeoutMs: 1_000,
-          pollIntervalMs: 5,
-        });
-        await child;
-
-        assert.equal(child.signalCode, "SIGKILL");
-        assert.equal(processExists(descendantPid), false);
-        assert.deepEqual(gracefulSignals, ["parent"]);
-      } finally {
-        forceKill(descendantPid);
-        forceKill(child.pid);
-        await child.catch(() => undefined);
-      }
-    },
-  );
-
-  it(
-    "supports force-only tree signaling without a graceful phase",
-    { skip: process.platform === "win32" },
-    async () => {
-      const { child, started, gracefulSignals } = processTreeFixture("force");
-      let descendantPid: number | undefined;
-      try {
-        descendantPid = await started;
-        await exec.kill(child, {
-          gracefulSignal: false,
-          forceTimeoutMs: 1_000,
-          pollIntervalMs: 5,
-        });
-        await child;
-
-        assert.equal(child.signalCode, "SIGKILL");
-        assert.equal(processExists(descendantPid), false);
-        assert.deepEqual(gracefulSignals, []);
-      } finally {
-        forceKill(descendantPid);
-        forceKill(child.pid);
-        await child.catch(() => undefined);
-      }
-    },
-  );
-
-  it(
-    "discovers and signals descendants created during graceful polling",
+    "discovers and signals descendants created during termination polling",
     { skip: process.platform === "win32" },
     async () => {
       const { child, started, lateStarted } = processTreeFixture("late");
@@ -369,9 +510,9 @@ describe("process tree termination", () => {
       let latePid: number | undefined;
       try {
         descendantPid = await started;
-        const shutdown = exec.kill(child, {
-          forceSignal: false,
-          pollIntervalMs: 10,
+        const shutdown = child.shutdown({
+          terminateTimeout: 1_000,
+          killTimeout: 1_000,
         });
         latePid = await Promise.race([
           lateStarted,

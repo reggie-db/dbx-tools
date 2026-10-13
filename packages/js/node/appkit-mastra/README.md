@@ -441,7 +441,9 @@ For Databricks Sandbox over SSH, use `sshWorkspaceSandbox(runtime)` from
 `@dbx-tools/appkit-sandbox/workspace`. Share that runtime with the
 Databricks Sandbox AppKit plugin so agent commands, terminal and health routes
 use the same transport and machine assignments. That package owns Sandbox
-lifecycle, SSH keys, authentication fallback, and route forwarding.
+lifecycle, SSH keys, authentication fallback, and route forwarding. Its Mastra
+adapter forwards command output to `onStdout` and `onStderr` while the command
+runs, then returns Mastra's completed `CommandResult`.
 
 The default local Monty Python runtime accepts Python source or `python3 -c` and
 has no host filesystem, network, environment variables, shell, or third-party
@@ -887,7 +889,7 @@ attributes remain on a child span.
   separate `model` tag.
 - `obo_auth=true` and `sp_auth=true` independently record which Databricks
   authentication modes ran. A mixed-auth turn retains both tags.
-- `local=true` is added when `isDatabricksAppEnv()` is false.
+- `local=true` is added when `environmentUtils.isDatabricksAppEnv()` is false.
 - `@dbx-tools/tunnel` adds `tunnel=portr|frp` and
   `tunnel_subdomain=<name>` when the public host matches its tunnel config.
 - Other AppKit plugins can call `injectRequestTag()` or `injectRequestTags()`.
@@ -922,7 +924,7 @@ override that location. The local provider forwards only marked chat roots and
 their descendants, so unrelated AppKit HTTP, cache, and plugin spans
 do not become traces. Before export it also writes the resolved email, user
 name, or resource id to MLflow's trace user field. Direct mode requires a
-UC-linked experiment. Inside a Databricks App (`isDatabricksAppEnv()`), this
+UC-linked experiment. Inside a Databricks App (`environmentUtils.isDatabricksAppEnv()`), this
 provider stays off so AppKit remains the single global OTel provider and the
 platform telemetry sidecar owns export.
 

@@ -40,9 +40,9 @@ export const SSH_MACHINE_SERVICE_KINDS = ["terminal", "desktop", "stats"] as con
 
 /** Browser-safe display metadata shared by every built-in service control. */
 export const SSH_MACHINE_SERVICES = [
+  { kind: "stats", label: "Stats" },
   { kind: "terminal", label: "Terminal" },
   { kind: "desktop", label: "Desktop" },
-  { kind: "stats", label: "Stats" },
 ] as const satisfies readonly {
   kind: (typeof SSH_MACHINE_SERVICE_KINDS)[number];
   label: string;

@@ -33,6 +33,11 @@ export function configureVsCode(scope: javascript.NodeProject): void {
       "**/node_modules/**": true,
       "**/dist/**": true,
     },
+    "search.exclude": {
+      "**/.prettierrc.json": true,
+      "**/eslintrc.json": true,
+      "docs/**/archived/**": true,
+    },
   });
   editor.extensions.addRecommendations(
     "esbenp.prettier-vscode",

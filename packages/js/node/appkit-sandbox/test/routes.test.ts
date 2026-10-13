@@ -5,6 +5,7 @@ import {
   type Server as HttpServer,
 } from "node:http";
 import { createConnection, type Server as NetServer, type Socket } from "node:net";
+import { Duplex } from "node:stream";
 import { describe, it } from "node:test";
 import { USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
 import { WebSocketServer } from "ws";
@@ -130,6 +131,18 @@ describe("SshRouteRegistry", () => {
         `${preserved.path}/assets?q=1`,
       );
       assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}${stripped.path}/local`).then((res) =>
+          res.text(),
+        ),
+        "/local",
+      );
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}${stripped.path}/public`, {
+          headers: { host: "local-demo.apps.dbx.tools" },
+        }).then((response) => response.status),
+        404,
+      );
+      assert.equal(
         await fetch(`http://127.0.0.1:${proxyPort}${stripped.path}`, {
           headers: { [USER_EMAIL_HEADER]: "other@databricks.com" },
         }).then(async (response) => `${response.status}:${await response.text()}`),
@@ -148,7 +161,7 @@ describe("SshRouteRegistry", () => {
     }
   });
 
-  it("shares one internal machine-service route with every assigned owner", async () => {
+  it("keeps one internal machine-service route for the sole owner", async () => {
     const remote = createHttpServer((_request, response) => response.end("ready"));
     const remotePort = await listen(remote);
     const session = {
@@ -168,16 +181,13 @@ describe("SshRouteRegistry", () => {
     });
     const proxyPort = await listen(proxy);
     const path = "/sandbox/desktop/sandbox-1";
-    let collaboratorAssigned = true;
     const ownerExpirations = {
       "owner@databricks.com": Date.now() + 30 * 24 * 60 * 60 * 1_000,
-      "collaborator@databricks.com": Date.now() + 30 * 24 * 60 * 60 * 1_000,
     };
-    const authorizeOwner = async (ownerId: string) =>
-      ownerId !== "collaborator@databricks.com" || collaboratorAssigned;
+    const authorizeOwner = async (ownerId: string) => ownerId === "owner@databricks.com";
     try {
       const route = await registry.add(session, {
-        ownerIds: ["owner@databricks.com", "collaborator@databricks.com"],
+        ownerId: "owner@databricks.com",
         ownerExpirations,
         authorizeOwner,
         machineId: "sandbox-1",
@@ -187,14 +197,18 @@ describe("SshRouteRegistry", () => {
         internal: true,
       });
       assert.deepEqual(
-        registry.list("sandbox-1", "collaborator@databricks.com", { includeInternal: true }),
+        registry.list("sandbox-1", "owner@databricks.com", { includeInternal: true }),
         [route],
       );
       assert.equal(
         await fetch(`http://127.0.0.1:${proxyPort}${path}/`, {
-          headers: { [USER_EMAIL_HEADER]: "collaborator@databricks.com" },
+          headers: { [USER_EMAIL_HEADER]: "owner@databricks.com" },
         }).then((response) => response.text()),
         "ready",
+      );
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}${path}/`).then((response) => response.status),
+        200,
       );
       let replacementForwards = 0;
       const replacementSession = {
@@ -205,7 +219,7 @@ describe("SshRouteRegistry", () => {
       } as unknown as SshSession;
       assert.equal(
         await registry.add(replacementSession, {
-          ownerIds: ["owner@databricks.com", "collaborator@databricks.com"],
+          ownerId: "owner@databricks.com",
           ownerExpirations,
           authorizeOwner,
           machineId: "sandbox-1",
@@ -223,7 +237,6 @@ describe("SshRouteRegistry", () => {
         "ready",
       );
       assert.equal(replacementForwards, 1);
-      collaboratorAssigned = false;
       assert.equal(
         await fetch(`http://127.0.0.1:${proxyPort}${path}/`, {
           headers: { [USER_EMAIL_HEADER]: "collaborator@databricks.com" },
@@ -492,6 +505,49 @@ describe("SshRouteRegistry", () => {
       remoteWebSockets.close();
       await close(proxy);
       await close(remote);
+    }
+  });
+
+  it("returns 504 when an SSH forwarding channel never becomes responsive", async () => {
+    const session = {
+      forwardOut: async () =>
+        new Duplex({
+          read: () => undefined,
+          write: (_chunk, _encoding, callback) => callback(),
+        }),
+    } as unknown as SshSession;
+    const registry = new SshRouteRegistry("/sandbox", 10);
+    const proxy = createHttpServer((request, response) => {
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
+      });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
+      registry.middleware()(request as never, response as never, () => {
+        response.statusCode = 404;
+        response.end();
+      });
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const route = await registry.add(session, {
+        ownerId: "reggie.pierce@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort: 61208,
+        path: "/sandbox/metrics/sandbox-1",
+        internal: true,
+      });
+
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}${route.path}/`, {
+          headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+        }).then((response) => response.status),
+        504,
+      );
+    } finally {
+      await registry.close();
+      await close(proxy);
     }
   });
 

@@ -27,7 +27,7 @@
 
 import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
-import { asyncUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
+import { asyncUtils, environmentUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
 import { TraceLocationType, TraceMetadataKey } from "@mlflow/core";
 import { TraceInfo } from "@mlflow/core/dist/core/entities/trace_info.js";
@@ -298,7 +298,7 @@ function configuredExperiment(): { id?: string; name?: string } {
 
 /** Tracking URI for direct local MLflow tracing, with CLI-profile auth injected. */
 export function directMlflowTrackingUri(): string | undefined {
-  if (appkit.isDatabricksAppEnv()) return undefined;
+  if (environmentUtils.isDatabricksAppEnv()) return undefined;
   const configured = process.env.MLFLOW_TRACKING_URI?.trim();
   if (configured && configured !== "databricks") return configured;
   const profile = process.env.DATABRICKS_CONFIG_PROFILE?.trim();
@@ -331,7 +331,7 @@ export function directMlflowTraceLocation():
 /** Whether the local direct-to-experiment MLflow SDK has enough configuration. */
 export function directMlflowTracingConfigured(): boolean {
   return Boolean(
-    !appkit.isDatabricksAppEnv() &&
+    !environmentUtils.isDatabricksAppEnv() &&
     process.env.MLFLOW_EXPERIMENT_ID?.trim() &&
     directMlflowTrackingUri(),
   );
@@ -340,7 +340,7 @@ export function directMlflowTracingConfigured(): boolean {
 /** Whether a Databricks App can promote OTLP spans into full MLflow trace info. */
 export function appMlflowTraceInfoConfigured(): boolean {
   return Boolean(
-    appkit.isDatabricksAppEnv() &&
+    environmentUtils.isDatabricksAppEnv() &&
     (process.env.MLFLOW_EXPERIMENT_ID?.trim() || process.env.MLFLOW_EXPERIMENT_NAME?.trim()) &&
     (process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim() ||
       process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim()),

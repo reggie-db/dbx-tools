@@ -11,21 +11,21 @@ Build and start the sidecar with the same shared options used by the CLI and App
 ```ts
 import { createGraphitiChildProcess } from "@dbx-tools/appkit-graphiti/runtime";
 
-const sidecar = await createGraphitiChildProcess({
+const { child } = await createGraphitiChildProcess({
   profile: "MY-PROFILE",
   modelClass: "chat-fast",
 });
 
-await sidecar.start();
-await sidecar.shutdown();
+await child.shutdown();
 ```
 
 `createGraphitiChildProcess({ healthCheck })` accepts an
-`AppKitChildProcessHealthCheck`. By default it polls Graphiti's `/healthcheck`
-endpoint. The AppKit plugin supplies an OpenAPI probe so tool registration can
-use the same non-empty `/openapi.json` document that established startup, then
-polls `/healthcheck` with the remaining startup budget. Every tool call awaits
-that healthcheck promise, and AppKit is SIGTERMed if the later probe fails.
+async `GraphitiHealthCheck`. By default it polls Graphiti's `/healthcheck`
+endpoint and returns only after readiness succeeds. The AppKit plugin supplies
+an OpenAPI probe so tool registration can use the same non-empty
+`/openapi.json` document that established startup, then polls `/healthcheck`
+with the remaining startup budget. Every tool call awaits that healthcheck
+promise, and AppKit is SIGTERMed if the later probe fails.
 
 Set `bearer` or `GRAPHITI_TOKEN` to require bearer authentication on every
 Graphiti HTTP endpoint. The AppKit plugin generates a fresh bearer for each
@@ -36,8 +36,9 @@ Set `PYTHON` to launch that interpreter directly. Without it, the runtime uses
 `DBX_TOOLS_NODE_BIN` to prepend a specific Node executable's directory for
 Python and its descendants.
 
-Calling `shutdown()` forwards SIGTERM, allows bounded Python cleanup, and
-escalates the process tree only when graceful shutdown exceeds its deadline.
+Calling `shutdown()` requests platform termination, allows bounded Python
+cleanup, and force-kills the process tree only when graceful shutdown exceeds
+its deadline.
 
 ## Run Until Exit
 

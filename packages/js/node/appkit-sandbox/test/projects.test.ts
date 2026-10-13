@@ -147,7 +147,10 @@ describe("Sandbox project contracts", () => {
       addSshProjectRequestSchema.shape.config.description ?? "",
       /https:\/\/mise\.jdx\.dev\/schema\/mise\.json/,
     );
-    assert.match(addSshProjectRequestSchema.shape.postinstall.description ?? "", /check-lock-check/);
+    assert.match(
+      addSshProjectRequestSchema.shape.postinstall.description ?? "",
+      /check-lock-check/,
+    );
     assert.match(
       addSshProjectRequestSchema.shape.uninstall.description ?? "",
       /only this project task/,
@@ -168,7 +171,7 @@ describe("Sandbox project contracts", () => {
         id: "project-id",
         name: "worker",
         machineId: "sandbox-id",
-        directory: "~/projects/worker",
+        directory: "/home/sandbox-user/projects/worker",
         path: "/sandbox/abc/worker",
         port: 8080,
         stripPrefix: true,
@@ -206,6 +209,18 @@ describe("Sandbox command requests", () => {
           env: { DATABRICKS_TOKEN: "service-principal-token" },
         }),
       /dedicated app-mediated OBO capability/,
+    );
+  });
+
+  it("rejects public sudo requests", () => {
+    assert.throws(
+      () =>
+        sshCommandRequestSchema.parse({
+          machineId: "sandbox-id",
+          command: "id",
+          sudo: true,
+        }),
+      /unrecognized key/i,
     );
   });
 });

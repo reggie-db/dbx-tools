@@ -18,6 +18,7 @@ import {
   withBasePath,
   yamlString,
 } from "./repository-docs.mjs";
+import { DOCS_NODE } from "./docs-toolchain.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 import { injectSchemaSection, schemaDocsMarkdown } from "./zod-docs.mjs";
 
@@ -412,7 +413,7 @@ async function generatePackageApi(pkg, typedocBin) {
   fs.rmSync(outDir, { recursive: true, force: true });
 
   await checkedSpawn(
-    process.execPath,
+    DOCS_NODE,
     [
       typedocBin,
       ...object

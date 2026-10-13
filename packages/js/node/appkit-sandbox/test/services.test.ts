@@ -5,6 +5,7 @@ import { brandUtils } from "@dbx-tools/shared-core";
 import type { SshCommandResult } from "@dbx-tools/shared-databricks-sandbox";
 import { dbxToolsAssetSvg } from "@dbx-tools/ui/branding/assets";
 import { parse } from "smol-toml";
+import { completedSshCommand } from "./ssh-command.ts";
 import {
   ensureSshService,
   inspectSshLifecycleStates,
@@ -38,6 +39,10 @@ interface MiseServiceDocument {
       hide: boolean;
       run: string;
     };
+    status: {
+      hide: boolean;
+      run: string;
+    };
   };
 }
 
@@ -50,7 +55,7 @@ describe("packaged Sandbox services", () => {
     const definition = loadSshServiceDefinition("terminal", "/sandbox/terminal/machine");
     const document = serviceDocument(definition);
 
-    assert.equal(definition.directory, "~/projects/.sandbox-services/terminal");
+    assert.equal(definition.directory, "/home/sandbox-user/projects/.sandbox-services/terminal");
     assert.match(document.hooks.postinstall, /version="1\.7\.7"/);
     assert.match(
       document.hooks.postinstall,
@@ -73,45 +78,49 @@ describe("packaged Sandbox services", () => {
     assert.match(document.tasks.start.run, /\/proc\/\$pid\/cmdline/);
     assert.match(document.tasks.start.run, /ttyd did not become ready/);
     assert.match(document.tasks.stop.run, /stop-ttyd/);
+    assert.match(document.tasks.status.run, /ttyd\.pid/);
+    assert.match(document.tasks.status.run, /dev\/tcp\/127\.0\.0\.1\/7681/);
     assert.equal(document.tasks.start.hide, true);
     assert.equal(document.tasks.stop.hide, true);
+    assert.equal(document.tasks.status.hide, true);
     assert.equal(definition.target.remotePort, 7681);
     assert.equal(definition.target.stripPrefix, true);
     assert.equal(definition.target.redirectToSlash, true);
     assert.equal(definition.target.openUrl, "/sandbox/terminal/machine/");
   });
 
-  it("loads an optimized official KasmVNC desktop definition", () => {
+  it("loads an optimized official KasmVNC desktop definition", async () => {
     const definition = loadSshServiceDefinition("desktop", "/sandbox/desktop/machine");
     const document = serviceDocument(definition);
     const install = document.hooks.postinstall;
     const start = document.tasks.start.run;
+    const prerequisites = await readFile(
+      new URL("../scripts/setup-desktop-prerequisites.sh", import.meta.url),
+      "utf8",
+    );
 
-    assert.match(install, /kasmvnc_version="1\.5\.0"/);
+    assert.doesNotMatch(install, /sudo|apt-get|dpkg/);
+    assert.match(prerequisites, /kasmvnc_version=1\.5\.0/);
     assert.match(
-      install,
+      prerequisites,
       /package_name="kasmvncserver_\$\{codename\}_\$\{kasmvnc_version\}_\$architecture\.deb"/,
     );
     assert.match(
-      install,
+      prerequisites,
       /https:\/\/github\.com\/kasmtech\/KasmVNC\/releases\/download\/v\$\{kasmvnc_version\}/,
     );
     assert.match(
-      install,
+      prerequisites,
       /noble-amd64\) package_checksum="f599fe02e2175b9817b6165f74a5d2bebdc73118dde9181ba3410963bed7ae1e"/,
     );
     assert.match(
-      install,
+      prerequisites,
       /noble-arm64\) package_checksum="c9199cf4753208bfb69fd016a9780242bebfc43370cc38c97d61e90a3c783e04"/,
     );
-    assert.doesNotMatch(install, /libav(?:codec|format|util)|libswscale/i);
-    assert.doesNotMatch(install, /papirus/i);
-    assert.match(install, /hicolor-icon-theme/);
-    assert.equal(install.match(/apt-get update/g)?.length, 1);
-    assert.equal(install.match(/apt-get install/g)?.length, 1);
-    assert.ok(install.indexOf("python3 - <<'PY' &") < install.indexOf("apt-get update"));
-    assert.ok(install.indexOf("apt-get update") < install.indexOf('wait "$package_download_pid"'));
-    assert.match(install, /cmp -s "\$temporary" "\$destination"/);
+    assert.match(prerequisites, /apt-get update/);
+    assert.match(prerequisites, /freedoom/);
+    assert.match(prerequisites, /prboom-plus/);
+    assert.match(prerequisites, /sha256sum --check --status/);
     assert.equal(install.match(/rsvg-convert --width/g)?.length, 3);
     assert.match(install, /desktop_runner="\$runtime\/run"/);
     assert.match(install, /printf 'export DISPLAY=:%s\\n' '20'/);
@@ -136,6 +145,10 @@ describe("packaged Sandbox services", () => {
     assert.match(start, /KasmVNC web client did not become ready/);
     assert.equal(document.tasks.start.hide, true);
     assert.equal(document.tasks.stop.hide, true);
+    assert.match(document.tasks.status.run, /kasmvncserver\.pid/);
+    assert.match(document.tasks.status.run, /session\.ready/);
+    assert.match(document.tasks.status.run, /dev\/tcp\/127\.0\.0\.1\/6080/);
+    assert.equal(document.tasks.status.hide, true);
 
     const wallpaper = Buffer.from(
       definition.environment.DBX_TOOLS_DESKTOP_WALLPAPER_BASE64 ?? "",
@@ -182,6 +195,7 @@ describe("packaged Sandbox services", () => {
 
     assert.match(document.hooks.postinstall, /version="4\.5\.6"/);
     assert.match(document.hooks.postinstall, /glances\[web\]==\$version/);
+    assert.doesNotMatch(document.hooks.postinstall, /sudo|apt-get/);
     assert.match(document.hooks.postinstall, /url_prefix=\$\{DBX_TOOLS_SERVICE_PATH%\/\}\//);
     assert.match(document.tasks.start.run, /--bind 127\.0\.0\.1/);
     assert.match(document.tasks.start.run, /--port 61208/);
@@ -189,6 +203,9 @@ describe("packaged Sandbox services", () => {
     assert.match(document.hooks.postinstall, /\/proc\/\$pid\/cmdline/);
     assert.match(document.tasks.start.run, /\/proc\/\$pid\/cmdline/);
     assert.match(document.tasks.stop.run, /stop-glances/);
+    assert.match(document.tasks.status.run, /glances\.pid/);
+    assert.match(document.tasks.status.run, /dev\/tcp\/127\.0\.0\.1\/61208/);
+    assert.equal(document.tasks.status.hide, true);
     assert.equal(definition.environment.DBX_TOOLS_SERVICE_PATH, "/sandbox/metrics/machine");
     assert.equal(definition.target.remotePort, 61208);
     assert.equal(definition.target.stripPrefix, false);
@@ -204,7 +221,7 @@ describe("packaged Sandbox services", () => {
     let args: string[] = [];
     let environment: Readonly<Record<string, string>> | undefined;
     const session = {
-      execute: async (
+      execute: (
         value: string,
         values: string[],
         options: { env?: Readonly<Record<string, string>> },
@@ -212,7 +229,7 @@ describe("packaged Sandbox services", () => {
         command = value;
         args = values;
         environment = options.env;
-        return success;
+        return completedSshCommand(value, values, success);
       },
     } as unknown as SshSession;
 
@@ -245,15 +262,13 @@ describe("packaged Sandbox services", () => {
   it("reads durable remote service and project states", async () => {
     let script = "";
     const session = {
-      execute: async (command: string, args: string[]) => {
+      execute: (command: string, args: string[]) => {
         script = args[1] ?? "";
-        return {
+        return completedSshCommand(command, args, {
           ...success,
-          command,
-          args,
           stdout:
             "service\tterminal\tstarting\nservice-log\tterminal\taW5zdGFsbGluZyB0dHlkCg==\nservice\tdesktop\tready\nproject\tdemo/app\terror\n",
-        };
+        });
       },
     } as unknown as SshSession;
 
@@ -267,26 +282,23 @@ describe("packaged Sandbox services", () => {
   });
 
   it("bounds lifecycle logs included in machine state inspection", async () => {
-    const source = await readFile(
-      new URL("../scripts/inspect-status.sh", import.meta.url),
-      "utf8",
-    );
+    const source = await readFile(new URL("../scripts/inspect-status.sh", import.meta.url), "utf8");
 
     assert.match(source, /tail -n "\$maximum_log_lines"/);
     assert.match(source, /tail -c "\$maximum_log_chars"/);
+    assert.match(source, /"\$mise_bin" run status/);
+    assert.match(source, /printf '%s\\n' "\$state" >"\$operation_directory\/lifecycle\.status"/);
   });
 
   it("reads the shared remote service operation log", async () => {
     let script = "";
     const session = {
-      execute: async (command: string, args: string[]) => {
+      execute: (command: string, args: string[]) => {
         script = args[1] ?? "";
-        return {
+        return completedSshCommand(command, args, {
           ...success,
-          command,
-          args,
           stdout: "__DBX_TOOLS_ATTEMPT__=1\ninstalling ttyd\n",
-        };
+        });
       },
     } as unknown as SshSession;
 

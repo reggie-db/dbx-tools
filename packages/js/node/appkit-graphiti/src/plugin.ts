@@ -14,9 +14,9 @@ import type {
   ToolProvider,
 } from "@databricks/appkit/beta";
 import { appkit as dbxAppkit, toolkitEntries } from "@dbx-tools/appkit";
-import type { AppKitChildProcess } from "@dbx-tools/appkit/child-process";
 import { openApiTools, type OpenApiTool } from "@dbx-tools/appkit-mastra/openapi-tool";
 import { configUtils } from "@dbx-tools/core";
+import type { ChildProcessResult } from "@dbx-tools/core/exec";
 import { errorUtils, log, object } from "@dbx-tools/shared-core";
 
 import {
@@ -137,7 +137,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
 
   private readonly logger = log.logger(this);
   private resolved?: ResolvedGraphitiPluginConfig;
-  private sidecar?: AppKitChildProcess;
+  private sidecar?: ChildProcessResult;
   private ready?: Promise<void>;
   private readyWatch?: AbortController;
   private toolSchemas: OpenApiTool[] = [];
@@ -164,7 +164,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     const startedAt = Date.now();
     const openApiUrl = graphitiHttpUrl(resolved, "/openapi.json");
     let toolSchemas: OpenApiTool[] | undefined;
-    const sidecar = await createGraphitiChildProcess({
+    const { child: sidecar } = await createGraphitiChildProcess({
       ...resolved,
       healthCheck: async ({ signal }) => {
         try {
@@ -183,9 +183,6 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     });
     this.sidecar = sidecar;
     try {
-      await sidecar.start();
-      const child = sidecar.process;
-      if (!child) throw new Error("Graphiti sidecar exited after becoming ready");
       if (!toolSchemas) {
         throw new Error("Graphiti OpenAPI tools were not captured during readiness");
       }
@@ -272,7 +269,12 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     const operation = agentOperation(name);
     const toolSchema = this.toolSchemas.find(({ id }) => id === operation);
     if (!toolSchema) throw new Error(`Unknown Graphiti tool: ${name}`);
-    if (!this.resolved || !this.sidecar?.running) {
+    if (
+      !this.resolved ||
+      !this.sidecar ||
+      (this.sidecar.exitCode !== null && this.sidecar.exitCode !== undefined) ||
+      (this.sidecar.signalCode !== null && this.sidecar.signalCode !== undefined)
+    ) {
       throw new Error("Graphiti sidecar is not running");
     }
     if (!this.resolved.bearer) throw new Error("Graphiti sidecar bearer is not configured");

@@ -5,6 +5,7 @@ import {
   DatabricksEnvironmentNamesSchema,
   DatabricksOptionsSchema,
   LakebaseOptionsSchema,
+  PostgresConfigOptionsSchema,
   PostgresEnvironmentNamesSchema,
   PostgresOptionsSchema,
   databricksEnvironmentNames,
@@ -36,6 +37,7 @@ describe("shared option schemas", () => {
       postgresRole: "DBX_TOOLS_POSTGRES_ROLE",
     });
     assert.equal(postgresEnvironmentNames.postgresRole, "DBX_TOOLS_POSTGRES_ROLE");
+    assert.equal(PostgresConfigOptionsSchema.shape.postgresRole.meta()?.env, "POSTGRES_ROLE");
     assert.deepEqual(
       parseOpts(PostgresOptionsSchema, null, {
         DBX_TOOLS_POSTGRES_ROLE: "  app-owner@example.com  ",

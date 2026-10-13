@@ -26,7 +26,6 @@ import {
 } from "@dbx-tools/ui/react";
 import {
   ExternalLinkIcon,
-  PlayIcon,
   PlusIcon,
   RefreshCwIcon,
   SquareIcon,
@@ -41,11 +40,15 @@ import {
   selectedBuiltInServiceLog,
 } from "./built-in-service-launcher.tsx";
 import { useSshClient } from "./client.ts";
+import { MachinePowerButton } from "./machine-power-control.tsx";
 import { resolveServiceUrl } from "./service-url.ts";
 
 const REFRESH_INTERVAL_MS = 5_000;
 const CREATE_MACHINE_OPERATION = "machine:create";
 const CREATE_PROJECT_OPERATION = "project:create";
+const CONFIRMATION_DIALOG_CLASS_NAME =
+  "max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto overscroll-contain border-border/60 p-5 shadow-2xl dark:border-white/10";
+
 function machineOperation(machineId: string, action: string): string {
   return `machine:${machineId}:${action}`;
 }
@@ -60,9 +63,16 @@ export interface SshManagerProps {
   className?: string;
 }
 
+/** Machine and lifecycle action awaiting user approval. */
 interface MachineConfirmation {
   action: "stop" | "delete";
   machine: SshMachine;
+}
+
+/** Project and destructive action awaiting user approval. */
+interface ProjectConfirmation {
+  action: "reset" | "remove";
+  project: SshProject;
 }
 
 /** Manages existing SSH machines and their persisted Sandbox projects. */
@@ -77,7 +87,9 @@ export function SshManager({ basePath, className }: SshManagerProps) {
   const [error, setError] = useState<string>();
   const [machineId, setMachineId] = useState("");
   const [machineConfirmation, setMachineConfirmation] = useState<MachineConfirmation>();
-  const [resetTarget, setResetTarget] = useState<SshProject>();
+  const displayedMachineConfirmation = useDisplayedDialog(machineConfirmation);
+  const [projectConfirmation, setProjectConfirmation] = useState<ProjectConfirmation>();
+  const displayedProjectConfirmation = useDisplayedDialog(projectConfirmation);
   const [projectFormOpen, setProjectFormOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [port, setPort] = useState("");
@@ -86,9 +98,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
   const [route, setRoute] = useState(true);
   const [projectServices, setProjectServices] = useState<SshMachineServiceKind[]>([]);
   const [selectedServiceLogs, setSelectedServiceLogs] = useState<
-    Readonly<
-      Record<string, { kind: SshMachineServiceKind; source: "automatic" | "manual" } | undefined>
-    >
+    Readonly<Record<string, { kind: SshMachineServiceKind } | undefined>>
   >({});
   const [stripPrefix, setStripPrefix] = useState(true);
   const refreshing = useRef(false);
@@ -108,30 +118,6 @@ export function SshManager({ basePath, className }: SshManagerProps) {
     [...busyOperations].some((operation) => operation.startsWith(`machine:${machineId}:`));
   const isProjectBusy = (projectId: string) =>
     [...busyOperations].some((operation) => operation.startsWith(`project:${projectId}:`));
-
-  useEffect(() => {
-    setSelectedServiceLogs((current) => {
-      let changed = false;
-      const next = { ...current };
-      for (const machine of machines) {
-        const selected = current[machine.id];
-        if (selected?.source === "automatic") {
-          const service = machine.services.find((candidate) => candidate.kind === selected.kind);
-          if (service?.state !== "starting") {
-            next[machine.id] = undefined;
-            changed = true;
-          }
-          continue;
-        }
-        if (selected) continue;
-        const starting = machine.services.find((service) => service.state === "starting");
-        if (!starting) continue;
-        next[machine.id] = { kind: starting.kind, source: "automatic" };
-        changed = true;
-      }
-      return changed ? next : current;
-    });
-  }, [machines]);
 
   const refresh = useCallback(
     async (showLoading = false) => {
@@ -240,10 +226,20 @@ export function SshManager({ basePath, className }: SshManagerProps) {
 
   const confirmMachineAction = async () => {
     if (!machineConfirmation) return;
-    const completed =
-      machineConfirmation.action === "stop"
-        ? await manageMachine(machineConfirmation.machine, "stop")
-        : await deleteMachine(machineConfirmation.machine);
+    if (machineConfirmation.action === "stop") {
+      const machine = machineConfirmation.machine;
+      setMachineConfirmation(undefined);
+      setMachines((current) =>
+        current.map((candidate) =>
+          candidate.id === machine.id
+            ? { ...candidate, status: "stopping", canStart: false, canStop: true }
+            : candidate,
+        ),
+      );
+      void manageMachine(machine, "stop");
+      return;
+    }
+    const completed = await deleteMachine(machineConfirmation.machine);
     if (completed) setMachineConfirmation(undefined);
   };
 
@@ -308,35 +304,36 @@ export function SshManager({ basePath, className }: SshManagerProps) {
     }
   };
 
-  const resetProject = async () => {
-    if (!resetTarget) return;
-    const operation = projectOperation(resetTarget.id, "reset");
+  /** Executes one approved destructive project action. */
+  const manageProject = async (
+    project: SshProject,
+    action: ProjectConfirmation["action"],
+  ): Promise<boolean> => {
+    const operation = projectOperation(project.id, action);
     setOperationBusy(operation, true);
     setError(undefined);
     try {
-      await client.resetProject(resetTarget.id);
-      setResetTarget(undefined);
+      if (action === "reset") await client.resetProject(project.id);
+      else await client.removeProject(project.id);
       await refresh();
+      return true;
     } catch (caught) {
       setError(errorMessage(caught));
+      return false;
     } finally {
       setOperationBusy(operation, false);
     }
   };
 
-  const removeProject = async (project: SshProject) => {
-    const operation = projectOperation(project.id, "remove");
-    setOperationBusy(operation, true);
-    setError(undefined);
-    try {
-      await client.removeProject(project.id);
-      await refresh();
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setOperationBusy(operation, false);
-    }
+  /** Runs the project action selected in the confirmation dialog. */
+  const confirmProjectAction = async () => {
+    if (!projectConfirmation) return;
+    const completed = await manageProject(projectConfirmation.project, projectConfirmation.action);
+    if (completed) setProjectConfirmation(undefined);
   };
+  const projectConfirmationOperation = projectConfirmation
+    ? projectOperation(projectConfirmation.project.id, projectConfirmation.action)
+    : undefined;
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -412,24 +409,6 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                           </div>
                         </div>
                         <div className="flex min-w-0 flex-wrap items-center gap-1 border-t bg-muted/20 px-3 py-2 sm:px-4">
-                          {isMachineBusy(machine.id) ? <Spinner className="mr-1 size-4" /> : null}
-                          {machine.canStart ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="shrink-0 px-2 sm:px-3"
-                              aria-label={`Start ${machine.name}`}
-                              title="Start"
-                              disabled={
-                                isBusy(machineOperation(machine.id, "start")) ||
-                                isBusy(machineOperation(machine.id, "delete"))
-                              }
-                              onClick={() => void manageMachine(machine, "start")}
-                            >
-                              <PlayIcon className="size-3.5" />
-                              <span className="hidden sm:inline">Start</span>
-                            </Button>
-                          ) : null}
                           {BUILT_IN_SERVICE_CONTROLS.map(({ kind }) => (
                             <BuiltInServiceLauncher
                               key={kind}
@@ -452,71 +431,51 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                                       : candidate,
                                   ),
                                 );
-                                setSelectedServiceLogs((current) => {
-                                  if (snapshot.state === "starting") {
-                                    return {
-                                      ...current,
-                                      [machine.id]: { kind: snapshot.kind, source: "automatic" },
-                                    };
-                                  }
-                                  const selected = current[machine.id];
-                                  if (
-                                    selected?.source !== "automatic" ||
-                                    selected.kind !== snapshot.kind
-                                  ) {
-                                    return current;
-                                  }
-                                  return { ...current, [machine.id]: undefined };
-                                });
                               }}
                               onBusyChange={(busy) =>
                                 setOperationBusy(machineOperation(machine.id, kind), busy)
                               }
                               onError={setError}
-                              onActivate={() =>
+                              logsOpen={selectedServiceLogs[machine.id]?.kind === kind}
+                              onSelectLogs={() =>
+                                setSelectedServiceLogs((current) => ({
+                                  ...current,
+                                  [machine.id]: { kind },
+                                }))
+                              }
+                              onHideLogs={() =>
                                 setSelectedServiceLogs((current) => ({
                                   ...current,
                                   [machine.id]: undefined,
                                 }))
                               }
-                              onSelectLogs={() =>
-                                setSelectedServiceLogs((current) => ({
-                                  ...current,
-                                  [machine.id]: { kind, source: "manual" },
-                                }))
-                              }
                               onSettled={refresh}
                             />
                           ))}
-                          {machine.canStop ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="shrink-0 px-2 sm:px-3"
-                              aria-label={`Stop ${machine.name}`}
-                              title="Stop"
-                              disabled={
+                          <div className="ml-auto flex shrink-0 items-center gap-1">
+                            <MachinePowerButton
+                              machine={machine}
+                              iconOnly
+                              busy={
+                                isBusy(machineOperation(machine.id, "start")) ||
                                 isBusy(machineOperation(machine.id, "stop")) ||
                                 isBusy(machineOperation(machine.id, "delete"))
                               }
-                              onClick={() => setMachineConfirmation({ action: "stop", machine })}
+                              onStart={() => void manageMachine(machine, "start")}
+                              onStop={() => setMachineConfirmation({ action: "stop", machine })}
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="size-8 shrink-0 p-0 text-destructive hover:text-destructive"
+                              aria-label={`Delete ${machine.name}`}
+                              title="Delete"
+                              disabled={isMachineBusy(machine.id)}
+                              onClick={() => setMachineConfirmation({ action: "delete", machine })}
                             >
-                              <SquareIcon className="size-3.5" />
-                              <span className="hidden sm:inline">Stop</span>
+                              <Trash2Icon className="size-3.5" />
                             </Button>
-                          ) : null}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="shrink-0 px-2 text-destructive hover:text-destructive sm:px-3"
-                            aria-label={`Delete ${machine.name}`}
-                            title="Delete"
-                            disabled={isMachineBusy(machine.id)}
-                            onClick={() => setMachineConfirmation({ action: "delete", machine })}
-                          >
-                            <Trash2Icon className="size-3.5" />
-                            <span className="hidden sm:inline">Delete</span>
-                          </Button>
+                          </div>
                         </div>
                         {selectedService ? <BuiltInServiceLog service={selectedService} /> : null}
                       </div>
@@ -731,7 +690,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                             aria-label={`Reset ${project.name}`}
                             title="Reset project"
                             disabled={isProjectBusy(project.id)}
-                            onClick={() => setResetTarget(project)}
+                            onClick={() => setProjectConfirmation({ action: "reset", project })}
                           >
                             {isBusy(projectOperation(project.id, "reset")) ? (
                               <Spinner className="size-4" />
@@ -743,9 +702,10 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            aria-label={`Remove ${project.name}`}
+                            aria-label={`Delete ${project.name}`}
+                            title="Delete project"
                             disabled={isProjectBusy(project.id)}
-                            onClick={() => void removeProject(project)}
+                            onClick={() => setProjectConfirmation({ action: "remove", project })}
                           >
                             {isBusy(projectOperation(project.id, "remove")) ? (
                               <Spinner className="size-4" />
@@ -800,105 +760,140 @@ export function SshManager({ basePath, className }: SshManagerProps) {
           if (!open && (!operation || !isBusy(operation))) setMachineConfirmation(undefined);
         }}
       >
-        <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {machineConfirmation?.action === "delete"
-                ? `Delete ${machineConfirmation.machine.name}?`
-                : `Stop ${machineConfirmation?.machine.name ?? "this machine"}?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {machineConfirmation?.action === "delete"
-                ? `This permanently deletes ${machineConfirmation.machine.name}, its machine files, and every project stored on it. This can't be undone.`
-                : "Stopping interrupts active desktop, terminal, and forwarded service sessions. Projects and machine files remain available when you restart."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={Boolean(
-                machineConfirmation &&
+        {displayedMachineConfirmation ? (
+          <AlertDialogContent
+            key={`${displayedMachineConfirmation.action}:${displayedMachineConfirmation.machine.id}`}
+            className={CONFIRMATION_DIALOG_CLASS_NAME}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {displayedMachineConfirmation.action === "delete"
+                  ? `Delete ${displayedMachineConfirmation.machine.name}?`
+                  : `Stop ${displayedMachineConfirmation.machine.name}?`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {displayedMachineConfirmation.action === "delete"
+                  ? `This permanently deletes ${displayedMachineConfirmation.machine.name}, its machine files, and every project stored on it. This can't be undone.`
+                  : "Stopping interrupts active desktop, terminal, and forwarded service sessions. Projects and machine files remain available when you restart."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                disabled={Boolean(
+                  machineConfirmation &&
+                    isBusy(
+                      machineOperation(
+                        machineConfirmation.machine.id,
+                        machineConfirmation.action,
+                      ),
+                    ),
+                )}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={Boolean(
+                  machineConfirmation &&
+                    isBusy(
+                      machineOperation(
+                        machineConfirmation.machine.id,
+                        machineConfirmation.action,
+                      ),
+                    ),
+                )}
+                className={cn(
+                  displayedMachineConfirmation.action === "delete" &&
+                    "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+                )}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void confirmMachineAction();
+                }}
+              >
+                {machineConfirmation &&
                 isBusy(
                   machineOperation(machineConfirmation.machine.id, machineConfirmation.action),
-                ),
-              )}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={Boolean(
-                machineConfirmation &&
-                isBusy(
-                  machineOperation(machineConfirmation.machine.id, machineConfirmation.action),
-                ),
-              )}
-              className={cn(
-                machineConfirmation?.action === "delete" &&
-                  "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-              )}
-              onClick={(event) => {
-                event.preventDefault();
-                void confirmMachineAction();
-              }}
-            >
-              {machineConfirmation &&
-              isBusy(
-                machineOperation(machineConfirmation.machine.id, machineConfirmation.action),
-              ) ? (
-                <Spinner className="size-3.5" />
-              ) : machineConfirmation?.action === "delete" ? (
-                <Trash2Icon className="size-3.5" />
-              ) : (
-                <SquareIcon className="size-3.5" />
-              )}
-              {machineConfirmation?.action === "delete" ? "Delete machine" : "Stop machine"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+                ) ? (
+                  <Spinner className="size-3.5" />
+                ) : displayedMachineConfirmation.action === "delete" ? (
+                  <Trash2Icon className="size-3.5" />
+                ) : (
+                  <SquareIcon className="size-3.5" />
+                )}
+                {displayedMachineConfirmation.action === "delete"
+                  ? "Delete machine"
+                  : "Stop machine"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        ) : null}
       </AlertDialog>
 
       <AlertDialog
-        open={Boolean(resetTarget)}
+        open={Boolean(projectConfirmation)}
         onOpenChange={(open) => {
-          if (!open && (!resetTarget || !isBusy(projectOperation(resetTarget.id, "reset")))) {
-            setResetTarget(undefined);
+          if (!open && (!projectConfirmationOperation || !isBusy(projectConfirmationOperation))) {
+            setProjectConfirmation(undefined);
           }
         }}
       >
-        <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset this project?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {resetTarget
-                ? `${resetTarget.name}'s files will be permanently deleted and its saved environment will be recreated.`
-                : "The project files will be permanently deleted and its saved environment will be recreated."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={Boolean(resetTarget && isBusy(projectOperation(resetTarget.id, "reset")))}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={Boolean(resetTarget && isBusy(projectOperation(resetTarget.id, "reset")))}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(event) => {
-                event.preventDefault();
-                void resetProject();
-              }}
-            >
-              {resetTarget && isBusy(projectOperation(resetTarget.id, "reset")) ? (
-                <Spinner className="size-3.5" />
-              ) : (
-                <RefreshCwIcon className="size-3.5" />
-              )}
-              Reset project
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+        {displayedProjectConfirmation ? (
+          <AlertDialogContent
+            key={`${displayedProjectConfirmation.action}:${displayedProjectConfirmation.project.id}`}
+            className={CONFIRMATION_DIALOG_CLASS_NAME}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {displayedProjectConfirmation.action === "remove"
+                  ? `Delete ${displayedProjectConfirmation.project.name}?`
+                  : `Reset ${displayedProjectConfirmation.project.name}?`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {displayedProjectConfirmation.action === "remove"
+                  ? `This permanently deletes ${displayedProjectConfirmation.project.name}, its files, saved environment, and route. This can't be undone.`
+                  : `${displayedProjectConfirmation.project.name}'s files will be permanently deleted and its saved environment will be recreated.`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                disabled={Boolean(
+                  projectConfirmationOperation && isBusy(projectConfirmationOperation),
+                )}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={Boolean(
+                  projectConfirmationOperation && isBusy(projectConfirmationOperation),
+                )}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void confirmProjectAction();
+                }}
+              >
+                {projectConfirmationOperation && isBusy(projectConfirmationOperation) ? (
+                  <Spinner className="size-3.5" />
+                ) : displayedProjectConfirmation.action === "remove" ? (
+                  <Trash2Icon className="size-3.5" />
+                ) : (
+                  <RefreshCwIcon className="size-3.5" />
+                )}
+                {displayedProjectConfirmation.action === "remove" ? "Delete project" : "Reset project"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        ) : null}
       </AlertDialog>
     </div>
   );
+}
+
+/** Keeps dialog copy available while the overlay closes, without a closed-state fallback. */
+function useDisplayedDialog<T>(value: T | undefined): T | undefined {
+  const displayed = useRef(value);
+  if (value) displayed.current = value;
+  return displayed.current;
 }
 
 function machineName(machines: SshMachine[], machineId: string): string {

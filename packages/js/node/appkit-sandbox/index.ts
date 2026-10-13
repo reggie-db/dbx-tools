@@ -18,7 +18,7 @@ export * as session from "./src/session.ts";
 export * as skills from "./src/skills.ts";
 export * as workspace from "./src/workspace.ts";
 export { MachineSoftwareSchema, SshPluginConfigSchema } from "./src/config.ts";
-export type { MachineSoftware, SerializableSshPluginConfig, ResolvedSshPluginConfig, SshPluginConfig } from "./src/config.ts";
+export type { MachineSoftware, SerializableSshPluginConfig, ResolvedSshPluginConfig, SshTransportMode, Ssh2PatchMode, SshPluginConfig } from "./src/config.ts";
 export { desktopBrowserMetadata, desktopPorts } from "./src/desktop.ts";
 export { SshKeyStore } from "./src/key-store.ts";
 export { OWNERSHIP_SCHEMA_PREFIX, MachineAssignmentSchema, NewMachineAssignmentSchema, SandboxProjectRecordSchema, NewSandboxProjectRecordSchema, MachineServiceProjectRecordSchema, NewMachineServiceProjectRecordSchema, LakebaseMachineOwnershipStore } from "./src/ownership.ts";

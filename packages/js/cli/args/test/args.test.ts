@@ -116,6 +116,28 @@ describe("addArgs", () => {
     }
   });
 
+  it("scopes bare metadata environment keys exactly once", async () => {
+    const configured = z.object({
+      postgresRole: z.string().optional().meta({ env: "POSTGRES_ROLE" }),
+    });
+    const previousCanonical = process.env.DBX_TOOLS_POSTGRES_ROLE;
+    const previousDoubled = process.env.DBX_TOOLS_DBX_TOOLS_POSTGRES_ROLE;
+    process.env.DBX_TOOLS_POSTGRES_ROLE = "canonical";
+    process.env.DBX_TOOLS_DBX_TOOLS_POSTGRES_ROLE = "doubled";
+    try {
+      const command = addArgs(new Command("demo"), configured, {
+        sources: ["env"],
+      });
+      assert.match(command.helpInformation(), /POSTGRES_ROLE/);
+      assert.doesNotMatch(command.helpInformation(), /DBX_TOOLS_POSTGRES_ROLE/);
+      await command.parseAsync([], { from: "user" });
+      assert.equal(parseArgs(command, configured).postgresRole, "canonical");
+    } finally {
+      restoreEnvironment("DBX_TOOLS_POSTGRES_ROLE", previousCanonical);
+      restoreEnvironment("DBX_TOOLS_DBX_TOOLS_POSTGRES_ROLE", previousDoubled);
+    }
+  });
+
   it("defers fields with hidden help defaults until parsing", async () => {
     const configured = z.object({
       profile: z
@@ -160,6 +182,11 @@ describe("addArgs", () => {
     assert.ok(reads > 0);
   });
 });
+
+function restoreEnvironment(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
 
 describe("parseArgs", () => {
   it("prefers flags over layered configuration and applies schema defaults", async () => {

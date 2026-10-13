@@ -102,6 +102,12 @@ jobs:
           name: release-npm
           path: .release/npm
           if-no-files-found: error
+      - name: Setup Node.js
+        id: setup_node_js
+        if: ${{ success() && steps.release.outputs.docs == 'true' }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
       - name: Configure Pages
         id: configure_pages
         if: ${{ success() && steps.release.outputs.docs == 'true' }}

@@ -8,11 +8,8 @@
  * @module
  */
 import { delimiter, dirname } from "node:path";
-import {
-  AppKitChildProcess,
-  type AppKitChildProcessHealthCheck,
-} from "@dbx-tools/appkit/child-process";
 import { exec } from "@dbx-tools/core";
+import type { ChildProcessResult } from "@dbx-tools/core/exec";
 import {
   asyncUtils,
   environmentUtils,
@@ -27,8 +24,22 @@ import {
   type ResolvedGraphitiOptions,
 } from "./options.ts";
 
+/** Context passed to one Graphiti sidecar readiness probe. */
+export interface GraphitiHealthCheckContext {
+  readonly process: ChildProcessResult;
+  readonly signal: AbortSignal;
+  readonly attempt: number;
+}
+
 /** HTTP probe used to decide that the Graphiti sidecar has started listening. */
-export type GraphitiHealthCheck = AppKitChildProcessHealthCheck;
+export type GraphitiHealthCheck = (
+  context: GraphitiHealthCheckContext,
+) => boolean | PromiseLike<boolean>;
+
+/** Async creation result that preserves the awaitable child handle. */
+export interface GraphitiChildProcess {
+  child: ChildProcessResult;
+}
 
 /** Shared Graphiti options plus the Node-only sidecar readiness probe. */
 export type GraphitiRuntimeOptions = GraphitiOptions & {
@@ -188,7 +199,7 @@ export function graphitiHttpUrl(
 /** Build one readiness-gated Graphiti sidecar from the shared typed options. */
 export async function createGraphitiChildProcess(
   options: GraphitiRuntimeOptions = {},
-): Promise<AppKitChildProcess> {
+): Promise<GraphitiChildProcess> {
   const healthCheck = options.healthCheck;
   const resolved = resolveGraphitiOptions(graphitiOptions(options));
   const python = await resolveGraphitiPythonCommand(
@@ -196,26 +207,55 @@ export async function createGraphitiChildProcess(
     "-m",
     "dbx_tools.graphiti",
   );
-  return new AppKitChildProcess(
-    [
-      python.command,
-      python.args,
-      {
-        env: _runtimeEnvironment(resolved),
-      },
-    ],
+  const child = exec.spawn(python.command, python.args, {
+    env: _runtimeEnvironment(resolved),
+    forwardTerminationSignals: false,
+  });
+  const controller = new AbortController();
+  const probe = healthCheck ?? (({ signal }) => graphitiHealthCheck(resolved, signal));
+  try {
+    await Promise.race([
+      waitForGraphitiChild(child, probe, resolved.startupTimeoutMs, controller.signal),
+      child.then((result) => {
+        throw new Error(
+          `Graphiti child ${child.pid ?? "<unknown>"} exited before becoming ready ` +
+            `(exit ${result.exitCode})`,
+        );
+      }),
+    ]);
+    return { child };
+  } catch (error) {
+    await child.shutdown();
+    throw error;
+  } finally {
+    controller.abort();
+  }
+}
+
+async function waitForGraphitiChild(
+  child: ChildProcessResult,
+  healthCheck: GraphitiHealthCheck,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<void> {
+  for await (const healthy of asyncUtils.poll(
+    ({ attempt, signal: pollSignal }) =>
+      healthCheck({ process: child, signal: pollSignal, attempt }),
     {
-      gracefulSignalTarget: "root",
-      healthCheck: healthCheck ?? (({ signal }) => graphitiHealthCheck(resolved, signal)),
-      healthCheckTimeoutMs: resolved.startupTimeoutMs,
+      intervalMs: HEALTH_CHECK_INTERVAL_MS,
+      timeoutMs,
+      signal,
+      predicate: (ready) => !ready,
     },
-  );
+  )) {
+    if (healthy) return;
+  }
 }
 
 /** Run the supervised stack until one child exits or the process is signaled. */
 export async function runGraphiti(options: GraphitiRuntimeOptions = {}): Promise<void> {
-  const sidecar = await createGraphitiChildProcess(options);
-  const outcome = await sidecar.run({ signals: ["SIGINT", "SIGTERM"] });
+  const { child } = await createGraphitiChildProcess(options);
+  const outcome = await child;
   if (outcome.exitCode !== 0) {
     throw new Error(`Graphiti child exited with status ${outcome.exitCode}`);
   }

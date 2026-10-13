@@ -265,24 +265,14 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     },
   });
 
-  function interruptChild(): void {
-    const current = child;
-    if (!current?.pid) return;
-    try {
-      current.kill("SIGINT");
-    } catch {
-      // The command already exited.
-    }
-  }
-
   async function stopChild(): Promise<void> {
     const current = child;
     if (!current) return;
     child = undefined;
     try {
-      await exec.kill(current, {
-        gracefulTimeoutMs: SHUTDOWN_TIMEOUT_MS,
-        forceTimeoutMs: SHUTDOWN_TIMEOUT_MS,
+      await current.shutdown({
+        terminateTimeout: SHUTDOWN_TIMEOUT_MS,
+        killTimeout: SHUTDOWN_TIMEOUT_MS,
       });
     } catch (err) {
       logger.error("failed to stop command process tree", {
@@ -300,6 +290,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       stdout: "inherit",
       stderr: "inherit",
       check: false,
+      forwardTerminationSignals: false,
     });
     child = current;
     void current
@@ -387,7 +378,6 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     clearTimeout(timer);
     restartReason = undefined;
     restoreStdin();
-    interruptChild();
     await Promise.race([
       Promise.allSettled([watcher.close(), stopChild()]),
       asyncUtils.sleep(SHUTDOWN_TIMEOUT_MS),

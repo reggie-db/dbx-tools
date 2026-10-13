@@ -1,6 +1,24 @@
 import type { BasePluginConfig } from "@databricks/appkit";
+import { configUtils } from "@dbx-tools/core";
 import { z } from "zod";
 import { MISE_INSTALL_SCRIPT } from "./_projects.ts";
+
+const SSH_TRANSPORT_CONFIG_KEY = "SANDBOX_SSH_TRANSPORT";
+const SSH2_PATCH_CONFIG_KEY = "SANDBOX_SSH_SSH2_PATCH";
+
+const SshTransportSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.enum(["auto", "openssh", "ssh2"]))
+  .default("auto");
+
+const Ssh2PatchSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.enum(["auto", "true", "false"]))
+  .default("auto");
 
 export const MachineSoftwareSchema = z
   .object({
@@ -42,6 +60,12 @@ export const SshPluginConfigSchema = z
       .describe(
         "Whether a failed request-scoped OBO REST operation retries with the app service principal. Defaults to false.",
       ),
+    sshTransport: SshTransportSchema.describe(
+      `SSH transport selection: auto, openssh, or ssh2. Defaults to auto; configure with ${configUtils.name(SSH_TRANSPORT_CONFIG_KEY)}.`,
+    ),
+    ssh2Patch: Ssh2PatchSchema.describe(
+      `ssh2 missing-exec-reply compatibility mode: auto, true, or false. Defaults to auto; configure with ${configUtils.name(SSH2_PATCH_CONFIG_KEY)}.`,
+    ),
     sandboxLifetimeSeconds: z
       .number()
       .int()
@@ -101,6 +125,10 @@ export const SshPluginConfigSchema = z
 
 export type SerializableSshPluginConfig = z.input<typeof SshPluginConfigSchema>;
 export type ResolvedSshPluginConfig = z.output<typeof SshPluginConfigSchema>;
+/** SSH transport selected for a Sandbox session. */
+export type SshTransportMode = ResolvedSshPluginConfig["sshTransport"];
+/** Missing exec-reply patch policy applied when ssh2 is selected. */
+export type Ssh2PatchMode = ResolvedSshPluginConfig["ssh2Patch"];
 /**
  * Configuration accepted by {@link AppKitSshPlugin}.
  *
@@ -126,7 +154,13 @@ export function resolveSshPluginConfig(config: SshPluginConfig = {}): ResolvedSs
     context: _context,
     telemetry: _telemetry,
     streamConfig: _stream,
+    sshTransport,
+    ssh2Patch,
     ...serializable
   } = config;
-  return SshPluginConfigSchema.parse(serializable);
+  return SshPluginConfigSchema.parse({
+    ...serializable,
+    sshTransport: configUtils.string(sshTransport, SSH_TRANSPORT_CONFIG_KEY),
+    ssh2Patch: configUtils.string(ssh2Patch, SSH2_PATCH_CONFIG_KEY),
+  });
 }

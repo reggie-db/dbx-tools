@@ -6,33 +6,16 @@ import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { parse as parseYaml } from "yaml";
 import {
+  ENV_ONLY,
   environmentKeys,
   flattenAppEnv,
-  isDatabricksAppEnv,
+  name,
   port,
   resolveValue,
+  string as configString,
   text,
   toNumber,
 } from "../src/config-utils.ts";
-
-interface AppEnvironmentFixture {
-  name: string;
-  environment: Record<string, string>;
-  detected: boolean;
-}
-
-describe("Databricks App environment parity", () => {
-  it("matches the shared runtime fixtures", () => {
-    const fixturePath = resolve(
-      import.meta.dirname,
-      "../../../../test/fixtures/config/databricks-app-environments.json",
-    );
-    const fixtures = JSON.parse(readFileSync(fixturePath, "utf8")) as AppEnvironmentFixture[];
-    for (const fixture of fixtures) {
-      assert.equal(isDatabricksAppEnv(fixture.environment), fixture.detected, fixture.name);
-    }
-  });
-});
 
 describe("app YAML subset parity", () => {
   it("matches shared YAML 1.2 scalar fixtures", () => {
@@ -254,6 +237,29 @@ describe("resolved config values", () => {
       "LAKEBASEENDPOINT",
       "LAKEBASE_ENDPOINT",
     ]);
+  });
+
+  it("adds the dbx-tools scope exactly once for bare config keys", () => {
+    const canonical = "DBX_TOOLS_POSTGRES_ROLE";
+    const doubled = "DBX_TOOLS_DBX_TOOLS_POSTGRES_ROLE";
+    process.env[canonical] = "canonical";
+    process.env[doubled] = "doubled";
+    try {
+      assert.equal(name("POSTGRES_ROLE"), canonical);
+      assert.equal(configString(undefined, "POSTGRES_ROLE"), "canonical");
+    } finally {
+      delete process.env[canonical];
+      delete process.env[doubled];
+    }
+  });
+
+  it("keeps standard external environment names exact", () => {
+    process.env.DATABRICKS_APP_PORT = "8000";
+    try {
+      assert.equal(configString(undefined, "DATABRICKS_APP_PORT", ENV_ONLY), "8000");
+    } finally {
+      delete process.env.DATABRICKS_APP_PORT;
+    }
   });
 
   it("prefers bundle data before app data", () => {

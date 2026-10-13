@@ -208,15 +208,32 @@ export class LakebaseMachineOwnershipStore {
     return row ? parseAssignmentRow(row) : undefined;
   }
 
+  /** Returns the sole assignment for one workspace Sandbox. */
+  async getByMachine(
+    workspaceScope: string,
+    machineId: string,
+  ): Promise<MachineAssignment | undefined> {
+    const result = await this.pool.query<AssignmentRow>(
+      `SELECT workspace_scope, user_id, machine_id, managed_name, expires_at, created_at
+       FROM ${this.table("machine_assignments")}
+       WHERE workspace_scope = $1 AND machine_id = $2`,
+      [workspaceScope, machineId],
+    );
+    const row = result.rows[0];
+    return row ? parseAssignmentRow(row) : undefined;
+  }
+
   /** Inserts or replaces one assignment and its managed name and expiration. */
   async assign(input: NewMachineAssignment): Promise<void> {
     const assignment = NewMachineAssignmentSchema.parse(input);
-    await this.pool.query(
-      `INSERT INTO ${this.table("machine_assignments")}
+    const result = await this.pool.query<{ user_id: string }>(
+      `INSERT INTO ${this.table("machine_assignments")} AS existing
          (workspace_scope, user_id, machine_id, managed_name, expires_at)
        VALUES ($1, $2, $3, $4, $5::timestamptz)
-       ON CONFLICT (workspace_scope, user_id, machine_id)
-       DO UPDATE SET managed_name = EXCLUDED.managed_name, expires_at = EXCLUDED.expires_at`,
+       ON CONFLICT (workspace_scope, machine_id)
+       DO UPDATE SET managed_name = EXCLUDED.managed_name, expires_at = EXCLUDED.expires_at
+       WHERE existing.user_id = EXCLUDED.user_id
+       RETURNING user_id`,
       [
         assignment.workspaceScope,
         assignment.userId,
@@ -225,6 +242,9 @@ export class LakebaseMachineOwnershipStore {
         assignment.expiresAt,
       ],
     );
+    if (!result.rows[0]) {
+      throw new Error(`SSH machine ${assignment.machineId} is already assigned to another user`);
+    }
   }
 
   /** Removes one user's assignment and returns whether a row was deleted. */
@@ -235,15 +255,6 @@ export class LakebaseMachineOwnershipStore {
       [workspaceScope, userId, machineId],
     );
     return (result.rowCount ?? 0) > 0;
-  }
-
-  /** Removes every assignment for one Sandbox and returns the deleted row count. */
-  async unassignAll(workspaceScope: string, machineId: string): Promise<number> {
-    const result = await this.pool.query(
-      `DELETE FROM ${this.table("machine_assignments")} WHERE workspace_scope = $1 AND machine_id = $2`,
-      [workspaceScope, machineId],
-    );
-    return result.rowCount ?? 0;
   }
 
   /** Lists persisted projects in one workspace with optional owner and machine filters. */
@@ -367,20 +378,6 @@ export class LakebaseMachineOwnershipStore {
     const result = await this.pool.query(
       `DELETE FROM ${this.table("projects")} WHERE workspace_scope = $1 AND machine_id = $2`,
       [workspaceScope, machineId],
-    );
-    return result.rowCount ?? 0;
-  }
-
-  /** Deletes one owner's persisted projects for a shared Sandbox. */
-  async deleteProjectsForOwnerMachine(
-    workspaceScope: string,
-    userId: string,
-    machineId: string,
-  ): Promise<number> {
-    const result = await this.pool.query(
-      `DELETE FROM ${this.table("projects")}
-       WHERE workspace_scope = $1 AND user_id = $2 AND machine_id = $3`,
-      [workspaceScope, userId, machineId],
     );
     return result.rowCount ?? 0;
   }
@@ -512,7 +509,7 @@ export class LakebaseMachineOwnershipStore {
     const assignments = this.table("machine_assignments");
     const projects = this.table("projects");
     const machineServiceProjects = this.table("machine_service_projects");
-    await advisoryLock.withAdvisoryLock(
+    await advisoryLock.withAdvisoryTransactionLock(
       this.pool,
       [...MIGRATION_LOCK, this.schema],
       async (client) => {
@@ -585,6 +582,11 @@ export class LakebaseMachineOwnershipStore {
         await client.query(`ALTER TABLE ${projects} ALTER COLUMN project_path SET NOT NULL`);
         await client.query(`ALTER TABLE ${projects} ALTER COLUMN port SET NOT NULL`);
         await client.query(
+          `UPDATE ${projects}
+           SET directory_path = '/home/sandbox-user/projects/' || project_path
+           WHERE directory_path <> '/home/sandbox-user/projects/' || project_path`,
+        );
+        await client.query(
           `CREATE INDEX IF NOT EXISTS sandbox_projects_machine_idx
          ON ${projects} (workspace_scope, machine_id)`,
         );
@@ -621,7 +623,41 @@ export class LakebaseMachineOwnershipStore {
           `CREATE INDEX IF NOT EXISTS machine_service_projects_machine_idx
          ON ${machineServiceProjects} (workspace_scope, machine_id)`,
         );
+        await client.query(
+          `UPDATE ${machineServiceProjects}
+           SET directory_path = '/home/sandbox-user/projects/.sandbox-services/' || service_kind
+           WHERE directory_path <>
+             '/home/sandbox-user/projects/.sandbox-services/' || service_kind`,
+        );
         await this.copyLegacyOwnership(client, assignments, projects, machineServiceProjects);
+        await client.query(`
+          DELETE FROM ${projects} project
+          USING ${assignments} losing
+          WHERE project.workspace_scope = losing.workspace_scope
+            AND project.user_id = losing.user_id
+            AND project.machine_id = losing.machine_id
+            AND EXISTS (
+              SELECT 1
+              FROM ${assignments} winner
+              WHERE winner.workspace_scope = losing.workspace_scope
+                AND winner.machine_id = losing.machine_id
+                AND (winner.created_at, winner.user_id) < (losing.created_at, losing.user_id)
+            )
+        `);
+        await client.query(`
+          DELETE FROM ${assignments} losing
+          WHERE EXISTS (
+            SELECT 1
+            FROM ${assignments} winner
+            WHERE winner.workspace_scope = losing.workspace_scope
+              AND winner.machine_id = losing.machine_id
+              AND (winner.created_at, winner.user_id) < (losing.created_at, losing.user_id)
+          )
+        `);
+        await client.query(
+          `CREATE UNIQUE INDEX IF NOT EXISTS machine_assignments_machine_owner_idx
+           ON ${assignments} (workspace_scope, machine_id)`,
+        );
       },
     );
   }
@@ -654,8 +690,10 @@ export class LakebaseMachineOwnershipStore {
           `INSERT INTO ${assignments} (
              workspace_scope, user_id, machine_id, managed_name, expires_at, created_at
            )
-           SELECT workspace_scope, user_id, machine_id, managed_name, expires_at, created_at
+           SELECT DISTINCT ON (workspace_scope, machine_id)
+             workspace_scope, user_id, machine_id, managed_name, expires_at, created_at
            FROM ${legacy}.machine_assignments
+           ORDER BY workspace_scope, machine_id, created_at, user_id
            ON CONFLICT DO NOTHING`,
         );
         if ((copied.rowCount ?? 0) > 0) {
@@ -672,10 +710,15 @@ export class LakebaseMachineOwnershipStore {
              project_path, route_path, open_path, port, project_config, remote_host, remote_port,
              strip_prefix, created_at, updated_at
            )
-           SELECT workspace_scope, user_id, project_id, project_name, machine_id, directory_path,
-             project_path, route_path, open_path, port, project_config, remote_host, remote_port,
-             strip_prefix, created_at, updated_at
-           FROM ${legacy}.projects
+           SELECT source.workspace_scope, source.user_id, source.project_id, source.project_name,
+             source.machine_id, source.directory_path, source.project_path, source.route_path,
+             source.open_path, source.port, source.project_config, source.remote_host,
+             source.remote_port, source.strip_prefix, source.created_at, source.updated_at
+           FROM ${legacy}.projects source
+           JOIN ${assignments} assignment
+             ON assignment.workspace_scope = source.workspace_scope
+            AND assignment.machine_id = source.machine_id
+            AND assignment.user_id = source.user_id
            ON CONFLICT DO NOTHING`,
         );
         if ((copied.rowCount ?? 0) > 0) {
@@ -802,10 +845,14 @@ function parsePersistedServiceDependencies(value: unknown): SshMachineServiceKin
     key,
     ...(typeof entry === "string" ? [entry] : []),
   ]);
-  return [...new Set(candidates.flatMap((candidate) => {
-    const parsed = sshMachineServiceKindSchema.safeParse(candidate);
-    return parsed.success ? [parsed.data] : [];
-  }))];
+  return [
+    ...new Set(
+      candidates.flatMap((candidate) => {
+        const parsed = sshMachineServiceKindSchema.safeParse(candidate);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  ];
 }
 
 /** Parse one persisted machine-owned service project row. */

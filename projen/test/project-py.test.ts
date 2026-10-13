@@ -175,6 +175,14 @@ describe("DBXToolsPythonWorkspace", () => {
 
     const settings = readFileSync(join(outdir, ".vscode/settings.json"), "utf8");
     assert.match(settings, /python\/\.venv\/bin\/python/);
+    const searchExcludes = (
+      JSON.parse(settings) as {
+        "search.exclude"?: Record<string, boolean>;
+      }
+    )["search.exclude"];
+    assert.equal(searchExcludes?.["**/.prettierrc.json"], true);
+    assert.equal(searchExcludes?.["**/eslintrc.json"], true);
+    assert.equal(searchExcludes?.["docs/**/archived/**"], true);
     const packageJson = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
       workspaces?: string[];
     };

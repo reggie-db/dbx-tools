@@ -106,8 +106,8 @@ middleware on the app's Express server (no separate proxy process).
   valid session cookie or gets `401`. A WebSocket handshake is an ordinary `GET`
   and runs through the same gate.
 - Supervised teardown - `tunnelInterceptor` registers its tunnel supervisor with
-  AppKit's native `shutdown` lifecycle. `AppKitChildProcess` aborts active
-  readiness work and terminates each tunnel process tree.
+  AppKit's native `shutdown` lifecycle. Core exec terminates each tunnel process
+  tree through the child handle's memoized `shutdown()` method.
 - Public liveness probes - while portr is running, the supervisor HEADs the
   public URL. An `x-portr-error: unregistered-subdomain` (or any other
   `x-portr-error`) kills the child so the forever-loop restarts it. Process-exit
