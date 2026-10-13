@@ -986,6 +986,55 @@ describe("managed Sandbox ownership", () => {
     assert.ok(commands.some((command) => command.includes("base64 -d")));
   });
 
+  it("does not resolve addProject before project installation completes", async () => {
+    const now = Date.now();
+    const managedName = createSandboxName("00112233");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
+    const { client } = sandboxClient([
+      { sandboxId: "owned", status: "RUNNING", name: managedName },
+    ]);
+    const ssh = runtime(store, { machineSoftware: [] });
+    Object.defineProperty(ssh, "ensureSession", { value: async () => unusedSession });
+    let installationStarted!: () => void;
+    let finishInstallation!: () => void;
+    const started = new Promise<void>((resolve) => {
+      installationStarted = resolve;
+    });
+    const installation = new Promise<void>((resolve) => {
+      finishInstallation = resolve;
+    });
+    Object.defineProperty(ssh, "prepareProjectDirectory", {
+      value: async () => {
+        installationStarted();
+        await installation;
+        return "/home/sandbox-user/projects/demo";
+      },
+    });
+
+    let resolved = false;
+    const pending = ssh
+      .addProject(client, "user-a", {
+        machineId: "owned",
+        name: "demo",
+        port: 8080,
+        path: "demo",
+      })
+      .then((project) => {
+        resolved = true;
+        return project;
+      });
+    await started;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(resolved, false);
+    assert.deepEqual(store.projects, []);
+
+    finishInstallation();
+    const project = await pending;
+    assert.equal(project.directory, "/home/sandbox-user/projects/demo");
+    assert.equal(store.projects.length, 1);
+  });
+
   it("generates project defaults and rejects duplicate machine paths and ports", async () => {
     const now = Date.now();
     const managedName = createSandboxName("00112233");

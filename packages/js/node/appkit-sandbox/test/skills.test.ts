@@ -68,6 +68,8 @@ describe("databricksSandboxSkillMounts", () => {
     assert.doesNotMatch(htmlPage, /REPLACE_WITH_COMPLETE_APPLICATION_HTML/);
     const speedTest = await readFile(`${mount.root}/network-speed-test/SKILL.md`, "utf8");
     assert.match(speedTest, /github:librespeed\/speedtest-go/);
+    assert.match(speedTest, /mise" --no-hooks exec -- speedtest-backend/);
+    assert.doesNotMatch(speedTest, /command -v speedtest/);
     assert.doesNotMatch(speedTest, /REPLACE_WITH_COMPLETE_/);
     const whiteboard = await readFile(`${mount.root}/realtime-whiteboard/SKILL.md`, "utf8");
     assert.match(whiteboard, /lovasoa\/whitebophir/);

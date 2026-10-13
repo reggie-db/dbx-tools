@@ -8,10 +8,6 @@ const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const PROJECT_PATH_SEGMENT_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const GENERATED_PORT_MIN = 8_000;
 const GENERATED_PORT_MAX = 49_151;
-const DEFAULT_MISE_SETTINGS = {
-  unix_default_file_shell_args: "bash -e",
-  unix_default_inline_shell_args: "bash -c -o errexit",
-} as const;
 type ProjectConfigInput = NonNullable<AddSshProjectRequest["config"]>;
 type ProjectConfig = Exclude<ProjectConfigInput, string>;
 type ProjectConfigValue = ProjectConfig[string];
@@ -31,6 +27,8 @@ export const MISE_INSTALL_SCRIPT = `${LOCAL_BIN_PATH_SCRIPT.trimEnd()}\n\n${read
 export const PROJECT_SETUP_SCRIPT = readPackageResource("scripts", "setup-project.sh");
 /** @internal */
 export const PROJECT_REMOVE_SCRIPT = readPackageResource("scripts", "remove-project.sh");
+/** @internal */
+export const PROJECT_INSTALL_COMPLETION_MARKER = ".dbx-tools/mise-postinstall.complete";
 
 /** @internal */
 export interface ProjectEnvironment {
@@ -201,16 +199,32 @@ export function renderProjectMiseConfig(
     env[name] = expected;
   }
   resolved.env = env;
-  const settings = objectTable(resolved.settings, "config.settings");
-  for (const [name, value] of Object.entries(DEFAULT_MISE_SETTINGS)) {
-    if (settings[name] === undefined) settings[name] = value;
+  const hooks = objectTable(resolved.hooks, "config.hooks");
+  const postinstall = hooks.postinstall;
+  if (postinstall !== undefined && typeof postinstall !== "string") {
+    throw new Error("Sandbox project config.hooks.postinstall must be a string");
   }
-  resolved.settings = settings;
+  resolved.hooks = {
+    ...hooks,
+    postinstall: renderProjectPostinstall(postinstall),
+  };
   try {
     return `${stringify(resolved as TomlTableWithoutBigInt).trimEnd()}\n`;
   } catch (error) {
     throw new Error("Sandbox project config cannot be serialized to mise.toml", { cause: error });
   }
+}
+
+function renderProjectPostinstall(postinstall: string | undefined): string {
+  return `set -eu
+completion_marker=${shellQuote(PROJECT_INSTALL_COMPLETION_MARKER)}
+rm -f -- "$completion_marker"
+(
+${postinstall?.trimEnd() || ":"}
+)
+mkdir -p -- "$(dirname "$completion_marker")"
+: >"$completion_marker"
+`;
 }
 
 /** @internal */

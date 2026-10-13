@@ -7,6 +7,7 @@ export const PACKAGE_VERSION = "0.9.125";
 export * as reactBuiltInServiceLauncher from "./src/react/built-in-service-launcher.tsx";
 export * as reactClient from "./src/react/client.ts";
 export * as reactMachinePowerControl from "./src/react/machine-power-control.tsx";
+export * as reactProjectMachineReadiness from "./src/react/project-machine-readiness.ts";
 export * as reactServiceUrl from "./src/react/service-url.ts";
 export * as reactSshIndicator from "./src/react/ssh-indicator.tsx";
 export * as reactSshManager from "./src/react/ssh-manager.tsx";

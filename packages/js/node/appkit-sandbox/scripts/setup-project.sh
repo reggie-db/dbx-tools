@@ -5,6 +5,7 @@ umask 077
 project_path="$1"
 previous_path="$2"
 toml_base64="$3"
+completion_marker_path="$4"
 projects_root="$HOME/projects"
 
 validate_path() {
@@ -134,9 +135,18 @@ while ! install_is_complete; do
     continue
   fi
   mv -- "$temporary_file" "$project_directory/mise.toml"
+  completion_marker="$project_directory/$completion_marker_path"
+  rm -f -- "$completion_marker"
 
   if ! "$mise_bin" trust "$project_directory/mise.toml" >>"$operation_log" 2>&1 ||
     ! (cd "$project_directory" && "$mise_bin" install) >>"$operation_log" 2>&1; then
+    record_result error
+    rm -rf -- "$project_directory"
+    release_operation_lock
+    continue
+  fi
+  if [ ! -f "$completion_marker" ]; then
+    printf 'mise postinstall did not complete successfully\n' >>"$operation_log"
     record_result error
     rm -rf -- "$project_directory"
     release_operation_lock

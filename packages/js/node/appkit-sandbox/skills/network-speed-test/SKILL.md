@@ -36,14 +36,6 @@ server_lat = 1
 server_lng = 1
 database_type = "none"
 EOF
-if command -v speedtest-go >/dev/null 2>&1; then
-  speedtest_bin=speedtest-go
-elif command -v speedtest >/dev/null 2>&1; then
-  speedtest_bin=speedtest
-else
-  printf 'LibreSpeed binary not found on PATH\n' >&2
-  exit 1
-fi
 stamp="$(cksum < settings.toml)"
 if [ -f server.pid ]; then
   pid="$(tr -d '[:space:]' < server.pid)"
@@ -62,7 +54,7 @@ if [ -f server.pid ]; then
   esac
   "$HOME/.local/bin/mise" run uninstall
 fi
-nohup setsid "$speedtest_bin" > server.log 2>&1 < /dev/null &
+nohup setsid "$HOME/.local/bin/mise" --no-hooks exec -- speedtest-backend > server.log 2>&1 < /dev/null &
 echo $! > server.pid
 printf '%s\n' "$stamp" > server.stamp
 for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do

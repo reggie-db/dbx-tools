@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { access, chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { promisify } from "node:util";
 import {
   addSshProjectRequestSchema,
   sshCommandRequestSchema,
@@ -11,10 +16,13 @@ import {
   mergeProjectMiseConfig,
   normalizeProjectOpenPath,
   normalizeProjectPath,
+  PROJECT_INSTALL_COMPLETION_MARKER,
   PROJECT_REMOVE_SCRIPT,
   PROJECT_SETUP_SCRIPT,
   renderProjectMiseConfig,
 } from "../src/_projects.ts";
+
+const execFileAsync = promisify(execFile);
 
 describe("Sandbox project configuration", () => {
   it("normalizes project and open paths", () => {
@@ -39,7 +47,8 @@ describe("Sandbox project configuration", () => {
     const parsed = parse(toml) as {
       tools: { node: string };
       env: Record<string, string>;
-      settings: Record<string, string>;
+      hooks: { postinstall: string };
+      settings?: Record<string, string>;
     };
     assert.equal(parsed.tools.node, "lts");
     assert.deepEqual(parsed.env, {
@@ -48,10 +57,8 @@ describe("Sandbox project configuration", () => {
       PROJECT_PATH: "/sandbox/abc/demo",
       PROJECT_PORT: "8080",
     });
-    assert.deepEqual(parsed.settings, {
-      unix_default_file_shell_args: "bash -e",
-      unix_default_inline_shell_args: "bash -c -o errexit",
-    });
+    assert.equal(parsed.settings, undefined);
+    assert.match(parsed.hooks.postinstall, /mise-postinstall\.complete/);
   });
 
   it("preserves explicit mise shell settings", () => {
@@ -70,6 +77,29 @@ describe("Sandbox project configuration", () => {
       unix_default_file_shell_args: "zsh",
       unix_default_inline_shell_args: "zsh -c",
     });
+  });
+
+  it("writes the install completion marker only after postinstall succeeds", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-postinstall-"));
+    const successful = parse(
+      renderProjectMiseConfig(
+        { hooks: { postinstall: "printf 'installed\\n' > result.txt" } },
+        { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
+      ),
+    ) as { hooks: { postinstall: string } };
+    await execFileAsync("sh", ["-c", successful.hooks.postinstall], { cwd: directory });
+    await access(join(directory, PROJECT_INSTALL_COMPLETION_MARKER));
+
+    const failing = parse(
+      renderProjectMiseConfig(
+        { hooks: { postinstall: "exit 1" } },
+        { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
+      ),
+    ) as { hooks: { postinstall: string } };
+    await assert.rejects(
+      execFileAsync("sh", ["-c", failing.hooks.postinstall], { cwd: directory }),
+    );
+    await assert.rejects(access(join(directory, PROJECT_INSTALL_COMPLETION_MARKER)));
   });
 
   it("rejects conflicting reserved mise environment values", () => {
@@ -133,7 +163,51 @@ describe("Sandbox project configuration", () => {
     assert.match(PROJECT_SETUP_SCRIPT, /__DBX_TOOLS_ATTEMPT__/);
     assert.match(PROJECT_SETUP_SCRIPT, /__DBX_TOOLS_RESULT__/);
     assert.match(PROJECT_SETUP_SCRIPT, /install_is_complete/);
+    assert.match(PROJECT_SETUP_SCRIPT, /mise postinstall did not complete successfully/);
     assert.match(PROJECT_SETUP_SCRIPT, /rm -rf -- "\$project_directory"/);
+  });
+
+  it("fails project setup when mise hides a failed postinstall exit", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dbx-tools-project-setup-"));
+    const binDirectory = join(home, ".local", "bin");
+    const setupScript = join(home, "setup-project.sh");
+    const miseScript = join(binDirectory, "mise");
+    await mkdir(binDirectory, { recursive: true });
+    await writeFile(setupScript, PROJECT_SETUP_SCRIPT);
+    await chmod(setupScript, 0o700);
+    await writeFile(
+      miseScript,
+      `#!/bin/sh
+if [ "$1" = trust ]; then exit 0; fi
+if [ "$1" = install ]; then
+  printf 'mise WARN Postinstall hook failed\n' >&2
+  exit 0
+fi
+exit 2
+`,
+    );
+    await chmod(miseScript, 0o700);
+
+    await assert.rejects(
+      execFileAsync(
+        setupScript,
+        [
+          "failed-install",
+          "",
+          Buffer.from("[hooks]\npostinstall = 'exit 1'\n").toString("base64"),
+          PROJECT_INSTALL_COMPLETION_MARKER,
+        ],
+        { env: { ...process.env, HOME: home } },
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(
+          String((error as Error & { stderr?: string }).stderr),
+          /mise postinstall did not complete successfully/,
+        );
+        return true;
+      },
+    );
   });
 
   it("merges first-class mise options over raw config", () => {

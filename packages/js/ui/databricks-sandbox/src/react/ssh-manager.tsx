@@ -43,6 +43,7 @@ import {
 } from "./built-in-service-launcher.tsx";
 import { useSshClient } from "./client.ts";
 import { MachinePowerButton } from "./machine-power-control.tsx";
+import { ensureProjectMachineRunning } from "./project-machine-readiness.ts";
 import { resolveServiceUrl } from "./service-url.ts";
 
 const REFRESH_INTERVAL_MS = 5_000;
@@ -123,6 +124,25 @@ export function SshManager({ basePath, className }: SshManagerProps) {
     [...busyOperations].some((operation) => operation.startsWith(`machine:${machineId}:`));
   const isProjectBusy = (projectId: string) =>
     [...busyOperations].some((operation) => operation.startsWith(`project:${projectId}:`));
+
+  const updateMachine = useCallback((machine: SshMachine) => {
+    setMachines((current) =>
+      current.some((candidate) => candidate.id === machine.id)
+        ? current.map((candidate) => (candidate.id === machine.id ? machine : candidate))
+        : [machine, ...current],
+    );
+  }, []);
+
+  const ensureMachineRunningForProject = useCallback(
+    (projectMachineId: string) =>
+      ensureProjectMachineRunning(
+        machines,
+        projectMachineId,
+        (id) => client.start(id),
+        updateMachine,
+      ),
+    [client, machines, updateMachine],
+  );
 
   const refresh = useCallback(
     async (showLoading = false) => {
@@ -276,6 +296,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
       ...(entry ? { openPath: entry } : {}),
     };
     try {
+      await ensureMachineRunningForProject(machineId);
       await client.addProject(input);
       setProjectName("");
       setPort("");
@@ -292,20 +313,53 @@ export function SshManager({ basePath, className }: SshManagerProps) {
     }
   };
 
-  const openProjectTerminal = async (project: SshProject) => {
-    const operation = projectOperation(project.id, "terminal");
+  const runProjectRequest = async <T,>(
+    project: SshProject,
+    action: string,
+    request: () => Promise<T> | T,
+  ): Promise<T | undefined> => {
+    const operation = projectOperation(project.id, action);
     setOperationBusy(operation, true);
     setError(undefined);
     try {
-      const result = await client.openProjectTerminal(project.id);
-      if (result.service.state === "ready") {
-        window.open(resolveServiceUrl(result.service.openUrl), "_blank", "noopener,noreferrer");
-      }
+      await ensureMachineRunningForProject(project.machineId);
+      const result = await request();
       await refresh();
+      return result;
     } catch (caught) {
       setError(errorMessage(caught));
+      await refresh().catch(() => undefined);
+      return undefined;
     } finally {
       setOperationBusy(operation, false);
+    }
+  };
+
+  const openProject = (project: SshProject) => {
+    if (!project.openUrl) return;
+    const machine = machines.find((candidate) => candidate.id === project.machineId);
+    if (machine?.status === "running") {
+      window.open(resolveServiceUrl(project.openUrl), "_blank", "noopener,noreferrer");
+      return;
+    }
+    const pendingWindow = window.open("about:blank", "_blank");
+    if (pendingWindow) pendingWindow.opener = null;
+    void runProjectRequest(project, "open", () => {
+      const openUrl = resolveServiceUrl(project.openUrl!);
+      if (pendingWindow) pendingWindow.location.replace(openUrl);
+      else window.open(openUrl, "_blank", "noopener,noreferrer");
+      return true;
+    }).then((result) => {
+      if (result !== true) pendingWindow?.close();
+    });
+  };
+
+  const openProjectTerminal = async (project: SshProject) => {
+    const result = await runProjectRequest(project, "terminal", () =>
+      client.openProjectTerminal(project.id),
+    );
+    if (result?.service.state === "ready") {
+      window.open(resolveServiceUrl(result.service.openUrl), "_blank", "noopener,noreferrer");
     }
   };
 
@@ -314,18 +368,10 @@ export function SshManager({ basePath, className }: SshManagerProps) {
     project: SshProject,
     action: ProjectConfirmation["action"],
   ): Promise<void> => {
-    const operation = projectOperation(project.id, action);
-    setOperationBusy(operation, true);
-    setError(undefined);
-    try {
+    await runProjectRequest(project, action, async () => {
       if (action === "reset") await client.resetProject(project.id);
       else await client.removeProject(project.id);
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      await refresh().catch(() => undefined);
-      setOperationBusy(operation, false);
-    }
+    });
   };
 
   /** Runs the project action selected in the confirmation dialog. */
@@ -653,27 +699,44 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                 <div className="divide-y border-t">
                   {projects.map((project) => {
                     const projectLogOpen = Boolean(selectedProjectLogs[project.id]);
+                    const projectBusy = isProjectBusy(project.id);
                     return (
-                      <div key={project.id} className="min-w-0 overflow-hidden">
+                      <div
+                        key={project.id}
+                        className="min-w-0 overflow-hidden"
+                        aria-busy={projectBusy || undefined}
+                      >
                         <div className="px-3 py-3 sm:px-4">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
                               <p className="truncate text-sm font-medium">{project.name}</p>
-                              <Badge variant={project.state === "ready" ? "secondary" : "outline"}>
-                                {project.state}
+                              <Badge
+                                variant={
+                                  !projectBusy && project.state === "ready"
+                                    ? "secondary"
+                                    : "outline"
+                                }
+                                className="gap-1"
+                              >
+                                {projectBusy ? <Spinner className="size-3" /> : null}
+                                {projectBusy ? "loading" : project.state}
                               </Badge>
                             </div>
                             <div className="flex w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:shrink-0 sm:flex-nowrap">
                               {project.openUrl ? (
-                                <Button type="button" variant="outline" size="sm" asChild>
-                                  <a
-                                    href={project.openUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={projectBusy}
+                                  onClick={() => openProject(project)}
+                                >
+                                  {isBusy(projectOperation(project.id, "open")) ? (
+                                    <Spinner className="size-3.5" />
+                                  ) : (
                                     <ExternalLinkIcon className="size-3.5" />
-                                    Open
-                                  </a>
+                                  )}
+                                  Open
                                 </Button>
                               ) : null}
                               <Button
@@ -681,7 +744,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                                 variant="outline"
                                 size="sm"
                                 aria-label={`Open terminal for ${project.name}`}
-                                disabled={isProjectBusy(project.id)}
+                                disabled={projectBusy}
                                 onClick={() => void openProjectTerminal(project)}
                               >
                                 {isBusy(projectOperation(project.id, "terminal")) ? (
@@ -718,7 +781,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                                 size="icon"
                                 aria-label={`Reset ${project.name}`}
                                 title="Reset project"
-                                disabled={isProjectBusy(project.id)}
+                                disabled={projectBusy}
                                 onClick={() => setProjectConfirmation({ action: "reset", project })}
                               >
                                 {isBusy(projectOperation(project.id, "reset")) ? (
@@ -733,7 +796,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                                 size="icon"
                                 aria-label={`Delete ${project.name}`}
                                 title="Delete project"
-                                disabled={isProjectBusy(project.id)}
+                                disabled={projectBusy}
                                 onClick={() =>
                                   setProjectConfirmation({ action: "remove", project })
                                 }
@@ -758,12 +821,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                               <>
                                 <ProjectDetail label="Port" value={String(project.port)} code />
                                 <ProjectDetail label="Route" value={project.path} code wide />
-                                <ProjectDetail
-                                  label="Open URL"
-                                  value={project.openUrl}
-                                  href={project.openUrl}
-                                  wide
-                                />
+                                <ProjectDetail label="Open URL" value={project.openUrl} wide />
                                 <ProjectDetail
                                   label="Strip prefix"
                                   value={project.stripPrefix ? "Yes" : "No"}
@@ -928,14 +986,12 @@ function ProjectDetail({
   label,
   value,
   secondary,
-  href,
   code = false,
   wide = false,
 }: {
   label: string;
   value: string;
   secondary?: string;
-  href?: string;
   code?: boolean;
   wide?: boolean;
 }) {
@@ -944,18 +1000,7 @@ function ProjectDetail({
     <div className={cn("min-w-0", wide && "sm:col-span-2")}>
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 min-w-0">
-        {href ? (
-          <a
-            className={cn(valueClassName, "text-primary hover:underline")}
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {value}
-          </a>
-        ) : (
-          <span className={valueClassName}>{value}</span>
-        )}
+        <span className={valueClassName}>{value}</span>
         {secondary ? (
           <span className="mt-0.5 block break-all font-mono text-sm text-muted-foreground">
             {secondary}
