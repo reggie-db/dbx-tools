@@ -69,6 +69,8 @@ describe("packaged Sandbox services", () => {
     assert.match(document.tasks.start.run, /--interface 127\.0\.0\.1 --port 7681/);
     assert.match(document.tasks.start.run, /--writable --url-arg/);
     assert.match(document.tasks.start.run, /--client-option rendererType=webgl/);
+    assert.match(document.hooks.postinstall, /\/proc\/\$pid\/cmdline/);
+    assert.match(document.tasks.start.run, /\/proc\/\$pid\/cmdline/);
     assert.match(document.tasks.start.run, /ttyd did not become ready/);
     assert.match(document.tasks.stop.run, /stop-ttyd/);
     assert.equal(document.tasks.start.hide, true);
@@ -129,6 +131,8 @@ describe("packaged Sandbox services", () => {
     assert.match(start, /-select-de xfce -xstartup/);
     assert.match(start, /-websocketPort 6080/);
     assert.match(start, /-disableBasicAuth -SecurityTypes None/);
+    assert.match(install, /\/proc\/\$pid\/cmdline/);
+    assert.match(start, /\/proc\/\$pid\/cmdline/);
     assert.match(start, /KasmVNC web client did not become ready/);
     assert.equal(document.tasks.start.hide, true);
     assert.equal(document.tasks.stop.hide, true);
@@ -182,6 +186,8 @@ describe("packaged Sandbox services", () => {
     assert.match(document.tasks.start.run, /--bind 127\.0\.0\.1/);
     assert.match(document.tasks.start.run, /--port 61208/);
     assert.match(document.tasks.start.run, /Glances did not become ready/);
+    assert.match(document.hooks.postinstall, /\/proc\/\$pid\/cmdline/);
+    assert.match(document.tasks.start.run, /\/proc\/\$pid\/cmdline/);
     assert.match(document.tasks.stop.run, /stop-glances/);
     assert.equal(definition.environment.DBX_TOOLS_SERVICE_PATH, "/sandbox/metrics/machine");
     assert.equal(definition.target.remotePort, 61208);

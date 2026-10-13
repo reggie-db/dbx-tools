@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { SshMachineService } from "@dbx-tools/shared-databricks-sandbox";
 import {
-  openBuiltInServiceWhenReady,
   selectedBuiltInServiceLog,
+  waitForBuiltInServiceReady,
 } from "../src/react/built-in-service-launcher.tsx";
 
 const snapshot = (state: SshMachineService["state"]): SshMachineService => ({
@@ -13,8 +13,8 @@ const snapshot = (state: SshMachineService["state"]): SshMachineService => ({
   state,
 });
 
-describe("openBuiltInServiceWhenReady", () => {
-  it("does not open a tab until the lifecycle stream reports ready", async () => {
+describe("waitForBuiltInServiceReady", () => {
+  it("does not resolve until the lifecycle stream reports ready", async () => {
     let releaseReady: (() => void) | undefined;
     let observedStarting: (() => void) | undefined;
     const starting = new Promise<void>((resolve) => {
@@ -29,46 +29,30 @@ describe("openBuiltInServiceWhenReady", () => {
       await ready;
       yield snapshot("ready");
     }
-    const opened: string[] = [];
     const observed: string[] = [];
 
-    const result = openBuiltInServiceWhenReady(
-      snapshots(),
-      "Terminal",
-      (current) => observed.push(current.state),
-      (path) => opened.push(path),
+    const result = waitForBuiltInServiceReady(snapshots(), "Terminal", (current) =>
+      observed.push(current.state),
     );
     await starting;
-    assert.deepEqual(opened, []);
 
     releaseReady?.();
     assert.equal((await result).state, "ready");
     assert.deepEqual(observed, ["starting", "ready"]);
-    assert.deepEqual(opened, ["/sandbox/terminal/machine-1/"]);
   });
 
-  it("does not open a tab when provisioning fails", async () => {
+  it("rejects when provisioning fails", async () => {
     async function* snapshots(): AsyncIterable<SshMachineService> {
       yield snapshot("starting");
       yield { ...snapshot("error"), error: "install failed" };
     }
-    const opened: string[] = [];
-
     await assert.rejects(
-      openBuiltInServiceWhenReady(
-        snapshots(),
-        "Terminal",
-        () => undefined,
-        (path) => {
-          opened.push(path);
-        },
-      ),
+      waitForBuiltInServiceReady(snapshots(), "Terminal", () => undefined),
       /install failed/,
     );
-    assert.deepEqual(opened, []);
   });
 
-  it("opens as soon as ready without waiting for the stream to close", async () => {
+  it("resolves as soon as ready without waiting for the stream to close", async () => {
     let releaseStream: (() => void) | undefined;
     const streamClosed = new Promise<void>((resolve) => {
       releaseStream = resolve;
@@ -78,17 +62,9 @@ describe("openBuiltInServiceWhenReady", () => {
       yield snapshot("ready");
       await streamClosed;
     }
-    const opened: string[] = [];
-
-    const result = await openBuiltInServiceWhenReady(
-      snapshots(),
-      "Terminal",
-      () => undefined,
-      (path) => opened.push(path),
-    );
+    const result = await waitForBuiltInServiceReady(snapshots(), "Terminal", () => undefined);
 
     assert.equal(result.state, "ready");
-    assert.deepEqual(opened, ["/sandbox/terminal/machine-1/"]);
     releaseStream?.();
   });
 });

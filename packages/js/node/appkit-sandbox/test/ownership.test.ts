@@ -853,7 +853,7 @@ describe("managed Sandbox ownership", () => {
     assert.match(setupCommands[1] ?? "", /'start' 'false'$/);
     assert.match(setupCommands[2] ?? "", /'start' 'true'$/);
     assert.equal(store.serviceProjects.length, 1);
-    assert.equal(store.serviceProjects[0]?.definitionVersion, 10);
+    assert.equal(store.serviceProjects[0]?.definitionVersion, 11);
     assert.equal(store.serviceProjects[0]?.directory, "~/projects/.sandbox-services/desktop");
     assert.deepEqual(
       ssh.routes.list("owned", "user-b", { includeInternal: true }).map((route) => route.path),
@@ -1216,7 +1216,7 @@ describe("managed Sandbox ownership", () => {
       workspaceScope: "workspace",
       machineId: "owned",
       serviceKind: "desktop",
-      definitionVersion: 10,
+      definitionVersion: 11,
       directory: "~/projects/.sandbox-services/desktop",
       path: "/sandbox/desktop/owned",
       port: 6080,

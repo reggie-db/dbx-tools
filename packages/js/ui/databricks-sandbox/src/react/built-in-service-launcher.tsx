@@ -91,12 +91,11 @@ export function BuiltInServiceLog({ service }: BuiltInServiceLogProps) {
   );
 }
 
-/** @internal Waits for a service lifecycle stream before opening its ready route. */
-export async function openBuiltInServiceWhenReady(
+/** @internal Waits for a service lifecycle stream to report a ready route. */
+export async function waitForBuiltInServiceReady(
   snapshots: AsyncIterable<SshMachineService>,
   label: string,
   onSnapshot: (snapshot: SshMachineService) => void,
-  open: (path: string) => unknown,
 ): Promise<SshMachineService> {
   let finalSnapshot: SshMachineService | undefined;
   for await (const snapshot of snapshots) {
@@ -106,9 +105,6 @@ export async function openBuiltInServiceWhenReady(
       throw new Error(snapshot.error || `${label} did not become ready.`);
     }
     if (snapshot.state !== "ready") continue;
-    if (open(snapshot.openUrl) === null) {
-      throw new Error(`${label} is ready. Tap it again to open.`);
-    }
     return snapshot;
   }
   throw new Error(finalSnapshot?.error || `${label} did not become ready.`);
@@ -136,19 +132,14 @@ export function BuiltInServiceLauncher({
   const launch = async () => {
     if (disabled || busy) return;
     onActivate?.();
-    if (service?.state === "ready") {
-      window.open(resolveServiceUrl(service.openUrl), "_blank", "noopener,noreferrer");
-      return;
-    }
     setBusy(true);
     onBusyChange?.(true);
     onError(undefined);
     try {
-      await openBuiltInServiceWhenReady(
+      await waitForBuiltInServiceReady(
         client.startService(machine.id, kind),
         definition.label,
         onSnapshot,
-        (path) => window.open(resolveServiceUrl(path), "_blank", "noopener,noreferrer"),
       );
     } catch (caught) {
       onError(caught instanceof Error ? caught.message : String(caught));
@@ -159,13 +150,46 @@ export function BuiltInServiceLauncher({
     }
   };
 
-  const primary = (
+  const primaryContent = busy || service?.state === "starting" ? (
+    <Spinner className="size-3.5" />
+  ) : (
+    <Icon className="size-3.5" />
+  );
+  const primaryLabel = <span className={isMobile ? "sr-only" : undefined}>{definition.label}</span>;
+  const primary = service?.state === "ready" ? (
+    <Button
+      size="sm"
+      variant="outline"
+      className={isMobile ? "shrink-0 px-2" : "shrink-0"}
+      aria-label={`Open ${definition.label}`}
+      disabled={disabled}
+      asChild
+    >
+      <a
+        href={resolveServiceUrl(service.openUrl)}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-disabled={disabled}
+        tabIndex={disabled ? -1 : undefined}
+        onClick={(event) => {
+          if (disabled) {
+            event.preventDefault();
+            return;
+          }
+          onActivate?.();
+        }}
+      >
+        {primaryContent}
+        {primaryLabel}
+      </a>
+    </Button>
+  ) : (
     <Button
       type="button"
       size="sm"
       variant="outline"
       className={isMobile ? "shrink-0 px-2" : "shrink-0"}
-      aria-label={`${service?.state === "ready" ? "Open" : "Start"} ${definition.label}`}
+      aria-label={`Start ${definition.label}`}
       disabled={disabled || busy}
       onClick={(event) => {
         if (longPress.shouldSuppressClick()) {
@@ -176,12 +200,8 @@ export function BuiltInServiceLauncher({
       }}
       {...(isMobile ? longPress.handlers : {})}
     >
-      {busy || service?.state === "starting" ? (
-        <Spinner className="size-3.5" />
-      ) : (
-        <Icon className="size-3.5" />
-      )}
-      <span className={isMobile ? "sr-only" : undefined}>{definition.label}</span>
+      {primaryContent}
+      {primaryLabel}
     </Button>
   );
 

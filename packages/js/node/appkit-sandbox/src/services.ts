@@ -226,7 +226,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "terminal":
       return {
         fileName: "terminal.mise.toml",
-        definitionVersion: 3,
+        definitionVersion: 4,
         target: (path) => ({
           remoteHost: "127.0.0.1",
           remotePort: TTYD_PORT,
@@ -238,7 +238,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "desktop":
       return {
         fileName: "desktop.mise.toml",
-        definitionVersion: 10,
+        definitionVersion: 11,
         environment: desktopMiseEnvironment,
         target: (path) => ({
           ...desktopBrowserMetadata,
@@ -248,7 +248,7 @@ function serviceMetadata(kind: SshMachineServiceKind): ServiceMetadata {
     case "stats":
       return {
         fileName: "stats.mise.toml",
-        definitionVersion: 1,
+        definitionVersion: 2,
         target: (path) => ({
           remoteHost: "127.0.0.1",
           remotePort: GLANCES_PORT,

@@ -250,7 +250,7 @@ export const AssistantMarkdown = ({
     isAnimating={animate}
     className={cn(
       "prose prose-sm dark:prose-invert min-w-0 max-w-full overflow-x-hidden break-words",
-      "leading-relaxed prose-p:my-1.5 prose-p:leading-relaxed",
+      "leading-snug prose-p:my-1.5 prose-p:leading-snug sm:leading-relaxed sm:prose-p:leading-relaxed",
       "prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5",
       "prose-headings:font-semibold prose-headings:tracking-tight",
       "prose-h1:text-lg prose-h1:mt-4 prose-h1:mb-2",
@@ -283,10 +283,10 @@ export const ToolMarkdown = ({ children, className }: { children: string; classN
     linkSafety={LINK_SAFETY}
     className={cn(
       "prose prose-sm dark:prose-invert min-w-0 max-w-full overflow-x-hidden break-words",
-      "text-xs leading-snug text-muted-foreground",
-      "prose-p:my-0.5 prose-p:leading-snug [&_p]:!leading-snug",
+      "text-xs leading-tight text-muted-foreground sm:leading-snug",
+      "prose-p:my-0.5 prose-p:leading-tight [&_p]:!leading-tight sm:prose-p:leading-snug sm:[&_p]:!leading-snug",
       "prose-ul:my-0.5 prose-ul:pl-4 prose-ol:my-0.5 prose-ol:pl-4",
-      "prose-li:my-0 prose-li:leading-snug prose-li:marker:text-muted-foreground/60",
+      "prose-li:my-0 prose-li:leading-tight prose-li:marker:text-muted-foreground/60 sm:prose-li:leading-snug",
       "prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold",
       "prose-strong:text-foreground/90 prose-strong:font-medium",
       "prose-code:text-xs prose-code:font-medium",
@@ -380,7 +380,7 @@ export const SqlBlock = ({ sql }: { sql: string }) => {
         value={formatted}
         className="absolute right-1.5 top-1.5 z-10 bg-background/70 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
       />
-      <pre className="max-w-full overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
+      <pre className="max-w-full overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs leading-tight sm:leading-relaxed">
         {html === null ? (
           <code>{formatted}</code>
         ) : (
@@ -405,7 +405,7 @@ export const SourceBlock = ({
   return (
     <pre
       className={cn(
-        "max-w-full overflow-auto whitespace-pre font-mono text-xs leading-snug",
+        "max-w-full overflow-auto whitespace-pre font-mono text-xs leading-tight sm:leading-snug",
         className,
       )}
     >

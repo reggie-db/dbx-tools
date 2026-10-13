@@ -289,7 +289,7 @@ const MessageGroupBody = ({
   return (
     <div className="flex flex-col gap-1.5">
       {!omitQuestion && group.question && (
-        <div className="rounded border-l-2 border-primary/40 bg-background/40 px-2 py-1 text-xs italic leading-snug text-muted-foreground">
+        <div className="rounded border-l-2 border-primary/40 bg-background/40 px-2 py-1 text-xs italic leading-tight text-muted-foreground sm:leading-snug">
           {group.question}
         </div>
       )}
@@ -416,7 +416,7 @@ const RawToolPayload = ({
           {structured === undefined ? (
             <JsonBlock
               json={formatRawToolPayload(value)}
-              className="border-t border-border/50 px-2 py-2 text-foreground"
+              className="border-t border-border/50 px-2 py-2 leading-tight text-foreground sm:leading-relaxed"
             />
           ) : (
             <RecordPreview
@@ -644,7 +644,7 @@ const ToolCallDetails = ({
   return (
     <div className="flex flex-col gap-2">
       {showQuestion && question ? (
-        <p className="break-words px-0.5 text-[11px] leading-snug text-muted-foreground">
+        <p className="break-words px-0.5 text-[11px] leading-tight text-muted-foreground sm:leading-snug">
           {question}
         </p>
       ) : null}
@@ -702,7 +702,7 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
         {verb}
       </span>
       {question && (
-        <span className="mt-0.5 block break-words text-[11px] leading-snug text-foreground/75">
+        <span className="mt-0.5 block break-words text-[11px] leading-tight text-foreground/75 sm:leading-snug">
           {question}
         </span>
       )}

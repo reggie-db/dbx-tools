@@ -551,7 +551,12 @@ export const UserBubble = ({ message }: { message: UIMessage }) => {
             </div>
           )}
           {text && (
-            <div className={cn("whitespace-pre-wrap break-words px-1", files.length > 0 && "pt-2")}>
+            <div
+              className={cn(
+                "whitespace-pre-wrap break-words px-1 leading-snug sm:leading-normal",
+                files.length > 0 && "pt-2",
+              )}
+            >
               {text}
             </div>
           )}

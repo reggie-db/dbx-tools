@@ -404,21 +404,31 @@ cat >"$stop_script" <<'EOF'
 #!/bin/sh
 set -eu
 runtime="$HOME/.dbx-tools/runtime/desktop"
+pid_matches() {
+  pid_file="$1"
+  expected="$2"
+  [ -s "$pid_file" ] || return 1
+  pid=$(cat "$pid_file")
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "$expected" >/dev/null
+}
 stop_pid() {
   pid_file="$1"
-  if [ -s "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-    kill "$(cat "$pid_file")"
+  expected="$2"
+  if pid_matches "$pid_file" "$expected"; then
+    pid=$(cat "$pid_file")
+    kill "$pid"
     for _ in $(seq 1 40); do
-      kill -0 "$(cat "$pid_file")" 2>/dev/null || break
+      kill -0 "$pid" 2>/dev/null || break
       sleep 0.25
     done
   fi
   rm -f "$pid_file"
 }
-stop_pid "$runtime/kasmvncserver.pid"
-stop_pid "$runtime/websockify.pid"
-stop_pid "$runtime/session.pid"
-stop_pid "$runtime/xvnc.pid"
+stop_pid "$runtime/kasmvncserver.pid" "kasmvncserver"
+stop_pid "$runtime/websockify.pid" "websockify"
+stop_pid "$runtime/session.pid" "start-xfce.sh"
+stop_pid "$runtime/xvnc.pid" "Xkasmvnc"
 kasmvncserver -kill :20 >/dev/null 2>&1 || true
 rm -f "$runtime/session.ready"
 EOF
@@ -430,7 +440,7 @@ hide = true
 run = '''
 set -eu
 runtime="$HOME/.dbx-tools/runtime/desktop"
-version="10"
+version="11"
 version_file="$runtime/version"
 server_pid="$runtime/kasmvncserver.pid"
 session_ready="$runtime/session.ready"
@@ -438,10 +448,17 @@ session_script="$runtime/start-xfce.sh"
 stop_script="$runtime/stop"
 log_file="$runtime/desktop.log"
 
-if [ ! -f "$version_file" ] || [ "$(cat "$version_file")" != "$version" ]; then
+pid_matches() {
+  [ -s "$server_pid" ] || return 1
+  pid=$(cat "$server_pid")
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "kasmvncserver" >/dev/null
+}
+
+if [ ! -f "$version_file" ] || [ "$(cat "$version_file")" != "$version" ] || ! pid_matches; then
   "$stop_script"
 fi
-if ! [ -s "$server_pid" ] || ! kill -0 "$(cat "$server_pid")" 2>/dev/null; then
+if ! pid_matches; then
   kasmvncserver -kill :20 >/dev/null 2>&1 || true
   rm -f "$session_ready"
   nohup kasmvncserver :20 -fg -select-de xfce -xstartup "$session_script" \

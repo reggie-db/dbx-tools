@@ -40,10 +40,18 @@ cat >"$stop_script" <<'EOF'
 set -eu
 runtime="$HOME/.dbx-tools/runtime"
 pid_file="$runtime/glances.pid"
-if [ -s "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-  kill "$(cat "$pid_file")"
+expected="$runtime/glances/bin/glances"
+pid_matches() {
+  [ -s "$pid_file" ] || return 1
+  pid=$(cat "$pid_file")
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "$expected" >/dev/null
+}
+if pid_matches; then
+  pid=$(cat "$pid_file")
+  kill "$pid"
   for _ in $(seq 1 40); do
-    kill -0 "$(cat "$pid_file")" 2>/dev/null || break
+    kill -0 "$pid" 2>/dev/null || break
     sleep 0.25
   done
 fi
@@ -65,11 +73,18 @@ version="$(cat "$venv/.version")"
 running_version_file="$runtime/glances.running-version"
 stop_script="$runtime/bin/stop-glances"
 
+pid_matches() {
+  [ -s "$pid_file" ] || return 1
+  pid=$(cat "$pid_file")
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "$venv/bin/glances" >/dev/null
+}
+
 running_version="$(cat "$running_version_file" 2>/dev/null || true)"
-if [ -s "$pid_file" ] && [ "$running_version" != "$version" ]; then
+if [ -s "$pid_file" ] && { [ "$running_version" != "$version" ] || ! pid_matches; }; then
   "$stop_script"
 fi
-if ! [ -s "$pid_file" ] || ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+if ! pid_matches; then
   nohup "$venv/bin/glances" --config "$config" --webserver --bind 127.0.0.1 \
     --port 61208 --disable-autodiscover >"$log_file" 2>&1 </dev/null &
   echo $! >"$pid_file"

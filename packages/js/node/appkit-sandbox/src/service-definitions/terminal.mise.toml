@@ -80,16 +80,29 @@ cat >"$stop_script" <<'EOF'
 #!/bin/sh
 set -eu
 runtime="$HOME/.dbx-tools/runtime"
-for pid_file in "$runtime/ttyd.pid" "$runtime/dinotty.pid"; do
-  if [ -s "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-    kill "$(cat "$pid_file")"
+pid_matches() {
+  pid_file="$1"
+  expected="$2"
+  [ -s "$pid_file" ] || return 1
+  pid=$(cat "$pid_file")
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "$expected" >/dev/null
+}
+stop_pid() {
+  pid_file="$1"
+  expected="$2"
+  if pid_matches "$pid_file" "$expected"; then
+    pid=$(cat "$pid_file")
+    kill "$pid"
     for _ in $(seq 1 40); do
-      kill -0 "$(cat "$pid_file")" 2>/dev/null || break
+      kill -0 "$pid" 2>/dev/null || break
       sleep 0.25
     done
   fi
   rm -f "$pid_file"
-done
+}
+stop_pid "$runtime/ttyd.pid" "$runtime/bin/ttyd"
+stop_pid "$runtime/dinotty.pid" "dinotty"
 rm -f "$runtime/ttyd.running-version"
 EOF
 
@@ -111,14 +124,21 @@ running_version_file="$runtime/ttyd.running-version"
 shell_wrapper="$runtime/bin/dbx-tools-shell"
 stop_script="$runtime/bin/stop-ttyd"
 
+pid_matches() {
+  [ -s "$pid_file" ] || return 1
+  pid=$(cat "$pid_file")
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  tr '\0' ' ' <"/proc/$pid/cmdline" | grep -F -- "$bin" >/dev/null
+}
+
 version="$(cat "$version_file")"
 running_version="$(cat "$running_version_file" 2>/dev/null || true)"
 if [ -s "$legacy_pid_file" ] || \
-  { [ -s "$pid_file" ] && [ "$running_version" != "$version" ]; }; then
+  { [ -s "$pid_file" ] && { [ "$running_version" != "$version" ] || ! pid_matches; }; }; then
   "$stop_script"
 fi
 
-if ! [ -s "$pid_file" ] || ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+if ! pid_matches; then
   nohup "$bin" --interface 127.0.0.1 --port 7681 --writable --url-arg \
     --client-option term=xterm-256color --client-option rendererType=webgl \
     --client-option cursorStyle=bar --client-option copyOnSelect=true \
