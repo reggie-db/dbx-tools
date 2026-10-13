@@ -1,7 +1,8 @@
 /** Map Python OS errors onto Node `fs` error codes such as `ENOENT`. */
 
 export function nodeError(error: unknown, code: string, path: string): Error {
-  return Object.assign(error instanceof Error ? error : new Error(String(error)), { code, path });
+  const detail = error instanceof Error ? error.message : String(error);
+  return Object.assign(new Error(`${code}: ${detail}`, { cause: error }), { code, path });
 }
 
 /** Rethrow a Python filesystem failure as a Node-shaped error, or rethrow unchanged. */

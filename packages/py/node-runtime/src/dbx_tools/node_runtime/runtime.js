@@ -11870,7 +11870,8 @@ var import_node_stream2 = __toESM(require_stream_browserify(), 1);
 
 // packages/py/node-runtime/shims/fs-errors.ts
 function nodeError(error, code, path) {
-  return Object.assign(error instanceof Error ? error : new Error(String(error)), { code, path });
+  const detail = error instanceof Error ? error.message : String(error);
+  return Object.assign(new Error(`${code}: ${detail}`, { cause: error }), { code, path });
 }
 function translatePythonError(cause, path) {
   const message = String(cause);
