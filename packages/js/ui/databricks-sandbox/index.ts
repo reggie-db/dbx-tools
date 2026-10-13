@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-databricks-sandbox";
-export const PACKAGE_VERSION = "0.9.125";
+export const PACKAGE_VERSION = "0.9.126";
 export * as reactBuiltInServiceLauncher from "./src/react/built-in-service-launcher.tsx";
 export * as reactClient from "./src/react/client.ts";
 export * as reactMachinePowerControl from "./src/react/machine-power-control.tsx";
