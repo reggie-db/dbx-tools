@@ -562,6 +562,16 @@
         }
       ]
     },
+    "slop:review": {
+      "name": "slop:review",
+      "description": "Review repository code while honoring generated gitignore exclusions",
+      "steps": [
+        {
+          "exec": "slop-detector review . --format json --config .slopconfig.yaml",
+          "receiveArgs": true
+        }
+      ]
+    },
     "sync": {
       "name": "sync",
       "steps": [

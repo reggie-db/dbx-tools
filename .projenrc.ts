@@ -14,6 +14,7 @@
  * `applyToProjects`es, synths.
  */
 import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { bunWorkflow, project, projectJs } from "@dbx-tools/projen";
 import { Component, DependencyType, javascript } from "projen";
@@ -40,6 +41,32 @@ class BrandPackageAssets extends Component {
     execFileSync("bun", [resolve(this.project.outdir, "branding/generate-package-assets.mjs")], {
       stdio: "inherit",
     });
+  }
+}
+
+/** Keep ai-slop-detector's exclusions synchronized with the generated .gitignore. */
+class SlopDetectorConfig extends Component {
+  /** Regenerate the scanner config after Projen writes the final .gitignore. */
+  public override postSynthesize(): void {
+    const gitignore = readFileSync(resolve(this.project.outdir, ".gitignore"), "utf8");
+    const patterns = [
+      ...new Set(
+        gitignore
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line && !line.startsWith("#") && !line.startsWith("!"))
+          .map((line) => line.replace(/^\//, ""))
+          .map((line) => (line.endsWith("/") ? `${line}**` : line)),
+      ),
+    ];
+    const config = [
+      "# Generated from .gitignore by .projenrc.ts. Do not edit directly.",
+      'version: "2.0"',
+      "ignore:",
+      ...patterns.map((pattern) => `  - ${JSON.stringify(pattern)}`),
+      "",
+    ].join("\n");
+    writeFileSync(resolve(this.project.outdir, ".slopconfig.yaml"), config);
   }
 }
 
@@ -1463,6 +1490,8 @@ root.addTask("graphiti:sync:verify-tag", {
   description: "Verify the Graphiti sync commit matches its release tag",
 });
 new BrandPackageAssets(root);
+new SlopDetectorConfig(root);
+root.annotateGenerated("/.slopconfig.yaml");
 
 // ---------------------------------------------------------------------------
 // Root development commands
@@ -1504,6 +1533,15 @@ root.addTask("demo:deploy", {
   receiveArgs: true,
   description: "Stage local artifacts and deploy the AppKit demo to its configured workspace",
 });
+root.addTask("slop:review", {
+  exec: "slop-detector review . --format json --config .slopconfig.yaml",
+  receiveArgs: true,
+  description: "Review repository code while honoring generated gitignore exclusions",
+});
+root.setScript(
+  "slop:review",
+  "slop-detector review . --format json --config .slopconfig.yaml",
+);
 
 // The generated release workflow publishes every npm workspace member,
 // including `@dbx-tools/projen`.
