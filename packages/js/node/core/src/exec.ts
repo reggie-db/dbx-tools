@@ -239,6 +239,7 @@ interface ParentSignalForwarderState {
   readonly children: Map<number, ChildProcessResult>;
   readonly handlers: Map<NodeJS.Signals, () => void>;
   readonly forwardingSignals: Set<NodeJS.Signals>;
+  readonly listeners: Set<(signal: NodeJS.Signals) => void>;
 }
 
 interface SignalExitEmitter {
@@ -255,6 +256,7 @@ const parentSignalForwarderState = functionUtils.memoize((): ParentSignalForward
   children: new Map(),
   handlers: new Map(),
   forwardingSignals: new Set(),
+  listeners: new Set(),
 }));
 const parentSignalShutdowns = new WeakMap<ChildProcessResult, ParentSignalShutdown>();
 
@@ -284,8 +286,34 @@ function installParentSignalHandlers(state: ParentSignalForwarderState): void {
   }
 }
 
+/**
+ * Subscribe to the process-global parent-termination trap used by {@link spawn}.
+ * Does not add a per-subscriber `process` listener; extra listeners would change
+ * whether the trap re-raises the signal after children exit.
+ *
+ * @param listener - Called synchronously when a forwarded parent signal arrives
+ * @returns Unsubscribe function
+ */
+export function onParentTerminationSignal(
+  listener: (signal: NodeJS.Signals) => void,
+): () => void {
+  const state = parentSignalForwarderState();
+  installParentSignalHandlers(state);
+  state.listeners.add(listener);
+  return () => {
+    state.listeners.delete(listener);
+  };
+}
+
 function forwardParentSignal(state: ParentSignalForwarderState, signal: NodeJS.Signals): void {
   if (state.forwardingSignals.has(signal)) return;
+  for (const listener of state.listeners) {
+    try {
+      listener(signal);
+    } catch (error) {
+      reportParentSignalError(signal, undefined, error);
+    }
+  }
   const shutdowns: Promise<void>[] = [];
   for (const [pid, child] of state.children) {
     if (child.exitCode !== null || child.signalCode !== null) {

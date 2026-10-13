@@ -36,6 +36,11 @@
       "type": "build"
     },
     {
+      "name": "bun",
+      "version": "1.4.2",
+      "type": "build"
+    },
+    {
       "name": "commander",
       "version": "catalog:",
       "type": "build"

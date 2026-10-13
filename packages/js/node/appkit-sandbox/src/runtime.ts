@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { WorkspaceClient } from "@databricks/appkit";
+import { exec } from "@dbx-tools/core";
 import { asyncUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
 import {
   SSH_MACHINE_SERVICE_KINDS,
@@ -107,6 +108,7 @@ export interface SandboxReaperResult {
 export class SshRuntime {
   readonly routes: SshRouteRegistry;
   private readonly keys: SshKeyStore;
+  private readonly stopParentTerminationSignal: () => void;
   private readonly sessions = new Map<string, SshSession>();
   private readonly connecting = new Map<string, Promise<SshSession>>();
   private ownership?: LakebaseMachineOwnershipStore;
@@ -120,6 +122,8 @@ export class SshRuntime {
   private readonly machineSetup = new Map<string, Promise<void>>();
   private reaperTimer?: ReturnType<typeof setInterval>;
   private reaping?: Promise<SandboxReaperResult>;
+  private closing?: Promise<void>;
+  private closed = false;
 
   /** Creates a runtime with optional preinitialized ownership storage. */
   constructor(
@@ -127,7 +131,13 @@ export class SshRuntime {
     ownership?: LakebaseMachineOwnershipStore,
   ) {
     this.keys = new SshKeyStore(config.keyDirectory);
-    this.routes = new SshRouteRegistry(config.routePrefix);
+    this.routes = new SshRouteRegistry(
+      config.routePrefix,
+      Math.min(2_147_000_000, config.connectTimeoutMs * 2 + 1_000),
+    );
+    this.stopParentTerminationSignal = exec.onParentTerminationSignal(() => {
+      this.routes.beginShutdown();
+    });
     this.ownership = ownership;
   }
 
@@ -904,36 +914,63 @@ export class SshRuntime {
   }
 
   /** Invalidates and closes one cached SSH session without changing the remote Sandbox. */
-  disconnect(workspaceScope: string, userId: string, machineId: string): void {
+  async disconnect(workspaceScope: string, userId: string, machineId: string): Promise<void> {
     const key = sessionKey(workspaceScope, userId, machineId);
     this.bumpEpoch(this.ownerEpochs, key);
-    void this.sessions
-      .get(key)
-      ?.close()
-      .catch((error) =>
-        logger.warn("failed to close disconnected SSH session", {
-          error: errorUtils.toError(error),
-        }),
-      );
+    const session = this.sessions.get(key);
+    const pending = this.connecting.get(key);
     this.sessions.delete(key);
     this.connecting.delete(key);
+    await this.routes.removeMachine(machineId, userId);
+    const results = await Promise.allSettled([
+      ...(session ? [session.close()] : []),
+      ...(pending ? [pending] : []),
+    ]);
+    for (const result of results) {
+      if (result.status === "rejected") {
+        logger.warn("failed to close disconnected SSH session", {
+          error: errorUtils.toError(result.reason),
+        });
+      }
+    }
   }
 
   /** Stops the reaper and closes sessions, routes, service state, and ownership resources. */
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    this.closed = true;
+    this.routes.beginShutdown();
+    this.closing ??= this.closeResources();
+    return this.closing;
+  }
+
+  private async closeResources(): Promise<void> {
     if (this.reaperTimer) clearInterval(this.reaperTimer);
     this.reaperTimer = undefined;
-    await this.reaping?.catch(() => undefined);
-    await Promise.all([...this.sessions.values()].map((session) => session.close()));
-    this.sessions.clear();
+    const pendingConnections = [...this.connecting.values()];
+    const pendingOperations = [
+      ...this.startingServices.values(),
+      ...this.machineSetup.values(),
+      ...this.machineTransitions.values(),
+    ];
     this.connecting.clear();
-    this.services.clear();
     this.startingServices.clear();
-    this.machineEpochs.clear();
-    this.ownerEpochs.clear();
     this.machineSetup.clear();
-    await this.routes.close();
-    await this.ownership?.close();
+    this.machineTransitions.clear();
+    try {
+      await this.reaping?.catch(() => undefined);
+      await this.routes.close();
+      await Promise.all([...this.sessions.values()].map((session) => session.close()));
+      await Promise.allSettled([...pendingConnections, ...pendingOperations]);
+      this.sessions.clear();
+      this.services.clear();
+      this.projectStates.clear();
+      this.projectLogs.clear();
+      this.machineEpochs.clear();
+      this.ownerEpochs.clear();
+      await this.ownership?.close();
+    } finally {
+      this.stopParentTerminationSignal();
+    }
   }
 
   private async assertAssigned(
@@ -1123,6 +1160,7 @@ export class SshRuntime {
     epoch: RuntimeEpoch,
     signal?: AbortSignal,
   ): Promise<SshSession> {
+    if (this.closed) throw new Error("SSH runtime is closed");
     const api = new DatabricksSandboxClient(client);
     const key = sessionKey(api.workspaceScope(), userId, machine.sandboxId);
     this.assertRuntimeEpoch(api.workspaceScope(), userId, machine.sandboxId, epoch);
@@ -1757,14 +1795,19 @@ export class SshRuntime {
 
   private async clearMachineRuntime(workspaceScope: string, machineId: string): Promise<void> {
     this.bumpEpoch(this.machineEpochs, machineRuntimeKey(workspaceScope, machineId));
+    await this.routes.removeMachine(machineId);
+    const pendingConnections: Promise<SshSession>[] = [];
     for (const [key, session] of this.sessions) {
       if (!sessionKeyMatchesMachine(key, workspaceScope, machineId)) continue;
       await session.close();
       this.sessions.delete(key);
     }
-    for (const key of this.connecting.keys()) {
-      if (sessionKeyMatchesMachine(key, workspaceScope, machineId)) this.connecting.delete(key);
+    for (const [key, pending] of this.connecting) {
+      if (!sessionKeyMatchesMachine(key, workspaceScope, machineId)) continue;
+      pendingConnections.push(pending);
+      this.connecting.delete(key);
     }
+    await Promise.allSettled(pendingConnections);
     for (const key of this.services.keys()) {
       if (serviceKeyMatchesMachine(key, workspaceScope, machineId)) this.services.delete(key);
     }
@@ -1784,7 +1827,6 @@ export class SshRuntime {
       }
     }
     this.machineSetup.delete(machineRuntimeKey(workspaceScope, machineId));
-    await this.routes.removeMachine(machineId);
   }
 
   private async refreshRemoteLifecycleStates(
@@ -1797,6 +1839,7 @@ export class SshRuntime {
   ): Promise<void> {
     const key = sessionKey(workspaceScope, userId, entry.sandboxId);
     if (normalizeStatus(entry.status) !== "running") {
+      await this.routes.removeMachine(entry.sandboxId, userId);
       await this.sessions.get(key)?.close();
       this.sessions.delete(key);
       return;

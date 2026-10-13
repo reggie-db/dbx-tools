@@ -97,7 +97,7 @@ describe("sshWorkspaceSandbox", () => {
       "sandbox-1",
       "sandbox-1",
       runtime,
-      {} as WorkspaceClient,
+      { config: { workspaceId: "workspace" } } as WorkspaceClient,
       "user@example.com",
     );
 
@@ -115,5 +115,33 @@ describe("sshWorkspaceSandbox", () => {
     assert.equal(result.stdoutDroppedBytes, 4);
     assert.equal(result.stderrTruncated, true);
     assert.equal(result.stderrDroppedBytes, 3);
+  });
+
+  it("waits for runtime disconnection before reporting destruction", async () => {
+    let finishDisconnect!: () => void;
+    const disconnecting = new Promise<void>((resolve) => {
+      finishDisconnect = resolve;
+    });
+    const runtime = {
+      disconnect: () => disconnecting,
+    } as unknown as SshRuntime;
+    const sandbox = new SshWorkspaceSandbox(
+      "sandbox-1",
+      "sandbox-1",
+      runtime,
+      { config: { workspaceId: "workspace" } } as WorkspaceClient,
+      "user@example.com",
+    );
+
+    let destroyed = false;
+    const destroy = sandbox.destroy().then(() => {
+      destroyed = true;
+    });
+    await Promise.resolve();
+    assert.equal(destroyed, false);
+
+    finishDisconnect();
+    await destroy;
+    assert.equal(destroyed, true);
   });
 });

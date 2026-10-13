@@ -87,6 +87,45 @@ describe("SshSession", () => {
     expect(close).toHaveBeenCalledOnce();
     expect(await command).toBe(130);
   });
+
+  it("destroys pending clients and waits for connection settlement when closing", async () => {
+    let finishConnection!: () => void;
+    const connecting = new Promise<void>((resolve) => {
+      finishConnection = resolve;
+    });
+    const destroy = vi.fn();
+    const session = new SshSession({
+      host: "gateway.example",
+      port: 2_222,
+      username: "sandbox",
+      privateKey: "key",
+      privateKeyPath: "/tmp/key",
+      knownHostsPath: "/tmp/known-hosts",
+      connectTimeoutMs: 1_000,
+      sshTransport: "ssh2",
+      ssh2Patch: "false",
+    });
+    (
+      session as unknown as {
+        pendingClients: Set<{ destroy(): void }>;
+        connecting: Promise<void>;
+      }
+    ).pendingClients.add({ destroy });
+    (session as unknown as { connecting: Promise<void> }).connecting = connecting;
+
+    let closed = false;
+    const firstClose = session.close().then(() => {
+      closed = true;
+    });
+    const secondClose = session.close();
+    await Promise.resolve();
+
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(closed).toBe(false);
+    finishConnection();
+    await Promise.all([firstClose, secondClose]);
+    expect(closed).toBe(true);
+  });
 });
 
 describe("resolvePublicGatewayAddresses", () => {

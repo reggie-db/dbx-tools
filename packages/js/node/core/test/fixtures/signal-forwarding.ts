@@ -28,9 +28,15 @@ if (mode === "child") {
     stderr: "ignore",
   });
 } else {
-  const count = mode === "async-default" ? 2 : mode === "async-errors" ? 3 : 1;
+  const count =
+    mode === "async-default" || mode === "async-observer" ? 2 : mode === "async-errors" ? 3 : 1;
   const forwardTerminationSignals = mode !== "async-disabled";
   const baselineListenerCount = process.listenerCount("SIGTERM");
+  if (mode === "async-observer") {
+    exec.onParentTerminationSignal((signal) => {
+      appendFileSync(signalPath!, `observer:${signal}\n`);
+    });
+  }
   const pids: number[] = [];
   const children = [];
   const ready = Array.from({ length: count }, (_, index) => {

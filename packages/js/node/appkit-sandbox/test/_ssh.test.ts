@@ -1,10 +1,11 @@
 import { EventEmitter } from "node:events";
-import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
+import { Duplex, PassThrough } from "node:stream";
 import type { Client as Ssh2Client, ClientChannel } from "ssh2";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { exec } from "@dbx-tools/core";
 import {
   createSshTransport,
   PooledSshTransport,
@@ -18,15 +19,21 @@ import {
 } from "../src/_ssh.ts";
 import {
   nativeOpenSshArgs,
+  OPENSSH_PARENT_WATCH_SOURCE,
   OpenSshTransport,
   type OpenSshResource,
   supportsNativeOpenSsh,
 } from "../src/_ssh_openssh.ts";
 
 const originalNodeEnv = process.env.NODE_ENV;
+const temporaryDirectories = new Set<string>();
 
-afterEach(() => {
+afterEach(async () => {
   restoreEnvironment("NODE_ENV", originalNodeEnv);
+  await Promise.all(
+    [...temporaryDirectories].map((directory) => rm(directory, { recursive: true, force: true })),
+  );
+  temporaryDirectories.clear();
 });
 
 describe("native OpenSSH selection", () => {
@@ -36,7 +43,7 @@ describe("native OpenSSH selection", () => {
   });
 
   it("memoizes OpenSSH capability detection per executable", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-ssh-calls-"));
+    const directory = await temporaryDirectory("dbx-tools-ssh-calls-");
     const callsPath = join(directory, "calls.log");
     const command = await fakeSshCommand(true, callsPath);
 
@@ -44,6 +51,72 @@ describe("native OpenSSH selection", () => {
     expect(await supportsNativeOpenSsh(command)).toBe(true);
 
     expect((await readFile(callsPath, "utf8")).trim().split("\n")).toEqual(["-V", "-G"]);
+  });
+
+  it("kills a detached native OpenSSH child when parent termination begins", async () => {
+    const directory = await temporaryDirectory("dbx-tools-ssh-exit-");
+    const pidPath = join(directory, "pid");
+    const command = join(directory, "ssh");
+    await writeFile(
+      command,
+      `#!/usr/bin/env bun\nimport { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(pidPath)}, String(process.pid));\nsetInterval(() => undefined, 1_000);\n`,
+    );
+    await chmod(command, 0o700);
+    const ignoreSignal = () => undefined;
+    process.on("SIGTERM", ignoreSignal);
+    const probe = supportsNativeOpenSsh(command);
+    let childPid: number | undefined;
+    try {
+      await waitUntil(async () => {
+        const pid = await readFile(pidPath, "utf8").catch(() => undefined);
+        if (!pid) return false;
+        childPid = Number(pid);
+        return true;
+      });
+      process.emit("SIGTERM");
+      await expect(probe).resolves.toBe(false);
+      await waitUntil(() => !processExists(childPid));
+    } finally {
+      process.off("SIGTERM", ignoreSignal);
+      if (processExists(childPid)) process.kill(childPid!, "SIGKILL");
+    }
+  });
+
+  it("kills a native OpenSSH child when the parent pipe closes", async () => {
+    const directory = await temporaryDirectory("dbx-tools-ssh-watch-");
+    const pidPath = join(directory, "pid");
+    const childCommand = join(directory, "child");
+    await writeFile(
+      childCommand,
+      `#!/usr/bin/env bun\nimport { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(pidPath)}, String(process.pid));\nsetInterval(() => undefined, 1_000);\n`,
+    );
+    await chmod(childCommand, 0o700);
+    const watcher = exec.spawn(
+      process.execPath,
+      ["-e", OPENSSH_PARENT_WATCH_SOURCE, childCommand],
+      {
+        stdin: "pipe",
+        stdout: "ignore",
+        stderr: "capture",
+        forwardTerminationSignals: false,
+      },
+    );
+    let childPid: number | undefined;
+    try {
+      await waitUntil(async () => {
+        const pid = await readFile(pidPath, "utf8").catch(() => undefined);
+        if (!pid) return false;
+        childPid = Number(pid);
+        return true;
+      });
+      watcher.stdin?.end();
+
+      expect(await watcher).toMatchObject({ exitCode: 1 });
+      await waitUntil(() => !processExists(childPid));
+    } finally {
+      await watcher.shutdown({ terminateTimeout: 0, killTimeout: 1_000 });
+      if (processExists(childPid)) process.kill(childPid!, "SIGKILL");
+    }
   });
 
   it("rejects non-OpenSSH executables", async () => {
@@ -57,6 +130,8 @@ describe("native OpenSSH selection", () => {
     expect(args).toContain("StrictHostKeyChecking=yes");
     expect(args).toContain("UserKnownHostsFile=/tmp/known_hosts");
     expect(args).toContain("HostKeyAlias=[gateway.example]:2222");
+    expect(args).toContain("ServerAliveInterval=15");
+    expect(args).toContain("ServerAliveCountMax=3");
   });
 
   it("selects OpenSSH in auto mode when supported", async () => {
@@ -298,6 +373,29 @@ describe("pooled SSH transport", () => {
     await transport.close();
   });
 
+  it("waits for an in-progress startup before closing its created resource", async () => {
+    let finishCreate!: (resource: TestPoolResource) => void;
+    const created = new Promise<TestPoolResource>((resolve) => {
+      finishCreate = resolve;
+    });
+    const destroyed: number[] = [];
+    const transport = new TestPooledTransport({
+      create: () => created,
+      destroy: async (resource) => {
+        destroyed.push(resource.id);
+      },
+      test: async () => true,
+    });
+
+    const start = transport.start();
+    const close = transport.close();
+    finishCreate({ id: 1, valid: true });
+
+    await expect(start).rejects.toThrow(/transport is closed/);
+    await close;
+    expect(destroyed).toEqual([1]);
+  });
+
   it("replaces a dead warm resource before assigning an operation", async () => {
     const created: TestPoolResource[] = [];
     const destroyed: number[] = [];
@@ -319,6 +417,49 @@ describe("pooled SSH transport", () => {
       runTransport(transport, "echo", [], "'echo'", { timeoutMs: 1_000 }).result,
     ).resolves.toMatchObject({ stdout: "2:'echo'" });
     expect(destroyed).toContain(1);
+    await transport.close();
+  });
+
+  it("retries a failed forwarding open with a fresh resource", async () => {
+    const created: TestPoolResource[] = [];
+    const destroyed: number[] = [];
+    let attempts = 0;
+    const transport = new TestPooledTransport(
+      {
+        create: async () => {
+          const resource = { id: created.length + 1, valid: true };
+          created.push(resource);
+          return resource;
+        },
+        destroy: async (resource) => {
+          resource.valid = false;
+          destroyed.push(resource.id);
+        },
+        test: async (resource) => resource.valid,
+      },
+      {},
+      async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("forwarding connection closed");
+        return new Duplex({
+          allowHalfOpen: true,
+          read: () => undefined,
+          write: (_chunk, _encoding, callback) => callback(),
+        });
+      },
+    );
+    await transport.start();
+
+    const stream = await transport.connect("127.0.0.1", 8_080);
+
+    expect(attempts).toBe(2);
+    expect(destroyed).toContain(2);
+    stream.resume();
+    stream.push(null);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(destroyed).not.toContain(3);
+    stream.destroy();
+    await waitUntil(() => destroyed.includes(3));
     await transport.close();
   });
 });
@@ -537,6 +678,26 @@ describe("ssh2 exec no-reply fallback", () => {
     await transport.close();
   });
 
+  it("rejects an unacknowledged forwarding request immediately when closing", async () => {
+    const commandClient = fakeClient();
+    const forwardingClient = fakeClient();
+    forwardingClient.forwardOut = vi.fn(() => forwardingClient);
+    const transport = await createSshTransport({
+      ...transportOptions(commandClient),
+      connectTimeoutMs: 1_000,
+      createSsh2CommandClient: async () => forwardingClient,
+      transport: "ssh2",
+      ssh2Patch: "false",
+    });
+    const forwarding = transport.connect("127.0.0.1", 8_080);
+    await waitUntil(() => mockCallCount(forwardingClient.forwardOut) > 0);
+
+    const close = transport.close();
+
+    await expect(forwarding).rejects.toThrow(/connection closed while opening forwarding/);
+    await close;
+  });
+
   it("closes in-flight command clients with the transport", async () => {
     const commandClient = fakeClient();
     commandClient.exec = vi.fn((_script, callback) => {
@@ -554,7 +715,7 @@ describe("ssh2 exec no-reply fallback", () => {
     });
     await waitUntil(() => mockCallCount(commandClient.exec) > 0);
     const closed = transport.close();
-    expect(commandClient.end).toHaveBeenCalled();
+    await waitUntil(() => mockCallCount(commandClient.end) > 0);
     await closed;
     await expect(execution.result).rejects.toThrow(/connection closed/);
   });
@@ -597,6 +758,9 @@ class TestPooledTransport extends PooledSshTransport<TestPoolResource> {
   constructor(
     lifecycle: SshResourceLifecycle<TestPoolResource>,
     options: { acquireTimeoutMillis?: number } = {},
+    private readonly connectResource: (
+      resource: TestPoolResource,
+    ) => Promise<Duplex> = async () => new PassThrough(),
   ) {
     super(lifecycle, {
       acquireTimeoutMillis: options.acquireTimeoutMillis ?? 1_000,
@@ -614,8 +778,8 @@ class TestPooledTransport extends PooledSshTransport<TestPoolResource> {
     return 0;
   }
 
-  protected async connectWithResource(): Promise<PassThrough> {
-    return new PassThrough();
+  protected connectWithResource(resource: TestPoolResource): Promise<Duplex> {
+    return this.connectResource(resource);
   }
 }
 
@@ -729,7 +893,7 @@ function fakeChannel(): ClientChannel & {
 }
 
 async function fakeSshCommand(openSsh: boolean, callsPath?: string): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "dbx-tools-ssh-test-"));
+  const directory = await temporaryDirectory("dbx-tools-ssh-test-");
   const command = join(directory, "ssh");
   await writeFile(
     command,
@@ -740,7 +904,7 @@ async function fakeSshCommand(openSsh: boolean, callsPath?: string): Promise<str
 }
 
 async function fakeExecutingSshCommand(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "dbx-tools-ssh-exec-test-"));
+  const directory = await temporaryDirectory("dbx-tools-ssh-exec-test-");
   const command = join(directory, "ssh");
   await writeFile(
     command,
@@ -750,11 +914,28 @@ async function fakeExecutingSshCommand(): Promise<string> {
   return command;
 }
 
-async function waitUntil(condition: () => boolean, timeoutMs = 1_000): Promise<void> {
+async function temporaryDirectory(prefix: string): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), prefix));
+  temporaryDirectories.add(directory);
+  return directory;
+}
+
+async function waitUntil(condition: () => boolean | Promise<boolean>, timeoutMs = 1_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  while (!condition()) {
+  while (!(await condition())) {
     if (Date.now() >= deadline) throw new Error("condition was not met before timeout");
     await new Promise<void>((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+function processExists(pid: number | undefined): boolean {
+  if (pid === undefined) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ESRCH") return false;
+    throw error;
   }
 }
 

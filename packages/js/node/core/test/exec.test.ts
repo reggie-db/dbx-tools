@@ -329,6 +329,35 @@ describe("parent signal forwarding", () => {
     }
   });
 
+  it("notifies termination observers without adding another process listener", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "dbx-tools-signals-observer-"));
+    const readyPath = join(directory, "ready.json");
+    const signalPath = join(directory, "signals.log");
+    const parent = nativeSpawn(
+      process.execPath,
+      [SIGNAL_FORWARDING_FIXTURE, "async-observer", readyPath, signalPath],
+      { stdio: "ignore" },
+    );
+    let state: SignalFixtureState | undefined;
+    try {
+      state = await signalFixtureState(readyPath);
+      assert.equal(state.listenerCount - (state.baselineListenerCount ?? 0), 1);
+
+      process.kill(parent.pid!, "SIGTERM");
+      await childExit(parent);
+      const lines = await signalLines(signalPath, 3);
+
+      assert.equal(lines.includes("observer:SIGTERM"), true);
+      assert.equal(lines.includes("0:SIGTERM"), true);
+      assert.equal(lines.includes("1:SIGTERM"), true);
+    } finally {
+      forceKill(parent.pid);
+      for (const pid of state?.pids ?? []) forceKill(pid);
+      await childExit(parent);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("does not install or forward signals when disabled", async () => {
     const directory = mkdtempSync(join(tmpdir(), "dbx-tools-signals-disabled-"));
     const readyPath = join(directory, "ready.json");

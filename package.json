@@ -67,6 +67,7 @@
     "@types/node": "^24.6.0",
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
+    "bun": "1.4.2",
     "commander": "catalog:",
     "concurrently": "^10.0.3",
     "constructs": "^10.0.0",

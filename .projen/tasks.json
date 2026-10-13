@@ -350,6 +350,9 @@
       "description": "Install project dependencies and update lockfile (non-frozen)",
       "steps": [
         {
+          "exec": "bun scripts/check-bun.ts"
+        },
+        {
           "exec": "bun install"
         }
       ],
@@ -359,6 +362,9 @@
       "name": "install:ci",
       "description": "Install project dependencies using frozen lockfile",
       "steps": [
+        {
+          "exec": "bun scripts/check-bun.ts"
+        },
         {
           "exec": "bun install"
         }

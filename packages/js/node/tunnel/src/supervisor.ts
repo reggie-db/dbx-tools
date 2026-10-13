@@ -1,3 +1,4 @@
+import { exec } from "@dbx-tools/core";
 import type { ChildProcessResult } from "@dbx-tools/core/exec";
 import { asyncUtils, errorUtils, type Logger } from "@dbx-tools/shared-core";
 
@@ -56,16 +57,23 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
     );
   };
 
+  const abortRestartLoop = () => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+
   const stop = () => {
-    if (controller.signal.aborted) return;
-    controller.abort();
+    abortRestartLoop();
     terminateChild();
+    stopParentSignal();
     process.off("exit", onProcessExit);
   };
   const onProcessExit = () => {
     terminateChild();
   };
   process.once("exit", onProcessExit);
+  const stopParentSignal = exec.onParentTerminationSignal(() => {
+    abortRestartLoop();
+  });
 
   const run = async () => {
     let failures = 0;
@@ -77,10 +85,9 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
         outcome = await processOutcome(child, controller.signal, options);
       } catch (error) {
         outcome = { error: errorUtils.toError(error) };
-      } finally {
-        child = undefined;
       }
       if (controller.signal.aborted) return;
+      child = undefined;
       if (Date.now() - startedAt >= STABLE_CONNECTION_MS) failures = 0;
       const delayMs = asyncUtils.boundedRetryDelay(failures++, options.retryDelaysMs);
       options.logger.warn(`${options.name} stopped; retrying`, { ...outcome, delayMs });

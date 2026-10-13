@@ -253,9 +253,8 @@ root.addTask("shared-core:usage", {
 // on another developer's machine. Local installs still generate both files, but
 // the repo ignores them and CI resolves fresh. Verify before ever committing one:
 //   grep -c 'localhost:4873' bun.lock
-// ---------------------------------------------------------------------------
-root.tasks.tryFind("install:ci")?.reset("bun install");
 
+// ---------------------------------------------------------------------------
 // Generated dot-directories
 // ---------------------------------------------------------------------------
 // The dot-directories this repo generates are named individually rather than

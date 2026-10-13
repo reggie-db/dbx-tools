@@ -13,8 +13,6 @@ const MAX_TIMER_DELAY_MS = 2_147_000_000;
 const FORWARDING_READY_TIMEOUT_MS = 15_000;
 const logger = log.logger("appkit-sandbox:routes");
 
-type UpgradeSocket = Socket & { destroySoon?: () => void };
-
 interface RouteInput {
   id?: string;
   ownerId?: string;
@@ -76,6 +74,7 @@ export class SshRouteRegistry {
   private readonly sessionDrainWaiters = new Map<SshSession, Set<() => void>>();
   private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
+  private routeMutation = Promise.resolve();
   private closing?: Promise<void>;
   private shuttingDown = false;
 
@@ -95,10 +94,14 @@ export class SshRouteRegistry {
         error,
       });
       if ("writeHead" in response) {
-        if (!response.headersSent) response.writeHead(502);
-        response.end("SSH route unavailable");
+        if (response.headersSent) {
+          response.destroy();
+        } else {
+          response.writeHead(502);
+          response.end("SSH route unavailable");
+        }
       } else if (!response.destroyed) {
-        response.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+        response.destroy();
       }
     });
     this.proxy.on("proxyRes", (proxyResponse, request, response) => {
@@ -134,6 +137,17 @@ export class SshRouteRegistry {
    * built-in service paths must provide their complete reserved path.
    */
   async add(session: SshSession, input: RouteInput): Promise<SshForwardedRoute> {
+    this.assertOpen();
+    return this.withRouteMutation(async () => {
+      this.assertOpen();
+      return this.addUnlocked(session, input);
+    });
+  }
+
+  private async addUnlocked(
+    session: SshSession,
+    input: RouteInput,
+  ): Promise<SshForwardedRoute> {
     const prepared = this.prepare(input);
     if (prepared.previous) {
       const previous = prepared.previous;
@@ -141,6 +155,10 @@ export class SshRouteRegistry {
         const sockets = new Set<Socket>();
         const bridge = createBridge(session, input, sockets, this.forwardingReadyTimeoutMs);
         const target = await listenTarget(bridge);
+        if (this.shuttingDown) {
+          await closeServer(bridge);
+          throw new Error("SSH route registry is closed");
+        }
         const previousServer = previous.server;
         const previousSession = previous.session;
         for (const socket of previous.sockets) {
@@ -164,6 +182,10 @@ export class SshRouteRegistry {
     const sockets = new Set<Socket>();
     const bridge = createBridge(session, input, sockets, this.forwardingReadyTimeoutMs);
     const target = await listenTarget(bridge);
+    if (this.shuttingDown) {
+      await closeServer(bridge);
+      throw new Error("SSH route registry is closed");
+    }
     this.routes.set(prepared.route.id, {
       route: prepared.route,
       ownerIds: routeOwners(input),
@@ -186,6 +208,12 @@ export class SshRouteRegistry {
 
   /** Removes an owned route, closes active sockets, and deletes its local bridge. */
   async remove(routeId: string, ownerId?: string): Promise<boolean> {
+    const current = this.routes.get(routeId);
+    if (!current || (ownerId && !current.ownerIds.has(ownerId))) return false;
+    return this.withRouteMutation(() => this.removeUnlocked(routeId, ownerId));
+  }
+
+  private async removeUnlocked(routeId: string, ownerId?: string): Promise<boolean> {
     const entry = this.routes.get(routeId);
     if (!entry || (ownerId && !entry.ownerIds.has(ownerId))) return false;
     this.routes.delete(routeId);
@@ -210,15 +238,21 @@ export class SshRouteRegistry {
     const entries = [...this.routes.values()].filter(
       (entry) => entry.route.machineId === machineId,
     );
-    if (ownerId) {
-      entries
-        .filter((entry) => entry.internal)
-        .forEach((entry) => this.revokeRouteOwner(entry, ownerId));
+    if (!ownerId) {
+      await Promise.all(entries.map((entry) => this.remove(entry.route.id)));
+      return;
     }
-    const routeIds = entries
-      .filter((entry) => !ownerId || (!entry.internal && entry.ownerIds.has(ownerId)))
-      .map((entry) => entry.route.id);
-    await Promise.all(routeIds.map((routeId) => this.remove(routeId, ownerId)));
+    const removals: Promise<boolean>[] = [];
+    for (const entry of entries) {
+      if (!entry.ownerIds.has(ownerId)) continue;
+      if (!entry.internal) {
+        removals.push(this.remove(entry.route.id, ownerId));
+        continue;
+      }
+      this.revokeRouteOwner(entry, ownerId, false);
+      if (entry.ownerIds.size === 0) removals.push(this.remove(entry.route.id));
+    }
+    await Promise.all(removals);
   }
 
   /** Revokes one owner's active and future access to machine-owned service routes. */
@@ -294,7 +328,14 @@ export class SshRouteRegistry {
     if (!match) return false;
     if (!(await ownerIsAuthorized(match.entry, requestUser))) return false;
     if (match.stripPrefix) request.url = outboundPath(request.url, match.stripPrefix);
-    proxyWebSocket(request, socket, head, match.entry, requestUser!, this.proxy);
+    proxyWebSocket(
+      request,
+      socket,
+      head,
+      match.entry,
+      requestUser!,
+      this.forwardingReadyTimeoutMs,
+    );
     return true;
   }
 
@@ -306,21 +347,46 @@ export class SshRouteRegistry {
   /** Removes every route and closes the shared HTTP/WebSocket proxy. */
   close(): Promise<void> {
     if (this.closing) return this.closing;
-    this.shuttingDown = true;
+    this.beginShutdown();
     this.closing = this.closeRoutes();
     return this.closing;
   }
 
+  /** Suppresses expected proxy errors once process or plugin shutdown begins. */
+  beginShutdown(): void {
+    this.shuttingDown = true;
+  }
+
   private async closeRoutes(): Promise<void> {
+    await this.routeMutation;
     await Promise.all([...this.routes.keys()].map((routeId) => this.remove(routeId)));
     this.proxy.close();
+  }
+
+  private assertOpen(): void {
+    if (this.shuttingDown) throw new Error("SSH route registry is closed");
+  }
+
+  private async withRouteMutation<T>(action: () => Promise<T>): Promise<T> {
+    const previous = this.routeMutation;
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.routeMutation = current;
+    await previous;
+    try {
+      return await action();
+    } finally {
+      release();
+    }
   }
 
   private updateOwners(entry: RouteTarget, input: RouteInput): void {
     const owners = routeOwners(input);
     [...entry.ownerIds]
       .filter((ownerId) => !owners.has(ownerId))
-      .forEach((ownerId) => this.revokeRouteOwner(entry, ownerId));
+      .forEach((ownerId) => this.revokeRouteOwner(entry, ownerId, false));
     entry.ownerIds = owners;
     entry.authorizeOwner = input.authorizeOwner;
     entry.ownerTimers.forEach((timer) => clearTimeout(timer));
@@ -337,14 +403,14 @@ export class SshRouteRegistry {
     }
   }
 
-  private revokeRouteOwner(entry: RouteTarget, ownerId: string): void {
+  private revokeRouteOwner(entry: RouteTarget, ownerId: string, removeEmpty = true): void {
     entry.ownerIds.delete(ownerId);
     const timer = entry.ownerTimers.get(ownerId);
     if (timer) clearTimeout(timer);
     entry.ownerTimers.delete(ownerId);
     entry.ownerSockets.get(ownerId)?.forEach((socket) => socket.destroy());
     entry.ownerSockets.delete(ownerId);
-    if (entry.ownerIds.size === 0) void this.remove(entry.route.id);
+    if (removeEmpty && entry.ownerIds.size === 0) void this.remove(entry.route.id);
   }
 
   private scheduleOwnerExpiration(entry: RouteTarget, ownerId: string, expiresAt: number): void {
@@ -423,6 +489,7 @@ export class SshRouteRegistry {
       return { route: previous.route, previous };
     }
     const id = input.id ?? randomBytes(16).toString("hex");
+    if (this.routes.has(id)) throw new Error(`SSH route id ${id} is already registered`);
     return {
       route: {
         id,
@@ -658,6 +725,7 @@ function bridgeSocket(
   socket: Socket,
   channelPromise: Promise<Duplex>,
   readyTimeoutMs: number,
+  initialData?: Buffer,
 ): void {
   const pending = new PassThrough({ highWaterMark: MAX_PENDING_BYTES });
   let channel: Duplex | undefined;
@@ -672,6 +740,12 @@ function bridgeSocket(
   }, readyTimeoutMs);
   readyTimeout.unref?.();
   const clearReadyTimeout = () => clearTimeout(readyTimeout);
+  if (initialData) pending.write(initialData);
+  socket.once("error", () => {
+    clearReadyTimeout();
+    pending.destroy();
+    channel?.destroy();
+  });
   socket.pipe(pending);
   socket.once("close", () => {
     clearReadyTimeout();
@@ -687,20 +761,30 @@ function bridgeSocket(
         return;
       }
       channel = openedChannel;
-      channel.once("data", clearReadyTimeout);
-      channel.once("close", clearReadyTimeout);
-      socket.once("error", () => channel?.destroy());
+      clearReadyTimeout();
+      let channelEnded = false;
+      channel.once("end", () => {
+        channelEnded = true;
+      });
+      channel.once("close", () => {
+        if (!channelEnded && !socket.destroyed) socket.destroy();
+      });
       channel.once("error", () => socket.destroy());
       channel.pipe(socket);
       pending.pipe(channel);
     },
     (error) => {
       clearReadyTimeout();
-      logger.warn("SSH route forwarding channel failed", {
-        error: errorUtils.toError(error),
-      });
+      if (!timedOut && !socket.destroyed) {
+        logger.warn("SSH route forwarding channel failed", {
+          error: errorUtils.toError(error),
+        });
+        socket.end(
+          "HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+        );
+      }
       pending.destroy();
-      socket.destroy();
+      if (timedOut || socket.destroyed) socket.destroy();
     },
   );
 }
@@ -711,27 +795,27 @@ function proxyWebSocket(
   head: Buffer,
   entry: RouteTarget,
   ownerId: string,
-  proxy: { ws: (request: IncomingMessage, socket: Socket, head: Buffer, options?: object) => void },
+  readyTimeoutMs: number,
 ): void {
-  if (!entry.target) {
-    socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
-    return;
-  }
+  const routeSockets = entry.sockets;
+  routeSockets.add(socket);
   const ownerSockets = entry.ownerSockets.get(ownerId) ?? new Set<Socket>();
   ownerSockets.add(socket);
   entry.ownerSockets.set(ownerId, ownerSockets);
   socket.once("close", () => {
+    routeSockets.delete(socket);
     ownerSockets.delete(socket);
     if (ownerSockets.size === 0) entry.ownerSockets.delete(ownerId);
   });
   stripWebsocketIdentityHeaders(request);
   request.headers.origin = `http://${entry.route.remoteHost}:${entry.route.remotePort}`;
-  const upgradeSocket = socket as UpgradeSocket;
-  upgradeSocket.destroySoon ??= () => upgradeSocket.end();
-  proxy.ws(request, upgradeSocket, head, {
-    target: entry.target,
-    changeOrigin: true,
-  });
+  request.headers.host = `${entry.route.remoteHost}:${entry.route.remotePort}`;
+  bridgeSocket(
+    socket,
+    entry.session.forwardOut(entry.route.remoteHost, entry.route.remotePort),
+    readyTimeoutMs,
+    serializeUpgradeRequest(request, head),
+  );
 }
 
 function stripWebsocketIdentityHeaders(request: IncomingMessage): void {
@@ -744,4 +828,18 @@ function stripWebsocketIdentityHeaders(request: IncomingMessage): void {
   ]) {
     delete request.headers[name];
   }
+}
+
+function serializeUpgradeRequest(request: IncomingMessage, head: Buffer): Buffer {
+  const lines = [
+    `${request.method ?? "GET"} ${request.url ?? "/"} HTTP/${request.httpVersion || "1.1"}`,
+  ];
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      lines.push(`${name}: ${item}`);
+    }
+  }
+  lines.push("", "");
+  return Buffer.concat([Buffer.from(lines.join("\r\n")), head]);
 }

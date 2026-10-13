@@ -6,7 +6,7 @@ import type { Duplex } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import { exec } from "@dbx-tools/core";
 import type { ChildProcessResult } from "@dbx-tools/core/exec";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import { SocksClient } from "socks";
 import {
   PooledSshTransport,
@@ -17,8 +17,43 @@ import {
 } from "./_ssh.ts";
 
 const SOCKS_HOST = "127.0.0.1";
+const OPENSSH_HELPER_TIMEOUT_MS = 2_000;
 const logger = log.logger("appkit-sandbox:openssh");
 const nativeOpenSshSupportByCommand = new Map<string, Promise<boolean>>();
+const activeNativeOpenSshProcesses = new Set<ChildProcessResult>();
+const parentBoundNativeOpenSshProcesses = new WeakSet<ChildProcessResult>();
+let stopParentTerminationSignal: (() => void) | undefined;
+let processExitHookInstalled = false;
+/** @internal JavaScript watchdog that terminates one child when its parent pipe closes. */
+export const OPENSSH_PARENT_WATCH_SOURCE = stringUtils.dedent(
+  // ============================================================================
+  /*js*/`
+    const { spawn } = require("node:child_process");
+
+    const child = spawn(process.argv[1], process.argv.slice(2), {
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    let stopping = false;
+    const stopChild = () => {
+      if (stopping) return;
+      stopping = true;
+      child.kill("SIGKILL");
+    };
+
+    process.stdin.resume();
+    process.stdin.once("end", stopChild);
+    process.stdin.once("close", stopChild);
+    child.once("error", (error) => {
+      console.error(error);
+      process.exit(1);
+    });
+    child.once("exit", (code, signal) => {
+      process.stdin.pause();
+      process.exit(code ?? (signal ? 1 : 0));
+    });
+  `,
+  // ============================================================================
+);
 
 /** One authenticated native OpenSSH ControlMaster resource. */
 export interface OpenSshResource {
@@ -137,69 +172,82 @@ class NativeOpenSshResource implements OpenSshResource {
     command: string,
   ): Promise<NativeOpenSshResource> {
     const directory = await mkdtemp(join(tmpdir(), "dbx-tools-ssh-"));
-    const controlPath = join(directory, "control");
-    const socksPort = await availableLoopbackPort();
-    const target = `${options.username}@${options.connectHost}`;
-    const master = exec.spawn(
-      command,
-      [
-        ...nativeOpenSshArgs(options),
-        "-M",
-        "-N",
-        "-S",
-        controlPath,
-        "-o",
-        "ControlPersist=no",
-        "-o",
-        "ExitOnForwardFailure=yes",
-        "-D",
-        `${SOCKS_HOST}:${socksPort}`,
-        target,
-      ],
-      {
-        stdin: "ignore",
-        stdout: "ignore",
-        stderr: "capture",
-        trim: false,
-        forwardTerminationSignals: false,
-      },
-    );
-    const resource = new NativeOpenSshResource(
-      options,
-      command,
-      directory,
-      controlPath,
-      socksPort,
-      master,
-    );
     try {
-      await resource.waitUntilReady();
-      return resource;
+      const controlPath = join(directory, "control");
+      const socksPort = await availableLoopbackPort();
+      const target = `${options.username}@${options.connectHost}`;
+      const master = trackNativeOpenSshProcess(
+        exec.spawn(
+          process.execPath,
+          [
+            "-e",
+            OPENSSH_PARENT_WATCH_SOURCE,
+            command,
+            ...nativeOpenSshArgs(options),
+            "-M",
+            "-N",
+            "-S",
+            controlPath,
+            "-o",
+            "ControlPersist=no",
+            "-o",
+            "ExitOnForwardFailure=yes",
+            "-D",
+            `${SOCKS_HOST}:${socksPort}`,
+            target,
+          ],
+          {
+            stdin: "pipe",
+            stdout: "ignore",
+            stderr: "capture",
+            trim: false,
+            forwardTerminationSignals: false,
+          },
+        ),
+        true,
+      );
+      const resource = new NativeOpenSshResource(
+        options,
+        command,
+        directory,
+        controlPath,
+        socksPort,
+        master,
+      );
+      try {
+        await resource.waitUntilReady();
+        return resource;
+      } catch (error) {
+        await resource.close();
+        throw error;
+      }
     } catch (error) {
-      await resource.close();
+      await rm(directory, { recursive: true, force: true });
       throw error;
     }
   }
 
   async run(script: string, execution: SshCommandExecution): Promise<number> {
-    const child = exec.spawn(
-      this.command,
-      [
-        ...nativeOpenSshArgs(this.options),
-        "-S",
-        this.controlPath,
-        "-o",
-        "ControlMaster=no",
-        `${this.options.username}@${this.options.connectHost}`,
-        script,
-      ],
-      {
-        stdin: "ignore",
-        stdout: "pipe",
-        stderr: "pipe",
-        trim: false,
-        forwardTerminationSignals: false,
-      },
+    const child = trackNativeOpenSshProcess(
+      exec.spawn(
+        this.command,
+        [
+          ...nativeOpenSshArgs(this.options),
+          "-S",
+          this.controlPath,
+          "-o",
+          "ControlMaster=no",
+          `${this.options.username}@${this.options.connectHost}`,
+          script,
+        ],
+        {
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+          trim: false,
+          forwardTerminationSignals: false,
+        },
+      ),
     );
     child.stdout?.on("data", execution.stdout);
     child.stderr?.on("data", execution.stderr);
@@ -226,7 +274,11 @@ class NativeOpenSshResource implements OpenSshResource {
 
   async test(): Promise<boolean> {
     if (!this.alive || this.master.exitCode !== null) return false;
-    return (await this.control("check")).exitCode === 0;
+    try {
+      return (await this.control("check")).exitCode === 0;
+    } catch {
+      return false;
+    }
   }
 
   async close(): Promise<void> {
@@ -237,13 +289,16 @@ class NativeOpenSshResource implements OpenSshResource {
   }
 
   private async closeResource(): Promise<void> {
-    await this.control("exit").catch(() => undefined);
-    await this.master.shutdown({ terminateTimeout: 0, killTimeout: 1_000 }).catch((error) =>
-      logger.warn("failed to stop native SSH ControlMaster", {
-        error: errorUtils.toError(error),
-      }),
-    );
-    await rm(this.directory, { recursive: true, force: true });
+    try {
+      await this.control("exit").catch(() => undefined);
+    } finally {
+      await this.master.shutdown({ terminateTimeout: 0, killTimeout: 1_000 }).catch((error) =>
+        logger.warn("failed to stop native SSH ControlMaster", {
+          error: errorUtils.toError(error),
+        }),
+      );
+      await rm(this.directory, { recursive: true, force: true });
+    }
   }
 
   private async waitUntilReady(): Promise<void> {
@@ -263,47 +318,126 @@ class NativeOpenSshResource implements OpenSshResource {
     );
   }
 
-  private control(operation: "check" | "exit"): ChildProcessResult {
-    return exec.spawn(
-      this.command,
-      [
-        "-p",
-        String(this.options.port),
-        "-S",
-        this.controlPath,
-        "-O",
-        operation,
-        `${this.options.username}@${this.options.connectHost}`,
-      ],
-      {
-        stdin: "ignore",
-        stdout: "ignore",
-        stderr: "ignore",
-        forwardTerminationSignals: false,
-      },
+  private control(operation: "check" | "exit") {
+    const child = trackNativeOpenSshProcess(
+      exec.spawn(
+        this.command,
+        [
+          "-p",
+          String(this.options.port),
+          "-S",
+          this.controlPath,
+          "-O",
+          operation,
+          `${this.options.username}@${this.options.connectHost}`,
+        ],
+        {
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "ignore",
+          forwardTerminationSignals: false,
+        },
+      ),
     );
+    return waitForNativeOpenSshChild(child, `ssh -O ${operation}`);
   }
 }
 
 async function probeNativeOpenSsh(command: string): Promise<boolean> {
   try {
-    const version = await exec.spawn(command, ["-V"], {
-      stdin: "ignore",
-      stdout: "capture",
-      stderr: "capture",
-      forwardTerminationSignals: false,
-    });
+    const version = await waitForNativeOpenSshChild(
+      trackNativeOpenSshProcess(
+        exec.spawn(command, ["-V"], {
+          stdin: "ignore",
+          stdout: "capture",
+          stderr: "capture",
+          forwardTerminationSignals: false,
+        }),
+      ),
+      "ssh -V",
+    );
     const versionOutput = `${version.stdout}\n${version.stderr}`;
     if (version.exitCode !== 0 || !/(?:^|\s)OpenSSH_/m.test(versionOutput)) return false;
-    const dynamicForward = await exec.spawn(command, ["-G", "-D", `${SOCKS_HOST}:1`, "localhost"], {
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      forwardTerminationSignals: false,
-    });
+    const dynamicForward = await waitForNativeOpenSshChild(
+      trackNativeOpenSshProcess(
+        exec.spawn(command, ["-G", "-D", `${SOCKS_HOST}:1`, "localhost"], {
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "ignore",
+          forwardTerminationSignals: false,
+        }),
+      ),
+      "ssh -G",
+    );
     return dynamicForward.exitCode === 0;
   } catch {
     return false;
+  }
+}
+
+async function waitForNativeOpenSshChild(
+  child: ChildProcessResult,
+  operation: string,
+): Promise<Awaited<ChildProcessResult>> {
+  let timeout: ReturnType<typeof setTimeout>;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      void child
+        .shutdown({ terminateTimeout: 0, killTimeout: 1_000 })
+        .then(
+          () => reject(new Error(`${operation} timed out after ${OPENSSH_HELPER_TIMEOUT_MS}ms`)),
+          (error) => reject(error),
+        );
+    }, OPENSSH_HELPER_TIMEOUT_MS);
+    timeout.unref?.();
+  });
+  try {
+    return await Promise.race([child, timedOut]);
+  } finally {
+    clearTimeout(timeout!);
+  }
+}
+
+function trackNativeOpenSshProcess(
+  child: ChildProcessResult,
+  parentBound = false,
+): ChildProcessResult {
+  activeNativeOpenSshProcesses.add(child);
+  if (parentBound) parentBoundNativeOpenSshProcesses.add(child);
+  if (!stopParentTerminationSignal) {
+    stopParentTerminationSignal = exec.onParentTerminationSignal(forceStopNativeOpenSshProcesses);
+  }
+  if (!processExitHookInstalled) {
+    processExitHookInstalled = true;
+    process.once("exit", forceStopNativeOpenSshProcesses);
+  }
+  let tracked = true;
+  const untrack = () => {
+    if (!tracked) return;
+    tracked = false;
+    child.off("exit", untrack);
+    child.off("error", untrack);
+    activeNativeOpenSshProcesses.delete(child);
+    if (activeNativeOpenSshProcesses.size === 0) {
+      stopParentTerminationSignal?.();
+      stopParentTerminationSignal = undefined;
+      process.off("exit", forceStopNativeOpenSshProcesses);
+      processExitHookInstalled = false;
+    }
+  };
+  child.once("exit", untrack);
+  child.once("error", untrack);
+  return child;
+}
+
+function forceStopNativeOpenSshProcesses(): void {
+  for (const child of activeNativeOpenSshProcesses) {
+    try {
+      if (parentBoundNativeOpenSshProcesses.has(child)) child.stdin?.end();
+      else child.kill("SIGKILL");
+    } catch {
+      // The child may have exited between the tracked-state check and kill.
+    }
   }
 }
 

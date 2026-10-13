@@ -56,6 +56,7 @@ packages/py/graphiti/pyproject.toml
 bunfig.toml
 LICENSE
 pyproject.toml
+scripts/check-bun.ts
 tsconfig.base.json
 tsconfig.json
 tsconfig.projen.json

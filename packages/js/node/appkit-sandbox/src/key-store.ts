@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
+import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileLock } from "@dbx-tools/core";
 import ssh2 from "ssh2";
 import type { DatabricksSandboxClient } from "./rest.ts";
 
@@ -99,40 +100,35 @@ export class SshKeyStore {
     const directory = this.directory(scope, userId);
     const privatePath = join(directory, "id_ed25519");
     const publicPath = `${privatePath}.pub`;
-    try {
-      const [privateKey, publicKey] = await Promise.all([
-        readFile(privatePath, "utf8"),
-        readFile(publicPath, "utf8"),
-      ]);
-      return {
-        privateKey,
-        privateKeyPath: privatePath,
-        publicKey,
-        keyHash: publicKeyHash(publicKey),
-      };
-    } catch {
-      await mkdir(directory, { recursive: true, mode: 0o700 });
+    const stored = await readStoredKey(privatePath, publicPath);
+    if (stored) return stored;
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    return fileLock.withFileLock(["sandbox-ssh-key", privatePath], async () => {
+      const rechecked = await readStoredKey(privatePath, publicPath);
+      if (rechecked) return rechecked;
+
       const generated = utils.generateKeyPairSync("ed25519");
       const privateKey = generated.private;
       const publicKey = generated.public;
-      const suffix = `${process.pid}-${Date.now()}`;
+      const suffix = `${process.pid}-${randomBytes(8).toString("hex")}`;
       const stagedPrivate = `${privatePath}.${suffix}`;
       const stagedPublic = `${publicPath}.${suffix}`;
-      await writeFile(stagedPrivate, privateKey, { mode: 0o600 });
-      await writeFile(stagedPublic, `${publicKey.trim()}\n`, { mode: 0o600 });
-      await rename(stagedPrivate, privatePath).catch(() => undefined);
-      await rename(stagedPublic, publicPath).catch(() => undefined);
-      await chmod(privatePath, 0o600);
-      await chmod(publicPath, 0o600);
-      const storedPublic = await readFile(publicPath, "utf8");
-      const storedPrivate = await readFile(privatePath, "utf8");
-      return {
-        privateKey: storedPrivate,
-        privateKeyPath: privatePath,
-        publicKey: storedPublic,
-        keyHash: publicKeyHash(storedPublic),
-      };
-    }
+      try {
+        await writeFile(stagedPrivate, privateKey, { mode: 0o600 });
+        await writeFile(stagedPublic, `${publicKey.trim()}\n`, { mode: 0o600 });
+        await rename(stagedPrivate, privatePath);
+        await rename(stagedPublic, publicPath);
+        await Promise.all([chmod(privatePath, 0o600), chmod(publicPath, 0o600)]);
+        const created = await readStoredKey(privatePath, publicPath);
+        if (!created) throw new Error("SSH key files were not published atomically");
+        return created;
+      } finally {
+        await Promise.all([
+          rm(stagedPrivate, { force: true }),
+          rm(stagedPublic, { force: true }),
+        ]);
+      }
+    });
   }
 
   private hostFingerprintPath(scope: string, userId: string, host: string, port: number): string {
@@ -141,6 +137,26 @@ export class SshKeyStore {
 
   private directory(scope: string, userId: string): string {
     return join(this.root, digest(`${scope}\0${userId}`));
+  }
+}
+
+async function readStoredKey(
+  privatePath: string,
+  publicPath: string,
+): Promise<StoredKey | undefined> {
+  try {
+    const [privateKey, publicKey] = await Promise.all([
+      readFile(privatePath, "utf8"),
+      readFile(publicPath, "utf8"),
+    ]);
+    return {
+      privateKey,
+      privateKeyPath: privatePath,
+      publicKey,
+      keyHash: publicKeyHash(publicKey),
+    };
+  } catch {
+    return undefined;
   }
 }
 

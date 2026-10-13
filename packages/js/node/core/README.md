@@ -224,7 +224,10 @@ watch tasks. The returned live child is also awaitable and exposes a memoized
 tree, waits 8 seconds, then force-kills survivors and polls for 4 more seconds.
 Callers may override those timeouts but not the platform signal policy. Parent
 termination signals are forwarded through one process-global trap unless
-`forwardTerminationSignals: false` is set.
+`forwardTerminationSignals: false` is set. Subscribe with
+`exec.onParentTerminationSignal` instead of adding another `process` listener;
+extra listeners change whether that trap re-raises the signal after children
+exit.
 
 When an executable is missing, `spawn()` and `spawnSync()` return
 `exec.COMMAND_NOT_FOUND_EXIT_CODE` (`127`) unless `check: true` is set. With

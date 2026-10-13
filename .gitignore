@@ -36,6 +36,7 @@ jspm_packages/
 !/tsconfig.json
 !/tsconfig.projen.json
 !/bunfig.toml
+!/scripts/check-bun.ts
 !/.vscode/settings.json
 !/.vscode/extensions.json
 !/.vscode/tasks.json

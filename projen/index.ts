@@ -38,7 +38,7 @@ export * as watch from "./src/watch.ts";
 export * as workspaceLock from "./src/workspace-lock.ts";
 export * as workspaceVersion from "./src/workspace-version.ts";
 export { BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE, BUN_APP_OVERRIDES, RootBunfigFile, BunfigFile, BunDevServerFile, BunBuildFile } from "./src/bun-app.ts";
-export { BUN_VERSION } from "./src/bun-workflow.ts";
+export { BUN_VERSION, MINIMUM_BUN_VERSION, BUN_VERSION_CHECK_SCRIPT } from "./src/bun-workflow.ts";
 export { DBXToolsConfigDataSchema, DBXToolsConfig } from "./src/dbx-tools-config.ts";
 export type { DBXToolsConfigOptions, DBXToolsConfigData } from "./src/dbx-tools-config.ts";
 export { DEV_WATCH_TASK, DEV_WATCH_SCRIPT, DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY } from "./src/dev-watch.ts";

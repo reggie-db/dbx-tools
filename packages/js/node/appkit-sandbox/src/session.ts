@@ -70,8 +70,10 @@ export interface SshSessionOptions {
  */
 export class SshSession {
   private readonly activeCommands = new Set<SshCommand>();
+  private readonly pendingClients = new Set<Ssh2Client>();
   private transport?: SshTransport;
   private connecting?: Promise<void>;
+  private closing?: Promise<void>;
   private knownHost?: string;
   private closed = false;
 
@@ -129,6 +131,7 @@ export class SshSession {
   }
 
   private async connectHost(connectHost: string): Promise<void> {
+    if (this.closed) throw new Error("SSH session is closed");
     const client = await this.createVerifiedClient(connectHost, true);
     if (this.closed) {
       client.destroy();
@@ -164,9 +167,17 @@ export class SshSession {
 
   private createVerifiedClient(connectHost: string, rememberHost: boolean): Promise<Ssh2Client> {
     return new Promise((resolve, reject) => {
+      if (this.closed) {
+        reject(new Error("SSH session is closed"));
+        return;
+      }
       const client = new Client();
+      this.pendingClients.add(client);
       let verifiedHost: { fingerprint: string; key: Buffer } | undefined;
       let settled = false;
+      const finishSettlement = () => {
+        this.pendingClients.delete(client);
+      };
       client.once("ready", () => {
         const finish = async () => {
           if (!verifiedHost) throw new Error("SSH gateway did not provide a verified host key");
@@ -175,40 +186,51 @@ export class SshSession {
             await this.options.rememberHost?.(verifiedHost.fingerprint, verifiedHost.key);
           }
           settled = true;
+          finishSettlement();
           resolve(client);
         };
         void finish().catch((error) => {
           client.destroy();
           if (settled) return;
           settled = true;
+          finishSettlement();
           reject(error);
         });
       });
       client.once("error", (error) => {
         if (settled) return;
         settled = true;
+        finishSettlement();
         reject(error);
       });
       client.once("close", () => {
         if (settled) return;
         settled = true;
+        finishSettlement();
         reject(new Error("SSH gateway closed before authentication completed"));
       });
-      client.connect({
-        host: connectHost,
-        port: this.options.port,
-        username: this.options.username,
-        privateKey: this.options.privateKey,
-        readyTimeout: this.options.connectTimeoutMs,
-        keepaliveInterval: 15_000,
-        keepaliveCountMax: 3,
-        hostVerifier: (key: Buffer) => {
-          const fingerprint = createHash("sha256").update(key).digest("base64");
-          if (this.knownHost && fingerprint !== this.knownHost) return false;
-          verifiedHost = { fingerprint, key: Buffer.from(key) };
-          return true;
-        },
-      });
+      try {
+        client.connect({
+          host: connectHost,
+          port: this.options.port,
+          username: this.options.username,
+          privateKey: this.options.privateKey,
+          readyTimeout: this.options.connectTimeoutMs,
+          keepaliveInterval: 15_000,
+          keepaliveCountMax: 3,
+          hostVerifier: (key: Buffer) => {
+            const fingerprint = createHash("sha256").update(key).digest("base64");
+            if (this.knownHost && fingerprint !== this.knownHost) return false;
+            verifiedHost = { fingerprint, key: Buffer.from(key) };
+            return true;
+          },
+        });
+      } catch (error) {
+        settled = true;
+        finishSettlement();
+        client.destroy();
+        reject(error);
+      }
     });
   }
 
@@ -276,16 +298,26 @@ export class SshSession {
   }
 
   /** Cancels active commands, closes the selected transport, and clears connection state. */
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    if (this.closing) return this.closing;
     this.closed = true;
+    this.closing = this.closeResources();
+    return this.closing;
+  }
+
+  private async closeResources(): Promise<void> {
     const cancellations = [...this.activeCommands].map((command) => command.cancel());
     this.activeCommands.clear();
+    for (const client of this.pendingClients) client.destroy();
+    this.pendingClients.clear();
     const transport = this.transport;
+    const connecting = this.connecting;
     this.transport = undefined;
     this.connecting = undefined;
     const results = await Promise.allSettled([
       ...cancellations,
       ...(transport ? [transport.close()] : []),
+      ...(connecting ? [connecting] : []),
     ]);
     for (const result of results) {
       if (result.status === "rejected") {

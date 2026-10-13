@@ -45,19 +45,39 @@ export class Ssh2Transport extends PooledSshTransport<Ssh2Resource> {
   ): Promise<Duplex> {
     return new Promise((resolve, reject) => {
       let settled = false;
-      const timeout = setTimeout(() => {
+      let timeout: ReturnType<typeof setTimeout>;
+      const cleanup = () => {
+        clearTimeout(timeout);
+        resource.client.removeListener("close", clientClosed);
+        resource.client.removeListener("error", clientFailed);
+      };
+      const fail = (error: Error) => {
         if (settled) return;
         settled = true;
-        reject(new Error(`ssh2 forwarding did not open within ${this.connectTimeoutMs}ms`));
-      }, this.connectTimeoutMs);
+        cleanup();
+        reject(error);
+      };
+      const clientClosed = () => {
+        fail(new Error("ssh2 connection closed while opening forwarding"));
+      };
+      const clientFailed = (error: Error) => {
+        fail(error);
+      };
+      timeout = setTimeout(
+        () =>
+          fail(new Error(`ssh2 forwarding did not open within ${this.connectTimeoutMs}ms`)),
+        this.connectTimeoutMs,
+      );
       timeout.unref?.();
+      resource.client.once("close", clientClosed);
+      resource.client.once("error", clientFailed);
       resource.client.forwardOut("127.0.0.1", 0, remoteHost, remotePort, (error, channel) => {
         if (settled) {
           channel?.destroy();
           return;
         }
         settled = true;
-        clearTimeout(timeout);
+        cleanup();
         if (error) reject(error);
         else resolve(channel);
       });

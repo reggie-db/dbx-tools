@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   createServer as createHttpServer,
   type IncomingHttpHeaders,
@@ -8,7 +9,6 @@ import { createConnection, type Server as NetServer, type Socket } from "node:ne
 import { Duplex } from "node:stream";
 import { describe, it } from "node:test";
 import { USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
-import { WebSocketServer } from "ws";
 import { SshRouteRegistry } from "../src/routes.ts";
 import type { SshSession } from "../src/session.ts";
 
@@ -41,6 +41,58 @@ describe("SshRouteRegistry", () => {
       assert.deepEqual(registry.list("sandbox-1"), [otherRoute]);
       await registry.removeMachine("sandbox-1");
       assert.deepEqual(registry.list("sandbox-1"), []);
+    } finally {
+      await registry.close();
+    }
+  });
+
+  it("rejects route creation after shutdown and closes a racing bridge", async () => {
+    const registry = new SshRouteRegistry("/sandbox");
+    const add = registry.add(unusedSession, {
+      ownerId: "reggie.pierce@databricks.com",
+      machineId: "sandbox-1",
+      remoteHost: "127.0.0.1",
+      remotePort: 3000,
+    });
+    const close = registry.close();
+
+    await assert.rejects(add, /registry is closed/);
+    await close;
+    await assert.rejects(
+      registry.add(unusedSession, {
+        ownerId: "reggie.pierce@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort: 3000,
+      }),
+      /registry is closed/,
+    );
+    assert.deepEqual(registry.list(), []);
+  });
+
+  it("serializes concurrent route publication and rejects duplicate ids", async () => {
+    const registry = new SshRouteRegistry("/sandbox");
+    try {
+      const first = await registry.add(unusedSession, {
+        id: "shared-id",
+        ownerId: "reggie.pierce@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort: 3000,
+        path: "/first",
+      });
+      await assert.rejects(
+        registry.add(unusedSession, {
+          id: "shared-id",
+          ownerId: "reggie.pierce@databricks.com",
+          machineId: "sandbox-1",
+          remoteHost: "127.0.0.1",
+          remotePort: 3001,
+          path: "/second",
+        }),
+        /id shared-id is already registered/,
+      );
+      assert.deepEqual(registry.list(), [first]);
     } finally {
       await registry.close();
     }
@@ -385,11 +437,24 @@ describe("SshRouteRegistry", () => {
           : request.url,
       );
     });
-    const remoteWebSockets = new WebSocketServer({ noServer: true });
     remote.on("upgrade", (request, socket, head) => {
       upgradedPath = request.url;
       upgradedHeaders = request.headers;
-      remoteWebSockets.handleUpgrade(request, socket, head, (client) => client.send("ready"));
+      const accept = createHash("sha1")
+        .update(`${request.headers["sec-websocket-key"]}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+        .digest("base64");
+      socket.write(
+        [
+          "HTTP/1.1 101 Switching Protocols",
+          "Connection: Upgrade",
+          "Upgrade: websocket",
+          `Sec-WebSocket-Accept: ${accept}`,
+          "Sec-WebSocket-Protocol: binary",
+          "",
+          "",
+        ].join("\r\n"),
+      );
+      if (head.length > 0) socket.unshift(head);
     });
     const remotePort = await listen(remote);
     const session = {
@@ -502,7 +567,6 @@ describe("SshRouteRegistry", () => {
       assert.equal(upgradeHandled, false);
     } finally {
       await registry.close();
-      remoteWebSockets.close();
       await close(proxy);
       await close(remote);
     }
@@ -510,11 +574,7 @@ describe("SshRouteRegistry", () => {
 
   it("returns 504 when an SSH forwarding channel never becomes responsive", async () => {
     const session = {
-      forwardOut: async () =>
-        new Duplex({
-          read: () => undefined,
-          write: (_chunk, _encoding, callback) => callback(),
-        }),
+      forwardOut: () => new Promise<Duplex>(() => undefined),
     } as unknown as SshSession;
     const registry = new SshRouteRegistry("/sandbox", 10);
     const proxy = createHttpServer((request, response) => {
@@ -548,6 +608,108 @@ describe("SshRouteRegistry", () => {
     } finally {
       await registry.close();
       await close(proxy);
+    }
+  });
+
+  it("does not treat slow application responses as forwarding setup failures", async () => {
+    const remote = createHttpServer((_request, response) => {
+      setTimeout(() => response.end("ready"), 30);
+    });
+    const remotePort = await listen(remote);
+    const session = {
+      forwardOut: async () => createConnection(remotePort, "127.0.0.1"),
+    } as unknown as SshSession;
+    const registry = new SshRouteRegistry("/sandbox", 10);
+    const proxy = createHttpServer((request, response) => {
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
+      });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
+      registry.middleware()(request as never, response as never, () => {
+        response.statusCode = 404;
+        response.end();
+      });
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const route = await registry.add(session, {
+        ownerId: "reggie.pierce@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort,
+        path: "/sandbox/metrics/sandbox-1",
+        internal: true,
+      });
+
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}${route.path}/`, {
+          headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+        }).then((response) => response.text()),
+        "ready",
+      );
+    } finally {
+      await registry.close();
+      await close(proxy);
+      await close(remote);
+    }
+  });
+
+  it("returns 502 for a failed forwarding open without removing the route", async () => {
+    const remote = createHttpServer((_request, response) => response.end("ready"));
+    const remotePort = await listen(remote);
+    let attempts = 0;
+    const session = {
+      forwardOut: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("SSH forwarding connection closed");
+        return createConnection(remotePort, "127.0.0.1");
+      },
+    } as unknown as SshSession;
+    const registry = new SshRouteRegistry("/sandbox");
+    const proxy = createHttpServer((request, response) => {
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
+      });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
+      registry.middleware()(request as never, response as never, () => {
+        response.statusCode = 404;
+        response.end();
+      });
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const route = await registry.add(session, {
+        ownerId: "reggie.pierce@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort,
+        path: "/sandbox/metrics/sandbox-1",
+        internal: true,
+      });
+      const headers = { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" };
+
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}${route.path}/`, { headers }).then(
+          (response) => response.status,
+        ),
+        502,
+      );
+      assert.deepEqual(
+        registry.list("sandbox-1", "reggie.pierce@databricks.com", { includeInternal: true }),
+        [route],
+      );
+      assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}${route.path}/`, { headers }).then((response) =>
+          response.text(),
+        ),
+        "ready",
+      );
+    } finally {
+      await registry.close();
+      await close(proxy);
+      await close(remote);
     }
   });
 

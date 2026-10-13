@@ -121,6 +121,55 @@ describe("superviseProcessForever", () => {
     }
   });
 
+  it("does not restart after a parent shutdown signal", async () => {
+    const children: FakeChild[] = [];
+    const ignore = () => undefined;
+    process.on("SIGINT", ignore);
+    const supervisor = superviseProcessForever({
+      name: "test-client",
+      logger: log.logger("test:supervisor"),
+      retryDelaysMs: [0],
+      start: () => startChild(children),
+    });
+
+    try {
+      await waitFor(() => children.length === 1);
+      process.emit("SIGINT");
+      children[0]!.emit("exit", 0, null);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.equal(children.length, 1);
+      assert.equal(children[0]!.shutdownCalls, 0);
+    } finally {
+      process.off("SIGINT", ignore);
+      supervisor.stop();
+    }
+  });
+
+  it("still terminates the child when stop runs after a parent shutdown signal", async () => {
+    const children: FakeChild[] = [];
+    const ignore = () => undefined;
+    process.on("SIGTERM", ignore);
+    const supervisor = superviseProcessForever({
+      name: "test-client",
+      logger: log.logger("test:supervisor"),
+      retryDelaysMs: [0],
+      start: () => startChild(children),
+    });
+
+    try {
+      await waitFor(() => children.length === 1);
+      process.emit("SIGTERM");
+      await nextTurn();
+      supervisor.stop();
+      await nextTurn();
+
+      assert.equal(children[0]!.shutdownCalls, 1);
+      assert.equal(children.length, 1);
+    } finally {
+      process.off("SIGTERM", ignore);
+    }
+  });
+
   it("does not restart when a single probe fails below the threshold", async () => {
     const children: FakeChild[] = [];
     let probes = 0;

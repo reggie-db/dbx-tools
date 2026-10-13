@@ -81,7 +81,7 @@ export class SshWorkspaceSandbox extends MastraSandbox {
 
   /** Disconnects local session state without deleting the remote Sandbox. */
   async destroy(): Promise<void> {
-    this.runtime.disconnect(new DatabricksScope(this.client).value, this.userId, this.id);
+    await this.runtime.disconnect(new DatabricksScope(this.client).value, this.userId, this.id);
     this.status = "destroyed";
   }
 

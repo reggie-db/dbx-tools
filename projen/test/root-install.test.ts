@@ -67,12 +67,25 @@ describe("ROOT_INSTALL_ONLY_MIXIN", () => {
   it("keeps root installs and suppresses late-attached child installs by default", () => {
     const { child, outdir, root } = synthFixture("default");
 
-    assert.ok(taskSteps(outdir, "install").length > 0);
-    assert.ok(taskSteps(outdir, "install:ci").length > 0);
+    assert.deepEqual(taskSteps(outdir, "install").slice(0, 2), [
+      { exec: "bun scripts/check-bun.ts" },
+      { exec: "bun install" },
+    ]);
+    assert.deepEqual(taskSteps(outdir, "install:ci").slice(0, 2), [
+      { exec: "bun scripts/check-bun.ts" },
+      { exec: "bun install" },
+    ]);
     assert.deepEqual(taskSteps(join(outdir, "packages/child"), "install"), []);
     assert.deepEqual(taskSteps(join(outdir, "packages/child"), "install:ci"), []);
     assert.equal(Object.hasOwn(root.package, "installDependencies"), false);
     assert.equal(Object.hasOwn(child.package, "installDependencies"), true);
+    const manifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
+      devDependencies?: Record<string, string>;
+    };
+    assert.equal(manifest.devDependencies?.bun, "1.4.2");
+    const check = readFileSync(join(outdir, "scripts/check-bun.ts"), "utf8");
+    assert.match(check, /MINIMUM_VERSION = "1\.4\.2"/);
+    assert.match(check, /bun run bun/);
   });
 
   it("preserves child install tasks when rootInstallOnly is false", () => {

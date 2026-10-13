@@ -317,7 +317,17 @@ export abstract class PooledSshTransport<T> implements SshTransport {
 
   /** Starts both pools and waits until one tested command resource is warm. */
   start(): Promise<void> {
-    this.starting ??= this.startPools();
+    if (this.closed) return Promise.reject(new Error(`${this.kind} SSH transport is closed`));
+    if (this.starting) return this.starting;
+    this.starting = this.startPools();
+    void this.starting
+      .catch(() => this.close())
+      .catch((error) =>
+        logger.warn("failed to close SSH transport after startup failure", {
+          kind: this.kind,
+          error: errorUtils.toError(error),
+        }),
+      );
     return this.starting;
   }
 
@@ -350,21 +360,18 @@ export abstract class PooledSshTransport<T> implements SshTransport {
   }
 
   async connect(remoteHost: string, remotePort: number): Promise<Duplex> {
-    const resource = await this.acquire(this.forwardingPool);
+    const first = await this.acquire(this.forwardingPool);
     try {
-      const stream = await this.connectWithResource(resource, remoteHost, remotePort);
-      let disposed = false;
-      const dispose = () => {
-        if (disposed) return;
-        disposed = true;
-        void this.destroy(this.forwardingPool, resource);
-      };
-      stream.once("close", dispose);
-      stream.once("error", dispose);
-      if (stream.destroyed) dispose();
-      return stream;
+      return await this.connectWithBorrowedResource(first, remoteHost, remotePort);
     } catch (error) {
-      await this.destroy(this.forwardingPool, resource);
+      await this.destroy(this.forwardingPool, first);
+      if (this.closed) throw error;
+    }
+    const retry = await this.acquire(this.forwardingPool);
+    try {
+      return await this.connectWithBorrowedResource(retry, remoteHost, remotePort);
+    } catch (error) {
+      await this.destroy(this.forwardingPool, retry);
       throw error;
     }
   }
@@ -387,6 +394,24 @@ export abstract class PooledSshTransport<T> implements SshTransport {
     remoteHost: string,
     remotePort: number,
   ): Promise<Duplex>;
+
+  private async connectWithBorrowedResource(
+    resource: T,
+    remoteHost: string,
+    remotePort: number,
+  ): Promise<Duplex> {
+    const stream = await this.connectWithResource(resource, remoteHost, remotePort);
+    let disposed = false;
+    const dispose = () => {
+      if (disposed) return;
+      disposed = true;
+      void this.destroy(this.forwardingPool, resource);
+    };
+    stream.once("close", dispose);
+    stream.once("error", dispose);
+    if (stream.destroyed) dispose();
+    return stream;
+  }
 
   private async acquire(pool: Pool<T>): Promise<T> {
     if (this.closed) throw new Error(`${this.kind} SSH transport is closed`);
@@ -418,6 +443,7 @@ export abstract class PooledSshTransport<T> implements SshTransport {
   }
 
   private async closePools(): Promise<void> {
+    await this.starting?.catch(() => undefined);
     const commandDrain = this.commandPool.drain();
     const forwardingDrain = this.forwardingPool.drain();
     await Promise.all(
@@ -470,14 +496,24 @@ const defaultSshTransportFactories: SshTransportFactories = {
   createOpenSsh: async (options, command) => {
     const { OpenSshTransport } = await import("./_ssh_openssh.ts");
     const transport = new OpenSshTransport(options, command);
-    await transport.start();
-    return transport;
+    try {
+      await transport.start();
+      return transport;
+    } catch (error) {
+      await transport.close();
+      throw error;
+    }
   },
   createSsh2: async (options) => {
     const { Ssh2Transport } = await import("./_ssh_ssh2.ts");
     const transport = new Ssh2Transport(options);
-    await transport.start();
-    return transport;
+    try {
+      await transport.start();
+      return transport;
+    } catch (error) {
+      await transport.close();
+      throw error;
+    }
   },
 };
 
