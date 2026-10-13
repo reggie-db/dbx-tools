@@ -14,6 +14,7 @@ from dbx_tools.node_runtime.runtime import (
     get_runtime,
     load_bundle,
 )
+from pythonmonkey import SpiderMonkeyError
 
 FIXTURES = Path(__file__).with_name("fixtures")
 
@@ -30,7 +31,7 @@ def test_read_file_sync_missing_is_enoent() -> None:
     missing = str(Path("/no/such/dbx-tools/model-catalog.json"))
     try:
         get_builtin("fs").readFileSync(missing)
-    except Exception as exc:
+    except SpiderMonkeyError as exc:
         assert getattr(exc, "code", None) == "ENOENT" or "ENOENT" in str(exc)
         return
     raise AssertionError("readFileSync should fail for a missing cache file")
