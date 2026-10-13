@@ -39,6 +39,7 @@ describe("Sandbox project configuration", () => {
     const parsed = parse(toml) as {
       tools: { node: string };
       env: Record<string, string>;
+      settings: Record<string, string>;
     };
     assert.equal(parsed.tools.node, "lts");
     assert.deepEqual(parsed.env, {
@@ -46,6 +47,28 @@ describe("Sandbox project configuration", () => {
       PROJECT_NAME: "demo",
       PROJECT_PATH: "/sandbox/abc/demo",
       PROJECT_PORT: "8080",
+    });
+    assert.deepEqual(parsed.settings, {
+      unix_default_file_shell_args: "bash -e",
+      unix_default_inline_shell_args: "bash -c -o errexit",
+    });
+  });
+
+  it("preserves explicit mise shell settings", () => {
+    const toml = renderProjectMiseConfig(
+      {
+        settings: {
+          unix_default_file_shell_args: "zsh",
+          unix_default_inline_shell_args: "zsh -c",
+        },
+      },
+      { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
+    );
+    const parsed = parse(toml) as { settings: Record<string, string> };
+
+    assert.deepEqual(parsed.settings, {
+      unix_default_file_shell_args: "zsh",
+      unix_default_inline_shell_args: "zsh -c",
     });
   });
 

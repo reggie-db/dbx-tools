@@ -6,6 +6,8 @@ import {
 } from "@dbx-tools/shared-databricks-sandbox";
 import { Button, ButtonGroup, cn, Spinner, useIsMobile } from "@dbx-tools/ui/react";
 import {
+  CheckIcon,
+  CopyIcon,
   FileTextIcon,
   HeartPulseIcon,
   MonitorIcon,
@@ -78,23 +80,44 @@ export interface BuiltInServiceLogSelection {
 /** Renders a saved install log inside its owning machine or project row. */
 export function InstallLogPanel({ label, state, log, error }: InstallLogPanelProps) {
   const logRef = useRef<HTMLPreElement | null>(null);
+  const [copied, setCopied] = useState(false);
+  const output = log || error || `${label} has no recorded output.`;
 
   useEffect(() => {
     if (!logRef.current) return;
     logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [log]);
+    setCopied(false);
+  }, [output]);
+
+  const copyOutput = async () => {
+    await navigator.clipboard.writeText(output);
+    setCopied(true);
+  };
 
   return (
     <section aria-label={`${label} install logs`} className="border-t bg-zinc-950">
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2 sm:px-4">
         <span className="text-xs font-medium text-zinc-100">{label} install logs</span>
-        {state ? <span className="text-xs text-zinc-400">{state}</span> : null}
+        <div className="flex items-center gap-2">
+          {state ? <span className="text-xs text-zinc-400">{state}</span> : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-6 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+            aria-label={`Copy ${label} install logs`}
+            title={copied ? "Copied" : "Copy logs"}
+            onClick={() => void copyOutput()}
+          >
+            {copied ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}
+          </Button>
+        </div>
       </div>
       <pre
         ref={logRef}
-        className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11px] leading-4 text-zinc-100 sm:px-4"
+        className="max-h-48 cursor-text select-text overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11px] leading-4 text-zinc-100 sm:px-4"
       >
-        {log || error || `${label} has no recorded output.`}
+        {output}
       </pre>
     </section>
   );

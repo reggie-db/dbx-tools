@@ -292,5 +292,7 @@ describe("InstallLogPanel", () => {
     assert.match(html, /whiteboard install logs/);
     assert.match(html, /mise install failed/);
     assert.match(html, />error</);
+    assert.match(html, /aria-label="Copy whiteboard install logs"/);
+    assert.match(html, /select-text/);
   });
 });

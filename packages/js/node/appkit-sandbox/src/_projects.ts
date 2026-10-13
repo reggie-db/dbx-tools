@@ -8,6 +8,10 @@ const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const PROJECT_PATH_SEGMENT_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const GENERATED_PORT_MIN = 8_000;
 const GENERATED_PORT_MAX = 49_151;
+const DEFAULT_MISE_SETTINGS = {
+  unix_default_file_shell_args: "bash -e",
+  unix_default_inline_shell_args: "bash -c -o errexit",
+} as const;
 type ProjectConfigInput = NonNullable<AddSshProjectRequest["config"]>;
 type ProjectConfig = Exclude<ProjectConfigInput, string>;
 type ProjectConfigValue = ProjectConfig[string];
@@ -197,6 +201,11 @@ export function renderProjectMiseConfig(
     env[name] = expected;
   }
   resolved.env = env;
+  const settings = objectTable(resolved.settings, "config.settings");
+  for (const [name, value] of Object.entries(DEFAULT_MISE_SETTINGS)) {
+    if (settings[name] === undefined) settings[name] = value;
+  }
+  resolved.settings = settings;
   try {
     return `${stringify(resolved as TomlTableWithoutBigInt).trimEnd()}\n`;
   } catch (error) {
