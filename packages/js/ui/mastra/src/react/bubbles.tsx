@@ -18,6 +18,7 @@ import type { UIMessage } from "ai";
 import {
   BugIcon,
   CheckIcon,
+  ChevronDownIcon,
   CopyIcon,
   MessageSquareIcon,
   RefreshCcwIcon,
@@ -63,7 +64,8 @@ const UserAvatar = () => (
 
 const ThoughtsDisclosure = ({ text }: { text: string }) => (
   <Collapsible>
-    <CollapsibleTrigger className="w-fit cursor-pointer rounded-md border border-border/40 bg-background/30 px-2 py-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <CollapsibleTrigger className="group flex w-fit cursor-pointer items-center gap-1.5 px-0 py-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
       Thoughts
     </CollapsibleTrigger>
     <CollapsibleContent>

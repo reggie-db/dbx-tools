@@ -10,6 +10,7 @@ const Brand = lazy(() => import("@/pages/Brand"));
 const Bus = lazy(() => import("@/pages/Bus"));
 const Cards = lazy(() => import("@/pages/Cards"));
 const Chat = lazy(() => import("@/pages/Chat"));
+const GenieChat = lazy(() => import("@/pages/GenieChat"));
 const Search = lazy(() => import("@/pages/Search"));
 const Lakebox = lazy(() => import("@/pages/Lakebox"));
 
@@ -70,6 +71,12 @@ const BASE_ROUTES: RouteDef[] = [
     label: "Chat",
     description: "Streaming assistant with tools, history, and threads",
     element: <Chat />,
+  },
+  {
+    path: "/genie",
+    label: "Genie Chat",
+    description: "Direct Genie conversation using the same chat shell",
+    element: <GenieChat />,
   },
   {
     path: "/cards",
@@ -303,7 +310,7 @@ const App = () => {
     {
       path: "/lakebox",
       label: "Lakebox",
-      description: "Start the app Lakebox and open your terminal, desktop, and services",
+      description: "Open your terminal, desktop, and services",
       element: <Lakebox />,
     },
   ];

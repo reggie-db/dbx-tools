@@ -1,4 +1,3 @@
-import { lakeboxServicePath } from "@dbx-tools/shared-lakebox/client";
 import {
   createLakeboxServiceRequestSchema,
   lakeboxServiceKindSchema,
@@ -8,6 +7,7 @@ import {
   type LakeboxService,
   type LakeboxUser,
 } from "@dbx-tools/shared-lakebox";
+import { lakeboxServicePath } from "@dbx-tools/shared-lakebox/client";
 import { z } from "zod";
 import { desktopEnvironment, desktopHtmlHead, desktopOpenUrl } from "./desktop.ts";
 import { LAKEBOX_RUNTIME_ROOT, lakeboxServicePort } from "./user.ts";

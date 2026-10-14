@@ -207,6 +207,8 @@ export type ChatViewProps = {
    * footer, after Upload and before Export and Clear.
    */
   composerLeadingActions?: ReactNode;
+  /** Whether the composer accepts image attachments. Defaults to true. */
+  allowAttachments?: boolean;
   /**
    * Optional infinite-scroll-up handler. Fired when the user scrolls
    * within `TOP_LOAD_MORE_THRESHOLD_PX` of the top of the

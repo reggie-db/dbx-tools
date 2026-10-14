@@ -29,12 +29,18 @@
  * (auto-defaulted to `true` in `plugin.ts` when the `lakebase` plugin
  * is registered); per-agent settings cascade on top of that.
  *
+ * `config.managedMemory` replaces each agent's Postgres memory domain with a
+ * Databricks Agent Session Store and adds managed-memory recall as an input
+ * processor. Instance-level workflow storage remains Postgres when configured.
+ *
  * @module
  */
 
+import type { WorkspaceClient } from "@databricks/appkit";
 import { migration as appkitMigration } from "@dbx-tools/appkit";
 import { hash, log } from "@dbx-tools/shared-core";
 import type { AgentMemoryOption } from "@mastra/core/agent";
+import type { InputProcessor } from "@mastra/core/processors";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
@@ -47,6 +53,7 @@ import type { Pool } from "pg";
 
 import type { AnyMastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
 import type { MastraPluginConfig } from "./config.ts";
+import { ManagedMemoryRuntime, resolveManagedMemoryOptions } from "./managed-memory.ts";
 import { agentStorageSchemaName } from "./storage-schema.ts";
 import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 
@@ -148,16 +155,17 @@ export function needsLakebase(config: MastraPluginConfig): boolean {
 }
 
 /**
- * Construct a per-agent {@link Memory} factory bound to the supplied
- * service-principal pool.
+ * Construct a per-agent {@link Memory} factory bound to the service-principal
+ * workspace client and optional Lakebase pool.
  * Caches the shared `PgVector` singleton (built on first need) so each
  * agent build is O(1) after the first.
  */
 export function createMemoryBuilder(
   config: MastraPluginConfig,
-  servicePrincipalPool: Pool,
+  servicePrincipalClient: WorkspaceClient,
+  servicePrincipalPool?: Pool,
 ): MemoryBuilder {
-  return new MemoryBuilder(config, servicePrincipalPool);
+  return new MemoryBuilder(config, servicePrincipalClient, servicePrincipalPool);
 }
 
 /**
@@ -167,11 +175,20 @@ export function createMemoryBuilder(
  */
 export class MemoryBuilder {
   private sharedVector: PgVector | undefined;
+  readonly managed: ManagedMemoryRuntime | undefined;
 
   constructor(
     private readonly config: MastraPluginConfig,
-    private readonly servicePrincipalPool: Pool,
-  ) {}
+    servicePrincipalClient: WorkspaceClient,
+    private readonly servicePrincipalPool?: Pool,
+  ) {
+    this.managed = config.managedMemory
+      ? new ManagedMemoryRuntime(
+          servicePrincipalClient,
+          resolveManagedMemoryOptions(config.managedMemory),
+        )
+      : undefined;
+  }
 
   /**
    * Build the Mastra-instance-level storage used for workflow
@@ -196,6 +213,7 @@ export class MemoryBuilder {
         ),
       );
     }
+    if (!this.servicePrincipalPool) return undefined;
     return withSoftStorageInit(
       new PostgresStore({
         id: "mastra-store__instance",
@@ -215,8 +233,8 @@ export class MemoryBuilder {
     const storageSetting = def.storage ?? this.config.storage;
     const memorySetting = def.memory ?? this.config.memory;
 
-    const storage = this.buildStorage(agentId, storageSetting);
-    const vector = this.buildVector(memorySetting);
+    const storage = this.managed?.storage(agentId) ?? this.buildStorage(agentId, storageSetting);
+    const vector = this.managed ? undefined : this.buildVector(memorySetting);
     if (!storage && !vector) {
       logger.debug("agent:stateless", { agentId });
       return undefined;
@@ -254,9 +272,18 @@ export class MemoryBuilder {
     });
   }
 
-  private buildStorage(agentId: string, setting: StorageSetting): PostgresStore | undefined {
+  inputProcessors(): InputProcessor[] {
+    const processor = this.managed?.inputProcessor();
+    return processor ? [processor] : [];
+  }
+
+  private buildStorage(
+    agentId: string,
+    setting: StorageSetting,
+  ): ReturnType<ManagedMemoryRuntime["storage"]> | PostgresStore | undefined {
     if (!setting) return undefined;
     if (typeof setting === "boolean") {
+      if (!this.servicePrincipalPool) return undefined;
       return withSoftStorageInit(
         new PostgresStore({
           id: `mastra-store__${agentId}`,
@@ -294,6 +321,9 @@ export class MemoryBuilder {
 
   private getSharedVector(): PgVector {
     if (!this.sharedVector) {
+      if (!this.servicePrincipalPool) {
+        throw new Error("Lakebase is required for PgVector memory");
+      }
       this.sharedVector = buildSharedPgVector(this.servicePrincipalPool);
     }
     return this.sharedVector;

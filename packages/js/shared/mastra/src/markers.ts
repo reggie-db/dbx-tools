@@ -22,6 +22,9 @@
  *   - `[data:<statementId>]` - the `<statementId>` is a Databricks
  *     statement id (a time-ordered UUID) and resolves to the
  *     statement's rows.
+ *   - `[visualization:<statementId>]` - the same statement rendered by
+ *     AppKit UI's native Genie Chart/Table component after Genie requested a
+ *     visualization.
  *
  * The `<id>` of a real embed is UUID-shaped (`8-4-4-4-12` hex): both
  * id kinds above are UUIDs, just different versions (chart = v4,
@@ -48,14 +51,14 @@
  * the authoritative set of supported types lives in the server's
  * `/embed/:type/:id` resolver registry, and an unknown type simply
  * 404s. The two types the server ships today are `"chart"` and
- * `"data"`.
+ * `"data"` and `"visualization"`.
  */
 export type MarkerType = string;
 
 /**
  * Single matcher for ANY embed marker, regardless of type. Matches
  * `[<type>:<id>]`. Capture group 1 is the marker type token (e.g.
- * `chart`, `data`); group 2 is the id - any run of non-bracket,
+ * `chart`, `data`, `visualization`); group 2 is the id - any run of non-bracket,
  * non-whitespace characters, NOT constrained to a UUID shape.
  *
  * Neither the type nor the id shape is enumerated here. The type is

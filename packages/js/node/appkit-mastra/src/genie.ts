@@ -352,6 +352,11 @@ function aliasSuffix(alias: string): string {
   return slug ? `_${slug}` : "";
 }
 
+/** Tool id of the `ask_genie` tool registered for one space alias. */
+export function askGenieToolId(alias: string): string {
+  return `ask_genie${aliasSuffix(alias)}`;
+}
+
 /* --------------------------- per-space tools --------------------------- */
 
 /**
@@ -380,7 +385,7 @@ function buildAskGenieTool(opts: {
   agentMode?: boolean;
 }) {
   const { spaceId, alias, hint, agentMode } = opts;
-  const toolId = `ask_genie${aliasSuffix(alias)}`;
+  const toolId = askGenieToolId(alias);
   const hintLine = hint ? ` (${hint})` : "";
   return createTool({
     id: toolId,
@@ -400,14 +405,13 @@ function buildAskGenieTool(opts: {
 
       Returns the final \`GenieMessage\`. Agent Mode includes the
       synthesized answer and can include SQL result values as a
-      Markdown text attachment. Agent Mode has no \`statement_id\`;
-      use \`render_data\` with its inline rows when a chart is needed.
-      A legacy polling result instead carries a \`statement_id\` (at
-      \`message.query_result.statement_id\` or the first
-      attachment's \`query.statement_id\`); call
+      Markdown text attachment. Each executed query attachment
+      carries a \`statement_id\` at \`query.statement_id\` (a legacy
+      polling result may also carry
+      \`message.query_result.statement_id\`); call
       \`get_statement\` with that id only when you need to read
       the underlying values to reason about them. If you just want
-      to display a legacy result, embed a
+      to display a result, embed a
       \`[data:<statement_id>]\` marker in prose. Wire events
       (status, reasoning, SQL, query output, answer text) stream
       automatically while the call is in flight.

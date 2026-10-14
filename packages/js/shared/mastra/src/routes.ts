@@ -34,4 +34,24 @@ export const MASTRA_ROUTES = {
   // with the humanized model name.
   defaultModel: "/default-model",
   embed: "/embed",
+  // Direct Genie conversations: `/genie/:alias` scopes the chat, threads,
+  // messages, and suggestions segments to one configured Genie space alias.
+  genie: "/genie",
+  threads: "/threads",
+  messages: "/messages",
 } as const;
+
+/**
+ * Build a mount-relative direct Genie route for one space alias. Each part is
+ * either a {@link MASTRA_ROUTES} segment (leading `/`), an Express parameter
+ * token (leading `:`), or a concrete id, which is URI-encoded.
+ *
+ * @example
+ * genieRoutePath(":alias", MASTRA_ROUTES.threads, ":threadId"); // server
+ * genieRoutePath("default", MASTRA_ROUTES.threads, conversationId); // browser
+ */
+export function genieRoutePath(alias: string, ...parts: string[]): string {
+  const encode = (part: string) =>
+    part.startsWith("/") || part.startsWith(":") ? part : encodeURIComponent(part);
+  return [MASTRA_ROUTES.genie, ...[alias, ...parts].map(encode)].join("/").replace(/\/{2,}/g, "/");
+}

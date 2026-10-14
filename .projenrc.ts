@@ -445,7 +445,7 @@ project.applyToProjects(root, { identifierName: "lakebox", tags: "node" }, (p) =
 
 // AppKit integration for the single lazily created app Lakebox: per-user
 // accounts, direct-crun services, deterministic routes, metrics, agent tools,
-// and the Mastra workspace sandbox adapter.
+// persistent resource identity, and the Mastra workspace sandbox adapter.
 project.applyToProjects(root, { identifierName: "appkit-lakebox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
@@ -457,6 +457,7 @@ project.applyToProjects(root, { identifierName: "appkit-lakebox", tags: "node" }
     "@dbx-tools/appkit-mastra@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/lakebox@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-lakebox@workspace:^",
     "@dbx-tools/ui@workspace:^",
@@ -1247,6 +1248,7 @@ project.applyToProjects(root, { identifierName: "ui-teams", tags: "ui" }, (p) =>
 project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) => {
   p.package.addField("description", "React chat UI for the AppKit-Mastra plugin");
   p.addDeps(
+    "@databricks/appkit-ui@catalog:",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-mastra@workspace:^",
     "@dbx-tools/shared-genie@workspace:^",

@@ -3,8 +3,8 @@ import { createServer, type Server, type Socket } from "node:net";
 import { type Duplex, PassThrough, Readable } from "node:stream";
 import { ACCESS_TOKEN_HEADER, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
 import type { SshSession } from "@dbx-tools/lakebox/session";
-import type { LakeboxUser } from "@dbx-tools/shared-lakebox";
 import { errorUtils, log } from "@dbx-tools/shared-core";
+import type { LakeboxUser } from "@dbx-tools/shared-lakebox";
 import type { NextFunction, Request, Response } from "express";
 import ProxyModule from "http-proxy-3";
 import type { LakeboxServiceRoute } from "./services.ts";
@@ -90,8 +90,9 @@ export class LakeboxRouteRegistry {
         error,
       });
       if ("writeHead" in response) {
-        if (response.headersSent) response.destroy();
-        else {
+        if (response.headersSent) {
+          response.destroy();
+        } else {
           response.writeHead(502);
           response.end("Lakebox route unavailable");
         }
@@ -405,8 +406,9 @@ async function listenTarget(
     server.listen(0, "127.0.0.1", resolve);
   });
   const address = server.address();
-  if (!address || typeof address === "string")
+  if (!address || typeof address === "string") {
     throw new Error("Failed to bind Lakebox route bridge");
+  }
   return { host: "127.0.0.1", port: address.port, protocol: "http:" };
 }
 

@@ -65,11 +65,11 @@ describe("LakeboxClient", () => {
     ]);
     const api = new LakeboxClient(auth);
 
-    const created = await api.create("dbx-lakebox-demo");
+    const created = await api.create();
     await api.setIdleTimeout(created.sandboxId, 900);
     await api.delete(created.sandboxId);
 
-    assert.deepEqual(requests[0]?.body, { sandbox: { name: "dbx-lakebox-demo" } });
+    assert.deepEqual(requests[0]?.body, { sandbox: {} });
     assert.equal(requests[1]?.method, "PATCH");
     assert.deepEqual(requests[1]?.body, { sandbox_id: "created", idle_timeout: "900s" });
     assert.equal(requests[2]?.method, "DELETE");

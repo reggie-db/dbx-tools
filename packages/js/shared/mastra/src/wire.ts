@@ -268,6 +268,43 @@ export type Chart = z.infer<typeof ChartSchema>;
 /* ------------------------------- statements ------------------------------- */
 
 /**
+ * Browser payload consumed by AppKit UI's native Genie visualization.
+ *
+ * The Databricks SDK generates Genie's `statement_response` as `unknown`, so
+ * this route-owned schema narrows only the manifest and first result chunk the
+ * browser component reads.
+ */
+export const GenieVisualizationDataSchema = z
+  .object({
+    manifest: z
+      .object({
+        schema: z
+          .object({
+            columns: z
+              .array(
+                z.object({
+                  name: z.string().describe("Column name."),
+                  type_name: z.string().describe("Databricks SQL type name."),
+                }),
+              )
+              .describe("Columns in statement result order."),
+          })
+          .describe("Statement result schema."),
+      })
+      .describe("Statement manifest."),
+    result: z
+      .object({
+        data_array: z
+          .array(z.array(z.string().nullable()))
+          .describe("Statement rows in manifest column order."),
+      })
+      .describe("First statement result chunk."),
+  })
+  .describe("Statement result consumed by AppKit UI's native Genie visualization.");
+/** Statement result consumed by AppKit UI's native Genie visualization. */
+export type GenieVisualizationData = z.infer<typeof GenieVisualizationDataSchema>;
+
+/**
  * Wire-format payload returned by `GET ${basePath}/embed/data/:id`.
  *
  * Mirrors the agent-side `get_statement` tool's output so the
@@ -288,12 +325,17 @@ export type Chart = z.infer<typeof ChartSchema>;
  *   - `truncated`: `true` when the server clipped rows to honor
  *     the route's row cap; the UI should surface a "showing N of
  *     M rows" affordance in that case.
+ *   - `visualization`: the same manifest and first result chunk in the shape
+ *     AppKit UI's native Genie visualization consumes.
  */
 export const StatementDataSchema = z.object({
   columns: z.array(z.string()),
   rows: z.array(z.record(z.string(), z.unknown())),
   rowCount: z.number(),
   truncated: z.boolean(),
+  visualization: GenieVisualizationDataSchema.describe(
+    "Native AppKit Genie visualization payload for the same statement rows.",
+  ),
 });
 /** Tabular statement payload resolved from a `[data:<statement_id>]` embed marker. */
 export type StatementData = z.infer<typeof StatementDataSchema>;
@@ -482,6 +524,70 @@ export const ToolProgressPartDataSchema = z
 
 /** Validated payload carried by a native generic tool progress data part. */
 export type ToolProgressPartData = z.infer<typeof ToolProgressPartDataSchema>;
+
+/* -------------------------- direct Genie chat -------------------------- */
+
+/** Transient AI SDK data-part type announcing the Genie conversation behind a turn. */
+export const GENIE_CONVERSATION_PART_TYPE = "data-genie-conversation" as const;
+
+/** Data attached to {@link GENIE_CONVERSATION_PART_TYPE}. */
+export const GenieConversationPartDataSchema = z
+  .object({
+    conversationId: z.string().describe("Genie conversation id that owns the streamed turn."),
+    messageId: z.string().optional().describe("Genie message id assigned to the streamed turn."),
+  })
+  .describe("Genie conversation identity streamed once Genie assigns it.");
+
+/** Genie conversation identity streamed once Genie assigns it. */
+export type GenieConversationPartData = z.infer<typeof GenieConversationPartDataSchema>;
+
+/** Request body accepted by the direct Genie chat route. */
+export const GenieChatRequestSchema = z
+  .object({
+    question: z.string().trim().min(1).describe("Natural-language question sent to Genie."),
+    conversationId: z
+      .string()
+      .optional()
+      .describe("Existing Genie conversation to continue; omitted to start a new one."),
+  })
+  .describe("One direct Genie chat turn.");
+
+/** One direct Genie chat turn. */
+export type GenieChatRequest = z.infer<typeof GenieChatRequestSchema>;
+
+/** One Genie conversation listed as a chat thread. */
+export const GenieThreadSchema = z
+  .object({
+    id: z.string().describe("Genie conversation id, used directly as the chat thread id."),
+    title: z.string().optional().describe("Genie-assigned conversation title."),
+    createdAt: z.string().describe("ISO-8601 conversation creation time."),
+  })
+  .describe("One Genie conversation listed as a chat thread.");
+
+/** One Genie conversation listed as a chat thread. */
+export type GenieThread = z.infer<typeof GenieThreadSchema>;
+
+/** Response body of the direct Genie thread listing. */
+export const GenieThreadsResponseSchema = z
+  .object({
+    threads: z.array(GenieThreadSchema).describe("Caller's conversations, newest first."),
+  })
+  .describe("Genie conversations owned by the caller in one space.");
+
+/** Genie conversations owned by the caller in one space. */
+export type GenieThreadsResponse = z.infer<typeof GenieThreadsResponseSchema>;
+
+/** Response body of the direct Genie thread history route. */
+export const GenieThreadMessagesResponseSchema = z
+  .object({
+    messages: z
+      .array(z.unknown())
+      .describe("Chronological AI SDK `UIMessage` values, validated by the AI SDK client."),
+  })
+  .describe("Genie conversation history projected onto chat transcript messages.");
+
+/** Genie conversation history projected onto chat transcript messages. */
+export type GenieThreadMessagesResponse = z.infer<typeof GenieThreadMessagesResponseSchema>;
 
 /* ------------------------- summary + dataset ------------------------ */
 

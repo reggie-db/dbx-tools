@@ -261,6 +261,55 @@ With `lakebase()` registered, both default to enabled:
 Without `lakebase()`, agents are stateless unless you provide explicit storage
 and memory configs.
 
+### Use Databricks Managed Sessions And Memory
+
+Point `managedMemory` at existing Databricks Agent Session and Agent Memory
+stores:
+
+```ts
+mastra({
+  agents: { analyst },
+  managedMemory: true,
+});
+```
+
+`true` derives both store ids from `projectUtils.name()` and normalizes the
+value to the Databricks resource-name rules. Pass `{ sessionStore,
+memoryStore }` to select existing stores explicitly, or `memoryStore: false`
+for managed sessions without long-term recall.
+
+Agent Sessions implement Mastra's native `MemoryStorage` domain. Mastra thread
+ids become session ids, the trusted memory resource id becomes `actor_id`, and
+messages are stored as append-only session items. Message updates append a newer
+snapshot and message deletes append a tombstone, which preserves Mastra's
+mutable message view over Agent Sessions' immutable item log.
+
+When `memoryStore` is set, a native Mastra input processor searches the actor's
+managed memory on every user turn and adds the matching entries only to that
+model request. The recalled context is not copied into thread history. Search
+uses Databricks' BM25 ranking and accepts `topK` and `pathPrefix`; set
+`recall: false` to keep managed sessions without long-term recall.
+
+Provision the stores and their permissions separately. The adapter does not
+create or delete workspace-level stores at application startup. A scheduled
+[Agent Memory Pipeline](https://docs.databricks.com/aws/en/agents/agent-memory/memory-pipelines)
+can distill the managed sessions into the memory store. The exported
+`ManagedAgentMemoryClient` also exposes `runMemoryPipeline()` and
+`extractSession()` for explicit orchestration.
+
+Direct Genie still reads turns and history only from the Genie Agent API. After
+a completed turn, the plugin can mirror the user question and assistant answer
+to the configured Agent Session so a memory pipeline can distill it. Set
+`extractAfterGenieTurn: true` (or `{ instructions }`) to invoke synchronous
+session extraction after each mirrored turn. That background hook does not
+delay or replace the Genie response. Managed-memory recall is not injected into
+Genie because the Genie Agent response API accepts only one user message and no
+separate system/context field.
+
+`actor_id` partitions list and search operations but is not an access-control
+boundary. The adapter derives it from the trusted AppKit memory resource or OBO
+identity; callers must still restrict access to the store itself.
+
 ## Workspace Capabilities
 
 Every `agents.createAgent()` gets a default Mastra `Workspace` from
@@ -361,15 +410,15 @@ export const workspace = new Workspace({
 });
 ```
 
-Mastra discovers Databricks Workspace skills only from explicit `skills` paths,
-including the paths declared under the default Assistant paths. Those
-potentially slow remote directory listings use the skill-search processor. Set
-`workspaceSkills: false` to omit that processor, or pass `{ topK, minScore,
-ttlMs }` to tune it. Process-memory `localSkillMounts`, AI Tools, and other
-startup-provisioned remote skills are passed as native agent-level skills, so
-Mastra exposes its standard `skill`, `skill_search`, and `skill_read` tools
-without scanning their virtual workspace mounts. Set the workspace's `skills`
-to an empty list when the workspace should expose no Databricks skills.
+Mastra discovers skills from explicit `skills` paths, including the paths
+declared under the default Assistant paths and read-only `localSkillMounts`.
+Those paths use the skill-search processor. Set `workspaceSkills: false` to
+omit that processor, or pass `{ topK, minScore, ttlMs }` to tune it. Local
+mounts are also passed as native agent-level skills, so the standard `skill`,
+`skill_search`, and `skill_read` tools remain available. Startup-provisioned
+remote skills use their native tools without duplicating their virtual mounts
+in workspace search. Set the workspace's `skills` to an empty list when the
+workspace should expose no skills.
 
 ### Cache Workspace Metadata
 
@@ -652,11 +701,10 @@ SQL function calls, query output, and the synthesized answer into the existing
 writer events and terminal `GenieMessage`. Set `genieAgentMode: false` on
 `mastra(...)` to force the Conversation API polling flow. A pre-stream
 `FEATURE_DISABLED` or preview-toggle error falls back to polling automatically.
-Agent Mode carries query results inline as Markdown; use polling when a workflow
-specifically requires `statement_id`-backed chart or data embeds. For
-Agent Mode charts, pass the inline Markdown or structured metadata rows to the
-auto-wired `render_data` tool; never pass response, conversation, or function
-call ids to `prepare_chart`.
+Agent Mode carries query results inline as Markdown and projects the
+`statement_id` from each query output onto its query attachment when Databricks
+supplies one. Use that id with `get_statement`, `prepare_chart`, or a data
+marker. Use `render_data` only when rows are available without a statement id.
 
 ```ts
 const agent = agents.createAgent({
@@ -666,6 +714,55 @@ const agent = agents.createAgent({
   },
 });
 ```
+
+### Direct Genie Chat
+
+The plugin also exposes a Genie-only transport for the paired Mastra UI. It
+keeps the standard AI SDK `UIMessage` stream and the same tool, thought, table,
+and thread presentation without running a Mastra agent:
+
+```tsx
+import { MastraChat } from "@dbx-tools/ui-mastra/react";
+
+<MastraChat genieSpace="sales" />
+```
+
+The alias must exist in `genieSpaces`. Genie owns the state in this mode:
+conversations are thread IDs and Genie messages are projected into the
+transcript. The plugin does not write Mastra Memory or create a supervisor
+agent.
+
+Direct Genie chat always uses AppKit's OBO user context, matching the native
+AppKit Genie plugin. Service-principal conversations cannot safely back a
+multi-user thread list because every viewer would share the same Databricks
+conversation owner. Users therefore need workspace access to the configured
+space even when agent-backed calls use `genieIdentity: "service-principal"` or
+`"auto"`.
+
+Direct turns require the
+[Genie Agent API](https://docs.databricks.com/aws/en/genie-agents/api). They
+never fall back to the classic start/create/get-message polling flow, and
+history comes only from the Agent API conversation-items endpoint. The GA
+space conversation-list endpoint is used only to discover conversations marked
+`GENIE_CONVERSATION_TYPE_AGENT`; the GA delete endpoints provide the management
+operations that the Agent API does not expose.
+
+Agent Mode receives Genie's visualization tool. When Genie emits a
+visualization attachment, the answer contains a
+`[visualization:<statement_id>]` marker and the client renders the result with
+AppKit UI's native Genie Chart/Table component. This path does not use a
+supervisor or Model Serving chart planner. Queries Genie does not mark for
+visualization remain sortable data tables.
+
+Operational limits:
+
+- The thread list contains the newest 100 Agent Mode conversations.
+- Conversation history is Genie-owned and loaded as one UI history page.
+- Genie conversations cannot be renamed.
+- File attachments, MLflow feedback, approval continuations, background runs,
+  and stream reconnection are unavailable.
+- Aborting the browser stream cancels that request instead of leaving a durable
+  Mastra run to reconnect.
 
 ## Charts And Data Embeds
 
@@ -702,12 +799,9 @@ const resolved = await chart.fetchChart(chartId, { userKey });
 Agents can return `[chart:<id>]` and `[data:<statement_id>]` markers in prose.
 The embed route resolves them later, which avoids forcing the language model to
 inline large tables or wait for chart planning before continuing its answer.
-Genie supplies those statement ids through the Conversation API polling
-transport; Agent Mode returns inline Markdown and structured table metadata
-instead. The
-`GENIE_INSTRUCTIONS` prompt directs Agent Mode turns to call `render_data` with
-those inline rows, while polling turns call `prepare_chart` only with a real
-statement id.
+Agent Mode and polling query attachments carry statement ids when Databricks
+returns them. Direct Genie chat additionally uses
+`[visualization:<statement_id>]` for AppKit UI's native Genie visualization.
 
 ### Chart Types And Hand-Written Charts
 
@@ -1062,7 +1156,11 @@ use Mastra's native route surfaces behind the same scoped request-context gate.
 | `GET`                      | `/suggestions[/:agentId]`         | Starter questions from the configured Genie spaces. Degrades to `[]`.                                                    |
 | `GET`                      | `/embed/chart/:id`                | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.                                         |
 | `GET`                      | `/embed/data/:id`                 | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                                             |
+| `GET`                      | `/embed/visualization/:id`        | OBO-only statement payload for a `[visualization:<statement_id>]` AppKit UI embed.                                      |
 | `POST`                     | `/chat/:agentId`                  | Official Mastra AI SDK UI stream, including native `resumeData` continuations.                                           |
+| `POST`                     | `/genie/:alias/chat`              | Direct Genie turn projected onto the AI SDK UI stream.                                                                  |
+| `GET` / `DELETE`           | `/genie/:alias/threads[...]`      | OBO-only Genie conversation list, history, and deletion.                                                                |
+| `GET`                      | `/genie/:alias/suggestions`       | Starter questions for one direct Genie space.                                                                           |
 | `GET` / `PATCH` / `DELETE` | `/memory/threads[...]`            | Native Mastra resource-scoped conversation history and thread management.                                                |
 | `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                                             |
 | `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                                                           |
@@ -1098,6 +1196,10 @@ The main plugin options are:
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
+- `managedMemory` replaces per-agent thread/message storage with an existing
+  Databricks Agent Session Store and optionally recalls from an Agent Memory
+  Store on every turn. It also controls direct Genie turn mirroring and
+  synchronous extraction.
 - `sandbox` defaults to Monty for auto-created workspaces. `false` disables
   command execution; `true` or `"monty"` selects Monty; a native Mastra
   sandbox or resolver supplies another transport.
@@ -1141,7 +1243,8 @@ The main plugin options are:
   membership. `"auto"` uses OBO when the request includes it and otherwise uses
   the service principal. Memory threads, cache namespaces, and trace metadata
   remain user-scoped in all three modes. The environment fallback is
-  `MASTRA_GENIE_IDENTITY`.
+  `MASTRA_GENIE_IDENTITY`. Direct Genie chat routes always require OBO and do
+  not use this fallback.
 - `apiAccess` chooses the route allowlist. Keep the default scoped mode for
   deployed apps.
 
@@ -1161,6 +1264,8 @@ Clients that call these routes can import the browser-safe schemas from
   reasoning, Claude's replayed thinking blocks, Gemini/Claude content-parts
   responses) from failing a turn.
 - `genie` - Genie prompt, space normalization, Genie toolkits, and suggestions.
+- `genieChat` - direct Genie AI SDK stream, conversation history projection,
+  and OBO-only thread operations.
 - `chart` / `statement` / `writer` - chart cache, statement row fetches, and
   safe writer events.
 - `validation` - request-body validation for the plugin's custom routes.
@@ -1170,6 +1275,8 @@ Clients that call these routes can import the browser-safe schemas from
   style block, the summarizer, and the thread titler all append, so a summary or
   a thread title cannot drift from the prose it sits beside.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
+- `managedMemory` - Databricks Agent Session `MemoryStorage`, Agent Memory
+  recall processor, extraction, and memory-pipeline REST client.
 - `montySandbox` - Python-only Pydantic Monty fallback using Node subprocess
   workers.
 - `workspaces` / `filesystems` - native Mastra workspace configuration from

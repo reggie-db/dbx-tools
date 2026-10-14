@@ -36,9 +36,26 @@ export const GenieAgentOutputItemSchema = z
     arguments: z.string().optional(),
     output: z.string().optional(),
     status: z.string().optional(),
+    role: z.string().optional(),
     content: z.array(GenieAgentContentSchema).optional(),
+    metadata: z.unknown().optional(),
+    created_at: z.number().optional(),
   })
   .loose();
+
+/** One page of an Agent Mode conversation's item history. */
+export const GenieAgentConversationItemsSchema = z
+  .object({
+    data: z.array(GenieAgentOutputItemSchema).describe("Conversation items, oldest first."),
+    has_more: z.boolean().optional().describe("Whether another page follows `last_id`."),
+    last_id: z.string().optional().describe("Item id that the next page starts after."),
+    status: z.string().optional().describe("Current status of the conversation's latest response."),
+  })
+  .loose()
+  .describe("Page of Agent Mode conversation items.");
+
+/** Validated Agent Mode conversation item page. */
+export type GenieAgentConversationItems = z.infer<typeof GenieAgentConversationItemsSchema>;
 
 /** Genie Agent Mode response carried by lifecycle events. */
 export const GenieAgentResponseSchema = z
@@ -142,16 +159,84 @@ export function projectAgentModeMessage(
       : typeof response.error === "string"
         ? response.error
         : undefined;
+  const messageId = items.map(itemMessageId).find((id) => id !== undefined) ?? response.id;
   return GenieMessageSchema.parse({
-    id: response.id,
-    message_id: response.id,
+    id: messageId,
+    message_id: messageId,
     space_id: spaceId,
     conversation_id: response.conversation_id ?? "",
     content,
     status: agentModeStatus(response.status, items),
-    attachments: items.flatMap(itemAttachments),
+    attachments: withStatementIds(items.flatMap(itemAttachments), items),
     ...(response.created_at !== undefined ? { created_timestamp: response.created_at } : {}),
     ...(errorMessage ? { error: { error: errorMessage } } : {}),
+  });
+}
+
+/**
+ * Project an Agent Mode conversation's item history onto one Genie message per
+ * turn. Items are grouped by their `metadata.message_id`; each turn's user
+ * `message` item supplies the question.
+ */
+export function projectAgentModeConversation(
+  spaceId: string,
+  conversationId: string,
+  items: GenieAgentOutputItem[],
+  status = "completed",
+): GenieMessage[] {
+  const turns = new Map<string, GenieAgentOutputItem[]>();
+  for (const item of items) {
+    const messageId = itemMessageId(item);
+    if (!messageId) continue;
+    const turn = turns.get(messageId);
+    if (turn) turn.push(item);
+    else turns.set(messageId, [item]);
+  }
+  const entries = [...turns];
+  return entries.map(([messageId, turnItems], index) => {
+    const question = turnItems.find((item) => item.type === "message" && item.role === "user");
+    const failed = turnItems.some((item) => item.status === "failed");
+    const turnStatus = failed ? "failed" : index === entries.length - 1 ? status : "completed";
+    return projectAgentModeMessage(
+      spaceId,
+      contentText(question?.content, "input_text").join("\n"),
+      {
+        id: messageId,
+        status: turnStatus,
+        conversation_id: conversationId,
+        ...(question?.created_at !== undefined ? { created_at: question.created_at } : {}),
+      },
+      turnItems.filter((item) => item !== question),
+    );
+  });
+}
+
+function itemMetadata(item: GenieAgentOutputItem): Record<string, unknown> | undefined {
+  return object.isRecord(item.metadata) ? item.metadata : undefined;
+}
+
+function itemMessageId(item: GenieAgentOutputItem): string | undefined {
+  const messageId = itemMetadata(item)?.message_id;
+  return typeof messageId === "string" ? messageId : undefined;
+}
+
+/** Copy each query output's `statement_id` onto the query attachment it answers. */
+function withStatementIds(
+  attachments: GenieAttachment[],
+  items: GenieAgentOutputItem[],
+): GenieAttachment[] {
+  const statements = new Map<string, string>();
+  for (const item of items) {
+    const statementId = itemMetadata(item)?.statement_id;
+    if (item.type === "function_call_output" && item.call_id && typeof statementId === "string") {
+      statements.set(item.call_id, statementId);
+    }
+  }
+  return attachments.map((attachment) => {
+    const statementId = attachment.query && statements.get(attachment.attachment_id ?? "");
+    return statementId && attachment.query
+      ? { ...attachment, query: { ...attachment.query, statement_id: statementId } }
+      : attachment;
   });
 }
 
@@ -200,7 +285,22 @@ function itemAttachments(item: GenieAgentOutputItem): GenieAttachment[] {
       : [];
   }
   if (item.type === "function_call_output" && item.output !== undefined) {
-    return [textAttachment(id, item.output)];
+    const viz = itemMetadata(item)?.viz;
+    if (object.isRecord(viz) && typeof viz.attachment_id === "string") {
+      return [
+        {
+          attachment_id: viz.attachment_id,
+          attachment_type: "viz",
+          viz: {
+            ...(item.output ? { title: item.output } : {}),
+            ...(typeof viz.query_attachment_id === "string"
+              ? { query_attachment_id: viz.query_attachment_id }
+              : {}),
+          },
+        },
+      ];
+    }
+    return [textAttachment(id, item.output, item.metadata)];
   }
   if (item.type === "message") {
     return (item.content ?? []).flatMap((part) =>

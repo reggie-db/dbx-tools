@@ -65,6 +65,11 @@ export interface GenieChatOptions {
    * force the legacy start/create/get-message polling flow.
    */
   agentMode?: boolean;
+  /**
+   * Fall back to Conversation API polling when Agent Mode is unavailable.
+   * Defaults to `true`; set `false` when the caller requires Agent Mode.
+   */
+  agentModeFallback?: boolean;
   /** Ask Agent Mode to generate visualizations when appropriate. */
   enableVisualization?: boolean;
   /**
@@ -154,7 +159,9 @@ export async function* genieChat(
         }
         return;
       } catch (err) {
-        if (yielded || !isAgentModeUnavailable(err)) throw err;
+        if (options?.agentModeFallback === false || yielded || !isAgentModeUnavailable(err)) {
+          throw err;
+        }
         logger.warn("agent-mode:unavailable, falling back to polling", {
           space_id,
           error: errorUtils.toError(err),

@@ -22,7 +22,7 @@
 import type { WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
 import { object } from "@dbx-tools/shared-core";
-import type { GenieDatasetData } from "@dbx-tools/shared-mastra";
+import { wire, type GenieDatasetData, type GenieVisualizationData } from "@dbx-tools/shared-mastra";
 
 /**
  * Hard server-side cap on rows returned by the
@@ -48,6 +48,60 @@ function coerceCell(cell: string | null): unknown {
   return object.toNumber(cell, { separators: false, percent: false }) ?? cell;
 }
 
+type StatementResponse = Awaited<ReturnType<WorkspaceClient["statementExecution"]["getStatement"]>>;
+
+async function fetchStatementResponse(
+  client: WorkspaceClient,
+  statementId: string,
+  signal?: AbortSignal,
+): Promise<StatementResponse> {
+  const context = signal ? databricks.toContext(signal) : undefined;
+  return client.statementExecution.getStatement({ statement_id: statementId }, context);
+}
+
+function normalizedStatementData(response: StatementResponse, limit?: number): GenieDatasetData {
+  const columns = (response.manifest?.schema?.columns ?? []).map((column) => column.name ?? "");
+  const dataArray = (response.result?.data_array ?? []) as Array<Array<string | null>>;
+  const sliced = limit !== undefined && limit >= 0 ? dataArray.slice(0, limit) : dataArray;
+  const rows = sliced.map((row) => {
+    const record: Record<string, unknown> = {};
+    columns.forEach((column, index) => {
+      record[column] = coerceCell(row[index] ?? null);
+    });
+    return record;
+  });
+  return {
+    columns,
+    rows,
+    rowCount: response.manifest?.total_row_count ?? dataArray.length,
+  };
+}
+
+function visualizationData(response: StatementResponse, limit?: number): GenieVisualizationData {
+  const dataArray = (response.result?.data_array ?? []) as Array<Array<string | null>>;
+  return wire.GenieVisualizationDataSchema.parse({
+    manifest: {
+      schema: {
+        columns: (response.manifest?.schema?.columns ?? []).map((column) => ({
+          name: column.name,
+          type_name: column.type_name,
+        })),
+      },
+    },
+    result: {
+      data_array: limit !== undefined && limit >= 0 ? dataArray.slice(0, limit) : dataArray,
+    },
+  });
+}
+
+/** Normalized and AppKit-native projections of one statement response. */
+export interface StatementEmbedData {
+  /** Row records used by tools, sortable tables, and chart planners. */
+  data: GenieDatasetData;
+  /** Manifest and row arrays consumed by AppKit UI's Genie visualization. */
+  visualization: GenieVisualizationData;
+}
+
 /**
  * Fetch a single statement's rows via the Statement Execution API
  * and reshape into the shared {@link GenieDatasetData} shape
@@ -70,24 +124,22 @@ export async function fetchStatementData(
   statementId: string,
   options?: { limit?: number; signal?: AbortSignal },
 ): Promise<GenieDatasetData> {
-  const ctx = options?.signal ? databricks.toContext(options.signal) : undefined;
-  const r = await client.statementExecution.getStatement({ statement_id: statementId }, ctx);
-  const columns = (r.manifest?.schema?.columns ?? []).map((c) => c.name ?? "");
-  const dataArray = (r.result?.data_array ?? []) as Array<Array<string | null>>;
-  const sliced =
-    options?.limit !== undefined && options.limit >= 0
-      ? dataArray.slice(0, options.limit)
-      : dataArray;
-  const rows = sliced.map((row) => {
-    const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => {
-      obj[col] = coerceCell(row[i] ?? null);
-    });
-    return obj;
-  });
+  const response = await fetchStatementResponse(client, statementId, options?.signal);
+  return normalizedStatementData(response, options?.limit);
+}
+
+/**
+ * Fetch one statement once and project it for both the existing data table and
+ * AppKit UI's native Genie visualization.
+ */
+export async function fetchStatementEmbedData(
+  client: WorkspaceClient,
+  statementId: string,
+  options?: { limit?: number; signal?: AbortSignal },
+): Promise<StatementEmbedData> {
+  const response = await fetchStatementResponse(client, statementId, options?.signal);
   return {
-    columns,
-    rows,
-    rowCount: r.manifest?.total_row_count ?? dataArray.length,
+    data: normalizedStatementData(response, options?.limit),
+    visualization: visualizationData(response, options?.limit),
   };
 }

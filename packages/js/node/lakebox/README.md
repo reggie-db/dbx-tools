@@ -2,21 +2,19 @@
 
 Connect to, provision, and run commands on Databricks Lakeboxes.
 
-The package provides the Lakebox REST client and lifecycle convergence, managed
-name discovery, and a verified SSH session with pooled native OpenSSH or ssh2
-command and forwarding transport. It has no AppKit, React, or Lakebase
-dependency. User accounts and services belong to `@dbx-tools/appkit-lakebox`.
+The package provides the Lakebox REST client, lifecycle convergence, and a
+verified SSH session with pooled native OpenSSH or ssh2 command and forwarding
+transport. It has no AppKit, React, or Lakebase dependency. User accounts,
+resource identity, and services belong to `@dbx-tools/appkit-lakebox`.
 
 ## Provision a Lakebox
 
 ```ts
 import { LakeboxClient } from "@dbx-tools/lakebox/rest";
 import { ensureLakeboxRunning } from "@dbx-tools/lakebox/lifecycle";
-import { lakeboxManagedName, selectManagedLakebox } from "@dbx-tools/lakebox/managed-name";
 
 const api = new LakeboxClient(workspaceClient.config);
-const name = lakeboxManagedName("my-app");
-const entry = selectManagedLakebox(await api.list(), name) ?? (await api.create(name));
+const entry = await api.create();
 await api.setIdleTimeout(entry.sandboxId, 3_600);
 const running = await ensureLakeboxRunning(api, entry);
 ```

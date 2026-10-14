@@ -256,6 +256,7 @@ type ChatComposerProps = {
   composerActions: ChatViewProps["composerActions"];
   modelSelectorActions: ChatViewProps["modelSelectorActions"];
   composerLeadingActions: ChatViewProps["composerLeadingActions"];
+  allowAttachments: NonNullable<ChatViewProps["allowAttachments"]>;
   isLoadingHistory: NonNullable<ChatViewProps["isLoadingHistory"]>;
   onClear: ChatViewProps["onClear"];
   onExportConversation: ChatViewProps["onExportConversation"];
@@ -284,6 +285,7 @@ export const ChatComposer = ({
   composerActions,
   modelSelectorActions,
   composerLeadingActions,
+  allowAttachments,
   isLoadingHistory,
   onClear,
   onExportConversation,
@@ -293,7 +295,9 @@ export const ChatComposer = ({
   const [files, setFiles] = useState<FileUIPart[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isPreparingFiles, setIsPreparingFiles] = useState(false);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const inputId = useId();
+  const dragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputGroupRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -324,8 +328,14 @@ export const ChatComposer = ({
     onResumeFollow();
   };
 
-  const addFiles = async (selected: FileList | null) => {
+  const addFiles = async (selected: FileList | readonly File[] | null) => {
     if (!selected?.length) return;
+    const selectedFiles = Array.from(selected);
+    const imageFiles = selectedFiles.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      setFileError("Only image files can be attached");
+      return;
+    }
     const remaining = MAX_COMPOSER_IMAGES - files.length;
     if (remaining <= 0) {
       setFileError(`You can attach up to ${MAX_COMPOSER_IMAGES} images`);
@@ -335,12 +345,12 @@ export const ChatComposer = ({
     setFileError(null);
     try {
       const next = await Promise.all(
-        Array.from(selected)
-          .slice(0, remaining)
-          .map((file) => imageFileToUIPart(file)),
+        imageFiles.slice(0, remaining).map((file) => imageFileToUIPart(file)),
       );
       setFiles((current) => [...current, ...next]);
-      if (selected.length > remaining) {
+      if (selectedFiles.length !== imageFiles.length) {
+        setFileError("Only image files were added");
+      } else if (imageFiles.length > remaining) {
         setFileError(`Only the first ${remaining} images were added`);
       }
     } catch (error) {
@@ -376,9 +386,39 @@ export const ChatComposer = ({
         />
         <InputGroup
           ref={inputGroupRef}
-          className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md"
+          className={cn(
+            "rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md",
+            isDraggingFiles && "border-primary ring-2 ring-primary/20",
+          )}
+          onDragEnter={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            if (!allowAttachments) return;
+            dragDepthRef.current += 1;
+            setIsDraggingFiles(true);
+          }}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            if (!allowAttachments) {
+              event.dataTransfer.dropEffect = "none";
+              return;
+            }
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          onDragLeave={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+            if (dragDepthRef.current === 0) setIsDraggingFiles(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            dragDepthRef.current = 0;
+            setIsDraggingFiles(false);
+            if (allowAttachments) void addFiles(event.dataTransfer.files);
+          }}
         >
-          {files.length > 0 && (
+          {allowAttachments && files.length > 0 && (
             <InputGroupAddon
               align="block-start"
               className="max-w-full justify-start gap-2 overflow-x-auto pb-0"
@@ -415,6 +455,15 @@ export const ChatComposer = ({
             ref={textareaRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onPaste={(event) => {
+              if (!allowAttachments) return;
+              const pastedImages = Array.from(event.clipboardData.files).filter((file) =>
+                file.type.startsWith("image/"),
+              );
+              if (pastedImages.length === 0) return;
+              event.preventDefault();
+              void addFiles(pastedImages);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -425,7 +474,7 @@ export const ChatComposer = ({
             rows={1}
             className="field-sizing-fixed min-h-10 max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-sm"
           />
-          {fileError && (
+          {allowAttachments && fileError && (
             <div className="px-4 text-xs text-destructive" role="alert">
               {fileError}
             </div>
@@ -435,36 +484,42 @@ export const ChatComposer = ({
             className="flex w-full flex-row flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-1"
           >
             <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="sr-only"
-                onChange={(event) => void addFiles(event.currentTarget.files)}
-              />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="size-7 rounded-full [&_svg]:size-3"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={
-                      isLoadingHistory || isPreparingFiles || files.length >= MAX_COMPOSER_IMAGES
-                    }
-                    aria-label="Upload images"
-                  >
-                    {isPreparingFiles ? (
-                      <Spinner className="size-3" />
-                    ) : (
-                      <ImagePlusIcon className="size-3" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Upload images</TooltipContent>
-              </Tooltip>
+              {allowAttachments && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => void addFiles(event.currentTarget.files)}
+                  />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-7 rounded-full [&_svg]:size-3"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={
+                          isLoadingHistory ||
+                          isPreparingFiles ||
+                          files.length >= MAX_COMPOSER_IMAGES
+                        }
+                        aria-label="Upload images"
+                      >
+                        {isPreparingFiles ? (
+                          <Spinner className="size-3" />
+                        ) : (
+                          <ImagePlusIcon className="size-3" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Upload images</TooltipContent>
+                  </Tooltip>
+                </>
+              )}
               {composerLeadingActions}
               {onExportConversation && (
                 <ExportMenu

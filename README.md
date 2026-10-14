@@ -1,5 +1,7 @@
+<!-- docs-site:ignore:start -->
 **[Documentation](https://docs.dbx.tools/)** - full package
 reference, guides, and API docs.
+<!-- docs-site:ignore:end -->
 
 # dbx-tools
 
@@ -159,7 +161,7 @@ await createApp({
     mastra({
       agents: { analyst },
       defaultAgent: "analyst",
-      genie: { spaces: { sales: "01ef..." } },
+      genieSpaces: { sales: "01ef..." },
     }),
   ],
 });
@@ -178,6 +180,17 @@ export function App() {
   return <MastraChat agentId="analyst" threadPlacement="auto" showModelPicker />;
 }
 ```
+
+Use the same chat shell without a supervisor agent by selecting a configured
+Genie alias:
+
+```tsx
+<MastraChat genieSpace="sales" threadPlacement="auto" />
+```
+
+In this mode Genie conversations and messages remain the system of record. The
+route uses the signed-in user's OBO identity, requires the Genie Agent API for
+turns and history, and does not write Mastra Memory.
 
 For an app-wide assistant that survives route navigation, use
 `MastraAssistant` above the route outlet. It provides a configurable floating

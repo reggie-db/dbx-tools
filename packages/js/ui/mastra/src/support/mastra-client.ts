@@ -31,6 +31,12 @@ type NativeAgentClient = ReturnType<MastraClient["getAgent"]>;
 export interface MastraStreamResponse {
   headers: Headers;
   stream: ReadableStream<UIMessageChunk>;
+  /**
+   * Thread id the server assigned to this turn, read after the stream drains.
+   * Set by backends whose threads are server-minted (a Genie conversation);
+   * the chat adopts it in place of the client-minted id it streamed under.
+   */
+  threadId?: () => string | undefined;
 }
 
 /** Terminal HTTP failure returned before a chat stream was established. */
@@ -56,7 +62,8 @@ export type MastraMemoryThread = ListMemoryThreadsResponse["threads"][number];
  *   - Native Mastra memory history and thread management, plus the model
  *     catalogue (`models`),
  *     Genie starter prompts (`suggestions`), MLflow feedback logging
- *     (`feedback`), and inline embed resolution (`chart` / `statement`)
+ *     (`feedback`), and inline embed resolution (`chart`, `statement`,
+ *     `visualization`)
  *     over the plugin's own routes - all derived from `basePath` +
  *     {@link routes.MASTRA_ROUTES}.
  *
@@ -89,6 +96,10 @@ export class MastraPluginClient extends MastraClient {
   readonly chatAlwaysAvailable: boolean;
   /** Whether turns continue server-side after the initiating stream disconnects. */
   readonly backgroundTurns: boolean;
+  /** Whether {@link renameThread} is supported by this client's thread store. */
+  readonly threadRename: boolean = true;
+  /** Whether a chat may attach files to a turn. */
+  readonly attachments: boolean = true;
 
   constructor(config: MastraClientConfig) {
     super({
@@ -124,7 +135,7 @@ export class MastraPluginClient extends MastraClient {
     return headers;
   }
 
-  async #uiStream(options: {
+  protected async uiStream(options: {
     path: string;
     chatId: string;
     messages: UIMessage[];
@@ -219,7 +230,7 @@ export class MastraPluginClient extends MastraClient {
     requestContext?: MastraRequestContextSnapshot;
     signal?: AbortSignal;
   }): Promise<MastraStreamResponse> {
-    return this.#uiStream({
+    return this.uiStream({
       path: `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}`,
       chatId: params.threadId ?? params.runId,
       messages: params.messages,
@@ -320,7 +331,7 @@ export class MastraPluginClient extends MastraClient {
       signal?: AbortSignal;
     },
   ): Promise<MastraStreamResponse> {
-    return this.#uiStream({
+    return this.uiStream({
       path: `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(agentId)}`,
       chatId: params.threadId ?? params.runId,
       messages: [],
@@ -345,7 +356,7 @@ export class MastraPluginClient extends MastraClient {
    * chat-capable models for a picker.
    */
   async models(signal?: AbortSignal): Promise<ServingEndpointSummary[]> {
-    const payload = await this.#getJson(
+    const payload = await this.getJson(
       `${this.basePath}${routes.MASTRA_ROUTES.models}`,
       wire.ServingEndpointsResponseSchema,
       signal,
@@ -369,7 +380,7 @@ export class MastraPluginClient extends MastraClient {
 
   /** Fetch the complete resolved default-model descriptor for an agent. */
   async defaultModelDetails(agentId?: string, signal?: AbortSignal): Promise<DefaultModelResponse> {
-    const payload = await this.#getJson(
+    const payload = await this.getJson(
       this.#agentScoped(routes.MASTRA_ROUTES.defaultModel, agentId),
       wire.DefaultModelResponseSchema,
       signal,
@@ -383,7 +394,7 @@ export class MastraPluginClient extends MastraClient {
    * Genie space (or it defines none).
    */
   async suggestions(agentId?: string, signal?: AbortSignal): Promise<string[]> {
-    const payload = await this.#getJson(
+    const payload = await this.getJson(
       this.#agentScoped(routes.MASTRA_ROUTES.suggestions, agentId),
       wire.MastraSuggestionsResponseSchema,
       signal,
@@ -513,7 +524,7 @@ export class MastraPluginClient extends MastraClient {
    * `CAN_MANAGE`; inability to determine access resolves to `null`.
    */
   async mlflowExperiment(signal?: AbortSignal): Promise<MastraMlflowExperimentResponse> {
-    return this.#getJson(
+    return this.getJson(
       `${this.basePath}${routes.MASTRA_ROUTES.mlflowExperiment}`,
       feedback.MastraMlflowExperimentResponseSchema,
       signal,
@@ -541,6 +552,11 @@ export class MastraPluginClient extends MastraClient {
     return this.#embed("data", id, wire.StatementDataSchema.parse, signal);
   }
 
+  /** Resolve AppKit UI visualization data for a direct Genie statement. */
+  visualization(id: string, signal?: AbortSignal): Promise<StatementData | undefined> {
+    return this.#embed("visualization", id, wire.StatementDataSchema.parse, signal);
+  }
+
   /**
    * Compose an agent-scoped URL: `${basePath}${segment}` for the
    * default agent (the mount that does not require an `:agentId`), or
@@ -566,7 +582,7 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /** GET + JSON-parse + schema-validate against a route that always 200s. */
-  async #getJson<T>(
+  protected async getJson<T>(
     url: string,
     schema: { parse: (raw: unknown) => T },
     signal?: AbortSignal,
@@ -848,13 +864,16 @@ export const useMastraDefaultModel = (
  * Pass `enabled: false` to skip the fetch (e.g. when the caller
  * supplies its own explicit suggestion list), in which case
  * `questions` stays empty. Any fetch error degrades silently to no
- * suggestions - they're a non-critical enhancement.
+ * suggestions - they're a non-critical enhancement. `clientOverride`
+ * replaces the plugin's default client (e.g. a direct Genie client).
  */
 export const useMastraSuggestions = (
   agentId?: string,
   enabled = true,
+  clientOverride?: MastraPluginClient,
 ): { questions: string[]; loading: boolean } => {
-  const client = useMastraClient();
+  const defaultClient = useMastraClient();
+  const client = clientOverride ?? defaultClient;
   const [questions, setQuestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(enabled);
 
@@ -898,17 +917,20 @@ export const useMastraSuggestions = (
  * hidden), in which case `threads` stays empty. A failed fetch degrades
  * to an empty list - the conversation list is a non-critical
  * enhancement layered over the always-available default thread.
+ * `clientOverride` replaces the plugin's default client.
  */
 export const useMastraThreads = (
   agentId?: string,
   enabled = true,
+  clientOverride?: MastraPluginClient,
 ): {
   threads: MastraMemoryThread[];
   loading: boolean;
   error: Error | null;
   refresh: () => void;
 } => {
-  const client = useMastraClient();
+  const defaultClient = useMastraClient();
+  const client = clientOverride ?? defaultClient;
   const [threads, setThreads] = useState<MastraMemoryThread[]>([]);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<Error | null>(null);
@@ -952,7 +974,7 @@ export const useMastraThreads = (
 /**
  * Hook state for {@link useByIdFetch}. Generic over the
  * resource's payload shape; consumers read `data` / `loading` /
- * `error` exactly as the chart and statement slots do. A 404 on
+ * `error` exactly as the embed slots do. A 404 on
  * the server resolves as `data === undefined` with `error ===
  * null` so the slot renders nothing (matches "expired /
  * unknown id" semantics across all by-id resources).
@@ -1049,7 +1071,7 @@ function readFetchCache<T>(key: string | undefined): T | undefined {
 
 /**
  * React hook for any resource the Mastra plugin exposes as
- * `/<resource>/:id`. Powers both the chart and statement slots
+ * `/<resource>/:id`. Powers the chart, statement, and visualization slots
  * in the chat UI; the slot-specific hooks below are thin
  * adapters that pick the right cache `key`, `fetcher`, and
  * terminal check.
@@ -1180,5 +1202,18 @@ export const useStatementFetch = (
   const client = useMastraClient();
   const key = statementId ? `data:${statementId}` : undefined;
   const fetcher = useCallback(() => client.statement(statementId as string), [client, statementId]);
+  return useByIdFetch<StatementData>(key, fetcher, statementIsTerminal);
+};
+
+/** Fetch a direct Genie statement through the OBO-only visualization resolver. */
+export const useVisualizationFetch = (
+  statementId: string | undefined,
+): ByIdFetchState<StatementData> => {
+  const client = useMastraClient();
+  const key = statementId ? `visualization:${statementId}` : undefined;
+  const fetcher = useCallback(
+    () => client.visualization(statementId as string),
+    [client, statementId],
+  );
   return useByIdFetch<StatementData>(key, fetcher, statementIsTerminal);
 };

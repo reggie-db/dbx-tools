@@ -35,6 +35,7 @@ export const ChatView = ({
   composerActions,
   modelSelectorActions,
   composerLeadingActions,
+  allowAttachments = true,
   onLoadMore,
   isLoadingMore = false,
   hasMore = false,
@@ -136,6 +137,7 @@ export const ChatView = ({
         composerActions={composerActions}
         modelSelectorActions={modelSelectorActions}
         composerLeadingActions={composerLeadingActions}
+        allowAttachments={allowAttachments}
         isLoadingHistory={isLoadingHistory}
         onClear={onClear}
         onExportConversation={onExportConversation}

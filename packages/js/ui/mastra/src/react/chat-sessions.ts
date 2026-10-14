@@ -55,6 +55,14 @@ export function useChatSessions(activeThreadId: string | undefined) {
     sessionsRef.current.delete(threadId);
     setRevision((current) => current + 1);
   }, []);
+  /** Re-key one session, keeping its transcript and run state intact. */
+  const moveSession = useCallback((fromThreadId: string, toThreadId: string) => {
+    const session = sessionsRef.current.get(fromThreadId);
+    if (!session || fromThreadId === toThreadId) return;
+    sessionsRef.current.delete(fromThreadId);
+    sessionsRef.current.set(toThreadId, session);
+    setRevision((current) => current + 1);
+  }, []);
   const activeKey = sessionKey(activeThreadId);
   const activeSession = useMemo(() => getSession(activeKey), [activeKey, getSession, revision]);
   const streamingThreadIds = useMemo(() => {
@@ -70,6 +78,7 @@ export function useChatSessions(activeThreadId: string | undefined) {
     activeKey,
     activeSession,
     getSession,
+    moveSession,
     removeSession,
     resetSession,
     streamingThreadIds,

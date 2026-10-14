@@ -45,7 +45,11 @@ export type {
 } from "../support/request-context.ts";
 export { dedupeSuggestions } from "./suggestions.ts";
 export { MastraChat, useMastraChat } from "./mastra-chat.tsx";
-export type { MastraChatProps, UseMastraChatOptions } from "./mastra-chat.tsx";
+export type {
+  MastraChatProps,
+  ThreadIdChangeReason,
+  UseMastraChatOptions,
+} from "./mastra-chat.tsx";
 export { ThreadSidebar } from "./thread-sidebar.tsx";
 export type { ThreadSidebarProps } from "./thread-sidebar.tsx";
 export { ThreadActions, ThreadTabs } from "./thread-tabs.tsx";

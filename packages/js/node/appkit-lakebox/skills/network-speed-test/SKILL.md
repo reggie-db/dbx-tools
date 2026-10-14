@@ -1,6 +1,6 @@
 ---
 name: network-speed-test
-description: Run LibreSpeed as a Lakebox service to measure browser-to-AppKit-to-Lakebox HTTP throughput.
+description: Deploy or run a network speed-test app as a Lakebox service using LibreSpeed to measure browser-to-AppKit-to-Lakebox HTTP throughput.
 ---
 
 # Network Speed Test

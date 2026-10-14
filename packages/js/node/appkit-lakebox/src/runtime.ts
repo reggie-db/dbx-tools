@@ -8,7 +8,6 @@ import {
   lakeboxIdleTimeoutSeconds,
   normalizeLakeboxStatus,
 } from "@dbx-tools/lakebox/lifecycle";
-import { lakeboxManagedName, selectManagedLakebox } from "@dbx-tools/lakebox/managed-name";
 import {
   isLakeboxUnavailable,
   LakeboxApiError,
@@ -17,6 +16,7 @@ import {
   type LakeboxEntry,
 } from "@dbx-tools/lakebox/rest";
 import { SshCommand, SshSession } from "@dbx-tools/lakebox/session";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import {
   LAKEBOX_BUILT_IN_SERVICES,
   lakeboxBuiltInServiceNameSchema,
@@ -33,8 +33,9 @@ import {
   type LakeboxSummary,
   type LakeboxUser,
 } from "@dbx-tools/shared-lakebox";
-import { errorUtils, log } from "@dbx-tools/shared-core";
 import { readPackageResource } from "./_package.ts";
+import { LakeboxResourceRegistry } from "./_resource-registry.ts";
+import { LakeboxServiceSnapshots, stoppedSnapshotServices } from "./_service-snapshots.ts";
 import type { ResolvedLakeboxPluginConfig } from "./config.ts";
 import { LakeboxMetrics } from "./metrics.ts";
 import { LakeboxRouteRegistry, type LakeboxRouteResolution } from "./routes.ts";
@@ -85,6 +86,12 @@ interface Boot {
   desktop?: Promise<void>;
 }
 
+interface ServiceListing {
+  services: LakeboxService[];
+  stale: boolean;
+  observedAt?: string;
+}
+
 /**
  * Owns the single lazily created Lakebox of one application.
  *
@@ -92,11 +99,10 @@ interface Boot {
  * through {@link initialize}; request identity only selects the internal Linux
  * account. Each authenticated identity maps through one FNV-1a hash to a locked
  * account, persistent home, route segment, and service ports. Lifecycle and
- * per-boot bootstrap are serialized in-process; concurrent replicas converge on
- * the oldest Lakebox with the managed name.
+ * per-boot bootstrap are serialized in-process; the persistent resource
+ * registry serializes first creation across replicas.
  */
 export class LakeboxRuntime {
-  readonly name: string;
   readonly routes: LakeboxRouteRegistry;
   readonly metrics: LakeboxMetrics;
   private readonly keys: SshKeyStore;
@@ -108,6 +114,8 @@ export class LakeboxRuntime {
   private readonly routedIdentities = new Map<string, string>();
   private cached?: { entry?: LakeboxEntry; at: number };
   private boot?: Boot;
+  /** Last boot that completed runtime bootstrap and produced a metrics sample. */
+  private readyBootKey?: string;
   private converging?: Promise<Boot>;
   private waking?: Promise<unknown>;
   private metricsLease?: ReturnType<typeof setTimeout>;
@@ -116,11 +124,13 @@ export class LakeboxRuntime {
   private activeCommands = 0;
   /** Last service states per user hash, kept after an idle session release. */
   private readonly lastServices = new Map<string, Map<string, LakeboxControllerService>>();
+  private readonly lastServicesObservedAt = new Map<string, string>();
+  private resourceRegistry?: LakeboxResourceRegistry;
+  private serviceSnapshots?: LakeboxServiceSnapshots;
   private closing?: Promise<void>;
 
   /** Creates a runtime from resolved plugin configuration. */
   constructor(readonly config: ResolvedLakeboxPluginConfig) {
-    this.name = lakeboxManagedName(config.application);
     this.keys = new SshKeyStore(config.keyDirectory);
     this.routes = new LakeboxRouteRegistry(config.routePrefix, {
       user: (headers) => {
@@ -146,9 +156,16 @@ export class LakeboxRuntime {
    * Supplies app service-principal credentials and the request identity
    * resolver used by routes.
    */
-  initialize(auth: LakeboxAuth, identity?: LakeboxIdentityResolver): void {
+  initialize(
+    auth: LakeboxAuth,
+    identity?: LakeboxIdentityResolver,
+    serviceSnapshots?: LakeboxServiceSnapshots,
+    resourceRegistry?: LakeboxResourceRegistry,
+  ): void {
     this.api = new LakeboxClient(auth);
     if (identity) this.identity = identity;
+    if (serviceSnapshots) this.serviceSnapshots = serviceSnapshots;
+    if (resourceRegistry) this.resourceRegistry = resourceRegistry;
   }
 
   /** Derives the Lakebox account for one authenticated identity. */
@@ -159,7 +176,7 @@ export class LakeboxRuntime {
   /** Summarizes the app Lakebox for one user without creating it. */
   async summary(identity: string, signal?: AbortSignal): Promise<LakeboxSummary> {
     const user = this.user(identity);
-    const base = { auto: this.config.auto, name: this.name, user };
+    const base = { auto: this.config.auto, name: "Lakebox", user };
     let entry: LakeboxEntry | undefined;
     try {
       entry = await this.entry(signal, true);
@@ -170,15 +187,19 @@ export class LakeboxRuntime {
           supported: false,
           status: "missing",
           services: [],
+          servicesStale: false,
           canStart: false,
           canStop: false,
         };
       }
       throw error;
     }
-    const status: LakeboxStatus = entry ? normalizeLakeboxStatus(entry.status) : "missing";
-    const services =
-      status === "running" ? await this.listServices(identity, signal) : this.idleServices(user);
+    const platformStatus: LakeboxStatus = entry ? normalizeLakeboxStatus(entry.status) : "missing";
+    const status = this.productStatus(entry, platformStatus);
+    if (entry && platformStatus === "running" && status === "starting") {
+      this.wake(() => this.ready());
+    }
+    const listing = await this.serviceListing(identity, user, entry, status, signal);
     return {
       ...base,
       supported: true,
@@ -187,7 +208,9 @@ export class LakeboxRuntime {
       ...(lakeboxIdleTimeoutSeconds(entry?.idleTimeout) !== undefined
         ? { idleTimeoutSeconds: lakeboxIdleTimeoutSeconds(entry?.idleTimeout) }
         : {}),
-      services,
+      services: listing.services,
+      servicesStale: listing.stale,
+      ...(listing.observedAt ? { servicesObservedAt: listing.observedAt } : {}),
       canStart: status !== "running" && status !== "starting",
       canStop: status === "running" || status === "starting",
     };
@@ -213,6 +236,8 @@ export class LakeboxRuntime {
     if (!entry) return false;
     await this.discardBoot();
     await this.client().delete(entry.sandboxId, signal);
+    await this.resources().clear(this.client());
+    this.readyBootKey = undefined;
     this.cached = { at: Date.now() };
     return true;
   }
@@ -254,14 +279,8 @@ export class LakeboxRuntime {
   async listServices(identity: string, signal?: AbortSignal): Promise<LakeboxService[]> {
     const user = this.user(identity);
     const entry = await this.entry(signal);
-    if (!entry || normalizeLakeboxStatus(entry.status) !== "running")
-      return this.idleServices(user);
-    if (!this.boot) {
-      // Status polling never reconnects a released session, so it cannot keep the Lakebox awake.
-      return this.withBuiltIns(user, this.lastServices.get(user.hash) ?? new Map());
-    }
-    const services = await this.refreshServices(this.boot, user, identity, signal);
-    return this.withBuiltIns(user, services);
+    const status: LakeboxStatus = entry ? normalizeLakeboxStatus(entry.status) : "missing";
+    return (await this.serviceListing(identity, user, entry, status, signal)).services;
   }
 
   /** Creates or replaces one image service and waits until it is ready or failed. */
@@ -314,7 +333,7 @@ export class LakeboxRuntime {
     const result = (await this.controller(boot, user, "remove", [name], signal)) as {
       removed?: boolean;
     };
-    boot.services.get(user.hash)?.delete(name);
+    if (result.removed === true) await this.refreshServices(boot, user, identity, signal);
     return result.removed === true;
   }
 
@@ -346,19 +365,27 @@ export class LakeboxRuntime {
    */
   async metricsResponse(signal?: AbortSignal): Promise<LakeboxMetricsResponse> {
     const entry = await this.entry(signal);
-    const status: LakeboxStatus = entry ? normalizeLakeboxStatus(entry.status) : "missing";
-    if (status !== "running" || !this.boot) {
+    const platformStatus: LakeboxStatus = entry ? normalizeLakeboxStatus(entry.status) : "missing";
+    if (platformStatus !== "running") {
       this.metrics.stop();
-      return { status, series: [] };
+      return { status: platformStatus, series: [] };
+    }
+    if (!entry || !this.boot || this.boot.key !== this.bootKey(entry)) {
+      this.metrics.stop();
+      this.wake(() => this.ready());
+      return { status: "starting", series: [] };
     }
     this.leaseMetrics();
-    return { status, series: [...this.metrics.series()] };
+    return {
+      status: this.productStatus(entry, platformStatus),
+      series: [...this.metrics.series()],
+    };
   }
 
   /** Subscribes to metrics snapshots while the Lakebox runs. */
   subscribeMetrics(listener: (snapshot: LakeboxMetricsSnapshot) => void): () => void {
     this.metrics.on("snapshot", listener);
-    if (this.boot) this.metrics.start();
+    if (this.boot?.key === this.readyBootKey) this.metrics.start();
     return () => {
       this.metrics.off("snapshot", listener);
       this.leaseMetrics();
@@ -434,18 +461,33 @@ export class LakeboxRuntime {
     return this.api;
   }
 
+  private resources(): LakeboxResourceRegistry {
+    if (!this.resourceRegistry) throw new Error("The Lakebox runtime has no resource registry");
+    return this.resourceRegistry;
+  }
+
   /** Returns the managed Lakebox entry, cached briefly to keep routes cheap. */
   private async entry(signal?: AbortSignal, fresh = false): Promise<LakeboxEntry | undefined> {
-    if (!fresh && this.cached && Date.now() - this.cached.at < ENTRY_TTL_MS)
+    if (!fresh && this.cached && Date.now() - this.cached.at < ENTRY_TTL_MS) {
       return this.cached.entry;
-    const entry = selectManagedLakebox(await this.client().list(signal), this.name);
+    }
+    const entry = await this.resources().read(this.client(), signal);
     this.cached = { ...(entry ? { entry } : {}), at: Date.now() };
+    if (!entry || normalizeLakeboxStatus(entry.status) !== "running") {
+      this.readyBootKey = undefined;
+    }
     if (this.boot && (!entry || this.bootKey(entry) !== this.boot.key)) await this.discardBoot();
     return entry;
   }
 
   private bootKey(entry: LakeboxEntry): string {
     return `${entry.sandboxId}\0${entry.lastStartTime ?? ""}`;
+  }
+
+  private productStatus(entry: LakeboxEntry | undefined, status: LakeboxStatus): LakeboxStatus {
+    return entry && status === "running" && this.readyBootKey !== this.bootKey(entry)
+      ? "starting"
+      : status;
   }
 
   /** Serializes create, start, connect, and bootstrap for the current boot. */
@@ -468,11 +510,11 @@ export class LakeboxRuntime {
     if (!entry || normalizeLakeboxStatus(entry.status) !== "running") {
       if (!this.config.auto && !explicit) {
         throw new Error(
-          `Lakebox ${this.name} is ${entry ? entry.status : "not created"}; start it explicitly because auto is false`,
+          `Lakebox is ${entry ? entry.status : "not created"}; start it explicitly because auto is false`,
         );
       }
     }
-    entry ??= await this.create(operationSignal);
+    entry ??= await this.resources().getOrCreate(this.client(), operationSignal);
     if (lakeboxIdleTimeoutSeconds(entry.idleTimeout) !== this.config.idleTimeoutSeconds) {
       entry = await this.client().setIdleTimeout(
         entry.sandboxId,
@@ -496,9 +538,11 @@ export class LakeboxRuntime {
     };
     try {
       const restored = await this.bootstrap(session, operationSignal);
-      this.boot = boot;
-      this.watchIdle();
       this.metrics.stop();
+      this.metrics.seed((await this.admin(session, ["metrics"], operationSignal)).stdout);
+      this.boot = boot;
+      this.readyBootKey = key;
+      this.watchIdle();
       if (this.metrics.listenerCount("snapshot") > 0) this.metrics.start();
       for (const hash of restored) void this.restoreUser(boot, hash);
       return boot;
@@ -506,20 +550,6 @@ export class LakeboxRuntime {
       await session.close();
       throw error;
     }
-  }
-
-  private async create(signal: AbortSignal): Promise<LakeboxEntry> {
-    const created = await this.client().create(this.name, signal);
-    logger.info("created app Lakebox", { id: created.sandboxId, name: this.name });
-    const winner = selectManagedLakebox(await this.client().list(signal), this.name);
-    if (winner && winner.sandboxId !== created.sandboxId) {
-      await this.client()
-        .delete(created.sandboxId, signal)
-        .catch(() => undefined);
-      logger.info("deleted concurrently created duplicate Lakebox", { id: created.sandboxId });
-      return winner;
-    }
-    return created;
   }
 
   private async connect(entry: LakeboxEntry, signal: AbortSignal): Promise<SshSession> {
@@ -708,6 +738,9 @@ export class LakeboxRuntime {
     );
     boot.services.set(user.hash, services);
     this.lastServices.set(user.hash, services);
+    const observedAt = new Date().toISOString();
+    this.lastServicesObservedAt.set(user.hash, observedAt);
+    await this.persistServiceSnapshot(boot.entry, user, services, observedAt);
     return services;
   }
 
@@ -716,6 +749,61 @@ export class LakeboxRuntime {
     services.set(service.name, service);
     boot.services.set(user.hash, services);
     this.lastServices.set(user.hash, services);
+    const observedAt = new Date().toISOString();
+    this.lastServicesObservedAt.set(user.hash, observedAt);
+    void this.persistServiceSnapshot(boot.entry, user, services, observedAt);
+  }
+
+  private async serviceListing(
+    identity: string,
+    user: LakeboxUser,
+    entry: LakeboxEntry | undefined,
+    status: LakeboxStatus,
+    signal?: AbortSignal,
+  ): Promise<ServiceListing> {
+    if (!entry || status === "missing") {
+      return { services: this.idleServices(user), stale: false };
+    }
+    if (status === "running" && this.boot?.key === this.bootKey(entry)) {
+      const services = await this.refreshServices(this.boot, user, identity, signal);
+      return { services: this.withBuiltIns(user, services), stale: false };
+    }
+    const memory = this.lastServices.get(user.hash);
+    if (memory) {
+      const observedAt = this.lastServicesObservedAt.get(user.hash);
+      const services =
+        status === "running"
+          ? memory
+          : stoppedSnapshotServices({
+              observedAt: observedAt ?? new Date().toISOString(),
+              definitions: [...memory.values()].map((service) => service.definition),
+            });
+      return {
+        services: this.withBuiltIns(user, services),
+        stale: true,
+        ...(observedAt ? { observedAt } : {}),
+      };
+    }
+    const snapshot = await this.serviceSnapshots?.read(entry.sandboxId, user.hash);
+    return snapshot
+      ? {
+          services: this.withBuiltIns(user, stoppedSnapshotServices(snapshot)),
+          stale: true,
+          observedAt: snapshot.observedAt,
+        }
+      : { services: this.idleServices(user), stale: true };
+  }
+
+  private async persistServiceSnapshot(
+    entry: LakeboxEntry,
+    user: LakeboxUser,
+    services: ReadonlyMap<string, LakeboxControllerService>,
+    observedAt: string,
+  ): Promise<void> {
+    await this.serviceSnapshots?.write(entry.sandboxId, user.hash, {
+      observedAt,
+      definitions: [...services.values()].map((service) => service.definition),
+    });
   }
 
   private withBuiltIns(

@@ -215,3 +215,32 @@ describe("MastraPluginClient memory history", () => {
     assert.equal(response.hasMore, true);
   });
 });
+
+describe("MastraPluginClient embeds", () => {
+  it("loads native Genie visualization data from its OBO-only embed type", async () => {
+    let received = "";
+    globalThis.fetch = (async (input) => {
+      received = String(input);
+      return Response.json({
+        columns: ["value"],
+        rows: [{ value: 1 }],
+        rowCount: 1,
+        truncated: false,
+        visualization: {
+          manifest: { schema: { columns: [{ name: "value", type_name: "BIGINT" }] } },
+          result: { data_array: [["1"]] },
+        },
+      });
+    }) as typeof fetch;
+    const client = new MastraPluginClient({
+      basePath: "/api/mastra",
+      defaultAgent: "support",
+      agents: ["support"],
+    });
+
+    const result = await client.visualization("statement-1");
+
+    assert.equal(received, "/api/mastra/embed/visualization/statement-1");
+    assert.deepEqual(result?.visualization.result.data_array, [["1"]]);
+  });
+});

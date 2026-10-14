@@ -823,7 +823,11 @@ export async function buildAgents(opts: {
         : tools,
       ...(memory ? { memory } : {}),
       ...(workspace ? { workspace } : {}),
-      inputProcessors: [...inputProcessors, ...workspaceSkillInputProcessors(workspace, config)],
+      inputProcessors: [
+        ...inputProcessors,
+        ...(memoryBuilder?.inputProcessors() ?? []),
+        ...workspaceSkillInputProcessors(workspace, config),
+      ],
       outputProcessors: [toolErrorLoggingProcessor(log)],
     });
     agents[id] =

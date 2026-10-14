@@ -25,7 +25,10 @@ Key features:
   query output, and the synthesized answer.
 - Starts new Genie conversations or continues an existing `conversationId`.
 - Projects Agent Mode response items onto the existing `GenieMessage` snapshot
-  and semantic-event contracts.
+  and semantic-event contracts, including statement ids and visualization
+  attachments.
+- Loads Agent Mode conversation items and groups them back into one
+  `GenieMessage` per turn for history replay.
 - Retains the Conversation API polling driver behind `agentMode: false` and as
   an automatic pre-stream fallback for `FEATURE_DISABLED` or preview-toggle
   errors.
@@ -100,8 +103,9 @@ conversation, projects SSE output into `GenieMessage` snapshots, filters
 identical consecutive payloads, and stops after a terminal response. Set
 `agentMode: false` to force the Conversation API start/create/get-message
 polling flow. Use it when you want to run your own diffing or persist the
-normalized wire shape. Agent Mode returns query output inline as Markdown; use
-polling when a consumer specifically requires a `statement_id`.
+normalized wire shape. Agent Mode returns query output inline as Markdown and
+copies a query output's `statement_id` onto the matching query attachment when
+Databricks supplies one.
 
 ## Continue A Conversation
 
@@ -169,6 +173,8 @@ thrown.
 
 - `conversationId` - append to an existing Genie conversation.
 - `agentMode` - use Agent Mode SSE, default `true`; `false` forces polling.
+- `agentModeFallback` - fall back to classic polling when Agent Mode is
+  unavailable, default `true`; direct Agent-only callers set `false`.
 - `enableVisualization` - request Agent Mode visualization generation.
 - `workspaceClient` - explicit Databricks SDK client.
 - `pollIntervalMs` - fallback polling cadence, default `500`.
@@ -179,7 +185,7 @@ thrown.
 - `chat` - `genieChat()` raw snapshot stream and `genieEventChat()` typed event
   stream.
 - `agentMode` - `genieAgentModeChat()`, availability classification, and Agent
-  Mode transport options.
+  Mode transport options plus Agent Mode conversation history.
 - `space` - `getGenieSpace()` and `genieSampleQuestions()`.
 
 The AppKit-Mastra package builds its Genie tools on top of this driver; see

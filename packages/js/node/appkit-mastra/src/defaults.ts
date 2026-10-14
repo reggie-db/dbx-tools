@@ -83,6 +83,36 @@ export const genieSuggestionDefaults: ExecuteSettings = {
 };
 
 /**
+ * `GET /genie/:alias/threads` and its messages: the caller's Genie
+ * conversations and their transcripts.
+ */
+export const genieConversationReadDefaults: ExecuteSettings = {
+  default: {
+    // Cache disabled: conversations change on every turn, and the chat refreshes
+    // the list right after a turn to pick up the new conversation and title.
+    cache: { enabled: false },
+    // Retry enabled: listing conversations and messages is an idempotent GET on
+    // the chat's load path.
+    retry: { enabled: true, attempts: 2 },
+    timeout: REST_TIMEOUT_MS,
+  },
+};
+
+/**
+ * `DELETE /genie/:alias/threads/:threadId` and its messages.
+ */
+export const genieConversationWriteDefaults: ExecuteSettings = {
+  default: {
+    // Cache disabled: a write.
+    cache: { enabled: false },
+    // Retry disabled: a delete that succeeded upstream but timed out locally
+    // would surface as a not-found on retry, masking the real outcome.
+    retry: { enabled: false },
+    timeout: REST_TIMEOUT_MS,
+  },
+};
+
+/**
  * `GET /embed/data/:id`: one Statement Execution result set.
  */
 export const statementDataDefaults: ExecuteSettings = {

@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
+import { CacheManager } from "@databricks/appkit";
+import { workspaces } from "@dbx-tools/appkit-mastra";
 import { createLakeboxServiceRequestSchema } from "@dbx-tools/shared-lakebox";
+import { RequestContext } from "@mastra/core/request-context";
+import { AppKitLakeboxPlugin } from "../src/plugin.ts";
+import type { LakeboxRuntime } from "../src/runtime.ts";
 import { lakeboxSkillMounts } from "../src/skills.ts";
 
 const recipes = ["html-page", "jupyter-lab", "network-speed-test", "realtime-whiteboard"];
+
+before(async () => {
+  await CacheManager.getInstance();
+});
 
 describe("lakeboxSkillMounts", () => {
   it("packages one valid service request per recipe", async () => {
@@ -18,6 +27,7 @@ describe("lakeboxSkillMounts", () => {
     assert.deepEqual(entries, recipes);
     for (const recipe of recipes) {
       const source = await readFile(`${mount.root}/${recipe}/SKILL.md`, "utf8");
+      assert.match(source, /description: .*\b(?:deploy|service)\b/i);
       assert.match(source, /create_lakebox_service/);
       assert.match(source, /openUrl/);
       assert.doesNotMatch(source, /ssh_project|mise|PROJECT_PORT|\b(?:sudo|apt-get)\b/);
@@ -26,5 +36,43 @@ describe("lakeboxSkillMounts", () => {
       const parsed = createLakeboxServiceRequestSchema.parse(JSON.parse(request));
       assert.ok(parsed.command?.join(" ").includes("SERVICE_PORT"));
     }
+  });
+
+  it("routes generic app, page, and service deployment requests to the HTML recipe", async () => {
+    const workspace = workspaces.databricksWorkspace({
+      assistantPaths: false,
+      sandbox: false,
+      extraSkillMounts: lakeboxSkillMounts(),
+    });
+    const configured = workspace.skills;
+    assert.ok(configured);
+    const skills = (await configured.getScoped?.({ requestContext: new RequestContext() })) ?? configured;
+    for (const query of [
+      "deploy a service",
+      "deploy an app",
+      "deploy a page",
+      "deploy interactive web app service sandbox HTML Three.js 3D game",
+    ]) {
+      assert.equal((await skills.search(query))[0]?.skillName, "html-page", query);
+    }
+  });
+});
+
+describe("AppKitLakeboxPlugin agent tools", () => {
+  it("keeps command and service tools while excluding whole-Lakebox lifecycle controls", () => {
+    const plugin = new AppKitLakeboxPlugin({ runtime: {} as LakeboxRuntime });
+    assert.deepEqual(Object.keys(plugin.operations("user")), [
+      "get_lakebox",
+      "execute_lakebox_command",
+      "list_lakebox_services",
+      "create_lakebox_service",
+      "start_lakebox_service",
+      "stop_lakebox_service",
+      "remove_lakebox_service",
+      "get_lakebox_service_logs",
+    ]);
+    assert.equal("start_lakebox" in plugin.operations("user"), false);
+    assert.equal("stop_lakebox" in plugin.operations("user"), false);
+    assert.equal("delete_lakebox" in plugin.operations("user"), false);
   });
 });

@@ -30,6 +30,7 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 import type { AnyMastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
+import type { ManagedMemoryConfig } from "./managed-memory.ts";
 import type { LocalSkillMount, RemoteSkillsOption } from "./remote-skills.ts";
 
 /**
@@ -230,6 +231,14 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * separately configured store.
    */
   memory?: boolean | MastraMemoryConfig;
+  /**
+   * Databricks-managed short-term sessions and long-term memory.
+   *
+   * When configured, Agent Sessions replace the agent's Mastra message/thread
+   * storage. A `memoryStore` also adds actor-scoped managed-memory search to
+   * every model turn through a native Mastra input processor.
+   */
+  managedMemory?: ManagedMemoryConfig;
   /**
    * Expose executable tools available to the current request through native
    * Mastra Code Mode. Defaults on whenever the request has executable tools.
@@ -450,7 +459,8 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * Use the streaming Genie Agent Mode API for `ask_genie`. Defaults to `true`.
    * Set `false` to force the legacy Conversation API polling driver. A
    * pre-stream feature-disabled or preview-toggle response falls back
-   * automatically.
+   * automatically. Direct Genie chat always requires Agent Mode and ignores
+   * this option.
    */
   genieAgentMode?: boolean;
   /**
@@ -604,6 +614,8 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * threads, the per-user cache namespace, and trace metadata still key off the
    * forwarded user, so callers sharing the service principal's data access keep
    * separate conversations and cannot read each other's threads or charts.
+   * Direct Genie chat does not use this option: its conversations and messages
+   * always run under AppKit OBO so Genie remains the per-user state owner.
    *
    * @example An app any account user can open
    * ```ts
@@ -658,7 +670,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * ```
    */
   remoteSkills?: RemoteSkillsOption;
-  /** Read-only local skill trees mounted for files and passed as standard agent-level skills. */
+  /** Read-only local skill trees mounted for files, searchable by path, and passed as standard agent-level skills. */
   localSkillMounts?: LocalSkillMount[];
 }
 
@@ -697,6 +709,33 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: ["boolean", "object"],
       description:
         "PgVector store for Mastra semantic recall. `true` captures the `lakebase` plugin's existing service-principal pool; an object opens a separately configured store. Auto-enabled when the `lakebase` plugin is registered.",
+    },
+    managedMemory: {
+      type: ["boolean", "object"],
+      properties: {
+        sessionStore: {
+          type: "string",
+          description: "Existing Databricks Agent Session Store id or resource name.",
+        },
+        memoryStore: {
+          type: ["string", "boolean"],
+          description:
+            "Existing Databricks Agent Memory Store id or resource name. False disables long-term memory.",
+        },
+        recall: {
+          type: ["boolean", "object"],
+          description:
+            "Managed-memory search on each user turn. False disables it; an object accepts topK and pathPrefix.",
+        },
+        extractAfterGenieTurn: {
+          type: ["boolean", "object"],
+          description:
+            "Synchronously extract managed memories after mirroring a completed direct Genie turn. An object accepts extraction instructions.",
+        },
+      },
+      additionalProperties: false,
+      description:
+        "Use Databricks Agent Sessions for Mastra short-term memory and Agent Memory search for long-term context. True or omitted store ids use the normalized project name.",
     },
     codeMode: {
       type: ["boolean", "object"],
@@ -768,7 +807,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     genieAgentMode: {
       type: "boolean",
       description:
-        "Use the streaming Genie Agent Mode API for ask_genie. Defaults to true; false forces legacy polling. Feature-disabled or preview-toggle responses fall back automatically before streaming.",
+        "Use the streaming Genie Agent Mode API for agent-backed ask_genie. Defaults to true; false forces legacy polling. Feature-disabled or preview-toggle responses fall back automatically before streaming. Direct Genie chat always requires Agent Mode.",
     },
     genieSpaceCacheTtlMs: {
       type: "number",
@@ -810,7 +849,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       // runtime while the published schema (and the UI built from it) omits it.
       enum: [...IDENTITY_MODES],
       description:
-        'Which Databricks identity the agents\' workspace calls (serving catalogue, Genie, statement execution) run as. "user" (default) is always OBO, so callers must be workspace members; "service-principal" always uses the app service principal, so any caller who can open the app works, at the cost of per-user attribution; "auto" uses OBO when the request carries an OBO token and the service principal when it does not, for an app that also serves a tunnel or webhook door. Falls back to MASTRA_GENIE_IDENTITY.',
+        'Which Databricks identity agent-backed workspace calls (serving catalogue, Genie, statement execution) run as. Direct Genie chat always uses OBO. "user" (default) is always OBO, so callers must be workspace members; "service-principal" always uses the app service principal, so any caller who can open the app works, at the cost of per-user attribution; "auto" uses OBO when the request carries an OBO token and the service principal when it does not, for an app that also serves a tunnel or webhook door. Falls back to MASTRA_GENIE_IDENTITY.',
     },
     apiAccess: {
       type: "string",

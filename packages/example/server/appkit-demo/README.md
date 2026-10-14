@@ -44,11 +44,20 @@ await appkit.createApp({
   because Databricks gates the serialized-space API behind it; the suggestions
   route reads the current `config.sample_questions` dynamically and the app
   hard-codes none of their text.
+- The Mastra plugin's direct `/genie/:alias/*` routes back the client's
+  `/genie` page. They use the native AppKit Genie space binding and mandatory
+  OBO identity, project Agent Mode events onto AI SDK UI messages, and keep
+  conversations and messages in Genie rather than Mastra Memory.
 - `email()` + `emailTool()` from
   [`@dbx-tools/email`](../../../js/node/email) — an approval-gated
   `send_email` tool: the model can call it, but the send suspends until the user
   approves it in the chat UI.
 - `lakebase()` (AppKit) — backs Mastra Memory.
+- `DBX_TOOLS_MANAGED_MEMORY=true` replaces Mastra thread/message storage with
+  Databricks Agent Sessions and enables actor-scoped Agent Memory recall. Both
+  store ids default to the normalized `projectUtils.name()` value;
+  `DATABRICKS_AGENT_SESSION_STORE_ID` and
+  `DATABRICKS_AGENT_MEMORY_STORE_ID` override existing resource ids.
 - `graphiti()` from
   [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
   the unified Python Graphiti runtime and contributes its OpenAPI-derived,

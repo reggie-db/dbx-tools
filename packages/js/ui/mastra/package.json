@@ -29,6 +29,7 @@
     "react-dom": "catalog:"
   },
   "dependencies": {
+    "@databricks/appkit-ui": "catalog:",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-genie": "workspace:^",
     "@dbx-tools/shared-mastra": "workspace:^",

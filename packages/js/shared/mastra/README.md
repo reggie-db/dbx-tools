@@ -18,8 +18,9 @@ Key features:
 
 - Route constants for the official AI SDK chat mount and AppKit-Mastra
   additions, including suggestions, model lists, the per-agent default-model
-  lookup, embeds, and feedback. History and threads use Mastra's native client
-  API.
+  lookup, embeds, feedback, and direct Genie chat. Agent history and threads
+  use Mastra's native client API; direct mode maps Genie conversations and
+  messages onto the same UI contracts.
 - Header/query/body constants for thread selection and model override requests.
 - Embed-marker parsing for delayed chart and statement-data payloads in
   streaming assistant text.
@@ -81,8 +82,9 @@ const safeText = markers.stripIncompleteMarkerTail(streamingText);
 ```
 
 Markers let an agent mention large or delayed artifacts by id, such as
-`[chart:<id>]` and `[data:<statement_id>]`. The parser is useful for rendering
-assistant text while a stream is still arriving.
+`[chart:<id>]`, `[data:<statement_id>]`, and
+`[visualization:<statement_id>]`. The visualization marker selects AppKit UI's
+native Genie Chart/Table renderer after Genie requested a chart.
 
 ## Validate Feedback
 
@@ -107,14 +109,14 @@ const event = wire.GenieWriterEventSchema.parse(writerPayload);
 ```
 
 The `wire` module contains response schemas for suggestions, model lists,
-charts, statement data, and Genie writer events. It also defines the chart/data
-result shapes consumed by embed renderers.
+charts, statement data, direct Genie threads/history, and Genie writer events.
+It also defines the browser visualization payload consumed by AppKit UI.
 
 ## Modules
 
 - `wire` - zod schemas and types for client config, model lists, suggestions,
   charts, statement data, and writer events.
-- `routes` - plugin route segment constants.
+- `routes` - plugin route segment constants and direct Genie route builder.
 - `marker` - embed-marker parsing and incomplete-tail stripping.
 - `feedback` - MLflow feedback headers, assessment names, request/response
   schemas.

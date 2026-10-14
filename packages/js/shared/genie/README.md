@@ -19,8 +19,8 @@ Key features:
 - Runtime schemas for Genie messages, responses, spaces, attachments, and
   statuses, including fields observed on the live wire.
 - Forward-compatible Agent Mode SSE schemas plus a pure reducer that projects
-  reasoning, SQL, Markdown output, structured table metadata, and terminal
-  status into `GenieMessage`.
+  reasoning, SQL, Markdown output, statement ids, visualization metadata, and
+  terminal status into `GenieMessage`.
 - A flat `GenieChatEvent` vocabulary for thinking, SQL, rows, result, status,
   and error rendering.
 - Snapshot diff helpers that emit only newly observed semantic events.
@@ -53,8 +53,8 @@ const attachments = genieModel.GenieResponseSchema.parse(rawMessage);
 ```
 
 The schemas extend generated Databricks SDK Genie types with fields observed on
-the wire, including query thoughts, attachment discriminators, and serialized
-space data.
+the wire, including query thoughts, visualization attachments, attachment
+discriminators, and serialized space data.
 
 ## Handle Typed Chat Events
 
@@ -105,8 +105,8 @@ const kind = genieModel.detectAttachmentType(message.attachments?.[0]);
 ```
 
 `humanizeStatus()` is the shared display-label function. `detectAttachmentType()`
-lets consumers switch on `query`, `text`, or `suggested_questions` instead of
-probing optional fields.
+lets consumers switch on `query`, `text`, `suggested_questions`, or `viz`
+instead of probing optional fields.
 
 ## Event Model
 
@@ -141,7 +141,7 @@ The SDK itself is a dev dependency, so importing this package pulls in zod only.
 ## Modules
 
 - `agentMode` - forward-compatible zod schemas plus the pure Agent Mode event
-  reducer and `GenieMessage` projector, including inline table metadata.
+  reducer and live/history `GenieMessage` projectors.
 - `genieModel` - Genie schemas, status helpers, attachment helpers, and event
   union schemas/types.
 - `event` - event detector factory, individual detectors, and

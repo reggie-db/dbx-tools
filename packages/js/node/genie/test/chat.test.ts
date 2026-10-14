@@ -176,6 +176,25 @@ describe("genieChat Agent Mode", () => {
     assert.equal(messages[0]?.conversation_id, "poll-conversation");
   });
 
+  it("fails instead of polling when Agent Mode is required", async () => {
+    const client = {
+      apiClient: {
+        request: async () => {
+          throw new Error("FEATURE_DISABLED: preview toggle is off");
+        },
+      },
+    } as unknown as WorkspaceClient;
+
+    await assert.rejects(async () => {
+      for await (const _message of genieChat(AGENT_ID, "Agent-only question", {
+        workspaceClient: client,
+        agentModeFallback: false,
+      })) {
+        // The required Agent Mode request fails before yielding.
+      }
+    }, /FEATURE_DISABLED/);
+  });
+
   it("projects a cancelled Agent Mode response as terminal", async () => {
     const client = {
       apiClient: {

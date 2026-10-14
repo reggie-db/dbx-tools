@@ -67,6 +67,7 @@ export interface ExportBrand {
 export interface EmbedResolver {
   chart(id: string): Promise<Chart | undefined>;
   statement(id: string): Promise<StatementData | undefined>;
+  visualization(id: string): Promise<StatementData | undefined>;
 }
 
 /** Options accepted by {@link exportChat}. */
@@ -185,14 +186,15 @@ function printViaHiddenIframe(html: string, downloadName: string): void {
 
 /** One slice of a message: prose, a chart embed, or a data embed. */
 type Segment =
-  { kind: "text"; text: string } | { kind: "chart"; id: string } | { kind: "data"; id: string };
+  | { kind: "text"; text: string }
+  | { kind: "chart"; id: string }
+  | { kind: "data"; id: string }
+  | { kind: "visualization"; id: string };
 
 /**
- * Split message text into prose / chart / data segments at
- * `[chart:<uuid>]` / `[data:<uuid>]` marker positions. Mirrors the live
- * `MarkdownWithEmbeds` splitter so an export matches what's on screen:
- * non-UUID (fabricated) ids and unknown marker types collapse away so no
- * literal `[type:...]` leaks into the output.
+ * Split message text into prose, chart, and data segments. A native Genie
+ * visualization exports as its backing table because the interactive AppKit
+ * chart has no serializable ECharts spec.
  */
 function splitSegments(text: string): Segment[] {
   const segments: Segment[] = [];
@@ -201,8 +203,12 @@ function splitSegments(text: string): Segment[] {
     if (marker.start > last) {
       segments.push({ kind: "text", text: text.slice(last, marker.start) });
     }
-    if (markers.isUuid(marker.id) && (marker.type === "chart" || marker.type === "data")) {
-      segments.push({ kind: marker.type, id: marker.id });
+    if (markers.isUuid(marker.id) && marker.type === "chart") {
+      segments.push({ kind: "chart", id: marker.id });
+    } else if (markers.isUuid(marker.id) && marker.type === "data") {
+      segments.push({ kind: "data", id: marker.id });
+    } else if (markers.isUuid(marker.id) && marker.type === "visualization") {
+      segments.push({ kind: "visualization", id: marker.id });
     }
     last = marker.end;
   }
@@ -281,7 +287,7 @@ async function messageBodyHtml(message: UIMessage, resolver: EmbedResolver): Pro
       if (svg) parts.push(`<div class="embed embed-chart">${svg}</div>`);
       continue;
     }
-    const table = await dataTableHtml(resolver, seg.id);
+    const table = await dataTableHtml(resolver, seg.id, seg.kind === "visualization");
     if (table) parts.push(table);
   }
   return parts.join("\n");
@@ -332,8 +338,12 @@ async function chartSvg(resolver: EmbedResolver, id: string): Promise<string | n
 }
 
 /** Resolve a data id and render its rows to an HTML table. `null` on miss. */
-async function dataTableHtml(resolver: EmbedResolver, id: string): Promise<string | null> {
-  const data = await safeStatement(resolver, id);
+async function dataTableHtml(
+  resolver: EmbedResolver,
+  id: string,
+  visualization = false,
+): Promise<string | null> {
+  const data = await safeStatement(resolver, id, visualization);
   if (!data || data.rows.length === 0) return null;
   const head = data.columns.map((c) => `<th>${escapeHtml(stringUtils.toLabel(c))}</th>`).join("");
   const body = data.rows
@@ -383,7 +393,7 @@ async function messageBodyMarkdown(message: UIMessage, resolver: EmbedResolver):
       if (chart?.result) parts.push(`> **Chart:** ${chartTitle(chart)}`);
       continue;
     }
-    const table = await dataTableMarkdown(resolver, seg.id);
+    const table = await dataTableMarkdown(resolver, seg.id, seg.kind === "visualization");
     if (table) parts.push(table);
   }
   return parts.join("\n\n");
@@ -400,8 +410,12 @@ function chartTitle(chart: Chart): string {
 }
 
 /** Render statement rows to a GFM table. `null` on miss / empty. */
-async function dataTableMarkdown(resolver: EmbedResolver, id: string): Promise<string | null> {
-  const data = await safeStatement(resolver, id);
+async function dataTableMarkdown(
+  resolver: EmbedResolver,
+  id: string,
+  visualization = false,
+): Promise<string | null> {
+  const data = await safeStatement(resolver, id, visualization);
   if (!data || data.rows.length === 0) return null;
   const header = `| ${data.columns.map((c) => mdCell(stringUtils.toLabel(c))).join(" | ")} |`;
   const sep = `| ${data.columns.map(() => "---").join(" | ")} |`;
@@ -427,9 +441,10 @@ async function safeChart(resolver: EmbedResolver, id: string): Promise<Chart | u
 async function safeStatement(
   resolver: EmbedResolver,
   id: string,
+  visualization = false,
 ): Promise<StatementData | undefined> {
   try {
-    return await resolver.statement(id);
+    return await (visualization ? resolver.visualization(id) : resolver.statement(id));
   } catch {
     return undefined;
   }

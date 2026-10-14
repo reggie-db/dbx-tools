@@ -1,6 +1,6 @@
-import { LakeboxIndicator } from "@dbx-tools/ui-lakebox/react";
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
 import { useState } from "react";
+import { useChatThreadQuery } from "@/hooks/use-chat-thread-query";
 
 // Focused chat surface: streaming, tool-session pills, approvals, model
 // selection, history, threads, export, and Genie transport selection.
@@ -8,6 +8,7 @@ import { useState } from "react";
 const Chat = () => {
   const [agentMode, setAgentMode] = useState(true);
   const agentId = agentMode ? "support" : "support-polling";
+  const thread = useChatThreadQuery();
 
   const agentModeControl = (
     <label
@@ -32,11 +33,11 @@ const Chat = () => {
     <MastraChat
       key={agentId}
       agentId={agentId}
+      threadId={thread.threadId}
+      onThreadIdChange={thread.onThreadIdChange}
       showModelPicker
       enableExport
       modelSelectorActions={agentModeControl}
-      threadHistoryLeadingActions={<LakeboxIndicator />}
-      threadSidebarHeaderActions={<LakeboxIndicator />}
       className="min-h-0 flex-1"
     />
   );

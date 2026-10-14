@@ -30,6 +30,10 @@ export function App() {
   starts with Genie Agent Mode enabled and
   places a checkbox beside the inline model selector that switches to an
   otherwise-identical polling agent.
+- `src/pages/GenieChat.tsx` uses `MastraChat genieSpace="default"` for the same
+  shell directly over Genie. Its `?thread=` value is the Genie conversation id;
+  history, thoughts, tables, and AppKit-native visualizations replay without a
+  supervisor agent or Mastra Memory.
 - [`@dbx-tools/ui/search/react`](../../../js/ui/appkit) — native AppKit AI
   Search and the Lakebase full-text fallback share one search box and result
   surface.
@@ -51,6 +55,8 @@ export function App() {
   `<MastraChat composerActions>`, beside the model selector. It selects
   `support` for Agent Mode SSE or `support-polling` for Conversation API
   polling.
+- `src/pages/GenieChat.tsx` - direct Genie chat with Genie-owned conversations,
+  OBO identity, and no model selector, attachments, feedback, or rename action.
 - `src/pages/Brand.tsx` — a live `BrandPicker` that updates the whole site plus
   rich email previews that inherit the active brand, with one intentionally
   independent campaign identity.

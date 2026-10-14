@@ -30,7 +30,7 @@ With execute_lakebox_command, pass command "sh" and put the script in args ["-lc
 
 /** Options for the Lakebox-backed Mastra workspace sandbox. */
 export interface LakeboxWorkspaceSandboxOptions {
-  /** Optional display name presented by Mastra instead of the managed Lakebox name. */
+  /** Optional display name presented by Mastra instead of Lakebox. */
   displayName?: string;
 }
 
@@ -156,8 +156,8 @@ export function lakeboxWorkspaceSandbox(
       );
     }
     return new LakeboxWorkspaceSandbox(
-      runtime.name,
-      options.displayName ?? runtime.name,
+      runtime.config.application,
+      options.displayName ?? "Lakebox",
       runtime,
       user.id,
     );

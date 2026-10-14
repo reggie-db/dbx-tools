@@ -10,8 +10,8 @@
  * @module
  */
 
-import type { LakeboxUser } from "@dbx-tools/shared-lakebox";
 import { hash } from "@dbx-tools/shared-core";
+import type { LakeboxUser } from "@dbx-tools/shared-lakebox";
 
 /** Platform account that owns the persistent volume and the SSH session. */
 export const LAKEBOX_AGENT_USER = "sandbox-agent";

@@ -20,6 +20,7 @@ import {
 
 const logger = log.logger("genie/agent-mode");
 const CANCEL_TIMEOUT_MS = 5_000;
+const ITEM_PAGE_SIZE = 100;
 
 /** Inputs for one Agent Mode response stream. */
 export interface GenieAgentModeOptions {
@@ -87,6 +88,40 @@ export async function* genieAgentModeChat(
       await cancelResponse(client, agentId, projection.conversationId, projection.responseId);
     }
   }
+}
+
+/**
+ * Load an Agent Mode conversation's full item history and project it onto one
+ * `GenieMessage` per turn, oldest first.
+ */
+export async function listAgentModeConversation(
+  client: WorkspaceClient,
+  agentId: string,
+  conversationId: string,
+  options: { context?: databricks.ContextLike } = {},
+): Promise<GenieMessage[]> {
+  const context = options.context ? databricks.toContext(options.context) : undefined;
+  const items: agentModeWire.GenieAgentOutputItem[] = [];
+  let after: string | undefined;
+  let status = "completed";
+  do {
+    const page = agentModeWire.GenieAgentConversationItemsSchema.parse(
+      await client.apiClient.request(
+        {
+          path: `/api/2.0/genie/agents/${encodeURIComponent(agentId)}/conversations/${encodeURIComponent(conversationId)}/items`,
+          method: "GET",
+          headers: new Headers({ accept: "application/json" }),
+          query: { limit: ITEM_PAGE_SIZE, order: "asc", ...(after ? { after } : {}) },
+          raw: false,
+        },
+        context,
+      ),
+    );
+    items.push(...page.data);
+    status = page.status ?? status;
+    after = page.has_more ? page.last_id : undefined;
+  } while (after);
+  return agentModeWire.projectAgentModeConversation(agentId, conversationId, items, status);
 }
 
 /** Return whether Agent Mode is disabled or its preview toggle is unavailable. */

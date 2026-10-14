@@ -378,7 +378,7 @@ describe("databricksWorkspace skill source identity", () => {
     await assert.doesNotReject(() => catalogue.search("jobs"));
   });
 
-  it("keeps startup-provisioned local skills out of workspace search", async () => {
+  it("exposes local skill mounts through workspace search and native skills", async () => {
     const root = await mkdtemp(join(tmpdir(), "appkit-mastra-skills-"));
     const skill = join(root, "databricks-apps");
     await mkdir(skill);
@@ -399,7 +399,15 @@ describe("databricksWorkspace skill source identity", () => {
         sandbox: false,
         extraSkillMounts: mounts,
       });
-      assert.equal(workspace.skills, undefined);
+      const searchable = await resolveWorkspaceSkills(workspace, new RequestContext());
+      assert.deepEqual(
+        (await searchable.list()).map(({ name }) => name),
+        ["databricks-apps"],
+      );
+      assert.equal(
+        (await searchable.search("Databricks Apps deployment"))[0]?.skillName,
+        "databricks-apps",
+      );
       const skills = await inlineSkillsFromLocalMounts(mounts);
       assert.deepEqual(
         skills.map(({ name }) => name),

@@ -1,3 +1,4 @@
+import { GenieQueryVisualization } from "@databricks/appkit-ui/react";
 import { markers, type ParsedMarker } from "@dbx-tools/shared-mastra";
 import { Spinner } from "@dbx-tools/ui/react";
 import { ClockIcon } from "lucide-react";
@@ -6,13 +7,16 @@ import { DataGrid, humanizeLabel } from "./data-grid.tsx";
 import { AssistantMarkdown } from "./markdown.tsx";
 import { normalizeChartOption } from "../support/chart-option.ts";
 import { useChartChrome } from "../support/chart-theme.ts";
-import { useChartFetch, useStatementFetch } from "../support/mastra-client.ts";
+import {
+  useChartFetch,
+  useStatementFetch,
+  useVisualizationFetch,
+} from "../support/mastra-client.ts";
 
 const ReactECharts = lazy(() => import("echarts-for-react"));
 
-// Inline embed slots: chart / data tables resolved from `[chart:<id>]`
-// and `[data:<id>]` markers in the assistant's prose, plus the splitter
-// that interleaves those slots with the surrounding markdown.
+// Inline embed slots resolved from markers in assistant prose, plus the
+// splitter that interleaves those slots with surrounding markdown.
 
 /**
  * Frame shared by every chart-slot state so the layout stays
@@ -170,11 +174,27 @@ const DataSlot = ({ statementId }: { statementId: string }) => {
   );
 };
 
-/** One slice of an assistant message: prose, a chart slot, or a data slot. */
+/**
+ * Native AppKit Genie visualization for a query Genie chose to visualize.
+ * The same statement payload backs its Chart and Table tabs.
+ */
+const GenieVisualizationSlot = ({ statementId }: { statementId: string }) => {
+  const { data, loading, error } = useVisualizationFetch(statementId);
+  if (!loading && !error && data === undefined) return <ExpiredSlot type="visualization" />;
+  if (!data) return null;
+  return (
+    <div className="not-prose my-3 max-w-full rounded border border-border bg-card p-3">
+      <GenieQueryVisualization data={data.visualization} />
+    </div>
+  );
+};
+
+/** One slice of an assistant message. */
 type RenderSegment =
   | { kind: "text"; text: string }
   | { kind: "chart"; chartId: string }
-  | { kind: "data"; statementId: string };
+  | { kind: "data"; statementId: string }
+  | { kind: "visualization"; statementId: string };
 
 /**
  * Map one parsed marker onto its render segment. The marker grammar
@@ -185,8 +205,7 @@ type RenderSegment =
  * collapses to an empty text segment: the marker is consumed so no
  * literal `[<type>:...]` leaks into the prose, but no slot renders and
  * no `/embed/<type>/:id` request fires. Only a UUID-shaped id with a
- * known, renderable type (charts need ECharts, data needs a Table)
- * resolves to a slot.
+ * known, renderable type resolves to a slot.
  */
 const markerSegment = (marker: ParsedMarker): RenderSegment => {
   if (!markers.isUuid(marker.id)) return { kind: "text", text: "" };
@@ -195,6 +214,8 @@ const markerSegment = (marker: ParsedMarker): RenderSegment => {
       return { kind: "chart", chartId: marker.id };
     case "data":
       return { kind: "data", statementId: marker.id };
+    case "visualization":
+      return { kind: "visualization", statementId: marker.id };
     default:
       return { kind: "text", text: "" };
   }
@@ -220,8 +241,7 @@ const splitTextWithEmbeds = (text: string): RenderSegment[] => {
 };
 
 /**
- * Render the assistant's markdown with chart and data tables
- * placed at their inline marker positions. Each prose segment
+ * Render the assistant's markdown with embeds at their marker positions. Each prose segment
  * is its own {@link AssistantMarkdown} so streaming chunks still
  * incrementally parse correctly; embed slots break the markdown
  * flow with full-width block elements.
@@ -234,6 +254,8 @@ const splitTextWithEmbeds = (text: string): RenderSegment[] => {
  *   - `[data:<statement_id>]` -> {@link DataSlot} fetches the
  *     statement rows OBO-scoped and renders an inline Table
  *     (or nothing on 404 / empty result).
+ *   - `[visualization:<statement_id>]` -> {@link GenieVisualizationSlot}
+ *     renders AppKit UI's native Genie Chart/Table view.
  *
  * Stale markers in persisted transcript text are silently
  * dropped on reload so the prose around them stays clean.
@@ -264,6 +286,14 @@ export const MarkdownWithEmbeds = ({
         }
         if (seg.kind === "chart") {
           return <ChartSlot key={`c-${i}-${seg.chartId}`} chartId={seg.chartId} />;
+        }
+        if (seg.kind === "visualization") {
+          return (
+            <GenieVisualizationSlot
+              key={`v-${i}-${seg.statementId}`}
+              statementId={seg.statementId}
+            />
+          );
         }
         return <DataSlot key={`d-${i}-${seg.statementId}`} statementId={seg.statementId} />;
       })}

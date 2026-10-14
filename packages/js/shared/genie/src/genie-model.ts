@@ -125,6 +125,7 @@ export const ATTACHMENT_TYPES = [
   "query",
   "text",
   "suggested_questions",
+  "viz",
 ] as const satisfies readonly string[];
 
 export const KnownAttachmentTypeSchema = z
@@ -182,6 +183,23 @@ export const GenieTextAttachmentSchema = dashboards.textAttachmentSchema.extend(
 export type GenieTextAttachment = z.infer<typeof GenieTextAttachmentSchema>;
 
 /**
+ * Visualization Genie requested for one of its query results. Genie stores only
+ * the title and the query attachment it charts; the client draws the chart from
+ * that query's statement rows.
+ */
+export const GenieVizAttachmentSchema = z
+  .object({
+    title: z.string().optional().describe("Display title Genie chose for the chart."),
+    query_attachment_id: z
+      .string()
+      .optional()
+      .describe("`attachment_id` of the query attachment whose rows the chart plots."),
+  })
+  .describe("Genie visualization request over one query attachment.");
+/** Genie visualization request over one query attachment. */
+export type GenieVizAttachment = z.infer<typeof GenieVizAttachmentSchema>;
+
+/**
  * `GenieAttachment` with:
  *
  *   - `query` re-typed to the thoughts-aware
@@ -204,6 +222,7 @@ export type GenieTextAttachment = z.infer<typeof GenieTextAttachmentSchema>;
 export const GenieAttachmentSchema = SDKGenieAttachmentSchema.extend({
   query: GenieQueryAttachmentSchema.optional(),
   text: GenieTextAttachmentSchema.optional(),
+  viz: GenieVizAttachmentSchema.optional(),
   attachment_type: AttachmentTypeSchema.optional(),
 });
 /** Genie message attachment with an optional computed discriminator. */
@@ -343,6 +362,7 @@ export function detectAttachmentType(att: GenieAttachment): AttachmentType {
   if (att.query) return "query";
   if (att.text) return "text";
   if (att.suggested_questions) return "suggested_questions";
+  if (att.viz) return "viz";
   for (const k of Object.keys(att)) {
     if (k !== "attachment_id" && k !== "attachment_type") return k;
   }

@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
-import type { LakeboxMetricsSnapshot } from "@dbx-tools/shared-lakebox";
 import { errorUtils, log } from "@dbx-tools/shared-core";
+import type { LakeboxMetricsSnapshot } from "@dbx-tools/shared-lakebox";
 
 const logger = log.logger("appkit-lakebox:metrics");
 const DEFAULT_CAPACITY = 120;
@@ -58,6 +58,12 @@ export class LakeboxMetrics extends EventEmitter<LakeboxMetricsEvents> {
     return [...this.samples];
   }
 
+  /** Seeds one validated sample without starting the recurring sampler or emitting an event. */
+  seed(output: string, at = Date.now()): LakeboxMetricsSnapshot {
+    const snapshot = this.record(parseLakeboxCounters(output, at), false);
+    return snapshot;
+  }
+
   /** Starts sampling. Repeated calls are ignored. */
   start(): void {
     if (this.controller) return;
@@ -78,12 +84,8 @@ export class LakeboxMetrics extends EventEmitter<LakeboxMetricsEvents> {
   private async tick(signal: AbortSignal): Promise<void> {
     try {
       const counters = parseLakeboxCounters(await this.read(signal));
-      const snapshot = toSnapshot(counters, this.previous);
-      this.previous = counters;
       if (signal.aborted) return;
-      this.samples.push(snapshot);
-      if (this.samples.length > this.capacity) this.samples.shift();
-      this.emit("snapshot", snapshot);
+      this.record(counters, true);
     } catch (error) {
       if (!signal.aborted) {
         logger.debug("Lakebox metrics sample failed", { error: errorUtils.toError(error) });
@@ -92,6 +94,15 @@ export class LakeboxMetrics extends EventEmitter<LakeboxMetricsEvents> {
     if (signal.aborted) return;
     this.timer = setTimeout(() => void this.tick(signal), this.intervalMs);
     this.timer.unref?.();
+  }
+
+  private record(counters: LakeboxCounters, emit: boolean): LakeboxMetricsSnapshot {
+    const snapshot = toSnapshot(counters, this.previous);
+    this.previous = counters;
+    this.samples.push(snapshot);
+    if (this.samples.length > this.capacity) this.samples.shift();
+    if (emit) this.emit("snapshot", snapshot);
+    return snapshot;
   }
 }
 

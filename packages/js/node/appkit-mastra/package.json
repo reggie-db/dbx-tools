@@ -112,6 +112,10 @@
         "types": "./lib/src/filesystems.d.ts",
         "default": "./lib/src/filesystems.js"
       },
+      "./genie-chat": {
+        "types": "./lib/src/genie-chat.d.ts",
+        "default": "./lib/src/genie-chat.js"
+      },
       "./genie": {
         "types": "./lib/src/genie.d.ts",
         "default": "./lib/src/genie.js"
@@ -119,6 +123,10 @@
       "./identity": {
         "types": "./lib/src/identity.d.ts",
         "default": "./lib/src/identity.js"
+      },
+      "./managed-memory": {
+        "types": "./lib/src/managed-memory.d.ts",
+        "default": "./lib/src/managed-memory.js"
       },
       "./mcp": {
         "types": "./lib/src/mcp.d.ts",
@@ -236,8 +244,10 @@
     "./defaults": "./src/defaults.ts",
     "./evaluation": "./src/evaluation.ts",
     "./filesystems": "./src/filesystems.ts",
+    "./genie-chat": "./src/genie-chat.ts",
     "./genie": "./src/genie.ts",
     "./identity": "./src/identity.ts",
+    "./managed-memory": "./src/managed-memory.ts",
     "./mcp": "./src/mcp.ts",
     "./memory": "./src/memory.ts",
     "./mlflow": "./src/mlflow.ts",
@@ -267,7 +277,6 @@
   "files": [
     "index.ts",
     "src",
-    "exports.ts",
     "lib"
   ],
   "optionalDependencies": {

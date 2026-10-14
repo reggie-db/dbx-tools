@@ -22,9 +22,9 @@ Key features:
 
 - Drop-in `MastraChat` component that discovers the plugin client config and
   wires itself to the default agent.
-- Reload recovery for background turns: active run metadata is persisted per
-  agent and thread, the cached stream reconnects after a page reload, and the
-  final persisted history is refreshed when recovery completes.
+- Reload recovery for agent-backed background turns: active run metadata is
+  persisted per agent and thread, the cached stream reconnects after a page
+  reload, and the final persisted history is refreshed when recovery completes.
 - Headless `useMastraChat()` driver for apps that want the same transport logic
   with custom layout.
 - Persistent `MastraAssistant` application shell with a floating launcher,
@@ -172,6 +172,7 @@ precomputed `uiMessages` projection, history hydration uses Mastra's native
 Useful options:
 
 - `agentId` selects a registered agent; defaults to the plugin default agent.
+- `genieSpace` selects a configured Genie alias and bypasses the agent.
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
 - `composerActions` places host-owned per-turn controls beside the model
   selector without replacing the built-in composer.
@@ -187,11 +188,44 @@ Useful options:
   off. See [Place The Conversation List](#place-the-conversation-list).
 - `enableThreads: false` is the older shorthand for
   `threadPlacement: "disabled"`.
+- `threadId` and `onThreadIdChange` let a host bind the active conversation to
+  URL state or another external selector. Unknown external ids are replaced by
+  a new thread and reported with the `missing` reason.
 - `enableExport` adds whole-conversation and per-message export affordances.
 - Feedback defaults to auto: thumbs, dislike, and comment controls appear when
   the server reports MLflow feedback is available and a turn produced a trace
   id. Set `enableFeedback={false}` to hide them. Viewers with `CAN_MANAGE` on
   the experiment also get an experiment debug link at the end of the action row.
+
+## Use Direct Genie Chat
+
+Use `genieSpace` when the application needs the same chat shell without a
+supervisor agent:
+
+```tsx
+<MastraChat genieSpace="sales" threadPlacement="auto" enableExport />
+```
+
+The alias comes from the server plugin's `genieSpaces`. The client still uses
+AI SDK `UIMessage` streams and the same `ChatView`; Genie conversations replace
+Mastra threads and Genie messages replace Mastra Memory history.
+
+Turns and history require the Genie Agent API and never fall back to classic
+Genie message polling. The sidebar filters the GA Genie conversation listing to
+Agent Mode conversations. Genie decides whether a query should be visualized;
+visualization attachments render through AppKit UI's native
+`GenieQueryVisualization`, with Chart and Table tabs. This does not invoke a
+supervisor or the Mastra Model Serving chart planner. Queries without a
+visualization attachment render through the existing sortable data table.
+
+Direct mode requires the signed-in user's Databricks OBO context. It supports
+new/select/delete conversations, history, suggestions, thoughts, exports, and
+stream cancellation. It does not support conversation rename, file
+attachments, MLflow feedback, approvals, background turns, or stream
+reconnection. The newest 100 conversations are listed and each selected
+conversation loads as one history page. When the server configures
+`managedMemory`, completed turns are mirrored for Databricks memory extraction;
+the visible transcript still comes only from Genie.
 
 ## Place The Conversation List
 
@@ -213,6 +247,9 @@ show/hide toggle. Below 768px of chat width the panel becomes an overlay drawer
 on the same edge, so the transcript never loses room; the drawer is
 session-scoped and starts closed, and closes itself after a selection.
 
+The composer accepts images from the upload action, drag and drop, or clipboard
+paste. Oversized images use the same client-side resize path before submission.
+
 The `top` placement is the editor-tab model: each open conversation is a tab with
 its title, a spinner while it streams in the background, and a close affordance
 that only takes the tab off the strip (the conversation stays in history). A `+`
@@ -223,10 +260,11 @@ starts a fresh conversation when it was the last tab open. The open set is
 session state; the strip reseeds from the most recent conversations on the next
 load.
 
-Selecting a conversation fetches only the newest 20 native memory messages.
-Scrolling upward requests the next page and prepends it without moving the
-reader's viewport. Agent turns still send only the new user message; Mastra
-loads the remembered transcript server-side.
+For agent-backed chat, selecting a conversation fetches only the newest 20
+native memory messages. Scrolling upward requests the next page and prepends it
+without moving the reader's viewport. Agent turns still send only the new user
+message; Mastra loads the remembered transcript server-side. Direct Genie mode
+loads the selected Genie conversation in one page.
 
 `auto` measures the chat's own element rather than the viewport, so a chat
 embedded in a split view or side panel switches to tabs on the space it actually
@@ -363,6 +401,8 @@ The UI understands the extra events produced by
 - `[chart:<id>]` markers long-poll the chart cache and render ECharts inline.
 - `[data:<id>]` markers fetch statement rows and render a sortable table with
   column toggles and CSV export.
+- `[visualization:<id>]` markers fetch the same statement under OBO identity and
+  render AppKit UI's native Genie Chart/Table component.
 - MLflow trace headers enable per-message feedback controls when the server
   reports feedback is available.
 

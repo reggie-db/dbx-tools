@@ -36,9 +36,7 @@ import {
   lakeboxServiceLogsRequestSchema,
   listLakeboxServicesOperationSchema,
   removeLakeboxServiceOperationSchema,
-  startLakeboxOperationSchema,
   startLakeboxServiceOperationSchema,
-  stopLakeboxOperationSchema,
   stopLakeboxServiceOperationSchema,
   type CreateLakeboxServiceRequest,
   type LakeboxClientConfigInput,
@@ -48,6 +46,8 @@ import {
 import type { Application, Request, Response } from "express";
 import type { JSONSchema7 } from "json-schema";
 import { z } from "zod";
+import { LakeboxResourceRegistry } from "./_resource-registry.ts";
+import { LakeboxServiceSnapshots } from "./_service-snapshots.ts";
 import {
   LakeboxPluginConfigSchema,
   resolveLakeboxPluginConfig,
@@ -107,15 +107,16 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
 
   override async setup(): Promise<void> {
     this.context?.onLifecycle("setup:complete", async () => {
-      this.runtime.initialize(createWorkspaceClient().config, (headers) =>
-        this.requestIdentity(headers),
+      const pool = lakebaseResolver.captureServicePrincipalPool(
+        pluginRegistry.require(this.context, lakebase, "appkit-lakebox").exports().pool,
       );
-      const pool = pluginRegistry.instance(this.context, lakebase)?.exports().pool;
-      void this.runtime.cleanupLegacy(
-        pool
-          ? (lakebaseResolver.captureServicePrincipalPool(pool) as LakeboxLegacyPool)
-          : undefined,
+      this.runtime.initialize(
+        createWorkspaceClient().config,
+        (headers) => this.requestIdentity(headers),
+        new LakeboxServiceSnapshots(),
+        new LakeboxResourceRegistry(this.runtime.config.application, pool),
       );
+      void this.runtime.cleanupLegacy(pool as LakeboxLegacyPool);
       const server = this.context?.getPlugins().get("server") as ServerExtension | undefined;
       if (!server || this.mounted) return;
       this.upgradeIdentityGate = resolveUpgradeIdentityGate(
@@ -255,20 +256,6 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
       get_lakebox: {
         schema: getLakeboxOperationSchema,
         execute: async (_input, signal) => withoutLogs(await this.runtime.summary(user(), signal)),
-      },
-      start_lakebox: {
-        schema: startLakeboxOperationSchema,
-        execute: async (_input, signal) => {
-          await this.runtime.start(signal);
-          return withoutLogs(await this.runtime.summary(user(), signal));
-        },
-      },
-      stop_lakebox: {
-        schema: stopLakeboxOperationSchema,
-        execute: async (_input, signal) => {
-          await this.runtime.stop(signal);
-          return withoutLogs(await this.runtime.summary(user(), signal));
-        },
       },
       execute_lakebox_command: {
         schema: executeLakeboxCommandOperationSchema,

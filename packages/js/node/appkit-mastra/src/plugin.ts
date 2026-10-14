@@ -62,7 +62,9 @@ import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/sha
 import {
   feedback,
   routes,
+  wire,
   type Chart,
+  type GenieChatRequest,
   type MastraClientConfig,
   type MastraFeedbackRequest,
   type StatementData,
@@ -71,6 +73,7 @@ import { display, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
 import type { RequestContext } from "@mastra/core/request-context";
+import { pipeUIMessageStreamToResponse } from "ai";
 import express from "express";
 import type { Pool } from "pg";
 
@@ -86,11 +89,21 @@ import {
 import {
   chartFetchDefaults,
   feedbackWriteDefaults,
+  genieConversationReadDefaults,
+  genieConversationWriteDefaults,
   genieSuggestionDefaults,
   modelCatalogueDefaults,
   statementDataDefaults,
 } from "./defaults.ts";
-import { collectSpaceSuggestions, resolveGenieSpaces } from "./genie.ts";
+import {
+  deleteGenieThread,
+  deleteGenieThreadMessage,
+  genieChatStream,
+  listGenieThreadMessages,
+  listGenieThreads,
+  type GenieChatSpace,
+} from "./genie-chat.ts";
+import { collectSpaceSuggestions, resolveGenieSpaces, type GenieSpaceConfig } from "./genie.ts";
 import {
   requestUserId,
   resolveIdentityMode,
@@ -98,7 +111,7 @@ import {
   type MastraIdentityMode,
 } from "./identity.ts";
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
-import { createMemoryBuilder, needsLakebase } from "./memory.ts";
+import { createMemoryBuilder, needsLakebase, type MemoryBuilder } from "./memory.ts";
 import {
   flushDirectMlflowTracing,
   logFeedback,
@@ -117,7 +130,7 @@ import {
   MastraServer,
 } from "./server.ts";
 import { resolveServingConfig } from "./serving.ts";
-import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
+import { fetchStatementEmbedData, STATEMENT_ROW_CAP } from "./statement.ts";
 import { attachChatTurnTelemetry } from "./telemetry.ts";
 import { invalidFields } from "./validation.ts";
 import { inlineSkillsFromLocalMounts } from "./workspaces.ts";
@@ -231,6 +244,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * {@link buildAgentAndServer} and registered on the Mastra instance.
    */
   private mcp: ResolvedMcp | null = null;
+  private memoryBuilder: MemoryBuilder | undefined;
   /**
    * Resolved {@link MastraIdentityMode}: the identity the chat path's Databricks
    * calls run as. Read once at setup so an invalid `genieIdentity` fails the app
@@ -252,8 +266,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   }
 
   /**
-   * The plugin instance the chat path's Databricks calls should run through for
-   * `req`, honoring {@link identityMode}.
+   * The plugin instance agent-backed Databricks calls should run through for
+   * `req`, honoring {@link identityMode}. Direct Genie conversation routes use
+   * AppKit OBO through `asUser(req)` instead.
    *
    * In `"user"` mode (the default) this is `this.asUser(req)` - AppKit's own
    * proxy that runs every call inside `runInUserContext`, so `getExecutionContext()`
@@ -261,9 +276,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * unwrapped, so the same methods run in the ambient service context and
    * `getExecutionContext()` returns the app service principal's client - the same
    * "just don't enter `asUser`" pattern AppKit's own service-context calls use. One
-   * helper covers every workspace call the chat path makes (serving catalogue,
-   * Genie suggestions, `ask_genie` via the dispatched agent turn, statement fetch,
-   * feedback), so the identity decision lives in one place.
+   * helper covers the agent-backed workspace calls (serving catalogue, general
+   * suggestions, dispatched `ask_genie`, statement fetch, feedback), so the
+   * identity decision lives in one place.
    */
   private scopedSelf(req: express.Request): this {
     return useServicePrincipal(this.identityMode, req) ? this : this.asUser(req);
@@ -441,6 +456,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     this.registerModelRoutes(router);
     this.registerEmbedRoutes(router);
     this.registerSuggestionRoutes(router);
+    this.registerGenieChatRoutes(router);
     this.registerFeedbackRoutes(router);
     this.registerMlflowExperimentRoute(router);
     this.registerAgentRoutes(router);
@@ -545,10 +561,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // `GET /embed/:type/:id` is the single resolver for every embed
     // marker the agent emits in prose (`[chart:<id>]`,
     // `[data:<id>]`, ...). `:type` selects a resolver from the
-    // registry below; `:id` is that resolver's lookup key. The
-    // grammar (see `marker.ts`) is type-agnostic on purpose - new
-    // embed kinds are added by registering a resolver here, with no
-    // client or grammar change.
+    // registry below; `:id` is that resolver's lookup key. The marker grammar
+    // is type-agnostic; the client still chooses how each registered type
+    // renders.
     //
     // Status codes:
     //   - 200 with the resolver's JSON body when the id resolves.
@@ -563,7 +578,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     //     settles (`result` / `error`) or the budget elapses (then
     //     returns the still-processing entry to poll again).
     //     `?timeoutMs=<n>` (default 60s, capped 5min) tunes it.
-    //   - `data`: one OBO-scoped Statement Execution fetch.
+    //   - `data`: one Statement Execution fetch under `genieIdentity`.
+    //   - `visualization`: the same payload under mandatory OBO identity for
+    //     direct Genie chat, whose conversations belong to the signed-in user.
     //     `?limit=<n>` caps rows (clamped to STATEMENT_ROW_CAP).
     //
     // Built once (this handler is registered once) and keyed by the
@@ -583,6 +600,13 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       data: (req, id, signal) => {
         const limit = parseStatementLimit(req.query.limit);
         return this.scopedSelf(req).fetchStatement(id, {
+          ...(limit !== undefined ? { limit } : {}),
+          signal,
+        });
+      },
+      visualization: (req, id, signal) => {
+        const limit = parseStatementLimit(req.query.limit);
+        return this.asUser(req).fetchStatement(id, {
           ...(limit !== undefined ? { limit } : {}),
           signal,
         });
@@ -619,13 +643,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           res.status(400).json({ error: "id is required" });
           return;
         }
-        // Express's `req` predates `AbortSignal`; bridge the `close`
-        // event onto an `AbortController` so a closed connection
-        // unblocks any long-poll immediately and frees the request
-        // thread. The listener is GC'd with the request on normal
-        // completion.
+        // Bridge response close onto an AbortSignal so a client disconnect
+        // releases long-poll and workspace calls immediately.
         const controller = new AbortController();
-        req.on("close", () => controller.abort());
+        res.on("close", () => controller.abort());
         const result = await resolve(req, id, controller.signal);
         if (controller.signal.aborted) return;
         if (!result.ok) {
@@ -663,14 +684,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // empty state (no built-in example prompts). The `:agentId`
     // segment is accepted for URL symmetry with the chat / history
     // routes; Genie spaces are resolved per-plugin, not per-agent,
-    // so it doesn't change the result. OBO-scoped like the other
-    // data routes so the space lookup runs as the calling user.
+    // so it doesn't change the result. The space lookup uses the configured
+    // agent-backed identity.
     const handleSuggestions = async (
       req: express.Request,
       res: express.Response,
     ): Promise<void> => {
       const controller = new AbortController();
-      req.on("close", () => controller.abort());
+      res.on("close", () => controller.abort());
       const result = await this.scopedSelf(req).fetchSuggestions(controller.signal);
       if (controller.signal.aborted) return;
       if (!result.ok) {
@@ -698,6 +719,211 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       path: `${routes.MASTRA_ROUTES.suggestions}/:agentId`,
       handler: handleSuggestions,
     });
+  }
+
+  /**
+   * Register the direct Genie chat routes. Each route is scoped to one Genie
+   * space alias and sits directly on the Genie APIs under AppKit's OBO user
+   * context: conversations are threads, Genie messages are history, and a turn
+   * streams the same AI SDK chunks as an agent's `ask_genie` call. Nothing is
+   * written to Mastra Memory.
+   */
+  private registerGenieChatRoutes(router: IAppRouter): void {
+    const path = (...parts: string[]) => routes.genieRoutePath(":alias", ...parts);
+    const { chat: chatSegment, messages, suggestions, threads } = routes.MASTRA_ROUTES;
+    /** Resolve the route's alias, answering 404 when no such space is configured. */
+    const spaceFor = (req: express.Request, res: express.Response): GenieChatSpace | undefined => {
+      const alias = stringUtils.firstNonEmpty(req.params.alias) ?? "";
+      const configured = resolveGenieSpaces(this.config, this.context)[alias];
+      if (configured) return { alias, spaceId: configured.spaceId };
+      res.status(404).json({ error: `Unknown Genie space alias "${alias}"` });
+      return undefined;
+    };
+    /** Bridge the connection `close` event onto an abort signal. */
+    const closeSignal = (res: express.Response): AbortSignal => {
+      const controller = new AbortController();
+      res.on("close", () => controller.abort());
+      return controller.signal;
+    };
+
+    this.route(router, {
+      name: "genieChat",
+      method: "post",
+      path: path(chatSegment),
+      handler: async (req, res) => {
+        const space = spaceFor(req, res);
+        if (!space) return;
+        const parsed = wire.GenieChatRequestSchema.safeParse(req.body);
+        if (!parsed.success) {
+          res
+            .status(400)
+            .json({ error: "question is required", fields: invalidFields(parsed.error) });
+          return;
+        }
+        await this.asUser(req).streamGenieChat(res, space, parsed.data, closeSignal(res));
+      },
+    });
+    this.route(router, {
+      name: "genieThreads",
+      method: "get",
+      path: path(threads),
+      handler: async (req, res) => {
+        const space = spaceFor(req, res);
+        if (!space) return;
+        const signal = closeSignal(res);
+        const result = await this.asUser(req).genieConversationRead((client) =>
+          listGenieThreads(client, space, signal),
+        );
+        if (signal.aborted) return;
+        if (!result.ok) {
+          this.sendFailure(res, result, "genie-threads", "Could not list Genie conversations");
+          return;
+        }
+        res.json({ threads: result.data });
+      },
+    });
+    this.route(router, {
+      name: "genieThreadMessages",
+      method: "get",
+      path: path(threads, ":threadId", messages),
+      handler: async (req, res) => {
+        const space = spaceFor(req, res);
+        if (!space) return;
+        const threadId = stringUtils.firstNonEmpty(req.params.threadId) ?? "";
+        const signal = closeSignal(res);
+        const result = await this.asUser(req).genieConversationRead((client) =>
+          listGenieThreadMessages({
+            client,
+            space,
+            conversationId: threadId,
+            signal,
+          }),
+        );
+        if (signal.aborted) return;
+        if (!result.ok) {
+          this.sendFailure(res, result, "genie-messages", "Could not load the Genie conversation");
+          return;
+        }
+        res.json({ messages: result.data });
+      },
+    });
+    this.route(router, {
+      name: "genieThreadDelete",
+      method: "delete",
+      path: path(threads, ":threadId"),
+      handler: async (req, res) => {
+        const space = spaceFor(req, res);
+        if (!space) return;
+        const threadId = stringUtils.firstNonEmpty(req.params.threadId) ?? "";
+        const result = await this.asUser(req).genieConversationWrite((client) =>
+          deleteGenieThread(client, space, threadId),
+        );
+        if (!result.ok) {
+          this.sendFailure(
+            res,
+            result,
+            "genie-thread-delete",
+            "Could not delete the Genie conversation",
+          );
+          return;
+        }
+        res.status(204).end();
+      },
+    });
+    this.route(router, {
+      name: "genieThreadMessageDelete",
+      method: "delete",
+      path: path(threads, ":threadId", messages, ":messageId"),
+      handler: async (req, res) => {
+        const space = spaceFor(req, res);
+        if (!space) return;
+        const threadId = stringUtils.firstNonEmpty(req.params.threadId) ?? "";
+        const messageId = stringUtils.firstNonEmpty(req.params.messageId) ?? "";
+        const result = await this.asUser(req).genieConversationWrite((client) =>
+          deleteGenieThreadMessage(client, space, threadId, messageId),
+        );
+        if (!result.ok) {
+          this.sendFailure(
+            res,
+            result,
+            "genie-message-delete",
+            "Could not delete the Genie message",
+          );
+          return;
+        }
+        res.status(204).end();
+      },
+    });
+    this.route(router, {
+      name: "genieSuggestions",
+      method: "get",
+      path: path(suggestions),
+      handler: async (req, res) => {
+        const space = spaceFor(req, res);
+        if (!space) return;
+        const signal = closeSignal(res);
+        const result = await this.asUser(req).fetchSuggestions(signal, {
+          [space.alias]: { spaceId: space.spaceId },
+        });
+        if (signal.aborted) return;
+        res.json({ questions: result.ok ? result.data : [] });
+      },
+    });
+  }
+
+  /**
+   * Stream one direct Genie turn to `res` under AppKit's OBO user context.
+   * Direct conversations cannot use the shared service principal because Genie
+   * owns them under the Databricks caller.
+   */
+  private async streamGenieChat(
+    res: express.Response,
+    space: GenieChatSpace,
+    request: GenieChatRequest,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const context = getExecutionContext();
+    const client = context.client;
+    const managedMemory = this.memoryBuilder?.managed;
+    const actorId = managedMemory ? executionContextUserId(context) : undefined;
+    await pipeUIMessageStreamToResponse({
+      response: res,
+      stream: genieChatStream({
+        client,
+        space,
+        request,
+        ...(managedMemory && actorId
+          ? {
+              onResult: ({ message, answer }) =>
+                managedMemory.recordGenieTurn({
+                  actorId,
+                  alias: space.alias,
+                  conversationId: message.conversation_id,
+                  question: request.question,
+                  answer,
+                  signal,
+                }),
+            }
+          : {}),
+        signal,
+      }),
+    });
+  }
+
+  /** Run one Genie conversation read under the active request identity. */
+  private genieConversationRead<T>(
+    read: (client: ReturnType<typeof getExecutionContext>["client"]) => Promise<T>,
+  ): Promise<ExecutionResult<T>> {
+    const client = getExecutionContext().client;
+    return this.execute(() => read(client), genieConversationReadDefaults);
+  }
+
+  /** Run one Genie conversation write under the active request identity. */
+  private genieConversationWrite(
+    write: (client: ReturnType<typeof getExecutionContext>["client"]) => Promise<void>,
+  ): Promise<ExecutionResult<void>> {
+    const client = getExecutionContext().client;
+    return this.execute(() => write(client), genieConversationWriteDefaults);
   }
 
   /** Register MLflow feedback submission when configured. */
@@ -866,11 +1092,15 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * AppKit user-context proxy so `getExecutionContext()` returns the
    * OBO-scoped client. Resolves the plugin's Genie spaces and merges
    * their curated `sample_questions` (see {@link collectSpaceSuggestions}).
-   * Returns `[]` when no Genie space is configured so the client
-   * shows a bare empty state instead of built-in example prompts.
+   * `only` narrows the lookup to the given spaces (the direct Genie chat
+   * passes its own). Returns `[]` when no Genie space is configured so the
+   * client shows a bare empty state instead of built-in example prompts.
    */
-  private async fetchSuggestions(signal?: AbortSignal): Promise<ExecutionResult<string[]>> {
-    const spaces = resolveGenieSpaces(this.config, this.context);
+  private async fetchSuggestions(
+    signal?: AbortSignal,
+    only?: Record<string, GenieSpaceConfig>,
+  ): Promise<ExecutionResult<string[]>> {
+    const spaces = only ?? resolveGenieSpaces(this.config, this.context);
     if (Object.keys(spaces).length === 0) return { ok: true, data: [] };
     const client = getExecutionContext().client;
     return this.execute((executeSignal) => {
@@ -942,7 +1172,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       async (executeSignal) => {
         const combined = asyncUtils.combineAbortSignals(options.signal, executeSignal);
         try {
-          const data = await fetchStatementData(client, statementId, {
+          const { data, visualization } = await fetchStatementEmbedData(client, statementId, {
             limit,
             ...(combined ? { signal: combined } : {}),
           });
@@ -951,6 +1181,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
             rows: data.rows,
             rowCount: data.rowCount,
             truncated: data.rows.length < data.rowCount,
+            visualization,
           };
         } catch (err) {
           // The Databricks SDK throws on 404; surface as `undefined`
@@ -1045,7 +1276,11 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           pluginRegistry.require(this.context, lakebase, this.config).exports().pool,
         ) as Pool)
       : undefined;
-    const memoryBuilder = memoryPool ? createMemoryBuilder(this.config, memoryPool) : undefined;
+    const memoryBuilder =
+      memoryPool || this.config.managedMemory
+        ? createMemoryBuilder(this.config, getExecutionContext().client, memoryPool)
+        : undefined;
+    this.memoryBuilder = memoryBuilder;
 
     // Build every agent declared in `config.agents` (or the built-in
     // fallback when none are declared). Each agent's `model` resolves
@@ -1151,7 +1386,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       backgroundTurns: this.config.backgroundTurns !== false,
       apiAccess: this.config.apiAccess ?? "scoped",
       mcp: this.mcp ? `${this.basePath}${this.mcp.httpPath}` : "off",
-      lakebase: memoryBuilder !== undefined,
+      lakebase: memoryPool !== undefined,
+      managedMemory: memoryBuilder?.managed !== undefined,
       feedback: this.feedbackEnabled(),
       observability: observability !== undefined ? "mlflow" : "off",
     });

@@ -6,7 +6,6 @@ export const PACKAGE_IDENTIFIER = "@dbx-tools/lakebox";
 export const PACKAGE_VERSION = "0.9.129";
 export * as keyStore from "./src/key-store.ts";
 export * as lifecycle from "./src/lifecycle.ts";
-export * as managedName from "./src/managed-name.ts";
 export * as rest from "./src/rest.ts";
 export * as session from "./src/session.ts";
 export * as transport from "./src/transport.ts";

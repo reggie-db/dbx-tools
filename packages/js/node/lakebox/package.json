@@ -52,10 +52,6 @@
         "types": "./lib/src/lifecycle.d.ts",
         "default": "./lib/src/lifecycle.js"
       },
-      "./managed-name": {
-        "types": "./lib/src/managed-name.d.ts",
-        "default": "./lib/src/managed-name.js"
-      },
       "./rest": {
         "types": "./lib/src/rest.d.ts",
         "default": "./lib/src/rest.js"
@@ -87,7 +83,6 @@
     ".": "./index.ts",
     "./key-store": "./src/key-store.ts",
     "./lifecycle": "./src/lifecycle.ts",
-    "./managed-name": "./src/managed-name.ts",
     "./rest": "./src/rest.ts",
     "./session": "./src/session.ts",
     "./transport": "./src/transport.ts",

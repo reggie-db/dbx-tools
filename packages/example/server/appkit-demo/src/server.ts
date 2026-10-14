@@ -4,6 +4,9 @@ import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
 import { graphiti } from "@dbx-tools/appkit-graphiti";
+import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
+import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
+import { lakeboxSkillMounts } from "@dbx-tools/appkit-lakebox/skills";
 import {
   agents,
   genie as appkitMastraGenie,
@@ -12,10 +15,6 @@ import {
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
-import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
-import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
-import { lakeboxSkillMounts } from "@dbx-tools/appkit-lakebox/skills";
-import { lakeboxWorkspaceSandbox } from "@dbx-tools/appkit-lakebox/workspace";
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
@@ -111,11 +110,25 @@ const { defaultBrandContext } = brandUtils;
 const mastraStorage =
   configUtils.boolean(undefined, "MASTRA_STORAGE", configUtils.ENV_ONLY) ?? true;
 const mastraMemory = configUtils.boolean(undefined, "MASTRA_MEMORY", configUtils.ENV_ONLY) ?? true;
+const managedMemoryEnabled =
+  configUtils.boolean(undefined, "MANAGED_MEMORY", configUtils.ENV_ONLY) ?? false;
+const managedSessionStore = process.env.DATABRICKS_AGENT_SESSION_STORE_ID?.trim();
+const managedMemoryStore = process.env.DATABRICKS_AGENT_MEMORY_STORE_ID?.trim();
+const managedAgentMemory = managedMemoryEnabled
+  ? managedSessionStore || managedMemoryStore
+    ? {
+        ...(managedSessionStore ? { sessionStore: managedSessionStore } : {}),
+        ...(managedMemoryStore ? { memoryStore: managedMemoryStore } : {}),
+      }
+    : true
+  : undefined;
 const graphitiEnabled =
   configUtils.boolean(undefined, "GRAPHITI_ENABLED", configUtils.ENV_ONLY) ?? true;
 const busEnabled = configUtils.boolean(undefined, "BUS_ENABLED", configUtils.ENV_ONLY) ?? true;
 const remoteSkillsEnabled =
   configUtils.boolean(undefined, "REMOTE_SKILLS_ENABLED", configUtils.ENV_ONLY) ?? true;
+const appkitBodyLimit =
+  configUtils.string(undefined, "APPKIT_BODY_LIMIT", { sources: "env" }) ?? "100mb";
 const lakeboxRuntime = new LakeboxRuntime(resolveLakeboxPluginConfig());
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
@@ -350,6 +363,7 @@ try {
       // instrumentation is disabled.
       server({
         host,
+        bodyLimit: appkitBodyLimit,
         telemetry: false,
         ...(useAppKitVite ? {} : { staticPath: clientDist }),
       }),
@@ -421,13 +435,13 @@ try {
       mastra({
         storage: mastraStorage,
         memory: mastraMemory,
+        ...(managedAgentMemory ? { managedMemory: managedAgentMemory } : {}),
         // Fail boot unless MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME is set.
         // The deployed app binds `/Shared/dbx-tools-demo` and the Apps OTLP sidecar.
         feedback: true,
         agents: { support, "support-polling": supportPolling },
         defaultAgent: "support",
         genieAgentMode: true,
-        sandbox: lakeboxWorkspaceSandbox(lakeboxRuntime),
         workspaceFallbackToTmp: true,
         // Chat runs on-behalf-of the signed-in user by default, so the caller must
         // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
