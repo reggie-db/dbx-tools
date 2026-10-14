@@ -46,12 +46,12 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/appkit-mastra",
+      "name": "@dbx-tools/appkit-lakebox",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/appkit-sandbox",
+      "name": "@dbx-tools/appkit-mastra",
       "version": "workspace:^",
       "type": "runtime"
     },

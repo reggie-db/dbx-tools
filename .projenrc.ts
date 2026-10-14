@@ -422,39 +422,54 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
 
-// AppKit management for Databricks Sandboxes. The current transport uses the
-// lakebox REST surface for create/discovery/lifecycle/delete, pooled native
-// OpenSSH ControlMaster and ssh2 resources, and the existing proxy dependency
-// for remote web routes.
-project.applyToProjects(root, { identifierName: "appkit-sandbox", tags: "node" }, (p) => {
+// Low-level Databricks Lakebox transport: the lakebox REST surface, verified
+// SSH sessions over pooled native OpenSSH ControlMaster and ssh2 resources, and
+// deterministic user hashing and service-port derivation. No AppKit, Mastra,
+// React, or Lakebase dependency.
+project.applyToProjects(root, { identifierName: "lakebox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "AppKit management, Mastra tools, and persisted Projects for Databricks Sandboxes",
+    "Databricks Lakebox REST, pooled SSH transport, and deterministic user routing",
+  );
+  p.addDeps(
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-lakebox@workspace:^",
+    "generic-pool@catalog:",
+    "socks@catalog:",
+    "ssh2@catalog:",
+    "zod@catalog:",
+  );
+  p.addDevDeps("@types/ssh2@^1", "vitest@catalog:");
+});
+
+// AppKit integration for the single lazily created app Lakebox: per-user
+// accounts, direct-crun services, deterministic routes, metrics, agent tools,
+// and the Mastra workspace sandbox adapter.
+project.applyToProjects(root, { identifierName: "appkit-lakebox", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "AppKit plugin, user services, routes, metrics, and Mastra tools for one app Lakebox",
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/appkit-mastra@workspace:^",
     "@dbx-tools/core@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/lakebox@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-databricks-sandbox@workspace:^",
+    "@dbx-tools/shared-lakebox@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "@mastra/core@catalog:",
-    "generic-pool@catalog:",
     "http-proxy-3@catalog:",
-    "smol-toml@1.8.0",
-    "socks@catalog:",
-    "ssh2@catalog:",
     "zod@catalog:",
   );
   p.addDevDeps(
+    "@dbx-tools/auth@workspace:^",
     "@types/express@catalog:",
     "@types/json-schema@^7",
-    "@types/ssh2@^1",
-    "@types/ws@^8",
+    "express@catalog:",
     "vitest@catalog:",
-    "ws@catalog:",
   );
   projectJs.addPackageFiles(p, "skills");
   projectJs.addPackageFiles(p, "scripts");
@@ -920,10 +935,10 @@ project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" },
   );
 });
 
-project.applyToProjects(root, { identifierName: "shared-databricks-sandbox", tags: "shared" }, (p) => {
+project.applyToProjects(root, { identifierName: "shared-lakebox", tags: "shared" }, (p) => {
   p.package.addField(
     "description",
-    "Browser-safe contracts for Databricks Sandbox lifecycle, commands, services, and routes",
+    "Browser-safe contracts for the app Lakebox, user services, commands, metrics, and routes",
   );
   p.addDeps("zod@catalog:");
 });
@@ -1254,10 +1269,10 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
   // tag's component-library default.
 });
 
-project.applyToProjects(root, { identifierName: "ui-databricks-sandbox", tags: "ui" }, (p) => {
-  p.package.addField("description", "React controls for Databricks Sandboxes and forwarded routes");
+project.applyToProjects(root, { identifierName: "ui-lakebox", tags: "ui" }, (p) => {
+  p.package.addField("description", "React controls for the app Lakebox, user services, and metrics");
   p.addDeps(
-    "@dbx-tools/shared-databricks-sandbox@workspace:^",
+    "@dbx-tools/shared-lakebox@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "lucide-react@catalog:",
   );
@@ -1286,7 +1301,7 @@ project.applyToProjects(
       "@dbx-tools/appkit@workspace:^",
       "@dbx-tools/appkit-graphiti@workspace:^",
       "@dbx-tools/appkit-mastra@workspace:^",
-      "@dbx-tools/appkit-sandbox@workspace:^",
+      "@dbx-tools/appkit-lakebox@workspace:^",
       "@dbx-tools/core@workspace:^",
       "@dbx-tools/databricks@workspace:^",
       "@dbx-tools/postgres@workspace:^",
@@ -1341,7 +1356,7 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "@dbx-tools/ui-mastra@workspace:^",
-    "@dbx-tools/ui-databricks-sandbox@workspace:^",
+    "@dbx-tools/ui-lakebox@workspace:^",
     "@dbx-tools/ui-teams@workspace:^",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.

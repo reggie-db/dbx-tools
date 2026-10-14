@@ -1,0 +1,307 @@
+#!/bin/sh
+# Desktop service entrypoint. Runs as the Lakebox user inside a
+# host-environment crun container with a private /tmp, so the X socket is not
+# visible to other Lakebox users. crun owns the process lifecycle.
+set -eu
+: "${DBX_TOOLS_DESKTOP_WALLPAPER_BASE64:?DBX_TOOLS_DESKTOP_WALLPAPER_BASE64 is required}"
+: "${DBX_TOOLS_DESKTOP_BRAND_ICON_BASE64:?DBX_TOOLS_DESKTOP_BRAND_ICON_BASE64 is required}"
+: "${DBX_TOOLS_DESKTOP_TERMINAL_ICON_BASE64:?DBX_TOOLS_DESKTOP_TERMINAL_ICON_BASE64 is required}"
+: "${DBX_TOOLS_DESKTOP_HOMEPAGE_BASE64:?DBX_TOOLS_DESKTOP_HOMEPAGE_BASE64 is required}"
+: "${DBX_TOOLS_DESKTOP_PRIMARY:?DBX_TOOLS_DESKTOP_PRIMARY is required}"
+: "${DBX_TOOLS_DESKTOP_PRIMARY_HOVER:?DBX_TOOLS_DESKTOP_PRIMARY_HOVER is required}"
+: "${DBX_TOOLS_DESKTOP_SURFACE:?DBX_TOOLS_DESKTOP_SURFACE is required}"
+: "${DBX_TOOLS_DESKTOP_FONT:?DBX_TOOLS_DESKTOP_FONT is required}"
+: "${SERVICE_PORT:?SERVICE_PORT is required}"
+display=$((SERVICE_PORT - 20000 + 100))
+
+runtime="$HOME/.dbx-tools/desktop"
+session_script="$runtime/start-xfce.sh"
+browser_script="$runtime/open-browser"
+browser_homepage="$runtime/browser-homepage"
+desktop_environment="$runtime/environment"
+desktop_runner="$runtime/run"
+log_file="$runtime/desktop.log"
+wallpaper_svg="$runtime/dbx-tools-wallpaper.svg"
+wallpaper_png="$runtime/dbx-tools-wallpaper.png"
+brand_icon_svg="$runtime/dbx-tools-icon.svg"
+brand_icon="$runtime/dbx-tools-icon.png"
+terminal_icon_svg="$runtime/dbx-tools-terminal.svg"
+terminal_icon="$runtime/dbx-tools-terminal.png"
+
+mkdir -p "$runtime" "$HOME/.vnc" "$HOME/.config/gtk-3.0" \
+  "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml" "$HOME/.config/xfce4" \
+  "$HOME/.local/share/applications" "$HOME/.local/share/xfce4/helpers" "$HOME/Desktop"
+
+test -x "$(command -v kasmvncserver)" || {
+  printf 'kasmvncserver is unavailable after package setup.\n' >&2
+  exit 1
+}
+test -x "$(command -v kasmvncpasswd)" || {
+  printf 'kasmvncpasswd is unavailable after package setup.\n' >&2
+  exit 1
+}
+test -r /usr/share/kasmvnc/www/index.html || {
+  printf 'KasmVNC web client is unavailable after package setup.\n' >&2
+  exit 1
+}
+
+write_base64_asset() {
+  encoded="$1"
+  destination="$2"
+  temporary="$destination.tmp.$$"
+  printf '%s' "$encoded" | base64 -d >"$temporary"
+  if [ -f "$destination" ] && cmp -s "$temporary" "$destination"; then
+    rm -f "$temporary"
+    return 1
+  fi
+  mv "$temporary" "$destination"
+  return 0
+}
+
+if write_base64_asset "$DBX_TOOLS_DESKTOP_WALLPAPER_BASE64" "$wallpaper_svg" || \
+  [ ! -s "$wallpaper_png" ]; then
+  rsvg-convert --width 1600 --height 1000 "$wallpaper_svg" >"$wallpaper_png"
+fi
+if write_base64_asset "$DBX_TOOLS_DESKTOP_BRAND_ICON_BASE64" "$brand_icon_svg" || \
+  [ ! -s "$brand_icon" ]; then
+  rsvg-convert --width 64 --height 64 "$brand_icon_svg" >"$brand_icon"
+fi
+if write_base64_asset "$DBX_TOOLS_DESKTOP_TERMINAL_ICON_BASE64" "$terminal_icon_svg" || \
+  [ ! -s "$terminal_icon" ]; then
+  rsvg-convert --width 64 --height 64 "$terminal_icon_svg" >"$terminal_icon"
+fi
+write_base64_asset "$DBX_TOOLS_DESKTOP_HOMEPAGE_BASE64" "$browser_homepage" || true
+
+printf 'export DISPLAY=:%s\n' "$display" >"$desktop_environment"
+chmod 600 "$desktop_environment"
+cat >"$desktop_runner" <<'EOF'
+#!/bin/sh
+set -eu
+. "$HOME/.dbx-tools/desktop/environment"
+exec "$@"
+EOF
+chmod 700 "$desktop_runner"
+
+cat >"$browser_script" <<'EOF'
+#!/bin/sh
+export GTK_A11Y=none
+export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+if [ "$#" -eq 0 ]; then
+  set -- "$(cat "$HOME/.dbx-tools/desktop/browser-homepage")"
+fi
+exec epiphany "$@"
+EOF
+chmod 700 "$browser_script"
+
+cat >"$HOME/.config/gtk-3.0/gtk.css" <<EOF
+#XfcePanelWindow {
+  background-color: $DBX_TOOLS_DESKTOP_PRIMARY;
+  color: $DBX_TOOLS_DESKTOP_SURFACE;
+}
+#XfcePanelWindow button {
+  color: $DBX_TOOLS_DESKTOP_SURFACE;
+  border-color: transparent;
+  background-color: transparent;
+  border-radius: 8px;
+  margin: 3px;
+}
+#XfcePanelWindow button:hover,
+#XfcePanelWindow button:checked {
+  background-color: $DBX_TOOLS_DESKTOP_PRIMARY_HOVER;
+}
+EOF
+
+if [ -r /etc/xdg/xfce4/panel/default.xml ]; then
+  cp /etc/xdg/xfce4/panel/default.xml \
+    "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml"
+fi
+
+cat >"$HOME/.config/mimeapps.list" <<'EOF'
+[Default Applications]
+text/html=dbx-tools-browser.desktop
+x-scheme-handler/http=dbx-tools-browser.desktop
+x-scheme-handler/https=dbx-tools-browser.desktop
+EOF
+
+cat >"$HOME/.local/share/applications/dbx-tools-browser.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=dbx tools Browser
+Comment=Browse the web from the Lakebox desktop
+Exec=$browser_script %U
+Icon=$brand_icon
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
+EOF
+
+cat >"$HOME/.local/share/xfce4/helpers/dbx-tools-browser.desktop" <<EOF
+[Desktop Entry]
+Version=1.0
+Icon=$brand_icon
+Type=X-XFCE-Helper
+Name=dbx tools Browser
+StartupNotify=true
+X-XFCE-Binaries=$browser_script;
+X-XFCE-Category=WebBrowser
+X-XFCE-Commands=$browser_script;
+X-XFCE-CommandsWithParameter=$browser_script "%s";
+EOF
+
+cat >"$HOME/.config/xfce4/helpers.rc" <<'EOF'
+WebBrowser=dbx-tools-browser
+EOF
+rm -f "$HOME/Desktop/Web Browser.desktop"
+
+cat >"$HOME/.local/share/applications/dbx-tools-terminal.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Terminal
+Comment=Open the Lakebox desktop terminal
+Exec=xfce4-terminal
+Icon=$terminal_icon
+Terminal=false
+Categories=System;TerminalEmulator;
+EOF
+chmod 700 "$HOME/.local/share/applications/dbx-tools-terminal.desktop"
+rm -f "$HOME/Desktop/Terminal.desktop"
+
+cat >"$HOME/.vnc/kasmvnc.yaml" <<EOF
+desktop:
+  resolution:
+    width: 1600
+    height: 1000
+  allow_resize: true
+  pixel_depth: 24
+network:
+  protocol: http
+  interface: 127.0.0.1
+  websocket_port: $SERVICE_PORT
+  use_ipv4: true
+  use_ipv6: false
+  ssl:
+    pem_certificate:
+    pem_key:
+    require_ssl: false
+encoding:
+  max_frame_rate: 30
+  rect_encoding_mode:
+    min_quality: 7
+    max_quality: 9
+    consider_lossless_quality: 10
+    rectangle_compress_threads: auto
+  video_encoding_mode:
+    jpeg_quality: -1
+    webp_quality: -1
+    max_resolution:
+      width: 1920
+      height: 1080
+    enter_video_encoding_mode:
+      time_threshold: 1
+      area_threshold: 45%
+    exit_video_encoding_mode:
+      time_threshold: 2
+    scaling_algorithm: progressive_bilinear
+    webp_encoding_time: 30
+  video_streaming_mode:
+    codec: h264
+server:
+  http:
+    headers:
+      - Cross-Origin-Embedder-Policy=require-corp
+      - Cross-Origin-Opener-Policy=same-origin
+    httpd_directory: /usr/share/kasmvnc/www
+  auto_shutdown:
+    no_user_session_timeout: never
+    active_user_session_timeout: never
+    inactive_user_session_timeout: never
+command_line:
+  prompt: false
+EOF
+
+if [ ! -s "$HOME/.kasmpasswd" ]; then
+  kasm_password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  printf '%s\n%s\n' "$kasm_password" "$kasm_password" | \
+    kasmvncpasswd -u dbx-tools -r -w "$HOME/.kasmpasswd" >/dev/null
+fi
+
+cat >"$session_script" <<EOF
+#!/bin/sh
+set -eu
+runtime="\$HOME/.dbx-tools/desktop"
+ready="\$runtime/session.ready"
+log_file="\$runtime/desktop.log"
+wallpaper="\$runtime/dbx-tools-wallpaper.png"
+brand_icon="\$runtime/dbx-tools-icon.svg"
+rm -f "\$ready"
+if [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  exec dbus-run-session -- "\$0"
+fi
+startxfce4 >>"\$log_file" 2>&1 &
+xfce_pid=\$!
+for _ in \$(seq 1 160); do
+  if pgrep -x xfce4-panel >/dev/null 2>&1 && \
+    pgrep -x xfdesktop >/dev/null 2>&1 && pgrep -x xfwm4 >/dev/null 2>&1; then
+    set_xfconf() {
+      channel="\$1"
+      property="\$2"
+      type="\$3"
+      value="\$4"
+      if xfconf-query -c "\$channel" -p "\$property" >/dev/null 2>&1; then
+        xfconf-query -c "\$channel" -p "\$property" -s "\$value" >/dev/null 2>&1 || true
+      else
+        xfconf-query -c "\$channel" -p "\$property" --create -t "\$type" \
+          -s "\$value" >/dev/null 2>&1 || true
+      fi
+    }
+    xdg-mime default dbx-tools-browser.desktop text/html >/dev/null 2>&1 || true
+    xdg-mime default dbx-tools-browser.desktop x-scheme-handler/http >/dev/null 2>&1 || true
+    xdg-mime default dbx-tools-browser.desktop x-scheme-handler/https >/dev/null 2>&1 || true
+    xdg-settings set default-web-browser dbx-tools-browser.desktop >/dev/null 2>&1 || true
+    gsettings set org.gnome.Epiphany homepage-url \
+      "\$(cat "\$runtime/browser-homepage")" >/dev/null 2>&1 || true
+    gsettings set org.gnome.Epiphany ask-for-default false >/dev/null 2>&1 || true
+    set_xfconf xsettings /Net/ThemeName string Arc-Dark
+    set_xfconf xsettings /Net/IconThemeName string hicolor
+    set_xfconf xsettings /Gtk/FontName string '$DBX_TOOLS_DESKTOP_FONT 10'
+    set_xfconf xfwm4 /general/theme string Arc-Dark
+    set_xfconf xfce4-panel /panels/panel-1/size uint 36
+    set_xfconf xfce4-panel /plugins/plugin-1 string whiskermenu
+    set_xfconf xfce4-panel /plugins/plugin-1/button-icon string "\$brand_icon"
+    set_xfconf xfce4-panel /plugins/plugin-1/button-title string 'dbx tools'
+    set_xfconf xfce4-panel /plugins/plugin-1/show-button-title bool true
+    properties=\$(xfconf-query -c xfce4-desktop -l 2>/dev/null | \
+      grep -E '/(last-image|image-path)\$' || true)
+    if [ -z "\$properties" ]; then
+      properties='/backdrop/screen0/monitor0/workspace0/last-image
+/backdrop/screen0/monitorVNC-0/workspace0/last-image
+/backdrop/screen0/monitorDefault-0/workspace0/last-image'
+    fi
+    printf '%s\n' "\$properties" | while IFS= read -r property; do
+      [ -n "\$property" ] || continue
+      xfconf-query -c xfce4-desktop -p "\$property" --create -t string \
+        -s "\$wallpaper" >/dev/null 2>&1 || true
+      style=\$(printf '%s' "\$property" | sed -E 's/(last-image|image-path)\$/image-style/')
+      xfconf-query -c xfce4-desktop -p "\$style" --create -t int -s 5 >/dev/null 2>&1 || true
+    done
+    xfdesktop --reload >/dev/null 2>&1 || true
+    xfce4-panel --restart >/dev/null 2>&1 || true
+    touch "\$ready"
+    break
+  fi
+  kill -0 "\$xfce_pid" 2>/dev/null || exit 1
+  sleep 0.25
+done
+test -f "\$ready" || {
+  printf 'Xfce desktop shell did not become ready.\n' >&2
+  exit 1
+}
+wait "\$xfce_pid"
+EOF
+chmod 700 "$session_script"
+
+
+# Each user's display number follows from the derived service port.
+exec kasmvncserver ":$display" -fg -select-de xfce -xstartup "$session_script" \
+  -geometry 1600x1000 -depth 24 -interface 127.0.0.1 -websocketPort "$SERVICE_PORT" \
+  -disableBasicAuth -SecurityTypes None

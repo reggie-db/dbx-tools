@@ -1,4 +1,4 @@
-import { SshIndicator } from "@dbx-tools/ui-databricks-sandbox/react";
+import { LakeboxIndicator } from "@dbx-tools/ui-lakebox/react";
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
 import { useState } from "react";
 
@@ -35,8 +35,8 @@ const Chat = () => {
       showModelPicker
       enableExport
       modelSelectorActions={agentModeControl}
-      threadHistoryLeadingActions={<SshIndicator />}
-      threadSidebarHeaderActions={<SshIndicator />}
+      threadHistoryLeadingActions={<LakeboxIndicator />}
+      threadSidebarHeaderActions={<LakeboxIndicator />}
       className="min-h-0 flex-1"
     />
   );

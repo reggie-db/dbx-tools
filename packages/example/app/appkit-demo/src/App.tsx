@@ -11,7 +11,7 @@ const Bus = lazy(() => import("@/pages/Bus"));
 const Cards = lazy(() => import("@/pages/Cards"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Search = lazy(() => import("@/pages/Search"));
-const Sandboxes = lazy(() => import("@/pages/Sandboxes"));
+const Lakebox = lazy(() => import("@/pages/Lakebox"));
 
 const useVisualViewportShell = () => {
   useEffect(() => {
@@ -301,10 +301,10 @@ const App = () => {
       element: <Brand value={brandContext} onChange={setBrandContext} />,
     },
     {
-      path: "/sandbox",
-      label: "Sandboxes",
-      description: "Manage assigned sandboxes and registered proxy routes",
-      element: <Sandboxes />,
+      path: "/lakebox",
+      label: "Lakebox",
+      description: "Start the app Lakebox and open your terminal, desktop, and services",
+      element: <Lakebox />,
     },
   ];
 

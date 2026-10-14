@@ -441,13 +441,13 @@ mastra({
 });
 ```
 
-For Databricks Sandbox over SSH, use `sshWorkspaceSandbox(runtime)` from
-`@dbx-tools/appkit-sandbox/workspace`. Share that runtime with the
-Databricks Sandbox AppKit plugin so agent commands, terminal and health routes
-use the same transport and machine assignments. That package owns Sandbox
-lifecycle, SSH keys, authentication fallback, and route forwarding. Its Mastra
-adapter forwards command output to `onStdout` and `onStderr` while the command
-runs, then returns Mastra's completed `CommandResult`.
+For a Databricks Lakebox, use `lakeboxWorkspaceSandbox(runtime)` from
+`@dbx-tools/appkit-lakebox/workspace`. Share that runtime with the Lakebox
+AppKit plugin so agent commands, terminals, desktops, and service routes use the
+same Lakebox and per-user account. That package owns Lakebox lifecycle, SSH
+keys, user accounts, and route forwarding. Its Mastra adapter forwards command
+output to `onStdout` and `onStderr` while the command runs, then returns
+Mastra's completed `CommandResult`.
 
 The default local Monty Python runtime accepts Python source or `python3 -c` and
 has no host filesystem, network, environment variables, shell, or third-party
@@ -494,10 +494,10 @@ filesystem, network, process, timer, or module access beyond the explicitly
 supplied tools. QuickJS supports concurrent external calls, so generated code
 can use `Promise.all` for independent operations.
 
-The automatic Code Mode remains available when the workspace uses Databricks
-Sandbox because QuickJS or isolated-vm executes the orchestration program
+The automatic Code Mode remains available when the workspace uses a Databricks
+Lakebox because QuickJS or isolated-vm executes the orchestration program
 independently of the workspace command sandbox. SSH is used only if the program
-calls an exposed SSH-backed tool.
+calls an exposed Lakebox-backed tool.
 
 Callers may also use native Mastra `createCodeMode` directly when they want
 multiple explicitly scoped orchestration tools, or when the TypeScript program

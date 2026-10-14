@@ -12,10 +12,10 @@ import {
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
-import { AppKitSshPlugin, databricksSandbox, SshRuntime } from "@dbx-tools/appkit-sandbox";
-import { resolveSshPluginConfig } from "@dbx-tools/appkit-sandbox/config";
-import { databricksSandboxSkillMounts } from "@dbx-tools/appkit-sandbox/skills";
-import { sshWorkspaceSandbox } from "@dbx-tools/appkit-sandbox/workspace";
+import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
+import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
+import { lakeboxSkillMounts } from "@dbx-tools/appkit-lakebox/skills";
+import { lakeboxWorkspaceSandbox } from "@dbx-tools/appkit-lakebox/workspace";
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
@@ -116,11 +116,7 @@ const graphitiEnabled =
 const busEnabled = configUtils.boolean(undefined, "BUS_ENABLED", configUtils.ENV_ONLY) ?? true;
 const remoteSkillsEnabled =
   configUtils.boolean(undefined, "REMOTE_SKILLS_ENABLED", configUtils.ENV_ONLY) ?? true;
-const databricksSandboxRuntime = new SshRuntime(
-  resolveSshPluginConfig({
-    fallbackToServicePrincipal: true,
-  }),
-);
+const lakeboxRuntime = new LakeboxRuntime(resolveLakeboxPluginConfig());
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
 // `server({ staticPath })` serves it on the same port as the API. Locally the
@@ -264,7 +260,7 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
       // record without forcing that useless cross-tool type expansion.
       const agentTools = Object.assign({}, await demoGenieTools(plugins, agentMode)) as MastraTools;
       Object.assign(agentTools, await plugins.graphiti?.toolkit());
-      Object.assign(agentTools, await plugins[AppKitSshPlugin.manifest.name]?.toolkit());
+      Object.assign(agentTools, await plugins[AppKitLakeboxPlugin.manifest.name]?.toolkit());
       Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
       Object.assign(
         agentTools,
@@ -360,7 +356,7 @@ try {
       genie(),
       lakebase({ pool: postgresConnectionOptions({}) }),
       filesCache(),
-      databricksSandbox({ runtime: databricksSandboxRuntime }),
+      lakebox({ runtime: lakeboxRuntime }),
       ...(graphitiEnabled ? [graphiti()] : []),
       // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
       // Lakebase connection and fans topic broadcasts out to its browser viewers.
@@ -373,15 +369,15 @@ try {
       // The email-OTP access gate for the public portr tunnel. Registers the
       // `/api/email/auth/*` login routes + a gating middleware on THIS server that
       // gates only tunnel traffic (identified by the `Host` header matching
-      // `TUNNEL_PUBLIC_DOMAIN`); the platform front door passes through. Dynamic
-      // Sandbox routes also need the verified tunnel identity before their strict
-      // owner check, so protect the runtime-owned route prefix rather than letting
+      // `TUNNEL_PUBLIC_DOMAIN`); the platform front door passes through. Lakebox
+      // service routes also need the verified tunnel identity before their strict
+      // user-hash check, so protect the runtime-owned route prefix rather than letting
       // those requests fall through to the SPA. `allow` comes from
       // `TUNNEL_AUTH_ALLOW`, `publicDomain` from `TUNNEL_PUBLIC_DOMAIN` (both set
       // on the deployed app). Codes send through the `email()` transport above.
       // Localhost gets an explicit disabled status because its Host header never
       // matches the tunnel domain.
-      authGate({ gatePaths: [databricksSandboxRuntime.config.routePrefix] }),
+      authGate({ gatePaths: [lakeboxRuntime.config.routePrefix] }),
       // Web-search runtime for the `web_search` / `web_fetch` tools. The
       // web-search model defaults to Gemini, then GPT (the native web-search
       // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,
@@ -431,7 +427,7 @@ try {
         agents: { support, "support-polling": supportPolling },
         defaultAgent: "support",
         genieAgentMode: true,
-        sandbox: sshWorkspaceSandbox(databricksSandboxRuntime),
+        sandbox: lakeboxWorkspaceSandbox(lakeboxRuntime),
         workspaceFallbackToTmp: true,
         // Chat runs on-behalf-of the signed-in user by default, so the caller must
         // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
@@ -447,7 +443,7 @@ try {
         // generated chart matches the surrounding AppKit UI instead of falling
         // back to Echarts' defaults.
         brand: defaultBrandContext,
-        localSkillMounts: databricksSandboxSkillMounts(),
+        localSkillMounts: lakeboxSkillMounts(),
         // Fold Databricks' own AI Tools skills into the agents. Read straight
         // from the public databricks/databricks-agent-skills repo, so this works
         // in a deployed App container where the `databricks` CLI is absent.

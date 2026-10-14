@@ -1,0 +1,17 @@
+/*
+ * @dbx-tools/ui-lakebox stylesheet.
+ *
+ * Import once from the host app's Tailwind entry, after Tailwind and
+ * your AppKit-UI theme:
+ *
+ *   @import "tailwindcss";
+ *   @import "@databricks/appkit-ui/styles.css";
+ *   @import "@dbx-tools/ui-lakebox/styles.css";
+ *
+ * Pulls shared styling from `@dbx-tools/ui` and registers this
+ * package's React components with Tailwind via `@source`.
+ */
+
+@import "@dbx-tools/ui/styles.css";
+
+@source "./react";

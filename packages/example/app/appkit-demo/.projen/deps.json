@@ -46,7 +46,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/ui-databricks-sandbox",
+      "name": "@dbx-tools/ui-lakebox",
       "version": "workspace:^",
       "type": "runtime"
     },
