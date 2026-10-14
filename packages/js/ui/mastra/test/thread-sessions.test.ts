@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { UIMessage } from "ai";
 import type { QueuedSteer } from "../src/react/types.ts";
-import { enqueueSteer, removeSteer, reorderSteers } from "../src/support/thread-sessions.ts";
+import {
+  enqueueSteer,
+  interruptedTurnMessages,
+  removeSteer,
+  reorderSteers,
+} from "../src/support/thread-sessions.ts";
 
 describe("steer queue", () => {
   const steer = (id: string, text: string): QueuedSteer => ({ id, text });
@@ -63,5 +69,25 @@ describe("steer queue", () => {
     ];
 
     assert.deepEqual(reorderSteers(q, ["b", "a"]), [q[1], q[0]]);
+  });
+
+  it("carries the interrupted user request into the replacement turn", () => {
+    const original: UIMessage = {
+      id: "original",
+      role: "user",
+      parts: [{ type: "text", text: "create the GoldenEye character" }],
+    };
+    const partial: UIMessage = {
+      id: "partial",
+      role: "assistant",
+      parts: [{ type: "text", text: "Starting the build" }],
+    };
+    const steer: UIMessage = {
+      id: "steer",
+      role: "user",
+      parts: [{ type: "text", text: "deploy it as a service" }],
+    };
+
+    assert.deepEqual(interruptedTurnMessages([original, partial], steer), [original, steer]);
   });
 });

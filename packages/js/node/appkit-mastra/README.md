@@ -361,15 +361,15 @@ export const workspace = new Workspace({
 });
 ```
 
-Mastra discovers Databricks Workspace skills only from explicit `skills` paths,
-including the paths declared under the default Assistant paths. Those
-potentially slow remote directory listings use the skill-search processor. Set
-`workspaceSkills: false` to omit that processor, or pass `{ topK, minScore,
-ttlMs }` to tune it. Process-memory `localSkillMounts`, AI Tools, and other
-startup-provisioned remote skills are passed as native agent-level skills, so
-Mastra exposes its standard `skill`, `skill_search`, and `skill_read` tools
-without scanning their virtual workspace mounts. Set the workspace's `skills`
-to an empty list when the workspace should expose no Databricks skills.
+Mastra discovers skills from explicit `skills` paths, including the paths
+declared under the default Assistant paths and read-only `localSkillMounts`.
+Those paths use the skill-search processor. Set `workspaceSkills: false` to
+omit that processor, or pass `{ topK, minScore, ttlMs }` to tune it. Local
+mounts are also passed as native agent-level skills, so the standard `skill`,
+`skill_search`, and `skill_read` tools remain available. Startup-provisioned
+remote skills use their native tools without duplicating their virtual mounts
+in workspace search. Set the workspace's `skills` to an empty list when the
+workspace should expose no skills.
 
 ### Cache Workspace Metadata
 

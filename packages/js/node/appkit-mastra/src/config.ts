@@ -658,7 +658,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * ```
    */
   remoteSkills?: RemoteSkillsOption;
-  /** Read-only local skill trees mounted for files and passed as standard agent-level skills. */
+  /** Read-only local skill trees mounted for files, searchable by path, and passed as standard agent-level skills. */
   localSkillMounts?: LocalSkillMount[];
 }
 

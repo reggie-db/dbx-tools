@@ -30,6 +30,16 @@ describe("Lakebox metrics", () => {
     assert.throws(() => parseLakeboxCounters("cores 4"), /missing/);
   });
 
+  it("seeds readiness without starting or emitting", () => {
+    const metrics = new LakeboxMetrics(async () => sample(0, 0, 0, 0), 5);
+    let emitted = false;
+    metrics.on("snapshot", () => (emitted = true));
+    const snapshot = metrics.seed(sample(100, 900, 1_000, 2_000), 1_000);
+    assert.equal(metrics.running, false);
+    assert.equal(emitted, false);
+    assert.deepEqual(metrics.series(), [snapshot]);
+  });
+
   it("samples only between start and stop", async () => {
     let reads = 0;
     const metrics = new LakeboxMetrics(async () => {

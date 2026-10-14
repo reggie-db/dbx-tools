@@ -10,11 +10,18 @@ import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-con
 import type { Tool } from "@mastra/core/tools";
 
 import { buildAgents, type MastraTools } from "../src/agents.ts";
+import { MASTRA_ORIGIN_KEY } from "../src/request-context.ts";
 import { MASTRA_RESOLVED_MODEL_KEY } from "../src/serving.ts";
 
 interface RecordsPluginConfig extends BasePluginConfig {
   definitions?: AgentToolDefinition[];
-  calls?: Array<{ name: string; args: unknown; model?: string; resourceId?: string }>;
+  calls?: Array<{
+    name: string;
+    args: unknown;
+    model?: string;
+    origin?: string;
+    resourceId?: string;
+  }>;
 }
 
 class RecordsPlugin extends Plugin<RecordsPluginConfig> {
@@ -40,6 +47,7 @@ class RecordsPlugin extends Plugin<RecordsPluginConfig> {
       name,
       args,
       model: context?.model,
+      origin: context?.origin,
       resourceId: context?.resourceId,
     });
     await context?.writeProgress?.(
@@ -98,6 +106,7 @@ describe("AppKit toolkit adaptation", () => {
       name: string;
       args: unknown;
       model?: string;
+      origin?: string;
       resourceId?: string;
     }> = [];
     const definitions: AgentToolDefinition[] = [
@@ -157,6 +166,7 @@ describe("AppKit toolkit adaptation", () => {
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_RESOURCE_ID_KEY, "resource-7");
     requestContext.set(MASTRA_RESOLVED_MODEL_KEY, "databricks-gpt-6-1-sol");
+    requestContext.set(MASTRA_ORIGIN_KEY, "https://dbx-tools-demo.example.databricksapps.com");
     const progress: unknown[] = [];
     await tool.execute(
       { id: "record-1" },
@@ -175,6 +185,7 @@ describe("AppKit toolkit adaptation", () => {
         name: "lookup",
         args: { id: "record-1" },
         model: "databricks-gpt-6-1-sol",
+        origin: "https://dbx-tools-demo.example.databricksapps.com",
         resourceId: "resource-7",
       },
     ]);

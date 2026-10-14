@@ -27,8 +27,10 @@
 import { createServer } from "node:http";
 import type { Socket } from "node:net";
 import { parseArgs } from "node:util";
+import { CacheManager } from "@databricks/appkit";
 import { client as authClient } from "@dbx-tools/auth";
 import express from "express";
+import { LakeboxResourceRegistry } from "../src/_resource-registry.ts";
 import { resolveLakeboxPluginConfig } from "../src/config.ts";
 import { LakeboxRuntime } from "../src/runtime.ts";
 
@@ -57,6 +59,7 @@ const runtime = new LakeboxRuntime(
     idleTimeoutSeconds: Number(values["idle-timeout"]),
   }),
 );
+await CacheManager.getInstance();
 runtime.initialize(
   {
     host: auth.host,
@@ -66,6 +69,8 @@ runtime.initialize(
     },
   },
   () => identity,
+  undefined,
+  new LakeboxResourceRegistry(runtime.config.application),
 );
 
 const print = (value: unknown) => console.log(JSON.stringify(value, null, 2));

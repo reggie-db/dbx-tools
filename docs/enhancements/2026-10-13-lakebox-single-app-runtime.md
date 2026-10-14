@@ -209,14 +209,17 @@ Remove maximum lifetime, `expiresAt`, assignment TTL, and owner-lease logic.
 
 ### Stage 2: single app runtime
 
-- [x] Replace machine assignments with deterministic managed-name discovery.
+- [x] Replace machine assignments with a persistent generated-ID registry and
+  one-time adoption of the deterministic legacy name.
 - [x] Remove OBO workspace-client attempts and fallback policy.
 - [x] Serialize lazy create/start and enforce one exact managed Lakebox.
 - [x] Replace machine lists and selectors with one optional Lakebox summary.
-- [x] Remove Lakebase ownership tables and migrations. There is no data
-  migration: plugin startup deletes legacy per-user `dbx-<adjective>-<animal>-<nonce>`
-  Lakeboxes that are not the managed app Lakebox and drops the legacy
-  `dbx_tools_databricks_sandbox*` schemas when the Lakebase plugin is present.
+- [x] Remove Lakebase ownership tables and migrations. AppKit's persistent
+  cache stores only the generated Lakebox ID and last-known service definitions;
+  the service-principal pool supplies the cross-replica advisory lock. Plugin
+  startup deletes legacy per-user `dbx-<adjective>-<animal>-<nonce>` Lakeboxes
+  that are not the managed app Lakebox and drops the legacy
+  `dbx_tools_databricks_sandbox*` schemas.
 
 ### Stage 3: deterministic users and routes
 

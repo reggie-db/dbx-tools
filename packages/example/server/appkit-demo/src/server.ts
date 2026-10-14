@@ -1,9 +1,12 @@
 import path from "node:path";
 import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
-import { appkit } from "@dbx-tools/appkit";
+import { appkit, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
 import { graphiti } from "@dbx-tools/appkit-graphiti";
+import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
+import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
+import { lakeboxSkillMounts } from "@dbx-tools/appkit-lakebox/skills";
 import {
   agents,
   genie as appkitMastraGenie,
@@ -12,10 +15,6 @@ import {
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
-import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
-import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
-import { lakeboxSkillMounts } from "@dbx-tools/appkit-lakebox/skills";
-import { lakeboxWorkspaceSandbox } from "@dbx-tools/appkit-lakebox/workspace";
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
@@ -116,6 +115,8 @@ const graphitiEnabled =
 const busEnabled = configUtils.boolean(undefined, "BUS_ENABLED", configUtils.ENV_ONLY) ?? true;
 const remoteSkillsEnabled =
   configUtils.boolean(undefined, "REMOTE_SKILLS_ENABLED", configUtils.ENV_ONLY) ?? true;
+const appkitBodyLimit =
+  configUtils.string(undefined, "APPKIT_BODY_LIMIT", { sources: "env" }) ?? "100mb";
 const lakeboxRuntime = new LakeboxRuntime(resolveLakeboxPluginConfig());
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
@@ -343,13 +344,19 @@ if (useAppKitVite) process.chdir(demoClientRoot);
 try {
   await appkit.createApp({
     disableInternalTelemetry: true,
+    telemetry: {
+      instrumentations: appkitTelemetry.httpTelemetryInstrumentations({
+        exclude: [lakeboxRuntime.config.routePrefix, `${lakeboxRuntime.config.routePrefix}/*`],
+      }),
+    },
     plugins: [
-      // AppKit's server plugin enables HTTP/Express tracing by default whenever
-      // an exporter is active. This demo wants agent traces, not one trace per
-      // request; appkit-mastra creates a request-lifetime chat root when the HTTP
-      // instrumentation is disabled.
+      // The custom HTTP instrumentation above uses AppKit's global telemetry
+      // provider and exporter while excluding long-lived Lakebox proxy traffic.
+      // Disable only the server plugin's fixed instrumentation to avoid duplicate
+      // request spans; chat, AppKit plugin, Mastra, and model spans remain enabled.
       server({
         host,
+        bodyLimit: appkitBodyLimit,
         telemetry: false,
         ...(useAppKitVite ? {} : { staticPath: clientDist }),
       }),
@@ -427,7 +434,6 @@ try {
         agents: { support, "support-polling": supportPolling },
         defaultAgent: "support",
         genieAgentMode: true,
-        sandbox: lakeboxWorkspaceSandbox(lakeboxRuntime),
         workspaceFallbackToTmp: true,
         // Chat runs on-behalf-of the signed-in user by default, so the caller must
         // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or

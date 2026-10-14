@@ -209,8 +209,8 @@ export interface DatabricksWorkspaceOptions extends Omit<
   /** Add user-scoped `/tmp` only when no configured Databricks path mounts writable. */
   fallbackToTmp?: boolean;
   /**
-   * Extra local skill trees mounted read-only for file access. The plugin also
-   * converts them to native agent-level skills without workspace scanning.
+   * Extra local skill trees mounted read-only for file access and workspace
+   * skill search. The plugin also converts them to native agent-level skills.
    */
   extraSkillMounts?: LocalSkillMount[];
   /** Skill names provided directly to agents and excluded from workspace search. */
@@ -292,7 +292,7 @@ export function databricksWorkspaceConfig(
       retainFilesystemSource ? mountFilesCache : undefined,
       filesystemSourceKey,
     );
-  const hasSkillPaths = paths.some(pathMayProvideSkills);
+  const hasSkillPaths = extraSkillMounts.length > 0 || paths.some(pathMayProvideSkills);
   const excludedSkillNames = new Set(options.excludeSkillNames ?? []);
   const skills: SkillsResolver =
     options.skills ??
@@ -820,6 +820,7 @@ function localSkillMountResolvers(mounts: readonly LocalSkillMount[]): Workspace
       const source = await filesystem;
       return {
         mounts: { [mount]: filesystems(source, { readOnly: true }) },
+        skillPaths: [mount],
       };
     };
   });

@@ -71,6 +71,7 @@ const workspaceManifest = JSON.parse(
 const rootWorkspace = parse(readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8")) as {
   allowBuilds?: Record<string, boolean>;
   catalog?: Record<string, string>;
+  overrides?: Record<string, string>;
   packages?: string[];
 };
 const allowBuilds = rootWorkspace.allowBuilds ?? {};
@@ -227,9 +228,15 @@ const dependencies = {
   ...workspaceDependencies,
 };
 // pnpm-workspace.yaml: no members (single-package deploy), but `allowBuilds` so
-// pnpm 10+ runs required postinstalls. Overrides keep every nested @dbx-tools/*
-// dependency on its staged local archive rather than consulting the registry.
-const deployWorkspace = { allowBuilds, overrides: workspaceDependencies };
+// pnpm 10+ runs required postinstalls. Root overrides keep the deployed graph
+// identical to the validated workspace graph (for example one shared
+// @opentelemetry/api copy, so AppKit's tracer provider is visible to Mastra).
+// Archive overrides keep every nested @dbx-tools/* dependency on its staged
+// local archive rather than consulting the registry.
+const deployWorkspace = {
+  allowBuilds,
+  overrides: { ...rootWorkspace.overrides, ...workspaceDependencies },
+};
 const pythonRequirements = stagePythonWheels();
 writeFileSync(
   join(outDir, "package.json"),

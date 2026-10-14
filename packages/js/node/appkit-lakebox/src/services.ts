@@ -1,4 +1,3 @@
-import { lakeboxServicePath } from "@dbx-tools/shared-lakebox/client";
 import {
   createLakeboxServiceRequestSchema,
   lakeboxServiceKindSchema,
@@ -8,6 +7,7 @@ import {
   type LakeboxService,
   type LakeboxUser,
 } from "@dbx-tools/shared-lakebox";
+import { lakeboxServicePath } from "@dbx-tools/shared-lakebox/client";
 import { z } from "zod";
 import { desktopEnvironment, desktopHtmlHead, desktopOpenUrl } from "./desktop.ts";
 import { LAKEBOX_RUNTIME_ROOT, lakeboxServicePort } from "./user.ts";
@@ -182,6 +182,7 @@ export function toLakeboxService(
     name: definition.name,
     kind: definition.kind,
     ...(definition.image ? { image: definition.image } : {}),
+    ...(definition.openPath ? { openPath: definition.openPath } : {}),
     state: service.state,
     port: definition.port,
     route: definition.route,
@@ -190,6 +191,18 @@ export function toLakeboxService(
     ...(service.error ? { error: service.error } : {}),
     ...(service.log !== undefined ? { log: service.log } : {}),
   };
+}
+
+/** Resolve a routed service path against the browser app origin for agent output. */
+export function withServiceOrigin(service: LakeboxService, origin?: string): LakeboxService {
+  if (!service.openUrl || !origin) return service;
+  try {
+    const base = new URL(origin);
+    if (base.protocol !== "http:" && base.protocol !== "https:") return service;
+    return { ...service, openUrl: new URL(service.openUrl, base).href };
+  } catch {
+    return service;
+  }
 }
 
 /** Returns the stopped placeholder for a built-in service that has never started. */

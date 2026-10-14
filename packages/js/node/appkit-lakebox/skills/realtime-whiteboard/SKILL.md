@@ -1,6 +1,6 @@
 ---
 name: realtime-whiteboard
-description: Run the WBO collaborative whiteboard as a Lakebox service to demonstrate user-scoped WebSocket routing.
+description: Deploy or run a realtime collaborative whiteboard app as a Lakebox service using WBO and user-scoped WebSocket routing.
 ---
 
 # Realtime Whiteboard

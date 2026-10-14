@@ -1,4 +1,4 @@
-import type { LakeboxService, LakeboxStatus, LakeboxSummary } from "@dbx-tools/shared-lakebox";
+import type { LakeboxService, LakeboxStatus } from "@dbx-tools/shared-lakebox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,7 @@ import {
 } from "@dbx-tools/ui/react";
 import {
   CheckIcon,
+  ChevronDownIcon,
   CopyIcon,
   ExternalLinkIcon,
   FileTextIcon,
@@ -26,12 +27,14 @@ import {
   PlayIcon,
   SquareIcon,
   SquareTerminalIcon,
+  Settings2Icon,
   Trash2Icon,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLakeboxClient, type LakeboxClient } from "./client.ts";
 import { LakeboxMetrics } from "./lakebox-metrics.tsx";
+import { resolveServiceUrl } from "./service-url.ts";
 import { useLakebox, useLakeboxMetrics, type LakeboxState } from "./use-lakebox.ts";
 
 const SERVICE_ICONS: Partial<Record<LakeboxService["kind"], LucideIcon>> = {
@@ -45,14 +48,14 @@ export interface LakeboxPanelProps {
   className?: string;
 }
 
-/** Full Lakebox surface: status, power, the current user's services, and metrics. */
+/** Full Lakebox surface: status, the current user's services, and metrics. */
 export function LakeboxPanel({ basePath, className }: LakeboxPanelProps) {
   const client = useLakeboxClient(basePath);
   const state = useLakebox(client);
   const { summary } = state;
   const running = summary?.status === "running";
   const series = useLakeboxMetrics(client, running);
-  const [confirm, setConfirm] = useState<{ action: "stop" } | { action: "remove"; name: string }>();
+  const [removeService, setRemoveService] = useState<string>();
 
   if (summary && !summary.supported) {
     return (
@@ -75,16 +78,22 @@ export function LakeboxPanel({ basePath, className }: LakeboxPanelProps) {
         </div>
       ) : null}
       <Card className="gap-0 py-0">
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 px-3 py-2.5 sm:px-4">
+        <CardHeader className="flex flex-row items-center gap-3 space-y-0 px-3 py-2.5 sm:px-4">
           <div className="flex min-w-0 items-center gap-2">
             <StatusDot status={summary?.status} />
-            <CardTitle className="truncate text-sm">{summary?.name ?? "Lakebox"}</CardTitle>
+            <CardTitle className="truncate text-sm">Lakebox</CardTitle>
             <Badge variant="secondary">{statusLabel(summary?.status, state.loading)}</Badge>
           </div>
-          <PowerButton state={state} onStop={() => setConfirm({ action: "stop" })} />
         </CardHeader>
         {summary ? (
           <CardContent className="space-y-0 p-0">
+            {summary.servicesStale ? (
+              <p className="border-t bg-muted/30 px-3 py-2 text-xs text-muted-foreground sm:px-4">
+                {summary.servicesObservedAt
+                  ? `Last known services from ${new Date(summary.servicesObservedAt).toLocaleString()}. Service status is not live.`
+                  : "Saved services will appear after the Lakebox runs once."}
+              </p>
+            ) : null}
             {running ? (
               <section aria-label="Lakebox metrics" className="border-t px-3 py-3 sm:px-4">
                 <LakeboxMetrics series={series} />
@@ -97,7 +106,7 @@ export function LakeboxPanel({ basePath, className }: LakeboxPanelProps) {
                   client={client}
                   service={service}
                   state={state}
-                  onRemove={() => setConfirm({ action: "remove", name: service.name })}
+                  onRemove={() => setRemoveService(service.name)}
                 />
               ))}
             </ul>
@@ -109,15 +118,13 @@ export function LakeboxPanel({ basePath, className }: LakeboxPanelProps) {
           </CardContent>
         )}
       </Card>
-      <ConfirmDialog
-        confirm={confirm}
-        summary={summary}
-        onCancel={() => setConfirm(undefined)}
+      <RemoveServiceDialog
+        name={removeService}
+        onCancel={() => setRemoveService(undefined)}
         onConfirm={() => {
-          const current = confirm;
-          setConfirm(undefined);
-          if (current?.action === "stop") void state.stop();
-          if (current?.action === "remove") void state.removeService(current.name);
+          const name = removeService;
+          setRemoveService(undefined);
+          if (name) void state.removeService(name);
         }}
       />
     </div>
@@ -136,12 +143,13 @@ function ServiceRow({
   onRemove: () => void;
 }) {
   const [logsOpen, setLogsOpen] = useState(false);
+  const [configurationOpen, setConfigurationOpen] = useState(false);
   const starting = state.busy.has(`service:${service.name}:start`) || service.state === "starting";
   const stopping = state.busy.has(`service:${service.name}:stop`);
   const removing = state.busy.has(`service:${service.name}:remove`);
   const busy = starting || stopping || removing;
   const Icon = SERVICE_ICONS[service.kind];
-  const lakeboxBusy = state.busy.has("lakebox:stop") || state.summary?.status === "stopping";
+  const lakeboxBusy = state.summary?.status === "stopping";
   return (
     <li className="min-w-0" aria-busy={busy || undefined}>
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
@@ -161,6 +169,26 @@ function ServiceRow({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className={cn(configurationOpen && "bg-muted shadow-inner")}
+            aria-label={
+              configurationOpen
+                ? `Hide ${service.name} configuration`
+                : `Show ${service.name} configuration`
+            }
+            aria-expanded={configurationOpen}
+            title={configurationOpen ? "Hide configuration" : "Show configuration"}
+            onClick={() => setConfigurationOpen((open) => !open)}
+          >
+            {configurationOpen ? (
+              <ChevronDownIcon className="size-4" />
+            ) : (
+              <Settings2Icon className="size-4" />
+            )}
+          </Button>
           {!service.route && service.state !== "ready" ? (
             <Button
               type="button"
@@ -188,7 +216,7 @@ function ServiceRow({
               {removing ? <Spinner className="size-4" /> : <Trash2Icon className="size-4" />}
             </Button>
           ) : null}
-          {service.state === "ready" ? (
+          {service.kind !== "image" && service.state === "ready" ? (
             <Button
               type="button"
               size="icon"
@@ -236,8 +264,51 @@ function ServiceRow({
           <p className="w-full break-words text-xs text-destructive">{service.error}</p>
         ) : null}
       </div>
+      {configurationOpen ? <ServiceConfiguration service={service} /> : null}
       {logsOpen ? <ServiceLog client={client} name={service.name} live={starting} /> : null}
     </li>
+  );
+}
+
+/** Safe, user-visible service configuration without environment values. */
+function ServiceConfiguration({ service }: { service: LakeboxService }) {
+  const openUrl = service.openUrl ? resolveServiceUrl(service.openUrl) : undefined;
+  const fields = [
+    ["Kind", service.kind],
+    ...(service.image ? [["Image", service.image]] : []),
+    ...(service.openPath ? [["Open path", service.openPath]] : []),
+    ["Route path", service.path],
+    ["Loopback", `127.0.0.1:${service.port}`],
+  ] as const;
+  return (
+    <section
+      aria-label={`${service.name} configuration`}
+      className="border-t bg-muted/20 px-3 py-3 sm:px-4"
+    >
+      <dl className="grid min-w-0 gap-x-4 gap-y-2 text-xs sm:grid-cols-[7rem_minmax(0,1fr)]">
+        {fields.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="font-medium text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 break-all font-mono text-foreground">{value}</dd>
+          </div>
+        ))}
+        {openUrl ? (
+          <div className="contents">
+            <dt className="font-medium text-muted-foreground">Open URL</dt>
+            <dd className="min-w-0 break-all font-mono">
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-700 underline decoration-blue-700/40 underline-offset-2 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+              >
+                {openUrl}
+              </a>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+    </section>
   );
 }
 
@@ -299,94 +370,24 @@ function ServiceLog({
   );
 }
 
-/** Start or Stop for the shared Lakebox. */
-export function PowerButton({
-  state,
-  onStop,
-}: {
-  state: LakeboxState;
-  onStop: () => void;
-}) {
-  const status = state.summary?.status;
-  const changing =
-    state.busy.has("lakebox:start") ||
-    state.busy.has("lakebox:stop") ||
-    status === "starting" ||
-    status === "stopping";
-  if (changing) {
-    const label = status === "stopping" ? "Stopping Lakebox" : "Starting Lakebox";
-    return (
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className="shrink-0"
-        aria-label={label}
-        title={label}
-        disabled
-      >
-        <Spinner className="size-3.5" />
-      </Button>
-    );
-  }
-  if (state.summary?.canStop) {
-    return (
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className="shrink-0 text-destructive hover:text-destructive"
-        aria-label="Stop Lakebox"
-        title="Stop"
-        onClick={onStop}
-      >
-        <SquareIcon className="size-3.5" />
-      </Button>
-    );
-  }
-  const label = status === "missing" ? "Create Lakebox" : "Start Lakebox";
-  return (
-    <Button
-      type="button"
-      size="icon"
-      variant="outline"
-      className="shrink-0"
-      aria-label={label}
-      title={status === "missing" ? "Create" : "Start"}
-      disabled={!state.summary?.canStart}
-      onClick={() => void state.start()}
-    >
-      <PlayIcon className="size-3.5" />
-    </Button>
-  );
-}
-
-/** Confirmation for actions that interrupt other sessions or delete data. */
-export function ConfirmDialog({
-  confirm,
-  summary,
+/** Confirmation for deleting one saved custom service. */
+function RemoveServiceDialog({
+  name,
   onCancel,
   onConfirm,
 }: {
-  confirm: { action: "stop" } | { action: "remove"; name: string } | undefined;
-  summary: LakeboxSummary | undefined;
+  name: string | undefined;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   return (
-    <AlertDialog open={Boolean(confirm)} onOpenChange={(open) => (open ? undefined : onCancel())}>
-      {confirm ? (
+    <AlertDialog open={Boolean(name)} onOpenChange={(open) => (open ? undefined : onCancel())}>
+      {name ? (
         <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirm.action === "stop"
-                ? `Stop ${summary?.name ?? "the Lakebox"}?`
-                : `Remove ${confirm.name}?`}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{`Remove ${name}?`}</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirm.action === "stop"
-                ? "Stopping interrupts terminals, desktops, and services for every user of this app. Files and saved services remain and restart on the next start."
-                : `This stops ${confirm.name} and deletes its saved definition and image files. Files in your home directory remain.`}
+              {`This stops ${name} and deletes its saved definition and image files. Files in your home directory remain.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -395,7 +396,7 @@ export function ConfirmDialog({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={onConfirm}
             >
-              {confirm.action === "stop" ? "Stop Lakebox" : "Remove service"}
+              Remove service
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

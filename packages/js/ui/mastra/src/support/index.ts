@@ -12,6 +12,7 @@ export * as mastraClient from "./mastra-client.ts";
 export * as modelSelection from "./model-selection.ts";
 export * as requestContext from "./request-context.ts";
 export * as threadLabels from "./thread-labels.ts";
+export * as threadPersistence from "./thread-persistence.ts";
 export * as threadSessions from "./thread-sessions.ts";
 export * as threadTabs from "./thread-tabs.ts";
 export * as toolEvents from "./tool-events.ts";

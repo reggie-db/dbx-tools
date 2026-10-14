@@ -5,7 +5,7 @@ import { Ssh2PatchModeSchema, SshTransportModeSchema } from "@dbx-tools/lakebox/
 import { LAKEBOX_DEFAULT_ROUTE_PREFIX } from "@dbx-tools/shared-lakebox";
 import { z } from "zod";
 
-const NAME_CONFIG_KEY = "LAKEBOX_NAME";
+const APPLICATION_CONFIG_KEY = "LAKEBOX_APPLICATION";
 const IDLE_TIMEOUT_CONFIG_KEY = "LAKEBOX_IDLE_TIMEOUT_SECONDS";
 const SSH_TRANSPORT_CONFIG_KEY = "LAKEBOX_SSH_TRANSPORT";
 const SSH2_PATCH_CONFIG_KEY = "LAKEBOX_SSH_SSH2_PATCH";
@@ -23,7 +23,7 @@ export const LakeboxPluginConfigSchema = z
       .trim()
       .min(1)
       .describe(
-        `Application name that derives the managed Lakebox name. Defaults to ${configUtils.name(NAME_CONFIG_KEY)}, then DATABRICKS_APP_NAME, then the project directory name.`,
+        `Stable application key for the persisted Lakebox resource ID. Defaults to ${configUtils.name(APPLICATION_CONFIG_KEY)}, then DATABRICKS_APP_NAME, then the project directory name.`,
       ),
     idleTimeoutSeconds: z
       .number()
@@ -118,7 +118,7 @@ export function resolveLakeboxPluginConfig(
   return LakeboxPluginConfigSchema.parse({
     ...serializable,
     application:
-      configUtils.string(application, NAME_CONFIG_KEY) ??
+      configUtils.string(application, APPLICATION_CONFIG_KEY) ??
       configUtils.string(undefined, "DATABRICKS_APP_NAME", configUtils.ENV_ONLY) ??
       basename(projectUtils.root() ?? process.cwd()),
     idleTimeoutSeconds: configUtils.positiveInt(idleTimeoutSeconds, IDLE_TIMEOUT_CONFIG_KEY, 3_600),

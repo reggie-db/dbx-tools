@@ -59,6 +59,18 @@ export function closeOnTerminalChunk(
   });
 }
 
+/** Drain a run observation until its terminal finish or abort chunk arrives. */
+export async function waitForTerminalChunk(stream: ReadableStream<UIMessageChunk>): Promise<void> {
+  const reader = closeOnTerminalChunk(stream).getReader();
+  try {
+    while (!(await reader.read()).done) {
+      // Draining is the synchronization point; the replacement turn does not replay this output.
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 /** Replace or append one assistant message without disturbing the transcript. */
 function upsertAssistant(messages: UIMessage[], assistant: UIMessage): UIMessage[] {
   const next = [...messages];

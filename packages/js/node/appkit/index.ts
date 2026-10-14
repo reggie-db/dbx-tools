@@ -19,6 +19,7 @@ export * as pluginExecution from "./src/plugin-execution.ts";
 export * as pluginRegistry from "./src/plugin-registry.ts";
 export * as provision from "./src/provision.ts";
 export * as requestTags from "./src/request-tags.ts";
+export * as telemetry from "./src/telemetry.ts";
 export * as toolOperations from "./src/tool-operations.ts";
 export * as toolProvider from "./src/tool-provider.ts";
 export * as toolkitEntries from "./src/toolkit-entries.ts";
@@ -41,6 +42,8 @@ export type { SslMode, ParsedAddress, LakebaseConnectionInputs } from "./src/pga
 export type { RunPluginExecutionOptions } from "./src/plugin-execution.ts";
 export type { PluginContextLike } from "./src/plugin-registry.ts";
 export type { RequestTagValue } from "./src/request-tags.ts";
+export { TelemetryInstrumentationBridgePlugin, telemetryInstrumentationBridge } from "./src/telemetry.ts";
+export type { HttpTelemetryOptions, TelemetryInstrumentationBridgeConfig } from "./src/telemetry.ts";
 export type { AppKitToolMeta, AppKitOperationSchemaMeta, AppKitOperation } from "./src/tool-operations.ts";
 export { ToolRegistryPlugin } from "./src/tool-provider.ts";
 export type { AgentToolProgressOptions, AgentToolExecutionContext } from "./src/tool-provider.ts";

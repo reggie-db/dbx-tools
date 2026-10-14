@@ -187,6 +187,9 @@ Useful options:
   off. See [Place The Conversation List](#place-the-conversation-list).
 - `enableThreads: false` is the older shorthand for
   `threadPlacement: "disabled"`.
+- `threadId` and `onThreadIdChange` let a host bind the active conversation to
+  URL state or another external selector. Unknown external ids are replaced by
+  a new thread and reported with the `missing` reason.
 - `enableExport` adds whole-conversation and per-message export affordances.
 - Feedback defaults to auto: thumbs, dislike, and comment controls appear when
   the server reports MLflow feedback is available and a turn produced a trace
@@ -212,6 +215,9 @@ The docked placements render the sidebar as an inline column with a persisted
 show/hide toggle. Below 768px of chat width the panel becomes an overlay drawer
 on the same edge, so the transcript never loses room; the drawer is
 session-scoped and starts closed, and closes itself after a selection.
+
+The composer accepts images from the upload action, drag and drop, or clipboard
+paste. Oversized images use the same client-side resize path before submission.
 
 The `top` placement is the editor-tab model: each open conversation is a tab with
 its title, a spinner while it streams in the background, and a close affordance

@@ -293,7 +293,9 @@ export const ChatComposer = ({
   const [files, setFiles] = useState<FileUIPart[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isPreparingFiles, setIsPreparingFiles] = useState(false);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const inputId = useId();
+  const dragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputGroupRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -324,8 +326,14 @@ export const ChatComposer = ({
     onResumeFollow();
   };
 
-  const addFiles = async (selected: FileList | null) => {
+  const addFiles = async (selected: FileList | readonly File[] | null) => {
     if (!selected?.length) return;
+    const selectedFiles = Array.from(selected);
+    const imageFiles = selectedFiles.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      setFileError("Only image files can be attached");
+      return;
+    }
     const remaining = MAX_COMPOSER_IMAGES - files.length;
     if (remaining <= 0) {
       setFileError(`You can attach up to ${MAX_COMPOSER_IMAGES} images`);
@@ -335,12 +343,12 @@ export const ChatComposer = ({
     setFileError(null);
     try {
       const next = await Promise.all(
-        Array.from(selected)
-          .slice(0, remaining)
-          .map((file) => imageFileToUIPart(file)),
+        imageFiles.slice(0, remaining).map((file) => imageFileToUIPart(file)),
       );
       setFiles((current) => [...current, ...next]);
-      if (selected.length > remaining) {
+      if (selectedFiles.length !== imageFiles.length) {
+        setFileError("Only image files were added");
+      } else if (imageFiles.length > remaining) {
         setFileError(`Only the first ${remaining} images were added`);
       }
     } catch (error) {
@@ -376,7 +384,32 @@ export const ChatComposer = ({
         />
         <InputGroup
           ref={inputGroupRef}
-          className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md"
+          className={cn(
+            "rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md",
+            isDraggingFiles && "border-primary ring-2 ring-primary/20",
+          )}
+          onDragEnter={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            dragDepthRef.current += 1;
+            setIsDraggingFiles(true);
+          }}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          onDragLeave={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+            if (dragDepthRef.current === 0) setIsDraggingFiles(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            dragDepthRef.current = 0;
+            setIsDraggingFiles(false);
+            void addFiles(event.dataTransfer.files);
+          }}
         >
           {files.length > 0 && (
             <InputGroupAddon
@@ -415,6 +448,14 @@ export const ChatComposer = ({
             ref={textareaRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onPaste={(event) => {
+              const pastedImages = Array.from(event.clipboardData.files).filter((file) =>
+                file.type.startsWith("image/"),
+              );
+              if (pastedImages.length === 0) return;
+              event.preventDefault();
+              void addFiles(pastedImages);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();

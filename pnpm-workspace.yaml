@@ -126,6 +126,7 @@ overrides:
   bun: 1.4.2
   glob: ^13.0.0
   p-map: 7.0.8
+  "@opentelemetry/api": 1.9.1
 verifyDepsBeforeRun: warn
 allowBuilds:
   "@databricks/appkit": true

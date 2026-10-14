@@ -4,7 +4,8 @@ Give every user of a Databricks App a terminal, a desktop, and long-running
 services in one shared, lazily created Databricks Lakebox.
 
 - One Lakebox per app, created on first use by the app service principal and
-  stopped by the platform after its idle timeout.
+  stopped by the platform after its idle timeout. Databricks assigns the
+  machine name; users see only the Lakebox product label.
 - Each signed-in user gets a locked, non-sudo Linux account with a persistent
   home. Other users cannot read the home or reach the user's service ports.
 - Services run OCI images detached with direct crun. Terminal and desktop are
@@ -16,15 +17,19 @@ services in one shared, lazily created Databricks Lakebox.
 ## Register the plugin
 
 ```ts
-import { createApp, server } from "@databricks/appkit";
+import { createApp, lakebase, server } from "@databricks/appkit";
 import { lakebox } from "@dbx-tools/appkit-lakebox";
 
-await createApp({ plugins: [server(), lakebox({ idleTimeoutSeconds: 1_800 })] });
+await createApp({ plugins: [server(), lakebase(), lakebox({ idleTimeoutSeconds: 1_800 })] });
 ```
 
-Lakebase is not required. When the AppKit `lakebase()` plugin is registered,
-startup drops legacy Sandbox ownership schemas. Startup also deletes legacy
-per-user `dbx-<adjective>-<animal>-<nonce>` Lakeboxes; no data is migrated.
+Lakebase persists the Databricks-assigned Lakebox ID, serializes first creation
+across app replicas, and retains last-known service definitions while the
+machine is stopped. The registry adopts an existing
+`dbx-lakebox-<application>` machine once, but new machines use the name
+Databricks assigns. Startup also deletes legacy per-user
+`dbx-<adjective>-<animal>-<nonce>` Lakeboxes and drops legacy Sandbox ownership
+schemas; no user data is migrated between machines.
 
 To share the runtime with Mastra, create it once:
 
@@ -68,7 +73,6 @@ does not resume.
 | Tool | Effect |
 | --- | --- |
 | `get_lakebox` | Status, the current user's account, and services. Never creates the Lakebox. |
-| `start_lakebox`, `stop_lakebox` | Create or start the Lakebox; stop it for every user. |
 | `execute_lakebox_command` | Run a command as the user's account. |
 | `list_lakebox_services` | List the user's services. |
 | `create_lakebox_service` | Create or replace an image service and wait until ready. |
@@ -80,7 +84,7 @@ does not resume.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `application` | `DBX_TOOLS_LAKEBOX_NAME`, `DATABRICKS_APP_NAME`, or the project directory | Derives the managed name `dbx-lakebox-<application>`. |
+| `application` | `DBX_TOOLS_LAKEBOX_APPLICATION`, `DATABRICKS_APP_NAME`, or the project directory | Stable key for the persisted Lakebox resource ID. |
 | `idleTimeoutSeconds` | `3600` | Platform idle timeout, 60 to 86400 seconds. |
 | `auto` | `true` | Create or start the Lakebox on demand. |
 | `routePrefix` | `/lakebox` | AppKit root for service routes. |

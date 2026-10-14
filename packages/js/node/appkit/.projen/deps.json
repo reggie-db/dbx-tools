@@ -71,6 +71,11 @@
       "type": "runtime"
     },
     {
+      "name": "@opentelemetry/instrumentation-http",
+      "version": "0.219.0",
+      "type": "runtime"
+    },
+    {
       "name": "zod",
       "version": "catalog:",
       "type": "runtime"

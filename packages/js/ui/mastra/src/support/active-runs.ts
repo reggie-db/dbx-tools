@@ -37,8 +37,14 @@ const StoredActiveRunFileSchema = z
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 /** Build the browser storage key for one Mastra agent's active runs. */
-export const activeRunStorageKey = (basePath: string, agentId: string): string =>
-  `dbx-mastra-active-runs:${basePath}:${agentId}`;
+export const activeRunStorageKey = (
+  basePath: string,
+  agentId: string,
+  resourceScope?: string,
+): string => {
+  const prefix = `dbx-mastra-active-runs:${basePath}:${agentId}`;
+  return resourceScope ? `${prefix}:${encodeURIComponent(resourceScope)}` : prefix;
+};
 
 function browserStorage(): StorageLike | undefined {
   try {

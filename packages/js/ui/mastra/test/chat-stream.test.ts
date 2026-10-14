@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { UIMessageChunk } from "ai";
 
-import { closeOnTerminalChunk } from "../src/react/chat-stream.ts";
+import { closeOnTerminalChunk, waitForTerminalChunk } from "../src/react/chat-stream.ts";
 
 describe("chat stream completion", () => {
   it("closes after forwarding the finish chunk without waiting for upstream", async () => {
@@ -46,6 +46,23 @@ describe("chat stream completion", () => {
 
     await reader.read();
     await reader.cancel("stop");
+
+    assert.equal(cancelled, true);
+  });
+
+  it("waits for an abort chunk and cancels the remaining observation", async () => {
+    let cancelled = false;
+    const upstream = new ReadableStream<UIMessageChunk>({
+      start(controller) {
+        controller.enqueue({ type: "start", messageId: "assistant-1" });
+        controller.enqueue({ type: "abort", reason: "interrupted" });
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    await waitForTerminalChunk(upstream);
 
     assert.equal(cancelled, true);
   });

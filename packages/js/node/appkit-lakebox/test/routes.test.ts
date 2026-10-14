@@ -75,7 +75,20 @@ describe("LakeboxRouteRegistry", () => {
     assert.equal(redirect.headers.location, `/lakebox/${owner.hash}/web/?x=1`);
     const loading = await get(port, `/lakebox/${owner.hash}/web/`, headers);
     assert.equal(loading.status, 202);
-    assert.match(loading.body, /loading/);
+    assert.equal(loading.headers["content-type"], "application/json; charset=utf-8");
+    assert.equal(loading.headers["retry-after"], "2");
+    assert.deepEqual(JSON.parse(loading.body), {
+      status: "loading",
+      message: "Starting Lakebox service",
+    });
+    const browserLoading = await get(port, `/lakebox/${owner.hash}/web/`, {
+      ...headers,
+      accept: "text/html,application/xhtml+xml",
+    });
+    assert.equal(browserLoading.status, 202);
+    assert.equal(browserLoading.headers["content-type"], "text/html; charset=utf-8");
+    assert.match(browserLoading.body, /http-equiv="refresh" content="2"/);
+    assert.match(browserLoading.body, /role="status"/);
     next = { kind: "failed", message: "boom" };
     assert.equal((await get(port, `/lakebox/${owner.hash}/web/`, headers)).status, 502);
     next = { kind: "missing" };

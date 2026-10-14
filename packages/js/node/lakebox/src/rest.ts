@@ -120,10 +120,10 @@ export class LakeboxClient {
     return LakeboxEntrySchema.parse(await this.request("GET", lakeboxPath(id), undefined, signal));
   }
 
-  /** Creates a Lakebox with a display name and waits for the API to accept it. */
-  async create(name: string, signal?: AbortSignal): Promise<LakeboxEntry> {
+  /** Creates a Lakebox with a Databricks-assigned display name. */
+  async create(signal?: AbortSignal): Promise<LakeboxEntry> {
     return LakeboxEntrySchema.parse(
-      await this.request("POST", LAKEBOXES_PATH, { sandbox: { name } }, signal),
+      await this.request("POST", LAKEBOXES_PATH, { sandbox: {} }, signal),
     );
   }
 

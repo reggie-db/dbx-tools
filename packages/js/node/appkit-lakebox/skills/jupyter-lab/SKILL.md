@@ -1,6 +1,6 @@
 ---
 name: jupyter-lab
-description: Run JupyterLab as a Lakebox service behind the user's authenticated route, without a separate Jupyter password or token.
+description: Deploy or run JupyterLab as a Lakebox service behind the user's authenticated route, without a separate Jupyter password or token. Use for notebook app or notebook service requests.
 ---
 
 # JupyterLab

@@ -21,6 +21,10 @@ describe("active background run persistence", () => {
     const storage = memoryStorage();
     const key = activeRunStorageKey("/api/mastra", "support");
     assert.equal(key, "dbx-mastra-active-runs:/api/mastra:support");
+    assert.equal(
+      activeRunStorageKey("/api/mastra", "support", "reggie.pierce+test@databricks.com"),
+      "dbx-mastra-active-runs:/api/mastra:support:reggie.pierce%2Btest%40databricks.com",
+    );
     storeActiveRun(
       key,
       {

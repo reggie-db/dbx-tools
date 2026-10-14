@@ -225,6 +225,11 @@ const root = new project.DBXToolsNodeProject({
   ],
 });
 
+// OpenTelemetry's global tracer provider must be shared by AppKit and Mastra.
+// AppKit 0.81 pins api@1.9.0 while Mastra requires ^1.9.1; without one override
+// Bun installs two physical API copies and Mastra sees AppKit's provider as noop.
+root.pnpmWorkspace?.addOverride("@opentelemetry/api", "1.9.1");
+
 const eslintTask = javascript.Eslint.of(root)!.eslintTask;
 eslintTask.reset();
 for (const paths of [
@@ -395,6 +400,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-fs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
+    "@opentelemetry/instrumentation-http@0.219.0",
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
@@ -445,7 +451,7 @@ project.applyToProjects(root, { identifierName: "lakebox", tags: "node" }, (p) =
 
 // AppKit integration for the single lazily created app Lakebox: per-user
 // accounts, direct-crun services, deterministic routes, metrics, agent tools,
-// and the Mastra workspace sandbox adapter.
+// persistent resource identity, and the Mastra workspace sandbox adapter.
 project.applyToProjects(root, { identifierName: "appkit-lakebox", tags: "node" }, (p) => {
   p.package.addField(
     "description",
@@ -457,6 +463,7 @@ project.applyToProjects(root, { identifierName: "appkit-lakebox", tags: "node" }
     "@dbx-tools/appkit-mastra@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/lakebox@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-lakebox@workspace:^",
     "@dbx-tools/ui@workspace:^",

@@ -30,6 +30,7 @@ import {
 } from "./config.ts";
 import { requestUserEmail, requestUserId } from "./identity.ts";
 import { resolveFeedbackEnabled } from "./mlflow.ts";
+import { MASTRA_ORIGIN_KEY } from "./request-context.ts";
 import {
   extractModelOverride,
   MASTRA_MODEL_OVERRIDE_KEY,
@@ -52,6 +53,7 @@ const TRUSTED_REQUEST_CONTEXT_KEYS = [
   MASTRA_USER_NAME_KEY,
   MASTRA_USER_EMAIL_KEY,
   MASTRA_REQUEST_ID_KEY,
+  MASTRA_ORIGIN_KEY,
   MASTRA_SCOPES_KEY,
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
@@ -61,6 +63,29 @@ const TRUSTED_REQUEST_CONTEXT_KEYS = [
 export function clearTrustedRequestContext(requestContext: RequestContext): void {
   for (const key of TRUSTED_REQUEST_CONTEXT_KEYS) {
     requestContext.deleteRaw(key);
+  }
+}
+
+/** Resolve the canonical browser origin from standard proxy and browser headers. */
+export function requestOrigin(req: express.Request): string | undefined {
+  for (const value of [req.get("origin"), req.get("referer")]) {
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
+    } catch {
+      // Continue to proxy headers.
+    }
+  }
+  const host = req.get("x-forwarded-host")?.split(",", 1)[0]?.trim() || req.get("host")?.trim();
+  if (!host) return undefined;
+  const protocol =
+    req.get("x-forwarded-proto")?.split(",", 1)[0]?.trim() || req.protocol || "https";
+  if (protocol !== "http" && protocol !== "https") return undefined;
+  try {
+    return new URL(`${protocol}://${host}`).origin;
+  } catch {
+    return undefined;
   }
 }
 
@@ -197,6 +222,7 @@ export class MastraServer extends ExpressMastraServer {
       this.configureRequestContextThreadId(req, res, requestContext);
       this.configureRequestContextModelOverride(req, requestContext);
       this.configureRequestContextRequestId(req, res, requestContext);
+      this.configureRequestContextOrigin(req, requestContext);
       this.configureRequestContextScopes(req, requestContext);
 
       this.configureMlflowTraceId(res);
@@ -236,6 +262,12 @@ export class MastraServer extends ExpressMastraServer {
       requestContext.get(MASTRA_RESOURCE_ID_KEY),
     ].find((value): value is string => typeof value === "string" && value.trim().length > 0);
     recordActiveTraceUser(traceUser);
+  }
+
+  /** Stamp the public browser origin so plugin tools can return canonical app links. */
+  configureRequestContextOrigin(req: express.Request, requestContext: RequestContext): void {
+    const origin = requestOrigin(req);
+    if (origin) requestContext.set(MASTRA_ORIGIN_KEY, origin);
   }
 
   /**

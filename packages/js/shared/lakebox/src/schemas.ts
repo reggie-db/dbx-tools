@@ -71,6 +71,10 @@ export const lakeboxServiceSchema = z
     name: lakeboxServiceNameSchema,
     kind: lakeboxServiceKindSchema,
     image: z.string().optional().describe("OCI image reference for image services."),
+    openPath: z
+      .string()
+      .optional()
+      .describe("Configured entry path appended to the service route."),
     state: lakeboxServiceStateSchema,
     port: z
       .number()
@@ -83,10 +87,11 @@ export const lakeboxServiceSchema = z
       .describe("Whether AppKit exposes the service through an authenticated route."),
     path: z.string().startsWith("/").describe("AppKit route path for the service."),
     openUrl: z
-      .string()
-      .startsWith("/")
+      .union([z.string().startsWith("/"), z.httpUrl()])
       .optional()
-      .describe("AppKit URL that opens the service; present for routed services."),
+      .describe(
+        "AppKit URL that opens the service; REST responses use a path and agent tools resolve it against the browser app origin.",
+      ),
     error: z.string().optional().describe("Latest start or readiness failure."),
     log: z
       .string()
@@ -105,7 +110,7 @@ export const lakeboxSummarySchema = z
       .describe("Whether commands, services, and routes start or create the Lakebox on demand."),
     status: lakeboxStatusSchema,
     id: z.string().optional().describe("Databricks Lakebox identifier, once created."),
-    name: z.string().min(1).describe("App-scoped Lakebox name."),
+    name: z.string().min(1).describe("Product display label; never the upstream machine name."),
     idleTimeoutSeconds: z
       .number()
       .int()
@@ -114,6 +119,16 @@ export const lakeboxSummarySchema = z
       .describe("Platform idle timeout after which the Lakebox stops."),
     user: lakeboxUserSchema,
     services: z.array(lakeboxServiceSchema).describe("The current user's services."),
+    servicesStale: z
+      .boolean()
+      .describe(
+        "True when services come from the last successful controller observation rather than live Lakebox state.",
+      ),
+    servicesObservedAt: z
+      .string()
+      .datetime()
+      .optional()
+      .describe("Time of the last successful live service observation."),
     canStart: z.boolean().describe("Whether the Lakebox can be started or created now."),
     canStop: z.boolean().describe("Whether the Lakebox can be stopped now."),
   })
@@ -387,20 +402,6 @@ export const getLakeboxOperationSchema = z
     "Return the app Lakebox status, the current user's Lakebox account, and that user's services. This never creates the Lakebox.",
   )
   .meta(readTool);
-
-export const startLakeboxOperationSchema = z
-  .object({})
-  .strict()
-  .describe("Create the app Lakebox if needed and start it. Saved services restart automatically.")
-  .meta({ appkitTool: { ...writeTool.appkitTool, idempotent: true } });
-
-export const stopLakeboxOperationSchema = z
-  .object({})
-  .strict()
-  .describe(
-    "Stop the shared app Lakebox for every user. Files and saved services persist and restart on the next start.",
-  )
-  .meta({ appkitTool: { ...writeTool.appkitTool, idempotent: true } });
 
 export const executeLakeboxCommandOperationSchema = lakeboxCommandRequestSchema
   .describe(

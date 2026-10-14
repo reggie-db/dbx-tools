@@ -303,7 +303,7 @@ const App = () => {
     {
       path: "/lakebox",
       label: "Lakebox",
-      description: "Start the app Lakebox and open your terminal, desktop, and services",
+      description: "Open your terminal, desktop, and services",
       element: <Lakebox />,
     },
   ];

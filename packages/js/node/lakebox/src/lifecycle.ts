@@ -1,5 +1,5 @@
-import type { LakeboxStatus } from "@dbx-tools/shared-lakebox";
 import { asyncUtils } from "@dbx-tools/shared-core";
+import type { LakeboxStatus } from "@dbx-tools/shared-lakebox";
 import type { LakeboxClient, LakeboxEntry } from "./rest.ts";
 
 const POLL_INTERVAL_MS = 1_000;

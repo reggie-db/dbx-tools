@@ -67,6 +67,25 @@ export function isSessionRunning(session: ThreadSession): boolean {
   return session.status === "submitted" || session.status === "streaming";
 }
 
+/** Return the newest user message in a transcript or turn. */
+export function lastUserMessage(messages: readonly UIMessage[]): UIMessage | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "user") return message;
+  }
+  return undefined;
+}
+
+/** Build a replacement turn that retains the interrupted user request. */
+export function interruptedTurnMessages(
+  messages: UIMessage[],
+  nextMessage: UIMessage,
+): UIMessage[] {
+  const interrupted = lastUserMessage(messages);
+  if (!interrupted || interrupted.id === nextMessage.id) return [nextMessage];
+  return [interrupted, nextMessage];
+}
+
 /** Append a steer to the queue (oldest first). Returns a new array. */
 export function enqueueSteer<T extends QueuedSteer>(queue: T[], steer: T): T[] {
   return [...queue, steer];

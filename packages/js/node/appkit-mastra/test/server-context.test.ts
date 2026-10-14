@@ -13,10 +13,12 @@ import {
   MASTRA_USER_EMAIL_KEY,
   MASTRA_USER_KEY,
 } from "../src/config.ts";
+import { MASTRA_ORIGIN_KEY } from "../src/request-context.ts";
 import {
   attachStaleResumeRecovery,
   clearTrustedRequestContext,
   isMastraRequestAllowed,
+  requestOrigin,
 } from "../src/server.ts";
 
 describe("application request context boundary", () => {
@@ -28,6 +30,7 @@ describe("application request context boundary", () => {
     context.setRaw(MASTRA_USER_KEY, { id: "attacker" });
     context.setRaw(MASTRA_USER_EMAIL_KEY, "attacker@example.com");
     context.setRaw(MASTRA_REQUEST_ID_KEY, "attacker-request");
+    context.setRaw(MASTRA_ORIGIN_KEY, "https://attacker.example");
     context.setRaw(MASTRA_SCOPES_KEY, ["all-apis"]);
 
     clearTrustedRequestContext(context);
@@ -39,10 +42,25 @@ describe("application request context boundary", () => {
       MASTRA_USER_KEY,
       MASTRA_USER_EMAIL_KEY,
       MASTRA_REQUEST_ID_KEY,
+      MASTRA_ORIGIN_KEY,
       MASTRA_SCOPES_KEY,
     ]) {
       assert.equal(context.hasRaw(key), false);
     }
+  });
+
+  it("resolves the deployed app origin without the Databricks shell host", () => {
+    const headers = new Map([
+      ["origin", "https://dbx-tools-demo-7474652124440999.aws.databricksapps.com"],
+      ["host", "apps.databricks.com"],
+    ]);
+    assert.equal(
+      requestOrigin({
+        get: (name: string) => headers.get(name.toLowerCase()),
+        protocol: "https",
+      } as express.Request),
+      "https://dbx-tools-demo-7474652124440999.aws.databricksapps.com",
+    );
   });
 });
 

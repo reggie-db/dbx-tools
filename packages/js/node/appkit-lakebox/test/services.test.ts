@@ -6,6 +6,7 @@ import {
   imageDefinition,
   serviceRoute,
   toLakeboxService,
+  withServiceOrigin,
 } from "../src/services.ts";
 import { lakeboxServicePort, lakeboxUser } from "../src/user.ts";
 
@@ -76,6 +77,14 @@ describe("Lakebox service definitions", () => {
     );
     assert.equal(service.path, `/lakebox/${user.hash}/site`);
     assert.equal(service.openUrl, `/lakebox/${user.hash}/site/index.html`);
+    assert.equal(service.openPath, "index.html");
     assert.equal(service.log, "ok");
+    assert.equal(
+      withServiceOrigin(
+        service,
+        "https://dbx-tools-demo-7474652124440999.aws.databricksapps.com/chat",
+      ).openUrl,
+      `https://dbx-tools-demo-7474652124440999.aws.databricksapps.com/lakebox/${user.hash}/site/index.html`,
+    );
   });
 });
