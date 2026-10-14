@@ -42,6 +42,10 @@ export const ChatModelSelectionOptionsSchema = ModelSelectionOptionsSchema.safeE
 }).describe("Chat-model selection by name or capability class.");
 
 export const ModelGatewayOptionsSchema = ModelSelectionOptionsSchema.safeExtend({
+  preferSystemModels: z
+    .boolean()
+    .default(false)
+    .describe("Prefer system.ai services over serving endpoints for non-exact model selection."),
   listen: options
     .listenAddressSchema({ port: 4000, loopback: true })
     .describe("Loopback listener address."),

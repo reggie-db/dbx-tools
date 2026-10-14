@@ -36,6 +36,7 @@ export interface ModelGatewayOptions {
   readonly overrides?: readonly ModelCapabilityOverride[];
   readonly model?: string;
   readonly modelClass?: ModelClassType;
+  readonly preferSystemModels?: boolean;
 }
 
 /** Error carrying an HTTP status and protocol-safe message. */
@@ -54,15 +55,20 @@ export class ModelGateway {
   private readonly registry: ModelRegistry;
   private readonly model?: string;
   private readonly modelClass?: ModelClassType;
+  private readonly preferSystemModels: boolean;
 
   constructor(options: ModelGatewayOptions = {}, registry?: ModelRegistry) {
     const registryOptions: ModelRegistryOptions = {
       ...(options.cacheTtlMs !== undefined ? { ttlMs: options.cacheTtlMs } : {}),
       ...(options.overrides ? { overrides: options.overrides } : {}),
+      ...(options.preferSystemModels !== undefined
+        ? { preferSystemModels: options.preferSystemModels }
+        : {}),
     };
     this.registry = registry ?? new DatabricksModelRegistry(registryOptions);
     this.model = options.model;
     this.modelClass = options.modelClass;
+    this.preferSystemModels = options.preferSystemModels ?? false;
   }
 
   /** Return the live OpenAI model list, including Codex metadata when requested. */
@@ -72,7 +78,12 @@ export class ModelGateway {
     const query = search?.trim();
     const targets = query ? await this.registry.search(query) : await this.registry.list();
     logger.debug("listed models", { codex, count: targets.length });
-    return listModelsPayload(targets, codex, query !== undefined && query.length > 0);
+    return listModelsPayload(
+      targets,
+      codex,
+      query !== undefined && query.length > 0,
+      this.preferSystemModels,
+    );
   }
 
   /** Resolve and execute one inference request. */
@@ -113,11 +124,11 @@ export class ModelGateway {
           : "No model matches the requested class",
       );
     }
-    const requestedModel = selection.model ?? target.id;
     const route = resolveRoute({
       clientProtocol: protocol,
-      requestedModel,
+      ...(selection.model ? { requestedModel: selection.model } : {}),
       originator: headers.get("originator") ?? undefined,
+      preferSystemModels: this.preferSystemModels,
       features,
       target,
     });

@@ -121,8 +121,16 @@ export type ModelCapabilityOverride = z.infer<typeof ModelCapabilityOverrideSche
 export const ResolveRouteInputSchema = z
   .object({
     clientProtocol: ClientProtocolSchema.describe("Protocol the caller used."),
-    requestedModel: z.string().min(1).describe("Model id or alias requested by the caller."),
+    requestedModel: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Model id or alias requested by the caller; omitted for class or default picks."),
     originator: z.string().optional().describe("Optional Originator header, such as codex."),
+    preferSystemModels: z
+      .boolean()
+      .optional()
+      .describe("Prefer system.ai services over serving endpoints for non-exact requests."),
     features: RequestedFeaturesSchema.describe("Request features that constrain routing."),
     target: ModelTargetSchema.describe("Discovered model selected for this request."),
   })

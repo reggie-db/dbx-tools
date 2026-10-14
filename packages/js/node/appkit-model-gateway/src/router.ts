@@ -4,6 +4,7 @@
  * @module
  */
 
+import { policy } from "@dbx-tools/model";
 import { object } from "@dbx-tools/shared-core";
 import type {
   GatewayRoute,
@@ -25,7 +26,7 @@ export class UnsupportedGatewayFeatureError extends Error {
 
 /** Select the lowest-overhead upstream that preserves the client contract. */
 export function resolveRoute(input: ResolveRouteInput): GatewayRoute {
-  const { clientProtocol, requestedModel, features, target } = input;
+  const { clientProtocol, features, target } = input;
   if (clientProtocol === "openai-embeddings") {
     if (!target.capabilities.embeddings) {
       throw new UnsupportedGatewayFeatureError(["embeddings"]);
@@ -35,9 +36,13 @@ export function resolveRoute(input: ResolveRouteInput): GatewayRoute {
   if (clientProtocol === "openai-responses") {
     rejectStatefulResponses(features);
     if (
-      isCodexOriginator(input.originator) &&
       canUseAiGatewayCodex(target, features) &&
-      !requestedServingEndpoint(requestedModel, target)
+      policy.prefersSystemModelService(
+        input.requestedModel,
+        target.id,
+        target.modelServiceName!,
+        input.preferSystemModels === true,
+      )
     ) {
       return directRoute(input, "databricks-ai-gateway-codex", target.modelServiceName!);
     }
@@ -164,9 +169,4 @@ function canUseAiGatewayCodex(target: ModelTarget, features: RequestedFeatures):
     Boolean(target.capabilities.aiGatewayCodex && target.modelServiceName) &&
     supportsDirectResponses(target, features)
   );
-}
-
-/** Serving-endpoint ids stay on Databricks Responses; aliases and model-service slugs use Codex. */
-function requestedServingEndpoint(requestedModel: string, target: ModelTarget): boolean {
-  return requestedModel.trim().replace(/^(?:dbx|databricks)\//i, "") === target.id;
 }

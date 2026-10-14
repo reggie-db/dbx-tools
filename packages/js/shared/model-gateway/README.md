@@ -69,6 +69,7 @@ import {
 const options = resolveModelGatewayOptions({
   listen: "localhost:4400",
   modelClass: "chat-balanced",
+  preferSystemModels: true,
   bodyLimit: "100mb",
 });
 
@@ -77,7 +78,9 @@ ModelGatewayOptionsSchema.parse(options);
 
 `ModelSelectionOptionsSchema` defines the mutually exclusive `model` and
 `modelClass` fields shared by model-gateway and Genie Code callers. Omit both to
-select the best available chat model.
+select the best available chat model. `preferSystemModels` defaults to `false`;
+when enabled, non-exact requests use `system.ai.*` services instead of workspace
+serving endpoints.
 
 ## Package API
 

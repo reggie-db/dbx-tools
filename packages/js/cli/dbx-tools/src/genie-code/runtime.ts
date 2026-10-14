@@ -71,7 +71,8 @@ async function resolveCodexModel(
       model ? `Genie Code model not found: ${model}` : "No tool-capable chat model is available",
     );
   }
-  return models.codexModelSlug(target);
+  // Genie Code pins the exact system.ai service slug, which wins regardless of gateway preference.
+  return models.codexModelSlug(target, true);
 }
 
 /** Inputs accepted by managed Genie Code preparation and execution. */

@@ -66,30 +66,58 @@ describe("model gateway routing", () => {
     assert.equal(route.translateResponse, false);
   });
 
-  it("uses the Unity Gateway Codex fast path for fuzzy Codex aliases", () => {
+  it("keeps fuzzy aliases on the serving endpoint unless system models are preferred", () => {
     const target = fixtureTarget({
       responses: true,
       aiGatewayCodex: true,
       customTools: true,
     });
+    for (const originator of ["codex", undefined]) {
+      const input = {
+        clientProtocol: "openai-responses" as const,
+        requestedModel: "gpt",
+        ...(originator ? { originator } : {}),
+        features: { ...NO_FEATURES, tools: true },
+        target,
+      };
+
+      assert.equal(resolveRoute(input).upstreamProtocol, "databricks-responses", originator);
+      const preferred = resolveRoute({ ...input, preferSystemModels: true });
+      assert.equal(preferred.upstreamProtocol, "databricks-ai-gateway-codex", originator);
+      assert.equal(preferred.upstreamModel, target.modelServiceName);
+    }
+  });
+
+  it("honors exact system service names for every originator", () => {
+    const target = fixtureTarget({ responses: true, aiGatewayCodex: true, customTools: true });
     const route = resolveRoute({
       clientProtocol: "openai-responses",
-      requestedModel: "gpt",
-      originator: "codex",
-      features: { ...NO_FEATURES, tools: true },
+      requestedModel: target.modelServiceName,
+      features: NO_FEATURES,
       target,
     });
 
     assert.equal(route.upstreamProtocol, "databricks-ai-gateway-codex");
-    assert.equal(route.upstreamModel, target.modelServiceName);
+  });
+
+  it("applies the system preference to class and default selections", () => {
+    const target = fixtureTarget({ responses: true, aiGatewayCodex: true, customTools: true });
+    const input = { clientProtocol: "openai-responses" as const, features: NO_FEATURES, target };
+
+    assert.equal(resolveRoute(input).upstreamProtocol, "databricks-responses");
+    assert.equal(
+      resolveRoute({ ...input, preferSystemModels: true }).upstreamProtocol,
+      "databricks-ai-gateway-codex",
+    );
   });
 
   it("keeps endpoint-name Responses requests on the serving fast path", () => {
-    const target = fixtureTarget({ responses: true, customTools: true });
+    const target = fixtureTarget({ responses: true, aiGatewayCodex: true, customTools: true });
     const route = resolveRoute({
       clientProtocol: "openai-responses",
       requestedModel: target.id,
       originator: "codex",
+      preferSystemModels: true,
       features: NO_FEATURES,
       target,
     });

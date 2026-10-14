@@ -18,12 +18,19 @@ import { rankEndpoints } from "./_ranking.ts";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import { endpointSupportsTools } from "./policy.ts";
 
+/** In-process model-ranking policy controls. */
+export interface ModelSelectionPolicyOptions {
+  /** Prefer Databricks system endpoints instead of excluding them from non-exact selection. */
+  readonly preferSystemModels?: boolean;
+}
+
 /** Rank a catalogue against a model query, best-first. */
 export function lookupModels(
   endpoints: readonly ServingEndpointSummary[],
   query: ModelQuery = {},
+  policy: ModelSelectionPolicyOptions = {},
 ): RankedModel[] {
-  return rankEndpoints(endpoints, query);
+  return rankEndpoints(endpoints, query, policy);
 }
 
 /** Resolve the closest model id in one catalogue snapshot. */
@@ -31,13 +38,18 @@ export function rankModelId(
   endpoints: readonly ServingEndpointSummary[],
   search: string,
   options: ResolveModelOptions = {},
+  policy: ModelSelectionPolicyOptions = {},
 ): ResolvedModel {
-  const [top] = lookupModels(endpoints, {
-    search,
-    limit: 1,
-    ...(options.threshold !== undefined ? { threshold: options.threshold } : {}),
-    ...(options.requiresTools !== undefined ? { requiresTools: options.requiresTools } : {}),
-  });
+  const [top] = lookupModels(
+    endpoints,
+    {
+      search,
+      limit: 1,
+      ...(options.threshold !== undefined ? { threshold: options.threshold } : {}),
+      ...(options.requiresTools !== undefined ? { requiresTools: options.requiresTools } : {}),
+    },
+    policy,
+  );
   if (!top) return { modelId: search, matched: false };
   return { modelId: top.endpoint.name, matched: true, score: top.score };
 }
@@ -46,13 +58,14 @@ export function rankModelId(
 export function resolveModel(
   endpoints: readonly ServingEndpointSummary[],
   input: ResolveModelInput = {},
+  policy: ModelSelectionPolicyOptions = {},
 ): ResolvedModelSelection {
   if (input.explicit !== undefined) {
     if (input.fuzzy === false) {
       if (input.requiresTools) assertToolSupport(endpoints, input.explicit);
       return { modelId: input.explicit, source: "explicit" };
     }
-    const [top] = lookupModels(endpoints, buildQuery(input, input.explicit));
+    const [top] = lookupModels(endpoints, buildQuery(input, input.explicit), policy);
     if (input.requiresTools && !top) {
       throw new Error(`No tool-capable model matches "${input.explicit}"`);
     }
@@ -70,7 +83,7 @@ export function resolveModel(
   }
 
   const source = input.modelClass !== undefined ? "class" : "fallback";
-  const [top] = lookupModels(endpoints, buildQuery(input, undefined));
+  const [top] = lookupModels(endpoints, buildQuery(input, undefined), policy);
   if (top) return { modelId: top.endpoint.name, source };
 
   if (input.liveOnly) {

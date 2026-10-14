@@ -33,21 +33,25 @@ export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: true,
   preserveOrder?: boolean,
+  preferSystemModels?: boolean,
 ): CodexModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: false,
   preserveOrder?: boolean,
+  preferSystemModels?: boolean,
 ): OpenAIModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
   preserveOrder?: boolean,
+  preferSystemModels?: boolean,
 ): ModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
   preserveOrder = false,
+  preferSystemModels = false,
 ): ModelListResponse {
   const available = targets
     .filter((target) => target.endpoint?.status?.deprecated !== true)
@@ -59,7 +63,7 @@ export function listModelsPayload(
   }
   if (includeCodex) {
     return {
-      models: available.map((target, index) => codexModel(target, index + 1)),
+      models: available.map((target, index) => codexModel(target, index + 1, preferSystemModels)),
     };
   }
   return {
@@ -91,19 +95,23 @@ function openAiModel(target: ModelTarget): OpenAIModel {
   };
 }
 
-/** Codex `/v1/models` slug for a resolved gateway target. */
-export function codexModelSlug(target: ModelTarget): string {
+/** Codex `/v1/models` slug: the `system.ai.*` service when preferred, else the endpoint id. */
+export function codexModelSlug(target: ModelTarget, preferSystemModels: boolean): string {
   const model =
-    target.capabilities.aiGatewayCodex && target.modelServiceName
+    preferSystemModels && target.capabilities.aiGatewayCodex && target.modelServiceName
       ? target.modelServiceName
       : target.id;
   return `databricks/${model}`;
 }
 
-function codexModel(target: ModelTarget, priority: number): CodexModel {
+function codexModel(
+  target: ModelTarget,
+  priority: number,
+  preferSystemModels: boolean,
+): CodexModel {
   const efforts = target.reasoningEfforts;
   return {
-    slug: codexModelSlug(target),
+    slug: codexModelSlug(target, preferSystemModels),
     display_name: target.displayName,
     description: target.endpoint?.description ?? "Databricks model service",
     base_instructions: CODEX_BASE_INSTRUCTIONS,
