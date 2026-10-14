@@ -32,6 +32,7 @@ const DEFAULT_FUZZY_THRESHOLD = 0.4;
 interface NativeRankingOptions {
   readonly includeDeprecated?: boolean;
   readonly modelClass?: ModelClass;
+  readonly preferSystemModels?: boolean;
   readonly task?: string;
 }
 
@@ -60,6 +61,7 @@ export function rankEndpoints(
   const search = query.search?.trim();
   const requestedClass = options.modelClass ?? query.modelClass;
   const includeDeprecated = query.includeDeprecated ?? options.includeDeprecated ?? false;
+  const preferSystemModels = options.preferSystemModels ?? false;
   const eligible = requestedClass ? classesAtOrBelow(requestedClass) : CHAT_CLASS_ORDER;
   const candidates: RankedModel[] = [];
   if (search && requestedClass === undefined) {
@@ -83,18 +85,24 @@ export function rankEndpoints(
     }
   }
 
-  let ranked =
-    !search && requestedClass === undefined
-      ? preferLatestWithinLeadingFamily(candidates)
-      : candidates;
-  if (search) {
-    const exact = candidates.find((candidate) => candidate.endpoint.name === search);
-    if (exact) {
-      ranked = [{ ...exact, score: 0 }];
-    } else {
+  const exact = search
+    ? candidates.find((candidate) => candidate.endpoint.name === search)
+    : undefined;
+  let ranked: RankedModel[];
+  if (exact) {
+    ranked = [{ ...exact, score: 0 }];
+  } else {
+    const selectable = preferSystemModels
+      ? preferSystemCandidates(candidates)
+      : candidates.filter((candidate) => !isSystemModel(candidate.endpoint));
+    ranked =
+      !search && requestedClass === undefined
+        ? preferLatestWithinLeadingFamily(selectable, preferSystemModels)
+        : selectable;
+    if (search) {
       const threshold = query.threshold ?? DEFAULT_FUZZY_THRESHOLD;
       const searchTokens = tokenize(search);
-      const tokenMatches = candidates
+      const tokenMatches = selectable
         .filter((candidate) => {
           const candidateTokens = new Set(searchableValues(candidate.endpoint).flatMap(tokenize));
           return (
@@ -103,9 +111,9 @@ export function rankEndpoints(
         })
         .map((candidate) => ({ ...candidate, score: 0 }));
       if (tokenMatches.length > 0) {
-        ranked = tokenMatches.sort(compareRanked);
+        ranked = tokenMatches.sort((left, right) => compareRanked(left, right, preferSystemModels));
       } else {
-        const fuse = new Fuse(candidates, {
+        const fuse = new Fuse(selectable, {
           keys: [
             "endpoint.name",
             "endpoint.displayName",
@@ -125,7 +133,7 @@ export function rankEndpoints(
               .search(normalizedSearch)
               .filter((result) => (result.score ?? 0) <= threshold)
               .map((result) => ({ ...result.item, score: result.score ?? 0 }))
-              .sort(compareRanked)
+              .sort((left, right) => compareRanked(left, right, preferSystemModels))
           : [];
       }
     }
@@ -137,14 +145,17 @@ export function rankEndpoints(
   return query.limit === undefined ? restored : restored.slice(0, Math.max(0, query.limit));
 }
 
-function preferLatestWithinLeadingFamily(candidates: readonly RankedModel[]): RankedModel[] {
+function preferLatestWithinLeadingFamily(
+  candidates: readonly RankedModel[],
+  preferSystemModels: boolean,
+): RankedModel[] {
   const leading = candidates[0];
   if (!leading) return [];
   const family = modelFamily(leading.endpoint.name);
   if (!family) return [...candidates];
   const sameFamily = candidates
     .filter((candidate) => modelFamily(candidate.endpoint.name) === family)
-    .sort(compareRanked);
+    .sort((left, right) => compareRanked(left, right, preferSystemModels));
   const selected = new Set(sameFamily.map((candidate) => candidate.endpoint.name));
   return [
     ...sameFamily,
@@ -252,9 +263,14 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
   });
 }
 
-function compareRanked(left: RankedModel, right: RankedModel): number {
+function compareRanked(left: RankedModel, right: RankedModel, preferSystemModels: boolean): number {
   const score = Math.round((left.score ?? 0) * 1000) - Math.round((right.score ?? 0) * 1000);
   if (score !== 0) return score;
+  if (preferSystemModels) {
+    const leftSystem = isSystemModel(left.endpoint);
+    const rightSystem = isSystemModel(right.endpoint);
+    if (leftSystem !== rightSystem) return leftSystem ? -1 : 1;
+  }
   const leftOss = isOpenWeightsGpt(left.endpoint.name);
   const rightOss = isOpenWeightsGpt(right.endpoint.name);
   if (leftOss !== rightOss) return leftOss ? 1 : -1;
@@ -267,6 +283,17 @@ function compareRanked(left: RankedModel, right: RankedModel): number {
   const variant = modelVariantRank(left.endpoint.name) - modelVariantRank(right.endpoint.name);
   if (variant !== 0) return variant;
   return MODEL_CLASS_ORDER.indexOf(left.modelClass) - MODEL_CLASS_ORDER.indexOf(right.modelClass);
+}
+
+function preferSystemCandidates(candidates: readonly RankedModel[]): RankedModel[] {
+  return [
+    ...candidates.filter((candidate) => isSystemModel(candidate.endpoint)),
+    ...candidates.filter((candidate) => !isSystemModel(candidate.endpoint)),
+  ];
+}
+
+function isSystemModel(endpoint: ServingEndpointSummary): boolean {
+  return endpoint.name.toLowerCase().startsWith("system.ai.");
 }
 
 function modelVariantRank(name: string): number {

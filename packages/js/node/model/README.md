@@ -18,6 +18,19 @@ const selected = await models.resolveModel({ explicit: "sonnet" });
 console.log(selected.modelId);
 ```
 
+By default, non-exact requests route to workspace serving endpoints such as
+`databricks-gpt-5-6-sol`. Opt in to route Responses requests through the matching
+`system.ai.*` AI Gateway service instead:
+
+```ts
+const models = await createModelClient({ preferSystemModels: true });
+const route = await models.route({ explicit: "gpt-5-6-sol", protocol: "responses" });
+// route.modelId === "system.ai.gpt-5-6-sol"
+```
+
+An exact endpoint id or exact `system.ai.*` name always wins, regardless of this
+preference.
+
 Browser-safe request/result schemas and endpoint classification types live in
 [`@dbx-tools/shared-model`](../../shared/model).
 

@@ -34,6 +34,9 @@ export class ModelGatewayPlugin extends Plugin<ModelGatewayPluginConfig> {
       ...(config.overrides ? { overrides: config.overrides } : {}),
       ...(config.model ? { model: config.model } : {}),
       ...(config.modelClass ? { modelClass: config.modelClass } : {}),
+      ...(config.preferSystemModels !== undefined
+        ? { preferSystemModels: config.preferSystemModels }
+        : {}),
     });
   }
 

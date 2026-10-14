@@ -9,6 +9,7 @@ import {
 describe("model-gateway options", () => {
   it("owns shared server defaults", () => {
     assert.deepEqual(MODEL_GATEWAY_DEFAULTS, {
+      preferSystemModels: false,
       listen: { scheme: "tcp", host: "localhost", port: 4000 },
       bodyLimit: "100mb",
     });
@@ -22,6 +23,7 @@ describe("model-gateway options", () => {
         profile: " PROFILE ",
       }),
       {
+        preferSystemModels: false,
         listen: { scheme: "tcp", host: "localhost", port: 4400 },
         profile: "PROFILE",
         bodyLimit: "100mb",
@@ -45,6 +47,11 @@ describe("model-gateway options", () => {
       () => resolveModelGatewayOptions({ model: "gpt", modelClass: "chat-balanced" }),
       /mutually exclusive/,
     );
+  });
+
+  it("defaults system-model preference off and allows explicit opt-in", () => {
+    assert.equal(resolveModelGatewayOptions().preferSystemModels, false);
+    assert.equal(resolveModelGatewayOptions({ preferSystemModels: true }).preferSystemModels, true);
   });
 
   it("rejects public listener hosts", () => {

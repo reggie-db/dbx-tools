@@ -13,7 +13,12 @@ import type {
   ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import { lookupModels, rankModelId, resolveModel } from "./_selection.ts";
+import {
+  lookupModels,
+  rankModelId,
+  resolveModel,
+  type ModelSelectionPolicyOptions,
+} from "./_selection.ts";
 import {
   listServingEndpoints,
   type ListServingEndpointsOptions,
@@ -21,6 +26,7 @@ import {
 } from "./model-catalog.ts";
 
 export { lookupModels, rankModelId, resolveModel } from "./_selection.ts";
+export type { ModelSelectionPolicyOptions } from "./_selection.ts";
 
 /** Intent plus catalogue cache controls passed to {@link selectModel}. */
 export interface SelectModelInput extends ResolveModelInput {
@@ -39,10 +45,11 @@ export async function rankModelIdLive(
   load: (force: boolean) => Promise<readonly ServingEndpointSummary[]>,
   search: string,
   options: ResolveModelOptions = {},
+  policy: ModelSelectionPolicyOptions = {},
 ): Promise<ResolvedModel> {
-  const resolved = rankModelId(await load(false), search, options);
+  const resolved = rankModelId(await load(false), search, options, policy);
   if (resolved.matched) return resolved;
-  return rankModelId(await load(true), search, options);
+  return rankModelId(await load(true), search, options, policy);
 }
 
 /** List and rank a workspace model catalogue. */

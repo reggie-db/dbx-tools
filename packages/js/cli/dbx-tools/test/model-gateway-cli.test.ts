@@ -23,6 +23,7 @@ describe("model gateway CLI", () => {
     assert.match(help, /PROFILE/);
     assert.match(help, /--model <value>/);
     assert.match(help, /--model-class <value>/);
+    assert.match(help, /--prefer-system-models/);
     assert.match(help, /--body-limit <value>/);
     assert.match(help, /BODY_LIMIT/);
     assert.doesNotMatch(help, /bearer-token/i);
@@ -82,6 +83,7 @@ describe("model gateway CLI", () => {
     );
 
     assert.deepEqual(definition?.command?.arguments, [
+      "--no-prefer-system-models",
       "--listen",
       "tcp://localhost:4401",
       "--profile",
@@ -122,8 +124,20 @@ describe("model gateway CLI", () => {
         listen: { scheme: "tcp", host: "localhost", port: 4410 },
         profile: "MODEL-PROFILE",
         bodyLimit: "100mb",
+        preferSystemModels: false,
       },
     ]);
+  });
+
+  it("passes the system-model preference to the foreground gateway", async () => {
+    const calls: Parameters<ModelGatewayCliDependencies["start"]>[0][] = [];
+    await buildProgram("dbx model-gateway", {
+      async start(options) {
+        calls.push(options);
+      },
+    }).parseAsync(["--prefer-system-models"], { from: "user" });
+
+    assert.equal(calls[0]?.preferSystemModels, true);
   });
 
   it("reads the hidden bearer token only from the environment", async () => {

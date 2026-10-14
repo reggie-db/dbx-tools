@@ -395,6 +395,46 @@ describe("lookupModels", () => {
     assert.deepEqual(names(ranked), ["databricks-gpt-5-6-sol", "databricks-gpt-5-6-luna"]);
   });
 
+  it("excludes system endpoints by default and prefers them only when enabled", () => {
+    const models = [
+      chat("system.ai.gpt-5-6-sol"),
+      chat("databricks-gpt-5-6-sol"),
+      chat("databricks-gpt-5-5-pro"),
+    ];
+
+    assert.equal(
+      resolveModel(models, { explicit: "gpt-5-6-sol" }).modelId,
+      "databricks-gpt-5-6-sol",
+    );
+    assert.equal(
+      resolveModel(models, { explicit: "gpt-5-6-sol" }, { preferSystemModels: true }).modelId,
+      "system.ai.gpt-5-6-sol",
+    );
+    assert.deepEqual(names(lookupModels(models, { search: "gpt" })), [
+      "databricks-gpt-5-6-sol",
+      "databricks-gpt-5-5-pro",
+    ]);
+    assert.deepEqual(names(lookupModels(models, { search: "gpt" }, { preferSystemModels: true })), [
+      "system.ai.gpt-5-6-sol",
+      "databricks-gpt-5-6-sol",
+      "databricks-gpt-5-5-pro",
+    ]);
+  });
+
+  it("keeps exact endpoint ids ahead of the system preference", () => {
+    const models = [chat("system.ai.gpt-5-6-sol"), chat("databricks-gpt-5-6-sol")];
+
+    assert.equal(
+      resolveModel(models, { explicit: "databricks-gpt-5-6-sol" }, { preferSystemModels: true })
+        .modelId,
+      "databricks-gpt-5-6-sol",
+    );
+    assert.equal(
+      resolveModel(models, { explicit: "system.ai.gpt-5-6-sol" }).modelId,
+      "system.ai.gpt-5-6-sol",
+    );
+  });
+
   it("does not let GPT-OSS parameter size outrank hosted GPT for a family search", () => {
     const oss = { ...chat("databricks-gpt-oss-120b"), supportsTools: true };
     const ranked = lookupModels([oss, chat("databricks-gpt-5-6-sol")], { search: "gpt" });

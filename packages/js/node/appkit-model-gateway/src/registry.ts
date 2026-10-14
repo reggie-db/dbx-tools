@@ -42,6 +42,7 @@ export interface ModelRegistry {
 export interface ModelRegistryOptions {
   readonly ttlMs?: number;
   readonly overrides?: readonly ModelCapabilityOverride[];
+  readonly preferSystemModels?: boolean;
   /** Discover models with this client instead of the AppKit execution context. */
   readonly client?: WorkspaceClient;
 }
@@ -56,11 +57,13 @@ interface RegistryContext {
 export class DatabricksModelRegistry implements ModelRegistry {
   private readonly ttlMs: number;
   private readonly overrides: readonly ModelCapabilityOverride[];
+  private readonly preferSystemModels: boolean;
   private readonly client: WorkspaceClient | undefined;
 
   constructor(options: ModelRegistryOptions = {}) {
     this.ttlMs = positiveTtl(options.ttlMs);
     this.overrides = options.overrides ?? [];
+    this.preferSystemModels = options.preferSystemModels ?? false;
     this.client = options.client;
   }
 
@@ -87,7 +90,14 @@ export class DatabricksModelRegistry implements ModelRegistry {
   ): Promise<ModelTarget | undefined> {
     const requested = model === undefined ? undefined : unqualifiedModel(model);
     const targets = await this.list();
-    const exact =
+    const exactId =
+      requested === undefined
+        ? undefined
+        : targets.find(
+            (target) =>
+              target.id.localeCompare(requested, undefined, { sensitivity: "accent" }) === 0,
+          );
+    const exactAlias =
       requested === undefined
         ? undefined
         : targets.find((target) =>
@@ -95,6 +105,7 @@ export class DatabricksModelRegistry implements ModelRegistry {
               (alias) => alias.localeCompare(requested, undefined, { sensitivity: "accent" }) === 0,
             ),
           );
+    const exact = exactId ?? exactAlias;
     if (exact && matchesResolveOptions(exact, options)) {
       logger.debug("resolved exact model", { requested, resolved: exact.id });
       return exact;
@@ -103,10 +114,16 @@ export class DatabricksModelRegistry implements ModelRegistry {
     const endpoints = targets
       .map((target) => target.endpoint)
       .filter((endpoint): endpoint is ServingEndpointSummary => endpoint !== undefined);
-    const resolved = modelResolve.resolveModel(endpoints, {
-      ...(requested !== undefined ? { explicit: requested } : {}),
-      ...options,
-    });
+    const resolved = modelResolve.resolveModel(
+      endpoints,
+      {
+        ...(requested !== undefined ? { explicit: requested } : {}),
+        ...options,
+      },
+      {
+        preferSystemModels: this.preferSystemModels,
+      },
+    );
     const target = targets.find((candidate) => candidate.id === resolved.modelId);
     logger.debug("resolved fuzzy model", {
       requested,
@@ -123,11 +140,23 @@ export class DatabricksModelRegistry implements ModelRegistry {
       .map((target) => target.endpoint)
       .filter((endpoint): endpoint is ServingEndpointSummary => endpoint !== undefined);
     const ranked = [
-      ...modelResolve.lookupModels(endpoints, { search: query }),
-      ...modelResolve.lookupModels(endpoints, {
-        search: query,
-        modelClass: ModelClass.Embedding,
-      }),
+      ...modelResolve.lookupModels(
+        endpoints,
+        { search: query },
+        {
+          preferSystemModels: this.preferSystemModels,
+        },
+      ),
+      ...modelResolve.lookupModels(
+        endpoints,
+        {
+          search: query,
+          modelClass: ModelClass.Embedding,
+        },
+        {
+          preferSystemModels: this.preferSystemModels,
+        },
+      ),
     ].sort((left, right) => (left.score ?? 0) - (right.score ?? 0));
     return ranked
       .map(({ endpoint }) => byId.get(endpoint.name))
@@ -155,7 +184,7 @@ export class DatabricksModelRegistry implements ModelRegistry {
     const published = metadata.modelCapabilitiesFor(endpoint);
     const family = endpoint.family?.toLowerCase();
     const openAiFamily = family === "gpt" || family === "openai" || endpoint.name.includes("codex");
-    const modelServiceName = normalizedModelServiceName(endpoint.modelServiceName);
+    const modelServiceName = policy.modelServiceName(endpoint.modelServiceName);
     const embeddings =
       endpoint.class === ModelClass.Embedding || endpoint.task === "llm/v1/embeddings";
     const capabilities: ModelCapabilities = {
@@ -235,18 +264,6 @@ function positiveTtl(value = DEFAULT_CACHE_TTL_MS): number {
     throw new Error("Model registry ttlMs must be a positive finite number");
   }
   return value;
-}
-
-function normalizedModelServiceName(value: string | undefined): string | undefined {
-  const normalized = value?.trim().replace(/^databricks\//, "");
-  if (!normalized) return undefined;
-  if (normalized.startsWith("system.ai.databricks-")) {
-    return `system.ai.${normalized.slice("system.ai.databricks-".length)}`;
-  }
-  if (normalized.startsWith("databricks-")) {
-    return `system.ai.${normalized.slice("databricks-".length)}`;
-  }
-  return normalized;
 }
 
 function matchesResolveOptions(target: ModelTarget, options: ModelRegistryResolveOptions): boolean {

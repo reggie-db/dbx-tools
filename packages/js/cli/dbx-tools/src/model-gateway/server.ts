@@ -63,6 +63,7 @@ export async function startModelGateway(options: ModelGatewayOptions = {}): Prom
   const gateway = new ModelGateway({
     ...(resolved.model ? { model: resolved.model } : {}),
     ...(resolved.modelClass ? { modelClass: resolved.modelClass } : {}),
+    preferSystemModels: resolved.preferSystemModels,
   });
   const client = await workspaceClient.createWorkspaceClient({
     ...(resolved.profile ? { profile: resolved.profile } : {}),

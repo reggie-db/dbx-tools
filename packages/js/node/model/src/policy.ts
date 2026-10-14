@@ -96,6 +96,49 @@ export function isFoundationModelIdentity(name: string): boolean {
   return /^(?:databricks-|system\.ai\.)/i.test(name.trim());
 }
 
+/** Normalize a served-entity identity to its AI Gateway model-service name. */
+export function modelServiceName(value: string | undefined): string | undefined {
+  const normalized = value?.trim().replace(/^databricks\//, "");
+  if (!normalized) return undefined;
+  if (normalized.startsWith("system.ai.databricks-")) {
+    return `system.ai.${normalized.slice("system.ai.databricks-".length)}`;
+  }
+  if (normalized.startsWith("databricks-")) {
+    return `system.ai.${normalized.slice("databricks-".length)}`;
+  }
+  return normalized;
+}
+
+/** Return the `system.ai.*` AI Gateway Codex service behind an endpoint, when one exists. */
+export function systemModelService(
+  endpoint: Pick<ServingEndpointSummary, "name" | "modelServiceName">,
+): string | undefined {
+  const service = modelServiceName(endpoint.modelServiceName);
+  if (!service?.startsWith("system.ai.")) return undefined;
+  const family = modelFamily(endpoint.name);
+  return family === ModelFamily.Claude || family === ModelFamily.Gemini ? undefined : service;
+}
+
+/**
+ * Return whether a request should use the `system.ai.*` service instead of the
+ * serving endpoint. An exact endpoint id or exact service name always wins;
+ * otherwise `preferSystemModels` decides.
+ */
+export function prefersSystemModelService(
+  requested: string | undefined,
+  endpointName: string,
+  serviceName: string,
+  preferSystemModels: boolean,
+): boolean {
+  const name = requested
+    ?.trim()
+    .replace(/^(?:dbx|databricks)\//i, "")
+    .toLowerCase();
+  if (name === endpointName.toLowerCase()) return false;
+  if (name === serviceName.toLowerCase()) return true;
+  return preferSystemModels;
+}
+
 /** Return whether an identity is hosted GPT-OSS rather than a GPT generation. */
 export function isOpenWeightsGpt(name: string): boolean {
   return modelFamily(name) === "gpt" && /(?:^|[-_.])oss(?:[-_.]|$)/i.test(name);

@@ -26,6 +26,49 @@ describe("ModelClient", () => {
     await client.listModels(true);
     assert.equal(calls, 2);
     assert.equal(client.status().cacheTtlMs, DEFAULT_MODEL_CLIENT_CACHE_TTL_MS);
+    assert.equal(client.status().preferSystemModels, false);
+  });
+
+  it("applies the client-level system-model preference", async () => {
+    const client = createModelClientWithDatabricksClient(
+      fakeClient(
+        async () => ({
+          endpoints: [endpoint("system.ai.gpt-5-6-sol"), endpoint("databricks-gpt-5-6-sol")],
+        }),
+        "prefer-system-models",
+      ),
+      DEFAULT_MODEL_CLIENT_CACHE_TTL_MS,
+      true,
+    );
+
+    assert.equal(
+      (await client.route({ explicit: "gpt-5-6-sol", protocol: "chat" })).modelId,
+      "system.ai.gpt-5-6-sol",
+    );
+    assert.equal(client.status().preferSystemModels, true);
+  });
+
+  it("routes Responses through the system.ai service only when preferred or exact", async () => {
+    const load = async () => ({ endpoints: [endpoint("databricks-gpt-5-6-sol")] });
+    const workspace = createModelClientWithDatabricksClient(fakeClient(load, "service-default"));
+    const system = createModelClientWithDatabricksClient(
+      fakeClient(load, "service-preferred"),
+      DEFAULT_MODEL_CLIENT_CACHE_TTL_MS,
+      true,
+    );
+    const route = (client: typeof workspace, explicit: string) =>
+      client.route({ explicit, protocol: "responses" });
+
+    assert.equal((await route(workspace, "gpt-5-6-sol")).modelId, "databricks-gpt-5-6-sol");
+    assert.equal(
+      (await route(workspace, "gpt-5-6-sol")).url,
+      `${HOST}/serving-endpoints/responses`,
+    );
+    const exactSystem = await route(workspace, "system.ai.gpt-5-6-sol");
+    assert.equal(exactSystem.modelId, "system.ai.gpt-5-6-sol");
+    assert.equal(exactSystem.url, `${HOST}/ai-gateway/codex/v1/responses`);
+    assert.equal((await route(system, "gpt-5-6-sol")).modelId, "system.ai.gpt-5-6-sol");
+    assert.equal((await route(system, "databricks-gpt-5-6-sol")).modelId, "databricks-gpt-5-6-sol");
   });
 
   it("isolates catalogues by principal", async () => {

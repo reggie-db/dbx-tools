@@ -30,9 +30,14 @@ import {
 
 import { normalizeEndpoints } from "./_ranking.ts";
 import { lookupModels, resolveModel } from "./_selection.ts";
-import { chatCompletionsUrl, invocationsUrl, responsesUpstreamUrl } from "./invoke.ts";
+import {
+  aiGatewayCodexResponsesUrl,
+  chatCompletionsUrl,
+  invocationsUrl,
+  responsesUpstreamUrl,
+} from "./invoke.ts";
 import { hydrateModelMetadata, modelMetadataFor } from "./metadata.ts";
-import { modelServingApi } from "./policy.ts";
+import { modelServingApi, prefersSystemModelService, systemModelService } from "./policy.ts";
 
 const logger = log.logger("model/client");
 
@@ -53,6 +58,8 @@ export interface ModelClientOptions {
   cacheTtlMs?: number;
   /** Hydrate Node-only metadata caches before constructing the client. */
   hydrateMetadata?: boolean;
+  /** Prefer `system.ai.*` services over serving endpoints for non-exact model selection. */
+  preferSystemModels?: boolean;
 }
 
 /** Secret-free runtime identity and cache configuration. */
@@ -62,6 +69,7 @@ export interface ModelClientStatus {
   readonly principal: string;
   readonly workspaceId?: string;
   readonly cacheTtlMs: number;
+  readonly preferSystemModels: boolean;
 }
 
 /** Serving protocol selected for one resolved model. */
@@ -162,6 +170,7 @@ class DefaultModelClient implements ModelClient {
   constructor(
     private readonly client: DatabricksModelClient,
     private readonly cacheTtlMs: number,
+    private readonly preferSystemModels: boolean,
   ) {}
 
   async listModels(refresh = false): Promise<ServingEndpointSummary[]> {
@@ -169,7 +178,9 @@ class DefaultModelClient implements ModelClient {
   }
 
   async searchModels(query: ModelQuery = {}, refresh = false): Promise<RankedModel[]> {
-    return lookupModels(await this.catalogue(refresh), query).map(({ endpoint, ...ranked }) => ({
+    return lookupModels(await this.catalogue(refresh), query, {
+      preferSystemModels: this.preferSystemModels,
+    }).map(({ endpoint, ...ranked }) => ({
       ...ranked,
       endpoint: cloneEndpoint(endpoint),
     }));
@@ -182,19 +193,34 @@ class DefaultModelClient implements ModelClient {
         ? { ...selection, modelClass: ModelClass.Embedding }
         : selection;
     const catalogue = await this.catalogue(refresh);
-    let resolved = resolveModel(catalogue, effectiveSelection);
+    let resolved = resolveModel(catalogue, effectiveSelection, {
+      preferSystemModels: this.preferSystemModels,
+    });
     if (isUnmatchedExplicit(catalogue, effectiveSelection, resolved)) {
-      resolved = resolveModel(await this.catalogue(true), effectiveSelection);
+      resolved = resolveModel(await this.catalogue(true), effectiveSelection, {
+        preferSystemModels: this.preferSystemModels,
+      });
     }
     const endpoint = (await this.catalogue(false)).find(
       (candidate) => candidate.name === resolved.modelId,
     );
     const protocol = requestedProtocol ?? inferProtocol(endpoint, resolved.modelId);
     const host = this.client.host();
-    const url = routeUrl(host, resolved.modelId, protocol);
+    const service = protocol === "responses" && endpoint ? systemModelService(endpoint) : undefined;
+    const system =
+      service !== undefined &&
+      prefersSystemModelService(
+        selection.explicit,
+        resolved.modelId,
+        service,
+        this.preferSystemModels,
+      );
+    const url = system
+      ? aiGatewayCodexResponsesUrl(host)
+      : routeUrl(host, resolved.modelId, protocol);
     const headers = await this.client.auth.headers({ login });
     return {
-      modelId: resolved.modelId,
+      modelId: system ? service : resolved.modelId,
       ...(endpoint ? { endpoint: cloneEndpoint(endpoint) } : {}),
       source: resolved.source,
       protocol,
@@ -217,6 +243,7 @@ class DefaultModelClient implements ModelClient {
       principal: this.client.principal(),
       ...(this.client.workspaceId() ? { workspaceId: this.client.workspaceId() } : {}),
       cacheTtlMs: this.cacheTtlMs,
+      preferSystemModels: this.preferSystemModels,
     };
   }
 
@@ -298,6 +325,7 @@ export async function createModelClient(options: ModelClientOptions = {}): Promi
   return new DefaultModelClient(
     new AuthenticatedModelClient(await createAuthClient(options.auth), globalThis.fetch),
     cacheTtlMs,
+    options.preferSystemModels ?? false,
   );
 }
 
@@ -310,8 +338,9 @@ export function listProfiles(refresh = false): DatabricksProfileSummary[] {
 export function createModelClientWithDatabricksClient(
   client: DatabricksModelClient,
   cacheTtlMs = DEFAULT_MODEL_CLIENT_CACHE_TTL_MS,
+  preferSystemModels = false,
 ): ModelClient {
-  return new DefaultModelClient(client, validateCacheTtl(cacheTtlMs));
+  return new DefaultModelClient(client, validateCacheTtl(cacheTtlMs), preferSystemModels);
 }
 
 /** @internal Create a model client with injectable auth host capabilities. */
@@ -326,6 +355,7 @@ export async function createModelClientWithDependencies(
       dependencies.fetch ?? globalThis.fetch,
     ),
     validateCacheTtl(options.cacheTtlMs),
+    options.preferSystemModels ?? false,
   );
 }
 

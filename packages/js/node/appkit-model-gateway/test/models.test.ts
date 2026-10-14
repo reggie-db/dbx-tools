@@ -25,8 +25,9 @@ describe("model gateway catalogue", () => {
   it("derives Codex slugs from the model-service name when AI Gateway Codex is available", () => {
     const gpt = target("gpt", { responses: true, openResponses: false, customTools: true });
     const claude = target("claude", { anthropic: true, aiGatewayCodex: false });
-    assert.equal(codexModelSlug(gpt), "databricks/system.ai.gpt-test");
-    assert.equal(codexModelSlug(claude), "databricks/databricks-claude-test");
+    assert.equal(codexModelSlug(gpt, true), "databricks/system.ai.gpt-test");
+    assert.equal(codexModelSlug(gpt, false), "databricks/databricks-gpt-test");
+    assert.equal(codexModelSlug(claude, true), "databricks/databricks-claude-test");
   });
 
   it("publishes Codex models with a chat class, sorted by major family then display name", () => {
@@ -44,7 +45,7 @@ describe("model gateway catalogue", () => {
       codex.map((entry) => entry.slug),
       [
         "databricks/databricks-claude-test",
-        "databricks/system.ai.gpt-test",
+        "databricks/databricks-gpt-test",
         "databricks/databricks-gemini-test",
       ],
     );
