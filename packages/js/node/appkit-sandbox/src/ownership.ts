@@ -98,6 +98,10 @@ export const SandboxProjectRecordSchema = z
       .default([])
       .describe("Built-in machine services required by this project."),
     stripPrefix: z.boolean().describe("Whether AppKit strips the project route prefix."),
+    redirectToSlash: z
+      .boolean()
+      .default(true)
+      .describe("Whether AppKit redirects the exact project mount to its trailing-slash URL."),
     createdAt: z.string().datetime().describe("Time the project was first persisted."),
     updatedAt: z.string().datetime().describe("Time the project configuration last changed."),
   })
@@ -276,6 +280,7 @@ export class LakebaseMachineOwnershipStore {
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
               project_config, route_enabled, service_dependencies, strip_prefix,
+              redirect_to_slash,
               created_at, updated_at
        FROM ${this.table("projects")}
        WHERE ${conditions.join(" AND ")}
@@ -295,6 +300,7 @@ export class LakebaseMachineOwnershipStore {
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
               project_config, route_enabled, service_dependencies, strip_prefix,
+              redirect_to_slash,
               created_at, updated_at
        FROM ${this.table("projects")}
        WHERE workspace_scope = $1 AND user_id = $2 AND project_id = $3`,
@@ -314,6 +320,7 @@ export class LakebaseMachineOwnershipStore {
       `SELECT workspace_scope, user_id, project_id, project_name, machine_id,
               directory_path, project_path, route_path, open_path, port,
               project_config, route_enabled, service_dependencies, strip_prefix,
+              redirect_to_slash,
               created_at, updated_at
        FROM ${this.table("projects")}
        WHERE workspace_scope = $1 AND user_id = $2 AND machine_id = $3 AND project_name = $4`,
@@ -328,9 +335,9 @@ export class LakebaseMachineOwnershipStore {
     await this.pool.query(
       `INSERT INTO ${this.table("projects")}
          (workspace_scope, user_id, project_id, project_name, machine_id,
-          directory_path, project_path, route_path, open_path, port, project_config,
-          route_enabled, service_dependencies, strip_prefix)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         directory_path, project_path, route_path, open_path, port, project_config,
+          route_enabled, service_dependencies, strip_prefix, redirect_to_slash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (workspace_scope, user_id, project_id)
        DO UPDATE SET project_name = EXCLUDED.project_name,
                      machine_id = EXCLUDED.machine_id,
@@ -343,6 +350,7 @@ export class LakebaseMachineOwnershipStore {
                      route_enabled = EXCLUDED.route_enabled,
                      service_dependencies = EXCLUDED.service_dependencies,
                      strip_prefix = EXCLUDED.strip_prefix,
+                     redirect_to_slash = EXCLUDED.redirect_to_slash,
                      updated_at = now()`,
       [
         project.workspaceScope,
@@ -359,6 +367,7 @@ export class LakebaseMachineOwnershipStore {
         project.route,
         JSON.stringify(project.serviceDependencies),
         project.stripPrefix,
+        project.redirectToSlash,
       ],
     );
   }
@@ -551,6 +560,7 @@ export class LakebaseMachineOwnershipStore {
           remote_host TEXT,
           remote_port INTEGER,
           strip_prefix BOOLEAN NOT NULL,
+          redirect_to_slash BOOLEAN NOT NULL DEFAULT TRUE,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           PRIMARY KEY (workspace_scope, user_id, project_id)
@@ -566,6 +576,9 @@ export class LakebaseMachineOwnershipStore {
         );
         await client.query(
           `ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS service_dependencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
+        );
+        await client.query(
+          `ALTER TABLE ${projects} ADD COLUMN IF NOT EXISTS redirect_to_slash BOOLEAN NOT NULL DEFAULT TRUE`,
         );
         await client.query(`ALTER TABLE ${projects} ALTER COLUMN remote_host DROP NOT NULL`);
         await client.query(`ALTER TABLE ${projects} ALTER COLUMN remote_port DROP NOT NULL`);
@@ -779,6 +792,7 @@ interface ProjectRow {
   route_enabled: boolean;
   service_dependencies: unknown;
   strip_prefix: boolean;
+  redirect_to_slash: boolean;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -825,6 +839,7 @@ function parseProjectRow(row: ProjectRow): SandboxProjectRecord {
     route: row.route_enabled,
     serviceDependencies: parsePersistedServiceDependencies(row.service_dependencies),
     stripPrefix: row.strip_prefix,
+    redirectToSlash: row.redirect_to_slash,
     createdAt: isoTimestamp(row.created_at),
     updatedAt: isoTimestamp(row.updated_at),
   });

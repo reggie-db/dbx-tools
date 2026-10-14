@@ -418,6 +418,7 @@ describe("managed Sandbox ownership", () => {
     assert.ok(statements.some((statement) => statement.includes("project_config JSONB")));
     assert.ok(statements.some((statement) => statement.includes("route_enabled BOOLEAN")));
     assert.ok(statements.some((statement) => statement.includes("service_dependencies JSONB")));
+    assert.ok(statements.some((statement) => statement.includes("redirect_to_slash BOOLEAN")));
     assert.ok(statements.some((statement) => statement.includes("sandbox_projects_machine_idx")));
     assert.ok(
       statements.some((statement) => statement.includes("sandbox_projects_machine_port_idx")),
@@ -506,6 +507,7 @@ describe("managed Sandbox ownership", () => {
       route_enabled: true,
       service_dependencies: { 0: "desktop" },
       strip_prefix: true,
+      redirect_to_slash: false,
       created_at: new Date("2026-10-12T10:00:00.000Z"),
       updated_at: new Date("2026-10-12T10:01:00.000Z"),
     };
@@ -537,6 +539,7 @@ describe("managed Sandbox ownership", () => {
       port: 8080,
       config: { tools: { node: "lts" } },
       stripPrefix: true,
+      redirectToSlash: false,
     });
     const projects = await store.listProjects("workspace", {
       userId: "user-a",
@@ -546,6 +549,7 @@ describe("managed Sandbox ownership", () => {
     assert.equal(projects[0]?.projectId, "project-1");
     assert.equal(projects[0]?.openPath, "open.html");
     assert.deepEqual(projects[0]?.serviceDependencies, ["desktop"]);
+    assert.equal(projects[0]?.redirectToSlash, false);
     assert.equal(await store.deleteProject("workspace", "user-a", "project-1"), true);
     assert.ok(
       queries.some(({ text }) => text.includes(`INSERT INTO "${OWNERSHIP_SCHEMA}"."projects"`)),
@@ -940,12 +944,15 @@ describe("managed Sandbox ownership", () => {
       port: 8081,
       path: "demo",
       openPath: "dashboard.html?mode=full",
+      redirectToSlash: false,
     });
 
     assert.equal(created.directory, "/home/sandbox-user/projects/demo");
     assert.equal(created.openUrl, `${ssh.projectPathPrefix("user-a")}/demo/open.html`);
+    assert.equal(created.redirectToSlash, true);
     assert.equal(updated.id, created.id);
     assert.equal(updated.port, 8081);
+    assert.equal(updated.redirectToSlash, false);
     assert.equal(
       updated.openUrl,
       `${ssh.projectPathPrefix("user-a")}/demo/dashboard.html?mode=full`,
@@ -970,6 +977,7 @@ describe("managed Sandbox ownership", () => {
     });
     assert.equal(routeLess.openUrl, undefined);
     assert.equal(routeLess.state, "ready");
+    assert.equal(routeLess.redirectToSlash, false);
     assert.equal(store.projects[0]?.route, false);
     assert.deepEqual(store.projects[0]?.serviceDependencies, ["desktop"]);
     assert.deepEqual(startedServices, ["desktop"]);
@@ -1173,9 +1181,7 @@ describe("managed Sandbox ownership", () => {
     assert.equal(reset.directory, "/home/sandbox-user/projects/demo");
     assert.equal(reset.state, "ready");
     assert.ok(
-      commands.some(({ args }) =>
-        args[1]?.endsWith("sh -s -- 'demo' '_dbx-tools-uninstall'"),
-      ),
+      commands.some(({ args }) => args[1]?.endsWith("sh -s -- 'demo' '_dbx-tools-uninstall'")),
     );
     assert.ok(commands.some(({ args }) => args[1]?.includes("sh -s -- 'demo' ''")));
     Object.defineProperty(ssh, "startService", {
@@ -1215,6 +1221,7 @@ describe("managed Sandbox ownership", () => {
       port: 8080,
       config: {},
       stripPrefix: true,
+      redirectToSlash: false,
     });
     const { client } = sandboxClient([
       { sandboxId: "owned", status: "RUNNING", name: managedName },
@@ -1300,6 +1307,7 @@ describe("managed Sandbox ownership", () => {
       port: 8080,
       config: {},
       stripPrefix: true,
+      redirectToSlash: false,
     });
     await store.upsertMachineServiceProject({
       workspaceScope: "workspace",
@@ -1318,6 +1326,7 @@ describe("managed Sandbox ownership", () => {
     Object.defineProperty(first, "ensureSession", { value: async () => unusedSession });
     await first.startReaper(client);
     assert.equal(first.routes.list("owned", "user-a").length, 1);
+    assert.equal(first.routes.list("owned", "user-a")[0]?.redirectToSlash, false);
     assert.deepEqual(
       first.routes
         .list("owned", "user-a", { includeInternal: true })
@@ -1332,6 +1341,7 @@ describe("managed Sandbox ownership", () => {
     Object.defineProperty(second, "ensureSession", { value: async () => unusedSession });
     await second.startReaper(client);
     assert.equal(second.routes.list("owned", "user-a")[0]?.id, "project-1");
+    assert.equal(second.routes.list("owned", "user-a")[0]?.redirectToSlash, false);
     assert.ok(
       second.routes
         .list("owned", "user-a", { includeInternal: true })
@@ -1407,6 +1417,7 @@ describe("managed Sandbox ownership", () => {
       port: 45656,
       config: {},
       stripPrefix: true,
+      redirectToSlash: false,
       route: true,
       serviceDependencies: [],
       createdAt: new Date(now).toISOString(),

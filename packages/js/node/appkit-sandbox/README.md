@@ -109,6 +109,12 @@ unique for the machine, creates `/home/sandbox-user/projects/<path>`, writes `mi
 `path`, loopback `port`, and `openUrl`. The call waits until the runtime-owned
 install and start tasks finish.
 
+Project paths are stored without a trailing slash. An exact request to a routed
+project redirects to `<path>/` by default so relative browser assets resolve
+under the project route. Set `redirectToSlash: false` only when the project must
+serve the exact mount path without redirecting it. Redirects preserve the query
+string.
+
 Set `route: false` for a project that does not serve HTTP. Route-less projects
 still receive a directory, mise environment, and lifecycle tasks, but they do
 not register an AppKit proxy route or return an `openUrl`. Declare required

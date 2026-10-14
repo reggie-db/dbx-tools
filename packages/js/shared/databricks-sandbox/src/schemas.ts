@@ -26,6 +26,9 @@ export const sshProjectSchema = z
     stripPrefix: z
       .boolean()
       .describe("Whether the registered AppKit path is removed before forwarding."),
+    redirectToSlash: z
+      .boolean()
+      .describe("Whether an exact project mount request redirects to the trailing-slash URL."),
     state: z
       .enum(["stopped", "starting", "ready", "error"])
       .describe("Current project route state."),
@@ -337,6 +340,12 @@ export const addSshProjectRequestSchema = z
       .optional()
       .describe(
         "Remove the registered HTTP and WebSocket path before forwarding; defaults true off root. Set false only when the service is configured for the full public base path.",
+      ),
+    redirectToSlash: z
+      .boolean()
+      .optional()
+      .describe(
+        "Redirect an exact project mount request to the trailing-slash URL so browser-relative assets stay under the project path. Defaults true when creating and retains the stored value when updating.",
       ),
   })
   .strict()

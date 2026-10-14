@@ -301,10 +301,7 @@ describe("Sandbox project contracts", () => {
       }).config,
       '[tools]\nnode = "lts"',
     );
-    assert.match(
-      addSshProjectRequestSchema.shape.install.description ?? "",
-      /_dbx-tools-install/,
-    );
+    assert.match(addSshProjectRequestSchema.shape.install.description ?? "", /_dbx-tools-install/);
     assert.match(addSshProjectRequestSchema.shape.start.description ?? "", /machine boot/);
     assert.match(
       addSshProjectRequestSchema.shape.uninstall.description ?? "",
@@ -331,6 +328,7 @@ describe("Sandbox project contracts", () => {
         path: "/sandbox/abc/worker",
         port: 8080,
         stripPrefix: true,
+        redirectToSlash: true,
         state: "stopped",
       }),
     );

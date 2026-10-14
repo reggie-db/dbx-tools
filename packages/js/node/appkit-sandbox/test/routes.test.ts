@@ -26,6 +26,7 @@ describe("SshRouteRegistry", () => {
       });
       assert.equal(route.path, "/sandbox/22padc/sandbox-1-3000");
       assert.equal(route.stripPrefix, true);
+      assert.equal(route.redirectToSlash, false);
       assert.deepEqual(registry.list("sandbox-1", "reggie.pierce@databricks.com"), [route]);
       assert.deepEqual(registry.list("sandbox-1", "other@databricks.com"), []);
       const otherRoute = await registry.add(unusedSession, {
@@ -345,6 +346,12 @@ describe("SshRouteRegistry", () => {
         "/local",
       );
       assert.equal(
+        await fetch(`http://127.0.0.1:${proxyPort}${stripped.path}`, {
+          headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+        }).then((res) => res.text()),
+        "/",
+      );
+      assert.equal(
         await fetch(`http://127.0.0.1:${proxyPort}${stripped.path}/public`, {
           headers: { host: "local-demo.apps.dbx.tools" },
         }).then((response) => response.status),
@@ -356,16 +363,66 @@ describe("SshRouteRegistry", () => {
         }).then(async (response) => `${response.status}:${await response.text()}`),
         "404:Not Found",
       );
-      const redirect = await fetch(`http://127.0.0.1:${proxyPort}${redirected.path}`, {
+      const redirect = await fetch(`http://127.0.0.1:${proxyPort}${redirected.path}?mode=classic`, {
         redirect: "manual",
         headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
       });
       assert.equal(redirect.status, 308);
-      assert.equal(redirect.headers.get("location"), `${redirected.path}/`);
+      assert.equal(redirect.headers.get("location"), `${redirected.path}/?mode=classic`);
     } finally {
       await registry.close();
       await close(proxy);
       await close(remote);
+    }
+  });
+
+  it("redirects exact wake routes before starting the machine", async () => {
+    const registry = new SshRouteRegistry("/sandbox");
+    let activationCount = 0;
+    const proxy = createHttpServer((request, response) => {
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
+      });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
+      registry.middleware()(request as never, response as never, () => {
+        response.statusCode = 404;
+        response.end();
+      });
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const route = await registry.addWakeRoute(
+        {
+          id: "project-redirect",
+          ownerId: "reggie.pierce@databricks.com",
+          machineId: "sandbox-1",
+          remoteHost: "127.0.0.1",
+          remotePort: 3000,
+          path: "/hello",
+          redirectToSlash: true,
+        },
+        async () => {
+          activationCount += 1;
+        },
+      );
+
+      const redirect = await fetch(`http://127.0.0.1:${proxyPort}${route.path}?mode=classic`, {
+        redirect: "manual",
+        headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+      });
+      assert.equal(redirect.status, 308);
+      assert.equal(redirect.headers.get("location"), `${route.path}/?mode=classic`);
+      assert.equal(activationCount, 0);
+
+      const loading = await fetch(`http://127.0.0.1:${proxyPort}${route.path}/`, {
+        headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+      });
+      assert.equal(loading.status, 202);
+      assert.equal(activationCount, 1);
+    } finally {
+      await close(proxy);
+      await registry.close();
     }
   });
 

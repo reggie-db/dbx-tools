@@ -36,6 +36,7 @@ export interface SshForwardedRoute {
   remoteHost: string;
   remotePort: number;
   stripPrefix: boolean;
+  redirectToSlash: boolean;
   state: "ready";
 }
 
@@ -50,7 +51,6 @@ interface RouteTarget {
   retiredSockets: Set<Socket>;
   ownerSockets: Map<string, Set<Socket>>;
   ownerTimers: Map<string, ReturnType<typeof setTimeout>>;
-  redirectToSlash: boolean;
   htmlHead?: string;
   internal: boolean;
   authorizeOwner?: (ownerId: string) => Promise<boolean>;
@@ -174,10 +174,7 @@ export class SshRouteRegistry {
   }
 
   /** Registers a persisted route that can start its machine when no live bridge exists. */
-  async addWakeRoute(
-    input: RouteInput,
-    activate: () => Promise<void>,
-  ): Promise<SshForwardedRoute> {
+  async addWakeRoute(input: RouteInput, activate: () => Promise<void>): Promise<SshForwardedRoute> {
     this.assertOpen();
     return this.withRouteMutation(async () => {
       this.assertOpen();
@@ -192,6 +189,7 @@ export class SshRouteRegistry {
         remoteHost: input.remoteHost,
         remotePort: input.remotePort,
         stripPrefix,
+        redirectToSlash: input.redirectToSlash ?? false,
         state: "ready",
       };
       const collision = [...this.wakeRoutes.values()].find(
@@ -279,7 +277,6 @@ export class SshRouteRegistry {
       retiredSockets: new Set(),
       ownerSockets: new Map(),
       ownerTimers: new Map(),
-      redirectToSlash: input.redirectToSlash ?? false,
       ...optionalHtmlHead(input.htmlHead),
       internal: input.internal ?? false,
       ...(input.authorizeOwner ? { authorizeOwner: input.authorizeOwner } : {}),
@@ -386,6 +383,12 @@ export class SshRouteRegistry {
         response.end("Not Found");
         return;
       }
+      if (access && request.path === access.route.path && access.route.redirectToSlash) {
+        response.statusCode = 308;
+        response.setHeader("location", routeRedirectUrl(request.url, access.route.path));
+        response.end();
+        return;
+      }
       if (wake) {
         this.activateWakeRoute(wake);
         sendLoadingResponse(request.header("accept"), response);
@@ -393,12 +396,6 @@ export class SshRouteRegistry {
       }
       const match = this.match(request.path, requestUser);
       if (!match) return next();
-      if (request.path === match.entry.route.path && match.entry.redirectToSlash) {
-        response.statusCode = 308;
-        response.setHeader("location", routeRedirectUrl(request.url, match.entry.route.path));
-        response.end();
-        return;
-      }
       const injectHead =
         request.method === "GET" && request.path === `${match.entry.route.path}/`
           ? match.entry.htmlHead
@@ -594,7 +591,7 @@ export class SshRouteRegistry {
         throw new Error(`SSH route path ${path} already forwards to a different target`);
       }
       if (
-        (input.redirectToSlash ?? false) !== previous.redirectToSlash ||
+        (input.redirectToSlash ?? false) !== previous.route.redirectToSlash ||
         input.htmlHead !== previous.htmlHead ||
         (input.internal ?? false) !== previous.internal
       ) {
@@ -612,6 +609,7 @@ export class SshRouteRegistry {
         remoteHost: input.remoteHost,
         remotePort: input.remotePort,
         stripPrefix,
+        redirectToSlash: input.redirectToSlash ?? false,
         state: "ready",
       },
     };

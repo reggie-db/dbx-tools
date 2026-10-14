@@ -694,6 +694,7 @@ export class SshRuntime {
         ? normalizeProjectOpenPath(request.openPath)
         : existing?.openPath;
     const stripPrefix = request.stripPrefix ?? existing?.stripPrefix ?? true;
+    const redirectToSlash = request.redirectToSlash ?? existing?.redirectToSlash ?? true;
     const config = mergeProjectMiseConfig(request.config ?? existing?.config, request);
     const routeEnabled = input.route ?? existing?.route ?? true;
     const serviceDependencies = input.serviceDependencies ?? existing?.serviceDependencies ?? [];
@@ -710,6 +711,7 @@ export class SshRuntime {
       (existing.path !== path ||
         existing.port !== port ||
         existing.stripPrefix !== stripPrefix ||
+        existing.redirectToSlash !== redirectToSlash ||
         existing.route !== routeEnabled),
     );
     if (routeChanged) {
@@ -733,6 +735,7 @@ export class SshRuntime {
       route: routeEnabled,
       serviceDependencies,
       stripPrefix,
+      redirectToSlash,
     });
     const stateKey = projectStateKey(record);
     const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
@@ -764,6 +767,7 @@ export class SshRuntime {
           remotePort: port,
           path: projectPath,
           stripPrefix,
+          redirectToSlash,
         });
         record.path = route.path;
         record.stripPrefix = route.stripPrefix;
@@ -1502,6 +1506,7 @@ export class SshRuntime {
       remotePort: project.port,
       path: project.path,
       stripPrefix: project.stripPrefix,
+      redirectToSlash: project.redirectToSlash,
     });
   }
 
@@ -1516,6 +1521,7 @@ export class SshRuntime {
       | "port"
       | "path"
       | "stripPrefix"
+      | "redirectToSlash"
       | "route"
     >,
   ): Promise<void> {
@@ -1533,6 +1539,7 @@ export class SshRuntime {
         remotePort: project.port,
         path: project.path,
         stripPrefix: project.stripPrefix,
+        redirectToSlash: project.redirectToSlash,
       },
       async () => {
         await this.startMachine(client, project.userId, project.machineId);
@@ -1834,6 +1841,7 @@ export class SshRuntime {
       ...(project.route ? { openUrl: projectOpenUrl(project.path, project.openPath) } : {}),
       port: project.port,
       stripPrefix: project.stripPrefix,
+      redirectToSlash: project.redirectToSlash,
       state: remoteState ?? (!project.route || ready ? "ready" : "stopped"),
       ...(log !== undefined ? { log } : {}),
       ...(error !== undefined ? { error } : {}),
@@ -1852,7 +1860,8 @@ export class SshRuntime {
       this.toProject(project, this.projectRouteReady(project)),
     );
     const status =
-      upstreamStatus === "running" && renderedProjects.some((project) => project.state === "starting")
+      upstreamStatus === "running" &&
+      renderedProjects.some((project) => project.state === "starting")
         ? "starting"
         : upstreamStatus;
     return {
@@ -2127,10 +2136,7 @@ function serviceKeyMatchesMachine(key: string, workspaceScope: string, machineId
 }
 
 function projectStateKey(
-  project: Pick<
-    SandboxProjectRecord,
-    "workspaceScope" | "userId" | "machineId" | "projectPath"
-  >,
+  project: Pick<SandboxProjectRecord, "workspaceScope" | "userId" | "machineId" | "projectPath">,
 ): string {
   return `${sessionKey(project.workspaceScope, project.userId, project.machineId)}\0${project.projectPath}`;
 }

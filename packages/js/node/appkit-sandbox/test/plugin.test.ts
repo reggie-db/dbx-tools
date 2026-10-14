@@ -180,6 +180,7 @@ describe("AppKitSshPlugin", () => {
                 path: "/sandbox/project",
                 port: 8080,
                 stripPrefix: true,
+                redirectToSlash: true,
                 state: "error",
                 log: "large project install log",
               },
