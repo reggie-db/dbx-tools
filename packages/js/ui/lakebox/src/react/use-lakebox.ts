@@ -21,7 +21,7 @@ export interface LakeboxState {
   refresh: () => Promise<void>;
   start: () => Promise<void>;
   stop: () => Promise<void>;
-  /** Starts a service when needed and opens it in a new tab. */
+  /** Starts a service when needed, then opens it after it reports ready. */
   open: (service: LakeboxService) => Promise<void>;
   startService: (name: string) => Promise<void>;
   stopService: (name: string) => Promise<void>;
@@ -140,19 +140,14 @@ export function useLakebox(client: LakeboxClient, enabled = true): LakeboxState 
         window.open(resolveServiceUrl(service.openUrl), "_blank", "noopener,noreferrer");
         return Promise.resolve();
       }
-      const pending = window.open("about:blank", "_blank");
-      if (pending) pending.opener = null;
       return run(`service:${service.name}:start`, async () => {
         updateService({ ...service, state: "starting" });
         const started = await client.startService(service.name);
         updateService(started);
         if (started.state !== "ready" || !started.openUrl) {
-          pending?.close();
           throw new Error(started.error ?? `${service.name} did not become ready`);
         }
-        const url = resolveServiceUrl(started.openUrl);
-        if (pending) pending.location.replace(url);
-        else window.open(url, "_blank", "noopener,noreferrer");
+        window.open(resolveServiceUrl(started.openUrl), "_blank", "noopener,noreferrer");
       });
     },
     startService: (name) =>

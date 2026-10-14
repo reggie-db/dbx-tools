@@ -71,7 +71,7 @@ export function LakeboxIndicator({ basePath, className }: LakeboxIndicatorProps)
               {lakeboxTransitioning(summary) ? <Spinner className="size-3" /> : null}
             </div>
             {summary?.supported === false ? null : (
-              <PowerButton state={state} onStop={() => setConfirmStop(true)} compact />
+              <PowerButton state={state} onStop={() => setConfirmStop(true)} />
             )}
           </div>
           {summary?.supported === false ? (

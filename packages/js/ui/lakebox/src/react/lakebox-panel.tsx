@@ -85,12 +85,11 @@ export function LakeboxPanel({ basePath, className }: LakeboxPanelProps) {
         </CardHeader>
         {summary ? (
           <CardContent className="space-y-0 p-0">
-            <p className="truncate border-t px-3 py-2 text-xs text-muted-foreground sm:px-4">
-              Signed in as <span className="font-mono">{summary.user.name}</span>
-              {summary.idleTimeoutSeconds
-                ? `, stops after ${formatDuration(summary.idleTimeoutSeconds)} idle`
-                : null}
-            </p>
+            {running ? (
+              <section aria-label="Lakebox metrics" className="border-t px-3 py-3 sm:px-4">
+                <LakeboxMetrics series={series} />
+              </section>
+            ) : null}
             <ul className="divide-y border-t">
               {summary.services.map((service) => (
                 <ServiceRow
@@ -102,11 +101,6 @@ export function LakeboxPanel({ basePath, className }: LakeboxPanelProps) {
                 />
               ))}
             </ul>
-            {running ? (
-              <section aria-label="Lakebox metrics" className="border-t px-3 py-3 sm:px-4">
-                <LakeboxMetrics series={series} />
-              </section>
-            ) : null}
           </CardContent>
         ) : (
           <CardContent className="flex min-h-16 items-center justify-center gap-2 border-t text-sm text-muted-foreground">
@@ -167,31 +161,31 @@ function ServiceRow({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {service.route ? (
+          {!service.route && service.state !== "ready" ? (
             <Button
               type="button"
-              size="sm"
+              size="icon"
               variant="outline"
-              disabled={busy || lakeboxBusy}
-              onClick={() => void state.open(service)}
-            >
-              {starting ? (
-                <Spinner className="size-3.5" />
-              ) : (
-                <ExternalLinkIcon className="size-3.5" />
-              )}
-              Open
-            </Button>
-          ) : service.state !== "ready" ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
+              aria-label={`Start ${service.name}`}
+              title="Start"
               disabled={busy || lakeboxBusy}
               onClick={() => void state.startService(service.name)}
             >
               <PlayIcon className="size-3.5" />
-              Start
+            </Button>
+          ) : null}
+          {service.kind === "image" ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              aria-label={`Remove ${service.name}`}
+              title="Remove"
+              disabled={busy}
+              onClick={onRemove}
+            >
+              {removing ? <Spinner className="size-4" /> : <Trash2Icon className="size-4" />}
             </Button>
           ) : null}
           {service.state === "ready" ? (
@@ -220,18 +214,21 @@ function ServiceRow({
           >
             <FileTextIcon className="size-4" />
           </Button>
-          {service.kind === "image" ? (
+          {service.route ? (
             <Button
               type="button"
               size="icon"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              aria-label={`Remove ${service.name}`}
-              title="Remove"
-              disabled={busy}
-              onClick={onRemove}
+              variant="outline"
+              aria-label={starting ? `Opening ${service.name}` : `Open ${service.name}`}
+              title={starting ? "Opening" : "Open"}
+              disabled={busy || lakeboxBusy}
+              onClick={() => void state.open(service)}
             >
-              {removing ? <Spinner className="size-4" /> : <Trash2Icon className="size-4" />}
+              {starting ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <ExternalLinkIcon className="size-3.5" />
+              )}
             </Button>
           ) : null}
         </div>
@@ -306,11 +303,9 @@ function ServiceLog({
 export function PowerButton({
   state,
   onStop,
-  compact = false,
 }: {
   state: LakeboxState;
   onStop: () => void;
-  compact?: boolean;
 }) {
   const status = state.summary?.status;
   const changing =
@@ -318,32 +313,50 @@ export function PowerButton({
     state.busy.has("lakebox:stop") ||
     status === "starting" ||
     status === "stopping";
+  if (changing) {
+    const label = status === "stopping" ? "Stopping Lakebox" : "Starting Lakebox";
+    return (
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="shrink-0"
+        aria-label={label}
+        title={label}
+        disabled
+      >
+        <Spinner className="size-3.5" />
+      </Button>
+    );
+  }
   if (state.summary?.canStop) {
     return (
       <Button
         type="button"
-        size="sm"
+        size="icon"
         variant="ghost"
         className="shrink-0 text-destructive hover:text-destructive"
-        disabled={changing}
+        aria-label="Stop Lakebox"
+        title="Stop"
         onClick={onStop}
       >
-        {changing ? <Spinner className="size-3.5" /> : <SquareIcon className="size-3.5" />}
-        {compact ? null : "Stop"}
+        <SquareIcon className="size-3.5" />
       </Button>
     );
   }
+  const label = status === "missing" ? "Create Lakebox" : "Start Lakebox";
   return (
     <Button
       type="button"
-      size="sm"
+      size="icon"
       variant="outline"
       className="shrink-0"
-      disabled={changing || !state.summary?.canStart}
+      aria-label={label}
+      title={status === "missing" ? "Create" : "Start"}
+      disabled={!state.summary?.canStart}
       onClick={() => void state.start()}
     >
-      {changing ? <Spinner className="size-3.5" /> : <PlayIcon className="size-3.5" />}
-      {compact ? null : status === "missing" ? "Create" : "Start"}
+      <PlayIcon className="size-3.5" />
     </Button>
   );
 }
@@ -415,10 +428,4 @@ export function StatusDot({ status, className }: { status?: LakeboxStatus; class
 export function statusLabel(status: LakeboxStatus | undefined, loading: boolean): string {
   if (!status) return loading ? "loading" : "unknown";
   return status === "missing" ? "not created" : status;
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds % 3_600 === 0) return `${seconds / 3_600} h`;
-  if (seconds % 60 === 0) return `${seconds / 60} min`;
-  return `${seconds} s`;
 }
