@@ -12,6 +12,7 @@ date and final status.
 
 ## Active plans
 
+- [Replace Sandbox projects with agent-facing containers](2026-10-13-container-first-sandbox-runtime.md)
 - [Consolidate packages and reduce test orchestration cost](2026-10-07-package-and-test-consolidation.md)
 - [Cache Databricks workspace skill discovery across turns](2026-10-08-cache-databricks-workspace-skills.md)
 - [Support service-principal MLflow feedback in Databricks Apps](2026-10-08-apps-feedback-service-principal-client.md)
