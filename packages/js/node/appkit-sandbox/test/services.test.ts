@@ -261,7 +261,9 @@ describe("packaged Sandbox services", () => {
     assert.match(runner, /__DBX_TOOLS_ATTEMPT__/);
     assert.match(runner, /__DBX_TOOLS_RESULT__/);
     assert.match(runner, /\.dbx-tools-install\.sha256/);
-    assert.match(runner, /\[ "\$task" = start \] && \[ "\$install" = true \]/);
+    assert.match(runner, /runner_version=3/);
+    assert.match(runner, /if \[ "\$task" = start \]; then/);
+    assert.doesNotMatch(runner, /\[ "\$task" = start \] && \[ "\$install" = true \]/);
     assert.match(runner, /"\$mise_bin" run "\$task"/);
     assert.equal(environment?.DBX_TOOLS_SERVICE_PATH, "/sandbox/terminal/machine");
     assert.equal(target.remotePort, 7681);
