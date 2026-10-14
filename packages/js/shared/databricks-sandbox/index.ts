@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-databricks-sandbox";
-export const PACKAGE_VERSION = "0.9.127";
+export const PACKAGE_VERSION = "0.9.128";
 export * as client from "./src/client.ts";
 export * as schemas from "./src/schemas.ts";
 export { SSH_PLUGIN_NAME, SSH_DEFAULT_BASE_PATH, SSH_ROUTES, SshClientConfigSchema, sshRoute } from "./src/client.ts";
