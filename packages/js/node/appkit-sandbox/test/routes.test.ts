@@ -46,6 +46,162 @@ describe("SshRouteRegistry", () => {
     }
   });
 
+  it("starts dormant routes and returns browser or JSON loading responses", async () => {
+    const registry = new SshRouteRegistry("/sandbox");
+    let activationCount = 0;
+    let finishActivation!: () => void;
+    const activation = new Promise<void>((resolve) => {
+      finishActivation = resolve;
+    });
+    const proxy = createHttpServer((request, response) => {
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
+      });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
+      registry.middleware()(request as never, response as never, () => {
+        response.statusCode = 404;
+        response.end();
+      });
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const route = await registry.addWakeRoute(
+        {
+          id: "project-1",
+          ownerId: "reggie.pierce@databricks.com",
+          machineId: "sandbox-1",
+          remoteHost: "127.0.0.1",
+          remotePort: 3000,
+          path: "/hello",
+        },
+        async () => {
+          activationCount += 1;
+          await activation;
+        },
+      );
+      const headers = { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" };
+      const browser = await fetch(`http://127.0.0.1:${proxyPort}${route.path}`, {
+        headers: { ...headers, accept: "text/html" },
+      });
+      assert.equal(browser.status, 202);
+      assert.match(await browser.text(), /Starting Sandbox project/);
+      const api = await fetch(`http://127.0.0.1:${proxyPort}${route.path}/api`, {
+        headers: { ...headers, accept: "application/json" },
+      });
+      assert.equal(api.status, 202);
+      assert.deepEqual(await api.json(), {
+        status: "loading",
+        message: "Starting Sandbox project",
+      });
+      assert.equal(activationCount, 1);
+      finishActivation();
+    } finally {
+      finishActivation();
+      await close(proxy);
+      await registry.close();
+    }
+  });
+
+  it("preserves wake routes when a machine deactivates and removes them with the machine", async () => {
+    const registry = new SshRouteRegistry("/sandbox");
+    let activationCount = 0;
+    const proxy = createHttpServer((request, response) => {
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
+      });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
+      registry.middleware()(request as never, response as never, () => {
+        response.statusCode = 404;
+        response.end();
+      });
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const input = {
+        id: "project-1",
+        ownerId: "reggie.pierce@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort: 3000,
+        path: "/hello",
+      } as const;
+      const route = await registry.addWakeRoute(input, async () => {
+        activationCount += 1;
+      });
+      await registry.add(unusedSession, input);
+      await registry.deactivateMachine("sandbox-1", "reggie.pierce@databricks.com");
+
+      const loading = await fetch(`http://127.0.0.1:${proxyPort}${route.path}`, {
+        headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+      });
+      assert.equal(loading.status, 202);
+      assert.equal(activationCount, 1);
+
+      await registry.removeMachine("sandbox-1", "reggie.pierce@databricks.com");
+      const removed = await fetch(`http://127.0.0.1:${proxyPort}${route.path}`, {
+        headers: { [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com" },
+      });
+      assert.equal(removed.status, 404);
+    } finally {
+      await close(proxy);
+      await registry.close();
+    }
+  });
+
+  it("returns loading and starts recovery when an active project proxy is offline", async () => {
+    const registry = new SshRouteRegistry("/sandbox");
+    let activationCount = 0;
+    const session = {
+      forwardOut: async () => {
+        throw new Error("project is offline");
+      },
+    } as unknown as SshSession;
+    const proxy = createHttpServer((request, response) => {
+      Object.defineProperty(request, "path", {
+        configurable: true,
+        get: () => new URL(request.url ?? "/", "http://localhost").pathname,
+      });
+      Object.assign(request, { header: (name: string) => request.headers[name.toLowerCase()] });
+      registry.middleware()(request as never, response as never, () => {
+        response.statusCode = 404;
+        response.end();
+      });
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const input = {
+        id: "project-1",
+        ownerId: "reggie.pierce@databricks.com",
+        machineId: "sandbox-1",
+        remoteHost: "127.0.0.1",
+        remotePort: 3000,
+        path: "/hello",
+      } as const;
+      const route = await registry.addWakeRoute(input, async () => {
+        activationCount += 1;
+      });
+      await registry.add(session, input);
+
+      const loading = await fetch(`http://127.0.0.1:${proxyPort}${route.path}`, {
+        headers: {
+          [USER_EMAIL_HEADER]: "reggie.pierce@databricks.com",
+          accept: "application/json",
+        },
+      });
+      assert.equal(loading.status, 202);
+      assert.deepEqual(await loading.json(), {
+        status: "loading",
+        message: "Starting Sandbox project",
+      });
+      assert.equal(activationCount, 1);
+    } finally {
+      await close(proxy);
+      await registry.close();
+    }
+  });
+
   it("rejects route creation after shutdown and closes a racing bridge", async () => {
     const registry = new SshRouteRegistry("/sandbox");
     const add = registry.add(unusedSession, {

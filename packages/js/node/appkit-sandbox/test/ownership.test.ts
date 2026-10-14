@@ -1027,12 +1027,46 @@ describe("managed Sandbox ownership", () => {
     await started;
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(resolved, false);
-    assert.deepEqual(store.projects, []);
+    assert.equal(store.projects.length, 1);
+    const starting = await ssh.listMachines(client, "user-a");
+    assert.equal(starting.machines[0]?.status, "starting");
+    assert.equal(starting.machines[0]?.projects[0]?.state, "starting");
 
     finishInstallation();
     const project = await pending;
     assert.equal(project.directory, "/home/sandbox-user/projects/demo");
     assert.equal(store.projects.length, 1);
+  });
+
+  it("returns lifecycle failures as project errors without failing the running machine", async () => {
+    const now = Date.now();
+    const managedName = createSandboxName("00112233");
+    const store = new MemoryOwnershipStore();
+    store.assignments.push(assignment("user-a", "owned", managedName, now + 60_000));
+    const { client } = sandboxClient([
+      { sandboxId: "owned", status: "RUNNING", name: managedName },
+    ]);
+    const ssh = runtime(store, { machineSoftware: [] });
+    Object.defineProperty(ssh, "ensureSession", { value: async () => unusedSession });
+    Object.defineProperty(ssh, "prepareProjectDirectory", {
+      value: async () => {
+        throw new Error("install failed");
+      },
+    });
+
+    const project = await ssh.addProject(client, "user-a", {
+      machineId: "owned",
+      name: "demo",
+      port: 8080,
+      path: "demo",
+    });
+    const listed = await ssh.listMachines(client, "user-a");
+
+    assert.equal(project.state, "error");
+    assert.match(project.error ?? "", /install failed/);
+    assert.equal(listed.machines[0]?.status, "running");
+    assert.equal(listed.machines[0]?.projects[0]?.state, "error");
+    assert.match(listed.machines[0]?.projects[0]?.error ?? "", /install failed/);
   });
 
   it("generates project defaults and rejects duplicate machine paths and ports", async () => {
@@ -1138,7 +1172,11 @@ describe("managed Sandbox ownership", () => {
 
     assert.equal(reset.directory, "/home/sandbox-user/projects/demo");
     assert.equal(reset.state, "ready");
-    assert.ok(commands.some(({ args }) => args[1]?.endsWith("sh -s -- 'demo'")));
+    assert.ok(
+      commands.some(({ args }) =>
+        args[1]?.endsWith("sh -s -- 'demo' '_dbx-tools-uninstall'"),
+      ),
+    );
     assert.ok(commands.some(({ args }) => args[1]?.includes("sh -s -- 'demo' ''")));
     Object.defineProperty(ssh, "startService", {
       value: async () => ({

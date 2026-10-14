@@ -30,9 +30,13 @@ import {
   normalizeProjectPath,
   mergeProjectMiseConfig,
   packageScriptCommand,
+  PROJECT_INSTALL_MARKER,
+  PROJECT_INSTALL_TASK,
   PROJECT_REMOVE_SCRIPT,
   PROJECT_SETUP_SCRIPT,
-  PROJECT_INSTALL_COMPLETION_MARKER,
+  PROJECT_START_MARKER,
+  PROJECT_START_TASK,
+  PROJECT_UNINSTALL_TASK,
   projectDirectory,
   projectOpenUrl,
   renderProjectMiseConfig,
@@ -50,7 +54,7 @@ import { createSandboxName, sandboxDisplayName } from "./managed-name.ts";
 import {
   LakebaseMachineOwnershipStore,
   type MachineAssignment,
-  type NewSandboxProjectRecord,
+  NewSandboxProjectRecordSchema,
   type SandboxProjectRecord,
 } from "./ownership.ts";
 import { DatabricksSandboxClient, isSandboxUnavailable, type SandboxEntry } from "./rest.ts";
@@ -116,6 +120,7 @@ export class SshRuntime {
   private readonly services = new Map<string, SshMachineService>();
   private readonly projectStates = new Map<string, SshProject["state"]>();
   private readonly projectLogs = new Map<string, string>();
+  private readonly projectErrors = new Map<string, string>();
   private readonly startingServices = new Map<string, Promise<SshMachineService>>();
   private readonly machineTransitions = new Map<string, Promise<SandboxEntry>>();
   private readonly machineEpochs = new Map<string, number>();
@@ -330,6 +335,15 @@ export class SshRuntime {
     const api = new DatabricksSandboxClient(client);
     const owned = await this.requireOwnedMachine(api, userId, machineId, signal);
     const final = await this.convergeMachine(api, machineId, "running", owned.entry, signal);
+    const projects = await this.ownershipStore().listProjects(api.workspaceScope(), {
+      userId,
+      machineId,
+    });
+    for (const project of projects) {
+      const key = projectStateKey(project);
+      this.projectStates.set(key, "starting");
+      this.projectErrors.delete(key);
+    }
     await Promise.allSettled(
       (["terminal", "stats"] as const).map((service) =>
         this.startService(client, userId, { machineId, service }, signal),
@@ -337,10 +351,6 @@ export class SshRuntime {
     );
     await this.assertAssigned(api.workspaceScope(), userId, machineId);
     await this.restoreMachineProjects(client, api, userId, final, signal);
-    const projects = await this.ownershipStore().listProjects(api.workspaceScope(), {
-      userId,
-      machineId,
-    });
     return this.toMachine(final, api.workspaceScope(), userId, owned.assignment, projects);
   }
 
@@ -409,7 +419,7 @@ export class SshRuntime {
       "stopped",
       owned.entry,
       signal,
-      () => this.clearMachineRuntime(api.workspaceScope(), machineId),
+      () => this.clearMachineRuntime(api.workspaceScope(), machineId, true),
       (entry) =>
         normalizeStatus(entry.status) === "running"
           ? this.stopMachineServices(client, api, userId, entry, signal)
@@ -694,20 +704,6 @@ export class SshRuntime {
     );
     const path = `${this.routes.userPathPrefix(userId)}/${projectPath}`;
     const miseToml = renderProjectMiseConfig(config, { name, path, port });
-    const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
-    const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
-    const session = await this.ensureSession(client, userId, machine, epoch, signal);
-    await this.ensureMachineSoftware(workspaceScope, request.machineId, session, signal);
-    await this.restoreMachineProjects(client, api, userId, machine, signal);
-    const directory = await this.prepareProjectDirectory(
-      session,
-      projectPath,
-      miseToml,
-      existing?.projectPath,
-      signal,
-    );
-    await this.assertAssigned(workspaceScope, userId, request.machineId);
-    this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
     const projectId = existing?.projectId ?? randomBytes(16).toString("hex");
     const routeChanged = Boolean(
       existing &&
@@ -716,14 +712,19 @@ export class SshRuntime {
         existing.stripPrefix !== stripPrefix ||
         existing.route !== routeEnabled),
     );
-    if (routeChanged) await this.routes.remove(projectId, userId);
-    const record: NewSandboxProjectRecord = {
+    if (routeChanged) {
+      await Promise.all([
+        this.routes.remove(projectId, userId),
+        this.routes.removeWakeRoute(projectId, userId),
+      ]);
+    }
+    const record = NewSandboxProjectRecordSchema.parse({
       workspaceScope,
       userId,
       projectId,
       name,
       machineId: request.machineId,
-      directory,
+      directory: projectDirectory(projectPath),
       projectPath,
       path,
       ...(openPath ? { openPath } : {}),
@@ -732,8 +733,28 @@ export class SshRuntime {
       route: routeEnabled,
       serviceDependencies,
       stripPrefix,
-    };
+    });
+    const stateKey = projectStateKey(record);
+    const machine = await this.ensureRunning(api, userId, request.machineId, signal, true);
+    const epoch = this.runtimeEpoch(workspaceScope, userId, request.machineId);
+    const session = await this.ensureSession(client, userId, machine, epoch, signal);
+    await this.ensureMachineSoftware(workspaceScope, request.machineId, session, signal);
+    await this.restoreMachineProjects(client, api, userId, machine, signal, projectId);
+    await ownership.upsertProject(record);
+    await this.registerProjectWakeRoute(client, record);
+    this.projectStates.set(stateKey, "starting");
+    this.projectErrors.delete(stateKey);
+    this.projectLogs.delete(stateKey);
     try {
+      record.directory = await this.prepareProjectDirectory(
+        session,
+        projectPath,
+        miseToml,
+        existing?.projectPath,
+        signal,
+      );
+      await this.assertAssigned(workspaceScope, userId, request.machineId);
+      this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
       if (routeEnabled) {
         const route = await this.routes.add(session, {
           id: projectId,
@@ -752,6 +773,8 @@ export class SshRuntime {
       await this.assertAssigned(workspaceScope, userId, request.machineId);
       this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
       await ownership.upsertProject(record);
+      this.projectStates.set(stateKey, "ready");
+      this.projectErrors.delete(stateKey);
       if (existing && existing.projectPath !== projectPath) {
         try {
           await this.removeProjectDirectory(session, existing.projectPath, signal);
@@ -775,9 +798,30 @@ export class SshRuntime {
         routeEnabled,
       );
     } catch (error) {
+      const resolved = errorUtils.toError(error);
       await this.routes.remove(projectId, userId);
-      if (existing) await this.restoreProjectRoute(session, existing);
-      throw error;
+      try {
+        await this.assertAssigned(workspaceScope, userId, request.machineId);
+        this.assertRuntimeEpoch(workspaceScope, userId, request.machineId, epoch);
+      } catch (ownershipError) {
+        await Promise.allSettled([
+          this.routes.removeWakeRoute(projectId, userId),
+          ownership.deleteProject(workspaceScope, userId, projectId),
+        ]);
+        throw ownershipError;
+      }
+      this.projectStates.set(stateKey, "error");
+      this.projectErrors.set(stateKey, resolved.message);
+      this.projectLogs.set(stateKey, resolved.message);
+      await ownership.upsertProject(record);
+      return this.toProject(
+        {
+          ...record,
+          createdAt: existing?.createdAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        false,
+      );
     }
   }
 
@@ -813,11 +857,14 @@ export class SshRuntime {
           "stopped",
           await api.get(project.machineId),
           signal,
-          () => this.clearMachineRuntime(workspaceScope, project.machineId),
+          () => this.clearMachineRuntime(workspaceScope, project.machineId, true),
         );
       }
     }
-    await this.routes.remove(projectId, userId);
+    await Promise.all([
+      this.routes.remove(projectId, userId),
+      this.routes.removeWakeRoute(projectId, userId),
+    ]);
     return this.ownershipStore().deleteProject(workspaceScope, userId, projectId);
   }
 
@@ -870,7 +917,7 @@ export class SshRuntime {
           "stopped",
           await api.get(project.machineId),
           signal,
-          () => this.clearMachineRuntime(workspaceScope, project.machineId),
+          () => this.clearMachineRuntime(workspaceScope, project.machineId, true),
         );
       }
     }
@@ -924,7 +971,7 @@ export class SshRuntime {
     const pending = this.connecting.get(key);
     this.sessions.delete(key);
     this.connecting.delete(key);
-    await this.routes.removeMachine(machineId, userId);
+    await this.routes.deactivateMachine(machineId, userId);
     const results = await Promise.allSettled([
       ...(session ? [session.close()] : []),
       ...(pending ? [pending] : []),
@@ -970,6 +1017,7 @@ export class SshRuntime {
       this.services.clear();
       this.projectStates.clear();
       this.projectLogs.clear();
+      this.projectErrors.clear();
       this.machineEpochs.clear();
       this.ownerEpochs.clear();
       await this.ownership?.close();
@@ -1222,6 +1270,15 @@ export class SshRuntime {
         assignment,
       ]),
     );
+    await Promise.all(
+      projects.map(async (project) => {
+        const assignment = assignmentsByOwner.get(
+          sessionKey(workspaceScope, project.userId, project.machineId),
+        );
+        if (!assignment || !this.assignmentIsCurrent(assignment)) return;
+        await this.registerProjectWakeRoute(client, project);
+      }),
+    );
     const owners = new Map<string, { userId: string; machine: SandboxEntry }>();
     for (const project of projects) {
       const machine = entriesById.get(project.machineId);
@@ -1288,6 +1345,7 @@ export class SshRuntime {
     userId: string,
     machine: SandboxEntry,
     signal?: AbortSignal,
+    excludeProjectId?: string,
   ): Promise<void> {
     const workspaceScope = api.workspaceScope();
     const projects = await this.ownershipStore().listProjects(workspaceScope, {
@@ -1299,6 +1357,10 @@ export class SshRuntime {
     const session = await this.ensureSession(client, userId, machine, epoch, signal);
     await this.ensureMachineSoftware(workspaceScope, machine.sandboxId, session, signal);
     for (const project of projects) {
+      if (project.projectId === excludeProjectId) continue;
+      const stateKey = projectStateKey(project);
+      this.projectStates.set(stateKey, "starting");
+      this.projectErrors.delete(stateKey);
       try {
         const miseToml = renderProjectMiseConfig(project.config, {
           name: project.name,
@@ -1313,12 +1375,18 @@ export class SshRuntime {
           signal,
         );
         await this.restoreProjectRoute(session, project);
+        this.projectStates.set(stateKey, "ready");
+        this.projectErrors.delete(stateKey);
       } catch (error) {
+        const resolved = errorUtils.toError(error);
+        this.projectStates.set(stateKey, "error");
+        this.projectErrors.set(stateKey, resolved.message);
+        this.projectLogs.set(stateKey, resolved.message);
         logger.warn("Sandbox project route restoration failed", {
           userId: project.userId,
           machineId: project.machineId,
           projectId: project.projectId,
-          ...authErrorMetadata(errorUtils.toError(error)),
+          ...authErrorMetadata(resolved),
         });
       }
     }
@@ -1378,7 +1446,10 @@ export class SshRuntime {
           projectPath,
           previousProjectPath ?? "",
           Buffer.from(miseToml).toString("base64"),
-          PROJECT_INSTALL_COMPLETION_MARKER,
+          PROJECT_INSTALL_TASK,
+          PROJECT_START_TASK,
+          PROJECT_INSTALL_MARKER,
+          PROJECT_START_MARKER,
         ]),
       ],
       { timeoutMs: Math.max(this.config.commandTimeoutMs, 600_000), signal },
@@ -1404,7 +1475,7 @@ export class SshRuntime {
   ): Promise<void> {
     const result = await session.execute(
       "sh",
-      ["-lc", packageScriptCommand(PROJECT_REMOVE_SCRIPT, [projectPath])],
+      ["-lc", packageScriptCommand(PROJECT_REMOVE_SCRIPT, [projectPath, PROJECT_UNINSTALL_TASK])],
       { timeoutMs: this.config.commandTimeoutMs, signal },
     ).result;
     if (!result.success) {
@@ -1432,6 +1503,41 @@ export class SshRuntime {
       path: project.path,
       stripPrefix: project.stripPrefix,
     });
+  }
+
+  private async registerProjectWakeRoute(
+    client: WorkspaceClient,
+    project: Pick<
+      SandboxProjectRecord,
+      | "workspaceScope"
+      | "userId"
+      | "projectId"
+      | "machineId"
+      | "port"
+      | "path"
+      | "stripPrefix"
+      | "route"
+    >,
+  ): Promise<void> {
+    if (!project.route) return;
+    await this.routes.addWakeRoute(
+      {
+        id: project.projectId,
+        ...(await this.userRouteAuthorization(
+          project.workspaceScope,
+          project.userId,
+          project.machineId,
+        )),
+        machineId: project.machineId,
+        remoteHost: "127.0.0.1",
+        remotePort: project.port,
+        path: project.path,
+        stripPrefix: project.stripPrefix,
+      },
+      async () => {
+        await this.startMachine(client, project.userId, project.machineId);
+      },
+    );
   }
 
   private async userRouteAuthorization(
@@ -1718,6 +1824,7 @@ export class SshRuntime {
     const key = projectStateKey(project);
     const remoteState = this.projectStates.get(key);
     const log = this.projectLogs.get(key);
+    const error = this.projectErrors.get(key);
     return {
       id: project.projectId,
       name: project.name,
@@ -1729,6 +1836,7 @@ export class SshRuntime {
       stripPrefix: project.stripPrefix,
       state: remoteState ?? (!project.route || ready ? "ready" : "stopped"),
       ...(log !== undefined ? { log } : {}),
+      ...(error !== undefined ? { error } : {}),
     };
   }
 
@@ -1739,7 +1847,14 @@ export class SshRuntime {
     assignment: MachineAssignment,
     projects: SandboxProjectRecord[],
   ): SshMachine {
-    const status = normalizeStatus(entry.status);
+    const upstreamStatus = normalizeStatus(entry.status);
+    const renderedProjects = projects.map((project) =>
+      this.toProject(project, this.projectRouteReady(project)),
+    );
+    const status =
+      upstreamStatus === "running" && renderedProjects.some((project) => project.state === "starting")
+        ? "starting"
+        : upstreamStatus;
     return {
       id: entry.sandboxId,
       name: sandboxDisplayName(assignment.managedName ?? entry.name),
@@ -1752,7 +1867,7 @@ export class SshRuntime {
       ...(idleTimeoutSeconds(entry.idleTimeout) !== undefined
         ? { autoStopSeconds: idleTimeoutSeconds(entry.idleTimeout) }
         : {}),
-      projects: projects.map((project) => this.toProject(project, this.projectRouteReady(project))),
+      projects: renderedProjects,
       services: SSH_MACHINE_SERVICE_KINDS.map(
         (kind): SshMachineService =>
           this.services.get(serviceKey(workspaceScope, userId, entry.sandboxId, kind)) ?? {
@@ -1816,9 +1931,17 @@ export class SshRuntime {
     throw new Error(`SSH machine ${machineId} operation was revoked`);
   }
 
-  private async clearMachineRuntime(workspaceScope: string, machineId: string): Promise<void> {
+  private async clearMachineRuntime(
+    workspaceScope: string,
+    machineId: string,
+    preserveWakeRoutes = false,
+  ): Promise<void> {
     this.bumpEpoch(this.machineEpochs, machineRuntimeKey(workspaceScope, machineId));
-    await this.routes.removeMachine(machineId);
+    if (preserveWakeRoutes) {
+      await this.routes.deactivateMachine(machineId);
+    } else {
+      await this.routes.removeMachine(machineId);
+    }
     const pendingConnections: Promise<SshSession>[] = [];
     for (const [key, session] of this.sessions) {
       if (!sessionKeyMatchesMachine(key, workspaceScope, machineId)) continue;
@@ -1849,6 +1972,11 @@ export class SshRuntime {
         this.projectLogs.delete(key);
       }
     }
+    for (const key of this.projectErrors.keys()) {
+      if (projectStateKeyMatchesMachine(key, workspaceScope, machineId)) {
+        this.projectErrors.delete(key);
+      }
+    }
     this.machineSetup.delete(machineRuntimeKey(workspaceScope, machineId));
   }
 
@@ -1862,7 +1990,7 @@ export class SshRuntime {
   ): Promise<void> {
     const key = sessionKey(workspaceScope, userId, entry.sandboxId);
     if (normalizeStatus(entry.status) !== "running") {
-      await this.routes.removeMachine(entry.sandboxId, userId);
+      await this.routes.deactivateMachine(entry.sandboxId, userId);
       await this.sessions.get(key)?.close();
       this.sessions.delete(key);
       return;
@@ -1893,9 +2021,15 @@ export class SshRuntime {
       for (const project of projects) {
         const key = projectStateKey(project);
         const state = states.projects.get(project.projectPath);
-        if (state) this.projectStates.set(key, state);
+        if (state) {
+          this.projectStates.set(key, state);
+          if (state !== "error") this.projectErrors.delete(key);
+        }
         const log = states.projectLogs.get(project.projectPath);
-        if (log !== undefined) this.projectLogs.set(key, log);
+        if (log !== undefined) {
+          this.projectLogs.set(key, log);
+          if (state === "error") this.projectErrors.set(key, log);
+        }
       }
     } catch (error) {
       logger.debug("Sandbox lifecycle status inspection failed", {
@@ -1992,7 +2126,12 @@ function serviceKeyMatchesMachine(key: string, workspaceScope: string, machineId
   return sessionKeyMatchesMachine(key, workspaceScope, machineId);
 }
 
-function projectStateKey(project: SandboxProjectRecord): string {
+function projectStateKey(
+  project: Pick<
+    SandboxProjectRecord,
+    "workspaceScope" | "userId" | "machineId" | "projectPath"
+  >,
+): string {
   return `${sessionKey(project.workspaceScope, project.userId, project.machineId)}\0${project.projectPath}`;
 }
 

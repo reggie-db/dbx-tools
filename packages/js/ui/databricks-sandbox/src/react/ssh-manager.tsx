@@ -700,11 +700,12 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                   {projects.map((project) => {
                     const projectLogOpen = Boolean(selectedProjectLogs[project.id]);
                     const projectBusy = isProjectBusy(project.id);
+                    const projectLoading = projectBusy || project.state === "starting";
                     return (
                       <div
                         key={project.id}
                         className="min-w-0 overflow-hidden"
-                        aria-busy={projectBusy || undefined}
+                        aria-busy={projectLoading || undefined}
                       >
                         <div className="px-3 py-3 sm:px-4">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
@@ -718,7 +719,7 @@ export function SshManager({ basePath, className }: SshManagerProps) {
                                 }
                                 className="gap-1"
                               >
-                                {projectBusy ? <Spinner className="size-3" /> : null}
+                                {projectLoading ? <Spinner className="size-3" /> : null}
                                 {projectBusy ? "loading" : project.state}
                               </Badge>
                             </div>

@@ -56,6 +56,14 @@ interface RouteTarget {
   authorizeOwner?: (ownerId: string) => Promise<boolean>;
 }
 
+interface WakeRouteTarget {
+  route: SshForwardedRoute;
+  ownerIds: Set<string>;
+  activate: () => Promise<void>;
+  activation?: Promise<void>;
+  authorizeOwner?: (ownerId: string) => Promise<boolean>;
+}
+
 interface RouteMatch {
   entry: RouteTarget;
   stripPrefix?: string;
@@ -70,9 +78,11 @@ interface RouteMatch {
  */
 export class SshRouteRegistry {
   private readonly routes = new Map<string, RouteTarget>();
+  private readonly wakeRoutes = new Map<string, WakeRouteTarget>();
   private readonly retiredSessionSockets = new Map<SshSession, Set<Socket>>();
   private readonly sessionDrainWaiters = new Map<SshSession, Set<() => void>>();
   private readonly responseHeadInjections = new WeakMap<IncomingMessage, string>();
+  private readonly responseRoutes = new WeakMap<IncomingMessage, RouteTarget>();
   private readonly proxy = ProxyModule.createProxyServer({ ws: true, xfwd: true });
   private routeMutation = Promise.resolve();
   private closing?: Promise<void>;
@@ -86,6 +96,13 @@ export class SshRouteRegistry {
     this.proxy.on("error", (error, request, response) => {
       if (this.shuttingDown && isConnectionClosureError(error)) {
         response.destroy();
+        return;
+      }
+      const active = this.responseRoutes.get(request);
+      const wake = active ? this.wakeRoutes.get(active.route.id) : undefined;
+      if (wake && "writeHead" in response && !response.headersSent) {
+        this.activateWakeRoute(wake);
+        sendLoadingResponse(request.headers.accept, response);
         return;
       }
       logger.warn("SSH route proxy failed", {
@@ -105,10 +122,22 @@ export class SshRouteRegistry {
       }
     });
     this.proxy.on("proxyRes", (proxyResponse, request, response) => {
+      const active = this.responseRoutes.get(request);
+      const wake = active ? this.wakeRoutes.get(active.route.id) : undefined;
+      if (wake && [502, 503, 504].includes(proxyResponse.statusCode ?? 0)) {
+        proxyResponse.resume();
+        this.responseHeadInjections.delete(request);
+        this.activateWakeRoute(wake);
+        sendLoadingResponse(request.headers.accept, response);
+        return;
+      }
       const head = this.responseHeadInjections.get(request);
-      if (!head) return;
-      this.responseHeadInjections.delete(request);
-      void injectHtmlHead(proxyResponse, response, head);
+      if (head) {
+        this.responseHeadInjections.delete(request);
+        void injectHtmlHead(proxyResponse, response, head);
+        return;
+      }
+      if (wake) pipeProxyResponse(proxyResponse, response);
     });
   }
 
@@ -141,6 +170,62 @@ export class SshRouteRegistry {
     return this.withRouteMutation(async () => {
       this.assertOpen();
       return this.addUnlocked(session, input);
+    });
+  }
+
+  /** Registers a persisted route that can start its machine when no live bridge exists. */
+  async addWakeRoute(
+    input: RouteInput,
+    activate: () => Promise<void>,
+  ): Promise<SshForwardedRoute> {
+    this.assertOpen();
+    return this.withRouteMutation(async () => {
+      this.assertOpen();
+      const path = input.internal
+        ? normalizeRoutePath(requiredInternalPath(input.path))
+        : this.userRoutePath(input);
+      const stripPrefix = input.stripPrefix ?? path !== "/";
+      const route: SshForwardedRoute = {
+        id: input.id ?? randomBytes(16).toString("hex"),
+        machineId: input.machineId,
+        path,
+        remoteHost: input.remoteHost,
+        remotePort: input.remotePort,
+        stripPrefix,
+        state: "ready",
+      };
+      const collision = [...this.wakeRoutes.values()].find(
+        (entry) => entry.route.path === path && entry.route.id !== route.id,
+      );
+      if (collision) throw new Error(`SSH route path ${path} is already registered`);
+      const previous = this.wakeRoutes.get(route.id);
+      if (
+        previous &&
+        (previous.route.path !== route.path ||
+          previous.route.machineId !== route.machineId ||
+          previous.route.remotePort !== route.remotePort)
+      ) {
+        throw new Error(`SSH wake route ${route.id} already targets another project`);
+      }
+      this.wakeRoutes.set(route.id, {
+        route,
+        ownerIds: routeOwners(input),
+        activate,
+        ...(input.authorizeOwner ? { authorizeOwner: input.authorizeOwner } : {}),
+      });
+      return route;
+    });
+  }
+
+  /** Removes one persisted wake route without changing active bridges. */
+  async removeWakeRoute(routeId: string, ownerId?: string): Promise<boolean> {
+    const current = this.wakeRoutes.get(routeId);
+    if (!current || (ownerId && !current.ownerIds.has(ownerId))) return false;
+    return this.withRouteMutation(async () => {
+      const entry = this.wakeRoutes.get(routeId);
+      if (!entry || (ownerId && !entry.ownerIds.has(ownerId))) return false;
+      this.wakeRoutes.delete(routeId);
+      return true;
     });
   }
 
@@ -237,19 +322,32 @@ export class SshRouteRegistry {
     );
     if (!ownerId) {
       await Promise.all(entries.map((entry) => this.remove(entry.route.id)));
-      return;
-    }
-    const removals: Promise<boolean>[] = [];
-    for (const entry of entries) {
-      if (!entry.ownerIds.has(ownerId)) continue;
-      if (!entry.internal) {
-        removals.push(this.remove(entry.route.id, ownerId));
-        continue;
+    } else {
+      const removals: Promise<boolean>[] = [];
+      for (const entry of entries) {
+        if (!entry.ownerIds.has(ownerId)) continue;
+        if (!entry.internal) {
+          removals.push(this.remove(entry.route.id, ownerId));
+          continue;
+        }
+        this.revokeRouteOwner(entry, ownerId, false);
+        if (entry.ownerIds.size === 0) removals.push(this.remove(entry.route.id));
       }
-      this.revokeRouteOwner(entry, ownerId, false);
-      if (entry.ownerIds.size === 0) removals.push(this.remove(entry.route.id));
+      await Promise.all(removals);
     }
-    await Promise.all(removals);
+    const wakeRemovals = [...this.wakeRoutes.values()]
+      .filter((entry) => entry.route.machineId === machineId)
+      .filter((entry) => !ownerId || entry.ownerIds.has(ownerId))
+      .map((entry) => this.removeWakeRoute(entry.route.id, ownerId));
+    await Promise.all(wakeRemovals);
+  }
+
+  /** Removes live forwarding bridges while preserving persisted wake routes. */
+  async deactivateMachine(machineId: string, ownerId?: string): Promise<void> {
+    const entries = [...this.routes.values()].filter(
+      (entry) => entry.route.machineId === machineId && (!ownerId || entry.ownerIds.has(ownerId)),
+    );
+    await Promise.all(entries.map((entry) => this.remove(entry.route.id, ownerId)));
   }
 
   /** Revokes one owner's active and future access to machine-owned service routes. */
@@ -277,13 +375,20 @@ export class SshRouteRegistry {
   middleware() {
     return async (request: Request, response: Response, next: NextFunction) => {
       const direct = this.directRoute(request.path);
+      const wake = direct ? undefined : this.directWakeRoute(request.path);
+      const access = direct ?? wake;
       const requestUser =
         request.header(USER_ID_HEADER) ??
         request.header(USER_EMAIL_HEADER) ??
-        localDevelopmentOwner(request.header("host"), direct);
-      if (direct && !(await ownerIsAuthorized(direct, requestUser))) {
+        localDevelopmentOwner(request.header("host"), access);
+      if (access && !(await ownerIsAuthorized(access, requestUser))) {
         response.statusCode = 404;
         response.end("Not Found");
+        return;
+      }
+      if (wake) {
+        this.activateWakeRoute(wake);
+        sendLoadingResponse(request.header("accept"), response);
         return;
       }
       const match = this.match(request.path, requestUser);
@@ -304,10 +409,11 @@ export class SshRouteRegistry {
       }
       const replayBody = replayParsedJsonBody(request);
       if (match.stripPrefix) request.url = outboundPath(request.url, match.stripPrefix);
+      this.responseRoutes.set(request, match.entry);
       this.proxy.web(request, response, {
         target: match.entry.target!,
         changeOrigin: true,
-        selfHandleResponse: Boolean(injectHead),
+        selfHandleResponse: Boolean(injectHead || this.wakeRoutes.has(match.entry.route.id)),
         ...(replayBody ? { buffer: replayBody } : {}),
       });
     };
@@ -350,7 +456,25 @@ export class SshRouteRegistry {
   private async closeRoutes(): Promise<void> {
     await this.routeMutation;
     await Promise.all([...this.routes.keys()].map((routeId) => this.remove(routeId)));
+    this.wakeRoutes.clear();
     this.proxy.close();
+  }
+
+  private activateWakeRoute(entry: WakeRouteTarget): void {
+    if (entry.activation) return;
+    const activation = entry
+      .activate()
+      .catch((error) => {
+        logger.warn("SSH route wake failed", {
+          machineId: entry.route.machineId,
+          path: entry.route.path,
+          error: errorUtils.toError(error),
+        });
+      })
+      .finally(() => {
+        if (entry.activation === activation) entry.activation = undefined;
+      });
+    entry.activation = activation;
   }
 
   private assertOpen(): void {
@@ -523,10 +647,16 @@ export class SshRouteRegistry {
       .filter((entry) => path === entry.route.path || path.startsWith(`${entry.route.path}/`))
       .sort((left, right) => right.route.path.length - left.route.path.length)[0];
   }
+
+  private directWakeRoute(path: string): WakeRouteTarget | undefined {
+    return [...this.wakeRoutes.values()]
+      .filter((entry) => path === entry.route.path || path.startsWith(`${entry.route.path}/`))
+      .sort((left, right) => right.route.path.length - left.route.path.length)[0];
+  }
 }
 
 async function ownerIsAuthorized(
-  entry: RouteTarget,
+  entry: Pick<RouteTarget, "ownerIds" | "authorizeOwner">,
   ownerId: string | undefined,
 ): Promise<boolean> {
   return Boolean(
@@ -536,13 +666,44 @@ async function ownerIsAuthorized(
   );
 }
 
+function sendLoadingResponse(
+  accept: string | string[] | undefined,
+  response: Pick<ServerResponse, "statusCode" | "setHeader" | "end">,
+): void {
+  response.statusCode = 202;
+  response.setHeader("cache-control", "no-store");
+  response.setHeader("retry-after", "2");
+  const acceptsHtml = (Array.isArray(accept) ? accept.join(",") : (accept ?? ""))
+    .toLowerCase()
+    .includes("text/html");
+  if (!acceptsHtml) {
+    response.setHeader("content-type", "application/json; charset=utf-8");
+    response.end(JSON.stringify({ status: "loading", message: "Starting Sandbox project" }));
+    return;
+  }
+  response.setHeader("content-type", "text/html; charset=utf-8");
+  response.end(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="2">
+<title>Starting Sandbox project</title>
+<style>
+html{color-scheme:light dark;font-family:system-ui,sans-serif}body{min-height:100vh;margin:0;display:grid;place-items:center;background:Canvas;color:CanvasText}.loading{display:flex;align-items:center;gap:.75rem}.spinner{width:1.25rem;height:1.25rem;border:.2rem solid color-mix(in srgb,CanvasText 20%,transparent);border-top-color:CanvasText;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body><div class="loading" role="status"><span class="spinner" aria-hidden="true"></span><span>Starting Sandbox project</span></div></body>
+</html>`);
+}
+
 /**
  * Allows direct loopback navigation when no front door exists to inject the
  * owner header. Multiple-owner and non-loopback routes remain fail-closed.
  */
 function localDevelopmentOwner(
   host: string | undefined,
-  entry: RouteTarget | undefined,
+  entry: Pick<RouteTarget, "ownerIds"> | Pick<WakeRouteTarget, "ownerIds"> | undefined,
 ): string | undefined {
   if (!entry || entry.ownerIds.size !== 1 || !isDevelopmentLoopbackHost(host)) return undefined;
   return entry.ownerIds.values().next().value;
@@ -622,6 +783,15 @@ async function injectHtmlHead(
     if (!response.headersSent) response.writeHead(502);
     response.end("SSH route unavailable");
   }
+}
+
+function pipeProxyResponse(proxyResponse: IncomingMessage, response: ServerResponse): void {
+  for (const [name, value] of Object.entries(proxyResponse.headers)) {
+    if (value !== undefined) response.setHeader(name, value);
+  }
+  response.statusCode = proxyResponse.statusCode ?? 200;
+  if (proxyResponse.statusMessage) response.statusMessage = proxyResponse.statusMessage;
+  proxyResponse.pipe(response);
 }
 
 function createBridge(

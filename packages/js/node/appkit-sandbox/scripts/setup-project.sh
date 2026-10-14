@@ -5,7 +5,10 @@ umask 077
 project_path="$1"
 previous_path="$2"
 toml_base64="$3"
-completion_marker_path="$4"
+install_task="$4"
+start_task="$5"
+install_marker_path="$6"
+start_marker_path="$7"
 projects_root="$HOME/projects"
 
 validate_path() {
@@ -48,7 +51,9 @@ operation_log="$operation_directory/lifecycle.log"
 operation_status="$operation_directory/lifecycle.status"
 operation_attempt="$operation_directory/lifecycle.attempt"
 config_digest=$(printf '%s' "$toml_base64" | base64 -d | sha256sum | awk '{print $1}')
-operation_key="install:$config_digest"
+boot_id=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || printf unknown)
+start_key="$boot_id:$config_digest"
+operation_key="start:$start_key"
 maximum_attempts=2
 mkdir -p "$projects_root" "$operation_directory"
 
@@ -80,8 +85,24 @@ acquire_operation_lock() {
   trap release_operation_lock EXIT HUP INT TERM
 }
 
-install_is_complete() {
-  [ "$(cat "$project_directory/.dbx-tools/mise-install.sha256" 2>/dev/null || true)" = "$config_digest" ]
+lifecycle_is_complete() {
+  install_marker="$project_directory/$install_marker_path"
+  start_marker="$project_directory/$start_marker_path"
+  [ "$(cat "$install_marker" 2>/dev/null || true)" = "$config_digest" ] &&
+    [ "$(cat "$start_marker" 2>/dev/null || true)" = "$start_key" ]
+}
+
+task_exists() {
+  (cd "$project_directory" && "$mise_bin" tasks ls --name-only --hidden) | grep -Fxq "$1"
+}
+
+write_marker() {
+  marker="$1"
+  value="$2"
+  temporary="$marker.tmp.$$"
+  mkdir -p -- "$(dirname "$marker")"
+  printf '%s\n' "$value" >"$temporary"
+  mv -- "$temporary" "$marker"
 }
 
 record_result() {
@@ -90,9 +111,9 @@ record_result() {
   printf '%s\n' "$result" >"$operation_status"
 }
 
-while ! install_is_complete; do
+while ! lifecycle_is_complete; do
   acquire_operation_lock
-  if install_is_complete; then
+  if lifecycle_is_complete; then
     release_operation_lock
     break
   fi
@@ -108,7 +129,6 @@ while ! install_is_complete; do
   if [ "$attempt_count" -ge "$maximum_attempts" ]; then
     cat "$operation_log" >&2 2>/dev/null || true
     release_operation_lock
-    rm -rf -- "$operation_directory"
     exit 1
   fi
 
@@ -130,33 +150,40 @@ while ! install_is_complete; do
   if ! printf '%s' "$toml_base64" | base64 -d >"$temporary_file"; then
     rm -f -- "$temporary_file"
     record_result error
-    rm -rf -- "$project_directory"
     release_operation_lock
     continue
   fi
   mv -- "$temporary_file" "$project_directory/mise.toml"
-  completion_marker="$project_directory/$completion_marker_path"
-  rm -f -- "$completion_marker"
+  install_marker="$project_directory/$install_marker_path"
+  start_marker="$project_directory/$start_marker_path"
 
   if ! "$mise_bin" trust "$project_directory/mise.toml" >>"$operation_log" 2>&1 ||
     ! (cd "$project_directory" && "$mise_bin" install) >>"$operation_log" 2>&1; then
     record_result error
-    rm -rf -- "$project_directory"
-    release_operation_lock
-    continue
-  fi
-  if [ ! -f "$completion_marker" ]; then
-    printf 'mise postinstall did not complete successfully\n' >>"$operation_log"
-    record_result error
-    rm -rf -- "$project_directory"
     release_operation_lock
     continue
   fi
 
-  install_marker="$project_directory/.dbx-tools/mise-install.sha256"
-  marker_temporary="$install_marker.tmp.$$"
-  printf '%s\n' "$config_digest" >"$marker_temporary"
-  mv -- "$marker_temporary" "$install_marker"
+  if [ "$(cat "$install_marker" 2>/dev/null || true)" != "$config_digest" ]; then
+    if task_exists "$install_task" &&
+      ! (cd "$project_directory" && "$mise_bin" run "$install_task") >>"$operation_log" 2>&1; then
+      record_result error
+      release_operation_lock
+      continue
+    fi
+    write_marker "$install_marker" "$config_digest"
+  fi
+
+  if [ "$(cat "$start_marker" 2>/dev/null || true)" != "$start_key" ]; then
+    if task_exists "$start_task" &&
+      ! (cd "$project_directory" && "$mise_bin" run "$start_task") >>"$operation_log" 2>&1; then
+      record_result error
+      release_operation_lock
+      continue
+    fi
+    write_marker "$start_marker" "$start_key"
+  fi
+
   record_result ready
   release_operation_lock
 done

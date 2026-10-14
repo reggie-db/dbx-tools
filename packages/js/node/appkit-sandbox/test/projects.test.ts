@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -16,9 +16,13 @@ import {
   mergeProjectMiseConfig,
   normalizeProjectOpenPath,
   normalizeProjectPath,
-  PROJECT_INSTALL_COMPLETION_MARKER,
+  PROJECT_INSTALL_MARKER,
+  PROJECT_INSTALL_TASK,
   PROJECT_REMOVE_SCRIPT,
   PROJECT_SETUP_SCRIPT,
+  PROJECT_START_MARKER,
+  PROJECT_START_TASK,
+  PROJECT_UNINSTALL_TASK,
   renderProjectMiseConfig,
 } from "../src/_projects.ts";
 
@@ -47,7 +51,6 @@ describe("Sandbox project configuration", () => {
     const parsed = parse(toml) as {
       tools: { node: string };
       env: Record<string, string>;
-      hooks: { postinstall: string };
       settings?: Record<string, string>;
     };
     assert.equal(parsed.tools.node, "lts");
@@ -58,7 +61,6 @@ describe("Sandbox project configuration", () => {
       PROJECT_PORT: "8080",
     });
     assert.equal(parsed.settings, undefined);
-    assert.match(parsed.hooks.postinstall, /mise-postinstall\.complete/);
   });
 
   it("preserves explicit mise shell settings", () => {
@@ -79,27 +81,17 @@ describe("Sandbox project configuration", () => {
     });
   });
 
-  it("writes the install completion marker only after postinstall succeeds", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-postinstall-"));
-    const successful = parse(
-      renderProjectMiseConfig(
-        { hooks: { postinstall: "printf 'installed\\n' > result.txt" } },
-        { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
-      ),
-    ) as { hooks: { postinstall: string } };
-    await execFileAsync("sh", ["-c", successful.hooks.postinstall], { cwd: directory });
-    await access(join(directory, PROJECT_INSTALL_COMPLETION_MARKER));
-
-    const failing = parse(
-      renderProjectMiseConfig(
-        { hooks: { postinstall: "exit 1" } },
-        { name: "demo", path: "/sandbox/abc/demo", port: 8080 },
-      ),
-    ) as { hooks: { postinstall: string } };
-    await assert.rejects(
-      execFileAsync("sh", ["-c", failing.hooks.postinstall], { cwd: directory }),
-    );
-    await assert.rejects(access(join(directory, PROJECT_INSTALL_COMPLETION_MARKER)));
+  it("maps lifecycle fields to hidden runtime-owned mise tasks", () => {
+    const merged = mergeProjectMiseConfig(undefined, {
+      install: "prepare-project",
+      start: "start-project",
+      uninstall: "remove-project",
+    });
+    assert.deepEqual(merged.tasks, {
+      [PROJECT_INSTALL_TASK]: { run: "prepare-project", hide: true },
+      [PROJECT_START_TASK]: { run: "start-project", hide: true },
+      [PROJECT_UNINSTALL_TASK]: { run: "remove-project", hide: true },
+    });
   });
 
   it("rejects conflicting reserved mise environment values", () => {
@@ -141,9 +133,9 @@ describe("Sandbox project configuration", () => {
   it("runs only optional mise uninstall before deleting the project directory", () => {
     assert.match(
       PROJECT_REMOVE_SCRIPT,
-      /if "\$mise_bin" tasks ls --name-only --hidden \| grep -Fxq uninstall; then/,
+      /if "\$mise_bin" tasks ls --name-only --hidden \| grep -Fxq "\$uninstall_task"; then/,
     );
-    assert.match(PROJECT_REMOVE_SCRIPT, /"\$mise_bin" run uninstall/);
+    assert.match(PROJECT_REMOVE_SCRIPT, /"\$mise_bin" run "\$uninstall_task"/);
     assert.doesNotMatch(PROJECT_REMOVE_SCRIPT, /run stop/);
     assert.match(PROJECT_REMOVE_SCRIPT, /stop_project_processes/);
     assert.match(PROJECT_REMOVE_SCRIPT, /readlink "\$proc\/cwd"/);
@@ -162,12 +154,13 @@ describe("Sandbox project configuration", () => {
     assert.match(PROJECT_SETUP_SCRIPT, /maximum_attempts=2/);
     assert.match(PROJECT_SETUP_SCRIPT, /__DBX_TOOLS_ATTEMPT__/);
     assert.match(PROJECT_SETUP_SCRIPT, /__DBX_TOOLS_RESULT__/);
-    assert.match(PROJECT_SETUP_SCRIPT, /install_is_complete/);
-    assert.match(PROJECT_SETUP_SCRIPT, /mise postinstall did not complete successfully/);
-    assert.match(PROJECT_SETUP_SCRIPT, /rm -rf -- "\$project_directory"/);
+    assert.match(PROJECT_SETUP_SCRIPT, /lifecycle_is_complete/);
+    assert.match(PROJECT_SETUP_SCRIPT, /boot_id=/);
+    assert.match(PROJECT_SETUP_SCRIPT, /task_exists "\$install_task"/);
+    assert.match(PROJECT_SETUP_SCRIPT, /task_exists "\$start_task"/);
   });
 
-  it("fails project setup when mise hides a failed postinstall exit", async () => {
+  it("runs install once per config and start once per machine boot", async () => {
     const home = await mkdtemp(join(tmpdir(), "dbx-tools-project-setup-"));
     const binDirectory = join(home, ".local", "bin");
     const setupScript = join(home, "setup-project.sh");
@@ -178,9 +171,14 @@ describe("Sandbox project configuration", () => {
     await writeFile(
       miseScript,
       `#!/bin/sh
-if [ "$1" = trust ]; then exit 0; fi
-if [ "$1" = install ]; then
-  printf 'mise WARN Postinstall hook failed\n' >&2
+if [ "$1" = trust ] || [ "$1" = install ]; then exit 0; fi
+if [ "$1" = tasks ] && [ "$2" = ls ]; then
+  [ "$PWD" = "$HOME/projects/managed-project" ] || exit 3
+  printf '%s\n%s\n' '${PROJECT_INSTALL_TASK}' '${PROJECT_START_TASK}'
+  exit 0
+fi
+if [ "$1" = run ]; then
+  printf '%s\n' "$2" >> "$HOME/task-runs.txt"
   exit 0
 fi
 exit 2
@@ -188,26 +186,31 @@ exit 2
     );
     await chmod(miseScript, 0o700);
 
-    await assert.rejects(
-      execFileAsync(
-        setupScript,
-        [
-          "failed-install",
-          "",
-          Buffer.from("[hooks]\npostinstall = 'exit 1'\n").toString("base64"),
-          PROJECT_INSTALL_COMPLETION_MARKER,
-        ],
-        { env: { ...process.env, HOME: home } },
-      ),
-      (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.match(
-          String((error as Error & { stderr?: string }).stderr),
-          /mise postinstall did not complete successfully/,
-        );
-        return true;
-      },
+    const args = [
+      "managed-project",
+      "",
+      Buffer.from("[tools]\npython = '3.12'\n").toString("base64"),
+      PROJECT_INSTALL_TASK,
+      PROJECT_START_TASK,
+      PROJECT_INSTALL_MARKER,
+      PROJECT_START_MARKER,
+    ];
+    await execFileAsync(setupScript, args, { env: { ...process.env, HOME: home } });
+    await execFileAsync(setupScript, args, { env: { ...process.env, HOME: home } });
+    assert.deepEqual((await readFile(join(home, "task-runs.txt"), "utf8")).trim().split("\n"), [
+      PROJECT_INSTALL_TASK,
+      PROJECT_START_TASK,
+    ]);
+    await writeFile(
+      join(home, "projects", "managed-project", PROJECT_START_MARKER),
+      "previous-machine-boot\n",
     );
+    await execFileAsync(setupScript, args, { env: { ...process.env, HOME: home } });
+    assert.deepEqual((await readFile(join(home, "task-runs.txt"), "utf8")).trim().split("\n"), [
+      PROJECT_INSTALL_TASK,
+      PROJECT_START_TASK,
+      PROJECT_START_TASK,
+    ]);
   });
 
   it("merges first-class mise options over raw config", () => {
@@ -215,22 +218,23 @@ exit 2
       {
         tools: { node: "20", python: "3.12" },
         env: { MODE: "demo" },
-        hooks: { postinstall: "old-install" },
-        tasks: { uninstall: { run: "old-uninstall" }, start: { run: "start" } },
+        tasks: { user: { run: "user-task" } },
       },
       {
         tools: { node: "lts" },
         env: { HTML_CONTENT: "<html></html>", MODE: "prod" },
-        postinstall: "new-install",
+        install: "new-install",
+        start: "new-start",
         uninstall: "new-uninstall",
       },
     );
     assert.deepEqual(merged.tools, { node: "lts", python: "3.12" });
     assert.deepEqual(merged.env, { MODE: "prod", HTML_CONTENT: "<html></html>" });
-    assert.deepEqual(merged.hooks, { postinstall: "new-install" });
     assert.deepEqual(merged.tasks, {
-      uninstall: { run: "new-uninstall" },
-      start: { run: "start" },
+      user: { run: "user-task" },
+      [PROJECT_INSTALL_TASK]: { run: "new-install", hide: true },
+      [PROJECT_START_TASK]: { run: "new-start", hide: true },
+      [PROJECT_UNINSTALL_TASK]: { run: "new-uninstall", hide: true },
     });
   });
 
@@ -260,14 +264,16 @@ describe("Sandbox project contracts", () => {
       machineId: "sandbox-id",
       serviceDependencies: ["desktop", "terminal"],
       tools: { node: "lts" },
-      postinstall: "prepare-project",
+      install: "prepare-project",
+      start: "start-project",
       uninstall: "remove-project",
     });
 
     assert.equal(request.route, undefined);
     assert.deepEqual(request.serviceDependencies, ["desktop", "terminal"]);
     assert.deepEqual(request.tools, { node: "lts" });
-    assert.equal(request.postinstall, "prepare-project");
+    assert.equal(request.install, "prepare-project");
+    assert.equal(request.start, "start-project");
     assert.equal(request.uninstall, "remove-project");
     assert.deepEqual(
       addSshProjectRequestSchema.parse({
@@ -296,12 +302,13 @@ describe("Sandbox project contracts", () => {
       '[tools]\nnode = "lts"',
     );
     assert.match(
-      addSshProjectRequestSchema.shape.postinstall.description ?? "",
-      /check-lock-check/,
+      addSshProjectRequestSchema.shape.install.description ?? "",
+      /_dbx-tools-install/,
     );
+    assert.match(addSshProjectRequestSchema.shape.start.description ?? "", /machine boot/);
     assert.match(
       addSshProjectRequestSchema.shape.uninstall.description ?? "",
-      /only this project task/,
+      /_dbx-tools-uninstall/,
     );
     assert.match(addSshProjectRequestSchema.shape.env.description ?? "", /HTML_CONTENT/);
     assert.throws(

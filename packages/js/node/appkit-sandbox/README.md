@@ -91,10 +91,10 @@ Use the `add_ssh_project` tool instead of creating a proxy route directly:
   "name": "demo",
   "openPath": "index.html",
   "tools": {
-    "node": "lts"
+    "python": "3.12"
   },
-  "postinstall": "[ -f server.mjs ] || exit 0\nif [ -f server.pid ] && kill -0 \"$(cat server.pid)\" 2>/dev/null; then exit 0; fi\nnohup node server.mjs > server.log 2>&1 < /dev/null &\necho $! > server.pid\n",
-  "uninstall": "[ -f server.pid ] && kill \"$(cat server.pid)\" 2>/dev/null || true\n",
+  "install": "cat > server.py <<'PY'\nimport os\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nname = os.environ['PROJECT_NAME']\nport = int(os.environ['PROJECT_PORT'])\nclass Handler(BaseHTTPRequestHandler):\n    def do_GET(self):\n        body = ('hello world from ' + name + '\\n').encode()\n        self.send_response(200)\n        self.send_header('content-length', str(len(body)))\n        self.end_headers()\n        self.wfile.write(body)\n    def log_message(self, format, *args):\n        pass\nThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()\nPY",
+  "start": "if [ -f server.pid ]; then kill $(cat server.pid) 2>/dev/null || true; fi\nnohup python server.py > server.log 2>&1 < /dev/null &\necho $! > server.pid",
   "config": {
     "settings": {
       "experimental": true
@@ -106,7 +106,8 @@ Use the `add_ssh_project` tool instead of creating a proxy route directly:
 `name`, `path`, and `port` are optional. The runtime generates values that are
 unique for the machine, creates `/home/sandbox-user/projects/<path>`, writes `mise.toml`, runs
 `mise trust` and `mise install`, and returns the project `directory`, public
-`path`, loopback `port`, and `openUrl`.
+`path`, loopback `port`, and `openUrl`. The call waits until the runtime-owned
+install and start tasks finish.
 
 Set `route: false` for a project that does not serve HTTP. Route-less projects
 still receive a directory, mise environment, and lifecycle tasks, but they do
@@ -117,25 +118,23 @@ project setup without writing dependency tasks into the project's `mise.toml`.
 
 `config` accepts a JSON object, a JSON object string, or a complete TOML
 string. String input is checked as JSON first and otherwise parsed as TOML
-before remote setup. First-class `tools`, `env`, `postinstall`, and `uninstall`
-values override conflicts in `config.tools`, `config.env`,
-`config.hooks.postinstall`, and `config.tasks.uninstall`. Reserved
+before remote setup. First-class `tools`, `env`, `install`, `start`, and
+`uninstall` values override their runtime-owned hidden tasks. Reserved
 `PROJECT_NAME`, `PROJECT_PATH`, and `PROJECT_PORT` may be repeated only with
 the injected values. Put generated payloads such as `HTML_CONTENT` in `env`.
 
-Put application file creation, installation,
-preparation, initial workload launch, and readiness checks in `postinstall` so
-setup progress and completion appear in the project lifecycle log. Do not add
-start, stop, or hidden tasks unless the project needs a later explicit operator
-action that cannot belong to setup or uninstall. Use check-lock-check plus a
-completion marker for expensive setup. Project install is idempotent and uses
-one home-owned lifecycle lock and bounded operation log. Concurrent callers
-attach to that log, and a failed attempt may retry once before returning an
-error.
+Put persistent preparation in `install` and long-running workload launch in
+`start`. Install is marker-gated by generated configuration. Start runs after
+install and once per machine boot. Both use one home-owned lifecycle lock and
+bounded operation log. Concurrent callers attach to that operation. Lifecycle
+failure returns the project with `state: "error"` and saved diagnostics instead
+of failing machine startup. A machine remains `starting` while any project is
+still starting, then becomes `running` after every project is `ready` or
+`error`.
 
 Before invoking any additional task, call `execute_ssh_command` from the returned directory with `command: "sh"`
 and
-`args: ["-lc", "\"$HOME/.local/bin/mise\" tasks ls --name-only --hidden"]`.
+`args: ["-lc", "\"$HOME/.local/bin/mise\" tasks ls --name-only"]`.
 Evaluate the available tasks and invoke only the task defined for the requested
 lifecycle action, using the same command and directory with
 `args: ["-lc", "\"$HOME/.local/bin/mise\" run <task>"]`. Never concatenate
@@ -159,12 +158,19 @@ Pass the returned `projectId` to update the name, path, open path, port, config,
 or prefix behavior. An explicit duplicate path or port fails. Omitting a field
 during an update retains its stored value.
 
-`remove_ssh_project` may run only `mise run uninstall` when that task exists.
-Uninstall is idempotent and does not wait for an active install: it terminates
+`remove_ssh_project` may run only the hidden runtime-owned uninstall task when
+that field is configured. Uninstall does not wait for an active install: it terminates
 the lock owner, removes the lock, and continues teardown. Failures are logged and ignored before
 the proxy route, Lakebase record, and project directory are removed. Stopping a
 Sandbox preserves Projects. Deleting or expiring a Sandbox removes its Project
 records without starting the machine for remote cleanup.
+
+Persisted project paths remain valid while their machine is stopped. An
+authenticated HTTP request starts the machine and its projects. Browser
+navigation receives a loading page that refreshes automatically; non-HTML
+requests receive HTTP 202 JSON with `status: "loading"` until the route is
+ready. A project start failure remains visible on the project instead of
+turning the machine into a failed state.
 
 Remote commands do not inherit authentication from the Sandbox image. The SSH
 transport clears Databricks environment variables, disables SSH agent

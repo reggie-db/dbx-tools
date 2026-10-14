@@ -2,6 +2,7 @@
 set -euf
 
 project_path="$1"
+uninstall_task="$2"
 case "$project_path" in
   ""|/*|*\\*)
     printf 'Invalid project path: %s\n' "$project_path" >&2
@@ -102,8 +103,8 @@ if [ -d "$project_directory" ]; then
   if [ -n "$mise_bin" ]; then
     (
       cd "$project_directory"
-      if "$mise_bin" tasks ls --name-only --hidden | grep -Fxq uninstall; then
-        "$mise_bin" run uninstall
+      if "$mise_bin" tasks ls --name-only --hidden | grep -Fxq "$uninstall_task"; then
+        "$mise_bin" run "$uninstall_task"
       fi
     ) || printf 'mise run uninstall failed (ignored)\n' >&2
   fi

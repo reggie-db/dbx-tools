@@ -282,7 +282,7 @@ export const addSshProjectRequestSchema = z
       .union([z.record(z.string(), z.json()), z.string().trim().min(1)])
       .optional()
       .describe(
-        "Optional raw mise configuration as a JSON object, JSON object string, or TOML string. String values are checked as JSON first and otherwise parsed as TOML; malformed input and non-object roots fail project creation. The server injects reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT environment values. First-class tools, env, postinstall, and uninstall values merge over conflicting raw config fields.",
+        "Optional raw mise configuration as a JSON object, JSON object string, or TOML string. String values are checked as JSON first and otherwise parsed as TOML; malformed input and non-object roots fail project creation. The server injects reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT environment values. First-class tools, env, install, start, and uninstall values merge over conflicting raw config fields.",
       ),
     tools: z
       .record(z.string().min(1), z.json())
@@ -296,13 +296,21 @@ export const addSshProjectRequestSchema = z
       .describe(
         "Optional mise env table. Use this for large or generated values such as HTML_CONTENT. Entries merge over config.env. Reserved PROJECT_NAME, PROJECT_PATH, and PROJECT_PORT may be repeated only with the injected values; other conflicts fail project creation.",
       ),
-    postinstall: z
+    install: z
       .string()
       .trim()
       .min(1)
       .optional()
       .describe(
-        "Optional mise hooks.postinstall shell script. Put application file creation, installation, preparation, initial workload launch, and readiness checks here so setup progress and completion are captured in the lifecycle log. It overrides config.hooks.postinstall. Use an idempotent check-lock-check pattern plus a completion marker for expensive work.",
+        "Optional installation shell script mapped to the hidden _dbx-tools-install mise task. It runs after mise installs declared tools and only when the generated project configuration changes. Put file generation, package installation, and other persistent preparation here.",
+      ),
+    start: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional workload launch shell script mapped to the hidden _dbx-tools-start mise task. It runs after installation and once per machine boot. Start loopback servers here and write their process ids to project-local *.pid files for automatic teardown.",
       ),
     uninstall: z
       .string()
@@ -310,7 +318,7 @@ export const addSshProjectRequestSchema = z
       .min(1)
       .optional()
       .describe(
-        "Optional mise tasks.uninstall shell script. Project removal and reset may call only this project task automatically, then still terminate recorded pid files and processes whose working directory is the project. It overrides config.tasks.uninstall.",
+        "Optional cleanup shell script mapped to the hidden _dbx-tools-uninstall mise task. Project removal and reset may call only this runtime-owned task automatically, then still terminate recorded pid files and processes whose working directory is the project.",
       ),
     route: z
       .boolean()
@@ -438,7 +446,7 @@ export const deleteSshMachineOperationSchema = sshMachineActionSchema
 
 export const executeSshCommandOperationSchema = sshCommandRequestSchema
   .describe(
-    "Execute a maintenance command on an assigned Sandbox. Create or select a persisted project first for app, demo, server, desktop, or persistent file work, and run from that project directory. Keep file creation, installation, initial startup, and readiness checks in mise hooks.postinstall. Use start, stop, or hidden tasks only when the applicable skill explicitly requires a later operator action. List the applicable tasks before invoking one.",
+    "Execute a maintenance command on an assigned Sandbox. Create or select a persisted project first for app, demo, server, desktop, or persistent file work, and run from that project directory. Put persistent preparation in add_ssh_project.install and workload launch in add_ssh_project.start. Runtime-owned hidden lifecycle tasks are not user controls. List the applicable non-hidden tasks before invoking one.",
   )
   .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
 
@@ -467,7 +475,7 @@ export const listSshProjectsOperationSchema = listSshProjectsRequestSchema
 
 export const addSshProjectOperationSchema = addSshProjectRequestSchema
   .describe(
-    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route. config accepts an object, JSON object string, or TOML string; first-class tools, env, postinstall, and uninstall options merge over it. postinstall owns file creation, installation, initial startup, and readiness checks, while only uninstall may be auto-called during removal or reset.",
+    "Create or update a persisted Sandbox project, its isolated directory, mise configuration, reserved loopback port, and authenticated AppKit route. config accepts an object, JSON object string, or TOML string; first-class tools, env, install, start, and uninstall options merge over it. install is marker-gated after mise tool installation, start runs after installation and once per machine boot, and uninstall runs during removal or reset. The operation waits for lifecycle tasks and returns project error state instead of failing solely because those tasks failed.",
   )
   .meta({ appkitTool: { agentTool: true, effect: "write", requiresUserContext: true } });
 
@@ -477,7 +485,7 @@ export const openSshProjectTerminalOperationSchema = sshProjectActionSchema
 
 export const resetSshProjectOperationSchema = sshProjectActionSchema
   .describe(
-    "Permanently wipe a persisted Sandbox project's directory, run its optional mise uninstall task, terminate remaining project processes, and recreate it from its saved mise configuration.",
+    "Permanently wipe a persisted Sandbox project's directory, run its optional runtime-owned uninstall task, terminate remaining project processes, and recreate it from its saved mise configuration.",
   )
   .meta({
     appkitTool: {
@@ -491,7 +499,7 @@ export const resetSshProjectOperationSchema = sshProjectActionSchema
 
 export const removeSshProjectOperationSchema = removeSshProjectRequestSchema
   .describe(
-    "Permanently remove a Sandbox project, its route, and its isolated directory. Attempts only mise run uninstall when present, logs and ignores failures, terminates recorded pid files and processes whose cwd is the project directory, then deletes ~/projects/<path>.",
+    "Permanently remove a Sandbox project, its route, and its isolated directory. Attempts only the hidden runtime-owned uninstall task when present, logs and ignores failures, terminates recorded pid files and processes whose cwd is the project directory, then deletes ~/projects/<path>.",
   )
   .meta({
     appkitTool: {

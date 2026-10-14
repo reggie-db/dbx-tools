@@ -28,7 +28,15 @@ export const PROJECT_SETUP_SCRIPT = readPackageResource("scripts", "setup-projec
 /** @internal */
 export const PROJECT_REMOVE_SCRIPT = readPackageResource("scripts", "remove-project.sh");
 /** @internal */
-export const PROJECT_INSTALL_COMPLETION_MARKER = ".dbx-tools/mise-postinstall.complete";
+export const PROJECT_INSTALL_TASK = "_dbx-tools-install";
+/** @internal */
+export const PROJECT_START_TASK = "_dbx-tools-start";
+/** @internal */
+export const PROJECT_UNINSTALL_TASK = "_dbx-tools-uninstall";
+/** @internal */
+export const PROJECT_INSTALL_MARKER = ".dbx-tools/mise-install.sha256";
+/** @internal */
+export const PROJECT_START_MARKER = ".dbx-tools/mise-start.key";
 
 /** @internal */
 export interface ProjectEnvironment {
@@ -40,7 +48,7 @@ export interface ProjectEnvironment {
 /** @internal */
 export function mergeProjectMiseConfig(
   config: ProjectConfigInput | undefined,
-  options: Pick<AddSshProjectRequest, "tools" | "env" | "postinstall" | "uninstall">,
+  options: Pick<AddSshProjectRequest, "tools" | "env" | "install" | "start" | "uninstall">,
 ): ProjectConfig {
   const resolved = parseProjectMiseConfig(config);
   if (options.tools) {
@@ -51,15 +59,17 @@ export function mergeProjectMiseConfig(
     const configuredEnv = objectTable(resolved.env, "config.env");
     resolved.env = { ...configuredEnv, ...options.env };
   }
-  if (options.postinstall) {
-    const hooks = objectTable(resolved.hooks, "config.hooks");
-    resolved.hooks = { ...hooks, postinstall: options.postinstall };
-  }
-  if (options.uninstall) {
+  if (options.install || options.start || options.uninstall) {
     const tasks = objectTable(resolved.tasks, "config.tasks");
     resolved.tasks = {
       ...tasks,
-      uninstall: { run: options.uninstall },
+      ...(options.install
+        ? { [PROJECT_INSTALL_TASK]: { run: options.install, hide: true } }
+        : {}),
+      ...(options.start ? { [PROJECT_START_TASK]: { run: options.start, hide: true } } : {}),
+      ...(options.uninstall
+        ? { [PROJECT_UNINSTALL_TASK]: { run: options.uninstall, hide: true } }
+        : {}),
     };
   }
   assertNonCredentialEnv(objectTable(resolved.env, "config.env"));
@@ -199,32 +209,11 @@ export function renderProjectMiseConfig(
     env[name] = expected;
   }
   resolved.env = env;
-  const hooks = objectTable(resolved.hooks, "config.hooks");
-  const postinstall = hooks.postinstall;
-  if (postinstall !== undefined && typeof postinstall !== "string") {
-    throw new Error("Sandbox project config.hooks.postinstall must be a string");
-  }
-  resolved.hooks = {
-    ...hooks,
-    postinstall: renderProjectPostinstall(postinstall),
-  };
   try {
     return `${stringify(resolved as TomlTableWithoutBigInt).trimEnd()}\n`;
   } catch (error) {
     throw new Error("Sandbox project config cannot be serialized to mise.toml", { cause: error });
   }
-}
-
-function renderProjectPostinstall(postinstall: string | undefined): string {
-  return `set -eu
-completion_marker=${shellQuote(PROJECT_INSTALL_COMPLETION_MARKER)}
-rm -f -- "$completion_marker"
-(
-${postinstall?.trimEnd() || ":"}
-)
-mkdir -p -- "$(dirname "$completion_marker")"
-: >"$completion_marker"
-`;
 }
 
 /** @internal */

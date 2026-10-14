@@ -26,9 +26,9 @@ const request = addSshProjectRequestSchema.parse({
   name: "desktop-tool",
   route: false,
   serviceDependencies: ["desktop"],
-  config: {
-    tools: { node: "lts" },
-  },
+  tools: { python: "3.12" },
+  install: "printf 'print(\"hello\")\\n' > app.py",
+  start: "nohup python app.py > app.log 2>&1 < /dev/null & echo $! > app.pid",
 });
 ```
 
@@ -36,8 +36,10 @@ The server generates omitted names, paths, and ports. Project paths are scoped
 beneath the authenticated user's route prefix. `config` is serialized to
 `mise.toml`. The server injects the reserved Project environment values.
 `route: false` keeps lifecycle-only projects out of the HTTP proxy.
-`serviceDependencies` starts typed built-in services and adds hidden
-`sandbox:<kind>` mise task dependencies.
+`serviceDependencies` starts typed built-in services outside project mise
+configuration. `install`, `start`, and `uninstall` map to hidden runtime-owned
+tasks. Install is marker-gated; start runs after installation and once per
+machine boot. Other tasks remain user-invoked.
 
 Use these schemas at browser and server boundaries. SSH sessions, private keys,
 Lakebase persistence, and proxy transports remain in
