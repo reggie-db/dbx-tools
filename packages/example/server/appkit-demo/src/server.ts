@@ -111,7 +111,7 @@ const mastraStorage =
   configUtils.boolean(undefined, "MASTRA_STORAGE", configUtils.ENV_ONLY) ?? true;
 const mastraMemory = configUtils.boolean(undefined, "MASTRA_MEMORY", configUtils.ENV_ONLY) ?? true;
 const managedMemoryEnabled =
-  configUtils.boolean(undefined, "MANAGED_MEMORY", configUtils.ENV_ONLY) ?? false;
+  configUtils.boolean(undefined, "MANAGED_MEMORY", { sources: "env" }) ?? false;
 const managedSessionStore = process.env.DATABRICKS_AGENT_SESSION_STORE_ID?.trim();
 const managedMemoryStore = process.env.DATABRICKS_AGENT_MEMORY_STORE_ID?.trim();
 const managedAgentMemory = managedMemoryEnabled
