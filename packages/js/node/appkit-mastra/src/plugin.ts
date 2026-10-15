@@ -57,6 +57,7 @@ import {
   type ResourceRequirement,
 } from "@databricks/appkit";
 import { lakebaseResolver, pluginRegistry, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
+import { sendGenieMessageFeedback } from "@dbx-tools/genie/feedback";
 import { modelCatalog } from "@dbx-tools/model";
 import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import {
@@ -66,13 +67,14 @@ import {
   type Chart,
   type GenieChatRequest,
   type MastraClientConfig,
-  type MastraFeedbackRequest,
   type StatementData,
 } from "@dbx-tools/shared-mastra";
 import { display, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { workflowRoute } from "@mastra/ai-sdk";
 import type { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
 import type { RequestContext } from "@mastra/core/request-context";
+import type { AnyWorkflow } from "@mastra/core/workflows";
 import { pipeUIMessageStreamToResponse } from "ai";
 import express from "express";
 import type { Pool } from "pg";
@@ -100,6 +102,7 @@ import {
   modelCatalogueDefaults,
   statementDataDefaults,
 } from "./defaults.ts";
+import { resolveFeedbackMode } from "./feedback-mode.ts";
 import {
   deleteGenieThread,
   deleteGenieThreadMessage,
@@ -120,9 +123,8 @@ import { createMemoryBuilder, needsLakebase } from "./memory.ts";
 import {
   flushDirectMlflowTracing,
   logFeedback,
+  mlflowEnabled,
   mlflowExperimentManagerUrl,
-  resolveFeedbackEnabled,
-  validateFeedbackConfig,
 } from "./mlflow.ts";
 import { resolveDefaultModelId } from "./model.ts";
 import { buildObservability, configureOtelPropagation } from "./observability.ts";
@@ -244,12 +246,18 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   private mastraApp: express.Express | null = null;
   private mastraServer: MastraServer | null = null;
   private readonly outputProcessorFactories: MastraOutputProcessorFactory[] = [];
+  /** Code-defined workflows registered before the Mastra instance is built. */
+  private readonly workflows: Record<string, AnyWorkflow> = {
+    ...(this.config.workflows ?? {}),
+  };
   /**
    * The optional MCP server exposing this plugin's agents / tools, or
    * `null` when `config.mcp` is disabled (the default). Built in
    * {@link buildAgentAndServer} and registered on the Mastra instance.
    */
   private mcp: ResolvedMcp | null = null;
+  /** Resolved feedback destination published to server and browser clients. */
+  private resolvedFeedbackMode: feedback.FeedbackMode = "none";
   /**
    * Resolved {@link MastraIdentityMode}: the identity the chat path's Databricks
    * calls run as. Read once at setup so an invalid `genieIdentity` fails the app
@@ -260,7 +268,12 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // Resolve the identity mode up front so an invalid `genieIdentity` fails the
     // app boot with a clear message rather than 500-ing the first chat request.
     this.identityMode = resolveIdentityMode(this.config.genieIdentity);
-    validateFeedbackConfig(this.config.feedback);
+    const spaces = resolveGenieSpaces(this.config, this.context);
+    this.resolvedFeedbackMode = resolveFeedbackMode(this.config.feedbackMode, {
+      genie: this.config.genieAgentMode !== false && Object.keys(spaces).length > 0,
+      mlflow: mlflowEnabled(),
+    });
+    this.config.feedbackMode = this.resolvedFeedbackMode;
     if (this.config.observability !== false) {
       await registerAppMlflowTraceInfoProcessor();
     }
@@ -358,6 +371,18 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         }
         this.outputProcessorFactories.push(factory);
       },
+      /** Register a workflow before the hosted Mastra instance is built. */
+      registerWorkflow: (key: string, workflow: AnyWorkflow): void => {
+        if (this.mastra) {
+          throw new Error("Mastra workflows must be registered before the instance is built");
+        }
+        if (this.workflows[key]) {
+          throw new Error(`Mastra workflow key "${key}" is already registered`);
+        }
+        this.workflows[key] = workflow;
+      },
+      /** Registered workflow keys in insertion order. */
+      listWorkflows: (): string[] => Object.keys(this.workflows),
       /** Underlying Mastra instance for advanced use (custom routes etc.). */
       getMastra: () => this.mastra,
       /**
@@ -452,7 +477,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       basePath: this.basePath,
       defaultAgent: this.built?.defaultAgentId ?? FALLBACK_AGENT_ID,
       agents: Object.keys(this.built?.agents ?? {}),
-      feedbackEnabled: this.feedbackEnabled(),
+      feedbackMode: this.feedbackMode(),
       backgroundTurns: this.config.backgroundTurns !== false,
       // In `service-principal` mode the chat works for any caller who can open
       // the app, so a UI that hides chat behind an OBO-token probe should show
@@ -462,13 +487,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     return config as unknown as Record<string, unknown>;
   }
 
-  /**
-   * Whether user feedback can be logged to MLflow. Delegates to
-   * {@link resolveFeedbackEnabled} so the client-config flag and the
-   * feedback route share the same gate as the server's trace-id header.
-   */
-  private feedbackEnabled(): boolean {
-    return resolveFeedbackEnabled(this.config.feedback);
+  /** Resolve the only feedback destination exposed for this plugin mode. */
+  private feedbackMode(): feedback.FeedbackMode {
+    return this.resolvedFeedbackMode;
   }
 
   override injectRoutes(router: IAppRouter): void {
@@ -924,24 +945,15 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     return this.execute(() => write(client), genieConversationWriteDefaults);
   }
 
-  /** Register MLflow feedback submission when configured. */
+  /** Register the single feedback destination selected by plugin mode. */
   private registerFeedbackRoutes(router: IAppRouter): void {
-    // `POST /route/feedback` logs a thumbs / comment assessment against
-    // a turn's MLflow trace (the `traceId` the client captured from the
-    // stream response's trace-id header). Registered on the AppKit
-    // router (like `/models`) rather than the Mastra subapp so it runs
-    // under the same OBO scope - the feedback is attributed to the
-    // signed-in user. Returns 404 when feedback is disabled so the
-    // client treats the capability as absent; 400 on a malformed body.
-    // A recorded assessment yields `{ ok: true }`; a soft failure (most
-    // often the trace hasn't finished exporting to MLflow yet) yields
-    // `{ ok: false }` without a 5xx so the UI can prompt a retry.
     this.route(router, {
       name: "feedback",
       method: "post",
       path: routes.MASTRA_ROUTES.feedback,
       handler: async (req, res) => {
-        if (!this.feedbackEnabled()) {
+        const mode = this.feedbackMode();
+        if (mode === "none") {
           res.status(404).json({ ok: false });
           return;
         }
@@ -955,6 +967,19 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
             error: INVALID_FEEDBACK_MESSAGE,
             fields: invalidFields(parsed.error),
           });
+          return;
+        }
+        if (parsed.data.mode !== mode) {
+          res.status(400).json({ ok: false, error: INVALID_FEEDBACK_MESSAGE });
+          return;
+        }
+        if (parsed.data.mode === "genie") {
+          const result = await this.scopedSelf(req).sendGenieFeedback(parsed.data);
+          if (!result.ok) {
+            this.sendFailure(res, result, "genie-feedback", "Feedback could not be recorded");
+            return;
+          }
+          res.json({ ok: true });
           return;
         }
         const result = await this.scopedSelf(req).logFeedback(parsed.data);
@@ -978,7 +1003,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       method: "get",
       path: routes.MASTRA_ROUTES.mlflowExperiment,
       handler: async (req, res) => {
-        if (!this.feedbackEnabled()) {
+        if (this.feedbackMode() !== "mlflow") {
           res.json({ url: null });
           return;
         }
@@ -1120,7 +1145,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * (see {@link logFeedback} in `./mlflow.js`).
    */
   private async logFeedback(
-    feedback: MastraFeedbackRequest,
+    feedback: feedback.MlflowFeedbackRequest,
   ): Promise<ExecutionResult<string | undefined>> {
     const ctx = getExecutionContext();
     const sourceId =
@@ -1135,6 +1160,28 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           ...feedback,
           ...(sourceId ? { sourceId } : {}),
         }),
+      feedbackWriteDefaults,
+    );
+  }
+
+  /** Send Agent Mode rating and comment directly to the originating Genie message. */
+  private sendGenieFeedback(input: feedback.GenieFeedbackRequest): Promise<ExecutionResult<void>> {
+    const client = getExecutionContext().client;
+    return this.execute(
+      (signal) =>
+        sendGenieMessageFeedback(
+          {
+            space_id: input.spaceId,
+            conversation_id: input.conversationId,
+            message_id: input.messageId,
+            rating: input.rating,
+            ...(input.comment ? { comment: input.comment } : {}),
+          },
+          {
+            workspaceClient: client,
+            ...(signal ? { context: signal } : {}),
+          },
+        ),
       feedbackWriteDefaults,
     );
   }
@@ -1353,6 +1400,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     });
     this.mastra = new Mastra({
       agents: this.built.agents,
+      ...(Object.keys(this.workflows).length > 0 ? { workflows: this.workflows } : {}),
       ...(instanceStorage ? { storage: instanceStorage } : {}),
       ...(observability ? { observability } : {}),
       ...(this.mcp ? { mcpServers: { [this.mcp.serverId]: this.mcp.server } } : {}),
@@ -1372,18 +1420,25 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       app: this.mastraApp,
       mastra: this.mastra,
       prefix: "",
-      customApiRoutes: agentChatRoutes(),
+      customApiRoutes: [
+        ...agentChatRoutes(),
+        workflowRoute({
+          path: "/route/workflows/:workflowId/stream",
+          version: "v7",
+        }),
+      ],
     });
     await this.mastraServer.init();
     attachStaleResumeRecovery(this.mastraApp);
     this.logger.info("ready", {
       agents: Object.keys(this.built.agents),
+      workflows: Object.keys(this.workflows),
       defaultAgent: this.built.defaultAgentId,
       backgroundTurns: this.config.backgroundTurns !== false,
       apiAccess: this.config.apiAccess ?? "scoped",
       mcp: this.mcp ? `${this.basePath}${this.mcp.httpPath}` : "off",
       lakebase: memoryPool !== undefined,
-      feedback: this.feedbackEnabled(),
+      feedback: this.feedbackMode(),
       observability: observability !== undefined ? "mlflow" : "off",
     });
   }

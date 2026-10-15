@@ -74,6 +74,7 @@ describe("Better Auth runtime", () => {
       basePath: "/api/email/auth",
       logoutRedirectPath: "/login",
       appName: "Test app",
+      passkeyNamePrefix: "DBX Tools",
       secret: "test-secret-at-least-thirty-two-characters",
       sessionTtlSeconds: 3600,
       codeTtlSeconds: 600,
@@ -114,10 +115,21 @@ describe("Better Auth runtime", () => {
       email: "ada@example.com",
       enabled: true,
       passkeysEnabled: true,
+      passkeyNamePrefix: "DBX Tools",
     });
 
     const passkeys = await runtime.handler(authRequest("/passkey/list-user-passkeys", { cookie }));
     assert.equal(passkeys.status, 200);
+
+    const registration = await runtime.handler(
+      authRequest("/passkey/generate-register-options", { cookie }),
+    );
+    assert.equal(registration.status, 200);
+    const registrationOptions = (await registration.json()) as {
+      rp?: { id?: string; name?: string };
+    };
+    assert.equal(registrationOptions.rp?.id, "localhost");
+    assert.equal(registrationOptions.rp?.name, "DBX Tools Localhost");
 
     const foreignLogout = await runtime.handler(
       authRequest("/logout", { cookie, origin: "https://untrusted.example" }, "POST"),
@@ -138,8 +150,51 @@ describe("Better Auth runtime", () => {
       authenticated: false,
       enabled: true,
       passkeysEnabled: true,
+      passkeyNamePrefix: "DBX Tools",
     });
     await runtime.close();
+  });
+
+  it("scopes passkey challenges to each full tunnel hostname", async () => {
+    const runtimes = await Promise.all(
+      ["alpha.tunnels.example.com", "beta.tunnels.example.com"].map(async (hostname) => {
+        const origin = `https://${hostname}`;
+        return {
+          hostname,
+          origin,
+          runtime: await createPasswordlessAuth({
+            storage: await createAuthStorage({
+              storage: "sqlite",
+              sqlitePath: join(directory, `${hostname}.sqlite`),
+            }),
+            baseURL: origin,
+            appName: "Test app",
+            secret: "test-secret-at-least-thirty-two-characters",
+            sessionTtlSeconds: 3600,
+            codeTtlSeconds: 600,
+            maxAttempts: 5,
+            authorizeIdentity: () => true,
+            sendCode: async () => undefined,
+          }),
+        };
+      }),
+    );
+
+    try {
+      for (const { hostname, origin, runtime } of runtimes) {
+        const response = await runtime.handler(
+          new Request(`${origin}/api/auth/passkey/generate-authenticate-options`, {
+            headers: { origin },
+          }),
+        );
+        assert.equal(response.status, 200);
+        const options = (await response.json()) as { rpId?: string };
+        assert.equal(options.rpId, hostname);
+        assert.notEqual(options.rpId, "example.com");
+      }
+    } finally {
+      await Promise.all(runtimes.map(({ runtime }) => runtime.close()));
+    }
   });
 
   it("does not deliver an OTP for an unauthorized identity", async () => {

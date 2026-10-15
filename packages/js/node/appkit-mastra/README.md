@@ -2,7 +2,7 @@
 
 Host Mastra agents in a Databricks App with AppKit authentication, streaming
 routes, Lakebase-backed memory, Genie tools, model selection, chart and table
-embeds, MLflow feedback, and MCP exposure.
+embeds, Genie or MLflow feedback, and MCP exposure.
 
 ## Quick start
 
@@ -172,6 +172,23 @@ The paired UI sends this through Mastra's standard `requestContext` body field.
 The agent schema validates it before model execution. AppKit-Mastra removes and
 re-stamps trusted identity, resource, thread, auth, scope, model, and trace keys,
 so application context cannot change conversation ownership or credentials.
+
+## Register application workflows
+
+Pass code-defined workflows in plugin config, or let a sibling plugin register
+one before AppKit setup completes:
+
+```ts
+mastra({
+  workflows: { generatorDemoAssets },
+});
+```
+
+Scoped mode exposes `POST /api/mastra/route/workflows/:workflowId/stream` in AI
+SDK v7 format while keeping Mastra's stock workflow administration routes
+closed. The route always uses the trusted request context stamped by
+AppKit-Mastra. Start and resume requests must provide fresh OBO context because
+workspace clients and tokens are never persisted in workflow snapshots.
 
 `createAgent({ requireToolApproval })` forwards Mastra's native request-level
 approval gate. It may be an async Classifier-backed function that returns `true`
@@ -926,10 +943,13 @@ MLflow reporting, OTel tracing, or the official AI SDK chat route.
 ## Feedback and observability
 
 `observability.buildObservability()` wires Mastra tracing when OTLP export is
-configured. `mlflow.resolveFeedbackEnabled()` turns MLflow feedback on when both
-trace export and an MLflow experiment are configured, unless the plugin config
-forces a value. Explicit `feedback: true` requires `MLFLOW_EXPERIMENT_ID` or
-`MLFLOW_EXPERIMENT_NAME` and fails app startup when neither is available.
+configured. `feedbackMode` is the only feedback setting:
+
+- `auto` prefers direct Genie feedback when Genie Agent Mode and a space are
+  available, otherwise MLflow when tracing is configured, otherwise none.
+- `genie` or `mlflow` selects that destination and fails startup when it is not
+  available.
+- `none` disables feedback.
 
 `telemetry.attachChatTurnTelemetry()` writes each chat request and response to
 the exported root span so MLflow's UC `*_trace_unified` view can display the
@@ -967,11 +987,13 @@ attribute.
 ```ts
 mastra({
   agents: analyst,
-  feedback: true,
+  feedbackMode: "auto",
 });
 ```
 
-`mlflow.logFeedback()` logs a human assessment against the active MLflow trace.
+In Genie Agent Mode, the UI sends Rating and Comment to the originating Genie
+message and displays the original Request in the feedback dialog. In MLflow
+mode, `mlflow.logFeedback()` logs a human assessment against the active trace.
 On Apps UC traces it reads the experiment's
 `mlflow.experiment.databricksTraceDestinationPath` tag (or the spans-table tag)
 so the assessment URI matches the row the experiment UI shows. The response
@@ -1042,7 +1064,7 @@ Success in the boot log looks like:
 
 ```text
 [observability] Mastra observability wired through OTel bridge {
-  otelBase: 'http://localhost:4314', feedback: true, observability: 'mlflow'
+  otelBase: 'http://localhost:4314', mlflowAvailable: true, observability: 'mlflow'
 }
 ```
 
@@ -1128,7 +1150,7 @@ use Mastra's native route surfaces behind the same scoped request-context gate.
 | `GET` / `PATCH` / `DELETE` | `/memory/threads[...]`            | Native Mastra resource-scoped conversation history and thread management.                                                |
 | `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                                             |
 | `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                                                           |
-| `POST`                     | `/route/feedback`                 | Log a thumbs / comment assessment to the turn's MLflow trace. `404` when feedback is off.                                |
+| `POST`                     | `/route/feedback`                 | Send feedback to the resolved Genie or MLflow destination. `404` when feedback mode is none.                             |
 | `GET`                      | `/route/mlflow-experiment`        | Return the experiment URL only when the active viewer has effective `CAN_MANAGE`. Otherwise, return `{ "url": null }`.   |
 | `POST` / `GET`             | `/mcp`, `/sse`, `/messages`       | MCP transports, when `mcp` is enabled.                                                                                   |
 
@@ -1147,7 +1169,7 @@ needs no extra wiring.
 | `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO), `service-principal`, or `auto` for the agents' Databricks calls.                                                            |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. On Apps, the telemetry sidecar injects these.                            |
 | `OTEL_PROPAGATORS`                                                  | Set to `none` on Databricks Apps. The plugin disables extraction and injection before serving requests while retaining local async span parenting. |
-| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset. Assessments read the experiment's UC trace destination tag.              |
+| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | Makes MLflow available to automatic or explicit MLflow feedback mode. Assessments read the experiment's UC trace destination tag.                  |
 | `MLFLOW_UC_TRACE_PREFIX`                                            | Optional override for the UC table prefix. Omit to use the experiment tag.                                                                         |
 
 ## Configuration reference
@@ -1192,9 +1214,8 @@ The main plugin options are:
   preview-toggle responses fall back automatically.
 - `defaultModel`, `modelOverride`, and `modelFuzzyMatch` control how loose model
   names are resolved through Databricks Model Serving.
-- `feedback` controls whether MLflow feedback routes are exposed. The automatic
-  mode enables feedback when tracing and an MLflow experiment are configured.
-  Explicit `true` fails startup unless an experiment id or name is configured.
+- `feedbackMode` is `auto`, `genie`, `mlflow`, or `none`. Explicit unavailable
+  destinations fail startup.
 - `mcp` controls whether agents are exposed as MCP tools and how that server is
   named.
 - `genieIdentity` selects credentials for model discovery, Genie calls, and

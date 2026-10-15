@@ -33,7 +33,7 @@ import {
   type AuthStorageMode,
   type PasswordlessAuthRuntime,
 } from "@dbx-tools/auth-gate";
-import { configUtils } from "@dbx-tools/core";
+import { configUtils, projectUtils } from "@dbx-tools/core";
 import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
 import { brandUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import type { RequestHandler } from "express";
@@ -99,6 +99,7 @@ export const AuthGateConfigSchema = authStorage.AuthStorageConfigSchema.extend({
   allow: textOrList("Email allow-list patterns."),
   subject: text("Verification email subject."),
   brandName: text("Verification email brand name."),
+  passkeyNamePrefix: text("Prefix for humanized tunnel passkey names."),
   message: text("Verification email message."),
   sessionTtlSeconds: z.coerce
     .number<number>()
@@ -147,6 +148,7 @@ export interface ResolvedAuthGateConfig {
   allow: string[];
   subject: string;
   brandName: string;
+  passkeyNamePrefix: string;
   message: string;
   sessionTtlSeconds: number;
   codeTtlSeconds: number;
@@ -199,6 +201,9 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     TUNNEL_CONFIG,
   );
   const frpPublicDomain = configUtils.text("TUNNEL_FRP_PUBLIC_DOMAIN", TUNNEL_CONFIG);
+  const brandName =
+    configUtils.string(config.brandName, "TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG) ??
+    DEFAULTS.brandName;
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
     // TUNNEL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
@@ -210,9 +215,13 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     ],
     subject:
       configUtils.string(config.subject, "TUNNEL_AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
-    brandName:
-      configUtils.string(config.brandName, "TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG) ??
-      DEFAULTS.brandName,
+    brandName,
+    passkeyNamePrefix:
+      configUtils.string(
+        config.passkeyNamePrefix,
+        "TUNNEL_AUTH_PASSKEY_NAME_PREFIX",
+        TUNNEL_CONFIG,
+      ) ?? projectUtils.name(),
     message:
       configUtils.string(config.message, "TUNNEL_AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
     sessionTtlSeconds: configUtils.positiveInt(
@@ -335,13 +344,14 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
         for (const origin of new Set(origins)) {
           const storage = await authStorage.createAuthStorage(this.resolved, pool);
           this.runtimes.set(
-            new URL(origin).host.toLowerCase(),
+            new URL(origin).hostname.toLowerCase(),
             await passwordlessAuth.createPasswordlessAuth({
               storage,
               baseURL: origin,
               trustedOrigins: [origin],
               basePath: AUTH_BASE_PATH,
               appName: this.resolved.brandName,
+              passkeyNamePrefix: this.resolved.passkeyNamePrefix,
               secret: Buffer.from(key).toString("base64url"),
               sessionTtlSeconds: this.resolved.sessionTtlSeconds,
               sessionCutoffMs: this.resolved.sessionCutoffMs,
@@ -400,6 +410,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       forwardHeaders: this.resolved.forwardHeaders,
       gatePaths: this.resolved.gatePaths,
       brandName: this.resolved.brandName,
+      passkeyNamePrefix: this.resolved.passkeyNamePrefix,
     });
   }
 
@@ -415,15 +426,16 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
 
   override exports(): AuthGateApi {
     const runtime = (headers?: Headers, request?: Request) => {
-      const host = (
-        headers?.get("host") ?? (request ? new URL(request.url).host : "")
-      ).toLowerCase();
-      return this.runtimes.get(host) ?? this.runtimes.values().next().value;
+      const hostname = _authHostname(headers, request);
+      return hostname ? this.runtimes.get(hostname) : this.runtimes.values().next().value;
     };
     return {
       basePath: AUTH_BASE_PATH,
       passkeysEnabled: [...this.runtimes.values()].some((entry) => entry.passkeysEnabled),
-      isProtectedHost: (headers) => this.runtimes.has((headers.get("host") ?? "").toLowerCase()),
+      isProtectedHost: (headers) => {
+        const hostname = _authHostname(headers);
+        return hostname ? this.runtimes.has(hostname) : false;
+      },
       handler: (request) =>
         runtime(request.headers, request)?.handler(request) ??
         Promise.resolve(new Response("Not Found", { status: 404 })),
@@ -433,6 +445,17 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
         Promise.resolve({ authenticated: false, enabled: false, passkeysEnabled: false }),
       close: () => this.shutdown(),
     };
+  }
+}
+
+/** Resolve an exact request hostname without widening it to a parent domain. */
+function _authHostname(headers?: Headers, request?: Request): string | undefined {
+  const host = headers?.get("host")?.trim();
+  try {
+    if (host) return new URL(`https://${host}`).hostname.toLowerCase();
+    return request ? new URL(request.url).hostname.toLowerCase() : undefined;
+  } catch {
+    return undefined;
   }
 }
 

@@ -30,7 +30,6 @@ import {
   type User,
 } from "./config.ts";
 import { requestUserEmail, requestUserId } from "./identity.ts";
-import { resolveFeedbackEnabled } from "./mlflow.ts";
 import { MASTRA_ORIGIN_KEY } from "./request-context.ts";
 import {
   extractModelOverride,
@@ -202,10 +201,9 @@ export async function createRequestContext(
 export class MastraServer extends ExpressMastraServer {
   private log: log.Logger;
   /**
-   * Whether to stamp the MLflow trace-id header on responses. Shares the
-   * plugin's feedback gate via {@link resolveFeedbackEnabled}.
+   * Whether to stamp the MLflow trace-id header on responses.
    */
-  private feedbackEnabled: boolean;
+  private mlflowFeedback: boolean;
 
   constructor(
     private config: MastraPluginConfig,
@@ -213,7 +211,7 @@ export class MastraServer extends ExpressMastraServer {
   ) {
     super(...args);
     this.log = log.logger(config);
-    this.feedbackEnabled = resolveFeedbackEnabled(config.feedback);
+    this.mlflowFeedback = config.feedbackMode === "mlflow";
   }
 
   override registerAuthMiddleware(): void {
@@ -324,7 +322,7 @@ export class MastraServer extends ExpressMastraServer {
    * degrading gracefully rather than emitting a bogus trace id.
    */
   configureMlflowTraceId(res: express.Response) {
-    if (!this.feedbackEnabled || res.headersSent) return;
+    if (!this.mlflowFeedback || res.headersSent) return;
     if (res.getHeader(feedback.MLFLOW_TRACE_ID_HEADER)) return;
     const traceId = trace.getActiveSpan()?.spanContext().traceId;
     if (!traceId || traceId === INVALID_TRACE_ID) return;

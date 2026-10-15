@@ -167,21 +167,20 @@ export async function buildObservability(
     : otelBase
       ? `${otelBase.replace(/\/+$/, "")}/v1/traces`
       : undefined;
-  // `mlflowEnabled` is the same gate that flips chat feedback on, so the
-  // boot line is the one-glance check that both halves of the Apps UC
-  // pipeline (OTLP sidecar + experiment id) are present.
-  const feedback = mlflowEnabled();
+  // `mlflowEnabled` establishes whether MLflow can be selected by feedback
+  // auto-resolution, so the boot line reports that availability directly.
+  const mlflowAvailable = mlflowEnabled();
   logger.info("Mastra observability wired through OTel bridge", {
     serviceName,
     requestContextKeys,
     otelBase: otelBase ?? "<unset>",
     resolvedTracesUrl: resolvedTracesUrl ?? "<unset>",
-    feedback,
+    mlflowAvailable,
     observability: directMlflowConfigured
       ? "mlflow-direct"
       : appMlflowTraceInfo
         ? "mlflow-apps"
-        : feedback
+        : mlflowAvailable
           ? "mlflow"
           : "otel",
   });

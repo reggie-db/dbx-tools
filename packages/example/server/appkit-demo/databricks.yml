@@ -11,6 +11,8 @@ variables:
     default: 01f1890bd0cd1a7d93cb3c6dba8ab1e5
   warehouse_id:
     default: a2171589c3905bc7
+  generator_catalog:
+    default: reggie_pierce_aws_catalog
   experiment_id:
     default: "3223948959631242"
   telemetry_schema:
@@ -46,6 +48,22 @@ targets:
     mode: development
 
 resources:
+  # Existing Unity Catalog used by generator workflows. Bind this bundle key to
+  # the existing catalog once before the first deploy:
+  # databricks bundle deployment bind generator_catalog <catalog> -t <target>
+  # The app SP creates marked per-user schemas, then grants the active OBO user
+  # ALL PRIVILEGES and MANAGE on only that schema.
+  catalogs:
+    generator_catalog:
+      name: ${var.generator_catalog}
+      lifecycle:
+        prevent_destroy: true
+      grants:
+        - principal: ${resources.apps.demo_app.service_principal_client_id}
+          privileges:
+            - USE_CATALOG
+            - CREATE_SCHEMA
+
   # Lakebase Autoscaling project backing the demo's memory tools. Lakebase
   # automatically provisions the `production` branch and its `primary`
   # read-write endpoint. The endpoint inherits these project defaults.
@@ -115,6 +133,8 @@ resources:
             value: dbx_tools_search
           - name: DATABRICKS_WAREHOUSE_ID
             value_from: sql-warehouse
+          - name: GENERATOR_CATALOG
+            value: ${var.generator_catalog}
           - name: DATABRICKS_GENIE_SPACE_ID
             value_from: genie-space
           - name: LAKEBASE_ENDPOINT

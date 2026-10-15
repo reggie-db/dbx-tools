@@ -10,6 +10,7 @@
 
 import { passkey } from "@better-auth/passkey";
 import { type AuthStatus, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
+import { passkeyDisplayName } from "@dbx-tools/shared-auth/auth";
 import { environmentUtils, errorUtils, log } from "@dbx-tools/shared-core";
 import { APIError, betterAuth, type BetterAuthOptions } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
@@ -42,6 +43,8 @@ export interface PasswordlessAuthOptions {
   trustedOrigins?: readonly string[];
   basePath?: string;
   appName: string;
+  /** Prefix added before the humanized hostname in the WebAuthn display name. */
+  passkeyNamePrefix?: string;
   secret: string;
   sessionCookieName?: string;
   /** Same-origin path returned after logout. Defaults to `/`. */
@@ -76,6 +79,7 @@ export async function createPasswordlessAuth(
   ];
   const allowDatabricksAppOrigins = environmentUtils.isDatabricksAppEnv();
   const rpID = new URL(origin).hostname;
+  const passkeyNamePrefix = config.passkeyNamePrefix ?? config.appName;
   const basePath = config.basePath ?? "/api/auth";
   const logoutRedirectPath = normalizeLogoutRedirectPath(config.logoutRedirectPath);
   const emailOptions: AuthEmailOptions = {
@@ -176,7 +180,7 @@ export async function createPasswordlessAuth(
       }),
       passkey({
         rpID,
-        rpName: config.appName,
+        rpName: passkeyDisplayName(passkeyNamePrefix, rpID) ?? config.appName,
         origin,
         authenticatorSelection: {
           residentKey: "preferred",
@@ -209,6 +213,7 @@ export async function createPasswordlessAuth(
         ...(email ? { email } : {}),
         enabled: true,
         passkeysEnabled: true,
+        passkeyNamePrefix,
       });
     }
     // OTP send + verify go straight to better-auth's native emailOTP endpoints
@@ -255,6 +260,7 @@ export async function createPasswordlessAuth(
         ...(email ? { email } : {}),
         enabled: true,
         passkeysEnabled: true,
+        passkeyNamePrefix,
       };
     },
     close: () => config.storage.close(),

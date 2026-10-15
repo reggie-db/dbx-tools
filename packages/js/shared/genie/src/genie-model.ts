@@ -289,6 +289,36 @@ export const GenieSpaceSchema = SDKGenieSpaceSchema.extend({
 /** Genie space metadata with the identifiers required by chat consumers. */
 export type GenieSpace = z.infer<typeof GenieSpaceSchema>;
 
+/** Request accepted by the GA Genie space create endpoint. */
+export const CreateGenieSpaceRequestSchema = z
+  .object({
+    warehouse_id: z.string().trim().min(1).describe("Associated SQL warehouse ID."),
+    serialized_space: z.string().trim().min(1).describe("Serialized Genie space definition."),
+    title: z.string().trim().min(1).optional().describe("Genie space title."),
+    description: z.string().trim().min(1).optional().describe("Genie space description."),
+    parent_path: z.string().trim().min(1).optional().describe("Parent workspace folder."),
+  })
+  .strict()
+  .describe("GA Genie space creation request.");
+
+/** GA Genie space creation request. */
+export type CreateGenieSpaceRequest = z.infer<typeof CreateGenieSpaceRequestSchema>;
+
+/** Feedback request accepted by Genie chat-mode and agent-mode messages. */
+export const GenieMessageFeedbackRequestSchema = z
+  .object({
+    space_id: z.string().trim().min(1).describe("Genie space ID."),
+    conversation_id: z.string().trim().min(1).describe("Genie conversation ID."),
+    message_id: z.string().trim().min(1).describe("Genie message ID."),
+    rating: z.enum(["POSITIVE", "NEGATIVE", "NONE"]).describe("Genie feedback rating."),
+    comment: z.string().trim().max(5_000).optional().describe("Optional Genie feedback comment."),
+  })
+  .strict()
+  .describe("Feedback attached to one Genie conversation message.");
+
+/** Feedback attached to one Genie conversation message. */
+export type GenieMessageFeedbackRequest = z.infer<typeof GenieMessageFeedbackRequestSchema>;
+
 /* ------------------------ terminal helpers ------------------------- */
 
 /**

@@ -25,10 +25,12 @@
 import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import { classes, policy, resolve } from "@dbx-tools/model";
-import { createDatabricksLanguageModel } from "@dbx-tools/model-protocol/provider";
+import {
+  createDatabricksLanguageModel,
+  type DatabricksLanguageModel,
+} from "@dbx-tools/model-protocol/provider";
 import { log } from "@dbx-tools/shared-core";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
-import type { MastraModelConfig } from "@mastra/core/llm";
 import { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
@@ -138,7 +140,7 @@ export function resolveDefaultModelId(
 }
 
 /**
- * Resolve a `MastraModelConfig` for the current agent step. Runs
+ * Resolve a Databricks ProviderV4 model for the current agent step. Runs
  * while `agent.stream` is inside the `asUser(req)` scope so tokens
  * are user-scoped; outside an active user context the workspace
  * client falls back to the service principal.
@@ -154,7 +156,7 @@ export async function buildModel(
   config: MastraPluginConfig,
   requestContext?: RequestContext,
   overrides: BuildModelOverrides = {},
-): Promise<MastraModelConfig> {
+): Promise<DatabricksLanguageModel> {
   const context = requestContext ?? new RequestContext();
   // The chat path stamps the AppKit user on the request context via
   // `MastraServer`. The MCP transport routes don't thread that context

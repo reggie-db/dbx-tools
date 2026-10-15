@@ -1,0 +1,223 @@
+/**
+ * Browser-safe contracts and client for AppKit brand generation.
+ *
+ * @module
+ */
+
+import { BrandContextSchema } from "@dbx-tools/shared-core/brand-utils";
+import { z } from "zod";
+
+const nonBlankString = z.string().trim().min(1);
+
+/** Registered AppKit generator plugin name. */
+export const GENERATOR_PLUGIN_NAME = "generator";
+
+/** Default route prefix published by the generator plugin. */
+export const GENERATOR_BASE_PATH = `/api/${GENERATOR_PLUGIN_NAME}`;
+
+/** Mount-relative route segments owned by the generator plugin. */
+export const GENERATOR_ROUTES = {
+  generateBrand: "/brand/generate",
+} as const;
+
+/** Input accepted by brand generation. */
+export const BrandGenerationRequestSchema = z
+  .object({
+    name: nonBlankString.max(200).describe("Brand, organization, or product name to research."),
+    website: z
+      .string()
+      .url()
+      .refine((value) => new URL(value).protocol === "https:", "Expected an HTTPS website URL.")
+      .optional()
+      .describe("Known official website used to disambiguate the brand."),
+  })
+  .strict()
+  .describe("Request to research one brand and generate its portable branding package.");
+
+/** Validated brand-generation request. */
+export type BrandGenerationRequest = z.infer<typeof BrandGenerationRequestSchema>;
+
+/** A cited source and whether its page content was available to synthesis. */
+export const BrandPackageSourceSchema = z
+  .object({
+    url: z.string().url().describe("Source URL used during brand research."),
+    title: nonBlankString.optional().describe("Source page title, when available."),
+    snippet: nonBlankString.optional().describe("Search-result excerpt, when available."),
+    fetched: z
+      .boolean()
+      .describe("True when web_fetch returned page content used during synthesis."),
+  })
+  .strict()
+  .describe("Web source used to research the generated brand.");
+
+/** Source provenance included in a generated branding package. */
+export type BrandPackageSource = z.infer<typeof BrandPackageSourceSchema>;
+
+/** Portable generated brand context with research provenance. */
+export const BrandPackageSchema = z
+  .object({
+    brand: BrandContextSchema.describe(
+      "Portable brand context ready for @dbx-tools UI and email consumers.",
+    ),
+    sources: z
+      .array(BrandPackageSourceSchema)
+      .describe("Deduplicated web sources used to generate this package."),
+  })
+  .strict()
+  .describe("Generated branding package and its web research provenance.");
+
+/** Generated branding package. */
+export type BrandPackage = z.infer<typeof BrandPackageSchema>;
+
+/** Observable stages in one brand-generation workflow. */
+export const BrandGenerationStageSchema = z.enum(["search", "fetch", "assets", "synthesize"]);
+
+/** Observable brand-generation stage. */
+export type BrandGenerationStage = z.infer<typeof BrandGenerationStageSchema>;
+
+/** Progress emitted while the backend researches and synthesizes a brand. */
+export const BrandGenerationProgressEventSchema = z
+  .object({
+    type: z.literal("progress"),
+    stage: BrandGenerationStageSchema.describe("Current workflow stage."),
+    message: nonBlankString.describe("Short user-facing progress message."),
+    current: z.number().int().nonnegative().optional().describe("Completed items in this stage."),
+    total: z.number().int().positive().optional().describe("Total items in this stage."),
+  })
+  .strict()
+  .describe("Progress update from a running brand generation.");
+
+/** Progress event emitted during brand generation. */
+export type BrandGenerationProgressEvent = z.infer<typeof BrandGenerationProgressEventSchema>;
+
+/** Final successful brand-generation event. */
+export const BrandGenerationResultEventSchema = z
+  .object({
+    type: z.literal("result"),
+    package: BrandPackageSchema.describe("Completed portable branding package."),
+  })
+  .strict()
+  .describe("Successful completion of brand generation.");
+
+/** Final successful brand-generation event. */
+export type BrandGenerationResultEvent = z.infer<typeof BrandGenerationResultEventSchema>;
+
+/** Final error event from a started brand-generation stream. */
+export const BrandGenerationErrorEventSchema = z
+  .object({
+    type: z.literal("error"),
+    message: nonBlankString.describe("Actionable generation failure message."),
+  })
+  .strict()
+  .describe("Failure emitted after a brand-generation stream started.");
+
+/** Final error event from a started brand-generation stream. */
+export type BrandGenerationErrorEvent = z.infer<typeof BrandGenerationErrorEventSchema>;
+
+/** Every server-sent event emitted by brand generation. */
+export const BrandGenerationEventSchema = z.discriminatedUnion("type", [
+  BrandGenerationProgressEventSchema,
+  BrandGenerationResultEventSchema,
+  BrandGenerationErrorEventSchema,
+]);
+
+/** Server-sent event emitted by brand generation. */
+export type BrandGenerationEvent = z.infer<typeof BrandGenerationEventSchema>;
+
+/** Browser-safe route configuration published by the AppKit generator plugin. */
+export const GeneratorClientConfigSchema = z
+  .object({
+    basePath: nonBlankString.describe("Mounted API route prefix for the generator plugin."),
+  })
+  .strict()
+  .describe("Browser configuration published by the AppKit generator plugin.");
+
+/** Browser-safe generator plugin route configuration. */
+export type GeneratorClientConfig = z.infer<typeof GeneratorClientConfigSchema>;
+
+/** Options for one browser brand-generation stream. */
+export interface BrandGenerationStreamOptions {
+  /** Cancels the request and response stream. */
+  signal?: AbortSignal;
+  /** Fetch implementation. Defaults to the browser global. */
+  fetch?: typeof globalThis.fetch;
+}
+
+/** Build the brand endpoint from the generator plugin's published base path. */
+export function brandGenerateUrl(basePath: string = GENERATOR_BASE_PATH): string {
+  return `${basePath.replace(/\/+$/, "")}${GENERATOR_ROUTES.generateBrand}`;
+}
+
+/** Parse one complete SSE frame into its validated brand event. */
+function parseEventFrame(frame: string): BrandGenerationEvent | undefined {
+  const data = frame
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (!data) return undefined;
+  const value: unknown = JSON.parse(data);
+  return BrandGenerationEventSchema.parse(value);
+}
+
+/** Read a failed HTTP response without trusting its payload shape. */
+async function responseError(response: Response): Promise<string> {
+  const value: unknown = await response
+    .clone()
+    .json()
+    .catch(() => undefined);
+  if (typeof value === "object" && value !== null && "error" in value) {
+    const message = value.error;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+  const text = await response.text().catch(() => "");
+  return text.trim() || `Brand generation failed (${response.status}).`;
+}
+
+/** Browser client for the generator plugin's streamed routes. */
+export class GeneratorPluginClient {
+  private readonly config: GeneratorClientConfig;
+
+  /** Create a client from the plugin's published `clientConfig()` payload. */
+  constructor(config: GeneratorClientConfig) {
+    this.config = GeneratorClientConfigSchema.parse(config);
+  }
+
+  /** Generate a brand while yielding validated progress and terminal events. */
+  async *generate(
+    input: BrandGenerationRequest,
+    options: BrandGenerationStreamOptions = {},
+  ): AsyncGenerator<BrandGenerationEvent> {
+    const request = BrandGenerationRequestSchema.parse(input);
+    const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+    const response = await fetcher(brandGenerateUrl(this.config.basePath), {
+      method: "POST",
+      headers: {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    if (!response.ok) throw new Error(await responseError(response));
+    if (!response.body) throw new Error("Brand generation returned no event stream.");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done }).replaceAll("\r\n", "\n");
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary >= 0) {
+        const event = parseEventFrame(buffer.slice(0, boundary));
+        if (event) yield event;
+        buffer = buffer.slice(boundary + 2);
+        boundary = buffer.indexOf("\n\n");
+      }
+      if (done) break;
+    }
+    const event = parseEventFrame(buffer.trim());
+    if (event) yield event;
+  }
+}

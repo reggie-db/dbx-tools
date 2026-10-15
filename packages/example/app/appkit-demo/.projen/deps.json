@@ -51,6 +51,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-generator",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/ui-lakebox",
       "version": "workspace:^",
       "type": "runtime"

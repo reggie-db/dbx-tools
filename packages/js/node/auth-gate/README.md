@@ -57,6 +57,7 @@ const runtime = await auth.createPasswordlessAuth({
   baseURL: "http://localhost:8000",
   trustedOrigins: ["https://overlay.example.com"],
   appName: "My app",
+  passkeyNamePrefix: "My Company",
   secret,
   logoutRedirectPath: "/",
   sessionTtlSeconds: 2_592_000,
@@ -139,8 +140,11 @@ path.
 - The runtime stores OTP values as hashes and limits code attempts and request
   rates through Better Auth.
 - `baseURL` determines secure-cookie behavior, the WebAuthn relying-party ID,
-  and the expected passkey origin. Configure the external browser origin, not a
-  private loopback address, in production.
+  and the expected passkey origin. The relying-party ID is the exact hostname,
+  so sibling tunnel hosts use separate passkeys. Configure the external browser
+  origin, not a private loopback address, in production.
+- `passkeyNamePrefix` controls the prefix before the humanized hostname in the
+  WebAuthn display name. It defaults to `appName`.
 - `trustedOrigins` extends the accepted browser origins. Arbitrary `Origin` and
   `Referer` values are rejected.
 - The runtime is an authentication boundary, not a Databricks authorization

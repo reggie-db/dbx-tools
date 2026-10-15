@@ -1,8 +1,7 @@
 /**
- * Wire-format contract for the Mastra plugin's user-feedback surface:
- * the response header that carries a turn's MLflow trace id back to the
- * browser, plus the request / response schemas for the feedback route
- * (`MASTRA_ROUTES.feedback`).
+ * Wire-format contracts for the Mastra plugin's user-feedback surface:
+ * automatic destination selection, Genie Agent message feedback, and MLflow
+ * trace assessments through `MASTRA_ROUTES.feedback`.
  *
  * Feedback is logged to MLflow as a trace *assessment* (thumbs up/down
  * as a boolean, or a freeform comment as text), so it must be tied to a
@@ -43,6 +42,18 @@ export const MastraFeedbackValueSchema = z.union([z.boolean(), z.number(), z.str
 /** Value recorded on the MLflow assessment for a Mastra turn. */
 export type MastraFeedbackValue = z.infer<typeof MastraFeedbackValueSchema>;
 
+/** Feedback destination selected by AppKit-Mastra configuration. */
+export const FeedbackModeSchema = z.enum(["none", "mlflow", "genie"]);
+
+/** Feedback destination selected by AppKit-Mastra configuration. */
+export type FeedbackMode = z.infer<typeof FeedbackModeSchema>;
+
+/** Configurable feedback mode with automatic destination selection. */
+export const FeedbackModeOptionSchema = z.enum(["auto", "none", "mlflow", "genie"]);
+
+/** Configurable feedback mode with automatic destination selection. */
+export type FeedbackModeOption = z.infer<typeof FeedbackModeOptionSchema>;
+
 /**
  * Request body for `POST ${basePath}/route/feedback`.
  *
@@ -58,8 +69,9 @@ export type MastraFeedbackValue = z.infer<typeof MastraFeedbackValueSchema>;
  * Refined so an empty submission (neither a value nor a non-empty
  * comment) is rejected rather than logging a meaningless assessment.
  */
-export const MastraFeedbackRequestSchema = z
+export const MlflowFeedbackRequestSchema = z
   .object({
+    mode: z.literal("mlflow"),
     traceId: z.string().min(1),
     name: z.string().optional(),
     value: MastraFeedbackValueSchema.optional(),
@@ -68,6 +80,32 @@ export const MastraFeedbackRequestSchema = z
   .refine((v) => v.value !== undefined || (v.comment?.trim().length ?? 0) > 0, {
     message: "feedback requires a value or a non-empty comment",
   });
+
+/** MLflow trace-assessment feedback request. */
+export type MlflowFeedbackRequest = z.infer<typeof MlflowFeedbackRequestSchema>;
+
+/** Feedback submitted directly to one Genie Agent message. */
+export const GenieFeedbackRequestSchema = z
+  .object({
+    mode: z.literal("genie"),
+    spaceId: z.string().trim().min(1),
+    conversationId: z.string().trim().min(1),
+    messageId: z.string().trim().min(1),
+    rating: z.enum(["POSITIVE", "NEGATIVE"]),
+    request: z.string().trim().min(1).max(10_000),
+    comment: z.string().trim().max(5_000).optional(),
+  })
+  .strict()
+  .describe("Rating, request, and optional comment for one Genie Agent message.");
+
+/** Feedback submitted directly to one Genie Agent message. */
+export type GenieFeedbackRequest = z.infer<typeof GenieFeedbackRequestSchema>;
+
+/** Feedback route request for the configured MLflow or Genie destination. */
+export const MastraFeedbackRequestSchema = z.discriminatedUnion("mode", [
+  MlflowFeedbackRequestSchema,
+  GenieFeedbackRequestSchema,
+]);
 /** Validated request body accepted by the Mastra feedback route. */
 export type MastraFeedbackRequest = z.infer<typeof MastraFeedbackRequestSchema>;
 

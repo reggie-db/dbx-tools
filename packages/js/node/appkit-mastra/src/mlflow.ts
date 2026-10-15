@@ -577,32 +577,6 @@ export function mlflowEnabled(): boolean {
 }
 
 /**
- * Resolve whether user feedback is enabled from the plugin's optional
- * `config.feedback` override: the explicit boolean wins, otherwise fall
- * back to auto-detecting MLflow tracing ({@link mlflowEnabled}). Shared
- * by the plugin's client-config gate and the server's trace-id header so
- * the two never disagree.
- */
-export function resolveFeedbackEnabled(explicit: boolean | undefined): boolean {
-  return explicit ?? mlflowEnabled();
-}
-
-/**
- * Reject an explicitly enabled feedback surface when no MLflow experiment is
- * configured. Auto mode remains non-fatal and simply disables feedback.
- */
-export function validateFeedbackConfig(explicit: boolean | undefined): void {
-  if (explicit !== true) return;
-  const experiment = configuredExperiment();
-  if (experiment.id || experiment.name) return;
-  throw new ConfigurationError(
-    "mastra: feedback is enabled but no MLflow experiment is configured. " +
-      "Set MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME, use feedback: false, " +
-      "or omit feedback to use automatic detection.",
-  );
-}
-
-/**
  * Return the configured experiment URL only when the active Databricks
  * principal has effective `CAN_MANAGE` permission. Permission lookup is
  * intentionally best-effort so Apps environments that do not expose the
@@ -693,7 +667,7 @@ async function resolveExperimentId(client: WorkspaceClient): Promise<string | un
 }
 
 /** Parameters for {@link logFeedback}. */
-export type LogFeedbackParams = feedback.MastraFeedbackRequest & {
+export type LogFeedbackParams = feedback.MlflowFeedbackRequest & {
   /** Identity the feedback is attributed to (user email / id). */
   sourceId?: string;
 };

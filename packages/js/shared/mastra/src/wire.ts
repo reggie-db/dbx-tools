@@ -34,6 +34,7 @@
 import { genieModel, type GenieChatEvent, type MessageStatus } from "@dbx-tools/shared-genie";
 import { model } from "@dbx-tools/shared-model";
 import { z } from "zod";
+import { FeedbackModeSchema } from "./feedback.ts";
 
 /* ---------------------------- client config ---------------------------- */
 
@@ -56,11 +57,8 @@ import { z } from "zod";
  *   - `defaultAgent`: agent id the client converses with when it
  *     doesn't name one.
  *   - `agents`: every registered agent id in registration order.
- *   - `feedbackEnabled`: whether the server can log user feedback to
- *     MLflow (MLflow tracing is configured). Drives whether the chat UI
- *     surfaces thumbs / comment controls. Defaults to `false` so a
- *     config published by an older server (without the field) parses
- *     cleanly to "off".
+ *   - `feedbackMode`: `"genie"` in Genie Agent Mode, `"mlflow"` for traced
+ *     agent feedback, or `"none"`.
  *   - `chatAlwaysAvailable`: whether the agents' Databricks calls run as the
  *     app service principal rather than on-behalf-of the signed-in user. When
  *     `true` the chat works for any caller who can open the app, so a UI that
@@ -75,7 +73,7 @@ export const MastraClientConfigSchema = z.object({
   basePath: z.string(),
   defaultAgent: z.string(),
   agents: z.array(z.string()),
-  feedbackEnabled: z.boolean().default(false),
+  feedbackMode: FeedbackModeSchema.default("none"),
   chatAlwaysAvailable: z.boolean().default(false),
   backgroundTurns: z.boolean().default(false),
 });

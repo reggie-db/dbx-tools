@@ -14,6 +14,8 @@ import { LOGIN_CLIENT_SOURCE } from "./generated/_login-client.ts";
 export interface LoginPageOptions {
   /** Product/brand name shown in the heading. */
   brandName: string;
+  /** Prefix added before the humanized tunnel subdomain in a new passkey name. */
+  passkeyNamePrefix?: string;
   /** Validated same-origin path loaded after authentication succeeds. */
   returnTo: string;
 }
@@ -21,6 +23,7 @@ export interface LoginPageOptions {
 /** The login page HTML for a `text/html` request to a gated path with no session. */
 export function loginPageHtml(options: LoginPageOptions): string {
   const brand = stringUtils.escapeHtml(options.brandName);
+  const passkeyNamePrefix = stringUtils.escapeHtml(options.passkeyNamePrefix ?? "");
   const returnTo = stringUtils.escapeHtml(options.returnTo);
   // prettier-ignore
   return stringUtils.dedent(
@@ -63,6 +66,13 @@ export function loginPageHtml(options: LoginPageOptions): string {
         border: 1px solid var(--border); background: var(--field); color: var(--fg);
       }
       input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+      .choice {
+        display: flex; align-items: center; gap: 8px; margin: 12px 0 0;
+        color: var(--fg); cursor: pointer;
+      }
+      .choice[hidden] { display: none; }
+      .choice input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+      .choice span { font-size: 13px; }
       button {
         width: 100%; margin-top: 16px; padding: 10px 12px; font-size: 15px;
         font-weight: 600; border: 0; border-radius: 9px; background: var(--accent);
@@ -77,7 +87,7 @@ export function loginPageHtml(options: LoginPageOptions): string {
       .back { background: none; color: var(--muted); font-weight: 400; margin-top: 8px; }
     </style>
     </head>
-    <body data-return-to="${returnTo}" data-auth-base="${AUTH_BASE_PATH}">
+    <body data-return-to="${returnTo}" data-auth-base="${AUTH_BASE_PATH}" data-passkey-name-prefix="${passkeyNamePrefix}">
       <main class="card">
         <svg class="logo" viewBox="0 0 64 64" role="img" aria-label="${brand}" shape-rendering="crispEdges">
           <rect x="19" y="20" width="8" height="8" rx="1" fill="#FF3621"/><rect x="37" y="20" width="8" height="8" rx="1" fill="#FF3621"/>
@@ -97,6 +107,10 @@ export function loginPageHtml(options: LoginPageOptions): string {
         <form id="code-form" class="hidden">
           <label for="code">Verification code</label>
           <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required>
+          <label id="create-passkey-option" class="choice" for="create-passkey" hidden>
+            <input id="create-passkey" name="create-passkey" type="checkbox" checked>
+            <span>Create a passkey for this tunnel host</span>
+          </label>
           <button id="code-submit" type="submit">Verify</button>
           <button id="back" type="button" class="back">Use a different email</button>
         </form>

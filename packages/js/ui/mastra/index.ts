@@ -44,6 +44,7 @@ export * as supportThreadTabs from "./src/support/thread-tabs.ts";
 export * as supportToolEvents from "./src/support/tool-events.ts";
 export { AssistantBubble, UserBubble } from "./src/react/bubbles.tsx";
 export { ChatComposer } from "./src/react/chat-composer.tsx";
+export type { GenieFeedbackTarget } from "./src/react/chat-feedback.ts";
 export type { ThreadSessionReader, ThreadSessionUpdater, ThreadMessageWriter } from "./src/react/chat-sessions.ts";
 export { ChatThreadLayout } from "./src/react/chat-thread-layout.tsx";
 export { useChatTranscriptController, ChatTranscript } from "./src/react/chat-transcript.tsx";

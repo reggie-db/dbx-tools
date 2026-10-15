@@ -3,6 +3,7 @@ import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
+import { generator } from "@dbx-tools/appkit-generator";
 import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
 import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
 import { lakeboxSkillMounts } from "@dbx-tools/appkit-lakebox/skills";
@@ -321,6 +322,7 @@ function buildSupportDefinition(): MastraAgentDefinition<DemoRequestContext> {
       Object.assign(agentTools, await plugins.memory?.toolkit());
       Object.assign(agentTools, await plugins[AppKitLakeboxPlugin.manifest.name]?.toolkit());
       Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
+      Object.assign(agentTools, await plugins.generator?.toolkit({ prefix: "" }));
       Object.assign(agentTools, await plugins.search?.toolkit({ prefix: "" }));
       Object.assign(agentTools, {
         // Auto-discovered AppKit `ToolProvider` plugins. `plugins.<name>`
@@ -442,7 +444,7 @@ try {
       // web-search model defaults to Gemini, then GPT (the native web-search
       // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,
       // or `allowedUrls` to restrict which sites are reachable.
-      webSearch(),
+      webSearch({ timeoutMs: 120_000 }),
       searchProvider,
       // The provider registered above owns the AppKit AI Search query contract:
       // native `aiSearch` when SEARCH_ENDPOINT is configured, otherwise
@@ -468,9 +470,9 @@ try {
       mastra({
         storage: mastraStorage,
         memory: mastraMemory,
-        // Fail boot unless MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME is set.
-        // The deployed app binds `/Shared/dbx-tools-demo` and the Apps OTLP sidecar.
-        feedback: true,
+        // Agent Mode feedback goes directly to Genie. If Agent Mode is disabled,
+        // auto falls back to the deployed MLflow experiment and OTLP sidecar.
+        feedbackMode: "auto",
         agents: { support },
         defaultAgent: "support",
         genieAgentMode: true,
@@ -495,6 +497,9 @@ try {
         // in a deployed App container where the `databricks` CLI is absent.
         ...(remoteSkillsEnabled ? { remoteSkills: "aitools" as const } : {}),
       }),
+      // Registered after Mastra so setup can add its workflow before Mastra's
+      // deferred instance build. Brand-page generation uses the read-only route.
+      generator({ timeoutMs: 240_000 }),
     ],
     async onPluginsReady(appkit) {
       appServer = appkit.server;

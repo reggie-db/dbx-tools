@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
+import { projectUtils } from "@dbx-tools/core";
 import { brandUtils } from "@dbx-tools/shared-core";
 
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
@@ -49,10 +50,21 @@ describe("gate config and email copy", () => {
   it("uses shared brand and conventional OTP wording", () => {
     const resolved = resolveAuthGateConfig({});
     assert.equal(resolved.brandName, brandUtils.defaultBrandContext.name);
+    assert.equal(resolved.passkeyNamePrefix, projectUtils.name());
     assert.equal(resolved.subject, "Your verification code");
     assert.equal(resolved.message, "Your verification code is:");
     assert.equal(resolved.sessionTtlSeconds, KEY_TTL_SECONDS);
     assert.equal(resolved.logoutRedirectPath, "/");
+  });
+
+  it("accepts a separate passkey display-name prefix", () => {
+    assert.equal(
+      resolveAuthGateConfig({
+        brandName: "Acme App",
+        passkeyNamePrefix: "Acme Passkey",
+      }).passkeyNamePrefix,
+      "Acme Passkey",
+    );
   });
 
   it("accepts only same-origin logout redirect paths", () => {

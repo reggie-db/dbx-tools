@@ -23,7 +23,7 @@ export class GenieChatClient extends MastraPluginClient {
   /** Genie space alias every route is scoped to. */
   readonly alias: string;
   override readonly backgroundTurns = false;
-  override readonly feedbackEnabled = false;
+  override readonly feedbackMode = "none";
   override readonly threadRename = false;
   override readonly attachments = false;
   /** Thread ids known to be Genie conversations (listed, loaded, or announced). */

@@ -10,6 +10,7 @@ export * as chat from "./src/chat.ts";
 export * as config from "./src/config.ts";
 export * as defaults from "./src/defaults.ts";
 export * as evaluation from "./src/evaluation.ts";
+export * as feedbackMode from "./src/feedback-mode.ts";
 export * as filesystems from "./src/filesystems.ts";
 export * as genie from "./src/genie.ts";
 export * as genieChat from "./src/genie-chat.ts";
@@ -45,6 +46,7 @@ export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_AU
 export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraCodeModeConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, genieConversationReadDefaults, genieConversationWriteDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
 export type { MastraEvalDriverOptions } from "./src/evaluation.ts";
+export type { FeedbackAvailability } from "./src/feedback-mode.ts";
 export { MastraFileSystemAdapter, MountedCompositeFilesystem } from "./src/filesystems.ts";
 export type { MastraFileSystemAdapterOptions } from "./src/filesystems.ts";
 export { DEFAULT_GENIE_ALIAS, GENIE_INSTRUCTIONS } from "./src/genie.ts";

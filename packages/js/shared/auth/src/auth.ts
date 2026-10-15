@@ -8,6 +8,7 @@
  * @module
  */
 
+import { stringUtils } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import { AUTH_BASE_PATH } from "./_route.ts";
@@ -27,6 +28,25 @@ export function isAuthPath(path: string): boolean {
 
 /** Shared Better Auth session-cookie name used by browser and server packages. */
 export const SESSION_COOKIE_NAME = "dbx-tools-auth";
+
+/**
+ * Build a passkey display name from an optional prefix and the humanized first
+ * hostname label. For example, `DBX Tools` and `demo.apps.example.com` produce
+ * `DBX Tools Demo`.
+ */
+export function passkeyDisplayName(
+  prefix: string | undefined,
+  hostname: string,
+): string | undefined {
+  const normalizedPrefix = stringUtils.trimToNull(prefix);
+  const subdomain = stringUtils.trimToNull(hostname)?.split(".", 1)[0];
+  const suffix = subdomain ? stringUtils.toLabel(subdomain) : undefined;
+  if (!normalizedPrefix) return suffix;
+  if (!suffix || normalizedPrefix.toLowerCase().endsWith(suffix.toLowerCase())) {
+    return normalizedPrefix;
+  }
+  return `${normalizedPrefix} ${suffix}`;
+}
 
 export const authRequestSchema = z
   .object({
@@ -78,6 +98,10 @@ export const authStatusSchema = z
     email: z.string().optional().describe("Signed-in address when a session exists."),
     enabled: z.boolean().describe("True when the passwordless gate is configured."),
     passkeysEnabled: z.boolean().optional().describe("True when WebAuthn passkeys are available."),
+    passkeyNamePrefix: z
+      .string()
+      .optional()
+      .describe("Configured prefix for humanized passkey display names."),
   })
   .describe("Gate availability, session identity, and optional passkey capability.");
 

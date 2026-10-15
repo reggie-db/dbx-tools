@@ -65,6 +65,8 @@ export interface GateOptions {
   gatePaths?: readonly string[];
   /** Product name displayed by the hosted login page. */
   brandName?: string;
+  /** Prefix added before the humanized tunnel subdomain in new passkey names. */
+  passkeyNamePrefix?: string;
 }
 
 /**
@@ -328,7 +330,7 @@ export function mountGate(
   _addRoute: (method: "get" | "post", path: string, handler: RequestHandler) => void,
   addMiddleware: (path: string, handler: RequestHandler) => void,
 ): void {
-  const { gate, publicDomain, forwardHeaders, gatePaths, brandName } = opts;
+  const { gate, publicDomain, forwardHeaders, gatePaths, brandName, passkeyNamePrefix } = opts;
   const headerPolicy = toHeaderPolicy(forwardHeaders);
   logger.debug("gate mounted", { publicDomain, forward: headerPolicy.patterns, gatePaths });
 
@@ -351,6 +353,7 @@ export function mountGate(
         .send(
           loginPageHtml({
             brandName: brandName ?? "Databricks App",
+            passkeyNamePrefix,
             returnTo: loginReturnTo(req),
           }),
         );
@@ -372,6 +375,7 @@ export function mountGate(
         .send(
           loginPageHtml({
             brandName: brandName ?? "Databricks App",
+            passkeyNamePrefix,
             returnTo: requestReturnTo(req),
           }),
         );

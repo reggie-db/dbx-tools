@@ -68,14 +68,16 @@ uses the app service principal for Databricks calls that require credentials.
 The demo has the following pages:
 
 - **Chat** switches one history-aware surface between the tool-using support
-  agent and direct Genie conversations.
+  agent and direct Genie conversations. The support agent can run approved
+  generator tools for KPI-shaped data, dashboards, and standalone Genie spaces.
 - **Lakebox** manages the current user's terminal, desktop, services, and
   machine metrics.
 - **AI Search** uses Databricks AI Search when configured and a Lakebase
   full-text provider otherwise.
 - **Message Bus** publishes Postgres topic messages and streams them to every
   open viewer.
-- **Brand** updates the application and email preview brand context.
+- **Brand** streams researched brand-generation progress, applies the resulting
+  context, and updates the application and email previews.
 
 On desktop, each page includes a hideable guide pane with concrete use cases
 and links to the corresponding section of the dbx-tools documentation.

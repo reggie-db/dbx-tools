@@ -17,9 +17,11 @@
 import { getExecutionContext, type BasePluginConfig, type ConfigSchema } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import type { BrandContext } from "@dbx-tools/shared-core";
+import type { FeedbackModeOption } from "@dbx-tools/shared-mastra/feedback";
 import type { AgentConfig } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
+import type { AnyWorkflow } from "@mastra/core/workflows";
 import type {
   WorkspaceSandbox,
   WorkspaceSandboxResolver,
@@ -316,6 +318,12 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   tools?: MastraTools;
   /**
+   * Code-defined Mastra workflows registered on the hosted instance.
+   * Deferred sibling plugins may also register through the plugin export
+   * before the instance is built.
+   */
+  workflows?: Record<string, AnyWorkflow>;
+  /**
    * Agent id used when the client doesn't specify one (the bare,
    * un-suffixed history / suggestions routes resolve to it).
    * Defaults to the first key in `agents` (or `"default"` when
@@ -509,24 +517,11 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   observability?: boolean;
   /**
-   * Log user feedback (thumbs up/down + freeform comments) to MLflow as
-   * trace assessments, and surface the feedback controls in the chat UI.
-   *
-   * - `undefined` (default, auto): enabled only when MLflow tracing is
-   *   wired - an OTLP exporter endpoint is set and an MLflow experiment
-   *   is named (the same signals the observability pipeline needs to
-   *   ship traces to MLflow). Otherwise off, since there'd be no trace
-   *   to attach feedback to.
-   * - `true`: force on. Requires `MLFLOW_EXPERIMENT_ID` or
-   *   `MLFLOW_EXPERIMENT_NAME`; app startup fails when neither is configured.
-   *   Use this when trace export is wired in a way the auto-probe does not
-   *   recognize.
-   * - `false`: force off. No trace-id header, no feedback route, no UI.
-   *
-   * Feedback attaches to a turn's MLflow trace via the OpenTelemetry
-   * trace id the server stamps on each response; see `mlflow.ts`.
+   * Feedback destination. `auto` prefers Genie when Genie Agent Mode is
+   * available, otherwise MLflow when tracing is configured, otherwise none.
+   * Explicit `genie` or `mlflow` fails startup when unavailable.
    */
-  feedback?: boolean;
+  feedbackMode?: FeedbackModeOption;
   /**
    * Expose the plugin's agents (and optionally tools) as a Mastra MCP
    * server so external MCP clients - Claude Desktop, Cursor, the Mastra
@@ -800,10 +795,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       description:
         "Bridge Mastra spans into AppKit's OTel pipeline. Defaults to on only when OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set.",
     },
-    feedback: {
-      type: "boolean",
+    feedbackMode: {
+      type: "string",
+      enum: ["auto", "genie", "mlflow", "none"],
       description:
-        "Log thumbs / comment assessments to MLflow and surface the feedback controls. Defaults to on only when an OTLP endpoint and MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME are set. Explicit true fails startup unless an experiment id or name is configured.",
+        "Feedback destination. Auto prefers Genie in Genie Agent Mode, otherwise MLflow when configured, otherwise none. Explicit unavailable modes fail startup.",
     },
     mcp: {
       type: ["boolean", "object"],

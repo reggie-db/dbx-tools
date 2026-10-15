@@ -59,7 +59,7 @@ describe("MastraPluginClient AI SDK transport", () => {
       basePath: "/api/mastra",
       defaultAgent: "support",
       agents: ["support"],
-      feedbackEnabled: false,
+      feedbackMode: "none",
       chatAlwaysAvailable: true,
     });
 
@@ -125,7 +125,7 @@ describe("MastraPluginClient AI SDK transport", () => {
       basePath: "/api/mastra",
       defaultAgent: "support",
       agents: ["support"],
-      feedbackEnabled: false,
+      feedbackMode: "none",
       chatAlwaysAvailable: true,
     });
 
@@ -156,7 +156,7 @@ describe("MastraPluginClient AI SDK transport", () => {
       basePath: "/api/mastra",
       defaultAgent: "support",
       agents: ["support"],
-      feedbackEnabled: false,
+      feedbackMode: "none",
       chatAlwaysAvailable: true,
     });
 
@@ -192,7 +192,7 @@ describe("MastraPluginClient memory history", () => {
       basePath: "/api/mastra",
       defaultAgent: "support",
       agents: ["support"],
-      feedbackEnabled: false,
+      feedbackMode: "none",
       chatAlwaysAvailable: true,
     });
 

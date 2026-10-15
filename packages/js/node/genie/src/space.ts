@@ -24,7 +24,7 @@
 import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
 import { errorUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
-import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
+import { genieModel, type CreateGenieSpaceRequest, type GenieSpace } from "@dbx-tools/shared-genie";
 
 const logger = log.logger("genie/space");
 
@@ -51,6 +51,35 @@ export interface GetGenieSpaceOptions {
    * `Context` (see `databricks.ContextLike`).
    */
   context?: databricks.ContextLike;
+}
+
+/** Options for creating a Genie space with explicit workspace identity. */
+export interface CreateGenieSpaceOptions {
+  /** Workspace client whose identity owns the new space. */
+  workspaceClient?: WorkspaceClient;
+  /** External cancellation. */
+  context?: databricks.ContextLike;
+}
+
+/** Create a Genie space from one validated serialized definition. */
+export async function createGenieSpace(
+  input: CreateGenieSpaceRequest,
+  options?: CreateGenieSpaceOptions,
+): Promise<GenieSpace> {
+  const request = genieModel.CreateGenieSpaceRequestSchema.parse(input);
+  const client = options?.workspaceClient ?? createWorkspaceClient();
+  const context = options?.context ? databricks.toContext(options.context) : undefined;
+  const raw = await client.apiClient.request(
+    {
+      path: "/api/2.0/genie/spaces",
+      method: "POST",
+      payload: request,
+      headers: new Headers(),
+      raw: false,
+    },
+    context,
+  );
+  return genieModel.GenieSpaceSchema.parse(raw);
 }
 
 /**

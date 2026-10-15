@@ -336,6 +336,10 @@ type AssistantBubbleProps = {
    * when MLflow logging is enabled and the turn has a captured trace id.
    */
   onFeedback?: (submission: FeedbackSubmission) => void | Promise<void>;
+  /** Feedback destination selected by the server. */
+  feedbackMode?: "mlflow" | "genie";
+  /** Original user request shown in Genie feedback. */
+  feedbackRequest?: string;
   /** Last thumbs the user left on this message, for highlighting. */
   feedbackValue?: FeedbackValue;
   /** MLflow experiment link shown only to viewers with `CAN_MANAGE`. */
@@ -354,6 +358,8 @@ export const AssistantBubble = ({
   externalApprovals,
   onExport,
   onFeedback,
+  feedbackMode,
+  feedbackRequest,
   feedbackValue,
   mlflowExperimentUrl,
 }: AssistantBubbleProps) => {
@@ -493,6 +499,8 @@ export const AssistantBubble = ({
             {hasText && onFeedback && (
               <FeedbackControls
                 onSubmit={onFeedback}
+                {...(feedbackMode ? { mode: feedbackMode } : {})}
+                {...(feedbackRequest ? { request: feedbackRequest } : {})}
                 {...(feedbackValue ? { value: feedbackValue } : {})}
               />
             )}

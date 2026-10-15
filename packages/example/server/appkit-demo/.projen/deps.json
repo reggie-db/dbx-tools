@@ -41,6 +41,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/appkit-generator",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/appkit-lakebox",
       "version": "workspace:^",
       "type": "runtime"
@@ -92,6 +97,11 @@
     },
     {
       "name": "@dbx-tools/shared-core",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-generator",
       "version": "workspace:^",
       "type": "runtime"
     },

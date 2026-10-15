@@ -299,7 +299,10 @@ describe("gate middleware", () => {
   });
 
   it("in app-gating mode, denies an unauthenticated browser navigation (for the login page)", async () => {
-    const { middleware } = mount({ gatePaths: ["/ws"] });
+    const { middleware } = mount({
+      gatePaths: ["/ws"],
+      passkeyNamePrefix: "DBX Tools",
+    });
     let nexted = false;
     const res = makeRes();
     const req = makeReq(PUBLIC_DOMAIN, "/");
@@ -315,8 +318,11 @@ describe("gate middleware", () => {
     assert.equal(res.statusCode, 401);
     assert.match(String(res.sentBody), /Sign in — Databricks App/);
     assert.match(String(res.sentBody), /data-return-to="\/"/);
+    assert.match(String(res.sentBody), /data-passkey-name-prefix="DBX Tools"/);
     assert.match(String(res.sentBody), /autocomplete="email webauthn"/);
     assert.match(String(res.sentBody), />Sign in with a passkey</);
+    assert.match(String(res.sentBody), /id="create-passkey"[^>]+checked/);
+    assert.match(String(res.sentBody), />Create a passkey for this tunnel host</);
   });
 
   it("preserves a deep navigation path through hosted login", async () => {
@@ -431,10 +437,13 @@ describe("login return paths", () => {
   it("escapes direct login-page values for an inline script", () => {
     const html = loginPageHtml({
       brandName: "Example",
+      passkeyNamePrefix: 'Example"><script>alert(2)</script>',
       returnTo: "/</script><script>alert(1)</script>",
     });
     assert.doesNotMatch(html, /data-return-to="\/<\/script>/);
     assert.match(html, /data-return-to="\/&lt;\/script&gt;/);
+    assert.doesNotMatch(html, /data-passkey-name-prefix="Example"><script>/);
+    assert.match(html, /data-passkey-name-prefix="Example&quot;&gt;&lt;script&gt;/);
   });
 });
 

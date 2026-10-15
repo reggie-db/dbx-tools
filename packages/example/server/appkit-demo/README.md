@@ -134,6 +134,15 @@ databricks bundle deployment bind demo_app dbx-tools-demo \
   --profile <profile>
 ```
 
+The configured generator catalog also exists outside this bundle. Bind it once
+so deployment manages only its declared app-service-principal grant:
+
+```bash
+databricks bundle deployment bind generator_catalog reggie_pierce_aws_catalog \
+  --target dev \
+  --profile <profile>
+```
+
 ## Understand server limits
 
 - Local development uses AppKit's development identity. Production user-scoped

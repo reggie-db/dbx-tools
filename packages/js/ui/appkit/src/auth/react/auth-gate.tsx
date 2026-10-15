@@ -5,24 +5,32 @@ import {
   beginPasskeyEnrollment,
   beginPasskeySignIn,
   getAuthStatus,
+  passkeyDisplayName,
   requestEmailOtp,
   type PasskeyOperation,
   verifyEmailOtp,
 } from "./auth-client.ts";
 import { BrandIcon, useBrand } from "../../branding/react/index.ts";
-import { Button, Input } from "../../react/index.ts";
+import { Button, Checkbox, Input, Label } from "../../react/index.ts";
 
-type Phase = "loading" | "email" | "code" | "enroll" | "authed" | "open";
+type Phase = "loading" | "email" | "code" | "authed" | "open";
 
 /** Protected content and optional sign-in copy rendered by {@link AuthGate}. */
 export interface AuthGateProps {
   children: ReactNode;
   title?: string;
   description?: string;
+  /** Prefix added before the humanized tunnel subdomain in new passkey names. */
+  passkeyNamePrefix?: string;
 }
 
-/** Email OTP gate with conditional passkey sign-in and first-login enrollment. */
-export function AuthGate({ children, title, description }: AuthGateProps): ReactNode {
+/** Email OTP gate with conditional passkey sign-in and optional inline enrollment. */
+export function AuthGate({
+  children,
+  title,
+  description,
+  passkeyNamePrefix,
+}: AuthGateProps): ReactNode {
   const { context: brand } = useBrand();
   const [phase, setPhase] = useState<Phase>("loading");
   const [email, setEmail] = useState("");
@@ -30,6 +38,10 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [passkeysEnabled, setPasskeysEnabled] = useState(false);
+  const [configuredPasskeyNamePrefix, setConfiguredPasskeyNamePrefix] = useState<
+    string | undefined
+  >();
+  const [createPasskey, setCreatePasskey] = useState(true);
   const passkeyOperation = useRef<PasskeyOperation | undefined>(undefined);
 
   const cancelPasskey = useCallback(() => {
@@ -46,6 +58,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
       .then((status) => {
         if (cancelled) return;
         setPasskeysEnabled(status.passkeysEnabled === true);
+        setConfiguredPasskeyNamePrefix(status.passkeyNamePrefix);
         setPhase(status.enabled ? (status.authenticated ? "authed" : "email") : "open");
       })
       .catch(() => {
@@ -128,17 +141,45 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
       setBusy(true);
       setNotice(null);
       try {
-        if (!(await verifyEmailOtp(email, code.trim(), email.split("@")[0] || "User"))) {
-          throw new Error("OTP verification failed");
+        const verified = await verifyEmailOtp(
+          email,
+          code.trim(),
+          email.split("@")[0] || "User",
+        ).catch(() => false);
+        if (!verified) {
+          setNotice("That verification code is incorrect or has expired.");
+          return;
         }
-        setPhase(passkeysEnabled ? "enroll" : "authed");
-      } catch {
-        setNotice("That verification code is incorrect or has expired.");
+        if (passkeysEnabled && createPasskey) {
+          let operation: PasskeyOperation | undefined;
+          try {
+            operation = beginPasskeyEnrollment(
+              passkeyDisplayName(passkeyNamePrefix ?? configuredPasskeyNamePrefix),
+            );
+            passkeyOperation.current = operation;
+            await operation.result;
+          } catch {
+            // The verified OTP session remains valid when enrollment is unavailable or cancelled.
+          } finally {
+            if (operation && passkeyOperation.current === operation) {
+              passkeyOperation.current = undefined;
+            }
+          }
+        }
+        setPhase("authed");
       } finally {
         setBusy(false);
       }
     },
-    [busy, code, email, passkeysEnabled],
+    [
+      busy,
+      code,
+      configuredPasskeyNamePrefix,
+      createPasskey,
+      email,
+      passkeyNamePrefix,
+      passkeysEnabled,
+    ],
   );
 
   const usePasskey = useCallback(async () => {
@@ -164,29 +205,6 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
     }
   }, [cancelPasskey]);
 
-  const enroll = useCallback(async () => {
-    cancelPasskey();
-    const operation = beginPasskeyEnrollment("Primary passkey");
-    passkeyOperation.current = operation;
-    setBusy(true);
-    setNotice(null);
-    try {
-      if (!(await operation.result)) throw new Error("Passkey enrollment failed");
-      if (passkeyOperation.current !== operation) return;
-      passkeyOperation.current = undefined;
-      setPhase("authed");
-    } catch {
-      if (passkeyOperation.current === operation) {
-        setNotice("Unable to create a passkey. You can continue with email recovery.");
-      }
-    } finally {
-      if (passkeyOperation.current === operation) {
-        passkeyOperation.current = undefined;
-        setBusy(false);
-      }
-    }
-  }, [cancelPasskey]);
-
   if (phase === "authed" || phase === "open") return <>{children}</>;
   if (phase === "loading") return null;
 
@@ -201,9 +219,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
           {description ??
             (phase === "code"
               ? "Enter the 6-digit verification code sent to your email address."
-              : phase === "enroll"
-                ? "Create a passkey for faster, phishing-resistant sign-in next time."
-                : "Enter your email for a one-time code, or use a passkey.")}
+              : "Enter your email for a one-time code, or use a passkey.")}
         </p>
 
         {phase === "email" ? (
@@ -246,29 +262,24 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
               onChange={(event) => setCode(event.target.value)}
               required
             />
+            {passkeysEnabled ? (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="create-passkey"
+                  checked={createPasskey}
+                  disabled={busy}
+                  onCheckedChange={(checked) => setCreatePasskey(checked === true)}
+                />
+                <Label htmlFor="create-passkey" className="text-sm font-normal">
+                  Create a passkey for this tunnel host
+                </Label>
+              </div>
+            ) : null}
             <Button type="submit" disabled={busy} className="w-full">
               Continue
             </Button>
           </form>
-        ) : (
-          <div className="space-y-3">
-            <Button type="button" disabled={busy} className="w-full" onClick={enroll}>
-              Create a passkey
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full"
-              onClick={() => {
-                cancelPasskey();
-                setBusy(false);
-                setPhase("authed");
-              }}
-            >
-              Not now
-            </Button>
-          </div>
-        )}
+        ) : null}
 
         {notice ? (
           <p role="status" aria-live="polite" className="mt-3 text-xs text-muted-foreground">

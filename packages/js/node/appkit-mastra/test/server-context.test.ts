@@ -79,6 +79,7 @@ describe("scoped Mastra API gate", () => {
       ["PATCH", "/memory/threads/thread-1"],
       ["DELETE", "/memory/threads/thread-1"],
       ["POST", "/memory/messages/delete"],
+      ["POST", "/route/workflows/generatorDemoAssets/stream"],
     ]) {
       assert.equal(isMastraRequestAllowed(method, path, options), true, `${method} ${path}`);
     }

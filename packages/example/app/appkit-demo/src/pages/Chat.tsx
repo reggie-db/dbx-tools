@@ -1,4 +1,3 @@
-import { MastraChat } from "@dbx-tools/ui-mastra/react";
 import {
   Button,
   DropdownMenu,
@@ -6,6 +5,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@dbx-tools/ui/react";
+import { MastraChat } from "@dbx-tools/ui-mastra/react";
 import { SettingsIcon, SparklesIcon } from "lucide-react";
 import { useState } from "react";
 import { useChatThreadQuery } from "@/hooks/use-chat-thread-query";

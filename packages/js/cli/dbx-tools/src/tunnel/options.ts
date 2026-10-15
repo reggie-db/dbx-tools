@@ -45,6 +45,9 @@ export const TunnelOptionsSchema = z
     allow: list("Email allow-list patterns.").meta({ env: "TUNNEL_AUTH_ALLOW" }),
     subject: text("Verification email subject.").meta({ env: "TUNNEL_AUTH_SUBJECT" }),
     brandName: text("Verification email brand name.").meta({ env: "TUNNEL_AUTH_BRAND_NAME" }),
+    passkeyNamePrefix: text("Prefix for humanized tunnel passkey names.").meta({
+      env: "TUNNEL_AUTH_PASSKEY_NAME_PREFIX",
+    }),
     message: text("Verification email message.").meta({ env: "TUNNEL_AUTH_MESSAGE" }),
     sessionTtlSeconds: z.coerce
       .number<number>()
@@ -127,6 +130,7 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
     allow: options.allow,
     subject: options.subject,
     brandName: options.brandName,
+    passkeyNamePrefix: options.passkeyNamePrefix,
     message: options.message,
     // Coerced, not resolved: the plugin owns the env name and the default for
     // these, so the flag is passed through as the `config` value it expects and

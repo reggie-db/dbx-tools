@@ -1,7 +1,9 @@
 import {
   AUTH_BASE_PATH,
+  beginPasskeyEnrollment,
   beginPasskeySignIn,
   getAuthStatus,
+  passkeyDisplayName,
   requestEmailOtp,
   type PasskeyOperation,
   verifyEmailOtp,
@@ -14,12 +16,16 @@ const codeInput = document.querySelector<HTMLInputElement>("#code")!;
 const emailSubmit = document.querySelector<HTMLButtonElement>("#email-submit")!;
 const codeSubmit = document.querySelector<HTMLButtonElement>("#code-submit")!;
 const passkeySubmit = document.querySelector<HTMLButtonElement>("#passkey-submit")!;
+const createPasskeyOption = document.querySelector<HTMLElement>("#create-passkey-option")!;
+const createPasskey = document.querySelector<HTMLInputElement>("#create-passkey")!;
 const back = document.querySelector<HTMLButtonElement>("#back")!;
 const message = document.querySelector<HTMLDivElement>("#msg")!;
 
 let email = "";
+let passkeysEnabled = false;
 let passkeyOperation: PasskeyOperation | undefined;
 let returnTo = document.body.dataset.returnTo || "/";
+const passkeyNamePrefix = document.body.dataset.passkeyNamePrefix;
 
 if (window.location.pathname !== AUTH_BASE_PATH) {
   returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -62,6 +68,20 @@ function startPasskey(autoFill: boolean): void {
     });
 }
 
+/** Enroll the current tunnel host after OTP verification when selected. */
+async function createPasskeyAfterSignIn(): Promise<void> {
+  if (!passkeysEnabled || !createPasskey.checked) return;
+  say("Creating a passkey.");
+  try {
+    const operation = beginPasskeyEnrollment(passkeyDisplayName(passkeyNamePrefix));
+    passkeyOperation = operation;
+    await operation.result;
+    if (passkeyOperation === operation) passkeyOperation = undefined;
+  } catch {
+    passkeyOperation = undefined;
+  }
+}
+
 void getAuthStatus()
   .then(async (status) => {
     if (status.authenticated) {
@@ -69,7 +89,9 @@ void getAuthStatus()
       return;
     }
     if (!status.passkeysEnabled) return;
+    passkeysEnabled = true;
     passkeySubmit.hidden = false;
+    createPasskeyOption.hidden = false;
     if (
       typeof PublicKeyCredential === "undefined" ||
       typeof PublicKeyCredential.isConditionalMediationAvailable !== "function" ||
@@ -112,15 +134,18 @@ codeForm.addEventListener("submit", (event) => {
   const code = codeInput.value.trim();
   if (!code) return;
   codeSubmit.disabled = true;
+  createPasskey.disabled = true;
   say("Verifying.");
   void verifyEmailOtp(email, code, email.split("@")[0] || "User")
-    .then((accepted) => {
+    .then(async (accepted) => {
       if (!accepted) throw new Error("OTP verification failed");
+      await createPasskeyAfterSignIn();
       redirectAfterSignIn();
     })
     .catch(() => {
       say("That code was not accepted. Try again.", true);
       codeSubmit.disabled = false;
+      createPasskey.disabled = false;
     });
 });
 

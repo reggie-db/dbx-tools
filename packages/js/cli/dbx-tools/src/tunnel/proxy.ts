@@ -46,6 +46,8 @@ export interface ProxyOptions {
   gatePaths?: readonly string[];
   /** Brand name for the hosted login page shown on a denied browser navigation. */
   brandName?: string;
+  /** Prefix added before the humanized tunnel subdomain in new passkey names. */
+  passkeyNamePrefix?: string;
   /**
    * Addresses to listen on. Defaults to a single `0.0.0.0` (every interface),
    * the portr/platform case. Pass specific interface IPs to expose the gate on
@@ -77,6 +79,7 @@ async function handleAuthRoute(
   path: string,
   gate: AuthGateApi,
   brandName: string,
+  passkeyNamePrefix?: string,
 ): Promise<boolean> {
   if (!tunnelGate.isAuthPath(path)) return false;
   if (tunnelGate.wantsHostedLogin(request)) {
@@ -84,6 +87,7 @@ async function handleAuthRoute(
     response.end(
       tunnelLoginPage.loginPageHtml({
         brandName,
+        passkeyNamePrefix,
         returnTo: tunnelGate.loginReturnTo(request),
       }),
     );
@@ -126,13 +130,20 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
     void (async () => {
       const path = (request.url ?? "/").split("?")[0] ?? "/";
       const brandName = options.brandName ?? "this app";
-      if (gate && (await handleAuthRoute(request, response, path, gate, brandName))) return;
+      const passkeyNamePrefix = options.passkeyNamePrefix;
+      if (
+        gate &&
+        (await handleAuthRoute(request, response, path, gate, brandName, passkeyNamePrefix))
+      ) {
+        return;
+      }
       if ((await decide(request)) === "deny") {
         // A denied browser navigation gets the hosted login page; anything else
         // (an XHR, a /ws upgrade probe, a non-HTML fetch) gets the 401 JSON.
         if (gate && tunnelGate.wantsLoginPage(request)) {
           const html = tunnelLoginPage.loginPageHtml({
             brandName,
+            passkeyNamePrefix,
             returnTo: tunnelGate.requestReturnTo(request),
           });
           response.writeHead(401, { "content-type": "text/html; charset=utf-8" });

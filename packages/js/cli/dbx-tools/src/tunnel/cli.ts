@@ -132,6 +132,7 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
     forwardHeaders: resolved.gate.forwardHeaders,
     gatePaths: resolved.gate.gatePaths,
     brandName: resolved.gate.brandName,
+    passkeyNamePrefix: resolved.gate.passkeyNamePrefix,
     bindHosts: resolved.bindHosts,
   });
 

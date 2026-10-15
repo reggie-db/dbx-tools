@@ -51,7 +51,9 @@ import { AuthGate, PasskeyManager } from "@dbx-tools/ui/auth/react";
 ```
 
 These components consume the browser-safe `@dbx-tools/shared-auth` contracts and
-the routes provided by `@dbx-tools/auth-gate`.
+the routes provided by `@dbx-tools/auth-gate`. Set `passkeyNamePrefix` on either
+component to override the server-provided prefix used before the humanized tunnel
+subdomain.
 
 ## Email
 

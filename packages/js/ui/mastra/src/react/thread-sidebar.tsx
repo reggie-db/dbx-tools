@@ -152,7 +152,9 @@ export const ThreadSidebar = ({
               New chat
             </Button>
           )}
-          {headerActions ? <div className={cn("shrink-0", !onNew && "ml-auto")}>{headerActions}</div> : null}
+          {headerActions ? (
+            <div className={cn("shrink-0", !onNew && "ml-auto")}>{headerActions}</div>
+          ) : null}
           {onHide && (
             <Tooltip>
               <TooltipTrigger asChild>

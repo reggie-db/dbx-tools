@@ -547,11 +547,12 @@ const App = () => {
     {
       path: "/brand",
       label: "Brand",
-      description: "Live brand picker and rich email template previews",
+      description: "Web-generated brand contexts and email previews",
       guide: {
         summary:
-          "Apply one portable brand context to AppKit tokens, browser metadata, icons, and email presentation while still allowing a message-specific campaign identity.",
+          "Research a named brand, inspect generation progress and sources, then apply one portable context to AppKit tokens, metadata, icons, and email presentation.",
         unlocks: [
+          "Source-grounded brand generation through web search and page fetch",
           "One typed source for application colors, typography, icons, and metadata",
           "Brand-aware authentication, navigation, email chrome, and rendered messages",
           "Scoped overrides for partner, event, or campaign communication",
@@ -566,6 +567,10 @@ const App = () => {
           "Send incident, launch, or weekly digest email with the correct message-specific identity",
         ],
         docs: [
+          {
+            label: "Generate a brand context",
+            href: docsUrl("packages/appkit-generator/"),
+          },
           { label: "Apply application branding", href: docsUrl("packages/ui/#branding") },
           { label: "Render email surfaces", href: docsUrl("packages/ui/#email") },
         ],

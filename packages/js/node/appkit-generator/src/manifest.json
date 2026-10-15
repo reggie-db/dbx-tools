@@ -1,0 +1,72 @@
+{
+  "$schema": "https://databricks.github.io/appkit/schemas/plugin-manifest.schema.json",
+  "name": "generator",
+  "displayName": "Generator",
+  "description": "Researches brands and KPIs, generates governed demo data, and creates AI/BI dashboard or Genie assets.",
+  "author": "dbx-tools",
+  "license": "Apache-2.0",
+  "stability": "beta",
+  "resources": {
+    "required": [
+      {
+        "type": "sql_warehouse",
+        "alias": "Generator SQL Warehouse",
+        "resourceKey": "generator-warehouse",
+        "description": "SQL warehouse used for OBO data generation and validation.",
+        "permission": "CAN_USE",
+        "fields": {
+          "id": {
+            "env": "DATABRICKS_WAREHOUSE_ID",
+            "description": "SQL warehouse ID used by generator workflows."
+          }
+        }
+      }
+    ],
+    "optional": []
+  },
+  "config": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Model endpoint or loose model name for structured generation. Env: GENERATOR_MODEL."
+        },
+        "maxSources": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Maximum cited pages fetched per research operation. Default 4."
+        },
+        "sourceMaxLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000,
+          "description": "Maximum readable characters retained per source. Default 8000."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Overall generation timeout in milliseconds. Default 240000."
+        },
+        "catalog": {
+          "type": "string",
+          "description": "Unity Catalog containing generated schemas. Env: GENERATOR_CATALOG."
+        },
+        "warehouseId": {
+          "type": "string",
+          "description": "SQL warehouse ID. Env: DATABRICKS_WAREHOUSE_ID."
+        }
+      }
+    }
+  },
+  "scaffolding": {
+    "rules": {
+      "must": [
+        "Register @dbx-tools/appkit-web-search webSearch() in the same AppKit application.",
+        "Register @dbx-tools/appkit-mastra mastra() before generator() in the AppKit plugin list.",
+        "Grant the app service principal USE_CATALOG and CREATE_SCHEMA on the configured generator catalog."
+      ]
+    }
+  }
+}

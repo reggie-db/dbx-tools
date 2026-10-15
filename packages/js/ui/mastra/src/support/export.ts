@@ -217,7 +217,7 @@ function splitSegments(text: string): Segment[] {
 }
 
 /** Concatenate a message's `text` parts (matches the on-screen bubbles). */
-function messageText(message: UIMessage): string {
+export function messageText(message: UIMessage): string {
   return message.parts
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
     .map((p) => p.text)

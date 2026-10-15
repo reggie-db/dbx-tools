@@ -2,7 +2,9 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 
 import {
   beginPasskeyEnrollment,
+  getAuthStatus,
   listPasskeys,
+  passkeyDisplayName,
   type PasskeyOperation,
   type Passkey,
   removePasskey,
@@ -13,15 +15,20 @@ import { Button, Input } from "../../react/index.ts";
 /** Styling options for the authenticated passkey management surface. */
 export interface PasskeyManagerProps {
   className?: string;
+  /** Prefix added before the humanized tunnel subdomain in new passkey names. */
+  passkeyNamePrefix?: string;
 }
 
 /** Authenticated management surface for a user's Better Auth passkeys. */
-export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
+export function PasskeyManager({ className, passkeyNamePrefix }: PasskeyManagerProps): ReactNode {
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [configuredPasskeyNamePrefix, setConfiguredPasskeyNamePrefix] = useState<
+    string | undefined
+  >();
   const enrollment = useRef<PasskeyOperation | undefined>(undefined);
 
   const cancelEnrollment = useCallback(() => {
@@ -33,9 +40,10 @@ export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
   useEffect(() => cancelEnrollment, [cancelEnrollment]);
 
   const refresh = useCallback(async () => {
-    const values = await listPasskeys();
+    const [values, status] = await Promise.all([listPasskeys(), getAuthStatus()]);
     setPasskeys(values);
     setNames(Object.fromEntries(values.map((passkey) => [passkey.id, passkey.name ?? "Passkey"])));
+    setConfiguredPasskeyNamePrefix(status.passkeyNamePrefix);
     setLoaded(true);
     setNotice(null);
   }, []);
@@ -46,7 +54,9 @@ export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
 
   const add = useCallback(async () => {
     cancelEnrollment();
-    const operation = beginPasskeyEnrollment();
+    const operation = beginPasskeyEnrollment(
+      passkeyDisplayName(passkeyNamePrefix ?? configuredPasskeyNamePrefix),
+    );
     enrollment.current = operation;
     setBusy(true);
     setNotice(null);
@@ -62,7 +72,7 @@ export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
         setBusy(false);
       }
     }
-  }, [cancelEnrollment, refresh]);
+  }, [cancelEnrollment, configuredPasskeyNamePrefix, passkeyNamePrefix, refresh]);
 
   const rename = useCallback(
     async (id: string) => {

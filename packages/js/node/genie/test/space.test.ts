@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { genieSampleQuestions, getGenieSpace } from "../src/space.ts";
+import { createGenieSpace, genieSampleQuestions, getGenieSpace } from "../src/space.ts";
 
 /**
  * Minimal `WorkspaceClient` stand-in: records the query of every raw
@@ -72,5 +72,45 @@ describe("getGenieSpace", () => {
       /Can Edit/,
     );
     assert.equal(queries.length, 1);
+  });
+});
+
+describe("createGenieSpace", () => {
+  it("posts the validated serialized definition through the supplied identity", async () => {
+    const requests: unknown[] = [];
+    const client = {
+      apiClient: {
+        request: async (request: unknown) => {
+          requests.push(request);
+          return {
+            space_id: "space-1",
+            title: "Generated sales",
+            warehouse_id: "warehouse-1",
+          };
+        },
+      },
+    };
+    const created = await createGenieSpace(
+      {
+        warehouse_id: "warehouse-1",
+        title: "Generated sales",
+        serialized_space: JSON.stringify({ version: 1, data_sources: { tables: [] } }),
+      },
+      { workspaceClient: client as never },
+    );
+    assert.equal(created.space_id, "space-1");
+    assert.deepEqual(requests, [
+      {
+        path: "/api/2.0/genie/spaces",
+        method: "POST",
+        payload: {
+          warehouse_id: "warehouse-1",
+          title: "Generated sales",
+          serialized_space: '{"version":1,"data_sources":{"tables":[]}}',
+        },
+        headers: new Headers(),
+        raw: false,
+      },
+    ]);
   });
 });

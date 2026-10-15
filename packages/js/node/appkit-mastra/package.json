@@ -108,6 +108,10 @@
         "types": "./lib/src/evaluation.d.ts",
         "default": "./lib/src/evaluation.js"
       },
+      "./feedback-mode": {
+        "types": "./lib/src/feedback-mode.d.ts",
+        "default": "./lib/src/feedback-mode.js"
+      },
       "./filesystems": {
         "types": "./lib/src/filesystems.d.ts",
         "default": "./lib/src/filesystems.js"
@@ -239,6 +243,7 @@
     "./config": "./src/config.ts",
     "./defaults": "./src/defaults.ts",
     "./evaluation": "./src/evaluation.ts",
+    "./feedback-mode": "./src/feedback-mode.ts",
     "./filesystems": "./src/filesystems.ts",
     "./genie-chat": "./src/genie-chat.ts",
     "./genie": "./src/genie.ts",

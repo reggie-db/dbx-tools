@@ -70,6 +70,7 @@ export type FeedbackValue = "up" | "down";
  */
 export type FeedbackSubmission = {
   value?: FeedbackValue;
+  request?: string;
   comment?: string;
 };
 
@@ -81,7 +82,7 @@ export type FeedbackSubmission = {
  * active thumb stays highlighted.
  */
 export type MessageFeedback = {
-  traceId: string;
+  traceId?: string;
   value?: FeedbackValue;
 };
 
@@ -364,6 +365,8 @@ export type ChatViewProps = {
    * response header when MLflow logging is enabled.
    */
   feedbackByMessage?: Record<string, MessageFeedback>;
+  /** Resolved feedback destination selected by the server. */
+  feedbackMode?: "none" | "mlflow" | "genie";
   /**
    * Submit thumbs / comment feedback for an assistant message. When
    * provided (and the message has a {@link feedbackByMessage} entry),

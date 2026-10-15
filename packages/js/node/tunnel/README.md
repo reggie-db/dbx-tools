@@ -83,8 +83,12 @@ The package:
   the operating system's application-data directory. Both adapters run Better
   Auth's own migrations under a Postgres advisory lock or file lock.
 - Email OTP remains bootstrap and recovery. Returning users can authenticate
-  with discoverable passkeys, enroll multiple devices, and name or remove them
-  through [@dbx-tools/ui/auth](../../ui/appkit).
+  with discoverable passkeys. The OTP form can create a passkey immediately
+  after verification, and users can enroll, name, or remove more passkeys
+  through [@dbx-tools/ui/auth](../../ui/appkit). Each passkey uses the exact
+  public tunnel hostname as its WebAuthn relying-party ID. Its display name
+  combines `TUNNEL_AUTH_PASSKEY_NAME_PREFIX` with the humanized first hostname
+  label; the prefix defaults to `projectUtils.name()`.
 - Allow-list patterns in three shapes, matched in order: a domain shortcut
   (`example.com`, `@example.com`), a shell-style glob (`*@example.com`), or a
   regex literal (`/^ops-.*@example\.com$/`). An empty list allows nobody.
@@ -169,29 +173,30 @@ The interceptor reads tunnel wiring from the environment. The gate (the `authGat
 plugin) reads its own settings the same way, so a deployment configures both
 without touching code.
 
-| Env                           | Default                      |
-| ----------------------------- | ---------------------------- |
-| `TUNNEL_AUTH_ALLOW`           | empty (allow nobody)         |
-| `TUNNEL_AUTH_SUBJECT`         | `Your verification code`     |
-| `TUNNEL_AUTH_BRAND_NAME`      | the brand context `name`     |
-| `TUNNEL_AUTH_MESSAGE`         | `Your verification code is:` |
-| `TUNNEL_AUTH_SESSION_TTL`     | `2592000` (30 days)          |
-| `TUNNEL_AUTH_CODE_TTL`        | `600` (10 minutes)           |
-| `TUNNEL_AUTH_SESSION_CUTOFF`  | unset (no cutoff)            |
-| `TUNNEL_AUTH_LOGOUT_REDIRECT` | `/` (show login again)       |
-| `TUNNEL_PUBLIC_DOMAIN`        | - (no tunnel when unset)     |
-| `TUNNEL_FRP_PUBLIC_DOMAIN`    | - (no FRP tunnel when unset) |
-| `TUNNEL_TRANSPORT`            | `portr`                      |
-| `PORTR_SSH_URL`               | Portr host on port `4444`    |
-| `FRP_SERVER`                  | FRP public domain            |
-| `FRP_SERVER_PORT`             | `443`                        |
-| `FRP_PROTOCOL`                | `wss`                        |
-| `FRP_TOKEN`                   | unset (no frps auth)         |
-| `FRP_PROXY_NAME`              | public domain's first label  |
-| `FRP_PATH`                    | `DATABRICKS_APP_NAME`        |
-| `FRP_STRIP_PREFIX`            | `true` for non-root paths    |
-| `TUNNEL_FORWARD_HEADERS`      | the built-in `x-` allowlist  |
-| `TUNNEL_AUTH_JWT_SECRET`      | an ephemeral per-process key |
+| Env                               | Default                      |
+| --------------------------------- | ---------------------------- |
+| `TUNNEL_AUTH_ALLOW`               | empty (allow nobody)         |
+| `TUNNEL_AUTH_SUBJECT`             | `Your verification code`     |
+| `TUNNEL_AUTH_BRAND_NAME`          | the brand context `name`     |
+| `TUNNEL_AUTH_PASSKEY_NAME_PREFIX` | `projectUtils.name()`        |
+| `TUNNEL_AUTH_MESSAGE`             | `Your verification code is:` |
+| `TUNNEL_AUTH_SESSION_TTL`         | `2592000` (30 days)          |
+| `TUNNEL_AUTH_CODE_TTL`            | `600` (10 minutes)           |
+| `TUNNEL_AUTH_SESSION_CUTOFF`      | unset (no cutoff)            |
+| `TUNNEL_AUTH_LOGOUT_REDIRECT`     | `/` (show login again)       |
+| `TUNNEL_PUBLIC_DOMAIN`            | - (no tunnel when unset)     |
+| `TUNNEL_FRP_PUBLIC_DOMAIN`        | - (no FRP tunnel when unset) |
+| `TUNNEL_TRANSPORT`                | `portr`                      |
+| `PORTR_SSH_URL`                   | Portr host on port `4444`    |
+| `FRP_SERVER`                      | FRP public domain            |
+| `FRP_SERVER_PORT`                 | `443`                        |
+| `FRP_PROTOCOL`                    | `wss`                        |
+| `FRP_TOKEN`                       | unset (no frps auth)         |
+| `FRP_PROXY_NAME`                  | public domain's first label  |
+| `FRP_PATH`                        | `DATABRICKS_APP_NAME`        |
+| `FRP_STRIP_PREFIX`                | `true` for non-root paths    |
+| `TUNNEL_FORWARD_HEADERS`          | the built-in `x-` allowlist  |
+| `TUNNEL_AUTH_JWT_SECRET`          | an ephemeral per-process key |
 
 Every tunnel-owned variable is `TUNNEL_`-prefixed because the tunnel shares one
 environment with the app it fronts, so a generic name may already belong to the

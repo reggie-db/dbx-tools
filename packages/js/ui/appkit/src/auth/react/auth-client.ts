@@ -12,6 +12,7 @@ export {
   getAuthStatus,
   listPasskeys,
   logout,
+  passkeyDisplayName,
   removePasskey,
   renamePasskey,
   requestEmailOtp,

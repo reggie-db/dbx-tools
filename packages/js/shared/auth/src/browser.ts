@@ -14,12 +14,13 @@ import { createAuthClient } from "better-auth/client";
 import { emailOTPClient } from "better-auth/client/plugins";
 
 import { AUTH_BASE_PATH } from "./_route.ts";
-import type { AuthStatus } from "./auth.ts";
+import { type AuthStatus, passkeyDisplayName as formatPasskeyDisplayName } from "./auth.ts";
 
 export { AUTH_BASE_PATH } from "./_route.ts";
 export type { Passkey } from "@better-auth/passkey/client";
 
 interface BrowserLocation {
+  readonly hostname: string;
   readonly origin: string;
   assign(url: string): void;
 }
@@ -56,7 +57,8 @@ function authStatus(value: unknown): AuthStatus {
     typeof item.authenticated !== "boolean" ||
     typeof item.enabled !== "boolean" ||
     (item.email !== undefined && typeof item.email !== "string") ||
-    (item.passkeysEnabled !== undefined && typeof item.passkeysEnabled !== "boolean")
+    (item.passkeysEnabled !== undefined && typeof item.passkeysEnabled !== "boolean") ||
+    (item.passkeyNamePrefix !== undefined && typeof item.passkeyNamePrefix !== "string")
   ) {
     throw new Error("Auth status returned an invalid response");
   }
@@ -65,6 +67,9 @@ function authStatus(value: unknown): AuthStatus {
     enabled: item.enabled,
     ...(typeof item.email === "string" ? { email: item.email } : {}),
     ...(typeof item.passkeysEnabled === "boolean" ? { passkeysEnabled: item.passkeysEnabled } : {}),
+    ...(typeof item.passkeyNamePrefix === "string"
+      ? { passkeyNamePrefix: item.passkeyNamePrefix }
+      : {}),
   };
 }
 
@@ -120,10 +125,19 @@ export function beginPasskeySignIn(autoFill = false): PasskeyOperation {
   return beginPasskeyOperation((operationClient) => operationClient.signIn.passkey({ autoFill }));
 }
 
-/** Start a passkey registration whose lifetime is explicitly owned by the caller. */
+/** Build a passkey display name for the current browser hostname. */
+export function passkeyDisplayName(prefix?: string): string | undefined {
+  return formatPasskeyDisplayName(prefix, browserLocation()?.hostname ?? "");
+}
+
+/**
+ * Start a passkey registration whose lifetime is explicitly owned by the caller.
+ * The display name defaults to the humanized browser subdomain.
+ */
 export function beginPasskeyEnrollment(name?: string): PasskeyOperation {
+  const passkeyName = name ?? passkeyDisplayName();
   return beginPasskeyOperation((operationClient) =>
-    operationClient.passkey.addPasskey(name ? { name } : undefined),
+    operationClient.passkey.addPasskey(passkeyName ? { name: passkeyName } : undefined),
   );
 }
 

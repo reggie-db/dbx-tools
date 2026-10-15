@@ -316,6 +316,16 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
   p.addDeps("zod@catalog:");
 });
 
+// shared-generator: browser-safe contracts and streaming clients for the
+// AppKit generator plugin and its Mastra workflows.
+project.applyToProjects(root, { identifierName: "shared-generator", tags: "shared" }, (p) => {
+  p.package.addField(
+    "description",
+    "Browser-safe contracts and clients for AppKit generator workflows",
+  );
+  p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
+});
+
 // Node packages
 
 // node-core: the Node-only half of the shared runtime (exec + project +
@@ -644,6 +654,30 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
     "zod@catalog:",
   );
   p.addDevDeps("@types/express@catalog:", "@types/html-to-text@^9", "@types/json-schema@^7");
+});
+
+// node-appkit-generator: reusable brand, KPI, synthetic-data, dashboard, and
+// Genie operations composed through a Mastra workflow.
+project.applyToProjects(root, { identifierName: "appkit-generator", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "AppKit tools and Mastra workflows for researched Databricks demo assets",
+  );
+  p.addDeps(
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/appkit-mastra@workspace:^",
+    "@dbx-tools/appkit-web-search@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/genie@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-generator@workspace:^",
+    "@dbx-tools/shared-genie@workspace:^",
+    "@databricks/appkit@catalog:",
+    "@databricks/sdk-experimental@catalog:",
+    "@mastra/core@catalog:",
+    "cheerio@^1.2.0",
+    "zod@catalog:",
+  );
 });
 
 // node-postgres: connection-correct Postgres utilities shared by packages.
@@ -1309,6 +1343,7 @@ project.applyToProjects(
     projectJs.applyIncludes(p, "stage-deploy.ts");
     p.addDeps(
       "@dbx-tools/appkit@workspace:^",
+      "@dbx-tools/appkit-generator@workspace:^",
       "@dbx-tools/appkit-memory@workspace:^",
       "@dbx-tools/appkit-mastra@workspace:^",
       "@dbx-tools/appkit-lakebox@workspace:^",
@@ -1319,6 +1354,7 @@ project.applyToProjects(
       "@dbx-tools/appkit-web-search@workspace:^",
       "@dbx-tools/search@workspace:^",
       "@dbx-tools/shared-core@workspace:^",
+      "@dbx-tools/shared-generator@workspace:^",
       // The tunnel library: the server registers `tunnelInterceptor()` on its own
       // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
       // runs the server directly rather than through a wrapper bin.
@@ -1364,6 +1400,7 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email-template@workspace:^",
+    "@dbx-tools/shared-generator@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "@dbx-tools/ui-mastra@workspace:^",
     "@dbx-tools/ui-lakebox@workspace:^",

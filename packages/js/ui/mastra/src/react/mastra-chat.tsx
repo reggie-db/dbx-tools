@@ -238,14 +238,9 @@ export interface UseMastraChatOptions<
    */
   enableClear?: boolean;
   /**
-   * Surface per-message feedback controls (thumbs up/down + a comment
-   * modal) that log to MLflow as trace assessments.
-   *
-   * Defaults to auto: controls render when the server reports MLflow
-   * feedback is available. Pass `false` to hide them or `true` to request
-   * them explicitly. Regardless of this flag, controls only render when the
-   * server reports MLflow logging is enabled (`clientConfig.feedbackEnabled`)
-   * and the turn produced a trace id.
+   * Surface per-message feedback controls for the destination selected by the
+   * server. Genie Agent Mode posts Rating and Comment to Genie; traced agent
+   * mode posts thumbs/comment assessments to MLflow.
    */
   enableFeedback?: boolean;
   /**
@@ -329,8 +324,9 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // Feedback defaults to automatic server capability detection. An explicit
   // false hides it; true keeps it requested but cannot bypass the server gate.
   const enableFeedback = options.enableFeedback !== false;
-  const feedbackAvailable = enableFeedback && mastraClient.feedbackEnabled;
-  const { url: mlflowExperimentUrl } = useMastraMlflowExperiment(feedbackAvailable);
+  const feedbackMode = enableFeedback ? mastraClient.feedbackMode : "none";
+  const feedbackAvailable = feedbackMode !== "none";
+  const { url: mlflowExperimentUrl } = useMastraMlflowExperiment(feedbackMode === "mlflow");
   const [resourceScope, setResourceScope] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -577,6 +573,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const submitFeedback = useChatFeedback({
     activeKey,
     feedbackByMessage: activeSession.feedbackByMessage,
+    feedbackMode,
     mastraClient,
     updateSession,
   });
@@ -1493,12 +1490,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           onExportMessage: exportMessage,
         }
       : {}),
-    // Feedback: only expose the state + handler (which light up the
-    // per-bubble thumbs / comment controls in ChatView) when feedback
-    // is enabled AND the server can log to MLflow. `feedbackByMessage`
-    // still gates per-message on a captured trace id.
+    // Feedback: expose one server-selected destination. MLflow messages still
+    // require trace state; Genie messages derive their target from ask_genie.
     ...(feedbackAvailable
       ? {
+          feedbackMode,
           feedbackByMessage: activeSession.feedbackByMessage,
           onFeedback: submitFeedback,
           ...(mlflowExperimentUrl ? { mlflowExperimentUrl } : {}),

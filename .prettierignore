@@ -72,6 +72,7 @@ packages/js/cli/args/index.ts
 packages/js/cli/dbx-tools/index.ts
 packages/js/cli/service/index.ts
 packages/js/node/appkit/index.ts
+packages/js/node/appkit-generator/index.ts
 packages/js/node/appkit-lakebox/index.ts
 packages/js/node/appkit-mastra/index.ts
 packages/js/node/appkit-memory/index.ts
@@ -100,6 +101,7 @@ packages/js/shared/core/index.ts
 packages/js/shared/email/index.ts
 packages/js/shared/email-template/index.ts
 packages/js/shared/fs/index.ts
+packages/js/shared/generator/index.ts
 packages/js/shared/genie/index.ts
 packages/js/shared/genie/src/dashboards.ts
 packages/js/shared/genie-code/index.ts

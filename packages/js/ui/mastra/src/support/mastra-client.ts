@@ -79,13 +79,8 @@ export class MastraPluginClient extends MastraClient {
   readonly defaultAgent: string;
   /** Registered agent ids, surfaced for pickers. */
   readonly agents: readonly string[];
-  /**
-   * Whether the server can log feedback to MLflow. When `false`, the
-   * chat UI hides thumbs / comment controls and {@link feedback} would
-   * be rejected server-side, so callers gate on this before offering
-   * feedback affordances.
-   */
-  readonly feedbackEnabled: boolean;
+  /** Resolved feedback destination published by the server. */
+  readonly feedbackMode: feedback.FeedbackMode;
   /**
    * Whether the agents run their Databricks calls as the app service principal
    * rather than on-behalf-of the signed-in user. When `true` the chat works for
@@ -111,7 +106,7 @@ export class MastraPluginClient extends MastraClient {
     this.basePath = config.basePath;
     this.defaultAgent = config.defaultAgent;
     this.agents = config.agents;
-    this.feedbackEnabled = config.feedbackEnabled ?? false;
+    this.feedbackMode = config.feedbackMode ?? "none";
     this.chatAlwaysAvailable = config.chatAlwaysAvailable ?? false;
     this.backgroundTurns = config.backgroundTurns ?? false;
   }

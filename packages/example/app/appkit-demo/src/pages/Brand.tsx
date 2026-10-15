@@ -1,17 +1,30 @@
 import { brandUtils } from "@dbx-tools/shared-core";
 import { emailBrandFromContext, type EmailBrand } from "@dbx-tools/shared-email-template";
+import {
+  GENERATOR_PLUGIN_NAME,
+  GeneratorPluginClient,
+  type GeneratorClientConfig,
+  type BrandGenerationProgressEvent,
+  type BrandGenerationStage,
+  type BrandPackage,
+} from "@dbx-tools/shared-generator/brand";
 import { BrandIcon, useBrand } from "@dbx-tools/ui/branding/react";
 import { EmailPreview } from "@dbx-tools/ui/email/react";
 import {
   Badge,
   BrandPicker,
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  Input,
+  usePluginClientConfig,
   type BrandPreset,
 } from "@dbx-tools/ui/react";
+import { CheckCircle2, Circle, CircleX, LoaderCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const SITE_PRESETS: readonly BrandPreset[] = [
   {
@@ -55,6 +68,20 @@ const SITE_PRESETS: readonly BrandPreset[] = [
     },
   },
 ];
+
+const GENERATION_STAGES: readonly BrandGenerationStage[] = [
+  "search",
+  "fetch",
+  "assets",
+  "synthesize",
+];
+
+const GENERATION_STAGE_LABELS: Record<BrandGenerationStage, string> = {
+  search: "Find official sources",
+  fetch: "Read cited pages",
+  assets: "Inspect brand artwork",
+  synthesize: "Build brand context",
+};
 
 const digestEmail = {
   to: ["data-platform@databricks.com"],
@@ -135,6 +162,199 @@ const campaignBrand = {
   logoUrl: NORTHSTAR_ICON,
 } satisfies EmailBrand;
 
+interface BrandGeneratorProps {
+  onGenerated: (brand: brandUtils.BrandContext) => void;
+}
+
+const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
+  const config = usePluginClientConfig<GeneratorClientConfig>(GENERATOR_PLUGIN_NAME);
+  const client = useMemo(() => new GeneratorPluginClient(config), [config.basePath]);
+  const [name, setName] = useState("Databricks");
+  const [website, setWebsite] = useState("https://www.databricks.com/");
+  const [progress, setProgress] = useState<
+    Partial<Record<BrandGenerationStage, BrandGenerationProgressEvent>>
+  >({});
+  const [generated, setGenerated] = useState<BrandPackage>();
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string>();
+  const abortRef = useRef<AbortController>();
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    [],
+  );
+
+  const generate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!name.trim() || running) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setRunning(true);
+    setError(undefined);
+    setGenerated(undefined);
+    setProgress({});
+    let completed = false;
+
+    try {
+      for await (const update of client.generate(
+        {
+          name: name.trim(),
+          ...(website.trim() ? { website: website.trim() } : {}),
+        },
+        { signal: controller.signal },
+      )) {
+        if (update.type === "progress") {
+          setProgress((current) => ({ ...current, [update.stage]: update }));
+          continue;
+        }
+        if (update.type === "error") throw new Error(update.message);
+        completed = true;
+        setGenerated(update.package);
+        onGenerated(update.package.brand);
+      }
+      if (!completed) throw new Error("Brand generation ended before returning a package.");
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setError(cause instanceof Error ? cause.message : "Brand generation failed.");
+      }
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = undefined;
+        setRunning(false);
+      }
+    }
+  };
+
+  const activeStage = [...GENERATION_STAGES].reverse().find((stage) => progress[stage]);
+  const activeIndex = activeStage ? GENERATION_STAGES.indexOf(activeStage) : -1;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Generate from a brand</CardTitle>
+        <CardDescription>
+          Research official sources, build a portable context, and apply it to this page.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <form className="space-y-4" onSubmit={generate}>
+          <label className="block space-y-1.5 text-sm font-medium">
+            <span>Brand name</span>
+            <Input
+              value={name}
+              maxLength={200}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Databricks"
+              required
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm font-medium">
+            <span>Official website</span>
+            <Input
+              type="url"
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+              placeholder="https://www.example.com/"
+            />
+            <span className="block text-xs font-normal text-muted-foreground">
+              Optional. Use it to distinguish brands with similar names.
+            </span>
+          </label>
+          <Button type="submit" disabled={running || !name.trim()}>
+            {running ? (
+              <>
+                <LoaderCircle className="motion-safe:animate-spin" />
+                Generating
+              </>
+            ) : (
+              "Generate and apply"
+            )}
+          </Button>
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </form>
+
+        <div className="space-y-3" aria-live="polite">
+          <p className="text-sm font-medium text-foreground">
+            {generated
+              ? `Applied ${generated.brand.name}`
+              : running
+                ? "Generation activity"
+                : error
+                  ? "Generation failed"
+                  : "Ready"}
+          </p>
+          <ol className="space-y-2">
+            {GENERATION_STAGES.map((stage, index) => {
+              const update = progress[stage];
+              const complete = Boolean(generated) || (activeIndex >= 0 && index < activeIndex);
+              const active = running && stage === activeStage;
+              const failed = Boolean(error) && stage === activeStage;
+              return (
+                <li key={stage} className="flex gap-2.5 text-sm">
+                  {complete ? (
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
+                  ) : active ? (
+                    <LoaderCircle className="mt-0.5 size-4 shrink-0 text-primary motion-safe:animate-spin" />
+                  ) : failed ? (
+                    <CircleX className="mt-0.5 size-4 shrink-0 text-destructive" />
+                  ) : (
+                    <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground/50" />
+                  )}
+                  <div className="min-w-0">
+                    <p
+                      className={
+                        failed
+                          ? "text-destructive"
+                          : complete || active
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {GENERATION_STAGE_LABELS[stage]}
+                    </p>
+                    {update ? (
+                      <p className="truncate text-xs text-muted-foreground">{update.message}</p>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          {generated?.sources.length ? (
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer font-medium text-foreground">
+                Sources ({generated.sources.length})
+              </summary>
+              <ul className="mt-2 space-y-1.5">
+                {generated.sources.map((source) => (
+                  <li key={source.url} className="truncate">
+                    <a
+                      className="hover:text-foreground hover:underline"
+                      href={source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {source.title ?? new URL(source.url).hostname}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 interface BrandPageProps {
   value: brandUtils.BrandContext;
   onChange: (value: brandUtils.BrandContext) => void;
@@ -157,6 +377,8 @@ const BrandPage = ({ value, onChange }: BrandPageProps) => {
             and standard email previews update together.
           </p>
         </section>
+
+        <BrandGenerator onGenerated={onChange} />
 
         <BrandPicker value={value} onChange={onChange} presets={SITE_PRESETS} />
 

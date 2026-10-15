@@ -26,7 +26,6 @@ import {
   resetAppMlflowTraceInfo,
   resetUcTracePrefixCache,
   ucTracePrefixFromExperimentTags,
-  validateFeedbackConfig,
 } from "../src/mlflow.ts";
 import { AppMlflowTraceInfoSpanProcessor } from "../src/telemetry.ts";
 import { APPKIT_AGENT_TRACE_ROOT_ATTR } from "../src/trace-attributes.ts";
@@ -339,22 +338,6 @@ describe("direct MLflow span filtering", () => {
 
     assert.deepEqual(recording.started, ["mastra.chat_turn"]);
     assert.deepEqual(recording.ended, ["mastra.chat_turn"]);
-  });
-});
-
-describe("feedback configuration", () => {
-  it("fails boot validation when feedback is forced on without an experiment", () => {
-    delete process.env.MLFLOW_EXPERIMENT_ID;
-    delete process.env.MLFLOW_EXPERIMENT_NAME;
-
-    assert.throws(() => validateFeedbackConfig(true), /no MLflow experiment is configured/);
-    assert.doesNotThrow(() => validateFeedbackConfig(undefined));
-    assert.doesNotThrow(() => validateFeedbackConfig(false));
-  });
-
-  it("accepts either experiment identifier", () => {
-    process.env.MLFLOW_EXPERIMENT_NAME = "/Shared/chat";
-    assert.doesNotThrow(() => validateFeedbackConfig(true));
   });
 });
 
