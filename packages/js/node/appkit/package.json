@@ -37,7 +37,8 @@
     "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-fs": "workspace:^",
-    "@opentelemetry/instrumentation-http": "0.219.0",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/sdk-trace-base": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",

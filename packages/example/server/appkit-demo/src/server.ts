@@ -342,22 +342,17 @@ const searchProvider = USE_VECTOR_SEARCH
 const previousCwd = process.cwd();
 if (useAppKitVite) process.chdir(demoClientRoot);
 try {
+  await appkitTelemetry.configureNativeHttpTelemetry({
+    exclude: [lakeboxRuntime.config.routePrefix, `${lakeboxRuntime.config.routePrefix}/*`],
+  });
   await appkit.createApp({
     disableInternalTelemetry: true,
-    telemetry: {
-      instrumentations: appkitTelemetry.httpTelemetryInstrumentations({
-        exclude: [lakeboxRuntime.config.routePrefix, `${lakeboxRuntime.config.routePrefix}/*`],
-      }),
-    },
     plugins: [
-      // The custom HTTP instrumentation above uses AppKit's global telemetry
-      // provider and exporter while excluding long-lived Lakebox proxy traffic.
-      // Disable only the server plugin's fixed instrumentation to avoid duplicate
-      // request spans; chat, AppKit plugin, Mastra, and model spans remain enabled.
+      // Keep AppKit's native HTTP/Express tracing. The compatibility hook above
+      // only extends its request filter for long-lived Lakebox proxy traffic.
       server({
         host,
         bodyLimit: appkitBodyLimit,
-        telemetry: false,
         ...(useAppKitVite ? {} : { staticPath: clientDist }),
       }),
       genie(),

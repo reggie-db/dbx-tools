@@ -56,7 +56,7 @@ import {
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import { lakebaseResolver, pluginRegistry } from "@dbx-tools/appkit";
+import { lakebaseResolver, pluginRegistry, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
 import { modelCatalog } from "@dbx-tools/model";
 import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import {
@@ -118,7 +118,10 @@ import {
 } from "./server.ts";
 import { resolveServingConfig } from "./serving.ts";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
-import { attachChatTurnTelemetry } from "./telemetry.ts";
+import {
+  attachChatTurnTelemetry,
+  registerAppMlflowTraceInfoProcessor,
+} from "./telemetry.ts";
 import { invalidFields } from "./validation.ts";
 import { inlineSkillsFromLocalMounts } from "./workspaces.ts";
 
@@ -242,6 +245,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // app boot with a clear message rather than 500-ing the first chat request.
     this.identityMode = resolveIdentityMode(this.config.genieIdentity);
     validateFeedbackConfig(this.config.feedback);
+    if (this.config.observability !== false) {
+      await registerAppMlflowTraceInfoProcessor();
+    }
     // Wait until sibling plugins (e.g. `lakebase`) finish `setup()` so
     // the lakebase pool is valid when storage/memory are enabled.
     this.context?.onLifecycle("setup:complete", async () => {
@@ -1106,6 +1112,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const observability = await buildObservability({
       serviceName: this.name,
       enabled: this.config.observability,
+      tracerProvider: await appkitTelemetry.deferredNativeTracerProvider(),
     });
     // Optional MCP exposure: build a Mastra MCP server from the
     // registered agents (and, opt-in, the ambient tools) and register

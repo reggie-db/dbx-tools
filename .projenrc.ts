@@ -400,7 +400,8 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-fs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
-    "@opentelemetry/instrumentation-http@0.219.0",
+    "@opentelemetry/api@catalog:",
+    "@opentelemetry/sdk-trace-base@catalog:",
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");

@@ -46,7 +46,7 @@ import { projectUtils } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Observability } from "@mastra/observability";
 import { OtelBridge } from "@mastra/otel-bridge";
-import { propagation } from "@opentelemetry/api";
+import { propagation, type TracerProvider } from "@opentelemetry/api";
 
 import { TRACE_REQUEST_CONTEXT_KEYS } from "./config.ts";
 import {
@@ -92,6 +92,8 @@ export interface BuildObservabilityOptions {
    * Supports dot notation for nested values per the Mastra docs.
    */
   requestContextKeys?: readonly string[];
+  /** AppKit-owned tracer provider used by the Mastra OTel bridge. */
+  tracerProvider?: TracerProvider;
 }
 
 /** True when AppKit's global OTel pipeline is configured to export traces. */
@@ -188,7 +190,9 @@ export async function buildObservability(
     configs: {
       serviceName: {
         serviceName,
-        bridge: new OtelBridge(),
+        bridge: new OtelBridge(
+          options?.tracerProvider ? { tracerProvider: options.tracerProvider } : undefined,
+        ),
         requestContextKeys,
       },
     },

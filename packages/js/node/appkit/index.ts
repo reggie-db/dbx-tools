@@ -42,8 +42,7 @@ export type { SslMode, ParsedAddress, LakebaseConnectionInputs } from "./src/pga
 export type { RunPluginExecutionOptions } from "./src/plugin-execution.ts";
 export type { PluginContextLike } from "./src/plugin-registry.ts";
 export type { RequestTagValue } from "./src/request-tags.ts";
-export { TelemetryInstrumentationBridgePlugin, telemetryInstrumentationBridge } from "./src/telemetry.ts";
-export type { HttpTelemetryOptions, TelemetryInstrumentationBridgeConfig } from "./src/telemetry.ts";
+export type { NativeHttpTelemetryOptions } from "./src/telemetry.ts";
 export type { AppKitToolMeta, AppKitOperationSchemaMeta, AppKitOperation } from "./src/tool-operations.ts";
 export { ToolRegistryPlugin } from "./src/tool-provider.ts";
 export type { AgentToolProgressOptions, AgentToolExecutionContext } from "./src/tool-provider.ts";

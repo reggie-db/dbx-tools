@@ -20,16 +20,38 @@
 
 import { StringDecoder } from "node:string_decoder";
 
+import { telemetry as appkitTelemetry } from "@dbx-tools/appkit";
 import { getRequestTags } from "@dbx-tools/appkit/request-tags";
 import { environmentUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
-import { context, createContextKey, SpanKind, trace, type Span } from "@opentelemetry/api";
+import type { TracingOptions } from "@mastra/core/observability";
+import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
+import {
+  context,
+  createContextKey,
+  SpanKind,
+  SpanStatusCode,
+  trace,
+  type Context,
+  type Span,
+} from "@opentelemetry/api";
 import { getRPCMetadata, RPCType } from "@opentelemetry/core";
+import type {
+  ReadableSpan,
+  Span as SdkSpan,
+  SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import type express from "express";
 
+import {
+  MASTRA_AUTH_MODE_KEY,
+  MASTRA_USER_EMAIL_KEY,
+  MASTRA_USER_NAME_KEY,
+} from "./config.ts";
 import { USER_EMAIL_HEADER, USER_ID_HEADER } from "./identity.ts";
 import {
   directMlflowTracingActive,
+  initializeAppMlflowTraceInfo,
   persistAppMlflowTraceInfo,
   updateActiveMlflowTrace,
   updateActiveMlflowTraceTags,
@@ -78,7 +100,8 @@ const CHAT_TURN_TRACER = "@dbx-tools/appkit-mastra/telemetry";
  * are intentionally excluded: their bodies are tool decisions, not the
  * user prompt, and they rarely produce a fresh answer worth surfacing.
  */
-const AGENT_TURN_ROUTE = /^(?:\/agents\/[^/]+\/(?:stream|generate)(?:\/|$)|\/chat\/[^/]+$)/i;
+const AGENT_TURN_ROUTE =
+  /(?:^|\/)(?:agents\/[^/]+\/(?:stream|generate)|chat\/[^/]+)\/?$/i;
 
 /** Attribute keys the MLflow UC `*_trace_unified` view reads from the root span. */
 export const MLFLOW_SPAN_INPUTS_ATTR = "mlflow.spanInputs";
@@ -129,6 +152,8 @@ interface TraceTarget {
 
 interface ChatTraceState {
   readonly tags: Map<string, string>;
+  readonly traceId: string;
+  readonly parentSpanId?: string;
   firstModel?: string;
   user?: string;
 }
@@ -185,6 +210,26 @@ function activeChatTraceState(): ChatTraceState | undefined {
   return context.active().getValue(CHAT_TRACE_STATE_KEY) as ChatTraceState | undefined;
 }
 
+/**
+ * Bind a Mastra agent run to the trace selected by chat telemetry.
+ *
+ * Databricks Apps uses a dedicated agent trace because evented agents finish
+ * before the HTTP server span. Promoting MLflow trace info after the agent root
+ * closes avoids the sidecar replacing clean previews and tags with empty HTTP
+ * trace metadata. Other runtimes retain the existing HTTP/local parentage.
+ */
+export function activeChatTracingOptions(
+  options: TracingOptions | undefined,
+): TracingOptions | undefined {
+  const state = activeChatTraceState();
+  if (!state) return options;
+  return {
+    ...options,
+    traceId: state.traceId,
+    ...(state.parentSpanId ? { parentSpanId: state.parentSpanId } : { parentSpanId: undefined }),
+  };
+}
+
 function setChatTraceTag(state: ChatTraceState, name: string, value: ChatTraceTagValue): void {
   const tag = stringUtils.trimToNull(name);
   if (!tag) return;
@@ -235,9 +280,8 @@ export function recordActiveTraceAuth(auth: "obo" | "service-principal"): void {
 }
 
 /** Publish the turn's MLflow trace id before the handler writes the body. */
-function stampMlflowTraceId(res: express.Response, span: Span): void {
+function stampMlflowTraceId(res: express.Response, traceId: string): void {
   if (res.headersSent) return;
-  const traceId = span.spanContext().traceId;
   if (!traceId || traceId === INVALID_TRACE_ID) return;
   res.setHeader(feedback.MLFLOW_TRACE_ID_HEADER, `tr-${traceId}`);
 }
@@ -327,6 +371,150 @@ export function assistantTextFromSse(body: string): string {
 export function assistantTextFromJson(body: unknown): string {
   if (!object.isRecord(body) || typeof body.text !== "string") return "";
   return body.text.slice(0, TRACE_IO_LIMIT);
+}
+
+const MASTRA_AGENT_INPUT_ATTR = "mastra.agent_run.input";
+const MASTRA_AGENT_OUTPUT_ATTR = "mastra.agent_run.output";
+const GEN_AI_REQUEST_MODEL_ATTR = "gen_ai.request.model";
+const GEN_AI_AGENT_ID_ATTR = "gen_ai.agent.id";
+const GEN_AI_AGENT_NAME_ATTR = "gen_ai.agent.name";
+const MASTRA_MODEL_METADATA_ATTR = "mastra.metadata.modelMetadata";
+const MASTRA_METADATA_PREFIX = "mastra.metadata.";
+
+interface AppMlflowTraceState {
+  readonly tags: Map<string, string>;
+  genie: boolean;
+  model?: string;
+}
+
+function attributeString(span: ReadableSpan, name: string): string | undefined {
+  const value = span.attributes[name];
+  return typeof value === "string" ? stringUtils.trimToNull(value) ?? undefined : undefined;
+}
+
+function metadataAttribute(key: string): string {
+  return `${MASTRA_METADATA_PREFIX}${key}`;
+}
+
+function modelFromSpan(span: ReadableSpan): string | undefined {
+  const direct = attributeString(span, GEN_AI_REQUEST_MODEL_ATTR);
+  if (direct) return direct;
+  const metadata = json.parse(attributeString(span, MASTRA_MODEL_METADATA_ATTR));
+  return object.isRecord(metadata) && typeof metadata.modelId === "string"
+    ? stringUtils.trimToNull(metadata.modelId) ?? undefined
+    : undefined;
+}
+
+function spanUsesGenie(span: ReadableSpan): boolean {
+  if (span.attributes[MLFLOW_GENIE_TAG_ATTR] === "true") return true;
+  if (/\bask_genie(?:_|\b)/i.test(span.name)) return true;
+  return ["gen_ai.tool.name", "mastra.tool_call.name"].some((name) =>
+    /^ask_genie(?:_|$)/i.test(attributeString(span, name) ?? ""),
+  );
+}
+
+function collectTraceTags(span: ReadableSpan, state: AppMlflowTraceState): void {
+  for (const [name, value] of Object.entries(span.attributes)) {
+    if (!name.startsWith(MLFLOW_TRACE_TAG_PREFIX)) continue;
+    const tag = name.slice(MLFLOW_TRACE_TAG_PREFIX.length);
+    if (tag && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")) {
+      state.tags.set(tag, String(value));
+    }
+  }
+}
+
+function hrTimeMilliseconds(value: readonly [number, number]): number {
+  return value[0] * 1_000 + value[1] / 1_000_000;
+}
+
+function previewInput(span: ReadableSpan): string | undefined {
+  const raw = attributeString(span, MASTRA_AGENT_INPUT_ATTR);
+  if (!raw) return undefined;
+  return (textOnlyChatInput(json.parse(raw)) ?? raw).slice(0, TRACE_IO_LIMIT);
+}
+
+function previewOutput(span: ReadableSpan): string | undefined {
+  const raw = attributeString(span, MASTRA_AGENT_OUTPUT_ATTR);
+  if (!raw) return undefined;
+  const parsed = json.parse(raw);
+  const text = assistantTextFromJson(parsed) || (typeof parsed === "string" ? parsed : raw);
+  return text.slice(0, TRACE_IO_LIMIT);
+}
+
+/** Promote the actual Mastra `invoke_agent` trace exported by AppKit's provider. */
+export class AppMlflowTraceInfoSpanProcessor implements SpanProcessor {
+  private readonly traces = new Map<string, AppMlflowTraceState>();
+
+  onStart(span: SdkSpan, _parentContext: Context): void {
+    const traceId = span.spanContext().traceId;
+    if (!this.traces.has(traceId)) {
+      this.traces.set(traceId, { tags: new Map(), genie: false });
+    }
+  }
+
+  onEnd(span: ReadableSpan): void {
+    const traceId = span.spanContext().traceId;
+    const state: AppMlflowTraceState = this.traces.get(traceId) ?? {
+      tags: new Map(),
+      genie: false,
+    };
+    this.traces.set(traceId, state);
+    collectTraceTags(span, state);
+    state.model ??= modelFromSpan(span);
+    state.genie ||= spanUsesGenie(span);
+
+    if (attributeString(span, GEN_AI_OPERATION_NAME_ATTR) !== "invoke_agent") {
+      if (!span.parentSpanContext?.spanId) this.traces.delete(traceId);
+      return;
+    }
+
+    const agent =
+      state.model ?? attributeString(span, GEN_AI_AGENT_ID_ATTR) ?? attributeString(span, GEN_AI_AGENT_NAME_ATTR);
+    if (agent) state.tags.set(MLFLOW_AGENT_TAG, agent);
+    if (state.genie) state.tags.set(MLFLOW_GENIE_TAG, "true");
+    const auth = attributeString(span, metadataAttribute(MASTRA_AUTH_MODE_KEY));
+    if (auth === "obo") state.tags.set(MLFLOW_OBO_AUTH_TAG, "true");
+    else if (auth === "service-principal") state.tags.set(MLFLOW_SP_AUTH_TAG, "true");
+
+    const user =
+      attributeString(span, metadataAttribute(MASTRA_USER_EMAIL_KEY)) ??
+      attributeString(span, metadataAttribute(MASTRA_USER_NAME_KEY)) ??
+      attributeString(span, metadataAttribute(MASTRA_RESOURCE_ID_KEY));
+    const sessionId =
+      attributeString(span, metadataAttribute(MASTRA_THREAD_ID_KEY)) ??
+      attributeString(span, "gen_ai.conversation.id");
+    const requestPreview = previewInput(span);
+    const responsePreview = previewOutput(span);
+    persistAppMlflowTraceInfo({
+      traceId,
+      requestTime: hrTimeMilliseconds(span.startTime),
+      executionDuration: hrTimeMilliseconds(span.duration),
+      error: span.status.code === SpanStatusCode.ERROR,
+      tags: Object.fromEntries(state.tags),
+      ...(user ? { user } : {}),
+      ...(sessionId ? { sessionId } : {}),
+      ...(requestPreview ? { requestPreview } : {}),
+      ...(responsePreview ? { responsePreview } : {}),
+    });
+    this.traces.delete(traceId);
+  }
+
+  async forceFlush(): Promise<void> {}
+
+  async shutdown(): Promise<void> {
+    this.traces.clear();
+  }
+}
+
+let appMlflowTraceInfoProcessorRegistered = false;
+
+/** Register trace enrichment before AppKit constructs its native provider. */
+export async function registerAppMlflowTraceInfoProcessor(): Promise<boolean> {
+  if (appMlflowTraceInfoProcessorRegistered) return true;
+  if (!(await initializeAppMlflowTraceInfo())) return false;
+  await appkitTelemetry.registerNativeSpanProcessor(new AppMlflowTraceInfoSpanProcessor());
+  appMlflowTraceInfoProcessorRegistered = true;
+  return true;
 }
 
 /** Incrementally assemble UTF-8 SSE text while retaining a bounded JSON fallback. */
@@ -485,7 +673,11 @@ export function chatTurnTelemetryMiddleware(
     next();
     return;
   }
-  const traceState: ChatTraceState = { tags: new Map() };
+  const traceState: ChatTraceState = {
+    tags: new Map(),
+    traceId: targetTraceId,
+    parentSpanId: target.span.spanContext().spanId,
+  };
   const traceRequestTime = Date.now();
   if (!environmentUtils.isDatabricksAppEnv()) {
     setChatTraceTag(traceState, MLFLOW_LOCAL_TAG, true);
@@ -499,7 +691,7 @@ export function chatTurnTelemetryMiddleware(
       if (value !== undefined) setChatTraceTag(traceState, name, value);
     }
   }
-  stampMlflowTraceId(res, target.span);
+  stampMlflowTraceId(res, traceState.traceId);
   traceState.user = stampMlflowActor(target.span, req);
   target.span.setAttribute(MLFLOW_SPAN_TYPE_ATTR, MLFLOW_SPAN_TYPE_AGENT);
   target.span.setAttribute(GEN_AI_OPERATION_NAME_ATTR, "invoke_agent");
@@ -569,16 +761,18 @@ export function chatTurnTelemetryMiddleware(
         ...(traceState.user ? { user: traceState.user } : {}),
       });
     });
-    persistAppMlflowTraceInfo({
-      traceId: targetTraceId,
-      requestTime: traceRequestTime,
-      executionDuration: Date.now() - traceRequestTime,
-      error: res.statusCode >= 500,
-      tags,
-      ...(traceState.user ? { user: traceState.user } : {}),
-      ...(requestPreview ? { requestPreview } : {}),
-      ...(responsePreview ? { responsePreview } : {}),
-    });
+    if (!environmentUtils.isDatabricksAppEnv()) {
+      persistAppMlflowTraceInfo({
+        traceId: traceState.traceId,
+        requestTime: traceRequestTime,
+        executionDuration: Date.now() - traceRequestTime,
+        error: res.statusCode >= 500,
+        tags,
+        ...(traceState.user ? { user: traceState.user } : {}),
+        ...(requestPreview ? { requestPreview } : {}),
+        ...(responsePreview ? { responsePreview } : {}),
+      });
+    }
   };
   const endOwnedSpan = (): void => {
     if (!target.owned || ownedSpanEnded) return;

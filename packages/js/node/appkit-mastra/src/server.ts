@@ -20,6 +20,7 @@ import type express from "express";
 
 import {
   attributedUserId,
+  MASTRA_AUTH_MODE_KEY,
   MASTRA_REQUEST_ID_KEY,
   MASTRA_SCOPES_KEY,
   MASTRA_USER_EMAIL_KEY,
@@ -52,6 +53,7 @@ const TRUSTED_REQUEST_CONTEXT_KEYS = [
   MASTRA_USER_KEY,
   MASTRA_USER_NAME_KEY,
   MASTRA_USER_EMAIL_KEY,
+  MASTRA_AUTH_MODE_KEY,
   MASTRA_REQUEST_ID_KEY,
   MASTRA_ORIGIN_KEY,
   MASTRA_SCOPES_KEY,
@@ -141,6 +143,7 @@ export async function stampRequestContextUser(
   };
   requestContext.set(MASTRA_USER_KEY, user);
   requestContext.set(MASTRA_RESOURCE_ID_KEY, user.id);
+  requestContext.set(MASTRA_AUTH_MODE_KEY, isUserContext ? "obo" : "service-principal");
   // AppKit's `UserContext` surfaces display name / email only on
   // OBO requests. Service-context calls (background tasks, server
   // start-up) leave these undefined and we skip the stamp so

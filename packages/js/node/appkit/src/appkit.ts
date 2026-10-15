@@ -51,7 +51,7 @@ import {
 } from "./interceptor.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
-import { telemetryInstrumentationBridge } from "./telemetry.ts";
+import { bindNativeTelemetryProvider } from "./telemetry.ts";
 
 const logger = log.logger("appkit");
 
@@ -269,25 +269,6 @@ function interceptorList(interceptor: CreateAppConfig["interceptor"]): Intercept
 }
 
 /**
- * Register AppKit's declared custom telemetry instrumentations through a hidden
- * plugin. AppKit 0.81 exposes `TelemetryConfig.instrumentations` but does not
- * consume it in `TelemetryManager.initialize()`.
- */
-function injectTelemetryInstrumentations<T extends AppKitPlugins>(
-  appConfig: CreateAppConfig<T>,
-): void {
-  const telemetryConfig = appConfig.telemetry;
-  const instrumentations = telemetryConfig?.instrumentations;
-  if (!telemetryConfig || !instrumentations?.length) return;
-  appConfig.plugins = [
-    ...(appConfig.plugins ?? []),
-    telemetryInstrumentationBridge({ instrumentations }),
-  ] as unknown as T;
-  const { instrumentations: _instrumentations, ...telemetry } = telemetryConfig;
-  appConfig.telemetry = telemetry;
-}
-
-/**
  * Auto-configuring drop-in for AppKit's `createApp`: same config, same typed
  * plugin-export map, with {@link autoConfigure} run first.
  *
@@ -329,6 +310,12 @@ export async function createApp<T extends AppKitPlugins>(
   const appConfig = { ...config };
   delete appConfig.autoConfigure;
   delete appConfig.interceptor;
+  const onPluginsReady = appConfig.onPluginsReady;
+  appConfig.onPluginsReady = async (app) => {
+    const bound = await bindNativeTelemetryProvider();
+    logger.debug("createApp: native telemetry provider binding", { bound });
+    await onPluginsReady?.(app);
+  };
 
   if (shouldInjectCacheStorage(config)) {
     logger.debug("createApp: inject memory-first cache storage");
@@ -341,8 +328,6 @@ export async function createApp<T extends AppKitPlugins>(
       persistent: storage.isPersistent(),
     });
   }
-
-  injectTelemetryInstrumentations(appConfig);
 
   if (interceptors.length === 0) {
     logger.debug("createApp: no interceptors; delegating to AppKit createApp", {

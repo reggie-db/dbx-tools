@@ -71,8 +71,13 @@
       "type": "runtime"
     },
     {
-      "name": "@opentelemetry/instrumentation-http",
-      "version": "0.219.0",
+      "name": "@opentelemetry/api",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@opentelemetry/sdk-trace-base",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
