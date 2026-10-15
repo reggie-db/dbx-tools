@@ -55,10 +55,10 @@ export interface ManagedMemoryOptions {
   /** Search settings applied once to each user turn. */
   recall?: false | { topK?: number; pathPrefix?: string };
   /**
-   * Synchronously extract memory after a mirrored direct Genie turn. Scheduled
-   * memory pipelines are preferable for normal agent-backed sessions.
+   * Extract durable memory after each completed Mastra or direct Genie turn.
+   * Defaults to `true` when a memory store is configured.
    */
-  extractAfterGenieTurn?: boolean | { instructions?: string };
+  extractAfterTurn?: boolean | { instructions?: string };
 }
 
 /** Enable managed memory with project defaults or configure it explicitly. */
@@ -504,6 +504,7 @@ export class ManagedSessionMemoryStorage extends MemoryStorage {
   constructor(
     private readonly memory: ManagedAgentMemoryClient,
     private readonly agentId: string,
+    private readonly extractAfterTurn: ManagedMemoryOptions["extractAfterTurn"] = false,
   ) {
     super();
   }
@@ -618,6 +619,18 @@ export class ManagedSessionMemoryStorage extends MemoryStorage {
           threadId,
           grouped.map((message) => storedMessage(message)),
         );
+        if (
+          this.memory.memoryStore &&
+          this.extractAfterTurn !== false &&
+          grouped.some((message) => message.role === "assistant")
+        ) {
+          await this.memory.extractSession({
+            sessionId: threadId,
+            ...(typeof this.extractAfterTurn === "object" && this.extractAfterTurn.instructions
+              ? { instructions: this.extractAfterTurn.instructions }
+              : {}),
+          });
+        }
       }),
     );
     return { messages };
@@ -887,7 +900,13 @@ export class ManagedMemoryRuntime {
   storage(agentId: string): MastraCompositeStore {
     return new MastraCompositeStore({
       id: `databricks-agent-sessions__${agentId}`,
-      domains: { memory: new ManagedSessionMemoryStorage(this.client, agentId) },
+      domains: {
+        memory: new ManagedSessionMemoryStorage(
+          this.client,
+          agentId,
+          this.options.extractAfterTurn ?? true,
+        ),
+      },
     });
   }
 
@@ -960,12 +979,12 @@ export class ManagedMemoryRuntime {
       ],
       input.signal,
     );
-    if (this.options.memoryStore && this.options.extractAfterGenieTurn) {
+    if (this.options.memoryStore && this.options.extractAfterTurn !== false) {
       await this.client.extractSession({
         sessionId: input.conversationId,
-        ...(typeof this.options.extractAfterGenieTurn === "object" &&
-        this.options.extractAfterGenieTurn.instructions
-          ? { instructions: this.options.extractAfterGenieTurn.instructions }
+        ...(typeof this.options.extractAfterTurn === "object" &&
+        this.options.extractAfterTurn.instructions
+          ? { instructions: this.options.extractAfterTurn.instructions }
           : {}),
         signal: input.signal,
       });

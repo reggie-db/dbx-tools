@@ -727,10 +727,10 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
           description:
             "Managed-memory search on each user turn. False disables it; an object accepts topK and pathPrefix.",
         },
-        extractAfterGenieTurn: {
+        extractAfterTurn: {
           type: ["boolean", "object"],
           description:
-            "Synchronously extract managed memories after mirroring a completed direct Genie turn. An object accepts extraction instructions.",
+            "Extract managed memories after each completed Mastra or direct Genie turn. Defaults to true when a memory store is configured; an object accepts extraction instructions.",
         },
       },
       additionalProperties: false,

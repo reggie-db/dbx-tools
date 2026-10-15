@@ -151,8 +151,11 @@ function message(
 describe("ManagedSessionMemoryStorage", () => {
   test("maps Mastra threads and append-only message updates onto Agent Sessions", async () => {
     const fake = fakeWorkspaceClient();
-    const client = new ManagedAgentMemoryClient(fake.client, { sessionStore: "test" });
-    const storage = new ManagedSessionMemoryStorage(client, "support");
+    const client = new ManagedAgentMemoryClient(fake.client, {
+      sessionStore: "test",
+      memoryStore: "memory",
+    });
+    const storage = new ManagedSessionMemoryStorage(client, "support", true);
 
     await storage.saveThread({
       thread: {
@@ -167,6 +170,7 @@ describe("ManagedSessionMemoryStorage", () => {
     await storage.saveMessages({
       messages: [message("message-1", "Hello"), message("message-2", "Hi", { role: "assistant" })],
     });
+    expect(fake.extractions).toHaveLength(1);
     await storage.updateMessages({
       messages: [
         {
@@ -242,7 +246,7 @@ describe("ManagedMemoryRuntime", () => {
     const runtime = new ManagedMemoryRuntime(fake.client, {
       sessionStore: "test",
       memoryStore: "memory",
-      extractAfterGenieTurn: { instructions: "Keep durable preferences." },
+      extractAfterTurn: { instructions: "Keep durable preferences." },
     });
 
     await runtime.recordGenieTurn({

@@ -299,10 +299,11 @@ can distill the managed sessions into the memory store. The exported
 
 Direct Genie still reads turns and history only from the Genie Agent API. After
 a completed turn, the plugin can mirror the user question and assistant answer
-to the configured Agent Session so a memory pipeline can distill it. Set
-`extractAfterGenieTurn: true` (or `{ instructions }`) to invoke synchronous
-session extraction after each mirrored turn. That background hook does not
-delay or replace the Genie response. Managed-memory recall is not injected into
+to the configured Agent Session. By default, both Mastra and direct Genie turns
+invoke managed-memory extraction after the assistant response is persisted.
+Set `extractAfterTurn: false` to rely only on a scheduled pipeline, or pass
+`{ instructions }` to steer synchronous extraction. The direct Genie hook does
+not delay or replace the response. Managed-memory recall is not injected into
 Genie because the Genie Agent response API accepts only one user message and no
 separate system/context field.
 
