@@ -5,6 +5,9 @@ description: Deploy or run a realtime collaborative whiteboard app as a Lakebox 
 
 # Realtime Whiteboard
 
+Use the pinned Docker/OCI image through `create_lakebox_service`. Do not run a
+container CLI directly.
+
 Call `create_lakebox_service` once:
 
 ```json

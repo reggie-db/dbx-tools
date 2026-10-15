@@ -9,7 +9,13 @@ import { AppKitLakeboxPlugin } from "../src/plugin.ts";
 import type { LakeboxRuntime } from "../src/runtime.ts";
 import { lakeboxSkillMounts } from "../src/skills.ts";
 
-const recipes = ["html-page", "jupyter-lab", "network-speed-test", "realtime-whiteboard"];
+const recipes = [
+  "html-page",
+  "jupyter-lab",
+  "lakebox-showcase",
+  "network-speed-test",
+  "realtime-whiteboard",
+];
 
 before(async () => {
   await CacheManager.getInstance();
@@ -57,12 +63,31 @@ describe("lakeboxSkillMounts", () => {
       assert.equal((await skills.search(query))[0]?.skillName, "html-page", query);
     }
   });
+
+  it("routes broad Lakebox capability and demo questions to the showcase", async () => {
+    const workspace = workspaces.databricksWorkspace({
+      assistantPaths: false,
+      sandbox: false,
+      extraSkillMounts: lakeboxSkillMounts(),
+    });
+    const configured = workspace.skills;
+    assert.ok(configured);
+    const skills =
+      (await configured.getScoped?.({ requestContext: new RequestContext() })) ?? configured;
+    for (const query of [
+      "what can I do with Lakebox",
+      "give me fun Lakebox Docker demo ideas",
+      "showcase a one-port browser app in Lakebox",
+    ]) {
+      assert.equal((await skills.search(query))[0]?.skillName, "lakebox-showcase", query);
+    }
+  });
 });
 
 describe("AppKitLakeboxPlugin agent tools", () => {
   it("keeps command and service tools while excluding whole-Lakebox lifecycle controls", () => {
     const plugin = new AppKitLakeboxPlugin({ runtime: {} as LakeboxRuntime });
-    assert.deepEqual(Object.keys(plugin.operations("user")), [
+    const operationNames = [
       "get_lakebox",
       "execute_lakebox_command",
       "list_lakebox_services",
@@ -71,7 +96,9 @@ describe("AppKitLakeboxPlugin agent tools", () => {
       "stop_lakebox_service",
       "remove_lakebox_service",
       "get_lakebox_service_logs",
-    ]);
+    ];
+    assert.deepEqual(Object.keys(plugin.operations("user")), operationNames);
+    assert.deepEqual(Object.keys(plugin.toolkit()), operationNames);
     assert.equal("start_lakebox" in plugin.operations("user"), false);
     assert.equal("stop_lakebox" in plugin.operations("user"), false);
     assert.equal("delete_lakebox" in plugin.operations("user"), false);

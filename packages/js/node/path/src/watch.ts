@@ -9,8 +9,8 @@
  * @module
  */
 
-import { Stats } from "fs";
-import { readFile } from "node:fs/promises";
+import { once } from "node:events";
+import { readFileSync, type Stats } from "node:fs";
 import { isAbsolute, relative, resolve } from "path";
 import { errorUtils, log } from "@dbx-tools/shared-core";
 import { ChokidarOptions, MatchFunction, watch, type FSWatcher } from "chokidar";
@@ -32,6 +32,10 @@ export interface FileWatchOptions
 interface NormalizedFileWatchOptions extends Omit<FileWatchOptions, "ignore" | "ignoreOptions"> {
   gitIgnore?: GitIgnore;
   ignored: MatchFunction;
+}
+
+interface GitIgnoreControls {
+  attach(watcher: FSWatcher, watchPaths: readonly string[]): void;
 }
 
 /**
@@ -58,20 +62,21 @@ export async function watchFiles(
     watchPaths = literals;
   }
 
+  const controls = gitIgnore
+    ? await createGitIgnoreControls(gitIgnore, {
+        cwd,
+        followSymlinks,
+        ignoreOptions: options?.ignoreOptions,
+        persistent: chokidarOptions.persistent,
+      })
+    : undefined;
   const watcher = watch(watchPaths, {
     ...chokidarOptions,
     cwd,
     followSymlinks,
     ignored,
   });
-  if (gitIgnore) {
-    attachGitIgnoreWatcher(watcher, gitIgnore, watchPaths, {
-      cwd,
-      followSymlinks,
-      ignoreOptions: options?.ignoreOptions,
-      persistent: chokidarOptions.persistent,
-    });
-  }
+  controls?.attach(watcher, watchPaths);
   return watcher;
 }
 
@@ -147,6 +152,7 @@ function toWatchMatchFunction(
 
   const matchPath = (path: string, stats?: Stats): boolean => {
     const rel = toCwdRelativePath(path, cwd);
+    gitIgnore?.refreshPathSync(rel);
     if (gitIgnore?.ignores(rel, stats?.isDirectory() ?? false)) return true;
     if (matcher(rel)) return true;
     for (const fn of functions) {
@@ -165,23 +171,30 @@ function toWatchMatchFunction(
   return matchPath;
 }
 
-function attachGitIgnoreWatcher(
-  watcher: FSWatcher,
+/**
+ * Start the control-file watcher before the primary watcher.
+ *
+ * Waiting for its initial scan closes the event-loss window where a newly
+ * created `.gitignore` could be missed while the primary watcher was already
+ * accepting files under stale rules.
+ */
+async function createGitIgnoreControls(
   gitIgnore: GitIgnore,
-  watchPaths: readonly string[],
   options: {
     cwd: string;
     followSymlinks: boolean;
     ignoreOptions?: FileScanIgnoreOptions;
     persistent?: boolean;
   },
-): void {
+): Promise<GitIgnoreControls> {
   const builtInIgnore = ignorePathMatcher(options.ignoreOptions);
   const controls = watch(".", {
     atomic: false,
     cwd: options.cwd,
     followSymlinks: options.followSymlinks,
-    ignoreInitial: true,
+    // Include the initial scan so a control file created while this secondary
+    // watcher starts cannot fall between its scan and live event subscription.
+    ignoreInitial: false,
     persistent: options.persistent,
     ignored(path, stats) {
       const relativePath = toCwdRelativePath(path, options.cwd);
@@ -190,31 +203,47 @@ function attachGitIgnoreWatcher(
       return stats ? !stats.isDirectory() : false;
     },
   });
+  let target: { watcher: FSWatcher; watchPaths: readonly string[] } | undefined;
+  let pendingError: unknown;
+  const refreshTarget = (): void => {
+    target?.watcher.add([...target.watchPaths]);
+  };
   const reload = (path: string): void => {
-    void readFile(resolve(options.cwd, path), "utf8")
-      .then((content) => {
-        gitIgnore.set(path, content);
-        watcher.add([...watchPaths]);
-        logger.debug(".gitignore updated", { path });
-      })
-      .catch((error) => {
-        logger.warn("failed to reload .gitignore", {
-          path,
-          error: errorUtils.toError(error),
-        });
+    try {
+      gitIgnore.set(path, readFileSync(resolve(options.cwd, path), "utf8"));
+      refreshTarget();
+      logger.debug(".gitignore updated", { path });
+    } catch (error) {
+      logger.warn("failed to reload .gitignore", {
+        path,
+        error: errorUtils.toError(error),
       });
+    }
   };
   controls.on("add", reload);
   controls.on("change", reload);
   controls.on("unlink", (path) => {
     gitIgnore.delete(path);
-    watcher.add([...watchPaths]);
+    refreshTarget();
     logger.debug(".gitignore removed", { path });
   });
-  controls.on("error", (error) => watcher.emit("error", error));
-  const close = watcher.close.bind(watcher);
-  watcher.close = async () => {
-    await Promise.all([close(), controls.close()]);
+  controls.on("error", (error) => {
+    if (target) target.watcher.emit("error", error);
+    else pendingError = error;
+  });
+  await once(controls, "ready");
+  return {
+    attach(watcher, watchPaths) {
+      target = { watcher, watchPaths };
+      if (pendingError) {
+        queueMicrotask(() => watcher.emit("error", pendingError));
+        pendingError = undefined;
+      }
+      const close = watcher.close.bind(watcher);
+      watcher.close = async () => {
+        await Promise.all([close(), controls.close()]);
+      };
+    },
   };
 }
 

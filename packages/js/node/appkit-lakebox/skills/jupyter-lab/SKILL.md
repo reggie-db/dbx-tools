@@ -5,6 +5,9 @@ description: Deploy or run JupyterLab as a Lakebox service behind the user's aut
 
 # JupyterLab
 
+Use the pinned Docker/OCI image through `create_lakebox_service`. Do not run a
+container CLI directly.
+
 Call `create_lakebox_service` once:
 
 ```json

@@ -5,6 +5,9 @@ description: Deploy or run a network speed-test app as a Lakebox service using L
 
 # Network Speed Test
 
+Use the pinned Docker/OCI image through `create_lakebox_service`. Do not run a
+container CLI directly.
+
 Call `create_lakebox_service` once:
 
 ```json

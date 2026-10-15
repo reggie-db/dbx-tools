@@ -8,7 +8,7 @@
  * @module
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,6 +103,34 @@ export class GitIgnore {
   get(path: string): string | undefined {
     const relativePath = this.relativePath(path);
     return relativePath ? this.files.get(relativePath)?.content : undefined;
+  }
+
+  /**
+   * Synchronize the root and ancestor control files that can affect `path`.
+   *
+   * File watchers call this before evaluating a new filesystem event so a
+   * control-file event delayed by the operating system cannot admit a file
+   * under stale rules.
+   */
+  refreshPathSync(path: string): void {
+    const relativePath = this.relativePath(path);
+    if (!relativePath) return;
+    const directory = toPosix(dirname(relativePath));
+    const candidates = [".gitignore"];
+    let current = "";
+    for (const segment of directory === "." ? [] : directory.split("/")) {
+      current = current ? `${current}/${segment}` : segment;
+      candidates.push(`${current}/.gitignore`);
+    }
+    for (const candidate of candidates) {
+      const absolute = resolve(this.root, candidate);
+      if (!existsSync(absolute)) {
+        this.delete(candidate);
+        continue;
+      }
+      const content = readFileSync(absolute, "utf8");
+      if (this.get(candidate) !== content) this.set(candidate, content);
+    }
   }
 
   /** Whether a path is ignored after applying parent then nested rule files. */

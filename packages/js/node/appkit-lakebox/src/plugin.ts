@@ -202,7 +202,10 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
 
   /** Returns selected AppKit toolkit entries backed by this plugin's agent tools. */
   toolkit(options?: ToolkitOptions): Record<string, ToolkitEntry> {
-    return toolkitEntries.entries(LAKEBOX_PLUGIN_NAME, this.getAgentTools(), options);
+    return toolkitEntries.entries(LAKEBOX_PLUGIN_NAME, this.getAgentTools(), {
+      ...options,
+      prefix: options?.prefix ?? "",
+    });
   }
 
   /** Executes one registered agent tool for the current execution identity. */
