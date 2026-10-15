@@ -55,6 +55,14 @@ export function parseUniversalSearchResult(value: unknown): SearchResult {
   return searchSchemas.searchResultSchema.parse(value);
 }
 
+/** A single configured index is already the complete universal-search set. */
+export function usesUniversalSearchRoute(
+  universal: boolean | undefined,
+  indexCount: number,
+): boolean {
+  return universal === true && indexCount !== 1;
+}
+
 function toHits(
   results: Array<{ score: number; data: Record<string, unknown> }>,
   index: string | null,
@@ -76,6 +84,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
   const native = useAiSearchQuery({ ...(options.index ? { alias: options.index } : {}) });
   const debounceMs = options.debounceMs ?? 200;
   const minLength = options.minLength ?? 1;
+  const useUniversalRoute = usesUniversalSearchRoute(options.universal, native.indexes.length);
 
   const [query, setQueryState] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -93,7 +102,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
         setUniversalLoading(false);
         return;
       }
-      if (!options.universal) {
+      if (!useUniversalRoute) {
         const resolvedQueryType = searchSchemas.toAiSearchQueryType(options.mode);
         const request: AiSearchRequest = {
           queryText: text,
@@ -132,7 +141,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
         if (abortRef.current === controller) setUniversalLoading(false);
       }
     },
-    [minLength, native.alias, native.search, options.limit, options.mode, options.universal],
+    [minLength, native.alias, native.search, options.limit, options.mode, useUniversalRoute],
   );
 
   const setQuery = useCallback(
@@ -179,8 +188,8 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
     }),
     [native.alias, native.indexes, options.limit],
   );
-  const loading = options.universal ? universalLoading : native.loading;
-  const error = options.universal ? universalError : native.error;
+  const loading = useUniversalRoute ? universalLoading : native.loading;
+  const error = useUniversalRoute ? universalError : native.error;
   return useMemo(
     () => ({ query, setQuery, hits, loading, error, config, submit, clear }),
     [query, setQuery, hits, loading, error, config, submit, clear],
