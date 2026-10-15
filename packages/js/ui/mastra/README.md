@@ -223,9 +223,7 @@ new/select/delete conversations, history, suggestions, thoughts, exports, and
 stream cancellation. It does not support conversation rename, file
 attachments, MLflow feedback, approvals, background turns, or stream
 reconnection. The newest 100 conversations are listed and each selected
-conversation loads as one history page. When the server configures
-`managedMemory`, completed turns are mirrored for Databricks memory extraction;
-the visible transcript still comes only from Genie.
+conversation loads as one history page.
 
 ## Place The Conversation List
 

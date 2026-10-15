@@ -29,9 +29,9 @@
  * (auto-defaulted to `true` in `plugin.ts` when the `lakebase` plugin
  * is registered); per-agent settings cascade on top of that.
  *
- * `config.managedMemory` replaces each agent's Postgres memory domain with a
- * Databricks Agent Session Store and adds managed-memory recall as an input
- * processor. Instance-level workflow storage remains Postgres when configured.
+ * `config.managedMemory` adds Databricks Agent Memory recall as an input
+ * processor. PostgresStore remains the thread/message owner and PgVector
+ * remains available for Mastra semantic recall.
  *
  * @module
  */
@@ -233,8 +233,8 @@ export class MemoryBuilder {
     const storageSetting = def.storage ?? this.config.storage;
     const memorySetting = def.memory ?? this.config.memory;
 
-    const storage = this.managed?.storage(agentId) ?? this.buildStorage(agentId, storageSetting);
-    const vector = this.managed ? undefined : this.buildVector(memorySetting);
+    const storage = this.buildStorage(agentId, storageSetting);
+    const vector = this.buildVector(memorySetting);
     if (!storage && !vector) {
       logger.debug("agent:stateless", { agentId });
       return undefined;
@@ -277,10 +277,11 @@ export class MemoryBuilder {
     return processor ? [processor] : [];
   }
 
-  private buildStorage(
-    agentId: string,
-    setting: StorageSetting,
-  ): ReturnType<ManagedMemoryRuntime["storage"]> | PostgresStore | undefined {
+  managedTools(requestContext?: RequestContext) {
+    return this.managed?.tools(requestContext) ?? Promise.resolve({});
+  }
+
+  private buildStorage(agentId: string, setting: StorageSetting): PostgresStore | undefined {
     if (!setting) return undefined;
     if (typeof setting === "boolean") {
       if (!this.servicePrincipalPool) return undefined;

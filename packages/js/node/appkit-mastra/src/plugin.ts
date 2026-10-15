@@ -111,7 +111,7 @@ import {
   type MastraIdentityMode,
 } from "./identity.ts";
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
-import { createMemoryBuilder, needsLakebase, type MemoryBuilder } from "./memory.ts";
+import { createMemoryBuilder, needsLakebase } from "./memory.ts";
 import {
   flushDirectMlflowTracing,
   logFeedback,
@@ -244,7 +244,6 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * {@link buildAgentAndServer} and registered on the Mastra instance.
    */
   private mcp: ResolvedMcp | null = null;
-  private memoryBuilder: MemoryBuilder | undefined;
   /**
    * Resolved {@link MastraIdentityMode}: the identity the chat path's Databricks
    * calls run as. Read once at setup so an invalid `genieIdentity` fails the app
@@ -884,26 +883,12 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   ): Promise<void> {
     const context = getExecutionContext();
     const client = context.client;
-    const managedMemory = this.memoryBuilder?.managed;
-    const actorId = managedMemory ? executionContextUserId(context) : undefined;
     await pipeUIMessageStreamToResponse({
       response: res,
       stream: genieChatStream({
         client,
         space,
         request,
-        ...(managedMemory && actorId
-          ? {
-              onResult: ({ message, answer }) =>
-                managedMemory.recordGenieTurn({
-                  actorId,
-                  alias: space.alias,
-                  conversationId: message.conversation_id,
-                  question: request.question,
-                  answer,
-                }),
-            }
-          : {}),
         signal,
       }),
     });
@@ -1279,7 +1264,6 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       memoryPool || this.config.managedMemory
         ? createMemoryBuilder(this.config, getExecutionContext().client, memoryPool)
         : undefined;
-    this.memoryBuilder = memoryBuilder;
 
     // Build every agent declared in `config.agents` (or the built-in
     // fallback when none are declared). Each agent's `model` resolves

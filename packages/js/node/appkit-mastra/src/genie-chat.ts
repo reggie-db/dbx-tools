@@ -214,10 +214,9 @@ export function genieChatStream(options: {
   client: WorkspaceClient;
   space: GenieChatSpace;
   request: GenieChatRequest;
-  onResult?: (result: { message: GenieMessage; answer: string }) => Promise<void>;
   signal?: AbortSignal;
 }): ReadableStream<UIMessageChunk> {
-  const { client, space, request, onResult, signal } = options;
+  const { client, space, request, signal } = options;
   const toolCallId = hash.id();
   const toolName = askGenieToolId(space.alias);
   return createUIMessageStream({
@@ -295,14 +294,6 @@ export function genieChatStream(options: {
       );
       writer.write({ type: "finish-step" });
       const answer = genieAnswerText(finalMessage);
-      if (onResult) {
-        void onResult({ message: finalMessage, answer }).catch((error) => {
-          logger.warn("managed-memory:error", {
-            conversationId: finalMessage.conversation_id,
-            error: errorUtils.toError(error),
-          });
-        });
-      }
       if (answer) {
         const textId = hash.id();
         writer.write({ type: "start-step" });

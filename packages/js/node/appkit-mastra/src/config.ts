@@ -232,11 +232,8 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   memory?: boolean | MastraMemoryConfig;
   /**
-   * Databricks-managed short-term sessions and long-term memory.
-   *
-   * When configured, Agent Sessions replace the agent's Mastra message/thread
-   * storage. A `memoryStore` also adds actor-scoped managed-memory search to
-   * every model turn through a native Mastra input processor.
+   * Add actor-scoped Databricks Agent Memory recall to every model turn.
+   * Mastra keeps its configured PostgresStore and PgVector memory.
    */
   managedMemory?: ManagedMemoryConfig;
   /**
@@ -713,29 +710,19 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     managedMemory: {
       type: ["boolean", "object"],
       properties: {
-        sessionStore: {
-          type: "string",
-          description: "Existing Databricks Agent Session Store id or resource name.",
-        },
         memoryStore: {
-          type: ["string", "boolean"],
-          description:
-            "Existing Databricks Agent Memory Store id or resource name. False disables long-term memory.",
+          type: "string",
+          description: "Existing Databricks Agent Memory Store id or resource name.",
         },
         recall: {
           type: ["boolean", "object"],
           description:
             "Managed-memory search on each user turn. False disables it; an object accepts topK and pathPrefix.",
         },
-        extractAfterTurn: {
-          type: ["boolean", "object"],
-          description:
-            "Extract managed memories after each completed Mastra or direct Genie turn. Defaults to true when a memory store is configured; an object accepts extraction instructions.",
-        },
       },
       additionalProperties: false,
       description:
-        "Use Databricks Agent Sessions for Mastra short-term memory and Agent Memory search for long-term context. True or omitted store ids use the normalized project name.",
+        "Add Databricks Agent Memory search to Mastra while retaining PostgresStore and PgVector. True or an omitted memoryStore uses the normalized project name.",
     },
     codeMode: {
       type: ["boolean", "object"],

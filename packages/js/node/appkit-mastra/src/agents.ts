@@ -815,12 +815,15 @@ export async function buildAgents(opts: {
           },
           memory ? requestContext : undefined,
         ),
-      tools: resolveCodeMode
-        ? async (args) => {
-            const codeMode = await resolveCodeMode(args);
-            return codeMode ? { ...tools, [codeMode.tool.id]: codeMode.tool } : tools;
-          }
-        : tools,
+      tools:
+        resolveCodeMode || memoryBuilder?.managed
+          ? async (args) => {
+              const managedTools = await memoryBuilder?.managedTools(args.requestContext);
+              const scopedTools = { ...tools, ...managedTools };
+              const codeMode = resolveCodeMode ? await resolveCodeMode(args) : undefined;
+              return codeMode ? { ...scopedTools, [codeMode.tool.id]: codeMode.tool } : scopedTools;
+            }
+          : tools,
       ...(memory ? { memory } : {}),
       ...(workspace ? { workspace } : {}),
       inputProcessors: [

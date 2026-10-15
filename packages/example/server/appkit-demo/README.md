@@ -53,11 +53,10 @@ await appkit.createApp({
   `send_email` tool: the model can call it, but the send suspends until the user
   approves it in the chat UI.
 - `lakebase()` (AppKit) — backs Mastra Memory.
-- `DBX_TOOLS_MANAGED_MEMORY=true` replaces Mastra thread/message storage with
-  Databricks Agent Sessions and enables actor-scoped Agent Memory recall. Both
-  store ids default to the normalized `projectUtils.name()` value;
-  `DATABRICKS_AGENT_SESSION_STORE_ID` and
-  `DATABRICKS_AGENT_MEMORY_STORE_ID` override existing resource ids.
+- `DBX_TOOLS_MANAGED_MEMORY=true` adds actor-scoped Databricks Agent Memory
+  recall while retaining PostgresStore and PgVector. The memory store id
+  defaults to normalized `projectUtils.name()`;
+  `DATABRICKS_AGENT_MEMORY_STORE_ID` overrides it.
 - `graphiti()` from
   [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
   the unified Python Graphiti runtime and contributes its OpenAPI-derived,

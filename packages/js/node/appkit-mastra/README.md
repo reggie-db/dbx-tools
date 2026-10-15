@@ -261,10 +261,10 @@ With `lakebase()` registered, both default to enabled:
 Without `lakebase()`, agents are stateless unless you provide explicit storage
 and memory configs.
 
-### Use Databricks Managed Sessions And Memory
+### Add Databricks Agent Memory Recall
 
-Point `managedMemory` at existing Databricks Agent Session and Agent Memory
-stores:
+Keep Mastra's PostgresStore and PgVector memory, then add actor-scoped recall
+from an existing Databricks Agent Memory Store:
 
 ```ts
 mastra({
@@ -273,39 +273,26 @@ mastra({
 });
 ```
 
-`true` derives both store ids from `projectUtils.name()` and normalizes the
-value to the Databricks resource-name rules. Pass `{ sessionStore,
-memoryStore }` to select existing stores explicitly, or `memoryStore: false`
-for managed sessions without long-term recall.
+`true` derives the memory store id from `projectUtils.name()` and normalizes it
+to Databricks resource-name rules. Pass `{ memoryStore, recall }` to select an
+existing store and tune `topK` or `pathPrefix`.
 
-Agent Sessions implement Mastra's native `MemoryStorage` domain. Mastra thread
-ids become session ids, the trusted memory resource id becomes `actor_id`, and
-messages are stored as append-only session items. Message updates append a newer
-snapshot and message deletes append a tombstone, which preserves Mastra's
-mutable message view over Agent Sessions' immutable item log.
+A native Mastra input processor searches the actor's managed memory on every
+user turn and adds matching entries only to that model request. The recalled
+context is not copied into Postgres history. PgVector semantic recall remains
+enabled independently through the existing `memory` option.
 
-When `memoryStore` is set, a native Mastra input processor searches the actor's
-managed memory on every user turn and adds the matching entries only to that
-model request. The recalled context is not copied into thread history. Search
-uses Databricks' BM25 ranking and accepts `topK` and `pathPrefix`; set
-`recall: false` to keep managed sessions without long-term recall.
-
-Provision the stores and their permissions separately. The adapter does not
-create or delete workspace-level stores at application startup. A scheduled
-[Agent Memory Pipeline](https://docs.databricks.com/aws/en/agents/agent-memory/memory-pipelines)
-can distill the managed sessions into the memory store. The exported
-`ManagedAgentMemoryClient` also exposes `runMemoryPipeline()` and
-`extractSession()` for explicit orchestration.
-
-Direct Genie still reads turns and history only from the Genie Agent API. After
-a completed turn, the plugin can mirror the user question and assistant answer
-to the configured Agent Session. By default, both Mastra and direct Genie turns
-invoke managed-memory extraction after the assistant response is persisted.
-Set `extractAfterTurn: false` to rely only on a scheduled pipeline, or pass
-`{ instructions }` to steer synchronous extraction. The direct Genie hook does
-not delay or replace the response. Managed-memory recall is not injected into
-Genie because the Genie Agent response API accepts only one user message and no
+Provision the Agent Memory Store and its permissions separately. This adapter
+does not use Agent Sessions, session extraction, or memory pipelines. Direct
+Genie remains unchanged because the Genie Agent response API accepts no
 separate system/context field.
+
+At the start of a user-scoped turn, the adapter checks whether that caller can
+read the configured store. Accessible turns receive a native Mastra `remember`
+tool that writes with Agent Memory's overwrite mode. When access is unavailable,
+the tool is omitted and recall is skipped. Apps that register Graphiti keep its
+`add_memory` and search tools, so they remain the model's durable-memory
+fallback without a failing managed-memory tool in the tool set.
 
 `actor_id` partitions list and search operations but is not an access-control
 boundary. The adapter derives it from the trusted AppKit memory resource or OBO
@@ -1197,10 +1184,8 @@ The main plugin options are:
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
-- `managedMemory` replaces per-agent thread/message storage with an existing
-  Databricks Agent Session Store and optionally recalls from an Agent Memory
-  Store on every turn. It also controls direct Genie turn mirroring and
-  synchronous extraction.
+- `managedMemory` adds actor-scoped Databricks Agent Memory search to every
+  Mastra user turn while retaining PostgresStore and PgVector.
 - `sandbox` defaults to Monty for auto-created workspaces. `false` disables
   command execution; `true` or `"monty"` selects Monty; a native Mastra
   sandbox or resolver supplies another transport.
@@ -1276,8 +1261,8 @@ Clients that call these routes can import the browser-safe schemas from
   style block, the summarizer, and the thread titler all append, so a summary or
   a thread title cannot drift from the prose it sits beside.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
-- `managedMemory` - Databricks Agent Session `MemoryStorage`, Agent Memory
-  recall processor, extraction, and memory-pipeline REST client.
+- `managedMemory` - Databricks Agent Memory REST client and native Mastra recall
+  processor.
 - `montySandbox` - Python-only Pydantic Monty fallback using Node subprocess
   workers.
 - `workspaces` / `filesystems` - native Mastra workspace configuration from
