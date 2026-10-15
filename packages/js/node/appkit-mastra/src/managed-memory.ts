@@ -256,7 +256,12 @@ export class ManagedAgentMemoryClient {
         .join("/")}?update_mask=content,description`,
       {
         method: "PATCH",
-        body: memoryPayload(input),
+        body: {
+          actor_id: input.actorId,
+          path: input.path,
+          content: input.content,
+          ...(input.description ? { description: input.description } : {}),
+        },
         ...(input.signal ? { signal: input.signal } : {}),
       },
     );
