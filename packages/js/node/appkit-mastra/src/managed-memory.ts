@@ -36,7 +36,7 @@ const PAGE_SIZE = 100;
 const AGENT_METADATA_KEY = "agent_id";
 const TITLE_METADATA_KEY = "title";
 const THREAD_METADATA_KEY = "thread_metadata";
-const MESSAGE_ITEM_TYPE = "mastra_message";
+const MESSAGE_ITEM_TYPE = "message";
 const DELETE_ITEM_TYPE = "mastra_message_delete";
 const MEMORY_CONTEXT_HEADING = "Relevant long-term memory";
 
@@ -204,7 +204,11 @@ export type MemoryPipelineRun = z.infer<typeof MemoryPipelineRunSchema>;
 const StoredMessageSchema = z
   .object({
     type: z.literal(MESSAGE_ITEM_TYPE).describe("Mastra message item discriminator."),
-    message: z
+    role: z
+      .enum(["user", "assistant", "system", "signal"])
+      .describe("SDK-native message role used by managed memory extraction."),
+    content: z.string().describe("Plain text used by managed memory extraction."),
+    mastra_message: z
       .object({
         id: z.string().describe("Mastra message identifier."),
         role: z.enum(["user", "assistant", "system", "signal"]).describe("Mastra message role."),
@@ -215,7 +219,6 @@ const StoredMessageSchema = z
         content: z.record(z.string(), z.unknown()).describe("Mastra format-2 message content."),
       })
       .describe("Serialized Mastra database message."),
-    text: z.string().optional().describe("Plain text retained for memory extraction."),
   })
   .describe("Mastra message stored as an Agent Session item.");
 
@@ -500,6 +503,7 @@ export class ManagedAgentMemoryClient {
 export class ManagedSessionMemoryStorage extends MemoryStorage {
   readonly supportsPartialThreadUpdate = true;
   private readonly creating = new Map<string, Promise<AgentSession>>();
+  private readonly writing = new Map<string, Promise<void>>();
 
   constructor(
     private readonly memory: ManagedAgentMemoryClient,
@@ -615,22 +619,31 @@ export class ManagedSessionMemoryStorage extends MemoryStorage {
         const resourceId = grouped.find((message) => message.resourceId)?.resourceId;
         if (!resourceId) throw new Error(`Messages for thread ${threadId} require resourceId`);
         await this.ensureSession(threadId, resourceId);
-        await this.memory.appendSessionItems(
-          threadId,
-          grouped.map((message) => storedMessage(message)),
-        );
-        if (
-          this.memory.memoryStore &&
-          this.extractAfterTurn !== false &&
-          grouped.some((message) => message.role === "assistant")
-        ) {
-          await this.memory.extractSession({
-            sessionId: threadId,
-            ...(typeof this.extractAfterTurn === "object" && this.extractAfterTurn.instructions
-              ? { instructions: this.extractAfterTurn.instructions }
-              : {}),
-          });
-        }
+        await this.withSessionWrite(threadId, async () => {
+          const existing = new Map(
+            (await this.messagesForSession(threadId)).map((message) => [message.id, message]),
+          );
+          const changed = grouped.filter(
+            (message) => !object.deepEqual(existing.get(message.id), message),
+          );
+          if (changed.length === 0) return;
+          await this.memory.appendSessionItems(
+            threadId,
+            changed.map((message) => storedMessage(message)),
+          );
+          if (
+            this.memory.memoryStore &&
+            this.extractAfterTurn !== false &&
+            changed.some((message) => message.role === "assistant")
+          ) {
+            await this.memory.extractSession({
+              sessionId: threadId,
+              ...(typeof this.extractAfterTurn === "object" && this.extractAfterTurn.instructions
+                ? { instructions: this.extractAfterTurn.instructions }
+                : {}),
+            });
+          }
+        });
       }),
     );
     return { messages };
@@ -797,12 +810,24 @@ export class ManagedSessionMemoryStorage extends MemoryStorage {
     return creation;
   }
 
+  private async withSessionWrite(sessionId: string, write: () => Promise<void>): Promise<void> {
+    const previous = this.writing.get(sessionId) ?? Promise.resolve();
+    const current = previous
+      .catch(() => undefined)
+      .then(write)
+      .finally(() => {
+        if (this.writing.get(sessionId) === current) this.writing.delete(sessionId);
+      });
+    this.writing.set(sessionId, current);
+    await current;
+  }
+
   private async messagesForSession(sessionId: string): Promise<MastraDBMessage[]> {
     const current = new Map<string, MastraDBMessage>();
     for (const item of await this.memory.listSessionItems(sessionId)) {
       const stored = StoredMessageSchema.safeParse(item.data);
       if (stored.success) {
-        current.set(stored.data.message.id, deserializeMessage(stored.data.message));
+        current.set(stored.data.mastra_message.id, deserializeMessage(stored.data.mastra_message));
         continue;
       }
       const deleted = DeletedMessageSchema.safeParse(item.data);
@@ -1012,7 +1037,9 @@ function filterString(value: string): string {
 function storedMessage(message: MastraDBMessage): Record<string, unknown> {
   return {
     type: MESSAGE_ITEM_TYPE,
-    message: {
+    role: message.role,
+    content: messageText(message),
+    mastra_message: {
       id: message.id,
       role: message.role,
       createdAt: message.createdAt.toISOString(),
@@ -1021,12 +1048,11 @@ function storedMessage(message: MastraDBMessage): Record<string, unknown> {
       ...(message.type ? { messageType: message.type } : {}),
       content: message.content,
     },
-    ...(messageText(message) ? { text: messageText(message) } : {}),
   };
 }
 
 function deserializeMessage(
-  value: z.infer<typeof StoredMessageSchema>["message"],
+  value: z.infer<typeof StoredMessageSchema>["mastra_message"],
 ): MastraDBMessage {
   return {
     id: value.id,
