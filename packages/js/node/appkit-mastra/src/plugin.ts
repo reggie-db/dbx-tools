@@ -769,11 +769,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       handler: async (req, res) => {
         const space = spaceFor(req, res);
         if (!space) return;
-        const signal = closeSignal(res);
         const result = await this.asUser(req).genieConversationRead((client) =>
-          listGenieThreads(client, space, signal),
+          listGenieThreads(client, space),
         );
-        if (signal.aborted) return;
         if (!result.ok) {
           this.sendFailure(res, result, "genie-threads", "Could not list Genie conversations");
           return;
@@ -789,16 +787,13 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         const space = spaceFor(req, res);
         if (!space) return;
         const threadId = stringUtils.firstNonEmpty(req.params.threadId) ?? "";
-        const signal = closeSignal(res);
         const result = await this.asUser(req).genieConversationRead((client) =>
           listGenieThreadMessages({
             client,
             space,
             conversationId: threadId,
-            signal,
           }),
         );
-        if (signal.aborted) return;
         if (!result.ok) {
           this.sendFailure(res, result, "genie-messages", "Could not load the Genie conversation");
           return;
@@ -860,11 +855,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       handler: async (req, res) => {
         const space = spaceFor(req, res);
         if (!space) return;
-        const signal = closeSignal(res);
-        const result = await this.asUser(req).fetchSuggestions(signal, {
+        const result = await this.asUser(req).fetchSuggestions(undefined, {
           [space.alias]: { spaceId: space.spaceId },
         });
-        if (signal.aborted) return;
         res.json({ questions: result.ok ? result.data : [] });
       },
     });

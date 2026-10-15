@@ -534,7 +534,6 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       activeThreadId !== requestedThreadId ||
       isLoadingThreads ||
       threadsError ||
-      genieClient ||
       localThreadIdsRef.current.has(requestedThreadId) ||
       optimisticThreads[requestedThreadId] ||
       threads.some((thread) => thread.id === requestedThreadId) ||
@@ -550,7 +549,6 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     activeRunsKey,
     activeThreadId,
     enableThreads,
-    genieClient,
     hydratedThreadKey,
     isLoadingThreads,
     mintThreadId,
@@ -563,9 +561,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   ]);
   const historyAvailability = isLoadingThreads
     ? "loading"
-    : threads.some((thread) => thread.id === activeThreadId) ||
-        optimisticThreads[activeThreadId] ||
-        (genieClient && requestedThreadId === activeThreadId)
+    : threads.some((thread) => thread.id === activeThreadId) || optimisticThreads[activeThreadId]
       ? "present"
       : "missing";
   const { isLoadingHistory, isLoadingMore, loadOlderHistory } = useChatHistory({
