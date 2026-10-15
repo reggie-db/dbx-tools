@@ -31,6 +31,8 @@ import {
 } from "@mastra/core/storage";
 import { z } from "zod";
 
+import { databricksFetch, readResponseJson } from "./rest.ts";
+
 const logger = log.logger("mastra/managed-memory");
 const PAGE_SIZE = 100;
 const AGENT_METADATA_KEY = "agent_id";
@@ -476,20 +478,42 @@ export class ManagedAgentMemoryClient {
     options?: { query?: Record<string, string | number | boolean>; payload?: unknown },
     signal?: AbortSignal,
   ): Promise<unknown> {
-    return this.client.apiClient.request(
-      {
-        path,
-        method,
-        headers: new Headers({
-          accept: "application/json",
-          ...(options?.payload !== undefined ? { "content-type": "application/json" } : {}),
-        }),
-        raw: false,
-        ...(options?.query ? { query: options.query } : {}),
-        ...(options?.payload !== undefined ? { payload: options.payload } : {}),
-      },
-      signal ? databricks.toContext(signal) : undefined,
-    );
+    if (method !== "PATCH") {
+      return this.client.apiClient.request(
+        {
+          path,
+          method,
+          headers: new Headers({
+            accept: "application/json",
+            ...(options?.payload !== undefined ? { "content-type": "application/json" } : {}),
+          }),
+          raw: false,
+          ...(options?.query ? { query: options.query } : {}),
+          ...(options?.payload !== undefined ? { payload: options.payload } : {}),
+        },
+        signal ? databricks.toContext(signal) : undefined,
+      );
+    }
+    const query = new URLSearchParams();
+    for (const [name, value] of Object.entries(options?.query ?? {})) {
+      query.set(name, String(value));
+    }
+    const requestPath = query.size > 0 ? `${path}?${query}` : path;
+    return databricksFetch(this.client, requestPath, {
+      method,
+      ...(options?.payload !== undefined ? { body: options.payload } : {}),
+      ...(signal ? { signal } : {}),
+    }).then(async (response) => {
+      const body = await readResponseJson(response);
+      if (response.ok) return body;
+      throw Object.assign(
+        new Error(`Databricks Agent Memory request failed (${response.status})`),
+        {
+          statusCode: response.status,
+          response: body,
+        },
+      );
+    });
   }
 }
 
