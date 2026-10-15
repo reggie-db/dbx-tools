@@ -58,6 +58,28 @@ describe("genieAnswerText", () => {
     expect(text).toBe("Sales dipped, then recovered.\n\n[visualization:stmt-1]\n\n[data:stmt-2]");
   });
 
+  test("keeps native visualization placeholders in the answer's prose order", () => {
+    const text = genieAnswerText(
+      genieMessage({
+        attachments: [
+          { attachment_id: "q1", query: { query: "SELECT 1", statement_id: "stmt-1" } },
+          { attachment_id: "v1", viz: { query_attachment_id: "q1" } },
+          { attachment_id: "q2", query: { query: "SELECT 2", statement_id: "stmt-2" } },
+          { attachment_id: "v2", viz: { query_attachment_id: "q2" } },
+          { text: { content: "Overview." } },
+          { text: { content: "", metadata: { viz: { attachment_id: "v1" } } } },
+          { text: { content: "Inside sales improved." } },
+          { text: { content: "", metadata: { viz: { attachment_id: "v2" } } } },
+          { text: { content: "Fuel revenue rose because of pricing." } },
+        ],
+      }),
+    );
+
+    expect(text).toBe(
+      "Overview.\n\n[visualization:stmt-1]\n\nInside sales improved.\n\n[visualization:stmt-2]\n\nFuel revenue rose because of pricing.",
+    );
+  });
+
   test("falls back to the Genie error for an empty failed message", () => {
     const text = genieAnswerText(
       genieMessage({ status: "FAILED", attachments: [], error: { error: "Warehouse stopped" } }),

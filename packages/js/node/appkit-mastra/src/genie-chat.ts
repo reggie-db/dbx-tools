@@ -50,38 +50,67 @@ export interface GenieChatSpace {
 }
 
 /**
- * Compose the visible answer for one terminal Genie message: its narrative text
- * first, then one embed per query that produced a warehouse statement. A query
- * Genie chose to visualize embeds `[visualization:<statement_id>]`, which
- * AppKit UI renders with its native Genie visualization. Any other query embeds
- * `[data:<statement_id>]`. Agent Mode's Markdown copy of a query result is
- * dropped because either embed renders the same rows.
+ * Compose the visible answer for one terminal Genie message. Agent Mode puts an
+ * empty `output_text` part with `metadata.viz.attachment_id` wherever a native
+ * visualization belongs, so those placeholders become AppKit visualization
+ * markers in the same prose position. Query outputs without an inline
+ * placeholder are appended after the narrative as data or visualization embeds.
+ * Agent Mode's Markdown copy of a query result is dropped because either embed
+ * renders the same rows.
  */
 export function genieAnswerText(message: GenieMessage): string {
   const attachments = message.attachments ?? [];
-  const visualizedQueries = new Set(
-    attachments.flatMap((attachment) =>
-      attachment.viz?.query_attachment_id ? [attachment.viz.query_attachment_id] : [],
-    ),
-  );
-  const prose: string[] = [];
-  const embeds: string[] = [];
+  const statementsByQuery = new Map<string, string>();
+  const queriesByVisualization = new Map<string, string>();
+  const visualizedQueries = new Set<string>();
   for (const attachment of attachments) {
-    const text = attachment.text?.content?.trim();
-    if (text && !isQueryOutputText(attachment.text?.metadata)) prose.push(text);
     const statementId = attachment.query?.statement_id;
-    if (!statementId) continue;
+    if (statementId && attachment.attachment_id) {
+      statementsByQuery.set(attachment.attachment_id, statementId);
+    }
+    if (attachment.attachment_id && attachment.viz?.query_attachment_id) {
+      queriesByVisualization.set(attachment.attachment_id, attachment.viz.query_attachment_id);
+      visualizedQueries.add(attachment.viz.query_attachment_id);
+    }
+  }
+
+  const sections: string[] = [];
+  const inlineStatements = new Set<string>();
+  for (const attachment of attachments) {
+    if (!attachment.text) continue;
+    if (isQueryOutputText(attachment.text.metadata)) continue;
+    const visualizationId = visualizationAttachmentId(attachment.text.metadata);
+    if (visualizationId) {
+      const queryId = queriesByVisualization.get(visualizationId);
+      const statementId = queryId ? statementsByQuery.get(queryId) : undefined;
+      if (statementId) {
+        sections.push(markers.formatMarker("visualization", statementId));
+        inlineStatements.add(statementId);
+      }
+      continue;
+    }
+    const text = attachment.text.content?.trim();
+    if (text) sections.push(text);
+  }
+
+  for (const attachment of attachments) {
+    const statementId = attachment.query?.statement_id;
+    if (!statementId || inlineStatements.has(statementId)) continue;
     const description = attachment.query?.description?.trim();
-    if (description) embeds.push(description);
-    embeds.push(
-      visualizedQueries.has(attachment.attachment_id ?? "")
+    if (description) sections.push(description);
+    sections.push(
+      attachment.attachment_id && visualizedQueries.has(attachment.attachment_id)
         ? markers.formatMarker("visualization", statementId)
         : markers.formatMarker("data", statementId),
     );
   }
-  const sections = [...prose, ...embeds];
   if (sections.length === 0 && message.error?.error) sections.push(message.error.error);
   return sections.join("\n\n");
+}
+
+function visualizationAttachmentId(metadata: unknown): string | undefined {
+  if (!object.isRecord(metadata) || !object.isRecord(metadata.viz)) return undefined;
+  return typeof metadata.viz.attachment_id === "string" ? metadata.viz.attachment_id : undefined;
 }
 
 /** Whether a text attachment is Agent Mode's Markdown copy of a query result. */

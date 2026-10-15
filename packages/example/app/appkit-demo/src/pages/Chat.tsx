@@ -1,4 +1,5 @@
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
+import { SparklesIcon } from "lucide-react";
 import { useState } from "react";
 import { useChatThreadQuery } from "@/hooks/use-chat-thread-query";
 
@@ -13,9 +14,10 @@ const Chat = () => {
 
   const genieOnlyControl = (
     <label
-      className="flex h-7 cursor-pointer items-center gap-2 rounded-sm px-2 text-xs text-foreground hover:bg-accent"
+      className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-xs text-foreground hover:bg-accent"
       title="Use direct Genie conversations instead of the tool-using support agent"
     >
+      <SparklesIcon className="size-4 shrink-0 text-[#FF3621]" aria-hidden />
       <input
         name="genie-only"
         type="checkbox"
@@ -34,7 +36,6 @@ const Chat = () => {
       threadId={thread.threadId}
       onThreadIdChange={thread.onThreadIdChange}
       enableExport
-      threadHistoryLeadingActions={genieOnlyControl}
       threadSidebarHeaderActions={genieOnlyControl}
       className="min-h-0 flex-1"
     />

@@ -139,37 +139,41 @@ export const ThreadSidebar = ({
       )}
     >
       {(onNew || headerActions || onHide) && (
-        <div className="flex items-center gap-2 p-2">
-          {onNew && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onNew}
-              className="flex-1 justify-start gap-2"
-            >
-              <MessageSquarePlusIcon className="size-4" />
-              New chat
-            </Button>
-          )}
-          {headerActions}
-          {onHide && (
-            <Tooltip>
-              <TooltipTrigger asChild>
+        <div className="flex flex-col gap-1 p-2">
+          {(onNew || onHide) && (
+            <div className="flex items-center gap-2">
+              {onNew && (
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={onHide}
-                  aria-label="Hide conversations"
-                  className={cn("size-8 shrink-0", !onNew && "ml-auto")}
+                  variant="outline"
+                  size="sm"
+                  onClick={onNew}
+                  className="flex-1 justify-start gap-2"
                 >
-                  <HideIcon className="size-4" />
+                  <MessageSquarePlusIcon className="size-4" />
+                  New chat
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>Hide conversations</TooltipContent>
-            </Tooltip>
+              )}
+              {onHide && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={onHide}
+                      aria-label="Hide conversations"
+                      className={cn("size-8 shrink-0", !onNew && "ml-auto")}
+                    >
+                      <HideIcon className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Hide conversations</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           )}
+          {headerActions ? <div className="min-w-0">{headerActions}</div> : null}
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable]">

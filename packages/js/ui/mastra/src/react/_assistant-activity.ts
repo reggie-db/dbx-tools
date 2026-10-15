@@ -20,10 +20,13 @@ export const assistantActivityItems = (
     if (renderedEventIds.has(event.id)) return;
     renderedEventIds.add(event.id);
     items.push({ type: "tool", key: `tool-${event.id}`, event });
-    for (const [index, progress] of (event.progress ?? []).entries()) {
-      if (progress.type !== "thinking") continue;
+    const thoughts = (event.progress ?? []).flatMap((progress) => {
+      if (progress.type !== "thinking") return [];
       const text = compactReasoningText(progress.text);
-      if (text) items.push({ type: "thought", key: `thought-${event.id}-${index}`, text });
+      return text ? [text] : [];
+    });
+    if (thoughts.length > 0) {
+      items.push({ type: "thought", key: `thought-${event.id}`, text: thoughts.join("\n\n") });
     }
   };
 

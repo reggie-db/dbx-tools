@@ -106,8 +106,13 @@ export const EmailPreview = ({ email, brand }: EmailPreviewProps) => {
           </ul>
         ) : null}
       </div>
-      <div style={{ backgroundColor: theme.surface }}>
-        <EmailCard subject={subject} body={email.body || ""} brand={theme} framed={false} />
+      <div className="p-3 sm:p-4" style={{ backgroundColor: theme.background }}>
+        <div
+          className="overflow-hidden rounded-xl border"
+          style={{ borderColor: theme.border, backgroundColor: theme.surface }}
+        >
+          <EmailCard subject={subject} body={email.body || ""} brand={theme} framed={false} />
+        </div>
       </div>
     </div>
   );

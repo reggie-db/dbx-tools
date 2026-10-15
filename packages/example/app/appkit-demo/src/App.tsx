@@ -85,13 +85,21 @@ const BASE_ROUTES: RouteDef[] = [
         "Streaming answers with governed tools, approvals, charts, and tables",
         "Persistent threads, history, model selection, export, and MLflow feedback",
         "Direct Genie conversations without a second application surface",
+        "Mastra skills, memory, and search tools behind one authenticated AppKit route",
+        "Consistent citations and visualization rendering across agent and Genie responses",
       ],
       useCases: [
         "A data-platform copilot that can search, query Genie, and request approved actions",
         "An analyst Q&A experience where Genie owns the conversation and visualizations",
         "A support assistant that keeps user context across multiple work sessions",
+        "An operations agent that drafts email or external actions for human approval",
+        "A governed assistant that traces every turn and captures reviewer feedback in MLflow",
       ],
       docs: [
+        {
+          label: "Configure a Mastra agent",
+          href: docsUrl("guides/agents-and-genie/#register-a-mastra-agent"),
+        },
         {
           label: "Render Mastra chat",
           href: docsUrl("guides/agents-and-genie/#render-mastra-chat"),
@@ -115,20 +123,28 @@ const BASE_ROUTES: RouteDef[] = [
         "Browser terminal and desktop access with persistent user homes",
         "App-routed OCI services created from governed agent tools",
         "User isolation, service controls, and live machine-level metrics",
+        "Repeatable showcase recipes an agent can deploy without exposing Docker access",
+        "One app-owned runtime with deterministic user routing and no workload credentials",
       ],
       useCases: [
         "Run data-science tools that need a full Linux environment beside an AppKit app",
         "Let an agent create and manage a temporary visualization or development service",
         "Provide durable workspaces for workshops, investigations, or operator workflows",
+        "Create a self-contained 3D dog scene and deploy it as a routed browser service",
+        "Deploy an MS Paint-style editor or a platformer game from the Lakebox showcase skill",
       ],
       docs: [
         {
-          label: "Render Lakebox controls",
-          href: docsUrl("guides/lakebox/#render-lakebox-controls"),
+          label: "Configure Lakebox",
+          href: docsUrl("packages/appkit-lakebox/#register-the-plugin"),
         },
         {
           label: "Create a Lakebox service",
           href: docsUrl("packages/appkit-lakebox/#create-a-service"),
+        },
+        {
+          label: "Render Lakebox controls",
+          href: docsUrl("guides/lakebox/#render-lakebox-controls"),
         },
       ],
     },
@@ -145,11 +161,15 @@ const BASE_ROUTES: RouteDef[] = [
         "Search-as-you-type over a configured index",
         "Universal search across multiple indexes with merged results",
         "The same search contract for React screens and Mastra agent tools",
+        "A provider switch between governed Vector Search and Lakebase full-text search",
+        "Index lifecycle APIs for seeding demos, updating documents, and deleting test data",
       ],
       useCases: [
         "Search product, support, or policy knowledge from an internal application",
         "Let an agent retrieve grounded records before it answers or acts",
         "Prototype locally with Lakebase, then move to governed Vector Search",
+        "Build result cards that update while a user types without a separate search service",
+        "Search multiple governed domains while preserving each hit's source index and score",
       ],
       docs: [
         {
@@ -175,11 +195,15 @@ const BASE_ROUTES: RouteDef[] = [
         "Low-latency topic broadcasts across app replicas and connected clients",
         "Typed envelopes with sender identity and application metadata",
         "Optional persisted replay when consumers need to catch up",
+        "SSE delivery to browsers without adding a separate broker or websocket service",
+        "App-scoped topics that keep replica coordination separate from business data tables",
       ],
       useCases: [
         "Refresh dashboards when a long-running workflow completes",
         "Broadcast agent progress or shared operator events to every viewer",
         "Coordinate cache invalidation or lightweight work signals across replicas",
+        "Notify reviewers when an approval request or background export is ready",
+        "Keep multiple operator screens synchronized during an incident or rollout",
       ],
       docs: [
         {
@@ -416,11 +440,7 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
       <div className="flex h-full flex-col">
         <AssistantRouteContext />
         <header className="demo-header shrink-0">
-          <Nav
-            routes={routes}
-            guideOpen={guideOpen}
-            onShowGuide={() => updateGuideOpen(true)}
-          />
+          <Nav routes={routes} guideOpen={guideOpen} onShowGuide={() => updateGuideOpen(true)} />
           <Separator />
         </header>
         <main className="flex min-h-0 flex-1">
@@ -450,7 +470,15 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
 
 const GUIDE_STORAGE_KEY = "demo-guide-open";
 
-const DemoGuide = ({ route, open, onHide }: { route: RouteDef; open: boolean; onHide: () => void }) => {
+const DemoGuide = ({
+  route,
+  open,
+  onHide,
+}: {
+  route: RouteDef;
+  open: boolean;
+  onHide: () => void;
+}) => {
   if (!open) return null;
 
   return (
@@ -527,11 +555,15 @@ const App = () => {
           "One typed source for application colors, typography, icons, and metadata",
           "Brand-aware authentication, navigation, email chrome, and rendered messages",
           "Scoped overrides for partner, event, or campaign communication",
+          "Synchronized favicons, sender identity, document metadata, and AppKit design tokens",
+          "Browser previews that reuse the same React Email card delivered to recipients",
         ],
         useCases: [
           "Ship the same internal application for multiple business units or customers",
           "Keep approval previews visually identical to delivered React Email messages",
           "Apply a temporary campaign identity without changing the surrounding app",
+          "White-label a Databricks application while preserving one implementation and route set",
+          "Send incident, launch, or weekly digest email with the correct message-specific identity",
         ],
         docs: [
           { label: "Apply application branding", href: docsUrl("packages/ui/#branding") },

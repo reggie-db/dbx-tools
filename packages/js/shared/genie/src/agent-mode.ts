@@ -313,12 +313,18 @@ function itemAttachments(item: GenieAgentOutputItem): GenieAttachment[] {
   }
   if (item.type === "message") {
     return (item.content ?? []).flatMap((part) =>
-      part.type === "output_text" && part.text
-        ? [textAttachment(id, part.text, part.metadata)]
+      part.type === "output_text" &&
+      (part.text !== undefined || visualizationAttachmentId(part.metadata))
+        ? [textAttachment(id, part.text ?? "", part.metadata)]
         : [],
     );
   }
   return [];
+}
+
+function visualizationAttachmentId(metadata: unknown): string | undefined {
+  if (!object.isRecord(metadata) || !object.isRecord(metadata.viz)) return undefined;
+  return typeof metadata.viz.attachment_id === "string" ? metadata.viz.attachment_id : undefined;
 }
 
 function contentText(

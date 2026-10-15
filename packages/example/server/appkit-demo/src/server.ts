@@ -72,33 +72,93 @@ const searchIndexName = SEARCH_INDEX ?? SEARCH_ALIAS;
 const SEARCH_DOCUMENTS = [
   {
     id: "1",
-    title: "Databricks AI Search overview",
-    text: "AI Search (Vector Search) indexes documents and finds the most relevant ones for a query using hybrid semantic + keyword matching.",
-    url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
+    title: "Build governed Mastra agents in Databricks Apps",
+    text: "Register a Mastra agent with AppKit, stream tool calls, require approval for external actions, persist conversation threads, and capture MLflow feedback in one chat surface.",
+    url: "https://dbx.tools/guides/agents-and-genie/#register-a-mastra-agent",
   },
   {
     id: "2",
-    title: "Delta Sync indexes",
-    text: "A Delta Sync index computes embeddings from a source Delta table and keeps the index in sync as rows change.",
-    url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
+    title: "Use direct AI/BI Genie conversations",
+    text: "Serve a Genie space directly through the same chat UI while Genie owns conversation history, SQL reasoning, citations, tables, and native visualizations.",
+    url: "https://dbx.tools/guides/agents-and-genie/#render-direct-genie-chat",
   },
   {
     id: "3",
-    title: "Direct access indexes",
-    text: "A direct-access index lets you upsert documents yourself; with managed embeddings Databricks embeds a text column on write and query.",
-    url: "https://docs.databricks.com/aws/en/generative-ai/create-query-vector-search",
+    title: "Render a production-ready agent chat",
+    text: "Add persistent threads, model selection, exports, tool progress, approvals, charts, tables, attachments, and feedback without assembling a second chat framework.",
+    url: "https://dbx.tools/guides/agents-and-genie/#render-mastra-chat",
   },
   {
     id: "4",
-    title: "Autocomplete and universal search",
-    text: "Autocomplete is a small-limit search over one index; universal search fans a query across every configured index and merges the hits.",
-    url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
+    title: "Give every user a persistent Lakebox workspace",
+    text: "Expose a browser terminal, desktop, persistent home, isolated services, and live machine metrics from one app-owned Databricks Lakebox.",
+    url: "https://dbx.tools/packages/appkit-lakebox/#register-the-plugin",
   },
   {
     id: "5",
-    title: "Unity Catalog governance",
-    text: "Indexes are Unity Catalog objects, so search runs under the caller's identity and SELECT permissions on the index apply.",
-    url: "https://docs.databricks.com/aws/en/data-governance/unity-catalog",
+    title: "Deploy a self-contained 3D Lakebox scene",
+    text: "Use the Lakebox showcase skill to create a polished browser-only 3D dog or interactive scene, package it in a small OCI service, and route it through the app.",
+    url: "https://dbx.tools/packages/appkit-lakebox/#create-a-service",
+  },
+  {
+    id: "6",
+    title: "Deploy an MS Paint-style browser app",
+    text: "Create a retro paint or pixel editor as a self-contained HTML application, keep all assets inline, and deploy it as a user-scoped Lakebox service.",
+    url: "https://dbx.tools/packages/appkit-lakebox/#create-a-service",
+  },
+  {
+    id: "7",
+    title: "Deploy a platformer or arcade game",
+    text: "Generate a one-port browser platformer, puzzle, or arcade game and let an agent deploy, inspect, restart, and remove it through governed Lakebox tools.",
+    url: "https://dbx.tools/packages/appkit-lakebox/#create-a-service",
+  },
+  {
+    id: "8",
+    title: "Choose AI Search or Lakebase full-text search",
+    text: "Use one browser and agent search contract with managed Databricks Vector Search in production or Lakebase full-text search for a simple local and demo path.",
+    url: "https://dbx.tools/packages/search/#choose-a-search-provider",
+  },
+  {
+    id: "9",
+    title: "Search every configured index",
+    text: "Universal search fans one query across configured indexes, merges scored hits, and preserves each result's source so applications can search multiple governed domains.",
+    url: "https://dbx.tools/packages/search/#add-search-to-a-mastra-agent",
+  },
+  {
+    id: "10",
+    title: "Ground a Mastra agent with the same search indexes",
+    text: "Expose the application's configured AI Search indexes as agent tools so a model can retrieve governed records before it answers or requests an action.",
+    url: "https://dbx.tools/packages/search/#add-search-to-a-mastra-agent",
+  },
+  {
+    id: "11",
+    title: "Broadcast live progress with the Postgres message bus",
+    text: "Use typed Lakebase or PostgreSQL topics to broadcast workflow completion, agent progress, cache invalidation, and operator events across app replicas and browser sessions.",
+    url: "https://dbx.tools/packages/postgres/#topic-bus",
+  },
+  {
+    id: "12",
+    title: "Replay persisted messages after reconnect",
+    text: "Persist selected topic messages so a reconnecting viewer can catch up before switching back to low-latency LISTEN and NOTIFY delivery.",
+    url: "https://dbx.tools/packages/postgres/#replay-with-persist",
+  },
+  {
+    id: "13",
+    title: "Apply one brand across the app and email",
+    text: "Drive application tokens, browser metadata, icons, authentication surfaces, email chrome, and delivered React Email messages from one typed brand context.",
+    url: "https://dbx.tools/packages/ui/#branding",
+  },
+  {
+    id: "14",
+    title: "Preview approval-gated email before delivery",
+    text: "Render recipient fields, subject, attachments, sender icon, and the exact branded message body before a person approves the external action.",
+    url: "https://dbx.tools/packages/ui/#email",
+  },
+  {
+    id: "15",
+    title: "Add memory, search, and approved actions",
+    text: "Combine managed memory, governed retrieval, web research, and approval-gated email into a Databricks app agent without duplicating identity or persistence policy.",
+    url: "https://dbx.tools/guides/memory-search-and-actions/",
   },
 ];
 
@@ -311,7 +371,7 @@ const searchProvider = USE_VECTOR_SEARCH
           indexName: searchIndexName,
           columns: SEARCH_COLUMNS,
           queryType: "hybrid",
-          numResults: 10,
+          numResults: 12,
         },
       },
     })
@@ -321,7 +381,7 @@ const searchProvider = USE_VECTOR_SEARCH
           indexName: searchIndexName,
           columns: SEARCH_COLUMNS,
           queryType: "full_text",
-          numResults: 10,
+          numResults: 12,
           documents: SEARCH_DOCUMENTS,
         },
       },
@@ -393,7 +453,7 @@ try {
       // This `search` plugin adds agent tools, universal search, and index
       // lifecycle routes. On the native path, `ensureOnSetup` creates and seeds
       // the managed Vector Search index in the background. The Lakebase provider
-      // provisions and seeds its own full-text table during setup.
+      // provisions its own full-text table during setup.
       search({
         allowWrite: true,
         // Native Vector Search uses SEARCH_INDEX (catalog.schema.index). Lakebase
@@ -436,8 +496,13 @@ try {
         ...(remoteSkillsEnabled ? { remoteSkills: "aitools" as const } : {}),
       }),
     ],
-    onPluginsReady(appkit) {
+    async onPluginsReady(appkit) {
       appServer = appkit.server;
+      try {
+        await appkit.search.addDocuments({ documents: SEARCH_DOCUMENTS });
+      } catch (error) {
+        console.warn("Demo search documents could not be refreshed", error);
+      }
       if (clientDevUrl) {
         clientDevelopmentProxy = createClientDevelopmentProxy(clientDevUrl, appkit.authGate);
         appkit.server.extend(clientDevelopmentProxy.configure);

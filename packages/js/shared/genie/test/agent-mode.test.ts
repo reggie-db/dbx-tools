@@ -147,4 +147,39 @@ describe("Genie Agent Mode contracts", () => {
       ],
     );
   });
+
+  it("preserves empty visualization placeholders in assistant content order", () => {
+    const message = agentMode.projectAgentModeMessage(
+      "space-1",
+      "Question",
+      { id: "response-1", status: "completed", conversation_id: "conversation-1" },
+      [
+        {
+          type: "message",
+          id: "answer-1",
+          content: [
+            { type: "output_text", text: "Before chart." },
+            {
+              type: "output_text",
+              text: "",
+              metadata: { viz: { attachment_id: "viz-1" } },
+            },
+            { type: "output_text", text: "After chart." },
+          ],
+        },
+      ],
+    );
+
+    assert.deepEqual(
+      message.attachments?.map((attachment) => ({
+        content: attachment.text?.content,
+        metadata: attachment.text?.metadata,
+      })),
+      [
+        { content: "Before chart.", metadata: undefined },
+        { content: "", metadata: { viz: { attachment_id: "viz-1" } } },
+        { content: "After chart.", metadata: undefined },
+      ],
+    );
+  });
 });

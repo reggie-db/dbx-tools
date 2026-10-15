@@ -68,4 +68,50 @@ describe("assistantActivityItems", () => {
       ["tool-live-tool"],
     );
   });
+
+  it("groups one tool call's Genie thoughts into one disclosure", () => {
+    const items = assistantActivityItems(
+      [
+        {
+          type: "dynamic-tool",
+          toolCallId: "genie-1",
+          toolName: "ask_genie",
+          state: "input-available",
+          input: {},
+        },
+      ] as UIMessage["parts"],
+      [
+        {
+          id: "genie-1",
+          toolName: "ask_genie",
+          status: "running",
+          progress: [
+            {
+              type: "thinking",
+              space_id: "space-1",
+              conversation_id: "conversation-1",
+              message_id: "message-1",
+              attachment_id: "attachment-1",
+              thought_type: "THOUGHT_TYPE_DESCRIPTION",
+              text: "First thought.",
+            },
+            {
+              type: "thinking",
+              space_id: "space-1",
+              conversation_id: "conversation-1",
+              message_id: "message-1",
+              attachment_id: "attachment-1",
+              thought_type: "THOUGHT_TYPE_DESCRIPTION",
+              text: "Second thought.",
+            },
+          ],
+        },
+      ],
+    );
+
+    assert.deepEqual(
+      items.map((item) => (item.type === "tool" ? `tool:${item.event.id}` : item.text)),
+      ["tool:genie-1", "First thought.\n\nSecond thought."],
+    );
+  });
 });

@@ -335,14 +335,14 @@ export const EmailCard = ({
         }}
       >
         <Row>
-          <Column style={{ padding: "22px 30px" }}>
+          <Column style={{ padding: "26px 36px" }}>
             <BrandMark theme={theme} />
           </Column>
         </Row>
       </Section>
       <Section>
         <Row>
-          <Column style={{ padding: "34px 34px 24px" }}>
+          <Column style={{ padding: "38px 38px 28px" }}>
             {heading ? (
               <Heading
                 style={{
@@ -364,7 +364,7 @@ export const EmailCard = ({
       <Hr style={{ borderColor: theme.border, margin: 0 }} />
       <Section>
         <Row>
-          <Column style={{ padding: "20px 34px 26px" }}>
+          <Column style={{ padding: "24px 38px 30px" }}>
             <Text
               style={{
                 color: theme.muted,
