@@ -586,16 +586,18 @@ dbx model-gateway [options] [command]
 
 #### Options
 
-| Option                  | Description                                                                                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-v, --version`         | output the version number                                                                                                                                    |
-| `--model <value>`       | Optional fuzzy or exact model name. (env: MODEL)                                                                                                             |
-| `--model-class <value>` | Optional model capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", "embedding", env: MODEL_CLASS) |
-| `-l, --listen <value>`  | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                                                                                      |
-| `-p, --profile <value>` | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE)                                                                   |
-| `--body-limit <value>`  | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                                                                                          |
-| `-r, --runtime-info`    | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                                                                                   |
-| `--no-runtime-info`     | Disable print runtime implementation metadata.                                                                                                               |
+| Option                      | Description                                                                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-v, --version`             | output the version number                                                                                                                                    |
+| `--model <value>`           | Optional fuzzy or exact model name. (env: MODEL)                                                                                                             |
+| `--model-class <value>`     | Optional model capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", "embedding", env: MODEL_CLASS) |
+| `--prefer-system-models`    | Prefer system.ai services over serving endpoints for non-exact model selection. (default: false, env: PREFER_SYSTEM_MODELS)                                  |
+| `--no-prefer-system-models` | Disable prefer system.ai services over serving endpoints for non-exact model selection.                                                                      |
+| `-l, --listen <value>`      | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                                                                                      |
+| `--profile <value>`         | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE)                                                                   |
+| `--body-limit <value>`      | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                                                                                          |
+| `-r, --runtime-info`        | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                                                                                   |
+| `--no-runtime-info`         | Disable print runtime implementation metadata.                                                                                                               |
 
 #### Commands
 
