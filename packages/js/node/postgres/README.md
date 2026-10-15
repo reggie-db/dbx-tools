@@ -1,28 +1,30 @@
-# `@dbx-tools/postgres`
+# @dbx-tools/postgres
 
-Connection-correct PostgreSQL primitives for Node.js: advisory locks that hold the
-connection they lock, and a structured topic bus over `LISTEN`/`NOTIFY`.
-
-The package provides advisory locks, a typed topic bus, optional message
-persistence, sender identity, and connection helpers for Node services.
+Use connection-correct PostgreSQL advisory locks and a structured
+`LISTEN`/`NOTIFY` topic bus from Node.js. The package also provides optional
+message persistence, sender identity, and connection helpers.
 
 Both work against a plain `pg.Pool` or anything structurally compatible with one,
-including the pool AppKit's Lakebase plugin exports — so a Databricks App gets
+including the pool AppKit's Lakebase plugin exports, so a Databricks App gets
 them without a second database client or connection pool.
 
-## Quick Start
+## Quick start
 
 Run protected work on the same PostgreSQL connection that holds the lock:
 
 ```ts
-import { withAdvisoryLock } from "@dbx-tools/postgres";
+import { postgresConnectionOptions, withAdvisoryLock } from "@dbx-tools/postgres";
+import { Pool } from "pg";
+
+const pool = new Pool(postgresConnectionOptions({}));
+const invoiceId = 42;
 
 await withAdvisoryLock(pool, ["invoice", invoiceId], async (client) => {
   await client.query("UPDATE invoices SET status = 'sent' WHERE id = $1", [invoiceId]);
 });
 ```
 
-## Key Features
+## Capabilities
 
 - Converts an arbitrary structured key (string, array, object, `Date`, or an
   explicit `bigint`) into a stable signed 64-bit advisory-lock identifier.
@@ -39,14 +41,14 @@ await withAdvisoryLock(pool, ["invoice", invoiceId], async (client) => {
 - Rejects a payload that would not survive a JSON round trip unchanged, at the
   call site rather than on the wire.
 - Reconnects a dropped listener with bounded backoff while subscribers remain.
-- Optionally PERSISTS every published message to a package-owned table, so a
+- Optionally persists every published message to a package-owned table, so a
   subscriber that was not listening can replay history by cursor, with a default
   TTL and cleanup on insert.
 - Two payload styles: the whole envelope in the notification, or a pointer the
-  listener reads back — which lifts the 8000-byte `NOTIFY` limit and keeps the
-  contents behind a table grant.
+  listener reads back. The pointer lifts the 8000-byte `NOTIFY` limit and keeps
+  the contents behind a table grant.
 
-## Session Roles
+## Session roles
 
 Set `DBX_TOOLS_POSTGRES_ROLE` when every repository-owned PostgreSQL connection
 should assume one role after authenticating. `postgresConnectionOptions()` adds
@@ -70,14 +72,14 @@ service-principal and per-user OBO pools. Every login identity that can reach th
 pool must therefore be a member of the configured role, or otherwise have
 permission to `SET ROLE`, before the pool can connect successfully.
 
-## Use With AppKit Lakebase
+## Use with AppKit Lakebase
 
 Use AppKit `lakebase()` to obtain and refresh the PostgreSQL pool. This package
 does not replace that plugin. Add it when work needs connection-correct advisory
 locks or cross-instance `LISTEN`/`NOTIFY` delivery, capabilities the native
 Lakebase plugin does not provide.
 
-## Advisory Locks
+## Advisory locks
 
 ```ts
 import { postgresConnectionOptions, withAdvisoryLock } from "@dbx-tools/postgres";
@@ -107,7 +109,7 @@ await withAdvisoryTransactionLock(pool, { schema: "my_feature", version: 1 }, as
 `identity.advisoryLockId(key)` exposes the same reduction as a JSON-safe decimal
 string. A `bigint` key is
 used directly (narrowed to 64 bits) rather than hashed, so a lock can interoperate
-with another implementation that publishes its numeric lock id — `pgmq`'s
+with another implementation that publishes its numeric lock id, such as `pgmq`'s
 installer lock, for instance. Anything else is canonicalized with
 `object.toStableKey` from `@dbx-tools/shared-core` and hashed, so key order in an
 object does not matter while a `1` and a `"1"` stay different locks. An array is
@@ -115,7 +117,7 @@ read as several parts, so `["invoice", 7]` and `"invoice_7"` are different locks
 non-finite number or a cyclic key throws `TypeError` rather than yielding an
 identity two callers could disagree about.
 
-## Topic Bus
+## Topic bus
 
 ```ts
 import { PostgresTopicBus } from "@dbx-tools/postgres";
@@ -139,27 +141,27 @@ await unsubscribe();
 await bus.close();
 ```
 
-Every process listening on the channel receives every message; there are no
-competing consumers. That makes the bus right for live fan-out — an SSE stream per
-browser tab, a cache invalidation, a presence ping — and wrong for work
-distribution. Delivery is live-only by default; turn on `persist` (below) when a
+Every process listening on the channel receives every message. There are no
+competing consumers. The bus fits live fan-out such as an SSE stream per browser
+tab, a cache invalidation, or a presence ping. It doesn't distribute work.
+Delivery is live-only by default. Turn on `persist` when a
 subscriber needs replay, and use a real queue when it needs acks.
 
-### The Envelope
+### Message envelope
 
 | Field         | Source | Notes                                                              |
 | ------------- | ------ | ------------------------------------------------------------------ |
 | `id`          | bus    | Unique per message across instances. Use it to dedupe or as `id:`. |
 | `topic`       | bus    | The `broadcast` topic. Listeners on other topics never see it.     |
-| `type`        | caller | Event name, e.g. `order.updated`. Required, non-blank.             |
+| `type`        | caller | Event name, for example `order.updated`. Required, non-blank.      |
 | `metadata`    | merged | Automatic context under the caller's. See below.                   |
 | `body`        | caller | Passed through unchanged.                                          |
-| `publishedAt` | bus    | ISO-8601, from the publisher's clock — not the database's.         |
+| `publishedAt` | bus    | ISO-8601, from the publisher's clock, not the database's.          |
 
 `publishedAt` and `id` are for display and dedupe. Neither orders messages from
 different instances reliably.
 
-### Metadata Precedence
+### Metadata precedence
 
 Weakest to strongest: automatic machine context, then AppKit sender identity, then
 the bus's `metadata` option, then the per-message `metadata`. A key present at a
@@ -174,23 +176,23 @@ Automatic keys, each omitted when it resolves to nothing: `project` (from
 architecture, runtime name, and runtime version are left out on purpose: IPs and
 pids are noisy (and often sensitive), the rest are constant per deployment, and
 every message would pay for them against the payload limit. Pass a `metadata`
-function when a process genuinely needs one of those values.
+function when a process needs one of those values.
 
 The example above attaches a discovered public IP that way. The function runs on
 every broadcast, so memoize anything expensive.
 
 With the optional `@databricks/appkit` peer installed and a user execution context
 active, `senderId`, `senderName`, and `senderEmail` are added too. AppKit is
-imported lazily and never required; outside a request, or without the package, the
-bus just skips those keys.
+imported lazily and never required. Outside a request, or without the package, the
+bus skips those keys.
 
-### What A Message May Contain
+### Supported message values
 
 The body and metadata must survive `JSON.parse(JSON.stringify(x))` unchanged, which
 is stricter than `JSON.stringify` not throwing. A `Date` becomes a string, `NaN`
-and `Infinity` become `null`, a `Map` becomes `{}`, and `undefined` vanishes — each
-reaches the listener as something other than what was sent, so all of them throw
-`TypeError` at the call instead. Cycles, functions, symbols, bigints, and class
+and `Infinity` become `null`, a `Map` becomes `{}`, and `undefined` vanishes.
+Each reaches the listener as something other than what was sent, so all of them
+throw `TypeError` at the call instead. Cycles, functions, symbols, bigints, and class
 instances are rejected for the same reason.
 
 The rule lives in `@dbx-tools/shared-core` as `object.isSerializableValue` and
@@ -202,16 +204,16 @@ The encoded envelope is capped at 7900 bytes, under PostgreSQL's 8000-byte
 `NOTIFY` limit, and a larger one throws `RangeError`. Automatic metadata counts
 against that, so broadcast a reference and let the receiver fetch anything big.
 
-### Connections, Lifecycle, And Failure
+### Connections, lifecycle, and failure
 
 Publishing borrows a pooled connection per call. Listening cannot: `LISTEN` is
-session state, so the bus checks out ONE dedicated client and keeps it for as long
+session state, so the bus checks out one dedicated client and keeps it for as long
 as it has subscribers, however many topics and listeners are registered. Size the
 pool with that long-lived checkout in mind.
 
 Nothing connects until the first `listen`, or an explicit `start()` when you would
 rather find out about a connection problem at boot. `close()` releases the client
-and is required — register it with the host's shutdown hook. A closed bus stays
+and is required. Register it with the host's shutdown hook. A closed bus stays
 closed and throws instead of silently reconnecting.
 
 When the notification connection drops, the bus reconnects on its own: immediately
@@ -219,15 +221,15 @@ first, then doubling from 250ms to a 5s ceiling, indefinitely, for as long as
 subscribers remain. A Postgres restart or a rotated Lakebase credential recovers
 without intervention. Messages published during the gap are lost. Every failed
 attempt, every dropped connection, and every listener that throws is reported
-through `onError`, which defaults to swallowing them — wire it to a logger in
+through `onError`, which defaults to swallowing them. Configure a logger in
 anything long-running. A failing listener never affects the publisher or the other
 listeners.
 
-One channel carries many topics, so adding a topic costs nothing; give a genuinely
-high-volume unrelated stream its own channel instead, since every listening
+One channel carries many topics, so adding a topic costs nothing. Give an
+unrelated high-volume stream its own channel because every listening
 session decodes every message on the channel.
 
-### Replay With `persist`
+### Replay with `persist`
 
 `NOTIFY` has no replay: a process that was not listening never learns what it
 missed. Set `persist` and each published message is INSERTed in the same
@@ -246,13 +248,13 @@ do {
 } while (cursor);
 ```
 
-The row and the notification COMMIT together, which is the property the whole
+The row and the notification commit together, which is the property the whole
 design rests on: `NOTIFY` is delivered at commit rather than at statement time, so
 a listener can never be told about a row it cannot yet read.
 
 | Option             | Default           | Behavior                                                       |
 | ------------------ | ----------------- | -------------------------------------------------------------- |
-| `schema`           | `dbx_message_bus` | Schema used for message persistence.                            |
+| `schema`           | `dbx_message_bus` | Schema used for message persistence.                           |
 | `scope`            | `open`            | Which tier's table publishes and history read by default.      |
 | `tables`           | `*_messages`      | Override a tier's table name for a managed installation.       |
 | `ttl`              | `24 hours`        | Per-message expiry. `false` keeps messages until deleted.      |
@@ -261,44 +263,44 @@ a listener can never be told about a row it cannot yet read.
 | `provision`        | `true`            | Create the schema, tables, and indexes on first persisted use. |
 
 Messages EXPIRE by default. A 24-hour TTL is the default precisely because an
-unbounded message table is the failure this feature would otherwise introduce;
-expired rows are deleted in bounded batches on each persisted publish, and
+unbounded message table is the failure this feature would otherwise introduce.
+Expired rows are deleted in bounded batches on each persisted publish, and
 `cleanupExpired()` runs the same sweep on demand. `ttl: false` opts one bus (or
-`{ ttl: false }` on a single `broadcast`) out of expiry — it is available, but it
-is not the default.
+`{ ttl: false }` on a single `broadcast`) out of expiry. It is available but
+isn't the default.
 
 Two tiers, `open` and `restricted`, exist so one channel can carry messages with
 different read audiences: they are separate tables, so a role granted the open
 table cannot read restricted history. `messageBusGrantStatements(roles, scope,
 options)` emits exactly the grants a tier needs, and a `history` cursor is bound
-to the tier it came from — resuming an open page against the restricted table
-throws rather than silently returning someone else's rows. Publish to a tier
+to the tier it came from. Resuming an open page against the restricted table
+throws instead of returning someone else's rows. Publish to a tier
 per-message with `broadcast(topic, { scope: "restricted", ... })`.
 
-Set `provision: false` when a migration owns the schema; the statements are
+Set `provision: false` when a migration owns the schema. The statements are
 otherwise applied once, under an advisory transaction lock, so concurrent
 instances installing at boot do not race.
 
-### Envelope Or Pointer
+### Envelope or pointer
 
 `payload: "envelope"` (the default) puts the whole message in the notification.
 One round trip, no read amplification, bounded by PostgreSQL's payload limit.
 
-`payload: "pointer"` notifies with routing and identity only — `{ v, scope, topic,
-id, sequence }` — and the listener reads the envelope back. That lifts the size
+`payload: "pointer"` notifies with routing and identity only
+(`{ v, scope, topic, id, sequence }`), and the listener reads the envelope back. That lifts the size
 limit entirely (a body larger than 7900 bytes is only publishable this way) and
 means a subscriber without the tier's table grant learns that something happened
 without learning what. The cost is one read per notification. Listeners receive
-the same `TopicMessage` either way; the difference is invisible above `listen`.
+the same `TopicMessage` either way. The difference is invisible above `listen`.
 
 A pointer whose row is already gone (TTL cleanup won the race) or unreadable
-delivers nothing rather than raising — expected on the restricted tier. Use
+delivers nothing instead of raising, which is expected on the restricted tier. Use
 `decodePointer` if a non-bus consumer needs to read the raw notification.
 
-### Naming A Channel
+### Name a channel
 
-`channel` takes whatever identifies the channel, not a pre-sanitized identifier —
-a name, a tenant id, a `[env, feature]` pair, a config object. One value or many:
+`channel` takes whatever identifies the channel, not a pre-sanitized identifier:
+a name, a tenant id, a `[env, feature]` pair, or a config object. One value or many:
 an array is read as several parts, anything else as one.
 
 ```ts
@@ -313,31 +315,31 @@ form (`object.toStableKey`) is appended. The hash is what makes the mapping
 trustworthy: tokenizing alone is lossy, so `my-app`, `my_app`, and `myApp` would
 collapse onto one channel, and a name long enough to hit Postgres's 63-character
 limit would collide with anything sharing its leading tokens. With the suffix the
-readable part stays readable and distinct inputs stay distinct — including
+readable part stays readable and distinct inputs stay distinct, including
 `["billing", "prod"]` versus `"billing_prod"`, which differ in structure.
 
 Derivation is deterministic across processes and runs, so every participant that
 passes equivalent parts lands on the same channel without coordinating. Object key
-order does not matter; a different spelling does. Read `bus.channelName` to see
+order does not matter. A different spelling does. Read `bus.channelName` to see
 what a set of parts resolved to, or to confirm two processes agree. Defaults to a
 shared `dbx_tools_topic_bus` channel.
 
 `identity.channelName(parts)` exposes the derivation without constructing a bus,
 which is useful for configuration checks and cross-runtime contract tests.
 
-## Connection Lifecycles
+## Connection lifecycles
 
-Advisory locks are connection-scoped, and that is easy to get wrong invisibly:
+Advisory locks are connection-scoped, and incorrect pool use can fail invisibly:
 taking the lock with `pool.query()` and doing the protected work with another
 `pool.query()` can use two different connections, so the lock protects nothing and
 the code looks correct. The same applies to `LISTEN`, which is session state a
 pooled query cannot hold. These helpers keep both lifecycles on dedicated
 connections and depend only on `pg`.
 
-AppKit supplies the Lakebase pool; these helpers add locks and cross-instance
+AppKit supplies the Lakebase pool. These helpers add locks and cross-instance
 message delivery on top of it.
 
-## Module Map
+## Module map
 
 | Module         | Purpose                                                                |
 | -------------- | ---------------------------------------------------------------------- |

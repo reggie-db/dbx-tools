@@ -1,14 +1,10 @@
 # @dbx-tools/core
 
-Node-only core helpers for layered configuration, binary installation, process
-execution, locking, and project discovery.
+Use shared Node and Bun helpers for layered configuration, binary installation,
+process execution, locking, and project discovery. Browser-safe utilities live in
+[@dbx-tools/shared-core](../../shared/core).
 
-It provides the shared configuration, command, project discovery, installer,
-and locking behavior used by the Node packages in this repository. Browser-safe
-utilities live in
-[`@dbx-tools/shared-core`](../../shared/core).
-
-## Quick Start
+## Quick start
 
 Resolve a scoped setting through the shared environment and project-file rules:
 
@@ -20,7 +16,7 @@ const publicDomain = configUtils.string(undefined, "PUBLIC_DOMAIN", {
 });
 ```
 
-Key features:
+Use this package for:
 
 - Async and sync process execution with consistent stdio handling.
 - AbortSignal support for long-running subprocesses.
@@ -41,7 +37,7 @@ Key features:
 - npm dependency resolution from an in-memory `package.json` against the
   configured registry.
 
-## Install A Binary
+## Install a binary
 
 ```ts
 import { join } from "node:path";
@@ -65,10 +61,10 @@ duplicate downloads across processes and worker threads.
 After the lock, a function URL receives `{ tempDir }` so a local installer can
 write under that directory. Direct HTTP downloads are selected by default. A `file://` URL is
 copied without fetching or unpacking. Zip, tar, tar.gz, and tgz archives can
-be unpacked automatically; a single-file archive needs no selector, while a
+be unpacked automatically. A single-file archive needs no selector, while a
 selector can choose a binary from a larger archive. The selected file is
 normalized to mode `0755` and must report an acceptable version before it is
-atomically moved into place; the final renamed path runs the same validation
+atomically moved into place. The final renamed path runs the same validation
 again before returning.
 
 Every candidate runs with `--version` before it is accepted. Set
@@ -76,16 +72,16 @@ Every candidate runs with `--version` before it is accepted. Set
 or complete numeric floor such as `1`, `1.2`, or `1.3.5`. The default parser
 searches stdout first, then stderr. It accepts one to three numeric components
 with common npm/Python suffixes such as `1.2.3-rc.1`, `1.2.3rc1`, or
-`1.2.3.patchdev`; candidates with more components rank first, then the highest
+`1.2.3.patchdev`. Candidates with more components rank first, then the highest
 numeric candidate wins. Supply `versionParser({ stdout, stderr })` for another
 output format.
 
-Successful installs log an info event with the source URL and destination path;
-credentials, query parameters, and fragments are removed from the URL. Set
+Successful installs log an info event with the source URL and destination path.
+Credentials, query parameters, and fragments are removed from the URL. Set
 `LOG_LEVEL=debug` to trace access checks, version decisions, locking, downloads,
 archive extraction, and selection.
 
-## Load Brand Context
+## Load brand context
 
 ```ts
 import { brandFiles } from "@dbx-tools/core";
@@ -95,11 +91,11 @@ const context = await brandFiles.loadBrandContext();
 
 `loadBrandContext()` searches known npm/git project roots for
 `branding/brand.yaml`, `.yml`, or `.json`, followed by equivalent root-level
-files. Missing files return the complete dbx tools default context; malformed
+files. Missing files return the full dbx-tools default context. Malformed
 files fail validation. Use `loadBrandContextFile(path)` for an explicit file and
 `resolveBrandAssetPath(path, asset)` for relative asset references.
 
-## Resolve Configuration
+## Resolve configuration
 
 ```ts
 import { configUtils } from "@dbx-tools/core";
@@ -117,10 +113,10 @@ bundle configuration, then `app.yaml` / `app.yml` env values. The default
 `DBX_TOOLS` scope and an optional capability prefix produce names such as
 `DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN`, then
 `TUNNEL_PUBLIC_DOMAIN`, then `PUBLIC_DOMAIN`. `.env.production` and `.env.prod`
-are checked before `.env` when `NODE_ENV=production`; development uses
+are checked before `.env` when `NODE_ENV=production`. Development uses
 `.env.development` and `.env.dev`.
 
-Pass one config map or an array of maps through `data`; the first matching value
+Pass one config map or an array of maps through `data`. The first matching value
 wins before environment lookup by default. When a custom `sources` order omits
 `config`, passed data is still read and is appended last. This lets a caller put
 env first without accidentally discarding its fallback config:
@@ -138,7 +134,7 @@ const endpoint = config.resolveValue("lakebaseEndpoint", {
 Bundle lookup runs `databricks bundle validate --output json` only after earlier
 sources miss. It reads literal values from the single App's `config.env`, accepts
 usable partial JSON from a failed validation, and honors the active Databricks
-profile. Parsed dotenv records are cached by file path; parsed bundle output is
+profile. Parsed dotenv records are cached by file path. Parsed bundle output is
 cached by bundle path plus profile. App YAML lookup runs only if the bundle did
 not resolve the key and reads `env[].value` entries. Bundle `value_from` and App
 YAML `valueFrom` references resolve supported fields from their named
@@ -160,8 +156,8 @@ deterministic path as CLIs and ordinary Node consumers.
 Deployed Apps skip dotenv, bundle, and app YAML lookup after
 `environmentUtils.isDatabricksAppEnv()` from `@dbx-tools/shared-core` recognizes
 the required App name, HTTP(S) host, and valid port, or the Apps container source
-tree. Set `DBX_TOOLS_DATABRICKS_APP_ENV=true` or `false` to force that result;
-unrecognized values leave automatic detection in place.
+tree. Set `DBX_TOOLS_DATABRICKS_APP_ENV=true` or `false` to force that result.
+Unrecognized values leave automatic detection in place.
 
 `DBX_TOOLS_CONFIG_DOTENV`, `DBX_TOOLS_CONFIG_BUNDLE`, and
 `DBX_TOOLS_CONFIG_APP` independently force those file sources on or off. A
@@ -169,17 +165,17 @@ recognized boolean takes precedence over App
 runtime detection, so `true` can enable a local source inside an App and `false`
 can suppress it during local development. Absent or unrecognized values keep
 the default: read files outside an App and skip them inside one. Bundle reads
-also default off when `NODE_ENV=production`; set
+also default off when `NODE_ENV=production`. Set
 `DBX_TOOLS_CONFIG_BUNDLE=true` to opt into bundle validation there.
 
 Use `config.string()`, `boolean()`, `positiveNumber()`, `positiveInt()`,
 `port()`, and `list()` to normalize typed options and text-based configuration
-through one rule. `config.port()` accepts only TCP ports from 1 through 65535;
+through one rule. `config.port()` accepts only TCP ports from 1 through 65535.
 `config.ENV_ONLY` disables file fallbacks for exact environment reads.
 `config.flattenBundleEnv()`, `flattenAppEnv()`, and `getBundlePath()` expose the
 same parsing logic for callers that already have parsed configuration data.
 
-## Discover Bundle App Resources
+## Discover bundle App resources
 
 ```ts
 import { bundle } from "@dbx-tools/core";
@@ -202,7 +198,7 @@ A failed validation that still returns partial App resources attaches
 nothing. Missing, invalid, or out-of-bound project paths also yield nothing.
 Malformed successful CLI output throws while the generator is consumed.
 
-## Run Commands
+## Run commands
 
 ```ts
 import { exec } from "@dbx-tools/core";
@@ -225,8 +221,8 @@ tree, waits 8 seconds, then force-kills survivors and polls for 4 more seconds.
 Callers may override those timeouts but not the platform signal policy. Parent
 termination signals are forwarded through one process-global trap unless
 `forwardTerminationSignals: false` is set. Subscribe with
-`exec.onParentTerminationSignal` instead of adding another `process` listener;
-extra listeners change whether that trap re-raises the signal after children
+`exec.onParentTerminationSignal` instead of adding another `process` listener.
+Extra listeners change whether that trap re-raises the signal after children
 exit.
 
 When an executable is missing, `spawn()` and `spawnSync()` return
@@ -237,7 +233,7 @@ Prefer `spawn()` over ad hoc `child_process` calls when command output needs to
 be captured, streamed line-by-line, or aborted consistently from higher-level
 tooling.
 
-## Run Synchronously
+## Run synchronously
 
 ```ts
 const rev = exec
@@ -252,7 +248,7 @@ control flow is not available. Synchronous children remain in the parent's
 process group so terminal signals reach both processes. JavaScript signal traps
 cannot run while the parent is blocked in `spawnSync()`.
 
-## Split Shell-Like Commands
+## Split shell-like commands
 
 ```ts
 const argv = exec.shlex('pnpm exec prettier --write "README.md"');
@@ -261,7 +257,7 @@ const argv = exec.shlex('pnpm exec prettier --write "README.md"');
 `shlex()` is a small parser for command strings that need to become argv arrays.
 Prefer explicit argv arrays when possible.
 
-## Serialize Work Across Threads
+## Serialize work across threads
 
 ```ts
 import { processLock } from "@dbx-tools/core";
@@ -272,14 +268,14 @@ await processLock.withProcessLock(["cache", name], async () => {
 ```
 
 `withProcessLock()` runs the callback while holding the named lock, releasing it
-when the callback settles. Callers sharing a key are serialized; distinct keys
+when the callback settles. Callers sharing a key are serialized. Distinct keys
 run concurrently. The key is any value with a stable identity - a string, a
 `["invoice", id]` tuple, a config object - canonicalized by `object.toStableKey`,
 so structure counts: `["invoice", 7]` and `"invoice_7"` are different locks.
 
 Use it instead of a module-level promise chain when worker threads are involved.
 A promise chain only serializes the thread it lives on, so a worker pool runs one
-callback per thread; the coordinator here is shared, so the key admits one
+callback per thread. The coordinator here is shared, so the key admits one
 callback for the whole process.
 
 Workers opt in when they are constructed:
@@ -302,10 +298,10 @@ never keeps the process from exiting.
 The scope is the THREADS of one process - `withProcessLock` shares nothing with a
 second `node` invocation or another replica. When the critical section spans a
 deployment, use
-[`@dbx-tools/postgres`](../postgres)'s `withAdvisoryLock`, which puts the arbiter
+[@dbx-tools/postgres](../postgres)'s `withAdvisoryLock`, which puts the arbiter
 in PostgreSQL where every replica can see it.
 
-## Serialize Work Across Processes
+## Serialize work across processes
 
 ```ts
 import { fileLock } from "@dbx-tools/core";
@@ -330,7 +326,7 @@ Use `processLock.withProcessLock()` when only threads in one process compete,
 `fileLock.withFileLock()` when local processes compete, and Postgres advisory
 locks when multiple app replicas need one arbiter.
 
-## Discover Project Roots
+## Discover project roots
 
 ```ts
 import { projectUtils } from "@dbx-tools/core";
@@ -346,10 +342,10 @@ const cwd = projectUtils.resolveWorkingDirectory("");
 basename. `projectUtils.resolveWorkingDirectory()` normalizes blank, null, omitted,
 relative, and absolute cwd values for cache decisions. Project subprocess probes
 share a command/argument result cache only when that resolved path is the live
-process cwd; another directory executes directly. Empty command results are
+process cwd. Another directory runs directly. Empty command results are
 cached too.
 
-## Resolve npm Dependencies
+## Resolve npm dependencies
 
 ```ts
 import { readFile } from "node:fs/promises";
@@ -401,7 +397,6 @@ this when a mirror or delayed proxy 404s versions that public npm already has.
 - `brand` - YAML/JSON discovery, parsing, validation, and asset path resolution.
 - `config` - scoped environment, dotenv, and validated Databricks bundle lookup,
   including runtime detection and typed coercion helpers.
-- `file` - best-effort filesystem stat.
 - `fileLock` - portable cross-process lock directories shared by Bun and Node,
   with an explicit `flock` option.
 - `processLock` - keyed mutual exclusion across the main thread and its workers,

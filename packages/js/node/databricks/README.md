@@ -1,11 +1,9 @@
 # @dbx-tools/databricks
 
-Databricks workspace, filesystem, cloud, and network utilities.
+Resolve Databricks workspace identity, access workspace files, detect cloud and
+region, resolve DNS, and discover the caller's public IP.
 
-Use these helpers for Databricks workspace identity, filesystem access, cloud
-and region lookup, DNS resolution, and public IP discovery.
-
-## Quick Start
+## Quick start
 
 Read and write a Unity Catalog volume through the shared filesystem API:
 
@@ -16,7 +14,7 @@ const files = new DatabricksFileSystem({ root: "main.default.assets" });
 await files.writeFile("reports/latest.txt", "ready");
 ```
 
-Key features:
+The package:
 
 - Workspace URL and numeric workspace id resolution from AppKit context,
   Databricks SDK config, env, and config files.
@@ -31,23 +29,28 @@ Key features:
 - DNS A/AAAA lookup helpers for Databricks and adjacent service hosts.
 - Memoized outbound public-IP discovery for setup and diagnostics.
 
-## Relationship To Native AppKit
+## Choose application or agent file access
 
 Use native AppKit for its standard workspace client and plugin integrations.
 Use this package when code needs Databricks filesystem root normalization,
 cloud region discovery, network helpers, or workspace identity fallbacks
 outside an AppKit request.
 
-## Filesystem Targets
+Use AppKit's Files plugin when application routes or UI components need file and
+volume operations. Use `DatabricksFileSystem` for backend libraries and for a
+portable filesystem mounted into a Mastra agent workspace. Use
+[@dbx-tools/fs](../fs) for host-local files.
+
+## Filesystem targets
 
 ```ts
 import { DatabricksFileSystem } from "@dbx-tools/databricks";
 
-// Unity Catalog volume via three-part id
+// Unity Catalog volume using a three-part id
 const volume = new DatabricksFileSystem({ root: "main.default.assets" });
 await volume.writeFile("notes/hello.txt", "hi");
 
-// Workspace home (resolves ~ via currentUser.me / AppKit userName)
+// Workspace home (resolves ~ using currentUser.me / AppKit userName)
 const home = await DatabricksFileSystem.create({ root: "~" });
 const entries = await home.readdir(".");
 ```
@@ -63,15 +66,15 @@ Roots are normalized before use:
 | `/dbfs/...`                                                 | unchanged (POSIX)                 | DBFS      |
 
 `~` expansion uses `getCurrentUserName()` (AppKit context `userName`, else
-`currentUser.me()` via `tryGetWorkspaceClient` / `getWorkspaceClient`). Prefer
+`currentUser.me()` through `tryGetWorkspaceClient` / `getWorkspaceClient`). Prefer
 `DatabricksFileSystem.create({ root: "~" })` when the username is not known up
 front.
 
-Built on `@dbx-tools/shared-fs` `BaseFileSystem`, so portable behavior (parents,
+Built on [@dbx-tools/shared-fs](../../shared/fs) `BaseFileSystem`, so portable behavior (parents,
 recursion, encoding, error mapping) is shared with `LocalFileSystem` /
 `MemoryFileSystem`.
 
-## Resolve Workspace Identity
+## Resolve workspace identity
 
 ```ts
 import { workspaceClient } from "@dbx-tools/databricks";
@@ -85,7 +88,7 @@ present, then a default Databricks SDK client, then environment/config. Use it i
 libraries that should work inside an AppKit request and from a standalone
 script.
 
-## Detect Cloud Provider And Region
+## Detect cloud provider and region
 
 ```ts
 import { cloud } from "@dbx-tools/databricks";
@@ -101,7 +104,7 @@ or routing workspace-adjacent traffic.
 Cloud detection is best-effort. It is intended for endpoint construction and
 developer diagnostics, not for security policy decisions.
 
-## Resolve Network Details
+## Resolve network details
 
 ```ts
 import { net } from "@dbx-tools/databricks";
@@ -122,4 +125,4 @@ short-lived reuse.
 - `net` - DNS A/AAAA resolution and outbound public-IP discovery.
 
 Zerobus endpoint construction builds on these helpers in
-[`@dbx-tools/databricks-zerobus`](../databricks-zerobus).
+[@dbx-tools/databricks-zerobus](../databricks-zerobus).

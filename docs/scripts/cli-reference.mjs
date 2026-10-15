@@ -85,7 +85,7 @@ export function serviceReference(buildServiceCommand) {
 export function withCliReference(readme, reference) {
   const starts = readme.split(CLI_REFERENCE_START).length - 1;
   const ends = readme.split(CLI_REFERENCE_END).length - 1;
-  const block = `${CLI_REFERENCE_START}\n## Command Reference\n\n${reference.trim()}\n${CLI_REFERENCE_END}`;
+  const block = `${CLI_REFERENCE_START}\n## Command reference\n\n${reference.trim()}\n${CLI_REFERENCE_END}`;
   if (starts === 0 && ends === 0) return `${readme.trimEnd()}\n\n${block}\n`;
   if (starts !== 1 || ends !== 1)
     throw new Error("Expected one complete CLI reference marker pair");

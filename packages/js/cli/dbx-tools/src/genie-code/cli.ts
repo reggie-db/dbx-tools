@@ -34,7 +34,7 @@ export function buildProgram(
       .description("Run Genie Code through an authenticated local Databricks model gateway")
       .argument(
         "[genieArgs...]",
-        "arguments and unknown flags forwarded to Genie Code; wrapper options may be separated with --",
+        "Arguments and unknown flags forwarded to Genie Code. Separate wrapper options with --",
       )
       .allowUnknownOption()
       .passThroughOptions()

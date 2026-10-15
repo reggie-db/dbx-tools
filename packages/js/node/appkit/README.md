@@ -1,11 +1,9 @@
 # @dbx-tools/appkit
 
-Node-side helpers for Databricks AppKit apps.
+Configure Lakebase before Databricks AppKit plugin startup and use AppKit request
+context, typed plugin lookup, and Databricks SDK cancellation from backend code.
 
-These helpers configure Lakebase before plugin startup and expose AppKit request
-context, typed plugin lookup, and Databricks SDK cancellation to backend code.
-
-## Quick Start
+## Quick start
 
 Use the wrapper when Lakebase settings must be resolved before plugin setup:
 
@@ -18,7 +16,7 @@ await appkit.createApp({
 });
 ```
 
-**Key features:**
+Use these helpers for:
 
 - Auto-configuration before AppKit setup, especially for Lakebase/Postgres env
   values that AppKit plugins read during initialization.
@@ -39,7 +37,7 @@ await appkit.createApp({
   AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary).
   `@dbx-tools/tunnel` consumes this surface for auxiliary startup and shutdown.
 
-## Use With Native AppKit
+## Use with native AppKit
 
 Use native AppKit directly when your app can read its required env vars before
 `createApp()` and does not need extra setup around plugin exports or config
@@ -47,19 +45,31 @@ sources.
 
 Use this package when the friction is around bootstrapping and reuse:
 
-- AppKit plugins read Lakebase/Postgres env during initialization; this package
+- AppKit plugins read Lakebase/Postgres env during initialization. This package
   resolves and applies those values before setup.
-- AppKit exposes request context inside AppKit handlers; these helpers make code
+- AppKit exposes request context inside AppKit handlers. These helpers make code
   safe to call from scripts, tests, and background jobs too.
-- AppKit plugin instances are generic; the lookup helpers keep sibling-plugin
+- AppKit plugin instances are generic. The lookup helpers keep sibling-plugin
   access typed and return clear errors.
 - Local CLI flags, bundle validation output, and `app.yaml` values use the same
   `@dbx-tools/core` configuration path.
 - AppKit's `asUser(req)` throws outside `NODE_ENV=development` when a request
-  carries no OBO token; `identity` makes falling back to the service principal a
-  configured, per-request decision instead of a `NODE_ENV` side effect.
+  carries no on-behalf-of-user (OBO) token. `identity` makes falling back to the
+  service principal a configured, per-request decision instead of a `NODE_ENV`
+  side effect.
 
-## Auto-Configuration Behavior
+Choose the Lakebase path by caller:
+
+- Use native AppKit `lakebase()` when a Databricks App already has complete
+  runtime connection configuration.
+- Use this package's `appkit.createApp()` when Lakebase environment values or
+  cache grants must be resolved before AppKit plugins initialize.
+- Use [@dbx-tools/lakebase](../lakebase) for profile-aware discovery and
+  short-lived credentials in standalone Node or Bun code.
+- Use [dbx lakebase-proxy](../../cli/dbx-tools) when an external PostgreSQL
+  client needs a loopback connection.
+
+## Auto-configuration behavior
 
 `appkit.createApp` is a drop-in wrapper around AppKit `createApp` with the
 same config and the same typed plugin-export map. It runs
@@ -79,7 +89,7 @@ When native `lakebase()` or beta `database()` is present, auto-config resolves
 Lakebase Postgres connection settings and fills missing `PG*` /
 `LAKEBASE_*` variables. That avoids a startup race where a plugin reads env
 before another async setup step can discover it. A database-only app resolves
-env without implicitly broadening cache-schema grants; AppKit's database plugin
+env without implicitly broadening cache-schema grants. AppKit's database plugin
 owns its own pool.
 
 Auto-configuration is conservative: existing env vars win unless a caller passes
@@ -109,8 +119,8 @@ const resolved = await lakebaseResolver.resolveLakebaseConnection({
 lakebaseResolver.applyLakebaseToEnv(resolved);
 ```
 
-`applyLakebaseEnv()` does both steps and applies the COMPLETE set a Postgres pool
-needs, `PGUSER` included — it is what auto-configuration itself calls, so a caller
+`applyLakebaseEnv()` does both steps and applies the complete set a Postgres pool
+needs, including `PGUSER`. Auto-configuration calls the same function, so a caller
 outside `createApp` gets the same env rather than a hand-rolled subset:
 
 ```ts
@@ -118,10 +128,10 @@ const { resolved, user } = await lakebaseResolver.applyLakebaseEnv({ autoCreate:
 ```
 
 Reach for it when something other than the `lakebase()` plugin needs a working
-pool. AppKit's PERSISTENT cache is the common case: it builds its own pool from
+pool. AppKit's persistent cache is the common case: it builds its own pool from
 env, and `createLakebasePool()` throws unless `LAKEBASE_ENDPOINT`, `PGHOST`,
-`PGDATABASE`, and a username are all present — while a Databricks App `postgres`
-resource binding supplies only the first. Miss one and the cache degrades silently
+`PGDATABASE`, and a username are all present. A Databricks App `postgres`
+resource binding supplies only the first. If one is missing, the cache degrades silently
 to in-memory. `@dbx-tools/tunnel`'s OTP gate calls this for exactly that
 reason.
 
@@ -131,7 +141,7 @@ reason.
 
 | Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                                      |
 | --------------- | ------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema; `"env"` resolves the connection only; `false` skips auto-configuration. Omit it to gate resolution on native `lakebase` or `database`; implicit database-only resolution does not grant the cache schema. |
+| `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema. `"env"` resolves the connection only. `false` skips auto-configuration. Omit it to gate resolution on native `lakebase` or `database`. Implicit database-only resolution does not grant the cache schema. |
 | `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env and AppKit lifecycle registration through `onLifecycle`.                                                                                                                                   |
 
 Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
@@ -139,8 +149,8 @@ still wants Lakebase-backed cache persistence. The injected AppKit storage is
 memory-first: warm hits avoid persistent reads and `last_accessed` writes, while
 mutations are coalesced and written behind without blocking the request. When a
 Lakebase pool is available it is the persistent level. Otherwise the cache uses
-the portable project-scoped disk level from `@dbx-tools/cache`. `"env"` is the
-right mode inside a deployed app, since the app service principal cannot grant on
+the portable project-scoped disk level from `@dbx-tools/cache`. Use `"env"`
+inside a deployed app because the app service principal cannot grant access to
 the cache schema anyway.
 
 `createApp()` installs this storage by default when AppKit caching is enabled and
@@ -154,10 +164,10 @@ const storage = await cacheStorage.createAppKitCacheStorage();
 ```
 
 AppKit closes injected storage during shutdown. Native composition should call
-`close()` when it owns the storage directly; that drains tracked write-behind
+`close()` when it owns the storage directly. That drains tracked write-behind
 work before disconnecting the persistent levels.
 
-## Filesystem Cache Plugin
+## Filesystem cache plugin
 
 Register `filesCache()` when provider-backed filesystems should share one
 AppKit-lifecycle cache:
@@ -179,7 +189,7 @@ batched invalidation clears matching keys across active user scopes without
 sharing authorization-sensitive values.
 
 `forFileSystem(scope, { paths, key? }, load)` retains one framework filesystem
-source for the same user and actual mounted paths. `key` separates framework
+source for the same user and mounted paths. `key` separates framework
 instances that use different policies over the same paths. This gives frameworks
 such as Mastra a stable source identity across page refreshes and turns without
 introducing a second parsed catalogue cache.
@@ -220,9 +230,9 @@ Environment variables read during resolution:
 Resolved values are written back to `process.env` by
 `lakebaseResolver.applyLakebaseToEnv()`, which never overwrites a variable that
 is already set. That function covers everything except `PGUSER`, which needs an
-await; `lakebaseResolver.applyLakebaseEnv()` resolves and applies the full set.
+await. `lakebaseResolver.applyLakebaseEnv()` resolves and applies the full set.
 
-## Resolve Local And Bundle Config
+## Resolve local and bundle config
 
 Configuration is owned by `@dbx-tools/core`, not re-exported by this package.
 Its default precedence is constant config, process env, `.env`, bundle
@@ -241,7 +251,7 @@ Databricks App deployment. `configUtils.bundleFile()` exposes validated bundle
 output, while `configUtils.appFile()` exposes parsed App YAML. Both cache successful,
 missing, and invalid results for the process lifetime.
 
-## Parse Lakebase Addresses
+## Parse Lakebase addresses
 
 `pgaddress.parseAddress()` accepts resource paths, Postgres URLs, bare
 Lakebase hosts, and partial inputs. It gives the resolver a common shape without
@@ -258,7 +268,7 @@ pgaddress.parseAddress(
 `pgaddress.parseResourcePath()` is useful when you specifically expect a
 `projects/<id>/branches/<id>/endpoints/<id>` value.
 
-## Use AppKit Execution Context Safely
+## Use AppKit execution context safely
 
 `appkit.tryGetExecutionContext()` returns the active AppKit request context when
 code is running under AppKit, and `undefined` elsewhere. That lets libraries
@@ -274,7 +284,7 @@ const client = appkit.tryGetExecutionContext()?.client ?? createWorkspaceClient(
 `appkit.ensureInitialized()` lazily initializes AppKit runtime state before
 context lookup in code paths that may run early.
 
-## Adapt Databricks SDK Cancellation
+## Adapt Databricks SDK cancellation
 
 Databricks SDK calls accept a `Context`. Many app and web APIs use
 `AbortSignal`. `databricks.toContext()` bridges the two.
@@ -293,7 +303,7 @@ await client.apiClient.request(
 );
 ```
 
-## Look Up Sibling Plugins
+## Look up sibling plugins
 
 AppKit's plugin map is intentionally generic. `pluginRegistry.data()`,
 `pluginRegistry.instance()`, and `pluginRegistry.require()` keep lookups typed and produce better
@@ -314,10 +324,10 @@ hard-code registered names or casts at every call site. A missing required
 plugin throws AppKit's `ConfigurationError`, naming both the caller and the
 plugin to register.
 
-## Provision Lakebase Cache Schema
+## Provision the Lakebase cache schema
 
 `provision.provisionCacheSchema()` grants the AppKit cache schema in Lakebase to
-the Postgres role that will run the app. Use it after Lakebase connection env has
+the Postgres role that runs the app. Use it after Lakebase connection env has
 been resolved and before AppKit initializes its persistent cache.
 
 ```ts
@@ -330,13 +340,13 @@ Pass a second argument to report progress on your own logger. The grants are
 skipped inside a Databricks App, and any failure is logged rather than thrown so
 a degraded cache never blocks startup.
 
-## Choose The Request Identity
+## Choose the request identity
 
 AppKit gives a plugin two identities: the ambient service context (the app's own
 service principal) and a per-request user context entered with `asUser(req)`,
 which authenticates on-behalf-of (OBO) using the token the Databricks front door
 forwards on `x-forwarded-access-token`. When that header is absent, AppKit's
-behaviour depends entirely on `NODE_ENV`:
+behavior depends entirely on `NODE_ENV`:
 
 | `NODE_ENV`    | `asUser(req)` with no `x-forwarded-access-token`       |
 | ------------- | ------------------------------------------------------ |
@@ -346,9 +356,9 @@ behaviour depends entirely on `NODE_ENV`:
 That throw is right for an app behind the front door, where a missing token means
 something is broken. It is fatal for an app whose traffic legitimately arrives
 without one - a public tunnel where callers authenticate by email code
-([`@dbx-tools/tunnel`](../../node/tunnel)), or a bot channel that validates its
+([@dbx-tools/tunnel](../../node/tunnel)), or a bot channel that validates its
 own inbound JWT (`POST /api/teams/messages`). Those apps must not run with
-`NODE_ENV=development` just to get the fallback, since that flag also relaxes
+`NODE_ENV=development` only to get the fallback, because that flag also relaxes
 secure cookies and unlocks other dev-only escape hatches.
 
 `identity` is that decision, made explicit:
@@ -363,20 +373,20 @@ const scoped = identity.useServicePrincipal(mode, req) ? this : this.asUser(req)
 const rows = await scoped.executeQuery(sql);
 ```
 
-| Mode                | Behaviour                                                                    |
+| Mode                | Behavior                                                                     |
 | ------------------- | ---------------------------------------------------------------------------- |
 | `user` (default)    | Always OBO. Per-user attribution and per-user Genie / Unity Catalog filters. |
 | `service-principal` | Always the app's own identity. Needs no OBO scopes and serves any caller.    |
 | `auto`              | OBO when the request carries a usable token, service principal otherwise.    |
 
-`auto` decides per REQUEST, not per boot, because one container can serve both
+`auto` decides per request, not per boot, because one container can serve both
 doors at once - the tunnel gate and the platform front door share a port. A
 boot-time flag would have to be wrong for one of them. An unrecognized configured
 value throws a `ConfigurationError` rather than falling back, because a typo
 (`"obo"`, `"sp"`) would otherwise keep serving the very error the option was set
 to avoid.
 
-Running as the service principal does not change WHO the request belongs to. The
+Running as the service principal does not change which user owns the request. The
 caller still arrives on `x-forwarded-user` / `x-forwarded-email` (read them with
 `identity.requestUserId()` / `requestUserEmail()`), so memory threads, cache
 namespaces, and trace attribution stay per-user - only the Databricks credential
@@ -398,5 +408,5 @@ is shared. `@dbx-tools/appkit-mastra` exposes this as its `genieIdentity` option
 | `identity`         | OBO-vs-service-principal request identity: modes, resolution, and the forwarded headers.                                                        |
 
 The shell-facing wrapper for auto-config is
-[`@dbx-tools/cli/appkit`](../../cli/dbx-tools). Higher-level agent composition
-is in [`@dbx-tools/appkit-mastra`](../appkit-mastra).
+[@dbx-tools/cli/appkit](../../cli/dbx-tools). Higher-level agent composition
+is in [@dbx-tools/appkit-mastra](../appkit-mastra).

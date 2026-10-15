@@ -1,15 +1,13 @@
 # @dbx-tools/email
 
-Server-side email runtime, agent tools, and AppKit plugin.
-
 Add model-drafted email with human approval, sender policy, SMTP delivery, and a
 local development outbox to an AppKit or Mastra backend. Browser-safe message
 and result schemas live in
-[`@dbx-tools/shared-email`](../../shared/email), and the reusable React Email
+[@dbx-tools/shared-email](../../shared/email), and the reusable React Email
 presentation lives in
-[`@dbx-tools/shared-email-template`](../../shared/email-template).
+[@dbx-tools/shared-email-template](../../shared/email-template).
 
-## Quick Start
+## Quick start
 
 Give an agent an email tool that pauses before delivery:
 
@@ -23,7 +21,7 @@ const support = agents.createAgent({
 });
 ```
 
-**Key features:**
+The package:
 
 - AppKit plugin registration that resolves config, verifies SMTP at boot, and
   mounts a sender-options route.
@@ -43,7 +41,7 @@ const support = agents.createAgent({
 - Named caps on body length and attachment size, and an `AbortSignal` threaded
   through every send.
 
-## Register Delivery
+## Register delivery
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";
@@ -71,7 +69,7 @@ await createApp({
 `plugin.email()` validates config, primes the shared runtime, verifies SMTP when
 SMTP mode is active, and mounts a sender-options route for UIs. A failed verify
 fails setup, so a bad host or credential shows up in the boot logs rather than on
-the first approved send; outbox mode skips the check and logs loudly instead.
+the first approved send. Outbox mode skips the check and logs a warning instead.
 
 `tool.emailTool()` creates an approval-gated Mastra `send_email` tool. Approval
 requires Mastra storage, so register `lakebase()` or configure storage explicitly
@@ -92,14 +90,14 @@ const sendEmail = emailTool({
 ```
 
 The callback returns `true` when human review is still required and `false`
-when Mastra may execute. Fail closed in the policy. Regular Mastra agents do not
-provide a built-in durable "remember this approval" store; Agent Controller
+when Mastra may run the tool. Fail closed in the policy. Regular Mastra agents do not
+provide a built-in durable "remember this approval" store. Agent Controller
 permission rules are a separate runtime, so this package does not emulate them
 client-side.
 
 The plugin does not decide how approval is presented. It emits a Mastra tool
 suspension and expects the host UI to resume that tool call with an approval or
-denial result. [`@dbx-tools/ui/email`](../../ui/appkit) provides the matching
+denial result. [@dbx-tools/ui/email](../../ui/appkit) provides the matching
 approval card and compose components.
 
 ## Configuration
@@ -131,16 +129,16 @@ built-in default.
 | `SMTP_PASSWORD`         | SMTP auth password or API key.                                 |
 | `EMAIL_DOMAIN`          | Domain for the derived sender address.                         |
 | `EMAIL_FROM`            | Optional fixed `From` address, overriding per-user derivation. |
-| `EMAIL_SYSTEM_FROM`     | `From` for system mail; defaults to `no-reply@<domain>`.       |
+| `EMAIL_SYSTEM_FROM`     | `From` for system mail. Defaults to `no-reply@<domain>`.       |
 | `EMAIL_SENDER_POLICY`   | `allowlist` (default) or `unrestricted`.                       |
-| `EMAIL_ALLOWED_SENDERS` | Comma- or whitespace-separated `From` allow-list.              |
+| `EMAIL_ALLOWED_SENDERS` | Comma- or whitespace-separated `From` allowlist.               |
 | `EMAIL_OUTBOX_MODE`     | Opt in to writing messages to disk when SMTP is unconfigured.  |
 | `EMAIL_OUTBOX_DIR`      | Directory for outbox previews.                                 |
 
 The `SMTP_*` names are unprefixed because SMTP is a third-party service, not a
 Databricks resource.
 
-## Send Without An Agent
+## Send without an agent
 
 ```ts
 import { transport } from "@dbx-tools/email";
@@ -183,7 +181,7 @@ HTML body presents the code once.
 By default both MIME alternatives are rendered from one React Email tree, so the
 `text/plain` part is a rendering of the HTML - it carries the brand header and
 footer, and CSS margin becomes blank lines. That is right for prose and wrong for
-content something PARSES. A fourth argument replaces just that part, leaving the
+content that a client parses. A fourth argument replaces only that part, leaving the
 branded HTML untouched:
 
 ```ts
@@ -194,15 +192,15 @@ await transport.sendEmail(message, from, undefined, {
 
 The motivating case is a one-time code: client code detection reads the code out
 of the prompt line, and a styled `<h2>` code renders two blank lines below the
-prompt, so autofill stops being offered even though the HTML looks perfect. Keep
+prompt, so autofill stops being offered even though the HTML renders correctly. Keep
 the same information in both parts - a text alternative that disagrees with the
 HTML reads as phishing to spam filters. See
-[`@dbx-tools/tunnel`](../../node/tunnel) for a gate that does this.
+[@dbx-tools/tunnel](../../node/tunnel) for a gate that does this.
 
 ### Control the preheader (and the push notification)
 
 The same options object takes a `preview`, the preheader: the snippet a client
-shows beside the subject in an inbox list, and the body of the PUSH NOTIFICATION
+shows beside the subject in an inbox list, and the body of the push notification
 a mobile mail app posts. It defaults to the subject.
 
 ```ts
@@ -225,7 +223,7 @@ const appkit = await createApp({ plugins: [server(), email()] });
 await appkit.email.sendEmail(message, "reports@example.com");
 ```
 
-## How Sends Reach AppKit's Interceptors
+## How sends reach AppKit interceptors
 
 Every send runs through AppKit's interceptor chain (timeout, telemetry, and the
 retry / cache posture in `defaults`), including sends from the Mastra tool, which
@@ -233,7 +231,7 @@ has no plugin instance in scope. The runtime carries an executor slot for this:
 registering the plugin installs its own `Plugin.execute()` there at setup, and
 `sendEmail()` routes through whatever is installed.
 
-Nothing else has to be wired up. Two consequences are worth knowing:
+This has two effects:
 
 - In a plain Mastra app with no AppKit plugin registered, the slot falls back to
   running the send directly, so the tool still works without interceptors.
@@ -242,7 +240,7 @@ Nothing else has to be wired up. Two consequences are worth knowing:
   chain is re-raised as a stable `ExecutionError`, so an SMTP relay's own wording
   never becomes the caller's or the model's error text.
 
-## Resolve SMTP Or Outbox Mode
+## Resolve SMTP or outbox mode
 
 ```ts
 import { config, transport } from "@dbx-tools/email";
@@ -260,7 +258,7 @@ const runtime = transport.getEmailRuntime({
 
 `resolveEmailConfig()` returns the validated `ResolvedEmailConfig` for
 inspection. `getEmailRuntime()` takes the same plugin config, resolves it, and
-memoizes the transport process-wide; the plugin primes it at setup, so later
+memoizes the transport process-wide. The plugin primes it at setup, so later
 callers pass nothing and get the same instance.
 
 SMTP mode requires host, user, password, and a sender source. Outbox mode writes
@@ -269,13 +267,17 @@ HTML files to disk when SMTP credentials are absent and `EMAIL_OUTBOX_MODE=1`.
 Use SMTP mode for deployed apps. Use outbox mode for local demos, automated
 tests, and development loops where sending real mail would be risky.
 
-## Agent Tools
+## Agent tools and approval
 
 Two tools expose the same send capability, one per agent runtime. Both are
 gated: the Mastra tool suspends for approval, and the AppKit tool is annotated
 `{ effect: "write", requiresUserContext: true }` so a host's approval gate fires.
 The AppKit tool is deliberately not `autoInheritable`, so an agent reaches it
 only by wiring it explicitly.
+
+Approval applies to the agent tools. `transport.sendEmail()` and the AppKit
+plugin's `sendEmail()` export send immediately, so direct callers must enforce
+their own authorization and approval policy.
 
 | Tool         | Runtime | Wiring                                                                   |
 | ------------ | ------- | ------------------------------------------------------------------------ |
@@ -297,7 +299,7 @@ await createApp({
 });
 ```
 
-## AppKit Routes
+## AppKit routes
 
 | Method | Path                 | Response                                                   |
 | ------ | -------------------- | ---------------------------------------------------------- |
@@ -311,7 +313,7 @@ caller's own local part.
 Use this route to populate a `From` dropdown in a compose UI. If no dropdown is
 shown, the server can still derive the sender from the active user and config.
 
-## Sender Addresses
+## Sender addresses
 
 ```ts
 import { config, sender } from "@dbx-tools/email";
@@ -334,14 +336,14 @@ address and is entirely optional - set it only when every message really should
 come from a single mailbox.
 
 Mail that no user asked for - a sign-in code, a password reset, an alert - is
-SYSTEM mail, and a reply to it reaches nobody. It sends from
+system mail, and a reply to it reaches nobody. It sends from
 `no-reply@<domain>` instead, which is also what `resolveSenderAddress()` returns
 when there is no user in scope, so a service-context send never leaks a person's
 address onto machine mail. That default outranks `from` on purpose (a fixed
 `from` is normally a human or team address). Name the address yourself with
 `systemFrom` / `EMAIL_SYSTEM_FROM` to route those replies to a monitored
-`support@`, or just to spell the local part differently. The system sender is
-folded into the effective allow-list, so the deny-by-default policy never blocks
+`support@`, or to use a different local part. The system sender is
+folded into the effective allowlist, so the deny-by-default policy never blocks
 the app's own sign-in mail.
 
 Sender helpers support exact addresses, domain wildcards, bare domains, and `*`.
@@ -349,12 +351,12 @@ Sender helpers support exact addresses, domain wildcards, bare domains, and `*`.
 choices for the current user, which is what the AppKit plugin exposes to clients.
 
 The default `senderPolicy: "allowlist"` is deny-by-default: with no explicit
-`allowedSenders`, the effective allow-list is the configured sender source, so a
+`allowedSenders`, the effective allowlist is the configured sender source, so a
 deployment that only sets `EMAIL_DOMAIN` rejects a `From` on any other domain.
 Set `senderPolicy: "unrestricted"` to accept any `From` a caller supplies. The
 effective policy is logged at boot.
 
-## Render A React Email
+## Render a React Email
 
 ```ts
 import { emailHtml, markdown } from "@dbx-tools/email";
@@ -379,7 +381,7 @@ and delivered message share typography, content styling, and brand behavior.
 `markdown.normalizeMarkdown()` normalizes Markdown without rendering it.
 `markdown.markdownToHtml()` renders through the shared React Email body.
 
-## Brand The Email
+## Brand the email
 
 Every message uses the repository's dbx-tools brand by default. Pass a `brand`
 to the plugin or renderer only when the consuming application needs its own
@@ -409,10 +411,10 @@ email({
 React Email applies the brand through email-safe inline styles. The browser UI's
 `[data-brand]` CSS bridge cannot reach an inbox, so both the delivered document
 and browser preview consume the same `EmailBrand` values directly. A `logoUrl`
-renders when it is an `http(s):`, `data:`, or `cid:` URL; otherwise the branded
+renders when it is an `http(s):`, `data:`, or `cid:` URL. Otherwise the branded
 display name becomes the header mark.
 
-## Use The Outbox In Tests
+## Use the outbox in tests
 
 ```ts
 import { outbox } from "@dbx-tools/email";
@@ -422,7 +424,7 @@ const path = await outbox.writeOutboxEmail(message, "bot@example.com", "tmp/emai
 
 Outbox files are HTML previews with metadata in the header, written to
 `<dir>/<from>/<timestamp>-<subject-slug>.html`. A fourth argument accepts an
-`EmailBrand`; a fifth accepts the same `heading` and `preview` presentation used
+`EmailBrand`. A fifth accepts the same `heading` and `preview` presentation used
 by the transport. Attachments are listed in the preview, but attachment bytes
 are not copied to disk.
 
@@ -439,7 +441,7 @@ are not copied to disk.
 
 An oversized payload is rejected with a `ValidationError` before anything is
 handed to SMTP. The constants and the plugin's interceptor settings live in the
-`defaults` module. Attachments accept inline `content` only; local paths and
+`defaults` module. Attachments accept inline `content` only. Local paths and
 remote URLs are not part of the model-facing contract.
 
 ## Modules
@@ -457,7 +459,7 @@ remote URLs are not part of the model-facing contract.
   `resolveEmailConfig()`.
 - `defaults` - execution settings for the interceptor chain and the payload caps.
 - `sender` - per-user sender derivation, the do-not-reply system sender
-  (`resolveSystemSenderAddress()`), allow-list parsing, and sender-option
+  (`resolveSystemSenderAddress()`), allowlist parsing, and sender-option
   listing.
 - `emailHtml` - Node rendering adapters over the shared template:
   `renderEmailHtml()`, `renderEmailText()`, and `renderEmail()` for both MIME
@@ -467,12 +469,12 @@ remote URLs are not part of the model-facing contract.
 - `brand` - `EmailBrand`, `emailBrandFromContext()`, and `defaultEmailBrand`.
 
 `brand`, and the components behind `emailHtml`/`markdown`, re-export from
-[`@dbx-tools/shared-email-template`](../../shared/email-template). They exist so
+[@dbx-tools/shared-email-template](../../shared/email-template). They exist so
 server code has one import for delivery, and so the Node renderer and a browser
-preview cannot drift apart - not as a second implementation. Style inlining is
-React Email's own; this package runs no separate CSS inliner.
+preview cannot drift apart. Style inlining is React Email's own. This package
+runs no separate CSS inliner.
 
-Pair this package with [`@dbx-tools/shared-email`](../../shared/email) when a UI
+Pair this package with [@dbx-tools/shared-email](../../shared/email) when a UI
 or tool schema needs to validate the same email payload, and with
-[`@dbx-tools/shared-email-template`](../../shared/email-template) when another
+[@dbx-tools/shared-email-template](../../shared/email-template) when another
 runtime needs to reuse the presentation components directly.

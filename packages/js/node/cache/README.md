@@ -1,11 +1,8 @@
-# `@dbx-tools/cache`
+# @dbx-tools/cache
 
-Memory-first caching for Node.js and Bun, built on Cacheable v2 and Keyv.
-
-The default project cache keeps bounded values in memory and persists them to a
-project-scoped portable disk file without blocking foreground writes. Additional
-Keyv-compatible levels can be supplied in read order. Pending persistence is
-tracked and can be drained during application shutdown.
+Cache Node.js and Bun values in bounded memory with optional project-scoped
+disk or Keyv-compatible persistence. Foreground writes don't wait for
+persistence, and shutdown can drain tracked writes.
 
 ## Cache project data
 
@@ -40,3 +37,10 @@ await closeCache(cache);
 Pass ordered Keyv-compatible `levels` to `createCache` when an application needs
 custom persistence. The package does not depend on AppKit;
 `@dbx-tools/appkit` adapts it to AppKit's storage contract.
+
+## Limits
+
+The memory level is process-local and isn't a cross-replica coordination
+mechanism. Call `closeCache()` during shutdown when later levels must receive
+pending writes. Use a shared Keyv-compatible level or an owning framework's
+distributed cache when replicas must read the same persisted values.

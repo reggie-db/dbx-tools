@@ -1,15 +1,12 @@
 # @dbx-tools/ui-teams
 
-React surface for the Teams add-on: render Microsoft Teams Adaptive Cards in the
-browser with the [`adaptivecards`](https://www.npmjs.com/package/adaptivecards)
-JavaScript renderer.
+Render Microsoft Teams Adaptive Cards or a Teams-style conversation preview in
+a React application. This browser package uses the
+[adaptivecards](https://www.npmjs.com/package/adaptivecards) renderer, card
+contracts from [@dbx-tools/shared-teams](../../shared/teams), and the shared
+[@dbx-tools/ui](../appkit) foundation.
 
-Display the Adaptive Cards built by [`@dbx-tools/teams`](../../node/teams) in a
-browser or add a Teams-style conversation preview. The components use the card
-schemas from [`@dbx-tools/shared-teams`](../../shared/teams) and the shared
-[`@dbx-tools/ui`](../appkit) foundation.
-
-## Quick Start
+## Quick start
 
 ```tsx
 import { TeamsChat } from "@dbx-tools/ui-teams/react";
@@ -19,39 +16,41 @@ export function SupportChat() {
 }
 ```
 
-**Key features:**
+Import the stylesheet after your AppKit UI theme.
 
-- `TeamsChat` - a Teams conversation surface: each turn posts a Bot Framework
-  activity to the server's `POST /api/teams/messages` endpoint - the SAME route a
-  real Teams channel calls, so this is a faithful preview rather than a parallel
-  implementation - and the agent's reply renders as Adaptive Card attachments,
-  the way a Teams channel shows a bot's cards. (That route only answers in the
-  HTTP response when the server enables its `allowUnauthenticated` development
-  bypass; against a real bot registration replies go out over the Connector API,
-  so point `endpoint` at `/api/teams/activity` instead.)
-  Mints one conversation id per mount (which threads the server's
-  agent memory), echoes the user's turn optimistically, cancels an in-flight turn
-  on unmount, and offers tap-to-send starters while the transcript is empty.
-- `AdaptiveCardView` - a thin React wrapper over the imperative `adaptivecards`
-  renderer: feed it a compiled Adaptive Card document and it mounts the rendered
-  node, re-rendering on change and wiring `Action.OpenUrl` clicks (open in a new
-  tab by default, or intercept with `onOpenUrl`). The renderer is loaded only
-  when the first card mounts.
-- `AdaptiveCardGallery` - a self-contained dev tool: edit a `CardSpec` (or pick a
-  sample), compile it through the server's `POST /api/teams/card` route, and see
-  the card render live. This is the drop-in "display them" surface for a dev
-  preview page.
-- Built-in `CARD_SAMPLES` covering the different parts of a card (facts, link
-  actions, plain notes) so the preview shows something before you edit.
-- Markdown in a `TextBlock` actually renders. A `TextBlock` is markdown per the
-  Adaptive Cards spec, but `adaptivecards` ships no parser - it leaves the
-  implementation (and its sanitization) to the host, so `**bold**` renders
-  literally until one is installed. Mounting the first card loads and registers
-  `marked` as the renderer's `onProcessMarkdown` processor, degrading to plain
-  text if a string fails to parse, and the stylesheet re-applies list markers /
-  paragraph spacing that Tailwind's preflight resets away.
+## Package fit
 
-## Configure The Chat Preview
+Use this package with the [@dbx-tools/teams](../../node/teams) server plugin.
+Import `@databricks/appkit-ui/styles.css` before this package's stylesheet. The
+components don't read AppKit client configuration. `TeamsChat` and
+`AdaptiveCardGallery` use the explicit `endpoint` and `buildEndpoint` props,
+which default to `/api/teams/messages` and `/api/teams/card`.
+
+The browser preview doesn't implement Microsoft Bot Framework authentication.
+The `/messages` route returns activities in the HTTP response only when the
+server enables its development-only `allowUnauthenticated` option. For a local
+preview against the normal server configuration, set
+`endpoint="/api/teams/activity"`. Keep Microsoft Teams bot credentials and
+Connector API delivery on the server.
+
+Use [@dbx-tools/ui-mastra](../mastra) for Mastra chat and
+[@dbx-tools/ui](../appkit) for common AppKit, authentication, email, and search
+components.
+
+## Package contents
+
+- `TeamsChat` posts Bot Framework activities and renders reply attachments as
+  Adaptive Cards. It keeps one conversation ID per mount, cancels an active
+  request on unmount, and supports starter prompts.
+- `AdaptiveCardView` renders a compiled Adaptive Card and supports
+  `Action.OpenUrl` handling through `onOpenUrl`.
+- `AdaptiveCardGallery` edits a `CardSpec`, compiles it through
+  `POST /api/teams/card`, and renders the result.
+- `CARD_SAMPLES` provides examples with facts, link actions, and notes.
+- `TextBlock` Markdown uses `marked`. If parsing fails, the renderer displays
+  the source as plain text.
+
+## Configure the chat preview
 
 ```tsx
 import { TeamsChat } from "@dbx-tools/ui-teams/react";
@@ -63,22 +62,22 @@ Point `endpoint` elsewhere if the plugin is mounted under a different name, and
 pass `agentId` to converse with a specific agent instead of the server's default.
 `starters` replaces the built-in `DEFAULT_STARTERS` prompts.
 
-## Render A Card
+## Render a card
 
 ```tsx
-import { AdaptiveCardView } from "@dbx-tools/ui-teams/react";
+import { AdaptiveCardView, type AdaptiveCard } from "@dbx-tools/ui-teams/react";
 
 const Preview = ({ card }: { card: AdaptiveCard }) => (
   <AdaptiveCardView card={card} className="ac-container" />
 );
 ```
 
-`AdaptiveCardView` renders any compiled Adaptive Card document - one returned by
-the `create_teams_card` tool, the plugin's `buildCard` export, or the
-`/api/teams/card` route. Card text is treated as markdown, matching how Teams
-itself renders a `TextBlock`.
+`AdaptiveCardView` renders any compiled Adaptive Card document, including one
+returned by the `create_teams_card` tool, the plugin's `buildCard` export, or
+the `/api/teams/card` route. Card text is treated as Markdown, matching how
+Teams renders a `TextBlock`.
 
-## Live Preview Page
+## Add a live preview page
 
 ```tsx
 import { AdaptiveCardGallery } from "@dbx-tools/ui-teams/react";
@@ -87,15 +86,14 @@ const Cards = () => <AdaptiveCardGallery />;
 export default Cards;
 ```
 
-Drop `<AdaptiveCardGallery/>` on a route. It posts the edited `CardSpec` to the
+Add `<AdaptiveCardGallery />` to a route. It posts the edited `CardSpec` to the
 `@dbx-tools/teams` plugin's `/api/teams/card` route and renders the compiled
-card, so you exercise the real server builder end to end. Point it at a
-different mount with `buildEndpoint`.
+card. Point it at a different mount with `buildEndpoint`.
 
-## Styling
+## Styles
 
 Import the stylesheet once from the host app's Tailwind entry, after Tailwind and
-your AppKit-UI theme:
+your AppKit UI theme:
 
 ```css
 @import "tailwindcss";
@@ -103,10 +101,14 @@ your AppKit-UI theme:
 @import "@dbx-tools/ui-teams/styles.css";
 ```
 
-## Modules
+The Teams stylesheet imports the shared `@dbx-tools/ui` foundation and uses
+AppKit semantic tokens. Import it once from the host application's Tailwind
+entry point.
 
-- `./react` - `TeamsChat`, `DEFAULT_STARTERS`, `AdaptiveCardView`,
+## Package exports
+
+- `./react`: `TeamsChat`, `DEFAULT_STARTERS`, `AdaptiveCardView`,
   `AdaptiveCardGallery`, `CARD_SAMPLES`, and the
-  re-exported `AdaptiveCard` / `CardResult` / `CardSpec` types.
-- `./styles.css` - the AppKit-token-based styling for the gallery plus a minimal
+  re-exported `Activity`, `AdaptiveCard`, `CardResult`, and `CardSpec` types.
+- `./styles.css`: AppKit-token-based gallery styles and a minimal
   Adaptive Card container skin.

@@ -1,11 +1,10 @@
 # @dbx-tools/cli-service
 
-Add desktop-service installation, lifecycle commands, optional uv-managed
-Python dependencies, and a tray menu to a Commander CLI. Users can keep your
-command running after their terminal closes and manage it through the same
-`service` commands on macOS, Linux, and Windows.
+Add current-user service installation, lifecycle commands, optional uv-managed
+Python dependencies, and a tray menu to a Commander CLI. The managed command
+continues after its terminal closes on macOS, Linux, and Windows.
 
-## Add Service Commands
+## Add service commands
 
 ```ts
 import { buildServiceCommand } from "@dbx-tools/cli-service/cli";
@@ -27,7 +26,7 @@ await program.parseAsync(process.argv);
 `defineService` uses the owning package's name, version, and default executable.
 Use `command.binName` when the package has multiple executable entries. Set
 `command.executable` to run an existing external program instead of compiling a
-package entrypoint. Managed commands default `NODE_ENV` to `production`; an
+package entrypoint. Managed commands default `NODE_ENV` to `production`. An
 explicit `command.environment.NODE_ENV` overrides it.
 
 Set `pythonPackage` when the compiled service command needs a Python runtime:
@@ -70,7 +69,7 @@ defineService(import.meta.url, {
 });
 ```
 
-## Install And Manage The Service
+## Install and manage the service
 
 For the example program above:
 
@@ -96,16 +95,16 @@ The service belongs to the current user. Login startup uses a LaunchAgent on
 macOS, an XDG autostart entry on Linux, and a Startup command on Windows. Package
 entrypoints are compiled with Bun into `~/.dbx-tools/bin`.
 
-`restart` stops and starts the installed executable; it does not rebuild it.
+`restart` stops and starts the installed executable. It does not rebuild it.
 Re-run `install` after upgrading a consuming package to replace compiled
 executables and update the saved configuration.
 
-## Customize The Tray Menu
+## Customize the tray menu
 
 The default tray menu shows the program name and version and offers `Quit`.
 Add URL, command, or separator items through the service definition. Custom
-command items can select a package binary or an external executable just like
-the main service command.
+command items can select a package binary or an external executable in the same
+way as the main service command.
 
 Use this package when adding service support to another CLI so users get the
 same installation, lifecycle commands, and tray behavior. The generated
@@ -113,7 +112,7 @@ reference uses `<cli>` as a placeholder for the consuming program's name.
 
 <!-- cli-reference:start -->
 
-## Command Reference
+## Command reference
 
 ### `<cli> service`
 

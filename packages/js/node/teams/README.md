@@ -1,16 +1,13 @@
 # @dbx-tools/teams
 
-Server-side Microsoft Teams Adaptive Card runtime, agent tool, and AppKit
-plugin.
-
-Add a Teams bot endpoint to an AppKit or Mastra backend, or turn a short model
-response into an Adaptive Card for a preview or channel post. The browser-safe
+Add a Microsoft Teams bot endpoint to an AppKit or Mastra backend, or turn a
+model response into an Adaptive Card for a preview or channel post. The browser-safe
 card schemas live in
-[`@dbx-tools/shared-teams`](../../shared/teams), and the React renderer (the
+[@dbx-tools/shared-teams](../../shared/teams), and the React renderer (the
 `adaptivecards` JavaScript renderer) lives in
-[`@dbx-tools/ui-teams`](../../ui/teams).
+[@dbx-tools/ui-teams](../../ui/teams).
 
-## Quick Start
+## Quick start
 
 Register the Teams endpoint and give an agent its card tools:
 
@@ -29,7 +26,7 @@ const support = agents.createAgent({
 await createApp({ plugins: [server(), teams(), mastra({ agents: { support } })] });
 ```
 
-**Key features:**
+Registration adds:
 
 - AppKit plugin registration that resolves config, logs the effective card
   version and webhook state at boot, and mounts card-build / card-post routes.
@@ -37,9 +34,7 @@ await createApp({ plugins: [server(), teams(), mastra({ agents: { support } })] 
   `create_teams_card` factory, both taking the small `CardSpec` vocabulary.
   Each plugin instance keeps its card config, webhook, and executor separate.
 - A deterministic builder that compiles a `CardSpec` (title, subtitle, text,
-  key/value facts, link actions) into a valid Adaptive Card 1.5 document, so a
-  card is well-formed by construction rather than by hoping the model produced
-  correct schema.
+  key/value facts, link actions) into a valid Adaptive Card 1.5 document.
 - Optional posting to a Teams incoming webhook, wrapped in the attachment
   envelope Teams expects, with a retrying execution policy.
 - `POST /api/teams/messages` - the Microsoft Teams messaging endpoint: the
@@ -56,7 +51,7 @@ await createApp({ plugins: [server(), teams(), mastra({ agents: { support } })] 
 - `POST /api/teams/card` route a browser dev page posts to for a live card
   preview, and `POST /api/teams/post` to push a card to the webhook.
 
-## Configure Teams Delivery
+## Configure Teams delivery
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
@@ -86,7 +81,7 @@ toolkit as shown above, preserving the owning plugin's AppKit execution chain.
 The `teams.createCard` tool is auto-inheritable because building a card has no
 side effects.
 
-## Converse In Cards
+## Converse in cards
 
 ```bash
 curl -X POST http://localhost:8000/api/teams/activity \
@@ -105,26 +100,23 @@ The reply is `{ "activities": [...] }`, each activity carrying
 `attachments[].contentType === "application/vnd.microsoft.card.adaptive"` with a
 compiled Adaptive Card under `content` - what a Teams client renders.
 
-A turn runs in two passes, and the order is the whole point:
+A turn runs in two passes:
 
 1. **Answer.** The agent answers the question normally - its tools available, no
    `structuredOutput`, and nothing about cards in the prompt.
 2. **Format.** A second `structuredOutput` pass reformats that answer into a
    `CardSpec`, which the builder compiles.
 
-Asking for the answer AND the card shape in one request makes the model treat
-formatting as the task: it emits a card immediately, never calls its tools, and a
-question that should have queried Genie comes back as "I don't have a real system
-connected - here is a template card". Answering first means this endpoint's
-CONTENT matches what the streaming chat endpoint would say; only the
-presentation differs. Agents keep `create_teams_card` for the other direction -
-answering in prose on a chat endpoint and choosing to attach a card - and when
-the agent calls it during pass 1, that spec wins and pass 2 is skipped.
+Answering first preserves normal tool use. The second pass changes presentation
+without changing the answer. Agents keep `create_teams_card` for the opposite
+direction: answering in prose on a chat endpoint and choosing to attach a card.
+When the agent calls it during the first pass, that specification wins and the
+format pass is skipped.
 
 Because the schema is prompt-injected rather than provider-enforced (Databricks
 Model Serving rejects `response_format` alongside `tools`), the format pass is
 best-effort, so the answer is recovered in layers: the parsed spec, a full
-Adaptive Card DOCUMENT read back into the spec vocabulary (what a capable model
+Adaptive Card document read back into the spec vocabulary (what a capable model
 often returns when asked for "an Adaptive Card"), the payload Mastra rejected off
 the thrown error, JSON embedded in prose, then the prose itself. A formatting
 miss costs structure, never the answer.
@@ -137,7 +129,7 @@ answering pass asks the agent for the values themselves instead.
 The agent is resolved from the sibling Mastra plugin by registered name
 (`agentPlugin`, default `mastra`), so this package stays a leaf add-on and takes
 no dependency on `@dbx-tools/appkit-mastra`. Pass `agentId` in the body to pick a
-specific agent; omit it for the default one. An unmounted agent plugin answers
+specific agent. Omit it for the default one. An unmounted agent plugin answers
 503, an unknown `agentId` answers 404.
 
 The same lookup fetches the plugin's `createRequestContext()`, which builds the
@@ -145,15 +137,15 @@ per-turn Mastra `RequestContext` the turn passes to both passes. This is require
 for parity with chat: user-scoped tools read the AppKit user off that context, so
 without it `ask_genie` answers "the data source is unreachable" while the chat
 routes answer with real numbers. A provider that exposes no factory still serves
-turns, just without user-scoped tools.
+turns without user-scoped tools.
 
 Activities that carry no prompt - a `typing` indicator, a `conversationUpdate`
 when someone joins, an empty message - answer `{ "activities": [] }` rather than
-erroring, which is what a real bot does with them.
+erroring, which matches standard bot behavior.
 
-[`@dbx-tools/ui-teams`](../../ui/teams)'s `TeamsChat` is the matching client.
+[@dbx-tools/ui-teams](../../ui/teams)'s `TeamsChat` is the matching client.
 
-## Build A Card Directly
+## Build a card directly
 
 ```ts
 import { builder } from "@dbx-tools/teams";
@@ -180,14 +172,20 @@ const createTeamsCard = tool.teamsCardTool({ runtime: teamsRuntime });
 
 Pass the runtime explicitly or provide the executor to `createTeamsRuntime`.
 
-## Use With AppKit
+## Use with AppKit
 
-AppKit has no Teams or Adaptive Card surface at all, so use this whenever an
-agent should emit a Teams card. The value is the policy layer around a card: the
+AppKit has no Teams or Adaptive Card surface, so use this package when an
+agent should emit a Teams card. The policy layer limits the card shape: the
 model works in a small, safe vocabulary (`CardSpec`) instead of raw Adaptive
 Card JSON, the builder guarantees a schema-valid Adaptive Card 1.5 document, and
-posting is gated behind an explicitly configured incoming webhook. Same add-on
-shape as [`@dbx-tools/email`](../email).
+posting is gated behind an explicitly configured incoming webhook. This package
+follows the same add-on shape as [@dbx-tools/email](../email).
+
+Building a card is a read-only transform and doesn't require approval. Posting
+to `/api/teams/post` is an external side effect, but it isn't exposed as an
+agent tool. The application that exposes that route owns caller authorization
+and any approval step. Tools used by a Teams conversation keep their owning
+agent's approval policy.
 
 ## Configuration
 
@@ -200,7 +198,7 @@ environment variable.
   unset, posting is disabled and the plugin only builds cards for a UI to
   render. A value that is not an absolute HTTPS URL fails config resolution.
 - `agentPlugin` / `TEAMS_AGENT_PLUGIN` - registered name of the sibling plugin
-  whose agents answer a conversation turn. Defaults to `mastra`; set it when the
+  whose agents answer a conversation turn. Defaults to `mastra`. Set it when the
   Mastra plugin is mounted under a `config.name` override.
 - `appId` / `TEAMS_APP_ID` (alias `MICROSOFT_APP_ID`) - the Entra app (client)
   id from your Azure Bot registration. Required before `POST /messages` accepts
@@ -208,32 +206,32 @@ environment variable.
 - `appPassword` / `TEAMS_APP_PASSWORD` (alias `MICROSOFT_APP_PASSWORD`) - client
   secret for that app id, used to fetch the outbound Connector token.
 - `appTenantId` / `TEAMS_APP_TENANT_ID` (alias `MICROSOFT_APP_TENANT_ID`) - set
-  only for a SINGLE-tenant bot; leave unset for multi-tenant.
+  only for a single-tenant bot. Leave it unset for multi-tenant.
 - `allowUnauthenticated` / `TEAMS_ALLOW_UNAUTHENTICATED` - serve `/messages`
-  with NO token validation, replying in the HTTP response instead of through the
+  without token validation, replying in the HTTP response instead of through the
   Connector API. For local development only, and ignored unless `NODE_ENV` is
   `development`, so a production build cannot be talked into it by an
-  environment variable. See "Connect A Real Teams Channel".
+  environment variable. See "Connect a real Teams channel".
 
 The `MICROSOFT_APP_*` aliases are the names the Bot Framework SDK and the Azure
 portal already use, so an existing bot's environment drops in unchanged.
 
-## Connect A Real Teams Channel
+## Connect a real Teams channel
 
-1. Create an **Azure Bot** resource and note its **Microsoft App ID**; create a
+1. Create an **Azure Bot** resource and note its **Microsoft App ID**. Create a
    client secret for it.
-2. Set its **Messaging endpoint** to `https://<your-app-host>/api/teams/messages`.
-3. Enable the **Microsoft Teams** channel on the bot.
-4. Give the app `TEAMS_APP_ID` and `TEAMS_APP_PASSWORD` (plus
+1. Set its **Messaging endpoint** to the app host plus `/api/teams/messages`.
+1. Enable the **Microsoft Teams** channel on the bot.
+1. Give the app `TEAMS_APP_ID` and `TEAMS_APP_PASSWORD` (plus
    `TEAMS_APP_TENANT_ID` for a single-tenant registration).
-5. Install the bot in Teams (via a Teams app manifest referencing the same app
-   id) and message it. The agent answers in Adaptive Cards.
+1. Install the bot in Teams with a Teams app manifest that references the same app
+   ID, and message it. The agent answers in Adaptive Cards.
 
 What the endpoint does on each inbound request:
 
 - **Validates the JWT** against the Bot Framework JWKS, requiring a trusted
   issuer and an audience equal to `appId`. The audience check is the one that
-  matters: a token the Bot Service issued for someone ELSE's bot is signed by the
+  matters: a token the Bot Service issued for another bot is signed by the
   same keys, so without it anyone with their own bot could drive your agent.
 - **Pins the reply destination to the token.** `serviceUrl` arrives in the
   request body, and replies carry your bot's credentials, so it is honored only
@@ -245,7 +243,7 @@ What the endpoint does on each inbound request:
   Connector API when it is ready.
 
 For local development without a registration, set `allowUnauthenticated: true`
-(with `NODE_ENV=development`) and `/messages` will answer in the HTTP response,
+(with `NODE_ENV=development`) and `/messages` answers in the HTTP response,
 which is how the in-repo demo renders live cards.
 
 ## Routes
@@ -255,17 +253,17 @@ Mounted under the plugin base path `/api/teams`:
 - `POST /messages` - the Teams messaging endpoint (see above). Body is a bare Bot
   Framework activity. `401` on a token that fails validation, `503` when no
   `appId`/`appPassword` is configured, `400` on an invalid activity or a
-  `serviceUrl` that does not match the token. Answers `200` with an empty body;
-  the reply arrives over the Connector API.
+  `serviceUrl` that does not match the token. Answers `200` with an empty body.
+  The reply arrives over the Connector API.
 - `POST /activity` - run one conversation turn. Body is
-  `{ activity, agentId?, model? }`; the response is `{ activities }`, each
+  `{ activity, agentId?, model? }`. The response is `{ activities }`, each
   carrying Adaptive Card attachments. `400` on an invalid activity, `404` on an
   unknown `agentId`, `503` when no agent plugin is registered.
 - `POST /card` - compile a `CardSpec` request body into an Adaptive Card
   document. The dev display page posts here to preview cards live.
 - `POST /post` - compile then push a `CardSpec` to the configured Teams
-  incoming webhook; a `400` when the body is invalid, an error when no webhook
-  is configured.
+  incoming webhook. Returns `400` when the body is invalid and an error when no
+  webhook is configured.
 
 ## Modules
 

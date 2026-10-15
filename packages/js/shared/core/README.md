@@ -1,9 +1,11 @@
 # @dbx-tools/shared-core
 
-Browser-safe utility base for `@dbx-tools/*` packages.
+Use browser-safe utilities shared by `@dbx-tools/*` packages in browsers,
+workers, Node, Bun, CLIs, and schema packages. The package includes logging,
+options, networking, JSON, hashing, predicates, and other dependency-light
+foundations.
 
-These dependency-free helpers run in Node, browsers, workers, CLIs, and shared
-schema packages. Modules are exported as namespaces so call sites stay explicit:
+Import the namespaces that your code uses:
 
 ```ts
 import {
@@ -11,6 +13,8 @@ import {
   brandUtils,
   environmentUtils,
   errorUtils,
+  execution,
+  functionUtils,
   hash,
   http,
   json,
@@ -18,20 +22,23 @@ import {
   net,
   object,
   options,
+  pattern,
+  predicate,
   stringUtils,
+  token,
 } from "@dbx-tools/shared-core";
 ```
 
-Node-only helpers live in [`@dbx-tools/core`](../../node/core). AppKit and
-Databricks SDK helpers live in [`@dbx-tools/appkit`](../../node/appkit).
+Node-only helpers live in [@dbx-tools/core](../../node/core). AppKit and
+Databricks SDK helpers live in [@dbx-tools/appkit](../../node/appkit).
 
-Key features:
+Use these utilities for:
 
 - Abort-aware async utilities for polling, sleeping, and connecting cancellation
   across web and Node runtimes.
 - Error normalization for unknown thrown values, nested causes, and HTTP-ish
   status/message extraction.
-- Deterministic non-cryptographic hashes and short ids for cache keys, slugs,
+- Deterministic non-cryptographic hashes and short IDs for cache keys, slugs,
   and generated names.
 - Non-throwing JSON parsing for untrusted input, with record narrowing so parsed
   data is not cast blindly.
@@ -41,12 +48,19 @@ Key features:
   logging helpers that avoid Node-only dependencies.
 - Namespace exports that make utility call sites explicit without creating a
   grab-bag default import.
-- A Zod-backed `BrandContext` contract with dbx tools defaults, JSON Schema
+- A Zod-backed `BrandContext` contract with dbx-tools defaults, JSON Schema
   output, and prompt serialization for browser, library, and LLM consumers.
 - Shared Zod option schemas for Databricks environment names, normalized URLs,
   TCP ports, listener addresses, and schema-driven parse/serialization.
 
-## Brand Context
+## Runtime boundary
+
+This package doesn't read files, discover Databricks credentials, or call
+workspace APIs. Node-only configuration and filesystem behavior lives in
+[@dbx-tools/core](../../node/core). AppKit integration lives in
+[@dbx-tools/appkit](../../node/appkit).
+
+## Brand context
 
 ```ts
 import { brandUtils } from "@dbx-tools/shared-core";
@@ -58,11 +72,11 @@ const instructions = brandUtils.brandContextPrompt(context);
 
 `BrandContextSchema` validates identity, theme-aware assets, colors,
 typography, links, audience, and voice. Every field has a dbx tools default, so
-an empty object is a complete context. Use [`@dbx-tools/core`](../../node/core)
+an empty object is a complete context. Use [@dbx-tools/core](../../node/core)
 to discover and read YAML/JSON files, and
-[`@dbx-tools/ui/branding`](../../ui/appkit) to apply the same context to a UI.
+[@dbx-tools/ui/branding](../../ui/appkit) to apply the same context to a UI.
 
-## Async Control
+## Control asynchronous work
 
 ```ts
 for await (const status of asyncUtils.poll(fetchStatus, {
@@ -80,7 +94,7 @@ await asyncUtils.sleep(500, abortSignal);
 `asyncUtils.tieAbortSignal()` and `asyncUtils.sleep()` let route handlers connect caller
 cancellation to background work.
 
-## Error Handling
+## Handle errors
 
 ```ts
 try {
@@ -96,7 +110,7 @@ try {
 `errorUtils.errorNodes()` normalize unknown thrown values. `errorUtils.errorContext()`
 extracts HTTP-ish status/message detail from nested errors.
 
-## Hashes And Ids
+## Create hashes and IDs
 
 ```ts
 const id = hash.id(8);
@@ -107,7 +121,7 @@ const suffix = hash.fnvHashWithOptions({ length: 6 }, longName);
 These hashes are deterministic and non-cryptographic. Use them for cache keys,
 slug suffixes, and trace-stable identifiers, not secrets or signatures.
 
-## Parsing Untrusted JSON
+## Parse untrusted JSON
 
 ```ts
 const body = json.parseRecord(await readRequestText(req)) ?? {};
@@ -119,15 +133,15 @@ const settings = json.parse<Settings>(process.env.SETTINGS, DEFAULT_SETTINGS);
 
 `json.parse()` returns the fallback (or `undefined`) instead of throwing, so a
 malformed request body, env var, config file, subprocess stdout, or third-party
-response does not need its own `try`/`catch`. `json.parseRecord()` additionally
+response does not need its own `try`/`catch`. `json.parseRecord()` also
 narrows to `Record<string, unknown>`, which a bare `JSON.parse(...) as Record<...>`
 does not: it rejects a parsed `null`, array, or scalar rather than letting it
 through as an object.
 
 Reach for `JSON.parse` directly only when a throw is the correct outcome, such as
-reading a file this repo generated itself.
+reading a trusted generated file.
 
-## Strings And Descriptions
+## Normalize strings and descriptions
 
 ```ts
 const slug = stringUtils.toSlug("My Cool Project!");
@@ -144,7 +158,7 @@ const description = stringUtils.toDescription([
 ```
 
 `stringUtils.tokenize()`, `toSlug()`, and `toIdentifier()` keep package names, tool
-ids, schema ids, and generated labels consistent. `toDescription()` turns nested
+IDs, schema IDs, and generated labels consistent. `toDescription()` turns nested
 description data into prompt/tool text without hand-concatenating paragraphs.
 `dedent()` removes common indentation and surrounding blank lines from multiline
 code or configuration templates. Its `trimStart` and `trimEnd` options preserve
@@ -152,7 +166,7 @@ boundary blank lines when generated output requires them, while `trimLineEnd:
 false` preserves trailing spaces and tabs. `dedentLines()` returns the same
 normalization as a line array for file generators.
 
-Three helpers exist so call sites stop re-implementing them:
+Use the following helpers for common labels and configuration values:
 
 ```ts
 const label = stringUtils.toLabel("web_search"); // "Web Search"
@@ -167,7 +181,7 @@ field off parsed JSON. `parseList()` normalizes a config value that may arrive a
 an array or as one comma/whitespace-separated env string, de-duplicating as it
 goes.
 
-## Objects And Predicates
+## Work with objects and predicates
 
 ```ts
 if (object.isRecord(value)) {
@@ -185,7 +199,7 @@ const isRunnable = predicate
 short-circuits. `predicate.create()` returns composable predicates with `and`,
 `or`, and `negate`, used heavily by the projen engine.
 
-## Serializable Values And Stable Identities
+## Validate serializable values and stable identities
 
 ```ts
 if (object.isSerializableValue(requestBody)) {
@@ -207,11 +221,11 @@ it. Object key order does not affect the result, but types and structure do:
 `1` and `"1"` differ, and so do `["a", "bc"]` and `["ab", "c"]`. It throws on a
 cycle, a non-finite number, or a function/symbol rather than returning an
 identity two callers could disagree about. `@dbx-tools/postgres` derives both its
-advisory-lock ids and its notification channel names through it. Use
-`hash.fnvHash()` instead when a short collision-tolerant digest is enough — its
+advisory-lock IDs and its notification channel names through it. Use
+`hash.fnvHash()` instead when a short collision-tolerant digest is enough. Its
 canonicalizer is looser and folds every `Date` onto one token.
 
-## Numbers, Dates, And Durations
+## Parse numbers, dates, and durations
 
 ```ts
 object.toNumber("1,000"); //     1000
@@ -233,8 +247,8 @@ object.toDuration("-7d"); //               -604_800_000
 object.toDuration("2026-08-02"); //        ms from now until that instant
 ```
 
-All three are for values typed by HAND into env vars, CLI flags, and config
-files, so they are deliberately lenient: whitespace between amount and unit is
+These helpers parse values entered in environment variables, CLI flags, and
+configuration files. Whitespace between the amount and unit is
 optional, units are case-insensitive, and plurals and abbreviations are
 equivalent (`2ms` === `2 milliseconds`, `1h` === `1 hr` === `1 Hour`). Signs make
 a duration an OFFSET, which is what lets `toDate` read `-30d` / `12 hours ago` /
@@ -244,9 +258,9 @@ a duration an OFFSET, which is what lets `toDate` read `-30d` / `12 hours ago` /
 over `Number(value)` is that `Number` invents values: `""`, `null`, `[]`, and a
 whitespace string all become `0`, so every caller has to re-check the result.
 `toNumber` returns `undefined` instead, and accepts the spellings a person
-actually types — digit-group separators, a bare fraction, a trailing point, an
-exponent, a trailing percent. `ToNumberOptions` disables the `separators` and
-`percent` leniencies for a string whose other characters carry meaning; a SQL
+actually types, including digit-group separators, a bare fraction, a trailing point, an
+exponent, and a trailing percent. `ToNumberOptions` disables the `separators` and
+`percent` leniencies for a string whose other characters carry meaning. A SQL
 cell uses that so `"1,000"` in a text column stays the string the query returned.
 
 `toDate` exists rather than `new Date(value)` because a bare epoch usually
@@ -255,17 +269,17 @@ arrives as a STRING (`date +%s`, a JSON field, a copied log line) and
 Numeric input is therefore routed to the epoch path, with values under `1e11`
 read as seconds and the rest as milliseconds. An unknown unit fails the whole
 duration parse instead of being skipped, so `1 fortnight` is `undefined` rather
-than `1`. Neither function throws - like `toBoolean` they return `undefined`, so
+than `1`. Neither function throws. Like `toBoolean`, they return `undefined`, so
 the caller decides whether a bad value is fatal, a warning, or a fallback
 (`@dbx-tools/tunnel`'s `TUNNEL_AUTH_SESSION_CUTOFF` warns and carries on).
 
-### Dates And Durations Are Inverses
+### Dates and durations are inverses
 
 Each function falls back to the other, so one field accepts both readings: a
 duration reaching `toDate` resolves against now, and a date reaching
 `toDuration` becomes the signed offset from now (`date - now`, so a past instant
-is negative). Each tries its own reading first — `toDate` runs `Date.parse`
-before the duration fallback — and recurses with the other's parser off, so a
+is negative). Each tries its own reading first. `toDate` runs `Date.parse`
+before the duration fallback and recurses with the other's parser off, so a
 value cannot bounce between them.
 
 ```ts
@@ -279,7 +293,7 @@ the current clock makes the same input mean something different on every call. A
 timeout or a poll interval must not accept a date, because it would yield a
 plausible but wrong number that also drifts.
 
-## Iterables
+## Transform iterables
 
 ```ts
 const names = object
@@ -299,7 +313,7 @@ The iterable helpers are lazy and work well for filesystem scans, package lists,
 and one-pass generated data. Use `sequence(..., { cache: true })` when a source
 must be re-read.
 
-## HTTP Headers And Cookies
+## Read HTTP headers and cookies
 
 ```ts
 const cookies = http.parseCookies(req);
@@ -314,14 +328,14 @@ http.forEachHeaderValue(req, "authorization", (value) => {
 records, and plain `{ headers }` objects. `http.createFetchError()` turns a
 failed `Response` into an error with response text attached.
 
-## Intercepted Execution
+## Run intercepted execution
 
 `execution.directExecutor()` gives plugin-backed tools a no-plugin fallback with
 the same success/failure shape as AppKit's executor. `execution.run()` merges the
 plugin timeout signal with the caller's cancellation signal and centralizes
 result unwrapping without imposing an AppKit dependency on shared code.
 
-## Network Strings, Email, And CIDR
+## Parse network strings, email addresses, and CIDR blocks
 
 ```ts
 const url = net.urlBuilder("example.com")?.withPathAppend("api", "2.0");
@@ -334,10 +348,10 @@ const internal = cidr ? net.ipInCidr("10.1.2.3", cidr) : false;
 `urlBuilder(...).pathMatches()` compares path prefixes on segment boundaries.
 IP/CIDR helpers parse IPv4 and IPv6 into a shared bigint comparison model.
 
-## Allow-List Patterns
+## Compile allowlist patterns
 
 ```ts
-// One matcher from a config array OR a delimited env stringUtils.
+// One matcher from a config array or a delimited environment string.
 const forwardable = pattern.toPatternMatcher(["x-mastra-*", "/^x-trace-/", "x-tenant"]);
 
 forwardable("x-mastra-model"); // true  (glob)
@@ -346,25 +360,25 @@ forwardable("x-tenant"); // true  (literal, whole-string)
 forwardable("x-forwarded-user"); // false
 ```
 
-Every configurable allow-list in this repo takes the same three shapes, so the
+Configurable allowlists accept the same three shapes, so the
 compilation lives here once: a `/regex/` literal (with optional flags), a
 shell-style glob (`*`, `?`, anchored at both ends, all other characters escaped),
-or a literal compared whole-stringUtils. Matching is case-insensitive by default -
-what HTTP header names and email addresses both want - and `caseSensitive` opts
-out.
+or a literal compared as a whole string. Matching is case-insensitive by
+default, which suits HTTP header names and email addresses. Set `caseSensitive`
+to opt out.
 
 An invalid regex is skipped with a warning instead of throwing, so one bad
 config entry cannot stop a process from starting. No usable patterns yields a
-matcher that always returns `false`; a caller that reads "no patterns" as "permit
+matcher that always returns `false`. A caller that reads "no patterns" as "permit
 everything" must say so itself. The result is a `predicate`, so it composes with
 `.and()` / `.or()` / `.negate()`.
 
-Reach for [`@dbx-tools/path`](../../node/path)'s `toPathMatcher` instead when
+Use [@dbx-tools/path](../../node/path)'s `toPathMatcher` instead when
 matching a filesystem path or URL path, where `/` is a segment boundary and `**`
-is meaningful - that one is `minimatch`-backed. This module is deliberately
+is meaningful. That matcher uses `minimatch`. This module remains
 dependency-free so it stays usable in a browser bundle.
 
-## Token Claims
+## Read token claims
 
 ```ts
 const scopes = token.getAccessTokenScopes(req, "x-forwarded-access-token");
@@ -375,7 +389,7 @@ Token helpers decode JWT payloads without validating signatures. Use them for
 request-scoped authorization hints after the platform has already authenticated
 the request.
 
-## Memoization
+## Memoize functions
 
 ```ts
 const getRanges = functionUtils.memoize(fetchRanges, {
@@ -385,13 +399,13 @@ const getRanges = functionUtils.memoize(fetchRanges, {
 
 `functionUtils.memoize()` caches sync or async factories, evicts rejected
 promises, and supports TTL-based refresh. It is useful for public metadata feeds,
-SDK catalogues, and expensive computed constants.
+SDK catalogs, and expensive computed constants.
 
 Serializing whole callbacks rather than caching one value is a Node concern
 (it needs `node:worker_threads`), so it lives in
-[`@dbx-tools/core`](../../node/core)'s `processLock` instead.
+[@dbx-tools/core](../../node/core)'s `processLock` instead.
 
-## Logging
+## Write logs
 
 ```ts
 const logger = log.logger("mastra/genie");
@@ -407,30 +421,30 @@ formatted process streams on server runtimes: debug/info use stdout and
 warn/error use stderr. It honors `LOG_LEVEL` per call, so debug statements can
 stay in production code without paying formatting cost when disabled.
 
-## Modules
+## Package exports
 
-- `asyncUtils` - polling, sleep, and abort-signal wiring.
-- `errorUtils` - unknown-error normalization and HTTP-ish error context.
-- `hash` - ids, FNV hashes, and base32 encoding.
-- `json` - non-throwing `parse()` and record-narrowing `parseRecord()`.
-- `stringUtils` - tokenization, slugs, identifiers, human labels, string coercion,
+- `asyncUtils`: polling, sleep, and abort-signal wiring.
+- `errorUtils`: unknown-error normalization and HTTP-ish error context.
+- `hash`: IDs, FNV hashes, and base32 encoding.
+- `json`: non-throwing `parse()` and record-narrowing `parseRecord()`.
+- `stringUtils`: tokenization, slugs, identifiers, human labels, string coercion,
   config lists, multiline string/line dedenting, descriptions, pluralization,
   and HTML escaping.
-- `object` - record checks, number/boolean/date/duration coercion, present-only
+- `object`: record checks, number/boolean/date/duration coercion, present-only
   field spreading, deep equality, JSON-round-trip guards
   (`isSerializableValue`), canonical identity keys (`toStableKey`), shape types,
   and lazy sequence transforms + collection helpers.
-- `predicate` - composable boolean/type predicates.
-- `pattern` - literal / glob / `/regex/` allow-list matching compiled to a
+- `predicate`: composable boolean/type predicates.
+- `pattern`: literal, glob, and `/regex/` allowlist matching compiled to a
   predicate.
-- `http` - header iteration, cookie parsing, and fetch error creation.
-- `execution` - direct executor fallback, cancellation merging, and result unwrapping.
-- `net` - URL building, email parsing, path matching, IP/CIDR helpers.
-- `options` - Databricks environment/config schemas, ports, listener addresses,
+- `http`: header iteration, cookie parsing, and fetch error creation.
+- `execution`: direct executor fallback, cancellation merging, and result unwrapping.
+- `net`: URL building, email parsing, path matching, and IP/CIDR helpers.
+- `options`: Databricks environment/config schemas, ports, listener addresses,
   URL normalization, nullable map parsing, and flag/env JSON serialization.
-- `token` - JWT payload and scope readers.
-- `functionUtils` - memoization.
-- `log` - tagged leveled logging.
-- `brandUtils` - Zod schema, defaults, JSON Schema, and LLM prompt serialization.
-- `environmentUtils` - Databricks App runtime detection from App env vars or the
+- `token`: JWT payload and scope readers.
+- `functionUtils`: memoization.
+- `log`: tagged leveled logging.
+- `brandUtils`: Zod schema, defaults, JSON Schema, and LLM prompt serialization.
+- `environmentUtils`: Databricks App runtime detection from App env vars or the
   Apps container source tree.

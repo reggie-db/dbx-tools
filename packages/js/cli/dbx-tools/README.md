@@ -1,10 +1,10 @@
 # @dbx-tools/cli
 
-Use one CLI to authenticate with Databricks, connect local PostgreSQL tools to
-Lakebase, serve Databricks models to coding agents, run graph memory, and share
-applications through a gated public URL.
+Use `dbx` to authenticate with Databricks, connect local PostgreSQL tools to
+Lakebase, expose workspace models to local clients, run graph memory, and share
+an application through an access-controlled public URL.
 
-## Install And Connect
+## Install and connect
 
 ```sh
 bun add --global @dbx-tools/cli
@@ -12,20 +12,33 @@ bun add --global @dbx-tools/cli
 
 `dbx-tools` is an alias for `dbx`. Authentication and a configured Databricks
 profile are resolved automatically. Pass `--profile` only to override that
-selection; examples that use `MY-PROFILE` show the explicit form.
+selection. Examples that use `MY-PROFILE` show the explicit form.
 
-## Serve Models To Local Tools
+## Serve models to local tools
 
 ```sh
-dbx model-gateway --profile MY-PROFILE --port 4000
+dbx model-gateway --profile MY-PROFILE --listen tcp://127.0.0.1:4000
 ```
 
-Point an OpenAI-compatible client at `http://127.0.0.1:4000/v1`. The generated
+Point an OpenAI-compatible client at
+[http://127.0.0.1:4000/v1](http://127.0.0.1:4000/v1). The generated
 command reference includes all gateway and desktop-service options.
 
 Requests may omit `model` to select the best available chat endpoint. Set a
 gateway default with `--model` or `--model-class`, or select a class per request
 with the `x-dbx-tools-model-class` header.
+
+Run the gateway in the foreground for one terminal session. Install its
+current-user service when local tools need the endpoint after the terminal
+closes:
+
+```sh
+dbx model-gateway service install
+dbx model-gateway service status
+```
+
+Embed [@dbx-tools/appkit-model-gateway](../../node/appkit-model-gateway)
+instead when the gateway belongs inside an AppKit application.
 
 ## Run Genie Code
 
@@ -84,16 +97,16 @@ dbx genie --model claude -- exec --ephemeral "Review this repository."
 Use `--` only when a wrapper option such as `--model` must be sent to Genie
 instead of being consumed by `dbx genie`.
 
-## Connect To Lakebase
+## Connect to Lakebase
 
 ```sh
-dbx lakebase-proxy --profile MY-PROFILE --port 5432
+dbx lakebase-proxy --profile MY-PROFILE --listen tcp://127.0.0.1:5432
 ```
 
 Connect your PostgreSQL client to the loopback listener. The command reference
 includes target selection, connection URLs, and service commands.
 
-## Add Memory Or Share An App
+## Add memory or share an app
 
 ```sh
 dbx graphiti --profile MY-PROFILE
@@ -103,7 +116,7 @@ dbx tunnel --allow example.com -- bun src/server.ts
 `graphiti` provides graph memory for agents. `tunnel` adds a public URL with
 passwordless access to an existing process.
 
-## Export AppKit Configuration
+## Export AppKit configuration
 
 ```sh
 eval "$(dbx appkit env --quiet)"
@@ -112,7 +125,7 @@ eval "$(dbx appkit env --quiet)"
 Use the resolved AppKit environment before starting another process. The AppKit
 and authentication command groups below include JSON, Windows, and token options.
 
-## Bootstrap A Workspace
+## Bootstrap a workspace
 
 ```sh
 dbx dev sync
@@ -130,14 +143,14 @@ bun run sync -- --watch
 bun run barrels
 ```
 
-See [`@dbx-tools/projen`](../../../../projen) for workspace configuration and
+See [@dbx-tools/projen](../../../../projen) for workspace configuration and
 generation. Command implementations are available from `@dbx-tools/cli/appkit`,
 `/auth`, `/genie`, `/graphiti`, `/lakebase-proxy`, `/model-gateway`, and
 `/tunnel` when a Node caller needs to embed one parser.
 
 <!-- cli-reference:start -->
 
-## Command Reference
+## Command reference
 
 ### `dbx`
 
@@ -170,9 +183,9 @@ dbx dev [projenArgs...]
 
 #### Arguments
 
-| Argument     | Description                                   |
-| ------------ | --------------------------------------------- |
-| `projenArgs` | projen task and arguments (e.g. sync --watch) |
+| Argument     | Description                                         |
+| ------------ | --------------------------------------------------- |
+| `projenArgs` | Projen task and arguments, for example sync --watch |
 
 ### `dbx appkit`
 
@@ -705,9 +718,9 @@ dbx genie [options] [genieArgs...]
 
 #### Arguments
 
-| Argument    | Description                                                                                   |
-| ----------- | --------------------------------------------------------------------------------------------- |
-| `genieArgs` | arguments and unknown flags forwarded to Genie Code; wrapper options may be separated with -- |
+| Argument    | Description                                                                           |
+| ----------- | ------------------------------------------------------------------------------------- |
+| `genieArgs` | Arguments and unknown flags forwarded to Genie Code. Separate wrapper options with -- |
 
 #### Options
 

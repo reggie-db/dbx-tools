@@ -1,12 +1,11 @@
 # @dbx-tools/shared-genie
 
-Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers.
+Validate AI/BI Genie wire payloads and derive UI events from raw message
+snapshots without importing the Databricks SDK. Use the browser-safe schemas,
+event vocabulary, and snapshot diff helpers in clients, routes, and tests. The
+Node driver that calls Genie is [@dbx-tools/genie](../../node/genie).
 
-Validate Genie wire payloads and derive high-level UI events from raw message
-snapshots without importing the Databricks SDK. The Node driver that calls Genie is
-[`@dbx-tools/genie`](../../node/genie).
-
-## Quick Start
+## Quick start
 
 ```ts
 import { genieModel } from "@dbx-tools/shared-genie";
@@ -14,12 +13,12 @@ import { genieModel } from "@dbx-tools/shared-genie";
 const response = genieModel.GenieResponseSchema.parse(await request.json());
 ```
 
-Key features:
+Use the contracts for:
 
 - Runtime schemas for Genie messages, responses, spaces, attachments, and
   statuses, including fields observed on the live wire.
 - Forward-compatible Agent Mode SSE schemas plus a pure reducer that projects
-  reasoning, SQL, Markdown output, statement ids, visualization metadata, and
+  reasoning, SQL, Markdown output, statement IDs, visualization metadata, and
   terminal status into `GenieMessage`.
 - A flat `GenieChatEvent` vocabulary for thinking, SQL, rows, result, status,
   and error rendering.
@@ -27,23 +26,24 @@ Key features:
 - Attachment and status helpers for UI display logic.
 - Browser-safe types that allow clients to validate Genie payloads without
   bundling Databricks SDK runtime code.
-- Generated zod schemas for the upstream SDK Dashboard/Genie shapes, so
+- Generated Zod schemas for the upstream SDK Dashboard/Genie shapes, so
   validating an unwidened SDK payload needs no SDK import either.
 
-## Use With AppKit Genie Types
+## Choose between AppKit and shared Genie types
 
-Use AppKit's Genie plugin and UI types when you are building directly against
+Use AppKit's Genie plugin and UI types when you build directly against
 the native AppKit Genie routes. Use this package when you need a browser-safe
 event vocabulary independent of AppKit transport:
 
-- validating raw Genie messages captured from the Databricks SDK;
-- replaying persisted snapshots into semantic events;
-- sharing a flat event union between `@dbx-tools/genie`,
-  `@dbx-tools/appkit-mastra`, and custom UI/tests;
-- detecting attachment/status shapes that are present on the live wire but not
-  always convenient in generated SDK types.
+- Validate raw Genie messages captured from the Databricks SDK.
+- Replay persisted snapshots as semantic events.
+- Share a flat event union between
+  [@dbx-tools/genie](../../node/genie),
+  [@dbx-tools/appkit-mastra](../../node/appkit-mastra), and custom clients.
+- Detect attachment and status shapes that are present on the wire but aren't
+  convenient in generated SDK types.
 
-## Validate Message Snapshots
+## Validate message snapshots
 
 ```ts
 import { genieModel } from "@dbx-tools/shared-genie";
@@ -56,7 +56,7 @@ The schemas extend generated Databricks SDK Genie types with fields observed on
 the wire, including query thoughts, visualization attachments, attachment
 discriminators, and serialized space data.
 
-## Handle Typed Chat Events
+## Handle typed chat events
 
 ```ts
 import { type GenieChatEvent } from "@dbx-tools/shared-genie";
@@ -76,7 +76,7 @@ function render(event: GenieChatEvent) {
 The event union is flat: every variant has `type` plus its own fields and shared
 location fields such as `space_id`, `conversation_id`, and `message_id`.
 
-## Derive Events From Snapshots
+## Derive events from snapshots
 
 ```ts
 import { event } from "@dbx-tools/shared-genie";
@@ -92,23 +92,26 @@ shared vocabulary, or building a custom polling loop. Individual detectors are
 also exported for targeted checks: `detectStatus`, `detectThinking`,
 `detectQuery`, `detectRows`, and the other event-specific helpers.
 
-## Work With Status And Attachments
+## Work with status and attachments
 
 ```ts
 import { genieModel } from "@dbx-tools/shared-genie";
 
-if (genieModel.isTerminalStatus(message.status)) {
-  console.log(genieModel.humanizeStatus(message.status));
+export function describeMessage(input: unknown) {
+  const message = genieModel.GenieMessageSchema.parse(input);
+  const statusLabel = genieModel.isTerminalStatus(message.status)
+    ? genieModel.humanizeStatus(message.status)
+    : undefined;
+  const attachmentType = genieModel.detectAttachmentType(message.attachments?.[0]);
+  return { statusLabel, attachmentType };
 }
-
-const kind = genieModel.detectAttachmentType(message.attachments?.[0]);
 ```
 
 `humanizeStatus()` is the shared display-label function. `detectAttachmentType()`
 lets consumers switch on `query`, `text`, `suggested_questions`, or `viz`
 instead of probing optional fields.
 
-## Event Model
+## Event model
 
 The event detector compares the current Genie message with the previous snapshot
 from the same turn. This keeps streaming UIs from re-rendering duplicate thought
@@ -116,9 +119,9 @@ or query fragments while still allowing full history replay from persisted raw
 messages. Consumers can use the full `eventsFromMessage()` helper or individual
 detectors when a test needs to assert one specific behavior.
 
-## Generated SDK Schemas
+## Validate generated SDK shapes
 
-`dashboards` holds zod schemas generated from the upstream
+`dashboards` holds Zod schemas generated from the upstream
 `@databricks/sdk-experimental` dashboards declarations. Import it when code needs
 to validate a raw Databricks Genie/Dashboard payload against the SDK's own shape:
 
@@ -128,25 +131,22 @@ import { dashboards } from "@dbx-tools/shared-genie";
 const space = dashboards.genieSpaceSchema.parse(rawSpace);
 ```
 
-Most consumers want `genieModel` instead - those schemas are these shapes widened
-with the fields Genie actually sends. Reach for `dashboards` only when the
-unwidened SDK shape is the contract you mean.
+Use `genieModel` for schemas that include fields observed on the Genie wire. Use
+`dashboards` only when the unwidened Databricks SDK shape is the required
+contract. The SDK is a development dependency, so browser bundles include Zod
+but not the Databricks SDK runtime.
 
-The module is generated at synth time and is read-only: the
-`dbxToolsConfig.codegenInputs` field in `package.json` names the input
-declaration file. To change what is generated, change that input and re-synth;
-never hand-edit `src/dashboards.ts`.
-The SDK itself is a dev dependency, so importing this package pulls in zod only.
+## Package exports
 
-## Modules
-
-- `agentMode` - forward-compatible zod schemas plus the pure Agent Mode event
+- `agentMode`: forward-compatible Zod schemas plus the pure Agent Mode event
   reducer and live/history `GenieMessage` projectors.
-- `genieModel` - Genie schemas, status helpers, attachment helpers, and event
+- `genieModel`: Genie schemas, status helpers, attachment helpers, and event
   union schemas/types.
-- `event` - event detector factory, individual detectors, and
+- `event`: event detector factory, individual detectors, and
   `eventsFromMessage()`.
-- `dashboards` - generated, read-only zod schemas and inferred types for the
+- `dashboards`: generated, read-only Zod schemas and inferred types for the
   upstream SDK Dashboard/Genie shapes that `genieModel` extends.
 
-Server-side streaming is in [`@dbx-tools/genie`](../../node/genie).
+This package doesn't call Genie, manage credentials, or own conversation
+lifecycle. Server-side streaming is in
+[@dbx-tools/genie](../../node/genie).

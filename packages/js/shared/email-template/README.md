@@ -1,9 +1,10 @@
 # @dbx-tools/shared-email-template
 
-Universal React Email presentation shared by dbx-tools server and browser email
-surfaces.
+Render the same React Email presentation in server-delivered messages and
+browser previews. The package owns the branded document, card, body, and brand
+mapping without depending on Databricks AppKit, SMTP, or DOM APIs.
 
-## Quick Start
+## Quick start
 
 Render the same branded document in SMTP delivery and browser previews:
 
@@ -13,33 +14,29 @@ import { EmailDocument } from "@dbx-tools/shared-email-template";
 <EmailDocument subject="Incident update" body="## Resolved\nAll systems are healthy." />;
 ```
 
-Key features:
+The exported components cover:
 
 - Responsive React Email document with email-safe inline styling.
 - Reusable message-body component for approval and compose previews.
-- Repository branding applied by default through `BrandContext`.
+- dbx-tools branding applied by default through `BrandContext`.
 - Consumer brand overrides without coupling templates to AppKit or SMTP.
 - Rich content rendered consistently in the inbox and browser.
 
-## Runtime Support
+## Runtime boundary
 
-The presentation layer has two consumers with incompatible dependency needs, so
-it lives on its own:
+This package provides presentation only:
 
-- `@dbx-tools/email` is a Node/AppKit package: it depends on
-  `@databricks/appkit` and `nodemailer`. Templates that lived there could not be
-  imported by a browser bundle.
-- `@dbx-tools/shared-email` is a pure zod contract package consumed by
-  non-AppKit callers such as `@dbx-tools/tunnel`. Templates that lived there
-  would push React and `@react-email/components` onto every schema consumer.
-- `@dbx-tools/ui/email` is a React/DOM package. Templates that lived there would
-  make the Node renderer depend on a DOM-typed package.
+- [@dbx-tools/email](../../node/email) renders `EmailDocument` for SMTP and
+  local outbox delivery.
+- [@dbx-tools/ui/email](../../ui/appkit) uses `EmailBody` and `EmailCard` for
+  approval, compose, and preview surfaces.
+- [@dbx-tools/shared-email](../email) owns email wire schemas without taking a
+  React dependency.
 
-This package depends on neither AppKit nor SMTP nor the DOM, so any runtime that
-can render React can produce the same branded email — including callers outside
-AppKit entirely.
+The package doesn't send messages, approve delivery, access AppKit request
+identity, or require browser DOM APIs.
 
-## Template Options
+## Configure the template
 
 ```tsx
 import { EmailDocument } from "@dbx-tools/shared-email-template";
@@ -52,7 +49,7 @@ Node runtimes should pass this component to `@react-email/render`.
 
 `heading` is optional. Ordinary mail leaves it unset so the MIME subject stays a
 transport subject and is not repeated as a body title. Pass a shorter heading when
-the subject carries notification-specific details — one-time-code mail uses this
+the subject carries notification-specific details. One-time-code mail uses this
 to keep the code in notifications without repeating it inside the opened card:
 
 ```tsx
@@ -64,9 +61,10 @@ to keep the code in notifications without repeating it inside the opened card:
 />
 ```
 
-`preview` sets the preheader — the snippet a client shows beside the subject, and
-the body of the push notification a mobile mail app posts. It defaults to the
-subject; set it when the notification should say something the subject does not:
+`preview` sets the preheader, which is the snippet a client shows beside the
+subject and the body of the push notification a mobile mail app posts. It
+defaults to the subject. Set it when the notification should say something the
+subject does not:
 
 ```tsx
 <EmailDocument
@@ -76,11 +74,11 @@ subject; set it when the notification should say something the subject does not:
 />
 ```
 
-That pairing is what makes mobile one-time-code autofill work at all: a
-notification carries the sender, the subject, and this snippet, so a code found
-only in the body never reaches the autofill heuristics.
+Mobile one-time-code autofill can read the code from the notification's sender,
+subject, and preheader. A code that appears only in the message body doesn't
+reach the autofill heuristics.
 
-## Reuse The Body Preview
+## Reuse the body preview
 
 ```tsx
 import { EmailBody } from "@dbx-tools/shared-email-template";
@@ -90,7 +88,7 @@ import { EmailBody } from "@dbx-tools/shared-email-template";
 
 The body preview and complete document share typography and content styling. The
 full document adds the branded header band, optional heading, and footer.
-Envelope rows (`headers`) are opt-in for local outbox previews; delivered SMTP
+Envelope rows (`headers`) are opt-in for local outbox previews. Delivered SMTP
 mail and browser approval chrome leave recipients and attachments outside the
 HTML body.
 
@@ -103,7 +101,7 @@ import { EmailCard } from "@dbx-tools/shared-email-template";
 <EmailCard subject={draft.subject} body={draft.body} />;
 ```
 
-## Apply A Brand
+## Apply a brand
 
 ```ts
 import { brandUtils } from "@dbx-tools/shared-core";
@@ -115,11 +113,11 @@ const emailBrand = emailBrandFromContext(brandUtils.defaultBrandContext);
 Omitting `brand` uses the dbx-tools brand. A consumer may supply its own colors,
 font, name, tagline, website, and fetchable logo URL.
 
-## Modules
+## Package exports
 
-- `.` - `EmailDocument`, `EmailCard`, `EmailBody`, brand types/defaults, and
+- `.`: `EmailDocument`, `EmailCard`, `EmailBody`, brand types/defaults, and
   content normalization.
 
-Pair this package with [`@dbx-tools/shared-email`](../email) for wire schemas,
-[`@dbx-tools/email`](../../node/email) for delivery, and
-[`@dbx-tools/ui/email`](../../ui/appkit) for approval and compose UI.
+Pair this package with [@dbx-tools/shared-email](../email) for wire schemas,
+[@dbx-tools/email](../../node/email) for delivery, and
+[@dbx-tools/ui/email](../../ui/appkit) for approval and compose UI.

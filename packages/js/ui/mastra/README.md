@@ -1,13 +1,11 @@
 # @dbx-tools/ui-mastra
 
-React chat UI for the AppKit-Mastra plugin.
+Add a React chat surface to
+[@dbx-tools/appkit-mastra](../../node/appkit-mastra). The package supports
+streaming, model selection, AI/BI Genie progress, charts, tables, approvals,
+history, threads, export, and MLflow feedback.
 
-Add a complete chat surface for
-[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra), including streaming,
-model selection, Genie progress, charts, tables, approvals, history, threads,
-export, and MLflow feedback.
-
-## Quick Start
+## Quick start
 
 ```tsx
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
@@ -18,9 +16,12 @@ export function Assistant() {
 }
 ```
 
-Key features:
+The stylesheet imports the shared [@dbx-tools/ui](../appkit) foundation. The
+host application must also load Databricks AppKit UI styles.
 
-- Drop-in `MastraChat` component that discovers the plugin client config and
+Package contents:
+
+- Drop-in `MastraChat` component that reads the plugin client config and
   wires itself to the default agent.
 - Reload recovery for agent-backed background turns: active run metadata is
   persisted per agent and thread, the cached stream reconnects after a page
@@ -51,38 +52,53 @@ Key features:
   editor-style tab strip across the top, turn it off, or let `auto` pick between
   a side panel and tabs from the chat's own width.
 - Concurrent threads: run several conversations at once, switch between them
-  while each keeps streaming, and cancel any one independently (per-thread abort
-  - routing, no shared client state).
+  while each keeps streaming, and cancel any one independently. Abort routing
+  is per thread, with no shared client state.
 - Mid-turn steering queue: messages submitted while a turn streams stack up as
-  pending steers (they drain oldest-first when the turn ends); each queued item
+  pending steers. They drain oldest-first when the turn ends. Each queued item
   can be sent now (interrupting the current turn), removed, or dragged to
   reorder the queue.
 - Export menu for PDF and Markdown, resolving charts and tables so
   exported conversations remain useful offline.
 
-## Choose This UI Or AppKit UI
+## Choose a UI package
 
-Use native `@databricks/appkit-ui` when you need its general primitives, Genie
-chat component, or Model Serving hooks directly against native AppKit plugins.
+Use native `@databricks/appkit-ui` for its general primitives, AI/BI Genie chat,
+or Model Serving hooks with native AppKit plugins.
 
 Use this package when the server is
-[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra) and the UI needs to
+[@dbx-tools/appkit-mastra](../../node/appkit-mastra) and the UI needs to
 understand Mastra-specific behavior:
 
 - Mastra's official AI SDK chat stream, native resource-scoped memory APIs, and
   the plugin's model, suggestion, feedback, chart, and statement routes.
 - Suspended `requireApproval` tool calls resumed through native `resumeData`.
-- Genie writer events rendered as inline tool progress, not just a terminal
-  answer.
+- Genie writer events rendered as inline tool progress rather than only a
+  terminal answer.
 - `[chart:<id>]` and `[data:<id>]` assistant markers rendered as ECharts charts
   and sortable tables.
 - Concurrent multi-thread streaming, per-thread cancel, and a mid-turn steering
-  queue (submit while running to enqueue; drain oldest-first, or send any item
-  now to interrupt) - the native AppKit chat surface runs one turn at a time and
+  queue. Submit while running to enqueue, drain oldest-first, or send any item
+  immediately to interrupt. The native AppKit chat surface runs one turn at a time and
   has no steering.
 - Conversation export that resolves those embeds into Markdown or PDF.
 
-## Stylesheet Setup
+Import the AppKit UI stylesheet before this package's stylesheet. Mount the chat
+inside the application's authentication boundary. Agent chat can use either
+user identity or service-principal identity according to the server plugin's
+configuration. Direct Genie chat requires the signed-in user's on-behalf-of
+(OBO) context.
+
+`MastraChat` reads the `mastra` plugin's published `clientConfig()` payload
+through AppKit. The payload supplies the mount path, default agent, registered
+agents, feedback availability, background-turn support, and chat identity
+behavior. Don't hard-code plugin routes in browser code.
+
+Use [@dbx-tools/ui](../appkit) for common AppKit, authentication, email, and
+search components. Use [@dbx-tools/ui-teams](../teams) for Microsoft Teams
+Adaptive Cards and conversation previews.
+
+## Configure styles
 
 ```css
 @import "@databricks/appkit-ui/styles.css";
@@ -90,10 +106,10 @@ understand Mastra-specific behavior:
 ```
 
 The stylesheet imports the shared `@dbx-tools/ui` foundation and registers
-this package's React files with Tailwind. It does not define design tokens; the
+this package's React files with Tailwind. It does not define design tokens. The
 chat UI uses AppKit semantic tokens from the host app.
 
-## Add A Persistent Assistant
+## Add a persistent assistant
 
 Mount `MastraAssistant` inside the app's existing authentication gate and above
 the route outlet. Closing the panel hides its presentation without unmounting
@@ -127,7 +143,7 @@ export function App() {
 }
 ```
 
-`mode="dock"` reflows the child application; `mode="overlay"` overlaps it.
+`mode="dock"` reflows the child application. `mode="overlay"` overlaps it.
 `side` accepts `top`, `right`, `bottom`, or `left`. Set `resizable={false}` to
 lock size, `launcher={false}` when every launch comes from
 `useMastraAssistant()`, `header={false}` to place New, History, and Close beside
@@ -138,13 +154,10 @@ the conversation pills remain on their own second row. Replace `icon`, `closeIco
 dismissal while the covered application is inert. A `storageKey` retains
 horizontal and vertical sizes independently.
 
-This shell intentionally remains mounted instead of wrapping AppKit
-Sheet/Dialog/Resizable. Those overlays unmount their portal subtree when closed,
-and native resizable panels persist percentages rather than this component's
-independent horizontal/vertical pixel sizes; either change would lose drafts,
-scroll state, active streams, or sizing parity.
+`MastraAssistant` remains mounted when closed, which preserves drafts, scroll
+state, active streams, and independent horizontal and vertical sizes.
 
-## Render A Drop-In Chat
+## Render a drop-in chat
 
 ```tsx
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
@@ -162,16 +175,16 @@ export function App() {
 }
 ```
 
-`MastraChat` is the quickest client for the AppKit-Mastra plugin. It reads the
+`MastraChat` provides the bundled client for the AppKit-Mastra plugin. It reads the
 plugin's published client config, creates a `MastraPluginClient`, streams turns
 through Mastra's official AI SDK chat route, hydrates native memory, and renders
 the controlled `ChatView`. When Mastra returns persisted `messages` without a
 precomputed `uiMessages` projection, history hydration uses Mastra's native
 `convertMessages(...).to("AIV5.UI")` conversion.
 
-Useful options:
+Configure the client with these options:
 
-- `agentId` selects a registered agent; defaults to the plugin default agent.
+- `agentId` selects a registered agent and defaults to the plugin default agent.
 - `genieSpace` selects a configured Genie alias and bypasses the agent.
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
 - `composerActions` places host-owned per-turn controls beside the model
@@ -180,16 +193,16 @@ Useful options:
   the endpoint choices. Supply it only when the active agent supports that
   option, such as a Genie transport toggle.
 - `composerLeadingActions` places attachment or app actions on the left side of
-  the fixed composer footer. The textarea grows above it to a cap, then scrolls;
-  model and Send/Stop stay pinned bottom-right.
-- `suggestions` overrides Genie starter questions; omit it to auto-fetch
+  the fixed composer footer. The textarea grows above it to a cap, then scrolls.
+  Model and Send/Stop stay pinned bottom-right.
+- `suggestions` overrides Genie starter questions. Omit it to auto-fetch
   `/suggestions`, or pass `[]` to hide suggestions.
 - `threadPlacement` chooses where conversation management renders, or turns it
-  off. See [Place The Conversation List](#place-the-conversation-list).
-- `enableThreads: false` is the older shorthand for
+  off. See [Place the conversation list](#place-the-conversation-list).
+- `enableThreads: false` also sets
   `threadPlacement: "disabled"`.
 - `threadId` and `onThreadIdChange` let a host bind the active conversation to
-  URL state or another external selector. Unknown external ids are replaced by
+  URL state or another external selector. Unknown external IDs are replaced by
   a new thread and reported with the `missing` reason.
 - `enableExport` adds whole-conversation and per-message export affordances.
 - Feedback defaults to auto: thumbs, dislike, and comment controls appear when
@@ -197,7 +210,7 @@ Useful options:
   id. Set `enableFeedback={false}` to hide them. Viewers with `CAN_MANAGE` on
   the experiment also get an experiment debug link at the end of the action row.
 
-## Use Direct Genie Chat
+## Use direct Genie chat
 
 Use `genieSpace` when the application needs the same chat shell without a
 supervisor agent:
@@ -207,13 +220,13 @@ supervisor agent:
 ```
 
 The alias comes from the server plugin's `genieSpaces`. The client still uses
-AI SDK `UIMessage` streams and the same `ChatView`; Genie conversations replace
+AI SDK `UIMessage` streams and the same `ChatView`. Genie conversations replace
 Mastra threads and Genie messages replace Mastra Memory history.
 
 Turns and history require the Genie Agent API and never fall back to classic
-Genie message polling. The sidebar filters the GA Genie conversation listing to
-Agent Mode conversations. Genie decides whether a query should be visualized;
-visualization attachments render through AppKit UI's native
+Genie message polling. The sidebar filters the Genie conversation listing to
+Agent Mode conversations. Genie decides whether a query should be visualized.
+Visualization attachments render through AppKit UI's native
 `GenieQueryVisualization`, with Chart and Table tabs. This does not invoke a
 supervisor or the Mastra Model Serving chart planner. Queries without a
 visualization attachment render through the existing sortable data table.
@@ -225,7 +238,7 @@ attachments, MLflow feedback, approvals, background turns, or stream
 reconnection. The newest 100 conversations are listed and each selected
 conversation loads as one history page.
 
-## Place The Conversation List
+## Place the conversation list
 
 Conversation management is on by default. Where it lives is one option:
 
@@ -238,11 +251,11 @@ Conversation management is on by default. Where it lives is one option:
 | `auto` (default)  | `left` while the chat is wide, `top` once it is too narrow for a panel     |
 | `left` / `right`  | List docked to that edge, collapsing to an overlay drawer on a narrow chat |
 | `top`             | Tab strip of open conversations, with a history menu for the rest          |
-| `disabled`        | No thread UI - the classic single-thread chat on the session cookie        |
+| `disabled`        | No thread UI. Uses a single thread on the session cookie                   |
 
 The docked placements render the sidebar as an inline column with a persisted
 show/hide toggle. Below 768px of chat width the panel becomes an overlay drawer
-on the same edge, so the transcript never loses room; the drawer is
+on the same edge, so the transcript never loses room. The drawer is
 session-scoped and starts closed, and closes itself after a selection.
 
 The composer accepts images from the upload action, drag and drop, or clipboard
@@ -251,24 +264,24 @@ paste. Oversized images use the same client-side resize path before submission.
 The `top` placement is the editor-tab model: each open conversation is a tab with
 its title, a spinner while it streams in the background, and a close affordance
 that only takes the tab off the strip (the conversation stays in history). A `+`
-starts a fresh conversation and a history button opens the full list - the same
-sidebar, framed as a menu - so rename, delete, and cancel still work on anything
-not currently tabbed. Closing the active tab moves to a neighbouring one, or
+starts a fresh conversation. The history button opens the full sidebar as a
+menu, so rename, delete, and cancel still work on conversations that aren't on
+the tab strip. Closing the active tab moves to a neighboring one, or
 starts a fresh conversation when it was the last tab open. The open set is
-session state; the strip reseeds from the most recent conversations on the next
+session state. The strip reseeds from the most recent conversations on the next
 load.
 
 For agent-backed chat, selecting a conversation fetches only the newest 20
 native memory messages. Scrolling upward requests the next page and prepends it
 without moving the reader's viewport. Agent turns still send only the new user
-message; Mastra loads the remembered transcript server-side. Direct Genie mode
+message. Mastra loads the remembered transcript server-side. Direct Genie mode
 loads the selected Genie conversation in one page.
 
 `auto` measures the chat's own element rather than the viewport, so a chat
 embedded in a split view or side panel switches to tabs on the space it actually
 has instead of waiting for the window to shrink.
 
-## Use The Headless Driver
+## Use the headless driver
 
 ```tsx
 import { ChatView, useMastraChat } from "@dbx-tools/ui-mastra/react";
@@ -284,11 +297,11 @@ export function CustomChat() {
 }
 ```
 
-Use `useMastraChat()` when the stock behavior is right but the surrounding layout
-belongs to your app. The hook owns streaming, aborts, history paging, thread
+Use `useMastraChat()` when you want package transport behavior with your own
+layout. The hook owns streaming, aborts, history paging, thread
 selection, model overrides, suggestions, exports, approvals, and feedback state.
 
-## Pass Typed Application Context
+## Pass typed application context
 
 `requestContext` accepts a typed plain record, Mastra `RequestContext<T>`, or a
 per-turn resolver. The driver snapshots it when a message is submitted and
@@ -310,7 +323,7 @@ On the server, declare the same contract with Mastra's native
 cannot override the authenticated memory resource, thread, user, scopes, model,
 or trace fields stamped by AppKit-Mastra.
 
-## Build A Controlled Chat Surface
+## Build a controlled chat surface
 
 ```tsx
 import { ChatView, type ChatViewProps } from "@dbx-tools/ui-mastra/react";
@@ -330,66 +343,45 @@ is being resolved. The picker groups endpoints into
 model-family submenus. Its compact first popup shows only the current
 model, host-owned actions such as Genie Agent Mode, and a reasoning slider when
 the selected endpoint supports it. The current model opens the family picker,
-so the long endpoint catalogue stays out of the primary control popup. Family
+so the long endpoint catalog stays out of the primary control popup. Family
 and model menus use the same compact utility type as the composer actions,
 omit repeated headers, and omit the already-selected model. The model menu puts
 `Default (<resolved model>)` first, keeps `Other` last, and makes a one-model
 family directly selectable instead of opening another submenu.
 
-## Call Plugin Routes Directly
+## Call plugin routes directly
 
 ```ts
-import {
-  MastraPluginClient,
-  useMastraClient,
-  useMastraDefaultModel,
-  useMastraModels,
-  useMastraSuggestions,
-  useMastraThreads,
-} from "@dbx-tools/ui-mastra/react";
+import type { MastraClientConfig } from "@dbx-tools/shared-mastra";
+import { MastraPluginClient } from "@dbx-tools/ui-mastra/react";
 
-const client = new MastraPluginClient(clientConfig);
-
-// Routing (thread + model) is passed per call, so concurrent runs on
-// different threads never share state.
-const stream = await client.streamAgent({
-  agentId: client.defaultAgent,
-  messages: [
-    {
-      id: "user-1",
-      role: "user",
-      parts: [{ type: "text", text: "Hello" }],
-    },
-  ],
-  runId,
-  threadId: activeThreadId,
-  model: "claude sonnet",
-  signal: controller.signal,
-});
-
-const models = await client.models();
-const history = await client.history({ threadId: activeThreadId, page: 0, perPage: 20 });
+export async function listChatModels(clientConfig: MastraClientConfig) {
+  const client = new MastraPluginClient(clientConfig);
+  return client.models();
+}
 ```
 
 Each conversation thread runs independently: start a turn on one thread, switch
-to another and start a second, and both stream concurrently. Cancel one via its
+to another and start a second, and both stream concurrently. Cancel one using its
 `AbortSignal` (or the driver's `onCancelThread`) without touching the others.
 
 `MastraPluginClient` extends `@mastra/client-js` with the official AI SDK
 `chatRoute` transport and AppKit-Mastra additions. It uses
 `credentials: "include"` so session cookies travel with streaming and REST
-calls. The React hooks wrap native memory plus model catalogues, suggestions,
-chart fetches, and statement-data fetches.
+calls. The React hooks wrap native memory plus model catalogs, suggestions,
+chart fetches, and statement-data fetches. Use `useMastraClient()` to access the
+configured client inside React. `useMastraModels()`, `useMastraDefaultModel()`,
+`useMastraSuggestions()`, and `useMastraThreads()` expose route-specific state.
 
-## Approvals, Embeds, And Feedback
+## Handle approvals, embeds, and feedback
 
 The UI understands the extra events produced by
-[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra):
+[@dbx-tools/appkit-mastra](../../node/appkit-mastra):
 
 - Approval chunks become inline approval cards and continue the official chat
   route with Mastra's native `{ approved, reason? }` resume data.
 - Native tool-call and tool-result payloads remain complete. Expanding a tool
-  row reveals default-closed Request and Response viewers; large values scroll
+  row reveals default-closed Request and Response viewers. Large values scroll
   without string or collection truncation.
 - Genie `thinking` events stream into the assistant's collapsed Thoughts
   panel. Intermediate answer attachments and query-result tables stay on tool
@@ -404,42 +396,25 @@ The UI understands the extra events produced by
 - MLflow trace headers enable per-message feedback controls when the server
   reports feedback is available.
 
-## Chart Theming
+## Configure chart themes
 
-An ECharts chart draws to a canvas, so it inherits nothing from CSS the way its
-frame does: a dark theme re-skins the border around the chart while the axis
-labels, grid lines, and tooltip inside keep whatever colors the spec was born
-with. And the spec is born on the server, in
-[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra), which cannot know the
-reader's theme.
+ECharts draws to a canvas and doesn't inherit CSS colors from its frame. The
+server planner provides the series palette and font stack. The browser resolves
+axis, grid, title, legend, and tooltip colors from AppKit semantic tokens at
+render time.
 
-So the two halves are split. The planner inlines only what is
-theme-independent - the brand's series palette and font stack. Everything
-theme-dependent is resolved here at render time by `src/support/chart-theme.ts`,
-which reads AppKit's `--chart-axis-label`, `--chart-axis-title`, `--chart-grid`,
-and `--chart-tooltip-bg` (plus `--popover-foreground` and `--border` for the
-tooltip) into a `ChartChrome`, and `normalizeChartOption` paints it onto the
-axes, title, legend, and tooltip. Nothing to configure: a chart follows the
-theme wherever it renders.
-
-Two details worth knowing if you embed the chat:
-
-- Tokens are read off the **chart's own element**, not `:root`, so a theme
-  scoped to a subtree - a chat panel inside an otherwise-light app - wins. The
-  value re-resolves when a `.dark` / `.light` class lands on the document root
-  and when the OS `prefers-color-scheme` flips, so a live theme switch recolors
-  charts in place.
+- Theme tokens are read from the chart element, so a theme scoped to a chat
+  subtree takes precedence over the document theme. Charts update when the
+  document's `.dark` or `.light` class changes or when the operating-system
+  color preference changes.
 - AppKit darkens its tokens under `@media (prefers-color-scheme: dark)` for any
   `:root` that is not explicitly `.light`. If your host renders its own light
   chrome, pin `.light` (or `.dark`) on `:root` rather than leaving AppKit on the
-  OS preference, or the chat will read as half-dark while everything around it
-  stays light.
+  operating-system preference.
 
-The PDF export is the one caller that does not follow the page: it pins
-`LIGHT_CHART_CHROME`, because its document forces `color-scheme: light` on a
-white body for printing.
+PDF export uses a light chart theme on a white print document.
 
-## Export Conversations
+## Export conversations
 
 ```tsx
 <MastraChat enableExport />
@@ -450,65 +425,41 @@ resolved during export: charts are rendered to inline SVG with ECharts' server
 renderer, and data markers become real tables. Expired or missing embeds are
 skipped so old transcripts still export cleanly.
 
-## Copying And Downloading
+## Copy and download content
 
-Copy and download affordances appear in several places - message bubbles, code
-blocks, conversation export, and the data-grid CSV button - and they behave the
-same everywhere because each is backed by one internal module rather than
-per-component code.
+Copy and download controls appear in message bubbles, code blocks, conversation
+exports, and the data-grid CSV menu.
 
 Copying works on hosts served over plain HTTP. An insecure context has no
 Clipboard API, so a bare `navigator.clipboard.writeText` silently does nothing on
-a local or intranet deployment; the shared helper falls back to a hidden
+a local or intranet deployment. The package falls back to a hidden
 `<textarea>` plus `document.execCommand("copy")` and reports whether the copy
 actually succeeded. Downloads revoke their object URL after the temporary anchor
 fires, so a long session does not accumulate blobs.
 
-If you build a controlled surface with `ChatView`, you get both without wiring
-anything. Adding a new copy or download button anywhere in this package should
-reuse `src/support/clipboard.ts` and `src/support/download.ts` instead of
-touching `navigator.clipboard` or `URL.createObjectURL` again.
+## Package exports
 
-## Modules
-
-- `MastraChat` - self-contained drop-in chat component.
-- `MastraAssistant` / `useMastraAssistant` - persistent application shell and
+- `MastraChat`: self-contained drop-in chat component.
+- `MastraAssistant` / `useMastraAssistant`: persistent application shell and
   external open/close/context controller.
-- `useMastraChat` - headless driver that returns `ChatView` props.
-- `ChatView` - controlled presentational chat shell.
-- `MastraPluginClient` - native `@mastra/client-js` memory/agent APIs plus
+- `useMastraChat`: headless driver that returns `ChatView` props.
+- `ChatView`: controlled presentational chat shell.
+- `MastraPluginClient`: native `@mastra/client-js` memory/agent APIs plus
   AppKit-Mastra model, suggestion, feedback, and embed routes.
 - `useMastraClient`, `useMastraConfig`, `useMastraModels`,
   `useMastraDefaultModel`, `useMastraSuggestions`, `useMastraThreads`,
-  `useChartFetch`, `useStatementFetch` - route/config hooks for controlled
+  `useChartFetch`, `useStatementFetch`: route/config hooks for controlled
   clients.
-- `ThreadSidebar` - controlled conversation list, dockable to either edge.
-- `ThreadTabs` / `ThreadActions` - conversation pills plus reusable New/History
+- `ThreadSidebar`: controlled conversation list, dockable to either edge.
+- `ThreadTabs` / `ThreadActions`: conversation pills plus reusable New/History
   controls for the top strip or persistent assistant header.
-- `ExportMenu` - shared export format menu.
-- `src/support/thread-tabs.ts` - pure open-tab bookkeeping (`syncThreadTabs`,
-  `closeThreadTab`, `nextActiveThreadTab`) so the strip's state is testable
-  without a DOM.
-- `src/support/thread-labels.ts` - `threadTitle` / `relativeTime`, shared by
-  the sidebar and the tab strip so a row and a tab never disagree about how an
-  untitled or freshly-updated conversation reads.
-- `src/support/request-context.ts` - immutable per-run snapshots around Mastra's
-  native typed `RequestContext`.
-- `src/support/tool-events.ts` - projection of native AI SDK persisted tool
-  parts onto the live pill view model.
-- `src/support/chart-theme.ts` - `ChartChrome`, `LIGHT_CHART_CHROME`,
-  `resolveChartChrome`, and the `useChartChrome` hook that keeps an inline
-  chart's colors in step with the active theme.
-- `src/support/chart-option.ts` - `normalizeChartOption`, the pure pass that
-  patches layout (compact ticks, axis-name placement, title/grid spacing) and
-  an optional `ChartChrome` into a planner spec, shared by the inline chart and
-  the PDF export so both read the same.
-- Types - `ChatViewProps`, `MastraChatProps`, `UseMastraChatOptions`,
+- `ExportMenu`: shared export format menu.
+- Types: `ChatViewProps`, `MastraChatProps`, `UseMastraChatOptions`,
   `MastraAssistantProps`, `MastraRequestContextInput`, `ThreadPlacement`,
   `ThreadSummary`, `ToolEvent`, `ToolProgress`, `PendingApproval`,
   `FeedbackSubmission`, and related UI contract types.
 
 Server-side routes and event production live in
-[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra). Browser-safe route,
+[@dbx-tools/appkit-mastra](../../node/appkit-mastra). Browser-safe route,
 marker, feedback, and wire schemas live in
-[`@dbx-tools/shared-mastra`](../../shared/mastra).
+[@dbx-tools/shared-mastra](../../shared/mastra).

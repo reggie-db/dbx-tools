@@ -2,13 +2,13 @@
 
 Resolve a Databricks Lakebase target into the host, database, and user a
 PostgreSQL client needs, then request a short-lived database credential. The
-package gives Node and Bun applications one profile-aware path from a project
+package gives Node and Bun applications a profile-aware path from a project
 name or resource URL to connection-ready values. When the target is a Lakebase
 path or URL without a chosen database, discovery picks the branch default
 (`status.default`, then Lakebase's provisioned `databricks_postgres`) instead of
 PostgreSQL's generic `postgres` database.
 
-## Quick Start
+## Quick start
 
 ```ts
 import { LakebaseClient, parseAddress } from "@dbx-tools/lakebase";
@@ -32,7 +32,18 @@ Request a credential when opening an upstream connection. The client reuses the
 token until two minutes before the API's `expire_time`, coalesces concurrent
 refreshes, and never persists database passwords.
 
-## Choose A Target
+## Choose a Lakebase integration
+
+- Use native AppKit `lakebase()` for request-aware pools inside a Databricks
+  App.
+- Use [@dbx-tools/appkit](../appkit) when Lakebase environment values must be
+  resolved before AppKit plugins initialize.
+- Use this package for profile-aware discovery and credentials in standalone
+  Node or Bun code.
+- Use [dbx lakebase-proxy](../../cli/dbx-tools) when an external PostgreSQL
+  client needs a local loopback URL.
+
+## Choose a target
 
 `parseAddress()` accepts project IDs, canonical project and branch resources,
 endpoint or database resources, endpoint hostnames, and PostgreSQL URLs:
@@ -48,7 +59,7 @@ Use `requireAddress()` when invalid input should fail immediately. Use
 `parseResourcePath()` when the caller must provide a canonical Lakebase resource
 path rather than any supported address form.
 
-## Select Authentication
+## Select authentication
 
 Pass a Databricks profile to `LakebaseClient` when a local application must use
 a specific workspace:
@@ -59,13 +70,13 @@ const lakebase = new LakebaseClient({ profile: "PROFILE" });
 
 In a Databricks App, ambient app authentication remains available. A startup
 user supplied to `resolve()` or `generateDatabaseCredential()` is treated as a
-profile only when it exactly matches a configured local profile; an explicit
+profile only when it exactly matches a configured local profile. An explicit
 client profile always wins.
 
-## Build A Proxy URL
+## Build a proxy URL
 
 `connectionUrl()` formats the local URL expected by
-[`@dbx-tools/cli/lakebase-proxy`](../../cli/dbx-tools):
+[@dbx-tools/cli/lakebase-proxy](../../cli/dbx-tools):
 
 ```ts
 import { connectionUrl } from "@dbx-tools/lakebase";
@@ -74,7 +85,7 @@ connectionUrl("projects/my-project", "localhost", 5432);
 // postgresql://localhost:5432/projects/my-project?sslmode=disable
 ```
 
-## API Reference
+## API reference
 
 - `address` parses supported targets and formats local proxy URLs.
 - `client` discovers Lakebase resources and creates database credentials.

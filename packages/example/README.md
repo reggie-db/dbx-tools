@@ -1,323 +1,156 @@
-# dbx-tools demo — a Databricks App in a few lines
+# Run the dbx-tools AppKit demo
 
-A runnable Databricks App that stands up a **streaming Genie chat agent** with a
-persistent slide-out assistant, typed route context, complete tool
-payloads, approval-gated email, conversation memory, a model picker, history,
-and threads on top of the `@dbx-tools/*` packages.
+Run a Databricks App that combines Genie, Mastra, Lakebase, Lakebox, search,
+approval-gated email, Microsoft Teams cards, durable memory, and a React client.
+The demo consumes the workspace packages directly, so package changes are
+available without publishing them first.
 
-## The Whole Server
+```bash
+bun install
+uv sync --all-packages
+test -f .env || cp packages/example/server/appkit-demo/.env.example .env
+bun run demo -- -d
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). AppKit serves the React client and API from the
+same origin. The `-d` option keeps AppKit and its sidecars running while Vite
+updates client code through hot module replacement.
+
+## Configure the demo
+
+Before you run the demo, edit the repository-root `.env` file and authenticate
+the profile named by `DATABRICKS_CONFIG_PROFILE`:
+
+```bash
+databricks auth login --profile <profile>
+```
+
+The main settings are:
+
+| Setting                                       | Purpose                                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `DATABRICKS_HOST`                             | Databricks workspace URL.                                                                         |
+| `DATABRICKS_CONFIG_PROFILE`                   | Explicit Databricks CLI profile for local workspace access.                                       |
+| `DATABRICKS_GENIE_SPACE_ID`                   | Genie space used by the chat and card examples.                                                   |
+| `DATABRICKS_SERVING_ENDPOINT_NAME`            | Optional model endpoint override. The model catalog selects an endpoint when this value is unset. |
+| `LAKEBASE_ENDPOINT` or `LAKEBASE_PROJECT`     | Lakebase Autoscaling resource used by AppKit and Mastra persistence.                              |
+| `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASSWORD` | SMTP delivery for approved email.                                                                 |
+| `EMAIL_OUTBOX_MODE=1`                         | Write approved email to a local outbox instead of SMTP.                                           |
+| `DBX_TOOLS_GRAPHITI_ENABLED=0`                | Disable the Graphiti fallback for focused UI work.                                                |
+| `DBX_TOOLS_BUS_ENABLED=0`                     | Disable the Postgres topic-bus example.                                                           |
+| `DBX_TOOLS_REMOTE_SKILLS_ENABLED=0`           | Disable remote skill loading.                                                                     |
+
+For every available setting, see
+[server/appkit-demo/.env.example](server/appkit-demo/.env.example).
+
+## Run the development server
+
+Run the following command from the repository root when you want server and
+package changes to restart the process:
+
+```bash
+bun run demo
+```
+
+The watcher monitors the server package and its workspace dependencies. Press
+`r` to restart immediately. For client-only changes, use `bun run demo -- -d`
+so Vite can update the browser without restarting Graphiti, the model gateway,
+or the authenticated tunnel.
+
+Local development sets `NODE_ENV=development`, which lets AppKit supply a
+development user when the Databricks Apps front door is absent. For a deployed
+entrance that authenticates a user without an on-behalf-of token, set
+`MASTRA_GENIE_IDENTITY=auto`. This setting preserves per-user attribution and
+uses the app service principal for Databricks calls that require credentials.
+
+## Explore the app
+
+The demo has the following pages:
+
+- **Chat** compares Genie Agent Mode streaming with Conversation API polling.
+  Both agents share the same tools, model selection, threads, and history.
+- **Genie Chat** uses the Genie plugin directly, with Genie-owned
+  conversations and visualizations.
+- **Cards** sends the same agent questions through a Microsoft Teams Bot
+  Framework envelope and renders Adaptive Cards.
+- **Bus** publishes Postgres topic messages and streams them to every open
+  viewer.
+- **Search** uses Databricks AI Search when configured and a Lakebase full-text
+  provider otherwise.
+- **Brand** updates the application and email preview brand context.
+- **Lakebox** manages the current user's terminal, desktop, services, and
+  machine metrics.
+
+The server and client are separate workspace packages:
+
+| Package                                  | Purpose                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------------------------- |
+| [server/appkit-demo](server/appkit-demo) | Registers AppKit plugins, agents, tools, persistence, and deployment resources. |
+| [app/appkit-demo](app/appkit-demo)       | Renders the routed React application and persistent assistant.                  |
+
+The server uses the same plugin composition that consuming applications use:
 
 ```ts
-await createApp({
-  plugins: [
-    server({ host, staticPath: clientDist }),
-    genie(),
-    lakebase(),
-    email(),
-    teams(),
-    mastra({ agents: { support }, storage: true, memory: true }),
-  ],
+import { genie, lakebase, server } from "@databricks/appkit";
+import { appkit } from "@dbx-tools/appkit";
+import { lakebox } from "@dbx-tools/appkit-lakebox";
+import { memory } from "@dbx-tools/appkit-memory";
+import { email } from "@dbx-tools/email";
+import { teams } from "@dbx-tools/teams";
+
+await appkit.createApp({
+  plugins: [server(), genie(), lakebase(), lakebox(), memory(), email(), teams()],
 });
 ```
 
-The demo is a standalone downstream consumer with two small packages:
+The complete registration, including Mastra agents, search providers, the
+topic bus, and the tunnel gate, is in
+[server/appkit-demo/src/server.ts](server/appkit-demo/src/server.ts).
 
-| Package                                    | Tag      | What you write                               |
-| ------------------------------------------ | -------- | -------------------------------------------- |
-| [`server/appkit-demo`](server/appkit-demo) | `server` | ~30 lines: an AppKit `createApp` plugin list |
-| [`app/appkit-demo`](app/appkit-demo)       | `app`    | `MastraAssistant` around the routed app      |
+## Test the Teams endpoint
 
-Everything else - route-stable panel, streaming, typed request context,
-complete tool pills, Genie tools, approval cards,
-Lakebase-backed memory, model selection, history pagination, and the thread
-switcher - comes from the packages. The demo is wiring, not implementation.
-The demo disables the optional floating launcher and opens the assistant from
-the navigation bar instead.
-
-## Complete Server Configuration
-
-```ts
-// server/appkit-demo/src/server.ts (abridged)
-await createApp({
-  plugins: [
-    server({ host, staticPath: clientDist }),
-    genie(),
-    lakebase(),
-    email(), // approval-gated send_email tool transport
-    teams(), // create_teams_card tool + /api/teams/card route
-    mastra({
-      storage: true,
-      memory: true,
-      agents: { support, "support-polling": supportPolling },
-      defaultAgent: "support",
-      genieAgentMode: true,
-    }),
-  ],
-  cache: { enabled: true },
-});
-```
-
-The two agent definitions share one factory and differ only in Genie transport.
-`support` uses Agent Mode SSE by default; `support-polling` forces the
-Conversation API for statement-backed comparison.
-
-## The whole client page
-
-```tsx
-// app/appkit-demo/src/pages/Chat.tsx
-import { MastraChat } from "@dbx-tools/ui-mastra/react";
-import { useState } from "react";
-
-const Chat = () => {
-  const [agentMode, setAgentMode] = useState(true);
-  const agentId = agentMode ? "support" : "support-polling";
-  return (
-    <MastraChat
-      key={agentId}
-      agentId={agentId}
-      showModelPicker
-      enableExport
-      composerActions={
-        <label>
-          <input
-            type="checkbox"
-            checked={agentMode}
-            onChange={(event) => setAgentMode(event.target.checked)}
-          />
-          Agent Mode
-        </label>
-      }
-    />
-  );
-};
-export default Chat;
-```
-
-The checkbox starts enabled beside the model selector. It selects the default
-Agent Mode agent or the otherwise-identical polling agent without adding
-transport code to the browser.
-
-The **Cards** page (`app/appkit-demo/src/pages/Cards.tsx`) has two tabs over the
-`teams()` plugin. **Chat** is a Teams conversation: `<TeamsChat/>` posts a Bot
-Framework activity to `/api/teams/messages` — the same endpoint a real Teams
-channel calls — and the Mastra agent answers with Adaptive Card attachments,
-which render like a Teams channel. **Card builder** is the lower-level view: edit a `CardSpec` (or
-pick a sample), compile it through `/api/teams/card`, and see the document
-render. Both use the `adaptivecards` JavaScript renderer — the same one Teams
-preview tools embed.
-
-The Cards page answers with the SAME content the Chat page does - ask both
-"what were inside sales PSPW and gross margin this week?" and both call Genie and
-report the same numbers. That is the point of the endpoint: the agent, its tools,
-and its data are identical, and only the presentation changes (a card instead of
-streamed markdown). Its starter prompts come from the same place too: the page
-reads the agent's Genie sample questions off the Mastra plugin's `/suggestions`
-route (`useMastraSuggestions` + `dedupeSuggestions`, exactly what `MastraChat`
-does), so neither page offers a prompt the agent cannot answer. See
-[`@dbx-tools/teams`](../js/node/teams/README.md) for the two-pass turn
-that makes it so.
-
-The demo registers the plugin as `teams({ allowUnauthenticated: true })`, which
-serves `/messages` with no Bot Service token validation and replies in the HTTP
-response, so the page works with no Azure Bot registration. That option is
-ignored unless `NODE_ENV=development` (which the local dev server sets). A real
-deployment sets `TEAMS_APP_ID` / `TEAMS_APP_PASSWORD` instead and gets the
-JWT-validated, Connector-delivered path — see
-[`@dbx-tools/teams`](../js/node/teams/README.md).
-
-```tsx
-// app/appkit-demo/src/pages/Cards.tsx
-import { AdaptiveCardGallery, TeamsChat } from "@dbx-tools/ui-teams/react";
-
-const Cards = () => <TeamsChat className="h-full" />;
-export default Cards;
-```
-
-Because the endpoint speaks the real Bot Framework envelope, the same route the
-chat uses can be driven with `curl` — a bare activity, exactly what Bot Service
-posts:
+In development, the demo allows unauthenticated Bot Framework activities so
+you can test the Teams route without an Azure Bot registration:
 
 ```bash
-curl -X POST http://localhost:6868/api/teams/messages \
-  -H 'content-type: application/json' \
-  -d '{"type":"message","text":"summarize today",
-       "from":{"id":"user-1"},"conversation":{"id":"conv-1"}}'
+curl --request POST http://127.0.0.1:8000/api/teams/messages \
+  --header 'content-type: application/json' \
+  --data '{"type":"message","text":"summarize today","from":{"id":"user-1"},"conversation":{"id":"conv-1"}}'
 ```
 
-## Setup
+`allowUnauthenticated` applies only when `NODE_ENV=development`. A deployed
+Teams bot must configure `TEAMS_APP_ID` and `TEAMS_APP_PASSWORD`. For the
+protocol and delivery behavior, see
+[@dbx-tools/teams](../js/node/teams/README.md).
 
-This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
+## Deploy the demo
 
-1. **Make the packages available.** For local development, publish them to a local
-   registry (verdaccio) and point `.npmrc` at it (already the default):
-
-   ```bash
-   # from the main repo root, publish the packages to your local registry:
-   pnpm -r --filter "./packages/js/**" publish \
-     --registry http://localhost:4873 --no-git-checks
-   ```
-
-   Once the packages are on public npm, delete the `@dbx-tools:registry` line in
-   `.npmrc` (or point it at `https://registry.npmjs.org/`).
-
-2. **Install + configure:**
-
-   ```bash
-   pnpm install                       # from this demo/ folder
-   cp .env.example .env               # fill in the Databricks values (see below)
-   databricks auth login --host "$DATABRICKS_HOST"
-   ```
-
-3. **Run** (build the client, then watch the server):
-
-   ```bash
-   bun run demo
-   ```
-
-   The server serves the client's built `dist/` on the same port as the API.
-
-   Run the server with `NODE_ENV=development` locally. Outside a Databricks App
-   nothing sets the `x-forwarded-access-token` header, and AppKit's `asUser(req)`
-   only falls back to the service principal in development mode - otherwise the
-   first user-scoped route (e.g. `GET /api/mastra/models`, which the chat UI
-   calls on load) throws `AuthenticationError` from inside the handler and takes
-   the process down.
-
-   For a deployment that genuinely has no OBO token - behind the OTP tunnel, or
-   any proxy that authenticates its own way - set `MASTRA_GENIE_IDENTITY=auto`
-   instead of reaching for `NODE_ENV=development`, which also relaxes secure
-   cookies and other dev-only escape hatches. `auto` falls back per request, so
-   front-door callers keep full per-user scoping. See
-   [`@dbx-tools/appkit`](../js/node/appkit#choose-the-request-identity).
-
-## Two dev modes
-
-Which mode you want depends on whether you're building a CONSUMING project or
-working on the `@dbx-tools/*` packages themselves.
-
-### Dev-link mode (default) — for iterating on ALL packages in THIS repo
-
-When you're editing package source under `../js/**`, the bump → publish →
-update → restart loop is too slow. Link mode points BOTH demo members at local
-`@dbx-tools/*` source, so server changes land on restart and a
-`vite build --watch` rebuilds the client bundle on every UI edit. Beside the
-packages this is the common case, so it is what a plain install gives you:
+The deployment command compiles the workspace, builds the Python wheels,
+stages a self-contained source tree, validates the bundle, deploys the app, and
+starts it:
 
 ```bash
-bun install       # server + client use local source
-bun run demo      # build the client, then run the server through dev:watch
-# edit Node package source; wait for the settled restart or press r immediately.
+bun run demo:deploy -- --profile <profile>
 ```
 
-### Consumer mode — for consuming projects
+The profile must already be configured and authenticated. The
+[databricks.yml](server/appkit-demo/databricks.yml) file owns app resources,
+bindings, and deployed environment variables. The
+[app.yaml](server/appkit-demo/app.yaml) file owns the runtime command. For
+Databricks App deployment behavior, see
+[Databricks Apps](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/).
 
-`@dbx-tools/*` install as normal versioned packages from the registry in
-[`.npmrc`](.npmrc). This is exactly how a downstream app consumes them, so it's
-the right mode when the demo (or your own app) is the thing under development and
-the packages are a fixed dependency, and it's what you want when checking that
-the PUBLISHED packages actually work. Opt in with the env var:
+## Understand the operational limits
 
-```bash
-DBX_TOOLS_LINK=0 pnpm install                              # published versions
-```
-
-To pick up a new package version you bump/publish it, then
-`pnpm update "@dbx-tools/*" --latest` and rebuild.
-
-A copy of this folder taken OUT of the repo has no `../packages` to link against,
-so it installs from the registry with no env var involved.
-
-The mode is carried entirely by the `DBX_TOOLS_LINK` env var on the install, so
-there is nothing to remember beyond those two commands. The var is read in one
-place, the repo-root [`.pnpmfile.cjs`](../.pnpmfile.cjs)'s `linkEnabled()`, which
-treats `0`, `false`, `off`, and `no` as opt-out.
-
-The switch happens at RESOLVE time, in [`.pnpmfile.cjs`](.pnpmfile.cjs), so
-nothing on disk changes: no manifest is rewritten, no workspace member is added,
-and there is no state file to restore. Link mode leaves `git status` clean, which
-is the point. An earlier `scripts/dev-link.mjs` edited the app manifest and
-`pnpm-workspace.yaml` in place, and both are projen-generated and read-only while
-`pnpm-workspace.yaml` is also committed, so a forgotten undo landed local dev
-state in git.
-
-The local set is discovered automatically from `../js/**`, so packages
-added, removed, or renamed need no edit. The hook also resolves every EXTERNAL
-dependency declared by those source packages from the main install and links
-the demo's matching dependencies to that exact package directory. This second
-map matters on the server: linking only `@dbx-tools/*` would let direct demo
-imports load one AppKit / Mastra instance while linked sources load another,
-breaking identity-based singletons such as AppKit's `CacheManager`. Bridging the
-whole runtime graph gives both demo members and all linked sources one set of
-AppKit, Mastra, React, Zod, and other shared modules.
-
-The startup `dependencies` log reports what the process actually resolved.
-Local packages read `0.0.0 (linked from packages/js/...)`; consumer mode reports
-published versions such as `0.6.x`.
-
-## Required env
-
-See [`.env.example`](.env.example). At minimum:
-
-- `DATABRICKS_HOST`, `DATABRICKS_GENIE_SPACE_ID`
-- optional `DATABRICKS_SERVING_ENDPOINT_NAME` to override live highest-rank selection
-- `LAKEBASE_*` / `PG*` for memory-backing Postgres
-- SMTP (or `EMAIL_OUTBOX_MODE=1`) for the `send_email` tool
-
-## Demo KPI dataset and Genie space
-
-The agent's Genie tools need a space with data behind them. The deployed demo
-uses the KPI dataset and Genie space configured by its bundle variables:
-
-| Resource                                                    | What it is                                                                             |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `reggie_pierce_aws_catalog.dbx_tools_demo.fact_usage_daily` | Daily consumption fact (~42k rows), customer x product x day, 2024-01-01 to 2025-12-31 |
-| `…dbx_tools_demo.dim_customer`                              | 120 accounts with segment, industry, region, acquisition channel                       |
-| `…dbx_tools_demo.dim_product`                               | 8 SKUs across the Compute / AI / Storage families, with list price and unit cost       |
-| `…dbx_tools_demo.dim_date`                                  | Daily calendar spine with year, quarter, `year_month`, weekend flag                    |
-| `…dbx_tools_demo.vw_monthly_kpis`                           | Monthly rollup with margin %, revenue per customer, and month-over-month growth %      |
-
-The figures are generated deterministically from the natural keys, so the shape
-is stable across rebuilds: steady growth through the window, a Q4 seasonal lift,
-lighter weekend usage, and margins that differ by product family — enough for
-trend, mix, cohort, and margin questions to all return something interesting.
-
-Genie space **`dbx-tools Demo KPIs`** (`01f18902a1781636a3a4f383de2147e0`) is
-wired to those tables with column descriptions, 12 sample questions, analyst
-instructions, and 8 example question/SQL pairs. Point the demo at it with:
-
-```bash
-DATABRICKS_GENIE_SPACE_ID=01f18902a1781636a3a4f383de2147e0
-```
-
-## SMTP secrets
-
-The deployed app reads SMTP config from the `dbx-tools-demo` Databricks secret
-scope rather than from `.env`, so no credential is committed:
-
-```bash
-databricks secrets list-secrets dbx-tools-demo
-# email-domain, email-from, smtp-host, smtp-password, smtp-port, smtp-secure, smtp-user
-```
-
-[`app.yaml`](server/appkit-demo/app.yaml) maps each one to the matching env var
-via `valueFrom`. Grant the app's service principal `READ` on the scope
-(`databricks secrets put-acl dbx-tools-demo <sp-id> READ`) before deploying.
-
-## Deploy
-
-```bash
-bun run demo:deploy
-```
-
-The bundle ([`databricks.yml`](server/appkit-demo/databricks.yml)) provisions the
-Lakebase autoscaling Postgres; [`app.yaml`](server/appkit-demo/app.yaml) wires the
-Genie space and Lakebase endpoint into the deployed app. The deploy script uses
-`@dbx-tools/auth` to resolve the configured/default workspace profile and host,
-then force-refreshes the token with interactive login fallback; neither is
-committed in the bundle.
-
-## How the demo itself is configured
-
-`demo/.projenrc.ts` is the entire build/workspace config — a standalone projen
-root that discovers the two packages and applies their dependencies. It's
-deliberately tiny; the `server`/`app` tags supply the tsx/vite toolchain.
+- The demo expects one workspace with access to the configured Genie space,
+  SQL warehouse, model endpoints, Lakebase project, MLflow experiment, and
+  secret scope.
+- Genie Agent Mode requires an on-behalf-of user token. The configured
+  `auto` identity policy falls back to the app service principal when the
+  public tunnel provides identity without that token.
+- The Lakebox plugin creates at most one Lakebox for the app. Each authenticated
+  user receives a separate non-sudo account and service route.
+- Graphiti starts only when Databricks managed memory is unavailable for the
+  current actor. Disable Graphiti when you don't need that fallback.
+- Email outbox mode records rendered messages for development. It doesn't send
+  mail or reproduce attachment files on disk.

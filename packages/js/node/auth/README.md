@@ -1,15 +1,12 @@
-# `@dbx-tools/auth`
+# @dbx-tools/auth
 
-Databricks profile resolution and token or authentication-header production for
-Node.js and Bun.
+Resolve Databricks profiles and produce tokens or authentication headers from
+Node.js and Bun. The package selects personal access token (PAT), machine-to-machine
+(M2M), CLI user-to-machine (U2M), Databricks App service-principal, or App
+on-behalf-of-user (OBO) authentication and coordinates token acquisition in
+process memory.
 
-The package resolves profile configuration, selects PAT, M2M, CLI U2M, App
-service-principal, or App OBO authentication, and coordinates token acquisition
-in process memory. Generated Python bindings can also accept authentication from
-the shared Python runtime. Use the returned host, token, or headers with the
-workspace client for the capability being called.
-
-## Quick Start
+## Quick start
 
 ```ts
 import { client } from "@dbx-tools/auth";
@@ -23,7 +20,7 @@ With no options, `createAuthClient()` resolves the standard `DATABRICKS_*`
 environment values and configured default profile together. Explicit options
 override those default sources.
 
-## Features
+## Authentication paths
 
 - Standard `.databrickscfg` parsing and default-profile selection.
 - Secret-free configured profile enumeration.
@@ -65,7 +62,7 @@ Browser and UI code should import auth-type values, target values, profile
 summaries, profile selections, and client-configuration schemas from
 `@dbx-tools/shared-auth`.
 
-## Use The Credentials In A Client
+## Use the credentials in a client
 
 Use the returned `AuthClient` directly:
 
@@ -76,6 +73,10 @@ const headers = await auth.headers();
 
 Use the headers in an HTTP request, or inject the token and host into an AppKit
 or Databricks SDK workspace client.
+
+This package authenticates outbound Databricks calls. It doesn't protect an
+HTTP route or public tunnel. Use [@dbx-tools/tunnel](../tunnel) with its
+passwordless gate when application visitors need access control.
 
 ## Public modules
 

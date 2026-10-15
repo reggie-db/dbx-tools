@@ -1,12 +1,11 @@
 # @dbx-tools/shared-search
 
-Browser-safe schemas and extension types for AppKit-compatible AI Search
-providers.
+Validate Databricks AI Search requests, results, index catalogs, and document
+writes in browser and server code. It defines the browser-safe extension
+contracts shared by [@dbx-tools/search](../../node/search), Mastra tools, and
+[@dbx-tools/ui/search](../../ui/appkit).
 
-Use these schemas in UIs, Mastra tools, routes, and tests that exchange payloads
-with [`@dbx-tools/search`](../../node/search).
-
-## Quick Start
+## Quick start
 
 ```ts
 import { searchSchemas } from "@dbx-tools/shared-search";
@@ -18,7 +17,7 @@ const request = searchSchemas.searchRequestSchema.parse({
 });
 ```
 
-Key features:
+The schemas cover:
 
 - Shared `SearchRequest` / `SearchResult` contract with `{ id, score, fields }`
   hits, so an autocomplete box, a docs lookup, and a Mastra tool speak one shape.
@@ -27,12 +26,12 @@ Key features:
 - `UniversalSearchRequest` for federated search across several indexes at once.
 - `SearchDocument` / `UpsertResult` for adding and updating direct-access index
   contents.
-- `SearchIndexInfo` / `SearchClientConfig` for the boot-time index catalogue a
+- `SearchIndexInfo` / `SearchClientConfig` for the boot-time index catalog a
   search box reads with no server round-trip.
 - Model/tool-friendly schemas that avoid JSON Schema constraints known to cause
   problems with some serving endpoints.
 
-## Request Options
+## Validate request options
 
 ```ts
 import { searchSchemas, type SearchRequest } from "@dbx-tools/shared-search";
@@ -46,40 +45,52 @@ const request: SearchRequest = searchSchemas.searchRequestSchema.parse({
 });
 ```
 
-## Validate Search Results
+## Validate search results
 
 ```ts
-const result = search.searchResultSchema.parse(await response.json());
-for (const hit of result.hits) {
-  console.log(hit.score, hit.id, hit.fields.title);
-}
+import { searchSchemas } from "@dbx-tools/shared-search";
+
+const response = await fetch("/api/ai-search/docs/query", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ query: "reset my password", limit: 5 }),
+});
+if (!response.ok) throw new Error(`Search failed with ${response.status}`);
+const result = searchSchemas.searchResultSchema.parse(await response.json());
+const titles = result.hits.map((hit) => hit.fields.title);
 ```
 
 `searchHitSchema` returns the requested columns under `fields`, keyed by column
 name, plus the primary-key `id` and a relevance `score`. A federated hit also
 carries the `index` it came from.
 
-## Read The Index Catalogue
+## Read the index catalog
 
 ```ts
-const config = search.searchClientConfigSchema.parse(
+import { searchSchemas } from "@dbx-tools/shared-search";
+
+const config = searchSchemas.searchClientConfigSchema.parse(
   await fetch("/api/search/indexes").then((r) => r.json()),
 );
 ```
 
-`searchClientConfigSchema` is the extension catalogue for universal search.
-Single-index UI queries read native `aiSearch` client config instead.
+`searchClientConfigSchema` validates the extension catalog used for universal
+search. Single-index UI queries read AppKit's published `aiSearch` client
+configuration instead.
 
-## Module
+## Runtime boundary
 
-- `search` - `searchModeSchema`, `searchRequestSchema`, `searchHitSchema`,
+This package doesn't query indexes, read Databricks credentials, or choose a
+search backend. Use [@dbx-tools/search](../../node/search) for runtime search,
+index management, Mastra tools, and the AppKit plugin. Use
+[@dbx-tools/ui/search](../../ui/appkit) for React controls.
+
+## Package exports
+
+- `searchSchemas`: `searchModeSchema`, `searchRequestSchema`, `searchHitSchema`,
   `searchResultSchema`, `universalSearchRequestSchema`, `searchDocumentSchema`,
   `upsertResultSchema`, `searchIndexInfoSchema`, `searchClientConfigSchema`, and
-  `toAiSearchQueryType`,
+  `toAiSearchQueryType`, and
   the flat inferred types (`SearchMode`, `SearchRequest`, `SearchHit`,
   `SearchResult`, `UniversalSearchRequest`, `SearchDocument`, `UpsertResult`,
   `SearchIndexInfo`, `SearchClientConfig`).
-
-Runtime search, index management, the Mastra tools, and the AppKit plugin live
-in [`@dbx-tools/search`](../../node/search). The React search box lives in
-[`@dbx-tools/ui/search`](../../ui/appkit).

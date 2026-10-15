@@ -1,15 +1,13 @@
 # @dbx-tools/appkit-web-search
 
-Server-side web-search runtime, Mastra tools, and AppKit plugin.
-
 Add `web_search` and `web_fetch` to an AppKit or Mastra backend. `web_search`
 runs on the
 [Databricks Model Serving native web-search tool](https://docs.databricks.com/aws/en/machine-learning/model-serving/web-search):
 the model searches the web server-side and returns a synthesized answer plus the
-sources it used - no third-party search API key. `web_fetch` reads a single page
-through [`got-scraping`](https://www.npmjs.com/package/got-scraping).
+sources it used without a third-party search API key. `web_fetch` reads a single page
+through [got-scraping](https://www.npmjs.com/package/got-scraping).
 
-## Quick Start
+## Quick start
 
 Register the plugin and give its tools to an agent:
 
@@ -30,7 +28,7 @@ await createApp({
 });
 ```
 
-**Key features:**
+Registration provides:
 
 - AppKit plugin registration that resolves and logs the effective policy at boot.
 - Two Mastra tools: `web_search` (answer + citations) and `web_fetch` (page
@@ -39,13 +37,13 @@ await createApp({
 - `web_search` resolves a dedicated web-search-capable model - defaulting to Gemini,
   then GPT - independently of the calling agent's chat model (which may not
   support web search). Loose names (`"gemini"`, `"gpt"`) fuzzy-match the live
-  catalogue via [`@dbx-tools/model`](../model).
+  catalogue through [@dbx-tools/model](../model).
 - A built-in provider -> request-fragment map (OpenAI Responses API
   `{"tools":[{"type":"web_search"}]}`, Gemini Chat Completions
   `{"google_search":{}}`),
-  overridable per provider via the `WEB_SEARCH_TOOLS` setting.
-- A named URL policy (`allowlist` or `unrestricted`) over a glob allow-list
-  built on [`@dbx-tools/path`](../path)'s `match` matcher: `web_search` silently
+  overridable per provider with the `WEB_SEARCH_TOOLS` setting.
+- A named URL policy (`allowlist` or `unrestricted`) over a glob allowlist
+  built on [@dbx-tools/path](../path)'s `match` matcher: `web_search` silently
   filters disallowed citations, `web_fetch` refuses a disallowed URL, and the
   mode in force is logged at boot.
 - Per-tool approval gating: gate every call, or (for `web_fetch`) only calls
@@ -57,18 +55,24 @@ await createApp({
 - Page and fallback-result HTML use parser-backed text conversion and selectors,
   including complete HTML entity decoding and malformed-markup recovery.
 
-## Use With Native AppKit
+## Choose a web provider
 
 AppKit has no first-party web-search or page-fetch surface. Use this package when
 an agent needs to look things up on the open web or read a URL the user pasted,
-with a policy layer (allow-list + optional approval) around it so a deployment
-controls which sites are reachable and which calls pause for a human. Crucially,
-the web-search tool resolves its own web-search-capable model, so an agent
+with a policy layer (allowlist + optional approval) around it so a deployment
+controls which sites are reachable and which calls pause for a human. The
+web-search tool resolves its own web-search-capable model, so an agent
 running on any chat model (including one without web search) can still search. It
-is a thin add-on in the same shape as [`@dbx-tools/email`](../email): a Mastra
-tool pair plus an AppKit plugin.
+provides a Mastra tool pair and an AppKit plugin, like
+[@dbx-tools/email](../email).
 
-## Configure The AppKit Plugin
+Use native Databricks web search when a supported GPT or Gemini endpoint is
+deployed. Use the DuckDuckGo scrape fallback only when no capable endpoint is
+available and unsynthesized search results are acceptable. Use `web_fetch` for a
+specific public HTTPS page. For indexed application data, use
+[@dbx-tools/search](../search) instead.
+
+## Configure the AppKit plugin
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";
@@ -101,7 +105,7 @@ the native plugin toolkit as shown above, which preserves that plugin's policy,
 OBO scope, and AppKit execution chain. Approval, when enabled, requires Mastra
 storage, so register `lakebase()` or configure storage in the Mastra plugin.
 
-The plugin is also an AppKit `ToolProvider`, so a simple native code agent can
+The plugin is also an AppKit `ToolProvider`, so a native code agent can
 take the same two tools without Mastra. Put the definition at
 `server/agents/researcher/agent.ts` so AppKit discovers it:
 
@@ -132,16 +136,16 @@ Both tools are annotated `effect: "read"` and require user context, and neither
 is auto-inheritable: an agent has to ask for them, because `web_fetch` reaches
 whatever URL the model produces.
 
-Native volume skills currently execute as the service principal; the 0.81
+Native volume skills run as the service principal. The 0.81
 `skillCredentialMode: "obo"` option is not wired. Keep request-scoped writable
 skills, remote sources, asynchronous Graphiti discovery, Sandbox/Monty,
 Mastra memory, and durable approvals on `@dbx-tools/appkit-mastra`.
 
-## Choose The Web-Search Model
+## Choose the web-search model
 
 The native web-search tool only runs on certain models, and it is provider-
 specific. This package resolves deployed endpoints through
-[`@dbx-tools/model`](../model) and applies this order:
+[@dbx-tools/model](../model) and applies this order:
 
 1. Highest-ranked web-search-capable **Gemini**.
 2. Without Gemini, a capable **GPT** matching the calling/requested model.
@@ -159,26 +163,26 @@ Serving binding, and it is the field the plugin declares in its manifest, so
 The request's `model`, plugin `model`, and environment model values are used to
 match the calling GPT after Gemini availability is checked.
 When the tool runs through `@dbx-tools/appkit-mastra`, the host injects the
-actual resolved chat model, overriding any different model argument generated
+resolved chat model, overriding any different model argument generated
 by the LLM.
 
-Model resolution runs against the LIVE workspace catalogue (via
-[`@dbx-tools/model`](../model)), so it only ever picks an endpoint that is
+Model resolution runs against the live workspace catalogue through
+[@dbx-tools/model](../model), so it only picks an endpoint that is
 actually deployed - a configured id that doesn't exist is never called.
 
-### Scrape Fallback
+### Scrape fallback
 
-The native tool is always preferred. But when the workspace has NO deployed
+The native tool is preferred. When the workspace has no deployed
 GPT/Gemini endpoint (so native web search can't run at all), the tool falls
-back to a DuckDuckGo scrape (via `got-scraping`) so it still returns results
+back to a DuckDuckGo scrape using `got-scraping` so it still returns results
 instead of erroring. Fallback results set `model` to `"scrape:duckduckgo"` and
 carry the substance in `citations` (there is no model synthesizing an answer,
-so `answer` is a lead-in over the top results). It is enabled by default; set
+so `answer` is a lead-in over the top results). It is enabled by default. Set
 `scrapeFallback: false` (or `WEB_SEARCH_SCRAPE_FALLBACK=0`) to require a native
 model and error when none is deployed.
 
-The right provider request fragment is selected automatically from the resolved model:
-OpenAI GPT uses the Responses API `{"tools":[{"type":"web_search"}]}`; Gemini
+The plugin selects the provider request fragment from the resolved model:
+OpenAI GPT uses the Responses API `{"tools":[{"type":"web_search"}]}`. Gemini
 uses the top-level Chat Completions field `{"google_search":{}}`. Override or extend that map per provider with
 the `webSearchTools` setting (env `WEB_SEARCH_TOOLS`, JSON) as the platform
 evolves:
@@ -190,7 +194,7 @@ plugin.webSearch({
 });
 ```
 
-## Search And Fetch Without An Agent
+## Search and fetch without an agent
 
 ```ts
 import { search, fetch, runtime, tool } from "@dbx-tools/appkit-web-search";
@@ -217,7 +221,7 @@ const page = await fetch.runWebFetch({ url: result.citations[0]!.url, format: "t
 
 Use direct calls for operational lookups, tests, or admin flows where a model is
 not involved. Standalone Mastra tool factories likewise accept `runtime` or
-`config`; they never discover or attach to a process-global plugin:
+`config`. They never discover or attach to a process-global plugin:
 
 ```ts
 const webRuntime = runtime.createWebSearchRuntime({
@@ -233,7 +237,7 @@ const tools = {
 Pass the runtime explicitly or provide the executor to
 `createWebSearchRuntime`.
 
-## Restrict Which URLs Are Reachable
+## Restrict reachable URLs
 
 ```ts
 import { allowlist } from "@dbx-tools/appkit-web-search";
@@ -246,9 +250,9 @@ list.allows("https://docs.databricks.com/aws/en/index.html"); // true
 list.allows("https://evil.example.com/"); // false
 ```
 
-Each entry is a glob compiled by [`@dbx-tools/path`](../path)'s `match` matcher.
-A host entry (no path, e.g. `databricks.com` or `*.databricks.com`) matches the
-URL's hostname, and a bare host also matches its subdomains; a path entry
+Each entry is a glob compiled by [@dbx-tools/path](../path)'s `match` matcher.
+A host entry (no path, for example `databricks.com` or `*.databricks.com`) matches the
+URL's hostname, and a bare host also matches its subdomains. A path entry
 (`docs.example.com/api/**`) matches host + pathname. Enforcement is asymmetric by
 design: `web_search` citations are silently filtered to the permitted set (the
 model never surfaces a source it then can't fetch), while an explicit `web_fetch`
@@ -277,10 +281,10 @@ plugin.webSearch({ urlPolicy: "unrestricted" });
 plugin.webSearch({ urlPolicy: "allowlist", allowedUrls: ["*.databricks.com"] });
 ```
 
-## Gate Calls For Approval
+## Gate calls for approval
 
 Both tools run without approval by default. Pass `approval` to a tool (or set it
-plugin-wide) to require a human click. `true` gates every call; a URL pattern (or
+plugin-wide) to require approval. `true` gates every call. A URL pattern (or
 list) gates only calls whose URL matches - a `web_fetch` is evaluated precisely
 against its target URL, while a `web_search` (whose result URLs are unknown
 before the call) treats a pattern gate as "gate every call".
@@ -307,7 +311,7 @@ tool.webFetchTool({ config: { approval: ["*.internal.example.com"] } });
 Every spelling normalizes to one of three modes - `{ mode: "none" }`,
 `{ mode: "always" }`, `{ mode: "urls", patterns }` - which is what the resolved
 config carries and the boot log reports. Approval uses the same glob syntax as
-the allow-list, so the two policies read identically.
+the allowlist, so the two policies read identically.
 
 ## Configuration
 
@@ -334,7 +338,7 @@ built-in default.
 | `WEB_SEARCH_MODEL`                 | `model` (dedicated override, wins over the binding below)         |
 | `DATABRICKS_SERVING_ENDPOINT_NAME` | `model` (AppKit's Model Serving binding, treated as a preference) |
 | `WEB_SEARCH_MODEL_FALLBACKS`       | `modelFallbacks` (comma/space-separated)                          |
-| `WEB_SEARCH_TOOLS`                 | `webSearchTools` (JSON object; anything else fails at boot)       |
+| `WEB_SEARCH_TOOLS`                 | `webSearchTools` (JSON object. Any other value fails at boot.)    |
 | `WEB_SEARCH_FUZZY`                 | `modelFuzzyMatch`                                                 |
 | `WEB_SEARCH_FUZZY_THRESHOLD`       | `modelFuzzyThreshold`                                             |
 | `WEB_SEARCH_MAX_CITATIONS`         | `maxCitations`                                                    |
@@ -355,10 +359,10 @@ TTLs and retry budgets and why each was chosen.
 
 OpenAI Responses web searches stream native search, page-read, and completion
 status through the Mastra tool writer. The common tool-session pill updates
-while the search runs; the completed Responses payload remains the tool result.
+while the search runs. The completed Responses payload remains the tool result.
 
 Requirements: the native web-search tool runs on pay-per-token GPT / Gemini
-serving endpoints with cross-region processing enabled; it is unavailable on
+serving endpoints with cross-region processing enabled. It is unavailable on
 provisioned throughput, for external models, or under HIPAA/BAA compliance. See
 the [Databricks docs](https://docs.databricks.com/aws/en/machine-learning/model-serving/web-search).
 
@@ -381,9 +385,9 @@ the [Databricks docs](https://docs.databricks.com/aws/en/machine-learning/model-
   and `executeRead()`.
 - `config` - config types, JSON schema, `resolveWebSearchConfig()`, URL policy
   and approval helpers.
-- `allowlist` - URL allow-list parsing/compiling on top of `@dbx-tools/path`.
+- `allowlist` - URL allowlist parsing/compiling on top of `@dbx-tools/path`.
 - `schema` - zod tool contracts and inferred types.
 
-Pair this package with [`@dbx-tools/appkit-mastra`](../appkit-mastra) to spread
-the tools into an agent (and resolve its own model via [`@dbx-tools/model`](../model)),
-and [`@dbx-tools/email`](../email) for the sibling approval-gated tool pattern.
+Pair this package with [@dbx-tools/appkit-mastra](../appkit-mastra) to add
+the tools to an agent and resolve its model through [@dbx-tools/model](../model).
+Use [@dbx-tools/email](../email) for the sibling approval-gated tool pattern.

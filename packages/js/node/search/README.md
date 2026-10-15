@@ -1,16 +1,15 @@
 # @dbx-tools/search
 
-Extensions for AppKit's beta AI Search plugin: agent tools, federated search,
-index lifecycle helpers, and an AppKit-compatible Lakebase full-text provider.
-
-Use native AppKit `aiSearch` for
+Add agent tools, federated search, index lifecycle helpers, or a
+Lakebase-backed full-text provider to AppKit AI Search. Use native AppKit
+`aiSearch` for
 [Databricks AI Search](https://docs.databricks.com/aws/en/ai-search/ai-search)
 queries. Add this package when an agent needs `search` /
 `universal_search`, an app needs to create, sync, or seed indexes, or a
 deployment needs the same AppKit query contract backed by PostgreSQL full-text
 search instead of Vector Search.
 
-## Quick Start
+## Quick start
 
 Add the extension around an existing AppKit AI Search index:
 
@@ -28,44 +27,44 @@ await createApp({
 });
 ```
 
-**Key features:**
+The extension adds:
 
-- Vector Search reads delegate to AppKit `aiSearch`, which handles OBO execution,
-  caching, reranking, pagination, route validation, and response decoding.
+- Vector Search reads delegate to AppKit `aiSearch`, which handles identity
+  selection, caching, reranking, pagination, route validation, and response
+  decoding.
 - `lakebaseAiSearch()` implements the same `aiSearch` alias, route,
   client-config, and `SearchResponse` contract with PostgreSQL `tsvector`.
-- Agent tools for both Mastra (`searchTool()` etc.) and AppKit agents (through
+- Agent tools for Mastra (`searchTool()` and related factories) and AppKit agents (through
   the extension plugin's `ToolProvider`): `search` and `universal_search`
-  reads, plus provider-aware write tools. Lakebase exposes `add_documents`;
-  native Vector Search can also expose `create_index` and `sync_index`.
-- AppKit-compatible query routes under `/api/ai-search/:alias`; extension
+  reads, plus provider-aware write tools. Lakebase exposes `add_documents`.
+  Native Vector Search can also expose `create_index` and `sync_index`.
+- AppKit-compatible query routes under `/api/ai-search/:alias`. Extension
   routes under `/api/search` cover universal search and optional lifecycle
   operations.
-- Sensible-default config that infers almost everything: name a default index
-  (or set `DATABRICKS_VECTOR_SEARCH_INDEX`) and the columns, page size, mode,
-  aliases, and route path all have defaults you can override when you need to go
-  deeper.
-- OBO for Vector Search comes from native AppKit `aiSearch`. Each Lakebase
-  full-text index selects `service-principal` or `on-behalf-of-user` through the
-  sibling native `lakebase` routing pool.
+- Configuration can infer columns, page size, mode, aliases, and route path
+  after you name a default index or set `DATABRICKS_VECTOR_SEARCH_INDEX`.
+- Native AppKit `aiSearch` uses the service principal by default. Set an
+  index's `auth` to `on-behalf-of-user` when queries must use the signed-in
+  user's permissions. Each Lakebase full-text index selects the same two modes
+  through the sibling native `lakebase` routing pool.
 - Filters use AppKit's scalar/array shape: `{ column: valueOrValues }`.
 - Embedding-model resolution for index creation reuses
-  [`@dbx-tools/model`](../model): a loose name fuzzy-matches the live catalogue,
+  [@dbx-tools/model](../model): a loose name fuzzy-matches the live catalogue,
   or the best embedding endpoint is chosen automatically.
-- Index lifecycle without the ceremony: `createIndex` / `ensureIndex` (Delta
+- Index lifecycle helpers: `createIndex` / `ensureIndex` (Delta
   Sync from a source table, self-managed direct-access with a dimension, or a
   managed direct-access index that embeds a text column - no Delta table or
   warehouse), `provision` (ensure + seed in one idempotent call), `syncIndex`,
   `deleteIndex`, `listIndexes`, and `ensureEndpoint` - each inferring the
-  endpoint, embedding model, primary key, and columns from sensible defaults.
-- Wire up a real index on boot with `ensureOnSetup`: the plugin provisions the
+  endpoint, embedding model, primary key, and columns from package defaults.
+- Provision an index on boot with `ensureOnSetup`: the plugin provisions the
   endpoint + index and seeds documents in the background using the native AppKit
   workspace client, so a fresh deployment is searchable with no manual setup.
 - An explicit **Lakebase full-text provider**: register `lakebaseAiSearch`
   instead of native `aiSearch` to serve the same aliases, query routes, filters,
   and result shape from a Postgres `tsvector` index.
 
-## Use With Native AppKit
+## Choose a search provider
 
 Do not use this package instead of native AppKit for ordinary Vector Search
 queries. Register `aiSearch` from `@databricks/appkit/beta`.
@@ -74,7 +73,13 @@ Use this package for capabilities AppKit does not ship: agent tool providers,
 federated fan-out, index lifecycle and seeding, reusable result components, or
 the Lakebase full-text implementation of the AppKit AI Search contract.
 
-## Add Search To A Mastra Agent
+Register native `aiSearch` for Databricks Vector Search. Register
+`lakebaseAiSearch` for PostgreSQL full-text search with the same AppKit query
+contract. They both use the `aiSearch` plugin name, so an application must
+choose one. Add `search()` beside the selected provider when agents need tools,
+federated reads, or lifecycle routes.
+
+## Add search to a Mastra agent
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
@@ -147,12 +152,11 @@ createApp({
 });
 ```
 
-## Manage Indexes
+## Manage indexes
 
-`SearchClient` is the lifecycle client; query execution requires the registered
-AppKit-compatible provider. Create and maintain indexes with the same
-infer-everything ergonomics. A Delta
-Sync index computes embeddings from a source Delta table and stays synced; the
+`SearchClient` is the lifecycle client. Query execution requires the registered
+AppKit-compatible provider. A Delta
+Sync index computes embeddings from a source Delta table and stays synced. The
 embedding model, endpoint, primary key (`id`), and text column
 (`text`/`content`/`body`) are all inferred when omitted.
 
@@ -197,20 +201,24 @@ await client.provision("main.support.docs", {
 The `SearchIndex` handle mirrors these: `index.ensure(opts)`, `index.sync()`,
 `index.delete()`, `index.info()`.
 
-When the plugin's write surface is on (`search({ allowWrite: true })` or
+When the plugin's write surface is enabled (`search({ allowWrite: true })` or
 `SEARCH_WRITE=true`), agents get the same lifecycle as tools: `create_index`
 provisions an index with everything inferred (pass a `sourceTable` for the
 common Delta Sync case, or an `embeddingDimension` for a direct-access index),
-and `sync_index` refreshes a Delta Sync index from its source table. They are
-gated because they change infrastructure, so grant them only where a caller
-should be able to set up or refresh indexes.
+and `sync_index` refreshes a Delta Sync index from its source table.
 
-### Provision a real index on boot
+`allowWrite` exposes these tools but doesn't approve them. AppKit marks them
+with `effect: "write"` and runs them as the requesting user. The Mastra adapter
+doesn't suspend routine write effects. If a write requires human approval,
+register a Mastra tool with `requireApproval: true` that calls `SearchClient`
+after the run resumes instead of exposing the write toolkit directly.
 
-`ensureOnSetup` makes the plugin wire up a real index when the app starts, using
-the native AppKit workspace client. It ensures
-the endpoint + index exist and seeds documents only when the index is empty, all
-in the background so a slow first-time endpoint build never blocks the server.
+### Provision an index on boot
+
+`ensureOnSetup` provisions an index when the app starts, using the native
+AppKit workspace client. It creates the endpoint and index when absent and
+seeds documents only when the index is empty. This work runs in the background,
+so a slow first-time endpoint build does not block the server.
 The default is a managed direct-access index, so the seed rows are plain
 objects and search-by-text works immediately - no Delta table, no warehouse.
 
@@ -240,7 +248,7 @@ full-text index. It provisions one table per alias (a generated `tsvector`
 column with a GIN index), seeds configured documents, and answers queries with
 a prefix `to_tsquery` + `ts_rank`. The pool comes from the native `lakebase`
 plugin's routing pool, so database authentication is not re-implemented. HTTP
-callers cannot widen configured projection columns; `columns` overrides remain
+callers cannot widen configured projection columns. `columns` overrides remain
 available only to trusted programmatic `query()` calls. Set an index's `auth`
 to `on-behalf-of-user` for OBO query/write routes or leave it at
 `service-principal`.
@@ -297,16 +305,16 @@ default.
 
 | Config           | Environment                                      | Default                 | Purpose                                                  |
 | ---------------- | ------------------------------------------------ | ----------------------- | -------------------------------------------------------- |
-| `index`          | `SEARCH_INDEX`, `DATABRICKS_VECTOR_SEARCH_INDEX` | –                       | Default index (name or alias).                           |
-| `indexes`        | –                                                | `[index]`               | Indexes known for aliases, universal search, and the UI. |
-| `endpoint`       | `SEARCH_ENDPOINT`                                | –                       | Vector Search endpoint (only needed to create an index). |
+| `index`          | `SEARCH_INDEX`, `DATABRICKS_VECTOR_SEARCH_INDEX` | none                    | Default index (name or alias).                           |
+| `indexes`        | none                                             | `[index]`               | Indexes known for aliases, universal search, and the UI. |
+| `endpoint`       | `SEARCH_ENDPOINT`                                | none                    | Vector Search endpoint (only needed to create an index). |
 | `columns`        | `SEARCH_COLUMNS`                                 | index's columns         | Default columns per hit.                                 |
 | `pageSize`       | `SEARCH_PAGE_SIZE`                               | `10`                    | Default hits per search.                                 |
 | `mode`           | `SEARCH_MODE`                                    | `hybrid`                | `hybrid` / `vector` / `keyword`.                         |
 | `embeddingModel` | `SEARCH_EMBEDDING_MODEL`                         | best embedding endpoint | Embedding endpoint for index creation.                   |
 | `timeoutMs`      | `SEARCH_TIMEOUT_MS`                              | `30000`                 | Per-call timeout.                                        |
 | `allowWrite`     | `SEARCH_WRITE`                                   | `false`                 | Enable provider-supported write tools and routes.        |
-| `ensureOnSetup`  | –                                                | –                       | Provision and seed a native Vector Search index at boot. |
+| `ensureOnSetup`  | none                                             | none                    | Provision and seed a native Vector Search index at boot. |
 
 ## Modules
 
@@ -333,6 +341,6 @@ default.
 - `schema` - the tool descriptions and re-exported request schemas.
 
 Browser-safe schemas live in
-[`@dbx-tools/shared-search`](../../shared/search); the React search box
-lives in [`@dbx-tools/ui/search`](../../ui/appkit). Model resolution reuses
-[`@dbx-tools/model`](../model).
+[@dbx-tools/shared-search](../../shared/search). The React search box
+lives in [@dbx-tools/ui/search](../../ui/appkit). Model resolution reuses
+[@dbx-tools/model](../model).

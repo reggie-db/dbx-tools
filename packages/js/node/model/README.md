@@ -1,14 +1,12 @@
 # @dbx-tools/model
 
-Workspace-aware Databricks Model Serving selection.
-
-Turn a loose model request such as `"claude sonnet"` or `"chat-fast"` into a
-concrete serving endpoint in the current workspace. The client lists
+Resolve a loose model request such as `"claude sonnet"` or `"chat-fast"` to a
+concrete Databricks Model Serving endpoint in the active workspace. The client lists
 `/serving-endpoints`, caches and enriches the
 catalogue, classifies endpoints by capability, fuzzy-matches names, and falls
 back to a small static floor when the live catalogue is unavailable.
 
-## Quick Start
+## Quick start
 
 ```ts
 import { createModelClient } from "@dbx-tools/model";
@@ -32,9 +30,9 @@ An exact endpoint id or exact `system.ai.*` name always wins, regardless of this
 preference.
 
 Browser-safe request/result schemas and endpoint classification types live in
-[`@dbx-tools/shared-model`](../../shared/model).
+[@dbx-tools/shared-model](../../shared/model).
 
-Key features:
+The package:
 
 - Lists Databricks Model Serving endpoints through the SDK and normalizes them
   into a stable summary shape with TypeScript-owned family and reasoning-effort
@@ -56,27 +54,27 @@ Key features:
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
-## Use With AppKit Model Serving
+## Use with AppKit Model Serving
 
-Native AppKit's Model Serving plugin is the right choice when you already know
-the endpoint alias you want. It gives you authenticated invoke/stream routes,
+Use native AppKit's Model Serving plugin when you already know the endpoint
+alias you want. It gives you authenticated invoke/stream routes,
 OBO execution, generated endpoint types, request-body filtering, and frontend
 hooks.
 
 Use this package before or beside that layer when the hard part is choosing the
 endpoint:
 
-- resolve loose human input such as `"sonnet"` or `"fast"` against the live
-  workspace catalogue;
-- group endpoints into capability classes like `chat-thinking`, `chat-balanced`,
-  `chat-fast`, and `embedding`;
-- enforce class ceilings so a caller can degrade to smaller models without
-  escalating to a larger one;
-- build model pickers and debug routes from a cached, enriched endpoint list;
-- keep local agents and CLIs working with a static fallback when catalogue
+- Resolve loose human input such as `"sonnet"` or `"fast"` against the live
+  workspace catalogue.
+- Group endpoints into capability classes like `chat-thinking`, `chat-balanced`,
+  `chat-fast`, and `embedding`.
+- Enforce class ceilings so a caller can degrade to smaller models without
+  escalating to a larger one.
+- Build model pickers and debug routes from a cached, enriched endpoint list.
+- Keep local agents and CLIs working with a static fallback when catalogue
   access is unavailable.
 
-## Route Requests
+## Route requests
 
 ```ts
 import { createModelClient } from "@dbx-tools/model";
@@ -107,7 +105,7 @@ headers, exposes profiles, and returns the package's generated metadata. Its
 portable `@dbx-tools/model/python` entrypoint excludes the AppKit catalogue
 wrapper while reusing the same pure ranking and policy implementation.
 
-## Select One Model
+## Select one model
 
 ```ts
 import { createWorkspaceClient } from "@databricks/appkit";
@@ -127,7 +125,7 @@ console.log(selected.modelId, selected.source);
 catalogue, applies fuzzy matching when an explicit string is present, then
 returns a single `modelId` plus a source label explaining why that endpoint won.
 Set `liveOnly: true` for an unpinned production default that must select the
-highest-ranked currently available endpoint and must not fall through to an
+highest-ranked available endpoint and must not fall through to an
 offline static id when the catalogue has no match.
 With no explicit id or class, automatic selection prefers the highest-ranked
 live GPT family member, then falls back to the highest-ranked live chat model.
@@ -136,7 +134,7 @@ The `source` label is useful for logs and debug UIs. It distinguishes explicit
 matches from class-based selection, environment defaults, and fallback results,
 so operators can tell whether a request used the intended model policy.
 
-## Build A Model Picker
+## Build a model picker
 
 ```ts
 import { resolve } from "@dbx-tools/model";
@@ -172,7 +170,7 @@ exact serving task, `dimension` or `minDimension`/`maxDimension` for embedding
 shape, `reasoningEffort` for supported reasoning levels, and `requiresTools`
 for complete tool-call support.
 
-## Work With A Held Catalogue
+## Work with a held catalogue
 
 When you already have endpoint summaries, use the pure resolver functions from
 `resolve` and `modelCatalog` without another workspace call:
@@ -190,10 +188,10 @@ const picked = resolve.resolveModel(endpoints, {
 ```
 
 The class acts as a ceiling. `chat-balanced` may fall back to `chat-fast`, but
-will not escalate to `chat-thinking`. Embedding endpoints are considered only
+does not escalate to `chat-thinking`. Embedding endpoints are considered only
 when the requested class is `embedding`.
 
-## List And Cache Serving Endpoints
+## List and cache serving endpoints
 
 ```ts
 import { modelCatalog } from "@dbx-tools/model";
@@ -210,10 +208,10 @@ await modelCatalog.clearServingEndpointsCache(host);
 endpoints with classification and embedding dimensions, and isolates entries by
 workspace host and trusted credential identity. If a refresh fails, it can return
 the last known-good value retained on disk. `listServingEndpointsUncached()` is
-useful for simple scripts that only need the SDK response and do not want a cache
+useful for scripts that only need the SDK response and do not want a cache
 dependency.
 
-## Fuzzy Resolve Endpoint Names
+## Fuzzy resolve endpoint names
 
 ```ts
 const matches = serving.searchServingEndpoints("claude sonnet", endpoints, {
@@ -227,7 +225,7 @@ Fuzzy matching is intentionally a server concern because it depends on the live
 workspace catalogue and may re-list on misses. Disable it in callers that require
 exact endpoint ids.
 
-## Resolve Against A Catalogue That May Be Stale
+## Resolve against a catalogue that may be stale
 
 ```ts
 const resolved = await resolve.rankModelIdLive((force) => loadCatalogue(force), "opus");
@@ -238,10 +236,10 @@ reloads once with `force` before giving up, so a model deployed after your cache
 warmed still resolves without a restart. You supply the loader, so the caching
 policy stays yours: `listServingEndpoints` and its shared project cache, a plain
 field in a long-lived CLI, or a test double. `rankModelId()` is the pure form over
-a single snapshot; unlike `serving.resolveModelId` it breaks equal match scores
+a single snapshot. Unlike `serving.resolveModelId`, it breaks equal match scores
 by class and then version, so `"opus"` prefers `opus-5` over `opus-4-7`.
 
-## Call An Endpoint Directly
+## Call an endpoint directly
 
 ```ts
 import { invoke } from "@dbx-tools/model";
@@ -271,7 +269,7 @@ tool-bearing Chat Completions, while keeping GPT-OSS on its supported Chat path.
 The TypeScript helper applies this policy so every Node consumer shares one version
 threshold without loading a native library.
 
-## Read Published Model Metadata
+## Read published model metadata
 
 ```ts
 import { metadata } from "@dbx-tools/model";
@@ -283,11 +281,21 @@ const status = metadata.modelStatusFor("system.ai.gemini-2-5-pro");
 
 The package ships committed snapshots generated from Databricks documentation
 by `bun run --filter '@dbx-tools/model' metadata`. Runtime calls normalize endpoint, display,
-foundation-model, and provider identities into memoized sets and maps; they do
+foundation-model, and provider identities into memoized sets and maps. They do
 not fetch documentation. `modelMetadataFor()` returns status, capabilities, and
 published limits together for a string or `ServingEndpointSummary`.
 
-## Use Static Fallbacks
+Native web-search capability starts with the documented model set. Later
+versions in the same hosted foundation-model family inherit the capability by
+`versionTuple`. GPT-OSS models never inherit native web search. Custom and
+external endpoint names also don't inherit because digits in those names aren't
+treated as model versions.
+
+The model gateway can override a discovered capability for routing and model
+catalogues. Use that gateway override to disable web search when a workspace
+route doesn't support a capability that metadata would otherwise advertise.
+
+## Use static fallbacks
 
 ```ts
 import { classes, fallback } from "@dbx-tools/model";
@@ -299,7 +307,7 @@ const modelId = fallback.modelForClass(cls);
 
 The fallback floor gives agents and local scripts a stable answer when a
 workspace cannot list endpoints. Prefer live catalogue resolution for production
-policy decisions; fallbacks are a last resort.
+policy decisions. Use fallbacks only when live resolution is unavailable.
 
 ## Modules
 
@@ -318,4 +326,4 @@ policy decisions; fallbacks are a last resort.
 - `fallback` - static fallback model ids per class.
 
 The AppKit-Mastra integration uses this package through
-[`@dbx-tools/appkit-mastra`](../appkit-mastra).
+[@dbx-tools/appkit-mastra](../appkit-mastra).

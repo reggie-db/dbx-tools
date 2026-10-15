@@ -1,4 +1,4 @@
-# `@dbx-tools/appkit-memory`
+# @dbx-tools/appkit-memory
 
 Add durable, actor-scoped memory tools to an AppKit application. The plugin
 checks Databricks Agent Memory first and starts its Graphiti sidecar only when
@@ -21,27 +21,32 @@ await createApp({
 });
 ```
 
-`memory()` publishes two tools:
+The plugin is beta. It publishes two tools:
 
-- `remember` saves content at a stable absolute path.
-- `recall_memory` searches durable memory for the current actor.
+- `remember` saves non-empty content at a stable absolute path, such as
+  `/preferences/response.md`.
+- `recall_memory` searches memory for the current actor and returns up to 100
+  results.
 
 A 403 or 404 from the Databricks store selects Graphiti. Other Databricks
-errors propagate so a transient outage does not split one actor's memory
-between backends.
+errors remain errors, which prevents a transient outage from splitting one
+actor's memory between backends.
 
 `databricks` defaults to `"auto"`. Set it to `true` to require managed-memory
 access for every caller or `false` to disable the managed backend. The object
 form accepts `memoryStore` and `mode: "auto" | "required"`.
 
-## Use with Mastra
+## Add the tools to a Mastra agent
 
 Request the toolkit from an agent:
 
 ```ts
+import { createApp, server } from "@databricks/appkit";
 import { agents, mastra } from "@dbx-tools/appkit-mastra";
+import { memory } from "@dbx-tools/appkit-memory";
 
 const support = agents.createAgent({
+  name: "Support",
   instructions: "Help the user.",
   async tools(plugins) {
     return (await plugins.memory?.toolkit()) ?? {};
@@ -61,7 +66,23 @@ or `false` to disable it. Completed turns are mirrored to Graphiti only when
 Databricks managed memory is unavailable. Managed-memory session extraction is
 not used.
 
-## Graphiti runtime
+## Configure the backends
+
+`memory()` accepts the following backend and turn-saving settings:
+
+| Option                   | Default                    | Behavior                                                                                                                                  |
+| ------------------------ | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `databricks`             | `"auto"`                   | Uses Databricks managed memory when the actor can access the store. A 403 or 404 selects Graphiti.                                        |
+| `databricks.memoryStore` | Project-derived store name | Selects an existing memory store by ID or resource name.                                                                                  |
+| `databricks.mode`        | `"auto"`                   | Set to `"required"` to fail instead of selecting Graphiti.                                                                                |
+| `graphiti`               | `true`                     | Enables the lazy Graphiti fallback. Pass a Graphiti options object to override its model, database, listener, or authentication settings. |
+| `saveTurns`              | `"auto"`                   | Attaches a Mastra output processor when Mastra and Graphiti are registered.                                                               |
+
+At least one backend must remain enabled. `saveTurns: true` requires both a
+registered Mastra plugin and the Graphiti backend. `databricks: true` requires
+managed-memory access for every caller.
+
+## Run Graphiti directly
 
 The Graphiti fallback is imported and started on the first operation that needs
 it. Concurrent first operations share one startup. Configure `PYTHON` to use an
@@ -76,4 +97,21 @@ import { runtime as graphiti } from "@dbx-tools/appkit-memory/graphiti";
 await graphiti.runGraphiti({ profile: "MY-PROFILE" });
 ```
 
-# replace this
+`runGraphiti()` blocks until the process exits. Use it for a standalone
+Graphiti server or CLI integration. AppKit applications don't need to call it
+because the plugin supervises the fallback process.
+
+## Understand memory limits
+
+- Memory is partitioned by the trusted AppKit request identity. An `actor_id`
+  is a storage key, not an authorization mechanism.
+- Graphiti starts only after an operation cannot use Databricks managed memory.
+  Registering the plugin doesn't start Python or PostgreSQL.
+- The plugin stops a Graphiti process that it started when AppKit shuts down.
+- Mastra thread storage and PgVector semantic recall remain separate from these
+  durable memory tools.
+- Graphiti needs either a PostgreSQL or Lakebase database URL, or the optional
+  embedded PostgreSQL runtime.
+
+For Graphiti server, database, and queue behavior, see
+[dbx-tools-graphiti](../../../py/graphiti/README.md).

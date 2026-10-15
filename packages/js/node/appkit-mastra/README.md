@@ -1,13 +1,10 @@
 # @dbx-tools/appkit-mastra
 
-AppKit plugin and server-side toolkit for hosting Mastra agents inside a
-Databricks App.
+Host Mastra agents in a Databricks App with AppKit authentication, streaming
+routes, Lakebase-backed memory, Genie tools, model selection, chart and table
+embeds, MLflow feedback, and MCP exposure.
 
-The plugin mounts Mastra's streaming routes in an AppKit server and adds
-Databricks authentication, Lakebase-backed memory, Genie tools, model selection,
-chart and table embeds, MLflow feedback, and MCP exposure.
-
-## Quick Start
+## Quick start
 
 Add an agent and run its command tools in the default Monty runtime:
 
@@ -25,7 +22,7 @@ await createApp({ plugins: [server(), mastra({ agents: { analyst } })] });
 Add Lakebase, Genie, Analytics, or other AppKit plugins when the agent needs
 durable threads or workspace tools.
 
-## Choose Mastra Or AppKit Agents
+## Choose Mastra, AppKit Agents, or direct Genie
 
 Native AppKit Agents is the shorter path for AppKit-native agent definitions,
 streaming chat, threads, cancellation, and approvals. Choose this package when
@@ -37,13 +34,18 @@ the application already uses Mastra or needs Mastra-specific capabilities:
   ToolProvider plugins stay available without rewriting them.
 - Genie as an agent tool that emits typed progress events, result metadata, and
   delayed chart/data markers into the same assistant turn.
-- A paired React client in [`@dbx-tools/ui-mastra`](../../ui/mastra) with model
+- A paired React client in [@dbx-tools/ui-mastra](../../ui/mastra) with model
   picking, thread sidebar, approvals, feedback, exports, and inline embeds.
 - Per-request model override and fuzzy endpoint resolution through
-  [`@dbx-tools/model`](../model), instead of binding every agent to a fixed
+  [@dbx-tools/model](../model), instead of binding every agent to a fixed
   endpoint name.
 
-## Full App Example
+Use direct Genie chat when one Genie space owns the conversation and users don't
+need a supervising agent. Choose Mastra when one turn must combine Genie with
+other tools, memory, approvals, or workflows. Direct Genie keeps conversation
+history in Genie and doesn't write Mastra memory.
+
+## Full app example
 
 ```ts
 import { analytics, createApp, lakebase, server } from "@databricks/appkit";
@@ -98,7 +100,7 @@ This example provides:
 - Lakebase registration automatically enables durable thread storage and vector
   memory unless you opt out.
 
-## Agent Registration
+## Agent registration
 
 `mastra({ agents })` accepts a single definition, an array, or a record.
 Records are best when clients need stable agent ids:
@@ -135,7 +137,7 @@ Agents are also told to issue independent tool calls together in one turn and
 to keep dependent or conflicting calls sequential. Models that do not support
 parallel tool calls continue through the normal multi-step agent loop.
 
-## Typed Application Request Context
+## Typed application request context
 
 Use Mastra's native `requestContextSchema` for UI selections that should shape a
 turn, such as a store, workflow, route, or selected entity:
@@ -174,12 +176,12 @@ so application context cannot change conversation ownership or credentials.
 `createAgent({ requireToolApproval })` forwards Mastra's native request-level
 approval gate. It may be an async Classifier-backed function that returns `true`
 for calls still needing human review. A tool's own `requireApproval` remains
-authoritative; configure that native function on the tool when policy should
+authoritative. Configure that native function on the tool when policy should
 allow some calls. Regular agents do not include Agent Controller's durable
 allow/ask/deny permission store, so remembered decisions remain a caller-owned,
 server-side durable policy rather than browser state.
 
-## AppKit Toolkits
+## AppKit toolkits
 
 The `tools(plugins)` callback receives a dynamic index of registered AppKit
 tool-provider plugins. Each entry exposes `.toolkit(opts)` with AppKit's public
@@ -208,11 +210,11 @@ const agent = agents.createAgent({
 });
 ```
 
-Tool calls dispatch back through the owning AppKit plugin, preserving OBO auth
-and AppKit telemetry behavior. Optional plugins should be guarded with `?.` when
-you spread their tools.
+Tool calls dispatch back through the owning AppKit plugin, preserving
+on-behalf-of-user (OBO) authentication and AppKit telemetry behavior. Optional
+plugins should be guarded with `?.` when you spread their tools.
 
-### Tools Flow In, Not Out
+### Tools flow in, not out
 
 The plugin is a tool _consumer_, not an AppKit `ToolProvider`: it deliberately
 implements neither `getAgentTools()` nor `executeAgentTool()`, so its built-in
@@ -237,7 +239,7 @@ unless `mcp: { tools: true }` names them explicitly. Approval-gated tools you
 register yourself are enforced separately: boot fails if one is registered
 without Mastra storage to persist the suspended run.
 
-## Memory And Storage
+## Memory and storage
 
 The `memory` and `storage` config fields can be `false`, `true`, or a concrete
 Mastra Postgres/PgVector config.
@@ -252,23 +254,23 @@ mastra({
 
 With `lakebase()` registered, both default to enabled:
 
-- storage uses a per-agent schema for durable threads and messages;
-- memory uses a shared vector index for semantic recall;
-- the existing service-principal pool is captured from `lakebase()` during
+- Storage uses a per-agent schema for durable threads and messages.
+- Memory uses a shared vector index for semantic recall.
+- The existing service-principal pool is captured from `lakebase()` during
   startup, so request-scoped OBO credentials never reach storage work and no
   additional PostgreSQL pool is created.
 
 Without `lakebase()`, agents are stateless unless you provide explicit storage
 and memory configs.
 
-### Add External Durable Memory Tools
+### Add external durable memory tools
 
 Register `@dbx-tools/appkit-memory` as a sibling plugin and request
 `plugins.memory?.toolkit()` from the agents that need its `remember` and
 `recall_memory` tools. The memory plugin owns Databricks and Graphiti selection.
 Mastra continues to own only its configured PostgresStore and PgVector.
 
-## Workspace Capabilities
+## Workspace capabilities
 
 Every `agents.createAgent()` gets a default Mastra `Workspace` from
 `workspaces.databricksWorkspace()`. A workspace can provide file access, skill
@@ -276,6 +278,13 @@ discovery, a command sandbox, or any combination. The default mounts
 `/Workspace/.assistant` and the current user's workspace home, scans their
 configured Assistant skill paths, and provides Monty for isolated Python
 command execution.
+
+Use AppKit's Files plugin when application routes and UI components need
+governed upload, download, or volume access. Use a Mastra workspace when the
+agent itself needs files, skills, or command execution during a turn. A
+`FileSystem` from [@dbx-tools/databricks](../databricks) or
+[@dbx-tools/fs](../fs) can be mounted into that workspace with
+`filesystems(fs)`.
 
 Pass paths directly when an agent needs a different filesystem scope:
 
@@ -318,7 +327,7 @@ const workspace = workspaces.databricksWorkspace({
 Paths are file-only unless `skills` lists relative Mastra skill paths within
 that included path. At workspace level, `skills` uses Mastra's native path list
 or resolver. An empty list retains configured mounts without exposing skills.
-`writable` controls whether the filesystem attempts mutations; Databricks
+`writable` controls whether the filesystem attempts mutations. Databricks
 permissions still decide whether an operation succeeds. `mount` can expose the
 path at a different Mastra path when required.
 
@@ -378,7 +387,7 @@ remote skills use their native tools without duplicating their virtual mounts
 in workspace search. Set the workspace's `skills` to an empty list when the
 workspace should expose no skills.
 
-### Cache Workspace Metadata
+### Cache workspace metadata
 
 Register `filesCache()` to reuse Databricks directory metadata across page
 refreshes and later turns:
@@ -405,7 +414,7 @@ const workspace = workspaces.databricksWorkspace({
 });
 ```
 
-### Configure File Approvals
+### Configure file approvals
 
 Workspace tools are enabled and run without approval by default. This applies to
 file mutations and command execution with either Monty or a supplied sandbox
@@ -434,7 +443,7 @@ are separate, so gate or disable
 `WORKSPACE_TOOLS.SANDBOX.EXECUTE_COMMAND` when commands must not bypass file
 policies. Cached metadata never grants Databricks access.
 
-## Workspace Sandbox
+## Workspace sandbox
 
 Auto-created workspaces use Monty by default. Supply any native Mastra
 `WorkspaceSandbox` or request-scoped resolver to use a remote transport:
@@ -486,7 +495,7 @@ const localAgent = agents.createAgent({
 An agent-level workspace overrides the plugin-level sandbox setting. Returning
 `undefined` from a workspace resolver disables the workspace for that agent.
 
-### Batch Tools With Code Mode
+### Batch tools with Code Mode
 
 Mastra Code Mode is enabled by default when an agent has executable tools. It
 adds an `execute_typescript` tool so the model can batch independent calls,
@@ -508,7 +517,7 @@ calls an exposed Lakebox-backed tool.
 
 Callers may also use native Mastra `createCodeMode` directly when they want
 multiple explicitly scoped orchestration tools, or when the TypeScript program
-itself must execute in a supplied Sandbox:
+itself must run in a supplied Sandbox:
 
 ```ts
 const sales = createCodeMode({
@@ -531,11 +540,11 @@ const agent = new Agent({
 });
 ```
 
-This is native Mastra `createCodeMode`; the plugin does not wrap or re-export it.
+This is native Mastra `createCodeMode`. The plugin does not wrap or re-export it.
 Set plugin `codeMode: false` to disable the automatic Code Mode, or pass
 `{ id, timeout }` to tune its generated tool.
 
-## Remote Skills
+## Remote skills
 
 Use `remoteSkills` to install a curated skill set when the files are not already
 in the Databricks workspace. Sources can be a GitHub `owner/repo`, a git URL, a
@@ -615,13 +624,10 @@ mastra({
 });
 ```
 
-**No CLI required.** `databricks aitools install` resolves its skills from the
-PUBLIC `databricks/databricks-agent-skills` repo, so this reads the same repo
-directly: it fetches the repo's generated `manifest.json` (which names each
-skill's files and whether it lives under `skills/` or `experimental/`) and
-downloads them. That matters because a deployed Databricks App container has no
-`databricks` CLI - the old CLI shell-out simply never produced skills there.
-No Databricks auth is involved either, since the repo is public.
+The source reads the public
+[databricks/databricks-agent-skills](https://github.com/databricks/databricks-agent-skills)
+repository's generated `manifest.json` and downloads the selected skill files.
+It doesn't require the Databricks CLI or Databricks authentication.
 
 Per-source options for `"aitools"`:
 
@@ -636,18 +642,18 @@ destination. These trees are supplied to every agent as standard agent-level
 skills rather than workspace-search roots. Local filesystem mounts remain
 available below `/.skills` when a Databricks destination is unavailable.
 
-## Genie Tools
+## Genie tools
 
 `genie.buildGenieTools()` and `plugins.genie.toolkit()` expose tools for:
 
-- asking a configured Genie space;
-- reading space descriptions and serialized space metadata;
-- fetching statement rows by `statement_id`;
-- preparing charts from Genie result sets.
+- Asking a configured Genie space.
+- Reading space descriptions and serialized space metadata.
+- Fetching statement rows by `statement_id`.
+- Preparing charts from Genie result sets.
 
 The central agent drives those tools directly. Genie events stream through the
 Mastra writer using the shared contract from
-[`@dbx-tools/shared-mastra`](../../shared/mastra), so clients can show thinking,
+[@dbx-tools/shared-mastra](../../shared/mastra), so clients can show thinking,
 SQL, row counts, summaries, chart markers, and data markers as the turn runs.
 Independent `ask_genie` calls can run in parallel. One invocation owns the
 thread's reusable Genie conversation while overlapping invocations use isolated
@@ -673,7 +679,7 @@ const agent = agents.createAgent({
 });
 ```
 
-### Direct Genie Chat
+### Direct Genie chat
 
 The plugin also exposes a Genie-only transport for the paired Mastra UI. It
 keeps the standard AI SDK `UIMessage` stream and the same tool, thought, table,
@@ -702,7 +708,7 @@ Direct turns require the
 never fall back to the classic start/create/get-message polling flow, and
 history comes only from the Agent API conversation-items endpoint. The GA
 space conversation-list endpoint is used only to discover conversations marked
-`GENIE_CONVERSATION_TYPE_AGENT`; the GA delete endpoints provide the management
+`GENIE_CONVERSATION_TYPE_AGENT`. The GA delete endpoints provide the management
 operations that the Agent API does not expose.
 
 Agent Mode receives Genie's visualization tool. When Genie emits a
@@ -722,7 +728,7 @@ Operational limits:
 - Aborting the browser stream cancels that request instead of leaving a durable
   Mastra run to reconnect.
 
-## Charts And Data Embeds
+## Charts and data embeds
 
 `chart.prepareChart()` mints a chart id immediately, caches an in-progress
 record, resolves the data in the background, and stores a terminal chart or
@@ -758,10 +764,10 @@ Agents can return `[chart:<id>]` and `[data:<statement_id>]` markers in prose.
 The embed route resolves them later, which avoids forcing the language model to
 inline large tables or wait for chart planning before continuing its answer.
 Agent Mode and polling query attachments carry statement ids when Databricks
-returns them. Direct Genie chat additionally uses
+returns them. Direct Genie chat also uses
 `[visualization:<statement_id>]` for AppKit UI's native Genie visualization.
 
-### Chart Types And Hand-Written Charts
+### Chart types and hand-written charts
 
 The planner does not emit a raw Echarts option. It fills a small plan (chart
 type, categories, series) that `planToEchartsOption` expands, so tooltip,
@@ -796,10 +802,10 @@ Prefer a listed type whenever one fits. `custom` trades the shared defaults for
 reach, so it is the answer for an unsupported chart shape, not a way to restyle
 a supported one.
 
-### Brand The Charts
+### Brand the charts
 
 Pass a `brand` to the plugin to theme every generated chart with your brand's
-palette and font; omit it for the default Echarts look.
+palette and font. Omit it for the default Echarts look.
 
 ```ts
 import { brandUtils } from "@dbx-tools/shared-core";
@@ -820,24 +826,24 @@ read later in a browser whose light/dark theme the server cannot know, so the
 brand's single (light) foreground would produce near-black labels on a dark chat
 surface. The renderer resolves tick labels, axis names, grid lines, and the
 tooltip from AppKit's live CSS tokens instead - see
-[`@dbx-tools/ui-mastra`](../../ui/mastra)'s chart theming. Brand identity is the
-same in either mode; chrome is not.
+[@dbx-tools/ui-mastra](../../ui/mastra)'s chart theming. Brand identity is the
+same in either mode. Chrome is not.
 
-## Model Selection
+## Model selection
 
 `model.buildModel()` adapts the generic resolver from
-[`@dbx-tools/model`](../model) to Mastra, then constructs a request-scoped
+[@dbx-tools/model](../model) to Mastra, then constructs a request-scoped
 Vercel AI SDK ProviderV4 model through
-[`@dbx-tools/model-protocol`](../model-protocol). It resolves the model per
+[@dbx-tools/model-protocol](../model-protocol). It resolves the model per
 request, so OBO identity and request-specific overrides stay isolated.
 
 Model priority is:
 
-1. request override (`X-Mastra-Model`, `?model=`, body `model` / `modelId`);
-2. per-agent `model`;
-3. plugin `defaultModel`;
-4. `DATABRICKS_SERVING_ENDPOINT_NAME`;
-5. highest-ranked currently available GPT from the live workspace catalogue,
+1. Request override (`X-Mastra-Model`, `?model=`, body `model` / `modelId`).
+1. Per-agent `model`.
+1. Plugin `defaultModel`.
+1. `DATABRICKS_SERVING_ENDPOINT_NAME`.
+1. Highest-ranked available GPT from the live workspace catalogue,
    then the highest-ranked live chat model when no GPT is deployed.
 
 The unconfigured default is live-only and fails clearly when the workspace has
@@ -859,7 +865,7 @@ building custom routes that should behave like the plugin's `/models` and stream
 routes.
 
 The Chat provider uses a provider-local fetch from
-`@dbx-tools/model-protocol`; Mastra does not patch `globalThis.fetch`. The
+`@dbx-tools/model-protocol`. Mastra does not patch `globalThis.fetch`. The
 shared fetch repairs provider-specific wire requirements for both
 `fetch(url, { body })` and `fetch(new Request(...))`. In particular,
 Databricks-hosted GPT 5.6 Chat Completions with function tools receives
@@ -883,14 +889,14 @@ without waiting on the `/models` catalogue (so it never flashes a raw id). A
 `:agentId` that is not registered returns `404` with the registered ids, the
 same as the history and threads routes.
 
-## Threads, History, And Suggestions
+## Threads, history, and suggestions
 
 When storage is enabled, the plugin provides route helpers and in-process
 functions for conversation management:
 
-- `history.loadHistory()` and `history.clearHistory()` read or clear one thread;
+- `history.loadHistory()` and `history.clearHistory()` read or clear one thread.
 - `threads.listThreads()`, `threads.renameThread()`, and
-  `threads.deleteThread()` operate on the caller's scoped conversations;
+  `threads.deleteThread()` operate on the caller's scoped conversations.
 - `genie.collectSpaceSuggestions()` reads starter questions from the configured
   Genie space.
 
@@ -898,7 +904,7 @@ The plugin resolves the active thread from `x-mastra-thread-id`, `?threadId=`,
 or a per-session fallback cookie. That keeps streaming, history, and clear
 operations aligned around the same conversation id.
 
-## Evaluate In Process
+## Evaluate in process
 
 `eval.createMastraEvalDriver()` adapts a Mastra agent's native `generate()`
 result to AppKit 0.81's `EvalDriver` contract without reducing a chat stream:
@@ -970,7 +976,7 @@ On Apps UC traces it reads the experiment's
 `mlflow.experiment.databricksTraceDestinationPath` tag (or the spans-table tag)
 so the assessment URI matches the row the experiment UI shows. The response
 header name and request/response schemas live in
-[`@dbx-tools/shared-mastra`](../../shared/mastra).
+[@dbx-tools/shared-mastra](../../shared/mastra).
 
 Outside a Databricks App, an experiment id automatically enables direct MLflow
 tracing. The plugin initializes the MLflow Node SDK, injects
@@ -1034,7 +1040,7 @@ the global provider AppKit already owns and writes to a different store.
 
 Success in the boot log looks like:
 
-```
+```text
 [observability] Mastra observability wired through OTel bridge {
   otelBase: 'http://localhost:4314', feedback: true, observability: 'mlflow'
 }
@@ -1042,10 +1048,10 @@ Success in the boot log looks like:
 
 Verify with SQL against the UC `*_trace_unified` view (the REST
 `traces/search` API only covers the experiment store, not UC-backed traces).
-Schema names with hyphens need backticks; `attributes` is a `VARIANT`, so use
+Schema names with hyphens need backticks. `attributes` is a `VARIANT`, so use
 `attributes:['key']::string` rather than `map_keys()`.
 
-## MCP Exposure
+## MCP exposure
 
 `mcp.buildMcpServer()` exposes registered agents as MCP tools by default. The
 AppKit plugin publishes clean aliases under its base path:
@@ -1064,7 +1070,7 @@ mastra({
 Use `mcp: false` to disable MCP. Turn on `tools: true` only for ambient tools
 that are safe outside an in-process chat turn.
 
-## Driving A Turn From Outside The Routes
+## Drive a turn outside the routes
 
 Another plugin (or a scheduled job) can run an agent turn directly, but a raw
 `agent.generate(prompt)` loses everything the HTTP middleware stamps - most
@@ -1087,11 +1093,11 @@ const result = await mastra.getDefault().generate(prompt, { requestContext });
 The AppKit user, the memory thread / resource pair, and a request id (so the
 turn's spans join up in traces) are stamped exactly as the request middleware
 stamps them. Call it inside an `asUser(req)` scope to inherit the caller's OBO
-identity; outside one it resolves to the service principal.
-[`@dbx-tools/teams`](../teams) uses this so a Teams card turn has the same tool
+identity. Outside one it resolves to the service principal.
+[@dbx-tools/teams](../teams) uses this so a Teams card turn has the same tool
 reach - and therefore the same answer - as a chat turn.
 
-## API Gate
+## API gate
 
 The stock `@mastra/express` app has broad management routes. The plugin's
 default `apiAccess: "scoped"` allows only the chat, read-only metadata,
@@ -1104,7 +1110,7 @@ logic that need the same allowlist.
 ## Routes
 
 Mounted under the plugin base path, which is `/api/mastra` unless you override
-`name`. Product-specific routes use AppKit's `route()` helper; chat and memory
+`name`. Product-specific routes use AppKit's `route()` helper. Chat and memory
 use Mastra's native route surfaces behind the same scoped request-context gate.
 
 | Method                     | Path                              | Purpose                                                                                                                  |
@@ -1123,12 +1129,12 @@ use Mastra's native route surfaces behind the same scoped request-context gate.
 | `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                                             |
 | `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                                                           |
 | `POST`                     | `/route/feedback`                 | Log a thumbs / comment assessment to the turn's MLflow trace. `404` when feedback is off.                                |
-| `GET`                      | `/route/mlflow-experiment`        | Return the experiment URL only when the active viewer has effective `CAN_MANAGE`; otherwise `{ "url": null }`.           |
+| `GET`                      | `/route/mlflow-experiment`        | Return the experiment URL only when the active viewer has effective `CAN_MANAGE`. Otherwise, return `{ "url": null }`.   |
 | `POST` / `GET`             | `/mcp`, `/sse`, `/messages`       | MCP transports, when `mcp` is enabled.                                                                                   |
 
 The UI consumes `/chat/:agentId` with the AI SDK's `DefaultChatTransport`.
 
-## Environment Variables
+## Environment variables
 
 Every value can also be set through plugin config, which wins. These are the
 fallbacks, so a deployment that already follows AppKit's Databricks env naming
@@ -1136,7 +1142,7 @@ needs no extra wiring.
 
 | Variable                                                            | Effect                                                                                                                                             |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Optional model override used when neither the agent nor `defaultModel` names one; omit for live highest-rank selection.                            |
+| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Optional model override used when neither the agent nor `defaultModel` names one. Omit for live highest-rank selection.                            |
 | `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                                                                                                  |
 | `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO), `service-principal`, or `auto` for the agents' Databricks calls.                                                            |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. On Apps, the telemetry sidecar injects these.                            |
@@ -1144,7 +1150,7 @@ needs no extra wiring.
 | `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset. Assessments read the experiment's UC trace destination tag.              |
 | `MLFLOW_UC_TRACE_PREFIX`                                            | Optional override for the UC table prefix. Omit to use the experiment tag.                                                                         |
 
-## Configuration Reference
+## Configuration reference
 
 The main plugin options are:
 
@@ -1155,13 +1161,13 @@ The main plugin options are:
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
 - `sandbox` defaults to Monty for auto-created workspaces. `false` disables
-  command execution; `true` or `"monty"` selects Monty; a native Mastra
+  command execution. `true` or `"monty"` selects Monty. A native Mastra
   sandbox or resolver supplies another transport.
 - `codeMode` exposes all executable tools available to the current request,
   including enabled native workspace tools, through native Mastra Code Mode. It
   defaults on when such tools exist, selecting isolated-vm once at startup and
   falling back to QuickJS only when unavailable. Both transports support
-  concurrent external calls without SSH; an SSH connection is needed only when
+  concurrent external calls without SSH. An SSH connection is needed only when
   an exposed SSH-backed tool is called. Pass `false` to disable it.
 - `workspaceSkills` enables Mastra's native on-demand skill search by default.
   Pass `false` to disable it or an object with `topK`, `minScore`, and `ttlMs`
@@ -1203,7 +1209,7 @@ The main plugin options are:
   deployed apps.
 
 Clients that call these routes can import the browser-safe schemas from
-[`@dbx-tools/shared-mastra`](../../shared/mastra).
+[@dbx-tools/shared-mastra](../../shared/mastra).
 
 ## Modules
 
@@ -1232,14 +1238,14 @@ Clients that call these routes can import the browser-safe schemas from
 - `montySandbox` - Python-only Pydantic Monty fallback using Node subprocess
   workers.
 - `workspaces` / `filesystems` - native Mastra workspace configuration from
-  Databricks paths, opt-in user-scoped temp paths, and caller-supplied mounts;
+  Databricks paths, opt-in user-scoped temp paths, and caller-supplied mounts.
   `filesystems(fs)` wraps any `@dbx-tools/shared-fs` `FileSystem` (including
   `@dbx-tools/databricks` / `@dbx-tools/fs`) as a Mastra mount.
 - `remote-skills` - startup provisioning of remote `SKILL.md` sources. The
   `"aitools"` constant reads Databricks' public skill repo through a daily
   `@dbx-tools/cache` snapshot and serves one shared in-memory
   `/.databricks/skills` tree. Other sources go through the optional `skills` CLI
-  or a direct fetch. Every source keeps a process-memory standard-skill copy;
+  or a direct fetch. Every source keeps a process-memory standard-skill copy.
   Databricks persistence and read-only local mounts are storage options, not
   runtime search roots. `refreshTtlMs` overrides the source default.
 - `mcp` - MCP server construction.
@@ -1249,7 +1255,7 @@ Clients that call these routes can import the browser-safe schemas from
   and stale chart-id input cleanup.
 
 Browser-facing wire types are in
-[`@dbx-tools/shared-mastra`](../../shared/mastra). Genie event contracts are in
-[`@dbx-tools/shared-genie`](../../shared/genie). Model request/result contracts
-are in [`@dbx-tools/shared-model`](../../shared/model). The matching React chat
-surface is [`@dbx-tools/ui-mastra`](../../ui/mastra).
+[@dbx-tools/shared-mastra](../../shared/mastra). Genie event contracts are in
+[@dbx-tools/shared-genie](../../shared/genie). Model request/result contracts
+are in [@dbx-tools/shared-model](../../shared/model). The matching React chat
+surface is [@dbx-tools/ui-mastra](../../ui/mastra).

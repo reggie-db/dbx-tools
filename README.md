@@ -1,399 +1,166 @@
 <!-- docs-site:ignore:start -->
 
-**[Documentation](https://docs.dbx.tools/)** - full package
-reference, guides, and API docs.
+**[Documentation](https://docs.dbx.tools/)** - guides, package reference, and API reference.
+
 <!-- docs-site:ignore:end -->
 
 # dbx-tools
 
-Companion packages for Databricks developers building Databricks Apps, AppKit
-backends, Mastra agents, Genie workflows, and Model Serving integrations.
+Build Databricks Apps, agents, and local developer tools without reimplementing
+authentication, model routing, durable memory, per-user compute, or production
+UI.
 
-`dbx-tools` adds Mastra agents, model routing, Genie tools, search, email,
-Teams, Graphiti memory, tunnels, and reusable React surfaces to AppKit apps.
+`dbx-tools` extends Databricks AppKit with Mastra agents, direct Genie chat,
+Lakebox workloads, model gateways, Databricks-first memory, search, approved
+actions, local services, and reusable React components.
 
-## Add A Sandboxed Agent
+## Choose what to build
 
-```ts
-import { createApp, server } from "@databricks/appkit";
-import { agents, mastra } from "@dbx-tools/appkit-mastra";
+- [Build an AppKit application](docs/get-started-appkit.md) with Databricks
+  authentication, server plugins, shared configuration, and React UI.
+- [Build an agent or Genie experience](docs/agents-and-genie.md) with native
+  AppKit Agents, Mastra, direct Genie chat, durable threads, and data embeds.
+- [Give each app user a Lakebox](docs/lakebox.md) with a terminal, desktop,
+  persistent home, OCI services, and a Mastra workspace sandbox.
+- [Connect model clients to Databricks](docs/model-gateway.md) using OpenAI
+  Responses, Chat Completions, Anthropic Messages, embeddings, or Codex.
+- [Add memory, search, and approved actions](docs/memory-search-and-actions.md)
+  to an AppKit or Mastra application.
+- [Work with Databricks files and ingestion](docs/data-and-files.md) using
+  AppKit Files, portable filesystems, or Zerobus.
+- [Use the dbx CLI and local services](docs/cli-and-local-services.md) for
+  authentication, Lakebase proxying, Genie Code, model gateways, and tunnels.
 
-const analyst = agents.createAgent({
-  instructions: "Answer questions and use Python for analysis.",
-});
+## Capabilities
 
-await createApp({
-  plugins: [server(), mastra({ agents: { analyst }, sandbox: "databricks" })],
-});
-```
+### Agents and conversational data
 
-Add Lakebase, Genie, Analytics, or other AppKit plugins when the agent needs
-durable threads or workspace tools.
+Use [@dbx-tools/appkit-mastra](packages/js/node/appkit-mastra) for Mastra
+agents with AppKit authentication, Lakebase-backed threads, model selection,
+tools, approvals, MCP, and tracing. Use
+[@dbx-tools/genie](packages/js/node/genie) for typed Genie Agent Mode events.
+Use [@dbx-tools/ui-mastra](packages/js/ui/mastra) for Mastra or direct Genie
+chat.
 
-## Use With Native AppKit
+### Per-user Lakebox workloads
 
-Use native AppKit first when it already gives you the exact surface you need.
-AppKit has strong built-in plugins for Analytics, Genie, Files, Lakebase, Model
-Serving, Jobs, beta AI Search, and beta Agents, plus React UI primitives and
-hooks. `dbx-tools` is not a fork of that platform and should not replace AppKit
-for straightforward cases.
+Use [@dbx-tools/appkit-lakebox](packages/js/node/appkit-lakebox) to give each
+authenticated app user a locked Linux account, persistent home, terminal,
+desktop, service routes, and machine metrics in one app-managed Lakebox. Use
+[@dbx-tools/ui-lakebox](packages/js/ui/lakebox) for the matching React
+controls.
 
-This repository tests AppKit and AppKit UI 0.81 as an exact pair. Prefer native
-`database()` for typed application entities, native code-agent discovery and
-curated skills for simple agents, `@databricks/appkit/testing` for plugin/app
-harnesses, and native evaluation contracts where they fit. The packages below
-remain for protocols and policy those surfaces do not replace.
+### Model and coding-tool gateways
 
-Use these packages when the native surface gets repetitive or narrow for a real
-app:
+Use
+[@dbx-tools/appkit-model-gateway](packages/js/node/appkit-model-gateway) to
+serve OpenAI, Anthropic, embedding, and Codex protocols from AppKit or the
+standalone `dbx model-gateway` command. Model discovery includes workspace
+serving endpoints and supported `system.ai.*` services.
 
-- you need Databricks defaults before AppKit plugins initialize, such as
-  Lakebase env discovery or layered config resolution;
-- you want Mastra's agent runtime, storage, tools, MCP, and broader ecosystem
-  while still running inside AppKit with OBO auth and Databricks plugin tools;
-- you want Genie Agent Mode SSE projected as typed async events that an agent or
-  custom UI can consume, enrich, and turn into chart/data embeds;
-- you want model selection by intent (`"sonnet"`, `"chat-fast"`) rather than
-  wiring every app to one serving endpoint alias;
-- you need a managed Graphiti memory sidecar backed by PostgreSQL,
-  per-user graph groups, and a constrained AppKit MCP endpoint;
-- you need local OpenAI-compatible development tooling on top of Databricks
-  Model Serving;
-- you want agent tools, federated search, index lifecycle helpers, reusable
-  search components, or a Lakebase full-text provider around native AppKit AI
-  Search;
-- you need reusable UI surfaces for Mastra chat or human-approved email rather
-  than a one-off component in each app.
+### Memory, search, and actions
 
-## What This Adds
+Use [@dbx-tools/appkit-memory](packages/js/node/appkit-memory) for
+actor-scoped memory that checks Databricks Agent Memory first and starts
+Graphiti only when the managed store is unavailable. Add AI Search, Lakebase
+full-text search, web search, email, or Teams tools from their owning packages.
 
-- **AppKit app defaults** — auto-configure Lakebase/Postgres env through core
-  config sources, access AppKit execution context safely, and look up sibling
-  plugins with typed helpers.
-- **Core configuration and locking** — resolve scoped settings lazily from
-  constant data, the environment, project `.env` files, validated bundles, or
-  App YAML with explicit runtime and source overrides; install binaries atomically; and serialize critical
-  sections across threads, local processes, or replicas with process, file, and
-  Postgres advisory locks.
-- **Mastra inside AppKit** — register one or more Mastra agents as an AppKit
-  plugin with OBO auth, Lakebase-backed storage/memory, independently configured
-  workspace file access, skills, and sandboxing, model selection, history,
-  threads, feedback, and scoped route exposure.
-- **Genie as agent tools** — use Genie Agent Mode SSE by default to stream
-  reasoning, SQL, query output, and synthesized answers as typed events; expose
-  Genie metadata and starter questions. Agent Mode charts its inline rows
-  through `render_data`; the Conversation API polling opt-out provides
-  statement-backed chart and data embeds when an app needs them.
-- **Model Serving ergonomics** — turn loose model names such as `"sonnet"` or
-  `"chat-fast"` into concrete Databricks serving endpoints using workspace
-  catalogues, fuzzy matching, class ceilings, cache, and fallbacks.
-- **OpenAI-compatible local proxy** — point OpenAI-shaped clients at Databricks
-  Model Serving without hand-managing Databricks auth or endpoint ids.
-- **Managed Graphiti memory** - run the unified Python Graphiti runtime with
-  persistent embedded PostgreSQL or Lakebase-backed PostGraph storage; enforce
-  per-user graph groups; and republish a constrained MCP surface through AppKit.
-- **Approval-gated email workflows** — give agents a `send_email` tool that
-  suspends for human approval, supports SMTP or local outbox mode, derives safe
-  senders, and renders Markdown email.
-- **Web search and fetch tools** — give agents `web_search` (the Databricks
-  native web-search tool, on its own Gemini/GPT web-capable model, returning an
-  answer plus citations) and `web_fetch` (page contents) with an optional URL
-  allow-list and per-tool approval gating.
-- **AI Search extensions and Lakebase full text** - native AppKit `aiSearch`
-  owns Vector Search queries, OBO, caching, reranking, pagination, and the React
-  query hook. The dbx-tools search packages add agent tools, universal search,
-  index creation/sync/seed helpers, `SearchBox` / `SearchResults`, and
-  `lakebaseAiSearch`, a PostgreSQL full-text provider with the same AppKit query
-  contract.
-- **Teams bot endpoint and Adaptive Cards** — give an app a real Bot Framework
-  messaging endpoint (inbound JWT validated, replies delivered over the Connector
-  API), compile an agent's small card spec into a schema-valid Adaptive Card, and
-  render a whole Teams conversation in React.
-- **A Postgres message bus** — broadcast a typed envelope to every app instance
-  over `LISTEN`/`NOTIFY` with automatic sender context, plus optional persistence
-  so a subscriber that missed a message can replay history by cursor.
-- **A gated public URL for any command** — `dbx tunnel -- <command>` fronts a
-  process with a portr tunnel and an email one-time-code gate, for the case that
-  is not an AppKit app at all.
-- **Reusable React surfaces** — provide AppKit/Tailwind/Bun foundations, a
-  Mastra chat UI with a persistent dock/overlay assistant host, plus React Email
-  approval, preview, compose, and delivery components.
-- **Shared browser-safe contracts** — keep UI, server, tests, and tools aligned
-  with zod schemas for Mastra routes, Genie events, model lookup, email payloads,
-  and selected Databricks SDK shapes.
-- **Reusable brand context** — validate one YAML or JSON source for product
-  names, assets, colors, typography, and LLM writing voice, then consume it from
-  Node, React, browser helpers, or generated JSON Schema.
-- **Databricks infrastructure helpers** — resolve workspace identity, cloud
-  region, public IPs, Zerobus endpoints, and Databricks SDK cancellation without
-  binding every package to AppKit.
+### Local Databricks development
 
-## Repository Setup And Full Example
+Use [@dbx-tools/cli](packages/js/cli/dbx-tools) for Databricks authentication,
+Lakebase proxying, managed Genie Code, model gateway services, Graphiti, gated
+tunnels, and AppKit environment export. Use
+[@dbx-tools/cli-service](packages/js/cli/service) to install supported commands
+as current-user background services.
 
-Install dependencies and type-check the workspace:
+### Data and files
 
-```sh
-bun install
-bun run --filter '*' compile
-```
+Use native AppKit Files for application routes and UI over Unity Catalog
+volumes. Use [@dbx-tools/databricks](packages/js/node/databricks) for portable
+Workspace, volume, and DBFS access in backend or agent code. Use
+[@dbx-tools/databricks-zerobus](packages/js/node/databricks-zerobus) for
+region-aware Zerobus ingest streams.
 
-For AppKit apps, the most common entrypoint is the Mastra plugin:
+### UI and browser-safe contracts
 
-```ts
-import { analytics, createApp, lakebase, server } from "@databricks/appkit";
-import { agents, genie, mastra } from "@dbx-tools/appkit-mastra";
+Use [@dbx-tools/ui](packages/js/ui/appkit) for AppKit-oriented foundations,
+branding, authentication, email, and search. Mastra, Lakebox, and Teams have
+separate UI packages. Shared packages own the Zod contracts that cross the
+browser and server boundary.
 
-const analyst = agents.createAgent({
-  name: "analyst",
-  instructions: `Answer with Databricks context.\n\n${genie.GENIE_INSTRUCTIONS}`,
-  tools(plugins) {
-    return {
-      ...plugins.analytics.toolkit(),
-      ...plugins.genie?.toolkit(),
-    };
-  },
-});
+### Python interoperability
 
-await createApp({
-  plugins: [
-    server(),
-    analytics(),
-    lakebase(),
-    mastra({
-      agents: { analyst },
-      defaultAgent: "analyst",
-      genieSpaces: { sales: "01ef..." },
-    }),
-  ],
-});
-```
+Use [dbx-tools-graphiti](packages/py/graphiti) for the Graphiti REST and MCP
+runtime with PostGraph storage. Use
+[dbx-tools-node-runtime](packages/py/node-runtime) to run generated
+PythonMonkey-backed Node packages in notebooks, Lakeflow Jobs, and other
+managed Python environments.
 
-That single plugin registration can provide agent streaming routes, model
-resolution, Genie-backed data tools, durable Lakebase storage, chat history,
-thread management, feedback, and MCP exposure.
+## Use native AppKit first
 
-Use `@dbx-tools/ui-mastra` on the client side for the matching chat UI:
+AppKit provides Analytics, Genie, Files, Lakebase, Model Serving, Jobs, UI
+components, testing, and evaluation contracts. It also provides beta AI Search
+and beta Agents plugins. Use those surfaces directly when they meet the
+application requirement.
 
-```tsx
-import { MastraChat } from "@dbx-tools/ui-mastra/react";
+Use dbx-tools for integration and policy that remain outside the native owner,
+including:
 
-export function App() {
-  return <MastraChat agentId="analyst" threadPlacement="auto" showModelPicker />;
-}
-```
+- Mastra hosting and direct Genie chat in one AppKit application.
+- Per-user Lakebox accounts, workloads, routes, metrics, and sandbox adapters.
+- Databricks-first memory with a lazy Graphiti fallback.
+- OpenAI, Anthropic, embedding, and Codex protocol gateways.
+- Approval-gated communication, federated search, and local service
+  supervision.
+- Shared configuration, authentication, and browser-safe contracts used across
+  these capabilities.
 
-Use the same chat shell without a supervisor agent by selecting a configured
-Genie alias:
+This repository tests `@databricks/appkit` and `@databricks/appkit-ui` 0.81 as
+an exact pair.
 
-```tsx
-<MastraChat genieSpace="sales" threadPlacement="auto" />
-```
+## Requirements and boundaries
 
-In this mode Genie conversations and messages remain the system of record. The
-route uses the signed-in user's OBO identity, requires the Genie Agent API for
-turns and history, and does not write Mastra Memory.
+- Use Bun for JavaScript and TypeScript package management, scripts, and tests.
+- The published Python packages require Python 3.10 or later and earlier than
+  Python 4.
+- Workspace operations require an explicit Databricks profile or AppKit
+  execution context.
+- AppKit browser clients use each plugin's published client configuration and
+  shared route contracts.
+- Some Databricks and AppKit integrations are beta or depend on preview APIs.
+  Each package guide identifies those limits.
 
-For an app-wide assistant that survives route navigation, use
-`MastraAssistant` above the route outlet. It provides a configurable floating
-launcher, dock/overlay panel, resize behavior, external `open(context)` control,
-and typed per-turn Mastra request context without owning authentication.
+## <a id="additional-resources"></a> Additional resources
 
-## Feature Packages
+- [Start-here guides](docs)
+- [Package reference](packages)
+- [CLI reference](packages/js/cli/dbx-tools)
+- [Generated API reference](https://docs.dbx.tools/api/)
+- [Release notes](docs/releases)
+- [Contributor and generator guide](projen)
 
-| Use case                       | Packages                                                                                                                                                                                                                     |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AppKit defaults                | `[@dbx-tools/appkit](packages/js/node/appkit)`, `[@dbx-tools/cli/appkit](packages/js/cli/dbx-tools)`                                                                                                                         |
-| AppKit-hosted agents           | `[@dbx-tools/appkit-mastra](packages/js/node/appkit-mastra)`, `[@dbx-tools/shared-mastra](packages/js/shared/mastra)`                                                                                                        |
-| Genie streaming and schemas    | `[@dbx-tools/genie](packages/js/node/genie)`, `[@dbx-tools/shared-genie](packages/js/shared/genie)`                                                                                                                          |
-| Model Serving selection        | `[@dbx-tools/model](packages/js/node/model)`, `[@dbx-tools/shared-model](packages/js/shared/model)`                                                                                                                          |
-| Local model gateway            | `[@dbx-tools/appkit-model-gateway](packages/js/node/appkit-model-gateway)`, `[@dbx-tools/shared-model-gateway](packages/js/shared/model-gateway)`, `[@dbx-tools/cli/model-gateway](packages/js/cli/dbx-tools)`               |
-| Databricks runtime utilities   | `[@dbx-tools/auth](packages/js/node/auth)`, `[@dbx-tools/databricks](packages/js/node/databricks)`                                                                                                                           |
-| Lakebase parsing and discovery | `[@dbx-tools/lakebase](packages/js/node/lakebase)`, `[@dbx-tools/cli/lakebase-proxy](packages/js/cli/dbx-tools)`                                                                                                             |
-| Databricks OAuth tokens        | `[@dbx-tools/auth](packages/js/node/auth)`, `[@dbx-tools/cli/auth](packages/js/cli/dbx-tools)`                                                                                                                               |
-| Public tunnel + access gate    | `[@dbx-tools/tunnel](packages/js/node/tunnel)`, `[@dbx-tools/cli/tunnel](packages/js/cli/dbx-tools)`                                                                                                                         |
-| Passwordless authentication    | `[@dbx-tools/auth-gate](packages/js/node/auth-gate)`, `[@dbx-tools/shared-auth](packages/js/shared/auth)`, `[@dbx-tools/ui/auth](packages/js/ui/appkit)`                                                                     |
-| Configuration and local locks  | `[@dbx-tools/core](packages/js/node/core)`                                                                                                                                                                                   |
-| Email workflows                | `[@dbx-tools/email](packages/js/node/email)`, `[@dbx-tools/shared-email-template](packages/js/shared/email-template)`, `[@dbx-tools/shared-email](packages/js/shared/email)`, `[@dbx-tools/ui/email](packages/js/ui/appkit)` |
-| Web search and fetch           | `[@dbx-tools/appkit-web-search](packages/js/node/appkit-web-search)`                                                                                                                                                         |
-| Durable memory and Graphiti    | `[@dbx-tools/appkit-memory](packages/js/node/appkit-memory)`, `[dbx-tools-graphiti](packages/py/graphiti)`                                                                                                                   |
-| Postgres locks and message bus | `[@dbx-tools/postgres](packages/js/node/postgres)`                                                                                                                                                                           |
-| AI Search extensions           | `[@dbx-tools/search](packages/js/node/search)`, `[@dbx-tools/shared-search](packages/js/shared/search)`, `[@dbx-tools/ui/search](packages/js/ui/appkit)`                                                                     |
-| Teams chat and cards           | `[@dbx-tools/teams](packages/js/node/teams)`, `[@dbx-tools/shared-teams](packages/js/shared/teams)`, `[@dbx-tools/ui-teams](packages/js/ui/teams)`                                                                           |
-| React/AppKit UI                | `[@dbx-tools/ui](packages/js/ui/appkit)`, `[@dbx-tools/ui-mastra](packages/js/ui/mastra)`, `[@dbx-tools/ui/auth](packages/js/ui/appkit)`, `[@dbx-tools/ui/email](packages/js/ui/appkit)`                                     |
-| Brand context and assets       | `[@dbx-tools/shared-core](packages/js/shared/core)`, `[@dbx-tools/core](packages/js/node/core)`, `[@dbx-tools/ui/branding](packages/js/ui/appkit)`                                                                           |
-| Databricks infrastructure      | `[@dbx-tools/databricks](packages/js/node/databricks)`, `[@dbx-tools/databricks-zerobus](packages/js/node/databricks-zerobus)`                                                                                               |
-| Portable filesystems           | `[@dbx-tools/shared-fs](packages/js/shared/fs)`, `[@dbx-tools/fs](packages/js/node/fs)`                                                                                                                                      |
-| Shared utilities               | `[@dbx-tools/shared-core](packages/js/shared/core)`, `[@dbx-tools/core](packages/js/node/core)`, `[@dbx-tools/path](packages/js/node/path)`                                                                                  |
-| Commander args from Zod        | `[@dbx-tools/cli-args](packages/js/cli/args)`                                                                                                                                                                                |
-| The `dbx` CLI                  | `[@dbx-tools/cli](packages/js/cli/dbx-tools)`, `[@dbx-tools/cli/appkit](packages/js/cli/dbx-tools)`, `[@dbx-tools/cli/auth](packages/js/cli/dbx-tools)`, `[@dbx-tools/cli/tunnel](packages/js/cli/dbx-tools)`                |
+<!-- docs-site:ignore:start -->
 
-Read the package README for each feature area. They are written as the
-package-level source of truth: key features, import examples, configuration or
-runtime behavior, module maps, and links to adjacent packages.
+## Develop this repository
 
-### Python Packages
-
-Install the published Python packages by distribution name:
+Install dependencies and synthesize generated files:
 
 ```bash
-uv add dbx-tools-graphiti
-```
-
-The Python packages support Python 3.11 through the Python 3 release line.
-
-The root uv workspace contains only the internal Graphiti adapter:
-
-| Package                                      | Purpose                                                                                       |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `[dbx-tools-graphiti](packages/py/graphiti)` | Runs Graphiti REST, MCP, PostGraph storage, and PythonMonkey-backed Databricks model routing. |
-
-### Load One Brand File
-
-The root `[branding/brand.yaml](branding/brand.yaml)` is the canonical dbx tools
-context and points at the reusable SVG assets beside it. The same schema accepts
-JSON.
-
-```ts
-import { brandFiles } from "@dbx-tools/core";
-
-const brandContext = await brandFiles.loadBrandContext();
-```
-
-Use `brandUtils.BrandContextSchema` from `@dbx-tools/shared-core` in browser-safe
-code or structured LLM tools. Use `@dbx-tools/ui/branding/react` and
-`@dbx-tools/ui/branding/browser` to render or apply the resulting context.
-
-## Common Workflows
-
-### Add AppKit Defaults
-
-Use `[@dbx-tools/appkit](packages/js/node/appkit)` when an AppKit backend
-needs the setup code you would otherwise repeat in every app: Lakebase env
-resolution, config lookup, Databricks SDK cancellation bridging, execution
-context fallback, and typed sibling plugin access.
-
-```ts
-import { lakebase, server } from "@databricks/appkit";
-import { appkit } from "@dbx-tools/appkit";
-
-await appkit.createApp({
-  plugins: [server(), lakebase()],
-});
-```
-
-### Resolve Models By Intent
-
-Use `[@dbx-tools/model](packages/js/node/model)` when a UI, agent, or CLI
-should ask for a model by capability or loose name instead of hard-coding a
-serving endpoint id.
-
-```ts
-import { resolve } from "@dbx-tools/model";
-
-const selected = await resolve.selectModel(client, host, {
-  explicit: "claude sonnet",
-  modelClass: "chat-balanced",
-});
-```
-
-### Run OpenAI-Shaped Tools Against Databricks
-
-Use `[@dbx-tools/appkit-model-gateway](packages/js/node/appkit-model-gateway)` when a local tool expects
-OpenAI-compatible endpoints with Databricks auth and Model Serving resolution.
-
-```sh
-dbx model-gateway --profile my-workspace --port 4000
-```
-
-Then point the client at `http://127.0.0.1:4000/v1`. The foreground command
-keeps the gateway loopback-only and resolves credentials through
-`@dbx-tools/auth`.
-
-### Authenticate With Databricks OAuth
-
-Use `[@dbx-tools/auth](packages/js/node/auth)` for direct PAT and M2M
-credentials, lazy CLI-backed U2M with automatic CLI login, App OBO/App SP
-authentication, secure token storage, and check-lock-recheck refresh.
-`[@dbx-tools/cli/auth](packages/js/cli/dbx-tools)` exposes the same runtime through
-`dbx auth`.
-
-```sh
-dbx auth login --profile my-workspace
-dbx auth token --profile my-workspace
-dbx auth status --profile my-workspace
-```
-
-### Require Human Approval For Email
-
-Use `[@dbx-tools/email](packages/js/node/email)` with
-`[@dbx-tools/ui/email](packages/js/ui/appkit)` when an agent should draft email but
-not send it until a user approves the suspended tool call.
-
-```ts
-import { email, emailTool } from "@dbx-tools/email";
-import { mastra } from "@dbx-tools/appkit-mastra";
-
-const agent = agents.createAgent({
-  instructions: "Draft emails, then wait for approval before sending.",
-  tools: () => ({ send_email: emailTool() }),
-});
-
-await createApp({
-  plugins: [server(), lakebase(), email(), mastra({ agents: agent })],
-});
-```
-
-### Put A Gated Public URL In Front Of A Command
-
-Use `[@dbx-tools/tunnel](packages/js/node/tunnel)` inside an AppKit app, where the
-portr tunnel and the `[@dbx-tools/auth-gate](packages/js/node/auth-gate)` passwordless gate
-run in-process through `tunnelInterceptor()` and the `authGate` plugin. The gate
-supports Better Auth email OTP recovery and passkeys with Lakebase or SQLite
-persistence.
-
-Use `[@dbx-tools/cli/tunnel](packages/js/cli/dbx-tools)` when the process is not an
-AppKit app - a Python service, a static server, a third-party binary - and should
-still be reachable only by approved email addresses.
-
-```sh
-dbx tunnel --allow databricks.com -- bun src/server.ts
-dbx tunnel status --allow databricks.com
-```
-
-The wrapper claims the public port, moves the wrapped command to a private one,
-and gates traffic in between. `status` prints the resolved configuration without
-starting anything.
-
-## Development
-
-This repository uses a small internal workspace generator so package metadata,
-barrels, generated schemas, and examples stay consistent. That tooling is not
-the main product surface of the repo, but it is documented for contributors:
-
-- `[@dbx-tools/projen](projen)` documents the projen engine,
-  package discovery, generated files, mixins, and codegen.
-- `[dbx-tools](packages/js/cli/dbx-tools)` documents the contributor CLI.
-
-Useful contributor commands:
-
-```sh
 bun install
 bunx projen
-bun run --filter '*' compile
-bun run --filter '*' test
-bun run format
-uv sync --all-packages
-uv run pytest
-uv run ruff check packages/py
 ```
 
-## Documentation
+Run focused package checks before broader workspace validation:
 
-The READMEs are the current package-level source of truth. The GitHub Pages site
-is generated from those README files, so package docs are not maintained twice.
-See `[docs/README.md](docs/README.md)` for the local build command and Pages
-workflow.
+```bash
+bun run --filter '<package-name>' compile
+bun run --filter '<package-name>' test
+bun run docs:check-readmes
+bun run docs:link-check
+```
 
-## Release Notes
+Use [projen/README.md](projen/README.md) for package generation and workspace
+development. Use [docs/README.md](docs/README.md) for the local documentation
+build.
 
-Release notes can be found in [`docs/releases`](docs/releases/).
+<!-- docs-site:ignore:end -->

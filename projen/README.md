@@ -1,11 +1,10 @@
 # @dbx-tools/projen
 
-Projen engine for Bun-first dbx-tools workspaces.
+Use this Projen engine from `.projenrc.ts` to discover packages and generate
+manifests, tsconfigs, barrels, schemas, and release tasks for Bun-first
+dbx-tools workspaces.
 
-Use it from `.projenrc.ts` to discover packages from the filesystem and generate
-manifests, tsconfigs, barrels, code generation, and release tasks.
-
-## Define A Workspace Root
+## Define a workspace root
 
 ```ts
 import { project } from "@dbx-tools/projen";
@@ -49,7 +48,7 @@ Repository policy stays in the consuming `.projenrc.ts`:
 - `releaseDocs` supplies repository-defined preparation and build steps plus
   the Pages artifact path. The engine adds release checkout, artifact upload,
   and deployment without naming a docs script or output tree.
-- `releasePythonRoot` passes the actual Python package root to local release
+- `releasePythonRoot` passes the configured Python package root to local release
   preparation. Omit it when the workspace has no standard Python packages.
 - `releaseValidationTasks` names repository tasks that must pass in tag CI
   before release artifacts are built and published.
@@ -71,7 +70,7 @@ The engine treats generated barrels, tests, declaration files, and folders
 without exported source modules as implementation details. They do not create
 new package membership.
 
-## Add A Python uv Workspace
+## Add a Python uv workspace
 
 `DBXToolsPythonWorkspace` attaches Python packaging to an existing projen root
 without turning Python packages into JavaScript workspace projects. It generates
@@ -108,11 +107,11 @@ Distribution names and modules come from the parent scope plus each package
 directory. The repository comes from the parent project metadata or Git remote.
 `internalDependencies` renders standalone Git `#subdirectory=` requirements
 without repeating repository coordinates. Pass `repository`, `name`, or
-`module` only to override those conventions. `root.vscode` is projen's existing
-VS Code component; dbx-tools reuses it rather than constructing a second
+`module` only to override those conventions. `root.vscode` is Projen's existing
+VS Code component. dbx-tools reuses it rather than constructing a second
 `.vscode/settings.json` owner.
 
-### Bundle Node Code For PythonMonkey
+### Bundle Node code for PythonMonkey
 
 Add `nodeBindings` to any `DBXToolsPythonWorkspace` package to generate
 committed CommonJS runtimes and Python wrappers from public Node packages. Pass
@@ -122,7 +121,11 @@ one binding object or an array. Projen writes one
 in consuming repositories after `@dbx-tools/projen` is installed.
 
 ```ts
-new project.DBXToolsPythonWorkspace(root, {
+import { project, projectPy } from "@dbx-tools/projen";
+
+const root = new project.DBXToolsNodeProject({ name: "my-apps" });
+
+new projectPy.DBXToolsPythonWorkspace(root, {
   root: "packages/py",
   packages: [
     {
@@ -152,7 +155,7 @@ new project.DBXToolsPythonWorkspace(root, {
 
 Bindings always live under
 `<python-module>/_generated/node/`. Each Python package receives one shared
-`_runtime.js`; typed wrappers live under `<node-package>/<module>.py`. This
+`_runtime.js`. Typed wrappers live under `<node-package>/<module>.py`. This
 preserves Node module singleton identity across all bindings in the Python
 process. The intermediate directories remain implicit namespace packages with
 no generated `__init__.py`. Omit `modules` to discover every exported package
@@ -216,31 +219,42 @@ created. Full synthesis regenerates every binding and reconciles stale
 Built-in shims can make ordinary Node imports work under PythonMonkey.
 `functionOverrides` replaces named exports only in the generated runtime, so the
 Node package does not gain Python callbacks or alternate source files. A
-replacement may use a different export name through `handlerExport`; every
+replacement may use a different export name through `handlerExport`. Every
 other export continues to come from the original module.
 
-### Synchronize Pinned Python Sources
+### Synchronize pinned Python sources
 
 Use a package's `sync` field when published Python code must include a reviewed
 subset of a Git repository instead of exposing a direct URL dependency:
 
 ```ts
-{
-  directory: "service",
-  description: "Python service with synchronized upstream code",
-  sync: [
+import { project, projectPy } from "@dbx-tools/projen";
+
+const root = new project.DBXToolsNodeProject({ name: "my-apps" });
+
+new projectPy.DBXToolsPythonWorkspace(root, {
+  root: "packages/py",
+  packages: [
     {
-      name: "upstream_driver",
-      source:
-        "driver @ git+https://github.com/example/project.git@0123456789abcdef0123456789abcdef01234567#subdirectory=src/driver",
-      include: ["driver.py", "operations/**/*.py"],
-      exclude: ["**/test_*.py"],
-      replace: {
-        "DEFAULT_TIMEOUT = 30": "DEFAULT_TIMEOUT = 120",
-      },
+      directory: "service",
+      description: "Python service with synchronized upstream code",
+      sync: [
+        {
+          name: "upstream_driver",
+          source:
+            "driver @ git+https://github.com/example/project.git@0123456789abcdef0123456789abcdef01234567#subdirectory=src/driver",
+          include: ["driver.py", "operations/**/*.py"],
+          exclude: ["**/test_*.py"],
+          replace: {
+            "DEFAULT_TIMEOUT = 30": "DEFAULT_TIMEOUT = 120",
+          },
+        },
+      ],
     },
   ],
-}
+});
+
+root.synth();
 ```
 
 Each source is written beneath
@@ -263,9 +277,9 @@ Synchronization uses a check-lock-check sequence and an atomic directory
 replacement. A current pinned commit performs no network request. Branches and
 tags use `git ls-remote` to detect upstream movement. Run the generated
 `<package>:python-sync:check` task in validation, or pass `--force` to refresh a
-current source intentionally.
+pinned source intentionally.
 
-## Customize Packages With Mixins
+## Customize packages with mixins
 
 ```ts
 import { project } from "@dbx-tools/projen";
@@ -283,9 +297,10 @@ Use `projectJs.addOptionalPeer(pkg, specifier)` for an optional peer that must
 also resolve during local development. It writes the peer metadata and matching
 development dependency without turning the peer into a runtime dependency.
 
-`applyToProjects` AND-s its globs (prefix a glob with `!` to negate) into one
-predicate over the DBXTools child packages, then applies it as a `constructs`
-mixin across the subtree. Filter on the folder (`path`), the tags (`tags`), or
+`applyToProjects` combines its globs with AND logic. Prefix a glob with `!` to
+negate it. The resulting predicate selects DBXTools child packages and applies
+the callback as a `constructs` mixin across the subtree. Filter on the folder
+(`path`), the tags (`tags`), or
 the name from whichever angle fits: `name` matches the raw projen name verbatim,
 while `identifierPackageName`, `identifierScope`, and `identifierName` match the
 parsed `@scope/name`, its scope, and its unscoped half. Two flags widen the
@@ -300,33 +315,34 @@ scripts, and generated files on top.
 
 Every workspace root exposes a generic development watcher:
 
-```sh
+```bash
 bun run dev:watch [--debounce-ms 15000] [--restart-key r] <command> [args...]
 ```
 
 It restarts after watched writes have been quiet for 15 seconds. Command paths,
-`--cwd`, and `--filter` identify the owning package; its transitive workspace
+`--cwd`, and `--filter` identify the owning package. Its transitive workspace
 dependencies are watched with the shared generated/dependency/test/temp ignores.
 Press the configured key for an immediate restart. The demo uses this task to
-run its concrete server entrypoint; the `server` tag does not assume one.
+run its concrete server entrypoint. The `server` tag does not assume one.
 
 AppKit 0.81's `appkitServerConfig()` is the preferred tsdown preset for a
 consumer app using conventional compiled `server/agents/*/agent.ts` entries. It
 does not replace this engine's package discovery, Bun browser build, source-run
 server, publication, or Databricks deployment staging.
 
-A tag layers over a shared compiler floor every package gets at construction:
-ES2022 plus the web-platform globals available in every runtime, and deliberately
-no DOM lib and no Node types, so agnostic code stays isomorphic. The tags are what
-add an environment on top - `node` adds Node types, `ui` adds the DOM lib. That
-floor is also where `jsx` lives, for a reason worth knowing before moving it:
-packages resolve each other to SOURCE, so a consumer type-checks its dependency's
-files under its own tsconfig. The moment any package re-exports a `.tsx` module,
-every package that imports it - however far down the graph, whatever its tag -
-fails with `TS6142: ... but '--jsx' is not set`. Setting `jsx` per consumer is the
-wrong fix, since the consumer authors no JSX and cannot know a transitive
-dependency started to. The option is inert without JSX in the graph: it selects
-how JSX syntax compiles and adds no lib, global, or type dependency.
+A tag layers over a shared compiler floor that every package receives at
+construction: ES2022 plus the web-platform globals available in every runtime,
+with no DOM library and no Node types. The tags add an environment on top.
+`node` adds Node types, and `ui` adds the DOM library. The shared floor also
+sets `jsx`.
+
+Packages resolve each other to source, so a consumer type-checks its
+dependency's files under its own tsconfig. If any package re-exports a `.tsx`
+module, every transitive importer fails with
+`TS6142: ... but '--jsx' is not set`. The consumer doesn't author that JSX and
+can't track when a dependency starts exporting it, so the compiler floor owns
+the setting. The option is inert without JSX in the graph. It selects how JSX
+syntax compiles without adding a library, global, or type dependency.
 
 Keep the generated tsconfigs package-local. Each package build config owns its
 `rootDir`, declaration output, package-specific globals, and publish boundary.
@@ -344,7 +360,7 @@ installation runs only when the generated root manifest changes or
 `node_modules` is absent. Repository discovery is process-cached so every child
 package reuses the root probe instead of invoking `git`, `ssh`, and `gh` again.
 
-## Work With Package Discovery
+## Work with package discovery
 
 ```ts
 import { packages } from "@dbx-tools/projen";
@@ -358,7 +374,7 @@ the generated `pnpm-workspace.yaml` plus package manifests for post-synth tools.
 Use the latter for docs, linting, and release checks that should match the
 recorded workspace.
 
-## Generate Barrels And Codegen
+## Generate barrels and code generation
 
 ```ts
 import { barrels, codegen } from "@dbx-tools/projen";
@@ -370,13 +386,19 @@ barrels.generateBarrels();
 Add declaration inputs through the owning package's typed config:
 
 ```ts
-pkg.dbxToolsConfig.codegenInputs.push("node_modules/example/model.d.ts");
+import { project } from "@dbx-tools/projen";
+
+const rootProject = new project.DBXToolsNodeProject({ name: "my-apps" });
+project.applyToProjects(rootProject, { path: "packages/shared/generated" }, (pkg) => {
+  pkg.dbxToolsConfig.codegenInputs.push("node_modules/example/model.d.ts");
+});
+rootProject.synth();
 ```
 
 `generateCodegen()` reads the serialized `dbxToolsConfig.codegenInputs` and
 writes generated schema modules. They are written read-only, and the root
 ESLint task runs with an explicit separate fix task, so each generated module is
-added to `ignorePatterns` at synth - named individually via
+added to `ignorePatterns` at synth - named individually using
 `codegen.codegenModulePaths()`, never as a blanket `<package>/src/**`. A codegen
 package may hold hand-written modules beside its generated ones, and those must
 stay linted.
@@ -389,56 +411,88 @@ source directories. For example, `src/example/one.ts` becomes importable through
 generated surface at the package root or any nested level. Existing hand-written
 `index.ts` entrypoints remain authoritative.
 
-Generated barrels include module namespaces and flat unique type/value exports;
-the package root additionally exposes `PACKAGE_IDENTIFIER`. A name two modules
+Generated barrels include module namespaces and flat unique type/value exports.
+The package root additionally exposes `PACKAGE_IDENTIFIER`. A name two modules
 both declare is ambiguous and stays namespace-only, except when one is generated:
 the hand-written module is the curated view of the generated shape
 (`shared-genie`'s `genie-model.ts` extends its own codegen'd `dashboards.ts`), so
 it owns the name and stays hoisted. An unchanged barrel remains untouched,
 including its read-only bit, so concurrent writers do not collide. Every package
-is attempted even if one fails; failures are re-thrown together as an
+is attempted even if one fails. Failures are re-thrown together as an
 `AggregateError` naming each package.
 
-## Configure pnpm Catalogs
+## Configure pnpm catalogs
 
 ```ts
-project.pnpmWorkspace?.addCatalog("react", "^19");
-project.pnpmWorkspace?.allowBuild("esbuild");
+import { project } from "@dbx-tools/projen";
+
+const rootProject = new project.DBXToolsNodeProject({ name: "my-apps" });
+rootProject.pnpmWorkspace?.addCatalog("react", "^19");
+rootProject.pnpmWorkspace?.allowBuild("esbuild");
 ```
 
-projen's native `javascript.PnpmWorkspaceYaml` writes `pnpm-workspace.yaml`;
+Projen's native `javascript.PnpmWorkspaceYaml` writes `pnpm-workspace.yaml`.
 `pnpmWorkspace.PnpmWorkspaceState` supplies the options it renders and tracks
 package members, catalog entries, and build-script allowances. Any other pnpm
 setting goes through the root's `workspaceYaml` option, which is projen's typed
 `PnpmWorkspaceYamlOptions`:
 
 ```ts
-new DBXToolsNodeProject({ workspaceYaml: { overrides: { glob: "^13.0.0" } } });
+import { project } from "@dbx-tools/projen";
+
+const rootProject = new project.DBXToolsNodeProject({
+  name: "my-apps",
+  pnpmOptions: {
+    workspaceYamlOptions: {
+      overrides: { glob: "^13.0.0" },
+    },
+  },
+});
+rootProject.synth();
 ```
 
 `allowBuild` writes pnpm's `allowBuilds` map rather than projen's own
 `allowScripts` option, which for pnpm renders `onlyBuiltDependencies` - a key
-current pnpm does not read, so the list would leave every build script skipped.
-Only allowances are declared; a dependency that is never allowed needs no entry,
+pnpm does not read, so the list would leave every build script skipped.
+Only allowances are declared. A dependency that is never allowed needs no entry
 because pnpm warns and moves on.
 
-The engine also applies `catalogMode: manual` (keeps `pnpm add` out of the
-generated catalog) and `verifyDepsBeforeRun: warn`. The file is emitted for the
-tree ROOT only; a member package never gets a nested one.
+The engine also applies `catalogMode: manual`, which keeps `pnpm add` out of the
+generated catalog, and `verifyDepsBeforeRun: warn`. The file is emitted for the
+tree root only. A member package never gets a nested one.
 
-## Clean And Watch Generated Files
+## Clean and watch generated files
 
 ```ts
 import { clean, watch } from "@dbx-tools/projen";
 
-const generated = clean.listGeneratedFiles();
-watch.watchLoop("workspace", watch.watchRoots(), async (files) => refresh(files));
+const generated = await clean.listGeneratedFiles();
+const roots = watch.watchRoots();
 ```
 
 Use these modules for maintenance tasks that should follow the same generated
-file contract as the CLI.
+file contract as the CLI. `watch.watchLoop()` accepts these roots and an
+application-specific callback.
 
-## Modules
+## Understand generation limits
+
+- Change `.projenrc.ts` or another owning configuration source, then run
+  `bun run sync` from the workspace root. Don't hand-edit generated files.
+- Synthesis is a whole-tree operation. Don't run `bunx projen` or
+  `projen default` from a member package.
+- `packageRoots` discovery creates a package for each source-bearing directory.
+  Generated folders, tests, and declaration-only folders don't create members.
+- A single workspace version comes from `VERSION`. JavaScript and Python
+  manifests reproduce it during synthesis.
+- Python Node bindings support public functions and representable TypeScript
+  types. Generation fails with a property path when a type can't be converted
+  safely.
+- Source synchronization requires a pinned Git source for reproducible
+  publication. Branches and tags require a network lookup to detect movement.
+- Release commands commit and push changes, tags, and selected publication
+  artifacts. Review release options before you run `bun run release`.
+
+## Use package modules
 
 - `project` - `DBXToolsNodeProject`, `DBXToolsTypeScriptProject`, package naming,
   compiler/task helpers.
@@ -455,17 +509,17 @@ file contract as the CLI.
 - `publish` - packaging and tag-based release helpers.
 - `engineRoot` - engine package root resolution for bootstrapped repos.
 
-The engine registers its commands as projen tasks on the workspace root, so run
-them with `bun run <task>` - `sync` (add `--watch`), `barrels`, `clean`, and the
+The engine registers its commands as Projen tasks on the workspace root, so run
+them with `bun run <task>`, including `sync` (add `--watch`), `barrels`, `clean`, and the
 configured `python-node-bindings:*` and `python-node-runtime:*` lifecycles.
-[`@dbx-tools/cli`](../packages/js/cli/dbx-tools) is only needed to
+[@dbx-tools/cli](../packages/js/cli/dbx-tools/README.md) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
 
-## Run Tasks From The ROOT
+## Run tasks from the root
 
 Every repo-wide task lives on the root. `compile` batches package tsconfigs in
 up to four `tsc --build` processes and runs package-owned compile lifecycles
-alongside them; `test` delegates with `bun run --filter '*'`. Both read the
+alongside them. `test` delegates with `bun run --filter '*'`. Both read the
 current workspace list, so a new package is covered without a re-synth. Work
 from the root:
 
@@ -482,14 +536,14 @@ from the root:
 
 Run `bun run release` from any branch. Pending changes are committed and
 the current branch is pushed first. A non-`main` branch then fast-forwards
-`main`; the command fails without creating a merge commit if either branch has
+`main`. The command fails without creating a merge commit if either branch has
 diverged. From `main`, it calls the existing `bump` task, commits the generated
 version changes, pushes `main`, and pushes the matching annotated `vX.Y.Z` tag.
 Pass `--no-bump` only to release an existing synchronized local bump. The tag
 workflow verifies that the tag points at the exact `origin/main` commit. One
 `build-release` job installs workspace dependencies, runs validation, packs the
 npm archives, builds all Python distributions, and builds the documentation
-site. Install validation prerequisites through `releaseSetupSteps`;
+site. Install validation prerequisites through `releaseSetupSteps`.
 `releaseDocs.prepareSteps` runs after validation.
 
 Publication jobs download the resulting artifacts rather than rebuilding the
@@ -503,12 +557,12 @@ The default release still publishes npm, Python, and docs, then publishes to
 configured local registries automatically. Select a scope or disable individual
 steps for one run without changing the Projen definition:
 
-```sh
+```bash
 bun run release --publish pypi --no-docs
 bun run release --no-npm --no-local-publish
 bun run release --publish local --install never
 bun run release --local-registry false --local-pypi auto
-bun run release --demo-deploy --profile FEVM-REGGIE-PIERCE-AWS
+bun run release --demo-deploy --profile <profile>
 bun run release --no-release-notes
 bun run release --release-notes-text "# Release 1.2.3"
 bun run release --release-notes-file ./notes.md
@@ -541,11 +595,11 @@ Genie prompt. Notes are committed with the version bump and are not recorded in
 the annotated tag. They are skipped on `--no-bump` because that path requires an
 already committed tree.
 
-`--install auto` keeps Projen's normal local dependency-install behavior;
+`--install auto` keeps Projen's normal local dependency-install behavior.
 `always` performs a manifest-resolved install first, and `never` uses dependencies already
 installed while still regenerating versioned sources. Local release validation
 runs `eslint:fix` before branch preparation and bump, then runs the selected
-fail-closed tasks; CI remains check-only.
+fail-closed tasks. CI remains check-only.
 CI rebuilds the selected release artifacts instead of checking generated-source fingerprints.
 `--no-validation` skips optional task checks locally and in CI, not workspace-version or immutable-source checks.
 `--no-docs` skips building and deploying the site, not package README validation.
@@ -553,12 +607,12 @@ Scopes select artifacts, not the normal commit and tag-push transaction.
 The annotated tag records CI step selections, so publishing a selected scope does
 not change the next release's defaults. Local registry URLs stay local.
 
-Members intentionally keep only the tasks that something OTHER than a human
-invokes, so there is no second place to run the same thing:
+Members keep only tasks that repository automation invokes, so there is no
+second place for a contributor to run the same operation:
 
 - `compile` / `test` - what the root's `--filter '*'` delegation calls.
 - `prepack` - standalone-publish safety that compiles one package before packing
-  when that package has a compiled publication surface; the workspace release
+  when that package has a compiled publication surface. The workspace release
   driver compiles from the root and publishes with lifecycle scripts disabled.
 - `watch` - a single-package `tsc --build -w`, for narrowing a long
   edit/compile loop to one package.
@@ -566,18 +620,18 @@ invokes, so there is no second place to run the same thing:
   one package. Release preparation validates through the root's filtered tasks,
   and publication uploads archives that were each packed and
   validated once with lifecycle scripts disabled. The package phase also packs
-  with `--ignore-scripts` because its build already compiled; `prepack` remains
+  with `--ignore-scripts` because its build already compiled. `prepack` remains
   available for a standalone publish that did not run `build` first.
 - `install` / `install:ci` / `default` / `pre-compile` / `post-compile` -
   projen's lifecycle scaffolding, emitted for every member because its task model
   expects them.
 
-Do NOT run `projen default` (or `bunx projen`) from inside a member. Synth is a
-whole-tree operation driven by the ROOT `.projenrc.ts`, so a member-level run
+Don't run `projen default` or `bunx projen` from inside a member. Synthesis is a
+whole-tree operation driven by the root `.projenrc.ts`, so a member-level run
 re-synths the entire workspace from the member's directory. Run `bun run sync`
 from the root instead.
 
-## Versioning
+## Manage workspace versions
 
 `VERSION` is the language-neutral version seam. Real package manifests remain
 Projen-owned and reproduce it exactly across JavaScript and Python packages.
@@ -586,7 +640,7 @@ workflow order without introducing another version owner.
 
 <!-- cli-reference:start -->
 
-## Command Reference
+## Command reference
 
 ### `release`
 

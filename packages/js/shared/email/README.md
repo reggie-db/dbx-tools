@@ -1,11 +1,9 @@
 # @dbx-tools/shared-email
 
-Browser-safe email sending schemas and inferred types.
+Validate browser, route, and agent-tool payloads for `@dbx-tools/email` without
+importing Node-only code.
 
-Use these schemas in UIs, Mastra tools, routes, and tests that exchange email
-payloads with [`@dbx-tools/email`](../../node/email).
-
-## Validate A Drafted Message
+## Validate a drafted message
 
 ```ts
 import { email, type EmailMessage } from "@dbx-tools/shared-email";
@@ -19,39 +17,61 @@ const message: EmailMessage = email.emailMessageSchema.parse({
 ```
 
 The message schema covers recipients, subject, body content, and attachments.
-Attachments can carry inline content, a local path, a URL, encoding metadata, and
-content type hints.
+Attachments carry inline string content, an optional encoding, and an optional
+content type. The schema doesn't accept a local path or URL. Read external
+content in trusted server code, then pass the resulting string through
+`content`.
 
 The package also includes send-result and sender-option schemas for routes,
 approval UIs, and tests.
 
-## Validate Send Results
+## Validate send results
 
 ```ts
-const result = email.emailResultSchema.parse(await sendResponse.json());
+import { email } from "@dbx-tools/shared-email";
+
+export function parseEmailResult(value: unknown) {
+  return email.emailResultSchema.parse(value);
+}
+
+const result = parseEmailResult({
+  sent: true,
+  recipient: "alice@example.com",
+  from: "reports@example.com",
+  messageId: "smtp-message-id",
+});
 ```
 
 `emailResultSchema` is the shared shape for SMTP sends and outbox writes. Use it
 for approval UI state and test assertions.
 
-## Render Sender Choices
+## Load sender choices
 
 ```ts
+import { email } from "@dbx-tools/shared-email";
+
 const senders = email.emailSendersSchema.parse(
-  await fetch("/api/email/senders").then((r) => r.json()),
+  await fetch("/api/email/senders").then((response) => response.json()),
 );
 ```
 
 The sender schema describes the concrete `From` choices for the current user,
 the default sender, and whether the list is restricted by policy.
 
-## Modules
+## Understand schema and transport limits
 
-- `email` - `emailAttachmentSchema`, `emailMessageSchema`,
-  `emailResultSchema`, `emailSendersSchema`, and flat inferred types:
-  `EmailAttachment`, `EmailMessage`, `EmailResult`, and `EmailSenders`.
-  The schemas intentionally avoid array `.min()` constraints so they can be reused
-  as model/tool JSON schemas for serving endpoints that reject `minItems`.
+- `emailAttachmentSchema` accepts `filename`, inline `content`, `encoding`, and
+  `contentType`. It doesn't read files, fetch URLs, or validate whether an
+  encoding matches the content.
+- The schemas don't add array `minItems` constraints because some Model Serving
+  endpoints reject that JSON Schema keyword. The Node sending layer still
+  requires at least one recipient.
+- The Node sending layer limits a message to 20 attachments, 10 MiB per decoded
+  attachment, 20 MiB across attachments, and 200,000 body characters.
+- Outbox mode lists attachment filenames in the rendered preview but doesn't
+  write attachment payloads as separate files.
+- Sender policy, SMTP delivery, approval, and outbox persistence belong to
+  [@dbx-tools/email](../../node/email/README.md).
 
 Passwordless authentication contracts live in
-[`@dbx-tools/shared-auth`](../auth).
+[@dbx-tools/shared-auth](../auth/README.md).

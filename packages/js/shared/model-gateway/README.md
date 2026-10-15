@@ -1,21 +1,18 @@
 # @dbx-tools/shared-model-gateway
 
-Discover the models exposed by a dbx-tools model gateway from browser, edge, or
-shared application code. The package validates successful and error responses
-at the network boundary and provides the protocol contracts needed to build
-model pickers without importing Node or AppKit runtime code.
+Discover models exposed by a dbx-tools model gateway from browser, edge, or
+shared application code. The package validates success and error responses at
+the network boundary and provides model-picker contracts without importing Node
+or Databricks AppKit runtime code.
 
-## List Available Models
+## List available models
 
 ```ts
 import { createModelGatewayClient } from "@dbx-tools/shared-model-gateway";
 
 const client = createModelGatewayClient();
 const response = await client.listModels({ search: "claude sonnet" });
-
-for (const model of response.data) {
-  console.log(model.id);
-}
+const modelIds = "data" in response ? response.data.map((model) => model.id) : [];
 ```
 
 In a browser, the client uses the active origin. Supply `baseUrl` in tests,
@@ -27,9 +24,9 @@ const client = createModelGatewayClient({
 });
 ```
 
-## Request A Codex Catalogue
+## Request a Codex catalog
 
-Use the Codex catalogue when a client needs Codex-specific model metadata and
+Use the Codex catalog when a client needs Codex-specific model metadata and
 reasoning controls:
 
 ```ts
@@ -40,7 +37,7 @@ Pass an `AbortSignal` to cancel model discovery. HTTP failures throw
 `ModelGatewayClientError`, which includes the status code and a validated gateway
 error response when one was returned.
 
-## Validate Gateway Payloads
+## Validate gateway payloads
 
 Use the exported Zod schemas with another HTTP transport:
 
@@ -54,7 +51,7 @@ The `models` module covers OpenAI, Codex, Anthropic, embedding, and error
 payloads. The `contracts` module covers model capabilities and deterministic
 route-selection inputs and results.
 
-## Configure The Gateway
+## Configure gateway options
 
 `ModelGatewayOptionsSchema` defines server defaults and validation. The derived
 `ModelGatewayCliOptionsSchema` adds `runtimeInfo` and requires a non-zero port
@@ -78,13 +75,22 @@ ModelGatewayOptionsSchema.parse(options);
 
 `ModelSelectionOptionsSchema` defines the mutually exclusive `model` and
 `modelClass` fields shared by model-gateway and Genie Code callers. Omit both to
-select the best available chat model. `preferSystemModels` defaults to `false`;
-when enabled, non-exact requests use `system.ai.*` services instead of workspace
+select the best available chat model. `preferSystemModels` defaults to `false`.
+When enabled, non-exact requests use `system.ai.*` services instead of workspace
 serving endpoints.
 
-## Package API
+## Runtime boundary
 
-- `client` creates the model-discovery client and typed HTTP errors.
-- `models` validates public model, embedding, and error payloads.
-- `contracts` validates shared routing and capability values.
-- `options` validates shared server and CLI configuration.
+The discovery client performs HTTP requests to `GET /v1/models`. The schemas and
+option helpers don't start a gateway, resolve Databricks credentials, or invoke
+models. Use
+[@dbx-tools/appkit-model-gateway](../../node/appkit-model-gateway) for AppKit
+gateway transport and [@dbx-tools/model](../../node/model) for server-side
+model discovery and selection.
+
+## Package exports
+
+- `client`: creates the model-discovery client and typed HTTP errors.
+- `models`: validates public model, embedding, and error payloads.
+- `contracts`: validates shared routing and capability values.
+- `options`: validates shared server and CLI configuration.

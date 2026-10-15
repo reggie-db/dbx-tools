@@ -1,12 +1,11 @@
 # @dbx-tools/shared-fs
 
-Browser-safe filesystem contract and abstract base for rooted storage backends.
+Use one filesystem contract across memory, local disk, Unity Catalog volumes,
+and other rooted storage backends. This browser-safe package provides the
+portable `FileSystem` interface, `BaseFileSystem`, normalized errors, path
+helpers, caching, and an in-memory adapter.
 
-The package defines the portable filesystem API used by local disk, Databricks,
-memory, and other storage backends. `BaseFileSystem` supplies rooted paths,
-common operations, and normalized errors for new adapters.
-
-## Quick Start
+## Quick start
 
 ```ts
 import { MemoryFileSystem } from "@dbx-tools/shared-fs";
@@ -15,38 +14,45 @@ const files = new MemoryFileSystem();
 await files.writeFile("note.txt", "ready");
 ```
 
-Key features:
+The filesystem contract covers:
 
-- Portable `FileSystem` interface (read/write/append/copy/move, mkdir/rmdir/readdir/stat/exists)
-- `BaseFileSystem` root accepts one or many segments (`"/path"`, objects →
-  FNV hash, `true`/`1` stringified); strings are split on `/` and only a
+- Portable `FileSystem` interface for read, write, append, copy, move, directory,
+  stat, and existence operations.
+- `BaseFileSystem` roots accept one or many segments. Objects are FNV-hashed,
+  and `true` and `1` are stringified. Strings are split on `/`, and only a
   component that _cannot_ be a path component (separator, NUL / control
   character, or `..`) is FNV-hashed, so real names like
-  `/Workspace/Users/me@corp.com/My Notes` survive intact
-- `BaseFileSystem` so a new backend mostly implements `*At` primitives: memoized `_init`, optional `createRoot`, `toBackendPath`, parent creation before write/append/copy/move, POSIX-only paths, encoding, recursive mkdir/rmdir/readdir, and append/copy/move fallbacks
+  `/Workspace/Users/me@corp.com/My Notes` survive intact.
+- `BaseFileSystem` lets a new backend implement mostly `*At` primitives. It
+  provides memoized `_init`, optional `createRoot`, `toBackendPath`, parent
+  creation before mutations, POSIX-only paths, encoding, recursive directory
+  operations, and append, copy, and move fallbacks.
 - Every primitive is invoked through a guard that routes failures to a
   `mapError` hook, so an adapter writes no try/catch of its own and cannot
-  return an unnormalized error
-- `MemoryFileSystem` in-process adapter for tests and as a reference implementation
+  return an unnormalized error.
+- `MemoryFileSystem` in-process adapter for tests and reference implementations.
 - `baseFS.mapFileSystemError` / `baseFS.inferFileSystemErrorCode` on
-  `@dbx-tools/shared-core` `error` helpers
+  `@dbx-tools/shared-core` error helpers.
 - `posixPath` helpers that convert roots/joins to `/`-separated form
-  (`posixPath.toPosix`, `posixPath.join`, …)
-- Typed `FileSystemError` codes for portable failure handling
+  (`posixPath.toPosix` and `posixPath.join`).
+- Typed `FileSystemError` codes for portable failure handling.
 - Lazy debug logs for every public filesystem operation. Set
-  `LOG_LEVEL=debug`; operation metadata is not constructed at normal log levels.
+  `LOG_LEVEL=debug`. Operation metadata is not constructed at normal log levels.
 - `cache()` read-through decorator with automatic mutation invalidation.
-  `exists`, `readdir`, and `stat` are cached by default; other methods delegate
+  `exists`, `readdir`, and `stat` are cached by default. Other methods delegate
   directly unless selected explicitly. Cache owners expose `keys()` so
   directory move/delete operations can invalidate related ancestor and
   descendant entries. `read`, `invalidate`, and `keys` may be synchronous or
   asynchronous. Keys use `<stable-hash>_<canonical-rooted-backend-path>`.
 
-## Use The Shared Contract
+## Choose a runtime
 
-Use this when multiple backends (local disk, object storage, Databricks volumes, in-memory) should share one API. Node hosts implement concrete adapters such as `@dbx-tools/fs` (`LocalFileSystem`).
+Use this package when several backends must implement the same API. Browser
+code can use the contracts, path helpers, cache decorator, and
+`MemoryFileSystem`. Node hosts provide concrete adapters such as
+[@dbx-tools/fs](../../node/fs), including `LocalFileSystem`.
 
-## Cache And Backend Helpers
+## Use cache and backend helpers
 
 ```ts
 import type { FileSystem, FileSystemCache } from "@dbx-tools/shared-fs";
@@ -73,12 +79,12 @@ The default caches `exists`, `readdir`, and `stat`. `filter` receives the
 operation and normalized absolute path, so an owning package can compile its
 own glob or authorization policy without adding a path-matcher dependency here.
 
-## Modules
+## Package exports
 
 | Export                                   | Role                                                       |
 | ---------------------------------------- | ---------------------------------------------------------- |
 | `FileSystem`                             | Portable filesystem contract                               |
-| `BaseFileSystem`                         | Abstract base over `*At` primitives; memoized `_init`      |
+| `BaseFileSystem`                         | Abstract base over `*At` primitives with memoized `_init`  |
 | `baseFS.normalizeFileSystemRoot`         | Join root segments (stringify / FNV-hash)                  |
 | `FileSystemRootInput`                    | `root` option: one or many non-null segments               |
 | `MemoryFileSystem`                       | In-memory adapter (tests / reference)                      |
@@ -88,8 +94,6 @@ own glob or authorization policy without adding a path-matcher dependency here.
 | `posixPath`                              | POSIX root/join/normalize helpers for namespace paths      |
 | `posixPath.isHomeRelativePath`           | `~` / `~/...` detection, shared by every adapter           |
 | `posixPath.expandHome`                   | Expand `~` against a home, with a pluggable join           |
-| `posixPath.toRelativeSegment`            | Strip leading `~` / separators so input joins UNDER a base |
+| `posixPath.toRelativeSegment`            | Strip leading `~` / separators so input joins under a base |
 | `FileSystemError`                        | Typed filesystem failure                                   |
-| `FileEntry` / `FileStat` / options types | Shared wire shapes                                         |
-
-Adjacent: `@dbx-tools/fs` (local disk adapter).
+| `FileEntry` / `FileStat` / options types | Shared data types                                          |

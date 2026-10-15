@@ -1,10 +1,10 @@
 # @dbx-tools/shared-graphiti
 
-Use the same browser-safe Graphiti options from Node, AppKit, browser tools, and
-other JavaScript callers. The package applies defaults, validates values, and
-parses environment-shaped records.
+Validate Graphiti configuration consistently in Node, Databricks AppKit,
+browser tools, and shared JavaScript code. Use the browser-safe schemas,
+defaults, and environment parser without loading the Graphiti runtime.
 
-## Resolve Runtime Options
+## Resolve runtime options
 
 ```ts
 import { resolveGraphitiOptions } from "@dbx-tools/shared-graphiti/options";
@@ -15,12 +15,11 @@ const options = resolveGraphitiOptions({
 });
 ```
 
-The result includes stable listener, chat-class, database durability, and
-structured-output defaults. Embedding selection and dimensions come from live
-model metadata. Route and embedded-process details are intentionally not part
-of this browser-safe contract.
+The result includes listener, chat model class, database durability, and
+structured-output defaults. The server integration derives embedding selection
+and dimensions from live model metadata.
 
-## Parse Environment Options
+## Parse environment options
 
 Resolve supported environment names without reading global process state:
 
@@ -34,6 +33,19 @@ const options = graphitiOptionsFromEnvironment({
 });
 ```
 
-Zod schemas provide runtime validation and inferred input/output types. Process
-launching, Databricks authentication, model discovery, and service lifecycle are
-handled by the Node integration.
+The parser accepts an explicit record and doesn't read global process state.
+Supported fields include the Databricks profile, bearer token, listener,
+runtime directory, model class, database URL, database schema, and startup
+timeout.
+
+## Runtime boundary
+
+This package doesn't launch Graphiti, read credentials, discover models, or
+manage a database. The
+[@dbx-tools/appkit-memory](../../node/appkit-memory) server plugin owns
+authentication, lazy Graphiti startup, and service lifecycle.
+
+## Package exports
+
+- `./options`: option schemas, defaults, explicit environment parsing, and
+  process-environment serialization.

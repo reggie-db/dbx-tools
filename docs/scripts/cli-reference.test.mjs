@@ -65,8 +65,7 @@ describe("parser-owned CLI references", () => {
     }
     for (const option of [
       "--profile <value>",
-      "--model <value>",
-      "--embedder-model <value>",
+      "--model-class <value>",
       "--listen <value>",
       "--database-url <value>",
     ]) {

@@ -1,10 +1,9 @@
 # @dbx-tools/cli-args
 
-Generate Commander flags from a Zod object schema so any CLI can share one
-argument, help, and layered-config path without installing the full `dbx`
-package.
+Generate Commander flags, help text, parsed values, and argv from one Zod
+object schema without installing the full `dbx` package.
 
-## Bind And Parse Arguments
+## Bind and parse arguments
 
 ```ts
 import { addArgs, parseArgs } from "@dbx-tools/cli-args";
@@ -28,7 +27,7 @@ should hide its default. A field with `helpDefault: false` defers layered
 configuration loading until `parseArgs`, so rendering `--help` does not resolve
 that value.
 
-## Serialize Options Back To Argv
+## Serialize options back to argv
 
 ```ts
 import { serializeArgs } from "@dbx-tools/cli-args";
@@ -42,4 +41,6 @@ values. Boolean false becomes `--no-*`, arrays become repeated flags, and
 listener addresses use the shared listen-address format.
 
 Consuming commands define their schemas. This package binds Commander, help,
-and argv serialization.
+and argv serialization. Use Commander directly when a command doesn't use a
+Zod object schema or layered [@dbx-tools/core](../../node/core)
+configuration.

@@ -1,13 +1,10 @@
 # @dbx-tools/path
 
-Node filesystem path toolkit for discovery, matching, ignoring, scanning, and
-watching.
+Discover, match, ignore, scan, and watch filesystem paths with the same rules
+used by the CLI, Projen, barrel generation, code generation, and documentation
+tooling.
 
-The toolkit keeps file discovery, ignore rules, package scanning, and watch
-behavior consistent across the CLI, Projen, barrel generation, code generation,
-and documentation tooling.
-
-## Find Files
+## Find files
 
 ```ts
 import { find, ignore } from "@dbx-tools/path";
@@ -23,7 +20,7 @@ const files = find.findFilesSync(["packages/**/src/**/*.ts"]).toArray();
 
 `find.findFiles()` streams matches asynchronously. `find.findFilesSync()`
 returns a lazy `Sequence<string>` from
-[`@dbx-tools/shared-core`](../../shared/core), so callers can map/filter without
+[@dbx-tools/shared-core](../../shared/core), so callers can map/filter without
 materializing immediately.
 
 The package also provides glob matchers, shared ignore rules, workspace package
@@ -32,7 +29,7 @@ scanning, and Chokidar-based watch helpers.
 Use this package instead of direct `glob` or `chokidar` calls when the result
 should agree with package discovery, barrel generation, or cleanup logic.
 
-## Compile Matchers
+## Compile matchers
 
 ```ts
 import { match } from "@dbx-tools/path";
@@ -47,7 +44,7 @@ if (isTest("packages/shared/model/test/classify.test.ts")) {
 `match.pathMatchTests()` when you need to inspect the compiled include/exclude
 tests.
 
-## Reuse Ignore Rules
+## Reuse ignore rules
 
 ```ts
 import { ignore } from "@dbx-tools/path";
@@ -63,7 +60,7 @@ const matcher = ignore.ignorePathMatcher({
 The ignore helpers centralize repo-wide exclusions such as `node_modules`,
 generated files, build output, VCS metadata, and package-manager output.
 
-## Scan Workspace Packages
+## Scan workspace packages
 
 ```ts
 import { scan } from "@dbx-tools/path";
@@ -79,7 +76,7 @@ const options: scan.FileScanOptions = {
 options when implementing docs or analysis tools that should walk the workspace
 like synthesis does.
 
-## Watch Files
+## Watch files
 
 ```ts
 import { watch } from "@dbx-tools/path";
@@ -94,7 +91,7 @@ watcher.on("change", (file) => rebuild(file));
 `watch.watchFiles()` wraps chokidar with the same path and ignore expectations
 used by the rest of the repo tooling.
 
-## Build Patterns
+## Build patterns
 
 ```ts
 import { pattern } from "@dbx-tools/path";
@@ -115,4 +112,4 @@ Pattern helpers keep generated glob fragments escaped and consistent.
 - `pattern` - escaped directory-name and extension glob fragments.
 
 The projen engine uses this package in
-[`@dbx-tools/projen`](../../../../projen).
+[@dbx-tools/projen](../../../../projen).

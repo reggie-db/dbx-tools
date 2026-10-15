@@ -52,6 +52,16 @@ const write = (p, text) => {
   fs.writeFileSync(p, text);
 };
 
+const GUIDE_ORDER = [
+  "get-started-appkit",
+  "agents-and-genie",
+  "lakebox",
+  "model-gateway",
+  "memory-search-and-actions",
+  "data-and-files",
+  "cli-and-local-services",
+];
+
 /**
  * Hand-written contributor guides that live in `docs/*.md` (not package
  * READMEs). Published under `/guides/<slug>` so the site carries them
@@ -71,7 +81,16 @@ function discoverGuides() {
         title: pageTitle(read(source), ent.name),
       };
     })
-    .sort((a, b) => a.title.localeCompare(b.title));
+    .sort((left, right) => {
+      const leftIndex = GUIDE_ORDER.indexOf(left.slug);
+      const rightIndex = GUIDE_ORDER.indexOf(right.slug);
+      if (leftIndex >= 0 || rightIndex >= 0) {
+        if (leftIndex < 0) return 1;
+        if (rightIndex < 0) return -1;
+        return leftIndex - rightIndex;
+      }
+      return left.title.localeCompare(right.title);
+    });
 }
 
 /** Release notes retained under `docs/releases`, newest version first. */
@@ -97,8 +116,16 @@ function docsPathForGuide(guide) {
   return `/guides/${guide.slug}`;
 }
 
+function docsPathForGuideIndex() {
+  return "/guides/";
+}
+
 function docsPathForRelease(release) {
   return `/releases/${release.slug.replaceAll(".", "")}`;
+}
+
+function docsPathForReleaseIndex() {
+  return "/releases/";
 }
 
 function docsPathForPackage(pkg) {
@@ -218,6 +245,44 @@ function buildPackageIndex(packages) {
   ].join("\n");
 }
 
+function buildGuideIndex(guides) {
+  return [
+    "Choose a task to start with dbx-tools.",
+    "",
+    ...guides.map((guide) => {
+      const summary = summaryText(read(guide.source));
+      return `- [${guide.title}](${withBase(docsPathForGuide(guide))})${summary ? `: ${summary}` : ""}`;
+    }),
+    "",
+  ].join("\n");
+}
+
+function releaseSummary(markdown) {
+  const prose = markdown
+    .split(/\r?\n\r?\n/)
+    .map((section) => section.trim())
+    .find(
+      (section) =>
+        section &&
+        !section.startsWith("#") &&
+        !section.startsWith("```") &&
+        !section.startsWith("|"),
+    );
+  return prose ? summaryText(`# Release\n\n${prose}`) : "";
+}
+
+function buildReleaseIndex(releases) {
+  return [
+    "Release notes describe user-visible changes for each dbx-tools version.",
+    "",
+    ...releases.map((release) => {
+      const summary = releaseSummary(read(release.source));
+      return `- [${release.title}](${withBase(docsPathForRelease(release))})${summary ? `: ${summary}` : ""}`;
+    }),
+    "",
+  ].join("\n");
+}
+
 function nav(packages, guides, releases) {
   const groups = new Map();
   for (const pkg of packages) {
@@ -233,30 +298,30 @@ function nav(packages, guides, releases) {
     ...(guides.length
       ? [
           {
-            label: "Guides",
-            items: guides.map((guide) => ({
-              label: guide.title,
-              link: docsPathForGuide(guide),
-            })),
+            label: "Start here",
+            items: [
+              { label: "Overview", link: docsPathForGuideIndex() },
+              ...guides.map((guide) => ({
+                label: guide.title,
+                link: docsPathForGuide(guide),
+              })),
+            ],
           },
         ]
       : []),
-    { label: "Package Reference", link: "/packages/" },
+    { label: "Package reference", link: "/packages/" },
     ...[...groups.entries()].map(([group, items]) => ({
       label: groupTitle(group),
       items: items.map((item) => ({ label: item.text, link: item.link })),
     })),
     // API reference sorts after the README guides: readers reach the
     // hand-written package guides first, then generated language API pages.
-    { label: "API Reference", link: "/api/" },
+    { label: "API reference", link: "/api/" },
     ...(releases.length
       ? [
           {
-            label: "Release Notes",
-            items: releases.map((release) => ({
-              label: release.title,
-              link: docsPathForRelease(release),
-            })),
+            label: "Release notes",
+            link: docsPathForReleaseIndex(),
           },
         ]
       : []),
@@ -297,7 +362,7 @@ function llms(packages, guides, releases) {
   if (releases.length) {
     lines.push("## Release Notes", "");
     for (const release of releases) {
-      const summary = summaryText(read(release.source));
+      const summary = releaseSummary(read(release.source));
       lines.push(`- [${release.title}](${withBase(docsPathForRelease(release))}): ${summary}`);
     }
     lines.push("");
@@ -489,6 +554,9 @@ function main() {
   for (const release of releases) {
     mappings.byFile.set(path.resolve(release.source), docsPathForRelease(release));
   }
+  mappings.byDir.set(path.join(root, "packages"), "/packages/");
+  mappings.byDir.set(path.join(root, "docs"), docsPathForGuideIndex());
+  mappings.byDir.set(path.join(root, "docs", "releases"), docsPathForReleaseIndex());
   rm(sourceRoot);
   mkdir(docsContentRoot);
 
@@ -500,7 +568,7 @@ function main() {
   write(
     path.join(docsContentRoot, "packages", "index.md"),
     frontmatter({
-      title: "Package Reference",
+      title: "Package reference",
       description: "Package-level documentation generated from dbx-tools README files.",
       sourcePath: rootReadme,
     }) +
@@ -513,6 +581,20 @@ function main() {
     write(
       path.join(docsContentRoot, "packages", `${pkg.slug}.md`),
       `${packagePage.trimEnd()}\n\n## See more\n\n[Open the complete API reference](${withBase(`/api/${pkg.slug}/`)})\n`,
+    );
+  }
+
+  if (guides.length) {
+    const guideIndexSource = path.join(root, "docs", "README.md");
+    write(
+      path.join(docsContentRoot, "guides", "index.md"),
+      frontmatter({
+        title: "Start here",
+        description: "Task-based guides for building with dbx-tools.",
+        sourcePath: guideIndexSource,
+      }) +
+        generatedHeader(guideIndexSource) +
+        buildGuideIndex(guides),
     );
   }
 
@@ -529,9 +611,23 @@ function main() {
     );
   }
 
+  if (releases.length) {
+    const releaseIndexSource = path.join(root, "docs", "scripts", "sync-readmes.mjs");
+    write(
+      path.join(docsContentRoot, "releases", "index.md"),
+      frontmatter({
+        title: "Release notes",
+        description: "User-visible changes in dbx-tools releases.",
+        sourcePath: releaseIndexSource,
+      }) +
+        generatedHeader(releaseIndexSource) +
+        buildReleaseIndex(releases),
+    );
+  }
+
   for (const release of releases) {
     write(
-      path.join(docsContentRoot, "releases", `${release.slug}.md`),
+      path.join(docsContentRoot, "releases", `${release.slug.replaceAll(".", "")}.md`),
       generatedPage(
         release.source,
         read(release.source),

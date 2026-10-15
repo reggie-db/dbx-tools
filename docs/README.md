@@ -1,7 +1,7 @@
 # dbx-tools docs
 
-This directory holds the docs-site generator. Any `docs/*.md` added beside it
-becomes a hand-written guide on the site; there are none today.
+This directory holds the docs-site generator and task-based start-here guides.
+Each direct `docs/*.md` file becomes a guide on the site.
 
 ## Write package guides for users
 
@@ -16,9 +16,10 @@ progression as AppKit documentation:
 4. Put module lists and generated API references last.
 
 Prefer sentence-case headings such as `Quick start`, `Choose a target`,
-`Run as a service`, and `Handle errors`. Avoid leading with ownership boundaries, internal classes,
-dependency graphs, protocol routing, caches, or build details. Include those
-only when they change how a caller uses or operates the package.
+`Run as a service`, and `Handle errors`. Avoid leading with ownership
+boundaries, internal classes, dependency graphs, protocol routing, caches, or
+build details. Include those only when they change how a caller uses or
+operates the package.
 
 Keep each prose paragraph focused on one decision or behavior. Split paragraphs
 that exceed 120 words into subsections, lists, tables, or shorter paragraphs.
@@ -50,7 +51,7 @@ The generator also adds a package-guide backlink to each API landing page.
 Development policies, dependency-installation safeguards, and implementation
 history belong in contributor instructions, not package product guides.
 
-## Generate CLI References
+## Generate CLI references
 
 CLI READMEs end with command references derived from their parsers. Commander
 provides the exact help text for every visible subcommand, including global
@@ -63,7 +64,7 @@ bun run docs:check-readmes
 ```
 
 Edit descriptions and options in the owning parser, then regenerate. Keep
-task-oriented guidance outside the `cli-reference` markers; do not edit
+task-oriented guidance outside the `cli-reference` markers. Do not edit
 generated sections or maintain separate flag tables. Documentation
 validation and the release docs workflow reject stale references.
 
@@ -77,7 +78,7 @@ Source of truth:
 - `README.md` becomes the docs homepage.
 - `packages/js/**/README.md` and `packages/py/**/README.md` become the package
   reference.
-- `docs/*.md` guides become the site's Guides section.
+- `docs/*.md` guides become the site's Start here section.
 - `docs/scripts/sync-readmes.mjs` rewrites local README links for the site,
   generates Starlight content, and publishes `llms.txt` / `llms-full.txt`.
 - `docs/scripts/generate-api-docs.mjs` resolves TypeScript entries from npm
@@ -94,7 +95,7 @@ Source of truth:
   static search, edit links, and the GitHub Pages build output.
 
 The API build requires Python 3.11 or newer and Node 22.12 or newer. Install
-the generated site with Bun; TypeDoc and Astro run under Node (not npm, and not
+the generated site with Bun. TypeDoc and Astro run under Node (not npm, and not
 Bun's `#!/usr/bin/env node` rewrite). Start locally while editing content:
 
 ```sh
@@ -144,14 +145,14 @@ before starting the Astro build.
 from `.docs-build/dist`. It starts no HTTP server and makes no external network
 requests, so release validation is deterministic.
 
-Generated files live under `.docs-build/` and should not be committed.
-Update `docs/toolchain.json` in a reviewed change when upgrading documentation
-dependencies; the generator rejects ranges, missing tools, and unknown entries.
+Generated files live under `.docs-build/` and should not be committed. Update
+`docs/toolchain.json` in a reviewed change when upgrading documentation
+dependencies. The generator rejects ranges, missing tools, and unknown entries.
 When existing public TypeScript declarations gain JSDoc, refresh the ratchet with
 `bun docs/scripts/check-source-docs.mjs --write-baseline` and review the baseline
 diff before committing it.
-The published site uses `https://docs.dbx.tools` with a root base path. GitHub Pages
-custom-domain state is configured through repository settings or the Pages API;
+The published site uses [https://docs.dbx.tools](https://docs.dbx.tools) with a root base path. GitHub Pages
+custom-domain state is configured through repository settings or the Pages API.
 Actions-based Pages ignores a repository or artifact `CNAME` file.
 
 After the Pages custom domain is set to `docs.dbx.tools`, configure the CNAME

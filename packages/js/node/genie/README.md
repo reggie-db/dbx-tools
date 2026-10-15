@@ -1,15 +1,16 @@
 # @dbx-tools/genie
 
-Server-side Databricks Genie chat drivers.
+Run Databricks Genie turns from Node or AppKit code as raw message snapshots or
+a typed event stream. AppKit requests keep their on-behalf-of-user (OBO)
+identity, standalone callers use the Databricks SDK authentication chain, and
+both modes support cancellation.
 
-Run a Genie turn from Node or AppKit code and consume raw message snapshots or a
-typed event stream. AppKit requests keep their OBO identity; standalone callers
-use the Databricks SDK authentication chain. Both modes support cancellation.
-
-## Quick Start
+## Quick start
 
 ```ts
 import { chat } from "@dbx-tools/genie";
+
+const spaceId = process.env.DATABRICKS_GENIE_SPACE_ID!;
 
 for await (const event of chat.genieEventChat(spaceId, "Top stores by revenue?")) {
   console.log(event.type, event);
@@ -17,9 +18,9 @@ for await (const event of chat.genieEventChat(spaceId, "Top stores by revenue?")
 ```
 
 Pure Genie schemas and event detector helpers live in
-[`@dbx-tools/shared-genie`](../../shared/genie).
+[@dbx-tools/shared-genie](../../shared/genie).
 
-Key features:
+The driver:
 
 - Streams the Genie Agent Mode API by default, including reasoning, SQL calls,
   query output, and the synthesized answer.
@@ -40,15 +41,17 @@ Key features:
   CLI tools.
 - Fetches Genie space metadata and starter questions for UI suggestions.
 
-## Choose The Driver Or AppKit Genie
+## Choose Genie integration
 
-Native AppKit's Genie plugin is the right choice for a standalone Genie chat
-experience: it provides named space aliases, SSE status updates, conversation
+Use native AppKit's Genie plugin for a standalone Genie chat experience. It
+provides named space aliases, SSE status updates, conversation
 history replay, query result fetching, OBO execution, and the AppKit UI
 `GenieChat` component.
 
-Use this package when Genie is one capability inside a larger agent or custom
-backend:
+Use direct Genie when one Genie space owns the conversation and answer. Use
+[@dbx-tools/appkit-mastra](../appkit-mastra) when a supervising agent must
+combine Genie with other tools, Mastra memory, approvals, or workflows. Use
+this package directly when custom backend code needs the lower-level stream:
 
 - You want a low-level async iterator rather than an AppKit HTTP route.
 - You want raw message snapshots or a normalized event stream that can be fed
@@ -60,7 +63,7 @@ backend:
 - You need the same driver to work inside AppKit with OBO auth and outside
   AppKit from scripts using normal Databricks SDK auth.
 
-## Handle Semantic Events
+## Handle semantic events
 
 ```ts
 import { chat } from "@dbx-tools/genie";
@@ -85,10 +88,10 @@ for await (const event of chat.genieEventChat(spaceId, "Top stores by revenue?")
 
 `chat.genieEventChat()` wraps the lower-level snapshot stream and yields a
 `GenieChatEvent` union. Use it for SSE streams, log pipelines, and tool writer
-events where consumers care about progress and SQL, not just the terminal
+events where consumers care about progress and SQL rather than only the terminal
 message.
 
-## Stream Raw Message Snapshots
+## Stream raw message snapshots
 
 ```ts
 import { chat } from "@dbx-tools/genie";
@@ -107,7 +110,7 @@ normalized wire shape. Agent Mode returns query output inline as Markdown and
 copies a query output's `statement_id` onto the matching query attachment when
 Databricks supplies one.
 
-## Continue A Conversation
+## Continue a conversation
 
 ```ts
 let conversationId: string | undefined;
@@ -126,7 +129,7 @@ message or event and passing it into the next turn. This works in stateless
 route handlers, durable thread stores, and one-off scripts. AppKit-Mastra stores
 the id with its thread and passes it back when a conversation continues.
 
-## Resolve A Workspace Client
+## Resolve a workspace client
 
 ```ts
 import { createWorkspaceClient } from "@databricks/appkit";
@@ -139,14 +142,14 @@ await chat.genieEventChat(spaceId, content, {
 
 Client resolution order:
 
-1. `options.workspaceClient`;
-2. AppKit execution-context client, when present;
-3. `createWorkspaceClient()` using AppKit's normal Databricks auth chain.
+1. `options.workspaceClient`.
+1. AppKit execution-context client, when present.
+1. `createWorkspaceClient()` using AppKit's normal Databricks auth chain.
 
 Pass `options.context` as an `AbortSignal` or SDK context to cancel the Agent
 Mode stream, SDK calls, and any polling fallback sleep.
 
-## Read Space Metadata And Starter Questions
+## Read space metadata and starter questions
 
 ```ts
 import { space } from "@dbx-tools/genie";
@@ -163,7 +166,7 @@ The serialized blob needs `Can Edit` on the space, while `Can Run` is enough for
 title and description. When the workspace rejects the serialized request for
 lack of permission, `getGenieSpace()` retries once without it and logs
 `serialized-space:forbidden`, so an app service principal holding only `Can Run`
-still resolves the space and simply reports no starter questions. Every other
+still resolves the space and reports no starter questions. Every other
 failure - a cancelled request, a missing space, a retry that also fails - is
 thrown.
 
@@ -172,9 +175,9 @@ thrown.
 `chat.GenieChatOptions` is shared by both drivers:
 
 - `conversationId` - append to an existing Genie conversation.
-- `agentMode` - use Agent Mode SSE, default `true`; `false` forces polling.
+- `agentMode` - use Agent Mode SSE, default `true`. `false` forces polling.
 - `agentModeFallback` - fall back to classic polling when Agent Mode is
-  unavailable, default `true`; direct Agent-only callers set `false`.
+  unavailable, default `true`. Direct Agent-only callers set `false`.
 - `enableVisualization` - request Agent Mode visualization generation.
 - `workspaceClient` - explicit Databricks SDK client.
 - `pollIntervalMs` - fallback polling cadence, default `500`.
@@ -188,6 +191,6 @@ thrown.
   Mode transport options plus Agent Mode conversation history.
 - `space` - `getGenieSpace()` and `genieSampleQuestions()`.
 
-The AppKit-Mastra package builds its Genie tools on top of this driver; see
-[`@dbx-tools/appkit-mastra`](../appkit-mastra) for the agent-level
+The AppKit-Mastra package builds its Genie tools on top of this driver. See
+[@dbx-tools/appkit-mastra](../appkit-mastra) for the agent-level
 workflow.

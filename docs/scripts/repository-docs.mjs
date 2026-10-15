@@ -58,9 +58,9 @@ export function groupTitle(group) {
     case "node":
       return "Node and AppKit";
     case "shared":
-      return "Shared Contracts";
+      return "Shared contracts";
     case "cli":
-      return "CLI Tools";
+      return "CLI tools";
     case "ui":
       return "React UI";
     case "python":
