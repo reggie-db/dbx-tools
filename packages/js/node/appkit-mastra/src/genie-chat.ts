@@ -36,6 +36,7 @@ const LIST_PAGE_SIZE = 100;
 /** Upper bound on conversations surfaced in the thread list. */
 const THREAD_LIMIT = 100;
 const AGENT_CONVERSATION_TYPE = "GENIE_CONVERSATION_TYPE_AGENT";
+const DIRECT_GENIE_ERROR = "Genie could not complete the request.";
 
 /** Suffix that keeps a Genie question's user message id distinct from its answer. */
 const QUESTION_ID_SUFFIX = ":question";
@@ -220,7 +221,7 @@ export function genieChatStream(options: {
   const toolCallId = hash.id();
   const toolName = askGenieToolId(space.alias);
   return createUIMessageStream({
-    onError: (error) => errorUtils.toError(error).message,
+    onError: () => DIRECT_GENIE_ERROR,
     execute: async ({ writer }) => {
       const progress = (progressEvent: wire.GenieWriterEvent) =>
         writer.write({
@@ -273,10 +274,14 @@ export function genieChatStream(options: {
           else if (chatEvent.type !== "message") progress(chatEvent);
         }
       } catch (error) {
+        logger.warn("turn:error", {
+          spaceId: space.spaceId,
+          error: errorUtils.toError(error),
+        });
         writer.write({
           type: "tool-output-error",
           toolCallId,
-          errorText: errorUtils.toError(error).message,
+          errorText: DIRECT_GENIE_ERROR,
         });
         throw error;
       }

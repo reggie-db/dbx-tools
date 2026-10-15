@@ -184,29 +184,37 @@ export function projectAgentModeConversation(
   items: GenieAgentOutputItem[],
   status = "completed",
 ): GenieMessage[] {
-  const turns = new Map<string, GenieAgentOutputItem[]>();
+  const turns: Array<{
+    messageId: string;
+    question: GenieAgentOutputItem;
+    items: GenieAgentOutputItem[];
+  }> = [];
+  let current: (typeof turns)[number] | undefined;
   for (const item of items) {
-    const messageId = itemMessageId(item);
-    if (!messageId) continue;
-    const turn = turns.get(messageId);
-    if (turn) turn.push(item);
-    else turns.set(messageId, [item]);
+    if (item.type === "message" && item.role === "user") {
+      const messageId =
+        itemMessageId(item) ??
+        (item.id?.endsWith("_input") ? item.id.slice(0, -"_input".length) : item.id);
+      if (!messageId) continue;
+      current = { messageId, question: item, items: [] };
+      turns.push(current);
+      continue;
+    }
+    current?.items.push(item);
   }
-  const entries = [...turns];
-  return entries.map(([messageId, turnItems], index) => {
-    const question = turnItems.find((item) => item.type === "message" && item.role === "user");
-    const failed = turnItems.some((item) => item.status === "failed");
-    const turnStatus = failed ? "failed" : index === entries.length - 1 ? status : "completed";
+  return turns.map((turn, index) => {
+    const failed = turn.items.some((item) => item.status === "failed");
+    const turnStatus = failed ? "failed" : index === turns.length - 1 ? status : "completed";
     return projectAgentModeMessage(
       spaceId,
-      contentText(question?.content, "input_text").join("\n"),
+      contentText(turn.question.content, "input_text").join("\n"),
       {
-        id: messageId,
+        id: turn.messageId,
         status: turnStatus,
         conversation_id: conversationId,
-        ...(question?.created_at !== undefined ? { created_at: question.created_at } : {}),
+        ...(turn.question.created_at !== undefined ? { created_at: turn.question.created_at } : {}),
       },
-      turnItems.filter((item) => item !== question),
+      turn.items,
     );
   });
 }
@@ -262,6 +270,7 @@ function itemAttachments(item: GenieAgentOutputItem): GenieAttachment[] {
       : [{ attachment_id: id, attachment_type: "query", query: { id, thoughts } }];
   }
   if (item.type === "function_call") {
+    const callId = item.call_id ?? item.id;
     const argumentsValue = json.parseRecord(item.arguments);
     const query =
       typeof argumentsValue?.sql === "string"
@@ -273,10 +282,10 @@ function itemAttachments(item: GenieAgentOutputItem): GenieAttachment[] {
     return query
       ? [
           {
-            attachment_id: id,
+            attachment_id: callId,
             attachment_type: "query",
             query: {
-              id,
+              id: callId,
               query,
               ...(title ? { title } : {}),
             },

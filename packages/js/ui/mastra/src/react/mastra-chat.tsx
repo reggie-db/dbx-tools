@@ -285,7 +285,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const agentId = genieSpace
     ? `genie:${genieSpace}`
     : (options.agentId ?? mastraClient.defaultAgent);
-  const showModelPicker = Boolean(options.showModelPicker);
+  const showModelPicker = Boolean(options.showModelPicker) && !genieSpace;
   const modelKey = modelStorageKey(mastraClient.basePath, agentId);
   const [model, setModel] = useState(() => (showModelPicker ? readStoredModel(modelKey) : ""));
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | undefined>();
@@ -534,6 +534,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       activeThreadId !== requestedThreadId ||
       isLoadingThreads ||
       threadsError ||
+      genieClient ||
       localThreadIdsRef.current.has(requestedThreadId) ||
       optimisticThreads[requestedThreadId] ||
       threads.some((thread) => thread.id === requestedThreadId) ||
@@ -549,6 +550,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     activeRunsKey,
     activeThreadId,
     enableThreads,
+    genieClient,
     hydratedThreadKey,
     isLoadingThreads,
     mintThreadId,
@@ -561,7 +563,9 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   ]);
   const historyAvailability = isLoadingThreads
     ? "loading"
-    : threads.some((thread) => thread.id === activeThreadId) || optimisticThreads[activeThreadId]
+    : threads.some((thread) => thread.id === activeThreadId) ||
+        optimisticThreads[activeThreadId] ||
+        (genieClient && requestedThreadId === activeThreadId)
       ? "present"
       : "missing";
   const { isLoadingHistory, isLoadingMore, loadOlderHistory } = useChatHistory({
@@ -765,13 +769,15 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       if (!userMessage) throw new Error("A Mastra chat turn requires a user message");
       const assistantId = hash.id();
       const runId = hash.id();
-      storeActiveRun(activeRunsKey, {
-        threadId,
-        runId,
-        assistantId,
-        userMessage,
-        startedAt: Date.now(),
-      });
+      if (mastraClient.backgroundTurns) {
+        storeActiveRun(activeRunsKey, {
+          threadId,
+          runId,
+          assistantId,
+          userMessage,
+          startedAt: Date.now(),
+        });
+      }
       updateSession(threadId, (session) => ({
         ...session,
         assistantId,
@@ -809,6 +815,12 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   );
 
   const recoveredRunsKeyRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!persistenceReady || mastraClient.backgroundTurns) return;
+    for (const run of readStoredActiveRuns(activeRunsKey)) {
+      removeStoredActiveRun(activeRunsKey, run.runId);
+    }
+  }, [activeRunsKey, mastraClient.backgroundTurns, persistenceReady]);
   useEffect(() => {
     if (
       !persistenceReady ||

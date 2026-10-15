@@ -155,13 +155,14 @@ export class GenieChatClient extends MastraPluginClient {
   }): Promise<ListMemoryThreadMessagesResponse> {
     const page = options.page ?? 0;
     let messages: UIMessage[] = [];
-    if (page === 0 && this.#conversations.has(options.threadId)) {
+    if (page === 0) {
       const payload = await this.getJson(
         this.#url(routes.MASTRA_ROUTES.threads, options.threadId, routes.MASTRA_ROUTES.messages),
         wire.GenieThreadMessagesResponseSchema,
         options.signal,
       );
       messages = await validateUIMessages({ messages: payload.messages });
+      this.#conversations.add(options.threadId);
       // History ids already address their Genie message; the delete route
       // resolves a question id to the message that owns it.
       for (const message of messages) this.#genieMessageIds.set(message.id, message.id);

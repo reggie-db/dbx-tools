@@ -138,7 +138,6 @@ describe("Genie conversation APIs", () => {
   });
 
   test("loads Agent Mode history from conversation items", async () => {
-    const meta = { message_id: "m1" };
     const requests: string[] = [];
     const client = {
       apiClient: {
@@ -153,42 +152,40 @@ describe("Genie conversation APIs", () => {
                 type: "message",
                 role: "user",
                 id: "m1_input",
-                metadata: meta,
                 content: [{ type: "input_text", text: "Plot sales" }],
               },
               {
                 type: "reasoning",
                 id: "r1",
-                metadata: meta,
                 content: [{ type: "reasoning_text", text: "Weekly trend." }],
               },
               {
                 type: "function_call",
-                id: "q1",
-                call_id: "q1",
+                id: "query-item-1",
+                call_id: "query-call-1",
                 name: "execute_sql",
                 arguments: JSON.stringify({ sql: "SELECT 1", title: "Sales" }),
-                metadata: meta,
               },
               {
                 type: "function_call_output",
                 id: "q1_out",
-                call_id: "q1",
+                call_id: "query-call-1",
                 output: "| week | sales |",
-                metadata: { ...meta, statement_id: "stmt-1" },
+                metadata: { statement_id: "stmt-1" },
               },
               {
                 type: "function_call_output",
                 id: "v1_out",
                 call_id: "v1",
                 output: "Sales trend",
-                metadata: { ...meta, viz: { attachment_id: "v1", query_attachment_id: "q1" } },
+                metadata: {
+                  viz: { attachment_id: "v1", query_attachment_id: "query-call-1" },
+                },
               },
               {
                 type: "message",
                 role: "assistant",
                 id: "a1",
-                metadata: meta,
                 content: [{ type: "output_text", text: "Sales recovered." }],
               },
             ],

@@ -87,17 +87,15 @@ describe("Genie Agent Mode contracts", () => {
           type: "message",
           role: "user",
           id: "message-1_input",
-          metadata: { message_id: "message-1" },
           content: [{ type: "input_text", text: "Show sales" }],
           status: "completed",
         },
         {
           type: "function_call",
-          id: "query-1",
-          call_id: "query-1",
+          id: "query-item-1",
+          call_id: "query-call-1",
           name: "execute_sql",
           arguments: JSON.stringify({ sql: "SELECT 1" }),
-          metadata: { message_id: "message-1" },
           status: "in_progress",
         },
       ],
@@ -105,5 +103,48 @@ describe("Genie Agent Mode contracts", () => {
     );
 
     assert.equal(messages[0]?.status, "EXECUTING_QUERY");
+    assert.equal(messages[0]?.message_id, "message-1");
+    assert.equal(messages[0]?.attachments?.[0]?.attachment_id, "query-call-1");
+  });
+
+  it("segments documented multi-turn items at each user input", () => {
+    const messages = agentMode.projectAgentModeConversation("space-1", "conversation-1", [
+      {
+        type: "message",
+        role: "user",
+        id: "turn-1_input",
+        content: [{ type: "input_text", text: "First" }],
+      },
+      {
+        type: "message",
+        role: "assistant",
+        id: "answer-1",
+        content: [{ type: "output_text", text: "One" }],
+      },
+      {
+        type: "message",
+        role: "user",
+        id: "turn-2_input",
+        content: [{ type: "input_text", text: "Second" }],
+      },
+      {
+        type: "message",
+        role: "assistant",
+        id: "answer-2",
+        content: [{ type: "output_text", text: "Two" }],
+      },
+    ]);
+
+    assert.deepEqual(
+      messages.map((message) => ({
+        id: message.message_id,
+        question: message.content,
+        answer: message.attachments?.[0]?.text?.content,
+      })),
+      [
+        { id: "turn-1", question: "First", answer: "One" },
+        { id: "turn-2", question: "Second", answer: "Two" },
+      ],
+    );
   });
 });

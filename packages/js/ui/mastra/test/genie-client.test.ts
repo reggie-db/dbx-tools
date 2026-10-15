@@ -116,4 +116,22 @@ describe("GenieChatClient", () => {
 
     await expect(client.history({ threadId: "conv-1" })).rejects.toThrow();
   });
+
+  test("loads a deep-linked conversation that is absent from the first thread page", async () => {
+    globalThis.fetch = (async () =>
+      Response.json({
+        messages: [
+          { id: "user-1", role: "user", parts: [{ type: "text", text: "Question" }] },
+          { id: "assistant-1", role: "assistant", parts: [{ type: "text", text: "Answer" }] },
+        ],
+      })) as typeof fetch;
+    const client = new GenieChatClient(CONFIG, "default");
+
+    const history = await client.history({ threadId: "older-conversation" });
+
+    expect(history.uiMessages?.map((message) => (message as UIMessage).id)).toEqual([
+      "assistant-1",
+      "user-1",
+    ]);
+  });
 });
