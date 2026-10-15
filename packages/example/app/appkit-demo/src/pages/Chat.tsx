@@ -1,5 +1,12 @@
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
-import { SparklesIcon } from "lucide-react";
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@dbx-tools/ui/react";
+import { SettingsIcon, SparklesIcon } from "lucide-react";
 import { useState } from "react";
 import { useChatThreadQuery } from "@/hooks/use-chat-thread-query";
 
@@ -12,21 +19,27 @@ const Chat = () => {
   const genieThread = useChatThreadQuery("genieThread");
   const thread = genieOnly ? genieThread : agentThread;
 
-  const genieOnlyControl = (
-    <label
-      className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-xs text-foreground hover:bg-accent"
-      title="Use direct Genie conversations instead of the tool-using support agent"
-    >
-      <SparklesIcon className="size-4 shrink-0 text-[#FF3621]" aria-hidden />
-      <input
-        name="genie-only"
-        type="checkbox"
-        className="size-3.5 accent-primary"
-        checked={genieOnly}
-        onChange={(event) => setGenieOnly(event.target.checked)}
-      />
-      Genie only
-    </label>
+  const chatSettings = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label="Chat settings"
+          title="Chat settings"
+        >
+          <SettingsIcon className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuCheckboxItem checked={genieOnly} onCheckedChange={setGenieOnly}>
+          <SparklesIcon className="size-4 text-[#FF3621]" aria-hidden />
+          Genie only
+        </DropdownMenuCheckboxItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   return (
@@ -36,7 +49,7 @@ const Chat = () => {
       threadId={thread.threadId}
       onThreadIdChange={thread.onThreadIdChange}
       enableExport
-      threadSidebarHeaderActions={genieOnlyControl}
+      threadSidebarHeaderActions={chatSettings}
       className="min-h-0 flex-1"
     />
   );
