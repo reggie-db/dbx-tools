@@ -9,6 +9,7 @@ import { context, trace } from "@opentelemetry/api";
 import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
+import { MASTRA_AUTH_MODE_KEY, MASTRA_USER_EMAIL_KEY } from "../src/config.ts";
 import {
   AgentTraceSpanProcessor,
   appMlflowTraceInfoConfigured,
@@ -27,10 +28,6 @@ import {
   ucTracePrefixFromExperimentTags,
   validateFeedbackConfig,
 } from "../src/mlflow.ts";
-import {
-  MASTRA_AUTH_MODE_KEY,
-  MASTRA_USER_EMAIL_KEY,
-} from "../src/config.ts";
 import { AppMlflowTraceInfoSpanProcessor } from "../src/telemetry.ts";
 import { APPKIT_AGENT_TRACE_ROOT_ATTR } from "../src/trace-attributes.ts";
 

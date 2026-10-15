@@ -36,18 +36,10 @@ import {
   type Span,
 } from "@opentelemetry/api";
 import { getRPCMetadata, RPCType } from "@opentelemetry/core";
-import type {
-  ReadableSpan,
-  Span as SdkSpan,
-  SpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import type { ReadableSpan, Span as SdkSpan, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import type express from "express";
 
-import {
-  MASTRA_AUTH_MODE_KEY,
-  MASTRA_USER_EMAIL_KEY,
-  MASTRA_USER_NAME_KEY,
-} from "./config.ts";
+import { MASTRA_AUTH_MODE_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_NAME_KEY } from "./config.ts";
 import { USER_EMAIL_HEADER, USER_ID_HEADER } from "./identity.ts";
 import {
   directMlflowTracingActive,
@@ -100,8 +92,7 @@ const CHAT_TURN_TRACER = "@dbx-tools/appkit-mastra/telemetry";
  * are intentionally excluded: their bodies are tool decisions, not the
  * user prompt, and they rarely produce a fresh answer worth surfacing.
  */
-const AGENT_TURN_ROUTE =
-  /(?:^|\/)(?:agents\/[^/]+\/(?:stream|generate)|chat\/[^/]+)\/?$/i;
+const AGENT_TURN_ROUTE = /(?:^|\/)(?:agents\/[^/]+\/(?:stream|generate)|chat\/[^/]+)\/?$/i;
 
 /** Attribute keys the MLflow UC `*_trace_unified` view reads from the root span. */
 export const MLFLOW_SPAN_INPUTS_ATTR = "mlflow.spanInputs";
@@ -389,7 +380,7 @@ interface AppMlflowTraceState {
 
 function attributeString(span: ReadableSpan, name: string): string | undefined {
   const value = span.attributes[name];
-  return typeof value === "string" ? stringUtils.trimToNull(value) ?? undefined : undefined;
+  return typeof value === "string" ? (stringUtils.trimToNull(value) ?? undefined) : undefined;
 }
 
 function metadataAttribute(key: string): string {
@@ -401,7 +392,7 @@ function modelFromSpan(span: ReadableSpan): string | undefined {
   if (direct) return direct;
   const metadata = json.parse(attributeString(span, MASTRA_MODEL_METADATA_ATTR));
   return object.isRecord(metadata) && typeof metadata.modelId === "string"
-    ? stringUtils.trimToNull(metadata.modelId) ?? undefined
+    ? (stringUtils.trimToNull(metadata.modelId) ?? undefined)
     : undefined;
 }
 
@@ -417,7 +408,10 @@ function collectTraceTags(span: ReadableSpan, state: AppMlflowTraceState): void 
   for (const [name, value] of Object.entries(span.attributes)) {
     if (!name.startsWith(MLFLOW_TRACE_TAG_PREFIX)) continue;
     const tag = name.slice(MLFLOW_TRACE_TAG_PREFIX.length);
-    if (tag && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")) {
+    if (
+      tag &&
+      (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    ) {
       state.tags.set(tag, String(value));
     }
   }
@@ -469,7 +463,9 @@ export class AppMlflowTraceInfoSpanProcessor implements SpanProcessor {
     }
 
     const agent =
-      state.model ?? attributeString(span, GEN_AI_AGENT_ID_ATTR) ?? attributeString(span, GEN_AI_AGENT_NAME_ATTR);
+      state.model ??
+      attributeString(span, GEN_AI_AGENT_ID_ATTR) ??
+      attributeString(span, GEN_AI_AGENT_NAME_ATTR);
     if (agent) state.tags.set(MLFLOW_AGENT_TAG, agent);
     if (state.genie) state.tags.set(MLFLOW_GENIE_TAG, "true");
     const auth = attributeString(span, metadataAttribute(MASTRA_AUTH_MODE_KEY));

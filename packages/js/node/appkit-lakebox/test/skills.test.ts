@@ -46,7 +46,8 @@ describe("lakeboxSkillMounts", () => {
     });
     const configured = workspace.skills;
     assert.ok(configured);
-    const skills = (await configured.getScoped?.({ requestContext: new RequestContext() })) ?? configured;
+    const skills =
+      (await configured.getScoped?.({ requestContext: new RequestContext() })) ?? configured;
     for (const query of [
       "deploy a service",
       "deploy an app",
