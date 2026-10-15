@@ -419,6 +419,9 @@ export interface BuiltAgents {
   ambientTools: MastraTools;
 }
 
+/** Builds one optional output processor for a registered Mastra agent. */
+export type MastraOutputProcessorFactory = (agentId: string) => OutputProcessor | undefined;
+
 /** Fallback agent id used when `config.agents` is omitted entirely. */
 export const FALLBACK_AGENT_ID = "default";
 
@@ -705,6 +708,7 @@ export async function buildAgents(opts: {
   config: MastraPluginConfig;
   context: pluginRegistry.PluginContextLike | undefined;
   memoryBuilder?: MemoryBuilder;
+  outputProcessorFactories?: readonly MastraOutputProcessorFactory[];
   log: log.Logger;
   /**
    * Local skill filesystems mounted into every auto-created default workspace.
@@ -720,6 +724,7 @@ export async function buildAgents(opts: {
     config,
     context,
     memoryBuilder,
+    outputProcessorFactories = [],
     log,
     extraSkillMounts,
     standardSkills = [],
@@ -815,23 +820,22 @@ export async function buildAgents(opts: {
           },
           memory ? requestContext : undefined,
         ),
-      tools:
-        resolveCodeMode || memoryBuilder?.managed
-          ? async (args) => {
-              const managedTools = await memoryBuilder?.managedTools(args.requestContext);
-              const scopedTools = { ...tools, ...managedTools };
-              const codeMode = resolveCodeMode ? await resolveCodeMode(args) : undefined;
-              return codeMode ? { ...scopedTools, [codeMode.tool.id]: codeMode.tool } : scopedTools;
-            }
-          : tools,
+      tools: resolveCodeMode
+        ? async (args) => {
+            const codeMode = await resolveCodeMode(args);
+            return codeMode ? { ...tools, [codeMode.tool.id]: codeMode.tool } : tools;
+          }
+        : tools,
       ...(memory ? { memory } : {}),
       ...(workspace ? { workspace } : {}),
-      inputProcessors: [
-        ...inputProcessors,
-        ...(memoryBuilder?.inputProcessors() ?? []),
-        ...workspaceSkillInputProcessors(workspace, config),
+      inputProcessors: [...inputProcessors, ...workspaceSkillInputProcessors(workspace, config)],
+      outputProcessors: [
+        toolErrorLoggingProcessor(log),
+        ...outputProcessorFactories.flatMap((factory) => {
+          const processor = factory(id);
+          return processor ? [processor] : [];
+        }),
       ],
-      outputProcessors: [toolErrorLoggingProcessor(log)],
     });
     agents[id] =
       config.backgroundTurns === false

@@ -29,18 +29,12 @@
  * (auto-defaulted to `true` in `plugin.ts` when the `lakebase` plugin
  * is registered); per-agent settings cascade on top of that.
  *
- * `config.managedMemory` adds Databricks Agent Memory recall as an input
- * processor. PostgresStore remains the thread/message owner and PgVector
- * remains available for Mastra semantic recall.
- *
  * @module
  */
 
-import type { WorkspaceClient } from "@databricks/appkit";
 import { migration as appkitMigration } from "@dbx-tools/appkit";
 import { hash, log } from "@dbx-tools/shared-core";
 import type { AgentMemoryOption } from "@mastra/core/agent";
-import type { InputProcessor } from "@mastra/core/processors";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
@@ -53,7 +47,6 @@ import type { Pool } from "pg";
 
 import type { AnyMastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
 import type { MastraPluginConfig } from "./config.ts";
-import { ManagedMemoryRuntime, resolveManagedMemoryOptions } from "./managed-memory.ts";
 import { agentStorageSchemaName } from "./storage-schema.ts";
 import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 
@@ -155,17 +148,16 @@ export function needsLakebase(config: MastraPluginConfig): boolean {
 }
 
 /**
- * Construct a per-agent {@link Memory} factory bound to the service-principal
- * workspace client and optional Lakebase pool.
+ * Construct a per-agent {@link Memory} factory bound to the optional
+ * service-principal Lakebase pool.
  * Caches the shared `PgVector` singleton (built on first need) so each
  * agent build is O(1) after the first.
  */
 export function createMemoryBuilder(
   config: MastraPluginConfig,
-  servicePrincipalClient: WorkspaceClient,
   servicePrincipalPool?: Pool,
 ): MemoryBuilder {
-  return new MemoryBuilder(config, servicePrincipalClient, servicePrincipalPool);
+  return new MemoryBuilder(config, servicePrincipalPool);
 }
 
 /**
@@ -175,20 +167,11 @@ export function createMemoryBuilder(
  */
 export class MemoryBuilder {
   private sharedVector: PgVector | undefined;
-  readonly managed: ManagedMemoryRuntime | undefined;
 
   constructor(
     private readonly config: MastraPluginConfig,
-    servicePrincipalClient: WorkspaceClient,
     private readonly servicePrincipalPool?: Pool,
-  ) {
-    this.managed = config.managedMemory
-      ? new ManagedMemoryRuntime(
-          servicePrincipalClient,
-          resolveManagedMemoryOptions(config.managedMemory),
-        )
-      : undefined;
-  }
+  ) {}
 
   /**
    * Build the Mastra-instance-level storage used for workflow
@@ -270,15 +253,6 @@ export class MemoryBuilder {
           : {}),
       },
     });
-  }
-
-  inputProcessors(): InputProcessor[] {
-    const processor = this.managed?.inputProcessor();
-    return processor ? [processor] : [];
-  }
-
-  managedTools(requestContext?: RequestContext) {
-    return this.managed?.tools(requestContext) ?? Promise.resolve({});
   }
 
   private buildStorage(agentId: string, setting: StorageSetting): PostgresStore | undefined {

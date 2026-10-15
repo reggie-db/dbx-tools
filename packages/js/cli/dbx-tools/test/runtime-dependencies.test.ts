@@ -54,7 +54,7 @@ describe("Node-owned model and Lakebase runtimes", () => {
   for (const packageName of [
     "@dbx-tools/cli",
     "@dbx-tools/model",
-    "@dbx-tools/appkit-graphiti",
+    "@dbx-tools/appkit-memory",
     "@dbx-tools/appkit",
     "@dbx-tools/postgres",
     "@dbx-tools/lakebase",

@@ -3,7 +3,6 @@ import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
-import { graphiti } from "@dbx-tools/appkit-graphiti";
 import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
 import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
 import { lakeboxSkillMounts } from "@dbx-tools/appkit-lakebox/skills";
@@ -15,6 +14,7 @@ import {
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
+import { memory } from "@dbx-tools/appkit-memory";
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
@@ -110,16 +110,22 @@ const { defaultBrandContext } = brandUtils;
 const mastraStorage =
   configUtils.boolean(undefined, "MASTRA_STORAGE", configUtils.ENV_ONLY) ?? true;
 const mastraMemory = configUtils.boolean(undefined, "MASTRA_MEMORY", configUtils.ENV_ONLY) ?? true;
-const managedMemoryEnabled =
-  configUtils.boolean(undefined, "MANAGED_MEMORY", { sources: "env" }) ?? false;
-const managedMemoryStore = process.env.DATABRICKS_AGENT_MEMORY_STORE_ID?.trim();
-const managedAgentMemory = managedMemoryEnabled
-  ? managedMemoryStore
-    ? { memoryStore: managedMemoryStore }
-    : true
-  : undefined;
+const databricksMemoryEnabled = configUtils.boolean(undefined, "MANAGED_MEMORY", {
+  sources: "env",
+});
+const databricksMemoryStore = process.env.DATABRICKS_AGENT_MEMORY_STORE_ID?.trim();
+const databricksMemory =
+  databricksMemoryEnabled === false
+    ? false
+    : databricksMemoryStore
+      ? {
+          memoryStore: databricksMemoryStore,
+          mode: databricksMemoryEnabled === true ? ("required" as const) : ("auto" as const),
+        }
+      : (databricksMemoryEnabled ?? "auto");
 const graphitiEnabled =
   configUtils.boolean(undefined, "GRAPHITI_ENABLED", configUtils.ENV_ONLY) ?? true;
+const memorySaveTurns = configUtils.boolean(undefined, "MEMORY_SAVE_TURNS", configUtils.ENV_ONLY);
 const busEnabled = configUtils.boolean(undefined, "BUS_ENABLED", configUtils.ENV_ONLY) ?? true;
 const remoteSkillsEnabled =
   configUtils.boolean(undefined, "REMOTE_SKILLS_ENABLED", configUtils.ENV_ONLY) ?? true;
@@ -245,8 +251,8 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
     "about the data the space covers. Reserve direct (no-tool)",
     "answers for pure meta-questions about your own behaviour or",
     "the conversation itself.",
-    "Graphiti memory tools are also available. Use them when the user",
-    "asks to save, retrieve, or manage durable knowledge and preferences.",
+    "Durable memory tools are also available. Use them when the user",
+    "asks to save or retrieve durable knowledge and preferences.",
     "",
     GENIE_INSTRUCTIONS,
   ].join("\n");
@@ -268,7 +274,7 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
       // instantiation depth; Object.assign preserves the same flat runtime
       // record without forcing that useless cross-tool type expansion.
       const agentTools = Object.assign({}, await demoGenieTools(plugins, agentMode)) as MastraTools;
-      Object.assign(agentTools, await plugins.graphiti?.toolkit());
+      Object.assign(agentTools, await plugins.memory?.toolkit());
       Object.assign(agentTools, await plugins[AppKitLakeboxPlugin.manifest.name]?.toolkit());
       Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
       Object.assign(
@@ -367,7 +373,15 @@ try {
       lakebase({ pool: postgresConnectionOptions({}) }),
       filesCache(),
       lakebox({ runtime: lakeboxRuntime }),
-      ...(graphitiEnabled ? [graphiti()] : []),
+      ...(graphitiEnabled || databricksMemory !== false
+        ? [
+            memory({
+              databricks: databricksMemory,
+              graphiti: graphitiEnabled,
+              saveTurns: memorySaveTurns ?? "auto",
+            }),
+          ]
+        : []),
       // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
       // Lakebase connection and fans topic broadcasts out to its browser viewers.
       ...(busEnabled ? [busDemo()] : []),
@@ -431,7 +445,6 @@ try {
       mastra({
         storage: mastraStorage,
         memory: mastraMemory,
-        ...(managedAgentMemory ? { managedMemory: managedAgentMemory } : {}),
         // Fail boot unless MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME is set.
         // The deployed app binds `/Shared/dbx-tools-demo` and the Apps OTLP sidecar.
         feedback: true,

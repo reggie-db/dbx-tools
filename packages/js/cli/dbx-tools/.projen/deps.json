@@ -26,7 +26,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/appkit-graphiti",
+      "name": "@dbx-tools/appkit-memory",
       "version": "workspace:^",
       "type": "runtime"
     },

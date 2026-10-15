@@ -124,10 +124,6 @@
         "types": "./lib/src/identity.d.ts",
         "default": "./lib/src/identity.js"
       },
-      "./managed-memory": {
-        "types": "./lib/src/managed-memory.d.ts",
-        "default": "./lib/src/managed-memory.js"
-      },
       "./mcp": {
         "types": "./lib/src/mcp.d.ts",
         "default": "./lib/src/mcp.js"
@@ -151,10 +147,6 @@
       "./observability": {
         "types": "./lib/src/observability.d.ts",
         "default": "./lib/src/observability.js"
-      },
-      "./openapi-tool": {
-        "types": "./lib/src/openapi-tool.d.ts",
-        "default": "./lib/src/openapi-tool.js"
       },
       "./plugin": {
         "types": "./lib/src/plugin.d.ts",
@@ -247,14 +239,12 @@
     "./genie-chat": "./src/genie-chat.ts",
     "./genie": "./src/genie.ts",
     "./identity": "./src/identity.ts",
-    "./managed-memory": "./src/managed-memory.ts",
     "./mcp": "./src/mcp.ts",
     "./memory": "./src/memory.ts",
     "./mlflow": "./src/mlflow.ts",
     "./model": "./src/model.ts",
     "./monty-sandbox": "./src/monty-sandbox.ts",
     "./observability": "./src/observability.ts",
-    "./openapi-tool": "./src/openapi-tool.ts",
     "./plugin": "./src/plugin.ts",
     "./processors": "./src/processors.ts",
     "./remote-skills": "./src/remote-skills.ts",

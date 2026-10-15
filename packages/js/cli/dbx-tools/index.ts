@@ -43,6 +43,8 @@ export type { InstallGenieCodeOptions } from "./src/genie-code/install.ts";
 export { RUNNER_OPTIONS_ENV } from "./src/genie-code/runner.ts";
 export type { GenieCodeRuntimeDependencies, RunGenieCodeOptions, PreparedGenieCodeRuntime } from "./src/genie-code/runtime.ts";
 export type { GraphitiCliDependencies, GraphitiServiceOptions } from "./src/graphiti/cli.ts";
+export { GRAPHITI_DEFAULTS, GraphitiCliOptionsSchema, GraphitiOptionsSchema, ResolvedGraphitiOptionsSchema, graphitiOptionOverrides, graphitiOptionsEnvironment, graphitiOptionsFromEnvironment, resolveGraphitiOptions } from "./src/graphiti/options.ts";
+export type { GraphitiOptions, ResolvedGraphitiOptions } from "./src/graphiti/options.ts";
 export { CancellationRegistry } from "./src/lakebase-proxy/cancellation.ts";
 export type { CancellationTarget, CancellationForwarder } from "./src/lakebase-proxy/cancellation.ts";
 export type { LakebaseProxyCliDependencies } from "./src/lakebase-proxy/cli.ts";

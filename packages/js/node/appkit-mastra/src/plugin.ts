@@ -77,7 +77,12 @@ import { pipeUIMessageStreamToResponse } from "ai";
 import express from "express";
 import type { Pool } from "pg";
 
-import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents.ts";
+import {
+  buildAgents,
+  FALLBACK_AGENT_ID,
+  type BuiltAgents,
+  type MastraOutputProcessorFactory,
+} from "./agents.ts";
 import { fetchChart } from "./chart.ts";
 import { agentChatRoutes } from "./chat.ts";
 import {
@@ -238,6 +243,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   private mastra: Mastra | null = null;
   private mastraApp: express.Express | null = null;
   private mastraServer: MastraServer | null = null;
+  private readonly outputProcessorFactories: MastraOutputProcessorFactory[] = [];
   /**
    * The optional MCP server exposing this plugin's agents / tools, or
    * `null` when `config.mcp` is disabled (the default). Built in
@@ -337,6 +343,18 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
        */
       getDefault: (): Agent | null =>
         (this.built && this.built.agents[this.built.defaultAgentId]) ?? null,
+      /**
+       * Register an output-processor factory before agents are built.
+       *
+       * Deferred sibling plugins use this generic extension point without
+       * adding provider-specific behavior to the Mastra plugin.
+       */
+      registerOutputProcessor: (factory: MastraOutputProcessorFactory): void => {
+        if (this.built) {
+          throw new Error("Mastra output processors must be registered before agents are built");
+        }
+        this.outputProcessorFactories.push(factory);
+      },
       /** Underlying Mastra instance for advanced use (custom routes etc.). */
       getMastra: () => this.mastra,
       /**
@@ -1253,10 +1271,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           pluginRegistry.require(this.context, lakebase, this.config).exports().pool,
         ) as Pool)
       : undefined;
-    const memoryBuilder =
-      memoryPool || this.config.managedMemory
-        ? createMemoryBuilder(this.config, getExecutionContext().client, memoryPool)
-        : undefined;
+    const memoryBuilder = createMemoryBuilder(this.config, memoryPool);
 
     // Build every agent declared in `config.agents` (or the built-in
     // fallback when none are declared). Each agent's `model` resolves
@@ -1291,6 +1306,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       config: this.config,
       context: this.context,
       memoryBuilder,
+      outputProcessorFactories: this.outputProcessorFactories,
       log: this.logger,
       extraSkillMounts: localSkillMounts,
       standardSkills,
@@ -1363,7 +1379,6 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       apiAccess: this.config.apiAccess ?? "scoped",
       mcp: this.mcp ? `${this.basePath}${this.mcp.httpPath}` : "off",
       lakebase: memoryPool !== undefined,
-      managedMemory: memoryBuilder?.managed !== undefined,
       feedback: this.feedbackEnabled(),
       observability: observability !== undefined ? "mlflow" : "off",
     });

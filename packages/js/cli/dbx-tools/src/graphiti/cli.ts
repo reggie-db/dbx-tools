@@ -10,7 +10,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { runGraphiti, type GraphitiRuntimeOptions } from "@dbx-tools/appkit-graphiti/runtime";
+import { runtime as graphitiRuntime } from "@dbx-tools/appkit-memory/graphiti";
 import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
@@ -26,6 +26,7 @@ import { PACKAGE_VERSION } from "../../index.ts";
 
 const DEFAULT_SERVICE_DIRECTORY = join(homedir(), ".dbx-tools", "services", "graphiti");
 const DEFAULT_SERVICE_HOME = join(homedir(), ".dbx-tools", "graphiti");
+type GraphitiRuntimeOptions = graphitiRuntime.GraphitiRuntimeOptions;
 
 /** Injectable runtime and service lifecycle boundaries for CLI callers. */
 export interface GraphitiCliDependencies {
@@ -64,7 +65,7 @@ export function graphitiServiceDefinition(
 /** Build foreground execution and shared desktop-service commands. */
 export function buildProgram(
   name = "dbx graphiti",
-  dependencies: GraphitiCliDependencies = { run: runGraphiti },
+  dependencies: GraphitiCliDependencies = { run: graphitiRuntime.runGraphiti },
 ): Command {
   const program = addArgs(
     new Command()

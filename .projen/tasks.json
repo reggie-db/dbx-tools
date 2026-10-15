@@ -328,10 +328,10 @@
     },
     "graphiti:smoke:mastra": {
       "name": "graphiti:smoke:mastra",
-      "description": "Smoke-test Graphiti through the AppKit Mastra tool provider",
+      "description": "Smoke-test the memory plugin through its lazy Graphiti fallback",
       "steps": [
         {
-          "exec": "bun packages/js/node/appkit-graphiti/smoke/mastra-tool.ts",
+          "exec": "bun packages/js/node/appkit-memory/smoke/mastra-tool.ts",
           "receiveArgs": true
         }
       ]

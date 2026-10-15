@@ -398,27 +398,28 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
-  p.addDevDeps("@dbx-tools/projen@workspace:^", "vitest@catalog:");
+  p.addDevDeps("@dbx-tools/projen@workspace:^", "@types/json-schema@^7", "vitest@catalog:");
 });
 
-// AppKit Graphiti plugin plus its Node runtime and shared option bindings.
-project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
+// AppKit durable-memory tools with Databricks-first routing and lazy Graphiti fallback.
+project.applyToProjects(root, { identifierName: "appkit-memory", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "AppKit Graphiti plugin and Python runtime supervision",
+    "AppKit durable memory tools with Databricks managed memory and lazy Graphiti fallback",
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/appkit-mastra@workspace:^",
     "@dbx-tools/auth@workspace:^",
+    "@dbx-tools/cache@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-graphiti@workspace:^",
     "semver@^7.7.3",
     "zod@catalog:",
   );
-  p.addDevDeps("vitest@catalog:");
+  projectJs.addOptionalPeer(p, "@dbx-tools/appkit-mastra@workspace:^");
+  p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
   projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
 
@@ -1139,7 +1140,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/email@workspace:^",
-    "@dbx-tools/appkit-graphiti@workspace:^",
+    "@dbx-tools/appkit-memory@workspace:^",
     "@dbx-tools/lakebase@workspace:^",
     "@dbx-tools/postgres@workspace:^",
     "@dbx-tools/shared-auth@workspace:^",
@@ -1301,7 +1302,7 @@ project.applyToProjects(
     projectJs.applyIncludes(p, "stage-deploy.ts");
     p.addDeps(
       "@dbx-tools/appkit@workspace:^",
-      "@dbx-tools/appkit-graphiti@workspace:^",
+      "@dbx-tools/appkit-memory@workspace:^",
       "@dbx-tools/appkit-mastra@workspace:^",
       "@dbx-tools/appkit-lakebox@workspace:^",
       "@dbx-tools/core@workspace:^",
@@ -1498,8 +1499,8 @@ root.addTask("graphiti:smoke:embedded", {
   description: "Smoke-test the embedded PostGraph driver and restart persistence",
 });
 root.addTask("graphiti:smoke:mastra", {
-  exec: "bun packages/js/node/appkit-graphiti/smoke/mastra-tool.ts",
-  description: "Smoke-test Graphiti through the AppKit Mastra tool provider",
+  exec: "bun packages/js/node/appkit-memory/smoke/mastra-tool.ts",
+  description: "Smoke-test the memory plugin through its lazy Graphiti fallback",
   receiveArgs: true,
 });
 root.addTask("graphiti:sync:verify-tag", {

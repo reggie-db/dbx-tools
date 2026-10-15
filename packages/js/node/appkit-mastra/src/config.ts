@@ -30,7 +30,6 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 import type { AnyMastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
-import type { ManagedMemoryConfig } from "./managed-memory.ts";
 import type { LocalSkillMount, RemoteSkillsOption } from "./remote-skills.ts";
 
 /**
@@ -231,11 +230,6 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * separately configured store.
    */
   memory?: boolean | MastraMemoryConfig;
-  /**
-   * Add actor-scoped Databricks Agent Memory recall to every model turn.
-   * Mastra keeps its configured PostgresStore and PgVector memory.
-   */
-  managedMemory?: ManagedMemoryConfig;
   /**
    * Expose executable tools available to the current request through native
    * Mastra Code Mode. Defaults on whenever the request has executable tools.
@@ -706,23 +700,6 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: ["boolean", "object"],
       description:
         "PgVector store for Mastra semantic recall. `true` captures the `lakebase` plugin's existing service-principal pool; an object opens a separately configured store. Auto-enabled when the `lakebase` plugin is registered.",
-    },
-    managedMemory: {
-      type: ["boolean", "object"],
-      properties: {
-        memoryStore: {
-          type: "string",
-          description: "Existing Databricks Agent Memory Store id or resource name.",
-        },
-        recall: {
-          type: ["boolean", "object"],
-          description:
-            "Managed-memory search on each user turn. False disables it; an object accepts topK and pathPrefix.",
-        },
-      },
-      additionalProperties: false,
-      description:
-        "Add Databricks Agent Memory search to Mastra while retaining PostgresStore and PgVector. True or an omitted memoryStore uses the normalized project name.",
     },
     codeMode: {
       type: ["boolean", "object"],

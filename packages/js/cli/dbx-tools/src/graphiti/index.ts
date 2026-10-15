@@ -5,3 +5,5 @@
 export * as cli from "./cli.ts";
 export * as options from "./options.ts";
 export type { GraphitiCliDependencies, GraphitiServiceOptions } from "./cli.ts";
+export { GRAPHITI_DEFAULTS, GraphitiCliOptionsSchema, GraphitiOptionsSchema, ResolvedGraphitiOptionsSchema, graphitiOptionOverrides, graphitiOptionsEnvironment, graphitiOptionsFromEnvironment, resolveGraphitiOptions } from "./options.ts";
+export type { GraphitiOptions, ResolvedGraphitiOptions } from "./options.ts";

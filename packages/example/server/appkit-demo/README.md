@@ -15,7 +15,7 @@ await appkit.createApp({
     server({ host, staticPath: clientDist }),
     genie(),
     lakebase(),
-    graphiti(),
+    memory(),
     email(),
     teams(),
     mastra({ agents: { support, "support-polling": supportPolling } }),
@@ -53,15 +53,13 @@ await appkit.createApp({
   `send_email` tool: the model can call it, but the send suspends until the user
   approves it in the chat UI.
 - `lakebase()` (AppKit) — backs Mastra Memory.
-- `DBX_TOOLS_MANAGED_MEMORY=true` adds actor-scoped Databricks Agent Memory
-  recall while retaining PostgresStore and PgVector. The memory store id
-  defaults to normalized `projectUtils.name()`;
-  `DATABRICKS_AGENT_MEMORY_STORE_ID` overrides it.
-- `graphiti()` from
-  [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
-  the unified Python Graphiti runtime and contributes its OpenAPI-derived,
-  user-scoped memory tools directly to the agents. Graphiti groups use the same
-  per-user resource id as Mastra memory.
+- `memory()` from
+  [`@dbx-tools/appkit-memory`](../../../js/node/appkit-memory) contributes
+  `remember` and `recall_memory`. It checks Databricks Agent Memory first and
+  lazy-starts the Graphiti fallback only for callers without managed-memory
+  access. Mastra keeps PostgresStore and PgVector as its standard memory.
+  `DBX_TOOLS_MEMORY_SAVE_TURNS=true` also mirrors completed turns to Graphiti
+  while the managed store is unavailable.
 - `busDemo()` from `src/bus-demo.ts` — a `PostgresTopicBus` from
   [`@dbx-tools/postgres`](../../../js/node/postgres) on the Lakebase pool:
   `POST /api/bus-demo/messages` broadcasts, `GET /api/bus-demo/events` streams to
@@ -100,8 +98,8 @@ bun run demo
 ```
 
 From the repository root, this builds the client once, then starts AppKit at
-`http://localhost:8000`. Graphiti and the managed model gateway use separate
-loopback ports. The demo runner reads the endpoint from this package's bundle defaults and uses
+`http://localhost:8000`. A started Graphiti fallback and the managed model
+gateway use separate loopback ports. The demo runner reads the endpoint from this package's bundle defaults and uses
 `@dbx-tools/appkit` auto-configuration once before passing the resolved
 Lakebase environment to every child. See the repository root README and
 `AGENTS.md` for workspace setup and environment behavior.
@@ -117,9 +115,9 @@ SMTP_HOST= SMTP_USER= SMTP_PASSWORD= EMAIL_OUTBOX_MODE=1 bun run demo
 The feature flags default to enabled, so normal demo and deployment behavior is
 unchanged.
 
-On shutdown, AppKit invokes each plugin's bounded `shutdown()` hook. The
-Graphiti plugin stops its supervised Python runtime, which closes the PostGraph
-client pool before the process deadline.
+On shutdown, AppKit invokes each plugin's bounded `shutdown()` hook. The memory
+plugin stops Graphiti when the fallback sidecar was started, which closes the
+PostGraph client pool before the process deadline.
 
 ## Deploy
 
@@ -157,7 +155,7 @@ databricks bundle run demo_app -t <target> --profile <resolved-profile>
 The staged app includes both `package.json` and `requirements.txt`. Databricks
 Apps installs the Node server from staged local `file:` archives and installs
 the locally built Graphiti and Node-runtime wheels. In Databricks Apps, the
-Graphiti plugin selects the newest `python` or `python3` interpreter that can
+memory plugin selects the newest `python` or `python3` interpreter that can
 import the installed wheel. The Graphiti wheel includes its pinned generated
 REST, MCP, and PostGraph sources; Node only supervises its process. npm and PyPI
 publication do not need to finish before the demo deploy uses the current

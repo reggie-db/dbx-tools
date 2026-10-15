@@ -12,9 +12,9 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 ## Node and AppKit
 
 - `@dbx-tools/appkit` - Node-side helpers for Databricks AppKit apps. Source: `packages/js/node/appkit`.
-- `@dbx-tools/appkit-graphiti` - Run Graphiti as an AppKit plugin or supervise the same Python runtime directly from Node. The package root exposes the plugin; the runtime and options subpaths expose the underlying lifecycle and configuration contracts. Source: `packages/js/node/appkit-graphiti`.
 - `@dbx-tools/appkit-lakebox` - Give every user of a Databricks App a terminal, a desktop, and long-running services in one shared, lazily created Databricks Lakebox. Source: `packages/js/node/appkit-lakebox`.
 - `@dbx-tools/appkit-mastra` - AppKit plugin and server-side toolkit for hosting Mastra agents inside a Databricks App. Source: `packages/js/node/appkit-mastra`.
+- `@dbx-tools/appkit-memory` - Add durable, actor-scoped memory tools to an AppKit application. The plugin checks Databricks Agent Memory first and starts its Graphiti sidecar only when the current actor cannot access the configured managed-memory store. Source: `packages/js/node/appkit-memory`.
 - `@dbx-tools/appkit-model-gateway` - Give OpenAI-, Anthropic-, and Codex-compatible clients one endpoint for the models available in a Databricks workspace. The AppKit plugin discovers the workspace catalogue, exposes familiar model APIs, and chooses a compatible Databricks route for each request. Source: `packages/js/node/appkit-model-gateway`.
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
 - `@dbx-tools/auth` - Databricks profile resolution and token or authentication-header production for Node.js and Bun. Source: `packages/js/node/auth`.

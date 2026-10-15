@@ -46,6 +46,15 @@ function isTopicMetadata(value: unknown): value is TopicMetadata {
   return object.isRecord(value) && object.isSerializableValue(value);
 }
 
+/** Return whether PostgreSQL is temporarily terminating or rejecting connections. */
+function isRecoverablePostgresDisconnect(value: unknown): boolean {
+  return (
+    object.isRecord(value) &&
+    typeof value.code === "string" &&
+    ["57P01", "57P02", "57P03"].includes(value.code)
+  );
+}
+
 const sendSchema = z.object({
   viewerId: z.string().trim().min(1).max(100),
   user: z.string().trim().min(1).max(80),
@@ -105,8 +114,14 @@ class BusDemoPlugin extends Plugin {
       const lake = pluginRegistry.require(this.context, lakebase, "bus-demo");
       this.bus = new PostgresTopicBus(lake.exports().pool, {
         metadata: resolveEnvironmentMetadata,
-        onError: (cause) =>
-          logger.error("topic listener failed", { error: errorUtils.toError(cause) }),
+        onError: (cause) => {
+          const error = errorUtils.toError(cause);
+          if (isRecoverablePostgresDisconnect(cause)) {
+            logger.warn("topic listener disconnected; reconnecting", { error });
+          } else {
+            logger.error("topic listener failed", { error });
+          }
+        },
         persist: { ttl: "7 days" },
       });
       await this.bus.start();

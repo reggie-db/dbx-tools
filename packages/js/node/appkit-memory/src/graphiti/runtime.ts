@@ -1,12 +1,9 @@
 /**
- * Node Graphiti runtime.
- *
- * Callers configure and control Graphiti through the typed lifecycle API in
- * this module. Process supervision, model routing, authentication, and
- * persistence remain internal details.
+ * Node Graphiti runtime and process supervision.
  *
  * @module
  */
+
 import { delimiter, dirname } from "node:path";
 import { exec } from "@dbx-tools/core";
 import type { ChildProcessResult } from "@dbx-tools/core/exec";
@@ -17,6 +14,7 @@ import {
   options as sharedOptions,
 } from "@dbx-tools/shared-core";
 import { coerce, rcompare, type SemVer } from "semver";
+
 import {
   graphitiOptionsEnvironment,
   resolveGraphitiOptions,
@@ -45,6 +43,8 @@ export interface GraphitiChildProcess {
 export type GraphitiRuntimeOptions = GraphitiOptions & {
   /** Readiness probe for {@link createGraphitiChildProcess}. Defaults to `/healthcheck`. */
   healthCheck?: GraphitiHealthCheck;
+  /** Cancels sidecar startup without changing the serialized Graphiti configuration. */
+  signal?: AbortSignal;
 };
 
 const HEALTH_CHECK_INTERVAL_MS = 200;
@@ -56,7 +56,6 @@ interface PythonCandidate {
   version: SemVer;
 }
 
-/** Discover the newest app-installed Python that can import Graphiti once per process. */
 const graphitiPython = functionUtils.memoize(async (): Promise<string | undefined> => {
   const available = (
     await Promise.all(PYTHON_CANDIDATES.map((command) => _probePython(command)))
@@ -65,9 +64,8 @@ const graphitiPython = functionUtils.memoize(async (): Promise<string | undefine
   return available[0]?.command;
 });
 
-/** Shared Graphiti options accepted by runtime callers, without the Node probe. */
 function graphitiOptions(options: GraphitiRuntimeOptions): GraphitiOptions {
-  const { healthCheck: _healthCheck, ...graphiti } = options;
+  const { healthCheck: _healthCheck, signal: _signal, ...graphiti } = options;
   return graphiti;
 }
 
@@ -76,7 +74,6 @@ export function remainingTimeoutMs(startedAt: number, timeoutMs: number, now = D
   return Math.max(0, timeoutMs - (now - startedAt));
 }
 
-/** Build the private process environment from the exact shared configuration. */
 function _runtimeEnvironment(options: ResolvedGraphitiOptions): NodeJS.ProcessEnv {
   if (options.listen.scheme !== "tcp") throw new Error("Graphiti requires a TCP listener");
   const nodeBin = process.env.DBX_TOOLS_NODE_BIN?.trim();
@@ -156,7 +153,7 @@ export async function resolveGraphitiPythonCommand(
   const extra = options.dev ? "[dev]" : "";
   const packageArgs = [
     "--with",
-    `dbx-tools-graphiti${extra}==${(await import("../index.ts")).PACKAGE_VERSION}`,
+    `dbx-tools-graphiti${extra}==${(await import("../../index.ts")).PACKAGE_VERSION}`,
   ];
   return {
     command: "uv",
@@ -164,7 +161,6 @@ export async function resolveGraphitiPythonCommand(
   };
 }
 
-/** Return one import-capable Python executable and its semantic version. */
 async function _probePython(command: string): Promise<PythonCandidate | undefined> {
   const versionResult = await exec.spawn(command, ["-V"], {
     check: false,
@@ -212,10 +208,13 @@ export async function createGraphitiChildProcess(
     forwardTerminationSignals: false,
   });
   const controller = new AbortController();
+  const startupSignal = options.signal
+    ? AbortSignal.any([controller.signal, options.signal])
+    : controller.signal;
   const probe = healthCheck ?? (({ signal }) => graphitiHealthCheck(resolved, signal));
   try {
     await Promise.race([
-      waitForGraphitiChild(child, probe, resolved.startupTimeoutMs, controller.signal),
+      waitForGraphitiChild(child, probe, resolved.startupTimeoutMs, startupSignal),
       child.then((result) => {
         throw new Error(
           `Graphiti child ${child.pid ?? "<unknown>"} exited before becoming ready ` +
@@ -252,7 +251,7 @@ async function waitForGraphitiChild(
   }
 }
 
-/** Run the supervised stack until one child exits or the process is signaled. */
+/** Run the supervised stack until the child exits. */
 export async function runGraphiti(options: GraphitiRuntimeOptions = {}): Promise<void> {
   const { child } = await createGraphitiChildProcess(options);
   const outcome = await child;

@@ -21,6 +21,7 @@
   "devDependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/projen": "workspace:^",
+    "@types/json-schema": "^7",
     "@types/node": "catalog:",
     "typescript": "^5.9.3",
     "vitest": "catalog:"
@@ -90,6 +91,10 @@
         "types": "./lib/src/migration.d.ts",
         "default": "./lib/src/migration.js"
       },
+      "./openapi-tool": {
+        "types": "./lib/src/openapi-tool.d.ts",
+        "default": "./lib/src/openapi-tool.js"
+      },
       "./pgaddress": {
         "types": "./lib/src/pgaddress.d.ts",
         "default": "./lib/src/pgaddress.js"
@@ -149,6 +154,7 @@
     "./interceptor": "./src/interceptor.ts",
     "./lakebase-resolver": "./src/lakebase-resolver.ts",
     "./migration": "./src/migration.ts",
+    "./openapi-tool": "./src/openapi-tool.ts",
     "./pgaddress": "./src/pgaddress.ts",
     "./plugin-execution": "./src/plugin-execution.ts",
     "./plugin-registry": "./src/plugin-registry.ts",

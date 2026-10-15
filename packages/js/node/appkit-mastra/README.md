@@ -261,44 +261,12 @@ With `lakebase()` registered, both default to enabled:
 Without `lakebase()`, agents are stateless unless you provide explicit storage
 and memory configs.
 
-### Add Databricks Agent Memory Recall
+### Add External Durable Memory Tools
 
-Keep Mastra's PostgresStore and PgVector memory, then add actor-scoped recall
-from an existing Databricks Agent Memory Store:
-
-```ts
-mastra({
-  agents: { analyst },
-  managedMemory: true,
-});
-```
-
-`true` derives the memory store id from `projectUtils.name()` and normalizes it
-to Databricks resource-name rules. Pass `{ memoryStore, recall }` to select an
-existing store and tune `topK` or `pathPrefix`.
-
-A native Mastra input processor searches the actor's managed memory on every
-user turn and adds matching entries only to that model request. The recalled
-context is not copied into Postgres history. PgVector semantic recall remains
-enabled independently through the existing `memory` option.
-
-Provision the Agent Memory Store and its permissions separately. This adapter
-does not use Agent Sessions, session extraction, or memory pipelines. Direct
-Genie remains unchanged because the Genie Agent response API accepts no
-separate system/context field.
-
-At the start of a user-scoped turn, the adapter checks whether that caller can
-read the configured store. Accessible turns receive a native Mastra `remember`
-tool that writes with Agent Memory's overwrite mode. When access is unavailable,
-the tool is omitted and recall is skipped. Apps that register Graphiti keep its
-`add_memory` and search tools, so they remain the model's durable-memory
-fallback without a failing managed-memory tool in the tool set. Access results
-are cached for five minutes through `@dbx-tools/cache`, keyed by memory store,
-credential identity, and trusted actor id.
-
-`actor_id` partitions list and search operations but is not an access-control
-boundary. The adapter derives it from the trusted AppKit memory resource or OBO
-identity; callers must still restrict access to the store itself.
+Register `@dbx-tools/appkit-memory` as a sibling plugin and request
+`plugins.memory?.toolkit()` from the agents that need its `remember` and
+`recall_memory` tools. The memory plugin owns Databricks and Graphiti selection.
+Mastra continues to own only its configured PostgresStore and PgVector.
 
 ## Workspace Capabilities
 
@@ -714,7 +682,7 @@ and thread presentation without running a Mastra agent:
 ```tsx
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
 
-<MastraChat genieSpace="sales" />
+<MastraChat genieSpace="sales" />;
 ```
 
 The alias must exist in `genieSpaces`. Genie owns the state in this mode:
@@ -1146,11 +1114,11 @@ use Mastra's native route surfaces behind the same scoped request-context gate.
 | `GET`                      | `/suggestions[/:agentId]`         | Starter questions from the configured Genie spaces. Degrades to `[]`.                                                    |
 | `GET`                      | `/embed/chart/:id`                | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.                                         |
 | `GET`                      | `/embed/data/:id`                 | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                                             |
-| `GET`                      | `/embed/visualization/:id`        | OBO-only statement payload for a `[visualization:<statement_id>]` AppKit UI embed.                                      |
+| `GET`                      | `/embed/visualization/:id`        | OBO-only statement payload for a `[visualization:<statement_id>]` AppKit UI embed.                                       |
 | `POST`                     | `/chat/:agentId`                  | Official Mastra AI SDK UI stream, including native `resumeData` continuations.                                           |
-| `POST`                     | `/genie/:alias/chat`              | Direct Genie turn projected onto the AI SDK UI stream.                                                                  |
-| `GET` / `DELETE`           | `/genie/:alias/threads[...]`      | OBO-only Genie conversation list, history, and deletion.                                                                |
-| `GET`                      | `/genie/:alias/suggestions`       | Starter questions for one direct Genie space.                                                                           |
+| `POST`                     | `/genie/:alias/chat`              | Direct Genie turn projected onto the AI SDK UI stream.                                                                   |
+| `GET` / `DELETE`           | `/genie/:alias/threads[...]`      | OBO-only Genie conversation list, history, and deletion.                                                                 |
+| `GET`                      | `/genie/:alias/suggestions`       | Starter questions for one direct Genie space.                                                                            |
 | `GET` / `PATCH` / `DELETE` | `/memory/threads[...]`            | Native Mastra resource-scoped conversation history and thread management.                                                |
 | `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                                             |
 | `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                                                           |
@@ -1186,8 +1154,6 @@ The main plugin options are:
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
-- `managedMemory` adds actor-scoped Databricks Agent Memory search to every
-  Mastra user turn while retaining PostgresStore and PgVector.
 - `sandbox` defaults to Monty for auto-created workspaces. `false` disables
   command execution; `true` or `"monty"` selects Monty; a native Mastra
   sandbox or resolver supplies another transport.
@@ -1263,8 +1229,6 @@ Clients that call these routes can import the browser-safe schemas from
   style block, the summarizer, and the thread titler all append, so a summary or
   a thread title cannot drift from the prose it sits beside.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
-- `managedMemory` - Databricks Agent Memory REST client and native Mastra recall
-  processor.
 - `montySandbox` - Python-only Pydantic Monty fallback using Node subprocess
   workers.
 - `workspaces` / `filesystems` - native Mastra workspace configuration from

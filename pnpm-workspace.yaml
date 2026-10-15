@@ -7,9 +7,9 @@ packages:
   - packages/js/cli/dbx-tools
   - packages/js/cli/service
   - packages/js/node/appkit
-  - packages/js/node/appkit-graphiti
   - packages/js/node/appkit-lakebox
   - packages/js/node/appkit-mastra
+  - packages/js/node/appkit-memory
   - packages/js/node/appkit-model-gateway
   - packages/js/node/appkit-web-search
   - packages/js/node/auth

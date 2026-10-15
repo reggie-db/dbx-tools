@@ -171,7 +171,7 @@ describe("PostgresTopicBus", () => {
     );
   });
 
-  it("reconnects a listener after its dedicated connection fails", async () => {
+  it("reconnects after PostgreSQL administratively terminates the listener", async () => {
     const first = new FakeClient();
     const second = new FakeClient();
     const clients = [first, second];
@@ -185,7 +185,10 @@ describe("PostgresTopicBus", () => {
     const channel = bus.channelName;
     await bus.listen("orders", (message) => received.push(message.body));
 
-    const connectionError = new Error("connection lost");
+    const connectionError = Object.assign(
+      new Error("terminating connection due to administrator command"),
+      { code: "57P01" },
+    );
     first.emit("error", connectionError);
     await new Promise<void>((resolve) => setImmediate(resolve));
 
