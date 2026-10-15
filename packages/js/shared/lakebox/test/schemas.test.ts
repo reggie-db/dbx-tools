@@ -4,6 +4,7 @@ import {
   createLakeboxServiceRequestSchema,
   lakeboxCommandRequestSchema,
   LAKEBOX_ROUTES,
+  lakeboxServiceSchema,
   lakeboxSummarySchema,
 } from "../index.ts";
 import { lakeboxRoute, lakeboxServicePath } from "../src/client.ts";
@@ -38,6 +39,31 @@ describe("shared Lakebox contracts", () => {
   it("builds routes from shared templates", () => {
     assert.equal(lakeboxRoute(LAKEBOX_ROUTES.serviceLogs, { name: "a b" }), "/services/a%20b/logs");
     assert.equal(lakeboxServicePath("/lakebox/", "abc1234", "web"), "/lakebox/abc1234/web");
+  });
+
+  it("accepts relative REST and absolute agent service links", () => {
+    const service = {
+      name: "web",
+      kind: "image",
+      image: "docker.io/library/nginx:1",
+      openPath: "/index.html",
+      state: "ready",
+      port: 20_000,
+      route: true,
+      path: "/lakebox/abc1234/web",
+    } as const;
+    assert.equal(
+      lakeboxServiceSchema.parse({ ...service, openUrl: "/lakebox/abc1234/web/index.html" })
+        .openUrl,
+      "/lakebox/abc1234/web/index.html",
+    );
+    assert.equal(
+      lakeboxServiceSchema.parse({
+        ...service,
+        openUrl: "https://demo.example.databricksapps.com/lakebox/abc1234/web/index.html",
+      }).openUrl,
+      "https://demo.example.databricksapps.com/lakebox/abc1234/web/index.html",
+    );
   });
 
   it("marks last-known service lists as stale wire data", () => {

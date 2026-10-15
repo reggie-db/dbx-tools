@@ -53,6 +53,7 @@ import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "./memory.ts";
 import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
 import { stripStaleChartsProcessor } from "./processors.ts";
+import { MASTRA_ORIGIN_KEY } from "./request-context.ts";
 import { MASTRA_RESOLVED_MODEL_KEY } from "./serving.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
@@ -1282,11 +1283,13 @@ function toolkitEntryToMastraTool(entry: ToolkitEntry, plugin: ContextualToolPro
         | undefined;
       const resourceId = execution?.requestContext?.get(MASTRA_RESOURCE_ID_KEY);
       const model = execution?.requestContext?.get(MASTRA_RESOLVED_MODEL_KEY);
+      const origin = execution?.requestContext?.get(MASTRA_ORIGIN_KEY);
       const toolCallId = execution?.agent?.toolCallId;
       const writer = execution?.writer;
       return plugin.executeAgentTool!(entry.localName, input, execution?.abortSignal, {
         ...(typeof resourceId === "string" ? { resourceId } : {}),
         ...(typeof model === "string" ? { model } : {}),
+        ...(typeof origin === "string" ? { origin } : {}),
         ...(writer && toolCallId
           ? {
               writeProgress: async (event, options) => {

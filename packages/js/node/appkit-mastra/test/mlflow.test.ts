@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { appkit } from "@dbx-tools/appkit";
+import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import { context, trace } from "@opentelemetry/api";
 import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
@@ -26,6 +27,11 @@ import {
   ucTracePrefixFromExperimentTags,
   validateFeedbackConfig,
 } from "../src/mlflow.ts";
+import {
+  MASTRA_AUTH_MODE_KEY,
+  MASTRA_USER_EMAIL_KEY,
+} from "../src/config.ts";
+import { AppMlflowTraceInfoSpanProcessor } from "../src/telemetry.ts";
 import { APPKIT_AGENT_TRACE_ROOT_ATTR } from "../src/trace-attributes.ts";
 
 const originalExperimentId = process.env.MLFLOW_EXPERIMENT_ID;
@@ -217,6 +223,78 @@ describe("Databricks Apps MLflow trace-info promotion", () => {
         tunnel_subdomain: "demo",
       },
       assessments: [],
+    });
+  });
+
+  it("promotes clean fields from the actual exported Mastra trace", async () => {
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4314";
+    const urls: string[] = [];
+    const bodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes("/api/2.0/mlflow/experiments/get?")) {
+        return Response.json({
+          experiment: {
+            experiment_id: "123",
+            tags: [
+              {
+                key: "mlflow.experiment.databricksTraceDestinationPath",
+                value: "cat.schema.demo",
+              },
+            ],
+          },
+        });
+      }
+      bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return Response.json({});
+    };
+    assert.equal(await initializeAppMlflowTraceInfo(workspaceClient()), true);
+
+    const provider = new NodeTracerProvider({
+      spanProcessors: [new AppMlflowTraceInfoSpanProcessor()],
+    });
+    const tracer = provider.getTracer("mastra");
+    const root = tracer.startSpan("invoke_agent Support", {
+      attributes: {
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.agent.id": "support",
+        "mastra.agent_run.input": JSON.stringify([
+          { role: "user", parts: [{ type: "text", text: "clean question" }] },
+        ]),
+        "mastra.agent_run.output": JSON.stringify({ text: "clean answer" }),
+        [`mastra.metadata.${MASTRA_USER_EMAIL_KEY}`]: "ada@example.com",
+        [`mastra.metadata.${MASTRA_THREAD_ID_KEY}`]: "thread-7",
+        [`mastra.metadata.${MASTRA_AUTH_MODE_KEY}`]: "obo",
+      },
+    });
+    const rootContext = trace.setSpan(context.active(), root);
+    const model = tracer.startSpan(
+      "chat model-a",
+      { attributes: { "gen_ai.request.model": "model-a" } },
+      rootContext,
+    );
+    model.end();
+    tracer.startSpan("execute_tool ask_genie", undefined, rootContext).end();
+    const traceId = root.spanContext().traceId;
+    root.end();
+    await flushDirectMlflowTracing();
+    await provider.shutdown();
+
+    assert.match(urls[1] ?? "", new RegExp(`/${traceId}/info$`));
+    assert.equal(bodies[0]?.request_preview, "clean question");
+    assert.equal(bodies[0]?.response_preview, "clean answer");
+    assert.deepEqual(bodies[0]?.tags, {
+      agent: "model-a",
+      genie: "true",
+      obo_auth: "true",
+    });
+    assert.deepEqual(bodies[0]?.trace_metadata, {
+      "mlflow.trace_schema.version": "4",
+      "mlflow.trace.user": "ada@example.com",
+      "mlflow.trace.session": "thread-7",
     });
   });
 });

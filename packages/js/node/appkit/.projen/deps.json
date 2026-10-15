@@ -76,6 +76,16 @@
       "type": "runtime"
     },
     {
+      "name": "@opentelemetry/api",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@opentelemetry/sdk-trace-base",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "zod",
       "version": "catalog:",
       "type": "runtime"

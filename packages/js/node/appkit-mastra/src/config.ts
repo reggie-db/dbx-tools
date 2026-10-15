@@ -48,6 +48,8 @@ export const MASTRA_USER_KEY = "mastra__user";
 export const MASTRA_USER_NAME_KEY = "mastra__userName";
 /** Request-context key containing the authenticated user's email address. */
 export const MASTRA_USER_EMAIL_KEY = "mastra__userEmail";
+/** Request-context key identifying the Databricks credential used by the turn. */
+export const MASTRA_AUTH_MODE_KEY = "mastra__authMode";
 
 /**
  * `RequestContext` key for the per-HTTP-request id stamped by
@@ -88,6 +90,7 @@ export const TRACE_REQUEST_CONTEXT_KEYS: readonly string[] = [
   MASTRA_REQUEST_ID_KEY,
   MASTRA_USER_NAME_KEY,
   MASTRA_USER_EMAIL_KEY,
+  MASTRA_AUTH_MODE_KEY,
   // Model override key is owned by `serving.ts`; spelled inline here
   // so this module stays leaf-level (no cycles with `serving.ts`).
   "mastra__model_override",

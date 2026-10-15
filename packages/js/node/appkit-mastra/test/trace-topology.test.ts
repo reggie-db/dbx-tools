@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 
-import type { appkit } from "@dbx-tools/appkit";
 import { injectRequestTags } from "@dbx-tools/appkit/request-tags";
 import { feedback } from "@dbx-tools/shared-mastra";
 import { context, propagation, ROOT_CONTEXT, trace, type Tracer } from "@opentelemetry/api";
@@ -14,13 +13,10 @@ import {
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
-import {
-  flushDirectMlflowTracing,
-  initializeAppMlflowTraceInfo,
-  resetAppMlflowTraceInfo,
-} from "../src/mlflow.ts";
+import { resetAppMlflowTraceInfo } from "../src/mlflow.ts";
 import { configureOtelPropagation } from "../src/observability.ts";
 import {
+  activeChatTracingOptions,
   CHAT_GENIE_USED_ATTR,
   CHAT_IDENTITY_ATTR,
   CHAT_MESSAGES_ATTR,
@@ -52,9 +48,6 @@ const INCOMING_SPAN_ID = "0123456789abcdef";
 const INCOMING_TRACEPARENT = `00-${INCOMING_TRACE_ID}-${INCOMING_SPAN_ID}-01`;
 const ORIGINAL_PROPAGATORS = process.env.OTEL_PROPAGATORS;
 const ORIGINAL_APP_ENV = process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
-const ORIGINAL_EXPERIMENT_ID = process.env.MLFLOW_EXPERIMENT_ID;
-const ORIGINAL_OTLP_ENDPOINT = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-const ORIGINAL_FETCH = globalThis.fetch;
 
 interface TestResponse {
   headers: Record<string, string>;
@@ -127,20 +120,6 @@ function restorePropagatorsEnvironment(): void {
   else process.env.OTEL_PROPAGATORS = ORIGINAL_PROPAGATORS;
 }
 
-function restoreEnvironment(name: string, value: string | undefined): void {
-  if (value === undefined) delete process.env[name];
-  else process.env[name] = value;
-}
-
-function workspaceClient(): appkit.WorkspaceClientLike {
-  return {
-    config: {
-      getHost: async () => new URL("https://workspace.example.com"),
-      authenticate: async () => {},
-    },
-  } as unknown as appkit.WorkspaceClientLike;
-}
-
 function restoreAppEnvironment(): void {
   if (ORIGINAL_APP_ENV === undefined) delete process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
   else process.env.DBX_TOOLS_DATABRICKS_APP_ENV = ORIGINAL_APP_ENV;
@@ -169,10 +148,7 @@ describe("chat trace topology", () => {
   afterEach(() => {
     restorePropagatorsEnvironment();
     restoreAppEnvironment();
-    restoreEnvironment("MLFLOW_EXPERIMENT_ID", ORIGINAL_EXPERIMENT_ID);
-    restoreEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", ORIGINAL_OTLP_ENDPOINT);
     resetAppMlflowTraceInfo();
-    globalThis.fetch = ORIGINAL_FETCH;
   });
 
   after(async () => {
@@ -183,7 +159,7 @@ describe("chat trace topology", () => {
     restorePropagatorsEnvironment();
   });
 
-  it("uses the HTTP RPC span instead of an active Express child", () => {
+  it("captures HTTP telemetry while assigning the Apps agent trace", () => {
     process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
     const root = tracer.startSpan("POST /api/mastra/chat/support");
     const rootContext = trace.setSpan(ROOT_CONTEXT, root);
@@ -196,7 +172,7 @@ describe("chat trace topology", () => {
 
     const response = createResponse();
     const chatRequest = request(
-      "/chat/support",
+      "/api/mastra/chat/support",
       [{ role: "user", parts: [{ type: "text", text: "hello" }] }],
       {
         headers: {
@@ -206,12 +182,18 @@ describe("chat trace topology", () => {
       },
     );
     injectRequestTags(chatRequest, { tunnel: "portr", tunnel_subdomain: "demo" });
+    let agentTracingOptions: ReturnType<typeof activeChatTracingOptions>;
     context.with(rpcContext, () => {
       chatTurnTelemetryMiddleware(
         chatRequest as never,
         response as never,
         () => {
           assert.equal(trace.getActiveSpan(), root);
+          agentTracingOptions = activeChatTracingOptions({
+            metadata: { source: "chat" },
+            traceId: "browser-controlled",
+            parentSpanId: "browser-controlled",
+          });
           recordActiveTraceModel("model-a");
           recordActiveTraceModel("model-a");
           recordActiveTraceModel("model-b");
@@ -273,66 +255,12 @@ describe("chat trace topology", () => {
     );
     assert.equal(
       response.headers[feedback.MLFLOW_TRACE_ID_HEADER],
-      `tr-${exportedRoot.spanContext().traceId}`,
+      `tr-${agentTracingOptions?.traceId}`,
     );
-  });
-
-  it("persists a user resolved later in the active request context", async () => {
-    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
-    process.env.MLFLOW_EXPERIMENT_ID = "123";
-    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4314";
-    const bodies: Array<Record<string, unknown>> = [];
-    globalThis.fetch = async (input, init) => {
-      if (String(input).includes("/api/2.0/mlflow/experiments/get?")) {
-        return Response.json({
-          experiment: {
-            experiment_id: "123",
-            tags: [
-              {
-                key: "mlflow.experiment.databricksTraceDestinationPath",
-                value: "cat.schema.demo",
-              },
-            ],
-          },
-        });
-      }
-      bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
-      return Response.json({});
-    };
-    assert.equal(await initializeAppMlflowTraceInfo(workspaceClient()), true);
-
-    const root = tracer.startSpan("POST /api/mastra/chat/support");
-    const rpcContext = setRPCMetadata(trace.setSpan(ROOT_CONTEXT, root), {
-      type: RPCType.HTTP,
-      span: root,
-    });
-    const response = createResponse();
-    const chatRequest = request("/chat/support", [
-      { role: "user", parts: [{ type: "text", text: "hello" }] },
-    ]);
-    injectRequestTags(chatRequest, { tunnel: "portr", tunnel_subdomain: "demo" });
-    context.with(rpcContext, () => {
-      chatTurnTelemetryMiddleware(chatRequest as never, response as never, () => {
-        recordActiveTraceModel("model-a");
-        recordActiveTraceUser("ada@example.com");
-        recordActiveTraceAuth("service-principal");
-        response.end('data: {"type":"text-delta","delta":"answer"}\n\n');
-      });
-    });
-    root.end();
-    await flushDirectMlflowTracing();
-
-    assert.equal(bodies.length, 1);
-    assert.deepEqual(bodies[0]?.trace_metadata, {
-      "mlflow.trace_schema.version": "4",
-      "mlflow.trace.user": "ada@example.com",
-    });
-    assert.deepEqual(bodies[0]?.tags, {
-      agent: "model-a",
-      sp_auth: "true",
-      tunnel: "portr",
-      tunnel_subdomain: "demo",
-    });
+    assert.match(agentTracingOptions?.traceId ?? "", /^[0-9a-f]{32}$/);
+    assert.equal(agentTracingOptions?.traceId, exportedRoot.spanContext().traceId);
+    assert.equal(agentTracingOptions?.parentSpanId, exportedRoot.spanContext().spanId);
+    assert.deepEqual(agentTracingOptions?.metadata, { source: "chat" });
   });
 
   it("creates one local root and blocks propagation when configured with none", () => {
@@ -345,11 +273,13 @@ describe("chat trace topology", () => {
 
     const response = createResponse();
     const downstream: Record<string, string> = {};
+    let agentTracingOptions: ReturnType<typeof activeChatTracingOptions>;
     context.with(extracted, () => {
       chatTurnTelemetryMiddleware(
         request("/agents/support/stream", [{ role: "user", content: "stream this" }]) as never,
         response as never,
         () => {
+          agentTracingOptions = activeChatTracingOptions(undefined);
           recordActiveTraceModel("model-local");
           recordActiveTraceUser("local-user@example.com");
           endChildSpans(tracer, ["invoke_agent support", "model", "tool", "memory", "processor"]);
@@ -396,6 +326,8 @@ describe("chat trace topology", () => {
       response.headers[feedback.MLFLOW_TRACE_ID_HEADER],
       `tr-${roots[0]?.spanContext().traceId}`,
     );
+    assert.equal(agentTracingOptions?.traceId, roots[0]?.spanContext().traceId);
+    assert.equal(agentTracingOptions?.parentSpanId, roots[0]?.spanContext().spanId);
   });
 
   it("retains W3C parentage and injection when propagation is enabled", () => {

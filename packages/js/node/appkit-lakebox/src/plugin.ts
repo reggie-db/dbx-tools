@@ -41,6 +41,7 @@ import {
   type CreateLakeboxServiceRequest,
   type LakeboxClientConfigInput,
   type LakeboxCommandRequest,
+  type LakeboxService,
   type LakeboxServiceLogsRequest,
 } from "@dbx-tools/shared-lakebox";
 import type { Application, Request, Response } from "express";
@@ -54,6 +55,7 @@ import {
   type LakeboxPluginConfig,
 } from "./config.ts";
 import { LakeboxRuntime, type LakeboxLegacyPool } from "./runtime.ts";
+import { withServiceOrigin } from "./services.ts";
 
 interface ServerExtension {
   addExtension(fn: (application: Application) => void): void;
@@ -210,7 +212,12 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
     signal?: AbortSignal,
     context?: AgentToolExecutionContext,
   ): Promise<unknown> {
-    return executeFromRegistry(this.createToolRegistry(context?.resourceId), name, args, signal);
+    return executeFromRegistry(
+      this.createToolRegistry(context?.resourceId, context?.origin),
+      name,
+      args,
+      signal,
+    );
   }
 
   /** Returns the typed sibling-plugin API. */
@@ -250,12 +257,16 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
   }
 
   /** Returns the Zod-owned operation contracts used by agent tools. */
-  operations(identity?: string) {
+  operations(identity?: string, origin?: string) {
     const user = () => identity ?? this.executionIdentity();
+    const presentService = (value: LakeboxService) => omitLog(withServiceOrigin(value, origin));
     return toolOperations.defineOperations({
       get_lakebox: {
         schema: getLakeboxOperationSchema,
-        execute: async (_input, signal) => withoutLogs(await this.runtime.summary(user(), signal)),
+        execute: async (_input, signal) => {
+          const summary = await this.runtime.summary(user(), signal);
+          return { ...summary, services: summary.services.map(presentService) };
+        },
       },
       execute_lakebox_command: {
         schema: executeLakeboxCommandOperationSchema,
@@ -264,25 +275,25 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
       list_lakebox_services: {
         schema: listLakeboxServicesOperationSchema,
         execute: async (_input, signal) => ({
-          services: (await this.runtime.listServices(user(), signal)).map(omitLog),
+          services: (await this.runtime.listServices(user(), signal)).map(presentService),
         }),
       },
       create_lakebox_service: {
         schema: createLakeboxServiceOperationSchema,
         execute: async (input, signal) => ({
-          service: omitLog(await this.runtime.createService(user(), input, signal)),
+          service: presentService(await this.runtime.createService(user(), input, signal)),
         }),
       },
       start_lakebox_service: {
         schema: startLakeboxServiceOperationSchema,
         execute: async (input, signal) => ({
-          service: omitLog(await this.runtime.startService(user(), input.name, signal)),
+          service: presentService(await this.runtime.startService(user(), input.name, signal)),
         }),
       },
       stop_lakebox_service: {
         schema: stopLakeboxServiceOperationSchema,
         execute: async (input, signal) => ({
-          service: omitLog(await this.runtime.stopService(user(), input.name, signal)),
+          service: presentService(await this.runtime.stopService(user(), input.name, signal)),
         }),
       },
       remove_lakebox_service: {
@@ -298,8 +309,8 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
     });
   }
 
-  private createToolRegistry(identity?: string): ToolRegistry {
-    return toolOperations.toolRegistryFromOperations(this.operations(identity));
+  private createToolRegistry(identity?: string, origin?: string): ToolRegistry {
+    return toolOperations.toolRegistryFromOperations(this.operations(identity, origin));
   }
 
   private executionIdentity(): string {
@@ -389,10 +400,6 @@ function serviceName(req: Request): string {
 
 function omitLog<T extends { log?: string }>({ log: _log, ...value }: T): Omit<T, "log"> {
   return value;
-}
-
-function withoutLogs<T extends { services: Array<{ log?: string }> }>(summary: T): T {
-  return { ...summary, services: summary.services.map(omitLog) };
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {

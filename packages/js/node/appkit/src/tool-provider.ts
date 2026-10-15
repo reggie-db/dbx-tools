@@ -21,6 +21,8 @@ export interface AgentToolExecutionContext {
   readonly resourceId?: string;
   /** Model endpoint selected for the current agent turn. */
   readonly model?: string;
+  /** Browser application origin associated with the current agent turn. */
+  readonly origin?: string;
   /** Best-effort progress sink validated by the hosting integration. */
   readonly writeProgress?: (event: unknown, options?: AgentToolProgressOptions) => Promise<void>;
 }

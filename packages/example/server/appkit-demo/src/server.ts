@@ -1,7 +1,7 @@
 import path from "node:path";
 import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
-import { appkit } from "@dbx-tools/appkit";
+import { appkit, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
 import { filesCache } from "@dbx-tools/appkit/files-cache";
 import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
 import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
@@ -356,17 +356,17 @@ const searchProvider = USE_VECTOR_SEARCH
 const previousCwd = process.cwd();
 if (useAppKitVite) process.chdir(demoClientRoot);
 try {
+  await appkitTelemetry.configureNativeHttpTelemetry({
+    exclude: [lakeboxRuntime.config.routePrefix, `${lakeboxRuntime.config.routePrefix}/*`],
+  });
   await appkit.createApp({
     disableInternalTelemetry: true,
     plugins: [
-      // AppKit's server plugin enables HTTP/Express tracing by default whenever
-      // an exporter is active. This demo wants agent traces, not one trace per
-      // request; appkit-mastra creates a request-lifetime chat root when the HTTP
-      // instrumentation is disabled.
+      // Keep AppKit's native HTTP/Express tracing. The compatibility hook above
+      // only extends its request filter for long-lived Lakebox proxy traffic.
       server({
         host,
         bodyLimit: appkitBodyLimit,
-        telemetry: false,
         ...(useAppKitVite ? {} : { staticPath: clientDist }),
       }),
       genie(),

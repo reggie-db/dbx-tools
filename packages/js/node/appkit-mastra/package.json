@@ -160,6 +160,10 @@
         "types": "./lib/src/remote-skills.d.ts",
         "default": "./lib/src/remote-skills.js"
       },
+      "./request-context": {
+        "types": "./lib/src/request-context.d.ts",
+        "default": "./lib/src/request-context.js"
+      },
       "./rest": {
         "types": "./lib/src/rest.d.ts",
         "default": "./lib/src/rest.js"
@@ -248,6 +252,7 @@
     "./plugin": "./src/plugin.ts",
     "./processors": "./src/processors.ts",
     "./remote-skills": "./src/remote-skills.ts",
+    "./request-context": "./src/request-context.ts",
     "./rest": "./src/rest.ts",
     "./server": "./src/server.ts",
     "./serving": "./src/serving.ts",

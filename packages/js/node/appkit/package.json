@@ -38,6 +38,8 @@
     "@dbx-tools/postgres": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-fs": "workspace:^",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/sdk-trace-base": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",
@@ -115,6 +117,10 @@
         "types": "./lib/src/request-tags.d.ts",
         "default": "./lib/src/request-tags.js"
       },
+      "./telemetry": {
+        "types": "./lib/src/telemetry.d.ts",
+        "default": "./lib/src/telemetry.js"
+      },
       "./tool-operations": {
         "types": "./lib/src/tool-operations.d.ts",
         "default": "./lib/src/tool-operations.js"
@@ -160,6 +166,7 @@
     "./plugin-registry": "./src/plugin-registry.ts",
     "./provision": "./src/provision.ts",
     "./request-tags": "./src/request-tags.ts",
+    "./telemetry": "./src/telemetry.ts",
     "./tool-operations": "./src/tool-operations.ts",
     "./tool-provider": "./src/tool-provider.ts",
     "./toolkit-entries": "./src/toolkit-entries.ts",

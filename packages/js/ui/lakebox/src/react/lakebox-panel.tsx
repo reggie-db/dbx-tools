@@ -19,6 +19,7 @@ import {
 } from "@dbx-tools/ui/react";
 import {
   CheckIcon,
+  ChevronDownIcon,
   CopyIcon,
   ExternalLinkIcon,
   FileTextIcon,
@@ -26,12 +27,14 @@ import {
   PlayIcon,
   SquareIcon,
   SquareTerminalIcon,
+  Settings2Icon,
   Trash2Icon,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLakeboxClient, type LakeboxClient } from "./client.ts";
 import { LakeboxMetrics } from "./lakebox-metrics.tsx";
+import { resolveServiceUrl } from "./service-url.ts";
 import { useLakebox, useLakeboxMetrics, type LakeboxState } from "./use-lakebox.ts";
 
 const SERVICE_ICONS: Partial<Record<LakeboxService["kind"], LucideIcon>> = {
@@ -140,6 +143,7 @@ function ServiceRow({
   onRemove: () => void;
 }) {
   const [logsOpen, setLogsOpen] = useState(false);
+  const [configurationOpen, setConfigurationOpen] = useState(false);
   const starting = state.busy.has(`service:${service.name}:start`) || service.state === "starting";
   const stopping = state.busy.has(`service:${service.name}:stop`);
   const removing = state.busy.has(`service:${service.name}:remove`);
@@ -165,6 +169,26 @@ function ServiceRow({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className={cn(configurationOpen && "bg-muted shadow-inner")}
+            aria-label={
+              configurationOpen
+                ? `Hide ${service.name} configuration`
+                : `Show ${service.name} configuration`
+            }
+            aria-expanded={configurationOpen}
+            title={configurationOpen ? "Hide configuration" : "Show configuration"}
+            onClick={() => setConfigurationOpen((open) => !open)}
+          >
+            {configurationOpen ? (
+              <ChevronDownIcon className="size-4" />
+            ) : (
+              <Settings2Icon className="size-4" />
+            )}
+          </Button>
           {!service.route && service.state !== "ready" ? (
             <Button
               type="button"
@@ -240,8 +264,51 @@ function ServiceRow({
           <p className="w-full break-words text-xs text-destructive">{service.error}</p>
         ) : null}
       </div>
+      {configurationOpen ? <ServiceConfiguration service={service} /> : null}
       {logsOpen ? <ServiceLog client={client} name={service.name} live={starting} /> : null}
     </li>
+  );
+}
+
+/** Safe, user-visible service configuration without environment values. */
+function ServiceConfiguration({ service }: { service: LakeboxService }) {
+  const openUrl = service.openUrl ? resolveServiceUrl(service.openUrl) : undefined;
+  const fields = [
+    ["Kind", service.kind],
+    ...(service.image ? [["Image", service.image]] : []),
+    ...(service.openPath ? [["Open path", service.openPath]] : []),
+    ["Route path", service.path],
+    ["Loopback", `127.0.0.1:${service.port}`],
+  ] as const;
+  return (
+    <section
+      aria-label={`${service.name} configuration`}
+      className="border-t bg-muted/20 px-3 py-3 sm:px-4"
+    >
+      <dl className="grid min-w-0 gap-x-4 gap-y-2 text-xs sm:grid-cols-[7rem_minmax(0,1fr)]">
+        {fields.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="font-medium text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 break-all font-mono text-foreground">{value}</dd>
+          </div>
+        ))}
+        {openUrl ? (
+          <div className="contents">
+            <dt className="font-medium text-muted-foreground">Open URL</dt>
+            <dd className="min-w-0 break-all font-mono">
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-700 underline decoration-blue-700/40 underline-offset-2 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+              >
+                {openUrl}
+              </a>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+    </section>
   );
 }
 

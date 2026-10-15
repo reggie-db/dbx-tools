@@ -225,6 +225,11 @@ const root = new project.DBXToolsNodeProject({
   ],
 });
 
+// OpenTelemetry's global tracer provider must be shared by AppKit and Mastra.
+// AppKit 0.81 pins api@1.9.0 while Mastra requires ^1.9.1; without one override
+// Bun installs two physical API copies and Mastra sees AppKit's provider as noop.
+root.pnpmWorkspace?.addOverride("@opentelemetry/api", "1.9.1");
+
 const eslintTask = javascript.Eslint.of(root)!.eslintTask;
 eslintTask.reset();
 for (const paths of [
@@ -395,6 +400,8 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-fs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
+    "@opentelemetry/api@catalog:",
+    "@opentelemetry/sdk-trace-base@catalog:",
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");

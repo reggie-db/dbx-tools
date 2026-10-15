@@ -71,6 +71,10 @@ export const lakeboxServiceSchema = z
     name: lakeboxServiceNameSchema,
     kind: lakeboxServiceKindSchema,
     image: z.string().optional().describe("OCI image reference for image services."),
+    openPath: z
+      .string()
+      .optional()
+      .describe("Configured entry path appended to the service route."),
     state: lakeboxServiceStateSchema,
     port: z
       .number()
@@ -83,10 +87,11 @@ export const lakeboxServiceSchema = z
       .describe("Whether AppKit exposes the service through an authenticated route."),
     path: z.string().startsWith("/").describe("AppKit route path for the service."),
     openUrl: z
-      .string()
-      .startsWith("/")
+      .union([z.string().startsWith("/"), z.httpUrl()])
       .optional()
-      .describe("AppKit URL that opens the service; present for routed services."),
+      .describe(
+        "AppKit URL that opens the service; REST responses use a path and agent tools resolve it against the browser app origin.",
+      ),
     error: z.string().optional().describe("Latest start or readiness failure."),
     log: z
       .string()

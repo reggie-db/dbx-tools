@@ -111,6 +111,11 @@
       "type": "build"
     },
     {
+      "name": "@opentelemetry/api",
+      "version": "1.9.1",
+      "type": "override"
+    },
+    {
       "name": "@typescript-eslint/eslint-plugin",
       "version": "8.71.0",
       "type": "override"

@@ -51,6 +51,7 @@ import {
 } from "./interceptor.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
+import { bindNativeTelemetryProvider } from "./telemetry.ts";
 
 const logger = log.logger("appkit");
 
@@ -309,6 +310,12 @@ export async function createApp<T extends AppKitPlugins>(
   const appConfig = { ...config };
   delete appConfig.autoConfigure;
   delete appConfig.interceptor;
+  const onPluginsReady = appConfig.onPluginsReady;
+  appConfig.onPluginsReady = async (app) => {
+    const bound = await bindNativeTelemetryProvider();
+    logger.debug("createApp: native telemetry provider binding", { bound });
+    await onPluginsReady?.(app);
+  };
 
   if (shouldInjectCacheStorage(config)) {
     logger.debug("createApp: inject memory-first cache storage");
