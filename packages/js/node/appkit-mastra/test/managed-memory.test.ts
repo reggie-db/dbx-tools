@@ -17,6 +17,7 @@ function fakeWorkspaceClient(available = true) {
         requests.push(request);
         if (request.method === "GET") {
           if (!available) throw Object.assign(new Error("forbidden"), { statusCode: 403 });
+          if (request.path.endsWith("/entries")) return { managed_memory_entries: [] };
           return { name: "memory-stores/support-agent-memory" };
         }
         if (request.path.endsWith("/entries")) {

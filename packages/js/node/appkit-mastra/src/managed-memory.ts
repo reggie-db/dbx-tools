@@ -19,6 +19,8 @@ import { MASTRA_RESOURCE_ID_KEY, type RequestContext } from "@mastra/core/reques
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
+import { databricksFetch, readResponseJson } from "./rest.ts";
+
 const logger = log.logger("mastra/managed-memory");
 const MEMORY_CONTEXT_HEADING = "Relevant long-term memory";
 const ACCESS_CACHE_TTL_MS = 5 * 60_000;
@@ -96,6 +98,17 @@ const SearchMemoryResponseSchema = z
   .loose()
   .describe("Databricks managed memory search response.");
 
+const ListMemoryResponseSchema = z
+  .object({
+    managed_memory_entries: z
+      .array(ManagedMemoryEntrySchema)
+      .optional()
+      .describe("Managed memory entries in this page."),
+    next_page_token: z.string().optional().describe("Next page token."),
+  })
+  .loose()
+  .describe("Page of Databricks managed memory entries.");
+
 /** Thin REST client for Databricks Agent Memory search. */
 export class ManagedAgentMemoryClient {
   readonly memoryStore: string;
@@ -165,6 +178,25 @@ export class ManagedAgentMemoryClient {
     description?: string;
     signal?: AbortSignal;
   }): Promise<ManagedMemoryEntry> {
+    const existing = (await this.listMemoryEntries(input))[0];
+    if (existing?.name) return this.updateMemory({ ...existing, name: existing.name }, input);
+    try {
+      return await this.createMemory(input);
+    } catch (error) {
+      if (!errorUtils.errorContext(error).hasStatusCode(409)) throw error;
+      const raced = (await this.listMemoryEntries(input))[0];
+      if (!raced?.name) throw error;
+      return this.updateMemory({ ...raced, name: raced.name }, input);
+    }
+  }
+
+  private async createMemory(input: {
+    actorId: string;
+    path: string;
+    content: string;
+    description?: string;
+    signal?: AbortSignal;
+  }): Promise<ManagedMemoryEntry> {
     return ManagedMemoryEntrySchema.parse(
       await this.client.apiClient.request(
         {
@@ -175,18 +207,67 @@ export class ManagedAgentMemoryClient {
             "content-type": "application/json",
           }),
           raw: false,
-          payload: {
-            actor_id: input.actorId,
-            path: input.path,
-            content: input.content,
-            ...(input.description ? { description: input.description } : {}),
-            source_type: "MANAGED_MEMORY_ENTRY_SOURCE_TYPE_AGENT",
-            write_mode: "overwrite",
-          },
+          payload: memoryPayload(input),
         },
         input.signal ? databricks.toContext(input.signal) : undefined,
       ),
     );
+  }
+
+  private async listMemoryEntries(input: {
+    actorId: string;
+    path: string;
+    signal?: AbortSignal;
+  }): Promise<ManagedMemoryEntry[]> {
+    const response = ListMemoryResponseSchema.parse(
+      await this.client.apiClient.request(
+        {
+          path: `/api/2.0/agents/memory-stores/${encodeURIComponent(this.memoryStore)}/entries`,
+          method: "GET",
+          headers: new Headers({ accept: "application/json" }),
+          query: {
+            actor_id: input.actorId,
+            path: input.path,
+            page_size: 100,
+          },
+          raw: false,
+        },
+        input.signal ? databricks.toContext(input.signal) : undefined,
+      ),
+    );
+    return (response.managed_memory_entries ?? []).filter((entry) => entry.path === input.path);
+  }
+
+  private async updateMemory(
+    current: ManagedMemoryEntry & { name: string },
+    input: {
+      actorId: string;
+      path: string;
+      content: string;
+      description?: string;
+      signal?: AbortSignal;
+    },
+  ): Promise<ManagedMemoryEntry> {
+    const response = await databricksFetch(
+      this.client,
+      `/api/2.0/agents/${current.name
+        .split("/")
+        .map((part) => encodeURIComponent(part))
+        .join("/")}?update_mask=content,description`,
+      {
+        method: "PATCH",
+        body: memoryPayload(input),
+        ...(input.signal ? { signal: input.signal } : {}),
+      },
+    );
+    const body = await readResponseJson(response);
+    if (!response.ok) {
+      throw Object.assign(
+        new Error(`Databricks Agent Memory request failed (${response.status})`),
+        { statusCode: response.status, response: body },
+      );
+    }
+    return ManagedMemoryEntrySchema.parse(body);
   }
 }
 
@@ -310,6 +391,21 @@ function resourceId(value: string, prefix: string): string {
   const trimmed = value.trim().replace(new RegExp(`^${prefix}/`), "");
   if (!trimmed) throw new Error(`${prefix} id is required`);
   return trimmed;
+}
+
+function memoryPayload(input: {
+  actorId: string;
+  path: string;
+  content: string;
+  description?: string;
+}): Record<string, unknown> {
+  return {
+    actor_id: input.actorId,
+    path: input.path,
+    content: input.content,
+    ...(input.description ? { description: input.description } : {}),
+    source_type: "MANAGED_MEMORY_ENTRY_SOURCE_TYPE_AGENT",
+  };
 }
 
 function agentStoreId(value: string): string {
