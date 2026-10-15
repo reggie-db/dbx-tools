@@ -71,6 +71,11 @@
       "type": "runtime"
     },
     {
+      "name": "lucide-react",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "react-dom",
       "version": "catalog:",
       "type": "runtime"

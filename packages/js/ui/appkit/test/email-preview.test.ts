@@ -26,5 +26,7 @@ describe("EmailPreview", () => {
 
     assert.equal(html.match(new RegExp(`src="${logoUrl}"`, "g"))?.length, 2);
     assert.match(html, /alt="dbx tools icon"/);
+    assert.match(html, /<td[^>]*style="[^"]*padding:22px 30px/);
+    assert.match(html, /<td[^>]*style="[^"]*padding:34px 34px 24px/);
   });
 });

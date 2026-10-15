@@ -327,7 +327,6 @@ export const EmailCard = ({
       <Section
         style={{
           backgroundColor: theme.accent,
-          padding: "22px 30px",
           // The corners are set on the band itself rather than clipped by the
           // container: React Email renders the container as a <table>, which
           // `overflow: hidden` does not reliably clip, so the band needs its own
@@ -335,48 +334,60 @@ export const EmailCard = ({
           ...(framed ? { borderRadius: "15px 15px 0 0" } : {}),
         }}
       >
-        <BrandMark theme={theme} />
+        <Row>
+          <Column style={{ padding: "22px 30px" }}>
+            <BrandMark theme={theme} />
+          </Column>
+        </Row>
       </Section>
-      <Section style={{ padding: "34px 34px 24px" }}>
-        {heading ? (
-          <Heading
-            style={{
-              color: theme.foreground,
-              fontSize: "28px",
-              letterSpacing: "-0.5px",
-              lineHeight: "1.2",
-              margin: "0 0 24px",
-            }}
-          >
-            {heading}
-          </Heading>
-        ) : null}
-        <EnvelopeHeaders headers={headers} theme={theme} />
-        <EmailBody body={body} brand={theme} />
+      <Section>
+        <Row>
+          <Column style={{ padding: "34px 34px 24px" }}>
+            {heading ? (
+              <Heading
+                style={{
+                  color: theme.foreground,
+                  fontSize: "28px",
+                  letterSpacing: "-0.5px",
+                  lineHeight: "1.2",
+                  margin: "0 0 24px",
+                }}
+              >
+                {heading}
+              </Heading>
+            ) : null}
+            <EnvelopeHeaders headers={headers} theme={theme} />
+            <EmailBody body={body} brand={theme} />
+          </Column>
+        </Row>
       </Section>
       <Hr style={{ borderColor: theme.border, margin: 0 }} />
-      <Section style={{ padding: "20px 34px 26px" }}>
-        <Text
-          style={{
-            color: theme.muted,
-            fontSize: "12px",
-            lineHeight: "1.55",
-            margin: 0,
-          }}
-        >
-          {footer ?? theme.tagline}{" "}
-          {theme.website ? (
-            <Link
-              href={theme.website}
+      <Section>
+        <Row>
+          <Column style={{ padding: "20px 34px 26px" }}>
+            <Text
               style={{
-                color: theme.accent,
-                textDecoration: "none",
+                color: theme.muted,
+                fontSize: "12px",
+                lineHeight: "1.55",
+                margin: 0,
               }}
             >
-              {theme.name}
-            </Link>
-          ) : null}
-        </Text>
+              {footer ?? theme.tagline}{" "}
+              {theme.website ? (
+                <Link
+                  href={theme.website}
+                  style={{
+                    color: theme.accent,
+                    textDecoration: "none",
+                  }}
+                >
+                  {theme.name}
+                </Link>
+              ) : null}
+            </Text>
+          </Column>
+        </Row>
       </Section>
     </Container>
   );

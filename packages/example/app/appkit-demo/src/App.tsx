@@ -3,6 +3,7 @@ import { getAuthStatus, logout as logoutAuth } from "@dbx-tools/ui/auth/react";
 import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui/branding/react";
 import { Button, Separator } from "@dbx-tools/ui/react";
 import { MastraAssistant, useMastraAssistant } from "@dbx-tools/ui-mastra/react";
+import { CircleHelpIcon, LoaderCircleIcon, LogOutIcon, PanelRightCloseIcon } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
@@ -195,7 +196,15 @@ const BASE_ROUTES: RouteDef[] = [
   },
 ];
 
-const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
+const Nav = ({
+  routes,
+  guideOpen,
+  onShowGuide,
+}: {
+  routes: readonly RouteDef[];
+  guideOpen: boolean;
+  onShowGuide: () => void;
+}) => {
   const { pathname } = useLocation();
   const { context } = useBrand();
   const [logoutEnabled, setLogoutEnabled] = useState(false);
@@ -232,18 +241,40 @@ const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
         <span className="hidden sm:inline">{context.shortName}</span>
       </Link>
       <NavRouteStrip routes={routes} pathname={pathname} />
-      {logoutEnabled ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="ml-auto shrink-0"
-          aria-busy={loggingOut}
-          title="End the tunnel session"
-          onClick={logout}
-        >
-          {loggingOut ? "Logging out..." : "Log out"}
-        </Button>
+      {!guideOpen || logoutEnabled ? (
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {!guideOpen ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="hidden size-8 xl:inline-flex"
+              aria-label="Show demo guide"
+              title="Show demo guide"
+              onClick={onShowGuide}
+            >
+              <CircleHelpIcon className="size-4" />
+            </Button>
+          ) : null}
+          {logoutEnabled ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-8"
+              aria-label={loggingOut ? "Logging out" : "Log out"}
+              aria-busy={loggingOut}
+              title="End the tunnel session"
+              onClick={logout}
+            >
+              {loggingOut ? (
+                <LoaderCircleIcon className="size-4 animate-spin" />
+              ) : (
+                <LogOutIcon className="size-4" />
+              )}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </nav>
   );
@@ -355,6 +386,21 @@ const AssistantRouteContext = () => {
 const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
   const { pathname } = useLocation();
   const route = routes.find((candidate) => candidate.path === pathname) ?? routes[0]!;
+  const [guideOpen, setGuideOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem(GUIDE_STORAGE_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const updateGuideOpen = (next: boolean) => {
+    setGuideOpen(next);
+    try {
+      window.localStorage.setItem(GUIDE_STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      // The in-session control still works when storage is unavailable.
+    }
+  };
   return (
     <MastraAssistant
       mode="overlay"
@@ -370,7 +416,11 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
       <div className="flex h-full flex-col">
         <AssistantRouteContext />
         <header className="demo-header shrink-0">
-          <Nav routes={routes} />
+          <Nav
+            routes={routes}
+            guideOpen={guideOpen}
+            onShowGuide={() => updateGuideOpen(true)}
+          />
           <Separator />
         </header>
         <main className="flex min-h-0 flex-1">
@@ -391,7 +441,7 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
               </Routes>
             </Suspense>
           </section>
-          <DemoGuide route={route} />
+          <DemoGuide route={route} open={guideOpen} onHide={() => updateGuideOpen(false)} />
         </main>
       </div>
     </MastraAssistant>
@@ -400,39 +450,8 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
 
 const GUIDE_STORAGE_KEY = "demo-guide-open";
 
-const DemoGuide = ({ route }: { route: RouteDef }) => {
-  const [open, setOpen] = useState(() => {
-    try {
-      return window.localStorage.getItem(GUIDE_STORAGE_KEY) !== "0";
-    } catch {
-      return true;
-    }
-  });
-
-  const updateOpen = (next: boolean) => {
-    setOpen(next);
-    try {
-      window.localStorage.setItem(GUIDE_STORAGE_KEY, next ? "1" : "0");
-    } catch {
-      // The in-session control still works when storage is unavailable.
-    }
-  };
-
-  if (!open) {
-    return (
-      <div className="hidden shrink-0 border-l border-border bg-muted/20 p-2 xl:flex">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-fit [writing-mode:vertical-rl]"
-          onClick={() => updateOpen(true)}
-        >
-          Show guide
-        </Button>
-      </div>
-    );
-  }
+const DemoGuide = ({ route, open, onHide }: { route: RouteDef; open: boolean; onHide: () => void }) => {
+  if (!open) return null;
 
   return (
     <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-muted/20 xl:flex 2xl:w-96">
@@ -441,8 +460,16 @@ const DemoGuide = ({ route }: { route: RouteDef }) => {
           <p className="text-xs font-medium text-muted-foreground">Demo guide</p>
           <h2 className="text-base font-semibold text-foreground">{route.label}</h2>
         </div>
-        <Button type="button" size="sm" variant="ghost" onClick={() => updateOpen(false)}>
-          Hide
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-8 shrink-0"
+          aria-label="Hide demo guide"
+          title="Hide demo guide"
+          onClick={onHide}
+        >
+          <PanelRightCloseIcon className="size-4" />
         </Button>
       </div>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 text-sm">

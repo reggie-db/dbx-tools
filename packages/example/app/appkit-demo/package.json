@@ -34,6 +34,7 @@
     "@dbx-tools/ui-lakebox": "workspace:^",
     "@dbx-tools/ui-mastra": "workspace:^",
     "@tailwindcss/vite": "catalog:",
+    "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router-dom": "catalog:",

@@ -1367,6 +1367,7 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
     "@dbx-tools/ui@workspace:^",
     "@dbx-tools/ui-mastra@workspace:^",
     "@dbx-tools/ui-lakebox@workspace:^",
+    "lucide-react@catalog:",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.
     "@databricks/appkit-ui@catalog:",
