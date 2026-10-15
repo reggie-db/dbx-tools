@@ -901,7 +901,6 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
                   conversationId: message.conversation_id,
                   question: request.question,
                   answer,
-                  signal,
                 }),
             }
           : {}),
