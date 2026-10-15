@@ -292,7 +292,9 @@ read the configured store. Accessible turns receive a native Mastra `remember`
 tool that writes with Agent Memory's overwrite mode. When access is unavailable,
 the tool is omitted and recall is skipped. Apps that register Graphiti keep its
 `add_memory` and search tools, so they remain the model's durable-memory
-fallback without a failing managed-memory tool in the tool set.
+fallback without a failing managed-memory tool in the tool set. Access results
+are cached for five minutes through `@dbx-tools/cache`, keyed by memory store,
+credential identity, and trusted actor id.
 
 `actor_id` partitions list and search operations but is not an access-control
 boundary. The adapter derives it from the trusted AppKit memory resource or OBO

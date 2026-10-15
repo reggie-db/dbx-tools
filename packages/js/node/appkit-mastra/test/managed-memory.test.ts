@@ -131,6 +131,8 @@ describe("ManagedMemoryRuntime", () => {
 
     const tools = await accessible.tools(requestContext);
     expect(Object.keys(tools)).toEqual(["remember"]);
-    expect(await unavailable.tools(requestContext)).toEqual({});
+    const unavailableContext = new RequestContext();
+    unavailableContext.set(MASTRA_RESOURCE_ID_KEY, "user-2");
+    expect(await unavailable.tools(unavailableContext)).toEqual({});
   });
 });

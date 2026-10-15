@@ -10,6 +10,7 @@
 
 import { getExecutionContext, type WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
+import { createCache, getOrSet } from "@dbx-tools/cache/cache";
 import { projectUtils } from "@dbx-tools/core";
 import { errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import type { MastraDBMessage } from "@mastra/core/agent";
@@ -20,6 +21,12 @@ import { z } from "zod";
 
 const logger = log.logger("mastra/managed-memory");
 const MEMORY_CONTEXT_HEADING = "Relevant long-term memory";
+const ACCESS_CACHE_TTL_MS = 5 * 60_000;
+const accessCache = createCache({
+  maxEntries: 1_000,
+  ttl: ACCESS_CACHE_TTL_MS,
+  useClone: false,
+});
 
 /** Databricks managed-memory configuration for the Mastra plugin. */
 export interface ManagedMemoryOptions {
@@ -185,8 +192,6 @@ export class ManagedAgentMemoryClient {
 
 /** Runtime that contributes managed-memory recall to each Mastra agent. */
 export class ManagedMemoryRuntime {
-  private readonly access = new Map<string, { available: boolean; expiresAt: number }>();
-
   constructor(
     private readonly workspaceClient: WorkspaceClient,
     readonly options: ResolvedManagedMemoryOptions,
@@ -204,11 +209,11 @@ export class ManagedMemoryRuntime {
         const query = latestUserText(messages);
         if (typeof actorId !== "string" || !query) return { messages, systemMessages };
         try {
-          const client = this.requestClient();
-          if (!(await this.available(actorId, client, abortSignal))) {
+          const request = this.requestClient(actorId);
+          if (!(await this.available(request.cacheKey, request.client, abortSignal))) {
             return { messages, systemMessages };
           }
-          const entries = await client.searchMemory({
+          const entries = await request.client.searchMemory({
             actorId,
             query,
             topK: recall.topK,
@@ -243,8 +248,8 @@ export class ManagedMemoryRuntime {
   async tools(requestContext?: RequestContext) {
     const actorId = requestContext?.get(MASTRA_RESOURCE_ID_KEY);
     if (typeof actorId !== "string") return {};
-    const client = this.requestClient();
-    if (!(await this.available(actorId, client))) return {};
+    const request = this.requestClient(actorId);
+    if (!(await this.available(request.cacheKey, request.client))) return {};
     return {
       remember: createTool({
         id: "remember",
@@ -260,7 +265,7 @@ export class ManagedMemoryRuntime {
         }),
         outputSchema: ManagedMemoryEntrySchema,
         execute: async (input, context) =>
-          client.saveMemory({
+          request.client.saveMemory({
             actorId,
             path: input.path,
             content: input.content,
@@ -273,26 +278,31 @@ export class ManagedMemoryRuntime {
     };
   }
 
-  private requestClient(): ManagedAgentMemoryClient {
+  private requestClient(actorId: string): {
+    client: ManagedAgentMemoryClient;
+    cacheKey: string;
+  } {
     let workspaceClient = this.workspaceClient;
+    let credentialId = actorId;
     try {
-      workspaceClient = getExecutionContext().client;
+      const execution = getExecutionContext();
+      workspaceClient = execution.client;
+      credentialId = "userId" in execution ? execution.userId : execution.serviceUserId;
     } catch {
       // Startup and tests have no active AppKit request context.
     }
-    return new ManagedAgentMemoryClient(workspaceClient, this.options);
+    return {
+      client: new ManagedAgentMemoryClient(workspaceClient, this.options),
+      cacheKey: `${this.options.memoryStore}:${credentialId}:${actorId}`,
+    };
   }
 
   private async available(
-    actorId: string,
+    cacheKey: string,
     client: ManagedAgentMemoryClient,
     signal?: AbortSignal,
   ): Promise<boolean> {
-    const cached = this.access.get(actorId);
-    if (cached && cached.expiresAt > Date.now()) return cached.available;
-    const available = await client.available(signal);
-    this.access.set(actorId, { available, expiresAt: Date.now() + 5 * 60_000 });
-    return available;
+    return (await getOrSet(accessCache, cacheKey, () => client.available(signal))) ?? false;
   }
 }
 
