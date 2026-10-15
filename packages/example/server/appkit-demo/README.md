@@ -2,8 +2,7 @@
 
 This package registers the backend for the dbx-tools demo. It exposes Mastra
 and direct Genie chat, Lakebox services, Lakebase persistence, search, email,
-Microsoft Teams cards, a Postgres topic bus, and the React client from one
-AppKit process.
+a Postgres topic bus, and the React client from one AppKit process.
 
 ```ts
 import { genie, lakebase, server } from "@databricks/appkit";
@@ -12,7 +11,6 @@ import { lakebox } from "@dbx-tools/appkit-lakebox";
 import { agents, mastra } from "@dbx-tools/appkit-mastra";
 import { memory } from "@dbx-tools/appkit-memory";
 import { email, emailTool } from "@dbx-tools/email";
-import { teams } from "@dbx-tools/teams";
 
 const support = agents.createAgent({
   name: "Support",
@@ -34,15 +32,14 @@ await appkit.createApp({
     lakebox(),
     memory(),
     email(),
-    teams(),
     mastra({ agents: { support } }),
   ],
 });
 ```
 
-The full server in [src/server.ts](src/server.ts) adds the polling agent,
-search providers, the topic bus, Lakebox skill mounts, the public tunnel, and
-deployment-specific identity policy.
+The full server in [src/server.ts](src/server.ts) adds search providers, the
+topic bus, Lakebox skill mounts, the public tunnel, and deployment-specific
+identity policy.
 
 ## Run the server
 
@@ -79,7 +76,7 @@ set the following values:
 | ---------------------------------- | --------------------------------------------------------------------------- |
 | `DATABRICKS_HOST`                  | Workspace URL.                                                              |
 | `DATABRICKS_CONFIG_PROFILE`        | Authenticated Databricks CLI profile for local development.                 |
-| `DATABRICKS_GENIE_SPACE_ID`        | Default Genie space for both demo agents.                                   |
+| `DATABRICKS_GENIE_SPACE_ID`        | Default Genie space for agent tools and direct Genie chat.                  |
 | `DATABRICKS_SERVING_ENDPOINT_NAME` | Optional model endpoint override.                                           |
 | `LAKEBASE_ENDPOINT`                | Lakebase Autoscaling endpoint used by AppKit, Mastra, search, and Graphiti. |
 | `DATABRICKS_AGENT_MEMORY_STORE_ID` | Optional Databricks managed-memory store.                                   |
@@ -98,14 +95,9 @@ Node runtime command.
 
 ## Use the registered capabilities
 
-The server registers two agents that share one definition:
-
-- `support` uses Genie Agent Mode streaming.
-- `support-polling` uses the Genie Conversation API and statement polling.
-
-Both agents use the same Genie space, memory tools, Lakebox tools, search
-tools, Teams card tool, email tool, model catalog, request context, and Mastra
-thread storage. The direct `/genie/:alias/*` routes keep conversations in
+The server registers one `support` agent with the Genie toolkit, durable memory,
+Lakebox, search, email, model selection, typed request context, and Mastra thread
+storage. The direct `/genie/:alias/*` routes keep Genie-only conversations in
 Genie instead of Mastra.
 
 The email tool pauses a turn until the user approves or rejects the send.
@@ -150,8 +142,5 @@ databricks bundle deployment bind demo_app dbx-tools-demo \
 - Direct Genie chat requires an on-behalf-of token. The Mastra agents can use
   `MASTRA_GENIE_IDENTITY=auto` to fall back to the app service principal when a
   tunnel supplies identity without a Databricks token.
-- The unauthenticated Teams messaging route is active only in development.
-  Production Bot Framework traffic requires `TEAMS_APP_ID` and
-  `TEAMS_APP_PASSWORD`.
 - AppKit shuts down the Graphiti sidecar, Lakebox runtime, topic bus, tunnel,
   and other plugin resources with the server process.

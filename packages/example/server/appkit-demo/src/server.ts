@@ -11,7 +11,6 @@ import {
   genie as appkitMastraGenie,
   mastra,
   type MastraAgentDefinition,
-  type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
 import { memory } from "@dbx-tools/appkit-memory";
@@ -21,7 +20,6 @@ import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { lakebaseAiSearch, search } from "@dbx-tools/search";
 import { brandUtils } from "@dbx-tools/shared-core";
-import { teams } from "@dbx-tools/teams";
 import { authGate, tunnelInterceptor } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
@@ -105,7 +103,7 @@ const SEARCH_DOCUMENTS = [
 ];
 
 const { createAgent, createTool, tool } = agents;
-const { buildGenieTools, GENIE_INSTRUCTIONS } = appkitMastraGenie;
+const { GENIE_INSTRUCTIONS } = appkitMastraGenie;
 const { defaultBrandContext } = brandUtils;
 const mastraStorage =
   configUtils.boolean(undefined, "MASTRA_STORAGE", configUtils.ENV_ONLY) ?? true;
@@ -218,20 +216,6 @@ let appServer: { getServer(): import("node:http").Server } | undefined;
 // Per-request overrides via `X-Mastra-Model` header, `?model=` query,
 // or body `model` field can re-target the same agent without redeploy.
 // `GET /api/mastra/models` lists the cached catalogue.
-async function demoGenieTools(plugins: MastraPlugins, agentMode: boolean): Promise<MastraTools> {
-  if (agentMode) return (await plugins.genie?.toolkit()) ?? {};
-
-  const spaceId = process.env.DATABRICKS_GENIE_SPACE_ID;
-  if (!spaceId) {
-    throw new Error("DATABRICKS_GENIE_SPACE_ID is required for the polling demo agent");
-  }
-
-  return buildGenieTools({
-    spaces: { default: spaceId },
-    config: { brand: defaultBrandContext, genieAgentMode: false },
-  });
-}
-
 const DemoRequestContextSchema = z.object({
   route: z.string().optional(),
   surface: z.string().optional(),
@@ -241,7 +225,7 @@ const DemoRequestContextSchema = z.object({
 });
 type DemoRequestContext = z.infer<typeof DemoRequestContextSchema>;
 
-function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoRequestContext> {
+function buildSupportDefinition(): MastraAgentDefinition<DemoRequestContext> {
   const baseInstructions = [
     "You are a data analyst helping customers explore a Databricks",
     "Genie space. Default to driving the Genie tools (`ask_genie`,",
@@ -257,7 +241,7 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
     GENIE_INSTRUCTIONS,
   ].join("\n");
   return {
-    name: agentMode ? "Support" : "Support (polling)",
+    name: "Support",
     requestContextSchema: DemoRequestContextSchema,
     instructions: ({ requestContext }) => {
       const applicationContext = requestContext.all;
@@ -273,17 +257,10 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
       // expand every source-linked Mastra tool schema together and exceeds its
       // instantiation depth; Object.assign preserves the same flat runtime
       // record without forcing that useless cross-tool type expansion.
-      const agentTools = Object.assign({}, await demoGenieTools(plugins, agentMode)) as MastraTools;
+      const agentTools = Object.assign({}, (await plugins.genie?.toolkit()) ?? {}) as MastraTools;
       Object.assign(agentTools, await plugins.memory?.toolkit());
       Object.assign(agentTools, await plugins[AppKitLakeboxPlugin.manifest.name]?.toolkit());
       Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
-      Object.assign(
-        agentTools,
-        await plugins.teams?.toolkit({
-          prefix: "",
-          rename: { createCard: "create_teams_card" },
-        }),
-      );
       Object.assign(agentTools, await plugins.search?.toolkit({ prefix: "" }));
       Object.assign(agentTools, {
         // Auto-discovered AppKit `ToolProvider` plugins. `plugins.<name>`
@@ -319,8 +296,7 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
     },
   };
 }
-const support = createAgent<DemoRequestContext>(buildSupportDefinition(true));
-const supportPolling = createAgent<DemoRequestContext>(buildSupportDefinition(false));
+const support = createAgent<DemoRequestContext>(buildSupportDefinition());
 
 const host = process.env.HOST ?? "127.0.0.1";
 
@@ -407,19 +383,6 @@ try {
       // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,
       // or `allowedUrls` to restrict which sites are reachable.
       webSearch(),
-      // Teams Adaptive Card runtime for the `create_teams_card` tool. Mounts
-      // `POST /api/teams/card` (the Cards page previews through it),
-      // `POST /api/teams/post`, and the Bot Framework messaging endpoint
-      // `POST /api/teams/messages`. Set TEAMS_WEBHOOK_URL to enable posting to a
-      // Teams channel.
-      //
-      // `allowUnauthenticated` lets the Cards page talk to `/messages` - the same
-      // route a real Teams channel would call - with no Azure Bot registration, so
-      // the demo renders live cards out of the box. It is honored ONLY when
-      // NODE_ENV=development (which this demo runs under locally); a real
-      // deployment sets TEAMS_APP_ID / TEAMS_APP_PASSWORD instead and gets the
-      // JWT-validated, Connector-delivered path.
-      teams({ allowUnauthenticated: true }),
       searchProvider,
       // The provider registered above owns the AppKit AI Search query contract:
       // native `aiSearch` when SEARCH_ENDPOINT is configured, otherwise
@@ -448,7 +411,7 @@ try {
         // Fail boot unless MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME is set.
         // The deployed app binds `/Shared/dbx-tools-demo` and the Apps OTLP sidecar.
         feedback: true,
-        agents: { support, "support-polling": supportPolling },
+        agents: { support },
         defaultAgent: "support",
         genieAgentMode: true,
         workspaceFallbackToTmp: true,

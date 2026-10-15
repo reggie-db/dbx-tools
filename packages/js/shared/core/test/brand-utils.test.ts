@@ -12,6 +12,7 @@ describe("brand context", () => {
     assert.equal(context.colors.primaryHover, "#0E538B");
     assert.equal(context.colors.accent, "#00A972");
     assert.equal(context.links.website, "https://dbx.tools");
+    assert.equal(context.links.documentation, "https://docs.dbx.tools/");
   });
 
   it("validates nested overrides and preserves defaults", () => {

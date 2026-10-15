@@ -1,4 +1,5 @@
 import { brandUtils } from "@dbx-tools/shared-core";
+import { emailBrandFromContext, type EmailBrand } from "@dbx-tools/shared-email-template";
 import { BrandIcon, useBrand } from "@dbx-tools/ui/branding/react";
 import { EmailPreview } from "@dbx-tools/ui/email/react";
 import {
@@ -90,7 +91,7 @@ The new release combines governed tools, durable memory, and human approval in o
 **Included in this release**
 
 1. Streaming multi-thread conversations
-2. Approval-gated email and Teams actions
+2. Approval-gated email and external actions
 3. Lakebase-backed memory and audit history
 4. Brand-aware UI and outbound messages
 
@@ -116,6 +117,9 @@ Seats are intentionally limited so every attendee leaves with an actionable plan
 [Reserve your seat](https://example.com/northstar)`,
 };
 
+const NORTHSTAR_ICON =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236D28D9'/%3E%3Cpath d='M32 11l5.8 14.2L53 27l-11.5 9.8L45 52l-13-8-13 8 3.5-15.2L11 27l15.2-1.8L32 11z' fill='%23fff'/%3E%3C/svg%3E";
+
 const campaignBrand = {
   accent: "#6D28D9",
   onAccent: "#FFFFFF",
@@ -128,7 +132,8 @@ const campaignBrand = {
   border: "#DDD6FE",
   tagline: "Ideas for teams building what comes next.",
   website: "https://example.com/northstar",
-};
+  logoUrl: NORTHSTAR_ICON,
+} satisfies EmailBrand;
 
 interface BrandPageProps {
   value: brandUtils.BrandContext;
@@ -136,7 +141,11 @@ interface BrandPageProps {
 }
 
 const BrandPage = ({ value, onChange }: BrandPageProps) => {
-  const { context } = useBrand();
+  const { context, resolveAsset } = useBrand();
+  const siteEmailBrand = {
+    ...emailBrandFromContext(context),
+    logoUrl: resolveAsset(context.assets.icon.light),
+  } satisfies EmailBrand;
   return (
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-6 md:py-10">
@@ -198,7 +207,9 @@ const BrandPage = ({ value, onChange }: BrandPageProps) => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <EmailPreview email={digestEmail} />
+                <div className="rounded-2xl border border-border/70 bg-muted/30 p-2 sm:p-3">
+                  <EmailPreview email={digestEmail} brand={siteEmailBrand} />
+                </div>
               </CardContent>
             </Card>
 
@@ -210,7 +221,9 @@ const BrandPage = ({ value, onChange }: BrandPageProps) => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <EmailPreview email={launchEmail} />
+                <div className="rounded-2xl border border-border/70 bg-muted/30 p-2 sm:p-3">
+                  <EmailPreview email={launchEmail} brand={siteEmailBrand} />
+                </div>
               </CardContent>
             </Card>
 
@@ -222,7 +235,9 @@ const BrandPage = ({ value, onChange }: BrandPageProps) => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="mx-auto max-w-3xl">
-                <EmailPreview email={campaignEmail} brand={campaignBrand} />
+                <div className="rounded-2xl border border-border/70 bg-muted/30 p-2 sm:p-3">
+                  <EmailPreview email={campaignEmail} brand={campaignBrand} />
+                </div>
               </CardContent>
             </Card>
           </div>

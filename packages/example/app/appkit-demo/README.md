@@ -1,9 +1,10 @@
 # Run the demo React client
 
 This package renders the browser half of the dbx-tools demo. It keeps a Mastra
-assistant mounted across route changes and provides focused pages for chat,
-Genie, search, Microsoft Teams cards, branding, Lakebox, and the Postgres topic
-bus.
+assistant mounted across route changes and provides focused pages for unified
+agent/Genie chat, Lakebox, AI Search, the Postgres message bus, and branding.
+Desktop layouts also include a hideable guide pane with use cases and links to
+the matching documentation sections.
 
 ```tsx
 import { MastraAssistant } from "@dbx-tools/ui-mastra/react";
@@ -56,16 +57,14 @@ For full environment and authentication setup, see the
 The client has the following pages:
 
 - `Chat.tsx` renders `MastraChat` with model selection, export, threads, and a
-  control that switches between Genie Agent Mode and polling agents.
-- `GenieChat.tsx` renders direct Genie chat. Genie owns the conversations,
-  tables, thoughts, and visualizations.
-- `Cards.tsx` renders a Teams-shaped chat and an Adaptive Card builder.
+  history-area control that switches between the tool-using support agent and
+  direct Genie conversations.
+- `Lakebox.tsx` renders the current user's Lakebox lifecycle, services, and
+  metrics.
 - `Search.tsx` uses one component surface for Databricks AI Search or the
   Lakebase full-text provider selected by the server.
 - `Bus.tsx` publishes and receives live Postgres topic-bus messages.
 - `Brand.tsx` updates the active application brand and email previews.
-- `Lakebox.tsx` renders the current user's Lakebox lifecycle, services, and
-  metrics.
 
 `MastraAssistant` remains mounted while React Router changes pages. This keeps
 the assistant thread and streaming state alive. `AssistantRouteContext` sends
@@ -92,10 +91,8 @@ runtime.
 
 - The client doesn't hold Databricks credentials. AppKit sessions and the
   server-published plugin configuration provide browser access.
-- The direct Genie page requires an on-behalf-of token from the Databricks Apps
-  front door.
-- The Teams chat accepts unauthenticated local activities only while the server
-  runs in development mode.
+- Genie-only chat requires an on-behalf-of token from the Databricks Apps front
+  door.
 - Topic-bus delivery is live. Opening a page doesn't replay messages published
   before its event stream connected.
 - Lakebox controls require the `@dbx-tools/appkit-lakebox` backend plugin and an

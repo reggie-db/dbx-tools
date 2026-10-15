@@ -107,7 +107,7 @@ export const BrandContextSchema = z
       .object({
         website: z.string().url().default("https://dbx.tools"),
         repository: z.string().url().optional(),
-        documentation: z.string().url().optional(),
+        documentation: z.string().url().default("https://docs.dbx.tools/"),
       })
       .strict()
       .prefault({}),

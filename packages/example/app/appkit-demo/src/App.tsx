@@ -8,9 +8,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react
 
 const Brand = lazy(() => import("@/pages/Brand"));
 const Bus = lazy(() => import("@/pages/Bus"));
-const Cards = lazy(() => import("@/pages/Cards"));
 const Chat = lazy(() => import("@/pages/Chat"));
-const GenieChat = lazy(() => import("@/pages/GenieChat"));
 const Search = lazy(() => import("@/pages/Search"));
 const Lakebox = lazy(() => import("@/pages/Lakebox"));
 
@@ -62,39 +60,138 @@ type RouteDef = {
   path: string;
   label: string;
   description: string;
+  guide: {
+    summary: string;
+    unlocks: readonly string[];
+    useCases: readonly string[];
+    docs: ReadonlyArray<{ label: string; href: string }>;
+  };
   element: React.ReactNode;
 };
+
+const docsUrl = (path: string): string =>
+  new URL(path, brandUtils.defaultBrandContext.links.documentation).toString();
 
 const BASE_ROUTES: RouteDef[] = [
   {
     path: "/chat",
     label: "Chat",
-    description: "Streaming assistant with tools, history, and threads",
+    description: "One chat for governed agents and direct Genie conversations",
+    guide: {
+      summary:
+        "Use the same conversation shell for a tool-using Mastra agent or a direct AI/BI Genie conversation. The Genie-only switch keeps both modes beside the same thread history.",
+      unlocks: [
+        "Streaming answers with governed tools, approvals, charts, and tables",
+        "Persistent threads, history, model selection, export, and MLflow feedback",
+        "Direct Genie conversations without a second application surface",
+      ],
+      useCases: [
+        "A data-platform copilot that can search, query Genie, and request approved actions",
+        "An analyst Q&A experience where Genie owns the conversation and visualizations",
+        "A support assistant that keeps user context across multiple work sessions",
+      ],
+      docs: [
+        {
+          label: "Render Mastra chat",
+          href: docsUrl("guides/agents-and-genie/#render-mastra-chat"),
+        },
+        {
+          label: "Render direct Genie chat",
+          href: docsUrl("guides/agents-and-genie/#render-direct-genie-chat"),
+        },
+      ],
+    },
     element: <Chat />,
   },
   {
-    path: "/genie",
-    label: "Genie Chat",
-    description: "Direct Genie conversation using the same chat shell",
-    element: <GenieChat />,
-  },
-  {
-    path: "/cards",
-    label: "Cards",
-    description: "A simulated Teams chat where the agent answers in Adaptive Cards",
-    element: <Cards />,
-  },
-  {
-    path: "/bus",
-    label: "Bus",
-    description: "Postgres topic broadcasts shared live across multiple viewers",
-    element: <Bus />,
+    path: "/lakebox",
+    label: "Lakebox",
+    description: "Persistent per-user terminal, desktop, services, and metrics",
+    guide: {
+      summary:
+        "Give each authenticated app user a persistent Linux workspace inside one app-owned Databricks Lakebox, without exposing workspace credentials to workloads.",
+      unlocks: [
+        "Browser terminal and desktop access with persistent user homes",
+        "App-routed OCI services created from governed agent tools",
+        "User isolation, service controls, and live machine-level metrics",
+      ],
+      useCases: [
+        "Run data-science tools that need a full Linux environment beside an AppKit app",
+        "Let an agent create and manage a temporary visualization or development service",
+        "Provide durable workspaces for workshops, investigations, or operator workflows",
+      ],
+      docs: [
+        {
+          label: "Render Lakebox controls",
+          href: docsUrl("guides/lakebox/#render-lakebox-controls"),
+        },
+        {
+          label: "Create a Lakebox service",
+          href: docsUrl("packages/appkit-lakebox/#create-a-service"),
+        },
+      ],
+    },
+    element: <Lakebox />,
   },
   {
     path: "/search",
-    label: "Search",
-    description: "AI Search (Vector Search) instant search, universal search, and results",
+    label: "AI Search",
+    description: "Instant, universal, and composable governed search",
+    guide: {
+      summary:
+        "Put governed Databricks AI Search behind drop-in React controls and agent tools, with a Lakebase full-text option when Vector Search is not configured.",
+      unlocks: [
+        "Search-as-you-type over a configured index",
+        "Universal search across multiple indexes with merged results",
+        "The same search contract for React screens and Mastra agent tools",
+      ],
+      useCases: [
+        "Search product, support, or policy knowledge from an internal application",
+        "Let an agent retrieve grounded records before it answers or acts",
+        "Prototype locally with Lakebase, then move to governed Vector Search",
+      ],
+      docs: [
+        {
+          label: "Choose a search provider",
+          href: docsUrl("packages/search/#choose-a-search-provider"),
+        },
+        {
+          label: "Add search to a Mastra agent",
+          href: docsUrl("packages/search/#add-search-to-a-mastra-agent"),
+        },
+      ],
+    },
     element: <Search />,
+  },
+  {
+    path: "/bus",
+    label: "Message Bus",
+    description: "Postgres topic broadcasts shared live across multiple viewers",
+    guide: {
+      summary:
+        "Use Lakebase or PostgreSQL LISTEN/NOTIFY as a typed, app-scoped message bus for live coordination between browser sessions, replicas, and background work.",
+      unlocks: [
+        "Low-latency topic broadcasts across app replicas and connected clients",
+        "Typed envelopes with sender identity and application metadata",
+        "Optional persisted replay when consumers need to catch up",
+      ],
+      useCases: [
+        "Refresh dashboards when a long-running workflow completes",
+        "Broadcast agent progress or shared operator events to every viewer",
+        "Coordinate cache invalidation or lightweight work signals across replicas",
+      ],
+      docs: [
+        {
+          label: "Use the topic bus",
+          href: docsUrl("packages/postgres/#topic-bus"),
+        },
+        {
+          label: "Replay persisted messages",
+          href: docsUrl("packages/postgres/#replay-with-persist"),
+        },
+      ],
+    },
+    element: <Bus />,
   },
 ];
 
@@ -256,6 +353,8 @@ const AssistantRouteContext = () => {
 };
 
 const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
+  const { pathname } = useLocation();
+  const route = routes.find((candidate) => candidate.path === pathname) ?? routes[0]!;
   return (
     <MastraAssistant
       mode="overlay"
@@ -274,27 +373,116 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
           <Nav routes={routes} />
           <Separator />
         </header>
-        <main className="flex min-h-0 flex-1 flex-col">
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Loading page...
-              </div>
-            }
-          >
-            <Routes>
-              <Route path="/" element={<Navigate to="/chat" replace />} />
-              {routes.map((route) => (
-                <Route key={route.path} path={route.path} element={route.element} />
-              ))}
-              <Route path="*" element={<Navigate to="/chat" replace />} />
-            </Routes>
-          </Suspense>
+        <main className="flex min-h-0 flex-1">
+          <section className="flex min-w-0 flex-1 flex-col">
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Loading page...
+                </div>
+              }
+            >
+              <Routes>
+                <Route path="/" element={<Navigate to="/chat" replace />} />
+                {routes.map((route) => (
+                  <Route key={route.path} path={route.path} element={route.element} />
+                ))}
+                <Route path="*" element={<Navigate to="/chat" replace />} />
+              </Routes>
+            </Suspense>
+          </section>
+          <DemoGuide route={route} />
         </main>
       </div>
     </MastraAssistant>
   );
 };
+
+const GUIDE_STORAGE_KEY = "demo-guide-open";
+
+const DemoGuide = ({ route }: { route: RouteDef }) => {
+  const [open, setOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem(GUIDE_STORAGE_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+
+  const updateOpen = (next: boolean) => {
+    setOpen(next);
+    try {
+      window.localStorage.setItem(GUIDE_STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      // The in-session control still works when storage is unavailable.
+    }
+  };
+
+  if (!open) {
+    return (
+      <div className="hidden shrink-0 border-l border-border bg-muted/20 p-2 xl:flex">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-fit [writing-mode:vertical-rl]"
+          onClick={() => updateOpen(true)}
+        >
+          Show guide
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-muted/20 xl:flex 2xl:w-96">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">Demo guide</p>
+          <h2 className="text-base font-semibold text-foreground">{route.label}</h2>
+        </div>
+        <Button type="button" size="sm" variant="ghost" onClick={() => updateOpen(false)}>
+          Hide
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 text-sm">
+        <p className="leading-6 text-foreground/85">{route.guide.summary}</p>
+        <GuideList title="What this unlocks" items={route.guide.unlocks} />
+        <GuideList title="Example use cases" items={route.guide.useCases} />
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">Read the docs</h3>
+          <div className="space-y-1">
+            {route.guide.docs.map((doc) => (
+              <a
+                key={doc.href}
+                href={doc.href}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-md px-2 py-1.5 font-medium text-primary hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {doc.label}
+              </a>
+            ))}
+          </div>
+        </section>
+      </div>
+    </aside>
+  );
+};
+
+const GuideList = ({ title, items }: { title: string; items: readonly string[] }) => (
+  <section className="space-y-2">
+    <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+    <ul className="space-y-2 text-muted-foreground">
+      {items.map((item) => (
+        <li key={item} className="flex gap-2 leading-5">
+          <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+);
 
 const App = () => {
   useVisualViewportShell();
@@ -305,13 +493,25 @@ const App = () => {
       path: "/brand",
       label: "Brand",
       description: "Live brand picker and rich email template previews",
+      guide: {
+        summary:
+          "Apply one portable brand context to AppKit tokens, browser metadata, icons, and email presentation while still allowing a message-specific campaign identity.",
+        unlocks: [
+          "One typed source for application colors, typography, icons, and metadata",
+          "Brand-aware authentication, navigation, email chrome, and rendered messages",
+          "Scoped overrides for partner, event, or campaign communication",
+        ],
+        useCases: [
+          "Ship the same internal application for multiple business units or customers",
+          "Keep approval previews visually identical to delivered React Email messages",
+          "Apply a temporary campaign identity without changing the surrounding app",
+        ],
+        docs: [
+          { label: "Apply application branding", href: docsUrl("packages/ui/#branding") },
+          { label: "Render email surfaces", href: docsUrl("packages/ui/#email") },
+        ],
+      },
       element: <Brand value={brandContext} onChange={setBrandContext} />,
-    },
-    {
-      path: "/lakebox",
-      label: "Lakebox",
-      description: "Open your terminal, desktop, and services",
-      element: <Lakebox />,
     },
   ];
 

@@ -3,41 +3,39 @@ import { useState } from "react";
 import { useChatThreadQuery } from "@/hooks/use-chat-thread-query";
 
 // Focused chat surface: streaming, tool-session pills, approvals, model
-// selection, history, threads, export, and Genie transport selection.
+// selection, history, threads, export, and direct Genie selection.
 
 const Chat = () => {
-  const [agentMode, setAgentMode] = useState(true);
-  const agentId = agentMode ? "support" : "support-polling";
-  const thread = useChatThreadQuery();
+  const [genieOnly, setGenieOnly] = useState(false);
+  const agentThread = useChatThreadQuery("thread");
+  const genieThread = useChatThreadQuery("genieThread");
+  const thread = genieOnly ? genieThread : agentThread;
 
-  const agentModeControl = (
+  const genieOnlyControl = (
     <label
-      className="flex h-7 w-full cursor-pointer items-center gap-2 rounded-sm px-2 text-xs text-foreground hover:bg-accent"
-      title={
-        agentMode ? "Genie Agent Mode SSE is enabled" : "Genie Conversation API polling is enabled"
-      }
+      className="flex h-7 cursor-pointer items-center gap-2 rounded-sm px-2 text-xs text-foreground hover:bg-accent"
+      title="Use direct Genie conversations instead of the tool-using support agent"
     >
       <input
-        id="genie-agent-mode"
-        name="genie-agent-mode"
+        name="genie-only"
         type="checkbox"
         className="size-3.5 accent-primary"
-        checked={agentMode}
-        onChange={(event) => setAgentMode(event.target.checked)}
+        checked={genieOnly}
+        onChange={(event) => setGenieOnly(event.target.checked)}
       />
-      Genie Agent Mode
+      Genie only
     </label>
   );
 
   return (
     <MastraChat
-      key={agentId}
-      agentId={agentId}
+      key={genieOnly ? "genie" : "agent"}
+      {...(genieOnly ? { genieSpace: "default" } : { agentId: "support", showModelPicker: true })}
       threadId={thread.threadId}
       onThreadIdChange={thread.onThreadIdChange}
-      showModelPicker
       enableExport
-      modelSelectorActions={agentModeControl}
+      threadHistoryLeadingActions={genieOnlyControl}
+      threadSidebarHeaderActions={genieOnlyControl}
       className="min-h-0 flex-1"
     />
   );

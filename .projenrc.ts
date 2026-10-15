@@ -1317,7 +1317,6 @@ project.applyToProjects(
       "@dbx-tools/postgres@workspace:^",
       "@dbx-tools/email@workspace:^",
       "@dbx-tools/appkit-web-search@workspace:^",
-      "@dbx-tools/teams@workspace:^",
       "@dbx-tools/search@workspace:^",
       "@dbx-tools/shared-core@workspace:^",
       // The tunnel library: the server registers `tunnelInterceptor()` on its own
@@ -1364,10 +1363,10 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
   p.addDevDeps("@dbx-tools/tunnel@workspace:^", "vite@catalog:");
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-email-template@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "@dbx-tools/ui-mastra@workspace:^",
     "@dbx-tools/ui-lakebox@workspace:^",
-    "@dbx-tools/ui-teams@workspace:^",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.
     "@databricks/appkit-ui@catalog:",

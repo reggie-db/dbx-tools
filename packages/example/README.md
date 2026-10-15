@@ -1,9 +1,9 @@
 # Run the dbx-tools AppKit demo
 
 Run a Databricks App that combines Genie, Mastra, Lakebase, Lakebox, search,
-approval-gated email, Microsoft Teams cards, durable memory, and a React client.
-The demo consumes the workspace packages directly, so package changes are
-available without publishing them first.
+approval-gated email, durable memory, a Postgres message bus, and a React
+client. The demo consumes the workspace packages directly, so package changes
+are available without publishing them first.
 
 ```bash
 bun install
@@ -31,7 +31,7 @@ The main settings are:
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `DATABRICKS_HOST`                             | Databricks workspace URL.                                                                         |
 | `DATABRICKS_CONFIG_PROFILE`                   | Explicit Databricks CLI profile for local workspace access.                                       |
-| `DATABRICKS_GENIE_SPACE_ID`                   | Genie space used by the chat and card examples.                                                   |
+| `DATABRICKS_GENIE_SPACE_ID`                   | Genie space used by the support agent and Genie-only chat.                                        |
 | `DATABRICKS_SERVING_ENDPOINT_NAME`            | Optional model endpoint override. The model catalog selects an endpoint when this value is unset. |
 | `LAKEBASE_ENDPOINT` or `LAKEBASE_PROJECT`     | Lakebase Autoscaling resource used by AppKit and Mastra persistence.                              |
 | `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASSWORD` | SMTP delivery for approved email.                                                                 |
@@ -67,19 +67,18 @@ uses the app service principal for Databricks calls that require credentials.
 
 The demo has the following pages:
 
-- **Chat** compares Genie Agent Mode streaming with Conversation API polling.
-  Both agents share the same tools, model selection, threads, and history.
-- **Genie Chat** uses the Genie plugin directly, with Genie-owned
-  conversations and visualizations.
-- **Cards** sends the same agent questions through a Microsoft Teams Bot
-  Framework envelope and renders Adaptive Cards.
-- **Bus** publishes Postgres topic messages and streams them to every open
-  viewer.
-- **Search** uses Databricks AI Search when configured and a Lakebase full-text
-  provider otherwise.
-- **Brand** updates the application and email preview brand context.
+- **Chat** switches one history-aware surface between the tool-using support
+  agent and direct Genie conversations.
 - **Lakebox** manages the current user's terminal, desktop, services, and
   machine metrics.
+- **AI Search** uses Databricks AI Search when configured and a Lakebase
+  full-text provider otherwise.
+- **Message Bus** publishes Postgres topic messages and streams them to every
+  open viewer.
+- **Brand** updates the application and email preview brand context.
+
+On desktop, each page includes a hideable guide pane with concrete use cases
+and links to the corresponding section of the dbx-tools documentation.
 
 The server and client are separate workspace packages:
 
@@ -96,32 +95,15 @@ import { appkit } from "@dbx-tools/appkit";
 import { lakebox } from "@dbx-tools/appkit-lakebox";
 import { memory } from "@dbx-tools/appkit-memory";
 import { email } from "@dbx-tools/email";
-import { teams } from "@dbx-tools/teams";
 
 await appkit.createApp({
-  plugins: [server(), genie(), lakebase(), lakebox(), memory(), email(), teams()],
+  plugins: [server(), genie(), lakebase(), lakebox(), memory(), email()],
 });
 ```
 
 The complete registration, including Mastra agents, search providers, the
 topic bus, and the tunnel gate, is in
 [server/appkit-demo/src/server.ts](server/appkit-demo/src/server.ts).
-
-## Test the Teams endpoint
-
-In development, the demo allows unauthenticated Bot Framework activities so
-you can test the Teams route without an Azure Bot registration:
-
-```bash
-curl --request POST http://127.0.0.1:8000/api/teams/messages \
-  --header 'content-type: application/json' \
-  --data '{"type":"message","text":"summarize today","from":{"id":"user-1"},"conversation":{"id":"conv-1"}}'
-```
-
-`allowUnauthenticated` applies only when `NODE_ENV=development`. A deployed
-Teams bot must configure `TEAMS_APP_ID` and `TEAMS_APP_PASSWORD`. For the
-protocol and delivery behavior, see
-[@dbx-tools/teams](../js/node/teams/README.md).
 
 ## Deploy the demo
 

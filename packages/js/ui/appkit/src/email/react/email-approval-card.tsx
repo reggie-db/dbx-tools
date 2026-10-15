@@ -27,7 +27,7 @@ export interface EmailPreviewProps {
   brand?: EmailBrand;
 }
 
-/** Initials for the sender avatar when no logo is available. */
+/** Initials for the sender avatar when no icon or logo is available. */
 function senderInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -63,11 +63,18 @@ export const EmailPreview = ({ email, brand }: EmailPreviewProps) => {
       <div className="space-y-3 border-b border-border bg-background px-4 py-3">
         <div className="flex items-start gap-3">
           <div
-            className="flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+            className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/70 text-xs font-semibold"
             style={{ backgroundColor: theme.accent, color: theme.onAccent }}
-            aria-hidden
           >
-            {senderInitials(theme.name)}
+            {theme.logoUrl ? (
+              <img
+                src={theme.logoUrl}
+                alt={`${theme.name} icon`}
+                className="size-8 object-contain"
+              />
+            ) : (
+              <span aria-hidden>{senderInitials(theme.name)}</span>
+            )}
           </div>
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-baseline justify-between gap-3">
