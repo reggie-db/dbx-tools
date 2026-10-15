@@ -14,6 +14,7 @@
         "@dbx-tools/shared-fs"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-memory",
@@ -27,6 +28,23 @@
         "@dbx-tools/search",
         "@dbx-tools/teams",
         "@dbx-tools/tunnel"
+      ]
+    },
+    {
+      "name": "@dbx-tools/appkit-generator",
+      "path": "packages/js/node/appkit-generator",
+      "dependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/appkit-mastra",
+        "@dbx-tools/appkit-web-search",
+        "@dbx-tools/core",
+        "@dbx-tools/genie",
+        "@dbx-tools/shared-core",
+        "@dbx-tools/shared-generator",
+        "@dbx-tools/shared-genie"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/demo-appkit-server"
       ]
     },
     {
@@ -68,6 +86,7 @@
         "@dbx-tools/shared-model"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/appkit-memory",
         "@dbx-tools/demo-appkit-server"
@@ -117,6 +136,7 @@
         "@dbx-tools/shared-model"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-generator",
         "@dbx-tools/demo-appkit-server"
       ]
     },
@@ -223,6 +243,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-memory",
@@ -277,11 +298,12 @@
       "path": "packages/example/app/appkit-demo",
       "dependencies": [
         "@dbx-tools/shared-core",
+        "@dbx-tools/shared-email-template",
+        "@dbx-tools/shared-generator",
         "@dbx-tools/tunnel",
         "@dbx-tools/ui",
         "@dbx-tools/ui-lakebox",
-        "@dbx-tools/ui-mastra",
-        "@dbx-tools/ui-teams"
+        "@dbx-tools/ui-mastra"
       ],
       "reverseDependencies": []
     },
@@ -290,6 +312,7 @@
       "path": "packages/example/server/appkit-demo",
       "dependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-memory",
@@ -301,7 +324,7 @@
         "@dbx-tools/projen",
         "@dbx-tools/search",
         "@dbx-tools/shared-core",
-        "@dbx-tools/teams",
+        "@dbx-tools/shared-generator",
         "@dbx-tools/tunnel"
       ],
       "reverseDependencies": []
@@ -343,6 +366,7 @@
         "@dbx-tools/shared-genie"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-mastra"
       ]
     },
@@ -487,6 +511,7 @@
       "dependencies": [],
       "reverseDependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-memory",
@@ -516,6 +541,7 @@
         "@dbx-tools/shared-auth",
         "@dbx-tools/shared-email-template",
         "@dbx-tools/shared-fs",
+        "@dbx-tools/shared-generator",
         "@dbx-tools/shared-genie",
         "@dbx-tools/shared-genie-code",
         "@dbx-tools/shared-graphiti",
@@ -545,6 +571,7 @@
         "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
+        "@dbx-tools/demo-appkit-app",
         "@dbx-tools/email",
         "@dbx-tools/ui"
       ]
@@ -563,12 +590,25 @@
       ]
     },
     {
+      "name": "@dbx-tools/shared-generator",
+      "path": "packages/js/shared/generator",
+      "dependencies": [
+        "@dbx-tools/shared-core"
+      ],
+      "reverseDependencies": [
+        "@dbx-tools/appkit-generator",
+        "@dbx-tools/demo-appkit-app",
+        "@dbx-tools/demo-appkit-server"
+      ]
+    },
+    {
       "name": "@dbx-tools/shared-genie",
       "path": "packages/js/shared/genie",
       "dependencies": [
         "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/genie",
         "@dbx-tools/shared-mastra",
@@ -681,9 +721,7 @@
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-teams"
       ],
-      "reverseDependencies": [
-        "@dbx-tools/demo-appkit-server"
-      ]
+      "reverseDependencies": []
     },
     {
       "name": "@dbx-tools/tunnel",
@@ -753,9 +791,7 @@
         "@dbx-tools/shared-teams",
         "@dbx-tools/ui"
       ],
-      "reverseDependencies": [
-        "@dbx-tools/demo-appkit-app"
-      ]
+      "reverseDependencies": []
     }
   ]
 }

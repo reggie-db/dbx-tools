@@ -12,7 +12,7 @@ import type {
   WebSearchRequest,
   WebSearchResult,
 } from "@dbx-tools/appkit-web-search/schema";
-import { log, stringUtils } from "@dbx-tools/shared-core";
+import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import type {
   BrandGenerationProgressEvent,
   BrandGenerationRequest,
@@ -166,7 +166,7 @@ async function fetchSource(
   } catch (error) {
     logger.warn("source-fetch-failed", {
       url: citation.url,
-      error: error instanceof Error ? error : new Error(String(error)),
+      error: errorUtils.toError(error),
     });
     return { ...citation, fetched: false };
   } finally {
@@ -244,7 +244,7 @@ export async function researchBrand(
       .catch((error: unknown) => {
         logger.warn("official-page-html-fetch-failed", {
           url: official.url,
-          error: error instanceof Error ? error : new Error(String(error)),
+          error: errorUtils.toError(error),
         });
         return undefined;
       }),
