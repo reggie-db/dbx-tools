@@ -333,6 +333,7 @@ dbx tunnel [options] [command] [command...]
 | `--allow <value>`                | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
 | `--subject <value>`              | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
 | `--brand-name <value>`           | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `--passkey-name-prefix <value>`  | Prefix for humanized tunnel passkey names. (env: TUNNEL_AUTH_PASSKEY_NAME_PREFIX)               |
 | `-m, --message <value>`          | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
 | `--session-ttl-seconds <value>`  | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
 | `-c, --code-ttl-seconds <value>` | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
@@ -385,6 +386,7 @@ dbx tunnel run [options] <command...>
 | `--allow <value>`                | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
 | `--subject <value>`              | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
 | `--brand-name <value>`           | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `--passkey-name-prefix <value>`  | Prefix for humanized tunnel passkey names. (env: TUNNEL_AUTH_PASSKEY_NAME_PREFIX)               |
 | `-m, --message <value>`          | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
 | `--session-ttl-seconds <value>`  | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
 | `-c, --code-ttl-seconds <value>` | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
@@ -423,6 +425,7 @@ dbx tunnel status [options]
 | `--allow <value>`                | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
 | `--subject <value>`              | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
 | `--brand-name <value>`           | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `--passkey-name-prefix <value>`  | Prefix for humanized tunnel passkey names. (env: TUNNEL_AUTH_PASSKEY_NAME_PREFIX)               |
 | `-m, --message <value>`          | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
 | `--session-ttl-seconds <value>`  | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
 | `-c, --code-ttl-seconds <value>` | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
