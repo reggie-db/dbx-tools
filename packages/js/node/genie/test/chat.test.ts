@@ -42,6 +42,7 @@ describe("genieChat Agent Mode", () => {
   });
 
   it("streams Agent Mode by default and projects response items", async () => {
+    const submittedContent = "Selected store: store-1\n\nWhat is the value?";
     const output = [
       {
         type: "reasoning",
@@ -81,7 +82,7 @@ describe("genieChat Agent Mode", () => {
               {
                 type: "message",
                 role: "user",
-                content: [{ type: "input_text", text: "What is the value?" }],
+                content: [{ type: "input_text", text: submittedContent }],
               },
             ],
           });
@@ -126,8 +127,9 @@ describe("genieChat Agent Mode", () => {
     } as unknown as WorkspaceClient;
 
     const messages = [];
-    for await (const message of genieChat(AGENT_ID, "What is the value?", {
+    for await (const message of genieChat(AGENT_ID, submittedContent, {
       workspaceClient: client,
+      displayContent: "What is the value?",
     })) {
       messages.push(message);
     }
@@ -135,6 +137,7 @@ describe("genieChat Agent Mode", () => {
     const final = messages.at(-1)!;
     assert.doesNotThrow(() => genieModel.GenieMessageSchema.parse(final));
     assert.equal(final.status, "COMPLETED");
+    assert.equal(final.content, "What is the value?");
     assert.equal(final.conversation_id, "conversation-1");
     assert.equal(final.attachments?.[0]?.query?.thoughts?.[0]?.content, "Find the relevant metric");
     assert.equal(final.attachments?.[1]?.query?.query, "SELECT 1 AS value");

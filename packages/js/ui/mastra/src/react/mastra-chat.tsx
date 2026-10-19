@@ -3,6 +3,7 @@ import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra/resume";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { getAuthStatus } from "@dbx-tools/ui/auth/react";
 import { useBrand } from "@dbx-tools/ui/branding/react";
+import type { RequestContext } from "@mastra/client-js";
 import type { FileUIPart, UIMessage } from "ai";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toChronologicalUiMessages } from "./_history-messages.ts";
@@ -42,7 +43,6 @@ import {
 } from "../support/model-selection.ts";
 import {
   snapshotRequestContext,
-  type MastraRequestContextSnapshot,
   type MastraRequestContextSource,
 } from "../support/request-context.ts";
 import { threadStorageKey } from "../support/thread-persistence.ts";
@@ -755,7 +755,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     (
       threadId: string,
       messages: UIMessage | UIMessage[],
-      requestContext?: MastraRequestContextSnapshot,
+      requestContext?: RequestContext,
     ) => {
       const turnMessages = Array.isArray(messages) ? messages : [messages];
       const userMessage = lastUserMessage(turnMessages);

@@ -547,6 +547,10 @@ export const GenieChatRequestSchema = z
       .string()
       .optional()
       .describe("Existing Genie conversation to continue; omitted to start a new one."),
+    requestContext: z
+      .record(z.string(), z.json())
+      .optional()
+      .describe("Mastra application request context for this direct Genie turn."),
   })
   .describe("One direct Genie chat turn.");
 

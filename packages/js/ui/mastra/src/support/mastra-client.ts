@@ -20,10 +20,10 @@ import {
   type ListAgentSuspendedRunsResponse,
   type ListMemoryThreadMessagesResponse,
   type ListMemoryThreadsResponse,
+  type RequestContext,
 } from "@mastra/client-js";
 import { DefaultChatTransport, type UIMessage, type UIMessageChunk } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MastraRequestContextSnapshot } from "./request-context.ts";
 
 type NativeAgentClient = ReturnType<MastraClient["getAgent"]>;
 
@@ -222,7 +222,7 @@ export class MastraPluginClient extends MastraClient {
     threadId?: string;
     model?: string;
     reasoningEffort?: ReasoningEffort;
-    requestContext?: MastraRequestContextSnapshot;
+    requestContext?: RequestContext;
     signal?: AbortSignal;
   }): Promise<MastraStreamResponse> {
     return this.uiStream({
@@ -290,7 +290,7 @@ export class MastraPluginClient extends MastraClient {
       runId: string;
       toolCallId: string;
       threadId?: string;
-      requestContext?: MastraRequestContextSnapshot;
+      requestContext?: RequestContext;
       signal?: AbortSignal;
     },
   ): Promise<MastraStreamResponse> {
@@ -307,7 +307,7 @@ export class MastraPluginClient extends MastraClient {
       toolCallId: string;
       threadId?: string;
       reason?: string;
-      requestContext?: MastraRequestContextSnapshot;
+      requestContext?: RequestContext;
       signal?: AbortSignal;
     },
   ): Promise<MastraStreamResponse> {
@@ -322,7 +322,7 @@ export class MastraPluginClient extends MastraClient {
       toolCallId: string;
       threadId?: string;
       reason?: string;
-      requestContext?: MastraRequestContextSnapshot;
+      requestContext?: RequestContext;
       signal?: AbortSignal;
     },
   ): Promise<MastraStreamResponse> {

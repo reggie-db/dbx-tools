@@ -78,7 +78,7 @@ export { GenieChatClient } from "./src/support/genie-client.ts";
 export { MastraChatRequestError, MastraPluginClient, useMastraConfig, useMastraClient, useMastraMlflowExperiment, useMastraModels, useMastraDefaultModel, useMastraSuggestions, useMastraThreads, useChartFetch, useStatementFetch, useVisualizationFetch } from "./src/support/mastra-client.ts";
 export type { MastraStreamResponse, MastraMemoryThread, ByIdFetchState } from "./src/support/mastra-client.ts";
 export { defaultReasoningEffort, modelStorageKey, readStoredModel, storeSelectedModel } from "./src/support/model-selection.ts";
-export type { MastraRequestContextInput, MastraRequestContextSource, MastraRequestContextSnapshot } from "./src/support/request-context.ts";
+export type { MastraRequestContextInput, MastraRequestContextSource } from "./src/support/request-context.ts";
 export { DEFAULT_THREAD_SESSION_KEY } from "./src/support/thread-sessions.ts";
 export type { SessionQueuedSteer, SessionRun, ThreadSession } from "./src/support/thread-sessions.ts";
 export { THREAD_TAB_SEED_MAX } from "./src/support/thread-tabs.ts";

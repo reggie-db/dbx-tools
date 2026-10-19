@@ -2,13 +2,17 @@ import { describe, expect, test } from "bun:test";
 import type { WorkspaceClient } from "@databricks/appkit";
 import type { GenieMessage } from "@dbx-tools/shared-genie";
 import { wire } from "@dbx-tools/shared-mastra";
+import type { MastraMemory } from "@mastra/core/memory";
+import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 
 import {
   deleteGenieThreadMessage,
   genieAnswerText,
+  genieChatStream,
   genieMessageToUiMessages,
   listGenieThreadMessages,
   listGenieThreads,
+  visibleGenieQuestion,
 } from "../src/genie-chat.ts";
 
 const SPACE = { alias: "default", spaceId: "space-1" };
@@ -25,6 +29,19 @@ function genieMessage(overrides: Partial<GenieMessage> = {}): GenieMessage {
     attachments: [{ text: { content: "Store 7 leads." } }],
     ...overrides,
   } as GenieMessage;
+}
+
+function agentStream(events: object[]): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      const encoder = new TextEncoder();
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
 }
 
 describe("genieAnswerText", () => {
@@ -118,6 +135,132 @@ describe("genieMessageToUiMessages", () => {
     expect(tool.type).toBe("tool-ask_genie_sales");
     expect(tool.state).toBe("output-error");
     expect(tool.errorText).toBe("boom");
+  });
+
+  test("hides context augmentation from reloaded questions", () => {
+    const content =
+      "<dbx-tools-genie-context>\nApplication context:\n{\"storeId\":\"store-1\"}" +
+      "\n</dbx-tools-genie-context>\n\nHow is this store performing?";
+    expect(visibleGenieQuestion(content)).toBe("How is this store performing?");
+    const [user] = genieMessageToUiMessages(genieMessage({ content }), SPACE);
+    expect(user?.parts).toEqual([{ type: "text", text: "How is this store performing?" }]);
+  });
+});
+
+describe("direct Genie context and memory", () => {
+  test("injects native request context and resource-scoped Mastra recall", async () => {
+    let payload: Record<string, unknown> | undefined;
+    const output = [
+      {
+        type: "message",
+        id: "answer-1",
+        content: [{ type: "output_text", text: "Store 1 is above target." }],
+      },
+    ];
+    const client = {
+      apiClient: {
+        request: async (request: { payload: Record<string, unknown> }) => {
+          payload = request.payload;
+          return {
+            contents: agentStream([
+              {
+                type: "response.created",
+                sequence_number: 0,
+                response: {
+                  id: "response-1",
+                  status: "in_progress",
+                  conversation_id: "conv-1",
+                  output: [],
+                },
+              },
+              {
+                type: "response.output_item.done",
+                sequence_number: 1,
+                output_index: 0,
+                item: output[0],
+              },
+              {
+                type: "response.completed",
+                sequence_number: 2,
+                response: {
+                  id: "response-1",
+                  status: "completed",
+                  conversation_id: "conv-1",
+                  output,
+                },
+              },
+            ]),
+          };
+        },
+      },
+    } as unknown as WorkspaceClient;
+    const saved: unknown[] = [];
+    const memory = {
+      listThreads: async () => ({
+        threads: [{ id: "prior-thread" }],
+        total: 1,
+        page: 0,
+        perPage: 1,
+        hasMore: false,
+      }),
+      getMergedThreadConfig: (config: unknown) => config,
+      recall: async () => ({
+        messages: [
+          {
+            id: "prior-1",
+            role: "user",
+            createdAt: new Date(),
+            threadId: "prior-thread",
+            resourceId: "user-1",
+            content: {
+              format: 2,
+              parts: [{ type: "text", text: "Store 1 is the selected location." }],
+            },
+          },
+        ],
+        total: 1,
+        page: 0,
+        perPage: false,
+        hasMore: false,
+      }),
+      getThreadById: async () => null,
+      createThread: async (options: unknown) => {
+        saved.push({ thread: options });
+        return {};
+      },
+      saveMessages: async (options: unknown) => {
+        saved.push(options);
+        return { messages: [] };
+      },
+    } as unknown as MastraMemory;
+    const requestContext = new RequestContext<unknown>();
+    requestContext.setRaw(MASTRA_RESOURCE_ID_KEY, "user-1");
+    const stream = genieChatStream({
+      client,
+      space: SPACE,
+      request: {
+        question: "How is this store performing?",
+        requestContext: { storeId: "store-1" },
+      },
+      memory,
+      requestContext,
+    });
+    const reader = stream.getReader();
+    while (!(await reader.read()).done) {
+      // Drain the stream so memory persistence completes.
+    }
+
+    const input = payload?.input as Array<{ content: Array<{ text: string }> }>;
+    expect(input[0]?.content[0]?.text).toContain('"storeId": "store-1"');
+    expect(input[0]?.content[0]?.text).toContain("Store 1 is the selected location.");
+    expect(input[0]?.content[0]?.text).toContain("How is this store performing?");
+    expect(saved).toHaveLength(2);
+    expect(saved[1]).toMatchObject({
+      messages: [
+        { role: "user", resourceId: "user-1" },
+        { role: "assistant", resourceId: "user-1" },
+      ],
+    });
   });
 });
 

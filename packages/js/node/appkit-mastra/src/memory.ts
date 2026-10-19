@@ -236,7 +236,9 @@ export class MemoryBuilder {
       ...(vector ? { vector, embedder: fastembed } : {}),
       options: {
         lastMessages: 10,
-        ...(vector ? { semanticRecall: { topK: 3, messageRange: 2 } } : {}),
+        ...(vector
+          ? { semanticRecall: { topK: 3, messageRange: 2, scope: "resource" as const } }
+          : {}),
         // Auto-name each thread from its opening turn so the
         // conversation list the UI renders shows meaningful titles
         // instead of raw ids. Titling runs on the small / fast chat

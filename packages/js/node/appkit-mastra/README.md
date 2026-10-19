@@ -42,8 +42,9 @@ the application already uses Mastra or needs Mastra-specific capabilities:
 
 Use direct Genie chat when one Genie space owns the conversation and users don't
 need a supervising agent. Choose Mastra when one turn must combine Genie with
-other tools, memory, approvals, or workflows. Direct Genie keeps conversation
-history in Genie and doesn't write Mastra memory.
+other tools, approvals, or workflows. Direct Genie keeps conversation history
+in Genie and, when Mastra memory is configured, adds resource-scoped semantic
+recall and saves completed turns to that memory.
 
 ## Full app example
 
@@ -172,6 +173,8 @@ The paired UI sends this through Mastra's standard `requestContext` body field.
 The agent schema validates it before model execution. AppKit-Mastra removes and
 re-stamps trusted identity, resource, thread, auth, scope, model, and trace keys,
 so application context cannot change conversation ownership or credentials.
+The same native context reaches direct Genie chat, where it is supplied as
+reference data because the Genie Agent Mode API accepts only one user message.
 
 ## Register application workflows
 
@@ -272,7 +275,10 @@ mastra({
 With `lakebase()` registered, both default to enabled:
 
 - Storage uses a per-agent schema for durable threads and messages.
-- Memory uses a shared vector index for semantic recall.
+- Memory uses a shared vector index with resource-scoped semantic recall across
+  the caller's threads and agents.
+- Direct Genie turns read from and write to the default agent's native memory
+  instance while Genie retains its own visible conversation history.
 - The existing service-principal pool is captured from `lakebase()` during
   startup, so request-scoped OBO credentials never reach storage work and no
   additional PostgreSQL pool is created.
@@ -710,8 +716,9 @@ import { MastraChat } from "@dbx-tools/ui-mastra/react";
 
 The alias must exist in `genieSpaces`. Genie owns the state in this mode:
 conversations are thread IDs and Genie messages are projected into the
-transcript. The plugin does not write Mastra Memory or create a supervisor
-agent.
+transcript. No supervisor agent runs. When Mastra memory is configured, direct
+turns use the default agent's native memory instance for resource-scoped
+semantic recall and save completed question-answer pairs back to it.
 
 Direct Genie chat always uses AppKit's OBO user context, matching the native
 AppKit Genie plugin. Service-principal conversations cannot safely back a

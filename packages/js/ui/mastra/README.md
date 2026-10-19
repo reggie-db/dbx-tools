@@ -221,7 +221,9 @@ supervisor agent:
 
 The alias comes from the server plugin's `genieSpaces`. The client still uses
 AI SDK `UIMessage` streams and the same `ChatView`. Genie conversations replace
-Mastra threads and Genie messages replace Mastra Memory history.
+Mastra threads and Genie messages remain the visible history. When Mastra
+memory is configured, the server injects resource-scoped semantic recall and
+saves completed direct turns without replacing Genie's conversation ownership.
 
 Turns and history require the Genie Agent API and never fall back to classic
 Genie message polling. The sidebar filters the Genie conversation listing to
@@ -321,7 +323,8 @@ const chat = useMastraChat<StoreContext>({
 On the server, declare the same contract with Mastra's native
 `requestContextSchema` on `createAgent<StoreContext>()`. Application context
 cannot override the authenticated memory resource, thread, user, scopes, model,
-or trace fields stamped by AppKit-Mastra.
+or trace fields stamped by AppKit-Mastra. Direct Genie chat forwards the same
+native context as reference data for its one Agent Mode user message.
 
 ## Build a controlled chat surface
 

@@ -72,6 +72,8 @@ export interface GenieChatOptions {
   agentModeFallback?: boolean;
   /** Ask Agent Mode to generate visualizations when appropriate. */
   enableVisualization?: boolean;
+  /** Original user text projected into Agent Mode snapshots when `content` is augmented. */
+  displayContent?: string;
   /**
    * Continue an existing conversation. Agent Mode sends it as
    * `conversation_id`; legacy polling passes it to `createMessage`. Read the id
@@ -152,6 +154,7 @@ export async function* genieChat(
         for await (const message of genieAgentModeChat(client, space_id, content, {
           ...(options?.conversationId ? { conversationId: options.conversationId } : {}),
           ...(options?.enableVisualization ? { enableVisualization: true } : {}),
+          ...(options?.displayContent ? { displayContent: options.displayContent } : {}),
           context: ctx,
         })) {
           yielded = true;

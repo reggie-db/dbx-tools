@@ -3,17 +3,19 @@ import type {
   ListAgentSuspendedRunsResponse,
   ListMemoryThreadMessagesResponse,
   ListMemoryThreadsResponse,
+  RequestContext,
 } from "@mastra/client-js";
 import { validateUIMessages, type UIMessage, type UIMessageChunk } from "ai";
 import { MastraPluginClient, type MastraStreamResponse } from "./mastra-client.ts";
 
 /**
  * {@link MastraPluginClient} that talks to one Genie space directly through
- * the Mastra plugin's `/genie/:alias` routes instead of an agent and Mastra
- * Memory. Genie owns all state: its conversations are the threads (the
- * conversation id is the thread id), its messages are the history, and each
- * turn streams the same AI SDK chunks as an agent's `ask_genie` call, so the
- * Mastra chat renders it unchanged.
+ * the Mastra plugin's `/genie/:alias` routes instead of an outer agent. Genie
+ * owns conversation state while the server may add Mastra request context and
+ * resource-scoped memory. Its conversations are the threads (the conversation
+ * id is the thread id), its messages are the history, and each turn streams
+ * the same AI SDK chunks as an agent's `ask_genie` call, so the Mastra chat
+ * renders it unchanged.
  *
  * A brand-new thread has no Genie conversation until its first turn; the
  * stream announces the conversation id, which {@link MastraStreamResponse.threadId}
@@ -54,6 +56,7 @@ export class GenieChatClient extends MastraPluginClient {
     messages: UIMessage[];
     runId: string;
     threadId?: string;
+    requestContext?: RequestContext;
     signal?: AbortSignal;
   }): Promise<MastraStreamResponse> {
     const userMessage = [...params.messages].reverse().find((message) => message.role === "user");
@@ -67,7 +70,11 @@ export class GenieChatClient extends MastraPluginClient {
       path: this.#url(routes.MASTRA_ROUTES.chat),
       chatId: params.threadId ?? params.runId,
       messages: userMessage ? [userMessage] : [],
-      body: { question, ...(conversationId ? { conversationId } : {}) },
+      body: {
+        question,
+        ...(conversationId ? { conversationId } : {}),
+        ...(params.requestContext ? { requestContext: params.requestContext } : {}),
+      },
       routing: {},
       signal: params.signal,
     });

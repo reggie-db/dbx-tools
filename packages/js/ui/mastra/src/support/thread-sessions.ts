@@ -1,18 +1,18 @@
 import type { UIMessage } from "ai";
-import type { MastraRequestContextSnapshot } from "./request-context.ts";
+import type { RequestContext } from "@mastra/client-js";
 import type { ChatStatus, MessageFeedback, PendingApproval, QueuedSteer } from "../react/types.ts";
 
 export type { QueuedSteer } from "../react/types.ts";
 
 /** A queued steer plus the application context captured when it was submitted. */
 export type SessionQueuedSteer = QueuedSteer & {
-  requestContext?: MastraRequestContextSnapshot;
+  requestContext?: RequestContext;
 };
 
 /** UI target and immutable application context captured for one Mastra run. */
 export type SessionRun = {
   assistantId: string;
-  requestContext?: MastraRequestContextSnapshot;
+  requestContext?: RequestContext;
 };
 
 /** Session-scoped transcript + stream state for one conversation thread. */
@@ -32,9 +32,9 @@ export type ThreadSession = {
   hasMoreHistory: boolean;
   historyPage: number;
   /** Context snapshot for the active run and approval continuation. */
-  runRequestContext?: MastraRequestContextSnapshot;
+  runRequestContext?: RequestContext;
   /** Context snapshot reused when regenerating the last turn. */
-  lastRequestContext?: MastraRequestContextSnapshot;
+  lastRequestContext?: RequestContext;
   /** Steers submitted mid-turn, waiting to run (oldest first). */
   queuedSteers: SessionQueuedSteer[];
 };

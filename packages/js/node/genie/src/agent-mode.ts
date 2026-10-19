@@ -26,6 +26,8 @@ const ITEM_PAGE_SIZE = 100;
 export interface GenieAgentModeOptions {
   conversationId?: string;
   enableVisualization?: boolean;
+  /** Original user text projected into client-visible snapshots when input is augmented. */
+  displayContent?: string;
   context?: databricks.ContextLike;
 }
 
@@ -37,7 +39,10 @@ export async function* genieAgentModeChat(
   options: GenieAgentModeOptions = {},
 ): AsyncGenerator<GenieMessage, void, void> {
   const ownedController = options.context ? undefined : new AbortController();
-  const projection = new agentModeWire.GenieAgentModeProjection(agentId, content);
+  const projection = new agentModeWire.GenieAgentModeProjection(
+    agentId,
+    options.displayContent ?? content,
+  );
   try {
     const context = options.context
       ? databricks.toContext(options.context)

@@ -73,7 +73,7 @@ import { display, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { workflowRoute } from "@mastra/ai-sdk";
 import type { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
-import type { RequestContext } from "@mastra/core/request-context";
+import { RequestContext } from "@mastra/core/request-context";
 import type { AnyWorkflow } from "@mastra/core/workflows";
 import { pipeUIMessageStreamToResponse } from "ai";
 import express from "express";
@@ -132,9 +132,11 @@ import { provisionRemoteSkills } from "./remote-skills.ts";
 import {
   attachRoutePatchMiddleware,
   attachStaleResumeRecovery,
+  clearTrustedRequestContext,
   createRequestContext,
   isMastraRequestAllowed,
   MastraServer,
+  stampRequestContextUser,
 } from "./server.ts";
 import { resolveServingConfig } from "./serving.ts";
 import { fetchStatementEmbedData, STATEMENT_ROW_CAP } from "./statement.ts";
@@ -918,12 +920,29 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   ): Promise<void> {
     const context = getExecutionContext();
     const client = context.client;
+    const requestContext = new RequestContext<unknown>(
+      Object.entries(request.requestContext ?? {}),
+    );
+    clearTrustedRequestContext(requestContext);
+    const applicationContext = requestContext.toJSON();
+    await stampRequestContextUser(requestContext);
+    const memory = await this.built?.agents[this.built.defaultAgentId]?.getMemory({
+      requestContext,
+    });
     await pipeUIMessageStreamToResponse({
       response: res,
       stream: genieChatStream({
         client,
         space,
-        request,
+        request: {
+          question: request.question,
+          ...(request.conversationId ? { conversationId: request.conversationId } : {}),
+          ...(Object.keys(applicationContext).length > 0
+            ? { requestContext: applicationContext }
+            : {}),
+        },
+        ...(memory ? { memory } : {}),
+        requestContext,
         signal,
       }),
     });

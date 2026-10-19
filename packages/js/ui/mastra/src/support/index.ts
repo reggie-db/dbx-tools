@@ -26,7 +26,7 @@ export { GenieChatClient } from "./genie-client.ts";
 export { MastraChatRequestError, MastraPluginClient, useMastraConfig, useMastraClient, useMastraMlflowExperiment, useMastraModels, useMastraDefaultModel, useMastraSuggestions, useMastraThreads, useChartFetch, useStatementFetch, useVisualizationFetch } from "./mastra-client.ts";
 export type { MastraStreamResponse, MastraMemoryThread, ByIdFetchState } from "./mastra-client.ts";
 export { defaultReasoningEffort, modelStorageKey, readStoredModel, storeSelectedModel } from "./model-selection.ts";
-export type { MastraRequestContextInput, MastraRequestContextSource, MastraRequestContextSnapshot } from "./request-context.ts";
+export type { MastraRequestContextInput, MastraRequestContextSource } from "./request-context.ts";
 export { DEFAULT_THREAD_SESSION_KEY } from "./thread-sessions.ts";
 export type { SessionQueuedSteer, SessionRun, ThreadSession } from "./thread-sessions.ts";
 export { THREAD_TAB_SEED_MAX } from "./thread-tabs.ts";

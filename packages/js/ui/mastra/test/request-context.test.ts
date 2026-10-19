@@ -10,20 +10,20 @@ describe("Mastra request context snapshots", () => {
     const snapshot = snapshotRequestContext(context);
     context.storeId = "store-2";
 
-    assert.deepEqual(snapshot, { storeId: "store-1", page: "/stores/1" });
+    assert.deepEqual(snapshot?.toJSON(), { storeId: "store-1", page: "/stores/1" });
   });
 
   it("accepts Mastra's native typed RequestContext", () => {
     const context = new RequestContext<{ storeId: string }>();
     context.set("storeId", "store-1");
 
-    assert.deepEqual(snapshotRequestContext(context), { storeId: "store-1" });
+    assert.deepEqual(snapshotRequestContext(context)?.toJSON(), { storeId: "store-1" });
   });
 
-  it("rejects values that would not survive a JSON round trip unchanged", () => {
-    assert.throws(
-      () => snapshotRequestContext({ selectedAt: new Date() }),
-      /JSON-serializable record/,
-    );
+  it("uses Mastra's native serialization policy", () => {
+    const selectedAt = new Date();
+    const snapshot = snapshotRequestContext({ selectedAt });
+    assert.equal(snapshot?.toJSON().selectedAt instanceof Date, true);
+    assert.notEqual(snapshot?.toJSON().selectedAt, selectedAt);
   });
 });

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { wire } from "@dbx-tools/shared-mastra";
+import { RequestContext } from "@mastra/client-js";
 import type { UIMessage } from "ai";
 import { GenieChatClient } from "../src/support/genie-client.ts";
 
@@ -48,16 +49,23 @@ describe("GenieChatClient", () => {
       ]);
     }) as typeof fetch;
     const client = new GenieChatClient(CONFIG, "default");
+    const requestContext = new RequestContext<{ storeId: string }>([
+      ["storeId", "store-1"],
+    ]);
 
     const first = await client.streamAgent({
       agentId: "genie:default",
       messages: [question("Top stores?")],
       runId: "run-1",
       threadId: "local-1",
+      requestContext,
     });
     await drain(first.stream);
     expect(first.threadId?.()).toBe("conv-1");
-    expect(bodies[0]).toMatchObject({ question: "Top stores?" });
+    expect(bodies[0]).toMatchObject({
+      question: "Top stores?",
+      requestContext: { storeId: "store-1" },
+    });
     expect(bodies[0]).not.toHaveProperty("conversationId");
 
     const second = await client.streamAgent({
