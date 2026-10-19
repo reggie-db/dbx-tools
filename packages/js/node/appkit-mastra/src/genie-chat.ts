@@ -162,7 +162,13 @@ async function recalledMemory(
     page: 0,
     perPage: 1,
   });
-  const threadId = conversationId ?? threads.threads[0]?.id;
+  const conversationThread = conversationId
+    ? await memory.getThreadById({ threadId: conversationId })
+    : undefined;
+  if (conversationThread && conversationThread.resourceId !== resourceId) {
+    throw new Error("Genie memory thread belongs to a different resource");
+  }
+  const threadId = conversationThread?.id ?? threads.threads[0]?.id;
   if (!threadId) return undefined;
   const config = memory.getMergedThreadConfig({ readOnly: true });
   const recalled = await memory.recall({

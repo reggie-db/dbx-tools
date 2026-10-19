@@ -310,13 +310,16 @@ per-turn resolver. The driver snapshots it when a message is submitted and
 keeps that snapshot with queued steers, regeneration, and approval continuation.
 
 ```tsx
+import { RequestContext } from "@mastra/client-js";
+
 type StoreContext = { storeId: string; route: string };
 
 const chat = useMastraChat<StoreContext>({
-  requestContext: () => ({
-    storeId: selectedStore.id,
-    route: location.pathname,
-  }),
+  requestContext: () =>
+    new RequestContext<StoreContext>([
+      ["storeId", selectedStore.id],
+      ["route", location.pathname],
+    ]),
 });
 ```
 
