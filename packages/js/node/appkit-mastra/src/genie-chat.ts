@@ -396,7 +396,7 @@ export function genieChatStream(options: {
       } catch (error) {
         logger.warn("memory:recall-failed", {
           spaceId: space.spaceId,
-          error: errorUtils.errorMessage(error),
+          error: errorUtils.toError(error),
         });
       }
       const question = contextualQuestion(request.question, request.requestContext, memoryContext);
@@ -495,7 +495,7 @@ export function genieChatStream(options: {
         } catch (error) {
           logger.warn("memory:save-failed", {
             spaceId: space.spaceId,
-            error: errorUtils.errorMessage(error),
+            error: errorUtils.toError(error),
           });
         }
       }

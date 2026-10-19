@@ -172,7 +172,7 @@ async function researchMobileStore(
           logger.warn("mobile-image-fetch-failed", {
             platform,
             url,
-            error: errorUtils.errorMessage(error),
+            error: errorUtils.toError(error),
           });
           return { url };
         }
@@ -187,7 +187,7 @@ async function researchMobileStore(
   } catch (error) {
     logger.warn("mobile-store-research-failed", {
       platform,
-      error: errorUtils.errorMessage(error),
+      error: errorUtils.toError(error),
     });
     return undefined;
   }
@@ -269,7 +269,7 @@ async function fetchSource(
   } catch (error) {
     logger.warn("source-fetch-failed", {
       url: citation.url,
-      error: errorUtils.errorMessage(error),
+      error: errorUtils.toError(error),
     });
     return { ...citation, fetched: false };
   } finally {
@@ -358,7 +358,7 @@ export async function researchBrand(
     ).catch((error: unknown) => {
       logger.warn("official-page-html-fetch-failed", {
         url: official.url,
-        error: errorUtils.errorMessage(error),
+        error: errorUtils.toError(error),
       });
       return undefined;
     }),
