@@ -4,6 +4,7 @@ import {
   beginPasskeySignIn,
   getAuthStatus,
   passkeyDisplayName,
+  passkeysAvailable,
   requestEmailOtp,
   type PasskeyOperation,
   verifyEmailOtp,
@@ -88,12 +89,11 @@ void getAuthStatus()
       redirectAfterSignIn();
       return;
     }
-    if (!status.passkeysEnabled) return;
+    if (!status.passkeysEnabled || !passkeysAvailable()) return;
     passkeysEnabled = true;
     passkeySubmit.hidden = false;
     createPasskeyOption.hidden = false;
     if (
-      typeof PublicKeyCredential === "undefined" ||
       typeof PublicKeyCredential.isConditionalMediationAvailable !== "function" ||
       !(await PublicKeyCredential.isConditionalMediationAvailable())
     ) {

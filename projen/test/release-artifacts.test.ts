@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { describe, it } from "node:test";
@@ -82,7 +90,7 @@ describe("shared release artifacts", () => {
     }
   });
 
-  it("runs the bundled npm publisher without a checkout or workspace dependencies", () => {
+  it("publishes bundled npm artifacts concurrently in dependency order", () => {
     const root = mkdtempSync(join(tmpdir(), "release-npm-artifacts-"));
     try {
       const bin = join(root, "bin");
@@ -91,15 +99,31 @@ describe("shared release artifacts", () => {
       mkdirSync(bin);
       mkdirSync(output);
       mkdirSync(packageRoot);
-      writeFileSync(
-        join(packageRoot, "package.json"),
-        JSON.stringify({
+      const manifests = {
+        core: {
           name: "@fixture/core",
           version: "1.2.3",
           publishConfig: { access: "public" },
-        }),
-      );
-      execFileSync("tar", ["-czf", join(output, "core.tgz"), "-C", root, "package"]);
+        },
+        util: {
+          name: "@fixture/util",
+          version: "1.2.3",
+          publishConfig: { access: "public" },
+        },
+        app: {
+          name: "@fixture/app",
+          version: "1.2.3",
+          publishConfig: { access: "public" },
+          dependencies: {
+            "@fixture/core": "1.2.3",
+            "@fixture/util": "1.2.3",
+          },
+        },
+      };
+      for (const [name, manifest] of Object.entries(manifests)) {
+        writeFileSync(join(packageRoot, "package.json"), JSON.stringify(manifest));
+        execFileSync("tar", ["-czf", join(output, `${name}.tgz`), "-C", root, "package"]);
+      }
       const publisher = join(output, "publish-npm.mjs");
       execFileSync(
         process.execPath,
@@ -113,7 +137,34 @@ describe("shared release artifacts", () => {
       );
       writeFileSync(
         join(bin, "npm"),
-        `#!/bin/sh\nprintf '%s\\n' "$@" > "${join(root, "publish-args")}"\n`,
+        // ============================================================================
+        /*ts*/ `
+#!/usr/bin/env bun
+import { basename, join } from "node:path";
+import { existsSync, writeFileSync } from "node:fs";
+
+const root = ${JSON.stringify(root)};
+const archive = process.argv.find((value) => value.endsWith(".tgz"));
+if (!archive) process.exit(2);
+const name = basename(archive, ".tgz");
+writeFileSync(join(root, \`started-\${name}\`), "");
+if (name === "core" || name === "util") {
+  const peer = name === "core" ? "util" : "core";
+  for (let attempt = 0; attempt < 200 && !existsSync(join(root, \`started-\${peer}\`)); attempt++) {
+    await Bun.sleep(10);
+  }
+  if (!existsSync(join(root, \`started-\${peer}\`))) process.exit(3);
+}
+if (
+  name === "app" &&
+  (!existsSync(join(root, "done-core")) || !existsSync(join(root, "done-util")))
+) {
+  process.exit(4);
+}
+writeFileSync(join(root, \`publish-args-\${name}\`), process.argv.slice(2).join("\\n"));
+writeFileSync(join(root, \`done-\${name}\`), "");
+`.trimStart(),
+        // ============================================================================
       );
       chmodSync(join(bin, "npm"), 0o755);
       const env = { ...process.env, PATH: `${bin}${delimiter}${process.env.PATH ?? ""}` };
@@ -122,13 +173,15 @@ describe("shared release artifacts", () => {
         [publisher, "--directory", output, "--version", "1.2.3", "--dry-run"],
         { cwd: root, env },
       );
-      assert.deepEqual(readFileSync(join(root, "publish-args"), "utf8").trim().split("\n"), [
-        "publish",
-        join(output, "core.tgz"),
-        "--access",
-        "public",
-        "--dry-run",
-      ]);
+      for (const name of Object.keys(manifests)) {
+        assert.equal(existsSync(join(root, `done-${name}`)), true);
+        assert.deepEqual(
+          readFileSync(join(root, `publish-args-${name}`), "utf8")
+            .trim()
+            .split("\n"),
+          ["publish", join(output, `${name}.tgz`), "--access", "public", "--dry-run"],
+        );
+      }
       assert.throws(
         () =>
           execFileSync(

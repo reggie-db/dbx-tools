@@ -15,13 +15,14 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
 import * as projectUtils from "@dbx-tools/core/project-utils";
-import { log } from "@dbx-tools/shared-core";
+import { asyncUtils, log } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
-import { TaskDryRunOptionSchema } from "./options.ts";
-import { runTaskCommand } from "../src/_task-command.ts";
+import { TaskConcurrencyOptionSchema, TaskDryRunOptionSchema } from "./options.ts";
+import { runTaskCommandAsync } from "../src/_task-command.ts";
 
 const DEFAULT_REGISTRY = "https://registry.npmjs.org";
+const DEFAULT_PUBLISH_CONCURRENCY = 4;
 const logger = log.logger("projen:publish-npm");
 
 /** Registry and archive identity used to verify idempotent npm publication. */
@@ -258,7 +259,8 @@ export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
   };
 }
 
-function orderNpmArchives(archives: readonly string[]): string[] {
+/** Group npm archives into dependency-ordered layers that can publish concurrently. */
+function npmArchiveLayers(archives: readonly string[]): string[][] {
   const byName = new Map(
     archives.map((archive) => {
       const manifest = readNpmArchiveManifest(archive);
@@ -278,7 +280,7 @@ function orderNpmArchives(archives: readonly string[]): string[] {
       ),
     ]),
   );
-  const ordered: string[] = [];
+  const layers: string[][] = [];
   while (remaining.size > 0) {
     const ready = [...remaining]
       .filter(([, dependencies]) => dependencies.size === 0)
@@ -289,15 +291,15 @@ function orderNpmArchives(archives: readonly string[]): string[] {
         `Cyclic npm release dependencies: ${[...remaining.keys()].sort().join(", ")}`,
       );
     }
+    layers.push(ready.map((name) => byName.get(name)!.archive));
     for (const name of ready) {
-      ordered.push(byName.get(name)!.archive);
       remaining.delete(name);
     }
     for (const dependencies of remaining.values()) {
       for (const name of ready) dependencies.delete(name);
     }
   }
-  return ordered;
+  return layers;
 }
 
 /** Hash paths, executable bits, symlink targets, and bytes while ignoring tar metadata. */
@@ -414,41 +416,51 @@ export function packNpmPackage(
 
 /** Publish dependency-ordered npm archives, skipping only exact registry matches. */
 export async function publishNpmArchives(options: {
+  readonly concurrency?: number;
   readonly directory: string;
   readonly dryRun?: boolean;
   readonly registry?: string;
   readonly version?: string;
 }): Promise<void> {
   const directory = resolve(options.directory);
-  const archives = orderNpmArchives(
+  const layers = npmArchiveLayers(
     readdirSync(directory)
       .filter((file) => file.endsWith(".tgz"))
       .sort()
       .map((file) => join(directory, file)),
   );
-  if (archives.length === 0) throw new Error(`No npm archives found in ${directory}`);
+  if (layers.length === 0) throw new Error(`No npm archives found in ${directory}`);
 
-  for (const archive of archives) {
-    const local = readNpmArchiveIdentity(archive);
-    if (options.version && local.version !== options.version) {
-      throw new Error(
-        `npm archive ${archive} carries ${local.version}, expected ${options.version}`,
-      );
-    }
-    if (!options.dryRun) {
-      const published = await publishedNpmRelease(local.name, local.version, options.registry);
-      if (npmReleaseMatches(local, published)) {
-        logger.info(`skip published ${local.name}@${local.version}`);
-        continue;
-      }
-    }
-    runTaskCommand(process.cwd(), "npm", [
-      "publish",
-      archive,
-      ...(local.access ? ["--access", local.access] : []),
-      ...(options.registry ? ["--registry", options.registry] : []),
-      ...(options.dryRun ? ["--dry-run"] : []),
-    ]);
+  for (const archives of layers) {
+    await asyncUtils.mapConcurrent(
+      archives,
+      async (archive) => {
+        const local = readNpmArchiveIdentity(archive);
+        if (options.version && local.version !== options.version) {
+          throw new Error(
+            `npm archive ${archive} carries ${local.version}, expected ${options.version}`,
+          );
+        }
+        if (!options.dryRun) {
+          const published = await publishedNpmRelease(local.name, local.version, options.registry);
+          if (npmReleaseMatches(local, published)) {
+            logger.info(`skip published ${local.name}@${local.version}`);
+            return;
+          }
+        }
+        await runTaskCommandAsync(process.cwd(), "npm", [
+          "publish",
+          archive,
+          ...(local.access ? ["--access", local.access] : []),
+          ...(options.registry ? ["--registry", options.registry] : []),
+          ...(options.dryRun ? ["--dry-run"] : []),
+        ]);
+      },
+      {
+        concurrency: options.concurrency ?? DEFAULT_PUBLISH_CONCURRENCY,
+        errorMode: "settle",
+      },
+    );
   }
 }
 
@@ -464,6 +476,7 @@ export const PublishNpmOptionsSchema = z.object({
     .describe("npm registry URL")
     .meta({ env: "NPM_CONFIG_REGISTRY" }),
   dryRun: TaskDryRunOptionSchema,
+  concurrency: TaskConcurrencyOptionSchema.default(DEFAULT_PUBLISH_CONCURRENCY),
 });
 
 /** Parse task options and publish validated npm release archives. */

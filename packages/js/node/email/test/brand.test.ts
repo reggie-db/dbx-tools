@@ -12,10 +12,8 @@ describe("email brand", () => {
     assert.equal(b.name, brandUtils.defaultBrandContext.name);
   });
 
-  it("drops a logo that is not a fetchable URL (package-export path)", () => {
-    // The default brand's logo is an `@dbx-tools/ui/branding/...svg` export
-    // path, which can't load in a mail client, so no logoUrl is emitted.
-    assert.equal(defaultEmailBrand.logoUrl, undefined);
+  it("embeds the default logo as an email-safe PNG data URL", () => {
+    assert.match(defaultEmailBrand.logoUrl!, /^data:image\/png;base64,/);
   });
 
   it("keeps an http(s) or data URL logo", () => {
@@ -24,6 +22,15 @@ describe("email brand", () => {
     });
     // Dark logo wins - the header band is dark.
     assert.equal(emailBrandFromContext(ctx).logoUrl, "https://ex.com/d.svg");
+  });
+
+  it("does not add a tagline when the brand omits one", async () => {
+    const brand = emailBrandFromContext(brandUtils.parseBrandContext());
+    assert.equal(brand.tagline, undefined);
+    assert.doesNotMatch(
+      await renderEmailHtml({ subject: "S", body: "b", brand }),
+      /Practical tools/,
+    );
   });
 });
 
@@ -51,12 +58,12 @@ describe("renderEmailHtml branding", () => {
     assert.match(text, /All clear\./);
   });
 
-  it("keeps the transport subject out of the body unless a heading is set", async () => {
+  it("uses the transport subject as the default body heading", async () => {
     const html = await renderEmailHtml({
       subject: "Weekly digest",
       body: "Your pipelines finished cleanly.",
     });
-    assert.ok(!html.includes("<h1"), "no duplicated subject heading");
+    assert.match(html, /Weekly digest\s*<\/h1>/);
     assert.ok(html.includes("Your pipelines finished cleanly."));
   });
 });

@@ -5,6 +5,7 @@ import {
   getAuthStatus,
   listPasskeys,
   passkeyDisplayName,
+  passkeysAvailable,
   type PasskeyOperation,
   type Passkey,
   removePasskey,
@@ -21,6 +22,7 @@ export interface PasskeyManagerProps {
 
 /** Authenticated management surface for a user's Better Auth passkeys. */
 export function PasskeyManager({ className, passkeyNamePrefix }: PasskeyManagerProps): ReactNode {
+  const [available] = useState(passkeysAvailable);
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -49,8 +51,9 @@ export function PasskeyManager({ className, passkeyNamePrefix }: PasskeyManagerP
   }, []);
 
   useEffect(() => {
+    if (!available) return;
     void refresh().catch(() => setNotice("Unable to load passkeys."));
-  }, [refresh]);
+  }, [available, refresh]);
 
   const add = useCallback(async () => {
     cancelEnrollment();
@@ -105,6 +108,8 @@ export function PasskeyManager({ className, passkeyNamePrefix }: PasskeyManagerP
     },
     [refresh],
   );
+
+  if (!available) return null;
 
   return (
     <section className={className} aria-label="Passkeys">

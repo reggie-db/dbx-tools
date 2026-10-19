@@ -259,7 +259,7 @@ const Nav = ({
   }, [loggingOut, logoutEnabled]);
 
   return (
-    <nav className="demo-nav mx-auto flex max-w-6xl items-center gap-2 px-2 py-2 sm:px-4 md:px-6">
+    <nav className="demo-nav flex w-full items-center gap-2 px-2 py-2 sm:px-4 md:px-6">
       <Link to="/brand" className="mr-1 flex shrink-0 items-center gap-2 text-sm font-semibold">
         <BrandIcon className="size-6" />
         <span className="hidden sm:inline">{context.shortName}</span>

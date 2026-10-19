@@ -6,6 +6,7 @@ import {
   beginPasskeySignIn,
   getAuthStatus,
   passkeyDisplayName,
+  passkeysAvailable,
   requestEmailOtp,
   type PasskeyOperation,
   verifyEmailOtp,
@@ -57,7 +58,7 @@ export function AuthGate({
     void getAuthStatus()
       .then((status) => {
         if (cancelled) return;
-        setPasskeysEnabled(status.passkeysEnabled === true);
+        setPasskeysEnabled(status.passkeysEnabled === true && passkeysAvailable());
         setConfiguredPasskeyNamePrefix(status.passkeyNamePrefix);
         setPhase(status.enabled ? (status.authenticated ? "authed" : "email") : "open");
       })
@@ -271,7 +272,7 @@ export function AuthGate({
                   onCheckedChange={(checked) => setCreatePasskey(checked === true)}
                 />
                 <Label htmlFor="create-passkey" className="text-sm font-normal">
-                  Create a passkey for this tunnel host
+                  Create passkey
                 </Label>
               </div>
             ) : null}

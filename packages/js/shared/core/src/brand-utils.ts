@@ -79,8 +79,8 @@ export const BrandContextSchema = z
     name: nonBlankString.default("dbx tools").describe("Canonical display name."),
     shortName: nonBlankString.default("dbx").describe("Compact name for constrained UI."),
     tagline: nonBlankString
-      .default("Practical tools for Databricks builders.")
-      .describe("Short product line suitable for a header or metadata."),
+      .optional()
+      .describe("Optional product line suitable for a header or metadata."),
     description: nonBlankString
       .default(
         "Companion packages for Databricks developers building apps, agents, data workflows, and reusable UI.",
@@ -132,7 +132,9 @@ export function parseBrandContext(input: unknown = {}): BrandContext {
 }
 
 /** Canonical dbx tools brand context with all schema defaults resolved. */
-export const defaultBrandContext: BrandContext = parseBrandContext();
+export const defaultBrandContext: BrandContext = parseBrandContext({
+  tagline: "Practical tools for Databricks builders.",
+});
 
 /** JSON Schema representation suitable for structured-output and tool definitions. */
 export function brandContextJsonSchema(): Record<string, unknown> {

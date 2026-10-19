@@ -71,8 +71,9 @@ const instructions = brandUtils.brandContextPrompt(context);
 ```
 
 `BrandContextSchema` validates identity, theme-aware assets, colors,
-typography, links, audience, and voice. Every field has a dbx tools default, so
-an empty object is a complete context. Use [@dbx-tools/core](../../node/core)
+typography, links, audience, and voice. Required fields have dbx tools defaults;
+`tagline` remains absent unless the brand supplies it. Use
+[@dbx-tools/core](../../node/core)
 to discover and read YAML/JSON files, and
 [@dbx-tools/ui/branding](../../ui/appkit) to apply the same context to a UI.
 

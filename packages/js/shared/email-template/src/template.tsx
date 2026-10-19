@@ -25,6 +25,7 @@ import {
   Text,
 } from "@react-email/components";
 import * as React from "react";
+import { dbxToolsEmailAssetDataUrls } from "./generated/assets.ts";
 
 /** Email-safe brand values used by the React Email template. */
 export interface EmailBrand {
@@ -55,10 +56,9 @@ export type ResolvedEmailBrand = Required<
     | "foreground"
     | "muted"
     | "border"
-    | "tagline"
   >
 > &
-  Pick<EmailBrand, "logoUrl" | "website">;
+  Pick<EmailBrand, "logoUrl" | "tagline" | "website">;
 
 function isRenderableImageUrl(value: string | undefined): value is string {
   return typeof value === "string" && /^(?:https?:|data:|cid:)/i.test(value);
@@ -77,18 +77,22 @@ export const emailBrandFromContext = (context: BrandContext): EmailBrand => {
     foreground: context.colors.foreground,
     muted: context.colors.muted,
     border: context.colors.border,
-    tagline: context.tagline,
+    ...(context.tagline ? { tagline: context.tagline } : {}),
     website: context.links.website,
     ...(isRenderableImageUrl(logo) ? { logoUrl: logo } : {}),
   };
 };
 
 /** The repository brand used by every email unless explicitly overridden. */
-export const defaultEmailBrand: EmailBrand = emailBrandFromContext(brandUtils.defaultBrandContext);
+export const defaultEmailBrand: EmailBrand = {
+  ...emailBrandFromContext(brandUtils.defaultBrandContext),
+  logoUrl: dbxToolsEmailAssetDataUrls.logo,
+};
 
 /** Merge a partial consumer brand over the repository default. */
 export const resolveEmailBrand = (input?: EmailBrand): ResolvedEmailBrand => {
   const merged = { ...defaultEmailBrand, ...input };
+  const tagline = input === undefined ? defaultEmailBrand.tagline : input.tagline;
   return {
     accent: merged.accent,
     onAccent: merged.onAccent ?? "#ffffff",
@@ -99,7 +103,7 @@ export const resolveEmailBrand = (input?: EmailBrand): ResolvedEmailBrand => {
     foreground: merged.foreground ?? brandUtils.defaultBrandContext.colors.foreground,
     muted: merged.muted ?? brandUtils.defaultBrandContext.colors.muted,
     border: merged.border ?? brandUtils.defaultBrandContext.colors.border,
-    tagline: merged.tagline ?? brandUtils.defaultBrandContext.tagline,
+    ...(tagline ? { tagline } : {}),
     ...(merged.logoUrl ? { logoUrl: merged.logoUrl } : {}),
     ...(merged.website ? { website: merged.website } : {}),
   };
@@ -194,10 +198,9 @@ export const EmailBody = ({ body, brand: brandInput }: EmailBodyProps) => {
 export interface EmailDocumentProps extends EmailBodyProps {
   subject?: string;
   /**
-   * Visible heading inside the email card. Omit it for ordinary messages so the
-   * transport subject stays a transport subject and is not repeated as a body
-   * title. Pass a shorter heading when the subject carries notification-specific
-   * details (one-time-code mail is the motivating case).
+   * Visible heading inside the email card. Defaults to the transport subject.
+   * Pass a shorter heading when the subject carries notification-specific
+   * details, such as a one-time code.
    */
   heading?: string;
   /**
@@ -303,11 +306,13 @@ export const EmailCard = ({
   body,
   heading,
   headers,
+  subject,
   footer,
   framed = true,
   brand: brandInput,
 }: EmailDocumentProps) => {
   const theme = resolveEmailBrand(brandInput);
+  const visibleHeading = heading ?? subject;
   return (
     <Container
       style={{
@@ -343,7 +348,7 @@ export const EmailCard = ({
       <Section>
         <Row>
           <Column style={{ padding: "38px 38px 28px" }}>
-            {heading ? (
+            {visibleHeading ? (
               <Heading
                 style={{
                   color: theme.foreground,
@@ -353,7 +358,7 @@ export const EmailCard = ({
                   margin: "0 0 24px",
                 }}
               >
-                {heading}
+                {visibleHeading}
               </Heading>
             ) : null}
             <EnvelopeHeaders headers={headers} theme={theme} />

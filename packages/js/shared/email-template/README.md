@@ -47,10 +47,9 @@ import { EmailDocument } from "@dbx-tools/shared-email-template";
 Node runtimes should pass this component to `@react-email/render`.
 `@dbx-tools/email` does that automatically for SMTP and local outbox delivery.
 
-`heading` is optional. Ordinary mail leaves it unset so the MIME subject stays a
-transport subject and is not repeated as a body title. Pass a shorter heading when
-the subject carries notification-specific details. One-time-code mail uses this
-to keep the code in notifications without repeating it inside the opened card:
+`heading` defaults to the MIME subject. Pass a shorter heading when the subject
+carries notification-specific details. One-time-code mail uses this to keep the
+code in notifications without repeating it inside the opened card:
 
 ```tsx
 <EmailDocument
@@ -87,7 +86,7 @@ import { EmailBody } from "@dbx-tools/shared-email-template";
 ```
 
 The body preview and complete document share typography and content styling. The
-full document adds the branded header band, optional heading, and footer.
+full document adds the branded header band, heading, and footer.
 Envelope rows (`headers`) are opt-in for local outbox previews. Delivered SMTP
 mail and browser approval chrome leave recipients and attachments outside the
 HTML body.
@@ -111,7 +110,8 @@ const emailBrand = emailBrandFromContext(brandUtils.defaultBrandContext);
 ```
 
 Omitting `brand` uses the dbx-tools brand. A consumer may supply its own colors,
-font, name, tagline, website, and fetchable logo URL.
+font, name, tagline, website, and fetchable logo URL. The footer renders a
+tagline only when the supplied brand declares one.
 
 ## Package exports
 

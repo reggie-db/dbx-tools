@@ -27,6 +27,7 @@ import { pluginExecution } from "@dbx-tools/appkit";
 import { execution, log } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
+import type { EmailBrand } from "./brand.ts";
 import { resolveEmailConfig, type EmailPluginConfig, type ResolvedEmailConfig } from "./config.ts";
 import {
   EMAIL_SEND_SETTINGS,
@@ -288,6 +289,33 @@ function toMailAttachments(
   }));
 }
 
+const INLINE_BRAND_CID = "dbx-tools-brand-logo";
+
+function inlineBrandImage(brand: EmailBrand): {
+  brand: EmailBrand;
+  attachment?: NonNullable<SendMailOptions["attachments"]>[number];
+} {
+  const match = /^data:(image\/[^;,]+);base64,([a-z0-9+/=]+)$/i.exec(brand.logoUrl ?? "");
+  if (!match) return { brand };
+  const [, contentType, content] = match;
+  return {
+    brand: { ...brand, logoUrl: `cid:${INLINE_BRAND_CID}` },
+    attachment: {
+      filename:
+        contentType === "image/svg+xml"
+          ? "brand-logo.svg"
+          : contentType === "image/png"
+            ? "brand-logo.png"
+            : "brand-logo",
+      content,
+      encoding: "base64",
+      contentType,
+      contentDisposition: "inline",
+      cid: INLINE_BRAND_CID,
+    },
+  };
+}
+
 /**
  * Hand one already-validated message to SMTP, or write it to the outbox when
  * no credentials are configured. The half of a send that performs I/O, so it
@@ -317,11 +345,16 @@ async function dispatch(
       "No transport was built for the resolved configuration.",
     );
   }
-  const attachments = toMailAttachments(message.attachments);
+  const messageAttachments = toMailAttachments(message.attachments);
+  const inlineBrand = inlineBrandImage(config.brand);
+  const attachments = [
+    ...(messageAttachments ?? []),
+    ...(inlineBrand.attachment ? [inlineBrand.attachment] : []),
+  ];
   const rendered = await renderEmail({
     subject: message.subject,
     body: message.body,
-    brand: config.brand,
+    brand: inlineBrand.brand,
     ...(options?.heading !== undefined ? { heading: options.heading } : {}),
     ...(options?.preview !== undefined ? { preview: options.preview } : {}),
   });
@@ -338,7 +371,7 @@ async function dispatch(
       html: rendered.html,
       ...(message.cc && message.cc.length > 0 ? { cc: message.cc } : {}),
       ...(message.bcc && message.bcc.length > 0 ? { bcc: message.bcc } : {}),
-      ...(attachments ? { attachments } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
     }),
     signal,
   );

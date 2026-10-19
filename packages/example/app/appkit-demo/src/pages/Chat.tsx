@@ -1,3 +1,4 @@
+import { getAuthStatus } from "@dbx-tools/ui/auth/react";
 import {
   Button,
   DropdownMenu,
@@ -7,7 +8,7 @@ import {
 } from "@dbx-tools/ui/react";
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
 import { SettingsIcon, SparklesIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useChatThreadQuery } from "@/hooks/use-chat-thread-query";
 
 // Focused chat surface: streaming, tool-session pills, approvals, model
@@ -15,11 +16,33 @@ import { useChatThreadQuery } from "@/hooks/use-chat-thread-query";
 
 const Chat = () => {
   const [genieOnly, setGenieOnly] = useState(false);
+  const [genieAvailable, setGenieAvailable] = useState(false);
   const agentThread = useChatThreadQuery("thread");
   const genieThread = useChatThreadQuery("genieThread");
-  const thread = genieOnly ? genieThread : agentThread;
+  const directGenie = genieOnly && genieAvailable;
+  const thread = directGenie ? genieThread : agentThread;
 
-  const chatSettings = (
+  useEffect(() => {
+    let cancelled = false;
+    void getAuthStatus()
+      .then((status) => {
+        if (cancelled) return;
+        const available = !status.enabled;
+        setGenieAvailable(available);
+        if (!available) setGenieOnly(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGenieAvailable(false);
+          setGenieOnly(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const chatSettings = genieAvailable ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
@@ -40,12 +63,12 @@ const Chat = () => {
         </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+  ) : null;
 
   return (
     <MastraChat
-      key={genieOnly ? "genie" : "agent"}
-      {...(genieOnly ? { genieSpace: "default" } : { agentId: "support", showModelPicker: true })}
+      key={directGenie ? "genie" : "agent"}
+      {...(directGenie ? { genieSpace: "default" } : { agentId: "support", showModelPicker: true })}
       threadId={thread.threadId}
       onThreadIdChange={thread.onThreadIdChange}
       enableExport

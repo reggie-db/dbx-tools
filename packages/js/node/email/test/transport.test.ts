@@ -142,8 +142,14 @@ describe("outbox send", () => {
  * that layout.
  */
 describe("caller-supplied plain-text alternative", () => {
+  interface CapturedEmail {
+    text: string;
+    html: string;
+    attachments: Array<{ cid?: string; contentDisposition?: string }>;
+  }
+
   /** Send through a stubbed SMTP transporter and return the captured payload. */
-  async function captureSend(options?: SendEmailOptions): Promise<{ text: string; html: string }> {
+  async function captureSend(options?: SendEmailOptions): Promise<CapturedEmail> {
     const saved = { ...process.env };
     delete process.env.EMAIL_OUTBOX_MODE;
     process.env.SMTP_HOST = "smtp.example.com";
@@ -154,11 +160,12 @@ describe("caller-supplied plain-text alternative", () => {
     try {
       const runtime = getEmailRuntime();
       assert.equal(runtime.config.mode, "smtp");
-      let captured: { text: string; html: string } | undefined;
+      let captured: CapturedEmail | undefined;
       // The transporter is the seam: everything above it is the code under test.
       (runtime.transporter as unknown as Record<string, unknown>).sendMail = async (payload: {
         text: string;
         html: string;
+        attachments: Array<{ cid?: string; contentDisposition?: string }>;
       }) => {
         captured = payload;
         return { messageId: "stub" };
@@ -189,13 +196,22 @@ describe("caller-supplied plain-text alternative", () => {
   });
 
   it("renders the caller-supplied heading and preheader", async () => {
-    const { html } = await captureSend({
+    const { attachments, html } = await captureSend({
       heading: "Verification code",
       preview: "Your verification code is: 123456",
     });
     assert.match(html, /Verification code\s*<\/h1>/);
     assert.match(html, /Your verification code is: 123456/);
     assert.doesNotMatch(html, />Subject\s*<\/h1>/);
+    assert.match(html, /src="cid:dbx-tools-brand-logo"/);
+    assert.equal(
+      attachments.some(({ cid }) => cid === "dbx-tools-brand-logo"),
+      true,
+    );
+    assert.equal(
+      attachments.some(({ contentDisposition }) => contentDisposition === "inline"),
+      true,
+    );
   });
 
   it("falls back to the generated text part when none is supplied", async () => {

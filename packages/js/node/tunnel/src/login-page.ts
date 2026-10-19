@@ -109,7 +109,7 @@ export function loginPageHtml(options: LoginPageOptions): string {
           <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required>
           <label id="create-passkey-option" class="choice" for="create-passkey" hidden>
             <input id="create-passkey" name="create-passkey" type="checkbox" checked>
-            <span>Create a passkey for this tunnel host</span>
+            <span>Create passkey</span>
           </label>
           <button id="code-submit" type="submit">Verify</button>
           <button id="back" type="button" class="back">Use a different email</button>

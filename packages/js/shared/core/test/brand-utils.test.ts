@@ -11,6 +11,11 @@ describe("brand context", () => {
     assert.equal(context.colors.primary, "#1B3139");
     assert.equal(context.colors.primaryHover, "#0E538B");
     assert.equal(context.colors.accent, "#00A972");
+    assert.equal(context.tagline, undefined);
+    assert.equal(
+      brandUtils.defaultBrandContext.tagline,
+      "Practical tools for Databricks builders.",
+    );
     assert.equal(context.links.website, "https://dbx.tools");
     assert.equal(context.links.documentation, "https://docs.dbx.tools/");
   });

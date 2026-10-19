@@ -170,9 +170,9 @@ export interface UseMastraChatOptions<
    * Converse with this Genie space alias directly instead of an agent. Every
    * turn is one Genie message streamed as an `ask_genie` tool call, so pills,
    * thoughts, suggestions, and embeds render exactly as in an agent chat.
-   * Genie owns the state: its conversations are the threads and its messages
-   * are the history; nothing is stored in Mastra Memory. Conversations cannot
-   * be renamed, turns take no attachments, and feedback is unavailable.
+   * Genie owns visible conversation state. When configured, the server adds
+   * resource-scoped Mastra recall and saves completed turns. Conversations
+   * cannot be renamed, turns take no attachments, and feedback is unavailable.
    */
   genieSpace?: string;
   /**

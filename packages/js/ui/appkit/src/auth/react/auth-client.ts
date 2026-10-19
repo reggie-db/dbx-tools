@@ -13,6 +13,7 @@ export {
   listPasskeys,
   logout,
   passkeyDisplayName,
+  passkeysAvailable,
   removePasskey,
   renamePasskey,
   requestEmailOtp,

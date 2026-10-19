@@ -130,6 +130,27 @@ export function passkeyDisplayName(prefix?: string): string | undefined {
   return formatPasskeyDisplayName(prefix, browserLocation()?.hostname ?? "");
 }
 
+/** Whether this browser can run a secure WebAuthn passkey ceremony. */
+export function passkeysAvailable(): boolean {
+  const scope = globalThis as unknown as {
+    isSecureContext?: boolean;
+    PublicKeyCredential?: unknown;
+    navigator?: {
+      credentials?: {
+        create?: unknown;
+        get?: unknown;
+      };
+    };
+  };
+  return Boolean(
+    scope.isSecureContext !== false &&
+    scope.PublicKeyCredential &&
+    scope.navigator?.credentials &&
+    typeof scope.navigator.credentials.create === "function" &&
+    typeof scope.navigator.credentials.get === "function",
+  );
+}
+
 /**
  * Start a passkey registration whose lifetime is explicitly owned by the caller.
  * The display name defaults to the humanized browser subdomain.

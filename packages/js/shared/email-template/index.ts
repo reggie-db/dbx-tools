@@ -4,6 +4,8 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-email-template";
 export const PACKAGE_VERSION = "0.9.138";
+export * as generatedAssets from "./src/generated/assets.ts";
 export * as template from "./src/template.tsx";
+export { dbxToolsEmailAssetDataUrls } from "./src/generated/assets.ts";
 export { emailBrandFromContext, defaultEmailBrand, resolveEmailBrand, normalizeEmailMarkdown, EmailBody, EmailCard, EmailDocument } from "./src/template.tsx";
 export type { EmailBrand, ResolvedEmailBrand, EmailBodyProps, EmailDocumentProps } from "./src/template.tsx";

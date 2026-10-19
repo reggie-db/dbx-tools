@@ -195,7 +195,7 @@ export function BrandPicker({
               <Label htmlFor={`${id}-tagline`}>Tagline</Label>
               <Input
                 id={`${id}-tagline`}
-                value={draft.tagline}
+                value={draft.tagline ?? ""}
                 onChange={(event) => updateIdentity("tagline", event.currentTarget.value)}
               />
             </div>

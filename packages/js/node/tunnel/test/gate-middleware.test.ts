@@ -322,7 +322,7 @@ describe("gate middleware", () => {
     assert.match(String(res.sentBody), /autocomplete="email webauthn"/);
     assert.match(String(res.sentBody), />Sign in with a passkey</);
     assert.match(String(res.sentBody), /id="create-passkey"[^>]+checked/);
-    assert.match(String(res.sentBody), />Create a passkey for this tunnel host</);
+    assert.match(String(res.sentBody), />Create passkey</);
   });
 
   it("preserves a deep navigation path through hosted login", async () => {

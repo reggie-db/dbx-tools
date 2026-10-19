@@ -92,7 +92,8 @@ runtime.
 - The client doesn't hold Databricks credentials. AppKit sessions and the
   server-published plugin configuration provide browser access.
 - Genie-only chat requires an on-behalf-of token from the Databricks Apps front
-  door.
+  door. Tunnel sessions hide that setting and use the regular support agent,
+  whose automatic identity mode falls back to the app service principal.
 - Topic-bus delivery is live. Opening a page doesn't replay messages published
   before its event stream connected.
 - Lakebox controls require the `@dbx-tools/appkit-lakebox` backend plugin and an
