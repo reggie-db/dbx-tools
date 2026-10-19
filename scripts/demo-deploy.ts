@@ -14,19 +14,30 @@ import { client as authClient } from "@dbx-tools/auth";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { parse } from "yaml";
+import { z } from "zod";
 
 const logger = log.logger("demo:deploy");
 const ROOT = process.cwd();
 const SERVER_DIR = path.join(ROOT, "packages/example/server/appkit-demo");
 const STAGE_DIR = path.join(tmpdir(), "dbx-tools-deploy-app");
 
-interface BundleTarget {
-  default?: boolean;
-}
+const BundleTargetSchema = z.object({
+  default: z.boolean().optional(),
+});
+type BundleTarget = z.infer<typeof BundleTargetSchema>;
 
-interface BundleConfig {
-  targets?: Record<string, BundleTarget>;
-}
+const BundleConfigSchema = z.object({
+  targets: z.record(z.string(), BundleTargetSchema).optional(),
+  variables: z.object({
+    app_name: z.object({ default: z.string() }),
+    generator_catalog: z.object({ default: z.string() }),
+  }),
+});
+type BundleConfig = z.infer<typeof BundleConfigSchema>;
+
+const AppResponseSchema = z.object({
+  service_principal_client_id: z.string().uuid(),
+});
 
 interface DemoDeployOptions {
   readonly profile?: string;
@@ -48,10 +59,16 @@ function bundleTarget(config: BundleConfig): { name: string; target: BundleTarge
 
 async function deploymentAuth(
   options: DemoDeployOptions,
-): Promise<{ host: string; profile?: string; target: string }> {
-  const config = parse(
-    readFileSync(path.join(STAGE_DIR, "databricks.yml"), "utf8"),
-  ) as BundleConfig;
+): Promise<{
+  host: string;
+  profile?: string;
+  target: string;
+  appName: string;
+  generatorCatalog: string;
+}> {
+  const config = BundleConfigSchema.parse(
+    parse(readFileSync(path.join(STAGE_DIR, "databricks.yml"), "utf8")),
+  );
   const selected = bundleTarget(config);
   const client = await authClient.createAuthClient(options);
   await client.token({ login: true, refresh: true });
@@ -59,6 +76,8 @@ async function deploymentAuth(
     host: client.host,
     ...(client.profile ? { profile: client.profile } : {}),
     target: selected.name,
+    appName: config.variables.app_name.default,
+    generatorCatalog: config.variables.generator_catalog.default,
   };
 }
 
@@ -74,6 +93,56 @@ async function run(command: string[], cwd: string): Promise<void> {
   if (exitCode !== 0) {
     throw new Error(`${command.join(" ")} exited with code ${exitCode}`);
   }
+}
+
+async function runOutput(command: string[], cwd: string): Promise<string> {
+  const child = Bun.spawn(command, {
+    cwd,
+    env: process.env,
+    stdin: "inherit",
+    stdout: "pipe",
+    stderr: "inherit",
+  });
+  const output = await new Response(child.stdout).text();
+  const exitCode = await child.exited;
+  if (exitCode !== 0) {
+    throw new Error(`${command.join(" ")} exited with code ${exitCode}`);
+  }
+  return output;
+}
+
+async function grantGeneratorCatalog(
+  auth: Awaited<ReturnType<typeof deploymentAuth>>,
+  selection: string[],
+): Promise<void> {
+  const app = AppResponseSchema.parse(
+    JSON.parse(
+      await runOutput(
+        ["databricks", "apps", "get", auth.appName, "--output", "json", ...selection],
+        STAGE_DIR,
+      ),
+    ),
+  );
+  await run(
+    [
+      "databricks",
+      "grants",
+      "update",
+      "catalog",
+      auth.generatorCatalog,
+      "--json",
+      JSON.stringify({
+        changes: [
+          {
+            principal: app.service_principal_client_id,
+            add: ["USE_CATALOG", "CREATE_SCHEMA"],
+          },
+        ],
+      }),
+      ...selection,
+    ],
+    STAGE_DIR,
+  );
 }
 
 async function main(): Promise<void> {
@@ -97,6 +166,7 @@ async function main(): Promise<void> {
   ];
   await run(["databricks", "bundle", "validate", ...selection], STAGE_DIR);
   await run(["databricks", "bundle", "deploy", "--auto-approve", ...selection], STAGE_DIR);
+  await grantGeneratorCatalog(auth, selection);
   await run(["databricks", "bundle", "run", "demo_app", ...selection], STAGE_DIR);
   logger.info("demo app deployed");
 }

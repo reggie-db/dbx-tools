@@ -52,17 +52,15 @@ resources:
   # the existing catalog once before the first deploy:
   # databricks bundle deployment bind generator_catalog <catalog> -t <target>
   # The app SP creates marked per-user schemas, then grants the active OBO user
-  # ALL PRIVILEGES and MANAGE on only that schema.
+  # ALL PRIVILEGES and MANAGE on only that schema. `demo:deploy` adds
+  # USE_CATALOG and CREATE_SCHEMA to the app SP after the app resource exists.
+  # Keep that grant additive: a catalog `grants` block is authoritative and
+  # would attempt to revoke privileges from every principal omitted here.
   catalogs:
     generator_catalog:
       name: ${var.generator_catalog}
       lifecycle:
         prevent_destroy: true
-      grants:
-        - principal: ${resources.apps.demo_app.service_principal_client_id}
-          privileges:
-            - USE_CATALOG
-            - CREATE_SCHEMA
 
   # Lakebase Autoscaling project backing the demo's memory tools. Lakebase
   # automatically provisions the `production` branch and its `primary`
