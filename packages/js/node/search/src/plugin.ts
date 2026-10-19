@@ -6,9 +6,8 @@
  *
  *   - a `search` / `universal_search` / (opt-in) `add_documents` tool set for
  *     both Mastra and AppKit agents (autocomplete is a small-`limit` search);
- *   - compatibility and extension routes under `/api/search`
- *     (`POST /` search, `POST /universal` federated, `GET /indexes` catalogue,
- *     and `POST /documents` when writes are enabled);
+ *   - extension routes under `/api/search` (`POST /universal` federated,
+ *     `GET /indexes` catalogue, and opt-in document/index lifecycle routes);
  *   - a `clientConfig()` payload so a UI knows the indexes, default, and page
  *     size at boot with no round-trip;
  *   - `exports()` so app code can `appkit.search.search(...)` directly.
@@ -25,7 +24,13 @@ import { toPlugin, type IAppRouter, type PluginManifest } from "@databricks/appk
 import { aiSearch, defineTool, type ToolRegistry } from "@databricks/appkit/beta";
 import { pluginRegistry, ToolRegistryPlugin } from "@dbx-tools/appkit";
 import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
-import { searchSchemas, type SearchClientConfig } from "@dbx-tools/shared-search";
+import {
+  SEARCH_DEFAULT_BASE_PATH,
+  SEARCH_PLUGIN_NAME,
+  SEARCH_ROUTES,
+  searchSchemas,
+  type SearchClientConfig,
+} from "@dbx-tools/shared-search";
 import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
 import { SEARCH_CONFIG_SCHEMA, resolveSearchConfig, type SearchPluginConfig } from "./config.ts";
 import { toCreateIndexOptions } from "./index-options.ts";
@@ -41,21 +46,6 @@ import {
 } from "./schema.ts";
 
 const logger = log.logger("search");
-
-/** Mount-relative route for a universal (federated) search across indexes. */
-const UNIVERSAL_ROUTE = "/universal";
-
-/** Mount-relative route serving the index catalogue a search box reads. */
-const INDEXES_ROUTE = "/indexes";
-
-/** Mount-relative route for adding documents to a direct-access index. */
-const DOCUMENTS_ROUTE = "/documents";
-
-/** Mount-relative route for creating a Vector Search index. */
-const INDEX_ROUTE = "/index";
-
-/** Mount-relative route for syncing a Delta Sync index from its source table. */
-const INDEX_SYNC_ROUTE = "/index/sync";
 
 /**
  * AppKit extension plugin for agent tools, federated search, and optional
@@ -89,7 +79,7 @@ const INDEX_SYNC_ROUTE = "/index/sync";
  */
 export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
   static manifest = {
-    name: "search",
+    name: SEARCH_PLUGIN_NAME,
     displayName: "AI Search",
     description:
       "Search Databricks AI Search (Vector Search) indexes: agent tools, HTTP routes for a " +
@@ -100,14 +90,14 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
       optional: [],
     },
     config: { schema: SEARCH_CONFIG_SCHEMA },
-  } satisfies PluginManifest<"search">;
+  } satisfies PluginManifest<typeof SEARCH_PLUGIN_NAME>;
 
   /** Runtime owned exclusively by this plugin instance. */
   private readonly runtime: SearchRuntime = createSearchRuntime({ config: this.config });
 
   /** The base path AppKit mounts this plugin's routes under. */
   private get basePath(): string {
-    return `/api/${SearchPlugin.manifest.name}`;
+    return SEARCH_DEFAULT_BASE_PATH;
   }
 
   /**
@@ -279,7 +269,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     this.route(router, {
       name: "universalSearch",
       method: "post",
-      path: UNIVERSAL_ROUTE,
+      path: SEARCH_ROUTES.universal,
       handler: async (req, res) => {
         await this.respond(res, "universalSearch", () => {
           const request = searchSchemas.universalSearchRequestSchema.parse(req.body ?? {});
@@ -290,7 +280,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     this.route(router, {
       name: "indexes",
       method: "get",
-      path: INDEXES_ROUTE,
+      path: SEARCH_ROUTES.indexes,
       handler: async (_req, res) => {
         res.json(this.clientConfig());
       },
@@ -298,7 +288,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     this.route(router, {
       name: "documents",
       method: "post",
-      path: DOCUMENTS_ROUTE,
+      path: SEARCH_ROUTES.documents,
       handler: async (req, res) => {
         const { config } = this.runtime;
         if (!config.allowWrite) {
@@ -313,7 +303,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     this.route(router, {
       name: "createIndex",
       method: "post",
-      path: INDEX_ROUTE,
+      path: SEARCH_ROUTES.index,
       handler: async (req, res) => {
         const { config, readBackend } = this.runtime;
         if (!config.allowWrite || !readBackend?.supportsLifecycle) {
@@ -328,7 +318,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     this.route(router, {
       name: "syncIndex",
       method: "post",
-      path: INDEX_SYNC_ROUTE,
+      path: SEARCH_ROUTES.indexSync,
       handler: async (req, res) => {
         const { config, readBackend } = this.runtime;
         if (!config.allowWrite || !readBackend?.supportsLifecycle) {

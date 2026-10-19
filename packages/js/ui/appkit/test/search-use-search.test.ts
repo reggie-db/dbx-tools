@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  parseSearchClientConfig,
   parseUniversalSearchResult,
   usesUniversalSearchRoute,
 } from "../src/search/react/use-search.ts";
@@ -49,5 +50,31 @@ describe("usesUniversalSearchRoute", () => {
     expect(usesUniversalSearchRoute(true, 0)).toBe(true);
     expect(usesUniversalSearchRoute(true, 2)).toBe(true);
     expect(usesUniversalSearchRoute(false, 2)).toBe(false);
+  });
+});
+
+describe("parseSearchClientConfig", () => {
+  it("treats AppKit's empty plugin config sentinel as absent", () => {
+    expect(parseSearchClientConfig({})).toBeUndefined();
+  });
+
+  it("validates the server-published route and index catalog", () => {
+    expect(
+      parseSearchClientConfig({
+        indexes: [{ name: "catalog.schema.docs", alias: "docs", isDefault: true }],
+        defaultIndex: "catalog.schema.docs",
+        pageSize: 10,
+        basePath: "/custom/search",
+      }),
+    ).toEqual({
+      indexes: [{ name: "catalog.schema.docs", alias: "docs", isDefault: true }],
+      defaultIndex: "catalog.schema.docs",
+      pageSize: 10,
+      basePath: "/custom/search",
+    });
+  });
+
+  it("rejects malformed published config", () => {
+    expect(() => parseSearchClientConfig({ indexes: [], pageSize: "ten" })).toThrow();
   });
 });

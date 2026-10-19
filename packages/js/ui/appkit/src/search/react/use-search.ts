@@ -2,8 +2,12 @@
 // search-as-you-type state machine. Single-index queries use AppKit's native
 // route and client config; universal queries use the dbx-tools extension route.
 
+import { usePluginClientConfig } from "@databricks/appkit-ui/react";
 import { useAiSearchQuery, type AiSearchRequest } from "@databricks/appkit-ui/react/beta";
 import {
+  SEARCH_DEFAULT_BASE_PATH,
+  SEARCH_PLUGIN_NAME,
+  SEARCH_ROUTES,
   searchSchemas,
   type SearchClientConfig,
   type SearchHit,
@@ -48,11 +52,22 @@ export interface UseSearchState {
   clear: () => void;
 }
 
-const UNIVERSAL_SEARCH_PATH = "/api/search/universal";
-
 /** Validate one universal-search response with the owning shared schema. */
 export function parseUniversalSearchResult(value: unknown): SearchResult {
   return searchSchemas.searchResultSchema.parse(value);
+}
+
+/** Validate the published extension config, treating AppKit's empty sentinel as absent. */
+export function parseSearchClientConfig(value: unknown): SearchClientConfig | undefined {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).length === 0
+  ) {
+    return undefined;
+  }
+  return searchSchemas.searchClientConfigSchema.parse(value);
 }
 
 /** A single configured index is already the complete universal-search set. */
@@ -82,9 +97,18 @@ function toHits(
  */
 export function useSearch(options: UseSearchOptions = {}): UseSearchState {
   const native = useAiSearchQuery({ ...(options.index ? { alias: options.index } : {}) });
+  const publishedConfig = usePluginClientConfig<unknown>(SEARCH_PLUGIN_NAME);
+  const config = useMemo(() => parseSearchClientConfig(publishedConfig), [publishedConfig]);
   const debounceMs = options.debounceMs ?? 200;
   const minLength = options.minLength ?? 1;
-  const useUniversalRoute = usesUniversalSearchRoute(options.universal, native.indexes.length);
+  const useUniversalRoute = usesUniversalSearchRoute(
+    options.universal,
+    config?.indexes.length ?? native.indexes.length,
+  );
+  const universalSearchPath = searchSchemas.searchRoute(
+    config?.basePath ?? SEARCH_DEFAULT_BASE_PATH,
+    SEARCH_ROUTES.universal,
+  );
 
   const [query, setQueryState] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -118,7 +142,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
       setUniversalLoading(true);
       setUniversalError(null);
       try {
-        const response = await fetch(UNIVERSAL_SEARCH_PATH, {
+        const response = await fetch(universalSearchPath, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -141,7 +165,15 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
         if (abortRef.current === controller) setUniversalLoading(false);
       }
     },
-    [minLength, native.alias, native.search, options.limit, options.mode, useUniversalRoute],
+    [
+      minLength,
+      native.alias,
+      native.search,
+      options.limit,
+      options.mode,
+      universalSearchPath,
+      useUniversalRoute,
+    ],
   );
 
   const setQuery = useCallback(
@@ -175,19 +207,6 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
     [],
   );
 
-  const config = useMemo<SearchClientConfig>(
-    () => ({
-      indexes: native.indexes.map((index) => ({
-        name: index.alias,
-        alias: index.alias,
-        isDefault: index.alias === native.alias,
-      })),
-      ...(native.alias ? { defaultIndex: native.alias } : {}),
-      pageSize: options.limit ?? 20,
-      basePath: "/api/ai-search",
-    }),
-    [native.alias, native.indexes, options.limit],
-  );
   const loading = useUniversalRoute ? universalLoading : native.loading;
   const error = useUniversalRoute ? universalError : native.error;
   return useMemo(

@@ -79,11 +79,10 @@ describe("search config", () => {
     assert.equal(new Set(aliases).size, aliases.length);
   });
 
-  it("defaults mode, page size, and base path", () => {
+  it("defaults mode and page size", () => {
     const config = resolveSearchConfig({});
     assert.equal(config.mode, "hybrid");
     assert.equal(config.pageSize, 10);
-    assert.equal(config.basePath, "/api/search");
     assert.equal(config.allowWrite, false);
   });
 });

@@ -1,6 +1,7 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
+import { findFilesSync } from "@dbx-tools/path/find";
 import { log, object } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
@@ -90,17 +91,14 @@ function writeGraph(root: string, graph: WorkspaceGraph): void {
 }
 
 function testFiles(directory: string): string[] {
-  if (!existsSync(directory)) return [];
-  const files: string[] = [];
-  const visit = (current: string): void => {
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
-      const path = join(current, entry.name);
-      if (entry.isDirectory()) visit(path);
-      else if (/\.(?:test|spec)\.tsx?$/.test(entry.name)) files.push(path);
-    }
-  };
-  visit(directory);
-  return files.sort();
+  return [
+    ...findFilesSync("**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}", {
+      cwd: directory,
+      absolute: true,
+      nodir: true,
+      ignoreOptions: { test: false },
+    }),
+  ].sort();
 }
 
 function integrationTest(path: string): boolean {
@@ -117,13 +115,13 @@ function packageForPath(graph: WorkspaceGraph, path: string): WorkspaceGraphPack
     .find((pkg) => normalized === pkg.path || normalized.startsWith(`${pkg.path}/`));
 }
 
-function affectedPackages(graph: WorkspaceGraph, changed: readonly string[]): Set<string> {
+function affectedPackages(graph: WorkspaceGraph, changed: readonly string[]): Set<string> | "all" {
   const byName = new Map(graph.packages.map((pkg) => [pkg.name, pkg]));
   const affected = new Set<string>();
   const pending: string[] = [];
   for (const path of changed) {
     const pkg = packageForPath(graph, path);
-    if (!pkg) return new Set(graph.packages.map((entry) => entry.name));
+    if (!pkg) return "all";
     if (!affected.has(pkg.name)) pending.push(pkg.name);
   }
   while (pending.length > 0) {
@@ -175,7 +173,7 @@ function selectedTests(
   if (mode === "integration") return all.filter(integrationTest);
   if (mode === "all") return all;
 
-  let names: Set<string>;
+  let names: Set<string> | "all";
   if (mode === "changed") {
     const changed = changedFiles(root, base);
     if (changed.length === 0) return [];
@@ -190,6 +188,7 @@ function selectedTests(
       names.add(byPath.name);
     }
   }
+  if (names === "all") return all;
   const paths = new Set(graph.packages.filter((pkg) => names.has(pkg.name)).map((pkg) => pkg.path));
   return all.filter((path) => {
     const relativePath = toPosix(relative(root, path));

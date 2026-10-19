@@ -7,8 +7,8 @@
  *
  * The design goal is "one index, zero config": name a default index (or set
  * `DATABRICKS_VECTOR_SEARCH_INDEX`) and everything else - the columns to
- * return, the page size, the match mode, the mounted route path, the embedding
- * model used when creating an index - has a sensible default that can be
+ * return, the page size, the match mode, and the embedding model used when
+ * creating an index - has a sensible default that can be
  * overridden when a deployment needs to go deeper.
  *
  * Which index / endpoint is used follows the standard precedence: explicit
@@ -45,9 +45,6 @@ export const DEFAULT_PAGE_SIZE = 10;
 
 /** Default per-call timeout for a search / index operation. */
 export const DEFAULT_TIMEOUT_MS = 30_000;
-
-/** Base path the plugin mounts its routes under, unless overridden. */
-export const DEFAULT_BASE_PATH = "/api/search";
 
 /**
  * A configured index the plugin knows about ahead of time. Only `name` (or
@@ -142,7 +139,6 @@ export interface ResolvedSearchConfig {
   pageSize: number;
   mode: SearchMode;
   embeddingModel?: string;
-  basePath: string;
   timeoutMs: number;
   allowWrite: boolean;
   ensureOnSetup?: EnsureOnSetupConfig;
@@ -316,7 +312,6 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
       "embeddingModel",
       configUtils.string(config.embeddingModel, "SEARCH_EMBEDDING_MODEL", configUtils.ENV_ONLY),
     ),
-    basePath: DEFAULT_BASE_PATH,
     timeoutMs: configUtils.positiveInt(
       config.timeoutMs,
       "SEARCH_TIMEOUT_MS",

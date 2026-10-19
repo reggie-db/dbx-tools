@@ -17,7 +17,7 @@ export * as schema from "./src/schema.ts";
 export * as tool from "./src/tool.ts";
 export { SearchIndex, SearchClient } from "./src/client.ts";
 export type { SearchReadBackend, SearchOptions, UniversalSearchOptions, IndexInfo, CreateIndexOptions, EnsureEndpointOptions, ProvisionOptions } from "./src/client.ts";
-export { INDEX_ENV, DATABRICKS_INDEX_ENV, ENDPOINT_ENV, DEFAULT_MODE, DEFAULT_PAGE_SIZE, DEFAULT_TIMEOUT_MS, DEFAULT_BASE_PATH, SEARCH_CONFIG_SCHEMA } from "./src/config.ts";
+export { INDEX_ENV, DATABRICKS_INDEX_ENV, ENDPOINT_ENV, DEFAULT_MODE, DEFAULT_PAGE_SIZE, DEFAULT_TIMEOUT_MS, SEARCH_CONFIG_SCHEMA } from "./src/config.ts";
 export type { SearchIndexConfig, SearchPluginConfig, EnsureOnSetupConfig, ResolvedIndexConfig, ResolvedSearchConfig } from "./src/config.ts";
 export { LakebaseSearchBackend } from "./src/lakebase.ts";
 export type { LakebaseSearchOptions, LakebaseSearchPool, LakebaseProvisionOptions } from "./src/lakebase.ts";

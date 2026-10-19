@@ -5,6 +5,7 @@ import { availableParallelism } from "node:os";
 import { join, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
 import { errorUtils, log } from "@dbx-tools/shared-core";
+import type { TaskSpec, TasksManifest } from "projen";
 import { runTaskMain } from "./cli.ts";
 
 const logger = log.logger("projen:compile");
@@ -13,20 +14,6 @@ interface PackageManifest {
   readonly name?: string;
   readonly scripts?: Record<string, string>;
   readonly workspaces?: string[];
-}
-
-interface TaskManifest {
-  readonly tasks?: {
-    readonly "pre-compile"?: {
-      readonly steps?: Array<{ readonly exec?: string; readonly execArgs?: string[] }>;
-    };
-    readonly compile?: {
-      readonly steps?: Array<{ readonly exec?: string; readonly execArgs?: string[] }>;
-    };
-    readonly "post-compile"?: {
-      readonly steps?: Array<{ readonly exec?: string; readonly execArgs?: string[] }>;
-    };
-  };
 }
 
 export interface CompilePlan {
@@ -38,9 +25,15 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
 
-function plainTypeScriptBuild(steps: unknown): boolean {
+function hasTaskOptions(task: TaskSpec | undefined): boolean {
+  return Object.keys(task ?? {}).some((key) => !["name", "description", "steps"].includes(key));
+}
+
+function plainTypeScriptBuild(task: TaskSpec | undefined): boolean {
+  if (hasTaskOptions(task)) return false;
+  const steps = task?.steps;
   if (!Array.isArray(steps) || steps.length !== 1) return false;
-  const step = steps[0] as { execArgs?: string[] };
+  const step = steps[0];
   if (!step || typeof step !== "object") return false;
   return (
     Object.keys(step).length === 1 &&
@@ -50,8 +43,8 @@ function plainTypeScriptBuild(steps: unknown): boolean {
   );
 }
 
-function hasSteps(steps: unknown): boolean {
-  return Array.isArray(steps) && steps.length > 0;
+function hasLifecycle(task: TaskSpec | undefined): boolean {
+  return hasTaskOptions(task) || (task?.steps?.length ?? 0) > 0;
 }
 
 /** Read the root's concrete workspace paths on every run, including newly added members. */
@@ -65,13 +58,13 @@ export function compilePlan(root: string): CompilePlan {
     const script = manifest.scripts?.compile;
     if (!script) continue;
     const taskPath = join(directory, ".projen", "tasks.json");
-    const tasks = existsSync(taskPath) ? readJson<TaskManifest>(taskPath).tasks : undefined;
-    const plainCompile = plainTypeScriptBuild(tasks?.compile?.steps);
+    const tasks = existsSync(taskPath) ? readJson<TasksManifest>(taskPath).tasks : undefined;
+    const plainCompile = plainTypeScriptBuild(tasks?.compile);
     if (
       script === "projen compile" &&
       plainCompile &&
-      !hasSteps(tasks?.["pre-compile"]?.steps) &&
-      !hasSteps(tasks?.["post-compile"]?.steps)
+      !hasLifecycle(tasks?.["pre-compile"]) &&
+      !hasLifecycle(tasks?.["post-compile"])
     ) {
       typescriptConfigs.push(join(directory, "tsconfig.json"));
     } else {

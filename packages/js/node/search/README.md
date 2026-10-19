@@ -41,8 +41,8 @@ The extension adds:
 - AppKit-compatible query routes under `/api/ai-search/:alias`. Extension
   routes under `/api/search` cover universal search and optional lifecycle
   operations.
-- Configuration can infer columns, page size, mode, aliases, and route path
-  after you name a default index or set `DATABRICKS_VECTOR_SEARCH_INDEX`.
+- Configuration can infer columns, page size, mode, and aliases after you name
+  a default index or set `DATABRICKS_VECTOR_SEARCH_INDEX`.
 - Native AppKit `aiSearch` uses the service principal by default. Set an
   index's `auth` to `on-behalf-of-user` when queries must use the signed-in
   user's permissions. Each Lakebase full-text index selects the same two modes

@@ -2,9 +2,9 @@
 
 ## Scope
 
-This audit reviewed the filesystem cache and approval path, AppKit and Mastra ownership boundaries, repeated local utilities, and the generated build and release pipeline. It combined focused source review with AI-SLOP Detector `3.8.6` pulse, duplicate, boundary, dead-code, and unused-dependency scans.
+This audit reviewed the filesystem cache and approval path, AppKit and Mastra ownership boundaries, repeated local utilities, search client/server contracts, workspace task orchestration, and the generated build and release pipeline. It combined focused source review with AI-SLOP Detector `3.8.6` pulse, duplicate, boundary, dead-code, and unused-dependency scans.
 
-The automated duplicate and unused-dependency results are dominated by generated Graphiti sources and monorepo dependency declarations. The boundary scan reported no violations. Manual review against the exact installed AppKit and Mastra versions produced the actionable findings below.
+The automated duplicate and unused-dependency results are dominated by generated Graphiti sources and monorepo dependency declarations. The boundary scan reported no violations, and the final changed-code review attributed no findings to this cleanup. Manual review against the exact installed AppKit, Mastra, and Projen versions produced the actionable findings below.
 
 ## Changes completed
 
@@ -12,6 +12,10 @@ The automated duplicate and unused-dependency results are dominated by generated
 - `sharedFS.cache()` can cache `readFile` only under declared filesystem-relative roots. AppKit Mastra passes resolved skill roots into that option, so skill files use the existing process-local `FilesCachePlugin` LRU while ordinary file reads remain live.
 - Workspace decoration is tracked in a `WeakSet` instead of mutating Mastra `Workspace` instances with a private symbol property.
 - Demo deployment resolves default environment or configured credentials directly through `@dbx-tools/auth`, including profile, host, and the other auth options. A resolved profile is forwarded to every Databricks bundle command when present.
+- AppKit Mastra shutdown now awaits Mastra's native `shutdown()` lifecycle before flushing direct MLflow traces. Cancellation no longer starts asynchronous teardown while AppKit still considers the plugin active.
+- Workspace compilation reads Projen's native `TaskSpec` and `TasksManifest` shapes. Tasks with conditions, working directories, environment policy, required variables, or shell selection remain under Projen execution instead of being incorrectly collapsed into the TypeScript batch.
+- Workspace test discovery reuses `@dbx-tools/path/findFilesSync`, includes JavaScript and modern module test extensions, and keeps repository-level documentation tests in changed-mode selection.
+- Search plugin names, extension routes, and the default mount path now have one browser-safe owner in `@dbx-tools/shared-search`. The React hook reads and validates AppKit's native boot-time `clientConfig()` payload, while single-index queries continue to use AppKit's native `useAiSearchQuery` hook.
 
 ## Ownership findings
 
@@ -25,11 +29,17 @@ AppKit's Lakebase-backed cache and cache-schema provisioning remain enabled. Thi
 
 `MountedCompositeFilesystem` handles Mastra's virtual-root `.gitignore` probe because native `CompositeFilesystem` cannot route that file when the root is only a mount namespace. This is a narrow compatibility gap rather than general filesystem policy. Keep it isolated and remove it when Mastra handles an unmounted virtual root natively.
 
+### Mastra PostgreSQL storage
+
+The installed Mastra PostgreSQL package does not expose public replacements for ownership-error recovery or `PgVector` pool injection. Keep the existing narrow initialization and pool adaptations until the owner publishes equivalent extension points; replacing them now would remove behavior rather than reuse native capability.
+
 ## DRY findings
 
 `retainedSize()` is implemented separately in AppKit's persistent-cache L1 and process-local files cache. The implementations are similar but size different entry shapes and belong to different cache lifecycles. Do not extract a generic helper unless a single cache owner can define the retained-value contract; a shared helper that accepts arbitrary values would hide rather than remove ownership duplication.
 
 Generated Graphiti source contains the duplicate blocks reported by the scanner. Those files are derived artifacts and must be fixed in their upstream source or generator, not edited locally.
+
+The `@dbx-tools/ui/auth/react` browser-auth re-export remains intentionally retained. It is the public authentication surface of the consolidated React package, not a second implementation; behavior and state remain owned only by `@dbx-tools/shared-auth/browser`.
 
 ## Build assessment
 
@@ -41,4 +51,5 @@ The custom release transaction is complex because it owns branch preparation, sy
 
 - Replace the private AppKit persistent-storage load when AppKit publishes the required storage API.
 - Remove `MountedCompositeFilesystem` after Mastra supports virtual-root ignore probing.
+- Remove the Mastra PostgreSQL initialization and pool adaptations when public lifecycle and pool extension points cover those cases.
 - Keep scanner exclusions aware of generated Graphiti trees so duplicate and dead-code reports remain actionable.

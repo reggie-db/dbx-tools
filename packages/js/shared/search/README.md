@@ -50,14 +50,10 @@ const request: SearchRequest = searchSchemas.searchRequestSchema.parse({
 ```ts
 import { searchSchemas } from "@dbx-tools/shared-search";
 
-const response = await fetch("/api/ai-search/docs/query", {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ query: "reset my password", limit: 5 }),
-});
-if (!response.ok) throw new Error(`Search failed with ${response.status}`);
-const result = searchSchemas.searchResultSchema.parse(await response.json());
-const titles = result.hits.map((hit) => hit.fields.title);
+export function resultTitles(payload: unknown): unknown[] {
+  const result = searchSchemas.searchResultSchema.parse(payload);
+  return result.hits.map((hit) => hit.fields.title);
+}
 ```
 
 `searchHitSchema` returns the requested columns under `fields`, keyed by column
@@ -67,10 +63,11 @@ carries the `index` it came from.
 ## Read the index catalog
 
 ```ts
-import { searchSchemas } from "@dbx-tools/shared-search";
+import { getPluginClientConfig } from "@databricks/appkit-ui";
+import { SEARCH_PLUGIN_NAME, searchSchemas } from "@dbx-tools/shared-search";
 
 const config = searchSchemas.searchClientConfigSchema.parse(
-  await fetch("/api/search/indexes").then((r) => r.json()),
+  getPluginClientConfig(SEARCH_PLUGIN_NAME),
 );
 ```
 
@@ -87,6 +84,9 @@ index management, Mastra tools, and the AppKit plugin. Use
 
 ## Package exports
 
+- `SEARCH_PLUGIN_NAME`, `SEARCH_DEFAULT_BASE_PATH`, and `SEARCH_ROUTES` own the
+  extension plugin's browser-safe route contract; `searchSchemas.searchRoute`
+  joins a published base path with those route segments.
 - `searchSchemas`: `searchModeSchema`, `searchRequestSchema`, `searchHitSchema`,
   `searchResultSchema`, `universalSearchRequestSchema`, `searchDocumentSchema`,
   `upsertResultSchema`, `searchIndexInfoSchema`, `searchClientConfigSchema`, and

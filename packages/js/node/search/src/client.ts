@@ -229,7 +229,6 @@ export class SearchClient {
       indexes: [],
       pageSize: DEFAULT_PAGE_SIZE,
       mode: DEFAULT_MODE,
-      basePath: "/api/search",
       timeoutMs: DEFAULT_TIMEOUT_MS,
       allowWrite: false,
     },

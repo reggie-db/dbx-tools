@@ -321,23 +321,19 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     if (this.config.memory === undefined) this.config.memory = true;
   }
 
-  /** Flush pending direct MLflow traces during graceful shutdown. */
+  /** Drain Mastra resources, then flush pending direct MLflow traces. */
   async shutdown(): Promise<void> {
     try {
-      await flushDirectMlflowTracing();
-    } catch (err) {
-      this.logger.warn("error flushing direct MLflow traces", {
-        error: errorUtils.toError(err),
-      });
+      await this.mastra?.shutdown();
+    } finally {
+      try {
+        await flushDirectMlflowTracing();
+      } catch (err) {
+        this.logger.warn("error flushing direct MLflow traces", {
+          error: errorUtils.toError(err),
+        });
+      }
     }
-  }
-
-  /**
-   * Abort in-flight work and start the asynchronous trace flush.
-   */
-  override abortActiveOperations(): void {
-    super.abortActiveOperations();
-    void this.shutdown();
   }
 
   override exports() {

@@ -24,6 +24,26 @@
 
 import { z } from "zod";
 
+/** AppKit plugin name used to publish and read the search browser client config. */
+export const SEARCH_PLUGIN_NAME = "search";
+
+/** Default AppKit mount path for the search extension routes. */
+export const SEARCH_DEFAULT_BASE_PATH = `/api/${SEARCH_PLUGIN_NAME}`;
+
+/** Shared server route segments owned by the search plugin contract. */
+export const SEARCH_ROUTES = {
+  universal: "/universal",
+  indexes: "/indexes",
+  documents: "/documents",
+  index: "/index",
+  indexSync: "/index/sync",
+} as const;
+
+/** Join a published search base path with one shared route segment. */
+export function searchRoute(basePath: string, route: string): string {
+  return `${basePath.replace(/\/+$/, "")}/${route.replace(/^\/+/, "")}`;
+}
+
 /**
  * How a query is matched. `hybrid` (the default) fuses vector similarity with
  * BM25 keyword ranking - the right choice for most search boxes and for source
@@ -187,6 +207,8 @@ export const searchClientConfigSchema = z.object({
   pageSize: z.number().int().describe("Default number of hits a search returns."),
   basePath: z
     .string()
+    .startsWith("/")
+    .default(SEARCH_DEFAULT_BASE_PATH)
     .describe("Base path the search routes are mounted under (e.g. /api/search)."),
 });
 
