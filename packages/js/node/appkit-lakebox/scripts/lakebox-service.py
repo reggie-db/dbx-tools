@@ -62,6 +62,7 @@ def namespaced(args, log=None, check=True, capture=False):
         stdout=subprocess.PIPE if capture else sink,
         stderr=sink,
         text=True,
+        check=False,
     )
     if check and result.returncode != 0:
         raise RuntimeError(f"{args[0]} {args[1] if len(args) > 1 else ''} exited {result.returncode}")
@@ -135,9 +136,8 @@ def listener_owner(port):
 
 
 def port_open(port):
-    with contextlib.suppress(OSError):
-        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-            return True
+    with contextlib.suppress(OSError), socket.create_connection(("127.0.0.1", port), timeout=0.5):
+        return True
     return False
 
 
@@ -150,7 +150,10 @@ def ensure_storage():
         f'runroot = "{RUN}/storage"\ngraphroot = "{STORAGE}/storage"\n'
         '[storage.options.vfs]\nignore_chown_errors = "true"\n'
     )
-    if not os.path.exists(conf) or open(conf, encoding="utf-8").read() != content:
+    existing = None
+    with contextlib.suppress(FileNotFoundError), open(conf, encoding="utf-8") as handle:
+        existing = handle.read()
+    if existing != content:
         with open(conf, "w", encoding="utf-8") as handle:
             handle.write(content)
 
@@ -368,18 +371,31 @@ def remove(name):
     return {"removed": True}
 
 
+def read_status(name):
+    status = {}
+    with (
+        contextlib.suppress(FileNotFoundError, json.JSONDecodeError),
+        open(f"{service_dir(name)}/status.json", encoding="utf-8") as handle,
+    ):
+        status = json.load(handle)
+    return status
+
+
+def resolve_service_state(status, running, lock_is_held):
+    state = status.get("state", "stopped")
+    if state == "ready" and not running:
+        return "stopped"
+    if state == "starting" and not running and not lock_is_held:
+        return "error" if status.get("error") else "stopped"
+    return state
+
+
 def describe(name, include_log=False):
     definition = read_definition(name)
-    status = {}
-    with contextlib.suppress(FileNotFoundError, json.JSONDecodeError):
-        with open(f"{service_dir(name)}/status.json", encoding="utf-8") as handle:
-            status = json.load(handle)
-    state = status.get("state", "stopped")
+    status = read_status(name)
     running = crun_state(name) == "running"
-    if state == "ready" and not running:
-        state = "stopped"
-    if state == "starting" and not running and not lock_held(name):
-        state = "error" if status.get("error") else "stopped"
+    lock_is_held = lock_held(name) if status.get("state") == "starting" and not running else False
+    state = resolve_service_state(status, running, lock_is_held)
     result = {"name": name, "state": state, "definition": definition}
     if status.get("error") and state == "error":
         result["error"] = status["error"]
@@ -389,12 +405,14 @@ def describe(name, include_log=False):
 
 
 def lock_held(name):
-    with contextlib.suppress(FileNotFoundError):
-        with open(f"{service_dir(name)}/.lock", "w", encoding="utf-8") as handle:
-            try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                return True
+    with (
+        contextlib.suppress(FileNotFoundError),
+        open(f"{service_dir(name)}/.lock", "w", encoding="utf-8") as handle,
+    ):
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
     return False
 
 
@@ -418,30 +436,53 @@ def tail(name, max_lines, max_chars):
     return "\n".join(text.splitlines()[-max_lines:])[-max_chars:]
 
 
+def put_command(encoded_definition):
+    definition = json.loads(base64.b64decode(encoded_definition))
+    name = definition["name"]
+    with locked(name):
+        write_json(f"{service_dir(name)}/service.json", definition)
+    return describe(name)
+
+
+def list_command():
+    return {"services": [describe(name, include_log=True) for name in names()]}
+
+
+def logs_command(name, max_lines, max_chars):
+    return {"log": tail(name, int(max_lines), int(max_chars))}
+
+
+def start_all_command():
+    return {"services": [start(name) for name in names() if read_definition(name).get("autostart")]}
+
+
+COMMANDS = {
+    "put": put_command,
+    "start": start,
+    "stop": stop,
+    "remove": remove,
+    "list": list_command,
+    "logs": logs_command,
+    "start-all": start_all_command,
+}
+
+
+def usage():
+    print(f"usage: lakebox-service {'|'.join(COMMANDS)}", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def dispatch(command, args):
+    handler = COMMANDS.get(command)
+    if handler is None:
+        usage()
+    return handler(*args)
+
+
 def main():
-    command = sys.argv[1] if len(sys.argv) > 1 else ""
-    if command == "put":
-        definition = json.loads(base64.b64decode(sys.argv[2]))
-        name = definition["name"]
-        with locked(name):
-            write_json(f"{service_dir(name)}/service.json", definition)
-        output = describe(name)
-    elif command == "start":
-        output = start(sys.argv[2])
-    elif command == "stop":
-        output = stop(sys.argv[2])
-    elif command == "remove":
-        output = remove(sys.argv[2])
-    elif command == "list":
-        output = {"services": [describe(name, include_log=True) for name in names()]}
-    elif command == "logs":
-        output = {"log": tail(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))}
-    elif command == "start-all":
-        output = {"services": [start(name) for name in names() if read_definition(name).get("autostart")]}
-    else:
-        print("usage: lakebox-service put|start|stop|remove|list|logs|start-all", file=sys.stderr)
-        sys.exit(2)
-    json.dump(output, sys.stdout)
+    if len(sys.argv) < 2:
+        usage()
+    json.dump(dispatch(sys.argv[1], sys.argv[2:]), sys.stdout)
 
 
 if __name__ == "__main__":
