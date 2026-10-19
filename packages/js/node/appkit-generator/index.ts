@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-generator";
-export const PACKAGE_VERSION = "0.9.134";
+export const PACKAGE_VERSION = "0.9.135";
 export * as assets from "./src/assets.ts";
 export * as config from "./src/config.ts";
 export * as dashboard from "./src/dashboard.ts";
