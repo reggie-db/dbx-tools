@@ -64,7 +64,7 @@
   },
   "main": "src/server.ts",
   "license": "Apache-2.0",
-  "version": "0.9.137",
+  "version": "0.9.138",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
