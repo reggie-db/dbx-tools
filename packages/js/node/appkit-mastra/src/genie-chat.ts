@@ -399,11 +399,7 @@ export function genieChatStream(options: {
           error: errorUtils.errorMessage(error),
         });
       }
-      const question = contextualQuestion(
-        request.question,
-        request.requestContext,
-        memoryContext,
-      );
+      const question = contextualQuestion(request.question, request.requestContext, memoryContext);
       const progress = (progressEvent: wire.GenieWriterEvent) =>
         writer.write({
           type: wire.GENIE_PROGRESS_PART_TYPE,

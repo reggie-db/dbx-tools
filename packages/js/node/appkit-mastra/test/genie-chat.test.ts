@@ -139,7 +139,7 @@ describe("genieMessageToUiMessages", () => {
 
   test("hides context augmentation from reloaded questions", () => {
     const content =
-      "<dbx-tools-genie-context>\nApplication context:\n{\"storeId\":\"store-1\"}" +
+      '<dbx-tools-genie-context>\nApplication context:\n{"storeId":"store-1"}' +
       "\n</dbx-tools-genie-context>\n\nHow is this store performing?";
     expect(visibleGenieQuestion(content)).toBe("How is this store performing?");
     const [user] = genieMessageToUiMessages(genieMessage({ content }), SPACE);

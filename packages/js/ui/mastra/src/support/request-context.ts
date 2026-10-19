@@ -18,8 +18,6 @@ export function snapshotRequestContext<TValues extends Record<string, unknown>>(
   const input = typeof source === "function" ? source() : source;
   if (input === undefined) return undefined;
   const context =
-    input instanceof RequestContext
-      ? input
-      : new RequestContext<unknown>(Object.entries(input));
+    input instanceof RequestContext ? input : new RequestContext<unknown>(Object.entries(input));
   return new RequestContext<unknown>(Object.entries(structuredClone(context.toJSON())));
 }

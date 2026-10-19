@@ -49,9 +49,7 @@ describe("GenieChatClient", () => {
       ]);
     }) as typeof fetch;
     const client = new GenieChatClient(CONFIG, "default");
-    const requestContext = new RequestContext<{ storeId: string }>([
-      ["storeId", "store-1"],
-    ]);
+    const requestContext = new RequestContext<{ storeId: string }>([["storeId", "store-1"]]);
 
     const first = await client.streamAgent({
       agentId: "genie:default",

@@ -752,11 +752,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   );
 
   const runStream = useCallback(
-    (
-      threadId: string,
-      messages: UIMessage | UIMessage[],
-      requestContext?: RequestContext,
-    ) => {
+    (threadId: string, messages: UIMessage | UIMessage[], requestContext?: RequestContext) => {
       const turnMessages = Array.isArray(messages) ? messages : [messages];
       const userMessage = lastUserMessage(turnMessages);
       if (!userMessage) throw new Error("A Mastra chat turn requires a user message");
