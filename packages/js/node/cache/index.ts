@@ -3,6 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cache";
-export const PACKAGE_VERSION = "0.9.136";
+export const PACKAGE_VERSION = "0.9.137";
 export * as cache from "./src/cache.ts";
 export type { CacheLevel, CacheOptions, ProjectCacheOptions, GetOrSetOptions } from "./src/cache.ts";
