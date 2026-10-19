@@ -4,7 +4,7 @@ import { createWebSearchRuntime } from "../src/runtime.ts";
 import { runWebSearch, type WebSearchContext } from "../src/search.ts";
 
 describe("web-search provider fallback", () => {
-  it("suppresses cross-region Gemini failures and retries GPT in the same call", async () => {
+  it("probes Gemini once and caches the GPT fallback across concurrent calls", async () => {
     const endpointNames = ["databricks-gemini-3-8-flash", "databricks-gpt-5-6-sol"];
     const client = {
       config: {
@@ -26,6 +26,7 @@ describe("web-search provider fallback", () => {
       const body = JSON.parse(String(init?.body)) as { model: string; stream?: boolean };
       models.push(body.model);
       if (body.model.includes("gemini")) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
         return new Response(
           JSON.stringify({
             error_code: "INVALID_PARAMETER_VALUE",
@@ -67,15 +68,23 @@ describe("web-search provider fallback", () => {
         model: "databricks-gpt-5-6-sol",
       };
       const progress: unknown[] = [];
-      const first = await runWebSearch(request, runtime, context, undefined, async (event) => {
-        progress.push(event);
-      });
-      const second = await runWebSearch(request, runtime, context);
+      const [first, second, third] = await Promise.all([
+        runWebSearch(request, runtime, context, undefined, async (event) => {
+          progress.push(event);
+        }),
+        runWebSearch(request, runtime, context),
+        runWebSearch(request, runtime, context),
+      ]);
+      const fourth = await runWebSearch(request, runtime, context);
 
       assert.equal(first.model, "databricks-gpt-5-6-sol");
       assert.equal(second.model, "databricks-gpt-5-6-sol");
+      assert.equal(third.model, "databricks-gpt-5-6-sol");
+      assert.equal(fourth.model, "databricks-gpt-5-6-sol");
       assert.deepEqual(models, [
         "databricks-gemini-3-8-flash",
+        "databricks-gpt-5-6-sol",
+        "databricks-gpt-5-6-sol",
         "databricks-gpt-5-6-sol",
         "databricks-gpt-5-6-sol",
       ]);

@@ -74,6 +74,8 @@ export interface BuildModelOverrides {
    * class's static list when the workspace has none.
    */
   modelClass?: ModelClass;
+  /** Explicit workspace client for standalone callers such as CLIs. */
+  workspaceClient?: WorkspaceClient;
 }
 
 /** Resolved workspace client and the authentication mode backing it. */
@@ -162,7 +164,10 @@ export async function buildModel(
   // `MastraServer`. The MCP transport routes don't thread that context
   // into tool execution, so fall back to the ambient execution context
   // (the active OBO scope, or the service principal) when it's absent.
-  const { client, auth } = resolveModelWorkspaceContext(context);
+  const resolved = overrides.workspaceClient
+    ? { client: overrides.workspaceClient, auth: "service-principal" as const }
+    : resolveModelWorkspaceContext(context);
+  const { client, auth } = resolved;
   recordActiveTraceAuth(auth);
   const clientConfig = client.config;
   const host = (await clientConfig.getHost()).toString();

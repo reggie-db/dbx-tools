@@ -37,6 +37,10 @@ export interface WebSearchRuntime {
   execute: WebSearchExecutor;
   /** Provider-family cooldown deadlines learned from workspace failures. */
   familyCooldowns: Map<policy.ModelFamily, number>;
+  /** Provider families that completed a native search successfully. */
+  availableFamilies: Set<policy.ModelFamily>;
+  /** First native request currently establishing one family's availability. */
+  familyProbes: Map<policy.ModelFamily, Promise<void>>;
 }
 
 /** Runtime-aware operation input, retaining resolved-config compatibility. */
@@ -54,7 +58,13 @@ export function createWebSearchRuntime(
   overrides?: WebSearchPluginConfig,
   execute: WebSearchExecutor = directExecute,
 ): WebSearchRuntime {
-  return { config: resolveWebSearchConfig(overrides), execute, familyCooldowns: new Map() };
+  return {
+    config: resolveWebSearchConfig(overrides),
+    execute,
+    familyCooldowns: new Map(),
+    availableFamilies: new Set(),
+    familyProbes: new Map(),
+  };
 }
 
 /** Build an isolated runtime from config that has already been resolved. */
@@ -62,7 +72,13 @@ export function createResolvedWebSearchRuntime(
   config: ResolvedWebSearchConfig,
   execute: WebSearchExecutor = directExecute,
 ): WebSearchRuntime {
-  return { config, execute, familyCooldowns: new Map() };
+  return {
+    config,
+    execute,
+    familyCooldowns: new Map(),
+    availableFamilies: new Set(),
+    familyProbes: new Map(),
+  };
 }
 
 /** Normalize an explicit runtime or legacy resolved config for one operation. */
@@ -91,10 +107,11 @@ export async function executeRead<T>(
   settings: WebSearchExecutionSettings,
   fn: (signal?: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
+  logFailure = true,
 ): Promise<T> {
   return pluginExecution.runPluginExecution({
     plugin: "web-search",
-    logger,
+    logger: logFailure ? logger : { warn() {} },
     operation,
     settings,
     execute: runtime.execute,

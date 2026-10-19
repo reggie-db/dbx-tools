@@ -26,12 +26,22 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/appkit-generator",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/appkit-memory",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/appkit-model-gateway",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/appkit-web-search",
       "version": "workspace:^",
       "type": "runtime"
     },
@@ -101,6 +111,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-generator",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-genie-code",
       "version": "workspace:^",
       "type": "runtime"
@@ -143,6 +158,11 @@
     {
       "name": "smol-toml",
       "version": "1.8.0",
+      "type": "runtime"
+    },
+    {
+      "name": "yaml",
+      "version": "^2.9.0",
       "type": "runtime"
     },
     {

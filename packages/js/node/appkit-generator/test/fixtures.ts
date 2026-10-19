@@ -70,4 +70,5 @@ export const plan: GeneratorPlan = {
 export const brand: BrandPackage = {
   brand: brandUtils.defaultBrandContext,
   sources: [{ url: "https://dbx.tools/", fetched: true }],
+  visualReferences: [],
 };

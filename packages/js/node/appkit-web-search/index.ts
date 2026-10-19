@@ -21,6 +21,7 @@ export { MODEL_ENV, SERVING_ENDPOINT_ENV, DEFAULT_MODEL_FALLBACKS, DEFAULT_MAX_C
 export type { ApprovalGate, ApprovalPolicy, UrlPolicyMode, ModelSource, WebSearchPluginConfig, ResolvedWebSearchConfig } from "./src/config.ts";
 export { SEARCH_CACHE_TTL_SECONDS, FETCH_CACHE_TTL_SECONDS, SERVING_RETRY_ATTEMPTS, WEB_RETRY_ATTEMPTS, webSearchExecuteDefaults, webFetchExecuteDefaults, scrapeSearchExecuteDefaults } from "./src/defaults.ts";
 export type { WebSearchExecuteConfig, WebSearchExecutionSettings } from "./src/defaults.ts";
+export type { WebAssetPageFetchRequest, WebImageFetchRequest, WebImageFetchResult } from "./src/fetch.ts";
 export { WebSearchPlugin, webSearch } from "./src/plugin.ts";
 export { WebSearchProviderSpecSchema, WEB_SEARCH_PROVIDERS } from "./src/provider.ts";
 export type { WebSearchProvider, WebSearchProviderSpec } from "./src/provider.ts";

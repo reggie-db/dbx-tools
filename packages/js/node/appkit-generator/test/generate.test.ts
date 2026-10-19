@@ -73,6 +73,9 @@ describe("brand package generation", () => {
           truncated: false,
         };
       },
+      async fetchImage() {
+        throw new Error("No mobile-store image was expected");
+      },
     };
     let synthesisInput: BrandSynthesisInput | undefined;
     const progress: BrandGenerationProgressEvent[] = [];
@@ -92,7 +95,7 @@ describe("brand package generation", () => {
       },
     );
 
-    assert.equal(calls.filter(({ operation }) => operation === "search").length, 1);
+    assert.equal(calls.filter(({ operation }) => operation === "search").length, 3);
     assert.equal(calls.filter(({ operation }) => operation === "fetch").length, 3);
     assert.equal(synthesisInput?.research.sources.length, 2);
     assert.ok(synthesisInput?.research.sources.every((source) => source.fetched));
@@ -102,9 +105,10 @@ describe("brand package generation", () => {
     assert.equal(generated.brand.links.repository, undefined);
     assert.equal(generated.sources.length, 2);
     assert.ok(generated.sources.every((source) => source.fetched));
+    assert.deepEqual(generated.visualReferences, []);
     assert.deepEqual(
       progress.map(({ stage }) => stage),
-      ["search", "fetch", "fetch", "fetch", "assets", "synthesize"],
+      ["search", "visuals", "fetch", "fetch", "fetch", "assets", "synthesize"],
     );
   });
 
@@ -121,6 +125,9 @@ describe("brand package generation", () => {
       async fetch() {
         throw new Error("fetch should not run");
       },
+      async fetchImage() {
+        throw new Error("fetchImage should not run");
+      },
     };
 
     await assert.rejects(
@@ -132,6 +139,105 @@ describe("brand package generation", () => {
         },
       ),
       /no public HTTPS sources/,
+    );
+  });
+
+  it("uses iOS and Android store artwork as supplemental synthesis evidence", async () => {
+    const fetchedImages: string[] = [];
+    let synthesisInput: BrandSynthesisInput | undefined;
+    const client: BrandResearchClient = {
+      async search(request) {
+        const platform = request.query.includes("apps.apple.com")
+          ? "ios"
+          : request.query.includes("play.google.com")
+            ? "android"
+            : undefined;
+        return {
+          query: request.query,
+          answer: platform ? `${platform} app listing` : "Acme brand evidence",
+          model: "databricks-gemini",
+          citations: platform
+            ? [
+                {
+                  url:
+                    platform === "ios"
+                      ? "https://apps.apple.com/us/app/acme/id123"
+                      : "https://play.google.com/store/apps/details?id=acme",
+                  title: "Acme Mobile",
+                },
+              ]
+            : [{ url: "https://acme.example/", title: "Acme" }],
+        };
+      },
+      async fetch(request) {
+        if (request.url.includes("apps.apple.com")) {
+          return {
+            url: request.url,
+            status: 200,
+            contentType: "text/html",
+            content:
+              '<meta property="og:title" content="Acme on the App Store"><meta property="og:image" content="https://cdn.example/ios.png">',
+            truncated: false,
+          };
+        }
+        if (request.url.includes("play.google.com")) {
+          return {
+            url: request.url,
+            status: 200,
+            contentType: "text/html",
+            content:
+              '<meta property="og:title" content="Acme - Apps on Google Play"><meta property="og:image" content="https://cdn.example/android.webp">',
+            truncated: false,
+          };
+        }
+        return {
+          url: request.url,
+          status: 200,
+          contentType: "text/html",
+          title: "Acme",
+          content: request.format === "html" ? "<html></html>" : "Acme source",
+          truncated: false,
+        };
+      },
+      async fetchImage(request) {
+        fetchedImages.push(request.url);
+        return {
+          url: request.url,
+          contentType: request.url.endsWith(".webp") ? "image/webp" : "image/png",
+          data: new Uint8Array([1, 2, 3]),
+        };
+      },
+    };
+
+    const generated = await generateBrandPackage(
+      { prompt: "A mobile Acme experience for commuters" },
+      {
+        client,
+        synthesize: async (input) => {
+          synthesisInput = input;
+          return profile;
+        },
+      },
+    );
+
+    assert.deepEqual(fetchedImages, [
+      "https://cdn.example/ios.png",
+      "https://cdn.example/android.webp",
+    ]);
+    assert.equal(synthesisInput?.research.visualReferences.length, 2);
+    assert.deepEqual(
+      synthesisInput?.research.visualReferences.map(({ images }) => images[0]?.data),
+      [new Uint8Array([1, 2, 3]), new Uint8Array([1, 2, 3])],
+    );
+    assert.deepEqual(
+      generated.visualReferences.map(({ platform, images }) => ({
+        platform,
+        contentType: images[0]?.contentType,
+      })),
+      [
+        { platform: "ios", contentType: "image/png" },
+        { platform: "android", contentType: "image/webp" },
+      ],
     );
   });
 });

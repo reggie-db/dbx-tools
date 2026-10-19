@@ -225,7 +225,12 @@ export class GeneratorPlugin extends ToolRegistryPlugin<GeneratorPluginConfig> {
   /** Resolve the sibling web-search plugin without recreating its policy. */
   private researchClient(): BrandResearchClient {
     const sibling = pluginRegistry.require(this.context, webSearch, this).exports();
-    return { search: sibling.search, fetch: sibling.fetch };
+    return {
+      search: sibling.search,
+      fetch: sibling.fetch,
+      fetchAssetPage: sibling.fetchAssetPage,
+      fetchImage: sibling.fetchImage,
+    };
   }
 
   /** Initialized operations or a clear lifecycle error. */

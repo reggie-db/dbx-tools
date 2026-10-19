@@ -31,7 +31,14 @@ import {
   WEB_SEARCH_CONFIG_SCHEMA,
   type WebSearchPluginConfig,
 } from "./config.ts";
-import { runWebFetch } from "./fetch.ts";
+import {
+  runWebAssetPageFetch,
+  runWebFetch,
+  runWebImageFetch,
+  type WebAssetPageFetchRequest,
+  type WebImageFetchRequest,
+  type WebImageFetchResult,
+} from "./fetch.ts";
 import { createWebSearchRuntime, type WebSearchRuntime } from "./runtime.ts";
 import {
   webFetchRequestSchema,
@@ -230,6 +237,16 @@ export class WebSearchPlugin extends ToolRegistryPlugin<WebSearchPluginConfig> {
        */
       fetch: (request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult> =>
         this.fetch(request, signal),
+      /** Fetch expanded HTML for in-process asset discovery. */
+      fetchAssetPage: (
+        request: WebAssetPageFetchRequest,
+        signal?: AbortSignal,
+      ): Promise<WebFetchResult> => runWebAssetPageFetch(request, this.runtime, signal),
+      /** Fetch one image for in-process visual research. */
+      fetchImage: (
+        request: WebImageFetchRequest,
+        signal?: AbortSignal,
+      ): Promise<WebImageFetchResult> => runWebImageFetch(request, this.runtime, signal),
     };
   }
 

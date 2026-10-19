@@ -14,6 +14,34 @@ bun add --global @dbx-tools/cli
 profile are resolved automatically. Pass `--profile` only to override that
 selection. Examples that use `MY-PROFILE` show the explicit form.
 
+## Export a brand package
+
+```sh
+dbx brand "A neighborhood coffee company for morning commuters"
+```
+
+The command researches the broader web for brand facts and design direction,
+then visits matching iOS App Store and Google Play pages for supplemental
+visual references. It uses the downloaded icons and screenshots during
+multimodal synthesis without treating the mobile designs as the full brand.
+
+The default `branding/` directory contains:
+
+- `brand.yaml`, compatible with the shared dbx-tools brand context.
+- `brand-package.json`, with source provenance and visual-reference metadata.
+- `references/ios/` and `references/android/`, with the mobile images used for
+  visual research.
+
+Use `--name` or `--website` to disambiguate the prompt, `--output` to select a
+different package directory, and `--force` to replace an existing package:
+
+```sh
+dbx brand "Retail analytics for store operators" \
+  --name "Acme Retail" \
+  --website https://acme.example \
+  --output branding/acme-retail
+```
+
 ## Serve models to local tools
 
 ```sh
@@ -145,8 +173,8 @@ bun run barrels
 
 See [@dbx-tools/projen](../../../../projen) for workspace configuration and
 generation. Command implementations are available from `@dbx-tools/cli/appkit`,
-`/auth`, `/genie`, `/graphiti`, `/lakebase-proxy`, `/model-gateway`, and
-`/tunnel` when a Node caller needs to embed one parser.
+`/auth`, `/brand`, `/genie`, `/graphiti`, `/lakebase-proxy`, `/model-gateway`,
+and `/tunnel` when a Node caller needs to embed one parser.
 
 <!-- cli-reference:start -->
 
@@ -154,7 +182,7 @@ generation. Command implementations are available from `@dbx-tools/cli/appkit`,
 
 ### `dbx`
 
-Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and local proxies
+Databricks developer tools: workspace lifecycle, AppKit env, auth, brand generation, tunnels, and local proxies
 
 ```sh
 dbx [command]
@@ -162,16 +190,17 @@ dbx [command]
 
 #### Commands
 
-| Command                          | Description                                                             |
-| -------------------------------- | ----------------------------------------------------------------------- |
-| `dev [projenArgs...]`            | Bootstrap or repair a dbx-tools workspace, then forward to projen       |
-| `appkit`                         | AppKit helpers: resolve the environment an AppKit app would start with. |
-| `auth [options]`                 | Authenticate to Databricks with user or machine OAuth                   |
-| `tunnel [options] [command...]`  | Front a command with a public tunnel and passwordless auth              |
-| `lakebase-proxy [options]`       | Run a loopback PostgreSQL proxy for Databricks Lakebase                 |
-| `model-gateway [options]`        | Run or manage the AppKit Databricks model gateway                       |
-| `genie [options] [genieArgs...]` | Run Genie Code through an authenticated local Databricks model gateway  |
-| `graphiti [options]`             | Run Graphiti or manage its current-user desktop service                 |
+| Command                          | Description                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------- |
+| `dev [projenArgs...]`            | Bootstrap or repair a dbx-tools workspace, then forward to projen                  |
+| `appkit`                         | AppKit helpers: resolve the environment an AppKit app would start with.            |
+| `auth [options]`                 | Authenticate to Databricks with user or machine OAuth                              |
+| `brand [options] <prompt>`       | Research a brand brief and export brand.yaml with web and mobile visual references |
+| `tunnel [options] [command...]`  | Front a command with a public tunnel and passwordless auth                         |
+| `lakebase-proxy [options]`       | Run a loopback PostgreSQL proxy for Databricks Lakebase                            |
+| `model-gateway [options]`        | Run or manage the AppKit Databricks model gateway                                  |
+| `genie [options] [genieArgs...]` | Run Genie Code through an authenticated local Databricks model gateway             |
+| `graphiti [options]`             | Run Graphiti or manage its current-user desktop service                            |
 
 ### `dbx dev`
 
@@ -306,6 +335,34 @@ Show the resolved authentication client configuration
 ```sh
 dbx auth status
 ```
+
+### `dbx brand`
+
+Research a brand brief and export brand.yaml with web and mobile visual references
+
+```sh
+dbx brand [options] <prompt>
+```
+
+#### Arguments
+
+| Argument | Description                                          |
+| -------- | ---------------------------------------------------- |
+| `prompt` | brand, company, product, or design brief to research |
+
+#### Options
+
+| Option                            | Description                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `-p, --profile <value>`           | Databricks CLI profile. (env: DATABRICKS_CONFIG_PROFILE)                                               |
+| `-n, --name <value>`              | Known canonical brand name. (env: NAME)                                                                |
+| `-w, --website <value>`           | Known official HTTPS website. (env: WEBSITE)                                                           |
+| `-o, --output <value>`            | Output directory for brand.yaml, provenance, and visual references. (default: "branding", env: OUTPUT) |
+| `--model <value>`                 | Optional Databricks model preference for brand synthesis. (env: MODEL)                                 |
+| `--max-sources <value>`           | Maximum general web sources to read. (default: 4, env: MAX_SOURCES)                                    |
+| `-s, --source-max-length <value>` | Maximum characters retained from each source page. (default: 8000, env: SOURCE_MAX_LENGTH)             |
+| `-f, --force`                     | Replace files in an existing output directory. (default: false, env: FORCE)                            |
+| `--no-force`                      | Disable replace files in an existing output directory.                                                 |
 
 ### `dbx tunnel`
 

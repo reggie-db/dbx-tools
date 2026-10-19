@@ -231,25 +231,22 @@ async function postServing(
         const responseBody = await response.text();
         const model =
           object.isRecord(body) && typeof body.model === "string" ? body.model : undefined;
-        logger.error("serving-request-rejected", {
-          model,
-          api: url.endsWith("/responses") ? "responses" : "chat",
-          url,
-          status: response.status,
-          responseBody,
-        });
-        if (
+        const crossRegionDisabled =
           response.status === 400 &&
           model &&
           policy.modelFamily(model) === policy.ModelFamily.Gemini &&
-          GEMINI_CROSS_REGION_DISABLED.test(responseBody)
-        ) {
+          GEMINI_CROSS_REGION_DISABLED.test(responseBody);
+        if (crossRegionDisabled) {
           const expiresAt = Date.now() + GEMINI_CROSS_REGION_COOLDOWN_MS;
           runtime.familyCooldowns.set(policy.ModelFamily.Gemini, expiresAt);
-          logger.warn("provider-family-suppressed", {
-            family: policy.ModelFamily.Gemini,
-            reason: "cross-region-disabled",
-            expiresAt: new Date(expiresAt).toISOString(),
+          runtime.availableFamilies.delete(policy.ModelFamily.Gemini);
+        } else {
+          logger.error("serving-request-rejected", {
+            model,
+            api: url.endsWith("/responses") ? "responses" : "chat",
+            url,
+            status: response.status,
+            responseBody,
           });
         }
         // Load-shedding and server faults are worth another attempt; a 4xx is
@@ -268,6 +265,7 @@ async function postServing(
         : response.json();
     },
     signal,
+    false,
   );
   return object.isRecord(payload) ? payload : {};
 }
@@ -456,29 +454,95 @@ export async function runWebSearch(
     );
   }
 
-  try {
-    return await runNativeWebSearch(request, runtime, ctx, endpoint, signal, writeProgress);
-  } catch (error) {
-    if (
-      endpointFamily(endpoint) !== policy.ModelFamily.Gemini ||
-      !activeFamilyCooldowns(runtime).has(policy.ModelFamily.Gemini)
-    ) {
-      throw error;
+  return runSelectedWebSearch(request, runtime, ctx, endpoint, signal, writeProgress);
+}
+
+/** Run one selected family after its first request establishes availability. */
+async function runSelectedWebSearch(
+  request: WebSearchRequest,
+  runtime: WebSearchRuntime,
+  ctx: WebSearchContext,
+  endpoint: ServingEndpointSummary,
+  signal?: AbortSignal,
+  writeProgress?: ProgressWriter,
+): Promise<WebSearchResult> {
+  const family = endpointFamily(endpoint);
+  if (!family || runtime.availableFamilies.has(family)) {
+    try {
+      return await runNativeWebSearch(request, runtime, ctx, endpoint, signal, writeProgress);
+    } catch (error) {
+      return runSearchFallback(request, runtime, ctx, endpoint, error, signal, writeProgress);
     }
-    const fallback = await resolveWebSearchModel(ctx, runtime, request.model);
-    if (!fallback) {
-      if (config.scrapeFallback) {
-        logger.info("gemini-unavailable:scrape-fallback", { query: request.query });
-        return runScrapeSearch(request, runtime, signal);
-      }
-      throw error;
-    }
-    logger.info("gemini-unavailable:model-fallback", {
-      failedModel: endpoint.name,
-      fallbackModel: fallback.name,
-    });
-    return runNativeWebSearch(request, runtime, ctx, fallback, signal, writeProgress);
   }
+
+  const activeProbe = runtime.familyProbes.get(family);
+  if (activeProbe) {
+    signal?.throwIfAborted();
+    await activeProbe;
+    signal?.throwIfAborted();
+    return runWebSearch(request, runtime, ctx, signal, writeProgress);
+  }
+
+  let releaseProbe!: () => void;
+  const probe = new Promise<void>((resolve) => {
+    releaseProbe = resolve;
+  });
+  runtime.familyProbes.set(family, probe);
+
+  if (runtime.availableFamilies.has(family) || activeFamilyCooldowns(runtime).has(family)) {
+    runtime.familyProbes.delete(family);
+    releaseProbe();
+    return runWebSearch(request, runtime, ctx, signal, writeProgress);
+  }
+
+  let failure: unknown;
+  try {
+    const result = await runNativeWebSearch(request, runtime, ctx, endpoint, signal, writeProgress);
+    runtime.availableFamilies.add(family);
+    return result;
+  } catch (error) {
+    failure = error;
+  } finally {
+    if (runtime.familyProbes.get(family) === probe) runtime.familyProbes.delete(family);
+    releaseProbe();
+  }
+  return runSearchFallback(request, runtime, ctx, endpoint, failure, signal, writeProgress);
+}
+
+/** Resolve a cached family failure to another model or the scrape fallback. */
+async function runSearchFallback(
+  request: WebSearchRequest,
+  runtime: WebSearchRuntime,
+  ctx: WebSearchContext,
+  endpoint: ServingEndpointSummary,
+  error: unknown,
+  signal?: AbortSignal,
+  writeProgress?: ProgressWriter,
+): Promise<WebSearchResult> {
+  if (
+    endpointFamily(endpoint) !== policy.ModelFamily.Gemini ||
+    !activeFamilyCooldowns(runtime).has(policy.ModelFamily.Gemini)
+  ) {
+    throw error;
+  }
+  const fallback = await resolveWebSearchModel(ctx, runtime, request.model);
+  if (!fallback) {
+    if (runtime.config.scrapeFallback) {
+      logger.warn("web-search-model-fallback", {
+        failedModel: endpoint.name,
+        fallback: "scrape",
+        reason: "cross-region-disabled",
+      });
+      return runScrapeSearch(request, runtime, signal);
+    }
+    throw error;
+  }
+  logger.warn("web-search-model-fallback", {
+    failedModel: endpoint.name,
+    fallbackModel: fallback.name,
+    reason: "cross-region-disabled",
+  });
+  return runSelectedWebSearch(request, runtime, ctx, fallback, signal, writeProgress);
 }
 
 /** Execute one native provider request against an already-selected endpoint. */

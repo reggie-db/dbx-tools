@@ -18,6 +18,14 @@ export interface DiscoveredBrandAssets {
   favicon: string;
 }
 
+/** Visual references extracted from an official mobile-store page. */
+export interface DiscoveredMobileAppVisuals {
+  /** Store listing application name. */
+  appName: string;
+  /** App icon and screenshot URLs in page order. */
+  imageUrls: string[];
+}
+
 /** Normalize a page-relative asset reference to a public HTTPS URL. */
 function assetUrl(value: string | undefined, baseUrl: string): string | undefined {
   if (!value?.trim()) return undefined;
@@ -33,6 +41,18 @@ function assetUrl(value: string | undefined, baseUrl: string): string | undefine
 function appendCandidate(candidates: string[], value: string | undefined, baseUrl: string): void {
   const resolved = assetUrl(value, baseUrl);
   if (resolved && !candidates.includes(resolved)) candidates.push(resolved);
+}
+
+/** Collapse CDN size and format variants of the same mobile artwork. */
+function mobileImageIdentity(value: string): string {
+  const url = new URL(value);
+  if (/googleusercontent\.com$/i.test(url.hostname)) {
+    return `${url.origin}${url.pathname.replace(/=[^/]+$/, "")}`;
+  }
+  if (/mzstatic\.com$/i.test(url.hostname)) {
+    return `${url.origin}${url.pathname.replace(/\/[^/]+$/, "")}`;
+  }
+  return url.toString();
 }
 
 /**
@@ -58,6 +78,26 @@ function jsonLdAssetUrls(value: unknown, depth = 0, assetContext = false): strin
     ...jsonLdAssetUrls(value.logo, depth + 1, true),
     ...jsonLdAssetUrls(value.image, depth + 1, true),
     ...jsonLdAssetUrls(value["@graph"], depth + 1, false),
+  ];
+}
+
+/** Collect mobile screenshots and image objects from JSON-LD. */
+function jsonLdMobileImageUrls(value: unknown, depth = 0, imageContext = false): string[] {
+  if (depth > 10 || value === null || value === undefined) return [];
+  if (typeof value === "string") return imageContext ? [value] : [];
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => jsonLdMobileImageUrls(entry, depth + 1, imageContext));
+  }
+  if (!object.isRecord(value)) return [];
+  const direct = imageContext
+    ? [value.url, value.contentUrl].flatMap((entry) => (typeof entry === "string" ? [entry] : []))
+    : [];
+  return [
+    ...direct,
+    ...jsonLdMobileImageUrls(value.screenshot, depth + 1, true),
+    ...jsonLdMobileImageUrls(value.image, depth + 1, true),
+    ...jsonLdMobileImageUrls(value.thumbnailUrl, depth + 1, true),
+    ...jsonLdMobileImageUrls(value["@graph"], depth + 1, false),
   ];
 }
 
@@ -124,4 +164,85 @@ export function discoverBrandAssets(html: string, pageUrl: string): DiscoveredBr
     logo: { light: logo },
     favicon: icon,
   };
+}
+
+/** Extract an app name plus representative screenshots/icons from a store page. */
+export function discoverMobileAppVisuals(
+  html: string,
+  pageUrl: string,
+): DiscoveredMobileAppVisuals {
+  const $ = load(html);
+  const metadataImages: string[] = [];
+  const structuredImages: string[] = [];
+  const screenshotImages: string[] = [];
+  const iconImages: string[] = [];
+  const otherStoreImages: string[] = [];
+  for (const selector of ['meta[property="og:image"]', 'meta[name="twitter:image"]']) {
+    $(selector).each((_index, element) => {
+      appendCandidate(metadataImages, $(element).attr("content"), pageUrl);
+    });
+  }
+  $('script[type="application/ld+json"]').each((_index, element) => {
+    try {
+      const value: unknown = JSON.parse($(element).text());
+      for (const candidate of jsonLdMobileImageUrls(value)) {
+        appendCandidate(structuredImages, candidate, pageUrl);
+      }
+    } catch {
+      return;
+    }
+  });
+  $("img").each((_index, element) => {
+    const descriptor = [
+      $(element).attr("alt"),
+      $(element).attr("class"),
+      $(element).attr("aria-label"),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const source = $(element).attr("src") ?? $(element).attr("data-src");
+    const isStoreImageHost = /(?:mzstatic|ggpht|googleusercontent)\./i.test(source ?? "");
+    const target = /\b(?:phone|screen|screenshot|tablet)\b/i.test(descriptor)
+      ? screenshotImages
+      : /\b(?:app|icon)\b/i.test(descriptor)
+        ? iconImages
+        : isStoreImageHost
+          ? otherStoreImages
+          : undefined;
+    if (target) {
+      appendCandidate(target, source, pageUrl);
+      const srcset = ($(element).attr("srcset") ?? $(element).attr("data-srcset"))
+        ?.split(",")
+        .at(-1)
+        ?.trim()
+        .split(/\s+/)[0];
+      appendCandidate(target, srcset, pageUrl);
+    }
+  });
+  $("picture source[srcset]").each((_index, element) => {
+    const srcset = $(element).attr("srcset")?.split(",").at(-1)?.trim().split(/\s+/)[0];
+    appendCandidate(screenshotImages, srcset, pageUrl);
+  });
+  const images: string[] = [];
+  const seenImages = new Set<string>();
+  for (const candidate of [
+    ...metadataImages.slice(0, 1),
+    ...screenshotImages,
+    ...iconImages,
+    ...structuredImages,
+    ...otherStoreImages,
+  ]) {
+    const resolved = assetUrl(candidate, pageUrl);
+    if (!resolved) continue;
+    const identity = mobileImageIdentity(resolved);
+    if (seenImages.has(identity)) continue;
+    seenImages.add(identity);
+    images.push(resolved);
+  }
+  const rawName =
+    $('meta[property="og:title"]').attr("content") ?? $("h1").first().text() ?? $("title").text();
+  const appName =
+    rawName.replace(/\s+(?:on the App Store|- Apps on Google Play).*$/i, "").trim() ||
+    new URL(pageUrl).hostname;
+  return { appName, imageUrls: images.slice(0, 6) };
 }

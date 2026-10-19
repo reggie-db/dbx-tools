@@ -4,6 +4,7 @@
  * `dev` bootstraps or repairs a workspace and forwards to projen.
  * `appkit` provides AppKit environment helpers.
  * `auth` manages Databricks OAuth and access tokens.
+ * `brand` researches and exports portable brand packages.
  * `tunnel` runs a public portr tunnel with passwordless access gating.
  *
  * Feature commands load their sibling packages only when selected and forward
@@ -88,7 +89,7 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   const program = new Command()
     .name(name)
     .description(
-      "Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and local proxies",
+      "Databricks developer tools: workspace lifecycle, AppKit env, auth, brand generation, tunnels, and local proxies",
     )
     .enablePositionalOptions()
     .showHelpAfterError()
@@ -117,6 +118,13 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     "auth",
     "Authenticate to Databricks and manage OAuth tokens",
     async () => (await import("./auth/cli.ts")).buildProgram,
+  );
+
+  addForwardedCommand(
+    program,
+    "brand",
+    "Research and export a portable brand package",
+    async () => (await import("./brand/cli.ts")).buildProgram,
   );
 
   addForwardedCommand(
@@ -163,6 +171,7 @@ export async function buildDocumentationProgram(name: string = PROGRAM_NAMES[0])
   const children = [
     (await import("./appkit/cli.ts")).buildProgram("appkit"),
     (await import("./auth/cli.ts")).buildProgram("auth"),
+    (await import("./brand/cli.ts")).buildProgram("brand"),
     (await import("./tunnel/cli.ts")).buildProgram("tunnel"),
     (await import("./lakebase-proxy/cli.ts")).buildProgram("lakebase-proxy"),
     (await import("./model-gateway/cli.ts")).buildProgram("model-gateway"),

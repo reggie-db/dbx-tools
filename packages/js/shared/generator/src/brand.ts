@@ -23,7 +23,14 @@ export const GENERATOR_ROUTES = {
 /** Input accepted by brand generation. */
 export const BrandGenerationRequestSchema = z
   .object({
-    name: nonBlankString.max(200).describe("Brand, organization, or product name to research."),
+    name: nonBlankString
+      .max(200)
+      .optional()
+      .describe("Known brand, organization, or product name."),
+    prompt: nonBlankString
+      .max(2_000)
+      .optional()
+      .describe("Open-ended brand brief used for research and generation."),
     website: z
       .string()
       .url()
@@ -32,6 +39,9 @@ export const BrandGenerationRequestSchema = z
       .describe("Known official website used to disambiguate the brand."),
   })
   .strict()
+  .refine((value) => value.name !== undefined || value.prompt !== undefined, {
+    message: "Brand generation requires a name or prompt.",
+  })
   .describe("Request to research one brand and generate its portable branding package.");
 
 /** Validated brand-generation request. */
@@ -53,6 +63,36 @@ export const BrandPackageSourceSchema = z
 /** Source provenance included in a generated branding package. */
 export type BrandPackageSource = z.infer<typeof BrandPackageSourceSchema>;
 
+/** One fetched mobile-app image used as visual brand research. */
+export const BrandVisualImageSchema = z
+  .object({
+    url: z.string().url().describe("Original mobile-store image URL."),
+    contentType: z.string().optional().describe("Fetched image media type."),
+    localPath: z
+      .string()
+      .optional()
+      .describe("Package-relative exported image path, when written by a CLI."),
+  })
+  .strict()
+  .describe("Mobile-store image reference used for brand inspiration.");
+
+/** Mobile-store image used as visual brand research. */
+export type BrandVisualImage = z.infer<typeof BrandVisualImageSchema>;
+
+/** App Store or Play Store page and its visual references. */
+export const BrandVisualReferenceSchema = z
+  .object({
+    platform: z.enum(["ios", "android"]).describe("Mobile application platform."),
+    appName: nonBlankString.describe("Application name read from the store page."),
+    pageUrl: z.string().url().describe("Official application-store page."),
+    images: z.array(BrandVisualImageSchema).describe("Fetched app icon or screenshots."),
+  })
+  .strict()
+  .describe("Mobile application visuals consulted during brand research.");
+
+/** Mobile-store brand research reference. */
+export type BrandVisualReference = z.infer<typeof BrandVisualReferenceSchema>;
+
 /** Portable generated brand context with research provenance. */
 export const BrandPackageSchema = z
   .object({
@@ -62,6 +102,10 @@ export const BrandPackageSchema = z
     sources: z
       .array(BrandPackageSourceSchema)
       .describe("Deduplicated web sources used to generate this package."),
+    visualReferences: z
+      .array(BrandVisualReferenceSchema)
+      .default([])
+      .describe("iOS and Android application visuals used for inspiration."),
   })
   .strict()
   .describe("Generated branding package and its web research provenance.");
@@ -70,7 +114,13 @@ export const BrandPackageSchema = z
 export type BrandPackage = z.infer<typeof BrandPackageSchema>;
 
 /** Observable stages in one brand-generation workflow. */
-export const BrandGenerationStageSchema = z.enum(["search", "fetch", "assets", "synthesize"]);
+export const BrandGenerationStageSchema = z.enum([
+  "search",
+  "fetch",
+  "visuals",
+  "assets",
+  "synthesize",
+]);
 
 /** Observable brand-generation stage. */
 export type BrandGenerationStage = z.infer<typeof BrandGenerationStageSchema>;

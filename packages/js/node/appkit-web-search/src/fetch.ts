@@ -20,10 +20,43 @@ import { gotScraping } from "got-scraping";
 import { assertFetchUrlAllowed } from "./_fetch-url.ts";
 import { toCallSettings, webFetchExecuteDefaults } from "./defaults.ts";
 import { decodeHtmlEntities, htmlToText } from "./html-text.ts";
-import { executeRead, toWebSearchRuntime, type WebSearchRuntimeInput } from "./runtime.ts";
+import {
+  executeRead,
+  toWebSearchRuntime,
+  type WebSearchRuntime,
+  type WebSearchRuntimeInput,
+} from "./runtime.ts";
 import type { WebFetchRequest, WebFetchResult } from "./schema.ts";
 
 const logger = log.logger("web-search/fetch");
+const DEFAULT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_ASSET_PAGE_MAX_LENGTH = 1_500_000;
+
+/** Input for a policy-checked HTML fetch used by in-process asset discovery. */
+export interface WebAssetPageFetchRequest {
+  /** Public HTTPS page URL. */
+  url: string;
+  /** Maximum returned markup length. Defaults to 1.5 million characters. */
+  maxLength?: number;
+}
+
+/** Input for a policy-checked binary image fetch. */
+export interface WebImageFetchRequest {
+  /** Public HTTPS image URL. */
+  url: string;
+  /** Maximum accepted response size. Defaults to 5 MiB. */
+  maxBytes?: number;
+}
+
+/** Binary image fetched through the web-search runtime's URL policy. */
+export interface WebImageFetchResult {
+  /** Final URL after redirects. */
+  url: string;
+  /** Image media type returned by the server. */
+  contentType: string;
+  /** Fetched image bytes. */
+  data: Uint8Array;
+}
 
 /** The slice of a got-scraping response this module reads. */
 interface FetchedPage {
@@ -46,38 +79,26 @@ function truncate(text: string, max: number): { content: string; truncated: bool
   return { content: text.slice(0, max), truncated: true };
 }
 
-/**
- * Fetch a single URL and return its content in the requested format.
- *
- * Throws when the URL is not permitted by the allow-list (the visible,
- * correctable failure the design calls for on the fetch path). The request's
- * `maxLength` narrows (never widens) the plugin's `fetchMaxLength` cap.
- * `signal` cancels the in-flight fetch.
- */
-export async function runWebFetch(
-  request: WebFetchRequest,
-  runtimeOrConfig: WebSearchRuntimeInput,
+/** Fetch and cache one raw page before caller-specific output reduction. */
+async function fetchPage(
+  requestUrl: string,
+  runtime: WebSearchRuntime,
   signal?: AbortSignal,
-): Promise<WebFetchResult> {
-  const runtime = toWebSearchRuntime(runtimeOrConfig);
+): Promise<FetchedPage> {
   const { config } = runtime;
-  await assertFetchUrlAllowed(request.url, config.allowList);
-  const cap = Math.min(request.maxLength ?? config.fetchMaxLength, config.fetchMaxLength);
-
-  // The response is cached before the format reduction, so the same page read
-  // as text and as html shares one network round trip.
+  await assertFetchUrlAllowed(requestUrl, config.allowList);
   const page = await executeRead(
     runtime,
     "page-fetch",
     toCallSettings(webFetchExecuteDefaults, config.timeoutMs, [
       "web-search",
       "fetch",
-      request.url,
+      requestUrl,
       ...config.allowList.patterns,
     ]),
     async (executeSignal): Promise<FetchedPage> => {
       const response = await gotScraping({
-        url: request.url,
+        url: requestUrl,
         // Bun's node:http2 reports default-port origins with :443 while
         // http2-wrapper compares them against URL-normalized origins.
         http2: false,
@@ -96,7 +117,7 @@ export async function runWebFetch(
         ...(executeSignal ? { signal: executeSignal } : {}),
       });
       return {
-        url: response.url ?? request.url,
+        url: response.url ?? requestUrl,
         statusCode: response.statusCode,
         contentType: response.headers["content-type"],
         body: typeof response.body === "string" ? response.body : String(response.body ?? ""),
@@ -105,6 +126,26 @@ export async function runWebFetch(
     signal,
   );
   await assertFetchUrlAllowed(page.url, config.allowList);
+  return page;
+}
+
+/**
+ * Fetch a single URL and return its content in the requested format.
+ *
+ * Throws when the URL is not permitted by the allow-list (the visible,
+ * correctable failure the design calls for on the fetch path). The request's
+ * `maxLength` narrows (never widens) the plugin's `fetchMaxLength` cap.
+ * `signal` cancels the in-flight fetch.
+ */
+export async function runWebFetch(
+  request: WebFetchRequest,
+  runtimeOrConfig: WebSearchRuntimeInput,
+  signal?: AbortSignal,
+): Promise<WebFetchResult> {
+  const runtime = toWebSearchRuntime(runtimeOrConfig);
+  const { config } = runtime;
+  const cap = Math.min(request.maxLength ?? config.fetchMaxLength, config.fetchMaxLength);
+  const page = await fetchPage(request.url, runtime, signal);
 
   const isHtml = !page.contentType || /html|xml/i.test(page.contentType);
   const rawContent = request.format === "html" || !isHtml ? page.body : htmlToText(page.body);
@@ -127,4 +168,92 @@ export async function runWebFetch(
     content,
     truncated,
   };
+}
+
+/**
+ * Fetch bounded raw markup for deterministic in-process asset discovery.
+ *
+ * This does not widen the model-facing `web_fetch` cap.
+ */
+export async function runWebAssetPageFetch(
+  request: WebAssetPageFetchRequest,
+  runtimeOrConfig: WebSearchRuntimeInput,
+  signal?: AbortSignal,
+): Promise<WebFetchResult> {
+  const runtime = toWebSearchRuntime(runtimeOrConfig);
+  const cap = Math.min(
+    Math.max(1, request.maxLength ?? DEFAULT_ASSET_PAGE_MAX_LENGTH),
+    DEFAULT_ASSET_PAGE_MAX_LENGTH,
+  );
+  const page = await fetchPage(request.url, runtime, signal);
+  const { content, truncated } = truncate(page.body, cap);
+  const title = extractTitle(page.body);
+  return {
+    url: page.url,
+    status: page.statusCode,
+    ...(page.contentType ? { contentType: page.contentType } : {}),
+    ...(title ? { title } : {}),
+    content,
+    truncated,
+  };
+}
+
+/** Fetch one public image while preserving URL policy, timeout, and redirect checks. */
+export async function runWebImageFetch(
+  request: WebImageFetchRequest,
+  runtimeOrConfig: WebSearchRuntimeInput,
+  signal?: AbortSignal,
+): Promise<WebImageFetchResult> {
+  const runtime = toWebSearchRuntime(runtimeOrConfig);
+  const { config } = runtime;
+  const maxBytes = Math.max(1, request.maxBytes ?? DEFAULT_IMAGE_MAX_BYTES);
+  await assertFetchUrlAllowed(request.url, config.allowList);
+  const page = await executeRead(
+    runtime,
+    "image-fetch",
+    {
+      default: {
+        cache: { enabled: false },
+        retry: { enabled: true, attempts: 2 },
+        timeout: config.timeoutMs,
+      },
+    },
+    async (executeSignal) => {
+      const response = await gotScraping({
+        url: request.url,
+        responseType: "buffer",
+        http2: false,
+        timeout: { request: config.timeoutMs },
+        throwHttpErrors: true,
+        followRedirect: true,
+        hooks: {
+          beforeRequest: [
+            async (options) => {
+              await assertFetchUrlAllowed(String(options.url), config.allowList);
+            },
+          ],
+        },
+        ...(executeSignal ? { signal: executeSignal } : {}),
+      });
+      const contentType = String(response.headers["content-type"] ?? "")
+        .split(";")[0]!
+        .trim()
+        .toLowerCase();
+      if (!contentType.startsWith("image/")) {
+        throw new TypeError(`Expected an image response, received ${contentType || "unknown"}`);
+      }
+      if (response.body.byteLength > maxBytes) {
+        throw new RangeError(`Image response exceeds ${maxBytes} bytes`);
+      }
+      return {
+        url: response.url ?? request.url,
+        contentType,
+        data: new Uint8Array(response.body),
+      };
+    },
+    signal,
+    false,
+  );
+  await assertFetchUrlAllowed(page.url, config.allowList);
+  return page;
 }

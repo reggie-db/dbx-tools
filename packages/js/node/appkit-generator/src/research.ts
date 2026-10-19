@@ -6,6 +6,11 @@
  */
 
 import type {
+  WebAssetPageFetchRequest,
+  WebImageFetchRequest,
+  WebImageFetchResult,
+} from "@dbx-tools/appkit-web-search/fetch";
+import type {
   WebFetchRequest,
   WebFetchResult,
   WebSearchCitation,
@@ -13,10 +18,13 @@ import type {
   WebSearchResult,
 } from "@dbx-tools/appkit-web-search/schema";
 import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
-import type {
-  BrandGenerationProgressEvent,
-  BrandGenerationRequest,
-  BrandPackageSource,
+import { discoverMobileAppVisuals } from "./assets.ts";
+import {
+  brandRequestSubject,
+  type BrandGenerationProgressEvent,
+  type BrandGenerationRequest,
+  type BrandPackageSource,
+  type BrandVisualReference,
 } from "./schema.ts";
 
 const logger = log.logger("brand/research");
@@ -33,8 +41,8 @@ export const MAX_SOURCES = 8;
 /** Upper bound on readable characters retained from one fetched page. */
 export const MAX_SOURCE_MAX_LENGTH = 20_000;
 
-/** Markup cap used for official-page asset discovery. */
-export const ASSET_HTML_MAX_LENGTH = 50_000;
+/** Markup cap used for official and mobile page asset discovery. */
+export const ASSET_HTML_MAX_LENGTH = 1_500_000;
 
 /** Search and fetch operations supplied by the registered web-search plugin. */
 export interface BrandResearchClient {
@@ -42,6 +50,10 @@ export interface BrandResearchClient {
   search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>;
   /** Fetch one cited page as text or HTML. */
   fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>;
+  /** Fetch expanded markup for deterministic in-process asset discovery. */
+  fetchAssetPage?(request: WebAssetPageFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>;
+  /** Fetch one image for multimodal research and package export. */
+  fetchImage(request: WebImageFetchRequest, signal?: AbortSignal): Promise<WebImageFetchResult>;
 }
 
 /** Research options controlling bounded page reads. */
@@ -75,19 +87,110 @@ export interface BrandResearch {
   officialPageUrl: string;
   /** Raw markup used only for deterministic asset discovery. */
   officialPageHtml?: string;
+  /** iOS and Android app-store references used as supplemental visual research. */
+  visualReferences: BrandResearchVisualReference[];
+}
+
+/** Fetched image retained in memory for multimodal synthesis. */
+export interface BrandResearchVisualImage {
+  url: string;
+  contentType?: string;
+  data?: Uint8Array;
+}
+
+/** Mobile-store page plus downloaded visual references. */
+export interface BrandResearchVisualReference extends Omit<BrandVisualReference, "images"> {
+  images: BrandResearchVisualImage[];
+}
+
+/** Use expanded asset markup when supplied, retaining compatibility with direct clients. */
+function fetchAssetPage(
+  client: BrandResearchClient,
+  request: WebAssetPageFetchRequest,
+  signal?: AbortSignal,
+): Promise<WebFetchResult> {
+  return client.fetchAssetPage
+    ? client.fetchAssetPage(request, signal)
+    : client.fetch({ ...request, format: "html" }, signal);
 }
 
 /** Build the focused, first-party search request for a brand. */
 export function brandResearchQuery(request: BrandGenerationRequest): string {
+  const subject = brandRequestSubject(request);
   const website = request.website ? ` The known official website is ${request.website}.` : "";
   return stringUtils.toDescription(`
-    Research the official brand identity for "${request.name}".${website}
+    Research the official brand identity and design direction for "${subject}".${website}
+    The broader brief is: ${request.prompt ?? subject}.
     Prefer first-party sources and cite the official website first. Identify
     the canonical and short names, current tagline, plain-language
     description, audiences, writing tone, brand colors as hex values,
     typography, documentation, source repository, logo, icon, and favicon.
     Distinguish documented facts from reasonable visual inferences.
   `);
+}
+
+/** Build a targeted mobile-store search query for visual references. */
+function mobileStoreQuery(
+  request: BrandGenerationRequest,
+  platform: BrandVisualReference["platform"],
+): string {
+  const subject = brandRequestSubject(request);
+  const site = platform === "ios" ? "apps.apple.com" : "play.google.com/store/apps";
+  return `site:${site} ${JSON.stringify(subject)} official app`;
+}
+
+/** Find one matching store page and download representative images. */
+async function researchMobileStore(
+  request: BrandGenerationRequest,
+  platform: BrandVisualReference["platform"],
+  client: BrandResearchClient,
+  signal?: AbortSignal,
+): Promise<BrandResearchVisualReference | undefined> {
+  try {
+    const search = await client.search({ query: mobileStoreQuery(request, platform) }, signal);
+    const expectedHost = platform === "ios" ? "apps.apple.com" : "play.google.com";
+    const pageUrl = search.citations
+      .map(({ url }) => publicHttpsUrl(url))
+      .find((url) => url && new URL(url).hostname === expectedHost);
+    if (!pageUrl) return undefined;
+    const page = await fetchAssetPage(
+      client,
+      { url: pageUrl, maxLength: ASSET_HTML_MAX_LENGTH },
+      signal,
+    );
+    const discovered = discoverMobileAppVisuals(page.content, page.url);
+    const images = await Promise.all(
+      discovered.imageUrls.slice(0, 4).map(async (url): Promise<BrandResearchVisualImage> => {
+        try {
+          const image = await client.fetchImage({ url }, signal);
+          return {
+            url: image.url,
+            contentType: image.contentType,
+            data: image.data,
+          };
+        } catch (error) {
+          logger.warn("mobile-image-fetch-failed", {
+            platform,
+            url,
+            error: errorUtils.errorMessage(error),
+          });
+          return { url };
+        }
+      }),
+    );
+    return {
+      platform,
+      appName: discovered.appName,
+      pageUrl: page.url,
+      images,
+    };
+  } catch (error) {
+    logger.warn("mobile-store-research-failed", {
+      platform,
+      error: errorUtils.errorMessage(error),
+    });
+    return undefined;
+  }
 }
 
 /** Return a normalized public HTTPS URL or `undefined`. */
@@ -107,8 +210,9 @@ function sourceScore(
   index: number,
 ): number {
   const url = new URL(citation.url);
+  const subject = brandRequestSubject(request);
   const knownWebsite = request.website ? new URL(request.website) : undefined;
-  const normalizedName = request.name.toLowerCase().replace(/[^a-z\d]/g, "");
+  const normalizedName = subject.toLowerCase().replace(/[^a-z\d]/g, "");
   const normalizedHost = url.hostname.toLowerCase().replace(/[^a-z\d]/g, "");
   const sameKnownOrigin = knownWebsite?.origin === url.origin ? 1_000 : 0;
   const hostMatchesName =
@@ -116,9 +220,7 @@ function sourceScore(
     (normalizedHost.includes(normalizedName) || normalizedName.includes(normalizedHost))
       ? 100
       : 0;
-  const titleMatchesName = citation.title?.toLowerCase().includes(request.name.toLowerCase())
-    ? 10
-    : 0;
+  const titleMatchesName = citation.title?.toLowerCase().includes(subject.toLowerCase()) ? 10 : 0;
   return sameKnownOrigin + hostMatchesName + titleMatchesName - index;
 }
 
@@ -128,8 +230,9 @@ function selectSources(
   request: BrandGenerationRequest,
   maxSources: number,
 ): WebSearchCitation[] {
+  const subject = brandRequestSubject(request);
   const candidates = request.website
-    ? [{ url: request.website, title: `${request.name} official website` }, ...citations]
+    ? [{ url: request.website, title: `${subject} official website` }, ...citations]
     : [...citations];
   const unique = new Map<string, WebSearchCitation>();
   for (const citation of candidates) {
@@ -166,7 +269,7 @@ async function fetchSource(
   } catch (error) {
     logger.warn("source-fetch-failed", {
       url: citation.url,
-      error: errorUtils.toError(error),
+      error: errorUtils.errorMessage(error),
     });
     return { ...citation, fetched: false };
   } finally {
@@ -184,6 +287,7 @@ export async function researchBrand(
   options: BrandResearchOptions = {},
   signal?: AbortSignal,
 ): Promise<BrandResearch> {
+  const subject = brandRequestSubject(request);
   const maxSources = Math.min(Math.max(1, options.maxSources ?? DEFAULT_MAX_SOURCES), MAX_SOURCES);
   const sourceMaxLength = Math.max(
     1,
@@ -192,14 +296,26 @@ export async function researchBrand(
   await options.onProgress?.({
     type: "progress",
     stage: "search",
-    message: `Searching for official ${request.name} brand sources`,
+    message: `Searching for official ${subject} brand sources`,
   });
-  const search = await client.search({ query: brandResearchQuery(request) }, signal);
+  const [search, iosReference, androidReference] = await Promise.all([
+    client.search({ query: brandResearchQuery(request) }, signal),
+    researchMobileStore(request, "ios", client, signal),
+    researchMobileStore(request, "android", client, signal),
+  ]);
+  const visualReferences = [iosReference, androidReference].filter(
+    (reference): reference is BrandResearchVisualReference => reference !== undefined,
+  );
+  await options.onProgress?.({
+    type: "progress",
+    stage: "visuals",
+    message: `Reviewed ${visualReferences.length} mobile app references`,
+    current: visualReferences.length,
+    total: 2,
+  });
   const citations = selectSources(search.citations, request, maxSources);
   if (citations.length === 0) {
-    throw new Error(
-      `Brand research for "${request.name}" returned no public HTTPS sources to fetch.`,
-    );
+    throw new Error(`Brand research for "${subject}" returned no public HTTPS sources to fetch.`);
   }
   let completedSources = 0;
   await options.onProgress?.({
@@ -232,22 +348,20 @@ export async function researchBrand(
         ),
       ),
     ),
-    client
-      .fetch(
-        {
-          url: official.url,
-          format: "html",
-          maxLength: ASSET_HTML_MAX_LENGTH,
-        },
-        signal,
-      )
-      .catch((error: unknown) => {
-        logger.warn("official-page-html-fetch-failed", {
-          url: official.url,
-          error: errorUtils.toError(error),
-        });
-        return undefined;
-      }),
+    fetchAssetPage(
+      client,
+      {
+        url: official.url,
+        maxLength: ASSET_HTML_MAX_LENGTH,
+      },
+      signal,
+    ).catch((error: unknown) => {
+      logger.warn("official-page-html-fetch-failed", {
+        url: official.url,
+        error: errorUtils.errorMessage(error),
+      });
+      return undefined;
+    }),
   ]);
   await options.onProgress?.({
     type: "progress",
@@ -263,5 +377,6 @@ export async function researchBrand(
     sources,
     officialPageUrl: officialHtml?.url ?? official.url,
     ...(officialHtml ? { officialPageHtml: officialHtml.content } : {}),
+    visualReferences,
   };
 }

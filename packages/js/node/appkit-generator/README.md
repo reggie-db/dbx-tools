@@ -33,6 +33,7 @@ The generated package contains:
 - Audience, tone, writing principles, and patterns to avoid.
 - Official website, documentation, and repository links when found.
 - Logo, icon, and favicon URLs discovered from official page markup.
+- Supplemental iOS and Android app references used for visual direction.
 - Source provenance, including whether each cited page was fetched.
 
 The optional website disambiguates similarly named brands and is placed first
@@ -107,11 +108,14 @@ markers prevent a slug collision from adopting another user's schema.
 One request performs the following bounded workflow:
 
 1. `web_search` asks for first-party identity, voice, visual, and link evidence.
-2. `web_fetch` reads up to four cited pages by default.
-3. The likely official page is also fetched as HTML for deterministic logo,
+2. Separate searches find relevant iOS App Store and Google Play listings.
+3. `web_fetch` reads up to four cited pages by default and visits matching app
+   listings for supplemental visual references.
+4. The likely official page is also fetched as HTML for deterministic logo,
    icon, and favicon discovery.
-4. A separate structured model call maps the evidence into the brand profile.
-5. The package normalizes action and text colors to WCAG AA contrast, then
+5. Representative app icons and screenshots are fetched and included in the
+   structured model call with the broader web evidence.
+6. The package normalizes action and text colors to WCAG AA contrast, then
    `BrandContextSchema` validates the final portable context.
 
 Fetched page text is treated as untrusted reference data. Embedded instructions
@@ -119,8 +123,10 @@ are excluded from the synthesis instructions. Link fields must use URLs present
 in the research evidence. Asset URLs come from the official page markup, with
 `/favicon.ico` on that origin as the icon fallback.
 
-The package returns asset references. It does not download, copy, or grant
-rights to third-party brand artwork.
+The package returns official brand asset URLs and mobile-reference metadata.
+Mobile images are held in memory during synthesis so an exporter can persist
+them separately as references. They are not substituted for the generated
+brand identity and the package does not grant rights to third-party artwork.
 
 ## Configure generation
 

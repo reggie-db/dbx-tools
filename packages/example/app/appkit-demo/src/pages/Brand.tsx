@@ -71,6 +71,7 @@ const SITE_PRESETS: readonly BrandPreset[] = [
 
 const GENERATION_STAGES: readonly BrandGenerationStage[] = [
   "search",
+  "visuals",
   "fetch",
   "assets",
   "synthesize",
@@ -79,6 +80,7 @@ const GENERATION_STAGES: readonly BrandGenerationStage[] = [
 const GENERATION_STAGE_LABELS: Record<BrandGenerationStage, string> = {
   search: "Find official sources",
   fetch: "Read cited pages",
+  visuals: "Review mobile app references",
   assets: "Inspect brand artwork",
   synthesize: "Build brand context",
 };

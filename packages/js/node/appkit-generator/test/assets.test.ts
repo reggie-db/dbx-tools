@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { discoverBrandAssets } from "../src/assets.ts";
+import { discoverBrandAssets, discoverMobileAppVisuals } from "../src/assets.ts";
 
 describe("brand asset discovery", () => {
   it("resolves first-party icon, logo, and JSON-LD references", () => {
@@ -43,5 +43,51 @@ describe("brand asset discovery", () => {
     );
     assert.equal(assets.icon.light, "https://example.com/assets/brand.png");
     assert.equal(assets.favicon, "https://example.com/assets/brand.png");
+  });
+});
+
+describe("mobile app visual discovery", () => {
+  it("collects app-store metadata, structured screenshots, and responsive images", () => {
+    const visuals = discoverMobileAppVisuals(
+      `
+        <html>
+          <head>
+            <meta property="og:title" content="Acme Mobile on the App Store">
+            <meta property="og:image" content="/icon.png">
+            <script type="application/ld+json">
+              {
+                "@type": "SoftwareApplication",
+                "screenshot": [
+                  {"contentUrl": "https://cdn.example/screen-one.webp"},
+                  "https://cdn.example/screen-two.webp"
+                ]
+              }
+            </script>
+          </head>
+          <body>
+            <img alt="App screenshot" src="/small.png"
+                 srcset="/small.png 1x, /large.png 2x">
+          </body>
+        </html>
+      `,
+      "https://apps.apple.com/us/app/acme/id123",
+    );
+
+    assert.equal(visuals.appName, "Acme Mobile");
+    assert.deepEqual(visuals.imageUrls, [
+      "https://apps.apple.com/icon.png",
+      "https://apps.apple.com/small.png",
+      "https://apps.apple.com/large.png",
+      "https://cdn.example/screen-one.webp",
+      "https://cdn.example/screen-two.webp",
+    ]);
+  });
+
+  it("rejects non-HTTPS image references", () => {
+    const visuals = discoverMobileAppVisuals(
+      '<meta property="og:image" content="http://insecure.example/icon.png">',
+      "https://play.google.com/store/apps/details?id=example",
+    );
+    assert.deepEqual(visuals.imageUrls, []);
   });
 });

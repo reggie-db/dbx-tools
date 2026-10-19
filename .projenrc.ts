@@ -675,6 +675,7 @@ project.applyToProjects(root, { identifierName: "appkit-generator", tags: "node"
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
+    "ai@catalog:",
     "cheerio@^1.2.0",
     "zod@catalog:",
   );
@@ -1173,7 +1174,9 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@clack/prompts@catalog:",
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/appkit-generator@workspace:^",
     "@dbx-tools/appkit-model-gateway@workspace:^",
+    "@dbx-tools/appkit-web-search@workspace:^",
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/auth-gate@workspace:^",
     "@dbx-tools/cli-args@workspace:^",
@@ -1187,6 +1190,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email@workspace:^",
+    "@dbx-tools/shared-generator@workspace:^",
     "@dbx-tools/shared-genie-code@workspace:^",
     "@dbx-tools/shared-model-gateway@workspace:^",
     "@dbx-tools/tunnel@workspace:^",
@@ -1195,6 +1199,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "http-proxy-3@catalog:",
     "pg@^8.22.0",
     "smol-toml@1.8.0",
+    "yaml@^2.9.0",
   );
   p.addDevDeps("@types/pg@^8");
   project.addExports(p, {
@@ -1202,6 +1207,10 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "./appkit/env-export": "./src/appkit/env-export.ts",
     "./auth": "./src/auth/cli.ts",
     "./auth/options": "./src/auth/options.ts",
+    "./brand": "./src/brand/cli.ts",
+    "./brand/export": "./src/brand/export.ts",
+    "./brand/options": "./src/brand/options.ts",
+    "./brand/run": "./src/brand/run.ts",
     "./graphiti": "./src/graphiti/cli.ts",
     "./graphiti/options": "./src/graphiti/options.ts",
     "./genie": "./src/genie-code/cli.ts",

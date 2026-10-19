@@ -4,7 +4,9 @@
  * @module
  */
 
+import type { WorkspaceClient } from "@databricks/appkit";
 import { brandUtils } from "@dbx-tools/shared-core";
+import type { ModelMessage } from "ai";
 import { discoverBrandAssets } from "./assets.ts";
 import { normalizeBrandPalette } from "./palette.ts";
 import {
@@ -31,6 +33,8 @@ export interface BrandSynthesisInput {
   research: BrandResearch;
   /** Optional synthesis-model preference. */
   model?: string;
+  /** Explicit workspace client for standalone callers. */
+  workspaceClient?: WorkspaceClient;
 }
 
 /** Replaceable structured synthesis boundary used by tests and custom runtimes. */
@@ -53,6 +57,10 @@ export interface GenerateBrandPackageOptions {
   synthesize?: BrandSynthesizer;
   /** Receives observable workflow progress. */
   onProgress?: BrandProgressReporter;
+  /** Receives fetched research for exporters that persist visual references. */
+  onResearch?: (research: BrandResearch) => void | Promise<void>;
+  /** Explicit workspace client for standalone model resolution. */
+  workspaceClient?: WorkspaceClient;
 }
 
 /** Instructions applied outside the untrusted page-content prompt. */
@@ -79,6 +87,12 @@ export function brandSynthesisPrompt(input: BrandSynthesisInput): string {
         ...source,
         ...(content ? { excerpt: content } : {}),
       })),
+      mobileVisualReferences: input.research.visualReferences.map((reference) => ({
+        platform: reference.platform,
+        appName: reference.appName,
+        pageUrl: reference.pageUrl,
+        images: reference.images.map(({ data: _data, ...image }) => image),
+      })),
       requirements: {
         voiceEntriesPerList: "2 to 6",
         tagline: "Use an evidenced current tagline, or a restrained descriptive line.",
@@ -91,6 +105,35 @@ export function brandSynthesisPrompt(input: BrandSynthesisInput): string {
   );
 }
 
+/** Add fetched mobile screenshots to the synthesis request as image parts. */
+function brandSynthesisMessages(input: BrandSynthesisInput): string | ModelMessage[] {
+  const images = input.research.visualReferences
+    .flatMap(({ images }) => images)
+    .filter(
+      (
+        image,
+      ): image is typeof image & {
+        data: Uint8Array;
+        contentType: string;
+      } => image.data !== undefined && image.contentType !== undefined,
+    )
+    .slice(0, 6);
+  if (images.length === 0) return brandSynthesisPrompt(input);
+  return [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: brandSynthesisPrompt(input) },
+        ...images.map((image) => ({
+          type: "image" as const,
+          image: image.data,
+          mediaType: image.contentType,
+        })),
+      ],
+    },
+  ];
+}
+
 /** Synthesize the evidence into the required brand-profile contract. */
 export async function synthesizeBrandProfile(
   input: BrandSynthesisInput,
@@ -99,9 +142,10 @@ export async function synthesizeBrandProfile(
   return generateStructured({
     id: "brand-profile-generator",
     instructions: BRAND_SYNTHESIS_INSTRUCTIONS,
-    prompt: brandSynthesisPrompt(input),
+    prompt: brandSynthesisMessages(input),
     schema: GeneratedBrandProfileSchema,
     ...(input.model ? { model: input.model } : {}),
+    ...(input.workspaceClient ? { workspaceClient: input.workspaceClient } : {}),
     ...(signal ? { signal } : {}),
   });
 }
@@ -163,6 +207,7 @@ export async function generateBrandPackage(
     },
     signal,
   );
+  await options.onResearch?.(research);
   await options.onProgress?.({
     type: "progress",
     stage: "synthesize",
@@ -175,6 +220,7 @@ export async function generateBrandPackage(
         request,
         research,
         ...(options.model ? { model: options.model } : {}),
+        ...(options.workspaceClient ? { workspaceClient: options.workspaceClient } : {}),
       },
       signal,
     ),
@@ -194,5 +240,11 @@ export async function generateBrandPackage(
   return BrandPackageSchema.parse({
     brand,
     sources: packageSources(research),
+    visualReferences: research.visualReferences.map((reference) => ({
+      platform: reference.platform,
+      appName: reference.appName,
+      pageUrl: reference.pageUrl,
+      images: reference.images.map(({ data: _data, ...image }) => image),
+    })),
   });
 }

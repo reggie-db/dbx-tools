@@ -7,6 +7,7 @@
  */
 
 import { stringUtils } from "@dbx-tools/shared-core";
+import type { BrandGenerationRequest as SharedBrandGenerationRequest } from "@dbx-tools/shared-generator/brand";
 import { z } from "zod";
 
 export {
@@ -18,6 +19,8 @@ export {
   BrandGenerationStageSchema,
   BrandPackageSchema,
   BrandPackageSourceSchema,
+  BrandVisualImageSchema,
+  BrandVisualReferenceSchema,
 } from "@dbx-tools/shared-generator/brand";
 export type {
   BrandGenerationErrorEvent,
@@ -28,10 +31,17 @@ export type {
   BrandGenerationStage,
   BrandPackage,
   BrandPackageSource,
+  BrandVisualImage,
+  BrandVisualReference,
 } from "@dbx-tools/shared-generator/brand";
 
 const nonBlankString = z.string().trim().min(1);
 const color = z.string().regex(/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i, "Expected a hex color.");
+
+/** Resolve the human-readable subject from a validated brand request. */
+export function brandRequestSubject(request: SharedBrandGenerationRequest): string {
+  return request.name ?? request.prompt!;
+}
 
 /** Description shared by the native AppKit brand-generation tool. */
 export const GENERATE_BRAND_TOOL_DESCRIPTION = stringUtils.toDescription(`

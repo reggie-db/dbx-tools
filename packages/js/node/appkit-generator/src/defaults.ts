@@ -4,7 +4,7 @@
  * @module
  */
 
-import type { BrandGenerationRequest } from "./schema.ts";
+import { brandRequestSubject, type BrandGenerationRequest } from "./schema.ts";
 
 /** AppKit execute configuration used by this package. */
 export type BrandExecuteConfig = {
@@ -23,7 +23,7 @@ export type BrandExecutionSettings = {
 export const BRAND_CACHE_TTL_SECONDS = 21_600;
 
 /** Cache-key version for the generated package shape and asset policy. */
-export const BRAND_CACHE_VERSION = 4;
+export const BRAND_CACHE_VERSION = 5;
 
 /** Attempts for the idempotent structured synthesis call. */
 export const BRAND_GENERATION_ATTEMPTS = 2;
@@ -47,7 +47,7 @@ export function brandGenerationSettings(
           "brand",
           "generate",
           BRAND_CACHE_VERSION,
-          request.name.toLowerCase(),
+          brandRequestSubject(request).toLowerCase(),
           request.website ?? "",
           options.model ?? "",
           options.maxSources,
