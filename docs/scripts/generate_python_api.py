@@ -42,6 +42,9 @@ class Module:
     exports: list[str] | None = None
 
 
+ExportRow = tuple[str, str, str]
+
+
 def project_metadata(package_dir: Path) -> tuple[str, str, Path]:
     """Return distribution name, import module, and package source directory."""
 
@@ -154,6 +157,8 @@ def class_methods(node: ast.ClassDef, module: str, source: Path) -> tuple[Member
 def relative_import(current: str, level: int, imported: str | None, *, is_package: bool) -> str:
     """Resolve an ImportFrom module name within the current package."""
 
+    if level == 0:
+        return imported or ""
     parts = current.split(".")
     package_parts = parts if is_package else parts[:-1]
     if level:
@@ -173,6 +178,104 @@ def module_name(module_root: str, module_dir: Path, source: Path) -> str:
     return ".".join([module_root, *parts]) if parts else module_root
 
 
+def import_bindings(
+    statement: ast.Import | ast.ImportFrom,
+    current: str,
+    *,
+    is_package: bool,
+) -> dict[str, tuple[str, str | None]]:
+    """Return local import bindings without loading the imported modules."""
+
+    if isinstance(statement, ast.Import):
+        return {
+            alias.asname or alias.name.split(".")[0]: (alias.name, None)
+            for alias in statement.names
+        }
+    imported_module = relative_import(
+        current,
+        statement.level,
+        statement.module,
+        is_package=is_package,
+    )
+    bindings: dict[str, tuple[str, str | None]] = {}
+    for alias in statement.names:
+        if alias.name == "*":
+            continue
+        local_name = alias.asname or alias.name
+        bindings[local_name] = (
+            (f"{imported_module}.{alias.name}", None)
+            if statement.module is None
+            else (imported_module, alias.name)
+        )
+    return bindings
+
+
+def declaration_member(
+    statement: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
+    module: str,
+    source: Path,
+) -> Member | None:
+    """Convert one public function or class declaration into a member."""
+
+    if statement.name.startswith("_"):
+        return None
+    if isinstance(statement, ast.ClassDef):
+        return Member(
+            name=statement.name,
+            kind="class",
+            module=module,
+            source=source,
+            line=statement.lineno,
+            signature=class_signature(statement),
+            docstring=normalized_docstring(ast.get_docstring(statement, clean=False)),
+            fields=class_fields(statement),
+            methods=class_methods(statement, module, source),
+        )
+    return Member(
+        name=statement.name,
+        kind="function",
+        module=module,
+        source=source,
+        line=statement.lineno,
+        signature=function_signature(statement),
+        docstring=normalized_docstring(ast.get_docstring(statement, clean=False)),
+    )
+
+
+def assignment_members(
+    statement: ast.Assign | ast.AnnAssign,
+    body: list[ast.stmt],
+    index: int,
+    module: str,
+    source: Path,
+) -> tuple[Member, ...]:
+    """Convert public top-level assignments into data or type-alias members."""
+
+    value = statement.value
+    annotation = statement.annotation if isinstance(statement, ast.AnnAssign) else None
+    members = []
+    for assigned in assigned_names(statement):
+        if assigned.startswith("_"):
+            continue
+        kind = (
+            "type alias" if annotation and ast.unparse(annotation).endswith("TypeAlias") else "data"
+        )
+        signature = assigned if annotation is None else f"{assigned}: {ast.unparse(annotation)}"
+        members.append(
+            Member(
+                name=assigned,
+                kind=kind,
+                module=module,
+                source=source,
+                line=statement.lineno,
+                signature=signature,
+                docstring=assignment_docstring(body, index),
+                alias_of=value.id if isinstance(value, ast.Name) else None,
+            )
+        )
+    return tuple(members)
+
+
 def parse_module(module_root: str, module_dir: Path, source: Path) -> Module:
     """Parse one source file into its public declarations and import graph."""
 
@@ -185,84 +288,24 @@ def parse_module(module_root: str, module_dir: Path, source: Path) -> Module:
         docstring=normalized_docstring(ast.get_docstring(tree, clean=False)),
     )
     for index, statement in enumerate(tree.body):
-        if isinstance(statement, ast.ImportFrom):
-            imported_module = relative_import(
-                name,
-                statement.level,
-                statement.module,
-                is_package=source.name == "__init__.py",
-            )
-            for alias in statement.names:
-                local_name = alias.asname or alias.name
-                if alias.name == "*":
-                    continue
-                if statement.module is None:
-                    parsed.imports[local_name] = (f"{imported_module}.{alias.name}", None)
-                else:
-                    parsed.imports[local_name] = (imported_module, alias.name)
-            continue
-        if isinstance(statement, ast.Import):
-            for alias in statement.names:
-                parsed.imports[alias.asname or alias.name.split(".")[0]] = (alias.name, None)
-            continue
-        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if statement.name.startswith("_"):
-                continue
-            parsed.members[statement.name] = Member(
-                name=statement.name,
-                kind="function",
-                module=name,
-                source=source,
-                line=statement.lineno,
-                signature=function_signature(statement),
-                docstring=normalized_docstring(ast.get_docstring(statement, clean=False)),
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            parsed.imports.update(
+                import_bindings(statement, name, is_package=source.name == "__init__.py")
             )
             continue
-        if isinstance(statement, ast.ClassDef):
-            if statement.name.startswith("_"):
-                continue
-            parsed.members[statement.name] = Member(
-                name=statement.name,
-                kind="class",
-                module=name,
-                source=source,
-                line=statement.lineno,
-                signature=class_signature(statement),
-                docstring=normalized_docstring(ast.get_docstring(statement, clean=False)),
-                fields=class_fields(statement),
-                methods=class_methods(statement, name, source),
-            )
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            member = declaration_member(statement, name, source)
+            if member is not None:
+                parsed.members[member.name] = member
             continue
         if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
             continue
         names = assigned_names(statement)
-        value = statement.value
         if "__all__" in names:
-            parsed.exports = static_string_list(value)
+            parsed.exports = static_string_list(statement.value)
             continue
-        for assigned in names:
-            if assigned.startswith("_"):
-                continue
-            alias_of = value.id if isinstance(value, ast.Name) else None
-            annotation = statement.annotation if isinstance(statement, ast.AnnAssign) else None
-            kind = (
-                "type alias"
-                if annotation and ast.unparse(annotation).endswith("TypeAlias")
-                else "data"
-            )
-            signature = assigned
-            if annotation is not None:
-                signature = f"{assigned}: {ast.unparse(annotation)}"
-            parsed.members[assigned] = Member(
-                name=assigned,
-                kind=kind,
-                module=name,
-                source=source,
-                line=statement.lineno,
-                signature=signature,
-                docstring=assignment_docstring(tree.body, index),
-                alias_of=alias_of,
-            )
+        for member in assignment_members(statement, tree.body, index, name, source):
+            parsed.members[member.name] = member
     return parsed
 
 
@@ -341,45 +384,69 @@ def render_member(member: Member, repo_root: Path) -> list[str]:
     return lines
 
 
-def render_package(package_dir: Path, output: Path, repo_root: Path) -> dict[str, int | str]:
-    """Generate one package API page and return summary counts."""
+def discover_modules(root_module: str, module_dir: Path) -> dict[str, Module]:
+    """Parse every Python source module in one package."""
 
-    distribution, root_module, module_dir = project_metadata(package_dir)
-    modules = {
+    return {
         parsed.name: parsed
         for source in sorted(module_dir.rglob("*.py"))
         if "__pycache__" not in source.parts
         for parsed in [parse_module(root_module, module_dir, source)]
     }
-    root = modules.get(root_module)
-    public_exports = root.exports if root and root.exports is not None else None
+
+
+def explicit_public_surface(
+    modules: dict[str, Module], root_module: str, public_exports: list[str]
+) -> tuple[dict[tuple[str, str], Member], list[ExportRow]]:
+    """Resolve an explicit root `__all__` to owning definitions and table rows."""
 
     selected: dict[tuple[str, str], Member] = {}
-    export_rows = []
-    if public_exports is not None:
-        for export in public_exports:
-            member, external = resolve_member(modules, root_module, export)
-            if member is not None:
-                selected[(member.module, member.name)] = member
-                detail = (
-                    f"Alias of [`{member.name}`](#{module_anchor(member.name)})"
-                    if export != member.name
-                    else member.kind
-                )
-                export_rows.append((export, member.module, detail))
-            else:
-                export_rows.append(
-                    (export, external or root_module, "module or external re-export")
-                )
-    else:
-        for module in modules.values():
-            for member in module.members.values():
-                if member.alias_of:
-                    continue
-                selected[(member.module, member.name)] = member
+    export_rows: list[ExportRow] = []
+    for export in public_exports:
+        member, external = resolve_member(modules, root_module, export)
+        if member is None:
+            export_rows.append((export, external or root_module, "module or external re-export"))
+            continue
+        selected[(member.module, member.name)] = member
+        detail = (
+            f"Alias of [`{member.name}`](#{module_anchor(member.name)})"
+            if export != member.name
+            else member.kind
+        )
+        export_rows.append((export, member.module, detail))
+    return selected, export_rows
 
-    source_path = package_dir.relative_to(repo_root).as_posix()
-    lines = [
+
+def public_surface(
+    modules: dict[str, Module], root_module: str
+) -> tuple[dict[tuple[str, str], Member], list[ExportRow]]:
+    """Select owning definitions and describe the package root's explicit exports."""
+
+    root = modules.get(root_module)
+    if root and root.exports is not None:
+        return explicit_public_surface(modules, root_module, root.exports)
+    selected = {
+        (member.module, member.name): member
+        for module in modules.values()
+        for member in module.members.values()
+        if not member.alias_of
+    }
+    return selected, []
+
+
+def group_members(selected: dict[tuple[str, str], Member]) -> dict[str, list[Member]]:
+    """Group selected definitions by their owning module."""
+
+    by_module: dict[str, list[Member]] = {}
+    for member in selected.values():
+        by_module.setdefault(member.module, []).append(member)
+    return by_module
+
+
+def page_header(distribution: str, root_module: str, source_path: str) -> list[str]:
+    """Return frontmatter and generated-file guidance for one API page."""
+
+    return [
         "---",
         f'title: "{distribution} Python API"',
         f'description: "Generated Python API reference for {distribution}."',
@@ -395,21 +462,31 @@ def render_package(package_dir: Path, output: Path, repo_root: Path) -> dict[str
         f"Import package: `{root_module}`.",
         "",
     ]
-    if export_rows:
-        lines.extend(
-            [
-                "## Public Exports",
-                "",
-                "| Export | Owner | Kind |",
-                "| --- | --- | --- |",
-                *[f"| `{name}` | `{owner}` | {detail} |" for name, owner, detail in export_rows],
-                "",
-            ]
-        )
 
-    by_module: dict[str, list[Member]] = {}
-    for member in selected.values():
-        by_module.setdefault(member.module, []).append(member)
+
+def render_export_rows(export_rows: list[ExportRow]) -> list[str]:
+    """Render the explicit package export table when one exists."""
+
+    if not export_rows:
+        return []
+    return [
+        "## Public Exports",
+        "",
+        "| Export | Owner | Kind |",
+        "| --- | --- | --- |",
+        *[f"| `{name}` | `{owner}` | {detail} |" for name, owner, detail in export_rows],
+        "",
+    ]
+
+
+def render_modules(
+    modules: dict[str, Module],
+    by_module: dict[str, list[Member]],
+    repo_root: Path,
+) -> list[str]:
+    """Render selected owning definitions grouped by source module."""
+
+    lines: list[str] = []
     for name in sorted(by_module):
         module = modules[name]
         lines.extend([f"## `{name}`", ""])
@@ -419,6 +496,20 @@ def render_package(package_dir: Path, output: Path, repo_root: Path) -> dict[str
             by_module[name], key=lambda candidate: (candidate.line, candidate.name)
         ):
             lines.extend(render_member(member, repo_root))
+    return lines
+
+
+def render_package(package_dir: Path, output: Path, repo_root: Path) -> dict[str, int | str]:
+    """Generate one package API page and return summary counts."""
+
+    distribution, root_module, module_dir = project_metadata(package_dir)
+    modules = discover_modules(root_module, module_dir)
+    selected, export_rows = public_surface(modules, root_module)
+    by_module = group_members(selected)
+    source_path = package_dir.relative_to(repo_root).as_posix()
+    lines = page_header(distribution, root_module, source_path)
+    lines.extend(render_export_rows(export_rows))
+    lines.extend(render_modules(modules, by_module, repo_root))
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines).rstrip() + "\n")
