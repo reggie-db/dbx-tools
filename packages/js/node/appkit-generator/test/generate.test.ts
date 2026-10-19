@@ -106,9 +106,12 @@ describe("brand package generation", () => {
     assert.equal(generated.sources.length, 2);
     assert.ok(generated.sources.every((source) => source.fetched));
     assert.deepEqual(generated.visualReferences, []);
+    assert.equal(progress[0]?.stage, "search");
+    assert.ok(progress.some(({ message }) => message.includes("iOS App Store")));
+    assert.ok(progress.some(({ message }) => message.includes("Google Play")));
     assert.deepEqual(
-      progress.map(({ stage }) => stage),
-      ["search", "visuals", "fetch", "fetch", "fetch", "assets", "synthesize"],
+      progress.slice(-5).map(({ stage }) => stage),
+      ["fetch", "fetch", "fetch", "assets", "synthesize"],
     );
   });
 

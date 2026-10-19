@@ -4,6 +4,9 @@
  * @module
  */
 
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { BrandResearch } from "@dbx-tools/appkit-generator";
 import { generateBrandPackage } from "@dbx-tools/appkit-generator/generate";
 import {
@@ -14,6 +17,7 @@ import {
 import { createWebSearchRuntime } from "@dbx-tools/appkit-web-search/runtime";
 import { runWebSearch } from "@dbx-tools/appkit-web-search/search";
 import { createWorkspaceClient } from "@dbx-tools/databricks/workspace-client";
+import { object } from "@dbx-tools/shared-core";
 import type { BrandGenerationProgressEvent } from "@dbx-tools/shared-generator";
 
 import { writeBrandPackage, type WrittenBrandPackage } from "./export.ts";
@@ -59,6 +63,21 @@ export async function exportBrandFromPrompt(
               ...(options.profile ? { cacheIdentity: `profile:${options.profile}` } : {}),
             },
             signal,
+            async (event) => {
+              if (!object.isRecord(event)) return;
+              const status = typeof event.status === "string" ? event.status : undefined;
+              const eventMessage =
+                typeof event.message === "string" ? event.message.trim() : undefined;
+              const detail = typeof event.detail === "string" ? event.detail.trim() : undefined;
+              await callbacks.onProgress?.({
+                type: "progress",
+                stage: "search",
+                message:
+                  status === "search" && eventMessage
+                    ? `Web search: ${eventMessage}`
+                    : `Web search complete${detail ? `: ${detail}` : ""}`,
+              });
+            },
           ),
         fetch: (request, signal) => runWebFetch(request, runtime, signal),
         fetchAssetPage: (request, signal) => runWebAssetPageFetch(request, runtime, signal),
@@ -75,11 +94,14 @@ export async function exportBrandFromPrompt(
     },
   );
   if (!research) throw new Error("Brand generation completed without research provenance");
+  const outputDirectory =
+    options.output ?? (await mkdtemp(path.join(tmpdir(), "dbx-tools-brand-")));
   return writeBrandPackage({
-    outputDirectory: options.output,
+    outputDirectory,
     prompt,
     brandPackage,
     research,
+    showcase: options.showcase,
     force: options.force,
   });
 }

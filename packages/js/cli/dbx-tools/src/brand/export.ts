@@ -10,6 +10,7 @@ import type { BrandResearch } from "@dbx-tools/appkit-generator";
 import type { BrandPackage } from "@dbx-tools/shared-generator";
 import { BrandPackageSchema } from "@dbx-tools/shared-generator";
 import { stringify } from "yaml";
+import { renderBrandShowcase } from "./showcase.ts";
 
 /** Inputs required to write a generated brand package. */
 export interface WriteBrandPackageOptions {
@@ -17,6 +18,7 @@ export interface WriteBrandPackageOptions {
   readonly prompt: string;
   readonly brandPackage: BrandPackage;
   readonly research: BrandResearch;
+  readonly showcase?: boolean;
   readonly force?: boolean;
 }
 
@@ -25,6 +27,7 @@ export interface WrittenBrandPackage {
   readonly outputDirectory: string;
   readonly brandYamlPath: string;
   readonly manifestPath: string;
+  readonly showcasePath?: string;
   readonly referenceCount: number;
 }
 
@@ -86,12 +89,14 @@ export async function writeBrandPackage(
 ): Promise<WrittenBrandPackage> {
   const outputDirectory = path.resolve(options.outputDirectory);
   const brandYamlPath = path.join(outputDirectory, "brand.yaml");
+  const showcasePath = path.join(outputDirectory, "showcase.html");
   const packageExists = await fileExists(brandYamlPath);
   if (packageExists && !options.force) {
     throw new Error(`Brand package already exists at ${brandYamlPath}; pass --force to replace it`);
   }
   if (options.force) {
     await rm(path.join(outputDirectory, "references"), { recursive: true, force: true });
+    await rm(showcasePath, { force: true });
   }
 
   const visualReferences = structuredClone(options.brandPackage.visualReferences);
@@ -134,11 +139,15 @@ export async function writeBrandPackage(
       2,
     )}\n`,
   );
+  if (options.showcase) {
+    await writeAtomic(showcasePath, renderBrandShowcase(brandPackage));
+  }
 
   return {
     outputDirectory,
     brandYamlPath,
     manifestPath,
+    ...(options.showcase ? { showcasePath } : {}),
     referenceCount,
   };
 }

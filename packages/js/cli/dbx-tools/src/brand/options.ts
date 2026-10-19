@@ -17,8 +17,10 @@ export const BrandExportOptionsSchema = z
       .string()
       .trim()
       .min(1)
-      .default("branding")
-      .describe("Output directory for brand.yaml, provenance, and visual references."),
+      .optional()
+      .describe(
+        "Persistent output directory for brand.yaml, showcase, provenance, and visual references. Omit for a temporary directory.",
+      ),
     model: z
       .string()
       .trim()
@@ -39,6 +41,10 @@ export const BrandExportOptionsSchema = z
       .max(20_000)
       .default(8_000)
       .describe("Maximum characters retained from each source page."),
+    showcase: z
+      .boolean()
+      .default(true)
+      .describe("Responsive HTML brand presentation and website mockups."),
     force: z.boolean().default(false).describe("Replace files in an existing output directory."),
   })
   .strict()

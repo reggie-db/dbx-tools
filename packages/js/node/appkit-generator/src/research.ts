@@ -144,23 +144,44 @@ async function researchMobileStore(
   request: BrandGenerationRequest,
   platform: BrandVisualReference["platform"],
   client: BrandResearchClient,
+  onProgress?: BrandProgressReporter,
   signal?: AbortSignal,
 ): Promise<BrandResearchVisualReference | undefined> {
+  const platformName = platform === "ios" ? "the iOS App Store" : "Google Play";
   try {
+    await onProgress?.({
+      type: "progress",
+      stage: "visuals",
+      message: `Searching ${platformName} for visual references`,
+    });
     const search = await client.search({ query: mobileStoreQuery(request, platform) }, signal);
     const expectedHost = platform === "ios" ? "apps.apple.com" : "play.google.com";
     const pageUrl = search.citations
       .map(({ url }) => publicHttpsUrl(url))
       .find((url) => url && new URL(url).hostname === expectedHost);
-    if (!pageUrl) return undefined;
+    if (!pageUrl) {
+      await onProgress?.({
+        type: "progress",
+        stage: "visuals",
+        message: `No matching app found on ${platformName}`,
+      });
+      return undefined;
+    }
+    await onProgress?.({
+      type: "progress",
+      stage: "visuals",
+      message: `Reading the ${platformName} listing`,
+    });
     const page = await fetchAssetPage(
       client,
       { url: pageUrl, maxLength: ASSET_HTML_MAX_LENGTH },
       signal,
     );
     const discovered = discoverMobileAppVisuals(page.content, page.url);
+    const imageUrls = discovered.imageUrls.slice(0, 4);
+    let completedImages = 0;
     const images = await Promise.all(
-      discovered.imageUrls.slice(0, 4).map(async (url): Promise<BrandResearchVisualImage> => {
+      imageUrls.map(async (url): Promise<BrandResearchVisualImage> => {
         try {
           const image = await client.fetchImage({ url }, signal);
           return {
@@ -175,6 +196,15 @@ async function researchMobileStore(
             error: errorUtils.toError(error),
           });
           return { url };
+        } finally {
+          completedImages += 1;
+          await onProgress?.({
+            type: "progress",
+            stage: "visuals",
+            message: `Reviewed ${completedImages} of ${imageUrls.length} images from ${platformName}`,
+            current: completedImages,
+            total: imageUrls.length,
+          });
         }
       }),
     );
@@ -188,6 +218,11 @@ async function researchMobileStore(
     logger.warn("mobile-store-research-failed", {
       platform,
       error: errorUtils.toError(error),
+    });
+    await onProgress?.({
+      type: "progress",
+      stage: "visuals",
+      message: `Could not read ${platformName}; continuing without it`,
     });
     return undefined;
   }
@@ -298,10 +333,20 @@ export async function researchBrand(
     stage: "search",
     message: `Searching for official ${subject} brand sources`,
   });
+  const searchPromise = client
+    .search({ query: brandResearchQuery(request) }, signal)
+    .then(async (result) => {
+      await options.onProgress?.({
+        type: "progress",
+        stage: "search",
+        message: `Found ${result.citations.length} candidate web sources`,
+      });
+      return result;
+    });
   const [search, iosReference, androidReference] = await Promise.all([
-    client.search({ query: brandResearchQuery(request) }, signal),
-    researchMobileStore(request, "ios", client, signal),
-    researchMobileStore(request, "android", client, signal),
+    searchPromise,
+    researchMobileStore(request, "ios", client, options.onProgress, signal),
+    researchMobileStore(request, "android", client, options.onProgress, signal),
   ]);
   const visualReferences = [iosReference, androidReference].filter(
     (reference): reference is BrandResearchVisualReference => reference !== undefined,

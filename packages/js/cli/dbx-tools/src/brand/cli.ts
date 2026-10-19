@@ -39,12 +39,14 @@ export function buildProgram(name = "dbx brand", dependencies: BrandCliDependenc
       const options = parseArgs(program, BrandExportOptionsSchema);
       const result = await runExport(prompt, options, {
         onProgress(event) {
-          writeProgress(`[${event.stage}] ${event.message}`);
+          writeProgress(event.message);
         },
       });
       writeResult({
+        root: result.outputDirectory,
         brand: result.brandYamlPath,
         manifest: result.manifestPath,
+        ...(result.showcasePath ? { showcase: result.showcasePath } : {}),
         references: result.referenceCount,
       });
     });

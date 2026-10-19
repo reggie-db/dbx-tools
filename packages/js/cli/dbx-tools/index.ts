@@ -13,6 +13,7 @@ export * as brandCli from "./src/brand/cli.ts";
 export * as brandExport from "./src/brand/export.ts";
 export * as brandOptions from "./src/brand/options.ts";
 export * as brandRun from "./src/brand/run.ts";
+export * as brandShowcase from "./src/brand/showcase.ts";
 export * as bun from "./src/bun.ts";
 export * as cli from "./src/cli.ts";
 export * as genieCodeCli from "./src/genie-code/cli.ts";

@@ -9,6 +9,7 @@ import { parse } from "yaml";
 
 import { buildProgram } from "../src/brand/cli.ts";
 import { writeBrandPackage } from "../src/brand/export.ts";
+import { BrandExportOptionsSchema } from "../src/brand/options.ts";
 
 const brandPackage: BrandPackage = {
   brand: {
@@ -99,6 +100,10 @@ const research: BrandResearch = {
 };
 
 describe("brand CLI", () => {
+  it("leaves output unset so the runtime creates a unique temporary directory", () => {
+    assert.equal(BrandExportOptionsSchema.parse({}).output, undefined);
+  });
+
   it("parses a freeform prompt and export options", async () => {
     const calls: unknown[] = [];
     await buildProgram("dbx brand", {
@@ -113,6 +118,7 @@ describe("brand CLI", () => {
           outputDirectory: "/tmp/brand",
           brandYamlPath: "/tmp/brand/brand.yaml",
           manifestPath: "/tmp/brand/brand-package.json",
+          showcasePath: "/tmp/brand/showcase.html",
           referenceCount: 2,
         };
       },
@@ -142,13 +148,16 @@ describe("brand CLI", () => {
           profile: "TEST",
           maxSources: 3,
           sourceMaxLength: 8_000,
+          showcase: true,
           force: false,
         },
       },
-      "[visuals] Reviewing visual references",
+      "Reviewing visual references",
       {
+        root: "/tmp/brand",
         brand: "/tmp/brand/brand.yaml",
         manifest: "/tmp/brand/brand-package.json",
+        showcase: "/tmp/brand/showcase.html",
         references: 2,
       },
     ]);
@@ -162,6 +171,7 @@ describe("brand CLI", () => {
         prompt: "Acme",
         brandPackage,
         research,
+        showcase: true,
       });
       const yaml = parse(await readFile(result.brandYamlPath, "utf8")) as {
         name: string;
@@ -170,8 +180,13 @@ describe("brand CLI", () => {
         visualReferences: Array<{ images: Array<{ localPath?: string }> }>;
       };
       const localPath = manifest.visualReferences[0]?.images[0]?.localPath;
+      const showcase = await readFile(result.showcasePath!, "utf8");
 
       assert.equal(yaml.name, "Acme");
+      assert.match(showcase, /aria-label="Desktop website mockup"/);
+      assert.match(showcase, /aria-label="Mobile website mockup"/);
+      assert.match(showcase, /--primary: #102A43/);
+      assert.match(showcase, /\.\/references\/ios\/acme-mobile-1\.png/);
       assert.equal(localPath, "./references/ios/acme-mobile-1.png");
       assert.deepEqual(
         new Uint8Array(await readFile(path.join(root, localPath!))),
@@ -197,6 +212,7 @@ describe("brand CLI", () => {
         force: true,
       });
       await assert.rejects(readFile(staleReference), { code: "ENOENT" });
+      await assert.rejects(readFile(result.showcasePath!), { code: "ENOENT" });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

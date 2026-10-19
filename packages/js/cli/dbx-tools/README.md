@@ -24,16 +24,23 @@ The command researches the broader web for brand facts and design direction,
 then visits matching iOS App Store and Google Play pages for supplemental
 visual references. It uses the downloaded icons and screenshots during
 multimodal synthesis without treating the mobile designs as the full brand.
+Plain status lines report web searches, store-page reads, image review, source
+fetches, and synthesis as they happen.
 
-The default `branding/` directory contains:
+By default, the command creates a unique operating-system temporary directory
+and prints its paths when generation completes. The directory contains:
 
 - `brand.yaml`, compatible with the shared dbx-tools brand context.
 - `brand-package.json`, with source provenance and visual-reference metadata.
+- `showcase.html`, a self-contained responsive brand presentation with desktop
+  and mobile website mockups.
 - `references/ios/` and `references/android/`, with the mobile images used for
   visual research.
 
-Use `--name` or `--website` to disambiguate the prompt, `--output` to select a
-different package directory, and `--force` to replace an existing package:
+Use `--name` or `--website` to disambiguate the prompt. Pass `--output` to keep
+the package at a stable path, and `--force` to replace an existing package.
+The showcase is enabled by default; pass `--no-showcase` to export only the
+portable package and research files:
 
 ```sh
 dbx brand "Retail analytics for store operators" \
@@ -352,17 +359,19 @@ dbx brand [options] <prompt>
 
 #### Options
 
-| Option                            | Description                                                                                            |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `-p, --profile <value>`           | Databricks CLI profile. (env: DATABRICKS_CONFIG_PROFILE)                                               |
-| `-n, --name <value>`              | Known canonical brand name. (env: NAME)                                                                |
-| `-w, --website <value>`           | Known official HTTPS website. (env: WEBSITE)                                                           |
-| `-o, --output <value>`            | Output directory for brand.yaml, provenance, and visual references. (default: "branding", env: OUTPUT) |
-| `--model <value>`                 | Optional Databricks model preference for brand synthesis. (env: MODEL)                                 |
-| `--max-sources <value>`           | Maximum general web sources to read. (default: 4, env: MAX_SOURCES)                                    |
-| `-s, --source-max-length <value>` | Maximum characters retained from each source page. (default: 8000, env: SOURCE_MAX_LENGTH)             |
-| `-f, --force`                     | Replace files in an existing output directory. (default: false, env: FORCE)                            |
-| `--no-force`                      | Disable replace files in an existing output directory.                                                 |
+| Option                        | Description                                                                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `-p, --profile <value>`       | Databricks CLI profile. (env: DATABRICKS_CONFIG_PROFILE)                                                                               |
+| `-n, --name <value>`          | Known canonical brand name. (env: NAME)                                                                                                |
+| `-w, --website <value>`       | Known official HTTPS website. (env: WEBSITE)                                                                                           |
+| `-o, --output <value>`        | Persistent output directory for brand.yaml, showcase, provenance, and visual references. Omit for a temporary directory. (env: OUTPUT) |
+| `--model <value>`             | Optional Databricks model preference for brand synthesis. (env: MODEL)                                                                 |
+| `--max-sources <value>`       | Maximum general web sources to read. (default: 4, env: MAX_SOURCES)                                                                    |
+| `--source-max-length <value>` | Maximum characters retained from each source page. (default: 8000, env: SOURCE_MAX_LENGTH)                                             |
+| `--showcase`                  | Responsive HTML brand presentation and website mockups. (default: true, env: SHOWCASE)                                                 |
+| `--no-showcase`               | Disable responsive html brand presentation and website mockups.                                                                        |
+| `-f, --force`                 | Replace files in an existing output directory. (default: false, env: FORCE)                                                            |
+| `--no-force`                  | Disable replace files in an existing output directory.                                                                                 |
 
 ### `dbx tunnel`
 

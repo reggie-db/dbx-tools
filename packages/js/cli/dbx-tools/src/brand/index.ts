@@ -6,6 +6,7 @@ export * as cli from "./cli.ts";
 export * as exportModule from "./export.ts";
 export * as options from "./options.ts";
 export * as run from "./run.ts";
+export * as showcase from "./showcase.ts";
 export type { BrandCliDependencies } from "./cli.ts";
 export type { WriteBrandPackageOptions, WrittenBrandPackage } from "./export.ts";
 export { BrandExportOptionsSchema } from "./options.ts";
