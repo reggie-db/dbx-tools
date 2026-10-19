@@ -302,6 +302,14 @@ root.gitignore.addPatterns(
   "**/.logs/",
 );
 
+// Generated brand packages and design experiments stay local.
+root.gitignore.addPatterns(
+  "/branding/*/",
+  "!/branding/assets/",
+  "/branding/brand-package.json",
+  "/branding/references/",
+);
+
 // ---------------------------------------------------------------------------
 // Per-package dependency rules (selected by package name + tag)
 // ---------------------------------------------------------------------------

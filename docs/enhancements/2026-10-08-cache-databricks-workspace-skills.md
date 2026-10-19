@@ -11,7 +11,7 @@ skill trees mounted for that user. This includes every reference file under
 every skill, even when the prompt does not require a skill and no workspace
 file changed.
 
-RaceTrac trace `98c9e1e07c60366f89d00edaafbee8b4` shows:
+A production trace shows:
 
 - 785 HTTP GET spans in one turn;
 - 581 `workspace/export` calls;
@@ -197,7 +197,7 @@ GET spans to every chat root after materialization.
 
 ## Acceptance criteria
 
-For the RaceTrac reproduction:
+For the production reproduction:
 
 - no-skill turns issue fewer than 20 workspace GETs after warm-up;
 - no workspace 429 responses occur;

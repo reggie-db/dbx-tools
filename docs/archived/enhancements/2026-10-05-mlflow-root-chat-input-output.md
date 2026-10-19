@@ -146,7 +146,7 @@ span attributes; custom OTel attributes do not become MLflow trace tags.
 ## Acceptance status
 
 Local implementation and tests are complete. Deployed-app UI checks stay
-unrun: example and RaceTrac deployments were skipped on October 7, 2026, and
+unrun: example and customer deployments were skipped on October 7, 2026, and
 this plan is closed without that live verification.
 
 - [x] A local incoming-`traceparent` test with `OTEL_PROPAGATORS=none` exports

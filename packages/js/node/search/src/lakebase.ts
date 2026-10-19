@@ -49,7 +49,7 @@ const RESERVED_COLUMNS = new Set(["id", "search_text", "document", "search_vecto
  * `store intelligence`. Postgres indexes a hyphenated word as the compound
  * lexeme PLUS each of its parts, but compiles a hyphenated QUERY to the
  * compound alone - so `store-intelligence` demands a `store-intellig` lexeme
- * that a document titled `racetrac-store-intelligence` does not have, and the
+ * that a document titled `sample-store-intelligence` does not have, and the
  * search silently returns nothing while `store intelligence` returns
  * everything. Same for `.` and `_` in a table reference.
  *

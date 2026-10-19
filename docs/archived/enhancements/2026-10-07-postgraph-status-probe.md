@@ -61,7 +61,7 @@ error.
 - [x] Added the PostGraph-native `SELECT 1` probe and generic-driver fallback.
 - [x] Registered the wrapper only for the direct `/tools/get_status` route.
 - [x] Added ready and not-ready tests; all focused Graphiti Python tests pass.
-- [x] Validated against RaceTrac Dev Lakebase with `status=ok` and provider
+- [x] Validated against a development Lakebase with `status=ok` and provider
   `postgraph`.
 - [x] Closed deployed-app repetition without execution at the user's request;
-  direct RaceTrac Dev Lakebase validation is the retained acceptance evidence.
+  direct development Lakebase validation is the retained acceptance evidence.

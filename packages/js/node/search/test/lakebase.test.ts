@@ -307,7 +307,7 @@ describe("lakebase search permissiveness", () => {
     const { be, fake } = backend();
     await be.provision("docs", {
       seed: [
-        { id: "1", title: "racetrac-store-intelligence", text: "store intelligence for racetrac" },
+        { id: "1", title: "sample-store-intelligence", text: "store intelligence for retail" },
         { id: "2", title: "billing", text: "invoice and billing" },
       ],
     });
@@ -346,7 +346,7 @@ describe("lakebase search permissiveness", () => {
   it("relaxes to any term when no row matches all of them", async () => {
     const { be, fake } = await seeded();
     const before = fake.statements.length;
-    const result = await be.search("docs", "racetrac billing");
+    const result = await be.search("docs", "retail billing");
 
     // Both passes ran, and the relaxed one found each single-term match.
     assert.equal(fake.statements.length - before, 2);
@@ -356,7 +356,7 @@ describe("lakebase search permissiveness", () => {
   it("stops after the precise pass when it finds something", async () => {
     const { be, fake } = await seeded();
     const before = fake.statements.length;
-    await be.search("docs", "racetrac");
+    await be.search("docs", "retail");
     assert.equal(fake.statements.length - before, 1);
   });
 

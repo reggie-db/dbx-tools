@@ -90,6 +90,10 @@ jspm_packages/
 .home/
 .kanna/
 **/.logs/
+/branding/*/
+!/branding/assets/
+/branding/brand-package.json
+/branding/references/
 !/pyproject.toml
 !/packages/py/node-runtime/pyproject.toml
 !/packages/py/graphiti/pyproject.toml

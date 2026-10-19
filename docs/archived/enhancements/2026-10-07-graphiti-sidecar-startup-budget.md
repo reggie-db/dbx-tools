@@ -14,11 +14,11 @@ deadline, including Lakebase-backed Databricks Apps.
 ## Observed failure
 
 `@dbx-tools/appkit-graphiti@0.9.51` launches the Python Graphiti runtime and
-polls `/healthcheck` for a hard-coded 60 seconds. A RaceTrac Dev Lakebase
+polls `/healthcheck` for a hard-coded 60 seconds. A development Lakebase
 startup completed successfully immediately after that deadline, causing the
 plugin to terminate an otherwise healthy app.
 
-Focused timing against `RACETRAC-DEV` showed:
+Focused timing against the development Lakebase showed:
 
 - model routing and client creation: 1.3 seconds;
 - Lakebase connection: 4.0 seconds;
@@ -66,8 +66,8 @@ generated Python option bindings.
 - Existing Graphiti option serialization and generated Python bindings remain
   synchronized and idempotent.
 - Focused JavaScript and Python tests pass.
-- RaceTrac GISMO starts without a local readiness shim and can expose Graphiti
-  tools from a deployed Databricks App.
+- The deployed application starts without a local readiness shim and can
+  expose Graphiti tools from a deployed Databricks App.
 
 ## Progress
 
@@ -80,8 +80,8 @@ generated Python option bindings.
   option overrides.
 - [x] Passed focused JavaScript builds, Python tests, documentation checks, and
   workspace version checks.
-- [x] Validated RaceTrac Dev locally: the sidecar became ready after the former
-  60-second cutoff and the application remained healthy.
+- [x] Validated against the development Lakebase: the sidecar became ready
+  after the former 60-second cutoff and the application remained healthy.
 - [x] Closed deployed-app validation without execution at the user's request;
   the local Lakebase timing and focused supervision tests are the retained
   acceptance evidence.
