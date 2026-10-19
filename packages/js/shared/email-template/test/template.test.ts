@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { brandUtils } from "@dbx-tools/shared-core";
+import { dbxToolsEmailAssetDataUrls } from "../src/generated/assets.ts";
 import {
   defaultEmailBrand,
   emailBrandFromContext,
@@ -31,7 +32,8 @@ describe("email template brand", () => {
       assets: { logo: { light: "https://example.com/logo.svg" } },
     });
     assert.equal(emailBrandFromContext(remote).logoUrl, "https://example.com/logo.svg");
-    assert.equal(defaultEmailBrand.logoUrl, undefined);
+    assert.equal(emailBrandFromContext(brandUtils.defaultBrandContext).logoUrl, undefined);
+    assert.equal(defaultEmailBrand.logoUrl, dbxToolsEmailAssetDataUrls.logo);
   });
 });
 
