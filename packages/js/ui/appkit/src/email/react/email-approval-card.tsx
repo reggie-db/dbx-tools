@@ -8,7 +8,7 @@ import {
 import { CheckIcon, MailIcon, PaperclipIcon, XIcon } from "lucide-react";
 
 import { attachmentNames, joinAddresses, type EmailDraft } from "./fields.ts";
-import { useBrand } from "@dbx-tools/ui/branding/react";
+import { useBrand } from "../../branding/react/brand.tsx";
 
 // Presentational pieces for an outbound email awaiting a human Approve /
 // Deny: a mail-client chrome (sender, recipients, subject, attachments)

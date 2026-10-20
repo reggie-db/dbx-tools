@@ -122,6 +122,993 @@
       "rules": {
         "@typescript-eslint/no-floating-promises": "off"
       }
+    },
+    {
+      "files": [
+        "packages/example/app/appkit-demo/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/demo-appkit-app",
+                  "@dbx-tools/demo-appkit-app/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/example/server/appkit-demo/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/demo-appkit-server",
+                  "@dbx-tools/demo-appkit-server/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/cli/args/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/cli-args",
+                  "@dbx-tools/cli-args/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/cli/dbx-tools/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/cli",
+                  "@dbx-tools/cli/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/cli/service/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/cli-service",
+                  "@dbx-tools/cli-service/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/appkit/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/appkit",
+                  "@dbx-tools/appkit/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/appkit-generator/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/appkit-generator",
+                  "@dbx-tools/appkit-generator/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/appkit-lakebox/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/appkit-lakebox",
+                  "@dbx-tools/appkit-lakebox/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/appkit-mastra/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/appkit-mastra",
+                  "@dbx-tools/appkit-mastra/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/appkit-memory/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/appkit-memory",
+                  "@dbx-tools/appkit-memory/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/appkit-model-gateway/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/appkit-model-gateway",
+                  "@dbx-tools/appkit-model-gateway/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/appkit-web-search/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/appkit-web-search",
+                  "@dbx-tools/appkit-web-search/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/auth/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/auth",
+                  "@dbx-tools/auth/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/auth-gate/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/auth-gate",
+                  "@dbx-tools/auth-gate/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/cache/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/cache",
+                  "@dbx-tools/cache/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/core/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/core",
+                  "@dbx-tools/core/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/databricks/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/databricks",
+                  "@dbx-tools/databricks/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/databricks-zerobus/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/databricks-zerobus",
+                  "@dbx-tools/databricks-zerobus/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/email/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/email",
+                  "@dbx-tools/email/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/fs/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/fs",
+                  "@dbx-tools/fs/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/genie/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/genie",
+                  "@dbx-tools/genie/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/lakebase/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/lakebase",
+                  "@dbx-tools/lakebase/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/lakebox/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/lakebox",
+                  "@dbx-tools/lakebox/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/model/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/model",
+                  "@dbx-tools/model/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/model-protocol/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/model-protocol",
+                  "@dbx-tools/model-protocol/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/path/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/path",
+                  "@dbx-tools/path/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/postgres/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/postgres",
+                  "@dbx-tools/postgres/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/search/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/search",
+                  "@dbx-tools/search/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/node/tunnel/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/tunnel",
+                  "@dbx-tools/tunnel/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/auth/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-auth",
+                  "@dbx-tools/shared-auth/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/core/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-core",
+                  "@dbx-tools/shared-core/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/email/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-email",
+                  "@dbx-tools/shared-email/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/email-template/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-email-template",
+                  "@dbx-tools/shared-email-template/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/fs/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-fs",
+                  "@dbx-tools/shared-fs/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/generator/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-generator",
+                  "@dbx-tools/shared-generator/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/genie/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-genie",
+                  "@dbx-tools/shared-genie/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/genie-code/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-genie-code",
+                  "@dbx-tools/shared-genie-code/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/graphiti/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-graphiti",
+                  "@dbx-tools/shared-graphiti/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/lakebox/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-lakebox",
+                  "@dbx-tools/shared-lakebox/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/mastra/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-mastra",
+                  "@dbx-tools/shared-mastra/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/model/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-model",
+                  "@dbx-tools/shared-model/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/model-gateway/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-model-gateway",
+                  "@dbx-tools/shared-model-gateway/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/shared/search/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-search",
+                  "@dbx-tools/shared-search/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/ui/appkit/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/ui",
+                  "@dbx-tools/ui/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/ui/lakebox/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/ui-lakebox",
+                  "@dbx-tools/ui-lakebox/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/js/ui/mastra/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/ui-mastra",
+                  "@dbx-tools/ui-mastra/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "projen/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/projen",
+                  "@dbx-tools/projen/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

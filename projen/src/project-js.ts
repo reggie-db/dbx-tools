@@ -1050,6 +1050,62 @@ class EslintIgnoreCodegen extends Component {
   }
 }
 
+/** Require package implementation files to import their own modules relatively. */
+class EslintWorkspaceImports extends Component {
+  private readonly configured = new Set<string>();
+
+  public override preSynthesize(): void {
+    const eslint = javascript.Eslint.of(this.project);
+    if (!eslint) return;
+    const root = this.project as DBXToolsNodeProject | DBXToolsTypeScriptProject;
+    const rootAbs = resolve(root.outdir);
+    const configure = (directory: string, packageName: string): void => {
+      const rel = toPosix(relative(rootAbs, directory));
+      const key = `${rel}:${packageName}`;
+      if (this.configured.has(key)) return;
+      this.configured.add(key);
+      eslint.addOverride({
+        files: [`${rel ? `${rel}/` : ""}**/*.{ts,tsx}`],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                {
+                  group: [packageName, `${packageName}/**`],
+                  message: "Use relative imports within this package.",
+                },
+              ],
+            },
+          ],
+        },
+      });
+    };
+
+    const members = root.node
+      .findAll()
+      .filter(
+        (candidate): candidate is DBXToolsNodeProject | DBXToolsTypeScriptProject =>
+          candidate !== root &&
+          (candidate instanceof DBXToolsNodeProject ||
+            candidate instanceof DBXToolsTypeScriptProject),
+      );
+    for (const member of members) {
+      configure(member.outdir, member.package.packageName);
+    }
+    if (members.length === 0 && root.extraWorkspaceMembers.length === 0) {
+      configure(root.outdir, root.package.packageName);
+    }
+    for (const member of root.extraWorkspaceMembers) {
+      const directory = resolve(rootAbs, member);
+      const packageName = readPackageManifest(directory)?.name;
+      if (typeof packageName === "string" && packageName.trim()) {
+        configure(directory, packageName);
+      }
+    }
+  }
+}
+
 /**
  * Keep generated package barrels and codegen modules out of root formatting.
  *
@@ -1358,6 +1414,7 @@ function initProject(
   // Codegen inputs may be added by mixins after construction; ignore their
   // generated modules once typed package configuration is final.
   new EslintIgnoreCodegen(project);
+  new EslintWorkspaceImports(project);
   eslint.addRules({
     "import/no-relative-packages": "error",
     // Monorepo tooling legitimately uses devDeps (typescript, tsx, projen) in src.

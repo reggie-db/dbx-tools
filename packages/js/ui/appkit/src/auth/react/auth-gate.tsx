@@ -12,7 +12,7 @@ import {
 import { parseEmails, isEmail } from "@dbx-tools/shared-core";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import { BrandIcon, useBrand } from "@dbx-tools/ui/branding/react";
+import { BrandIcon, useBrand } from "../../branding/react/brand.tsx";
 
 type Phase = "loading" | "email" | "code" | "authed" | "open";
 

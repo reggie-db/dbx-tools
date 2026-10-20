@@ -20,7 +20,7 @@ import {
 } from "@dbx-tools/shared-core";
 import { useEffect, useId, useMemo, useState } from "react";
 
-import { useBrand } from "@dbx-tools/ui/branding/react";
+import { useBrand } from "../branding/react/brand.tsx";
 
 const COLOR_FIELDS = [
   ["primary", "Primary"],

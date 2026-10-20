@@ -74,6 +74,7 @@ Primary ownership:
 - Generated package entrypoints live only at package roots: `index.ts` for modules directly under `src`, and `index.<sub.folder>.ts` for modules directly under `src/sub/folder`. Never add `exports.ts` or nested `src/**/index.ts` barrels.
 - Package export maps expose `.` and generated folder entrypoints, never individual TypeScript modules. Keep non-TypeScript asset exports only when consumers must address the asset itself.
 - Generated barrels expose module namespaces plus conflict-free flat values and types. Import flat names directly when available; otherwise use the owning module namespace. Do not add compatibility re-export modules or aliases.
+- Within a package, import its modules through relative paths rather than importing the package by its own npm name or subpaths.
 - Browser clients for AppKit plugins must consume the plugin's published `clientConfig()` through shared exported schemas and derive every endpoint from shared exported route constants/builders. Never hard-code a plugin base path or keep parallel client/server route strings in node or UI packages.
 - Keep `@dbx-tools/shared-core` logging dependency-free.
 - Python Node bundles contain no production Python callbacks. Compatibility belongs in build-time shims.
