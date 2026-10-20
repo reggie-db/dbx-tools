@@ -6,8 +6,7 @@ import { demoWatchArgs } from "./run-demo.ts";
 describe("demo server watch", () => {
   it("runs the server through the imported watcher by default", () => {
     const args = demoWatchArgs([]);
-    assert.equal(args[0], "bun");
-    assert.match(args[1] ?? "", /packages\/example\/server\/appkit-demo\/src\/server\.ts/);
+    assert.deepEqual(args, ["bun", "--cwd", "packages/demo", "server/server.ts"]);
   });
 
   it("forwards include and exclude globs into dev:watch", () => {

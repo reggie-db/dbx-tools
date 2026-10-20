@@ -58,7 +58,7 @@ describe("generated Bun app", () => {
   it("uses the Tailwind plugin in development and production", () => {
     assert.match(bunfig, /plugins = \["bun-plugin-tailwind"\]/);
     assert.match(build, /import tailwind from "bun-plugin-tailwind"/);
-    assert.match(build, /plugins: \[tailwind\]/);
+    assert.match(build, /plugins: \[tailwind, dedupeReact\]/);
   });
 
   it("uses Databricks-safe production defaults", () => {

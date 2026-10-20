@@ -58,3 +58,4 @@ export type { ThreadTabsProps, ThreadActionsProps } from "./src/react/thread-tab
 export { humanizeToolName, formatRawToolPayload, structuredToolPayload, detectToolSourceLanguage, toolInputPresentation, toolOutputPresentation, webSearchProgressGroups, webSearchQueryLabel, webSearchResultLabel, ToolSessionPill } from "./src/react/tool-pill.tsx";
 export type { ToolInputPresentation, WebSearchProgressGroup } from "./src/react/tool-pill.tsx";
 export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, ChatInputMessage, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ThreadPlacement, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types.ts";
+export { useChatThreadQuery } from "./src/react/use-chat-thread-query.ts";

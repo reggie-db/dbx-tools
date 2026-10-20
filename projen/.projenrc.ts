@@ -118,9 +118,9 @@ project.package.addField("exports", {
 // the compiled `lib/`. A `files` allowlist is the idiomatic, self-contained way
 // to say exactly that - it takes precedence over projen's generated `.npmignore`
 // (which excludes `/src/`), so `index.ts` (re-exports `./src/*`), the `src/`
-// modules, and the `tasks/` scripts a consumer runs as `bun <engine>/tasks/*.ts`
-// are all present. Runtime shims belong to the standalone Python package, not
-// the generator.
+// modules, and the `tasks/` scripts a consumer runs as
+// `bun <engine>/tasks/*.ts` are all present. Runtime shims belong to the
+// standalone Python package, not the generator.
 project.package.addField("files", ["index.ts", "src", "tasks"]);
 
 // Keep `.projenrc.ts`/`projenrc/` out of the published tarball.

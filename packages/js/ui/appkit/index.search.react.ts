@@ -4,10 +4,9 @@
 
 export * as searchBox from "./src/search/react/search-box.tsx";
 export * as searchResults from "./src/search/react/search-results.tsx";
-export * as useSearch from "./src/search/react/use-search.ts";
 export { SearchBox } from "./src/search/react/search-box.tsx";
 export type { SearchBoxProps } from "./src/search/react/search-box.tsx";
 export { SearchResults } from "./src/search/react/search-results.tsx";
 export type { SearchResultsProps } from "./src/search/react/search-results.tsx";
-export { parseUniversalSearchResult, parseSearchClientConfig, usesUniversalSearchRoute } from "./src/search/react/use-search.ts";
+export { parseUniversalSearchResult, parseSearchClientConfig, usesUniversalSearchRoute, useSearch } from "./src/search/react/use-search.ts";
 export type { UseSearchOptions, UseSearchState } from "./src/search/react/use-search.ts";

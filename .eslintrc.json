@@ -37,8 +37,9 @@
         "project": [
           "tsconfig.json",
           "packages/js/**/tsconfig.json",
-          "packages/example/**/tsconfig.json",
-          "projen/tsconfig.json"
+          "projen/tsconfig.json",
+          "packages/demo/tsconfig.client.json",
+          "packages/demo/tsconfig.server.json"
         ],
         "alwaysTryTypes": true
       }
@@ -54,9 +55,10 @@
     "*.generated.ts",
     "coverage",
     "packages/js/**/index*.ts",
-    "packages/example/**/index*.ts",
     "**/src/generated/**",
     "projen/index*.ts",
+    "packages/demo/index*.ts",
+    "packages/demo/client/vite.config.ts",
     "**/dev.ts",
     "**/build.ts",
     "**/bun-dev.override.ts",
@@ -125,7 +127,7 @@
     },
     {
       "files": [
-        "packages/example/app/appkit-demo/**/*.{ts,tsx}"
+        "packages/demo/**/*.{ts,tsx}"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -134,29 +136,8 @@
             "patterns": [
               {
                 "group": [
-                  "@dbx-tools/demo-appkit-app",
-                  "@dbx-tools/demo-appkit-app/**"
-                ],
-                "message": "Use relative imports within this package."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": [
-        "packages/example/server/appkit-demo/**/*.{ts,tsx}"
-      ],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": [
-                  "@dbx-tools/demo-appkit-server",
-                  "@dbx-tools/demo-appkit-server/**"
+                  "@dbx-tools/demo",
+                  "@dbx-tools/demo/**"
                 ],
                 "message": "Use relative imports within this package."
               }

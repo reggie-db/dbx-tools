@@ -502,7 +502,7 @@ debt by itself.
 | `packages/js/shared/fs/src/base-fs.ts`                |   882 | `projen/src/pnpm-workspace.ts`                      |                15 |
 | `packages/rs/model/tests/model.rs`                    |   876 | `projen/src/project-predicate.ts`                   |                15 |
 | `packages/js/node/appkit-mastra/src/remote-skills.ts` |   856 | `projen/tasks/release-pr.ts`                        |                15 |
-| `packages/js/shared/model/src/openai-responses.ts`    |   841 | `packages/example/server/appkit-demo/src/server.ts` |                14 |
+| `packages/js/shared/model/src/openai-responses.ts`    |   841 | `packages/demo/server/server.ts` |                14 |
 | `scripts/install.test.ts`                             |   813 | `projen/tasks/publish.ts`                           |                14 |
 
 This was a source/contract audit with targeted offline probes, not a deployment,

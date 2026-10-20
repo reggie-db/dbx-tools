@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -17,9 +25,9 @@ function fixturePackage(name: string): string {
   return directory;
 }
 
-function barrelStat(directory: string, file = "index.ts"): [number, number] {
+function barrelStat(directory: string, file = "index.ts"): [number, number, number] {
   const stat = statSync(join(directory, file));
-  return [stat.mode & 0o777, stat.mtimeMs];
+  return [stat.mode & 0o777, stat.mtimeMs, stat.ctimeMs];
 }
 
 describe("generateBarrels", () => {
@@ -71,9 +79,8 @@ describe("generateBarrels", () => {
     const wasm = readFileSync(join(directory, "index.example.wasm.ts"), "utf8");
     assert.match(root, /export \* as graph from "\.\/src\/graph\.ts";/);
     assert.doesNotMatch(root, /\.\/src\/example\//);
-    assert.match(example, /export \* as one from "\.\/src\/example\/one\.ts";/);
-    assert.match(example, /export \{ run \} from "\.\/src\/example\/one\.ts";/);
-    assert.doesNotMatch(example, /export \{[^}]*\bone\b/);
+    assert.doesNotMatch(example, /export \* as one from "\.\/src\/example\/one\.ts";/);
+    assert.match(example, /export \{ one, run \} from "\.\/src\/example\/one\.ts";/);
     assert.match(example, /export type \{ One \} from "\.\/src\/example\/one\.ts";/);
     assert.doesNotMatch(example, /index\.example\.wasm/);
     assert.match(wasm, /export \* as loader from "\.\/src\/example\/wasm\/loader\.ts";/);
@@ -115,14 +122,27 @@ describe("generateBarrels", () => {
     assert.throws(() => statSync(join(directory, "index.example.ts")), { code: "ENOENT" });
   });
 
-  it("leaves unchanged barrels byte-for-byte and mode-for-mode alone", () => {
+  it("leaves unchanged read-only barrels byte-for-byte and stat-for-stat alone", async () => {
     const directory = fixturePackage("noop");
     generateBarrels({ dirs: [directory] });
     const before = barrelStat(directory);
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     assert.equal(generateBarrels({ dirs: [directory] }), 0);
     assert.deepEqual(barrelStat(directory), before);
     assert.equal(before[0], 0o444);
+  });
+
+  it("restores read-only mode on unchanged barrels", () => {
+    const directory = fixturePackage("restore-mode");
+    generateBarrels({ dirs: [directory] });
+    const barrel = join(directory, "index.ts");
+    const content = readFileSync(barrel, "utf8");
+    chmodSync(barrel, 0o644);
+
+    assert.equal(generateBarrels({ dirs: [directory] }), 0);
+    assert.equal(readFileSync(barrel, "utf8"), content);
+    assert.equal(barrelStat(directory)[0], 0o444);
   });
 
   it("rewrites read-only barrels and restores their mode", () => {
@@ -131,7 +151,7 @@ describe("generateBarrels", () => {
     writeFileSync(join(directory, "src", "edge.ts"), "export const edge = true;\n");
 
     assert.equal(generateBarrels({ dirs: [directory] }), 1);
-    assert.match(readFileSync(join(directory, "index.ts"), "utf8"), /export \* as edge from/);
+    assert.match(readFileSync(join(directory, "index.ts"), "utf8"), /export \{ edge \} from/);
     assert.equal(barrelStat(directory)[0], 0o444);
   });
 

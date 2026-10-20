@@ -285,7 +285,7 @@ export function databricksWorkspaceConfig(
   const paths = resolveDatabricksWorkspacePaths(options);
   const configuredPaths = paths.length;
   const extraSkillMounts = options.extraSkillMounts ?? [];
-  const filesCache = instance(options.pluginContext, filesCachePlugin.filesCache)?.exports();
+  const filesCache = instance(options.pluginContext, filesCachePlugin)?.exports();
   const configuredCache = options.cache;
   const mountFilesCache = configuredCache === false ? undefined : filesCache;
   const retainFilesystemSource =

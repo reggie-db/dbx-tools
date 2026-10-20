@@ -203,13 +203,13 @@ function runnerGroup(root: string, path: string): string {
   if (relativePath.startsWith("packages/js/shared/")) return "browser-shared";
   if (
     relativePath.startsWith("packages/js/ui/") ||
-    relativePath.startsWith("packages/example/app/")
+    relativePath.startsWith("packages/demo/client/")
   ) {
     return "react-ui";
   }
   if (relativePath.startsWith("projen/")) return "projen";
   if (relativePath.startsWith("docs/scripts/")) return "docs";
-  if (relativePath.startsWith("packages/example/")) return "examples";
+  if (relativePath.startsWith("packages/demo/")) return "demo";
   return "node";
 }
 

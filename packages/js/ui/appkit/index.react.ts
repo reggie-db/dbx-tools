@@ -3,12 +3,14 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as brandPicker from "./src/react/brand-picker.tsx";
+export * as errorBoundary from "./src/react/error-boundary.tsx";
 export * as highlightedCode from "./src/react/highlighted-code.tsx";
 export * as recordPreviewData from "./src/react/record-preview-data.ts";
 export * as recordPreview from "./src/react/record-preview.tsx";
 export * as shikiPlugin from "./src/react/shiki-plugin.ts";
 export { BrandPicker } from "./src/react/brand-picker.tsx";
 export type { BrandPreset, BrandPickerProps } from "./src/react/brand-picker.tsx";
+export { ErrorBoundary } from "./src/react/error-boundary.tsx";
 export { detectCodeLanguage, useHighlightedHtml, HighlightedCodeBlock, JsonBlock } from "./src/react/highlighted-code.tsx";
 export type { DetectedCodeLanguage } from "./src/react/highlighted-code.tsx";
 export { recordPreviewRows, formatRecordPreviewJson, parseNestedJsonText, looksLikeMarkdown, markdownForPreview } from "./src/react/record-preview-data.ts";

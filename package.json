@@ -7,6 +7,7 @@
   "scripts": {
     "appkit:deploy": "projen appkit:deploy",
     "appkit:sync": "projen appkit:sync",
+    "appkit:typegen": "projen appkit:typegen",
     "barrels": "projen barrels",
     "build": "projen build",
     "bump": "projen bump",
@@ -117,8 +118,7 @@
   "private": true,
   "dbxToolsConfig": {
     "packageRoots": [
-      "packages/js",
-      "packages/example"
+      "packages/js"
     ],
     "syncResynthPaths": [
       "branding/brand.yaml",
@@ -132,8 +132,7 @@
   },
   "type": "module",
   "workspaces": [
-    "packages/example/app/appkit-demo",
-    "packages/example/server/appkit-demo",
+    "packages/demo",
     "packages/js/cli/args",
     "packages/js/cli/dbx-tools",
     "packages/js/cli/service",

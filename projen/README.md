@@ -322,23 +322,18 @@ parameter to `Project`). Drop to `mixin.create(predicate, fn)` +
 Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
 `ui`, and `app`. Repo-specific mixins layer package-specific dependencies,
 scripts, and generated files on top. `ui` is for reusable React component
-libraries. `app` owns a Bun-built browser application. Terminal
-`packages/**/app` and `packages/**/server` directories select those specific
-roles instead of inheriting a generic `ui` or `node` ancestor.
+libraries. The generic `app` tag still owns a standalone Bun browser package.
 
-AppKit mode defaults to `auto`: when the workspace has both `app` and `server`
-packages, the engine adds the AppKit, Vite, React plugin, and Tailwind
-dependencies to the package that uses each one. It also disables AppKit's
-package migration, includes the Vite and generated-type inputs in the browser
-tsconfig, generates a read-only monorepo-safe `vite.config.ts`, adds
-`appkit:sync`, and ignores local Databricks state. Put repository-specific Vite
-settings in the optional unmanaged `vite.config.override.ts`; the generated
-config merges it over the engine defaults. Set
-`appkit: false` to disable this ownership. Set `appkit: true` to require AppKit
-and fail synthesis when either package role or its required entry files are
-missing. Keep application-specific UI and server dependencies in the consuming
-`.projenrc.ts`. A workspace with one `server` package also receives standard
-`check`, `dev`, and `start` tasks unless the repository defines them.
+One private Bun/AppKit application can live at `packages/app`, with browser
+source under `client/` and backend source under `server/`. Set `appRoot` to
+override that location or false to disable application-root discovery. AppKit
+mode defaults to `auto` and configures the application whenever the root exists;
+`appkit: true` additionally requires `client/index.html` and
+`server/server.ts`. The engine generates the root Bun/TypeScript/AppKit
+configuration, `client/vite.config.ts`, `app.yaml`, and a minimal direct-engine
+bundle. Set `appBundle: false` when the application owns a richer
+`databricks.yml`. Put repository-specific Vite settings in the unmanaged
+`client/vite.config.override.ts`.
 
 The generated `deploy` task validates with the native Bun build, then delegates
 to `appkit:deploy` unless the repository already owns `deploy`. The AppKit task
@@ -369,11 +364,6 @@ and task selectors identify the owning package. Its transitive workspace
 dependencies are watched with the shared generated/dependency/test/temp ignores.
 The configured restart key triggers an immediate restart. The demo uses this
 task to run its concrete server entrypoint. The `server` tag does not assume one.
-
-AppKit 0.81's `appkitServerConfig()` is the preferred tsdown preset for a
-consumer app using conventional compiled `server/agents/*/agent.ts` entries. It
-does not replace this engine's package discovery, Bun browser build, source-run
-server, publication, or Databricks deployment staging.
 
 A tag layers over a shared compiler floor that every package receives at
 construction: ES2022 plus the web-platform globals available in every runtime,

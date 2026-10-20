@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 /** Deploy an AppKit workspace through npm-compatible temporary manifests. */
-import { existsSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { cpSync, existsSync, rmSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { resolveProfile } from "@dbx-tools/auth";
 import { serializeArgs } from "@dbx-tools/cli-args";
 import { spawn, spawnSync } from "@dbx-tools/core";
@@ -33,6 +33,13 @@ export const AppKitDeployContextOptionsSchema = z.object({
 });
 
 export const AppKitDeployOptionsSchema = AppKitDeployContextOptionsSchema.extend({
+  directory: z
+    .string()
+    .trim()
+    .min(1)
+    .default(".")
+    .describe("Application directory relative to the workspace root")
+    .meta({ env: [] }),
   autoApprove: z
     .boolean()
     .default(false)
@@ -81,6 +88,17 @@ export async function deployApp(
 ): Promise<void> {
   const root = dependencies.root ?? process.cwd();
   const options = await resolveDeployOptions(args, dependencies);
+  const application = resolve(root, options.directory);
+  const applicationPath = relative(root, application);
+  if (!applicationPath || applicationPath.startsWith("..") || isAbsolute(applicationPath)) {
+    if (options.directory !== ".") {
+      throw new Error("Application directory must be inside the workspace root");
+    }
+  }
+  const clientDist = join(application, "client", "dist");
+  if (!existsSync(clientDist)) {
+    throw new Error(`Built client is missing: ${clientDist}`);
+  }
   const context = AppKitDeployContextOptionsSchema.parse({
     target: options.target,
     profile: options.profile,
@@ -111,7 +129,7 @@ export async function deployApp(
             },
           ));
   if (validate) {
-    const validation = await validate(contextArgs, root);
+    const validation = await validate(contextArgs, application);
     if (validation.exitCode !== 0) {
       throw new Error(`databricks bundle validate exited with code ${validation.exitCode}`);
     }
@@ -127,10 +145,12 @@ export async function deployApp(
         stderr: "inherit",
       }));
   await withStagedWorkspaceManifests(root, async (stage) => {
-    await reconcileStagedBundleState(stage, contextArgs, options.target, dependencies);
-    const result = await run(deployArgs, stage);
+    const stagedApplication = resolve(stage, options.directory);
+    cpSync(clientDist, join(stagedApplication, "client", "dist"), { recursive: true });
+    await reconcileStagedBundleState(stagedApplication, contextArgs, options.target, dependencies);
+    const result = await run(deployArgs, stagedApplication);
     if (result.exitCode !== 0) {
-      await printAppLogs(contextArgs, stage, dependencies);
+      await printAppLogs(contextArgs, stagedApplication, dependencies);
       throw new Error(`databricks apps deploy exited with code ${result.exitCode}`);
     }
   });

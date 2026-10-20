@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 const packageRoot = join(import.meta.dir, "..");
@@ -23,4 +24,6 @@ const generated = [
 ].join("\n");
 
 await mkdir(dirname(outputPath), { recursive: true });
+if (existsSync(outputPath)) await chmod(outputPath, 0o644);
 await writeFile(outputPath, generated);
+await chmod(outputPath, 0o444);

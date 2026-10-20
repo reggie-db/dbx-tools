@@ -55,7 +55,7 @@ export async function writeOutboxEmail(
   from: string,
   dir: string,
   brand?: EmailBrand,
-  presentation?: Pick<EmailHtmlOptions, "heading" | "preview">,
+  presentation?: Partial<Pick<EmailHtmlOptions, "heading" | "preview">>,
 ): Promise<string> {
   const folder = resolve(dir, from);
   await mkdir(folder, { recursive: true });

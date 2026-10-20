@@ -1,10 +1,11 @@
 /**
- * `DBXToolsNodeProject` discovers source packages under `packages/js` and
- * `packages/example`. The published CLI at `packages/js/cli/dbx-tools` resolves
+ * `DBXToolsNodeProject` discovers source packages under `packages/js` and owns
+ * one AppKit application at `packages/demo`. The published CLI at
+ * `packages/js/cli/dbx-tools` resolves
  * to `@dbx-tools/cli`; the self-synthesizing `@dbx-tools/projen` engine lives in
  * `projen/` and joins the Bun workspace through `extraWorkspaceMembers`.
  *
- * The runnable sample app lives under `packages/example/` and is synthesized as
+ * The runnable sample app lives under `packages/demo/` and is synthesized as
  * part of this workspace alongside the published packages it consumes.
  *
  * Per-package tweaks are MIXINS applied with `project.applyToProjects(root, {...},
@@ -76,9 +77,9 @@ class SlopDetectorConfig extends Component {
 const root = new projectJs.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
-  // `packages/js` is the JavaScript product tree; `packages/example` holds the
-  // runnable demo app as `workspace:^` source siblings of the packages it uses.
-  packageRoots: ["packages/js", "packages/example"],
+  packageRoots: ["packages/js"],
+  appRoot: "packages/demo",
+  appBundle: false,
   resolvePackageOptions: (pkg, defaults) => {
     if (pkg.memberPath === "packages/js/cli/dbx-tools") {
       return { ...defaults, name: `@${SCOPE}/cli` };
@@ -86,16 +87,8 @@ const root = new projectJs.DBXToolsNodeProject({
     if (pkg.memberPath === "packages/js/ui/appkit") {
       return { ...defaults, name: `@${SCOPE}/ui` };
     }
-    if (pkg.memberPath === "packages/example/server/appkit-demo") {
-      return {
-        ...defaults,
-        name: `@${SCOPE}/demo-appkit-server`,
-        entrypoint: "src/server.ts",
-        publishable: false,
-      };
-    }
-    if (pkg.memberPath === "packages/example/app/appkit-demo") {
-      return { ...defaults, name: `@${SCOPE}/demo-appkit-app`, publishable: false };
+    if (pkg.memberPath === "packages/demo") {
+      return { ...defaults, name: `@${SCOPE}/demo`, publishable: false };
     }
     return defaults;
   },
@@ -234,7 +227,7 @@ eslintTask.reset();
 for (const paths of [
   ["packages/js/shared", "packages/js/cli"],
   ["packages/js/node"],
-  ["packages/js/ui", "packages/example", "projen"],
+  ["packages/js/ui", "packages/demo", "projen"],
 ]) {
   eslintTask.exec(
     `eslint --ext .ts,.tsx --no-error-on-unmatched-pattern ${paths.join(" ")}`,
@@ -1238,6 +1231,7 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     "streamdown@catalog:",
     "zod@catalog:",
   );
+  projectJs.addOptionalPeer(p, "react-router-dom@catalog:");
   // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
   // tag's component-library default.
 });
@@ -1255,83 +1249,33 @@ project.applyToProjects(root, { identifierName: "ui-lakebox", tags: "ui" }, (p) 
 // ---------------------------------------------------------------------------
 // Demo app
 // ---------------------------------------------------------------------------
-// The runnable sample: an AppKit server + a bun-bundled React client, both members
-// of the single workspace under `packages/example/`. They consume the
-// `@dbx-tools/*` packages as `workspace:^` source siblings rather than from the
-// registry, so editing a package is reflected immediately.
-
-// packages/example/server/appkit-demo: the AppKit server. `server` supplies its
-// Express/compiler shape; the root `dev:watch` task runs its concrete entrypoint.
-project.applyToProjects(
-  root,
-  { path: "packages/example/server/appkit-demo", tags: "server" },
-  (p) => {
-    // A private runnable app, not an importable library: entry is `src/server.ts`.
-    p.package.addField("exports", { "./package.json": "./package.json" });
-    projectJs.applyCompilerOptions(p, { rootDir: "." });
-    projectJs.applyIncludes(p, "stage-deploy.ts");
-    p.addDeps(
-      "@dbx-tools/appkit@workspace:^",
-      "@dbx-tools/appkit-generator@workspace:^",
-      "@dbx-tools/appkit-memory@workspace:^",
-      "@dbx-tools/appkit-mastra@workspace:^",
-      "@dbx-tools/appkit-lakebox@workspace:^",
-      "@dbx-tools/core@workspace:^",
-      "@dbx-tools/databricks@workspace:^",
-      "@dbx-tools/postgres@workspace:^",
-      "@dbx-tools/email@workspace:^",
-      "@dbx-tools/appkit-web-search@workspace:^",
-      "@dbx-tools/search@workspace:^",
-      "@dbx-tools/shared-core@workspace:^",
-      "@dbx-tools/shared-email-template@workspace:^",
-      "@dbx-tools/shared-generator@workspace:^",
-      // The tunnel library: the server registers `tunnelInterceptor()` on its own
-      // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
-      // runs the server directly rather than through a wrapper bin.
-      "@dbx-tools/tunnel@workspace:^",
-      "@mastra/core@catalog:",
-      "@mastra/ai-sdk@catalog:",
-      "@mastra/express@catalog:",
-      "@mastra/fastembed@catalog:",
-      "@mastra/mcp@catalog:",
-      "@mastra/memory@catalog:",
-      "@mastra/observability@catalog:",
-      "@mastra/otel-bridge@catalog:",
-      "@mastra/pg@catalog:",
-      "@opentelemetry/api@catalog:",
-      "http-proxy-3@catalog:",
-      "zod@catalog:",
-      "compression@^1.8.1",
-      "pg@^8.22.0",
-      "fuse.js@^7.4.2",
-      "yaml@^2.9.0",
-      "tsx@^4.22.4",
-    );
-    p.addDevDeps(
-      "@dbx-tools/projen@workspace:^",
-      "@types/compression@^1.8.1",
-      "@types/pg@^8",
-      "@types/json-schema@^7",
-    );
-  },
-);
-
-// packages/example/app/appkit-demo: the React client. Production uses bun build
-// (Tailwind via bun-plugin-tailwind). Local `bun run demo` omits `staticPath` so
-// AppKit `server()` serves this package through Vite middleware HMR.
-project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: "app" }, (p) => {
-  p.addDevDeps("@dbx-tools/tunnel@workspace:^");
+// One Bun/AppKit application rooted at packages/demo with client/ and server/.
+project.applyToProjects(root, { path: "packages/demo" }, (p) => {
   p.addDeps(
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/appkit-generator@workspace:^",
+    "@dbx-tools/appkit-lakebox@workspace:^",
+    "@dbx-tools/appkit-mastra@workspace:^",
+    "@dbx-tools/appkit-memory@workspace:^",
+    "@dbx-tools/appkit-web-search@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/databricks@workspace:^",
+    "@dbx-tools/email@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/search@workspace:^",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email-template@workspace:^",
     "@dbx-tools/shared-generator@workspace:^",
+    "@dbx-tools/shared-search@workspace:^",
     "@dbx-tools/ui@workspace:^",
-    "@dbx-tools/ui-mastra@workspace:^",
     "@dbx-tools/ui-lakebox@workspace:^",
+    "@dbx-tools/ui-mastra@workspace:^",
+    "@dbx-tools/tunnel@workspace:^",
+    "@mastra/core@catalog:",
     "lucide-react@catalog:",
     "react-router-dom@catalog:",
-    "tw-animate-css@catalog:",
+    "zod@catalog:",
   );
 });
 
@@ -1495,7 +1439,7 @@ for (const task of [SCOPE, "dbx"]) {
 }
 
 // Run the AppKit backend with its documented Vite middleware HMR. Omit
-// `staticPath` in development so `server()` serves `packages/example/app/appkit-demo`
+// `staticPath` in development so `server()` serves `packages/demo/client`
 // on the same port. `--watch-disable` / `-d` keeps that HMR without restarting
 // sidecars or the authenticated tunnel.
 // `--watch-include` replaces the default workspace-package watch set.

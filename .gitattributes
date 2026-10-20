@@ -21,8 +21,6 @@
 /bunfig.toml linguist-generated
 /LICENSE linguist-generated
 /package.json linguist-generated
-/packages/example/**/index*.ts linguist-generated
-/packages/example/**/src/generated/** linguist-generated
 /packages/js/**/index*.ts linguist-generated
 /packages/js/**/src/generated/** linguist-generated
 /packages/js/shared/genie/src/dashboards.ts linguist-generated

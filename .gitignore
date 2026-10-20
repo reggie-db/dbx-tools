@@ -84,7 +84,7 @@ jspm_packages/
 .idea/*
 .npmrc
 !/.eslintrc.json
-.databricks
+packages/demo/.databricks
 .release/
 !/.github/workflows/release.yml
 .codex/

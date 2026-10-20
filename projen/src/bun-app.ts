@@ -35,6 +35,17 @@ export const BUN_APP_OVERRIDES = [BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE];
 const PROJEN_HEADER = { tool: "projen", source: ".projenrc.ts" } as const;
 const PROJEN_TS_HEADER = header(PROJEN_HEADER).trimEnd().replaceAll("\n", "\n      ");
 
+/** Paths owned by a generated Bun browser build. */
+export interface BunBuildFileOptions {
+  readonly entrypoint?: string;
+  readonly outdir?: string;
+  readonly publicDir?: string;
+  /** Root resolved by the conventional `@/` source import alias. */
+  readonly sourceRoot?: string;
+  /** TypeScript configuration used by Bun for path aliases and JSX settings. */
+  readonly tsconfig?: string;
+}
+
 /**
  * Root `bunfig.toml`: pin bun's HOISTED linker workspace-wide.
  *
@@ -133,7 +144,10 @@ export class BunDevServerFile extends TextFile {
 
 /** `build.ts`: a `Bun.build()` production bundle (Tailwind via the plugin API). */
 export class BunBuildFile extends TextFile {
-  constructor(project: Project) {
+  constructor(project: Project, options: BunBuildFileOptions = {}) {
+    const entrypoint = options.entrypoint ?? "index.html";
+    const outdir = options.outdir ?? "dist";
+    const publicDir = options.publicDir ?? "public";
     // Raw template preserves backslashes in generated regular expression literals.
     // prettier-ignore
     const source = (
@@ -143,21 +157,51 @@ export class BunBuildFile extends TextFile {
       ${PROJEN_TS_HEADER}
       import { existsSync } from "node:fs";
       import { cp, rm } from "node:fs/promises";
-      import { basename } from "node:path";
+      import { createRequire } from "node:module";
+      import { basename${options.sourceRoot ? ", resolve" : ""} } from "node:path";
+      import type { BunPlugin } from "bun";
       import tailwind from "bun-plugin-tailwind";
+
+      const require = createRequire(import.meta.url);
+      const reactEntries = new Map(
+        ["react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom", "react-dom/client"].map(
+          (specifier) => [specifier, require.resolve(specifier)],
+        ),
+      );
+      const dedupeReact: BunPlugin = {
+        name: "dedupe-react",
+        setup(build) {
+          build.onResolve({ filter: /^react(?:-dom)?(?:\/.*)?$/ }, ({ path }) => {
+            const resolved = reactEntries.get(path);
+            return resolved ? { path: resolved } : undefined;
+          });
+        },
+      };
+${options.sourceRoot ? /*ts*/ `
+      const sourceRoot = resolve(import.meta.dirname, ${JSON.stringify(options.sourceRoot)});
+      const sourceAlias: BunPlugin = {
+        name: "source-alias",
+        setup(build) {
+          build.onResolve({ filter: new RegExp("^@/") }, ({ path }) => ({
+            path: Bun.resolveSync(\`./\${path.slice(2)}\`, sourceRoot),
+          }));
+        },
+      };
+` : ""}
 
       // Unmanaged override (${BUN_BUILD_OVERRIDE}): its default export is merged over
       // the generated build options - later wins.
       let options: Bun.BuildConfig = {
-        entrypoints: ["./index.html"],
-        outdir: "./dist",
+        entrypoints: [${JSON.stringify(entrypoint)}],
+        outdir: ${JSON.stringify(outdir)},
         define: { "process.env.NODE_ENV": JSON.stringify("production") },
         minify: true,
         splitting: true,
         publicPath: "/",
         external: ["/fonts/*"],
         sourcemap: "none",
-        plugins: [tailwind],
+        plugins: [tailwind, dedupeReact${options.sourceRoot ? ", sourceAlias" : ""}],
+${options.tsconfig ? `        tsconfig: ${JSON.stringify(options.tsconfig)},` : ""}
       };
 
       const overrideUrl = new URL("./${BUN_BUILD_OVERRIDE}", import.meta.url);
@@ -167,7 +211,7 @@ export class BunBuildFile extends TextFile {
         options = { ...options, ...override, plugins: [...(options.plugins ?? []), ...(override.plugins ?? [])] };
       }
 
-      const outdir = options.outdir ?? "./dist";
+      const outdir = options.outdir ?? ${JSON.stringify(outdir)};
       await rm(outdir, { recursive: true, force: true });
 
       const result = await Bun.build(options);
@@ -195,7 +239,7 @@ export class BunBuildFile extends TextFile {
         await Bun.write(htmlOut.path, html);
       }
 
-      const publicDir = "./public";
+      const publicDir = ${JSON.stringify(publicDir)};
       if (existsSync(publicDir)) {
         await cp(publicDir, outdir, { recursive: true });
       }

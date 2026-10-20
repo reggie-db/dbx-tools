@@ -7,11 +7,11 @@
 import { createHash } from "node:crypto";
 
 import {
-  LakebaseConnectionInputs,
   parseAddress as parseLakebaseAddress,
   parseResourcePath as parseLakebaseResourcePath,
   parseSslMode as parseLakebaseSslMode,
-  SslMode,
+  type LakebaseConnectionInputs,
+  type SslMode,
 } from "@dbx-tools/lakebase";
 import {
   fnvHashWithOptions,

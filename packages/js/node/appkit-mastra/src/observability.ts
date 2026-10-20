@@ -17,10 +17,11 @@
  *    ambient OTel context, so when Mastra is invoked from inside an
  *    AppKit HTTP span the trace stays connected.
  *
- * Net effect: Mastra spans get exactly the treatment AppKit's
- * `agents` plugin gets. No custom OTLP pipeline lives in this
- * package; the OTLP endpoint, headers, and resource attributes are
- * driven by the standard OTel env vars
+ * Net effect: deployed Mastra spans get exactly the treatment AppKit's
+ * `agents` plugin gets. Local direct MLflow tracing uses its own global
+ * provider because AppKit has no OTLP processor to start there. No custom
+ * OTLP pipeline lives in this package; the OTLP endpoint, headers, and resource
+ * attributes are driven by the standard OTel env vars
  * (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`,
  * `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, ...) and consumed
  * by AppKit's `TelemetryManager`. Set those once and both AppKit and
@@ -92,7 +93,7 @@ export interface BuildObservabilityOptions {
    * Supports dot notation for nested values per the Mastra docs.
    */
   requestContextKeys?: readonly string[];
-  /** AppKit-owned tracer provider used by the Mastra OTel bridge. */
+  /** AppKit-owned provider used unless local direct MLflow tracing owns the global provider. */
   tracerProvider?: TracerProvider;
 }
 
@@ -140,6 +141,7 @@ export async function buildObservability(
   const directMlflowConfigured =
     options?.enabled === false || otlpConfigured ? false : await initializeDirectMlflowTracing();
   if (directMlflowConfigured) configureOtelPropagation();
+  const bridgeTracerProvider = directMlflowConfigured ? undefined : options?.tracerProvider;
   const tracingConfigured = otlpConfigured || directMlflowConfigured;
 
   if (options?.enabled === false || (options?.enabled !== true && !tracingConfigured)) {
@@ -190,7 +192,7 @@ export async function buildObservability(
       serviceName: {
         serviceName,
         bridge: new OtelBridge(
-          options?.tracerProvider ? { tracerProvider: options.tracerProvider } : undefined,
+          bridgeTracerProvider ? { tracerProvider: bridgeTracerProvider } : undefined,
         ),
         requestContextKeys,
       },

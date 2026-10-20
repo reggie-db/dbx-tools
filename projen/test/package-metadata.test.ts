@@ -7,8 +7,8 @@ import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project-j
 
 function fixture(description?: string) {
   const outdir = mkdtempSync(join(tmpdir(), "package-metadata-"));
-  mkdirSync(join(outdir, "packages/example/src"), { recursive: true });
-  writeFileSync(join(outdir, "packages/example/src/example.ts"), "export const value = 1;\n");
+  mkdirSync(join(outdir, "packages/demo/src"), { recursive: true });
+  writeFileSync(join(outdir, "packages/demo/src/example.ts"), "export const value = 1;\n");
   const project = new DBXToolsNodeProject({
     name: "fixture",
     scope: "fixture",
@@ -30,7 +30,7 @@ describe("published package metadata", () => {
     try {
       project.synth();
       const manifest = JSON.parse(
-        readFileSync(join(outdir, "packages/example/package.json"), "utf8"),
+        readFileSync(join(outdir, "packages/demo/package.json"), "utf8"),
       ) as {
         description?: string;
         license?: string;
@@ -40,7 +40,7 @@ describe("published package metadata", () => {
       assert.equal(manifest.license, "Apache-2.0");
       assert.equal(manifest.dependencies?.["@fixture/shared-core"], "workspace:^");
       assert.equal(existsSync(join(outdir, "LICENSE")), true);
-      assert.equal(existsSync(join(outdir, "packages/example/LICENSE")), true);
+      assert.equal(existsSync(join(outdir, "packages/demo/LICENSE")), true);
     } finally {
       rmSync(outdir, { recursive: true, force: true });
     }

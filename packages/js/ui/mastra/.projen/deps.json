@@ -16,6 +16,11 @@
       "type": "build"
     },
     {
+      "name": "react-router-dom",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "react",
       "version": "catalog:",
       "type": "build"
@@ -27,6 +32,11 @@
     },
     {
       "name": "react-dom",
+      "version": "catalog:",
+      "type": "peer"
+    },
+    {
+      "name": "react-router-dom",
       "version": "catalog:",
       "type": "peer"
     },

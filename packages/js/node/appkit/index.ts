@@ -8,7 +8,6 @@ export * as appkit from "./src/appkit.ts";
 export * as brandContext from "./src/brand-context.ts";
 export * as cacheStorage from "./src/cache-storage.ts";
 export * as databricks from "./src/databricks.ts";
-export * as filesCache from "./src/files-cache.ts";
 export * as identity from "./src/identity.ts";
 export * as interceptor from "./src/interceptor.ts";
 export * as lakebaseResolver from "./src/lakebase-resolver.ts";
@@ -29,7 +28,7 @@ export { AppKitCacheStorage, loadPersistentStorage, softenInitialize, probeStora
 export type { AppKitCacheStorageOptions, PersistentStorageBase } from "./src/cache-storage.ts";
 export { toContext } from "./src/databricks.ts";
 export type { ContextLike } from "./src/databricks.ts";
-export { FilesCacheManager, FilesCachePlugin } from "./src/files-cache.ts";
+export { FilesCacheManager, FilesCachePlugin, filesCache } from "./src/files-cache.ts";
 export type { FilesCachePluginConfig, FilesCacheScope, FilesCacheSourceIdentity, FilesCacheExports } from "./src/files-cache.ts";
 export { IDENTITY_MODES, DEFAULT_IDENTITY_MODE, resolveIdentityMode, requestAccessToken, requestUserId, requestUserEmail, useServicePrincipal, installAsUserDevelopmentPatch } from "./src/identity.ts";
 export type { IdentityMode, HeaderBearing } from "./src/identity.ts";

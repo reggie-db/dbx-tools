@@ -9,8 +9,9 @@ import { main as runDevWatch } from "../projen/tasks/dev-watch.ts";
 
 const logger = log.logger("demo");
 const ROOT = process.cwd();
-const DEMO_BUNDLE = path.join(ROOT, "packages/example/server/appkit-demo/databricks.yml");
-const DEMO_SERVER = path.join(path.dirname(DEMO_BUNDLE), "src/server.ts");
+const DEMO_DIR = path.join(ROOT, "packages/demo");
+const DEMO_BUNDLE = path.join(DEMO_DIR, "databricks.yml");
+const DEMO_SERVER = path.join(path.dirname(DEMO_BUNDLE), "server/server.ts");
 
 /** Resolve the demo endpoint from its bundle variable defaults. */
 async function demoLakebaseEndpoint(): Promise<string> {
@@ -36,7 +37,9 @@ export function demoWatchArgs(argv: readonly string[] = process.argv.slice(2)): 
   return [
     ...argv,
     "bun",
-    path.relative(ROOT, DEMO_SERVER),
+    "--cwd",
+    path.relative(ROOT, DEMO_DIR),
+    path.relative(DEMO_DIR, DEMO_SERVER),
   ];
 }
 

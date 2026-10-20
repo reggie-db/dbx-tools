@@ -23,7 +23,12 @@ import { type IConstruct } from "constructs";
 import { Component, LogLevel, Project, type Task, TextFile, javascript, typescript } from "projen";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
-import { AppKitWorkspace, type AppKitWorkspaceMode } from "./appkit-workspace.ts";
+import {
+  AppKitWorkspace,
+  isAppKitApplication,
+  type AppKitBundleOptions,
+  type AppKitWorkspaceMode,
+} from "./appkit-workspace.ts";
 import { folderBarrelFile, generateBarrels } from "./barrels.ts";
 
 import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
@@ -35,7 +40,7 @@ import { resolvePkgRoot } from "./engine-root.ts";
 import * as mixin from "./mixin.ts";
 import {
   DEFAULT_PACKAGE_ROOTS,
-  type DiscoveredPackage,
+  DiscoveredPackage,
   projectName,
   readPackageManifest,
   scanPackages,
@@ -639,6 +644,13 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      */
     readonly appkit?: AppKitWorkspaceMode;
     /**
+     * One Bun/AppKit application root. Defaults to `packages/app` when that
+     * directory exists. Set false to disable application-root discovery.
+     */
+    readonly appRoot?: string | false;
+    /** Minimal generated bundle settings, or false for an application-owned bundle. */
+    readonly appBundle?: false | AppKitBundleOptions;
+    /**
      * Extra repo-root paths that trigger a full re-synth during `sync --watch`
      * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
      */
@@ -892,7 +904,7 @@ export class DBXToolsTypeScriptProject
     // `bun test` intercepts `node:test` (the suites keep using node:test) and
     // runs it with bun's own fast runner. The native no-tests option is portable
     // across Windows and Unix and lets packages without tests remain a no-op.
-    this.testTask.exec("bun test test --pass-with-no-tests");
+    this.testTask.exec(`bun test ${this.testdir} --pass-with-no-tests`);
     initProject(this, options);
   }
 
@@ -1325,6 +1337,12 @@ function initProject(
   const roots =
     options.packageRoots ??
     (existsSync(resolve(project.outdir, "packages/js")) ? ["packages/js"] : DEFAULT_PACKAGE_ROOTS);
+  const rootAbs = resolve(project.outdir);
+  const configuredAppRoot =
+    options.appRoot === false
+      ? undefined
+      : (options.appRoot ??
+        (existsSync(resolve(rootAbs, "packages/app")) ? "packages/app" : undefined));
   project.dbxToolsConfig.packageRoots = [...roots];
   if (options.syncResynthPaths?.length) {
     project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
@@ -1403,6 +1421,10 @@ function initProject(
   for (const member of project.extraWorkspaceMembers) {
     eslint.addIgnorePattern(`${member}/index*.ts`);
   }
+  if (configuredAppRoot) {
+    eslint.addIgnorePattern(`${configuredAppRoot}/index*.ts`);
+    eslint.addIgnorePattern(`${configuredAppRoot}/client/vite.config.ts`);
+  }
   // The generated bun app scripts + unmanaged overrides live at the package root,
   // outside any `src/**` tsconfig include, so the type-aware parser cannot resolve
   // them to a project. ESLint still cannot parse them.
@@ -1444,6 +1466,9 @@ function initProject(
       "tsconfig.json",
       ...roots.map((r) => `${r}/**/tsconfig.json`),
       ...project.extraWorkspaceMembers.map((member) => `${member}/tsconfig.json`),
+      ...(configuredAppRoot
+        ? [`${configuredAppRoot}/tsconfig.client.json`, `${configuredAppRoot}/tsconfig.server.json`]
+        : []),
     ];
   }
 
@@ -1458,11 +1483,44 @@ function initProject(
   };
 
   // Already-attached subprojects, keyed by repo-relative member path.
-  const rootAbs = resolve(project.outdir);
   const existing = new Map<string, DBXToolsJavaScriptProject>();
   for (const sub of project.subprojects) {
     if (sub instanceof DBXToolsNodeProject || sub instanceof DBXToolsTypeScriptProject) {
       existing.set(toPosix(relative(rootAbs, sub.outdir)), sub);
+    }
+  }
+
+  let application: DBXToolsTypeScriptProject | undefined;
+  let applicationPath: string | undefined;
+  if (configuredAppRoot) {
+    const appPath = toPosix(relative(rootAbs, resolve(rootAbs, configuredAppRoot)));
+    if (!appPath || appPath.startsWith("../")) {
+      throw new Error(`appRoot must resolve beneath the workspace root: ${configuredAppRoot}`);
+    }
+    applicationPath = appPath;
+    const segments = appPath.split("/").filter(Boolean);
+    const discovered = new DiscoveredPackage(rootAbs, segments[0]!, segments.slice(1));
+    const found = existing.get(appPath);
+    if (found) {
+      if (!(found instanceof DBXToolsTypeScriptProject)) {
+        throw new Error(`appRoot must be a TypeScript project: ${appPath}`);
+      }
+      application = found;
+    } else {
+      const defaults = {
+        name: packageNameFor(project.scope, discovered.relPath, omitPrefixes),
+        ...options.packageDefaults,
+        publishable: false,
+      } satisfies DiscoveredTypeScriptPackageOptions;
+      const packageOptions = options.resolvePackageOptions?.(discovered, defaults) ?? defaults;
+      application = new DBXToolsTypeScriptProject({
+        parent: project,
+        outdir: appPath,
+        ...packageOptions,
+        publishable: false,
+        tags: [],
+      });
+      existing.set(appPath, application);
     }
   }
 
@@ -1471,6 +1529,12 @@ function initProject(
   // agnostic floor is set in the child's constructor; per-tag deps/tsconfig come from
   // the PACKAGE_TAG_MIXINS applied across the subtree below.
   for (const p of scanPackages(rootAbs, roots)) {
+    if (
+      applicationPath &&
+      (p.memberPath === applicationPath || p.memberPath.startsWith(`${applicationPath}/`))
+    ) {
+      continue;
+    }
     const tags = [...sequence(p.tagCandidates, resolveTags(p, tagPaths)).distinct()];
     const found = existing.get(p.memberPath);
     if (found) {
@@ -1503,19 +1567,13 @@ function initProject(
   }
   const appkitMode = options.appkit ?? "auto";
   if (appkitMode !== false) {
-    const projects = [project, ...project.subprojects].filter(
-      (candidate): candidate is DBXToolsNodeProject | DBXToolsTypeScriptProject =>
-        candidate instanceof DBXToolsNodeProject || candidate instanceof DBXToolsTypeScriptProject,
-    );
-    const apps = projects.filter((candidate) => candidate.dbxToolsConfig.tags.includes("app"));
-    const servers = projects.filter((candidate) =>
-      candidate.dbxToolsConfig.tags.includes("server"),
-    );
-    const enabled = appkitMode === true || (apps.length > 0 && servers.length > 0);
-    if (enabled) {
+    if (appkitMode === true && !application) {
+      throw new Error("appkit: true requires an application root");
+    }
+    if (application && (appkitMode === true || isAppKitApplication(application))) {
       new AppKitWorkspace(project, {
-        apps,
-        servers,
+        application,
+        bundle: options.appBundle,
         validate: appkitMode === true,
       });
     }

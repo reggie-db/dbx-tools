@@ -30,7 +30,11 @@ function fixture(): {
   const root = mkdtempSync(join(tmpdir(), "appkit-deploy-"));
   fixtures.push(root);
   const childDirectory = join(root, "packages/app");
+  mkdirSync(join(root, "client/dist"), { recursive: true });
+  writeFileSync(join(root, "client/dist/index.html"), "<html></html>\n");
   mkdirSync(childDirectory, { recursive: true });
+  mkdirSync(join(childDirectory, "client/dist"), { recursive: true });
+  writeFileSync(join(childDirectory, "client/dist/index.html"), "<html></html>\n");
   const rootManifest = `${JSON.stringify(
     {
       name: "fixture",
@@ -83,6 +87,7 @@ it("materializes manifests only while Databricks deploy runs", async () => {
       const materializedChild = JSON.parse(
         readFileSync(join(cwd, "packages/app/package.json"), "utf8"),
       ) as { dependencies: Record<string, string> };
+      assert.equal(existsSync(join(cwd, "packages/app/client/dist/index.html")), true);
       assert.equal(materializedRoot.devDependencies.react, "19.2.7");
       assert.equal(materializedChild.dependencies["@fixture/shared"], "^1.2.3");
       assert.equal(materializedChild.dependencies.react, "19.2.7");
@@ -174,6 +179,26 @@ it("validates the source bundle with the resolved deployment context", async () 
       validated = true;
       assert.deepEqual(args, ["--target", "dev", "--profile", "TEST"]);
       assert.equal(cwd, root);
+      return { exitCode: 0 };
+    },
+  });
+  assert.equal(validated, true);
+});
+
+it("runs validation and deployment from the configured application directory", async () => {
+  const { root } = fixture();
+  let validated = false;
+  await deployApp(["--directory", "packages/app", "--target", "dev", "--profile", "TEST"], {
+    root,
+    run: async (args, cwd) => {
+      assert.deepEqual(args, ["--target", "dev", "--profile", "TEST", ...DEPLOY_DEFAULTS]);
+      assert.ok(cwd.endsWith("packages/app"));
+      return { exitCode: 0 };
+    },
+    validate: async (args, cwd) => {
+      validated = true;
+      assert.deepEqual(args, ["--target", "dev", "--profile", "TEST"]);
+      assert.equal(cwd, join(root, "packages/app"));
       return { exitCode: 0 };
     },
   });

@@ -1,0 +1,288 @@
+bundle:
+  name: dbx-tools-demo
+  engine: direct
+
+variables:
+  app_name:
+    default: dbx-tools-demo
+  lakebase_project_id:
+    default: dbx-tools-demo-v2
+  genie_space_id:
+    default: 01f1890bd0cd1a7d93cb3c6dba8ab1e5
+  warehouse_id:
+    default: a2171589c3905bc7
+  generator_catalog:
+    default: reggie_pierce_aws_catalog
+  experiment_id:
+    default: "3223948959631242"
+  telemetry_schema:
+    default: reggie_pierce_aws_catalog.mlflow_traces
+  telemetry_table_prefix:
+    default: demo
+  secret_scope:
+    default: dbx-tools-demo
+  tunnel_auth_allow:
+    default: databricks.com
+  lakebase_endpoint:
+    default: projects/${var.lakebase_project_id}/branches/production/endpoints/primary
+  genie_identity:
+    default: auto
+  mlflow_tracking_uri:
+    default: databricks
+  otel_propagators:
+    default: none
+  tunnel_public_domain:
+    default: demo.apps.dbx.tools
+
+workspace:
+  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+
+# `scripts/demo-deploy.ts` resolves the configured/default workspace profile
+# through `@dbx-tools/auth` and passes it explicitly. Workspace hosts and profile
+# names remain machine-local and are not committed here.
+targets:
+  dev:
+    default: true
+    mode: development
+
+resources:
+  # Existing Unity Catalog used by generator workflows. Bind this bundle key to
+  # the existing catalog once before the first deploy:
+  # databricks bundle deployment bind generator_catalog <catalog> -t <target>
+  # The app SP creates marked per-user schemas, then grants the active OBO user
+  # ALL PRIVILEGES and MANAGE on only that schema. `demo:deploy` adds
+  # USE_CATALOG and CREATE_SCHEMA to the app SP after the app resource exists.
+  # Keep that grant additive: a catalog `grants` block is authoritative and
+  # would attempt to revoke privileges from every principal omitted here.
+  catalogs:
+    generator_catalog:
+      name: ${var.generator_catalog}
+      lifecycle:
+        prevent_destroy: true
+
+  # Lakebase Autoscaling project backing the demo's memory tools. Lakebase
+  # automatically provisions the `production` branch and its `primary`
+  # read-write endpoint. The endpoint inherits these project defaults.
+  postgres_projects:
+    demo_project:
+      project_id: ${var.lakebase_project_id}
+      pg_version: 17
+      # Settings that flow into every auto-created endpoint (including
+      # the `primary` endpoint on every branch). 0.5 CU floor is the
+      # smallest unit; max of 2 CU keeps demo cost bounded. 300s suspend
+      # = 5min idle then scale-to-zero (free). Minimum allowed suspend
+      # is 60s; max is 604800s. Wakeup from suspend is a few hundred ms.
+      default_endpoint_settings:
+        autoscaling_limit_min_cu: 0.5
+        autoscaling_limit_max_cu: 2
+        suspend_timeout_duration: 300s
+      lifecycle:
+        prevent_destroy: true
+
+  # The demo app itself. It was originally created with `databricks apps
+  # create`; declaring it here keeps the resource bindings and the OAuth
+  # scopes in source control instead of living only in ad-hoc CLI JSON.
+  #
+  # `user_api_scopes` is what the on-behalf-of-user token is minted with.
+  # Without them the SDK calls made on the user's behalf fail with
+  # "Provided OAuth token does not have required scopes":
+  #   - serving.serving-endpoints -> `@dbx-tools/model` lists serving
+  #     endpoints to resolve an intent (e.g. `chat-balanced`) to a real
+  #     endpoint id, so the agent stream 500s without it.
+  #   - genie                     -> Genie Agent Mode responses.
+  #   - dashboards.genie          -> Conversation API polling and space metadata.
+  #   - sql                       -> warehouse queries behind the Genie/SQL tools.
+  apps:
+    demo_app:
+      name: ${var.app_name}
+      description: "dbx-tools AppKit + Mastra demo (Fuel Mart)"
+      source_code_path: .
+      lifecycle:
+        prevent_destroy: true
+      # app.yaml owns the runtime command so bundle and click-to-deploy launches
+      # both run the TypeScript server through Bun. The public tunnel, OTP gate,
+      # and deployment resource bindings remain here.
+      config:
+        env:
+          - name: GRAPHITI_ENABLED
+            value: "true"
+          - name: GRAPHITI_DATABASE_SCHEMA
+            value: graphiti_memory
+          # OTP gate allow-list (was the tunnel CLI's `--allow`). No subject /
+          # brand-name override: the defaults are the conventional one-time-code
+          # wording ("Your verification code") that iOS, Gmail, Outlook, and
+          # Android detect for autofill, and the display name comes from the repo
+          # brand context. A novel subject is what breaks that.
+          - name: TUNNEL_AUTH_ALLOW
+            value: ${var.tunnel_auth_allow}
+          # Keep the public OTP shell on its small local SQLite store. Auto mode
+          # sees the sibling Lakebase plugin and selects Postgres, but Better
+          # Auth's unqualified migrations then target the locked-down `public`
+          # schema and crash the app with `permission denied for schema public`.
+          # Mastra memory and search still use the bound Lakebase project.
+          - name: TUNNEL_AUTH_STORAGE
+            value: sqlite
+          # The Lakebase search provider provisions its own schema. PostgreSQL
+          # `public` is intentionally not writable by the app service principal,
+          # so never leave this at the provider default in a deployed app.
+          - name: SEARCH_LAKEBASE_SCHEMA
+            value: dbx_tools_search
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse
+          - name: GENERATOR_CATALOG
+            value: ${var.generator_catalog}
+          - name: DATABRICKS_GENIE_SPACE_ID
+            value_from: genie-space
+          - name: LAKEBASE_ENDPOINT
+            value: ${var.lakebase_endpoint}
+          # Use the app service principal for Genie and model calls at both
+          # entrances. The public OTP tunnel has no OBO token, and existing
+          # front-door sessions can retain a token minted before a newly added
+          # scope until that token expires. Memory, cache, and traces remain
+          # partitioned by the forwarded user identity.
+          - name: MASTRA_GENIE_IDENTITY
+            value: ${var.genie_identity}
+          - name: MLFLOW_EXPERIMENT_ID
+            value_from: mlflow-experiment
+          - name: MLFLOW_TRACKING_URI
+            value: ${var.mlflow_tracking_uri}
+          - name: OTEL_PROPAGATORS
+            value: ${var.otel_propagators}
+          - name: SMTP_HOST
+            value_from: smtp-host
+          - name: SMTP_PORT
+            value_from: smtp-port
+          - name: SMTP_SECURE
+            value_from: smtp-secure
+          - name: SMTP_USER
+            value_from: smtp-user
+          - name: SMTP_PASSWORD
+            value_from: smtp-password
+          - name: EMAIL_DOMAIN
+            value_from: email-domain
+          # EMAIL_FROM is deliberately NOT set. The sender is derived per
+          # on-behalf-of user, and system mail (the tunnel's sign-in code) goes
+          # out as no-reply@EMAIL_DOMAIN.
+          - name: TUNNEL_PUBLIC_DOMAIN
+            value: ${var.tunnel_public_domain}
+          - name: PORTR_TOKEN
+            value_from: portr-token
+          # TUNNEL_AUTH_JWT_SECRET is deliberately NOT set: the gate persists its
+          # own signing key in the Lakebase-backed AppKit cache for 30 days, so
+          # sessions survive the restarts this app sees on every redeploy. Leaving
+          # it unset is what dogfoods that path. Set it (from the `auth-jwt-secret`
+          # secret) for a multi-instance deployment, where an operator-held secret
+          # beats waiting for two instances to converge on a cached key.
+          #
+          # The `postgres` binding below is what makes that cache persistent, and
+          # the gate is a SEPARATE process from the app - it resolves the binding's
+          # LAKEBASE_ENDPOINT into PGHOST/PGDATABASE/PGUSER itself at boot. Check
+          # the startup log for `lakebase resolved for the gate cache`; a line
+          # saying the cache stays in memory means every redeploy signs everyone
+          # out again.
+      # Persist AppKit/Mastra OTel spans into the experiment's UC tables. The
+      # Apps runtime injects a loopback OTLP sidecar from this block; managed
+      # MLflow has no OTLP ingest of its own. Pair with `OTEL_PROPAGATORS=none`
+      # above so Apps ingress `traceparent` does not orphan chat roots.
+      telemetry_export_destinations:
+        - unity_catalog:
+            traces_table: ${var.telemetry_schema}.${var.telemetry_table_prefix}_otel_spans
+            logs_table: ${var.telemetry_schema}.${var.telemetry_table_prefix}_otel_logs
+            metrics_table: ${var.telemetry_schema}.${var.telemetry_table_prefix}_otel_metrics
+      user_api_scopes:
+        - ai-gateway
+        - model-serving
+        - sql
+        - genie
+        - dashboards.genie
+        - serving.serving-endpoints
+        - workspace.workspace
+      resources:
+        - name: genie-space
+          genie_space:
+            name: Fuel Mart Store Intelligence
+            space_id: ${var.genie_space_id}
+            # Dynamic starter suggestions live in `serialized_space`, whose
+            # API requires CAN_EDIT even though asking questions needs only
+            # CAN_RUN. No question text is copied into the app.
+            permission: CAN_EDIT
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        # Lakebase binding that lets autopg mint a working OAuth token as
+        # the app service principal. Without it Mastra's PostgresStore init
+        # fails with 28P01 password authentication failed and the process
+        # exits. The database resource id is hyphenated
+        # (`databricks-postgres`); the PG database name is
+        # `databricks_postgres`.
+        - name: postgres
+          postgres:
+            branch: projects/${var.lakebase_project_id}/branches/production
+            database: projects/${var.lakebase_project_id}/branches/production/databases/databricks-postgres
+            permission: CAN_CONNECT_AND_CREATE
+        # MLflow experiment the agent's traces and user feedback land in
+        # (`/Shared/dbx-tools-demo`). Workspace `users` inherit CAN_MANAGE from
+        # `/Shared`, so anyone in the workspace can open the experiment. Trace
+        # rows live in `reggie_pierce_aws_catalog.mlflow_traces` (`demo_otel_*`)
+        # with SELECT for `account users`.
+        #
+        # This binding is what makes the experiment writable in the deployed
+        # app. CAN_EDIT is the lowest level that permits logging; CAN_READ
+        # only allows viewing runs and metrics.
+        #
+        # `config.env` `value_from: mlflow-experiment` resolves to the experiment
+        # id, so the id is declared once, here.
+        - name: mlflow-experiment
+          experiment:
+            experiment_id: ${var.experiment_id}
+            permission: CAN_EDIT
+        # SMTP + sender config for the approval-gated email tool, read from
+        # the `dbx-tools-demo` secret scope and surfaced to the runtime by
+        # the matching `value_from` entries in the app config above.
+        - name: smtp-host
+          secret:
+            scope: ${var.secret_scope}
+            key: smtp-host
+            permission: READ
+        - name: smtp-port
+          secret:
+            scope: ${var.secret_scope}
+            key: smtp-port
+            permission: READ
+        - name: smtp-secure
+          secret:
+            scope: ${var.secret_scope}
+            key: smtp-secure
+            permission: READ
+        - name: smtp-user
+          secret:
+            scope: ${var.secret_scope}
+            key: smtp-user
+            permission: READ
+        - name: smtp-password
+          secret:
+            scope: ${var.secret_scope}
+            key: smtp-password
+            permission: READ
+        - name: email-domain
+          secret:
+            scope: ${var.secret_scope}
+            key: email-domain
+            permission: READ
+        - name: email-from
+          secret:
+            scope: ${var.secret_scope}
+            key: email-from
+            permission: READ
+        # Public tunnel + OTP gate secrets used only by the deployed command.
+        - name: portr-token
+          secret:
+            scope: ${var.secret_scope}
+            key: portr-token
+            permission: READ
+        - name: auth-jwt-secret
+          secret:
+            scope: ${var.secret_scope}
+            key: auth-jwt-secret
+            permission: READ

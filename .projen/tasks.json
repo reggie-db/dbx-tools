@@ -6,12 +6,14 @@
   "tasks": {
     "appkit:deploy": {
       "name": "appkit:deploy",
-      "description": "Deploy the AppKit workspace from an npm-compatible source snapshot",
+      "description": "Deploy the AppKit application from an npm-compatible source snapshot",
       "steps": [
         {
           "execArgs": [
             "bun",
-            "node_modules/@dbx-tools/projen/tasks/appkit-deploy.ts"
+            "node_modules/@dbx-tools/projen/tasks/appkit-deploy.ts",
+            "--directory",
+            "packages/demo"
           ],
           "receiveArgs": true
         }
@@ -24,7 +26,18 @@
         {
           "exec": "appkit plugin sync --write --silent"
         }
-      ]
+      ],
+      "cwd": "packages/demo"
+    },
+    "appkit:typegen": {
+      "name": "appkit:typegen",
+      "description": "Generate AppKit client declarations",
+      "steps": [
+        {
+          "exec": "appkit generate-types"
+        }
+      ],
+      "cwd": "packages/demo"
     },
     "barrels": {
       "name": "barrels",
@@ -208,7 +221,7 @@
     },
     "deploy": {
       "name": "deploy",
-      "description": "Validate with Bun and deploy the AppKit workspace",
+      "description": "Validate with Bun and deploy the AppKit application",
       "steps": [
         {
           "spawn": "check"
@@ -226,10 +239,11 @@
       },
       "steps": [
         {
-          "exec": "bun --watch packages/example/server/appkit-demo/src/server.ts",
+          "exec": "bun --watch server/server.ts",
           "receiveArgs": true
         }
-      ]
+      ],
+      "cwd": "packages/demo"
     },
     "dev:watch": {
       "name": "dev:watch",
@@ -321,7 +335,7 @@
           "receiveArgs": true
         },
         {
-          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern packages/js/ui packages/example projen",
+          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern packages/js/ui packages/demo projen",
           "receiveArgs": true
         }
       ]
@@ -636,10 +650,11 @@
       },
       "steps": [
         {
-          "exec": "bun packages/example/server/appkit-demo/src/server.ts",
+          "exec": "bun server/server.ts",
           "receiveArgs": true
         }
-      ]
+      ],
+      "cwd": "packages/demo"
     },
     "sync": {
       "name": "sync",

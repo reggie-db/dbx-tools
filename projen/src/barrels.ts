@@ -9,7 +9,7 @@
  *
  * Every output is stamped and read-only.
  */
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { findFilesSync } from "@dbx-tools/path";
 import { parseRecord, tokenizeWithOptions, capitalize, pluralize } from "@dbx-tools/shared-core";
@@ -117,16 +117,20 @@ function namespaceLines(content: string): { ns: string; modulePath: string }[] {
 }
 
 /** Append flat exports for names owned by exactly one module. */
-function hoistUniqueExports(content: string, barrelDir: string, reserved: Set<string>): string {
+function hoistUniqueExports(
+  content: string,
+  barrelDir: string,
+  modulePaths: readonly string[],
+  reserved: Set<string>,
+): string {
   const namespaces = namespaceLines(content);
-  if (namespaces.length === 0) return content;
 
   const blocked = new Set(reserved);
   for (const { ns } of namespaces) blocked.add(ns);
 
   const seen = new Map<string, { count: number; modulePath: string; generated: boolean }>();
   const perModule = new Map<string, ModuleExport[]>();
-  for (const { modulePath } of namespaces) {
+  for (const modulePath of modulePaths) {
     if (!modulePath.startsWith("./src/")) continue;
     const file = join(barrelDir, modulePath.replace(/^\.\//, ""));
     const exports = moduleExports(file);
@@ -147,7 +151,7 @@ function hoistUniqueExports(content: string, barrelDir: string, reserved: Set<st
   }
 
   const lines: string[] = [];
-  for (const { modulePath } of namespaces) {
+  for (const modulePath of modulePaths) {
     const types: string[] = [];
     const values: string[] = [];
     for (const { name, isType } of perModule.get(modulePath) ?? []) {
@@ -230,10 +234,11 @@ function generateBarrel(
   modules: readonly BarrelModule[],
   includePackageMetadata: boolean,
 ): number {
-  if (existsSync(barrel) && !isGeneratedBarrel(barrel)) {
+  const beforeStat = statSync(barrel, { throwIfNoEntry: false });
+  if (beforeStat && !isGeneratedBarrel(barrel)) {
     throw new Error(`Generated barrel path is owned by a hand-written file: ${barrel}`);
   }
-  const before = existsSync(barrel) ? readFileSync(barrel, "utf8") : undefined;
+  const before = beforeStat ? readFileSync(barrel, "utf8") : undefined;
 
   const bySourceStem = new Map<string, BarrelModule>();
   for (const module of modules) {
@@ -256,16 +261,25 @@ function generateBarrel(
     if (!includePackageMetadata) return 0;
   }
 
-  const namespaceExports = selected.flatMap(({ specifier, namespacePath, reexport }) => [
-    `export * as ${modulePathToNamespace(`./${namespacePath}`)} from "${specifier}";`,
-    ...(reexport ? [`export * from "${specifier}";`] : []),
-  ]);
+  const exportedNames = new Set(
+    selected.flatMap(({ specifier }) =>
+      moduleExports(join(pkgDir, specifier.replace(/^\.\//, ""))).map(({ name }) => name),
+    ),
+  );
+  const namespaceExports = selected.flatMap(({ specifier, namespacePath, reexport }) => {
+    const namespace = modulePathToNamespace(`./${namespacePath}`);
+    return [
+      ...(exportedNames.has(namespace) ? [] : [`export * as ${namespace} from "${specifier}";`]),
+      ...(reexport ? [`export * from "${specifier}";`] : []),
+    ];
+  });
   let content = includePackageMetadata
     ? `${PACKAGE_IDENTIFIER_LINE}\n${PACKAGE_VERSION_LINE}\n${namespaceExports.join("\n")}`
     : namespaceExports.join("\n");
   content = hoistUniqueExports(
     content,
     pkgDir,
+    selected.map(({ specifier }) => specifier),
     new Set(includePackageMetadata ? [PACKAGE_IDENTIFIER_EXPORT, PACKAGE_VERSION_EXPORT] : []),
   );
   const template = `${header(BARREL_HEADER)}\n${content.replace(/\n+$/, "")}\n`;
@@ -273,7 +287,10 @@ function generateBarrel(
   const structurallySame = includePackageMetadata
     ? before !== undefined && withoutPackageMetadata(before) === template && before === next
     : before === next;
-  if (structurallySame) return 0;
+  if (structurallySame) {
+    if (beforeStat && (beforeStat.mode & 0o777) !== 0o444) makeReadonly(barrel);
+    return 0;
+  }
 
   writeBarrel(barrel, next);
   makeReadonly(barrel);
@@ -290,7 +307,9 @@ function removeGeneratedBarrel(file: string): number {
 /** Rebuild one package's root and folder barrels. */
 function generateForPackage(pkgDir: string): number {
   const srcDir = join(pkgDir, "src");
-  if (!existsSync(srcDir)) return 0;
+  if (!existsSync(srcDir)) {
+    return generateBarrel(pkgDir, join(pkgDir, "index.ts"), [], true);
+  }
 
   const discoveredFiles = [...findFilesSync("**/*", { cwd: srcDir })].map(toPosix);
   const nestedIndexes = discoveredFiles.filter((file) =>

@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, it } from "node:test";
-import { header } from "../src/generated.ts";
+
+import { BUN_VERSION } from "../src/bun-workflow.ts";
 import { DBXToolsNodeProject } from "../src/project-js.ts";
 
 const fixtures: string[] = [];
@@ -20,92 +21,141 @@ afterEach(() => {
   for (const root of fixtures.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-function fixture(): string {
+function fixture(appRoot = "packages/app"): string {
   const root = mkdtempSync(join(tmpdir(), "appkit-workspace-"));
   fixtures.push(root);
-  for (const directory of [
-    "packages/app/demo/src",
-    "packages/server/demo/src",
-    "packages/ui/library/src",
-  ]) {
-    mkdirSync(join(root, directory), { recursive: true });
-    writeFileSync(join(root, directory, "main.ts"), "export const value = true;\n");
-  }
-  writeFileSync(join(root, "packages/app/demo/index.html"), '<div id="root"></div>\n');
-  writeFileSync(join(root, "packages/app/demo/vite.config.ts"), "export default {};\n");
-  writeFileSync(join(root, "packages/server/demo/src/server.ts"), "export const server = true;\n");
+  mkdirSync(join(root, appRoot, "client"), { recursive: true });
+  mkdirSync(join(root, appRoot, "server"), { recursive: true });
+  writeFileSync(join(root, appRoot, "client/index.html"), '<div id="root"></div>\n');
+  writeFileSync(join(root, appRoot, "server/server.ts"), "export const server = true;\n");
   return root;
 }
 
-function manifest(root: string, directory: string): Record<string, unknown> {
-  return JSON.parse(readFileSync(join(root, directory, "package.json"), "utf8")) as Record<
-    string,
-    unknown
-  >;
+function manifest(root: string, appRoot = "packages/app"): Record<string, any> {
+  return JSON.parse(readFileSync(join(root, appRoot, "package.json"), "utf8"));
 }
 
-it("auto-configures AppKit app and server packages without broadening UI libraries", () => {
+it("auto-configures one application project at packages/app", () => {
   process.env.PROJEN_DISABLE_POST = "1";
   const root = fixture();
   new DBXToolsNodeProject({
     name: "fixture",
     outdir: root,
-    packageDefaults: { publishable: false },
     packageRoots: ["packages"],
     releaseMode: "disabled",
   }).synth();
 
-  const app = manifest(root, "packages/app/demo");
-  const server = manifest(root, "packages/server/demo");
-  const ui = manifest(root, "packages/ui/library");
-  const appDependencies = app.dependencies as Record<string, string>;
-  const appDevDependencies = app.devDependencies as Record<string, string>;
-  const serverDependencies = server.dependencies as Record<string, string>;
-  const uiDependencies = (ui.dependencies ?? {}) as Record<string, string>;
-
-  assert.deepEqual(app.appkit, { autoMigrate: false });
+  const app = manifest(root);
   assert.equal(app.private, true);
-  assert.equal(server.private, true);
-  assert.equal(ui.private, true);
-  assert.equal(appDependencies["@databricks/appkit-ui"], "catalog:");
-  assert.equal(appDependencies["@tailwindcss/vite"], "catalog:");
-  assert.equal(appDependencies.tailwindcss, "catalog:");
-  assert.equal(appDevDependencies["@databricks/appkit"], "catalog:");
-  assert.equal(appDevDependencies.vite, "catalog:");
-  assert.equal(serverDependencies["@databricks/appkit"], "catalog:");
-  assert.equal(serverDependencies["@vitejs/plugin-react"], "catalog:");
-  assert.equal(server.main, "src/server.ts");
-  assert.equal(server.types, "src/server.ts");
-  assert.equal(uiDependencies["@databricks/appkit-ui"], undefined);
-  assert.equal(uiDependencies.tailwindcss, undefined);
+  assert.equal(app.main, "server/server.ts");
+  assert.equal(app.scripts.build, "bun build.ts");
+  assert.deepEqual(app.appkit, { autoMigrate: false });
+  assert.equal(app.dependencies["@databricks/appkit"], "catalog:");
+  assert.equal(app.dependencies["@databricks/appkit-ui"], "catalog:");
+  assert.equal(app.dependencies.bun, BUN_VERSION);
+  assert.deepEqual(app.exports, { "./package.json": "./package.json" });
+  assert.equal(existsSync(join(root, "packages/app/client/package.json")), false);
+  assert.equal(existsSync(join(root, "packages/app/server/package.json")), false);
 
-  const appTsconfig = readFileSync(join(root, "packages/app/demo/tsconfig.json"), "utf8");
-  assert.match(appTsconfig, /"rootDir": "\."/);
-  assert.match(appTsconfig, /"vite\.config\.ts"/);
-  assert.match(appTsconfig, /"shared\/appkit-types"/);
+  const workspace = readFileSync(join(root, "pnpm-workspace.yaml"), "utf8");
+  assert.match(workspace, /packages\/app/);
+  assert.doesNotMatch(workspace, /packages\/app\/client|packages\/app\/server/);
 
   const tasks = JSON.parse(readFileSync(join(root, ".projen/tasks.json"), "utf8")) as {
-    tasks: Record<
-      string,
-      { steps?: Array<{ exec?: string; execArgs?: string[]; spawn?: string }> }
-    >;
+    tasks: Record<string, { cwd?: string; steps?: Array<{ exec?: string; execArgs?: string[] }> }>;
   };
-  assert.equal(tasks.tasks["appkit:sync"]?.steps?.[0]?.exec, "appkit plugin sync --write --silent");
+  assert.equal(tasks.tasks["appkit:sync"]?.cwd, "packages/app");
+  assert.equal(tasks.tasks["appkit:typegen"]?.cwd, "packages/app");
   assert.deepEqual(tasks.tasks["appkit:deploy"]?.steps?.[0]?.execArgs, [
     "bun",
     "node_modules/@dbx-tools/projen/tasks/appkit-deploy.ts",
+    "--directory",
+    "packages/app",
   ]);
-  assert.deepEqual(
-    tasks.tasks.deploy?.steps?.map((step) => step.spawn),
-    ["check", "appkit:deploy"],
-  );
-  assert.equal(tasks.tasks.check?.steps?.[0]?.spawn, "build");
-  assert.equal(tasks.tasks.dev?.steps?.[0]?.exec, "bun --watch packages/server/demo/src/server.ts");
-  assert.equal(tasks.tasks.start?.steps?.[0]?.exec, "bun packages/server/demo/src/server.ts");
-  assert.match(readFileSync(join(root, ".gitignore"), "utf8"), /^\.databricks$/m);
+  assert.equal(tasks.tasks.dev?.cwd, "packages/app");
+  assert.equal(tasks.tasks.dev?.steps?.[0]?.exec, "bun --watch server/server.ts");
 });
 
-it("does not configure AppKit packages when disabled", () => {
+it("supports an overridden application root and application-owned bundle", () => {
+  process.env.PROJEN_DISABLE_POST = "1";
+  const root = fixture("packages/demo");
+  writeFileSync(join(root, "packages/demo/databricks.yml"), "bundle:\n  name: custom\n");
+  new DBXToolsNodeProject({
+    appBundle: false,
+    appRoot: "packages/demo",
+    name: "fixture",
+    outdir: root,
+    packageRoots: ["packages"],
+    releaseMode: "disabled",
+    resolvePackageOptions: (pkg, defaults) =>
+      pkg.memberPath === "packages/demo" ? { ...defaults, name: "@fixture/demo" } : defaults,
+  }).synth();
+
+  assert.equal(manifest(root, "packages/demo").name, "@fixture/demo");
+  assert.equal(
+    readFileSync(join(root, "packages/demo/databricks.yml"), "utf8"),
+    "bundle:\n  name: custom\n",
+  );
+  assert.equal(existsSync(join(root, "packages/demo/client/package.json")), false);
+});
+
+it("generates only the minimal AppKit and Bun configuration", () => {
+  process.env.PROJEN_DISABLE_POST = "1";
+  const root = fixture();
+  new DBXToolsNodeProject({
+    appkit: true,
+    name: "fixture",
+    outdir: root,
+    packageRoots: ["packages"],
+    releaseMode: "disabled",
+  }).synth();
+
+  for (const file of [
+    "app.yaml",
+    "build.ts",
+    "bunfig.toml",
+    "client/vite.config.ts",
+    "databricks.yml",
+    "tsconfig.json",
+    "tsconfig.client.json",
+    "tsconfig.server.json",
+    "tsconfig.shared.json",
+  ]) {
+    const path = join(root, "packages/app", file);
+    assert.equal(existsSync(path), true, file);
+    assert.equal(statSync(path).mode & 0o777, 0o444, file);
+  }
+  for (const file of [
+    "CLAUDE.md",
+    ".npmrc",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "eslint.config.js",
+    ".prettierrc.json",
+    "postcss.config.js",
+    "tailwind.config.ts",
+    "tsdown.server.config.ts",
+    "vitest.config.ts",
+  ]) {
+    assert.equal(existsSync(join(root, "packages/app", file)), false, file);
+  }
+
+  const appYaml = readFileSync(join(root, "packages/app/app.yaml"), "utf8");
+  assert.match(appYaml, /\.\/node_modules\/\.bin\/bun/);
+  assert.match(appYaml, /server\/server\.ts/);
+  assert.doesNotMatch(appYaml, /\nenv:/);
+
+  const build = readFileSync(join(root, "packages/app/build.ts"), "utf8");
+  assert.match(build, /name: "source-alias"/);
+  assert.match(build, /plugins: \[tailwind, dedupeReact, sourceAlias\]/);
+  assert.match(build, /tsconfig: "tsconfig\.client\.json"/);
+
+  const bundle = readFileSync(join(root, "packages/app/databricks.yml"), "utf8");
+  assert.match(bundle, /engine: direct/);
+  assert.match(bundle, /source_code_path: \.\//);
+});
+
+it("does not configure AppKit files when disabled", () => {
   process.env.PROJEN_DISABLE_POST = "1";
   const root = fixture();
   new DBXToolsNodeProject({
@@ -116,20 +166,29 @@ it("does not configure AppKit packages when disabled", () => {
     releaseMode: "disabled",
   }).synth();
 
-  const app = manifest(root, "packages/app/demo");
-  const server = manifest(root, "packages/server/demo");
-  assert.equal(app.appkit, undefined);
-  assert.equal((app.dependencies as Record<string, string>)["@databricks/appkit-ui"], undefined);
-  assert.equal((server.dependencies as Record<string, string>)["@databricks/appkit"], undefined);
+  assert.equal(manifest(root).appkit, undefined);
+  assert.equal(existsSync(join(root, "packages/app/app.yaml")), false);
 });
 
-it("fails immediately when explicit AppKit mode lacks a required package role", () => {
+it("leaves an incomplete application root unconfigured in automatic mode", () => {
+  process.env.PROJEN_DISABLE_POST = "1";
+  const root = fixture();
+  rmSync(join(root, "packages/app/server/server.ts"));
+  new DBXToolsNodeProject({
+    name: "fixture",
+    outdir: root,
+    packageRoots: ["packages"],
+    releaseMode: "disabled",
+  }).synth();
+
+  assert.equal(manifest(root).appkit, undefined);
+  assert.equal(existsSync(join(root, "packages/app/app.yaml")), false);
+});
+
+it("fails explicit AppKit mode without an application root", () => {
   process.env.PROJEN_DISABLE_POST = "1";
   const root = mkdtempSync(join(tmpdir(), "appkit-workspace-"));
   fixtures.push(root);
-  mkdirSync(join(root, "packages/app/demo/src"), { recursive: true });
-  writeFileSync(join(root, "packages/app/demo/src/main.ts"), "export const value = true;\n");
-
   assert.throws(
     () =>
       new DBXToolsNodeProject({
@@ -139,15 +198,14 @@ it("fails immediately when explicit AppKit mode lacks a required package role", 
         packageRoots: ["packages"],
         releaseMode: "disabled",
       }),
-    /appkit: true requires a `server` package/,
+    /requires an application root/,
   );
 });
 
-it("fails immediately when explicit AppKit mode lacks a required entry file", () => {
+it("fails explicit AppKit mode when client or server entries are missing", () => {
   process.env.PROJEN_DISABLE_POST = "1";
   const root = fixture();
-  unlinkSync(join(root, "packages/app/demo/index.html"));
-
+  rmSync(join(root, "packages/app/client/index.html"));
   assert.throws(
     () =>
       new DBXToolsNodeProject({
@@ -157,14 +215,13 @@ it("fails immediately when explicit AppKit mode lacks a required entry file", ()
         packageRoots: ["packages"],
         releaseMode: "disabled",
       }),
-    /@fixture\/app-demo\/index\.html/,
+    /client\/index\.html/,
   );
 });
 
-it("generates a monorepo-safe Vite config when the app does not provide one", () => {
+it("keeps a second synthesis stable", () => {
   process.env.PROJEN_DISABLE_POST = "1";
   const root = fixture();
-  unlinkSync(join(root, "packages/app/demo/vite.config.ts"));
   const options = {
     appkit: true,
     name: "fixture",
@@ -173,47 +230,7 @@ it("generates a monorepo-safe Vite config when the app does not provide one", ()
     releaseMode: "disabled" as const,
   };
   new DBXToolsNodeProject(options).synth();
+  const first = readFileSync(join(root, "packages/app/client/vite.config.ts"), "utf8");
   new DBXToolsNodeProject(options).synth();
-
-  const viteConfig = readFileSync(join(root, "packages/app/demo/vite.config.ts"), "utf8");
-  assert.ok(viteConfig.startsWith(header({ tool: "projen", source: ".projenrc.ts" })));
-  assert.match(viteConfig, /appKitServingTypesPlugin/);
-  assert.match(viteConfig, /appKitTypesPlugin/);
-  assert.match(viteConfig, /demo\/shared\/appkit-types/);
-  assert.match(viteConfig, /vite\.config\.override\.ts/);
-  assert.equal(statSync(join(root, "packages/app/demo/vite.config.ts")).mode & 0o777, 0o444);
-});
-
-it("accepts complete explicit AppKit package roles", () => {
-  process.env.PROJEN_DISABLE_POST = "1";
-  const root = fixture();
-  new DBXToolsNodeProject({
-    appkit: true,
-    name: "fixture",
-    outdir: root,
-    packageRoots: ["packages"],
-    releaseMode: "disabled",
-  }).synth();
-
-  assert.deepEqual(manifest(root, "packages/app/demo").appkit, { autoMigrate: false });
-});
-
-it("preserves a repository-owned deploy task", () => {
-  process.env.PROJEN_DISABLE_POST = "1";
-  const root = fixture();
-  const project = new DBXToolsNodeProject({
-    name: "fixture",
-    outdir: root,
-    packageRoots: ["packages"],
-    releaseMode: "disabled",
-  });
-  project.addTask("check", { exec: "bun scripts/check.ts" });
-  project.addTask("deploy", { exec: "bun scripts/deploy.ts" });
-  project.synth();
-
-  const tasks = JSON.parse(readFileSync(join(root, ".projen/tasks.json"), "utf8")) as {
-    tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
-  };
-  assert.equal(tasks.tasks.check?.steps?.[0]?.exec, "bun scripts/check.ts");
-  assert.equal(tasks.tasks.deploy?.steps?.[0]?.exec, "bun scripts/deploy.ts");
+  assert.equal(readFileSync(join(root, "packages/app/client/vite.config.ts"), "utf8"), first);
 });

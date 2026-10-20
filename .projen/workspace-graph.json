@@ -21,7 +21,6 @@
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/cli",
         "@dbx-tools/databricks",
-        "@dbx-tools/demo-appkit-server",
         "@dbx-tools/email",
         "@dbx-tools/genie",
         "@dbx-tools/model",
@@ -44,7 +43,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/cli",
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -62,7 +61,7 @@
         "@dbx-tools/ui"
       ],
       "reverseDependencies": [
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -89,7 +88,7 @@
         "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/appkit-memory",
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -106,7 +105,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/cli",
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -138,7 +137,7 @@
       "reverseDependencies": [
         "@dbx-tools/appkit-generator",
         "@dbx-tools/cli",
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -156,7 +155,8 @@
         "@dbx-tools/cli",
         "@dbx-tools/databricks",
         "@dbx-tools/lakebase",
-        "@dbx-tools/model"
+        "@dbx-tools/model",
+        "@dbx-tools/projen"
       ]
     },
     {
@@ -210,6 +210,7 @@
         "@dbx-tools/shared-email",
         "@dbx-tools/shared-generator",
         "@dbx-tools/shared-genie-code",
+        "@dbx-tools/shared-graphiti",
         "@dbx-tools/shared-model-gateway",
         "@dbx-tools/tunnel"
       ],
@@ -224,6 +225,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/cli",
+        "@dbx-tools/cli-service",
         "@dbx-tools/projen"
       ]
     },
@@ -231,6 +233,7 @@
       "name": "@dbx-tools/cli-service",
       "path": "packages/js/cli/service",
       "dependencies": [
+        "@dbx-tools/cli-args",
         "@dbx-tools/core",
         "@dbx-tools/shared-core"
       ],
@@ -259,7 +262,7 @@
         "@dbx-tools/cli-args",
         "@dbx-tools/cli-service",
         "@dbx-tools/databricks",
-        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/demo",
         "@dbx-tools/email",
         "@dbx-tools/fs",
         "@dbx-tools/lakebox",
@@ -285,7 +288,7 @@
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/cli",
         "@dbx-tools/databricks-zerobus",
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -297,24 +300,9 @@
       "reverseDependencies": []
     },
     {
-      "name": "@dbx-tools/demo-appkit-app",
-      "path": "packages/example/app/appkit-demo",
+      "name": "@dbx-tools/demo",
+      "path": "packages/demo",
       "dependencies": [
-        "@dbx-tools/shared-core",
-        "@dbx-tools/shared-email-template",
-        "@dbx-tools/shared-generator",
-        "@dbx-tools/tunnel",
-        "@dbx-tools/ui",
-        "@dbx-tools/ui-lakebox",
-        "@dbx-tools/ui-mastra"
-      ],
-      "reverseDependencies": []
-    },
-    {
-      "name": "@dbx-tools/demo-appkit-server",
-      "path": "packages/example/server/appkit-demo",
-      "dependencies": [
-        "@dbx-tools/appkit",
         "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/appkit-mastra",
@@ -324,11 +312,16 @@
         "@dbx-tools/databricks",
         "@dbx-tools/email",
         "@dbx-tools/postgres",
-        "@dbx-tools/projen",
         "@dbx-tools/search",
+        "@dbx-tools/shared-auth",
         "@dbx-tools/shared-core",
+        "@dbx-tools/shared-email-template",
         "@dbx-tools/shared-generator",
-        "@dbx-tools/tunnel"
+        "@dbx-tools/shared-search",
+        "@dbx-tools/tunnel",
+        "@dbx-tools/ui",
+        "@dbx-tools/ui-lakebox",
+        "@dbx-tools/ui-mastra"
       ],
       "reverseDependencies": []
     },
@@ -344,7 +337,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/cli",
-        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/demo",
         "@dbx-tools/tunnel"
       ]
     },
@@ -458,7 +451,7 @@
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/auth-gate",
         "@dbx-tools/cli",
-        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/demo",
         "@dbx-tools/search"
       ]
     },
@@ -466,14 +459,14 @@
       "name": "@dbx-tools/projen",
       "path": "projen",
       "dependencies": [
+        "@dbx-tools/auth",
         "@dbx-tools/cli-args",
         "@dbx-tools/core",
         "@dbx-tools/path",
         "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
-        "@dbx-tools/appkit",
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/appkit"
       ]
     },
     {
@@ -489,7 +482,7 @@
         "@dbx-tools/shared-search"
       ],
       "reverseDependencies": [
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -502,10 +495,12 @@
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
         "@dbx-tools/cli",
+        "@dbx-tools/demo",
         "@dbx-tools/lakebase",
         "@dbx-tools/model",
         "@dbx-tools/tunnel",
-        "@dbx-tools/ui"
+        "@dbx-tools/ui",
+        "@dbx-tools/ui-mastra"
       ]
     },
     {
@@ -528,8 +523,7 @@
         "@dbx-tools/cli-service",
         "@dbx-tools/core",
         "@dbx-tools/databricks",
-        "@dbx-tools/demo-appkit-app",
-        "@dbx-tools/demo-appkit-server",
+        "@dbx-tools/demo",
         "@dbx-tools/email",
         "@dbx-tools/fs",
         "@dbx-tools/genie",
@@ -572,7 +566,7 @@
         "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
-        "@dbx-tools/demo-appkit-app",
+        "@dbx-tools/demo",
         "@dbx-tools/email",
         "@dbx-tools/ui"
       ]
@@ -599,8 +593,7 @@
       "reverseDependencies": [
         "@dbx-tools/appkit-generator",
         "@dbx-tools/cli",
-        "@dbx-tools/demo-appkit-app",
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -637,7 +630,8 @@
         "@dbx-tools/shared-model-gateway"
       ],
       "reverseDependencies": [
-        "@dbx-tools/appkit-memory"
+        "@dbx-tools/appkit-memory",
+        "@dbx-tools/cli"
       ]
     },
     {
@@ -701,6 +695,7 @@
       "path": "packages/js/shared/search",
       "dependencies": [],
       "reverseDependencies": [
+        "@dbx-tools/demo",
         "@dbx-tools/search",
         "@dbx-tools/ui"
       ]
@@ -718,8 +713,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/cli",
-        "@dbx-tools/demo-appkit-app",
-        "@dbx-tools/demo-appkit-server"
+        "@dbx-tools/demo"
       ]
     },
     {
@@ -734,7 +728,7 @@
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit-lakebox",
-        "@dbx-tools/demo-appkit-app",
+        "@dbx-tools/demo",
         "@dbx-tools/ui-lakebox",
         "@dbx-tools/ui-mastra"
       ]
@@ -747,13 +741,14 @@
         "@dbx-tools/ui"
       ],
       "reverseDependencies": [
-        "@dbx-tools/demo-appkit-app"
+        "@dbx-tools/demo"
       ]
     },
     {
       "name": "@dbx-tools/ui-mastra",
       "path": "packages/js/ui/mastra",
       "dependencies": [
+        "@dbx-tools/shared-auth",
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-genie",
         "@dbx-tools/shared-mastra",
@@ -761,7 +756,7 @@
         "@dbx-tools/ui"
       ],
       "reverseDependencies": [
-        "@dbx-tools/demo-appkit-app"
+        "@dbx-tools/demo"
       ]
     }
   ]
