@@ -12,9 +12,10 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { spawn, spawnSync } from "@dbx-tools/core";
-import { log, poll, toError } from "@dbx-tools/shared-core";
+import { combineAbortSignals, log, poll, toError } from "@dbx-tools/shared-core";
 import {
   PUBLIC_NPM_REGISTRY_URL,
+  PUBLICATION_REQUEST_TIMEOUT_SECONDS,
   PUBLICATION_WAIT_INTERVAL_SECONDS,
   PUBLICATION_WAIT_TIMEOUT_SECONDS,
 } from "./release-context.ts";
@@ -79,11 +80,15 @@ export async function publishedNpmRelease(
   version: string,
   registry = process.env.NPM_CONFIG_REGISTRY ?? PUBLIC_NPM_REGISTRY_URL,
   signal?: AbortSignal,
-  options: { readonly content?: boolean } = {},
+  options: { readonly content?: boolean; readonly timeoutMs?: number } = {},
 ): Promise<NpmReleaseIdentity | undefined> {
+  const requestSignal = combineAbortSignals(
+    signal,
+    AbortSignal.timeout(options.timeoutMs ?? PUBLICATION_REQUEST_TIMEOUT_SECONDS * 1_000),
+  );
   const response = await fetch(registryUrl(registry, name, version), {
     headers: { accept: "application/json" },
-    signal,
+    signal: requestSignal,
   });
   if (response.status === 404) return undefined;
   if (!response.ok) {
@@ -100,7 +105,8 @@ export async function publishedNpmRelease(
   }
   let contentDigest: string | undefined;
   if (options.content !== false && metadata.dist?.tarball) {
-    const archive = await fetch(metadata.dist.tarball, { signal });
+    const archive = await fetch(metadata.dist.tarball, { signal: requestSignal });
+    if (archive.status === 404) return undefined;
     if (!archive.ok) {
       throw new Error(`npm tarball lookup failed for ${name}@${version}: ${archive.status}`);
     }
@@ -132,24 +138,47 @@ export function isNpmStagedVersionConflict(error: unknown): boolean {
 export async function waitForMatchingNpmRelease(
   local: NpmReleaseIdentity,
   registry?: string,
-  options: { readonly intervalMs?: number; readonly timeoutMs?: number } = {},
+  options: {
+    readonly intervalMs?: number;
+    readonly requestTimeoutMs?: number;
+    readonly timeoutMs?: number;
+  } = {},
 ): Promise<void> {
   const selectedRegistry = registry ?? process.env.NPM_CONFIG_REGISTRY ?? PUBLIC_NPM_REGISTRY_URL;
+  let lastError: Error | undefined;
   try {
     for await (const _available of poll(
       async ({ signal }) => {
-        const published = await publishedNpmRelease(
-          local.name,
-          local.version,
-          selectedRegistry,
-          signal,
-          { content: false },
-        );
+        let published: NpmReleaseIdentity | undefined;
+        try {
+          published = await publishedNpmRelease(
+            local.name,
+            local.version,
+            selectedRegistry,
+            signal,
+            { content: false, timeoutMs: options.requestTimeoutMs },
+          );
+        } catch (error) {
+          lastError = toError(error);
+          return false;
+        }
         if (!published) return false;
-        return npmReleaseMatches(
-          local,
-          await publishedNpmRelease(local.name, local.version, selectedRegistry, signal),
-        );
+        let complete: NpmReleaseIdentity | undefined;
+        try {
+          complete = await publishedNpmRelease(
+            local.name,
+            local.version,
+            selectedRegistry,
+            signal,
+            { timeoutMs: options.requestTimeoutMs },
+          );
+        } catch (error) {
+          lastError = toError(error);
+          return false;
+        }
+        if (!complete) return false;
+        lastError = undefined;
+        return npmReleaseMatches(local, complete);
       },
       {
         intervalMs: options.intervalMs ?? PUBLICATION_WAIT_INTERVAL_SECONDS * 1_000,
@@ -160,10 +189,9 @@ export async function waitForMatchingNpmRelease(
       void _available;
     }
   } catch (error) {
-    throw new Error(
-      `Staged npm version ${local.name}@${local.version} did not become available`,
-      { cause: error },
-    );
+    throw new Error(`Staged npm version ${local.name}@${local.version} did not become available`, {
+      cause: lastError ?? error,
+    });
   }
 }
 
@@ -178,6 +206,7 @@ export async function publishNpmArchive(options: {
   readonly dryRun?: boolean;
   readonly env?: NodeJS.ProcessEnv;
   readonly intervalMs?: number;
+  readonly requestTimeoutMs?: number;
   readonly registry?: string;
   readonly timeoutMs?: number;
 }): Promise<NpmPublishOutcome> {
@@ -205,7 +234,9 @@ export async function publishNpmArchive(options: {
       check: false,
     },
   );
-  if (result.stderr) process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : `${result.stderr}\n`);
+  if (result.stderr) {
+    process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : `${result.stderr}\n`);
+  }
   if (result.exitCode === 0) return "published";
   const error = new Error(
     `npm publish failed (exit ${result.exitCode})${result.stderr ? `: ${result.stderr}` : ""}`,
@@ -217,6 +248,7 @@ export async function publishNpmArchive(options: {
   logger.info(`waiting for staged ${identity.name}@${identity.version}`);
   await waitForMatchingNpmRelease(identity, options.registry, {
     intervalMs: options.intervalMs,
+    requestTimeoutMs: options.requestTimeoutMs,
     timeoutMs: options.timeoutMs,
   });
   return "staged";

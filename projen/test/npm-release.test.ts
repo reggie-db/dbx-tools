@@ -18,6 +18,7 @@ import { packNpmPackage } from "../src/npm-packaging.ts";
 import {
   isNpmStagedVersionConflict,
   npmReleaseMatches,
+  publishedNpmRelease,
   publishNpmArchive,
   readNpmArchiveIdentity,
   type NpmReleaseIdentity,
@@ -220,7 +221,10 @@ describe("npm release recovery", () => {
       ),
       true,
     );
-    assert.equal(isNpmStagedVersionConflict(new Error("npm error 409 Conflict - already exists")), false);
+    assert.equal(
+      isNpmStagedVersionConflict(new Error("npm error 409 Conflict - already exists")),
+      false,
+    );
   });
 
   it("waits for a previously staged version instead of publishing again", async () => {
@@ -230,19 +234,22 @@ describe("npm release recovery", () => {
       join(bin, "npm"),
       [
         "#!/usr/bin/env bun",
-        "import { appendFileSync } from \"node:fs\";",
+        'import { appendFileSync } from "node:fs";',
         `appendFileSync(${JSON.stringify(join(outdir, "npm-invocations"))}, "publish\\n");`,
-        'process.stderr.write(\'npm error 409 Conflict - PUT https://registry.npmjs.org/@fixture%2fnative - Cannot publish over previously staged version "1.2.3".\\n\');',
+        "process.stderr.write('npm error 409 Conflict - PUT https://registry.npmjs.org/@fixture%2fnative - Cannot publish over previously staged version \"1.2.3\".\\n');",
         "process.exit(1);",
         "",
       ].join("\n"),
     );
     chmodSync(join(bin, "npm"), 0o755);
     let lookups = 0;
+    let tarballLookups = 0;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (input) => {
       const url = String(input);
       if (url.includes("tarballs.invalid")) {
+        tarballLookups += 1;
+        if (tarballLookups < 3) return new Response(null, { status: 404 });
         return new Response(readFileSync(archive));
       }
       lookups += 1;
@@ -264,6 +271,30 @@ describe("npm release recovery", () => {
       });
       assert.equal(outcome, "staged");
       assert.equal(readFileSync(join(outdir, "npm-invocations"), "utf8").trim(), "publish");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("treats staged tarball 404 responses as unavailable", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) =>
+      String(input).includes("tarballs.invalid")
+        ? new Response(null, { status: 404 })
+        : Response.json({
+            name: identity.name,
+            version: identity.version,
+            repository: identity.repository,
+            dist: {
+              integrity: identity.integrity,
+              tarball: "https://tarballs.invalid/package.tgz",
+            },
+          });
+    try {
+      assert.equal(
+        await publishedNpmRelease(identity.name, identity.version, "https://registry.example"),
+        undefined,
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }
