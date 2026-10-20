@@ -16,7 +16,7 @@ import type { MessageList } from "@mastra/core/agent/message-list";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { OutputProcessor } from "@mastra/core/processors";
 import type { RequestContext } from "@mastra/core/request-context";
-import type { DataChunkType, MastraStreamTransform } from "@mastra/core/stream";
+import type { DataChunkType, LLMStepResult, MastraStreamTransform } from "@mastra/core/stream";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
@@ -29,6 +29,7 @@ const FOLLOW_UP_MODEL_CLASS = model.ModelClass.ChatFast;
 const DEFAULT_QUESTION_LIMIT = 3;
 const MAX_QUESTION_LIMIT = 10;
 const DEFAULT_TIMEOUT_MS = 10_000;
+const MAX_TURN_CONTEXT_CHARS = 16_000;
 const GENERIC_QUESTIONS = new Set([
   "anything else",
   "can you tell me more",
@@ -36,6 +37,12 @@ const GENERIC_QUESTIONS = new Set([
   "what else",
   "what would you like to know",
 ]);
+const ASSISTANT_DIRECTED_QUESTIONS = [
+  /^(?:would|do) you (?:like|want|prefer)\b/,
+  /^(?:should|shall|can|may) (?:i|we)\b/,
+  /^are you interested\b/,
+  /^should (?:the |this )?(?:chart|graph|table|visualization|response|output|results?|data)\b/,
+] as const;
 
 /** Trusted request-context key carrying the current user message. */
 export const FOLLOW_UP_USER_TEXT_KEY = "mastra__follow_up_user_text";
@@ -56,6 +63,8 @@ export interface ResolvedFollowUpSuggestionsConfig {
 export interface SuggestFollowUpsOptions {
   userText: string;
   answer: string;
+  /** Bounded serialized tool inputs and outputs that ground the next questions. */
+  turnContext?: string;
   nativeQuestions?: readonly string[];
   requestContext?: RequestContext;
   abortSignal?: AbortSignal;
@@ -80,6 +89,12 @@ const FollowUpToolInputSchema = z
   .object({
     userText: z.string().trim().min(1).describe("User message that started the completed turn."),
     answer: z.string().trim().min(1).describe("Assistant answer from the completed turn."),
+    turnContext: z
+      .string()
+      .trim()
+      .max(MAX_TURN_CONTEXT_CHARS)
+      .optional()
+      .describe("Relevant tool inputs and outputs from the completed turn."),
     nativeQuestions: z
       .array(z.string().trim().min(1))
       .optional()
@@ -88,9 +103,14 @@ const FollowUpToolInputSchema = z
   .strict();
 
 const FOLLOW_UP_INSTRUCTIONS = [
-  "Generate concise follow-up questions for a completed assistant turn.",
+  "Generate concise questions that a user can send to dig further into a completed assistant turn.",
+  "Write every item in the user's voice as a message for the assistant to answer when clicked.",
+  "Never address the user or ask what they would like, want, prefer, or how the response should be customized.",
   "Every question must be answerable from the same tools and data domain as the completed turn.",
-  "Prefer concrete next analyses, comparisons, filters, or explanations.",
+  "Ground questions in the answer and turn tool data, including displayed chart or table values.",
+  "Prefer concrete analyses, comparisons, rankings, calculations, filters, or explanations of the result.",
+  "For a chart or table, ask about the values and patterns before suggesting presentation changes.",
+  "Good examples include 'Which category has the highest value?', 'How large is the gap between the highest and lowest categories?', and 'What pattern stands out in these values?'.",
   "Do not repeat the user's question, the answer, or an existing suggestion.",
   "Do not ask generic filler such as 'Anything else?' or request unsupported data.",
   "Return zero questions when no useful grounded follow-up exists.",
@@ -162,7 +182,8 @@ function acceptedQuestions(
       !normalized ||
       normalized.length < 8 ||
       excluded.has(normalized) ||
-      GENERIC_QUESTIONS.has(normalized)
+      GENERIC_QUESTIONS.has(normalized) ||
+      ASSISTANT_DIRECTED_QUESTIONS.some((pattern) => pattern.test(normalized))
     ) {
       continue;
     }
@@ -171,6 +192,29 @@ function acceptedQuestions(
     if (accepted.length >= maxQuestions) break;
   }
   return accepted;
+}
+
+function serializedTurnContext(steps: readonly LLMStepResult[]): string | undefined {
+  const activity = steps.flatMap((step) => [
+    ...step.toolCalls.map((call) => ({
+      tool: call.payload.toolName,
+      input: call.payload.args,
+    })),
+    ...step.toolResults.map((result) => ({
+      tool: result.payload.toolName,
+      output: result.payload.result,
+      ...(result.payload.isError ? { isError: true } : {}),
+    })),
+  ]);
+  if (activity.length === 0) return undefined;
+  try {
+    const serialized = JSON.stringify(activity.slice(-12));
+    return serialized.length > MAX_TURN_CONTEXT_CHARS
+      ? serialized.slice(0, MAX_TURN_CONTEXT_CHARS)
+      : serialized;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Generate grounded follow-ups through ChatFast, failing open to an empty list. */
@@ -185,6 +229,7 @@ export async function suggestFollowUps(
   const prompt = stringUtils.toDescription({
     "User message": options.userText,
     "Assistant answer": options.answer,
+    ...(options.turnContext ? { "Turn tool data": options.turnContext } : {}),
     ...(options.nativeQuestions?.length
       ? { "Existing suggestions": JSON.stringify(options.nativeQuestions) }
       : {}),
@@ -280,13 +325,17 @@ export function buildFollowUpSuggestionsProcessor(
         settings.mode === "auto" && Array.isArray(nativeValue)
           ? nativeValue.filter((value): value is string => typeof value === "string")
           : [];
-      const questions = await suggester(config, {
+      const turnContext = serializedTurnContext(result.steps);
+      const suggestionOptions: SuggestFollowUpsOptions = {
         userText,
         answer,
+        ...(turnContext ? { turnContext } : {}),
         ...(nativeQuestions.length > 0 ? { nativeQuestions } : {}),
         requestContext,
         ...(abortSignal ? { abortSignal } : {}),
-      });
+      };
+      const suggested = await suggester(config, suggestionOptions);
+      const questions = acceptedQuestions(suggested, suggestionOptions, settings.limit);
       if (questions.length === 0) return messageList;
       const data = FollowUpSuggestionsPartDataSchema.parse({
         questions,
@@ -332,6 +381,7 @@ export function buildSuggestFollowUpsTool(config: MastraPluginConfig) {
       const questions = await suggestFollowUps(config, {
         userText: values.userText,
         answer: values.answer,
+        ...(values.turnContext ? { turnContext: values.turnContext } : {}),
         ...(values.nativeQuestions ? { nativeQuestions: values.nativeQuestions } : {}),
         ...(context?.requestContext ? { requestContext: context.requestContext } : {}),
         ...(context?.abortSignal ? { abortSignal: context.abortSignal } : {}),

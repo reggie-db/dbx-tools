@@ -51,14 +51,43 @@ describe("native Mastra output integration", () => {
     );
     const processor = buildFollowUpSuggestionsProcessor(config, async (_config, options) => {
       received = options;
-      return ["Which stores led growth?"];
+      return [
+        "Would you like to change the categories or values?",
+        "Should the chart be sorted in ascending or descending order?",
+        "Which category has the highest value?",
+        "How large is the gap between the highest and lowest categories?",
+      ];
     });
 
     await processor?.processOutputResult?.({
       result: {
         text: "Revenue increased.",
         finishReason: "stop",
-        steps: [],
+        steps: [
+          {
+            toolCalls: [
+              {
+                payload: {
+                  toolName: "render_data",
+                  args: {
+                    data: [
+                      { category: "North", value: 42 },
+                      { category: "South", value: 18 },
+                    ],
+                  },
+                },
+              },
+            ],
+            toolResults: [
+              {
+                payload: {
+                  toolName: "render_data",
+                  result: { chartId: "chart-1" },
+                },
+              },
+            ],
+          },
+        ],
         usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
       },
       messageList,
@@ -75,16 +104,30 @@ describe("native Mastra output integration", () => {
     for await (const chunk of stream) chunks.push(chunk);
 
     expect(received?.nativeQuestions).toEqual(["Show revenue by region"]);
+    expect(received?.turnContext).toContain('"tool":"render_data"');
+    expect(received?.turnContext).toContain('"category":"North"');
     expect(
       persistedParts?.find((part) => part.type === FOLLOW_UP_SUGGESTIONS_PART_TYPE),
     ).toMatchObject({
       type: FOLLOW_UP_SUGGESTIONS_PART_TYPE,
-      data: { questions: ["Which stores led growth?"], source: "model" },
+      data: {
+        questions: [
+          "Which category has the highest value?",
+          "How large is the gap between the highest and lowest categories?",
+        ],
+        source: "model",
+      },
     });
     expect(chunks).toEqual([
       {
         type: FOLLOW_UP_SUGGESTIONS_PART_TYPE,
-        data: { questions: ["Which stores led growth?"], source: "model" },
+        data: {
+          questions: [
+            "Which category has the highest value?",
+            "How large is the gap between the highest and lowest categories?",
+          ],
+          source: "model",
+        },
       },
       { type: "finish" },
     ]);
