@@ -63,7 +63,7 @@
   },
   "main": "src/server.ts",
   "license": "Apache-2.0",
-  "version": "0.9.153",
+  "version": "0.9.154",
   "types": "index.ts",
   "private": true,
   "dbxToolsConfig": {
