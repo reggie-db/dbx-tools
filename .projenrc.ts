@@ -803,7 +803,6 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@mastra/observability@catalog:",
     "@mastra/otel-bridge@catalog:",
     "@mastra/pg@catalog:",
-    "@mastra/quickjs@catalog:",
     "@pydantic/monty@catalog:",
     "@opentelemetry/api@catalog:",
     "@opentelemetry/core@catalog:",
@@ -816,14 +815,17 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
   );
   p.addDevDeps(
     "@mastra/isolated-vm@catalog:",
+    "@mastra/quickjs@catalog:",
     "@types/express@catalog:",
     "@types/json-schema@^7",
     "@types/pg@^8",
     "vitest@catalog:",
   );
   p.deps.addDependency("@mastra/isolated-vm@catalog:", DependencyType.OPTIONAL);
+  p.deps.addDependency("@mastra/quickjs@catalog:", DependencyType.OPTIONAL);
   p.package.addField("optionalDependencies", {
     "@mastra/isolated-vm": "catalog:",
+    "@mastra/quickjs": "catalog:",
   });
   // `skills` (https://www.npmjs.com/package/skills) is the OPTIONAL Agent-Skills
   // CLI `remote-skills.ts` shells out to when present. Left as an optional peer

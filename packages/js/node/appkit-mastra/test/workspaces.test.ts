@@ -822,6 +822,7 @@ describe("agent workspace selection", () => {
     const built = await buildAgents({
       config: {
         backgroundTurns: false,
+        codeMode: "auto",
         tools: { write_url: ambientTool },
         agents: {
           analyst: {
@@ -870,6 +871,7 @@ describe("agent workspace selection", () => {
     const built = await buildAgents({
       config: {
         backgroundTurns: false,
+        codeMode: { transport: "quickjs", timeout: 30_000 },
         agents: {
           analyst: {
             instructions: "Answer directly.",
@@ -946,6 +948,7 @@ describe("agent workspace selection", () => {
     const built = await buildAgents({
       config: {
         backgroundTurns: false,
+        codeMode: "quickjs",
         agents: {
           analyst: {
             instructions: "Answer directly.",
@@ -1004,6 +1007,7 @@ describe("agent workspace selection", () => {
     const built = await buildAgents({
       config: {
         backgroundTurns: false,
+        codeMode: "quickjs",
         agents: {
           analyst: {
             instructions: "Answer directly.",
@@ -1071,6 +1075,7 @@ describe("agent workspace selection", () => {
     const built = await buildAgents({
       config: {
         backgroundTurns: false,
+        codeMode: "quickjs",
         agents: {
           analyst: {
             instructions: "Answer directly.",
@@ -1103,6 +1108,37 @@ describe("agent workspace selection", () => {
       await workspace.destroy();
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it("leaves native Code Mode disabled when omitted", async () => {
+    const built = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            tools: {
+              read_url: createTool({
+                id: "read_url",
+                description: "Read one URL.",
+                inputSchema: z.object({ url: z.string() }),
+                execute: async ({ url }) => url,
+              }),
+            },
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const instructions = await built.agents.analyst?.getInstructions();
+    const tools = built.agents.analyst?.__getOverridableFields().tools;
+
+    assert.equal(typeof instructions, "string");
+    assert.doesNotMatch(instructions, /external_read_url/);
+    assert.ok(tools && !("execute_typescript" in tools));
   });
 
   it("allows native Code Mode to be disabled explicitly", async () => {

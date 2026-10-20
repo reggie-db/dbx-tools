@@ -520,18 +520,23 @@ An agent-level workspace overrides the plugin-level sandbox setting. Returning
 
 ### Batch tools with Code Mode
 
-Mastra Code Mode is enabled by default when an agent has executable tools. It
-adds an `execute_typescript` tool so the model can batch independent calls,
-aggregate their results, and perform calculations in one isolated program.
-Agent, plugin-level, and enabled native workspace tools are exposed as
-`external_*` functions for the current request.
+Mastra Code Mode is disabled by default. Enable it explicitly to add an
+`execute_typescript` tool so the model can batch independent calls, aggregate
+their results, and perform calculations in one isolated program. Agent,
+plugin-level, and enabled native workspace tools are exposed as `external_*`
+functions for the current request.
 
-The plugin selects Mastra's `IsolatedVmCodeModeTransport` once during startup.
-If the native addon cannot initialize in the current runtime, startup selects
-Mastra's QuickJS WebAssembly transport instead. Both transports expose no
-filesystem, network, process, timer, or module access beyond the explicitly
-supplied tools. QuickJS supports concurrent external calls, so generated code
-can use `Promise.all` for independent operations.
+Both Code Mode transports are optional dependencies. The plugin checks the
+selected dependency once during startup and uses a Vite-ignored dynamic import,
+so bundlers do not turn an unselected transport into a hard dependency.
+`codeMode: "auto"` prefers isolated-vm when the runtime supports it, then tries
+QuickJS, and leaves Code Mode disabled when neither optional transport can run.
+Explicit `"isolated-vm"` or `"quickjs"` selection fails startup when that
+transport cannot be loaded or initialized.
+
+Both transports expose no filesystem, network, process, timer, or module access
+beyond the explicitly supplied tools. QuickJS supports concurrent external
+calls, so generated code can use `Promise.all` for independent operations.
 
 The automatic Code Mode remains available when the workspace uses a Databricks
 Lakebox because QuickJS or isolated-vm executes the orchestration program
@@ -564,8 +569,23 @@ const agent = new Agent({
 ```
 
 This is native Mastra `createCodeMode`. The plugin does not wrap or re-export it.
-Set plugin `codeMode: false` to disable the automatic Code Mode, or pass
-`{ id, timeout }` to tune its generated tool.
+Configure the plugin with one of these values:
+
+```ts
+mastra({ codeMode: false });
+mastra({ codeMode: "auto" });
+mastra({ codeMode: "isolated-vm" });
+mastra({ codeMode: "quickjs" });
+mastra({ codeMode: { transport: "quickjs", id: "execute_typescript", timeout: 30_000 } });
+```
+
+Install an explicitly selected transport in the consuming application when it
+is not already present:
+
+```sh
+bun add @mastra/isolated-vm
+bun add @mastra/quickjs
+```
 
 ## Remote skills
 

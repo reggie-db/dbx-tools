@@ -45,10 +45,13 @@ import { createCodeMode, createTool } from "@mastra/core/tools";
 import type { Workspace } from "@mastra/core/workspace";
 import { createSkillTools, createWorkspaceTools } from "@mastra/core/workspace";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
-import { QuickJsCodeModeTransport } from "@mastra/quickjs";
 
 import { buildRenderDataTool } from "./chart.ts";
-import type { MastraPluginConfig } from "./config.ts";
+import type {
+  MastraCodeModeConfig,
+  MastraCodeModeTransport,
+  MastraPluginConfig,
+} from "./config.ts";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "./memory.ts";
 import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
@@ -64,7 +67,28 @@ import {
 } from "./workspaces.ts";
 
 const codeModeLogger = log.logger("mastra/code-mode");
-let resolvedCodeModeTransport: Promise<CodeModeTransport> | undefined;
+const ISOLATED_VM_PACKAGE = "@mastra/isolated-vm";
+const QUICKJS_PACKAGE = "@mastra/quickjs";
+let isolatedVmDependency: Promise<typeof import("@mastra/isolated-vm")> | undefined;
+let quickJsDependency: Promise<typeof import("@mastra/quickjs")> | undefined;
+
+type NormalizedCodeModeConfig = MastraCodeModeConfig;
+
+interface ResolvedCodeModeConfig {
+  readonly id?: string;
+  readonly timeout?: number;
+  readonly provider: Exclude<MastraCodeModeTransport, "auto">;
+  readonly transport: CodeModeTransport;
+}
+
+type CodeModeFailureCategory =
+  "unsupported-runtime" | "dependency-unavailable" | "construction-failed";
+
+interface CodeModeFailure {
+  readonly category: CodeModeFailureCategory;
+  readonly error?: Error;
+  readonly provider: Exclude<MastraCodeModeTransport, "auto">;
+}
 
 /** Return whether this boot environment matches isolated-vm's supported app shape. */
 function supportsIsolatedVmTransport(): boolean {
@@ -75,6 +99,36 @@ function supportsIsolatedVmTransport(): boolean {
   if (!Number.isFinite(nodeMajor) || nodeMajor < 20 || nodeMajor >= 25) return false;
   const nodeOptions = process.env.NODE_OPTIONS?.split(/\s+/) ?? [];
   return [...process.execArgv, ...nodeOptions].includes("--no-node-snapshot");
+}
+
+/** Return whether the current runtime satisfies QuickJS' published engine floor. */
+function supportsQuickJsTransport(): boolean {
+  if (process.versions.bun) return true;
+  if (process.release.name !== "node") return false;
+  const [majorText, minorText] = process.versions.node.split(".");
+  const major = Number.parseInt(majorText ?? "", 10);
+  const minor = Number.parseInt(minorText ?? "", 10);
+  return (
+    Number.isFinite(major) &&
+    Number.isFinite(minor) &&
+    (major > 20 || (major === 20 && minor >= 19))
+  );
+}
+
+/** Import the optional native transport at most once for this process. */
+function loadIsolatedVmDependency(): Promise<typeof import("@mastra/isolated-vm")> {
+  isolatedVmDependency ??= import(/* @vite-ignore */ ISOLATED_VM_PACKAGE) as Promise<
+    typeof import("@mastra/isolated-vm")
+  >;
+  return isolatedVmDependency;
+}
+
+/** Import the optional portable transport at most once for this process. */
+function loadQuickJsDependency(): Promise<typeof import("@mastra/quickjs")> {
+  quickJsDependency ??= import(/* @vite-ignore */ QUICKJS_PACKAGE) as Promise<
+    typeof import("@mastra/quickjs")
+  >;
+  return quickJsDependency;
 }
 
 /**
@@ -607,26 +661,125 @@ function appendInstructionBlock(instructions: AgentInstructions, block: string):
   return [instructions, { role: "system", content: block }] as AgentInstructions;
 }
 
-/** Resolve one native Code Mode transport during plugin startup. */
-function codeModeTransport(): Promise<CodeModeTransport> {
-  resolvedCodeModeTransport ??= (async () => {
+/** Normalize the public Code Mode shorthand into one startup configuration. */
+function normalizeCodeModeConfig(
+  codeMode: MastraPluginConfig["codeMode"],
+): NormalizedCodeModeConfig | undefined {
+  if (codeMode === undefined || codeMode === false) return undefined;
+  return typeof codeMode === "string" ? { transport: codeMode } : codeMode;
+}
+
+/** Try one optional Code Mode transport without applying fallback policy. */
+async function tryCodeModeTransport(
+  provider: Exclude<MastraCodeModeTransport, "auto">,
+): Promise<ResolvedCodeModeConfig | CodeModeFailure> {
+  if (provider === "isolated-vm") {
     if (!supportsIsolatedVmTransport()) {
-      codeModeLogger.info("transport selected", { provider: "quickjs" });
-      return new QuickJsCodeModeTransport();
+      return { category: "unsupported-runtime", provider };
+    }
+    let module: typeof import("@mastra/isolated-vm");
+    try {
+      module = await loadIsolatedVmDependency();
+    } catch (caught) {
+      return {
+        category: "dependency-unavailable",
+        error: errorUtils.toError(caught),
+        provider,
+      };
     }
     try {
-      const { IsolatedVmCodeModeTransport } = await import("@mastra/isolated-vm");
-      const transport = new IsolatedVmCodeModeTransport();
-      codeModeLogger.info("transport selected", { provider: "isolated-vm" });
-      return transport;
+      return { provider, transport: new module.IsolatedVmCodeModeTransport() };
     } catch (caught) {
-      codeModeLogger.warn("isolated-vm unavailable; using QuickJS", {
+      return {
+        category: "construction-failed",
         error: errorUtils.toError(caught),
-      });
-      return new QuickJsCodeModeTransport();
+        provider,
+      };
     }
-  })();
-  return resolvedCodeModeTransport;
+  }
+
+  if (!supportsQuickJsTransport()) {
+    return { category: "unsupported-runtime", provider };
+  }
+  let module: typeof import("@mastra/quickjs");
+  try {
+    module = await loadQuickJsDependency();
+  } catch (caught) {
+    return {
+      category: "dependency-unavailable",
+      error: errorUtils.toError(caught),
+      provider,
+    };
+  }
+  try {
+    return { provider, transport: new module.QuickJsCodeModeTransport() };
+  } catch (caught) {
+    return {
+      category: "construction-failed",
+      error: errorUtils.toError(caught),
+      provider,
+    };
+  }
+}
+
+function isCodeModeFailure(
+  result: ResolvedCodeModeConfig | CodeModeFailure,
+): result is CodeModeFailure {
+  return "category" in result;
+}
+
+/** Produce the actionable startup error for an explicitly required transport. */
+function requiredCodeModeError(failure: CodeModeFailure): ConfigurationError {
+  const runtime = process.versions.bun
+    ? `Bun ${process.versions.bun}`
+    : `${process.release.name} ${process.versions.node}`;
+  const install = `bun add ${failure.provider === "isolated-vm" ? ISOLATED_VM_PACKAGE : QUICKJS_PACKAGE}`;
+  const reason =
+    failure.category === "unsupported-runtime"
+      ? `is not supported by ${runtime}`
+      : failure.category === "dependency-unavailable"
+        ? "could not be loaded"
+        : "could not be initialized";
+  return new ConfigurationError(
+    `mastra: codeMode transport "${failure.provider}" ${reason}. Install the optional transport with \`${install}\` and use a supported runtime.`,
+    failure.error ? { cause: failure.error } : undefined,
+  );
+}
+
+/** Resolve the configured optional transport once during plugin startup. */
+async function resolveCodeModeConfig(
+  codeMode: MastraPluginConfig["codeMode"],
+): Promise<ResolvedCodeModeConfig | undefined> {
+  const config = normalizeCodeModeConfig(codeMode);
+  if (!config) return undefined;
+
+  const providers: readonly Exclude<MastraCodeModeTransport, "auto">[] =
+    config.transport === "auto" ? ["isolated-vm", "quickjs"] : [config.transport];
+  const failures: CodeModeFailure[] = [];
+  for (const provider of providers) {
+    const result = await tryCodeModeTransport(provider);
+    if (!isCodeModeFailure(result)) {
+      codeModeLogger.info("transport selected", { provider });
+      return { ...result, id: config.id, timeout: config.timeout };
+    }
+    failures.push(result);
+    if (config.transport !== "auto") throw requiredCodeModeError(result);
+    const fields = {
+      category: result.category,
+      provider,
+      ...(result.error ? { error: result.error } : {}),
+    };
+    if (result.category === "unsupported-runtime") {
+      codeModeLogger.info("automatic transport unsupported", fields);
+    } else {
+      codeModeLogger.warn("automatic transport unavailable", fields);
+    }
+  }
+
+  codeModeLogger.info("automatic Code Mode disabled", {
+    reasons: failures.map(({ category, provider }) => ({ category, provider })),
+  });
+  return undefined;
 }
 
 type CodeModeResolver<TRequestContext extends Record<string, unknown> | unknown = unknown> = (
@@ -640,12 +793,11 @@ type CodeModeResolver<TRequestContext extends Record<string, unknown> | unknown 
 
 /** Build request-scoped native Code Mode over all executable context tools. */
 async function buildCodeMode<TRequestContext extends Record<string, unknown> | unknown>(
-  config: MastraPluginConfig,
+  config: ResolvedCodeModeConfig,
   tools: MastraTools,
   workspace: Workspace | undefined,
   requestContext: RequestContext<TRequestContext>,
 ): Promise<ReturnType<typeof createCodeMode> | undefined> {
-  if (config.codeMode === false) return undefined;
   const workspaceTools = workspace
     ? await createWorkspaceTools(workspace, { requestContext, workspace })
     : {};
@@ -660,10 +812,13 @@ async function buildCodeMode<TRequestContext extends Record<string, unknown> | u
     ),
   ) as ToolsInput;
   if (Object.keys(executableTools).length === 0) return undefined;
-  const options = typeof config.codeMode === "object" ? config.codeMode : {};
   const codeMode = createCodeMode(
-    { tools: executableTools, ...options },
-    await codeModeTransport(),
+    {
+      tools: executableTools,
+      ...(config.id !== undefined ? { id: config.id } : {}),
+      ...(config.timeout !== undefined ? { timeout: config.timeout } : {}),
+    },
+    config.transport,
   );
   if (!("mastra_workspace_read_file" in workspaceTools)) return codeMode;
   return {
@@ -674,11 +829,11 @@ async function buildCodeMode<TRequestContext extends Record<string, unknown> | u
 
 /** Resolve Code Mode lazily so workspace and dynamic tool policy follow each request. */
 function codeModeResolver<TRequestContext extends Record<string, unknown> | unknown>(
-  config: MastraPluginConfig,
+  config: ResolvedCodeModeConfig | undefined,
   tools: MastraTools,
   workspace: Workspace | undefined,
 ): CodeModeResolver<TRequestContext> | undefined {
-  if (config.codeMode === false) return undefined;
+  if (!config) return undefined;
   return ({ requestContext }) => buildCodeMode(config, tools, workspace, requestContext);
 }
 
@@ -731,6 +886,7 @@ export async function buildAgents(opts: {
     standardSkills = [],
     excludedWorkspaceSkillNames = [],
   } = opts;
+  const codeModeConfig = await resolveCodeModeConfig(config.codeMode);
   const definitions = resolveDefinitions(config);
   const ids = Object.keys(definitions);
   const defaultAgentId = config.defaultAgent ?? ids[0] ?? FALLBACK_AGENT_ID;
@@ -798,7 +954,7 @@ export async function buildAgents(opts: {
     const gated = approvalGatedToolIds(tools);
     if (gated.length > 0) approvalGatedByAgent.push({ agentId: id, toolIds: gated });
     const memory = memoryBuilder?.forAgent(id, def);
-    const resolveCodeMode = codeModeResolver(config, tools, workspace);
+    const resolveCodeMode = codeModeResolver(codeModeConfig, tools, workspace);
     const agent = new Agent({
       id,
       name: def.name ?? id,

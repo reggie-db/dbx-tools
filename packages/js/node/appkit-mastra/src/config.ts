@@ -166,8 +166,13 @@ export interface MastraWorkspaceSkillsConfig {
   ttlMs?: number;
 }
 
+/** Native Mastra Code Mode execution transport. */
+export type MastraCodeModeTransport = "auto" | "isolated-vm" | "quickjs";
+
 /** Native Mastra Code Mode settings for sandboxed multi-tool orchestration. */
 export interface MastraCodeModeConfig {
+  /** Code Mode execution transport. */
+  transport: MastraCodeModeTransport;
   /** Generated orchestration tool id. Defaults to `execute_typescript`. */
   id?: string;
   /** Maximum orchestration program runtime in milliseconds. Defaults to 30 seconds. */
@@ -237,14 +242,14 @@ export interface MastraPluginConfig extends BasePluginConfig {
   memory?: boolean | MastraMemoryConfig;
   /**
    * Expose executable tools available to the current request through native
-   * Mastra Code Mode. Defaults on whenever the request has executable tools.
-   * The plugin selects Mastra's isolated-vm transport once during startup and
-   * falls back to Mastra QuickJS when the native transport is unavailable.
-   * These transports do not execute through the workspace command sandbox;
-   * SSH is used only when an exposed SSH-backed tool is called. Set `false` to
-   * opt out.
+   * Mastra Code Mode. Defaults to `false`. `auto` selects an installed,
+   * runtime-supported optional transport during startup and leaves Code Mode
+   * disabled when none is available. Explicit transport values fail startup
+   * when their optional dependency or runtime support is unavailable. These
+   * transports do not execute through the workspace command sandbox; SSH is
+   * used only when an exposed SSH-backed tool is called.
    */
-  codeMode?: boolean | MastraCodeModeConfig;
+  codeMode?: false | MastraCodeModeTransport | MastraCodeModeConfig;
   /**
    * Sandbox for auto-created agent workspaces. Defaults to Monty. `false`
    * disables command execution; `true` or `"monty"` selects Monty; an explicit
@@ -700,9 +705,10 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
         "PgVector store for Mastra semantic recall. `true` captures the `lakebase` plugin's existing service-principal pool; an object opens a separately configured store. Auto-enabled when the `lakebase` plugin is registered.",
     },
     codeMode: {
-      type: ["boolean", "object"],
+      type: ["boolean", "string", "object"],
+      default: false,
       description:
-        "Expose all executable tools available to the current request through native Mastra Code Mode for TypeScript batching, aggregation, and arithmetic. The plugin uses Mastra isolated-vm with the existing QuickJS fallback; neither transport runs through the workspace command sandbox, so SSH is used only when an SSH-backed tool is called. False disables it.",
+        'Expose executable request tools through native Mastra Code Mode for TypeScript batching, aggregation, and arithmetic. Defaults to false. Use "auto" to select an installed supported optional transport or stay disabled, "isolated-vm" to require the native transport, "quickjs" to require the portable transport, or an object with transport plus id and timeout. Neither transport runs through the workspace command sandbox.',
     },
     sandbox: {
       type: ["boolean", "string", "object"],

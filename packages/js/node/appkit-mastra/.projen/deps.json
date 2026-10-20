@@ -6,6 +6,11 @@
       "type": "build"
     },
     {
+      "name": "@mastra/quickjs",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "@mlflow/core",
       "version": "catalog:",
       "type": "build"
@@ -47,6 +52,11 @@
     },
     {
       "name": "@mastra/isolated-vm",
+      "version": "catalog:",
+      "type": "optional"
+    },
+    {
+      "name": "@mastra/quickjs",
       "version": "catalog:",
       "type": "optional"
     },
@@ -182,11 +192,6 @@
     },
     {
       "name": "@mastra/pg",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "@mastra/quickjs",
       "version": "catalog:",
       "type": "runtime"
     },

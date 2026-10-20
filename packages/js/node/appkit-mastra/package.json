@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@mastra/isolated-vm": "catalog:",
+    "@mastra/quickjs": "catalog:",
     "@mlflow/core": "catalog:",
     "@types/express": "catalog:",
     "@types/json-schema": "^7",
@@ -59,7 +60,6 @@
     "@mastra/observability": "catalog:",
     "@mastra/otel-bridge": "catalog:",
     "@mastra/pg": "catalog:",
-    "@mastra/quickjs": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",
     "@opentelemetry/api": "catalog:",
     "@opentelemetry/core": "catalog:",
@@ -280,7 +280,8 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@mastra/isolated-vm": "catalog:"
+    "@mastra/isolated-vm": "catalog:",
+    "@mastra/quickjs": "catalog:"
   },
   "peerDependenciesMeta": {
     "skills": {

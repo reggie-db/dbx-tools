@@ -9,13 +9,16 @@ interface PackageManifest {
 }
 
 describe("appkit-mastra package", () => {
-  it("keeps isolated-vm optional while retaining development types", () => {
+  it("keeps Code Mode transports optional while retaining development types", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as PackageManifest;
 
     assert.equal(manifest.dependencies?.["@mastra/isolated-vm"], undefined);
+    assert.equal(manifest.dependencies?.["@mastra/quickjs"], undefined);
     assert.equal(manifest.optionalDependencies?.["@mastra/isolated-vm"], "catalog:");
+    assert.equal(manifest.optionalDependencies?.["@mastra/quickjs"], "catalog:");
     assert.equal(manifest.devDependencies?.["@mastra/isolated-vm"], "catalog:");
+    assert.equal(manifest.devDependencies?.["@mastra/quickjs"], "catalog:");
   });
 });

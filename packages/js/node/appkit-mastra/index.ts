@@ -43,7 +43,7 @@ export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolki
 export { chartPlanSchema, chartPlannerRequestSchema, chartToolOutputSchema } from "./src/chart.ts";
 export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_AUTH_MODE_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
-export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraCodeModeConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
+export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraCodeModeTransport, MastraCodeModeConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, genieConversationReadDefaults, genieConversationWriteDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
 export type { MastraEvalDriverOptions } from "./src/evaluation.ts";
 export type { FeedbackAvailability } from "./src/feedback-mode.ts";
