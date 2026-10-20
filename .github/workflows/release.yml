@@ -102,6 +102,20 @@ jobs:
           name: release-npm
           path: .release/npm
           if-no-files-found: error
+      - name: Build publication verifier
+        id: build_publication_verifier
+        if: ${{ success() && (steps.release.outputs.npm == 'true' || steps.release.outputs.pypi == 'true') }}
+        run: |-
+          mkdir -p .release/verifier
+          bun build node_modules/@dbx-tools/projen/tasks/verify-publications.ts --target=bun --outfile=.release/verifier/verify-publications.mjs
+      - name: Upload publication verifier
+        id: upload_publication_verifier
+        if: ${{ success() && (steps.release.outputs.npm == 'true' || steps.release.outputs.pypi == 'true') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-publication-verifier
+          path: .release/verifier/verify-publications.mjs
+          if-no-files-found: error
       - name: Setup Node.js
         id: setup_node_js
         if: ${{ success() && steps.release.outputs.docs == 'true' }}
@@ -212,7 +226,7 @@ jobs:
           NPM_CONFIG_PROVENANCE: "true"
         run: bun .release/npm/publish-npm.mjs --directory .release/npm --version "$RELEASE_VERSION"
     timeout-minutes: 30
-  deploy-docs:
+  verify-publications:
     needs:
       - build-release
       - publish-node
@@ -220,12 +234,64 @@ jobs:
       - publish-pypi-graphiti
     runs-on: ubuntu-latest
     permissions:
+      contents: read
+    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.npm == 'true' || needs['build-release'].outputs.pypi == 'true') && (needs['build-release'].outputs.npm != 'true' || needs['publish-node'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-node-runtime'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-graphiti'].result == 'success') }}
+    steps:
+      - name: Download publication verifier
+        id: download_publication_verifier
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: release-publication-verifier
+          path: .release/verifier
+      - name: Download npm archives
+        id: download_npm_archives
+        if: ${{ needs.build-release.outputs.npm == 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: release-npm
+          path: .release/npm
+      - name: Download Python distributions
+        id: download_python_distributions
+        if: ${{ needs.build-release.outputs.pypi == 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: release-python-*
+          path: .release/python
+          merge-multiple: true
+      - name: Setup Bun
+        id: setup_bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - name: Wait for public package availability
+        id: wait_for_public_package_availability
+        env:
+          RELEASE_VERSION: ${{ needs.build-release.outputs.release_version }}
+          VERIFY_NPM: ${{ needs.build-release.outputs.npm }}
+          VERIFY_PYPI: ${{ needs.build-release.outputs.pypi }}
+        run: |-
+          args=(--version "$RELEASE_VERSION")
+          if [[ "$VERIFY_NPM" == "true" ]]; then
+            args+=(--npm-directory .release/npm)
+          fi
+          if [[ "$VERIFY_PYPI" == "true" ]]; then
+            args+=(--pypi-directory .release/python)
+          fi
+          bun .release/verifier/verify-publications.mjs "${args[@]}"
+        shell: bash
+    timeout-minutes: 15
+  deploy-docs:
+    needs:
+      - build-release
+      - verify-publications
+    runs-on: ubuntu-latest
+    permissions:
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['publish-node'].result == 'success' || needs['publish-node'].result == 'skipped') && (needs['publish-pypi-node-runtime'].result == 'success' || needs['publish-pypi-node-runtime'].result == 'skipped') && (needs['publish-pypi-graphiti'].result == 'success' || needs['publish-pypi-graphiti'].result == 'skipped') }}
+    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['verify-publications'].result == 'success' || needs['verify-publications'].result == 'skipped') }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

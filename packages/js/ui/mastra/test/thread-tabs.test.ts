@@ -8,7 +8,7 @@ const thread = (id: string): ThreadSummary => ({ id, title: id });
 describe("syncThreadTabs", () => {
   it("seeds from the newest conversations while the strip is empty", () => {
     const threads = [thread("a"), thread("b"), thread("c")];
-    assert.deepEqual(syncThreadTabs([], threads, undefined, 2), ["a", "b"]);
+    assert.deepEqual(syncThreadTabs([], threads, undefined, { seedMax: 2 }), ["a", "b"]);
   });
 
   it("keeps the active thread even when the server list has not caught up", () => {
@@ -27,10 +27,17 @@ describe("syncThreadTabs", () => {
     assert.equal(syncThreadTabs(open, threads, "b"), open);
   });
 
-  it("reseeds after the last tab is closed", () => {
-    // Closing every tab leaves an empty strip, which reseeds rather than
-    // stranding the user with no way back into a conversation.
-    assert.deepEqual(syncThreadTabs([], [thread("a"), thread("b")], undefined, 5), ["a", "b"]);
+  it("keeps the strip empty after every tab is explicitly closed", () => {
+    assert.deepEqual(
+      syncThreadTabs([], [thread("a"), thread("b")], undefined, { seed: false }),
+      [],
+    );
+  });
+
+  it("opens only the new active chat after the last tab is closed", () => {
+    assert.deepEqual(syncThreadTabs([], [thread("a"), thread("b")], "new", { seed: false }), [
+      "new",
+    ]);
   });
 });
 

@@ -97,6 +97,14 @@ describe("unified release workflow", () => {
       step(verifyJob, "Build npm archives").run?.includes("--outfile=.release/npm/publish-npm.mjs"),
     );
     assert.equal(step(verifyJob, "Upload npm archives").with?.name, "release-npm");
+    assert.ok(
+      step(verifyJob, "Build publication verifier").run?.includes("tasks/verify-publications.ts"),
+    );
+    assert.deepEqual(step(verifyJob, "Upload publication verifier").with, {
+      name: "release-publication-verifier",
+      path: ".release/verifier/verify-publications.mjs",
+      "if-no-files-found": "error",
+    });
     assert.equal(
       verifyJob.steps.some((candidate) => candidate.name === "Setup uv"),
       false,
@@ -154,6 +162,22 @@ describe("unified release workflow", () => {
       "${{ needs.build-release.outputs.release_version }}",
     );
     assert.doesNotMatch(publish.run ?? "", /release-automation|ACCEPT_STAGED/);
+
+    const availability = release.jobs["verify-publications"]!;
+    assert.deepEqual(availability.needs, ["build-release", "publish-node"]);
+    assert.deepEqual(step(availability, "Download publication verifier").with, {
+      name: "release-publication-verifier",
+      path: ".release/verifier",
+    });
+    assert.deepEqual(step(availability, "Download npm archives").with, {
+      name: "release-npm",
+      path: ".release/npm",
+    });
+    assert.ok(
+      step(availability, "Wait for public package availability").run?.includes(
+        "--npm-directory .release/npm",
+      ),
+    );
   });
 
   it("builds and selectively deploys docs in the same workflow", () => {
@@ -176,10 +200,10 @@ describe("unified release workflow", () => {
     });
 
     const deploy = release.jobs["deploy-docs"]!;
-    assert.deepEqual(deploy.needs, ["build-release", "publish-node"]);
+    assert.deepEqual(deploy.needs, ["build-release", "verify-publications"]);
     assert.equal(release.jobs["build-docs"], undefined);
     assert.ok(deploy.if?.includes("outputs.docs == 'true'"));
-    assert.ok(deploy.if?.includes("needs['publish-node'].result == 'skipped'"));
+    assert.ok(deploy.if?.includes("needs['verify-publications'].result == 'skipped'"));
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
       url: "${{ steps.deployment.outputs.page_url }}",
@@ -277,6 +301,7 @@ describe("optional Node release stage", () => {
       const workflow = readWorkflow(disabledOutdir, "release");
       assert.ok(workflow.jobs["build-release"]);
       assert.equal(workflow.jobs["publish-node"], undefined);
+      assert.equal(workflow.jobs["verify-publications"], undefined);
       assert.equal(workflow.jobs["build-docs"], undefined);
     } finally {
       rmSync(disabledOutdir, { recursive: true, force: true });
@@ -354,7 +379,10 @@ describe("optional Node release stage", () => {
       assert.equal(workflow.jobs["build-docs"], undefined);
       assert.equal(workflow.jobs["build-release"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
       assert.equal(workflow.jobs["build-release"]?.env?.DOCS_BASE, "/");
-      assert.deepEqual(workflow.jobs["deploy-docs"]?.needs, ["build-release", "publish-node"]);
+      assert.deepEqual(workflow.jobs["deploy-docs"]?.needs, [
+        "build-release",
+        "verify-publications",
+      ]);
       assert.equal("release-please" in workflow.jobs, false);
       assert.equal("release-plan" in workflow.jobs, false);
       assert.equal("publish-github-release" in workflow.jobs, false);

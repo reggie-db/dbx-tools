@@ -125,6 +125,20 @@ Lakebase mode uses `GRAPHITI_DATABASE_SCHEMA`, which defaults to
 If the database has an existing `vector` installation, Graphiti uses that
 extension schema for type resolution.
 
+Lakebase startup verifies schema ownership before creating extensions or
+starting Graphiti. Without `POSTGRES_ROLE`, the active login must own an
+existing schema. With `POSTGRES_ROLE`, that role must own it. A mismatched owner
+fails immediately.
+
+An application that must migrate a login-owned schema to a distinct shared role
+can call `prepare_lakebase_schema(database_url, schema, role)` from
+`dbx_tools.graphiti.database` before starting Graphiti. The function is a no-op
+when the requested role already owns the schema, including when that role is the
+active login. It rejects a destructive migration targeting the active login and
+rejects schemas owned by another principal. Otherwise it drops and recreates
+the login-owned schema under the shared role. Recreating the schema deletes its
+existing objects.
+
 ## Wait for memory writes
 
 The direct HTTP and MCP `add_memory` operation queues a write and returns

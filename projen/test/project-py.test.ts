@@ -282,13 +282,25 @@ describe("DBXToolsPythonWorkspace", () => {
       "build-release",
       "publish-pypi-core",
     ]);
-    assert.equal(release.jobs["build-docs"], undefined);
-    assert.deepEqual(release.jobs["deploy-docs"]?.needs, [
+    const availability = release.jobs["verify-publications"]!;
+    assert.deepEqual(availability.needs, [
       "build-release",
       "publish-node",
       "publish-pypi-core",
       "publish-pypi-app",
     ]);
+    assert.deepEqual(workflowStep(availability, "Download Python distributions").with, {
+      pattern: "release-python-*",
+      path: ".release/python",
+      "merge-multiple": true,
+    });
+    assert.ok(
+      workflowStep(availability, "Wait for public package availability").run?.includes(
+        "--pypi-directory .release/python",
+      ),
+    );
+    assert.equal(release.jobs["build-docs"], undefined);
+    assert.deepEqual(release.jobs["deploy-docs"]?.needs, ["build-release", "verify-publications"]);
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
@@ -551,6 +563,10 @@ describe("optional Python release stages", () => {
       assert.equal(workflow.jobs["build-python"], undefined);
       assert.ok(workflow.jobs["publish-pypi-core"]);
       assert.equal(workflow.jobs["publish-node"], undefined);
+      assert.deepEqual(workflow.jobs["verify-publications"]?.needs, [
+        "build-release",
+        "publish-pypi-core",
+      ]);
       assert.equal("repository_dispatch" in workflow.on, false);
       assert.equal("workflow_run" in workflow.on, false);
     } finally {

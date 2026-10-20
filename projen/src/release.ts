@@ -16,12 +16,17 @@ import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { projectReleaseBranch, taskCommand, type DBXToolsJavaScriptProject } from "./project-js.ts";
-import { RELEASE_VERSION, RELEASE_WORKFLOW_FILE } from "./release-context.ts";
+import {
+  PUBLIC_NPM_REGISTRY_URL,
+  RELEASE_VERSION,
+  RELEASE_WORKFLOW_FILE,
+} from "./release-context.ts";
 import type { ReleaseStepSelection } from "./release-options.ts";
 
 const NODE_VERSION = "24";
 const NPM_VERSION = "11.4.2";
-const NPM_REGISTRY_URL = "https://registry.npmjs.org";
+const PUBLICATION_VERIFIER_ARTIFACT = "release-publication-verifier";
+const PUBLICATION_VERIFIER_JOB = "verify-publications";
 const releaseTagPrefixes = new WeakMap<DBXToolsJavaScriptProject, string>();
 const releaseWorkflows = new WeakMap<DBXToolsJavaScriptProject, GithubWorkflow>();
 
@@ -95,7 +100,7 @@ export function nodeReleaseSetupSteps(): readonly JobStep[] {
       uses: github.ActionRefs.ACTIONS_SETUP_NODE,
       with: {
         "node-version": NODE_VERSION,
-        "registry-url": NPM_REGISTRY_URL,
+        "registry-url": PUBLIC_NPM_REGISTRY_URL,
         "package-manager-cache": false,
       },
     },
@@ -114,19 +119,14 @@ export function uvSetupStep(): JobStep {
 function refreshDocsRegistryDependencies(workflow: GithubWorkflow): void {
   const docs = workflow.getJob("deploy-docs") as Job | undefined;
   if (!docs) return;
-  const registryJobs = Object.keys(workflow.jobs).filter(
-    (name) => name === "publish-node" || name.startsWith("publish-pypi-"),
-  );
-  if (registryJobs.length > 0) {
+  if (workflow.getJob(PUBLICATION_VERIFIER_JOB)) {
     workflow.updateJob("deploy-docs", {
       ...docs,
-      needs: ["build-release", ...registryJobs],
+      needs: ["build-release", PUBLICATION_VERIFIER_JOB],
       if: releaseCondition([
         "needs['build-release'].result == 'success'",
         "needs['build-release'].outputs.docs == 'true'",
-        ...registryJobs.map(
-          (name) => `needs['${name}'].result == 'success' || needs['${name}'].result == 'skipped'`,
-        ),
+        `needs['${PUBLICATION_VERIFIER_JOB}'].result == 'success' || needs['${PUBLICATION_VERIFIER_JOB}'].result == 'skipped'`,
       ]),
     });
   }
@@ -138,6 +138,107 @@ export function refreshReleaseDocsDependencies(project: DBXToolsJavaScriptProjec
   if (workflow) {
     refreshDocsRegistryDependencies(workflow);
   }
+}
+
+function publicationRegistryJobs(workflow: GithubWorkflow): string[] {
+  return Object.keys(workflow.jobs).filter(
+    (name) => name === "publish-node" || name.startsWith("publish-pypi-"),
+  );
+}
+
+/** Keep one public availability barrier behind every configured registry publisher. */
+export function refreshPublicationVerification(project: DBXToolsJavaScriptProject): void {
+  const workflow = releaseWorkflows.get(project);
+  if (!workflow) return;
+  const registryJobs = publicationRegistryJobs(workflow);
+  if (registryJobs.length === 0) return;
+  const hasNpm = registryJobs.includes("publish-node");
+  const hasPypi = registryJobs.some((name) => name.startsWith("publish-pypi-"));
+  const selected = [
+    ...(hasNpm ? ["needs['build-release'].outputs.npm == 'true'"] : []),
+    ...(hasPypi ? ["needs['build-release'].outputs.pypi == 'true'"] : []),
+  ].join(" || ");
+  const prerequisites = registryJobs.map((name) => {
+    const output = name === "publish-node" ? "npm" : "pypi";
+    return `needs['build-release'].outputs.${output} != 'true' || needs['${name}'].result == 'success'`;
+  });
+  const job: Job = {
+    if: releaseCondition([
+      "needs['build-release'].result == 'success'",
+      selected,
+      ...prerequisites,
+    ]),
+    needs: ["build-release", ...registryJobs],
+    runsOn: ["ubuntu-latest"],
+    permissions: { contents: JobPermission.READ },
+    timeoutMinutes: 15,
+    steps: [
+      {
+        name: "Download publication verifier",
+        uses: github.ActionRefs.ACTIONS_DOWNLOAD_ARTIFACT,
+        with: { name: PUBLICATION_VERIFIER_ARTIFACT, path: ".release/verifier" },
+      },
+      ...(hasNpm
+        ? [
+            {
+              name: "Download npm archives",
+              if: "${{ needs.build-release.outputs.npm == 'true' }}",
+              uses: github.ActionRefs.ACTIONS_DOWNLOAD_ARTIFACT,
+              with: { name: "release-npm", path: ".release/npm" },
+            },
+          ]
+        : []),
+      ...(hasPypi
+        ? [
+            {
+              name: "Download Python distributions",
+              if: "${{ needs.build-release.outputs.pypi == 'true' }}",
+              uses: github.ActionRefs.ACTIONS_DOWNLOAD_ARTIFACT,
+              with: {
+                pattern: "release-python-*",
+                path: ".release/python",
+                "merge-multiple": true,
+              },
+            },
+          ]
+        : []),
+      {
+        name: "Setup Bun",
+        uses: github.ActionRefs.OVEN_SH_SETUP_BUN,
+        with: { "bun-version": BUN_VERSION },
+      },
+      {
+        name: "Wait for public package availability",
+        shell: "bash",
+        env: {
+          RELEASE_VERSION,
+          VERIFY_NPM: hasNpm ? "${{ needs.build-release.outputs.npm }}" : "false",
+          VERIFY_PYPI: hasPypi ? "${{ needs.build-release.outputs.pypi }}" : "false",
+        },
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+            args=(--version "$RELEASE_VERSION")
+            if [[ "$VERIFY_NPM" == "true" ]]; then
+              args+=(--npm-directory .release/npm)
+            fi
+            if [[ "$VERIFY_PYPI" == "true" ]]; then
+              args+=(--pypi-directory .release/python)
+            fi
+            bun .release/verifier/verify-publications.mjs "\${args[@]}"
+          `
+          // ============================================================================
+        ),
+      },
+    ],
+  };
+  if (workflow.getJob(PUBLICATION_VERIFIER_JOB)) {
+    workflow.updateJob(PUBLICATION_VERIFIER_JOB, job);
+  } else {
+    workflow.addJob(PUBLICATION_VERIFIER_JOB, job);
+  }
+  refreshDocsRegistryDependencies(workflow);
 }
 
 function releaseBuildJob(
@@ -229,6 +330,24 @@ function releaseBuildJob(
               with: { name: "release-npm", path: ".release/npm", "if-no-files-found": "error" },
             },
           ])),
+      {
+        name: "Build publication verifier",
+        if: "${{ success() && (steps.release.outputs.npm == 'true' || steps.release.outputs.pypi == 'true') }}",
+        run: [
+          "mkdir -p .release/verifier",
+          "bun build node_modules/@dbx-tools/projen/tasks/verify-publications.ts --target=bun --outfile=.release/verifier/verify-publications.mjs",
+        ].join("\n"),
+      },
+      {
+        name: "Upload publication verifier",
+        if: "${{ success() && (steps.release.outputs.npm == 'true' || steps.release.outputs.pypi == 'true') }}",
+        uses: github.ActionRefs.ACTIONS_UPLOAD_ARTIFACT,
+        with: {
+          name: PUBLICATION_VERIFIER_ARTIFACT,
+          path: ".release/verifier/verify-publications.mjs",
+          "if-no-files-found": "error",
+        },
+      },
       ...(options.docs
         ? releaseBuildSteps("docs", [
             ...options.docs.prepareSteps,
@@ -356,6 +475,7 @@ export class DBXToolsRelease extends Component {
     if (options.nodeRelease !== false) {
       workflow.addJob("publish-node", nodePublishJob());
     }
+    refreshPublicationVerification(project);
     if (options.docs) {
       addDocsJobs(workflow);
     }

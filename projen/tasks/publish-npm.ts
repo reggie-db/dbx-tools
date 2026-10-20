@@ -20,11 +20,11 @@ import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { TaskConcurrencyOptionSchema, TaskDryRunOptionSchema } from "./options.ts";
 import { runTaskCommandAsync } from "../src/_task-command.ts";
+import { PUBLIC_NPM_REGISTRY_URL } from "../src/release-context.ts";
 import { materializeWorkspaceManifest } from "../src/workspace-manifest.ts";
 
 export { materializeWorkspaceManifest } from "../src/workspace-manifest.ts";
 
-const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 const DEFAULT_PUBLISH_CONCURRENCY = 4;
 const logger = log.logger("projen:publish-npm");
 
@@ -132,10 +132,12 @@ export function npmReleaseMatches(
 export async function publishedNpmRelease(
   name: string,
   version: string,
-  registry = process.env.NPM_CONFIG_REGISTRY ?? DEFAULT_REGISTRY,
+  registry = process.env.NPM_CONFIG_REGISTRY ?? PUBLIC_NPM_REGISTRY_URL,
+  signal?: AbortSignal,
 ): Promise<NpmReleaseIdentity | undefined> {
   const response = await fetch(registryUrl(registry, name, version), {
     headers: { accept: "application/json" },
+    signal,
   });
   if (response.status === 404) return undefined;
   if (!response.ok) {
@@ -152,7 +154,7 @@ export async function publishedNpmRelease(
   }
   let contentDigest: string | undefined;
   if (metadata.dist?.tarball) {
-    const archive = await fetch(metadata.dist.tarball);
+    const archive = await fetch(metadata.dist.tarball, { signal });
     if (!archive.ok) {
       throw new Error(`npm tarball lookup failed for ${name}@${version}: ${archive.status}`);
     }

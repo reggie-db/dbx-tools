@@ -3,3 +3,7 @@
 export const RELEASE_VERSION = "${{ needs.build-release.outputs.release_version }}";
 /** Generated GitHub Actions workflow triggered by release tags. */
 export const RELEASE_WORKFLOW_FILE = "release.yml";
+/** Public npm registry queried after npm publication completes. */
+export const PUBLIC_NPM_REGISTRY_URL = "https://registry.npmjs.org";
+/** Public PyPI JSON API queried after Python publication completes. */
+export const PUBLIC_PYPI_REGISTRY_URL = "https://pypi.org/pypi";

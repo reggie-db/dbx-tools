@@ -601,11 +601,14 @@ site. Install validation prerequisites through `releaseSetupSteps`.
 Publication jobs download the resulting artifacts rather than rebuilding the
 workspace. Each Python package retains its own publishing environment and waits
 for its package dependencies to publish. The npm job uses the bundled archive
-publisher without a checkout or workspace install. Pages deploys the already
-built site after registry publication succeeds. Local npm and Python registry publication remains available
-through the direct local publication tooling. Those local publishers run
-concurrently; a failure or release termination stops every live publisher before
-the command returns.
+publisher without a checkout or workspace install. After all selected public
+publishers finish, one verifier downloads the complete release artifact set and
+polls only unresolved packages concurrently. It validates npm tarball contents
+and PyPI distribution hashes before Pages deploys the already built site. Local
+npm and Python registry publication remains available through the direct local
+publication tooling and does not wait for registry propagation. Those local
+publishers run concurrently; a failure or release termination stops every live
+publisher before the command returns.
 
 The default release publishes npm, Python, and docs, then publishes to
 configured local registries. Use `bun run release --help` or the generated

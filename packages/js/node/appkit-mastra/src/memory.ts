@@ -43,7 +43,7 @@ import {
 import { fastembed } from "@mastra/fastembed";
 import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
-import type { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 
 import type { AnyMastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
 import type { MastraPluginConfig } from "./config.ts";
@@ -158,6 +158,24 @@ export function createMemoryBuilder(
   servicePrincipalPool?: Pool,
 ): MemoryBuilder {
   return new MemoryBuilder(config, servicePrincipalPool);
+}
+
+/**
+ * Create the plugin-owned Lakebase pool used by durable workflow storage.
+ *
+ * @internal
+ *
+ * AppKit shuts plugin hooks down concurrently, so borrowing the native
+ * Lakebase plugin's pool lets its shutdown race Mastra's final snapshot writes.
+ * A caller-provided pool is not closed by PostgresStore; idle connections do
+ * not keep the process alive and remain available to runs Mastra is still
+ * draining after its bounded shutdown window.
+ */
+export function createMastraLakebasePool(config: PoolConfig): Pool {
+  return new Pool({
+    ...config,
+    allowExitOnIdle: true,
+  });
 }
 
 /**

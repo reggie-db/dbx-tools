@@ -32,6 +32,7 @@ from .options import ResolvedGraphitiOptionsResponse
 _DATABASE_DIRECTORY = "postgres"
 _EMBEDDED_DATABASE = "postgres"
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_SCHEMA_OWNER_QUERY = "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = $1"
 
 
 @dataclass
@@ -71,6 +72,47 @@ async def _start_database(
         options["databaseSchema"],
         role,
     )
+
+
+async def prepare_lakebase_schema(
+    database_url: str,
+    schema: str,
+    role: str,
+    profile: str | None = None,
+) -> bool:
+    """Recreate a login-owned Lakebase schema under a distinct shared role.
+
+    Returns ``True`` when the schema was recreated and ``False`` when it already
+    had the requested shared owner. Destructive migration is rejected when the
+    target role is the login role or another principal owns the schema.
+    Recreating the schema drops all objects beneath it.
+    """
+    client = create_lakebase_client({"profile": profile}) if profile else create_lakebase_client()
+    resolved = await client.resolve(parse_address(database_url))
+    password = await client.generate_database_credential(resolved["endpoint"])
+    connection = await asyncpg.connect(_lakebase_dsn(resolved), password=password)
+    try:
+        login_role, owner = await _schema_ownership(connection, schema)
+        if owner == role:
+            return False
+        if role == login_role:
+            raise RuntimeError(
+                f"Cannot recreate Graphiti schema {schema!r}: target role {role!r} "
+                "is the active login; destructive migration requires a distinct shared role"
+            )
+        if owner is not None and owner != login_role:
+            raise RuntimeError(
+                f"Cannot recreate Graphiti schema {schema!r}: owner is {owner!r}, "
+                f"but the active login is {login_role!r}"
+            )
+        quoted_schema = quote_postgres_identifier(schema)
+        quoted_role = quote_postgres_identifier(role)
+        async with connection.transaction():
+            await connection.execute(f"DROP SCHEMA IF EXISTS {quoted_schema} CASCADE")
+            await connection.execute(f"CREATE SCHEMA {quoted_schema} AUTHORIZATION {quoted_role}")
+        return True
+    finally:
+        await connection.close()
 
 
 async def _start_embedded_database(
@@ -113,8 +155,22 @@ async def _start_lakebase_database(
     dsn = _lakebase_dsn(resolved)
     connection = await asyncpg.connect(dsn, password=await password())
     try:
-        authorization = f" AUTHORIZATION {quote_postgres_identifier(role)}" if role else ""
-        await connection.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"{authorization}')
+        login_role, owner = await _schema_ownership(connection, schema)
+        expected_owner = role or login_role
+        authorization = f" AUTHORIZATION {quote_postgres_identifier(expected_owner)}"
+        if owner is None:
+            await connection.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"{authorization}')
+            owner = await _schema_owner(connection, schema)
+        if owner != expected_owner:
+            role_context = (
+                f"configured shared role is {role!r}"
+                if role and role != login_role
+                else "no distinct shared role is configured"
+            )
+            raise RuntimeError(
+                f"Cannot use Graphiti schema {schema!r}: owner is {owner!r}, "
+                f"active login is {login_role!r}, and {role_context}"
+            )
         role_statement = postgres_role_statement(role)
         if role_statement:
             await connection.execute(role_statement)
@@ -144,6 +200,24 @@ def _database_role_options(role: str | None) -> dict[str, Any]:
     """Return asyncpg/PostGraph connection options for an assumed database role."""
     server_settings = postgres_server_settings(role)
     return {"server_settings": server_settings} if server_settings else {}
+
+
+async def _schema_ownership(
+    connection: asyncpg.Connection,
+    schema: str,
+) -> tuple[str, str | None]:
+    """Return the authenticated login role and current schema owner."""
+    login_role = await connection.fetchval("SELECT session_user")
+    owner = await _schema_owner(connection, schema)
+    return login_role, owner
+
+
+async def _schema_owner(
+    connection: asyncpg.Connection,
+    schema: str,
+) -> str | None:
+    """Return the schema owner when the schema exists."""
+    return await connection.fetchval(_SCHEMA_OWNER_QUERY, schema)
 
 
 async def _ensure_vector_extension(connection: asyncpg.Connection, schema: str) -> str:

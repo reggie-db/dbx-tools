@@ -12,6 +12,22 @@ async def _connect(calls, connection, dsn, options):
     return connection
 
 
+class _StaticLakebaseClient:
+    """Return one stable Lakebase target and credential for ownership tests."""
+
+    async def resolve(self, _target: object) -> dict[str, object]:
+        return {
+            "endpoint": "projects/project/branches/branch/endpoints/primary",
+            "host": "primary.example",
+            "port": 5432,
+            "database": "databricks_postgres",
+            "user": "app_login",
+        }
+
+    async def generate_database_credential(self, _endpoint: str) -> str:
+        return "token"
+
+
 @pytest.mark.asyncio
 async def test_missing_database_starts_persistent_embedded_postgres(
     monkeypatch,
@@ -53,13 +69,18 @@ async def test_missing_database_starts_persistent_embedded_postgres(
 @pytest.mark.asyncio
 async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) -> None:
     calls: list[object] = []
+    owners = iter([None, "graphiti_owner"])
 
     class Connection:
         async def execute(self, query: str) -> None:
             calls.append(query)
 
-        async def fetchval(self, query: str) -> str:
+        async def fetchval(self, query: str, *_: object) -> str | None:
             calls.append(query)
+            if query == "SELECT session_user":
+                return "app_login"
+            if query == database._SCHEMA_OWNER_QUERY:
+                return next(owners)
             return "extensions"
 
         async def close(self) -> None:
@@ -105,8 +126,8 @@ async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) 
     password = runtime.connection_options["password"]
 
     assert callable(password)
-    assert await password() == "token-9"
-    assert await password() == "token-10"
+    assert await password() == "token-12"
+    assert await password() == "token-13"
     assert runtime.connection_options["server_settings"] == {
         "search_path": "graphiti_memory, extensions, public",
         "role": "graphiti_owner",
@@ -123,7 +144,10 @@ async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) 
             "postgresql://user%40example.com@primary.example:5432/databricks_postgres?sslmode=require",
             {"password": "token-3"},
         ),
+        "SELECT session_user",
+        database._SCHEMA_OWNER_QUERY,
         'CREATE SCHEMA IF NOT EXISTS "graphiti_memory" AUTHORIZATION "graphiti_owner"',
+        database._SCHEMA_OWNER_QUERY,
         'SET ROLE "graphiti_owner"',
         (
             "SELECT quote_ident(n.nspname) FROM pg_extension e "
@@ -134,6 +158,184 @@ async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) 
         "projects/project/branches/branch/endpoints/primary",
         "projects/project/branches/branch/endpoints/primary",
     ]
+
+
+@pytest.mark.asyncio
+async def test_prepare_lakebase_schema_recreates_current_users_schema(monkeypatch) -> None:
+    calls: list[object] = []
+
+    class Transaction:
+        async def __aenter__(self) -> None:
+            calls.append("begin")
+
+        async def __aexit__(self, *_: object) -> None:
+            calls.append("commit")
+
+    class Connection:
+        async def fetchval(self, query: str, *_: object) -> str:
+            calls.append(query)
+            return "app_login"
+
+        async def execute(self, query: str) -> None:
+            calls.append(query)
+
+        def transaction(self) -> Transaction:
+            return Transaction()
+
+        async def close(self) -> None:
+            calls.append("closed")
+
+    class Client:
+        async def resolve(self, target):
+            calls.append(target)
+            return {
+                "endpoint": "projects/project/branches/branch/endpoints/primary",
+                "host": "primary.example",
+                "port": 5432,
+                "database": "databricks_postgres",
+                "user": "app_login",
+            }
+
+        async def generate_database_credential(self, endpoint: str) -> str:
+            calls.append(endpoint)
+            return "token"
+
+    monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
+    monkeypatch.setattr(database, "create_lakebase_client", lambda: Client())
+    monkeypatch.setattr(
+        database.asyncpg,
+        "connect",
+        lambda dsn, **options: _connect(calls, Connection(), dsn, options),
+    )
+
+    recreated = await database.prepare_lakebase_schema(
+        "project",
+        "graphiti_memory",
+        "graphiti_owner",
+    )
+
+    assert recreated is True
+    assert 'DROP SCHEMA IF EXISTS "graphiti_memory" CASCADE' in calls
+    assert 'CREATE SCHEMA "graphiti_memory" AUTHORIZATION "graphiti_owner"' in calls
+    assert calls[-1] == "closed"
+
+
+@pytest.mark.asyncio
+async def test_prepare_lakebase_schema_rejects_another_owner(monkeypatch) -> None:
+    class Connection:
+        async def fetchval(self, query: str, *_: object) -> str:
+            return "app_login" if query == "SELECT session_user" else "another_owner"
+
+        async def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
+    monkeypatch.setattr(database, "create_lakebase_client", _StaticLakebaseClient)
+    monkeypatch.setattr(
+        database.asyncpg,
+        "connect",
+        lambda dsn, **options: _connect([], Connection(), dsn, options),
+    )
+
+    with pytest.raises(RuntimeError, match="another_owner"):
+        await database.prepare_lakebase_schema(
+            "project",
+            "graphiti_memory",
+            "graphiti_owner",
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepare_lakebase_schema_requires_distinct_shared_role(monkeypatch) -> None:
+    class Connection:
+        async def fetchval(self, query: str, *_: object) -> str:
+            return "app_login" if query == "SELECT session_user" else "another_owner"
+
+        async def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
+    monkeypatch.setattr(database, "create_lakebase_client", _StaticLakebaseClient)
+    monkeypatch.setattr(
+        database.asyncpg,
+        "connect",
+        lambda dsn, **options: _connect([], Connection(), dsn, options),
+    )
+
+    with pytest.raises(RuntimeError, match="distinct shared role"):
+        await database.prepare_lakebase_schema(
+            "project",
+            "graphiti_memory",
+            "app_login",
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepare_lakebase_schema_allows_login_owned_noop(monkeypatch) -> None:
+    class Connection:
+        async def fetchval(self, _query: str, *_: object) -> str:
+            return "app_login"
+
+        async def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
+    monkeypatch.setattr(database, "create_lakebase_client", _StaticLakebaseClient)
+    monkeypatch.setattr(
+        database.asyncpg,
+        "connect",
+        lambda dsn, **options: _connect([], Connection(), dsn, options),
+    )
+
+    recreated = await database.prepare_lakebase_schema(
+        "project",
+        "graphiti_memory",
+        "app_login",
+    )
+
+    assert recreated is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("role", "message"),
+    [
+        (None, "no distinct shared role"),
+        ("graphiti_owner", "configured shared role"),
+    ],
+)
+async def test_lakebase_schema_rejects_mismatched_owner(
+    monkeypatch,
+    role: str | None,
+    message: str,
+) -> None:
+    calls: list[str] = []
+
+    class Connection:
+        async def fetchval(self, query: str, *_: object) -> str:
+            calls.append(query)
+            return "app_login" if query == "SELECT session_user" else "another_owner"
+
+        async def close(self) -> None:
+            calls.append("closed")
+
+    monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
+    monkeypatch.setattr(database, "create_lakebase_client", _StaticLakebaseClient)
+    monkeypatch.setattr(
+        database.asyncpg,
+        "connect",
+        lambda dsn, **options: _connect([], Connection(), dsn, options),
+    )
+
+    with pytest.raises(RuntimeError, match=message):
+        await database._start_lakebase_database(
+            "project",
+            None,
+            "graphiti_memory",
+            role,
+        )
+
+    assert calls == ["SELECT session_user", database._SCHEMA_OWNER_QUERY, "closed"]
 
 
 @pytest.mark.asyncio

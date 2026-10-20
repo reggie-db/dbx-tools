@@ -56,7 +56,7 @@ import {
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import { lakebaseResolver, pluginRegistry, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
+import { pluginRegistry, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
 import { sendGenieMessageFeedback } from "@dbx-tools/genie/feedback";
 import { modelCatalog } from "@dbx-tools/model";
 import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
@@ -77,7 +77,6 @@ import { RequestContext } from "@mastra/core/request-context";
 import type { AnyWorkflow } from "@mastra/core/workflows";
 import { pipeUIMessageStreamToResponse } from "ai";
 import express from "express";
-import type { Pool } from "pg";
 
 import {
   buildAgents,
@@ -120,7 +119,7 @@ import {
   type MastraIdentityMode,
 } from "./identity.ts";
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
-import { createMemoryBuilder, needsLakebase } from "./memory.ts";
+import { createMastraLakebasePool, createMemoryBuilder, needsLakebase } from "./memory.ts";
 import {
   flushDirectMlflowTracing,
   logFeedback,
@@ -1341,9 +1340,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
 
   private async buildAgentAndServer(): Promise<void> {
     const memoryPool = needsLakebase(this.config)
-      ? (lakebaseResolver.captureServicePrincipalPool(
-          pluginRegistry.require(this.context, lakebase, this.config).exports().pool,
-        ) as Pool)
+      ? createMastraLakebasePool(
+          pluginRegistry.require(this.context, lakebase, this.config).exports().getPgConfig(),
+        )
       : undefined;
     const memoryBuilder = createMemoryBuilder(this.config, memoryPool);
 

@@ -279,9 +279,10 @@ With `lakebase()` registered, both default to enabled:
   the caller's threads and agents.
 - Direct Genie turns read from and write to the default agent's native memory
   instance while Genie retains its own visible conversation history.
-- The existing service-principal pool is captured from `lakebase()` during
-  startup, so request-scoped OBO credentials never reach storage work and no
-  additional PostgreSQL pool is created.
+- A dedicated service-principal pool is derived from `lakebase()` during
+  startup, so request-scoped OBO credentials never reach storage work and
+  AppKit's concurrent Lakebase shutdown cannot interrupt durable workflow
+  snapshot writes.
 
 Without `lakebase()`, agents are stateless unless you provide explicit storage
 and memory configs.

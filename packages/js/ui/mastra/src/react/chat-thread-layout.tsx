@@ -152,9 +152,16 @@ export const ChatThreadLayout = ({
   };
 
   const [openTabIds, setOpenTabIds] = useState<string[]>([]);
+  const tabsSeededRef = useRef(false);
   useEffect(() => {
     if (!tabbedThreads) return;
-    setOpenTabIds((previous) => syncThreadTabs(previous, threads ?? [], activeThreadId));
+    const seed = !tabsSeededRef.current;
+    tabsSeededRef.current = true;
+    setOpenTabIds((previous) =>
+      syncThreadTabs(previous, threads ?? [], activeThreadId, {
+        seed,
+      }),
+    );
   }, [tabbedThreads, threads, activeThreadId]);
 
   const closeTab = (threadId: string) => {

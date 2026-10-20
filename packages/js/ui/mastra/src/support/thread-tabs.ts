@@ -17,6 +17,14 @@ import type { ThreadSummary } from "../react/types.ts";
  */
 export const THREAD_TAB_SEED_MAX = 5;
 
+/** Controls one reconciliation pass for the top conversation tabs. */
+interface SyncThreadTabsOptions {
+  /** Seed recent conversations when no tabs remain. Defaults to true. */
+  readonly seed?: boolean;
+  /** Maximum recent conversations included by an initial seed. */
+  readonly seedMax?: number;
+}
+
 /**
  * Reconcile the open tabs against the current thread list and selection:
  * drop tabs whose conversation no longer exists, seed from the newest
@@ -31,11 +39,13 @@ export function syncThreadTabs(
   openIds: string[],
   threads: ThreadSummary[],
   activeThreadId?: string,
-  seedMax: number = THREAD_TAB_SEED_MAX,
+  options: SyncThreadTabsOptions = {},
 ): string[] {
   const known = new Set(threads.map((thread) => thread.id));
   let next = openIds.filter((id) => known.has(id) || id === activeThreadId);
-  if (next.length === 0) next = threads.slice(0, seedMax).map((thread) => thread.id);
+  if (next.length === 0 && (options.seed ?? true)) {
+    next = threads.slice(0, options.seedMax ?? THREAD_TAB_SEED_MAX).map((thread) => thread.id);
+  }
   if (activeThreadId && !next.includes(activeThreadId)) next = [...next, activeThreadId];
   const unchanged = next.length === openIds.length && next.every((id, i) => id === openIds[i]);
   return unchanged ? openIds : next;

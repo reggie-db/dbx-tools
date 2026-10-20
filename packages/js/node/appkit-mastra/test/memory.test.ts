@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { PostgresStore } from "@mastra/pg";
+import { PostgresStore } from "@mastra/pg";
 
-import { withSoftStorageInit } from "../src/memory.ts";
+import { createMastraLakebasePool, withSoftStorageInit } from "../src/memory.ts";
 
 type SoftStore = PostgresStore & {
   isInitialized: boolean;
@@ -60,5 +60,34 @@ describe("soft storage initialization", () => {
 
     assert.equal(attempts.count, 1);
     assert.equal((store as SoftStore).isInitialized, false);
+  });
+});
+
+describe("durable storage pool ownership", () => {
+  it("keeps the plugin-owned pool live when Mastra closes a borrowed store", async () => {
+    const pool = createMastraLakebasePool({
+      database: "test",
+      host: "127.0.0.1",
+      idleTimeoutMillis: 1_234,
+      password: "test",
+      port: 1,
+      user: "test",
+    });
+    const options = (pool as unknown as { options: Record<string, unknown> }).options;
+    const state = pool as unknown as { ended: boolean };
+    const store = new PostgresStore({
+      id: "durable-test",
+      pool,
+      schemaName: "mastra_instance",
+    });
+
+    try {
+      assert.equal(options.allowExitOnIdle, true);
+      assert.equal(options.idleTimeoutMillis, 1_234);
+      await store.close();
+      assert.equal(state.ended, false);
+    } finally {
+      await pool.end();
+    }
   });
 });

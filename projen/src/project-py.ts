@@ -19,6 +19,7 @@ import {
   PythonNodeRuntime,
 } from "./python-node-runtime.ts";
 import {
+  refreshPublicationVerification,
   refreshReleaseDocsDependencies,
   releaseCondition,
   releaseBuildSteps,
@@ -705,6 +706,7 @@ export class DBXToolsPythonWorkspace extends Component {
         ],
       });
     }
+    refreshPublicationVerification(project);
     refreshReleaseDocsDependencies(project);
   }
 
