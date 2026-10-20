@@ -55,6 +55,20 @@ module.exports = {
       keys: [...headers.keys()],
     };
   },
+  requestBehaves: () => {
+    const request = new Request("https://example.com/data", {
+      method: "post",
+      credentials: "include",
+      headers: { accept: "application/json" },
+    });
+    return {
+      credentials: request.credentials,
+      method: request.method,
+      url: request.url,
+      accept: request.headers.get("accept"),
+      credentialsOnPrototype: "credentials" in Request.prototype,
+    };
+  },
   environmentValue: (name) => process.env[name],
   setEnvironmentValue: (name, value) => {
     if (value === undefined) delete process.env[name];

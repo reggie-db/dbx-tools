@@ -11127,6 +11127,33 @@ var globals = globalThis;
 installAbortGlobals(globals);
 globals.Headers ??= PythonHeaders;
 
+class _PythonRequest {
+  #credentials;
+  #headers;
+  #method;
+  #url;
+  constructor(input, init = {}) {
+    const source = typeof input === "object" && "url" in input ? input : undefined;
+    this.#url = source?.url ?? String(input);
+    this.#method = (init.method ?? source?.method ?? "GET").toUpperCase();
+    this.#headers = new Headers(init.headers ?? source?.headers);
+    this.#credentials = init.credentials ?? source?.credentials ?? "same-origin";
+  }
+  get credentials() {
+    return this.#credentials;
+  }
+  get headers() {
+    return this.#headers;
+  }
+  get method() {
+    return this.#method;
+  }
+  get url() {
+    return this.#url;
+  }
+}
+globals.Request ??= _PythonRequest;
+
 class PythonResponse {
   headers;
   ok;

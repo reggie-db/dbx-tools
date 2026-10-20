@@ -50,6 +50,13 @@ def test_read_file_sync_missing_is_enoent() -> None:
         "cookies": ["first=1", "second=2"],
         "keys": ["set-cookie", "accept"],
     }
+    assert first._exports["requestBehaves"]() == {
+        "credentials": "include",
+        "method": "POST",
+        "url": "https://example.com/data",
+        "accept": "application/json",
+        "credentialsOnPrototype": True,
+    }
     assert first.invoke_positioned_sync("fixture", "add", [(0, 2), (1, 3)]) == 5
     assert second.invoke_positioned_sync("fixture", "multiply", [(0, 4), (1, 5)]) == 20
     assert first._exports["runSync"](

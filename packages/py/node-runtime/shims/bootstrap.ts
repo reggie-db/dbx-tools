@@ -25,6 +25,40 @@ installAbortGlobals(globals);
 
 globals.Headers ??= PythonHeaders as unknown as typeof Headers;
 
+/** Request metadata required by bundled fetch clients under PythonMonkey. */
+class _PythonRequest {
+  readonly #credentials: RequestCredentials;
+  readonly #headers: Headers;
+  readonly #method: string;
+  readonly #url: string;
+
+  constructor(input: string | URL | Request, init: RequestInit = {}) {
+    const source = typeof input === "object" && "url" in input ? input : undefined;
+    this.#url = source?.url ?? String(input);
+    this.#method = (init.method ?? source?.method ?? "GET").toUpperCase();
+    this.#headers = new Headers(init.headers ?? source?.headers);
+    this.#credentials = init.credentials ?? source?.credentials ?? "same-origin";
+  }
+
+  get credentials(): RequestCredentials {
+    return this.#credentials;
+  }
+
+  get headers(): Headers {
+    return this.#headers;
+  }
+
+  get method(): string {
+    return this.#method;
+  }
+
+  get url(): string {
+    return this.#url;
+  }
+}
+
+globals.Request ??= _PythonRequest as unknown as typeof Request;
+
 class PythonResponse {
   readonly headers: Headers;
   readonly ok: boolean;
