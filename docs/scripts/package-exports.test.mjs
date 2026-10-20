@@ -90,7 +90,7 @@ describe("resolvePackageTypeScriptExports", () => {
     ]);
   });
 
-  test("uses only the published ui-mastra React entry", () => {
+  test("uses only the published ui-mastra root and folder barrels", () => {
     const manifest = path.resolve("packages/js/ui/mastra/package.json");
 
     expect(
@@ -99,8 +99,9 @@ describe("resolvePackageTypeScriptExports", () => {
         relativeFile,
       })),
     ).toEqual([
-      { subpath: "./react", relativeFile: "src/react/index.ts" },
-      { subpath: "./support", relativeFile: "src/support/index.ts" },
+      { subpath: ".", relativeFile: "index.ts" },
+      { subpath: "./react", relativeFile: "index.react.ts" },
+      { subpath: "./support", relativeFile: "index.support.ts" },
     ]);
   });
 });

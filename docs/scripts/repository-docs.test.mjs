@@ -3,11 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
+import { escapeRegExp } from "@dbx-tools/shared-core";
 import {
   discoverJavaScriptPackages,
   discoverPythonPackages,
   discoverRepositoryPackages,
-  escapeRegExp,
   packageReadmeIssues,
   proseParagraphs,
   stripLeadingH1,

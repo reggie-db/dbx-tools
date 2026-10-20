@@ -2,7 +2,8 @@
 /** Validate built internal routes and fragments directly from the static dist tree. */
 import fs from "node:fs";
 import path from "node:path";
-import { escapeRegExp, posix, walk } from "./repository-docs.mjs";
+import { escapeRegExp } from "@dbx-tools/shared-core";
+import { posix, walk } from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
 const distRoot = path.resolve(process.argv[2] ?? ".docs-build/dist");

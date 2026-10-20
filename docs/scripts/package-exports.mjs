@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { isRecord } from "@dbx-tools/shared-core";
-import { escapeRegExp, posix } from "./repository-docs.mjs";
+import { escapeRegExp, isRecord } from "@dbx-tools/shared-core";
+import { posix } from "./repository-docs.mjs";
 
 const TYPESCRIPT_EXPORT = /\.(?:[cm]?ts|tsx)$/i;
 const CONDITION_PRIORITY = ["types", "bun", "browser", "node", "import", "default", "require"];

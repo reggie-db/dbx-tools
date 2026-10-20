@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
+import { toNumber } from "@dbx-tools/shared-core";
 import { parse as parseYaml } from "yaml";
 import {
   ENV_ONLY,
@@ -14,7 +15,6 @@ import {
   resolveValue,
   string as configString,
   text,
-  toNumber,
 } from "../src/config-utils.ts";
 
 describe("app YAML subset parity", () => {
