@@ -40,7 +40,17 @@ export async function runTaskCommandAsync(
   args: readonly string[],
   options: TaskCommandOptions & { readonly signal?: AbortSignal } = {},
 ): Promise<void> {
-  await exec.spawn(executable(command), [...args], {
+  await spawnTaskCommand(cwd, command, args, options);
+}
+
+/** Start one supervised task command and return its live process handle. */
+export function spawnTaskCommand(
+  cwd: string,
+  command: string,
+  args: readonly string[],
+  options: TaskCommandOptions & { readonly signal?: AbortSignal } = {},
+): exec.ChildProcessResult {
+  return exec.spawn(executable(command), [...args], {
     cwd,
     env: options.env,
     stdout: "inherit",

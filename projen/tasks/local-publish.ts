@@ -1,10 +1,11 @@
 /** Build and publish the current workspace to configured loopback registries. */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ChildProcessResult } from "@dbx-tools/core/exec";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log, net } from "@dbx-tools/shared-core";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
-import { runTaskCommandAsync } from "../src/_task-command.ts";
+import { spawnTaskCommand } from "../src/_task-command.ts";
 
 const logger = log.logger("projen:local-publish");
 
@@ -38,6 +39,24 @@ export function localPublishTaskPath(task: "publish.ts" | "publish-python.ts"): 
   return fileURLToPath(new URL(task, import.meta.url));
 }
 
+/** Await concurrent publishers and terminate every live sibling after one fails. */
+export async function awaitLocalPublishers(
+  publishes: readonly ChildProcessResult[],
+): Promise<void> {
+  try {
+    await Promise.all(publishes);
+  } catch (error) {
+    await Promise.all(
+      publishes.map((publish) =>
+        publish.exitCode === null && publish.signalCode === null
+          ? publish.shutdown()
+          : Promise.resolve(),
+      ),
+    );
+    throw error;
+  }
+}
+
 /** Build and publish the current workspace directly to local registries. */
 export async function publishLocalRelease(
   options: LocalPublishOptions,
@@ -46,7 +65,7 @@ export async function publishLocalRelease(
   const localRegistry = resolveLocalRegistry(options.localRegistry);
   const activeIndexes = activePythonIndexes();
   const localPypi = resolveLocalPypi(options.localPypi, activeIndexes);
-  const publishes: Promise<unknown>[] = [];
+  const publishes: ChildProcessResult[] = [];
 
   if (
     options.localPypi.toLowerCase() === "auto" &&
@@ -62,7 +81,7 @@ export async function publishLocalRelease(
     const publishNpmScript = localPublishTaskPath("publish.ts");
     logger.info(`building and publishing npm workspace to ${localRegistry}`);
     publishes.push(
-      runTaskCommandAsync(root, process.execPath, [
+      spawnTaskCommand(root, process.execPath, [
         publishNpmScript,
         options.version,
         "--registry",
@@ -75,7 +94,7 @@ export async function publishLocalRelease(
     const publishPythonScript = localPublishTaskPath("publish-python.ts");
     logger.info(`building and publishing Python workspace to ${localPypi.publishUrl}`);
     publishes.push(
-      runTaskCommandAsync(root, process.execPath, [
+      spawnTaskCommand(root, process.execPath, [
         publishPythonScript,
         options.version,
         "--root",
@@ -93,7 +112,7 @@ export async function publishLocalRelease(
     return { npm: false, python: false };
   }
 
-  await Promise.all(publishes);
+  await awaitLocalPublishers(publishes);
   logger.success(`published local workspace ${options.version}`);
   return { npm: Boolean(localRegistry), python: Boolean(localPypi) };
 }

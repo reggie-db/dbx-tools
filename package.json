@@ -104,7 +104,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.9.147",
+  "version": "0.9.148",
   "dbxToolsConfig": {
     "packageRoots": [
       "packages/js",

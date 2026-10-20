@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { basename, dirname } from "node:path";
 import { describe, it } from "node:test";
-import { localPublishTaskPath, resolveLocalRegistry } from "../tasks/local-publish.ts";
+import type { ChildProcessResult } from "@dbx-tools/core/exec";
+import {
+  awaitLocalPublishers,
+  localPublishTaskPath,
+  resolveLocalRegistry,
+} from "../tasks/local-publish.ts";
 
 describe("local release publication", () => {
   it("disables local npm publication explicitly", () => {
@@ -19,5 +24,31 @@ describe("local release publication", () => {
     assert.equal(dirname(npm), dirname(python));
     assert.equal(basename(npm), "publish.ts");
     assert.equal(basename(python), "publish-python.ts");
+  });
+
+  it("terminates a live sibling when another publisher fails", async () => {
+    let shutdownCalled = false;
+    let finishSibling: (() => void) | undefined;
+    const sibling = Object.assign(
+      new Promise<void>((resolve) => {
+        finishSibling = resolve;
+      }),
+      {
+        exitCode: null,
+        signalCode: null,
+        shutdown: async () => {
+          shutdownCalled = true;
+          finishSibling?.();
+        },
+      },
+    ) as unknown as ChildProcessResult;
+    const failed = Object.assign(Promise.reject(new Error("npm publish failed")), {
+      exitCode: 1,
+      signalCode: null,
+      shutdown: async () => {},
+    }) as unknown as ChildProcessResult;
+
+    await assert.rejects(awaitLocalPublishers([failed, sibling]), /npm publish failed/);
+    assert.equal(shutdownCalled, true);
   });
 });

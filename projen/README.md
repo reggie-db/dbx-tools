@@ -557,7 +557,9 @@ workspace. Each Python package retains its own publishing environment and waits
 for its package dependencies to publish. The npm job uses the bundled archive
 publisher without a checkout or workspace install. Pages deploys the already
 built site after registry publication succeeds. Local npm and Python registry publication remains available
-through the direct local publication tooling.
+through the direct local publication tooling. Those local publishers run
+concurrently; a failure or release termination stops every live publisher before
+the command returns.
 
 The default release publishes npm, Python, and docs, then publishes to
 configured local registries. Use `bun run release --help` or the generated
