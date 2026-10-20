@@ -4,13 +4,7 @@
  * @module
  */
 
-import {
-  log,
-  combineAbortSignals,
-  errorMessage,
-  isRecord,
-  toDescription,
-} from "@dbx-tools/shared-core";
+import { log, combineAbortSignals, isRecord, toError, toDescription } from "@dbx-tools/shared-core";
 import {
   FOLLOW_UP_SUGGESTIONS_PART_TYPE,
   type FollowUpSuggestionsPartData,
@@ -270,7 +264,7 @@ export async function suggestFollowUps(
     return acceptedQuestions(parsed.questions, options, settings.limit);
   } catch (error) {
     if (!options.abortSignal?.aborted) {
-      logger.warn("generation-failed", { error: errorMessage(error) });
+      logger.warn("generation-failed", { error: toError(error) });
     }
     return [];
   }

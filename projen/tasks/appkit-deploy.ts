@@ -200,7 +200,7 @@ async function printAppLogs(
     }
   } catch (error) {
     logger.warn("Could not read Databricks App logs", {
-      message: toError(error).message,
+      error: toError(error),
     });
   }
 }

@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { parse } from "smol-toml";
 import { readWorkflow, workflowStep } from "./workflow.ts";
@@ -310,7 +310,7 @@ describe("DBXToolsPythonWorkspace", () => {
     const helper = join(outdir, ".projen/pypi-trusted-publisher-instructions.mjs");
     const packageDirectory = join(outdir, "node_modules/@dbx-tools");
     mkdirSync(packageDirectory, { recursive: true });
-    symlinkSync(join(process.cwd(), "projen"), join(packageDirectory, "projen"), "dir");
+    symlinkSync(resolve(import.meta.dirname, ".."), join(packageDirectory, "projen"), "dir");
     const result = spawnSync(
       process.execPath,
       [helper, "--secret-file", "/run/secrets/pypi.json"],

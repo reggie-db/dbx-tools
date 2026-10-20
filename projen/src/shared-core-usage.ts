@@ -33,6 +33,7 @@ export const SHARED_CORE_BINDING_EXPORTS = [
 
 const SOURCE_PATTERN = "**/*.{ts,tsx,js,mjs}";
 const NAMESPACE_EXPORT = /^export \* as (\w+) from "\.\/src\/([^"]+)\.ts";$/gm;
+const ROOT_NAMED_IMPORT = /import\s*\{([\s\S]*?)\}\s*from\s*["']@dbx-tools\/shared-core["']/g;
 const LOCAL_OWNED_HELPER =
   /(?:export\s+)?(?:async\s+)?function(?:\s*\*)?\s+(isRecord|sleep|escapeRegExp|trimToNull|trimToUndefined|trimToEmpty)\s*\(|(?:export\s+)?const\s+(isRecord|sleep|escapeRegExp|trimToNull|trimToUndefined|trimToEmpty)\s*=/g;
 
@@ -109,6 +110,18 @@ function mentionsExport(
   moduleFile: string,
 ): boolean {
   if (source.includes(`${namespace}.${name}`)) return true;
+  ROOT_NAMED_IMPORT.lastIndex = 0;
+  for (const match of source.matchAll(ROOT_NAMED_IMPORT)) {
+    const specifiers = match[1]!.split(",").map((specifier) => specifier.trim());
+    if (
+      specifiers.some((specifier) => {
+        if (!specifier || specifier.startsWith("type ")) return false;
+        return specifier.split(/\s+as\s+/u, 1)[0] === name;
+      })
+    ) {
+      return true;
+    }
+  }
   const imported =
     source.includes(`from "@dbx-tools/shared-core/${moduleFile}"`) ||
     source.includes(`from "./${moduleFile}.ts"`) ||

@@ -17,19 +17,20 @@ function lossyExceptionLogs(file: string, source: string): string[] {
     issues.push(`${file}:${line + 1}: ${reason}`);
   }
 
-  function isToErrorCall(node: ts.Node): boolean {
+  function isSharedCoreCall(node: ts.Node, name: string): boolean {
+    if (!ts.isCallExpression(node)) return false;
+    if (ts.isIdentifier(node.expression)) return node.expression.text === name;
     return (
-      ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
       node.expression.expression.getText(sourceFile) === "errorUtils" &&
-      node.expression.name.text === "toError"
+      node.expression.name.text === name
     );
   }
 
   function isNormalized(identifier: ts.Identifier, call: ts.CallExpression): boolean {
     let current: ts.Node | undefined = identifier.parent;
     while (current && current !== call) {
-      if (isToErrorCall(current)) return true;
+      if (isSharedCoreCall(current, "toError")) return true;
       current = current.parent;
     }
     return false;
@@ -51,12 +52,7 @@ function lossyExceptionLogs(file: string, source: string): string[] {
 
   function inspectLogCall(call: ts.CallExpression, rejectedNames = new Set<string>()): void {
     function inspect(node: ts.Node): void {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.expression.getText(sourceFile) === "errorUtils" &&
-        node.expression.name.text === "errorMessage"
-      ) {
+      if (isSharedCoreCall(node, "errorMessage")) {
         report(node, "pass errorUtils.toError(...) to the logger instead of errorMessage(...)");
       }
       if (ts.isConditionalExpression(node) && /instanceof\s+Error/.test(node.getText(sourceFile))) {
