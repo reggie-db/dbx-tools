@@ -43,7 +43,8 @@ const LIST_PAGE_SIZE = 100;
 const THREAD_LIMIT = 100;
 const AGENT_CONVERSATION_TYPE = "GENIE_CONVERSATION_TYPE_AGENT";
 const DIRECT_GENIE_ERROR = "Genie could not complete the request.";
-const GENIE_CONTEXT_PREFIX = "<dbx-tools-genie-context>\n";
+const GENIE_CONTEXT_TAG = "<dbx-tools-genie-context>";
+const GENIE_CONTEXT_PREFIX = `${GENIE_CONTEXT_TAG}\n`;
 const GENIE_CONTEXT_SUFFIX = "\n</dbx-tools-genie-context>\n\n";
 const GENIE_MEMORY_MESSAGES = 12;
 
@@ -138,6 +139,17 @@ export function visibleGenieQuestion(content: string): string {
   if (!content.startsWith(GENIE_CONTEXT_PREFIX)) return content;
   const boundary = content.indexOf(GENIE_CONTEXT_SUFFIX);
   return boundary < 0 ? content : content.slice(boundary + GENIE_CONTEXT_SUFFIX.length);
+}
+
+/** Remove a complete hidden context envelope or omit a truncated polluted title. */
+export function visibleGenieThreadTitle(title: string | undefined): string | undefined {
+  const candidate = title?.trim();
+  if (!candidate) return undefined;
+  if (!candidate.startsWith(GENIE_CONTEXT_TAG)) return candidate;
+  if (!candidate.startsWith(GENIE_CONTEXT_PREFIX)) return undefined;
+  const visible = visibleGenieQuestion(candidate);
+  if (visible === candidate) return undefined;
+  return visible.trim() || undefined;
 }
 
 function messageText(message: MastraDBMessage): string | undefined {
@@ -314,7 +326,7 @@ export async function listGenieThreads(
   signal?: AbortSignal,
 ): Promise<GenieThread[]> {
   const context = signal ? toContext(signal) : undefined;
-  const threads: GenieThread[] = [];
+  const threads: Array<GenieThread & { recoverTitle?: boolean }> = [];
   let pageToken: string | undefined;
   do {
     const page = await client.genie.listConversations(
@@ -329,15 +341,40 @@ export async function listGenieThreads(
       if (!isRecord(conversation) || conversation.agent_type !== AGENT_CONVERSATION_TYPE) {
         continue;
       }
+      const rawTitle = typeof conversation.title === "string" ? conversation.title : undefined;
+      const title = visibleGenieThreadTitle(rawTitle);
       threads.push({
         id: conversation.conversation_id,
-        ...(conversation.title ? { title: conversation.title } : {}),
+        ...(title ? { title } : {}),
+        ...(rawTitle?.trim().startsWith(GENIE_CONTEXT_TAG) && !title ? { recoverTitle: true } : {}),
         createdAt: new Date(conversation.created_timestamp).toISOString(),
       });
     }
     pageToken = page.next_page_token || undefined;
   } while (pageToken && threads.length < THREAD_LIMIT);
-  return threads.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, THREAD_LIMIT);
+  const recovered = await Promise.all(
+    threads.map(async ({ recoverTitle, ...thread }) => {
+      if (!recoverTitle) return thread;
+      try {
+        const messages = await listAgentModeConversation(
+          client,
+          space.spaceId,
+          thread.id,
+          signal ? { context: signal } : {},
+        );
+        const title = visibleGenieQuestion(messages[0]?.content ?? "").trim();
+        return title ? { ...thread, title } : thread;
+      } catch (error) {
+        logger.warn("thread:title-recovery-failed", {
+          conversationId: thread.id,
+          spaceId: space.spaceId,
+          error: toError(error),
+        });
+        return thread;
+      }
+    }),
+  );
+  return recovered.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, THREAD_LIMIT);
 }
 
 /**

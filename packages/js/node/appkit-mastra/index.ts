@@ -54,7 +54,7 @@ export { filesystems, MastraFileSystemAdapter, MountedCompositeFilesystem, scrat
 export type { MastraFileSystemAdapterOptions } from "./src/filesystems.ts";
 export { FOLLOW_UP_USER_TEXT_KEY, FOLLOW_UP_NATIVE_QUESTIONS_KEY, FOLLOW_UP_RUN_ID_KEY, resolveFollowUpSuggestionsConfig, suggestFollowUps, buildFollowUpSuggestionsProcessor, buildFollowUpSuggestionsTransform, buildSuggestFollowUpsTool } from "./src/follow-up-suggestions.ts";
 export type { ResolvedFollowUpSuggestionsConfig, SuggestFollowUpsOptions, FollowUpSuggester } from "./src/follow-up-suggestions.ts";
-export { genieAnswerText, visibleGenieQuestion, genieMessageToUiMessages, listGenieThreads, listGenieThreadMessages, genieChatStream, deleteGenieThread, deleteGenieThreadMessage } from "./src/genie-chat.ts";
+export { genieAnswerText, visibleGenieQuestion, visibleGenieThreadTitle, genieMessageToUiMessages, listGenieThreads, listGenieThreadMessages, genieChatStream, deleteGenieThread, deleteGenieThreadMessage } from "./src/genie-chat.ts";
 export type { GenieChatSpace } from "./src/genie-chat.ts";
 export { DEFAULT_GENIE_ALIAS, askGenieToolId, GENIE_INSTRUCTIONS, normalizeGenieSpaces, resolveGenieSpaces, buildGenieTools, buildGenieToolkitProvider, collectSpaceSuggestions } from "./src/genie.ts";
 export type { GenieSpaceConfig, GenieSpacesConfig } from "./src/genie.ts";

@@ -13,6 +13,7 @@ import {
   listGenieThreadMessages,
   listGenieThreads,
   visibleGenieQuestion,
+  visibleGenieThreadTitle,
 } from "../src/genie-chat.ts";
 
 const SPACE = { alias: "default", spaceId: "space-1" };
@@ -144,6 +145,15 @@ describe("genieMessageToUiMessages", () => {
     expect(visibleGenieQuestion(content)).toBe("How is this store performing?");
     const [user] = genieMessageToUiMessages(genieMessage({ content }), SPACE);
     expect(user?.parts).toEqual([{ type: "text", text: "How is this store performing?" }]);
+  });
+
+  test("sanitizes complete context titles and omits truncated envelopes", () => {
+    const complete =
+      '<dbx-tools-genie-context>\nApplication context:\n{"storeId":"store-1"}' +
+      "\n</dbx-tools-genie-context>\n\nHow is this store performing?";
+    expect(visibleGenieThreadTitle("Quarterly performance")).toBe("Quarterly performance");
+    expect(visibleGenieThreadTitle(complete)).toBe("How is this store performing?");
+    expect(visibleGenieThreadTitle("<dbx-tools-genie-context> Use t")).toBeUndefined();
   });
 });
 
@@ -300,6 +310,48 @@ describe("Genie conversation APIs", () => {
     const threads = await listGenieThreads(client, SPACE);
     expect(threads.map((thread) => thread.id)).toEqual(["new", "old"]);
     expect(calls[0]).toMatchObject({ space_id: "space-1" });
+  });
+
+  test("recovers a truncated polluted title from the first visible question", async () => {
+    const content =
+      '<dbx-tools-genie-context>\nApplication context:\n{"storeId":"store-1"}' +
+      "\n</dbx-tools-genie-context>\n\nHow is this store performing?";
+    const client = {
+      genie: {
+        listConversations: async () => ({
+          conversations: [
+            {
+              conversation_id: "polluted",
+              title: "<dbx-tools-genie-context> Use t",
+              created_timestamp: 1_000,
+              agent_type: "GENIE_CONVERSATION_TYPE_AGENT",
+            },
+          ],
+        }),
+      },
+      apiClient: {
+        request: async () => ({
+          has_more: false,
+          status: "completed",
+          data: [
+            {
+              type: "message",
+              role: "user",
+              id: "m1_input",
+              content: [{ type: "input_text", text: content }],
+            },
+          ],
+        }),
+      },
+    } as unknown as WorkspaceClient;
+
+    await expect(listGenieThreads(client, SPACE)).resolves.toEqual([
+      {
+        id: "polluted",
+        title: "How is this store performing?",
+        createdAt: new Date(1_000).toISOString(),
+      },
+    ]);
   });
 
   test("loads Agent Mode history from conversation items", async () => {
