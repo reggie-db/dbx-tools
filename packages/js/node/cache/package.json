@@ -28,6 +28,7 @@
     "@dbx-tools/shared-core": "workspace:^",
     "cacheable": "catalog:",
     "env-paths": "catalog:",
+    "keyv": "catalog:",
     "keyv-file": "catalog:"
   },
   "main": "index.ts",

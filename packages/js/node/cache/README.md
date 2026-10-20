@@ -37,6 +37,8 @@ await closeCache(cache);
 Pass ordered Keyv-compatible `levels` to `createCache` when an application needs
 custom persistence. The package does not depend on AppKit;
 `@dbx-tools/appkit` adapts it to AppKit's storage contract.
+The package owns its Keyv runtime, so consumers do not install or pin Keyv to
+align cache constructors.
 
 ## Limits
 

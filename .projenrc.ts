@@ -134,6 +134,7 @@ const root = new project.DBXToolsNodeProject({
     "better-call": "1.4.0",
     "cacheable": "2.5.0",
     "env-paths": "^4.0.0",
+    "keyv": "5.6.0",
     "keyv-file": "5.3.5",
     "tailwindcss": "^4.3.2",
     "@tailwindcss/vite": "^4.3.2",
@@ -375,6 +376,7 @@ project.applyToProjects(root, { identifierName: "cache", tags: "node" }, (p) => 
     "@dbx-tools/shared-core@workspace:^",
     "cacheable@catalog:",
     "env-paths@catalog:",
+    "keyv@catalog:",
     "keyv-file@catalog:",
   );
   p.addDevDeps("vitest@catalog:");

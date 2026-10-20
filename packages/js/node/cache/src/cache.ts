@@ -11,13 +11,13 @@ import { errorUtils, log } from "@dbx-tools/shared-core";
 import {
   Cacheable,
   CacheableHooks,
-  createKeyv,
   KeyvCacheableMemory,
   type CacheableOptions,
   type GetOrSetFunctionOptions,
   type KeyvStoreAdapter,
 } from "cacheable";
 import envPaths from "env-paths";
+import { Keyv } from "keyv";
 import { KeyvFile } from "keyv-file";
 
 const DEFAULT_MAX_ENTRIES = 1_000;
@@ -281,17 +281,25 @@ export function createCache(options: CacheOptions = {}): Cacheable {
     DEFAULT_WRITE_DELAY_MS,
     "writeDelayMs",
   );
-  const primary = createKeyv({
-    lruSize: maxEntries,
-    ttl: options.ttl,
-    useClone: options.useClone ?? true,
+  const primary = new Keyv({
+    store: new KeyvCacheableMemory({
+      lruSize: maxEntries,
+      ttl: options.ttl,
+      useClone: options.useClone ?? true,
+    }),
+    ...(typeof options.ttl === "number" && Number.isInteger(options.ttl)
+      ? { ttl: options.ttl }
+      : {}),
   });
+  primary.serialize = undefined;
+  primary.deserialize = undefined;
   const adapter = options.levels?.length
     ? new TieredStoreAdapter(options.levels, writeDelayMs)
     : undefined;
+  const secondary = adapter ? new Keyv({ store: adapter }) : undefined;
   const cache = new Cacheable({
     primary,
-    ...(adapter ? { secondary: adapter, nonBlocking: true } : {}),
+    ...(secondary ? { secondary, nonBlocking: true } : {}),
     ...(options.cacheId === undefined ? {} : { cacheId: options.cacheId }),
     ...(options.maxTtl === undefined ? {} : { maxTtl: options.maxTtl }),
     ...(options.namespace === undefined ? {} : { namespace: options.namespace }),

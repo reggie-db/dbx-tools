@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import type { KeyvStoreAdapter } from "cacheable";
+import { Keyv } from "keyv";
 import { KeyvFile } from "keyv-file";
 
 import {
@@ -40,6 +41,16 @@ class CountingStore extends EventEmitter implements KeyvStoreAdapter {
 }
 
 describe("createCache", () => {
+  it("uses the package-owned Keyv constructor for both cache levels", async () => {
+    const cache = createCache({
+      levels: [{ store: new CountingStore() }],
+    });
+
+    assert.equal(cache.primary instanceof Keyv, true);
+    assert.equal(cache.secondary instanceof Keyv, true);
+    await closeCache(cache);
+  });
+
   it("coalesces write-behind mutations and drains them", async () => {
     const store = new CountingStore();
     const cache = createCache({
