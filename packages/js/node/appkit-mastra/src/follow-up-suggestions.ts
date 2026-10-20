@@ -4,7 +4,7 @@
  * @module
  */
 
-import { asyncUtils, errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import {
   FOLLOW_UP_SUGGESTIONS_PART_TYPE,
   type FollowUpSuggestionsPartData,
@@ -194,17 +194,36 @@ function acceptedQuestions(
   return accepted;
 }
 
+function toolActivityValue(value: unknown): Record<string, unknown> | undefined {
+  if (!object.isRecord(value)) return undefined;
+  return object.isRecord(value.payload) ? value.payload : value;
+}
+
+function toolActivityName(value: Record<string, unknown>): string | undefined {
+  if (typeof value.toolName === "string") return value.toolName;
+  return typeof value.name === "string" ? value.name : undefined;
+}
+
 function serializedTurnContext(steps: readonly LLMStepResult[]): string | undefined {
   const activity = steps.flatMap((step) => [
-    ...step.toolCalls.map((call) => ({
-      tool: call.payload.toolName,
-      input: call.payload.args,
-    })),
-    ...step.toolResults.map((result) => ({
-      tool: result.payload.toolName,
-      output: result.payload.result,
-      ...(result.payload.isError ? { isError: true } : {}),
-    })),
+    ...(step.toolCalls ?? []).flatMap((call) => {
+      const value = toolActivityValue(call);
+      const tool = value ? toolActivityName(value) : undefined;
+      if (!value || !tool) return [];
+      return [{ tool, input: value.args ?? value.input }];
+    }),
+    ...(step.toolResults ?? []).flatMap((result) => {
+      const value = toolActivityValue(result);
+      const tool = value ? toolActivityName(value) : undefined;
+      if (!value || !tool) return [];
+      return [
+        {
+          tool,
+          output: value.result ?? value.output,
+          ...(value.isError || value.error ? { isError: true } : {}),
+        },
+      ];
+    }),
   ]);
   if (activity.length === 0) return undefined;
   try {

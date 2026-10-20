@@ -67,22 +67,32 @@ describe("native Mastra output integration", () => {
           {
             toolCalls: [
               {
+                toolName: "render_data",
+                args: {
+                  data: [
+                    { category: "North", value: 42 },
+                    { category: "South", value: 18 },
+                  ],
+                },
+              },
+              {
                 payload: {
-                  toolName: "render_data",
+                  toolName: "get_statement",
                   args: {
-                    data: [
-                      { category: "North", value: 42 },
-                      { category: "South", value: 18 },
-                    ],
+                    statement_id: "statement-1",
                   },
                 },
               },
             ],
             toolResults: [
               {
+                toolName: "render_data",
+                result: { chartId: "chart-1" },
+              },
+              {
                 payload: {
-                  toolName: "render_data",
-                  result: { chartId: "chart-1" },
+                  toolName: "get_statement",
+                  result: { rowCount: 2 },
                 },
               },
             ],
@@ -106,6 +116,7 @@ describe("native Mastra output integration", () => {
     expect(received?.nativeQuestions).toEqual(["Show revenue by region"]);
     expect(received?.turnContext).toContain('"tool":"render_data"');
     expect(received?.turnContext).toContain('"category":"North"');
+    expect(received?.turnContext).toContain('"tool":"get_statement"');
     expect(
       persistedParts?.find((part) => part.type === FOLLOW_UP_SUGGESTIONS_PART_TYPE),
     ).toMatchObject({
