@@ -89,6 +89,22 @@ describe("RecordPreview", () => {
     assert.match(html, /<li[^>]*>first<\/li>/);
     assert.match(html, /<li[^>]*>second<\/li>/);
   });
+
+  it("renders emphasized text and GFM tables inside fields", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecordPreview, {
+        value: {
+          content:
+            "**Current week inside sales PSPW and total**\n\n| business_week | sales_pspw | total_sales |\n| --- | ---: | ---: |\n| 2025-12-28 | 48138.36 | 8472350.82 |",
+        },
+      }),
+    );
+
+    assert.match(html, /data-streamdown="strong">Current week inside sales PSPW and total<\/span>/);
+    assert.match(html, /<table/);
+    assert.match(html, />business_week</);
+    assert.match(html, /grid-cols-1 gap-1/);
+  });
 });
 
 describe("recordPreviewRows", () => {
@@ -160,6 +176,11 @@ describe("looksLikeMarkdown", () => {
     );
     assert.equal(looksLikeMarkdown("joke-generator"), false);
     assert.equal(looksLikeMarkdown("#ffffff"), false);
+  });
+
+  it("detects emphasized text and GFM table separators", () => {
+    assert.equal(looksLikeMarkdown("**Current reporting week**"), true);
+    assert.equal(looksLikeMarkdown("| week | sales |\n| --- | ---: |\n| 2025-12-28 | 100 |"), true);
   });
 });
 

@@ -35,8 +35,6 @@ import { MarkdownWithEmbeds } from "./embed-slots.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { FeedbackControls } from "./feedback-controls.tsx";
 import { ToolMarkdown } from "./markdown.tsx";
-import { SuggestionPills } from "./suggestion-pills.tsx";
-import { collectSuggestions } from "./suggestions.ts";
 import { ToolSessionPill, humanizeToolName } from "./tool-pill.tsx";
 import type {
   ApprovalDecision,
@@ -316,8 +314,6 @@ type AssistantBubbleProps = {
   status: ChatStatus;
   events?: ToolEvent[];
   regenerate?: () => void;
-  /** Click handler for tool-suggested follow-up questions. */
-  onSuggestionClick?: (question: string) => void;
   /** Approve / deny handler for inline {@link ToolApprovalCard}s. */
   onResolveToolApproval?: (decision: ApprovalDecision) => void | Promise<void>;
   /**
@@ -353,7 +349,6 @@ export const AssistantBubble = ({
   status,
   events,
   regenerate,
-  onSuggestionClick,
   onResolveToolApproval,
   externalApprovals,
   onExport,
@@ -396,7 +391,6 @@ export const AssistantBubble = ({
   // streaming target - either the agent has returned to `ready` /
   // `error`, or a newer message has taken over the `isLast` slot.
   const isStreamingThisBubble = isLast && (status === "streaming" || status === "submitted");
-  const suggestions = isStreamingThisBubble ? [] : collectSuggestions(events);
   const showResponseStatus = shouldShowAssistantResponseStatus(
     isLast,
     status,
@@ -528,7 +522,6 @@ export const AssistantBubble = ({
             )}
           </div>
         )}
-        <SuggestionPills questions={suggestions} onSelect={onSuggestionClick} className="mt-1" />
       </ItemContent>
     </Item>
   );

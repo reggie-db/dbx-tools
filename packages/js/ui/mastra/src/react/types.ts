@@ -1,4 +1,4 @@
-import type { ToolProgressEvent } from "@dbx-tools/shared-mastra/wire";
+import type { FollowUpSuggestionMode, ToolProgressEvent } from "@dbx-tools/shared-mastra/wire";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { FileUIPart, UIMessage } from "ai";
 import type { ReactNode } from "react";
@@ -171,6 +171,10 @@ export type ChatViewProps = {
    * questions when the caller doesn't pass an explicit list.
    */
   suggestions?: string[];
+  /** Enabled post-turn follow-up sources published by the server. */
+  followUpSuggestions?: FollowUpSuggestionMode;
+  /** Maximum post-turn follow-up questions shown under one response. */
+  followUpSuggestionLimit?: number;
   toolEventsByMessage?: Record<string, ToolEvent[]>;
   /** Available model endpoints. Pass an empty array (or omit) to hide the picker. */
   models?: ChatModelOption[];

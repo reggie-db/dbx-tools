@@ -110,12 +110,15 @@ const THEME_ATTRIBUTES = ["class", "style", "data-theme", "data-brand"];
  * structurally before being stored, so an unrelated attribute change
  * does not hand callers a new object and re-render every chart.
  *
- * Returns {@link LIGHT_CHART_CHROME} on the first render - the effect
- * that reads the real tokens runs after mount, by which point the chart
- * itself is usually still long-polling its spec.
+ * Returns `undefined` in the browser until the chart element is mounted and its
+ * inherited tokens have been read. This prevents Echarts from drawing once
+ * with fallback colors and immediately drawing again with the resolved theme.
+ * Server rendering retains {@link LIGHT_CHART_CHROME}.
  */
-export function useChartChrome(ref: RefObject<Element | null>): ChartChrome {
-  const [chrome, setChrome] = useState<ChartChrome>(LIGHT_CHART_CHROME);
+export function useChartChrome(ref: RefObject<Element | null>): ChartChrome | undefined {
+  const [chrome, setChrome] = useState<ChartChrome | undefined>(() =>
+    typeof window === "undefined" ? LIGHT_CHART_CHROME : undefined,
+  );
   useEffect(() => {
     const read = () => {
       const next = resolveChartChrome(ref.current);

@@ -68,15 +68,40 @@ import { FeedbackModeSchema } from "./feedback.ts";
  *   - `backgroundTurns`: whether turns use Mastra evented durable execution
  *     and can be observed after the initiating HTTP stream disconnects.
  *     Defaults to `false` for compatibility with older servers.
+ *   - `followUpSuggestions`: post-turn source policy. Defaults to `"none"`.
+ *   - `followUpSuggestionLimit`: maximum rendered post-turn questions.
  */
-export const MastraClientConfigSchema = z.object({
-  basePath: z.string(),
-  defaultAgent: z.string(),
-  agents: z.array(z.string()),
-  feedbackMode: FeedbackModeSchema.default("none"),
-  chatAlwaysAvailable: z.boolean().default(false),
-  backgroundTurns: z.boolean().default(false),
-});
+/** Post-turn follow-up sources enabled for a browser client. */
+export const FollowUpSuggestionModeSchema = z.enum(["none", "genie", "generated", "auto"]);
+/** Post-turn follow-up sources enabled for a browser client. */
+export type FollowUpSuggestionMode = z.infer<typeof FollowUpSuggestionModeSchema>;
+
+export const MastraClientConfigSchema = z
+  .object({
+    basePath: z.string().describe("Mounted HTTP path for the Mastra plugin."),
+    defaultAgent: z.string().describe("Agent selected when the client does not specify one."),
+    agents: z.array(z.string()).describe("Registered agent identifiers."),
+    feedbackMode: FeedbackModeSchema.default("none").describe("Available feedback destination."),
+    chatAlwaysAvailable: z
+      .boolean()
+      .default(false)
+      .describe("Whether chat can run without an on-behalf-of user credential."),
+    backgroundTurns: z
+      .boolean()
+      .default(false)
+      .describe("Whether agent turns continue through durable background execution."),
+    followUpSuggestions: FollowUpSuggestionModeSchema.default("none").describe(
+      "Post-turn suggestion sources available to the client.",
+    ),
+    followUpSuggestionLimit: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .default(3)
+      .describe("Maximum post-turn suggestions rendered by the client."),
+  })
+  .describe("Browser-safe Mastra plugin configuration.");
 /** Browser-safe Mastra plugin descriptor used to construct route and stream clients. */
 export type MastraClientConfig = z.input<typeof MastraClientConfigSchema>;
 
@@ -522,6 +547,26 @@ export const ToolProgressPartDataSchema = z
 
 /** Validated payload carried by a native generic tool progress data part. */
 export type ToolProgressPartData = z.infer<typeof ToolProgressPartDataSchema>;
+
+/** Native AI SDK data-part type carrying post-turn follow-up questions. */
+export const FOLLOW_UP_SUGGESTIONS_PART_TYPE = "data-follow-up-suggestions" as const;
+
+/** Follow-up questions emitted after an assistant turn settles. */
+export const FollowUpSuggestionsPartDataSchema = z
+  .object({
+    questions: z
+      .array(z.string().trim().min(1))
+      .max(10)
+      .describe("Short questions suitable for one-click submission."),
+    source: z
+      .enum(["genie", "model"])
+      .describe("Capability that produced these follow-up questions."),
+  })
+  .strict()
+  .describe("Persisted post-turn follow-up suggestions.");
+
+/** Persisted post-turn follow-up suggestions. */
+export type FollowUpSuggestionsPartData = z.infer<typeof FollowUpSuggestionsPartDataSchema>;
 
 /* -------------------------- direct Genie chat -------------------------- */
 

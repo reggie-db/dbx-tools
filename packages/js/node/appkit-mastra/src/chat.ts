@@ -4,7 +4,7 @@
  * @module
  */
 
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { errorUtils, log, object } from "@dbx-tools/shared-core";
 import { routes } from "@dbx-tools/shared-mastra";
 import {
   isStaleMastraResumeError,
@@ -15,6 +15,14 @@ import { isEventedAgent } from "@mastra/core/agent/durable";
 import { registerApiRoute } from "@mastra/core/server";
 import { createUIMessageStreamResponse } from "ai";
 
+import type { MastraPluginConfig } from "./config.ts";
+import {
+  buildFollowUpSuggestionsTransform,
+  FOLLOW_UP_NATIVE_QUESTIONS_KEY,
+  FOLLOW_UP_RUN_ID_KEY,
+  FOLLOW_UP_USER_TEXT_KEY,
+  resolveFollowUpSuggestionsConfig,
+} from "./follow-up-suggestions.ts";
 import { withRequestMemoryScope } from "./memory.ts";
 
 const logger = log.logger("mastra/chat");
@@ -24,8 +32,31 @@ export function agentAbortSignal(agent: unknown, signal: AbortSignal): AbortSign
   return isEventedAgent(agent) ? undefined : signal;
 }
 
+function latestUserText(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    const message = value[index];
+    if (!object.isRecord(message) || message.role !== "user") continue;
+    if (typeof message.content === "string" && message.content.trim()) {
+      return message.content.trim();
+    }
+    if (!Array.isArray(message.parts)) continue;
+    const text = message.parts
+      .flatMap((part) =>
+        object.isRecord(part) && part.type === "text" && typeof part.text === "string"
+          ? [part.text]
+          : [],
+      )
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  return undefined;
+}
+
 /** Register detached chat, durable observation, and explicit abort routes. */
-export function agentChatRoutes() {
+export function agentChatRoutes(config: MastraPluginConfig = {}) {
+  const followUps = resolveFollowUpSuggestionsConfig(config.followUpSuggestions);
   const chatPath = `${routes.MASTRA_ROUTES.chat}/:agentId` as `${string}:agentId`;
   const runPath =
     `${routes.MASTRA_ROUTES.chat}/:agentId${routes.MASTRA_ROUTES.runs}/:runId` as `${string}:agentId${string}:runId`;
@@ -56,6 +87,12 @@ export function agentChatRoutes() {
         }
         const status = rawStatus as "draft" | "published" | undefined;
         const abortSignal = agentAbortSignal(mastra.getAgentById(agentId), context.req.raw.signal);
+        const runId =
+          typeof params.runId === "string" && params.runId ? params.runId : crypto.randomUUID();
+        const userText = latestUserText(params.messages);
+        if (userText) requestContext.setRaw(FOLLOW_UP_USER_TEXT_KEY, userText);
+        requestContext.setRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY, []);
+        requestContext.setRaw(FOLLOW_UP_RUN_ID_KEY, runId);
         const stream = await handleChatStream({
           mastra,
           agentId,
@@ -67,11 +104,15 @@ export function agentChatRoutes() {
           params: withRequestMemoryScope(
             {
               ...params,
+              runId,
               requestContext,
               ...(abortSignal ? { abortSignal } : {}),
             },
             requestContext,
           ),
+          ...(followUps && followUps.mode !== "genie"
+            ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
+            : {}),
           version: "v7",
           sendReasoning: true,
           sendSources: true,
@@ -97,6 +138,9 @@ export function agentChatRoutes() {
         const observed = await agent.observe(runId);
         const stream = toAISdkStream(observed.output, {
           from: "agent",
+          ...(followUps && followUps.mode !== "genie"
+            ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
+            : {}),
           version: "v7",
           sendReasoning: true,
           sendSources: true,

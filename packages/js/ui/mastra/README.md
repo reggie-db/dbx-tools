@@ -210,6 +210,14 @@ Configure the client with these options:
   id. Set `enableFeedback={false}` to hide them. Viewers with `CAN_MANAGE` on
   the experiment also get an experiment debug link at the end of the action row.
 
+Post-turn follow-ups follow the policy published by AppKit-Mastra. Native Genie
+questions and persisted `data-follow-up-suggestions` parts use the same
+near-duplicate filter and source round-robin. After a turn settles, the latest
+questions render through `SuggestionPills` at the end of the scrollable
+transcript. They disappear when the next user turn starts and remain available
+after history hydration because generated suggestions are persisted on the
+assistant message.
+
 ## Use direct Genie chat
 
 Use `genieSpace` when the application needs the same chat shell without a

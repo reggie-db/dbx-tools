@@ -16,6 +16,7 @@ import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } fr
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
 import { genieFeedbackTarget } from "./chat-feedback.ts";
+import { SuggestionPills } from "./suggestion-pills.tsx";
 import type { ChatViewProps } from "./types.ts";
 import { messageText } from "../support/export.ts";
 
@@ -148,8 +149,9 @@ type ChatTranscriptProps = {
   messages: ChatViewProps["messages"];
   status: ChatViewProps["status"];
   error: ChatViewProps["error"];
-  sendMessage: ChatViewProps["sendMessage"];
   suggestions: NonNullable<ChatViewProps["suggestions"]>;
+  followUpQuestions: string[];
+  onSelectFollowUp: (question: string) => void;
   toolEventsByMessage: NonNullable<ChatViewProps["toolEventsByMessage"]>;
   regenerate: ChatViewProps["regenerate"];
   isLoadingMore: NonNullable<ChatViewProps["isLoadingMore"]>;
@@ -169,8 +171,9 @@ export const ChatTranscript = ({
   messages,
   status,
   error,
-  sendMessage,
   suggestions,
+  followUpQuestions,
+  onSelectFollowUp,
   toolEventsByMessage,
   regenerate,
   isLoadingMore,
@@ -252,7 +255,6 @@ export const ChatTranscript = ({
                     status={status}
                     events={toolEventsByMessage[message.id]}
                     regenerate={regenerate}
-                    onSuggestionClick={(text) => sendMessage({ text })}
                     onResolveToolApproval={onResolveToolApproval}
                     externalApprovals={pendingApprovalsByMessage[message.id]}
                     {...(onExportMessage
@@ -274,6 +276,11 @@ export const ChatTranscript = ({
               }
               return <UserBubble key={message.id} message={message} />;
             })}
+            <SuggestionPills
+              questions={followUpQuestions}
+              onSelect={onSelectFollowUp}
+              className="pb-2 pt-1"
+            />
             {showWaitingIndicator && (
               <div
                 role="status"

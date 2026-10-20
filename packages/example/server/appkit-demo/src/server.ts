@@ -474,6 +474,7 @@ try {
         // Agent Mode feedback goes directly to Genie. If Agent Mode is disabled,
         // auto falls back to the deployed MLflow experiment and OTLP sidecar.
         feedbackMode: "auto",
+        followUpSuggestions: true,
         agents: { support },
         defaultAgent: "support",
         genieAgentMode: true,

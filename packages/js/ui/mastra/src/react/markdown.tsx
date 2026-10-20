@@ -7,6 +7,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Spinner,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -180,6 +181,20 @@ const MARKDOWN_COMPONENTS = {
   },
 };
 
+/** Hold streaming tables until their rows and right-aligned values are complete. */
+const STREAMING_MARKDOWN_COMPONENTS = {
+  ...MARKDOWN_COMPONENTS,
+  table: () => (
+    <div
+      role="status"
+      className="my-2 flex h-10 items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 text-xs text-muted-foreground"
+    >
+      <Spinner className="size-3" />
+      <span>Building table...</span>
+    </div>
+  ),
+};
+
 /**
  * Markdown component map for tool-detail copy (Genie summaries, SQL
  * descriptions). Same cell/section overrides, but tables stay static
@@ -258,7 +273,7 @@ export const AssistantMarkdown = ({
   animate?: boolean;
 }) => (
   <Streamdown
-    components={MARKDOWN_COMPONENTS}
+    components={animate ? STREAMING_MARKDOWN_COMPONENTS : MARKDOWN_COMPONENTS}
     plugins={SHIKI_PLUGIN}
     controls={false}
     linkSafety={LINK_SAFETY}

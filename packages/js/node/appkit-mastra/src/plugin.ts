@@ -103,6 +103,7 @@ import {
   statementDataDefaults,
 } from "./defaults.ts";
 import { resolveFeedbackMode } from "./feedback-mode.ts";
+import { resolveFollowUpSuggestionsConfig } from "./follow-up-suggestions.ts";
 import {
   deleteGenieThread,
   deleteGenieThreadMessage,
@@ -471,12 +472,15 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // Return widens to `Record<string, unknown>` to satisfy the
     // base-class signature; consumers read it through the typed
     // `MastraClientConfig` shape via `usePluginClientConfig<...>(...)`.
+    const followUps = resolveFollowUpSuggestionsConfig(this.config.followUpSuggestions);
     const config: MastraClientConfig = {
       basePath: this.basePath,
       defaultAgent: this.built?.defaultAgentId ?? FALLBACK_AGENT_ID,
       agents: Object.keys(this.built?.agents ?? {}),
       feedbackMode: this.feedbackMode(),
       backgroundTurns: this.config.backgroundTurns !== false,
+      followUpSuggestions: followUps?.mode ?? "none",
+      followUpSuggestionLimit: followUps?.limit ?? 3,
       // In `service-principal` mode the chat works for any caller who can open
       // the app, so a UI that hides chat behind an OBO-token probe should show
       // it regardless. `"user"` mode keeps the OBO-gated behavior.
@@ -1436,7 +1440,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       mastra: this.mastra,
       prefix: "",
       customApiRoutes: [
-        ...agentChatRoutes(),
+        ...agentChatRoutes(this.config),
         workflowRoute({
           path: "/route/workflows/:workflowId/stream",
           version: "v7",

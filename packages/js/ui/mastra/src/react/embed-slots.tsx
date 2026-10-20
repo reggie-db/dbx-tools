@@ -105,12 +105,13 @@ const ChartSlot = ({ chartId }: { chartId: string }) => {
   // planner spec before rendering. Memoized on the resolved option and
   // the theme, so a light/dark switch recolors the chart in place.
   const option = useMemo(
-    () => (chart?.result ? normalizeChartOption(chart.result.option, chrome) : undefined),
+    () => (chart?.result && chrome ? normalizeChartOption(chart.result.option, chrome) : undefined),
     [chart?.result, chrome],
   );
+  const waiting = loading || chrome === undefined;
   // Settled 404 (unknown / TTL-expired id) -> small "expired" notice.
   // Hard-error / non-terminal payloads render nothing.
-  if (!option && !loading) {
+  if (!option && !waiting) {
     return !error && chart === undefined ? <ExpiredSlot type="chart" /> : null;
   }
   // One frame for both states: the chart's footprint is known ahead of

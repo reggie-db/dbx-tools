@@ -1436,6 +1436,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     regenerate,
     onStop: stop,
     suggestions,
+    followUpSuggestions: mastraClient.followUpSuggestions,
+    followUpSuggestionLimit: mastraClient.followUpSuggestionLimit,
     pendingApprovalsByMessage: activeSession.pendingApprovalsByMessage,
     onResolveToolApproval: handleApproval,
     // Picker is opt-in: only hand ChatView the catalogue + change

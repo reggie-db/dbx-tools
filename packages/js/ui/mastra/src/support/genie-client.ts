@@ -28,6 +28,7 @@ export class GenieChatClient extends MastraPluginClient {
   override readonly feedbackMode = "none";
   override readonly threadRename = false;
   override readonly attachments = false;
+  override readonly followUpSuggestions: "none" | "genie";
   /** Thread ids known to be Genie conversations (listed, loaded, or announced). */
   readonly #conversations = new Set<string>();
   /** Transcript message id to Genie message id, for regenerate cleanup. */
@@ -36,6 +37,10 @@ export class GenieChatClient extends MastraPluginClient {
   constructor(config: MastraClientConfig, alias: string) {
     super(config);
     this.alias = alias;
+    this.followUpSuggestions =
+      config.followUpSuggestions === "genie" || config.followUpSuggestions === "auto"
+        ? "genie"
+        : "none";
   }
 
   #url(...parts: string[]): string {

@@ -1,6 +1,7 @@
 import { ChatComposer } from "./chat-composer.tsx";
 import { ChatThreadLayout } from "./chat-thread-layout.tsx";
 import { ChatTranscript, useChatTranscriptController } from "./chat-transcript.tsx";
+import { collectSuggestions } from "./suggestions.ts";
 import type { ChatViewProps } from "./types.ts";
 
 /**
@@ -23,6 +24,8 @@ export const ChatView = ({
   onStop,
   className,
   suggestions = [],
+  followUpSuggestions = "none",
+  followUpSuggestionLimit = 3,
   toolEventsByMessage = {},
   models,
   model,
@@ -76,6 +79,18 @@ export const ChatView = ({
     hasMore,
     isLoadingHistory,
   });
+  const latestMessage = messages[messages.length - 1];
+  const latestAssistant = latestMessage?.role === "assistant" ? latestMessage : undefined;
+  const running = status === "submitted" || status === "streaming";
+  const followUpQuestions =
+    latestAssistant && !running
+      ? collectSuggestions(
+          toolEventsByMessage[latestAssistant.id],
+          latestAssistant,
+          followUpSuggestions,
+          followUpSuggestionLimit,
+        )
+      : [];
 
   return (
     <ChatThreadLayout
@@ -104,8 +119,9 @@ export const ChatView = ({
         messages={messages}
         status={status}
         error={error}
-        sendMessage={sendMessage}
         suggestions={suggestions}
+        followUpQuestions={followUpQuestions}
+        onSelectFollowUp={(text) => sendMessage({ text })}
         toolEventsByMessage={toolEventsByMessage}
         regenerate={regenerate}
         isLoadingMore={isLoadingMore}

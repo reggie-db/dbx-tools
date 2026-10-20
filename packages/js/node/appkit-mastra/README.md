@@ -722,6 +722,32 @@ const agent = agents.createAgent({
 });
 ```
 
+### Follow-up suggestions
+
+Post-turn suggestions are off by default. Enable one source, or let automatic
+mode combine native Genie questions with complementary ChatFast suggestions:
+
+```ts
+mastra({
+  followUpSuggestions: true,
+  agents: { analyst },
+});
+
+mastra({
+  followUpSuggestions: { mode: "generated", limit: 10 },
+  agents: { analyst },
+});
+```
+
+Accepted shorthand values are `false`, `"genie"`, `"generated"`, and `true`.
+`true` resolves to automatic mode and supplies native Genie questions to the
+ChatFast generator so it avoids repeats. The default limit is three and the
+maximum is ten. Generation runs through Mastra's final output processor and
+stream transform outside the primary agent step budget, persists with the
+assistant message, and fails open without changing the answer. Set
+`exposeTool: true` only when the primary agent should also be able to request
+suggestions explicitly.
+
 ### Direct Genie chat
 
 The plugin also exposes a Genie-only transport for the paired Mastra UI. It

@@ -1,3 +1,9 @@
+import {
+  FOLLOW_UP_SUGGESTIONS_PART_TYPE,
+  FollowUpSuggestionsPartDataSchema,
+  type FollowUpSuggestionMode,
+} from "@dbx-tools/shared-mastra/wire";
+import type { UIMessage } from "ai";
 import type { ToolEvent, ToolProgress } from "./types.ts";
 
 // Suggested follow-up question extraction: dedupe + cap the
@@ -9,7 +15,7 @@ import type { ToolEvent, ToolProgress } from "./types.ts";
  * assistant message - several Genie queries each emitting a handful
  * would otherwise flood the bubble.
  */
-const MAX_SUGGESTIONS = 4;
+const MAX_STARTER_SUGGESTIONS = 4;
 
 /**
  * Token-set Jaccard threshold above which two suggestions are treated
@@ -46,14 +52,14 @@ function tokenSimilarity(a: Set<string>, b: Set<string>): number {
  * its *top* question before any source contributes a second -
  * favoring breadth over depth. Near-duplicates (see
  * {@link SUGGESTION_SIMILARITY}) are skipped and the result is capped
- * at {@link MAX_SUGGESTIONS}. Exact-duplicate questions across
+ * at the caller's limit. Exact-duplicate questions across
  * sources also fold via the similarity check.
  */
-function pickSuggestions(lists: string[][]): string[] {
+function pickSuggestions(lists: string[][], limit: number): string[] {
   const accepted: string[] = [];
   const acceptedTokens: Set<string>[] = [];
   const consider = (question: string): void => {
-    if (accepted.length >= MAX_SUGGESTIONS) return;
+    if (accepted.length >= limit) return;
     const tokens = suggestionTokens(question);
     if (tokens.size === 0) return;
     const isDuplicate = acceptedTokens.some(
@@ -65,7 +71,7 @@ function pickSuggestions(lists: string[][]): string[] {
   };
 
   const maxLen = lists.reduce((m, l) => Math.max(m, l.length), 0);
-  for (let i = 0; i < maxLen && accepted.length < MAX_SUGGESTIONS; i++) {
+  for (let i = 0; i < maxLen && accepted.length < limit; i++) {
     for (const list of lists) {
       const question = list[i];
       if (question !== undefined) consider(question);
@@ -76,34 +82,49 @@ function pickSuggestions(lists: string[][]): string[] {
 
 /**
  * Dedupe + cap a single flat list of suggested questions (e.g. the
- * initial Genie sample questions). Shares the similarity dedupe and
- * {@link MAX_SUGGESTIONS} cap with the follow-up extractor so initial
- * and follow-up suggestions behave identically.
+ * initial Genie sample questions). Uses the same similarity dedupe as
+ * the follow-up extractor.
  */
 export const dedupeSuggestions = (questions: string[] | undefined): string[] =>
-  questions && questions.length > 0 ? pickSuggestions([questions]) : [];
+  questions && questions.length > 0 ? pickSuggestions([questions], MAX_STARTER_SUGGESTIONS) : [];
 
 /**
  * Build the short, deduped list of suggested follow-up questions for
- * an assistant message. Within each tool event the **last**
- * `suggested` progress entry wins (Genie publishes an evolving list;
- * the final one is the refined version). Delegates dedupe + cap to
- * {@link pickSuggestions}.
+ * an assistant message. Within each Genie tool event the last suggested
+ * progress entry wins; persisted generic data parts are merged according to
+ * the server-published source policy.
  */
-export const collectSuggestions = (events: ToolEvent[] | undefined): string[] => {
-  if (!events || events.length === 0) return [];
-
+export const collectSuggestions = (
+  events: ToolEvent[] | undefined,
+  message: UIMessage,
+  mode: FollowUpSuggestionMode,
+  limit: number,
+): string[] => {
+  if (mode === "none") return [];
   // One ordered question list per event that emitted any.
   const lists: string[][] = [];
-  for (const event of events) {
-    const last = [...(event.progress ?? [])]
-      .reverse()
-      .find(
-        (p): p is Extract<ToolProgress, { type: "suggested_questions" }> =>
-          p.type === "suggested_questions",
-      );
-    if (last && last.questions.length > 0) lists.push(last.questions);
+  if (mode === "genie" || mode === "auto") {
+    for (const event of events ?? []) {
+      const last = [...(event.progress ?? [])]
+        .reverse()
+        .find(
+          (p): p is Extract<ToolProgress, { type: "suggested_questions" }> =>
+            p.type === "suggested_questions",
+        );
+      if (last && last.questions.length > 0) lists.push(last.questions);
+    }
   }
-
-  return pickSuggestions(lists);
+  for (const part of message.parts) {
+    if (part.type !== FOLLOW_UP_SUGGESTIONS_PART_TYPE) continue;
+    const parsed = FollowUpSuggestionsPartDataSchema.safeParse(part.data);
+    if (!parsed.success) continue;
+    if (
+      (mode === "generated" && parsed.data.source !== "model") ||
+      (mode === "genie" && parsed.data.source !== "genie")
+    ) {
+      continue;
+    }
+    lists.push(parsed.data.questions);
+  }
+  return pickSuggestions(lists, Math.min(10, Math.max(1, limit)));
 };

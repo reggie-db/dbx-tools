@@ -218,6 +218,18 @@ export interface MastraMcpConfig {
   extraTools?: MastraTools;
 }
 
+/** Optional post-turn follow-up suggestion policy. */
+export interface FollowUpSuggestionsConfig {
+  /** Native Genie only, ChatFast generated only, or automatic selection when true. */
+  mode: true | "generated" | "genie";
+  /** Maximum questions emitted for one turn. Defaults to 3, maximum 10. */
+  limit?: number;
+  /** Tail-generation timeout in milliseconds. */
+  timeoutMs?: number;
+  /** Also expose the generator as an explicitly callable agent tool. */
+  exposeTool?: boolean;
+}
+
 /** Configuration accepted by the Mastra AppKit plugin. */
 export interface MastraPluginConfig extends BasePluginConfig {
   /**
@@ -509,6 +521,12 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   agentMaxSteps?: number;
   /**
+   * Optional post-turn follow-up questions. `true` selects sources
+   * automatically; `"generated"` or `"genie"` pins one source; `false` or
+   * omission disables follow-ups.
+   */
+  followUpSuggestions?: false | true | "generated" | "genie" | FollowUpSuggestionsConfig;
+  /**
    * Wire Mastra spans into AppKit's global OTel pipeline via
    * `@mastra/otel-bridge`.
    *
@@ -785,6 +803,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: "number",
       description:
         "Maximum LLM steps each agent gets per turn (a tool call and the final reply each consume one). Defaults to 25.",
+    },
+    followUpSuggestions: {
+      type: ["boolean", "string", "object"],
+      description:
+        'Optional post-turn follow-ups. True selects sources automatically; "generated" or "genie" pins one source; an object adds a limit, timeout, and optional tool exposure. Defaults off.',
     },
     stripStaleCharts: {
       type: "boolean",

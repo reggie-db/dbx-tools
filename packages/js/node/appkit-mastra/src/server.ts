@@ -29,6 +29,11 @@ import {
   type MastraPluginConfig,
   type User,
 } from "./config.ts";
+import {
+  FOLLOW_UP_NATIVE_QUESTIONS_KEY,
+  FOLLOW_UP_RUN_ID_KEY,
+  FOLLOW_UP_USER_TEXT_KEY,
+} from "./follow-up-suggestions.ts";
 import { requestUserEmail, requestUserId } from "./identity.ts";
 import { MASTRA_ORIGIN_KEY } from "./request-context.ts";
 import {
@@ -58,6 +63,9 @@ const TRUSTED_REQUEST_CONTEXT_KEYS = [
   MASTRA_SCOPES_KEY,
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
+  FOLLOW_UP_USER_TEXT_KEY,
+  FOLLOW_UP_NATIVE_QUESTIONS_KEY,
+  FOLLOW_UP_RUN_ID_KEY,
 ] as const;
 
 /** Remove browser-supplied values for fields owned by trusted server middleware. */

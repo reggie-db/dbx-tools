@@ -91,6 +91,10 @@ export class MastraPluginClient extends MastraClient {
   readonly chatAlwaysAvailable: boolean;
   /** Whether turns continue server-side after the initiating stream disconnects. */
   readonly backgroundTurns: boolean;
+  /** Enabled post-turn follow-up sources. */
+  readonly followUpSuggestions: "none" | "genie" | "generated" | "auto";
+  /** Maximum follow-up questions rendered after one turn. */
+  readonly followUpSuggestionLimit: number;
   /** Whether {@link renameThread} is supported by this client's thread store. */
   readonly threadRename: boolean = true;
   /** Whether a chat may attach files to a turn. */
@@ -109,6 +113,8 @@ export class MastraPluginClient extends MastraClient {
     this.feedbackMode = config.feedbackMode ?? "none";
     this.chatAlwaysAvailable = config.chatAlwaysAvailable ?? false;
     this.backgroundTurns = config.backgroundTurns ?? false;
+    this.followUpSuggestions = config.followUpSuggestions ?? "none";
+    this.followUpSuggestionLimit = config.followUpSuggestionLimit ?? 3;
   }
 
   /**

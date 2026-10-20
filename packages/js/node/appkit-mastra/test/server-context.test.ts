@@ -13,6 +13,11 @@ import {
   MASTRA_USER_EMAIL_KEY,
   MASTRA_USER_KEY,
 } from "../src/config.ts";
+import {
+  FOLLOW_UP_NATIVE_QUESTIONS_KEY,
+  FOLLOW_UP_RUN_ID_KEY,
+  FOLLOW_UP_USER_TEXT_KEY,
+} from "../src/follow-up-suggestions.ts";
 import { MASTRA_ORIGIN_KEY } from "../src/request-context.ts";
 import {
   attachStaleResumeRecovery,
@@ -32,6 +37,9 @@ describe("application request context boundary", () => {
     context.setRaw(MASTRA_REQUEST_ID_KEY, "attacker-request");
     context.setRaw(MASTRA_ORIGIN_KEY, "https://attacker.example");
     context.setRaw(MASTRA_SCOPES_KEY, ["all-apis"]);
+    context.setRaw(FOLLOW_UP_USER_TEXT_KEY, "attacker question");
+    context.setRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY, ["attacker suggestion"]);
+    context.setRaw(FOLLOW_UP_RUN_ID_KEY, "attacker-run");
 
     clearTrustedRequestContext(context);
 
@@ -44,6 +52,9 @@ describe("application request context boundary", () => {
       MASTRA_REQUEST_ID_KEY,
       MASTRA_ORIGIN_KEY,
       MASTRA_SCOPES_KEY,
+      FOLLOW_UP_USER_TEXT_KEY,
+      FOLLOW_UP_NATIVE_QUESTIONS_KEY,
+      FOLLOW_UP_RUN_ID_KEY,
     ]) {
       assert.equal(context.hasRaw(key), false);
     }

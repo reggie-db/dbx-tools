@@ -59,6 +59,7 @@ import type { MastraTools } from "./agents.ts";
 import { chartPlannerRequestSchema, chartToolOutputSchema, prepareChart } from "./chart.ts";
 import { MASTRA_USER_KEY, resolveUserKey } from "./config.ts";
 import type { MastraPluginConfig, User } from "./config.ts";
+import { FOLLOW_UP_NATIVE_QUESTIONS_KEY } from "./follow-up-suggestions.ts";
 import { fetchStatementData } from "./statement.ts";
 import { recordActiveTraceAuth, stampGenieToolSpan } from "./telemetry.ts";
 import { safeWriteProgress } from "./writer.ts";
@@ -491,6 +492,15 @@ function buildAskGenieTool(opts: {
             ...(signal ? { context: signal } : {}),
           })) {
             if (event.type !== "message") {
+              if (event.type === "suggested_questions") {
+                const current = requestContext.getRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY);
+                const questions = Array.isArray(current)
+                  ? current.filter((value): value is string => typeof value === "string")
+                  : [];
+                requestContext.setRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY, [
+                  ...new Set([...questions, ...event.questions]),
+                ]);
+              }
               await safeWriteProgress(logger, writer, toolCallId, event);
             }
             const eventConversationId = event.conversation_id;

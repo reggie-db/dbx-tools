@@ -52,6 +52,11 @@ import type {
   MastraCodeModeTransport,
   MastraPluginConfig,
 } from "./config.ts";
+import {
+  buildFollowUpSuggestionsProcessor,
+  buildSuggestFollowUpsTool,
+  resolveFollowUpSuggestionsConfig,
+} from "./follow-up-suggestions.ts";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "./memory.ts";
 import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
@@ -898,9 +903,14 @@ export async function buildAgents(opts: {
   // user can shadow either by including a same-named tool in their own
   // `config.tools` or per-agent `tools`. Merge order is
   // `system -> standard skills -> user-ambient -> per-agent`, last write wins.
+  const followUps = resolveFollowUpSuggestionsConfig(config.followUpSuggestions);
+  const followUpProcessor = buildFollowUpSuggestionsProcessor(config);
   const systemTools: MastraTools = {
     render_data: buildRenderDataTool(config),
     summarize: buildSummarizeTool(config),
+    ...(followUps?.exposeTool && followUps.mode !== "genie"
+      ? { suggest_follow_ups: buildSuggestFollowUpsTool(config) }
+      : {}),
   };
   const standardSkillTools =
     standardSkills.length > 0 ? createSkillTools(resolveAgentSkills([...standardSkills])) : {};
@@ -988,6 +998,7 @@ export async function buildAgents(opts: {
       inputProcessors: [...inputProcessors, ...workspaceSkillInputProcessors(workspace, config)],
       outputProcessors: [
         toolErrorLoggingProcessor(log),
+        ...(followUpProcessor ? [followUpProcessor] : []),
         ...outputProcessorFactories.flatMap((factory) => {
           const processor = factory(id);
           return processor ? [processor] : [];

@@ -41,8 +41,22 @@ export {
 } from "./record-preview-data.ts";
 
 /** Compact Streamdown in a table cell: match 11px rows, keep lists tight. */
-const MARKDOWN_CELL_CLASSES =
-  "min-w-0 max-w-full text-[11px] leading-snug [&_p]:my-0.5 [&_p]:leading-snug [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_h1]:my-1 [&_h1]:text-[11px] [&_h1]:font-semibold [&_h2]:my-1 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:text-[11px] [&_h3]:font-semibold [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-background/60 [&_pre]:p-1.5 [&_pre]:text-[10px] [&_code]:text-[10px]";
+const MARKDOWN_CELL_CLASSES = cn(
+  "min-w-0 max-w-full text-[11px] leading-snug",
+  "[&>div]:space-y-1 [&_p]:my-0.5 [&_p]:leading-snug",
+  "[&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0",
+  "[&_h1]:my-1 [&_h1]:text-[11px] [&_h1]:font-semibold",
+  "[&_h2]:my-1 [&_h2]:text-[11px] [&_h2]:font-semibold",
+  "[&_h3]:my-1 [&_h3]:text-[11px] [&_h3]:font-semibold",
+  "[&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded",
+  "[&_pre]:bg-background/60 [&_pre]:p-1.5 [&_pre]:text-[10px] [&_code]:text-[10px]",
+  "[&_[data-streamdown=table-wrapper]]:my-1 [&_[data-streamdown=table-wrapper]]:gap-1",
+  "[&_[data-streamdown=table-wrapper]]:rounded [&_[data-streamdown=table-wrapper]]:p-1",
+  "[&_[data-streamdown=table-header-cell]]:px-2 [&_[data-streamdown=table-header-cell]]:py-1",
+  "[&_[data-streamdown=table-header-cell]]:text-[11px] [&_[data-streamdown=table-header-cell]]:leading-snug",
+  "[&_[data-streamdown=table-cell]]:px-2 [&_[data-streamdown=table-cell]]:py-1",
+  "[&_[data-streamdown=table-cell]]:text-[11px] [&_[data-streamdown=table-cell]]:leading-snug",
+);
 
 const MAX_NESTED_DEPTH = 12;
 const MAX_INDENT_DEPTH = 4;
@@ -150,6 +164,8 @@ function FieldRow({
   depth: number;
   divided?: boolean;
 }) {
+  const stacked =
+    typeof row.value === "string" && (row.value.includes("\n") || looksLikeMarkdown(row.value));
   return (
     <TableRow className={cn("hover:bg-transparent", divided && "border-t-2 border-border/50")}>
       <TableCell
@@ -157,7 +173,12 @@ function FieldRow({
         className="min-w-0 whitespace-normal px-0 py-1.5 pr-8 align-top [overflow-wrap:anywhere]"
         style={{ paddingLeft: rowIndent(depth) }}
       >
-        <div className="grid min-w-0 gap-0.5 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-2">
+        <div
+          className={cn(
+            "grid min-w-0 gap-0.5",
+            stacked ? "grid-cols-1 gap-1" : "sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-1.5",
+          )}
+        >
           <div className="text-[10px] font-medium leading-snug text-muted-foreground sm:text-[11px]">
             {row.label}
           </div>
