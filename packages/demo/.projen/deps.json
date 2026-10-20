@@ -196,6 +196,11 @@
       "type": "runtime"
     },
     {
+      "name": "tw-animate-css",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "zod",
       "version": "catalog:",
       "type": "runtime"

@@ -21,6 +21,7 @@
         "@dbx-tools/appkit-web-search",
         "@dbx-tools/cli",
         "@dbx-tools/databricks",
+        "@dbx-tools/demo",
         "@dbx-tools/email",
         "@dbx-tools/genie",
         "@dbx-tools/model",
@@ -303,6 +304,7 @@
       "name": "@dbx-tools/demo",
       "path": "packages/demo",
       "dependencies": [
+        "@dbx-tools/appkit",
         "@dbx-tools/appkit-generator",
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/appkit-mastra",

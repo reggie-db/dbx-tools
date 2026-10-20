@@ -137,6 +137,7 @@ function configureApplication(
     "react@catalog:",
     "react-dom@catalog:",
     "tailwindcss@catalog:",
+    "tw-animate-css@catalog:",
   );
   project.addDevDeps(
     `@types/bun@${BUN_VERSION}`,

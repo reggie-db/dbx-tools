@@ -62,6 +62,7 @@
     "react-dom": "catalog:",
     "react-router-dom": "catalog:",
     "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:",
     "zod": "catalog:"
   },
   "main": "server/server.ts",

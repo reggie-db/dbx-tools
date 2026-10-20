@@ -52,6 +52,7 @@ it("auto-configures one application project at packages/app", () => {
   assert.deepEqual(app.appkit, { autoMigrate: false });
   assert.equal(app.dependencies["@databricks/appkit"], "catalog:");
   assert.equal(app.dependencies["@databricks/appkit-ui"], "catalog:");
+  assert.equal(app.dependencies["tw-animate-css"], "catalog:");
   assert.equal(app.dependencies.bun, BUN_VERSION);
   assert.deepEqual(app.exports, { "./package.json": "./package.json" });
   assert.equal(existsSync(join(root, "packages/app/client/package.json")), false);
