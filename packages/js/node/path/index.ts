@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/path";
-export const PACKAGE_VERSION = "0.9.154";
+export const PACKAGE_VERSION = "0.9.155";
 export * as find from "./src/find.ts";
 export * as gitIgnore from "./src/git-ignore.ts";
 export * as ignore from "./src/ignore.ts";
