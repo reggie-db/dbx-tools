@@ -17,7 +17,7 @@ import {
   type LakeboxAuth,
   type LakeboxEntry,
 } from "@dbx-tools/lakebox";
-import { log, toError } from "@dbx-tools/shared-core";
+import { errorNodes, log, sleep, toError } from "@dbx-tools/shared-core";
 import {
   LAKEBOX_BUILT_IN_SERVICES,
   lakeboxBuiltInServiceNameSchema,
@@ -61,6 +61,16 @@ const HELPERS = {
 const CONTROLLER = `${LAKEBOX_RUNTIME_ROOT}/bin/lakebox-service`;
 const ENTRY_TTL_MS = 5_000;
 const SETUP_TIMEOUT_MS = 600_000;
+const SSH_READY_TIMEOUT_MS = 300_000;
+const SSH_READY_RETRY_INITIAL_MS = 1_000;
+const SSH_READY_RETRY_MAX_MS = 10_000;
+const TRANSIENT_SSH_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ETIMEDOUT",
+]);
 const METRICS_LEASE_MS = 60_000;
 const IDLE_CHECK_MS = 30_000;
 const SSH_KEY_OWNER = "app-service-principal";
@@ -68,6 +78,16 @@ const LEGACY_NAME =
   /^dbx-(?!lakebox-)[a-z]+-[a-z]+-[0-9a-f]{8}(?:_uid_[A-Za-z0-9_-]+_exp_[0-9]+)?$/;
 const LEGACY_SCHEMA_PREFIX = "dbx_tools_databricks_sandbox";
 const logger = log.logger("appkit-lakebox:runtime");
+
+/** Whether the platform is running but its SSH gateway is still becoming reachable. */
+function _isTransientSshStartupError(error: unknown): boolean {
+  return [...errorNodes(error)].some(
+    (node) =>
+      typeof node === "object" &&
+      "code" in node &&
+      TRANSIENT_SSH_CODES.has(String((node as { code?: unknown }).code)),
+  );
+}
 
 /** Resolves the authenticated identity for raw request headers. */
 export type LakeboxIdentityResolver = (headers: IncomingHttpHeaders) => string | undefined;
@@ -552,6 +572,34 @@ export class LakeboxRuntime {
   }
 
   private async connect(entry: LakeboxEntry, signal: AbortSignal): Promise<SshSession> {
+    const startedAt = Date.now();
+    let attempt = 0;
+    while (true) {
+      try {
+        return await this.connectOnce(entry, signal);
+      } catch (error) {
+        attempt += 1;
+        if (!_isTransientSshStartupError(error) || Date.now() - startedAt >= SSH_READY_TIMEOUT_MS) {
+          throw error;
+        }
+        const delayMs = Math.min(
+          SSH_READY_RETRY_INITIAL_MS * 2 ** (attempt - 1),
+          SSH_READY_RETRY_MAX_MS,
+        );
+        logger.info("Lakebox SSH gateway is not ready; retrying", {
+          attempt,
+          delayMs,
+        });
+        await this.waitForSshRetry(delayMs, signal);
+      }
+    }
+  }
+
+  private waitForSshRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+    return sleep(delayMs, signal);
+  }
+
+  private async connectOnce(entry: LakeboxEntry, signal: AbortSignal): Promise<SshSession> {
     const api = this.client();
     const scope = await api.workspaceScope();
     const key = await this.keys.ensureRegistered(api, SSH_KEY_OWNER, signal);
