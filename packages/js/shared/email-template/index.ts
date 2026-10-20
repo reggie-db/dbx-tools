@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-email-template";
-export const PACKAGE_VERSION = "0.9.152";
+export const PACKAGE_VERSION = "0.9.153";
 export * as generatedAssets from "./src/generated/assets.ts";
 export * as template from "./src/template.tsx";
 export { dbxToolsEmailAssetDataUrls } from "./src/generated/assets.ts";
