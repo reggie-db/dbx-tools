@@ -542,10 +542,11 @@ version changes, pushes `main`, and pushes the matching annotated `vX.Y.Z` tag.
 Pass `--no-bump` only to release an existing synchronized local bump. The tag
 workflow verifies that the tag points at the exact `origin/main` commit. The
 local task completes local publication and demo deployment first, then waits for
-this workflow by default. It preserves the live checklist through a scroll-safe
-non-TTY stream and prints the final logs. Local-only releases and repositories
-without a resolved authenticated GitHub account skip the watcher. Stopping the
-local watcher does not cancel the remote run.
+this workflow by default. It prints the initial job and step state, then only
+append-only status changes, without annotations. Successful runs omit full logs;
+unsuccessful runs print failed-step logs only. Local-only releases and
+repositories without a resolved authenticated GitHub account skip the watcher.
+Stopping the local watcher does not cancel the remote run.
 
 One `build-release` job installs workspace dependencies, runs validation, packs
 the npm archives, builds all Python distributions, and builds the documentation

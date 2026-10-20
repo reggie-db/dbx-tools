@@ -125,6 +125,24 @@ describe("direct release tags", () => {
         '    url: "https://github.com/example/repo/actions/runs/42",',
         "  }]));",
         "}",
+        'if (args[0] === "run" && args[1] === "view" && args.includes("--json")) {',
+        "  console.log(JSON.stringify({",
+        '    status: "completed",',
+        '    conclusion: process.env.TEST_CONCLUSION || "success",',
+        "    jobs: [{",
+        "      databaseId: 84,",
+        '      name: "build-release",',
+        '      status: "completed",',
+        '      conclusion: "success",',
+        "      steps: [{",
+        "        number: 1,",
+        '        name: "Checkout release source",',
+        '        status: "completed",',
+        '        conclusion: "success",',
+        "      }],",
+        "    }],",
+        "  }));",
+        "}",
         "",
       ].join("\n"),
     );
@@ -154,9 +172,24 @@ describe("direct release tags", () => {
       });
       const invocations = readFileSync(calls, "utf8");
       assert.match(invocations, /run list .*--workflow release\.yml/);
-      assert.match(invocations, /run watch 42 .*--interval 1/);
-      assert.match(invocations, /run view 42 .*--log/);
+      assert.match(invocations, /run view 42 .*--json status,conclusion,jobs/);
+      assert.doesNotMatch(invocations, /run watch|annotations/);
+      assert.doesNotMatch(invocations, /--log(?:-failed)?/);
       assert.doesNotMatch(invocations, /\bcancel\b/);
+
+      writeFileSync(calls, "");
+      await watchReleaseGithubActions({
+        account: {
+          ...account,
+          env: { ...account.env, TEST_CONCLUSION: "failure" },
+        },
+        head,
+        root,
+        tag,
+        pollIntervalMs: 1,
+        startTimeoutMs: 100,
+      });
+      assert.match(readFileSync(calls, "utf8"), /run view 42 .*--log-failed/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

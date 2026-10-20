@@ -11,12 +11,7 @@ import { publishLocalRelease } from "./local-publish.ts";
 import { TaskDirectoriesOptionSchema, TaskRootOptionSchema } from "./options.ts";
 import { writeReleaseNotes } from "./release-notes.ts";
 import { assertReleaseVersion } from "./release-version.ts";
-import {
-  captureTaskCommand,
-  runTaskCommand,
-  streamTaskCommand,
-  taskCommandSucceeds,
-} from "../src/_task-command.ts";
+import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 import { RELEASE_WORKFLOW_FILE } from "../src/release-context.ts";
 import {
   RELEASE_INSTALL_MODES,
@@ -43,6 +38,33 @@ const GithubReleaseRunSchema = z
   })
   .passthrough();
 
+const GithubReleaseStepSchema = z
+  .object({
+    name: z.string(),
+    number: z.number().int(),
+    status: z.string(),
+    conclusion: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const GithubReleaseJobSchema = z
+  .object({
+    databaseId: z.number().int().positive(),
+    name: z.string(),
+    status: z.string(),
+    conclusion: z.string().nullable().optional(),
+    steps: z.array(GithubReleaseStepSchema),
+  })
+  .passthrough();
+
+const GithubReleaseRunViewSchema = z
+  .object({
+    status: z.string(),
+    conclusion: z.string().nullable().optional(),
+    jobs: z.array(GithubReleaseJobSchema),
+  })
+  .passthrough();
+
 /** Inputs required to locate and watch one tag-triggered release workflow. */
 export interface WatchReleaseGithubActionsOptions {
   readonly account: projectUtils.ProjectGhAccount;
@@ -66,6 +88,61 @@ function githubRepository(account: projectUtils.ProjectGhAccount): string {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+interface GithubProgressEntry {
+  readonly conclusion?: string | null;
+  readonly key: string;
+  readonly label: string;
+  readonly status: string;
+}
+
+function githubProgressEntries(
+  run: z.infer<typeof GithubReleaseRunViewSchema>,
+): GithubProgressEntry[] {
+  return [
+    {
+      key: "run",
+      label: "release",
+      status: run.status,
+      conclusion: run.conclusion,
+    },
+    ...run.jobs.flatMap((job) => [
+      {
+        key: `job:${job.databaseId}`,
+        label: job.name,
+        status: job.status,
+        conclusion: job.conclusion,
+      },
+      ...job.steps.map((step) => ({
+        key: `job:${job.databaseId}:step:${step.number}`,
+        label: `${job.name} / ${step.name}`,
+        status: step.status,
+        conclusion: step.conclusion,
+      })),
+    ]),
+  ];
+}
+
+function githubProgressMarker(entry: GithubProgressEntry): string {
+  if (entry.status === "completed") {
+    if (entry.conclusion === "success") return "[done]";
+    if (entry.conclusion === "skipped") return "[skip]";
+    return "[fail]";
+  }
+  return entry.status === "in_progress" ? "[run]" : "[wait]";
+}
+
+function reportGithubProgress(
+  run: z.infer<typeof GithubReleaseRunViewSchema>,
+  previous: Map<string, string>,
+): void {
+  for (const entry of githubProgressEntries(run)) {
+    const state = `${entry.status}:${entry.conclusion ?? ""}`;
+    if (previous.get(entry.key) === state) continue;
+    previous.set(entry.key, state);
+    logger.info(`${githubProgressMarker(entry)} ${entry.label}`);
+  }
 }
 
 /** Whether this release selection has remote work worth watching. */
@@ -139,26 +216,39 @@ export async function watchReleaseGithubActions(
     url: run.url,
   });
   try {
-    await streamTaskCommand(
-      root,
-      "gh",
-      [
-        "run",
-        "watch",
-        String(run.databaseId),
-        "--repo",
-        repository,
-        "--interval",
-        String(Math.max(1, Math.round(pollIntervalMs / 1_000))),
-      ],
-      { env: { ...account.env, NO_COLOR: "1" } },
-    );
-    runTaskCommand(
-      root,
-      "gh",
-      ["run", "view", String(run.databaseId), "--repo", repository, "--log"],
-      { env: account.env },
-    );
+    const progress = new Map<string, string>();
+    let completed = false;
+    let conclusion: string | null | undefined;
+    while (!completed) {
+      const output = captureTaskCommand(
+        root,
+        "gh",
+        [
+          "run",
+          "view",
+          String(run.databaseId),
+          "--repo",
+          repository,
+          "--json",
+          "status,conclusion,jobs",
+        ],
+        { check: true, env: account.env, stderr: "inherit" },
+      );
+      const parsed = GithubReleaseRunViewSchema.safeParse(json.parse(output));
+      if (!parsed.success) throw new Error("GitHub returned invalid release progress metadata");
+      reportGithubProgress(parsed.data, progress);
+      completed = parsed.data.status === "completed";
+      conclusion = parsed.data.conclusion;
+      if (!completed) await delay(pollIntervalMs);
+    }
+    if (conclusion !== "success" && conclusion !== "skipped") {
+      runTaskCommand(
+        root,
+        "gh",
+        ["run", "view", String(run.databaseId), "--repo", repository, "--log-failed"],
+        { env: account.env },
+      );
+    }
   } catch (error) {
     logger.warn("GitHub Actions release watch stopped; the remote run was not cancelled", {
       error: errorUtils.toError(error),
