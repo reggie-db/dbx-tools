@@ -163,7 +163,6 @@ platform.
 | `ssh2Patch`              | `auto`                                                                           | Apply the ssh2 missing-exec-reply workaround only in development, always, or never. |
 | `gatewayPort`            | `2222`                                                                           | Lakebox SSH gateway port.                                                           |
 | `connectTimeoutMs`       | `30000`                                                                          | SSH connection timeout.                                                             |
-| `destroyAfterStartupFailureSeconds` | `false`                                                              | Opt in to deleting and recreating an unreachable Lakebox after 5 to 600 seconds.    |
 | `commandTimeoutMs`       | `120000`                                                                         | Default command timeout.                                                            |
 | `keyDirectory`           | `~/.dbx-tools/lakebox`                                                           | Optional server-side SSH key and known-host storage root.                           |
 

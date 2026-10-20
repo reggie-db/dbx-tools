@@ -123,6 +123,35 @@ describe("SshSession", () => {
     await Promise.all([firstClose, secondClose]);
     expect(closed).toBe(true);
   });
+
+  it("uses public DNS addresses when the private gateway refuses the connection", async () => {
+    const host = "us-east-2.service-direct.cloud.databricks.com";
+    const attempts: string[] = [];
+    const session = new SshSession({
+      host,
+      port: 2_222,
+      username: "sandbox",
+      privateKey: "key",
+      privateKeyPath: "/tmp/key",
+      knownHostsPath: "/tmp/known-hosts",
+      connectTimeoutMs: 1_000,
+      sshTransport: "ssh2",
+      ssh2Patch: "false",
+      resolvePublicAddresses: async () => ["18.97.131.214"],
+    });
+    Object.defineProperty(session, "connectHost", {
+      value: async (connectHost: string) => {
+        attempts.push(connectHost);
+        if (connectHost === host) {
+          throw Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" });
+        }
+      },
+    });
+
+    await session.connect();
+
+    expect(attempts).toEqual([host, "18.97.131.214"]);
+  });
 });
 
 describe("resolvePublicGatewayAddresses", () => {

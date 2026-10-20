@@ -365,5 +365,10 @@ function shouldResolvePublicGateway(host: string, error: unknown): boolean {
   const code =
     (error as { code?: unknown; cause?: { code?: unknown } })?.code ??
     (error as { cause?: { code?: unknown } })?.cause?.code;
-  return code === "EHOSTUNREACH" || code === "ENETUNREACH" || code === "ETIMEDOUT";
+  return (
+    code === "ECONNREFUSED" ||
+    code === "EHOSTUNREACH" ||
+    code === "ENETUNREACH" ||
+    code === "ETIMEDOUT"
+  );
 }

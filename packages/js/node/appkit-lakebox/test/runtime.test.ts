@@ -8,8 +8,9 @@ import { LakeboxRuntime } from "../src/runtime.ts";
 interface RuntimeInternals {
   readyBootKey?: string;
   ready: () => Promise<unknown>;
-  connect: (entry: LakeboxEntry, signal: AbortSignal, timeoutMs: number) => Promise<unknown>;
+  connect: (entry: LakeboxEntry, signal: AbortSignal) => Promise<unknown>;
   connectOnce: (entry: LakeboxEntry, signal: AbortSignal) => Promise<unknown>;
+  refreshSshEntry: (entry: LakeboxEntry, signal: AbortSignal) => Promise<LakeboxEntry>;
   waitForSshRetry: (delayMs: number, signal: AbortSignal) => Promise<void>;
 }
 
@@ -72,12 +73,13 @@ describe("LakeboxRuntime readiness", () => {
       }
       return expected;
     };
+    internals.refreshSshEntry = async (current) => current;
     internals.waitForSshRetry = async (delayMs) => {
       delays.push(delayMs);
     };
 
     try {
-      assert.equal(await internals.connect(entry, new AbortController().signal, 30_000), expected);
+      assert.equal(await internals.connect(entry, new AbortController().signal), expected);
       assert.equal(attempts, 3);
       assert.deepEqual(delays, [1_000, 2_000]);
     } finally {

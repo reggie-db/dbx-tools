@@ -182,9 +182,7 @@ const memorySaveTurns = boolean(undefined, "MEMORY_SAVE_TURNS", ENV_ONLY);
 const busEnabled = boolean(undefined, "BUS_ENABLED", ENV_ONLY) ?? true;
 const remoteSkillsEnabled = boolean(undefined, "REMOTE_SKILLS_ENABLED", ENV_ONLY) ?? true;
 const appkitBodyLimit = string(undefined, "APPKIT_BODY_LIMIT", { sources: "env" }) ?? "100mb";
-const lakeboxRuntime = new LakeboxRuntime(
-  resolveLakeboxPluginConfig({ destroyAfterStartupFailureSeconds: 30 }),
-);
+const lakeboxRuntime = new LakeboxRuntime(resolveLakeboxPluginConfig());
 
 // AppKit demo wiring for `@dbx-tools/appkit-mastra`.
 //

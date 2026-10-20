@@ -1,22 +1,14 @@
 import { basename } from "node:path";
 import type { BasePluginConfig } from "@databricks/appkit";
-import { boolean, configUtils, string, ENV_ONLY, positiveInt, root } from "@dbx-tools/core";
+import { configUtils, string, ENV_ONLY, positiveInt, root } from "@dbx-tools/core";
 import { Ssh2PatchModeSchema, SshTransportModeSchema } from "@dbx-tools/lakebox";
 import { LAKEBOX_DEFAULT_ROUTE_PREFIX } from "@dbx-tools/shared-lakebox";
 import { z } from "zod";
 
 const APPLICATION_CONFIG_KEY = "LAKEBOX_APPLICATION";
 const IDLE_TIMEOUT_CONFIG_KEY = "LAKEBOX_IDLE_TIMEOUT_SECONDS";
-const DESTROY_AFTER_STARTUP_FAILURE_CONFIG_KEY = "LAKEBOX_DESTROY_AFTER_STARTUP_FAILURE_SECONDS";
 const SSH_TRANSPORT_CONFIG_KEY = "LAKEBOX_SSH_TRANSPORT";
 const SSH2_PATCH_CONFIG_KEY = "LAKEBOX_SSH_SSH2_PATCH";
-
-/** Resolve an optional destructive startup-recovery timeout. */
-function _destroyAfterStartupFailureSeconds(configured: unknown): false | number | undefined {
-  if (boolean(configured, DESTROY_AFTER_STARTUP_FAILURE_CONFIG_KEY) === false) return false;
-  const seconds = positiveInt(configured, DESTROY_AFTER_STARTUP_FAILURE_CONFIG_KEY, 0);
-  return seconds > 0 ? seconds : undefined;
-}
 
 export const LakeboxPluginConfigSchema = z
   .object({
@@ -60,12 +52,6 @@ export const LakeboxPluginConfigSchema = z
       .positive()
       .default(30_000)
       .describe("SSH connection timeout in milliseconds. Defaults to 30000."),
-    destroyAfterStartupFailureSeconds: z
-      .union([z.literal(false), z.number().int().min(5).max(600)])
-      .default(false)
-      .describe(
-        `Destroy and recreate the Lakebox when its SSH gateway remains unreachable for this many seconds, from 5 to 600. Defaults to false; configure with ${configUtils.name(DESTROY_AFTER_STARTUP_FAILURE_CONFIG_KEY)}.`,
-      ),
     commandTimeoutMs: z
       .number()
       .int()
@@ -125,7 +111,6 @@ export function resolveLakeboxPluginConfig(
     streamConfig: _stream,
     application,
     idleTimeoutSeconds,
-    destroyAfterStartupFailureSeconds,
     sshTransport,
     ssh2Patch,
     ...serializable
@@ -137,9 +122,6 @@ export function resolveLakeboxPluginConfig(
       string(undefined, "DATABRICKS_APP_NAME", ENV_ONLY) ??
       basename(root() ?? process.cwd()),
     idleTimeoutSeconds: positiveInt(idleTimeoutSeconds, IDLE_TIMEOUT_CONFIG_KEY, 3_600),
-    destroyAfterStartupFailureSeconds: _destroyAfterStartupFailureSeconds(
-      destroyAfterStartupFailureSeconds,
-    ),
     sshTransport: string(sshTransport, SSH_TRANSPORT_CONFIG_KEY),
     ssh2Patch: string(ssh2Patch, SSH2_PATCH_CONFIG_KEY),
   });

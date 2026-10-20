@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
-import { ExecutionError } from "@databricks/appkit";
 import { onParentTerminationSignal } from "@dbx-tools/core";
 import {
   SshKeyStore,
@@ -544,29 +543,10 @@ export class LakeboxRuntime {
     }
     entry = await ensureLakeboxRunning(this.client(), entry, operationSignal);
     this.cached = { entry, at: Date.now() };
-    let key = this.bootKey(entry);
+    const key = this.bootKey(entry);
     if (this.boot?.key === key) return this.boot;
     await this.discardBoot();
-    let session: SshSession;
-    try {
-      session = await this.connect(entry, operationSignal, this.startupTimeoutMs());
-    } catch (error) {
-      if (this.config.destroyAfterStartupFailureSeconds === false) throw error;
-      logger.warn("Lakebox SSH startup timed out; replacing the machine", {
-        id: entry.sandboxId,
-        timeoutSeconds: this.config.destroyAfterStartupFailureSeconds,
-      });
-      entry = await this.replaceUnreachable(entry, operationSignal);
-      key = this.bootKey(entry);
-      try {
-        session = await this.connect(entry, operationSignal, this.startupTimeoutMs());
-      } catch (replacementError) {
-        throw new ExecutionError("Replacement Lakebox SSH gateway did not become ready", {
-          cause: toError(replacementError),
-          clientMessage: "The replacement Lakebox also failed to start.",
-        });
-      }
-    }
+    const session = await this.connect(entry, operationSignal);
     const boot: Boot = {
       key,
       entry,
@@ -591,45 +571,7 @@ export class LakeboxRuntime {
     }
   }
 
-  private startupTimeoutMs(): number {
-    return this.config.destroyAfterStartupFailureSeconds === false
-      ? SSH_READY_TIMEOUT_MS
-      : this.config.destroyAfterStartupFailureSeconds * 1_000;
-  }
-
-  private async replaceUnreachable(
-    entry: LakeboxEntry,
-    signal: AbortSignal,
-  ): Promise<LakeboxEntry> {
-    let replacement: LakeboxEntry;
-    try {
-      replacement = await this.resources().recreate(this.client(), entry.sandboxId, signal);
-    } catch (error) {
-      const cause = toError(error);
-      throw new ExecutionError(`Could not destroy and replace Lakebox ${entry.sandboxId}`, {
-        cause,
-        clientMessage: cause.message,
-      });
-    }
-    this.cached = undefined;
-    this.readyBootKey = undefined;
-    if (lakeboxIdleTimeoutSeconds(replacement.idleTimeout) !== this.config.idleTimeoutSeconds) {
-      replacement = await this.client().setIdleTimeout(
-        replacement.sandboxId,
-        this.config.idleTimeoutSeconds,
-        signal,
-      );
-    }
-    replacement = await ensureLakeboxRunning(this.client(), replacement, signal);
-    this.cached = { entry: replacement, at: Date.now() };
-    return replacement;
-  }
-
-  private async connect(
-    entry: LakeboxEntry,
-    signal: AbortSignal,
-    timeoutMs: number,
-  ): Promise<SshSession> {
+  private async connect(entry: LakeboxEntry, signal: AbortSignal): Promise<SshSession> {
     const startedAt = Date.now();
     let attempt = 0;
     while (true) {
@@ -637,9 +579,10 @@ export class LakeboxRuntime {
         return await this.connectOnce(entry, signal);
       } catch (error) {
         attempt += 1;
-        if (!_isTransientSshStartupError(error) || Date.now() - startedAt >= timeoutMs) {
+        if (!_isTransientSshStartupError(error) || Date.now() - startedAt >= SSH_READY_TIMEOUT_MS) {
           throw error;
         }
+        entry = await this.refreshSshEntry(entry, signal);
         const delayMs = Math.min(
           SSH_READY_RETRY_INITIAL_MS * 2 ** (attempt - 1),
           SSH_READY_RETRY_MAX_MS,
@@ -651,6 +594,18 @@ export class LakeboxRuntime {
         await this.waitForSshRetry(delayMs, signal);
       }
     }
+  }
+
+  private async refreshSshEntry(entry: LakeboxEntry, signal: AbortSignal): Promise<LakeboxEntry> {
+    const refreshed = await this.client().get(entry.sandboxId, signal);
+    if (refreshed.gatewayHost !== entry.gatewayHost) {
+      logger.info("Lakebox SSH gateway address changed during startup", {
+        previousHost: entry.gatewayHost,
+        gatewayHost: refreshed.gatewayHost,
+      });
+    }
+    this.cached = { entry: refreshed, at: Date.now() };
+    return refreshed;
   }
 
   private waitForSshRetry(delayMs: number, signal: AbortSignal): Promise<void> {

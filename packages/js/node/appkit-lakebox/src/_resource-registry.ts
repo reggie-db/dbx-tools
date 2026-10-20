@@ -75,55 +75,6 @@ export class LakeboxResourceRegistry {
     return pending;
   }
 
-  /**
-   * Replace one unreachable managed Lakebox. A replica that observes an already
-   * replaced ID returns it without locking; the advisory-lock recheck prevents
-   * concurrent replicas from creating multiple replacements.
-   */
-  async recreate(
-    client: LakeboxResourceClient,
-    failedSandboxId: string,
-    signal?: AbortSignal,
-  ): Promise<LakeboxEntry> {
-    const scope = await client.workspaceScope();
-    const current = await this.resolve(client, scope, signal);
-    if (current && current.sandboxId !== failedSandboxId) return current;
-    const pending = this.pending.get(scope);
-    if (pending) return pending;
-    const replacement = this.withLock(scope, async () => {
-      const rechecked = await this.resolve(client, scope, signal);
-      if (rechecked && rechecked.sandboxId !== failedSandboxId) return rechecked;
-      if (rechecked) {
-        try {
-          await client.delete(rechecked.sandboxId, signal);
-        } catch (error) {
-          throw new Error("Destroying the unreachable Lakebox failed", { cause: error });
-        }
-      }
-      await this.cache().delete(this.key(scope));
-      this.legacyChecked.add(scope);
-      let created: LakeboxEntry;
-      try {
-        created = await client.create(signal);
-      } catch (error) {
-        throw new Error("Creating a replacement Lakebox failed", { cause: error });
-      }
-      try {
-        await this.write(scope, created.sandboxId);
-      } catch (error) {
-        await client.delete(created.sandboxId, signal).catch(() => undefined);
-        throw error;
-      }
-      logger.warn("replaced unreachable app Lakebox", {
-        previousId: failedSandboxId,
-        replacementId: created.sandboxId,
-      });
-      return created;
-    }).finally(() => this.pending.delete(scope));
-    this.pending.set(scope, replacement);
-    return replacement;
-  }
-
   /** Clears the persisted pointer after the managed Lakebox is deleted. */
   async clear(client: LakeboxResourceClient): Promise<void> {
     const scope = await client.workspaceScope();
