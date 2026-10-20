@@ -65,9 +65,6 @@ pause for review.
 Lakebase-backed Mastra storage persists the suspended run. The Mastra UI
 renders the draft, lets the user approve or deny it, and resumes the same run.
 
-Use the Teams packages when the application needs inbound Bot Framework
-messages or Adaptive Cards instead of email.
-
 ## Add the tools to Mastra
 
 Request each sibling toolkit asynchronously:
@@ -114,5 +111,4 @@ scope.
 - [@dbx-tools/search](../packages/js/node/search/README.md)
 - [@dbx-tools/appkit-web-search](../packages/js/node/appkit-web-search/README.md)
 - [@dbx-tools/email](../packages/js/node/email/README.md)
-- [@dbx-tools/teams](../packages/js/node/teams/README.md)
 - [@dbx-tools/ui-mastra](../packages/js/ui/mastra/README.md)

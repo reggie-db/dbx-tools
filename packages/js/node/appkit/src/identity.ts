@@ -23,8 +23,7 @@
  *   - a public tunnel (`@dbx-tools/tunnel`), where callers authenticate by
  *     email OTP and no OBO token exists to forward - the gate can prove WHO the
  *     caller is, but it cannot mint a Databricks credential for them;
- *   - any reverse proxy, webhook, or bot channel (`POST /api/teams/messages`)
- *     that authenticates its own way.
+ *   - any reverse proxy, webhook, or bot channel that authenticates its own way.
  *
  * Such an app must not run with `NODE_ENV=development` just to get the fallback:
  * that flag also relaxes secure cookies, AppKit's own dev affordances, and

@@ -9,12 +9,12 @@
  * otherwise, so ONE decision - do we enter that scope for this request - moves
  * every call site together.
  *
- * The decision itself is NOT Mastra-specific (the Teams messaging endpoint and
- * the tunnel gate face it too), so it lives in `@dbx-tools/appkit`'s `identity`
- * module - which also documents the measured AppKit behavior that makes `"auto"`
- * necessary. This module is the Mastra-facing binding: the plugin's own config
- * field and env var, re-exporting the shared vocabulary so a consumer importing
- * `@dbx-tools/appkit-mastra` needs no second import.
+ * The decision itself is NOT Mastra-specific (authenticated webhooks and the
+ * tunnel gate face it too), so it lives in `@dbx-tools/appkit`'s `identity`
+ * module - which also documents the measured AppKit behavior that makes
+ * `"auto"` necessary. This module is the Mastra-facing binding: the plugin's own
+ * config field and env var, re-exporting the shared vocabulary so a consumer
+ * importing `@dbx-tools/appkit-mastra` needs no second import.
  *
  * Why the option exists: OBO requires the caller to be a member of the
  * WORKSPACE, not merely of the Databricks account. An app shared with an
@@ -38,7 +38,8 @@
  *   - `"auto"`: OBO when the request carries an OBO token, the service principal
  *     when it does not. The mode for an app that serves BOTH the platform front
  *     door and a door with no OBO token to forward (a `@dbx-tools/tunnel`
- *     gate, a Teams channel), since a single container serves both at once.
+ *     gate or an authenticated webhook), since a single container serves both
+ *     at once.
  *
  * What the service-principal path does NOT change is WHO the turn belongs to.
  * The memory thread's `resourceId`, the per-user cache namespace, and the user

@@ -95,8 +95,7 @@ agents, feedback availability, background-turn support, and chat identity
 behavior. Don't hard-code plugin routes in browser code.
 
 Use [@dbx-tools/ui](../appkit) for common AppKit, authentication, email, and
-search components. Use [@dbx-tools/ui-teams](../teams) for Microsoft Teams
-Adaptive Cards and conversation previews.
+search components.
 
 ## Configure styles
 

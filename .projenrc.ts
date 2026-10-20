@@ -155,7 +155,6 @@ const root = new project.DBXToolsNodeProject({
     "shiki": "^3.0.0",
     "sql-formatter": "^15.6.9",
     "systray2": "^2.1.4",
-    "adaptivecards": "^3.0.5",
   },
   github: true,
   githubOptions: { mergify: false, pullRequestLint: false },
@@ -701,33 +700,6 @@ project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) 
   p.addDevDeps("@types/pg@^8");
 });
 
-// node-teams: server-side Teams Adaptive Card add-on. A deterministic builder
-// compiles the small `CardSpec` a model drafts into a valid Adaptive Card 1.5
-// document, exposed as the `create_teams_card` Mastra tool + the AppKit `teams`
-// plugin (which also mounts card-build / card-post routes and can POST a card
-// to a Teams incoming webhook). Consumes the browser-safe shared-teams contract.
-// AppKit + Mastra are runtime deps. Mirrors the node-email add-on's shape.
-project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => {
-  p.package.addField(
-    "description",
-    "Server-side Microsoft Teams Adaptive Card runtime, agent tool, and AppKit plugin",
-  );
-  p.addDeps(
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-teams@workspace:^",
-    "@databricks/appkit@catalog:",
-    "@mastra/core@catalog:",
-    // Validates the Bot Framework JWT on an inbound Teams request against the
-    // Azure Bot Service JWKS. `jose` is the runtime-agnostic verifier with no
-    // native build step, unlike `jsonwebtoken` + `jwks-rsa`.
-    "jose@^6.2.3",
-    "zod@catalog:",
-  );
-  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
-});
-
 // node-search: extensions around AppKit's beta `aiSearch` plugin. Native AppKit
 // owns Vector Search reads; this package adds agent tools, federated search,
 // index lifecycle, and an AppKit-compatible Lakebase full-text provider.
@@ -1072,18 +1044,6 @@ project.applyToProjects(root, { identifierName: "shared-email-template", tags: "
   p.addDevDeps("@types/react@catalog:");
 });
 
-// shared-teams: browser-safe zod wire contract for the Teams add-on - the
-// high-level `CardSpec` a model drafts, the compiled `AdaptiveCard` envelope,
-// and the `CardResult`. Pure zod, shared by the server card builder, the Mastra
-// tool, and the React Adaptive Cards renderer.
-project.applyToProjects(root, { identifierName: "shared-teams", tags: "shared" }, (p) => {
-  p.package.addField(
-    "description",
-    "Browser-safe Adaptive Card and Bot Framework activity schemas for the Teams add-on",
-  );
-  p.addDeps("zod@catalog:");
-});
-
 // shared-search: browser-safe zod wire contract for the AI Search add-on -
 // the search request / hit / result shapes, the universal-search request, the
 // document + upsert shapes, and the index-catalogue client config. Pure zod,
@@ -1237,8 +1197,8 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
 // UI packages
 
 // Common AppKit UI package. Foundation, branding, auth, email, and search stay
-// tree-shakeable behind distinct subpath exports; Mastra and Teams remain
-// separate packages because they carry larger optional dependency families.
+// tree-shakeable behind distinct subpath exports; Mastra remains separate
+// because it carries a larger optional dependency family.
 project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
   p.package.addField(
     "description",
@@ -1273,31 +1233,6 @@ project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
     "./search/styles.css": "./src/search/styles.css",
   });
   p.tasks.tryFind("pre-compile")?.exec("bun ../../../../branding/generate-package-assets.mjs");
-});
-
-// ui-teams: the React surface for the Teams add-on - an `AdaptiveCardView` that
-// renders a compiled Adaptive Card with the `adaptivecards` JavaScript renderer,
-// and a self-contained `AdaptiveCardGallery` dev tool that edits a `CardSpec`,
-// compiles it through the server's `/api/teams/card` route, and previews the
-// card live. Consumes the browser-safe shared-teams contract and renders
-// through ui-appkit's UI kit. `ui`-tagged (React + jsx from the ui tag).
-project.applyToProjects(root, { identifierName: "ui-teams", tags: "ui" }, (p) => {
-  p.package.addField(
-    "description",
-    "React renderer for Microsoft Teams Adaptive Cards and Teams chat surfaces",
-  );
-  p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-teams@workspace:^",
-    "@dbx-tools/ui@workspace:^",
-    "adaptivecards@catalog:",
-    // The `adaptivecards` renderer ships no markdown parser - a `TextBlock` is
-    // markdown per the spec, but the host supplies the implementation - so the
-    // card view installs `marked` as its `onProcessMarkdown` processor.
-    "marked@catalog:",
-  );
-  // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
-  // tag's component-library default.
 });
 
 // ui-mastra: the full Mastra chat UI - the self-contained `MastraChat`

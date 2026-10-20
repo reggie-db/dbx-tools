@@ -118,12 +118,11 @@ export interface AttributedIdentity {
  * `requestContext`.
  *
  * Split out of {@link MastraServer} because the HTTP middleware is not the only
- * caller that needs it: an out-of-band turn (a Teams activity arriving on
- * another plugin's route, a scheduled job) drives `agent.generate` directly, and
- * without this stamp every user-scoped tool - `ask_genie` above all - fails with
- * "invoke the tool from an agent turn served by the mastra plugin". Those
- * callers build a context with {@link createRequestContext} instead of a
- * request.
+ * caller that needs it: an out-of-band turn from another plugin route or a
+ * scheduled job drives `agent.generate` directly, and without this stamp every
+ * user-scoped tool - `ask_genie` above all - fails with "invoke the tool from an
+ * agent turn served by the mastra plugin". Those callers build a context with
+ * {@link createRequestContext} instead of a request.
  *
  * The Databricks credential always comes from the ambient execution context;
  * `attributed` only changes WHO the turn is attributed to when that context is

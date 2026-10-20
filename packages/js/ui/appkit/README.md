@@ -27,11 +27,6 @@ styles for dbx-tools UI packages.
   stylesheet before the Mastra stylesheet. Mount chat inside the application's
   authentication boundary. The client reads the plugin's published
   `clientConfig()` payload.
-- Use [@dbx-tools/ui-teams](../teams) with
-  [@dbx-tools/teams](../../node/teams). Import the AppKit UI stylesheet before
-  the Teams stylesheet. The preview components use explicit HTTP endpoints and
-  don't consume published plugin client configuration. Microsoft Teams bot
-  authentication remains a server concern.
 
 ## Branding
 

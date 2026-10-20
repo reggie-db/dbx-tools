@@ -386,8 +386,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       getMastra: () => this.mastra,
       /**
        * Build the `RequestContext` an agent turn driven from OUTSIDE this
-       * plugin's routes needs (a Teams activity on another plugin's endpoint, a
-       * scheduled job).
+       * plugin's routes needs, such as another plugin's endpoint or a scheduled
+       * job.
        *
        * Mastra's user-scoped tools - `ask_genie` most visibly - read the AppKit
        * user off the request context, which only the HTTP middleware stamps.

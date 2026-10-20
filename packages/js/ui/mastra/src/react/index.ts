@@ -9,8 +9,8 @@
 // - The Mastra plugin client + hooks (model catalogue, history paging,
 //   suggestions, embed fetches) the controlled path needs.
 // - `dedupeSuggestions`: the dedupe + cap `MastraChat` applies to
-//   Genie-sourced starter questions, so another surface offering the same
-//   prompts (e.g. a Teams card chat) presents an identical list.
+//   Genie-sourced starter questions, so another chat surface offering the same
+//   prompts presents an identical list.
 //
 // Internal building blocks (bubbles, tool pills, markdown, data grid,
 // embed slots) are intentionally not re-exported.

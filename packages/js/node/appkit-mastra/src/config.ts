@@ -619,8 +619,9 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * - `"auto"`: OBO when the request carries an OBO token, the service principal
    *   when it does not. For an app serving BOTH the platform front door and a
    *   door that has no token to forward - a `@dbx-tools/tunnel` gate, a
-   *   Teams channel - where AppKit's `asUser` would otherwise throw
-   *   `AuthenticationError` outside `NODE_ENV=development`.
+   *   separately authenticated webhook or bot channel - where AppKit's `asUser`
+   *   would otherwise throw `AuthenticationError` outside
+   *   `NODE_ENV=development`.
    *
    * The service-principal path changes only the Databricks CREDENTIAL. Memory
    * threads, the per-user cache namespace, and trace metadata still key off the

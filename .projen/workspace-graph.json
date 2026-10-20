@@ -26,7 +26,6 @@
         "@dbx-tools/genie",
         "@dbx-tools/model",
         "@dbx-tools/search",
-        "@dbx-tools/teams",
         "@dbx-tools/tunnel"
       ]
     },
@@ -267,7 +266,6 @@
         "@dbx-tools/path",
         "@dbx-tools/projen",
         "@dbx-tools/search",
-        "@dbx-tools/teams",
         "@dbx-tools/tunnel"
       ]
     },
@@ -552,11 +550,9 @@
         "@dbx-tools/shared-graphiti",
         "@dbx-tools/shared-model",
         "@dbx-tools/shared-model-gateway",
-        "@dbx-tools/teams",
         "@dbx-tools/tunnel",
         "@dbx-tools/ui",
-        "@dbx-tools/ui-mastra",
-        "@dbx-tools/ui-teams"
+        "@dbx-tools/ui-mastra"
       ]
     },
     {
@@ -710,26 +706,6 @@
       ]
     },
     {
-      "name": "@dbx-tools/shared-teams",
-      "path": "packages/js/shared/teams",
-      "dependencies": [],
-      "reverseDependencies": [
-        "@dbx-tools/teams",
-        "@dbx-tools/ui-teams"
-      ]
-    },
-    {
-      "name": "@dbx-tools/teams",
-      "path": "packages/js/node/teams",
-      "dependencies": [
-        "@dbx-tools/appkit",
-        "@dbx-tools/core",
-        "@dbx-tools/shared-core",
-        "@dbx-tools/shared-teams"
-      ],
-      "reverseDependencies": []
-    },
-    {
       "name": "@dbx-tools/tunnel",
       "path": "packages/js/node/tunnel",
       "dependencies": [
@@ -760,8 +736,7 @@
         "@dbx-tools/appkit-lakebox",
         "@dbx-tools/demo-appkit-app",
         "@dbx-tools/ui-lakebox",
-        "@dbx-tools/ui-mastra",
-        "@dbx-tools/ui-teams"
+        "@dbx-tools/ui-mastra"
       ]
     },
     {
@@ -788,16 +763,6 @@
       "reverseDependencies": [
         "@dbx-tools/demo-appkit-app"
       ]
-    },
-    {
-      "name": "@dbx-tools/ui-teams",
-      "path": "packages/js/ui/teams",
-      "dependencies": [
-        "@dbx-tools/shared-core",
-        "@dbx-tools/shared-teams",
-        "@dbx-tools/ui"
-      ],
-      "reverseDependencies": []
     }
   ]
 }

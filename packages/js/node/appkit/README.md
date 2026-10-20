@@ -356,10 +356,10 @@ behavior depends entirely on `NODE_ENV`:
 That throw is right for an app behind the front door, where a missing token means
 something is broken. It is fatal for an app whose traffic legitimately arrives
 without one - a public tunnel where callers authenticate by email code
-([@dbx-tools/tunnel](../../node/tunnel)), or a bot channel that validates its
-own inbound JWT (`POST /api/teams/messages`). Those apps must not run with
-`NODE_ENV=development` only to get the fallback, because that flag also relaxes
-secure cookies and unlocks other dev-only escape hatches.
+([@dbx-tools/tunnel](../../node/tunnel)), or an authenticated webhook or bot
+channel. Those apps must not run with `NODE_ENV=development` only to get the
+fallback, because that flag also relaxes secure cookies and unlocks other
+dev-only escape hatches.
 
 `identity` is that decision, made explicit:
 

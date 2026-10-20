@@ -63,7 +63,7 @@ serving endpoints and supported `system.ai.*` services.
 Use [@dbx-tools/appkit-memory](packages/js/node/appkit-memory) for
 actor-scoped memory that checks Databricks Agent Memory first and starts
 Graphiti only when the managed store is unavailable. Add AI Search, Lakebase
-full-text search, web search, email, or Teams tools from their owning packages.
+full-text search, web search, or email tools from their owning packages.
 
 ### Local Databricks development
 
@@ -84,9 +84,9 @@ region-aware Zerobus ingest streams.
 ### UI and browser-safe contracts
 
 Use [@dbx-tools/ui](packages/js/ui/appkit) for AppKit-oriented foundations,
-branding, authentication, email, and search. Mastra, Lakebox, and Teams have
-separate UI packages. Shared packages own the Zod contracts that cross the
-browser and server boundary.
+branding, authentication, email, and search. Mastra and Lakebox have separate
+UI packages. Shared packages own the Zod contracts that cross the browser and
+server boundary.
 
 ### Python interoperability
 

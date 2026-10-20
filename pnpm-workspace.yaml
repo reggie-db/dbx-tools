@@ -29,7 +29,6 @@ packages:
   - packages/js/node/path
   - packages/js/node/postgres
   - packages/js/node/search
-  - packages/js/node/teams
   - packages/js/node/tunnel
   - packages/js/shared/auth
   - packages/js/shared/core
@@ -45,11 +44,9 @@ packages:
   - packages/js/shared/model
   - packages/js/shared/model-gateway
   - packages/js/shared/search
-  - packages/js/shared/teams
   - packages/js/ui/appkit
   - packages/js/ui/lakebox
   - packages/js/ui/mastra
-  - packages/js/ui/teams
   - projen
 catalog:
   react: ~19.2.4
@@ -120,7 +117,6 @@ catalog:
   shiki: ^3.0.0
   sql-formatter: ^15.6.9
   systray2: ^2.1.4
-  adaptivecards: ^3.0.5
 catalogMode: manual
 overrides:
   "@typescript-eslint/eslint-plugin": 8.71.0

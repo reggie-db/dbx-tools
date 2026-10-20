@@ -1170,9 +1170,8 @@ const result = await mastra.getDefault().generate(prompt, { requestContext });
 The AppKit user, the memory thread / resource pair, and a request id (so the
 turn's spans join up in traces) are stamped exactly as the request middleware
 stamps them. Call it inside an `asUser(req)` scope to inherit the caller's OBO
-identity. Outside one it resolves to the service principal.
-[@dbx-tools/teams](../teams) uses this so a Teams card turn has the same tool
-reach - and therefore the same answer - as a chat turn.
+identity. Outside one it resolves to the service principal. Out-of-band
+callers use this to retain the same tool reach as an HTTP chat turn.
 
 ## API gate
 

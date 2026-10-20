@@ -48,16 +48,15 @@ Add a dbx-tools plugin for behavior outside that native surface:
   exposes OpenAI, Anthropic, embedding, and Codex routes.
 - [@dbx-tools/appkit-memory](../packages/js/node/appkit-memory/README.md)
   adds Databricks-first durable memory tools.
-- [@dbx-tools/search](../packages/js/node/search/README.md),
-  [@dbx-tools/email](../packages/js/node/email/README.md), and
-  [@dbx-tools/teams](../packages/js/node/teams/README.md) add search and
+- [@dbx-tools/search](../packages/js/node/search/README.md) and
+  [@dbx-tools/email](../packages/js/node/email/README.md) add search and
   communication tools.
 
 ## Add browser UI
 
 Use [@dbx-tools/ui](../packages/js/ui/appkit/README.md) for common AppKit UI,
-branding, authentication, email, and search. Use the separate Mastra, Lakebox,
-or Teams UI package when the backend registers that capability.
+branding, authentication, email, and search. Use the separate Mastra or Lakebox
+UI package when the backend registers that capability.
 
 Import the owning package stylesheet after the AppKit UI theme. Browser clients
 read plugin routes from published client configuration. Do not copy server route
