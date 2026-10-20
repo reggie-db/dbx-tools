@@ -123,9 +123,9 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
     writeFileSync(
       join(consumer, ".projenrc.ts"),
       [
-        'import { project } from "@dbx-tools/projen";',
+        'import { project, projectJs } from "@dbx-tools/projen";',
         'import { Project } from "projen";',
-        "const rootProject = new project.DBXToolsNodeProject({",
+        "const rootProject = new projectJs.DBXToolsNodeProject({",
         '  name: "external-consumer",',
         `  outdir: ${JSON.stringify(consumer)},`,
         '  scope: "external",',

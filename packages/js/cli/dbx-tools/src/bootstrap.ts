@@ -7,8 +7,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { intro, outro } from "@clack/prompts";
-import { exec } from "@dbx-tools/core";
-import { json, log } from "@dbx-tools/shared-core";
+import { spawnSync } from "@dbx-tools/core";
+import { log, parseRecord } from "@dbx-tools/shared-core";
 import { childEnv, resolveBunArgv, runBun } from "./bun.ts";
 import { rootLabel } from "./root.ts";
 
@@ -44,7 +44,7 @@ function ownVersion(): string | undefined {
     // in source but two levels away after compilation and silently fell back to
     // `@latest` in every installed CLI.
     const manifestPath = createRequire(import.meta.url).resolve(`${CLI_PACKAGE}/package.json`);
-    const version = json.parseRecord(readFileSync(manifestPath, "utf8"))?.version;
+    const version = parseRecord(readFileSync(manifestPath, "utf8"))?.version;
     return typeof version === "string" && version !== "0.0.0" ? version : undefined;
   } catch {
     return undefined;
@@ -62,7 +62,7 @@ function compareVersions(a: string, b: string): number {
 function installedEngineVersion(root: string): string | undefined {
   try {
     const manifest = join(root, "node_modules", "@dbx-tools", "projen", "package.json");
-    const version = json.parseRecord(readFileSync(manifest, "utf8"))?.version;
+    const version = parseRecord(readFileSync(manifest, "utf8"))?.version;
     return typeof version === "string" ? version : undefined;
   } catch {
     return undefined;
@@ -89,13 +89,9 @@ export function ensureEngineCurrent(root: string): void {
   runBun(["add", "-D", defaultProjenSpecifier()], root);
 }
 
-// Reach the class through its module NAMESPACE. Current engines also hoist it
-// flat, but every engine ever published exports the namespace, and this template
-// is resolved against `@latest` - a flat import dies on an older one with
-// "does not provide an export named 'DBXToolsNodeProject'".
-const PROJENRC_TEMPLATE = `import { project } from "@dbx-tools/projen";
+const PROJENRC_TEMPLATE = `import { projectJs } from "@dbx-tools/projen";
 
-const rootProject = new project.DBXToolsNodeProject();
+const rootProject = new projectJs.DBXToolsNodeProject();
 rootProject.synth();
 `;
 
@@ -153,7 +149,7 @@ export function seedToolchain(
     normalizeSeedManifest(manifestPath);
   }
 
-  const kernelArch = exec.spawnSync("uname", ["-m"], {
+  const kernelArch = spawnSync("uname", ["-m"], {
     stdin: "ignore",
     stdout: "capture",
     stderr: "ignore",
@@ -178,7 +174,7 @@ export function seedToolchain(
  */
 function normalizeSeedManifest(manifestPath: string): void {
   try {
-    const manifest = json.parseRecord(readFileSync(manifestPath, "utf8"));
+    const manifest = parseRecord(readFileSync(manifestPath, "utf8"));
     if (!manifest) return;
     delete manifest.devEngines;
     delete manifest.packageManager;
@@ -199,7 +195,7 @@ export function runInitialSynth(root: string): void {
   const [command, ...prefix] = resolveBunArgv();
   // bun runs the `.ts` directly. Registry environment aliases reach nested
   // commands through `childEnv` without writing project-level npm configuration.
-  exec.spawnSync(command, [...prefix, ".projenrc.ts"], {
+  spawnSync(command, [...prefix, ".projenrc.ts"], {
     cwd: root,
     env: childEnv({ PROJEN_DISABLE_POST: "true" }),
     check: true,

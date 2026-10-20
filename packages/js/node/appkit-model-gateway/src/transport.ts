@@ -5,9 +5,9 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { workspaceClient } from "@dbx-tools/databricks";
-import { errorUtils, log } from "@dbx-tools/shared-core";
-import { openaiChat } from "@dbx-tools/shared-model";
+import { refreshWorkspaceClientAuthentication } from "@dbx-tools/databricks";
+import { log, toError } from "@dbx-tools/shared-core";
+import { stripUnsupportedChatFields } from "@dbx-tools/shared-model";
 import { upstreamUrl, type GatewayRoute } from "@dbx-tools/shared-model-gateway";
 
 const logger = log.logger("appkit/model-gateway/transport");
@@ -75,10 +75,7 @@ export async function fetchDatabricks(request: DatabricksTransportRequest): Prom
       body,
       signal: request.signal,
     });
-    if (
-      response.status === 401 &&
-      (await workspaceClient.refreshWorkspaceClientAuthentication(client))
-    ) {
+    if (response.status === 401 && (await refreshWorkspaceClientAuthentication(client))) {
       logger.debug("retrying rejected upstream credential", {
         model: request.route.upstreamModel,
         upstreamProtocol: request.route.upstreamProtocol,
@@ -112,7 +109,7 @@ export async function fetchDatabricks(request: DatabricksTransportRequest): Prom
   } catch (error) {
     logger.error("upstream fetch failed", {
       elapsedMs: Date.now() - startedAt,
-      error: errorUtils.toError(error),
+      error: toError(error),
       model: request.route.upstreamModel,
       upstreamProtocol: request.route.upstreamProtocol,
     });
@@ -127,7 +124,7 @@ export function directDatabricksRequestBody(
 ): Record<string, unknown> {
   const sanitized: Record<string, unknown> = { ...body, model: route.upstreamModel };
   if (route.upstreamProtocol === "databricks-chat") {
-    openaiChat.stripUnsupportedChatFields(sanitized);
+    stripUnsupportedChatFields(sanitized);
   } else {
     delete sanitized.parallel_tool_calls;
   }
@@ -171,7 +168,7 @@ async function logUpstreamFailureBody(
   } catch (error) {
     logger.debug("could not read upstream error body", {
       ...details,
-      error: errorUtils.toError(error),
+      error: toError(error),
     });
   } finally {
     await reader.cancel().catch(() => undefined);

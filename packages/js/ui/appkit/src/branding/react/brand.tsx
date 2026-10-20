@@ -1,4 +1,10 @@
-import { brandUtils } from "@dbx-tools/shared-core";
+import {
+  type BrandContext,
+  defaultBrandContext,
+  type BrandContextInput,
+  parseBrandContext,
+  type BrandAssetSet,
+} from "@dbx-tools/shared-core";
 import {
   createContext,
   type ImgHTMLAttributes,
@@ -10,18 +16,18 @@ import {
 import { applyBrandContext, type BrandAssetResolver, resolveBrandAsset } from "../browser.ts";
 
 interface BrandState {
-  context: brandUtils.BrandContext;
+  context: BrandContext;
   resolveAsset: BrandAssetResolver;
 }
 
 const BrandReactContext = createContext<BrandState>({
-  context: brandUtils.defaultBrandContext,
+  context: defaultBrandContext,
   resolveAsset: resolveBrandAsset,
 });
 
 /** Brand input, asset resolver, and document-application behavior for {@link BrandProvider}. */
 export interface BrandProviderProps extends PropsWithChildren {
-  context?: brandUtils.BrandContextInput;
+  context?: BrandContextInput;
   resolveAsset?: BrandAssetResolver;
   applyToDocument?: boolean;
 }
@@ -33,7 +39,7 @@ export function BrandProvider({
   resolveAsset = resolveBrandAsset,
   applyToDocument = false,
 }: BrandProviderProps) {
-  const parsed = useMemo(() => brandUtils.parseBrandContext(context), [context]);
+  const parsed = useMemo(() => parseBrandContext(context), [context]);
   const value = useMemo(() => ({ context: parsed, resolveAsset }), [parsed, resolveAsset]);
 
   useEffect(() => {
@@ -59,7 +65,7 @@ function BrandImage({
   alt,
   mode = "auto",
   ...props
-}: BrandImageProps & { asset: brandUtils.BrandAssetSet }) {
+}: BrandImageProps & { asset: BrandAssetSet }) {
   const { resolveAsset } = useBrand();
   const light = resolveAsset(asset.light);
   const dark = resolveAsset(asset.dark ?? asset.light);

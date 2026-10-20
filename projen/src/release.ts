@@ -10,7 +10,7 @@
  * jobs download them. `DBXToolsRelease` therefore remains separate while native
  * workflow and project primitives own the YAML model and setup steps.
  */
-import { stringUtils } from "@dbx-tools/shared-core";
+import { dedent } from "@dbx-tools/shared-core";
 import { Component, github } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
@@ -216,7 +216,7 @@ export function refreshPublicationVerification(project: DBXToolsJavaScriptProjec
           VERIFY_PYPI: hasPypi ? "${{ needs.build-release.outputs.pypi }}" : "false",
         },
         // prettier-ignore
-        run: stringUtils.dedent(
+        run: dedent(
           // ============================================================================
           /*bash*/`
             args=(--version "$RELEASE_VERSION")
@@ -282,7 +282,7 @@ function releaseBuildJob(
           RELEASE_TAG: "${{ github.ref_name }}",
         },
         // prettier-ignore
-        run: stringUtils.dedent(
+        run: dedent(
           // ============================================================================
           /*bash*/`
           case "$RELEASE_TAG" in ${tagPrefix}*) ;; *) exit 1 ;; esac

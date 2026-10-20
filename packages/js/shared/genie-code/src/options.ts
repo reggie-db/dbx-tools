@@ -4,27 +4,31 @@
  * @module
  */
 
-import { options, stringUtils } from "@dbx-tools/shared-core";
-import { ChatModelSelectionOptionsSchema } from "@dbx-tools/shared-model-gateway/options";
+import {
+  DatabricksOptionsSchema,
+  listenAddressSchema,
+  toSlugWithOptions,
+} from "@dbx-tools/shared-core";
+import { ChatModelSelectionOptionsSchema } from "@dbx-tools/shared-model-gateway";
 import { z } from "zod";
 
 /** Pinned Genie Code release installed by the managed CLI. */
 export const GENIE_CODE_VERSION = "0.1.0-beta.2";
 
 export const GenieCodeOptionsSchema = ChatModelSelectionOptionsSchema.safeExtend({
-  profile: options.DatabricksOptionsSchema.shape.profile.describe(
+  profile: DatabricksOptionsSchema.shape.profile.describe(
     "Databricks profile used by the model-gateway sidecar.",
   ),
-  gatewayListen: options
-    .listenAddressSchema({ host: "127.0.0.1", port: 0, loopback: true })
-    .describe("Loopback listener allocated for the model-gateway sidecar."),
+  gatewayListen: listenAddressSchema({ host: "127.0.0.1", port: 0, loopback: true }).describe(
+    "Loopback listener allocated for the model-gateway sidecar.",
+  ),
 })
   .strict()
   .describe("Managed Genie Code runtime options.");
 
 export const GenieCodeHomeSchema = z
   .object({
-    profile: options.DatabricksOptionsSchema.shape.profile.unwrap(),
+    profile: DatabricksOptionsSchema.shape.profile.unwrap(),
     digest: z
       .string()
       .regex(/^[0-9a-f]{12}$/)
@@ -69,9 +73,6 @@ export function resolveGenieCodeOptions(value: GenieCodeOptions = {}): ResolvedG
 /** Build the readable directory name for one exact Databricks profile. */
 export function genieCodeHomeName(value: GenieCodeHome): string {
   const home = GenieCodeHomeSchema.parse(value);
-  const profile = stringUtils.toSlugWithOptions(
-    { maxLength: 40, truncateStrategy: "trim" },
-    home.profile,
-  );
+  const profile = toSlugWithOptions({ maxLength: 40, truncateStrategy: "trim" }, home.profile);
   return `${profile}-${home.digest}`;
 }

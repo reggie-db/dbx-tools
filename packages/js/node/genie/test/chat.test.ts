@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { WorkspaceClient } from "@databricks/appkit";
-import { genieModel } from "@dbx-tools/shared-genie";
+import { GenieMessageSchema } from "@dbx-tools/shared-genie";
 
 import { isAgentModeUnavailable } from "../src/agent-mode.ts";
 import { genieChat } from "../src/chat.ts";
@@ -135,7 +135,7 @@ describe("genieChat Agent Mode", () => {
     }
 
     const final = messages.at(-1)!;
-    assert.doesNotThrow(() => genieModel.GenieMessageSchema.parse(final));
+    assert.doesNotThrow(() => GenieMessageSchema.parse(final));
     assert.equal(final.status, "COMPLETED");
     assert.equal(final.content, "What is the value?");
     assert.equal(final.conversation_id, "conversation-1");

@@ -1,5 +1,5 @@
 import { CacheManager } from "@databricks/appkit";
-import { LakeboxApiError, type LakeboxEntry } from "@dbx-tools/lakebox/rest";
+import { LakeboxApiError, type LakeboxEntry } from "@dbx-tools/lakebox";
 import { withAdvisoryLock, type PgPoolLike } from "@dbx-tools/postgres";
 import { log } from "@dbx-tools/shared-core";
 import { z } from "zod";

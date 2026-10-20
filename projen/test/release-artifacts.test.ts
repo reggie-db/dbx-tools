@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import { pythonDistributionPaths } from "../tasks/publish-python.ts";
+import { pythonDistributionPaths } from "../src/python-packaging.ts";
 
 describe("shared release artifacts", () => {
   it("builds all Python packages once into independent publication directories", () => {
@@ -51,7 +51,7 @@ describe("shared release artifacts", () => {
       chmodSync(join(bin, "uv"), 0o755);
       chmodSync(join(bin, "uvx"), 0o755);
       const output = join(root, "dist");
-      const owner = resolve(import.meta.dirname, "../tasks/publish-python.ts");
+      const owner = resolve(import.meta.dirname, "../src/python-packaging.ts");
       const options = {
         root: join(root, "packages"),
         output,

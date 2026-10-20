@@ -6,8 +6,8 @@
  */
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { functionUtils } from "@dbx-tools/shared-core";
+import { root } from "@dbx-tools/core";
+import { memoize } from "@dbx-tools/shared-core";
 
 const ENGINE_PKG = "@dbx-tools/projen";
 
@@ -20,8 +20,8 @@ const ENGINE_PKG = "@dbx-tools/projen";
  * {@link functionUtils.memoize}, which caches only a successful result - a
  * throw is retried on the next call.
  */
-export const resolvePkgRoot = functionUtils.memoize((): string => {
-  const found = projectUtils.root(dirname(fileURLToPath(import.meta.url)));
+export const resolvePkgRoot = memoize((): string => {
+  const found = root(dirname(fileURLToPath(import.meta.url)));
   if (!found) throw new Error(`${ENGINE_PKG} package root not found`);
   return found;
 });

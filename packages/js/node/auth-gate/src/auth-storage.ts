@@ -9,9 +9,9 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileLock } from "@dbx-tools/core";
-import { advisoryLock, type PgPoolLike } from "@dbx-tools/postgres";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { withFileLock } from "@dbx-tools/core";
+import { type PgPoolLike, withAdvisoryLock } from "@dbx-tools/postgres";
+import { log, toError } from "@dbx-tools/shared-core";
 import type { BetterAuthOptions } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import envPaths from "env-paths";
@@ -131,7 +131,7 @@ export async function createAuthStorage(
   } catch (error) {
     if (resolved.mode === "sqlite") throw error;
     logger.warn("sqlite unavailable for auth storage; using in-memory adapter", {
-      error: errorUtils.toError(error),
+      error: toError(error),
     });
     const { memoryAdapter } = await import("better-auth/adapters/memory");
     return {
@@ -154,10 +154,10 @@ export async function migrateAuth(options: BetterAuthOptions, storage: AuthStora
   };
 
   if (storage.kind === "lakebase" && storage.pool) {
-    await advisoryLock.withAdvisoryLock(storage.pool, MIGRATION_LOCK, run);
+    await withAdvisoryLock(storage.pool, MIGRATION_LOCK, run);
     return;
   }
-  await fileLock.withFileLock(MIGRATION_LOCK, run);
+  await withFileLock(MIGRATION_LOCK, run);
 }
 
 async function openSqlite(path: string): Promise<AuthDatabase & { close(): void }> {

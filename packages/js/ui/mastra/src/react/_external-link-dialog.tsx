@@ -8,7 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   Button,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
 import { CheckIcon, CopyIcon, ExternalLinkIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LinkSafetyModalProps } from "streamdown";

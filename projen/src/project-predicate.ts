@@ -3,14 +3,8 @@
  * package identity, tags, and repository path.
  */
 import { relative } from "node:path";
-import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
-import {
-  object,
-  predicate,
-  Sequence,
-  type OneOrMany,
-  type Predicate,
-} from "@dbx-tools/shared-core";
+import { PathMatchInput, PathMatchPredicate, toPathMatcher } from "@dbx-tools/path";
+import { Sequence, type OneOrMany, type Predicate, sequence, create } from "@dbx-tools/shared-core";
 import { IConstruct } from "constructs";
 import { Project } from "projen";
 import { toPosix } from "./packages.ts";
@@ -28,7 +22,7 @@ import type { DBXToolsProject } from "./project.ts";
  * silently reject that construct before the install problem can be diagnosed.
  */
 export function isProject(): Predicate<IConstruct, Project> {
-  return predicate.create((c: IConstruct): c is Project => Project.isProject(c));
+  return create((c: IConstruct): c is Project => Project.isProject(c));
 }
 
 /** Guard: the construct implements the language-agnostic {@link DBXToolsProject} contract. */
@@ -53,9 +47,8 @@ export function isDBXToolsJavaScriptProject(): Predicate<IConstruct, DBXToolsJav
  * the resulting predicate.
  */
 function projectMatchers(...inputs: OneOrMany<PathMatchInput>): Sequence<PathMatchPredicate> {
-  return object
-    .sequence(inputs)
-    .map((input) => match.toPathMatcher(input))
+  return sequence(inputs)
+    .map((input) => toPathMatcher(input))
     .cache();
 }
 

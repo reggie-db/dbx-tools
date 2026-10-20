@@ -2,8 +2,8 @@
 /** Run the configured release transaction. */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { errorUtils, json, log } from "@dbx-tools/shared-core";
+import { projectUtils, type ProjectGhAccount, resolveProjectGhAccount } from "@dbx-tools/core";
+import { log, toError, parse } from "@dbx-tools/shared-core";
 import type { Command } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand } from "./cli.ts";
@@ -67,7 +67,7 @@ const GithubReleaseRunViewSchema = z
 
 /** Inputs required to locate and watch one tag-triggered release workflow. */
 export interface WatchReleaseGithubActionsOptions {
-  readonly account: projectUtils.ProjectGhAccount;
+  readonly account: ProjectGhAccount;
   readonly head: string;
   readonly root: string;
   readonly tag: string;
@@ -80,7 +80,7 @@ export type ReleaseGithubActionsWatcher = (
   options: WatchReleaseGithubActionsOptions,
 ) => Promise<void>;
 
-function githubRepository(account: projectUtils.ProjectGhAccount): string {
+function githubRepository(account: ProjectGhAccount): string {
   return account.host === "github.com"
     ? account.remote.repository
     : `${account.host}/${account.remote.repository}`;
@@ -194,7 +194,7 @@ export async function watchReleaseGithubActions(
       ],
       { check: true, env: account.env, stderr: "inherit" },
     );
-    const parsed = z.array(GithubReleaseRunSchema).safeParse(json.parse(output, []));
+    const parsed = z.array(GithubReleaseRunSchema).safeParse(parse(output, []));
     if (!parsed.success) throw new Error("GitHub returned invalid release workflow metadata");
     run = parsed.data.find(
       (candidate) => candidate.headSha === head && candidate.headBranch === tag,
@@ -234,7 +234,7 @@ export async function watchReleaseGithubActions(
         ],
         { check: true, env: account.env, stderr: "inherit" },
       );
-      const parsed = GithubReleaseRunViewSchema.safeParse(json.parse(output));
+      const parsed = GithubReleaseRunViewSchema.safeParse(parse(output));
       if (!parsed.success) throw new Error("GitHub returned invalid release progress metadata");
       reportGithubProgress(parsed.data, progress);
       completed = parsed.data.status === "completed";
@@ -251,7 +251,7 @@ export async function watchReleaseGithubActions(
     }
   } catch (error) {
     logger.warn("GitHub Actions release watch stopped; the remote run was not cancelled", {
-      error: errorUtils.toError(error),
+      error: toError(error),
       runId: run.databaseId,
       url: run.url,
     });
@@ -305,7 +305,7 @@ function pushAnnotatedReleaseTag(options: {
 }): void {
   const { annotation, branch, head, remote, root, tag } = options;
   runTaskCommand(root, "git", ["tag", "--annotate", tag, "--message", annotation]);
-  const githubAccount = projectUtils.resolveProjectGhAccount(root, { remote });
+  const githubAccount = resolveProjectGhAccount(root, { remote });
   if (!githubAccount) {
     logger.warn(
       "no authenticated GitHub account can access the release repository; using git push",
@@ -382,7 +382,7 @@ function pushAnnotatedReleaseTag(options: {
   } catch (error) {
     if (remoteRefCreated) throw error;
     logger.warn("GitHub API tag creation failed; using git push", {
-      error: errorUtils.toError(error),
+      error: toError(error),
       repository: githubAccount.remote.repository,
     });
     runTaskCommand(root, "git", ["push", remote, `refs/tags/${tag}`]);
@@ -480,7 +480,7 @@ export async function runRelease(
     /** After local release actions, wait for and stream the matching GitHub Actions run. */
     readonly watchGithubActions?: boolean;
     readonly githubActionsWatcher?: ReleaseGithubActionsWatcher;
-    readonly resolveGithubAccount?: typeof projectUtils.resolveProjectGhAccount;
+    readonly resolveGithubAccount?: typeof resolveProjectGhAccount;
   },
 ): Promise<string> {
   const { branch, prefix, remote, root } = options;
@@ -606,7 +606,7 @@ export async function runRelease(
   }
 
   if (shouldWatchReleaseGithubActions(options, selection)) {
-    const account = (options.resolveGithubAccount ?? projectUtils.resolveProjectGhAccount)(root, {
+    const account = (options.resolveGithubAccount ?? resolveProjectGhAccount)(root, {
       remote,
     });
     if (account) {

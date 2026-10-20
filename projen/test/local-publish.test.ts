@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { basename, dirname } from "node:path";
 import { describe, it } from "node:test";
-import type { ChildProcessResult } from "@dbx-tools/core/exec";
+import type { ChildProcessResult } from "@dbx-tools/core";
 import {
   awaitLocalPublishers,
   localPublishTaskPath,

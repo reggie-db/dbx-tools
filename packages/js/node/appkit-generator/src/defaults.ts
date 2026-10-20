@@ -4,7 +4,8 @@
  * @module
  */
 
-import { brandRequestSubject, type BrandGenerationRequest } from "./schema.ts";
+import type { BrandGenerationRequest } from "@dbx-tools/shared-generator";
+import { brandRequestSubject } from "./schema.ts";
 
 /** AppKit execute configuration used by this package. */
 export type BrandExecuteConfig = {

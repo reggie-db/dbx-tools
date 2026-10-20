@@ -11,14 +11,14 @@ import type {
   SearchRequest as AppKitSearchRequest,
   SearchResponse as AppKitSearchResponse,
 } from "@databricks/appkit/beta";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { trimToNull } from "@dbx-tools/shared-core";
 import {
-  searchSchemas,
   type SearchDocument,
   type SearchHit,
-  type SearchRequest as ExtensionSearchRequest,
+  type SearchRequest,
   type SearchResult,
   type UpsertResult,
+  toAiSearchQueryType,
 } from "@dbx-tools/shared-search";
 import type { SearchOptions, SearchReadBackend } from "./client.ts";
 import { indexConfigFor, type ResolvedSearchConfig } from "./config.ts";
@@ -30,7 +30,7 @@ export interface AiSearchProvider {
   addDocuments?(alias: string, documents: SearchDocument[]): Promise<UpsertResult>;
 }
 
-function filters(value: ExtensionSearchRequest["filter"]): AppKitSearchFilters | undefined {
+function filters(value: SearchRequest["filter"]): AppKitSearchFilters | undefined {
   if (!value) return undefined;
   const result: AppKitSearchFilters = {};
   for (const [key, item] of Object.entries(value)) {
@@ -61,7 +61,7 @@ function hitId(
 }
 
 function aliasFor(index: string, config: ResolvedSearchConfig): string {
-  const alias = indexConfigFor(config, index)?.alias ?? stringUtils.trimToNull(index);
+  const alias = indexConfigFor(config, index)?.alias ?? trimToNull(index);
   if (!alias) throw new ValidationError("AI Search requires a configured index alias");
   return alias;
 }
@@ -77,7 +77,7 @@ export function nativeAiSearchBackend(
       options.signal?.throwIfAborted();
       const known = indexConfigFor(config, index);
       const alias = aliasFor(index, config);
-      const resolvedQueryType = searchSchemas.toAiSearchQueryType(options.mode);
+      const resolvedQueryType = toAiSearchQueryType(options.mode);
       const resolvedFilters = filters(options.filter);
       const response = await provider.query(alias, {
         queryText: query,

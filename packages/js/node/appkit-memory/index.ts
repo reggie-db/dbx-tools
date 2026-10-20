@@ -5,13 +5,7 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-memory";
 export const PACKAGE_VERSION = "0.9.154";
 export * as config from "./src/config.ts";
-export * as databricksClient from "./src/databricks/client.ts";
-export * as graphitiOptions from "./src/graphiti/options.ts";
-export * as graphitiRuntime from "./src/graphiti/runtime.ts";
 export * as plugin from "./src/plugin.ts";
-export { DatabricksMemoryOptionsSchema, MemoryPluginOptionsSchema, MEMORY_CONFIG_SCHEMA } from "./src/config.ts";
+export { DatabricksMemoryOptionsSchema, MemoryPluginOptionsSchema, MEMORY_CONFIG_SCHEMA, resolveMemoryPluginConfig } from "./src/config.ts";
 export type { DatabricksMemoryOptions, MemoryPluginOptions, MemoryPluginConfig, ResolvedDatabricksMemoryOptions, ResolvedMemoryPluginConfig } from "./src/config.ts";
-export { ManagedMemoryEntrySchema, ManagedAgentMemoryClient } from "./src/databricks/client.ts";
-export type { ManagedMemoryEntry, ManagedMemorySearchResult } from "./src/databricks/client.ts";
-export type { GraphitiHealthCheckContext, GraphitiHealthCheck, GraphitiChildProcess, GraphitiRuntimeOptions, GraphitiPythonCommand } from "./src/graphiti/runtime.ts";
 export { MemoryPlugin, memory } from "./src/plugin.ts";

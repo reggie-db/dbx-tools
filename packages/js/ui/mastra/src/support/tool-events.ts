@@ -3,7 +3,7 @@ import {
   GenieProgressPartDataSchema,
   TOOL_PROGRESS_PART_TYPE,
   ToolProgressPartDataSchema,
-} from "@dbx-tools/shared-mastra/wire";
+} from "@dbx-tools/shared-mastra";
 import { getToolOrDynamicToolName, isToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 

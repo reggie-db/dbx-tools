@@ -11,11 +11,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  createShikiPlugin,
-  highlightToHtml,
-  useHighlightedHtml,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { createShikiPlugin, highlightToHtml, useHighlightedHtml } from "@dbx-tools/ui/react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";

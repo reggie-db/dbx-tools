@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { FOLLOW_UP_SUGGESTIONS_PART_TYPE } from "@dbx-tools/shared-mastra/wire";
+import { FOLLOW_UP_SUGGESTIONS_PART_TYPE } from "@dbx-tools/shared-mastra";
 import { MessageList } from "@mastra/core/agent/message-list";
 import { RequestContext } from "@mastra/core/request-context";
 

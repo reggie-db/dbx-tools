@@ -6,8 +6,8 @@
  * @module
  */
 
-import { pluginRegistry } from "@dbx-tools/appkit";
-import { errorUtils, log, object } from "@dbx-tools/shared-core";
+import { type PluginContextLike, instance } from "@dbx-tools/appkit";
+import { log, toError, isRecord } from "@dbx-tools/shared-core";
 
 import type { MemoryTurn } from "./_contracts.ts";
 
@@ -20,11 +20,11 @@ interface MemoryMessage {
 
 /** Attach a memory-owned turn saver through Mastra's generic processor extension. */
 export async function attachMastraTurnSaver(
-  context: pluginRegistry.PluginContextLike,
+  context: PluginContextLike,
   saveTurn: (turn: MemoryTurn, signal?: AbortSignal) => Promise<void>,
 ): Promise<boolean> {
   const mastraModule = await import("@dbx-tools/appkit-mastra");
-  const plugin = pluginRegistry.instance(context, mastraModule.mastra);
+  const plugin = instance(context, mastraModule.mastra);
   if (!plugin) return false;
   plugin.exports().registerOutputProcessor((agentId) => ({
     id: `appkit_memory_${agentId}`,
@@ -51,7 +51,7 @@ export async function attachMastraTurnSaver(
           abortSignal,
         );
       } catch (error) {
-        logger.warn("turn save failed", { error: errorUtils.toError(error), agentId });
+        logger.warn("turn save failed", { error: toError(error), agentId });
       }
       return messageList;
     },
@@ -68,9 +68,7 @@ function latestText(
     if (message?.role !== role) continue;
     const text = message.content.parts
       .flatMap((part) =>
-        object.isRecord(part) && part.type === "text" && typeof part.text === "string"
-          ? [part.text]
-          : [],
+        isRecord(part) && part.type === "text" && typeof part.text === "string" ? [part.text] : [],
       )
       .join("\n")
       .trim();

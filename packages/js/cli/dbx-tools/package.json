@@ -53,6 +53,7 @@
     "@dbx-tools/shared-email": "workspace:^",
     "@dbx-tools/shared-generator": "workspace:^",
     "@dbx-tools/shared-genie-code": "workspace:^",
+    "@dbx-tools/shared-graphiti": "workspace:^",
     "@dbx-tools/shared-model-gateway": "workspace:^",
     "@dbx-tools/tunnel": "workspace:^",
     "commander": "catalog:",
@@ -83,97 +84,37 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./bootstrap": {
-        "types": "./lib/src/bootstrap.d.ts",
-        "default": "./lib/src/bootstrap.js"
-      },
-      "./bun": {
-        "types": "./lib/src/bun.d.ts",
-        "default": "./lib/src/bun.js"
-      },
-      "./cli": {
-        "types": "./lib/src/cli.d.ts",
-        "default": "./lib/src/cli.js"
-      },
-      "./root": {
-        "types": "./lib/src/root.d.ts",
-        "default": "./lib/src/root.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./appkit": {
-        "types": "./lib/src/appkit/cli.d.ts",
-        "default": "./lib/src/appkit/cli.js"
-      },
-      "./appkit/env-export": {
-        "types": "./lib/src/appkit/env-export.d.ts",
-        "default": "./lib/src/appkit/env-export.js"
+        "types": "./lib/index.appkit.d.ts",
+        "default": "./lib/index.appkit.js"
       },
       "./auth": {
-        "types": "./lib/src/auth/cli.d.ts",
-        "default": "./lib/src/auth/cli.js"
-      },
-      "./auth/options": {
-        "types": "./lib/src/auth/options.d.ts",
-        "default": "./lib/src/auth/options.js"
+        "types": "./lib/index.auth.d.ts",
+        "default": "./lib/index.auth.js"
       },
       "./brand": {
-        "types": "./lib/src/brand/cli.d.ts",
-        "default": "./lib/src/brand/cli.js"
+        "types": "./lib/index.brand.d.ts",
+        "default": "./lib/index.brand.js"
       },
-      "./brand/export": {
-        "types": "./lib/src/brand/export.d.ts",
-        "default": "./lib/src/brand/export.js"
-      },
-      "./brand/options": {
-        "types": "./lib/src/brand/options.d.ts",
-        "default": "./lib/src/brand/options.js"
-      },
-      "./brand/run": {
-        "types": "./lib/src/brand/run.d.ts",
-        "default": "./lib/src/brand/run.js"
+      "./genie-code": {
+        "types": "./lib/index.genie-code.d.ts",
+        "default": "./lib/index.genie-code.js"
       },
       "./graphiti": {
-        "types": "./lib/src/graphiti/cli.d.ts",
-        "default": "./lib/src/graphiti/cli.js"
-      },
-      "./graphiti/options": {
-        "types": "./lib/src/graphiti/options.d.ts",
-        "default": "./lib/src/graphiti/options.js"
-      },
-      "./genie": {
-        "types": "./lib/src/genie-code/cli.d.ts",
-        "default": "./lib/src/genie-code/cli.js"
-      },
-      "./genie/options": {
-        "types": "./lib/src/genie-code/options.d.ts",
-        "default": "./lib/src/genie-code/options.js"
+        "types": "./lib/index.graphiti.d.ts",
+        "default": "./lib/index.graphiti.js"
       },
       "./lakebase-proxy": {
-        "types": "./lib/src/lakebase-proxy/cli.d.ts",
-        "default": "./lib/src/lakebase-proxy/cli.js"
-      },
-      "./lakebase-proxy/options": {
-        "types": "./lib/src/lakebase-proxy/options.d.ts",
-        "default": "./lib/src/lakebase-proxy/options.js"
+        "types": "./lib/index.lakebase-proxy.d.ts",
+        "default": "./lib/index.lakebase-proxy.js"
       },
       "./model-gateway": {
-        "types": "./lib/src/model-gateway/cli.d.ts",
-        "default": "./lib/src/model-gateway/cli.js"
-      },
-      "./model-gateway/server": {
-        "types": "./lib/src/model-gateway/server.d.ts",
-        "default": "./lib/src/model-gateway/server.js"
+        "types": "./lib/index.model-gateway.d.ts",
+        "default": "./lib/index.model-gateway.js"
       },
       "./tunnel": {
-        "types": "./lib/src/tunnel/cli.d.ts",
-        "default": "./lib/src/tunnel/cli.js"
-      },
-      "./tunnel/options": {
-        "types": "./lib/src/tunnel/options.d.ts",
-        "default": "./lib/src/tunnel/options.js"
+        "types": "./lib/index.tunnel.d.ts",
+        "default": "./lib/index.tunnel.js"
       },
       "./package.json": "./package.json"
     }
@@ -188,33 +129,18 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./bootstrap": "./src/bootstrap.ts",
-    "./bun": "./src/bun.ts",
-    "./cli": "./src/cli.ts",
-    "./root": "./src/root.ts",
-    "./*": "./src/*/index.ts",
-    "./appkit": "./src/appkit/cli.ts",
-    "./appkit/env-export": "./src/appkit/env-export.ts",
-    "./auth": "./src/auth/cli.ts",
-    "./auth/options": "./src/auth/options.ts",
-    "./brand": "./src/brand/cli.ts",
-    "./brand/export": "./src/brand/export.ts",
-    "./brand/options": "./src/brand/options.ts",
-    "./brand/run": "./src/brand/run.ts",
-    "./graphiti": "./src/graphiti/cli.ts",
-    "./graphiti/options": "./src/graphiti/options.ts",
-    "./genie": "./src/genie-code/cli.ts",
-    "./genie/options": "./src/genie-code/options.ts",
-    "./lakebase-proxy": "./src/lakebase-proxy/cli.ts",
-    "./lakebase-proxy/options": "./src/lakebase-proxy/options.ts",
-    "./model-gateway": "./src/model-gateway/cli.ts",
-    "./model-gateway/server": "./src/model-gateway/server.ts",
-    "./tunnel": "./src/tunnel/cli.ts",
-    "./tunnel/options": "./src/tunnel/options.ts",
+    "./appkit": "./index.appkit.ts",
+    "./auth": "./index.auth.ts",
+    "./brand": "./index.brand.ts",
+    "./genie-code": "./index.genie-code.ts",
+    "./graphiti": "./index.graphiti.ts",
+    "./lakebase-proxy": "./index.lakebase-proxy.ts",
+    "./model-gateway": "./index.model-gateway.ts",
+    "./tunnel": "./index.tunnel.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "bin",
     "lib"

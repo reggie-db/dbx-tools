@@ -1,4 +1,3 @@
-import { errorUtils } from "@dbx-tools/shared-core";
 import {
   Alert,
   AlertDescription,
@@ -10,7 +9,8 @@ import {
   EmptyMedia,
   EmptyTitle,
   Spinner,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { errorMessage } from "@dbx-tools/shared-core";
 import { isToolUIPart } from "ai";
 import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -298,7 +298,7 @@ export const ChatTranscript = ({
                   <AlertTitle>Something went wrong</AlertTitle>
                   <AlertDescription>
                     {error
-                      ? errorUtils.errorMessage(error)
+                      ? errorMessage(error)
                       : "The assistant ran into an error. Please try again."}
                   </AlertDescription>
                 </Alert>

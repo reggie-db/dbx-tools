@@ -22,7 +22,7 @@
 import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { environmentUtils, stringUtils } from "@dbx-tools/shared-core";
+import { isDatabricksAppEnv, trimToUndefined } from "@dbx-tools/shared-core";
 
 /** Databricks Apps container home when {@link environmentUtils.isDatabricksAppEnv}. */
 export const APP_HOME = "/home/app";
@@ -91,7 +91,7 @@ function resolveHome(env: NodeJS.ProcessEnv, cwd: string, options: ResolveOsPath
     tryCall(options.homeDir ?? homedir),
     env.HOME?.trim(),
     env.USERPROFILE?.trim(),
-    environmentUtils.isDatabricksAppEnv(env) ? (options.appHome ?? APP_HOME) : undefined,
+    isDatabricksAppEnv(env) ? (options.appHome ?? APP_HOME) : undefined,
   ];
 
   for (const candidate of candidates) {
@@ -134,7 +134,7 @@ function resolveTemp(env: NodeJS.ProcessEnv, home: string, options: ResolveOsPat
 
 function tryCall(fn: () => string): string | undefined {
   try {
-    return stringUtils.trimToUndefined(fn());
+    return trimToUndefined(fn());
   } catch {
     return undefined;
   }

@@ -1,10 +1,10 @@
-import { brandUtils } from "@dbx-tools/shared-core";
-import type { BrandPackage } from "@dbx-tools/shared-generator/brand";
+import { defaultBrandContext } from "@dbx-tools/shared-core";
 import type {
+  BrandPackage,
   GeneratedSchema,
   GeneratorPlan,
   GeneratorRequest,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 
 export const request: GeneratorRequest = {
   company: "Acme",
@@ -68,7 +68,7 @@ export const plan: GeneratorPlan = {
 };
 
 export const brand: BrandPackage = {
-  brand: brandUtils.defaultBrandContext,
+  brand: defaultBrandContext,
   sources: [{ url: "https://dbx.tools/", fetched: true }],
   visualReferences: [],
 };

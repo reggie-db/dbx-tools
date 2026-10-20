@@ -1,6 +1,6 @@
-import { exec } from "@dbx-tools/core";
-import type { ChildProcessResult } from "@dbx-tools/core/exec";
-import { asyncUtils, errorUtils, type Logger } from "@dbx-tools/shared-core";
+import { onParentTerminationSignal } from "@dbx-tools/core";
+import type { ChildProcessResult } from "@dbx-tools/core";
+import { type Logger, boundedRetryDelay, sleep, toError } from "@dbx-tools/shared-core";
 
 const STABLE_CONNECTION_MS = 60_000;
 /** How long to wait after a child start before the first public liveness probe. */
@@ -53,7 +53,7 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
     if (!stoppingChild) return Promise.resolve();
     stopping ??= stoppingChild.shutdown().catch((error) => {
       options.logger.error(`${options.name} did not stop`, {
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
     });
     return stopping;
@@ -73,7 +73,7 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
     void terminateChild();
   };
   process.once("exit", onProcessExit);
-  const stopParentSignal = exec.onParentTerminationSignal(() => {
+  const stopParentSignal = onParentTerminationSignal(() => {
     abortRestartLoop();
   });
 
@@ -87,15 +87,15 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
         stopping = undefined;
         outcome = await processOutcome(child, controller.signal, options);
       } catch (error) {
-        outcome = { error: errorUtils.toError(error) };
+        outcome = { error: toError(error) };
       }
       if (controller.signal.aborted) return;
       child = undefined;
       if (Date.now() - startedAt >= STABLE_CONNECTION_MS) failures = 0;
-      const delayMs = asyncUtils.boundedRetryDelay(failures++, options.retryDelaysMs);
+      const delayMs = boundedRetryDelay(failures++, options.retryDelaysMs);
       options.logger.warn(`${options.name} stopped; retrying`, { ...outcome, delayMs });
       try {
-        await asyncUtils.sleep(delayMs, controller.signal);
+        await sleep(delayMs, controller.signal);
       } catch {
         return;
       }
@@ -104,7 +104,7 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
 
   void run().catch((error) =>
     options.logger.error(`${options.name} supervisor failed`, {
-      error: errorUtils.toError(error),
+      error: toError(error),
     }),
   );
   return {
@@ -157,7 +157,7 @@ function processOutcome(
         // Probe errors (DNS blips, timeouts) are not proof the tunnel is dead;
         // only an explicit unhealthy result triggers a restart.
         options.logger.debug(`${options.name} health probe errored; ignoring`, {
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
         healthy = true;
       }
@@ -185,7 +185,7 @@ function processOutcome(
         () => finish(outcome),
         (error) => {
           options.logger.error(`${options.name} did not stop`, {
-            error: errorUtils.toError(error),
+            error: toError(error),
           });
           finish(outcome);
         },

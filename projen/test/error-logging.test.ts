@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
-import { find } from "@dbx-tools/path";
+import { findFiles } from "@dbx-tools/path";
 import ts from "typescript";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -143,7 +143,7 @@ describe("error logging", () => {
       "packages/**/*.{ts,tsx,js,mjs,cjs}",
       "projen/**/*.{ts,tsx,js,mjs,cjs}",
     ]) {
-      for await (const file of find.findFiles(pattern, {
+      for await (const file of findFiles(pattern, {
         cwd: ROOT,
         ignore: ["**/lib/**", "**/dist/**", "**/_generated/**", "**/node_modules/**"],
         ignoreOptions: { test: false },

@@ -1,8 +1,8 @@
 import { evaluatePython, type PythonFunction, runPythonInThread } from "./host";
 
-import type { DatabricksRuntimeAuthClient } from "@dbx-tools/auth/runtime-auth";
-import { isDatabricksAppEnv as isDatabricksAppRuntime } from "@dbx-tools/shared-core/environment-utils";
-import { trimToUndefined } from "@dbx-tools/shared-core/string-utils";
+import type { DatabricksRuntimeAuthClient } from "@dbx-tools/auth";
+import { isDatabricksAppEnv } from "@dbx-tools/shared-core";
+import { trimToUndefined } from "@dbx-tools/shared-core";
 
 interface PythonRuntimeMetadata {
   host: string;
@@ -25,7 +25,7 @@ const authenticationHeaders = evaluatePython<PythonFunction>(
 export async function databricksRuntimeAuthClient(): Promise<
   DatabricksRuntimeAuthClient | undefined
 > {
-  if (isDatabricksAppRuntime(process.env) || !process.env.DATABRICKS_RUNTIME_VERSION?.trim()) {
+  if (isDatabricksAppEnv(process.env) || !process.env.DATABRICKS_RUNTIME_VERSION?.trim()) {
     return undefined;
   }
 

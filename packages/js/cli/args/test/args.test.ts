@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { options as sharedOptions } from "@dbx-tools/shared-core";
+import { listenAddressSchema } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { z } from "zod";
 import { addArgs, parseArgs, parseArgv, serializeArgs } from "../src/args.ts";
@@ -215,7 +215,7 @@ describe("parseArgs", () => {
 
   it("parses listener addresses from one value", async () => {
     const configured = z.object({
-      listen: sharedOptions.listenAddressSchema({ port: 4000 }),
+      listen: listenAddressSchema({ port: 4000 }),
     });
     assert.deepEqual(await parse(configured, isolated, ["--listen", ":4400"]), {
       listen: { scheme: "tcp", host: "localhost", port: 4400 },

@@ -4,15 +4,15 @@
  * @module
  */
 
-import { BrandPackageSchema, type BrandGenerationRequest } from "@dbx-tools/shared-generator/brand";
-import { KpiResearchResultSchema } from "@dbx-tools/shared-generator/kpi";
+import { BrandPackageSchema, type BrandGenerationRequest } from "@dbx-tools/shared-generator";
 import {
+  KpiResearchResultSchema,
   GeneratedAssetsSchema,
   GeneratedSchemaSchema,
   GeneratorPlanSchema,
   GeneratorRequestSchema,
   MaterializedGeneratorDataSchema,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import type { GeneratorOperations } from "./operations.ts";

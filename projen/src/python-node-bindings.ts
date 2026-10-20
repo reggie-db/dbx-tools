@@ -1,10 +1,11 @@
 /** Shared pyproject-backed configuration for PythonMonkey Node bindings. */
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { find } from "@dbx-tools/path";
-import { object, stringUtils } from "@dbx-tools/shared-core";
+import { findFilesSync } from "@dbx-tools/path";
+import { isRecord, toIdentifierWithOptions } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
 import ts from "typescript";
 import { runTaskCommand } from "./_task-command.ts";
@@ -137,7 +138,7 @@ export function resolvePythonNodeBindingModules(
   config: ResolvedPythonNodeBindings,
 ): ResolvedPythonNodeBindings {
   if (config.modules.length > 0) return config;
-  const packageEntrypoint = Bun.resolveSync(config.entrypoint, config.projectDirectory);
+  const packageEntrypoint = resolveModule(config.entrypoint, config.projectDirectory);
   const modules = publicNamespaceExports(packageEntrypoint).filter(
     (module) =>
       publicFunctionExports(resolvePythonNodeBindingModule(packageEntrypoint, module)).length > 0,
@@ -147,7 +148,7 @@ export function resolvePythonNodeBindingModules(
 
 /** Map a JavaScript export or namespace to its generated Python identifier. */
 export function pythonNodeBindingFunctionName(javascriptName: string): string {
-  const name = stringUtils.toIdentifierWithOptions({ delimiter: "_" }, javascriptName);
+  const name = toIdentifierWithOptions({ delimiter: "_" }, javascriptName);
   if (!isPythonNodeBindingIdentifier(name)) {
     throw new Error(
       `JavaScript export ${javascriptName} does not map to a valid Python function name`,
@@ -184,7 +185,7 @@ export function pythonNodeBindingInputFingerprint(
     for (const input of config.watchInputs) files.add(canonicalPath(resolve(root, input)));
     for (const { handlerFile } of config.functionOverrides) files.add(canonicalPath(handlerFile));
     const packageEntrypoint = canonicalPath(
-      Bun.resolveSync(config.entrypoint, config.projectDirectory),
+      resolveModule(config.entrypoint, config.projectDirectory),
     );
     files.add(packageEntrypoint);
     const packageManifest = nearestPackageManifest(packageEntrypoint);
@@ -327,8 +328,7 @@ export function resolveAllPythonNodeBindings(
 /** Repository-relative Python projects that configure generated Node bindings. */
 export function pythonNodeBindingProjects(projectRoot: string): string[] {
   return [
-    ...find
-      .findFilesSync("**/pyproject.toml", { cwd: projectRoot })
+    ...findFilesSync("**/pyproject.toml", { cwd: projectRoot })
       .filter((file) => {
         const manifest = parse(readFileSync(resolve(projectRoot, file), "utf8")) as {
           tool?: { dbx_tools?: { node_bindings?: unknown } };
@@ -443,7 +443,7 @@ type BindingSourceConfig = Omit<ResolvedPythonNodeBindings, "watchInputs">;
 
 /** Transitive workspace source files reachable from configured binding modules. */
 function bindingSourceInputs(root: string, config: BindingSourceConfig): string[] {
-  const packageEntrypoint = Bun.resolveSync(config.entrypoint, config.projectDirectory);
+  const packageEntrypoint = resolveModule(config.entrypoint, config.projectDirectory);
   const entrypoints =
     config.modules.length > 0
       ? config.modules.map((module) => resolvePythonNodeBindingModule(packageEntrypoint, module))
@@ -479,7 +479,7 @@ function transitiveSourceFiles(
     const dependencies = ts.preProcessFile(source, true, true).importedFiles;
     for (const dependency of dependencies) {
       try {
-        pending.push(Bun.resolveSync(dependency.fileName, dirname(candidate)));
+        pending.push(resolveModule(dependency.fileName, dirname(candidate)));
       } catch {
         // Built-ins and external packages are outside the workspace source graph.
       }
@@ -501,7 +501,11 @@ export function resolvePythonNodeBindingModule(entrypoint: string, module: strin
   if (!match?.[1]) {
     throw new Error(`${entrypoint} does not export namespace ${module}`);
   }
-  return Bun.resolveSync(match[1], dirname(entrypoint));
+  return resolveModule(match[1], dirname(entrypoint));
+}
+
+function resolveModule(specifier: string, directory: string): string {
+  return createRequire(join(directory, "package.json")).resolve(specifier);
 }
 
 function canonicalPath(path: string): string {
@@ -578,11 +582,11 @@ function validateBindings(configs: readonly ResolvedPythonNodeBindings[]): void 
 
 function nodePackageName(packageName: string): string {
   const unscoped = packageName.split("/").at(-1) ?? packageName;
-  return stringUtils.toIdentifierWithOptions({ delimiter: "_" }, unscoped);
+  return toIdentifierWithOptions({ delimiter: "_" }, unscoped);
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
-  if (!object.isRecord(value)) throw new Error(`${path} must be a table`);
+  if (!isRecord(value)) throw new Error(`${path} must be a table`);
   return value;
 }
 

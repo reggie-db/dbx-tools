@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { appkit } from "@dbx-tools/appkit";
+import { type WorkspaceClientLike } from "@dbx-tools/appkit";
 import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import { context, trace } from "@opentelemetry/api";
 import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
@@ -507,13 +507,13 @@ describe("MLflow experiment manager link", () => {
   });
 });
 
-function workspaceClient(): appkit.WorkspaceClientLike {
+function workspaceClient(): WorkspaceClientLike {
   return {
     config: {
       getHost: async () => new URL("https://workspace.example.com"),
       authenticate: async () => {},
     },
-  } as unknown as appkit.WorkspaceClientLike;
+  } as unknown as WorkspaceClientLike;
 }
 
 function restoreEnvironment(name: string, value: string | undefined): void {

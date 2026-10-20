@@ -8,12 +8,25 @@
  * @module
  */
 
-import { configUtils } from "@dbx-tools/core";
-import { object, options as sharedOptions, stringUtils } from "@dbx-tools/shared-core";
+import {
+  configUtils,
+  type ConfigOptions,
+  environmentKeys,
+  list,
+  boolean,
+  text,
+} from "@dbx-tools/core";
+import {
+  isRecord,
+  formatListenAddress,
+  type ListenAddress,
+  toSlug,
+  tokenize,
+} from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
 
 /** Layered config lookup used to resolve argument values and help defaults. */
-export type CliArgsOptions = configUtils.ConfigOptions;
+export type CliArgsOptions = ConfigOptions;
 
 /** CLI metadata read from a field's Zod `.meta()` value. */
 export interface CliArgMeta {
@@ -80,7 +93,7 @@ export function addArgs<TSchema extends CliObjectSchema>(
     if (field.choices && field.choices.length > 0) option.choices(field.choices);
     if (fallback !== undefined && field.helpDefault !== false) {
       const address = listenAddress(fallback);
-      option.default(fallback, address ? sharedOptions.formatListenAddress(address) : undefined);
+      option.default(fallback, address ? formatListenAddress(address) : undefined);
     }
     if (field.type === "array") {
       option.argParser((value: string, previous: unknown) =>
@@ -139,12 +152,12 @@ export function serializeArgs(source: ArgumentSource): string[] {
 
 function fields(schema: CliObjectSchema): Field[] {
   const document = schema.toJSONSchema();
-  const properties = object.isRecord(document) ? document.properties : undefined;
-  if (!object.isRecord(properties)) {
+  const properties = isRecord(document) ? document.properties : undefined;
+  if (!isRecord(properties)) {
     throw new TypeError("Zod Commander binding requires a z.object() schema");
   }
   return Object.entries(properties).map(([key, value]) => {
-    if (!object.isRecord(value)) {
+    if (!isRecord(value)) {
       throw new TypeError(`Cannot bind CLI argument "${key}"`);
     }
     const json = value as JsonField;
@@ -169,7 +182,7 @@ function isCliObjectSchema(value: ArgumentSource): value is CliObjectSchema {
 }
 
 function argFlags(field: Field, short: string | undefined): string {
-  const long = `--${stringUtils.toSlug(field.key)}`;
+  const long = `--${toSlug(field.key)}`;
   const value = field.type === "boolean" ? "" : " <value>";
   if (short) return `-${short}, ${long}${value}`;
   return `${long}${value}`;
@@ -194,7 +207,7 @@ function fieldShortFlags(fields: readonly Field[]): ReadonlyMap<string, string> 
   const candidates = new Map<string, Field[]>();
   for (const field of fields) {
     if (field.short !== undefined) continue;
-    const short = [...stringUtils.tokenize(field.key)][0]?.[0]?.toLowerCase();
+    const short = [...tokenize(field.key)][0]?.[0]?.toLowerCase();
     if (!short || reserved.has(short)) continue;
     const matching = candidates.get(short) ?? [];
     matching.push(field);
@@ -209,7 +222,7 @@ function fieldShortFlags(fields: readonly Field[]): ReadonlyMap<string, string> 
 function fieldEnvKeys(field: Field): readonly string[] {
   if (typeof field.env === "string") return [field.env];
   if (Array.isArray(field.env)) return [...field.env];
-  return configUtils.environmentKeys(field.key);
+  return environmentKeys(field.key);
 }
 
 function envArgName(field: Field, envKeys: readonly string[], options: CliArgsOptions): string {
@@ -229,16 +242,16 @@ function configValue(
   options: CliArgsOptions,
 ): unknown {
   if (field.type === "array") {
-    const values = configUtils.list(undefined, envKeys, undefined, options);
+    const values = list(undefined, envKeys, undefined, options);
     return values.length > 0 ? values : undefined;
   }
-  if (field.type === "boolean") return configUtils.boolean(undefined, envKeys, options);
-  return configUtils.text(envKeys, options);
+  if (field.type === "boolean") return boolean(undefined, envKeys, options);
+  return text(envKeys, options);
 }
 
 function valueArguments(key: string, value: unknown): string[] {
   if (value === undefined || value === null) return [];
-  const flag = `--${stringUtils.toSlug(key)}`;
+  const flag = `--${toSlug(key)}`;
   if (typeof value === "boolean") return [value ? flag : `--no-${flag.slice(2)}`];
   if (Array.isArray(value)) {
     return value.flatMap((entry) => [flag, scalarArgument(key, entry)]);
@@ -251,12 +264,12 @@ function scalarArgument(key: string, value: unknown): string {
     return String(value);
   }
   const address = listenAddress(value);
-  if (address) return sharedOptions.formatListenAddress(address);
+  if (address) return formatListenAddress(address);
   throw new TypeError(`Cannot serialize CLI argument "${key}" with a non-scalar value`);
 }
 
-function listenAddress(value: unknown): sharedOptions.ListenAddress | undefined {
-  if (!object.isRecord(value)) return undefined;
+function listenAddress(value: unknown): ListenAddress | undefined {
+  if (!isRecord(value)) return undefined;
   if (value.scheme === "tcp" && typeof value.host === "string" && typeof value.port === "number") {
     return { scheme: "tcp", host: value.host, port: value.port };
   }

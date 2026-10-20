@@ -28,7 +28,7 @@ import { createServer } from "node:http";
 import type { Socket } from "node:net";
 import { parseArgs } from "node:util";
 import { CacheManager } from "@databricks/appkit";
-import { client as authClient } from "@dbx-tools/auth";
+import { createAuthClient } from "@dbx-tools/auth";
 import express from "express";
 import { LakeboxResourceRegistry } from "../src/_resource-registry.ts";
 import { resolveLakeboxPluginConfig } from "../src/config.ts";
@@ -51,7 +51,7 @@ if (!values.profile) {
   process.exit(2);
 }
 
-const auth = await authClient.createAuthClient({ profile: values.profile });
+const auth = await createAuthClient({ profile: values.profile });
 const identity = values.user;
 const runtime = new LakeboxRuntime(
   resolveLakeboxPluginConfig({

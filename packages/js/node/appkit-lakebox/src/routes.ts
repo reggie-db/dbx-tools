@@ -1,9 +1,14 @@
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import { createServer, type Server, type Socket } from "node:net";
 import { type Duplex, PassThrough, Readable } from "node:stream";
-import { ACCESS_TOKEN_HEADER, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/appkit";
-import type { SshSession } from "@dbx-tools/lakebox/session";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import type { SshSession } from "@dbx-tools/lakebox";
+import {
+  log,
+  toError,
+  ACCESS_TOKEN_HEADER,
+  USER_EMAIL_HEADER,
+  USER_ID_HEADER,
+} from "@dbx-tools/shared-core";
 import type { LakeboxUser } from "@dbx-tools/shared-lakebox";
 import type { NextFunction, Request, Response } from "express";
 import ProxyModule from "http-proxy-3";
@@ -274,7 +279,9 @@ async function closeBridge(bridge: Bridge): Promise<void> {
 }
 
 function stripIdentityHeaders(request: IncomingMessage): void {
-  for (const name of [ACCESS_TOKEN_HEADER, "authorization", "cookie"]) delete request.headers[name];
+  for (const name of [ACCESS_TOKEN_HEADER, "authorization", "cookie"]) {
+    delete request.headers[name];
+  }
 }
 
 function sendLoadingResponse(
@@ -358,7 +365,7 @@ async function injectHtmlHead(
     response.end(body);
   } catch (error) {
     logger.warn("Lakebox route HTML injection failed", {
-      error: errorUtils.toError(error),
+      error: toError(error),
     });
     if (!response.headersSent) response.writeHead(502);
     response.end("Lakebox route unavailable");
@@ -468,7 +475,7 @@ function bridgeSocket(
       clearReadyTimeout();
       if (!timedOut && !socket.destroyed) {
         logger.warn("Lakebox route forwarding channel failed", {
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
         socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
       }

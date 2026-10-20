@@ -1,18 +1,5 @@
-import { brandUtils } from "@dbx-tools/shared-core";
-import { emailBrandFromContext, type EmailBrand } from "@dbx-tools/shared-email-template";
-import {
-  GENERATOR_PLUGIN_NAME,
-  GeneratorPluginClient,
-  type GeneratorClientConfig,
-  type BrandGenerationProgressEvent,
-  type BrandGenerationStage,
-  type BrandPackage,
-} from "@dbx-tools/shared-generator/brand";
-import { BrandIcon, useBrand } from "@dbx-tools/ui/branding/react";
-import { EmailPreview } from "@dbx-tools/ui/email/react";
 import {
   Badge,
-  BrandPicker,
   Button,
   Card,
   CardContent,
@@ -21,8 +8,20 @@ import {
   CardTitle,
   Input,
   usePluginClientConfig,
-  type BrandPreset,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { defaultBrandContext, type BrandContext } from "@dbx-tools/shared-core";
+import { emailBrandFromContext, type EmailBrand } from "@dbx-tools/shared-email-template";
+import {
+  GENERATOR_PLUGIN_NAME,
+  GeneratorPluginClient,
+  type GeneratorClientConfig,
+  type BrandGenerationProgressEvent,
+  type BrandGenerationStage,
+  type BrandPackage,
+} from "@dbx-tools/shared-generator";
+import { BrandIcon, useBrand } from "@dbx-tools/ui/branding/react";
+import { EmailPreview } from "@dbx-tools/ui/email/react";
+import { BrandPicker, type BrandPreset } from "@dbx-tools/ui/react";
 import { CheckCircle2, Circle, CircleX, LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -31,7 +30,7 @@ const SITE_PRESETS: readonly BrandPreset[] = [
     id: "dbx-tools",
     label: "dbx tools",
     description: "Navy with green accent",
-    context: brandUtils.defaultBrandContext,
+    context: defaultBrandContext,
   },
   {
     id: "lakehouse",
@@ -165,7 +164,7 @@ const campaignBrand = {
 } satisfies EmailBrand;
 
 interface BrandGeneratorProps {
-  onGenerated: (brand: brandUtils.BrandContext) => void;
+  onGenerated: (brand: BrandContext) => void;
 }
 
 const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
@@ -358,8 +357,8 @@ const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
 };
 
 interface BrandPageProps {
-  value: brandUtils.BrandContext;
-  onChange: (value: brandUtils.BrandContext) => void;
+  value: BrandContext;
+  onChange: (value: BrandContext) => void;
 }
 
 const BrandPage = ({ value, onChange }: BrandPageProps) => {

@@ -20,10 +20,25 @@
 
 import { StringDecoder } from "node:string_decoder";
 
-import { telemetry as appkitTelemetry } from "@dbx-tools/appkit";
-import { getRequestTags } from "@dbx-tools/appkit/request-tags";
-import { environmentUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
-import { feedback, thread } from "@dbx-tools/shared-mastra";
+import {
+  USER_TRACE_ATTRIBUTE,
+  registerNativeSpanProcessor,
+  getRequestTags,
+} from "@dbx-tools/appkit";
+import {
+  log,
+  isDatabricksAppEnv,
+  parse,
+  isRecord,
+  trimToNull,
+  USER_EMAIL_HEADER,
+  USER_ID_HEADER,
+} from "@dbx-tools/shared-core";
+import {
+  MLFLOW_TRACE_ID_HEADER,
+  THREAD_ID_HEADER,
+  THREAD_ID_QUERY,
+} from "@dbx-tools/shared-mastra";
 import type { TracingOptions } from "@mastra/core/observability";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import {
@@ -40,7 +55,6 @@ import type { ReadableSpan, Span as SdkSpan, SpanProcessor } from "@opentelemetr
 import type express from "express";
 
 import { MASTRA_AUTH_MODE_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_NAME_KEY } from "./config.ts";
-import { USER_EMAIL_HEADER, USER_ID_HEADER } from "./identity.ts";
 import {
   appMlflowTraceInfoConfigured,
   directMlflowTracingActive,
@@ -61,21 +75,6 @@ import {
   MLFLOW_TRACE_TAG_PREFIX,
 } from "./trace-attributes.ts";
 
-export {
-  MLFLOW_AGENT_TAG,
-  MLFLOW_AGENT_TAG_ATTR,
-  APPKIT_AGENT_TRACE_ROOT_ATTR,
-  MLFLOW_GENIE_TAG,
-  MLFLOW_GENIE_TAG_ATTR,
-  MLFLOW_LOCAL_TAG,
-  MLFLOW_LOCAL_TAG_ATTR,
-  MLFLOW_OBO_AUTH_TAG,
-  MLFLOW_OBO_AUTH_TAG_ATTR,
-  MLFLOW_SP_AUTH_TAG,
-  MLFLOW_SP_AUTH_TAG_ATTR,
-  MLFLOW_TRACE_TAG_PREFIX,
-} from "./trace-attributes.ts";
-
 const logger = log.logger("mastra/telemetry");
 
 /** Cap on each payload copied onto a span, so one turn cannot bloat the export. */
@@ -85,7 +84,7 @@ export const TRACE_IO_LIMIT = 8_000;
 const RESPONSE_BODY_LIMIT = TRACE_IO_LIMIT * 4;
 
 /** Tracer scope used only when AppKit did not create a recording HTTP span. */
-const CHAT_TURN_TRACER = "@dbx-tools/appkit-mastra/telemetry";
+const CHAT_TURN_TRACER = "@dbx-tools/appkit-mastra";
 
 /**
  * Mount-relative Mastra agent invoke paths that carry a chat turn body
@@ -115,11 +114,6 @@ export const CHAT_GENIE_USED_ATTR = "appkit.mastra.genie.used";
 export const MLFLOW_SPAN_TYPE_ATTR = "mlflow.spanType";
 /** GenAI semantic-convention operation name, an alternate span-type source. */
 export const GEN_AI_OPERATION_NAME_ATTR = "gen_ai.operation.name";
-/**
- * Root-span user id the MLflow experiment UI's User column reads from OTel
- * traces. Prefer the forwarded email when present so the column is human.
- */
-export const MLFLOW_USER_ATTR = appkitTelemetry.USER_TRACE_ATTRIBUTE;
 /** Root-span session id that enables the MLflow Sessions tab. */
 export const MLFLOW_SESSION_ATTR = "session.id";
 /** Root-span type for a Mastra agent turn. */
@@ -170,25 +164,23 @@ export function stampGenieToolSpan(span: Span | undefined = trace.getActiveSpan(
 }
 
 function requestHeader(req: express.Request, name: string): string | undefined {
-  const fromMethod =
-    typeof req.header === "function" ? stringUtils.trimToNull(req.header(name)) : undefined;
+  const fromMethod = typeof req.header === "function" ? trimToNull(req.header(name)) : undefined;
   if (fromMethod) return fromMethod;
   const raw = req.headers?.[name.toLowerCase()];
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return stringUtils.trimToNull(typeof value === "string" ? value : undefined) ?? undefined;
+  return trimToNull(typeof value === "string" ? value : undefined) ?? undefined;
 }
 
 function requestQuery(req: express.Request, name: string): string | undefined {
   const raw = req.query?.[name];
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return stringUtils.trimToNull(typeof value === "string" ? value : undefined) ?? undefined;
+  return trimToNull(typeof value === "string" ? value : undefined) ?? undefined;
 }
 
 function stampMlflowActor(span: Span, req: express.Request): string | undefined {
   const user = requestHeader(req, USER_EMAIL_HEADER) ?? requestHeader(req, USER_ID_HEADER);
-  if (user) span.setAttribute(MLFLOW_USER_ATTR, user);
-  const session =
-    requestHeader(req, thread.THREAD_ID_HEADER) ?? requestQuery(req, thread.THREAD_ID_QUERY);
+  if (user) span.setAttribute(USER_TRACE_ATTRIBUTE, user);
+  const session = requestHeader(req, THREAD_ID_HEADER) ?? requestQuery(req, THREAD_ID_QUERY);
   if (session) span.setAttribute(MLFLOW_SESSION_ATTR, session);
   return user;
 }
@@ -223,7 +215,7 @@ export function activeChatTracingOptions(
 }
 
 function setChatTraceTag(state: ChatTraceState, name: string, value: ChatTraceTagValue): void {
-  const tag = stringUtils.trimToNull(name);
+  const tag = trimToNull(name);
   if (!tag) return;
   state.tags.set(tag, String(value));
 }
@@ -247,7 +239,7 @@ export function recordActiveTraceTags(
 
 /** Record the first selected model as the active chat trace's `agent` tag. */
 export function recordActiveTraceModel(modelId: string): void {
-  const value = stringUtils.trimToNull(modelId);
+  const value = trimToNull(modelId);
   if (!value) return;
   const state = activeChatTraceState();
   if (!state || state.firstModel) return;
@@ -260,7 +252,7 @@ export function recordActiveTraceModel(modelId: string): void {
 
 /** Record the best resolved user identifier on the active chat trace. */
 export function recordActiveTraceUser(user: string | undefined): void {
-  const value = stringUtils.trimToNull(user);
+  const value = trimToNull(user);
   if (!value) return;
   const state = activeChatTraceState();
   if (state) state.user = value;
@@ -275,7 +267,7 @@ export function recordActiveTraceAuth(auth: "obo" | "service-principal"): void {
 function stampMlflowTraceId(res: express.Response, traceId: string): void {
   if (res.headersSent) return;
   if (!traceId || traceId === INVALID_TRACE_ID) return;
-  res.setHeader(feedback.MLFLOW_TRACE_ID_HEADER, `tr-${traceId}`);
+  res.setHeader(MLFLOW_TRACE_ID_HEADER, `tr-${traceId}`);
 }
 
 /** Return one raw prompt when the request is exactly one text-only user message. */
@@ -283,7 +275,7 @@ export function textOnlyChatInput(messages: unknown): string | undefined {
   if (typeof messages === "string") return messages || undefined;
   if (!Array.isArray(messages) || messages.length !== 1) return undefined;
   const message = messages[0];
-  if (!object.isRecord(message) || message.role !== "user") return undefined;
+  if (!isRecord(message) || message.role !== "user") return undefined;
   if (typeof message.content === "string") return message.content || undefined;
   return textFromParts(message.parts) ?? textFromParts(message.content);
 }
@@ -292,7 +284,7 @@ function textFromParts(value: unknown): string | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;
   const text: string[] = [];
   for (const part of value) {
-    if (!object.isRecord(part) || part.type !== "text" || typeof part.text !== "string") {
+    if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") {
       return undefined;
     }
     text.push(part.text);
@@ -307,13 +299,13 @@ function serialized(value: unknown, limit = TRACE_IO_LIMIT): string {
 
 function sseFrame(line: string): unknown {
   if (!line.startsWith("data:")) return undefined;
-  return json.parse(line.slice(5));
+  return parse(line.slice(5));
 }
 
 function valueUsesGenie(value: unknown, depth = 0): boolean {
   if (depth > 3) return false;
   if (Array.isArray(value)) return value.some((item) => valueUsesGenie(item, depth + 1));
-  if (!object.isRecord(value)) return false;
+  if (!isRecord(value)) return false;
   if (
     value.type === "data-genie-progress" ||
     value.type === "ask_genie_done" ||
@@ -332,11 +324,11 @@ function assistantTextFromSseLine(line: string): string {
 }
 
 function assistantTextFromSseFrame(frame: unknown): string {
-  if (!object.isRecord(frame) || frame.type !== "text-delta") return "";
+  if (!isRecord(frame) || frame.type !== "text-delta") return "";
   const text =
     typeof frame.delta === "string"
       ? frame.delta
-      : object.isRecord(frame.payload)
+      : isRecord(frame.payload)
         ? frame.payload.text
         : undefined;
   return typeof text === "string" ? text : "";
@@ -361,7 +353,7 @@ export function assistantTextFromSse(body: string): string {
 
 /** Read the final assistant text from a non-streaming Mastra response. */
 export function assistantTextFromJson(body: unknown): string {
-  if (!object.isRecord(body) || typeof body.text !== "string") return "";
+  if (!isRecord(body) || typeof body.text !== "string") return "";
   return body.text.slice(0, TRACE_IO_LIMIT);
 }
 
@@ -381,7 +373,7 @@ interface AppMlflowTraceState {
 
 function attributeString(span: ReadableSpan, name: string): string | undefined {
   const value = span.attributes[name];
-  return typeof value === "string" ? (stringUtils.trimToNull(value) ?? undefined) : undefined;
+  return typeof value === "string" ? (trimToNull(value) ?? undefined) : undefined;
 }
 
 function metadataAttribute(key: string): string {
@@ -391,9 +383,9 @@ function metadataAttribute(key: string): string {
 function modelFromSpan(span: ReadableSpan): string | undefined {
   const direct = attributeString(span, GEN_AI_REQUEST_MODEL_ATTR);
   if (direct) return direct;
-  const metadata = json.parse(attributeString(span, MASTRA_MODEL_METADATA_ATTR));
-  return object.isRecord(metadata) && typeof metadata.modelId === "string"
-    ? (stringUtils.trimToNull(metadata.modelId) ?? undefined)
+  const metadata = parse(attributeString(span, MASTRA_MODEL_METADATA_ATTR));
+  return isRecord(metadata) && typeof metadata.modelId === "string"
+    ? (trimToNull(metadata.modelId) ?? undefined)
     : undefined;
 }
 
@@ -425,13 +417,13 @@ function hrTimeMilliseconds(value: readonly [number, number]): number {
 function previewInput(span: ReadableSpan): string | undefined {
   const raw = attributeString(span, MASTRA_AGENT_INPUT_ATTR);
   if (!raw) return undefined;
-  return (textOnlyChatInput(json.parse(raw)) ?? raw).slice(0, TRACE_IO_LIMIT);
+  return (textOnlyChatInput(parse(raw)) ?? raw).slice(0, TRACE_IO_LIMIT);
 }
 
 function previewOutput(span: ReadableSpan): string | undefined {
   const raw = attributeString(span, MASTRA_AGENT_OUTPUT_ATTR);
   if (!raw) return undefined;
-  const parsed = json.parse(raw);
+  const parsed = parse(raw);
   const text = assistantTextFromJson(parsed) || (typeof parsed === "string" ? parsed : raw);
   return text.slice(0, TRACE_IO_LIMIT);
 }
@@ -510,7 +502,7 @@ export async function registerAppMlflowTraceInfoProcessor(): Promise<boolean> {
   if (appMlflowTraceInfoProcessorRegistered) return true;
   if (!appMlflowTraceInfoConfigured()) return false;
   await initializeAppMlflowTraceInfo();
-  await appkitTelemetry.registerNativeSpanProcessor(new AppMlflowTraceInfoSpanProcessor());
+  await registerNativeSpanProcessor(new AppMlflowTraceInfoSpanProcessor());
   appMlflowTraceInfoProcessorRegistered = true;
   return true;
 }
@@ -580,7 +572,7 @@ class AssistantResponseCollector {
   }
 
   private jsonAnswer(): string {
-    return assistantTextFromJson(json.parse(this.body));
+    return assistantTextFromJson(parse(this.body));
   }
 }
 
@@ -677,7 +669,7 @@ export function chatTurnTelemetryMiddleware(
     parentSpanId: target.span.spanContext().spanId,
   };
   const traceRequestTime = Date.now();
-  if (!environmentUtils.isDatabricksAppEnv()) {
+  if (!isDatabricksAppEnv()) {
     setChatTraceTag(traceState, MLFLOW_LOCAL_TAG, true);
   }
   for (const [name, value] of Object.entries(getRequestTags(req))) {
@@ -752,14 +744,16 @@ export function chatTurnTelemetryMiddleware(
     for (const [name, value] of traceState.tags) {
       target.span.setAttribute(`${MLFLOW_TRACE_TAG_PREFIX}${name}`, value);
     }
-    if (traceState.user) target.span.setAttribute(MLFLOW_USER_ATTR, traceState.user);
+    if (traceState.user) {
+      target.span.setAttribute(USER_TRACE_ATTRIBUTE, traceState.user);
+    }
     context.with(trace.setSpan(context.active(), target.span), () => {
       updateActiveMlflowTrace({
         ...(Object.keys(tags).length > 0 ? { tags } : {}),
         ...(traceState.user ? { user: traceState.user } : {}),
       });
     });
-    if (!environmentUtils.isDatabricksAppEnv()) {
+    if (!isDatabricksAppEnv()) {
       persistAppMlflowTraceInfo({
         traceId: traceState.traceId,
         requestTime: traceRequestTime,

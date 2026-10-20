@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { postgresEnvironmentNames, postgresRoleSchema } from "@dbx-tools/shared-core/options";
+import { postgresEnvironmentNames, postgresRoleSchema } from "@dbx-tools/shared-core";
 
 /** Pool/client options required to set PostgreSQL startup parameters. */
 export interface PostgresConnectionOptions {

@@ -4,13 +4,13 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
+import { toDescription } from "@dbx-tools/shared-core";
 import {
   KpiResearchRequestSchema,
   KpiResearchResultSchema,
   type KpiResearchRequest,
   type KpiResearchResult,
-} from "@dbx-tools/shared-generator/kpi";
+} from "@dbx-tools/shared-generator";
 import type { BrandResearchClient } from "./research.ts";
 import { generateStructured } from "./structured.ts";
 
@@ -28,7 +28,7 @@ export interface ResearchKpisOptions {
 
 /** Build the web query that grounds KPI selection in the requested questions. */
 export function kpiResearchQuery(request: KpiResearchRequest): string {
-  return stringUtils.toDescription(`
+  return toDescription(`
     Research current, standard business KPIs for ${request.company} and the
     purpose "${request.purpose}". The generated demo must answer these
     questions: ${request.queries.join(" | ")}. Prefer authoritative industry,

@@ -3,9 +3,9 @@ import { describe, it } from "node:test";
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
 import type { AgentToolDefinition, ToolkitEntry } from "@databricks/appkit/beta";
 import { createTestPlugin, createTestPluginContext } from "@databricks/appkit/testing";
-import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
-import { log } from "@dbx-tools/shared-core";
-import { TOOL_PROGRESS_PART_TYPE } from "@dbx-tools/shared-mastra/wire";
+import type { AgentToolExecutionContext } from "@dbx-tools/appkit";
+import { logger } from "@dbx-tools/shared-core";
+import { TOOL_PROGRESS_PART_TYPE } from "@dbx-tools/shared-mastra";
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 import type { Tool } from "@mastra/core/tools";
 
@@ -157,7 +157,7 @@ describe("AppKit toolkit adaptation", () => {
         forAgent: () => undefined,
         instanceStorage: () => ({}),
       } as never,
-      log: log.logger("test/toolkit"),
+      log: logger("test/toolkit"),
     });
 
     assert.deepEqual(Object.keys(tools), ["find_record"]);
@@ -227,7 +227,7 @@ describe("AppKit toolkit adaptation", () => {
         forAgent: () => undefined,
         instanceStorage: () => ({}),
       } as never,
-      log: log.logger("test/toolkit"),
+      log: logger("test/toolkit"),
     });
 
     assert.notEqual((tools.save as Tool).requireApproval, true);
@@ -272,7 +272,7 @@ describe("AppKit toolkit adaptation", () => {
         forAgent: () => undefined,
         instanceStorage: () => ({}),
       } as never,
-      log: log.logger("test/toolkit"),
+      log: logger("test/toolkit"),
     });
 
     assert.equal((tools["records.delete"] as Tool).requireApproval, true);

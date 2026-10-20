@@ -1,4 +1,4 @@
-import { Spinner } from "@dbx-tools/ui/react";
+import { Spinner } from "@databricks/appkit-ui/react";
 
 import type { ChatStatus } from "./types.ts";
 

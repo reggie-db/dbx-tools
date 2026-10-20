@@ -13,7 +13,6 @@
 // Delivery is persisted in Lakebase. Each SSE connection receives stored history
 // before live fan-out, so reloads and transient reconnects recover recent messages.
 
-import { hash, json } from "@dbx-tools/shared-core";
 import {
   Badge,
   Button,
@@ -23,10 +22,11 @@ import {
   CardHeader,
   CardTitle,
   Input,
-  JsonBlock,
   ScrollArea,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { json, id, parseRecord, parse } from "@dbx-tools/shared-core";
+import { JsonBlock } from "@dbx-tools/ui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const API = "/api/bus-demo";
@@ -65,7 +65,7 @@ function sessionValue(key: string, create: () => string): string {
 
 /** Metadata must be a JSON object; anything else is a message the user can act on. */
 function parseMetadata(value: string): Record<string, unknown> {
-  const parsed = json.parseRecord(value);
+  const parsed = parseRecord(value);
   if (!parsed) {
     throw new TypeError("Metadata must be a JSON object.");
   }
@@ -80,7 +80,7 @@ function parseMetadata(value: string): Record<string, unknown> {
  */
 function parseBody(value: string): unknown {
   if (!value.trim()) return "";
-  const parsed = json.parse<unknown | typeof INVALID_JSON>(value, INVALID_JSON);
+  const parsed = parse<unknown | typeof INVALID_JSON>(value, INVALID_JSON);
   return parsed === INVALID_JSON ? value : parsed;
 }
 
@@ -90,7 +90,7 @@ function jsonText(value: unknown): string {
 }
 
 const Bus = () => {
-  const viewerId = useMemo(() => sessionValue("dbx-tools-bus-viewer", () => hash.id()), []);
+  const viewerId = useMemo(() => sessionValue("dbx-tools-bus-viewer", () => id()), []);
   const [user, setUser] = useState(() =>
     sessionValue("dbx-tools-bus-user", () => `Viewer ${viewerId.slice(0, 4).toUpperCase()}`),
   );
@@ -122,7 +122,7 @@ const Bus = () => {
     source.onerror = () => setConnection("reconnecting");
     source.addEventListener("ready", () => setConnection("connected"));
     source.onmessage = (event) => {
-      const message = json.parse<BusMessage>(event.data);
+      const message = parse<BusMessage>(event.data);
       if (message) {
         mergeMessages([message]);
       } else {

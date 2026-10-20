@@ -5,8 +5,8 @@
  */
 
 import type { BasePluginConfig } from "@databricks/appkit";
-import { configUtils } from "@dbx-tools/core";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { text, ENV_ONLY, positiveInt } from "@dbx-tools/core";
+import { trimToNull } from "@dbx-tools/shared-core";
 import manifest from "./manifest.json" with { type: "json" };
 import {
   DEFAULT_MAX_SOURCES,
@@ -57,42 +57,31 @@ export const GENERATOR_CONFIG_SCHEMA = manifest.config.schema;
 export function resolveGeneratorConfig(
   config: GeneratorPluginConfig = {},
 ): ResolvedGeneratorConfig {
-  const model =
-    stringUtils.trimToNull(config.model) ??
-    configUtils.text("GENERATOR_MODEL", configUtils.ENV_ONLY);
-  const catalog =
-    stringUtils.trimToNull(config.catalog) ??
-    configUtils.text("GENERATOR_CATALOG", configUtils.ENV_ONLY);
-  const warehouseId =
-    stringUtils.trimToNull(config.warehouseId) ??
-    configUtils.text("DATABRICKS_WAREHOUSE_ID", configUtils.ENV_ONLY);
+  const model = trimToNull(config.model) ?? text("GENERATOR_MODEL", ENV_ONLY);
+  const catalog = trimToNull(config.catalog) ?? text("GENERATOR_CATALOG", ENV_ONLY);
+  const warehouseId = trimToNull(config.warehouseId) ?? text("DATABRICKS_WAREHOUSE_ID", ENV_ONLY);
   return {
     ...(model ? { model } : {}),
     ...(catalog ? { catalog } : {}),
     ...(warehouseId ? { warehouseId } : {}),
     maxSources: Math.min(
-      configUtils.positiveInt(
-        config.maxSources,
-        "GENERATOR_MAX_SOURCES",
-        DEFAULT_MAX_SOURCES,
-        configUtils.ENV_ONLY,
-      ),
+      positiveInt(config.maxSources, "GENERATOR_MAX_SOURCES", DEFAULT_MAX_SOURCES, ENV_ONLY),
       MAX_SOURCES,
     ),
     sourceMaxLength: Math.min(
-      configUtils.positiveInt(
+      positiveInt(
         config.sourceMaxLength,
         "GENERATOR_SOURCE_MAX_LENGTH",
         DEFAULT_SOURCE_MAX_LENGTH,
-        configUtils.ENV_ONLY,
+        ENV_ONLY,
       ),
       MAX_SOURCE_MAX_LENGTH,
     ),
-    timeoutMs: configUtils.positiveInt(
+    timeoutMs: positiveInt(
       config.timeoutMs,
       "GENERATOR_TIMEOUT_MS",
       DEFAULT_GENERATOR_TIMEOUT_MS,
-      configUtils.ENV_ONLY,
+      ENV_ONLY,
     ),
   };
 }

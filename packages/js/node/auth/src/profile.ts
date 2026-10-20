@@ -1,4 +1,4 @@
-import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth/profile";
+import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
 
 import { AuthError } from "./_errors.ts";
 import { listDatabricksProfiles, resolveDatabricksProfile } from "./_profile-config.ts";

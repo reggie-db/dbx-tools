@@ -27,10 +27,14 @@ import {
   ExecutionError,
   getExecutionContext,
 } from "@databricks/appkit";
-import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
-import { invoke, policy, resolve, modelCatalog } from "@dbx-tools/model";
-import { log, object, stringUtils } from "@dbx-tools/shared-core";
-import { openaiChat, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import type { AgentToolExecutionContext } from "@dbx-tools/appkit";
+import { invoke, policy, selection, modelCatalog } from "@dbx-tools/model";
+import { log, isRecord, trimToEmpty } from "@dbx-tools/shared-core";
+import {
+  type ServingEndpointSummary,
+  chatContentParts,
+  chatContentToText,
+} from "@dbx-tools/shared-model";
 import { MODEL_ENV, type ResolvedWebSearchConfig } from "./config.ts";
 import { toCallSettings, webSearchExecuteDefaults } from "./defaults.ts";
 import { supportsWebSearch, webSearchProviderForFamily, webSearchToolSpec } from "./provider.ts";
@@ -46,7 +50,7 @@ import { runScrapeSearch } from "./scrape.ts";
 type WorkspaceClientLike = modelCatalog.WorkspaceClientLike & invoke.AuthenticatingClientLike;
 type ProgressWriter = NonNullable<AgentToolExecutionContext["writeProgress"]>;
 const logger = log.logger("web-search/search");
-const { lookupModels } = resolve;
+const { lookupModels } = selection;
 const { listServingEndpoints } = modelCatalog;
 
 /**
@@ -229,8 +233,7 @@ async function postServing(
       });
       if (!response.ok) {
         const responseBody = await response.text();
-        const model =
-          object.isRecord(body) && typeof body.model === "string" ? body.model : undefined;
+        const model = isRecord(body) && typeof body.model === "string" ? body.model : undefined;
         const crossRegionDisabled =
           response.status === 400 &&
           model &&
@@ -267,7 +270,7 @@ async function postServing(
     signal,
     false,
   );
-  return object.isRecord(payload) ? payload : {};
+  return isRecord(payload) ? payload : {};
 }
 
 /** Consume an OpenAI Responses SSE stream and retain its completed response. */
@@ -287,9 +290,9 @@ async function readStreamingResponse(
       .join("\n");
     if (!data || data === "[DONE]") return;
     const event = JSON.parse(data) as unknown;
-    if (!object.isRecord(event) || typeof event.type !== "string") return;
+    if (!isRecord(event) || typeof event.type !== "string") return;
     await emitWebSearchProgress(event, writeProgress);
-    if (event.type === "response.completed" && object.isRecord(event.response)) {
+    if (event.type === "response.completed" && isRecord(event.response)) {
       completed = event.response;
     }
     if (event.type === "response.failed") {
@@ -321,8 +324,8 @@ async function emitWebSearchProgress(
   event: Record<string, unknown>,
   writeProgress: ProgressWriter,
 ): Promise<void> {
-  if (event.type !== "response.output_item.done" || !object.isRecord(event.item)) return;
-  const action = object.isRecord(event.item.action) ? event.item.action : undefined;
+  if (event.type !== "response.output_item.done" || !isRecord(event.item)) return;
+  const action = isRecord(event.item.action) ? event.item.action : undefined;
   if (!action || action.type !== "search") return;
   const query = typeof action.query === "string" ? action.query : undefined;
   const queries = Array.isArray(action.queries)
@@ -364,25 +367,25 @@ function fromResponsesPayload(payload: Record<string, unknown>): {
   const citations: WebSearchCitation[] = [];
   const seen = new Set<string>();
   for (const item of output) {
-    if (!object.isRecord(item)) continue;
-    const parts = openaiChat.chatContentParts(item.content);
+    if (!isRecord(item)) continue;
+    const parts = chatContentParts(item.content);
     if (!parts) continue;
     for (const part of parts) {
-      if (!object.isRecord(part)) continue;
-      const text = stringUtils.trimToEmpty(part.text);
+      if (!isRecord(part)) continue;
+      const text = trimToEmpty(part.text);
       if (text) texts.push(text);
       const annotations = Array.isArray(part.annotations) ? part.annotations : [];
       for (const annotation of annotations) {
-        if (!object.isRecord(annotation)) continue;
-        const url = stringUtils.trimToEmpty(annotation.url);
+        if (!isRecord(annotation)) continue;
+        const url = trimToEmpty(annotation.url);
         if (!url || seen.has(url)) continue;
         seen.add(url);
-        const title = stringUtils.trimToEmpty(annotation.title);
+        const title = trimToEmpty(annotation.title);
         citations.push({ url, ...(title ? { title } : {}) });
       }
     }
   }
-  const answer = stringUtils.trimToEmpty(payload.output_text) || texts.join("\n").trim();
+  const answer = trimToEmpty(payload.output_text) || texts.join("\n").trim();
   return { answer, citations };
 }
 
@@ -398,17 +401,17 @@ function fromChatPayload(payload: Record<string, unknown>): {
 } {
   const choices = Array.isArray(payload.choices) ? payload.choices : [];
   const first = choices[0];
-  const message = object.isRecord(first) && object.isRecord(first.message) ? first.message : {};
-  const answer = openaiChat.chatContentToText(message.content);
+  const message = isRecord(first) && isRecord(first.message) ? first.message : {};
+  const answer = chatContentToText(message.content);
   const citations: WebSearchCitation[] = [];
   // Best-effort grounding extraction: walk any nested object for {uri|url,title}.
   const seen = new Set<string>();
   const visit = (v: unknown, depth: number): void => {
-    if (depth > MAX_GROUNDING_WALK_DEPTH || !object.isRecord(v)) return;
-    const url = stringUtils.trimToEmpty(v.url) || stringUtils.trimToEmpty(v.uri);
+    if (depth > MAX_GROUNDING_WALK_DEPTH || !isRecord(v)) return;
+    const url = trimToEmpty(v.url) || trimToEmpty(v.uri);
     if (url && !seen.has(url)) {
       seen.add(url);
-      const title = stringUtils.trimToEmpty(v.title);
+      const title = trimToEmpty(v.title);
       citations.push({ url, ...(title ? { title } : {}) });
     }
     for (const val of Object.values(v)) {

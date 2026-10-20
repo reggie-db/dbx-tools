@@ -10,13 +10,13 @@
  */
 
 import {
-  client as authClient,
-  profile as authProfile,
   type AuthClient,
   type DatabricksAuthOptions,
+  createAuthClient,
+  listProfiles,
 } from "@dbx-tools/auth";
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
-import { log, object, stringUtils } from "@dbx-tools/shared-core";
+import { log, isRecord, trimToUndefined } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import type { ParsedAddress } from "./address.ts";
@@ -87,9 +87,9 @@ export interface LakebaseClientDependencies {
 
 const DEFAULT_DEPENDENCIES: LakebaseClientDependencies = {
   createClient: async (options) => {
-    const auth = await authClient.createAuthClient(options);
+    const auth = await createAuthClient(options);
     return {
-      profiles: () => authProfile.listProfiles(),
+      profiles: () => listProfiles(),
       request: (path, requestOptions) => request(auth, path, requestOptions),
     };
   },
@@ -254,7 +254,7 @@ export class LakebaseClient {
       const query = pageToken ? `${path}?page_token=${encodeURIComponent(pageToken)}` : path;
       const response = record(await client.request(query));
       const page = response[field];
-      if (Array.isArray(page)) values.push(...page.filter(object.isRecord));
+      if (Array.isArray(page)) values.push(...page.filter(isRecord));
       pageToken = text(response.next_page_token);
     } while (pageToken);
     return values;
@@ -450,18 +450,18 @@ function current<T>(entry: Timed<T> | undefined): T | undefined {
 }
 
 function record(value: unknown): Record<string, unknown> {
-  if (!object.isRecord(value)) throw new Error("Databricks API response is not an object");
+  if (!isRecord(value)) throw new Error("Databricks API response is not an object");
   return value;
 }
 
 function at(value: object, ...path: string[]): unknown {
   let current: unknown = value;
-  for (const key of path) current = object.isRecord(current) ? current[key] : undefined;
+  for (const key of path) current = isRecord(current) ? current[key] : undefined;
   return current;
 }
 
 function text(value: unknown): string | undefined {
-  return stringUtils.trimToUndefined(value);
+  return trimToUndefined(value);
 }
 
 function number(value: unknown): number | undefined {

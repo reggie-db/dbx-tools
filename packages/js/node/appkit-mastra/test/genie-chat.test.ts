@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { WorkspaceClient } from "@databricks/appkit";
 import type { GenieMessage } from "@dbx-tools/shared-genie";
-import { wire } from "@dbx-tools/shared-mastra";
+import { GENIE_PROGRESS_PART_TYPE } from "@dbx-tools/shared-mastra";
 import type { MastraMemory } from "@mastra/core/memory";
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 
@@ -118,7 +118,7 @@ describe("genieMessageToUiMessages", () => {
     expect(tool.type).toBe("tool-ask_genie");
     expect(tool.state).toBe("output-available");
     expect(tool.input).toEqual({ question: "Top stores?" });
-    expect(assistant?.parts.some((part) => part.type === wire.GENIE_PROGRESS_PART_TYPE)).toBe(true);
+    expect(assistant?.parts.some((part) => part.type === GENIE_PROGRESS_PART_TYPE)).toBe(true);
     expect(assistant?.parts.at(-1)).toEqual({
       type: "text",
       text: "Store 7 leads.",

@@ -9,8 +9,8 @@
 
 import * as databricks from "@dbx-tools/auth";
 import { addArgs, parseArgs } from "@dbx-tools/cli-args";
-import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth/client";
-import { Command, CommanderError } from "commander";
+import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth";
+import { Command } from "commander";
 
 import {
   AuthCliOptionsSchema,
@@ -171,5 +171,3 @@ export function buildProgram(
 export async function runCli(argv: string[]): Promise<void> {
   await buildProgram().parseAsync(argv);
 }
-
-export { CommanderError };

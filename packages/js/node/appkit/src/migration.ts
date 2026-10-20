@@ -1,6 +1,12 @@
 /** Shared classification and logging policy for soft database migrations. */
 
-import { errorUtils, log, type Logger } from "@dbx-tools/shared-core";
+import {
+  type Logger,
+  errorContext,
+  errorMessage,
+  toError,
+  isLevelEnabled,
+} from "@dbx-tools/shared-core";
 
 const loggedOwnershipErrors = new Set<string>();
 
@@ -15,7 +21,7 @@ export interface OwnershipMigrationErrorOptions {
 
 /** Whether a migration failed because the current role does not own an object. */
 export function isOwnershipMigrationError(cause: unknown): boolean {
-  return errorUtils.errorContext(cause).hasMessage("must be owner");
+  return errorContext(cause).hasMessage("must be owner");
 }
 
 /**
@@ -27,12 +33,12 @@ export function handleOwnershipMigrationError(
   options: OwnershipMigrationErrorOptions,
 ): boolean {
   if (!isOwnershipMigrationError(cause)) return false;
-  const message = errorUtils.errorMessage(cause);
+  const message = errorMessage(cause);
   const key = `${options.scope}\0${message}`;
   if (loggedOwnershipErrors.has(key)) return true;
   loggedOwnershipErrors.add(key);
-  const error = errorUtils.toError(cause);
-  if (log.isLevelEnabled("debug")) options.logger.error(options.event, { error });
+  const error = toError(cause);
+  if (isLevelEnabled("debug")) options.logger.error(options.event, { error });
   else options.logger.warn(options.event, { error, ...options.context });
   return true;
 }

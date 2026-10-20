@@ -13,19 +13,19 @@
  * @module
  */
 
-import { hash, object } from "@dbx-tools/shared-core";
+import { fnvHash, toDate } from "@dbx-tools/shared-core";
 import {
   BaseFileSystem,
-  baseFS,
   FileSystemError,
-  posixPath,
   type CopyOptions,
   type FileEntry,
   type FileStat,
   type WriteFileOptions,
+  mapFileSystemError,
+  isHomeRelativePath,
+  basename,
 } from "@dbx-tools/shared-fs";
 import {
-  isHomeRelativePath,
   normalizeDatabricksRoot,
   resolveDatabricksFilesBackend,
   resolveDatabricksRoot,
@@ -121,7 +121,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
   constructor(options: DatabricksFileSystemOptions) {
     const root = normalizeDatabricksRoot(options.root, { userName: options.userName });
     super({
-      id: options.id ?? `databricks-${hash.fnvHash(root)}`,
+      id: options.id ?? `databricks-${fnvHash(root)}`,
       backend: "databricks",
       root,
       readOnly: options.readOnly,
@@ -174,7 +174,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
         },
       });
     } catch (error) {
-      throw baseFS.mapFileSystemError(error, resolvedPath);
+      throw mapFileSystemError(error, resolvedPath);
     }
   }
 
@@ -206,7 +206,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
           }),
       });
     } catch (error) {
-      throw baseFS.mapFileSystemError(error, resolvedPath);
+      throw mapFileSystemError(error, resolvedPath);
     }
   }
 
@@ -306,13 +306,13 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     return this.dispatch<FileEntry[]>(resolvedPath, {
       dbfs: (client) =>
         collect(client.dbfs.list({ path: resolvedPath }), (info) => ({
-          name: posixPath.basename(info.path ?? ""),
+          name: basename(info.path ?? ""),
           type: info.is_dir ? "directory" : "file",
           size: info.file_size,
         })),
       workspace: (client) =>
         collect(client.workspace.list({ path: resolvedPath }), (info) => ({
-          name: posixPath.basename(info.path ?? ""),
+          name: basename(info.path ?? ""),
           type: info.object_type === "DIRECTORY" ? "directory" : "file",
           metadata: {
             createdAt: info.created_at,
@@ -322,7 +322,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
         })),
       volumes: (client) =>
         collect(client.files.listDirectoryContents({ directory_path: resolvedPath }), (entry) => ({
-          name: entry.name ?? posixPath.basename(entry.path ?? ""),
+          name: entry.name ?? basename(entry.path ?? ""),
           type: entry.is_directory ? "directory" : "file",
           size: entry.file_size,
         })),
@@ -330,13 +330,13 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
   }
 
   protected override async statAt(resolvedPath: string): Promise<Omit<FileStat, "path">> {
-    const fallbackName = posixPath.basename(resolvedPath) || posixPath.basename(this.root);
+    const fallbackName = basename(resolvedPath) || basename(this.root);
     return this.dispatch<Omit<FileStat, "path">>(resolvedPath, {
       dbfs: async (client) => {
         const info = await client.dbfs.getStatus({ path: resolvedPath });
-        const modified = object.toDate(info.modification_time);
+        const modified = toDate(info.modification_time);
         return {
-          name: posixPath.basename(info.path ?? resolvedPath) || fallbackName,
+          name: basename(info.path ?? resolvedPath) || fallbackName,
           type: info.is_dir ? "directory" : "file",
           size: info.file_size,
           createdAt: modified,
@@ -346,10 +346,10 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
       workspace: async (client) => {
         const info = await client.workspace.getStatus({ path: resolvedPath });
         return {
-          name: posixPath.basename(info.path ?? resolvedPath) || fallbackName,
+          name: basename(info.path ?? resolvedPath) || fallbackName,
           type: info.object_type === "DIRECTORY" ? "directory" : "file",
-          createdAt: object.toDate(info.created_at),
-          modifiedAt: object.toDate(info.modified_at),
+          createdAt: toDate(info.created_at),
+          modifiedAt: toDate(info.modified_at),
         };
       },
       volumes: (client) => this.statVolumePath(client, resolvedPath, fallbackName),
@@ -416,7 +416,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
   ): Promise<Omit<FileStat, "path">> {
     try {
       const metadata = await client.files.getMetadata({ file_path: absolutePath });
-      const modified = object.toDate(metadata["last-modified"]);
+      const modified = toDate(metadata["last-modified"]);
       return {
         name: fallbackName,
         type: "file",
@@ -428,7 +428,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     } catch (fileErr) {
       // A directory has no file metadata, and an unreadable one reports as
       // missing / denied - both are worth a directory probe before failing.
-      const code = baseFS.mapFileSystemError(fileErr, absolutePath).code;
+      const code = mapFileSystemError(fileErr, absolutePath).code;
       if (code !== "NOT_FOUND" && code !== "PERMISSION_DENIED") throw fileErr;
       await client.files.getDirectoryMetadata({ directory_path: absolutePath });
       return { name: fallbackName, type: "directory" };

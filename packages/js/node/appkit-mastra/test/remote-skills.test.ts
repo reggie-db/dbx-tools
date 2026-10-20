@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { osPath } from "@dbx-tools/fs";
+import { clearOsPathsCache } from "@dbx-tools/fs";
 
 import {
   AITOOLS_REFRESH_TTL_MS,
@@ -202,13 +202,13 @@ describe("remote skill caching", () => {
     temp = mkdtempSync(join(tmpdir(), "remote-skills-cache-"));
     previousTmpdir = process.env.TMPDIR;
     process.env.TMPDIR = temp;
-    osPath.clearOsPathsCache();
+    clearOsPathsCache();
   });
 
   after(async () => {
     if (previousTmpdir === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = previousTmpdir;
-    osPath.clearOsPathsCache();
+    clearOsPathsCache();
     rmSync(temp, { recursive: true, force: true });
     await new Promise<void>((resolve, reject) =>
       server.close((err) => (err ? reject(err) : resolve())),

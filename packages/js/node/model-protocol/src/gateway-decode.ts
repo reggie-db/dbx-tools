@@ -4,7 +4,7 @@
  * @module
  */
 
-import { object } from "@dbx-tools/shared-core";
+import { isRecord } from "@dbx-tools/shared-core";
 import type { ClientProtocol } from "@dbx-tools/shared-model-gateway";
 import { dynamicTool, jsonSchema, type ModelMessage, type ToolSet } from "ai";
 
@@ -249,12 +249,12 @@ function messageRole(value: unknown): "system" | "user" | "assistant" | undefine
 
 function arrayRecords(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value)
-    ? value.filter((item): item is Record<string, unknown> => object.isRecord(item))
+    ? value.filter((item): item is Record<string, unknown> => isRecord(item))
     : [];
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return object.isRecord(value) ? value : {};
+  return isRecord(value) ? value : {};
 }
 
 function stringValue(value: unknown): string | undefined {

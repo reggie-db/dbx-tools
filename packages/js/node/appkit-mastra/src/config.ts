@@ -15,9 +15,9 @@
  */
 
 import { getExecutionContext, type BasePluginConfig, type ConfigSchema } from "@databricks/appkit";
-import { appkit } from "@dbx-tools/appkit";
+import { type ExecutionContextLike, type IdentityMode, IDENTITY_MODES } from "@dbx-tools/appkit";
 import type { BrandContext } from "@dbx-tools/shared-core";
-import type { FeedbackModeOption } from "@dbx-tools/shared-mastra/feedback";
+import type { FeedbackModeOption } from "@dbx-tools/shared-mastra";
 import type { AgentConfig } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
@@ -31,7 +31,6 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
 import type { AnyMastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
-import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
 import type { LocalSkillMount, RemoteSkillsOption } from "./remote-skills.ts";
 
 /**
@@ -101,14 +100,14 @@ export const TRACE_REQUEST_CONTEXT_KEYS: readonly string[] = [
 /** AppKit execution context plus the canonical user id. */
 export interface User {
   id: string;
-  executionContext: appkit.ExecutionContextLike;
+  executionContext: ExecutionContextLike;
 }
 
 /**
  * Canonical identity for an AppKit execution context: the OBO user id on a
  * user-scoped call, the service principal id otherwise.
  */
-export function executionContextUserId(context: appkit.ExecutionContextLike): string {
+export function executionContextUserId(context: ExecutionContextLike): string {
   return "userId" in context ? context.userId : context.serviceUserId;
 }
 
@@ -128,7 +127,7 @@ export function executionContextUserId(context: appkit.ExecutionContextLike): st
  * renders as an expired chart.
  */
 export function attributedUserId(
-  executionContext: appkit.ExecutionContextLike,
+  executionContext: ExecutionContextLike,
   forwardedUserId?: string,
 ): string {
   if ("isUserContext" in executionContext) return executionContextUserId(executionContext);
@@ -640,7 +639,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * mastra({ genieIdentity: "auto", genieSpaces: { default: spaceId } });
    * ```
    */
-  genieIdentity?: MastraIdentityMode;
+  genieIdentity?: IdentityMode;
   /**
    * Optional brand context applied to charts produced by the built-in
    * `render_data` / `prepare_chart` tools. When set, the chart planner's

@@ -38,7 +38,7 @@ import {
   type Worker,
   type WorkerOptions,
 } from "node:worker_threads";
-import { errorUtils, hash, object } from "@dbx-tools/shared-core";
+import { toError, id, toOneOrMany, toStableKey, isRecord } from "@dbx-tools/shared-core";
 
 /**
  * `workerData` slot carrying the coordinator port into a worker, and the
@@ -242,7 +242,7 @@ class LockClient {
     if (this.closed) {
       throw new Error("Process lock port is closed");
     }
-    const requestId = hash.id();
+    const requestId = id();
     this.retain();
     try {
       await new Promise<void>((resolve, reject) => {
@@ -251,7 +251,7 @@ class LockClient {
           this.port.postMessage({ type: "acquire", requestId, key } satisfies LockRequest);
         } catch (cause) {
           this.pending.delete(requestId);
-          reject(errorUtils.toError(cause));
+          reject(toError(cause));
         }
       });
     } catch (cause) {
@@ -330,9 +330,8 @@ export function withProcessLock<T>(key: unknown, fn: () => T | Promise<T>): Prom
 
 /** Canonical string identity for a lock key (see `object.toStableKey`). */
 function lockKey(key: unknown): string {
-  return object
-    .toOneOrMany(key)
-    .map((part) => object.toStableKey(part))
+  return toOneOrMany(key)
+    .map((part) => toStableKey(part))
     .join("\u0000");
 }
 
@@ -348,7 +347,7 @@ function lockKey(key: unknown): string {
  */
 export function processLockWorkerOptions(options: WorkerOptions = {}): WorkerOptions {
   const port = createCoordinatorPort("processLockWorkerOptions");
-  const existing = object.isRecord(options.workerData) ? options.workerData : {};
+  const existing = isRecord(options.workerData) ? options.workerData : {};
   return {
     ...options,
     workerData: { ...existing, [LOCK_PORT_KEY]: port },
@@ -404,7 +403,7 @@ export function processLockAttached(): Promise<void> {
   }
   return new Promise<void>((resolve) => {
     const onMessage = (message: unknown): void => {
-      if (!object.isRecord(message) || message.type !== ATTACH_MESSAGE_TYPE) return;
+      if (!isRecord(message) || message.type !== ATTACH_MESSAGE_TYPE) return;
       port.off("message", onMessage);
       client = new LockClient((message as unknown as AttachMessage).port);
       resolve();

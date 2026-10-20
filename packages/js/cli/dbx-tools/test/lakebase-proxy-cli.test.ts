@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
-import { serviceTrayIcon } from "@dbx-tools/cli-service/icon";
-import { json } from "@dbx-tools/shared-core";
+import { serviceTrayIcon } from "@dbx-tools/cli-service";
+import { parseRecord } from "@dbx-tools/shared-core";
 import { buildProgram, lakebaseProxyServiceDefinition } from "../src/lakebase-proxy/cli.ts";
 
-const version = json.parseRecord(
+const version = parseRecord(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 )?.version;
 

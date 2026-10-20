@@ -5,16 +5,16 @@
  */
 
 import { ExecutionError, type WorkspaceClient } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { asyncUtils } from "@dbx-tools/shared-core";
-import { MaterializedGeneratorDataSchema } from "@dbx-tools/shared-generator/workflow";
+import { toContext } from "@dbx-tools/appkit";
+import { poll } from "@dbx-tools/shared-core";
+import { MaterializedGeneratorDataSchema } from "@dbx-tools/shared-generator";
 import type {
   GeneratedColumn,
   GeneratedMetric,
   GeneratedSchema,
   GeneratorPlan,
   MaterializedGeneratorData,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 import { resolveGeneratorIdentity } from "./namespace.ts";
 
 const TERMINAL_STATEMENT_STATES = new Set(["SUCCEEDED", "FAILED", "CANCELED", "CLOSED"]);
@@ -87,7 +87,7 @@ export async function executeGeneratorStatement(
   location: Pick<GeneratedSchema, "catalog" | "schema">,
   signal?: AbortSignal,
 ): Promise<StatementResponse> {
-  const context = signal ? databricks.toContext(signal) : undefined;
+  const context = signal ? toContext(signal) : undefined;
   let response = await client.statementExecution.executeStatement(
     {
       warehouse_id: warehouseId,
@@ -102,11 +102,11 @@ export async function executeGeneratorStatement(
   if (!TERMINAL_STATEMENT_STATES.has(response.status?.state ?? "")) {
     const statementId = response.statement_id;
     if (!statementId) throw new ExecutionError("Statement execution returned no statement id");
-    for await (const polled of asyncUtils.poll<StatementResponse>(
+    for await (const polled of poll<StatementResponse>(
       ({ signal: pollSignal }) =>
         client.statementExecution.getStatement(
           { statement_id: statementId },
-          databricks.toContext(pollSignal),
+          toContext(pollSignal),
         ),
       {
         intervalMs: 1_000,

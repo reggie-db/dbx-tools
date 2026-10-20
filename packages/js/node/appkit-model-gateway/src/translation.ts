@@ -6,16 +6,16 @@
 
 import { getExecutionContext } from "@databricks/appkit";
 import { invoke } from "@dbx-tools/model";
-import { decodeGatewayRequest } from "@dbx-tools/model-protocol/gateway-decode";
 import {
+  decodeGatewayRequest,
   encodeGatewayResponse,
   encodeGatewayStream,
-} from "@dbx-tools/model-protocol/gateway-encode";
+} from "@dbx-tools/model-protocol";
 import {
   createDatabricksLanguageModel,
   type DatabricksLanguageModelProtocol,
-} from "@dbx-tools/model-protocol/provider";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+} from "@dbx-tools/model-protocol";
+import { log, toError } from "@dbx-tools/shared-core";
 import type { GatewayRoute } from "@dbx-tools/shared-model-gateway";
 import { streamText, type LanguageModel, type ToolSet } from "ai";
 
@@ -48,7 +48,7 @@ export async function translateGatewayRequest(
     abortSignal: signal,
     onError: ({ error }) => {
       logger.error("stream failed", {
-        error: errorUtils.toError(error),
+        error: toError(error),
         model: route.target.id,
       });
     },

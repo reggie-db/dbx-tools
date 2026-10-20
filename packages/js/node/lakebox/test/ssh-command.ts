@@ -1,5 +1,5 @@
 import type { LakeboxCommandResult } from "@dbx-tools/shared-lakebox";
-import { SshCommand } from "../src/session.ts";
+import { SshCommand } from "../src/ssh.ts";
 
 export function completedSshCommand(
   command: string,

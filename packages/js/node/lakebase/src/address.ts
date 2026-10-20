@@ -8,7 +8,7 @@
  * @module
  */
 
-import * as object from "@dbx-tools/shared-core/object";
+import { toNumber } from "@dbx-tools/shared-core";
 
 /** Supported PostgreSQL SSL mode values. */
 export const SSL_MODES = ["require", "disable", "prefer"] as const;
@@ -104,7 +104,7 @@ function parseUri(value: string): ParsedAddress {
   const target = decode(url.pathname.replace(/^\//, ""));
   const result = target.startsWith("projects/") ? parseResourcePath(target) : {};
   if (url.hostname) result.host = url.hostname;
-  const port = object.toNumber(url.port);
+  const port = toNumber(url.port);
   if (port !== undefined) result.port = port;
   if (url.username) result.user = decode(url.username);
   if (target && !result.project) result.database = target;

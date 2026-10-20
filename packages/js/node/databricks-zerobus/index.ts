@@ -5,3 +5,4 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/databricks-zerobus";
 export const PACKAGE_VERSION = "0.9.154";
 export * as zerobus from "./src/zerobus.ts";
+export { createSdk, createStream } from "./src/zerobus.ts";

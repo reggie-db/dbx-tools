@@ -1,14 +1,14 @@
 import {
-  AUTH_BASE_PATH,
   beginPasskeyEnrollment,
   beginPasskeySignIn,
   getAuthStatus,
-  passkeyDisplayName,
   passkeysAvailable,
   requestEmailOtp,
   type PasskeyOperation,
   verifyEmailOtp,
-} from "@dbx-tools/shared-auth/browser";
+  browser,
+  AUTH_BASE_PATH,
+} from "@dbx-tools/shared-auth";
 
 const emailForm = document.querySelector<HTMLFormElement>("#email-form")!;
 const codeForm = document.querySelector<HTMLFormElement>("#code-form")!;
@@ -74,7 +74,7 @@ async function createPasskeyAfterSignIn(): Promise<void> {
   if (!passkeysEnabled || !createPasskey.checked) return;
   say("Creating a passkey.");
   try {
-    const operation = beginPasskeyEnrollment(passkeyDisplayName(passkeyNamePrefix));
+    const operation = beginPasskeyEnrollment(browser.passkeyDisplayName(passkeyNamePrefix));
     passkeyOperation = operation;
     await operation.result;
     if (passkeyOperation === operation) passkeyOperation = undefined;

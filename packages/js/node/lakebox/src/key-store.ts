@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { fileLock } from "@dbx-tools/core";
+import { withFileLock } from "@dbx-tools/core";
 import ssh2 from "ssh2";
 import type { LakeboxClient } from "./rest.ts";
 
@@ -103,7 +103,7 @@ export class SshKeyStore {
     const stored = await readStoredKey(privatePath, publicPath);
     if (stored) return stored;
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    return fileLock.withFileLock(["lakebox-ssh-key", privatePath], async () => {
+    return withFileLock(["lakebox-ssh-key", privatePath], async () => {
       const rechecked = await readStoredKey(privatePath, publicPath);
       if (rechecked) return rechecked;
 

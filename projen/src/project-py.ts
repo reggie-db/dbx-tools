@@ -1,8 +1,8 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
 import { existsSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
+import { projectUtils } from "@dbx-tools/core";
+import { type OneOrMany, toSlug, dedent } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, github, javascript, python } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { header, PYTHON_GENERATED_PACKAGE } from "./generated.ts";
@@ -350,8 +350,8 @@ export class DBXToolsPythonWorkspace extends Component {
   constructor(project: javascript.NodeProject, options: DBXToolsPythonWorkspaceOptions) {
     super(project);
     const scope = isDBXToolsJavaScriptProject()(project)
-      ? stringUtils.toSlug(project.scope)
-      : stringUtils.toSlug(project.name).replace(/-root$/, "");
+      ? toSlug(project.scope)
+      : toSlug(project.name).replace(/-root$/, "");
     const repositoryUrl =
       options.repository?.url ??
       projectRepositoryUrl(project) ??
@@ -379,7 +379,7 @@ export class DBXToolsPythonWorkspace extends Component {
         directory,
         description: `${scope} ${directory} Python package.`,
         ...pkg,
-        name: pkg?.name ?? `${scope}-${stringUtils.toSlug(directory)}`,
+        name: pkg?.name ?? `${scope}-${toSlug(directory)}`,
         module: pkg?.module ?? pythonModuleName(scope, directory),
       };
     });
@@ -802,7 +802,7 @@ export class DBXToolsPythonWorkspace extends Component {
       marker: true,
       readonly: true,
       // prettier-ignore
-      lines: stringUtils.dedent(
+      lines: dedent(
         // ============================================================================
         /*js*/`
           #!/usr/bin/env bun

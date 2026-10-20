@@ -16,8 +16,8 @@
  * is thin glue.
  */
 import { isAbsolute, resolve } from "node:path";
-import { watch as pathWatch } from "@dbx-tools/path";
-import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
+import { watchFiles } from "@dbx-tools/path";
+import { log, sleep, toError } from "@dbx-tools/shared-core";
 import { isGeneratedFile, recordedRoots, repoRoot } from "./packages.ts";
 import { withWorkspaceMutationLock } from "./workspace-lock.ts";
 
@@ -49,9 +49,7 @@ const CLOSE_GRACE_MS = 2_000;
 const FATAL_WATCH_ERROR_CODES = new Set(["EMFILE", "ENFILE", "ENOSPC"]);
 
 /** node-path's built-in ignore-group toggles (`{ dot, temp, test, lock, defaults }`). */
-export type IgnoreGroupOptions = NonNullable<
-  Parameters<typeof pathWatch.watchFiles>[1]
->["ignoreOptions"];
+export type IgnoreGroupOptions = NonNullable<Parameters<typeof watchFiles>[1]>["ignoreOptions"];
 
 /** The package roots (absolute), where every watchable source file lives. */
 export function watchRoots(): string[] {
@@ -119,7 +117,7 @@ export async function watchLoop(
         });
       }
     } catch (err) {
-      logger.error(`${tag} cycle failed`, { error: errorUtils.toError(err) });
+      logger.error(`${tag} cycle failed`, { error: toError(err) });
     } finally {
       running = false;
       if (rerun) {
@@ -129,7 +127,7 @@ export async function watchLoop(
     }
   }
 
-  const watcher = await pathWatch.watchFiles(paths, {
+  const watcher = await watchFiles(paths, {
     cwd: repoRoot,
     ignoreInitial: true,
     ignore: (path) => ignoredPath(path),
@@ -146,7 +144,7 @@ export async function watchLoop(
     if (closing) return;
     closing = true;
     clearTimeout(timer);
-    await Promise.race([watcher.close().catch(() => {}), asyncUtils.sleep(CLOSE_GRACE_MS)]);
+    await Promise.race([watcher.close().catch(() => {}), sleep(CLOSE_GRACE_MS)]);
     process.exit(code);
   }
 
@@ -156,7 +154,7 @@ export async function watchLoop(
     timer = setTimeout(() => void flush(), DEBOUNCE_MS);
   });
   watcher.on("error", (err) => {
-    logger.error(`${tag} watcher error`, { error: errorUtils.toError(err) });
+    logger.error(`${tag} watcher error`, { error: toError(err) });
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code === undefined || !FATAL_WATCH_ERROR_CODES.has(code)) return;
     logger.error(`${tag}: ${code} leaves the watcher blind - exiting so it is restarted`);

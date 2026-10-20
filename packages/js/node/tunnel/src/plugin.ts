@@ -24,18 +24,21 @@ import {
   type ResourceRequirement,
   ResourceType,
 } from "@databricks/appkit";
-import { brandContext, pluginRegistry } from "@dbx-tools/appkit";
+import { getBrandContext, instance } from "@dbx-tools/appkit";
 import {
-  auth as passwordlessAuth,
-  authStorage,
   type AuthorizeIdentity,
   type AuthEmailOptions,
   type AuthStorageMode,
   type PasswordlessAuthRuntime,
+  normalizeLogoutRedirectPath,
+  createPasswordlessAuth,
+  AuthStorageConfigSchema,
+  resolveAuthStorageConfig,
+  createAuthStorage,
 } from "@dbx-tools/auth-gate";
-import { configUtils, projectUtils } from "@dbx-tools/core";
+import { configUtils, projectUtils, string, positiveInt, boolean } from "@dbx-tools/core";
 import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
-import { brandUtils, log, stringUtils } from "@dbx-tools/shared-core";
+import { log, defaultBrandContext, parseList, trimToNull } from "@dbx-tools/shared-core";
 import type { RequestHandler } from "express";
 import { z } from "zod";
 import { TUNNEL_CONFIG } from "./_config.ts";
@@ -95,7 +98,7 @@ const textOrList = (description: string) =>
     .optional()
     .describe(description);
 
-export const AuthGateConfigSchema = authStorage.AuthStorageConfigSchema.extend({
+export const AuthGateConfigSchema = AuthStorageConfigSchema.extend({
   allow: textOrList("Email allow-list patterns."),
   subject: text("Verification email subject."),
   brandName: text("Verification email brand name."),
@@ -178,7 +181,7 @@ const DEFAULTS = {
   // same identity the rest of the app presents. A host with its own
   // `branding/brand.yaml` overrides it by passing `brandName`; the shared default
   // is the fallback when nothing is configured.
-  brandName: brandUtils.defaultBrandContext.name,
+  brandName: defaultBrandContext.name,
   message: "Your verification code is:",
   // 30 days, the same window the cache-backed signing key is stored for.
   sessionTtlSeconds: KEY_TTL_SECONDS,
@@ -189,48 +192,38 @@ const DEFAULTS = {
 
 /** Merge {@link AuthGateConfig} over env over defaults into a resolved config. */
 export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateConfig {
-  const storage = authStorage.resolveAuthStorageConfig({
+  const storage = resolveAuthStorageConfig({
     storage:
       config.storage ??
       (configUtils.text("TUNNEL_AUTH_STORAGE", TUNNEL_CONFIG) as AuthStorageMode | undefined),
     sqlitePath: config.sqlitePath ?? configUtils.text("TUNNEL_AUTH_SQLITE_PATH", TUNNEL_CONFIG),
   });
-  const publicDomain = configUtils.string(
-    config.publicDomain,
-    "TUNNEL_PUBLIC_DOMAIN",
-    TUNNEL_CONFIG,
-  );
+  const publicDomain = string(config.publicDomain, "TUNNEL_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   const frpPublicDomain = configUtils.text("TUNNEL_FRP_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   const brandName =
-    configUtils.string(config.brandName, "TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG) ??
-    DEFAULTS.brandName;
+    string(config.brandName, "TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG) ?? DEFAULTS.brandName;
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
     // TUNNEL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
     // Hence `parseList` on each rather than `config.list`, which stops at the
     // first source that yields anything.
     allow: [
-      ...stringUtils.parseList(config.allow),
-      ...stringUtils.parseList(configUtils.text("TUNNEL_AUTH_ALLOW", TUNNEL_CONFIG)),
+      ...parseList(config.allow),
+      ...parseList(configUtils.text("TUNNEL_AUTH_ALLOW", TUNNEL_CONFIG)),
     ],
-    subject:
-      configUtils.string(config.subject, "TUNNEL_AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
+    subject: string(config.subject, "TUNNEL_AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
     brandName,
     passkeyNamePrefix:
-      configUtils.string(
-        config.passkeyNamePrefix,
-        "TUNNEL_AUTH_PASSKEY_NAME_PREFIX",
-        TUNNEL_CONFIG,
-      ) ?? projectUtils.name(),
-    message:
-      configUtils.string(config.message, "TUNNEL_AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
-    sessionTtlSeconds: configUtils.positiveInt(
+      string(config.passkeyNamePrefix, "TUNNEL_AUTH_PASSKEY_NAME_PREFIX", TUNNEL_CONFIG) ??
+      projectUtils.name(),
+    message: string(config.message, "TUNNEL_AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
+    sessionTtlSeconds: positiveInt(
       config.sessionTtlSeconds,
       "TUNNEL_AUTH_SESSION_TTL",
       DEFAULTS.sessionTtlSeconds,
       TUNNEL_CONFIG,
     ),
-    codeTtlSeconds: configUtils.positiveInt(
+    codeTtlSeconds: positiveInt(
       config.codeTtlSeconds,
       "TUNNEL_AUTH_CODE_TTL",
       DEFAULTS.codeTtlSeconds,
@@ -238,27 +231,27 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     ),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
     sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
-    logoutRedirectPath: passwordlessAuth.normalizeLogoutRedirectPath(
-      configUtils.string(config.logoutRedirectPath, "TUNNEL_AUTH_LOGOUT_REDIRECT", TUNNEL_CONFIG) ??
+    logoutRedirectPath: normalizeLogoutRedirectPath(
+      string(config.logoutRedirectPath, "TUNNEL_AUTH_LOGOUT_REDIRECT", TUNNEL_CONFIG) ??
         DEFAULTS.logoutRedirectPath,
     ),
     publicDomain,
     publicDomains: [
       ...new Set(
-        [publicDomain, frpPublicDomain, ...stringUtils.parseList(config.publicDomains)].filter(
+        [publicDomain, frpPublicDomain, ...parseList(config.publicDomains)].filter(
           (value): value is string => !!value,
         ),
       ),
     ],
     forwardHeaders: [
-      ...stringUtils.parseList(config.forwardHeaders),
-      ...stringUtils.parseList(configUtils.text("TUNNEL_FORWARD_HEADERS", TUNNEL_CONFIG)),
+      ...parseList(config.forwardHeaders),
+      ...parseList(configUtils.text("TUNNEL_FORWARD_HEADERS", TUNNEL_CONFIG)),
     ],
     gatePaths: [
-      ...stringUtils.parseList(config.gatePaths),
-      ...stringUtils.parseList(configUtils.text("TUNNEL_GATE_PATHS", TUNNEL_CONFIG)),
+      ...parseList(config.gatePaths),
+      ...parseList(configUtils.text("TUNNEL_GATE_PATHS", TUNNEL_CONFIG)),
     ],
-    insecure: configUtils.boolean(config.insecure, "TUNNEL_INSECURE", TUNNEL_CONFIG) ?? false,
+    insecure: boolean(config.insecure, "TUNNEL_INSECURE", TUNNEL_CONFIG) ?? false,
     storage: storage.mode,
     sqlitePath: storage.sqlitePath,
   };
@@ -305,7 +298,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   private readonly runtimes = new Map<string, PasswordlessAuthRuntime>();
 
   static getResourceRequirements(config: AuthGateConfig): ResourceRequirement[] {
-    if (authStorage.resolveAuthStorageConfig(config).mode !== "lakebase") return [];
+    if (resolveAuthStorageConfig(config).mode !== "lakebase") return [];
     return [
       {
         type: ResourceType.POSTGRES,
@@ -325,7 +318,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   override async setup(): Promise<void> {
     this.resolved = resolveAuthGateConfig(this.config);
     if (!this.config.brandName && !configUtils.text("TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG)) {
-      this.resolved.brandName = brandContext.getBrandContext().name;
+      this.resolved.brandName = getBrandContext().name;
     }
 
     if (this.resolved.insecure) {
@@ -340,12 +333,12 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       // before mounting the gate. Request-scoped `asUser` context cannot change
       // the storage identity after this point.
       this.context?.onLifecycle("setup:complete", async () => {
-        const pool = pluginRegistry.instance(this.context, lakebase)?.exports().pool;
+        const pool = instance(this.context, lakebase)?.exports().pool;
         for (const origin of new Set(origins)) {
-          const storage = await authStorage.createAuthStorage(this.resolved, pool);
+          const storage = await createAuthStorage(this.resolved, pool);
           this.runtimes.set(
             new URL(origin).hostname.toLowerCase(),
-            await passwordlessAuth.createPasswordlessAuth({
+            await createPasswordlessAuth({
               storage,
               baseURL: origin,
               trustedOrigins: [origin],
@@ -460,7 +453,7 @@ function _authHostname(headers?: Headers, request?: Request): string | undefined
 }
 
 function authOrigin(publicDomain?: string): string {
-  const value = stringUtils.trimToNull(publicDomain);
+  const value = trimToNull(publicDomain);
   if (!value) return "http://localhost";
   if (/^https?:\/\//i.test(value)) return new URL(value).origin;
   const host = value.split("/")[0]!;

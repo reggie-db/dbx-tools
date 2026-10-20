@@ -5,7 +5,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
 import { BotIcon, MessageCircleIcon, XIcon } from "lucide-react";
 import {
   createContext,

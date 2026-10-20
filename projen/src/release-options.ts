@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { json } from "@dbx-tools/shared-core";
+import { parseRecord } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 /** Publication scopes accepted by the release task; auto preserves normal publication. */
@@ -70,7 +70,7 @@ export function parseReleaseTagAnnotation(annotation: string): ReleaseStepSelect
   const selections = annotation.split("\n").filter((line) => line.startsWith(ANNOTATION_MARKER));
   if (selections.length === 0) return releaseStepSelection();
   if (selections.length !== 1) throw new Error("Release tag contains multiple step selections");
-  const value = json.parseRecord(selections[0]!.slice(ANNOTATION_MARKER.length));
+  const value = parseRecord(selections[0]!.slice(ANNOTATION_MARKER.length));
   const parsed = ReleaseStepSelectionSchema.safeParse(value);
   if (!parsed.success) throw new Error("Invalid release tag step selection");
   return parsed.data;

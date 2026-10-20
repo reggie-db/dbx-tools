@@ -8,14 +8,20 @@
  */
 
 import { lookup } from "node:dns/promises";
-import { functionUtils, http, net } from "@dbx-tools/shared-core";
+import {
+  memoize,
+  createFetchError,
+  type UrlLike,
+  urlBuilder,
+  parseIp,
+} from "@dbx-tools/shared-core";
 
 /**
  * This process's outbound public IP, cached for 5 minutes. Asks Cloudflare's
  * `cdn-cgi/trace` first and falls back to ipify. Useful for allowlisting or for
  * reasoning about egress from a Databricks App.
  */
-export const getPublicIp = functionUtils.memoize(
+export const getPublicIp = memoize(
   async () => {
     const cloudflareResponse = await fetch("https://cloudflare.com/cdn-cgi/trace");
     if (cloudflareResponse.ok) {
@@ -30,7 +36,7 @@ export const getPublicIp = functionUtils.memoize(
     }
     const ipifyResponse = await fetch("https://api.ipify.org?format=json");
     if (!ipifyResponse.ok) {
-      throw await http.createFetchError(ipifyResponse);
+      throw await createFetchError(ipifyResponse);
     }
     const ipifyData = (await ipifyResponse.json()) as { ip?: string };
     const ip = ipifyData?.ip;
@@ -53,11 +59,11 @@ export const getPublicIp = functionUtils.memoize(
  * platform resolver order are honored, matching what an outbound connection to
  * the host would actually use.
  */
-export async function resolveHostIps(input: net.UrlLike): Promise<string[]> {
-  const host = net.urlBuilder(input)?.hostname;
+export async function resolveHostIps(input: UrlLike): Promise<string[]> {
+  const host = urlBuilder(input)?.hostname;
   if (!host) return [];
   // WHATWG `URL.hostname` brackets IPv6 literals; strip before parsing.
-  const literal = net.parseIp(host.replace(/^\[|\]$/g, ""));
+  const literal = parseIp(host.replace(/^\[|\]$/g, ""));
   if (literal) return [host.replace(/^\[|\]$/g, "")];
   try {
     const results = await lookup(host, { all: true });

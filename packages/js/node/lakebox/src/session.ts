@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import type { Duplex } from "node:stream";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { log, toError } from "@dbx-tools/shared-core";
 import ssh2, { type Client as Ssh2Client } from "ssh2";
 import { z } from "zod";
 import {
@@ -10,10 +10,8 @@ import {
   sshCommandScript,
   type SshCommandIdentity,
   type SshTransport,
-} from "./_ssh.ts";
+} from "./ssh.ts";
 import type { Ssh2PatchMode, SshTransportMode } from "./transport.ts";
-
-export { SshCommand, sshCommandScript, type SshCommandIdentity } from "./_ssh.ts";
 
 const { Client } = ssh2;
 const logger = log.logger("lakebox:ssh");
@@ -66,7 +64,7 @@ export interface SshSessionOptions {
 
 /**
  * Verified SSH session that delegates commands and remote TCP connections to
- * the transport selected by `src/_ssh.ts`.
+ * the transport selected by `src/ssh.ts`.
  *
  * The initial ssh2 handshake verifies and persists the Databricks gateway host
  * key. The selected transport then starts its pooled command and forwarding
@@ -114,7 +112,7 @@ export class SshSession {
       } catch (resolveError) {
         logger.warn("public Lakebox gateway resolution failed", {
           host: this.options.host,
-          error: errorUtils.toError(resolveError),
+          error: toError(resolveError),
         });
         throw error;
       }
@@ -329,7 +327,7 @@ export class SshSession {
     for (const result of results) {
       if (result.status === "rejected") {
         logger.warn("failed to close SSH session resource", {
-          error: errorUtils.toError(result.reason),
+          error: toError(result.reason),
         });
       }
     }

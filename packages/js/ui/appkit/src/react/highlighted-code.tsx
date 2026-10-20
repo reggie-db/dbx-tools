@@ -4,13 +4,11 @@
  * @module
  */
 
-import { json } from "@dbx-tools/shared-core";
+import { cn } from "@databricks/appkit-ui/react";
+import { parse } from "@dbx-tools/shared-core";
 import { useEffect, useState } from "react";
 
-import { cn } from "./appkit-ui.ts";
 import { highlightToHtml } from "./shiki-plugin.ts";
-
-export { createShikiPlugin, highlightToHtml } from "./shiki-plugin.ts";
 
 /** Code languages detected automatically in free-form text fields. */
 export type DetectedCodeLanguage = "sql" | "python" | "typescript" | "bash" | "json";
@@ -29,7 +27,7 @@ export function detectCodeLanguage(source: string): DetectedCodeLanguage | undef
   if (
     (trimmed.startsWith("{") || trimmed.startsWith("[")) &&
     trimmed.length > 1 &&
-    json.parse(trimmed) !== undefined
+    parse(trimmed) !== undefined
   ) {
     return "json";
   }

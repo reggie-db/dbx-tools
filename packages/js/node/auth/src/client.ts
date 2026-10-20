@@ -1,5 +1,5 @@
-import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth/client";
-import { AuthType, TargetKind } from "@dbx-tools/shared-auth/config";
+import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth";
+import { AuthType, TargetKind } from "@dbx-tools/shared-auth";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./_databricks-cli.ts";
 import { AuthError } from "./_errors.ts";
 import { publicToken, TokenLifecycle } from "./_lifecycle.ts";

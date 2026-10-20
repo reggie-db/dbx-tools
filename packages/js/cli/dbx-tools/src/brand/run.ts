@@ -8,16 +8,16 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { BrandResearch } from "@dbx-tools/appkit-generator";
-import { generateBrandPackage } from "@dbx-tools/appkit-generator/generate";
+import { generateBrandPackage } from "@dbx-tools/appkit-generator";
 import {
   runWebAssetPageFetch,
   runWebFetch,
   runWebImageFetch,
-} from "@dbx-tools/appkit-web-search/fetch";
-import { createWebSearchRuntime } from "@dbx-tools/appkit-web-search/runtime";
-import { runWebSearch } from "@dbx-tools/appkit-web-search/search";
-import { createWorkspaceClient } from "@dbx-tools/databricks/workspace-client";
-import { object } from "@dbx-tools/shared-core";
+  createWebSearchRuntime,
+  runWebSearch,
+} from "@dbx-tools/appkit-web-search";
+import { createWorkspaceClient } from "@dbx-tools/databricks";
+import { isRecord } from "@dbx-tools/shared-core";
 import type { BrandGenerationProgressEvent } from "@dbx-tools/shared-generator";
 
 import { writeBrandPackage, type WrittenBrandPackage } from "./export.ts";
@@ -64,7 +64,7 @@ export async function exportBrandFromPrompt(
             },
             signal,
             async (event) => {
-              if (!object.isRecord(event)) return;
+              if (!isRecord(event)) return;
               const status = typeof event.status === "string" ? event.status : undefined;
               const eventMessage =
                 typeof event.message === "string" ? event.message.trim() : undefined;

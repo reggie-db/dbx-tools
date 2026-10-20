@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SshTransport } from "../src/_ssh.ts";
-import {
-  resolvePublicGatewayAddresses,
-  SshCommand,
-  SshSession,
-  sshCommandScript,
-} from "../src/session.ts";
+import { resolvePublicGatewayAddresses, SshSession } from "../src/session.ts";
+import { SshCommand, sshCommandScript, type SshTransport } from "../src/ssh.ts";
 
 const USER = { name: "lakebox-abc1234", home: "/home/lakebox-abc1234" };
 const USER_IDENTITY = { kind: "user", ...USER } as const;

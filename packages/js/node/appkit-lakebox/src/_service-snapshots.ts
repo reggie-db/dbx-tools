@@ -1,5 +1,5 @@
 import { CacheManager } from "@databricks/appkit";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { log, toError } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { LakeboxControllerDefinitionSchema, type LakeboxControllerService } from "./services.ts";
 
@@ -52,7 +52,7 @@ export class LakeboxServiceSnapshots {
       logger.warn("unable to read cached service snapshot", {
         lakeboxId,
         userHash,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
     }
     return undefined;
@@ -73,7 +73,7 @@ export class LakeboxServiceSnapshots {
       logger.warn("unable to cache service snapshot", {
         lakeboxId,
         userHash,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
     }
   }

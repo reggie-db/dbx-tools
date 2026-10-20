@@ -16,7 +16,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { bunWorkflow, project, projectJs } from "@dbx-tools/projen";
+import { bunWorkflow, project, projectJs, projectPy } from "@dbx-tools/projen";
 import { Component, DependencyType, javascript } from "projen";
 
 const SCOPE = "dbx-tools";
@@ -73,7 +73,7 @@ class SlopDetectorConfig extends Component {
 // ---------------------------------------------------------------------------
 // Root construction
 // ---------------------------------------------------------------------------
-const root = new project.DBXToolsNodeProject({
+const root = new projectJs.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
   // `packages/js` is the JavaScript product tree; `packages/example` holds the
@@ -922,7 +922,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "zod@catalog:",
   );
   p.addDevDeps(`@types/bun@${bunWorkflow.BUN_VERSION}`);
-  if (p instanceof project.DBXToolsTypeScriptProject && p.tsconfig) {
+  if (p instanceof projectJs.DBXToolsTypeScriptProject && p.tsconfig) {
     new javascript.TypescriptConfig(p, {
       fileName: "assets/tsconfig.json",
       extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([p.tsconfig]),
@@ -1164,6 +1164,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/shared-email@workspace:^",
     "@dbx-tools/shared-generator@workspace:^",
     "@dbx-tools/shared-genie-code@workspace:^",
+    "@dbx-tools/shared-graphiti@workspace:^",
     "@dbx-tools/shared-model-gateway@workspace:^",
     "@dbx-tools/tunnel@workspace:^",
     "concurrently@^10.0.3",
@@ -1174,26 +1175,6 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "yaml@^2.9.0",
   );
   p.addDevDeps("@types/pg@^8");
-  project.addExports(p, {
-    "./appkit": "./src/appkit/cli.ts",
-    "./appkit/env-export": "./src/appkit/env-export.ts",
-    "./auth": "./src/auth/cli.ts",
-    "./auth/options": "./src/auth/options.ts",
-    "./brand": "./src/brand/cli.ts",
-    "./brand/export": "./src/brand/export.ts",
-    "./brand/options": "./src/brand/options.ts",
-    "./brand/run": "./src/brand/run.ts",
-    "./graphiti": "./src/graphiti/cli.ts",
-    "./graphiti/options": "./src/graphiti/options.ts",
-    "./genie": "./src/genie-code/cli.ts",
-    "./genie/options": "./src/genie-code/options.ts",
-    "./lakebase-proxy": "./src/lakebase-proxy/cli.ts",
-    "./lakebase-proxy/options": "./src/lakebase-proxy/options.ts",
-    "./model-gateway": "./src/model-gateway/cli.ts",
-    "./model-gateway/server": "./src/model-gateway/server.ts",
-    "./tunnel": "./src/tunnel/cli.ts",
-    "./tunnel/options": "./src/tunnel/options.ts",
-  });
 });
 
 // UI packages
@@ -1207,6 +1188,7 @@ project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
     "AppKit React foundation with branding, authentication, email, and search surfaces",
   );
   p.addDeps(
+    "@better-auth/passkey@catalog:",
     "@databricks/appkit-ui@catalog:",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
@@ -1218,21 +1200,11 @@ project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
     "tailwindcss@catalog:",
     "streamdown@catalog:",
   );
-  project.addExports(p, {
-    "./branding/react": "./src/branding/react/index.ts",
-    "./branding/browser": "./src/branding/browser.ts",
-    "./branding/assets": "./src/branding/generated/assets.ts",
-    "./branding/styles.css": "./src/branding/styles.css",
-    "./branding/brand-bridge.css": "./src/branding/brand-bridge.css",
+  projectJs.addExports(p, {
     "./branding/assets/icon-light.svg": "./src/branding/generated/icon-light.svg",
     "./branding/assets/icon-dark.svg": "./src/branding/generated/icon-dark.svg",
     "./branding/assets/logo-light.svg": "./src/branding/generated/logo-light.svg",
     "./branding/assets/logo-dark.svg": "./src/branding/generated/logo-dark.svg",
-    "./auth/react": "./src/auth/react/index.ts",
-    "./email/react": "./src/email/react/index.ts",
-    "./email/styles.css": "./src/email/styles.css",
-    "./search/react": "./src/search/react/index.ts",
-    "./search/styles.css": "./src/search/styles.css",
   });
   p.tasks.tryFind("pre-compile")?.exec("bun ../../../../branding/generate-package-assets.mjs");
 });
@@ -1247,6 +1219,7 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
   p.package.addField("description", "React chat UI for the AppKit-Mastra plugin");
   p.addDeps(
     "@databricks/appkit-ui@catalog:",
+    "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-mastra@workspace:^",
     "@dbx-tools/shared-genie@workspace:^",
@@ -1272,6 +1245,7 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 project.applyToProjects(root, { identifierName: "ui-lakebox", tags: "ui" }, (p) => {
   p.package.addField("description", "React controls for the app Lakebox, user services, and metrics");
   p.addDeps(
+    "@databricks/appkit-ui@catalog:",
     "@dbx-tools/shared-lakebox@workspace:^",
     "@dbx-tools/ui@workspace:^",
     "lucide-react@catalog:",
@@ -1309,6 +1283,7 @@ project.applyToProjects(
       "@dbx-tools/appkit-web-search@workspace:^",
       "@dbx-tools/search@workspace:^",
       "@dbx-tools/shared-core@workspace:^",
+      "@dbx-tools/shared-email-template@workspace:^",
       "@dbx-tools/shared-generator@workspace:^",
       // The tunnel library: the server registers `tunnelInterceptor()` on its own
       // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
@@ -1347,6 +1322,7 @@ project.applyToProjects(
 project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: "app" }, (p) => {
   p.addDevDeps("@dbx-tools/tunnel@workspace:^");
   p.addDeps(
+    "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email-template@workspace:^",
     "@dbx-tools/shared-generator@workspace:^",
@@ -1364,7 +1340,7 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
 // ---------------------------------------------------------------------------
 const PYTHONMONKEY_REQUIREMENT = "pythonmonkey==1.3.2";
 
-const pythonPackages: project.PythonPackageOptions[] = [
+const pythonPackages: projectPy.PythonPackageOptions[] = [
   {
     directory: "node-runtime",
     description: "Shared PythonMonkey runtime and lazy Node.js bootstrap",
@@ -1463,7 +1439,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
   },
 ];
 
-new project.DBXToolsPythonWorkspace(root, {
+new projectPy.DBXToolsPythonWorkspace(root, {
   root: PYTHON_ROOT,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],

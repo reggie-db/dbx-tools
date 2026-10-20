@@ -4,7 +4,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import { LakebaseClient, requireAddress } from "@dbx-tools/lakebase";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
-import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
+import { log, toError, trimToUndefined } from "@dbx-tools/shared-core";
 import { Client } from "pg";
 
 import { CancellationRegistry } from "./cancellation.ts";
@@ -113,20 +113,20 @@ export class LakebaseProxy {
       try {
         target = requireAddress(targetText);
       } catch (error) {
-        throw new ProxyFailure(message(error), "3D000", { cause: errorUtils.toError(error) });
+        throw new ProxyFailure(message(error), "3D000", { cause: toError(error) });
       }
-      const startupUser = stringUtils.trimToUndefined(startup.parameters.user);
+      const startupUser = trimToUndefined(startup.parameters.user);
       let resolved;
       try {
         resolved = await this.client.resolve(target, startupUser);
       } catch (error) {
-        throw new ProxyFailure(message(error), "3D000", { cause: errorUtils.toError(error) });
+        throw new ProxyFailure(message(error), "3D000", { cause: toError(error) });
       }
       let password;
       try {
         password = await this.client.generateDatabaseCredential(resolved.endpoint, startupUser);
       } catch (error) {
-        throw new ProxyFailure(message(error), "28000", { cause: errorUtils.toError(error) });
+        throw new ProxyFailure(message(error), "28000", { cause: toError(error) });
       }
       let connected;
       try {
@@ -136,7 +136,7 @@ export class LakebaseProxy {
           postgresConnectionOptions(startup.parameters, this.options.postgresRole),
         );
       } catch (error) {
-        throw new ProxyFailure(message(error), "08001", { cause: errorUtils.toError(error) });
+        throw new ProxyFailure(message(error), "08001", { cause: toError(error) });
       }
       upstream = connected.socket;
       cancellation = this.cancellations.register({
@@ -168,7 +168,7 @@ export class LakebaseProxy {
           ? error
           : error instanceof PostgresProtocolError
             ? new ProxyFailure(error.message, "08P01", { cause: error })
-            : new ProxyFailure(message(error), "08001", { cause: errorUtils.toError(error) });
+            : new ProxyFailure(message(error), "08001", { cause: toError(error) });
       logger.warn("Lakebase connection failed", {
         durationMs: Date.now() - started,
         error: failure,

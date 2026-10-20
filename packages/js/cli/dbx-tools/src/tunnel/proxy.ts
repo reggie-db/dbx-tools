@@ -19,12 +19,21 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { isAuthPath } from "@dbx-tools/shared-auth";
+import { log, toError } from "@dbx-tools/shared-core";
 import {
-  gate as tunnelGate,
-  headers as tunnelHeaders,
-  loginPage as tunnelLoginPage,
   type AuthGateApi,
+  wantsHostedLogin,
+  loginReturnTo,
+  webRequest,
+  sendWebResponse,
+  type GateAction,
+  gateRequest,
+  wantsLoginPage,
+  requestReturnTo,
+  unauthorizedBody,
+  toHeaderPolicy,
+  loginPageHtml,
 } from "@dbx-tools/tunnel";
 import ProxyModule from "http-proxy-3";
 
@@ -81,20 +90,20 @@ async function handleAuthRoute(
   brandName: string,
   passkeyNamePrefix?: string,
 ): Promise<boolean> {
-  if (!tunnelGate.isAuthPath(path)) return false;
-  if (tunnelGate.wantsHostedLogin(request)) {
+  if (!isAuthPath(path)) return false;
+  if (wantsHostedLogin(request)) {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     response.end(
-      tunnelLoginPage.loginPageHtml({
+      loginPageHtml({
         brandName,
         passkeyNamePrefix,
-        returnTo: tunnelGate.loginReturnTo(request),
+        returnTo: loginReturnTo(request),
       }),
     );
     return true;
   }
-  const result = await gate.handler(tunnelGate.webRequest(request));
-  await tunnelGate.sendWebResponse(response, result);
+  const result = await gate.handler(webRequest(request));
+  await sendWebResponse(response, result);
   return true;
 }
 
@@ -113,18 +122,18 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
     ws: true,
     xfwd: true,
   });
-  const headerPolicy = tunnelHeaders.toHeaderPolicy(options.forwardHeaders);
+  const headerPolicy = toHeaderPolicy(options.forwardHeaders);
   const gate = options.gate;
 
-  const decide = (request: IncomingMessage): Promise<tunnelGate.GateAction> =>
+  const decide = (request: IncomingMessage): Promise<GateAction> =>
     gate
-      ? tunnelGate.gateRequest(request, {
+      ? gateRequest(request, {
           gate,
           publicDomain: (request.headers.host ?? "").split(":")[0] || "localhost",
           headerPolicy,
           gatePaths: options.gatePaths,
         })
-      : Promise.resolve<tunnelGate.GateAction>("pass");
+      : Promise.resolve<GateAction>("pass");
 
   const onRequest = (request: IncomingMessage, response: ServerResponse): void => {
     void (async () => {
@@ -140,22 +149,22 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
       if ((await decide(request)) === "deny") {
         // A denied browser navigation gets the hosted login page; anything else
         // (an XHR, a /ws upgrade probe, a non-HTML fetch) gets the 401 JSON.
-        if (gate && tunnelGate.wantsLoginPage(request)) {
-          const html = tunnelLoginPage.loginPageHtml({
+        if (gate && wantsLoginPage(request)) {
+          const html = loginPageHtml({
             brandName,
             passkeyNamePrefix,
-            returnTo: tunnelGate.requestReturnTo(request),
+            returnTo: requestReturnTo(request),
           });
           response.writeHead(401, { "content-type": "text/html; charset=utf-8" });
           response.end(html);
         } else {
-          sendJson(response, 401, tunnelGate.unauthorizedBody(request));
+          sendJson(response, 401, unauthorizedBody(request));
         }
         return;
       }
       proxy.web(request, response);
     })().catch((error: unknown) => {
-      logger.error("proxy request failed", { error: errorUtils.toError(error) });
+      logger.error("proxy request failed", { error: toError(error) });
       if (!response.headersSent) sendJson(response, 502, { error: "bad gateway" });
       else response.end();
     });
@@ -168,7 +177,7 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
     const upgradeSocket = socket as UpgradeSocket;
     upgradeSocket.destroySoon ??= () => upgradeSocket.end();
     const path = (request.url ?? "/").split("?", 1)[0] ?? "/";
-    if (tunnelGate.isAuthPath(path)) {
+    if (isAuthPath(path)) {
       upgradeSocket.destroy();
       return;
     }

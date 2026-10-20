@@ -30,9 +30,15 @@ import {
   getExecutionContext,
   type WorkspaceClient,
 } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { asyncUtils, errorUtils, log, type PollContext } from "@dbx-tools/shared-core";
-import { event, genieModel, type GenieChatEvent, type GenieMessage } from "@dbx-tools/shared-genie";
+import { type ContextLike, toContext } from "@dbx-tools/appkit";
+import { log, type PollContext, poll, toError } from "@dbx-tools/shared-core";
+import {
+  type GenieChatEvent,
+  type GenieMessage,
+  eventsFromMessage,
+  GenieMessageSchema,
+  isTerminalStatus,
+} from "@dbx-tools/shared-genie";
 
 import { genieAgentModeChat, isAgentModeUnavailable } from "./agent-mode.ts";
 
@@ -47,7 +53,7 @@ const logger = log.logger("genie/chat");
  * whole turn.
  */
 function validateMessage(raw: GenieMessage): GenieMessage {
-  const result = genieModel.GenieMessageSchema.safeParse(raw);
+  const result = GenieMessageSchema.safeParse(raw);
   if (result.success) return result.data;
   logger.debug("wire-message:schema-miss", {
     message_id: raw.message_id ?? raw.id,
@@ -94,7 +100,7 @@ export interface GenieChatOptions {
    * `Context` (see `databricks.ContextLike`). Aborting it cancels every in-flight
    * Agent Mode stream, SDK call, and the next inter-poll sleep.
    */
-  context?: databricks.ContextLike;
+  context?: ContextLike;
 }
 
 /* ----------------------- low-level: genieChat ----------------------- */
@@ -147,7 +153,7 @@ export async function* genieChat(
     // re-attach an abort listener to `options.context` on every poll iteration
     // (via `databricks.toContext` -> `async.tieAbortSignal`), eventually tripping
     // Node's `MaxListenersExceededWarning`.
-    const ctx = databricks.toContext(controller, options?.context);
+    const ctx = toContext(controller, options?.context);
     if (options?.agentMode !== false) {
       let yielded = false;
       try {
@@ -167,7 +173,7 @@ export async function* genieChat(
         }
         logger.warn("agent-mode:unavailable, falling back to polling", {
           space_id,
-          error: errorUtils.toError(err),
+          error: toError(err),
         });
       }
     }
@@ -212,7 +218,7 @@ export async function* genieChat(
       );
     };
 
-    yield* asyncUtils.poll(
+    yield* poll(
       async (pollCtx: PollContext<GenieMessage>) => validateMessage(await pollProducer(pollCtx)),
       {
         intervalMs: options?.pollIntervalMs ?? 500,
@@ -223,7 +229,7 @@ export async function* genieChat(
         // Stop after the terminal message is yielded. `poll` checks the
         // predicate AFTER yielding, so the terminal message still reaches the
         // consumer.
-        predicate: (m) => !genieModel.isTerminalStatus(m.status),
+        predicate: (m) => !isTerminalStatus(m.status),
         // Wake the inter-poll sleep on abort so a `for await` break (or
         // external abort) tears down promptly instead of waiting out the
         // interval.
@@ -317,9 +323,9 @@ export async function* genieEventChat(
       };
       questionEmitted = true;
     }
-    yield* event.eventsFromMessage(message, previous, message.space_id);
+    yield* eventsFromMessage(message, previous, message.space_id);
     const status = message.status;
-    if (genieModel.isTerminalStatus(status)) {
+    if (isTerminalStatus(status)) {
       yield {
         type: "result",
         space_id: message.space_id,

@@ -1,17 +1,17 @@
-import * as hash from "@dbx-tools/shared-core/hash";
-import * as log from "@dbx-tools/shared-core/log";
+import { fnvHash } from "@dbx-tools/shared-core";
+import { type Logger, logger } from "@dbx-tools/shared-core";
 
 import { AuthError } from "./_errors.ts";
 import type { Token } from "./_types.ts";
 
 /** Auth logger with a stable capability-specific tag. */
-export function authLogger(scope: string): log.Logger {
-  return log.logger(`auth:${scope}`);
+export function authLogger(scope: string): Logger {
+  return logger(`auth:${scope}`);
 }
 
 /** Stable non-secret identifier for a credential cache key. */
 export function credentialId(key: string): string {
-  return hash.fnvHash(key);
+  return fnvHash(key);
 }
 
 /** Secret-free token lifecycle metadata for debug output. */

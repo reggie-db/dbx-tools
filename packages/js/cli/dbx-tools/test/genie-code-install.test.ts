@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { GENIE_CODE_VERSION } from "@dbx-tools/shared-genie-code/options";
+import { GENIE_CODE_VERSION } from "@dbx-tools/shared-genie-code";
 
 import { genieCodeAsset } from "../src/genie-code/install.ts";
 

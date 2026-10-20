@@ -11,7 +11,7 @@ import {
   ResolvedModelSchema,
   ResolvedModelSelectionSchema,
   ServingEndpointSummarySchema,
-} from "../src/model.ts";
+} from "../src/contracts.ts";
 
 describe("browser-safe model schemas", () => {
   it("validates endpoint capabilities and metadata", () => {

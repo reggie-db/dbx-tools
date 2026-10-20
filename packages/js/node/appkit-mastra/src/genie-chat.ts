@@ -13,16 +13,19 @@
  */
 
 import type { WorkspaceClient } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { agentMode, chat } from "@dbx-tools/genie";
-import { errorUtils, hash, log, object } from "@dbx-tools/shared-core";
-import { event as genieEvent, genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
+import { toContext } from "@dbx-tools/appkit";
+import { listAgentModeConversation, genieEventChat } from "@dbx-tools/genie";
+import { log, toError, id, isRecord } from "@dbx-tools/shared-core";
+import { type GenieMessage, eventsFromMessage, humanizeStatus } from "@dbx-tools/shared-genie";
 import {
-  markers,
-  wire,
   type GenieChatRequest,
   type GenieThread,
   type StartedEvent,
+  formatMarker,
+  GENIE_PROGRESS_PART_TYPE,
+  type GenieWriterEvent,
+  type GenieConversationPartData,
+  GENIE_CONVERSATION_PART_TYPE,
 } from "@dbx-tools/shared-mastra";
 import type { MastraDBMessage } from "@mastra/core/agent";
 import type { MastraMemory } from "@mastra/core/memory";
@@ -90,7 +93,7 @@ export function genieAnswerText(message: GenieMessage): string {
       const queryId = queriesByVisualization.get(visualizationId);
       const statementId = queryId ? statementsByQuery.get(queryId) : undefined;
       if (statementId) {
-        sections.push(markers.formatMarker("visualization", statementId));
+        sections.push(formatMarker("visualization", statementId));
         inlineStatements.add(statementId);
       }
       continue;
@@ -106,8 +109,8 @@ export function genieAnswerText(message: GenieMessage): string {
     if (description) sections.push(description);
     sections.push(
       attachment.attachment_id && visualizedQueries.has(attachment.attachment_id)
-        ? markers.formatMarker("visualization", statementId)
-        : markers.formatMarker("data", statementId),
+        ? formatMarker("visualization", statementId)
+        : formatMarker("data", statementId),
     );
   }
   if (sections.length === 0 && message.error?.error) sections.push(message.error.error);
@@ -115,19 +118,19 @@ export function genieAnswerText(message: GenieMessage): string {
 }
 
 function visualizationAttachmentId(metadata: unknown): string | undefined {
-  if (!object.isRecord(metadata) || !object.isRecord(metadata.viz)) return undefined;
+  if (!isRecord(metadata) || !isRecord(metadata.viz)) return undefined;
   return typeof metadata.viz.attachment_id === "string" ? metadata.viz.attachment_id : undefined;
 }
 
 /** Whether a text attachment is Agent Mode's Markdown copy of a query result. */
 function isQueryOutputText(metadata: unknown): boolean {
-  return object.isRecord(metadata) && typeof metadata.statement_id === "string";
+  return isRecord(metadata) && typeof metadata.statement_id === "string";
 }
 
 /** Error text for a terminal Genie message that did not complete, or `undefined`. */
 function genieFailure(message: GenieMessage): string | undefined {
   if (message.status === "COMPLETED") return undefined;
-  return message.error?.error ?? `Genie ${genieModel.humanizeStatus(message.status!)}`;
+  return message.error?.error ?? `Genie ${humanizeStatus(message.status!)}`;
 }
 
 /** Recover the original user question from a context-augmented Genie input. */
@@ -140,9 +143,7 @@ export function visibleGenieQuestion(content: string): string {
 function messageText(message: MastraDBMessage): string | undefined {
   const text = message.content.parts
     .flatMap((part) =>
-      object.isRecord(part) && part.type === "text" && typeof part.text === "string"
-        ? [part.text]
-        : [],
+      isRecord(part) && part.type === "text" && typeof part.text === "string" ? [part.text] : [],
     )
     .join("\n")
     .trim();
@@ -230,7 +231,7 @@ async function saveGenieMemory(options: {
       saveThread: true,
     });
   }
-  const messageId = message.message_id || message.id || hash.id();
+  const messageId = message.message_id || message.id || id();
   const createdAt = new Date();
   await memory.saveMessages({
     messages: [
@@ -269,9 +270,9 @@ export function genieMessageToUiMessages(
   const question = visibleGenieQuestion(message.content);
   const input = { question };
   const failure = genieFailure(message);
-  const progress = [...genieEvent.eventsFromMessage(message, undefined, space.spaceId)].map(
+  const progress = [...eventsFromMessage(message, undefined, space.spaceId)].map(
     (progressEvent) => ({
-      type: wire.GENIE_PROGRESS_PART_TYPE,
+      type: GENIE_PROGRESS_PART_TYPE,
       data: { toolCallId, event: progressEvent },
     }),
   );
@@ -312,7 +313,7 @@ export async function listGenieThreads(
   space: GenieChatSpace,
   signal?: AbortSignal,
 ): Promise<GenieThread[]> {
-  const context = signal ? databricks.toContext(signal) : undefined;
+  const context = signal ? toContext(signal) : undefined;
   const threads: GenieThread[] = [];
   let pageToken: string | undefined;
   do {
@@ -325,7 +326,7 @@ export async function listGenieThreads(
       context,
     );
     for (const conversation of page.conversations ?? []) {
-      if (!object.isRecord(conversation) || conversation.agent_type !== AGENT_CONVERSATION_TYPE) {
+      if (!isRecord(conversation) || conversation.agent_type !== AGENT_CONVERSATION_TYPE) {
         continue;
       }
       threads.push({
@@ -351,7 +352,7 @@ export async function listGenieThreadMessages(options: {
   signal?: AbortSignal;
 }): Promise<UIMessage[]> {
   const { space } = options;
-  const messages = await agentMode.listAgentModeConversation(
+  const messages = await listAgentModeConversation(
     options.client,
     space.spaceId,
     options.conversationId,
@@ -379,7 +380,7 @@ export function genieChatStream(options: {
   signal?: AbortSignal;
 }): ReadableStream<UIMessageChunk> {
   const { client, space, request, memory, requestContext, signal } = options;
-  const toolCallId = hash.id();
+  const toolCallId = id();
   const toolName = askGenieToolId(space.alias);
   return createUIMessageStream({
     onError: () => DIRECT_GENIE_ERROR,
@@ -396,13 +397,13 @@ export function genieChatStream(options: {
       } catch (error) {
         logger.warn("memory:recall-failed", {
           spaceId: space.spaceId,
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
       }
       const question = contextualQuestion(request.question, request.requestContext, memoryContext);
-      const progress = (progressEvent: wire.GenieWriterEvent) =>
+      const progress = (progressEvent: GenieWriterEvent) =>
         writer.write({
-          type: wire.GENIE_PROGRESS_PART_TYPE,
+          type: GENIE_PROGRESS_PART_TYPE,
           data: { toolCallId, event: progressEvent },
         });
       writer.write({ type: "start" });
@@ -420,10 +421,10 @@ export function genieChatStream(options: {
       };
       progress(started);
 
-      let announced: wire.GenieConversationPartData | undefined;
+      let announced: GenieConversationPartData | undefined;
       let finalMessage: GenieMessage | undefined;
       try {
-        for await (const chatEvent of chat.genieEventChat(space.spaceId, question, {
+        for await (const chatEvent of genieEventChat(space.spaceId, question, {
           workspaceClient: client,
           agentMode: true,
           agentModeFallback: false,
@@ -443,7 +444,7 @@ export function genieChatStream(options: {
           ) {
             announced = { conversationId, ...(messageId ? { messageId } : {}) };
             writer.write({
-              type: wire.GENIE_CONVERSATION_PART_TYPE,
+              type: GENIE_CONVERSATION_PART_TYPE,
               data: announced,
               transient: true,
             });
@@ -454,7 +455,7 @@ export function genieChatStream(options: {
       } catch (error) {
         logger.warn("turn:error", {
           spaceId: space.spaceId,
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
         writer.write({
           type: "tool-output-error",
@@ -474,7 +475,7 @@ export function genieChatStream(options: {
       writer.write({ type: "finish-step" });
       const answer = genieAnswerText(finalMessage);
       if (answer) {
-        const textId = hash.id();
+        const textId = id();
         writer.write({ type: "start-step" });
         writer.write({ type: "text-start", id: textId });
         writer.write({ type: "text-delta", id: textId, delta: answer });
@@ -495,7 +496,7 @@ export function genieChatStream(options: {
         } catch (error) {
           logger.warn("memory:save-failed", {
             spaceId: space.spaceId,
-            error: errorUtils.toError(error),
+            error: toError(error),
           });
         }
       }

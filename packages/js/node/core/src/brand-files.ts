@@ -10,7 +10,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, resolve } from "node:path";
-import { brandUtils } from "@dbx-tools/shared-core";
+import { defaultBrandContext, parseBrandContext, type BrandContext } from "@dbx-tools/shared-core";
 import { statSync } from "./file.ts";
 import { resolveProjectRoots } from "./project-utils.ts";
 
@@ -22,21 +22,6 @@ const BRAND_CONTEXT_FILES = [
   "brand.yml",
   "brand.json",
 ] as const;
-
-/** Validated brand context consumed by dbx-tools presentation packages. */
-export type BrandContext = brandUtils.BrandContext;
-/** Partial or untrusted input accepted by the brand context parser. */
-export type BrandContextInput = brandUtils.BrandContextInput;
-/** Zod schema for a complete validated brand context. */
-export const BrandContextSchema = brandUtils.BrandContextSchema;
-/** Built-in dbx-tools brand used when no project brand file exists. */
-export const defaultBrandContext = brandUtils.defaultBrandContext;
-/** Validate and normalize brand context input. */
-export const parseBrandContext = brandUtils.parseBrandContext;
-/** JSON Schema representation of {@link BrandContextSchema}. */
-export const brandContextJsonSchema = brandUtils.brandContextJsonSchema;
-/** Format a brand context as instructions for a text or design model. */
-export const brandContextPrompt = brandUtils.brandContextPrompt;
 
 /** Find a conventional YAML or JSON brand file from known project roots. */
 export function findBrandContextFile(cwd: string = process.cwd()): string | undefined {
@@ -64,7 +49,7 @@ export async function loadBrandContextFile(path: string): Promise<BrandContext> 
     throw new Error(`Unsupported brand context format: ${extension || "no extension"}`);
   }
 
-  return brandUtils.parseBrandContext(input);
+  return parseBrandContext(input);
 }
 
 /**
@@ -73,7 +58,7 @@ export async function loadBrandContextFile(path: string): Promise<BrandContext> 
  */
 export async function loadBrandContext(cwd: string = process.cwd()): Promise<BrandContext> {
   const path = findBrandContextFile(cwd);
-  return path ? loadBrandContextFile(path) : brandUtils.defaultBrandContext;
+  return path ? loadBrandContextFile(path) : defaultBrandContext;
 }
 
 /** Resolve a relative asset reference against the brand file that declared it. */

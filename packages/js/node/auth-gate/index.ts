@@ -4,8 +4,9 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth-gate";
 export const PACKAGE_VERSION = "0.9.154";
-export * as auth from "./src/auth.ts";
 export * as authStorage from "./src/auth-storage.ts";
-export type { AuthorizeIdentity, AuthEmailCopy, AuthEmailOptions, PasswordlessAuthOptions, PasswordlessAuthRuntime } from "./src/auth.ts";
-export { AuthStorageModeSchema, AuthStorageConfigSchema } from "./src/auth-storage.ts";
+export * as auth from "./src/auth.ts";
+export { AuthStorageModeSchema, AuthStorageConfigSchema, resolveAuthStorageConfig, shouldUseLakebase, createAuthStorage, migrateAuth } from "./src/auth-storage.ts";
 export type { AuthStorageMode, AuthStorageConfig, ResolvedAuthStorageConfig, AuthDatabase, AuthStorage } from "./src/auth-storage.ts";
+export { createPasswordlessAuth, normalizeLogoutRedirectPath } from "./src/auth.ts";
+export type { AuthorizeIdentity, AuthEmailCopy, AuthEmailOptions, PasswordlessAuthOptions, PasswordlessAuthRuntime } from "./src/auth.ts";

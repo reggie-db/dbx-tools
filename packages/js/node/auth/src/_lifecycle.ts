@@ -1,4 +1,4 @@
-import * as errorUtils from "@dbx-tools/shared-core/error-utils";
+import { toError } from "@dbx-tools/shared-core";
 
 import { AuthError } from "./_errors.ts";
 import { authLogger, credentialId, failureMetadata, tokenMetadata } from "./_logging.ts";
@@ -109,7 +109,7 @@ export class TokenLifecycle {
         logger.debug("credential refresh failed", {
           ...this.context(),
           loginFallback: login,
-          ...failureMetadata(errorUtils.toError(error)),
+          ...failureMetadata(toError(error)),
         });
         if (!login) throw error;
         logger.debug("falling back to interactive login", this.context());
@@ -126,7 +126,7 @@ export class TokenLifecycle {
         logger.debug("silent credential acquisition failed", {
           ...this.context(),
           loginFallback: login,
-          ...failureMetadata(errorUtils.toError(error)),
+          ...failureMetadata(toError(error)),
         });
         if (!login) throw error;
         logger.debug("falling back to interactive login", this.context());
@@ -178,7 +178,7 @@ export class TokenLifecycle {
       } catch (releaseError) {
         logger.debug("credential lock release failed", {
           ...this.context(),
-          ...failureMetadata(errorUtils.toError(releaseError)),
+          ...failureMetadata(toError(releaseError)),
         });
         if (failure === undefined) throw releaseError;
       }

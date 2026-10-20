@@ -1,4 +1,4 @@
-import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth/profile";
+import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
 
 /** Stored OAuth credential with renewal metadata. */
 export interface Token {

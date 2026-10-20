@@ -28,7 +28,7 @@
  */
 
 import { ConfigurationError, ValidationError } from "@databricks/appkit";
-import { log, net, stringUtils } from "@dbx-tools/shared-core";
+import { log, parseEmails, trimToNull } from "@dbx-tools/shared-core";
 
 import type { ResolvedEmailConfig, ResolvedSender } from "./config.ts";
 
@@ -60,7 +60,7 @@ export function deriveSenderAddress(userEmail: string | undefined, domain: strin
  * restriction".
  */
 export function parseAllowedSenders(raw: string | string[] | undefined): string[] {
-  return net.parseEmails(raw, { lowercase: true });
+  return parseEmails(raw, { lowercase: true });
 }
 
 /** The `@domain` suffix a wildcard / bare-domain pattern matches, else null. */
@@ -132,11 +132,11 @@ type SenderSource = Pick<ResolvedSender, "systemFrom" | "domain" | "from">;
  * result into the sender allow-list before any send happens.
  */
 export function systemSenderAddress(source: SenderSource): string | undefined {
-  const explicit = stringUtils.trimToNull(source.systemFrom);
+  const explicit = trimToNull(source.systemFrom);
   if (explicit) return explicit;
-  const domain = stringUtils.trimToNull(source.domain);
+  const domain = trimToNull(source.domain);
   if (domain) return `${SYSTEM_SENDER_LOCAL_PART}@${domain}`;
-  return stringUtils.trimToNull(source.from) ?? undefined;
+  return trimToNull(source.from) ?? undefined;
 }
 
 /**
@@ -166,7 +166,7 @@ export function resolveSenderAddress(
   config: ResolvedEmailConfig,
   userEmail: string | undefined,
 ): string {
-  const email = stringUtils.trimToNull(userEmail);
+  const email = trimToNull(userEmail);
   if (!email) return resolveSystemSenderAddress(config);
   if (config.from) return config.from;
   if (config.domain) return deriveSenderAddress(email, config.domain);

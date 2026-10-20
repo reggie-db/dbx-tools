@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 /** Validate one stable release version against the canonical workspace policy. */
 import { resolve } from "node:path";
-import * as projectUtils from "@dbx-tools/core/project-utils";
+import { projectUtils } from "@dbx-tools/core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { TaskRootOptionSchema } from "./options.ts";

@@ -25,7 +25,15 @@
 
 import { ExecutionError } from "@databricks/appkit";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
-import { asyncUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
+import {
+  log,
+  sleep,
+  isRecord,
+  tokenizeWithOptions,
+  trimToEmpty,
+  trimToNull,
+  toSlug,
+} from "@dbx-tools/shared-core";
 import type {
   SearchDocument,
   SearchHit,
@@ -61,12 +69,7 @@ const RESERVED_COLUMNS = new Set(["id", "search_text", "document", "search_vecto
  * built.
  */
 export function toSearchTerms(query: string): string[] {
-  return [
-    ...stringUtils.tokenizeWithOptions(
-      { lowerCase: true, camelCase: false, distinct: true },
-      query,
-    ),
-  ];
+  return [...tokenizeWithOptions({ lowerCase: true, camelCase: false, distinct: true }, query)];
 }
 
 /**
@@ -139,7 +142,7 @@ export class LakebaseSearchBackend {
       for (let attempt = 0; attempt < 200; attempt += 1) {
         this.pool = this.poolSource.managedPool() ?? undefined;
         if (this.pool) return this.pool;
-        await asyncUtils.sleep(50);
+        await sleep(50);
       }
       throw new ExecutionError("search (lakebase): managed pool did not initialize", {
         context: { operation: "connect" },
@@ -179,7 +182,7 @@ export class LakebaseSearchBackend {
     query: string,
     options: LakebaseSearchOptions = {},
   ): Promise<SearchResult> {
-    const text = stringUtils.trimToEmpty(query);
+    const text = trimToEmpty(query);
     const table = this.tableFor(index);
     const limit = options.limit ?? 10;
     const pool = await this.getPool();
@@ -359,7 +362,7 @@ export class LakebaseSearchBackend {
     signal?: AbortSignal,
   ): Promise<void> {
     for (const doc of documents) {
-      const id = stringUtils.trimToNull(String(doc.id ?? doc.ID ?? "")) ?? undefined;
+      const id = trimToNull(String(doc.id ?? doc.ID ?? "")) ?? undefined;
       if (id === undefined) {
         throw new ExecutionError("search (lakebase): a document is missing an `id`", {
           context: { operation: "addDocuments" },
@@ -380,7 +383,7 @@ export class LakebaseSearchBackend {
 
   /** The text a row is indexed by: the text column first, then any other string field. */
   private searchText(doc: SearchDocument, textColumn: string): string {
-    const primary = stringUtils.trimToEmpty(String(doc[textColumn] ?? ""));
+    const primary = trimToEmpty(String(doc[textColumn] ?? ""));
     const rest = Object.entries(doc)
       .filter(([key, value]) => key !== textColumn && key !== "id" && typeof value === "string")
       .map(([, value]) => value as string);
@@ -389,7 +392,7 @@ export class LakebaseSearchBackend {
 
   /** A hit's `fields`: the stored document minus the reserved/internal keys. */
   private toFields(document: unknown): Record<string, unknown> {
-    if (!object.isRecord(document)) return {};
+    if (!isRecord(document)) return {};
     const fields: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(document)) {
       if (RESERVED_COLUMNS.has(key)) continue;
@@ -429,7 +432,7 @@ export class LakebaseSearchBackend {
   /** A safe bare table name derived from an index reference. */
   private bareName(reference: string): string {
     const last = reference.split(".").filter(Boolean).pop() ?? reference;
-    const slug = stringUtils.toSlug(last).replace(/-/g, "_");
+    const slug = toSlug(last).replace(/-/g, "_");
     return slug.length > 0 ? slug : "documents";
   }
 

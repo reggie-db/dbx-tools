@@ -41,38 +41,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./find": {
-        "types": "./lib/src/find.d.ts",
-        "default": "./lib/src/find.js"
-      },
-      "./git-ignore": {
-        "types": "./lib/src/git-ignore.d.ts",
-        "default": "./lib/src/git-ignore.js"
-      },
-      "./ignore": {
-        "types": "./lib/src/ignore.d.ts",
-        "default": "./lib/src/ignore.js"
-      },
-      "./match": {
-        "types": "./lib/src/match.d.ts",
-        "default": "./lib/src/match.js"
-      },
-      "./pattern": {
-        "types": "./lib/src/pattern.d.ts",
-        "default": "./lib/src/pattern.js"
-      },
-      "./scan": {
-        "types": "./lib/src/scan.d.ts",
-        "default": "./lib/src/scan.js"
-      },
-      "./watch": {
-        "types": "./lib/src/watch.d.ts",
-        "default": "./lib/src/watch.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -86,18 +54,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./find": "./src/find.ts",
-    "./git-ignore": "./src/git-ignore.ts",
-    "./ignore": "./src/ignore.ts",
-    "./match": "./src/match.ts",
-    "./pattern": "./src/pattern.ts",
-    "./scan": "./src/scan.ts",
-    "./watch": "./src/watch.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

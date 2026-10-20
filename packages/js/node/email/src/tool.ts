@@ -18,8 +18,13 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { log, stringUtils } from "@dbx-tools/shared-core";
-import { email } from "@dbx-tools/shared-email";
+import { log, toDescription } from "@dbx-tools/shared-core";
+import {
+  type EmailMessage,
+  type EmailResult,
+  emailMessageSchema,
+  emailResultSchema,
+} from "@dbx-tools/shared-email";
 import { createTool, type ToolAction } from "@mastra/core/tools";
 import { resolveSenderAddress } from "./sender.ts";
 import { getEmailRuntime, sendEmail } from "./transport.ts";
@@ -31,7 +36,7 @@ const logger = log.logger("email/tool/send-email");
  * {@link emailTool} and the AppKit `email.send` tool so both agents get the
  * same guidance about approval and scope.
  */
-export const SEND_EMAIL_DESCRIPTION = stringUtils.toDescription(`
+export const SEND_EMAIL_DESCRIPTION = toDescription(`
   Send an email on the user's behalf. Pass one or more recipient
   addresses (with optional cc / bcc and file attachments), a subject,
   and a body; the configured approval policy runs before it goes out.
@@ -55,7 +60,7 @@ export interface EmailToolOptions {
    * Use a function or Classifier-backed policy to allow low-risk calls while
    * retaining human review for uncertain ones.
    */
-  requireApproval?: ToolAction<email.EmailMessage, email.EmailResult>["requireApproval"];
+  requireApproval?: ToolAction<EmailMessage, EmailResult>["requireApproval"];
 }
 
 /**
@@ -78,11 +83,11 @@ export function emailTool(opts: EmailToolOptions = {}) {
   return createTool({
     id: opts.id ?? "send_email",
     description: SEND_EMAIL_DESCRIPTION,
-    inputSchema: email.emailMessageSchema,
-    outputSchema: email.emailResultSchema,
+    inputSchema: emailMessageSchema,
+    outputSchema: emailResultSchema,
     requireApproval: opts.requireApproval ?? true,
     execute: async (input, context) => {
-      const message = email.emailMessageSchema.parse(input);
+      const message = emailMessageSchema.parse(input);
       const { config } = getEmailRuntime();
       const ctx = getExecutionContext();
       const userEmail = "isUserContext" in ctx ? ctx.userEmail : undefined;

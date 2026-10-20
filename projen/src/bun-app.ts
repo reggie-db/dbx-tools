@@ -22,7 +22,7 @@
  * `src/`), they are outside the package's `tsconfig` include, so their `Bun.*`
  * usage never trips the `app` package's DOM-only `compile`.
  */
-import { stringUtils } from "@dbx-tools/shared-core";
+import { dedentLines } from "@dbx-tools/shared-core";
 import { type Project, TextFile } from "projen";
 import { header, headerLines } from "./generated.ts";
 
@@ -126,7 +126,7 @@ export class BunDevServerFile extends TextFile {
     super(project, "dev.ts", {
       marker: true,
       readonly: true,
-      lines: stringUtils.dedentLines(source, { trimEnd: false }),
+      lines: dedentLines(source, { trimEnd: false }),
     });
   }
 }
@@ -207,7 +207,7 @@ export class BunBuildFile extends TextFile {
     super(project, "build.ts", {
       marker: true,
       readonly: true,
-      lines: stringUtils.dedentLines(source, { trimEnd: false }),
+      lines: dedentLines(source, { trimEnd: false }),
     });
   }
 }

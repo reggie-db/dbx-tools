@@ -6,7 +6,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
 import {
   Loader2Icon,
   MessageSquarePlusIcon,

@@ -38,22 +38,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./local-fs": {
-        "types": "./lib/src/local-fs.d.ts",
-        "default": "./lib/src/local-fs.js"
-      },
-      "./local-path": {
-        "types": "./lib/src/local-path.d.ts",
-        "default": "./lib/src/local-path.js"
-      },
-      "./os-path": {
-        "types": "./lib/src/os-path.d.ts",
-        "default": "./lib/src/os-path.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -67,14 +51,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./local-fs": "./src/local-fs.ts",
-    "./local-path": "./src/local-path.ts",
-    "./os-path": "./src/os-path.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

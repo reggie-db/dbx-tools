@@ -13,17 +13,25 @@
  */
 
 import { configUtils } from "@dbx-tools/core";
-import { options as sharedOptions, stringUtils } from "@dbx-tools/shared-core";
-import { type AuthGateConfig, frp, interceptor, plugin, portr } from "@dbx-tools/tunnel";
+import { tcpPortOrZeroSchema, databricksEnvironmentNames, parseList } from "@dbx-tools/shared-core";
+import {
+  type AuthGateConfig,
+  resolveFrpConfig,
+  TunnelTransportSchema,
+  type TunnelTransport,
+  resolveTunnelTransport,
+  type ResolvedAuthGateConfig,
+  resolveAuthGateConfig,
+  resolvePortrConfig,
+} from "@dbx-tools/tunnel";
 import { z } from "zod";
 
 const text = (description: string) => z.string().trim().min(1).optional().describe(description);
-const port = (description: string) =>
-  sharedOptions.tcpPortOrZeroSchema.optional().describe(description);
+const port = (description: string) => tcpPortOrZeroSchema.optional().describe(description);
 const list = (description: string) =>
   z
     .preprocess(
-      (value) => (typeof value === "string" ? stringUtils.parseList(value) : value),
+      (value) => (typeof value === "string" ? parseList(value) : value),
       z.array(z.string().trim().min(1)),
     )
     .optional()
@@ -31,13 +39,13 @@ const list = (description: string) =>
 
 export const TunnelOptionsSchema = z
   .object({
-    transport: interceptor.TunnelTransportSchema.optional()
+    transport: TunnelTransportSchema.optional()
       .describe("Public tunnel transport.")
       .meta({ env: "TUNNEL_TRANSPORT" }),
     publicDomain: text("Public tunnel domain.").meta({ env: "TUNNEL_PUBLIC_DOMAIN" }),
     subdomain: text("Portr subdomain."),
     port: port("Public listener port.").meta({
-      env: sharedOptions.databricksEnvironmentNames.appPort,
+      env: databricksEnvironmentNames.appPort,
     }),
     appPort: port("Private wrapped application port.").meta({
       env: ["TUNNEL_APP_PORT", "APP_PORT"],
@@ -106,7 +114,7 @@ export interface ResolvedTunnelOptions {
   appPort?: number;
   /** Interface IPs the gate listens on. Empty means the default (0.0.0.0). */
   bindHosts: string[];
-  transport: interceptor.TunnelTransport;
+  transport: TunnelTransport;
   /**
    * The gate config as the `authGate` PLUGIN takes it - flags only, nothing
    * resolved. Passed straight to the plugin so it applies its own fallbacks
@@ -114,9 +122,9 @@ export interface ResolvedTunnelOptions {
    */
   gateConfig: AuthGateConfig;
   /** The same config after the plugin's resolution, for `status` and for routing. */
-  gate: plugin.ResolvedAuthGateConfig;
-  portr: ReturnType<typeof portr.resolvePortrConfig>;
-  frp: ReturnType<typeof frp.resolveFrpConfig>;
+  gate: ResolvedAuthGateConfig;
+  portr: ReturnType<typeof resolvePortrConfig>;
+  frp: ReturnType<typeof resolveFrpConfig>;
 }
 
 /** Resolve CLI flag values through the owning tunnel and auth-gate configuration rules. */
@@ -146,8 +154,8 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
     publicDomain: options.publicDomain,
     publicDomains: options.frpPublicDomain ? [options.frpPublicDomain] : undefined,
   };
-  const gate = plugin.resolveAuthGateConfig(gateConfig);
-  const transport = interceptor.resolveTunnelTransport(options.transport);
+  const gate = resolveAuthGateConfig(gateConfig);
+  const transport = resolveTunnelTransport(options.transport);
   return {
     publicPort,
     ...(appPort > 0 ? { appPort } : {}),
@@ -155,12 +163,12 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
     transport,
     gateConfig,
     gate,
-    portr: portr.resolvePortrConfig({
+    portr: resolvePortrConfig({
       publicDomain: gate.publicDomain,
       subdomain: options.subdomain,
       port: publicPort,
     }),
-    frp: frp.resolveFrpConfig({
+    frp: resolveFrpConfig({
       publicDomain: options.frpPublicDomain,
       server: options.frpServer,
       serverPort: options.frpServerPort,

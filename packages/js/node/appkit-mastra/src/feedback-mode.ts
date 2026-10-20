@@ -5,7 +5,7 @@
  */
 
 import { ConfigurationError } from "@databricks/appkit";
-import type { FeedbackMode, FeedbackModeOption } from "@dbx-tools/shared-mastra/feedback";
+import type { FeedbackMode, FeedbackModeOption } from "@dbx-tools/shared-mastra";
 
 /** Runtime availability used by automatic feedback selection. */
 export interface FeedbackAvailability {

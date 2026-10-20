@@ -12,7 +12,7 @@
  * @module
  */
 
-import { appkit } from "@dbx-tools/appkit";
+import { autoConfigure } from "@dbx-tools/appkit";
 import { addArgs, parseArgs } from "@dbx-tools/cli-args";
 import { log } from "@dbx-tools/shared-core";
 import { Command, CommanderError } from "commander";
@@ -35,7 +35,7 @@ async function writeEnvExport(opts: EnvCommandOptions): Promise<void> {
 
   logger.debug("Snapshotting env vars");
   const before = snapshotEnv();
-  await appkit.autoConfigure({ autoConfigure: "env" });
+  await autoConfigure({ autoConfigure: "env" });
   const changes = diffEnv(before, snapshotEnv());
 
   process.stdout.write(formatEnvExport(changes, opts.format));
@@ -68,5 +68,3 @@ export function buildProgram(name = "dbx appkit"): Command {
 export async function runCli(argv: string[]): Promise<void> {
   await buildProgram().parseAsync(argv);
 }
-
-export { CommanderError };

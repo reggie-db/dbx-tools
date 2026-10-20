@@ -3,6 +3,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  parseModelCapabilities,
+  parseModelRateLimits,
+  parseReasoningModels,
+  parseRetiredModels,
+} from "../src/_metadata-generator.ts";
+import {
   MODEL_METADATA_TTL_MS,
   MODEL_RATE_LIMITS_URL,
   OPENAI_RESPONSES_MODELS_URL,
@@ -13,13 +19,7 @@ import {
   type ModelRateLimitsSnapshot,
   type ReasoningModelsSnapshot,
   type RetiredModelsSnapshot,
-} from "../src/_metadata-contract.ts";
-import {
-  parseModelCapabilities,
-  parseModelRateLimits,
-  parseReasoningModels,
-  parseRetiredModels,
-} from "../src/_metadata-generator.ts";
+} from "../src/metadata-contract.ts";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../..");
 const nodeOutput = resolve(repositoryRoot, "packages/js/node/model/src/generated");

@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { net, stringUtils } from "@dbx-tools/shared-core";
+import { isLoopbackHost, parseList } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
 import { captureTaskCommand } from "../src/_task-command.ts";
 
@@ -97,7 +97,7 @@ export function devpiRegistry(index: string): LocalPythonRegistry | undefined {
   } catch {
     return undefined;
   }
-  if (!net.isLoopbackHost(url)) return undefined;
+  if (!isLoopbackHost(url)) return undefined;
 
   // A globally-configured publish-url wins: it names the deploy target directly,
   // so we honor it even if the index URL isn't the conventional `+simple` shape.
@@ -147,8 +147,8 @@ export function activePythonIndexes(): string[] {
   // uv: env vars first (primary, then extras), then uv.toml's index blocks.
   add(process.env.UV_DEFAULT_INDEX);
   add(process.env.UV_INDEX_URL);
-  for (const url of stringUtils.parseList(process.env.UV_INDEX)) add(url);
-  for (const url of stringUtils.parseList(process.env.UV_EXTRA_INDEX_URL)) add(url);
+  for (const url of parseList(process.env.UV_INDEX)) add(url);
+  for (const url of parseList(process.env.UV_EXTRA_INDEX_URL)) add(url);
   const uvConfig = process.env.UV_CONFIG_FILE ?? resolve(homedir(), ".config/uv/uv.toml");
   if (existsSync(uvConfig)) {
     for (const url of parseUvIndexes(readFileSync(uvConfig, "utf8"))) add(url);
@@ -156,9 +156,9 @@ export function activePythonIndexes(): string[] {
 
   // pip: env vars (primary + extras), then `pip config` (index-url + extra-index-url).
   add(process.env.PIP_INDEX_URL);
-  for (const url of stringUtils.parseList(process.env.PIP_EXTRA_INDEX_URL)) add(url);
+  for (const url of parseList(process.env.PIP_EXTRA_INDEX_URL)) add(url);
   add(pipConfig("global.index-url"));
-  for (const url of stringUtils.parseList(pipConfig("global.extra-index-url"))) add(url);
+  for (const url of parseList(pipConfig("global.extra-index-url"))) add(url);
 
   return out;
 }

@@ -44,24 +44,32 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { createRequire } from "node:module";
 import { dirname, join, posix } from "node:path";
 import type { WorkspaceClient } from "@databricks/appkit";
-import { appkit } from "@dbx-tools/appkit";
+import { tryGetExecutionContext } from "@dbx-tools/appkit";
 import type { WorkspaceClientLike } from "@dbx-tools/appkit";
-import { flushCache, getOrSet, projectCache } from "@dbx-tools/cache/cache";
-import { exec } from "@dbx-tools/core";
-import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
-import { localFS, type LocalFileSystem } from "@dbx-tools/fs";
-import { find } from "@dbx-tools/path";
+import { flushCache, getOrSet, projectCache } from "@dbx-tools/cache";
+import { spawn } from "@dbx-tools/core";
+import { DatabricksFileSystem, toLegacyWorkspaceClient } from "@dbx-tools/databricks";
+import { type LocalFileSystem, tmpFS, rebuildFS, scratchFS } from "@dbx-tools/fs";
+import { findFiles } from "@dbx-tools/path";
 import {
-  asyncUtils,
-  errorUtils,
   hash,
-  json,
   log,
-  net,
-  object,
-  stringUtils,
+  mapConcurrent,
+  toError,
+  errorMessage,
+  fnvHash,
+  parse,
+  type UrlLike,
+  urlBuilder,
+  isOneOrMany,
+  isRecord,
+  toDate,
+  parseList,
+  trimToNull,
+  toSlug,
+  trimToUndefined,
+  OneOrMany,
 } from "@dbx-tools/shared-core";
-import type { OneOrMany } from "@dbx-tools/shared-core";
 import { MemoryFileSystem, type FileSystem } from "@dbx-tools/shared-fs";
 
 import { ORGANIZATION_SKILLS_PATH, personalSkillsPath } from "./skill-paths.ts";
@@ -161,7 +169,7 @@ interface AiToolsManifest {
  */
 export interface RemoteSkillSourceOptions {
   /** `"aitools"`, a GitHub shorthand, a git / GitLab URL, or a download URL. */
-  source: net.UrlLike | AiToolsSource;
+  source: UrlLike | AiToolsSource;
   /** Stable virtual mount name under `/.skills`; generated from the source when omitted. */
   name?: string;
   /** Install only these skill names from the source. */
@@ -191,7 +199,7 @@ export interface RemoteSkillSourceOptions {
  * (string / `URL` / `{ url }`), or a {@link RemoteSkillSourceOptions} bag with
  * per-source policy.
  */
-export type RemoteSkillSource = net.UrlLike | AiToolsSource | RemoteSkillSourceOptions;
+export type RemoteSkillSource = UrlLike | AiToolsSource | RemoteSkillSourceOptions;
 
 /**
  * The workspace `remoteSkills` option: one source, a non-empty list of them, or
@@ -316,13 +324,13 @@ export function normalizeRemoteSkillsOption(
   const bag = isProvisionOptions(option) ? option : undefined;
   const sources = toSourceList(bag ? bag.sources : (option as RemoteSkillSource));
   // An empty list is the same as no configuration at all.
-  if (!object.isOneOrMany(sources)) return undefined;
+  if (!isOneOrMany(sources)) return undefined;
   return { ...bag, sources };
 }
 
 /** A `sources`-bearing bag is the top-level options shape, not a single source. */
 function isProvisionOptions(value: unknown): value is ProvisionRemoteSkillsOptions {
-  return object.isRecord(value) && "sources" in value;
+  return isRecord(value) && "sources" in value;
 }
 
 /** One source or many, as a plain array. A source is never itself an array. */
@@ -341,7 +349,7 @@ function toSourceOptions(source: RemoteSkillSource): NormalizedSource {
 }
 
 /** A {@link net.UrlLike} as the plain string the staging paths work with. */
-function toSourceString(source: net.UrlLike): string {
+function toSourceString(source: UrlLike): string {
   if (typeof source === "string") return source;
   return source instanceof URL ? source.toString() : source.url;
 }
@@ -361,11 +369,11 @@ function isAiToolsSource(source: string): boolean {
  * not what a success produces.
  */
 function cachePolicy(sourceOptions: NormalizedSource): RemoteSkillCacheEntry["policy"] {
-  const skills = stringUtils.parseList(sourceOptions.skills);
+  const skills = parseList(sourceOptions.skills);
   const policy = {
     ...(skills.length > 0 ? { skills: [...skills].sort() } : {}),
     ...(sourceOptions.experimental === true ? { experimental: true } : {}),
-    ...(stringUtils.trimToNull(sourceOptions.ref) ? { ref: sourceOptions.ref!.trim() } : {}),
+    ...(trimToNull(sourceOptions.ref) ? { ref: sourceOptions.ref!.trim() } : {}),
   };
   return Object.keys(policy).length > 0 ? policy : undefined;
 }
@@ -378,7 +386,7 @@ function cachePolicy(sourceOptions: NormalizedSource): RemoteSkillCacheEntry["po
  * The skill list is sorted first so a reordered array is still the same key.
  */
 function cacheKey(sourceOptions: NormalizedSource): string {
-  return hash.fnvHash(
+  return fnvHash(
     JSON.stringify({ source: sourceOptions.source, policy: cachePolicy(sourceOptions) ?? null }),
   );
 }
@@ -386,10 +394,10 @@ function cacheKey(sourceOptions: NormalizedSource): string {
 /** Stable virtual workspace path for one locally provisioned source. */
 function localSkillMountPath(sourceOptions: NormalizedSource, key: string): string {
   if (isAiToolsSource(sourceOptions.source)) return AITOOLS_SKILLS_MOUNT;
-  const configuredName = stringUtils.trimToNull(sourceOptions.name);
+  const configuredName = trimToNull(sourceOptions.name);
   const identifier = configuredName
-    ? stringUtils.toSlug(configuredName)
-    : stringUtils.toSlug(remoteSourceIdentifier(sourceOptions.source)) || "source";
+    ? toSlug(configuredName)
+    : toSlug(remoteSourceIdentifier(sourceOptions.source)) || "source";
   if (!identifier) {
     throw new Error(
       `remote skill source name must contain letters or numbers: "${configuredName}"`,
@@ -400,7 +408,7 @@ function localSkillMountPath(sourceOptions: NormalizedSource, key: string): stri
 
 /** Human-readable source portion used by generated virtual mount identifiers. */
 function remoteSourceIdentifier(source: string): string {
-  const url = net.urlBuilder(source);
+  const url = urlBuilder(source);
   if (!url) return source;
   const path = url.pathname.replace(/\.(git|md|zip|tar|tgz|gz)$/i, "");
   return `${url.hostname}-${path}`;
@@ -431,11 +439,11 @@ async function readMetadata(fs: FileSystem): Promise<RemoteSkillsMetadata | unde
   try {
     if (!(await fs.exists(METADATA_FILE))) return undefined;
     const raw = await fs.readFile(METADATA_FILE, { encoding: "utf8" });
-    const parsed = json.parse(raw, undefined) as RemoteSkillsMetadata | undefined;
-    if (!object.isRecord(parsed) || parsed.version !== METADATA_VERSION) return undefined;
-    return object.isRecord(parsed.sources) ? parsed : undefined;
+    const parsed = parse(raw, undefined) as RemoteSkillsMetadata | undefined;
+    if (!isRecord(parsed) || parsed.version !== METADATA_VERSION) return undefined;
+    return isRecord(parsed.sources) ? parsed : undefined;
   } catch (err) {
-    logger.debug("cache:unreadable", { error: errorUtils.toError(err) });
+    logger.debug("cache:unreadable", { error: toError(err) });
     return undefined;
   }
 }
@@ -449,7 +457,7 @@ async function readMetadata(fs: FileSystem): Promise<RemoteSkillsMetadata | unde
  */
 function isFresh(entry: RemoteSkillCacheEntry, ttlMs: number): boolean {
   if (ttlMs <= 0 || !Array.isArray(entry.skills)) return false;
-  const downloadedAt = object.toDate(entry.downloadedAt);
+  const downloadedAt = toDate(entry.downloadedAt);
   if (!downloadedAt) return false;
   const age = Date.now() - downloadedAt.getTime();
   return age >= 0 && age < ttlMs;
@@ -476,7 +484,7 @@ async function writeMetadata(
 
 /** The stable local tree a source is rebuilt into, keyed by {@link cacheKey}. */
 function localSkillsFS(key: string): LocalFileSystem {
-  return localFS.tmpFS(`${LOCAL_SKILLS_DIR}/${key}`);
+  return tmpFS(`${LOCAL_SKILLS_DIR}/${key}`);
 }
 
 /**
@@ -501,7 +509,7 @@ export async function provisionRemoteSkills(
   const sources = (Array.isArray(options.sources) ? options.sources : [options.sources]).map(
     toSourceOptions,
   );
-  const client = options.client ?? appkit.tryGetExecutionContext()?.client;
+  const client = options.client ?? tryGetExecutionContext()?.client;
   // Probed rather than assumed: an identity that cannot write the workspace
   // tree falls back to the local one instead of failing startup. The probe also
   // creates the root, which the first cache READ needs - `copySkillDirs` would
@@ -612,13 +620,13 @@ export async function provisionRemoteSkills(
       } catch (err) {
         if (failOnError) {
           throw new Error(
-            `failed to provision remote skill source "${sourceOptions.source}": ${errorUtils.errorMessage(err)}`,
-            { cause: errorUtils.toError(err) },
+            `failed to provision remote skill source "${sourceOptions.source}": ${errorMessage(err)}`,
+            { cause: toError(err) },
           );
         }
         logger.warn("source:skipped", {
           source: sourceOptions.source,
-          error: errorUtils.toError(err),
+          error: toError(err),
         });
       }
     }
@@ -677,7 +685,7 @@ async function cachedAiToolsTree(
 async function serializeSkillDirs(dirs: readonly StagedSkillDir[]): Promise<CachedSkillFile[]> {
   const files: CachedSkillFile[] = [];
   for (const dir of dirs) {
-    for await (const relative of find.findFiles("**/*", {
+    for await (const relative of findFiles("**/*", {
       cwd: dir.absolutePath,
       nodir: true,
     })) {
@@ -784,7 +792,7 @@ async function openWritableWorkspace(
   client: WorkspaceClient,
 ): Promise<DatabricksFileSystem | undefined> {
   const fs = new DatabricksFileSystem({
-    client: workspaceClient.toLegacyWorkspaceClient(client),
+    client: toLegacyWorkspaceClient(client),
     root: basePath,
     readOnly: false,
     createRoot: true,
@@ -795,7 +803,7 @@ async function openWritableWorkspace(
   } catch (err) {
     logger.warn("destination:unwritable", {
       destination: basePath,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     return undefined;
   }
@@ -809,8 +817,8 @@ function resolveDatabricksBasePath(
   client: WorkspaceClientLike | undefined,
 ): string | undefined {
   if (!client) return undefined;
-  if (options.databricksBasePath) return stringUtils.trimToUndefined(options.databricksBasePath);
-  const email = stringUtils.trimToNull(options.userEmail);
+  if (options.databricksBasePath) return trimToUndefined(options.databricksBasePath);
+  const email = trimToNull(options.userEmail);
   // A named user targets their personal Assistant tree (the "save a skill"
   // target); otherwise the shared workspace Assistant tree, which the built-in
   // Assistant-skills mount already scans.
@@ -849,13 +857,13 @@ async function stageAiTools(
   options: ProvisionRemoteSkillsOptions,
 ): Promise<string> {
   const maxBytes = resolveMaxBytes(sourceOptions, options);
-  const ref = stringUtils.trimToNull(sourceOptions.ref) ?? AITOOLS_REF;
-  const manifest = json.parse(
+  const ref = trimToNull(sourceOptions.ref) ?? AITOOLS_REF;
+  const manifest = parse(
     (await download(aiToolsRawUrl(ref, "manifest.json"), maxBytes)).toString("utf8"),
     undefined,
   ) as AiToolsManifest | undefined;
 
-  const wanted = new Set(stringUtils.parseList(sourceOptions.skills));
+  const wanted = new Set(parseList(sourceOptions.skills));
   const selected = Object.entries(manifest?.skills ?? {}).filter(([name, entry]) =>
     wanted.size > 0
       ? wanted.has(name)
@@ -871,7 +879,7 @@ async function stageAiTools(
       path: join(target, name, ...file.split("/")),
     })),
   );
-  await asyncUtils.mapConcurrent(
+  await mapConcurrent(
     files,
     async (item) => {
       const body = await download(item.url, maxBytes);
@@ -911,12 +919,12 @@ async function stageViaSkillsCli(
     "--copy",
     "-y",
   ];
-  for (const skill of stringUtils.parseList(sourceOptions.skills)) {
+  for (const skill of parseList(sourceOptions.skills)) {
     args.push("--skill", skill);
   }
-  if (stringUtils.parseList(sourceOptions.skills).length === 0) args.push("--skill", "*");
+  if (parseList(sourceOptions.skills).length === 0) args.push("--skill", "*");
 
-  const result = await exec.spawn(cli.command, args, {
+  const result = await spawn(cli.command, args, {
     cwd: target,
     stdout: "capture",
     stderr: "capture",
@@ -956,14 +964,14 @@ async function stageViaFetch(
   target: string,
   options: ProvisionRemoteSkillsOptions,
 ): Promise<string> {
-  const url = net.urlBuilder(sourceOptions.source);
+  const url = urlBuilder(sourceOptions.source);
   if (!url) {
     throw new Error(
       `source "${sourceOptions.source}" is not a URL and the optional "skills" package is not installed`,
     );
   }
   const buffer = await download(url.toString(), resolveMaxBytes(sourceOptions, options));
-  const name = stringUtils.toSlug(deriveSkillName(url.toString())) || "remote-skill";
+  const name = toSlug(deriveSkillName(url.toString())) || "remote-skill";
   const skillDir = join(target, name);
   await mkdir(skillDir, { recursive: true });
   await writeFile(join(skillDir, "SKILL.md"), buffer);
@@ -983,8 +991,8 @@ async function download(url: string, maxBytes: number): Promise<Buffer> {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS),
   }).catch((err) => {
-    throw new Error(`download failed (${url}): ${errorUtils.errorMessage(err)}`, {
-      cause: errorUtils.toError(err),
+    throw new Error(`download failed (${url}): ${errorMessage(err)}`, {
+      cause: toError(err),
     });
   });
   if (!response.ok) {
@@ -999,7 +1007,7 @@ async function download(url: string, maxBytes: number): Promise<Buffer> {
 
 /** Derive a skill directory name from a download URL's last path segment. */
 function deriveSkillName(urlString: string): string {
-  const url = net.urlBuilder(urlString);
+  const url = urlBuilder(urlString);
   const last = url?.pathname.split("/").filter(Boolean).pop() ?? "";
   return last.replace(/\.(md|zip|tar|tgz|gz)$/i, "");
 }
@@ -1039,7 +1047,7 @@ async function collectSkillDirs(root: string): Promise<StagedSkillDir[]> {
 async function copySkillDirs(destination: FileSystem, dirs: StagedSkillDir[]): Promise<void> {
   await destination.init();
   for (const dir of dirs) {
-    for await (const relative of find.findFiles("**/*", {
+    for await (const relative of findFiles("**/*", {
       cwd: dir.absolutePath,
       nodir: true,
     })) {
@@ -1070,7 +1078,7 @@ async function persistLocally(
   dirs: StagedSkillDir[],
   record: RemoteSkillCacheEntry,
 ): Promise<string> {
-  const stable = await localFS.rebuildFS(`${LOCAL_SKILLS_DIR}/${key}`, async (scratch) => {
+  const stable = await rebuildFS(`${LOCAL_SKILLS_DIR}/${key}`, async (scratch) => {
     await copySkillDirs(scratch, dirs);
     await writeMetadata(scratch, key, record);
   });
@@ -1083,7 +1091,7 @@ async function persistLocally(
  * the {@link FileSystem} API.
  */
 async function initializedScratch(prefix: string): Promise<LocalFileSystem> {
-  const scratch = localFS.scratchFS(prefix);
+  const scratch = scratchFS(prefix);
   await scratch.init();
   return scratch;
 }

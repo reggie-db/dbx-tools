@@ -8,11 +8,14 @@ import {
   SEARCH_DEFAULT_BASE_PATH,
   SEARCH_PLUGIN_NAME,
   SEARCH_ROUTES,
-  searchSchemas,
   type SearchClientConfig,
   type SearchHit,
   type SearchMode,
   type SearchResult,
+  searchResultSchema,
+  searchClientConfigSchema,
+  searchRoute,
+  toAiSearchQueryType,
 } from "@dbx-tools/shared-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -54,7 +57,7 @@ export interface UseSearchState {
 
 /** Validate one universal-search response with the owning shared schema. */
 export function parseUniversalSearchResult(value: unknown): SearchResult {
-  return searchSchemas.searchResultSchema.parse(value);
+  return searchResultSchema.parse(value);
 }
 
 /** Validate the published extension config, treating AppKit's empty sentinel as absent. */
@@ -67,7 +70,7 @@ export function parseSearchClientConfig(value: unknown): SearchClientConfig | un
   ) {
     return undefined;
   }
-  return searchSchemas.searchClientConfigSchema.parse(value);
+  return searchClientConfigSchema.parse(value);
 }
 
 /** A single configured index is already the complete universal-search set. */
@@ -105,7 +108,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
     options.universal,
     config?.indexes.length ?? native.indexes.length,
   );
-  const universalSearchPath = searchSchemas.searchRoute(
+  const universalSearchPath = searchRoute(
     config?.basePath ?? SEARCH_DEFAULT_BASE_PATH,
     SEARCH_ROUTES.universal,
   );
@@ -127,7 +130,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
         return;
       }
       if (!useUniversalRoute) {
-        const resolvedQueryType = searchSchemas.toAiSearchQueryType(options.mode);
+        const resolvedQueryType = toAiSearchQueryType(options.mode);
         const request: AiSearchRequest = {
           queryText: text,
           ...(options.limit ? { numResults: options.limit } : {}),

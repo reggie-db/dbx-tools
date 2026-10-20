@@ -1,11 +1,11 @@
-import { getAuthStatus } from "@dbx-tools/ui/auth/react";
 import {
   Button,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { getAuthStatus } from "@dbx-tools/shared-auth";
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
 import { SettingsIcon, SparklesIcon } from "lucide-react";
 import { useEffect, useState } from "react";

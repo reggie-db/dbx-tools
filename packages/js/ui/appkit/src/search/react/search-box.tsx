@@ -8,11 +8,6 @@
 // string-ish field as a title and the primary-key `id` as a subtitle. Styled
 // with AppKit tokens (see `../styles.css`).
 
-import type { SearchHit } from "@dbx-tools/shared-search";
-import { XIcon } from "lucide-react";
-import { useCallback, useState, type ReactNode } from "react";
-
-import { useSearch, type UseSearchOptions } from "./use-search.ts";
 import {
   Badge,
   Button,
@@ -23,7 +18,12 @@ import {
   CommandList,
   Spinner,
   cn,
-} from "../../react/index.ts";
+} from "@databricks/appkit-ui/react";
+import type { SearchHit } from "@dbx-tools/shared-search";
+import { XIcon } from "lucide-react";
+import { useCallback, useState, type ReactNode } from "react";
+
+import { useSearch, type UseSearchOptions } from "./use-search.ts";
 
 /** Props for {@link SearchBox}. */
 export interface SearchBoxProps extends UseSearchOptions {

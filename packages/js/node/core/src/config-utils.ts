@@ -36,12 +36,19 @@ import { readFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseEnv } from "node:util";
 import {
-  environmentUtils,
-  json,
   log,
-  object,
-  options as sharedOptions,
-  stringUtils,
+  isDatabricksAppEnv,
+  parseRecord,
+  isRecord,
+  sequence,
+  type Sequence,
+  toBoolean,
+  tcpPortSchema,
+  tokenize,
+  trimToEmpty,
+  trimToNull,
+  parseList,
+  toNumber,
 } from "@dbx-tools/shared-core";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -106,9 +113,6 @@ const NODE_ENV_ALTERNATIVES = {
   development: ["dev"],
 } as const satisfies Record<string, readonly string[]>;
 
-/** Highest valid TCP port number. */
-export const MAX_TCP_PORT = sharedOptions.MAX_TCP_PORT;
-
 /** Boolean environment override for project `.env` reads. */
 const CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV";
 
@@ -130,9 +134,9 @@ export const valueSchema = z
     message: "Interpolated values are not allowed",
   });
 
-const portValueSchema = sharedOptions.tcpPortSchema;
+const portValueSchema = tcpPortSchema;
 
-const positiveNumberValue = z.preprocess((input) => object.toNumber(input), z.number().positive());
+const positiveNumberValue = z.preprocess((input) => toNumber(input), z.number().positive());
 const positiveIntValue = positiveNumberValue.transform(Math.floor);
 
 /** A named bundle or App resource; concrete resource fields pass through. */
@@ -228,7 +232,7 @@ function resourceValue(resource: unknown): string | undefined {
     ["postgres", "branch"],
   ] as const) {
     let value = resource;
-    for (const part of path) value = object.isRecord(value) ? value[part] : undefined;
+    for (const part of path) value = isRecord(value) ? value[part] : undefined;
     const parsed = valueSchema.safeParse(value);
     if (parsed.success) return parsed.data;
   }
@@ -241,12 +245,12 @@ export function getBundlePath(data: Record<string, unknown>, path: string): stri
   if (parts.length === 0) return undefined;
   let current: unknown = data;
   for (let index = 0; index < parts.length; index++) {
-    if (!object.isRecord(current)) return undefined;
+    if (!isRecord(current)) return undefined;
     const next = current[parts[index]!];
     if (index === parts.length - 1) {
       const direct = valueSchema.safeParse(next);
       if (direct.success) return direct.data;
-      if (object.isRecord(next)) {
+      if (isRecord(next)) {
         const nested = valueSchema.safeParse(next.value);
         return nested.success ? nested.data : undefined;
       }
@@ -261,12 +265,11 @@ export function getBundlePath(data: Record<string, unknown>, path: string): stri
 export function environmentKeys(name: string): readonly string[] {
   const trimmed = name.trim();
   if (!trimmed) return [];
-  return object
-    .sequence(
-      trimmed,
-      trimmed.toUpperCase(),
-      Array.from(stringUtils.tokenize(trimmed)).join("_").toUpperCase(),
-    )
+  return sequence(
+    trimmed,
+    trimmed.toUpperCase(),
+    Array.from(tokenize(trimmed)).join("_").toUpperCase(),
+  )
     .filter(Boolean)
     .distinct()
     .toArray();
@@ -277,24 +280,17 @@ function keys(
   input: ConfigKey,
   options: Pick<ConfigOptions, "scope" | "prefix"> = {},
 ): readonly string[] {
-  const scopes = object
-    .sequence(options.scope ?? DEFAULT_SCOPE)
-    .map(stringUtils.trimToEmpty)
+  const scopes = sequence(options.scope ?? DEFAULT_SCOPE)
+    .map(trimToEmpty)
     .filter(Boolean)
     .distinct()
     .toArray();
   const prefixes =
     options.prefix === undefined
       ? []
-      : object
-          .sequence(options.prefix)
-          .map(stringUtils.trimToEmpty)
-          .filter(Boolean)
-          .distinct()
-          .toArray();
-  return object
-    .sequence(input)
-    .map(stringUtils.trimToEmpty)
+      : sequence(options.prefix).map(trimToEmpty).filter(Boolean).distinct().toArray();
+  return sequence(input)
+    .map(trimToEmpty)
     .filter(Boolean)
     .distinct()
     .flatMap((key) => {
@@ -316,10 +312,10 @@ function keys(
  * already answered.
  *
  */
-function values(input: ConfigKey, options: ConfigOptions = {}): object.Sequence<ConfigValue> {
+function values(input: ConfigKey, options: ConfigOptions = {}): Sequence<ConfigValue> {
   const candidates = keys(input, options);
   const sources = configSources(options);
-  return object.sequence({
+  return sequence({
     *[Symbol.iterator](): Generator<ConfigValue> {
       for (const source of sources) {
         for (const map of read(source, options)) {
@@ -335,7 +331,7 @@ function values(input: ConfigKey, options: ConfigOptions = {}): object.Sequence<
 
 function configSources(options: ConfigOptions): readonly ConfigSource[] {
   const sources: ConfigSource[] = [
-    ...object.sequence<ConfigSource>(options.sources ?? DEFAULT_SOURCES).distinct(),
+    ...sequence<ConfigSource>(options.sources ?? DEFAULT_SOURCES).distinct(),
   ];
   if (options.data !== undefined && options.sources !== undefined && !sources.includes("config")) {
     sources.push("config");
@@ -346,12 +342,12 @@ function configSources(options: ConfigOptions): readonly ConfigSource[] {
 function configMapValue(value: ConfigMapValue | unknown): string | null {
   if (Array.isArray(value)) {
     for (const entry of value) {
-      const resolved = stringUtils.trimToNull(entry);
+      const resolved = trimToNull(entry);
       if (resolved !== null) return resolved;
     }
     return null;
   }
-  return stringUtils.trimToNull(value);
+  return trimToNull(value);
 }
 
 /**
@@ -389,12 +385,12 @@ export function name(
  * Known long and short names are interchangeable; unknown names pass through.
  */
 function nodeEnvNames(nodeEnv: unknown): string[] {
-  const name = stringUtils.trimToNull(nodeEnv)?.toLowerCase();
+  const name = trimToNull(nodeEnv)?.toLowerCase();
   if (!name || !/^[a-z0-9_-]+$/.test(name)) return [];
   for (const [canonical, alternatives] of Object.entries(NODE_ENV_ALTERNATIVES)) {
     const names: readonly string[] = alternatives;
     if (name === canonical || names.includes(name)) {
-      return [...object.sequence(name, canonical, alternatives).distinct()];
+      return [...sequence(name, canonical, alternatives).distinct()];
     }
   }
   return [name];
@@ -414,7 +410,7 @@ export function string(
   input: ConfigKey,
   options?: ConfigOptions,
 ): string | undefined {
-  return stringUtils.trimToNull(configured) ?? text(input, options);
+  return trimToNull(configured) ?? text(input, options);
 }
 
 /**
@@ -426,11 +422,8 @@ export function boolean(
   input: ConfigKey,
   options?: ConfigOptions,
 ): boolean | undefined {
-  return object.toBoolean(configured) ?? object.toBoolean(text(input, options));
+  return toBoolean(configured) ?? toBoolean(text(input, options));
 }
-
-/** Parse a finite number with the shared scalar coercion rules. */
-export const toNumber = object.toNumber;
 
 /**
  * Resolve a positive number that may be fractional (a score threshold, a ratio).
@@ -492,10 +485,8 @@ export function list(
   transform?: (entry: string) => string,
   options?: ConfigOptions,
 ): string[] {
-  const fromConfig = stringUtils.parseList(configured, transform);
-  return fromConfig.length > 0
-    ? fromConfig
-    : stringUtils.parseList(text(input, options), transform);
+  const fromConfig = parseList(configured, transform);
+  return fromConfig.length > 0 ? fromConfig : parseList(text(input, options), transform);
 }
 
 /**
@@ -510,23 +501,21 @@ export function list(
  *
  */
 export function bundleFile(cwd?: string | null, profile?: string | null): ConfigFile | undefined {
-  const override = object.toBoolean(process.env[CONFIG_BUNDLE_KEY]);
+  const override = toBoolean(process.env[CONFIG_BUNDLE_KEY]);
   if (override === false) return undefined;
   if (
     override === undefined &&
-    (process.env.NODE_ENV?.trim().toLowerCase() === "production" ||
-      environmentUtils.isDatabricksAppEnv())
+    (process.env.NODE_ENV?.trim().toLowerCase() === "production" || isDatabricksAppEnv())
   ) {
     return undefined;
   }
   const resolved = resolveWorkingDirectory(cwd);
-  return loadBundleFile(resolved, stringUtils.trimToNull(profile));
+  return loadBundleFile(resolved, trimToNull(profile));
 }
 
 /** The parsed `app.yaml` / `app.yml` for `cwd`, when local App config reads are enabled. */
 export function appFile(cwd?: string | null): ConfigFile | undefined {
-  const enabled =
-    object.toBoolean(process.env[CONFIG_APP_KEY]) ?? !environmentUtils.isDatabricksAppEnv();
+  const enabled = toBoolean(process.env[CONFIG_APP_KEY]) ?? !isDatabricksAppEnv();
   if (!enabled) return undefined;
   return loadAppFile(resolveWorkingDirectory(cwd));
 }
@@ -547,7 +536,7 @@ function sourceData(
   source: ConfigFile | Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   if (!source) return undefined;
-  if ("path" in source && typeof source.path === "string" && object.isRecord(source.data)) {
+  if ("path" in source && typeof source.path === "string" && isRecord(source.data)) {
     return source.data;
   }
   return source as Record<string, unknown>;
@@ -555,8 +544,7 @@ function sourceData(
 
 /** Parsed `.env` for `cwd`, or `{}`; parsed file data is cached by path. */
 function dotenv(cwd?: string | null): Record<string, string | undefined> {
-  const enabled =
-    object.toBoolean(process.env[CONFIG_DOTENV_KEY]) ?? !environmentUtils.isDatabricksAppEnv();
+  const enabled = toBoolean(process.env[CONFIG_DOTENV_KEY]) ?? !isDatabricksAppEnv();
   if (!enabled) return {};
   const resolved = resolveWorkingDirectory(cwd);
   return loadDotenv(resolved, nodeEnvNames(process.env.NODE_ENV));
@@ -566,8 +554,8 @@ function dotenv(cwd?: string | null): Record<string, string | undefined> {
 function read(
   source: ConfigSource,
   options: ConfigOptions,
-): object.Sequence<Readonly<Record<string, unknown>>> {
-  return object.sequence({
+): Sequence<Readonly<Record<string, unknown>>> {
+  return sequence({
     *[Symbol.iterator](): Generator<Readonly<Record<string, unknown>>> {
       switch (source) {
         case "config": {
@@ -672,13 +660,13 @@ function loadBundleFile(cwd: string, profile: string | null): ConfigFile | undef
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const output = stringUtils.trimToNull(result.stdout);
-    const error = stringUtils.trimToNull(result.stderr);
+    const output = trimToNull(result.stdout);
+    const error = trimToNull(result.stderr);
     if (output === null) {
       logger.debug("bundle validate produced no JSON", { path, status: result.status, error });
       return undefined;
     }
-    const parsed = json.parseRecord(output);
+    const parsed = parseRecord(output);
     if (!parsed) {
       logger.warn("failed to parse bundle validate output", { path, status: result.status });
       return undefined;
@@ -697,7 +685,7 @@ function loadAppFile(cwd: string): ConfigFile | undefined {
   const data = cachedRecord(JSON.stringify(["app", path]), () => {
     try {
       const parsed = parseYaml(readFileSync(path, "utf8"));
-      return object.isRecord(parsed) ? parsed : undefined;
+      return isRecord(parsed) ? parsed : undefined;
     } catch {
       logger.warn("failed to parse app yaml", { path });
       return undefined;

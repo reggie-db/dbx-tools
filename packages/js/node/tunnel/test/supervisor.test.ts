@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { describe, it } from "node:test";
-import type { ChildProcessResult } from "@dbx-tools/core/exec";
-import { log } from "@dbx-tools/shared-core";
+import type { ChildProcessResult } from "@dbx-tools/core";
+import { logger } from "@dbx-tools/shared-core";
 import { superviseProcessForever } from "../src/supervisor.ts";
 
 class FakeChild extends EventEmitter {
@@ -42,7 +42,7 @@ describe("superviseProcessForever", () => {
     const children: FakeChild[] = [];
     const supervisor = superviseProcessForever({
       name: "test-client",
-      logger: log.logger("test:supervisor"),
+      logger: logger("test:supervisor"),
       retryDelaysMs: [0],
       start: () => startChild(children),
     });
@@ -60,7 +60,7 @@ describe("superviseProcessForever", () => {
     const children: FakeChild[] = [];
     const supervisor = superviseProcessForever({
       name: "test-client",
-      logger: log.logger("test:supervisor"),
+      logger: logger("test:supervisor"),
       retryDelaysMs: [0],
       start: () => startChild(children),
     });
@@ -78,7 +78,7 @@ describe("superviseProcessForever", () => {
     const children: FakeChild[] = [];
     const supervisor = superviseProcessForever({
       name: "test-client",
-      logger: log.logger("test:supervisor"),
+      logger: logger("test:supervisor"),
       retryDelaysMs: [0],
       start: () => startChild(children),
     });
@@ -98,7 +98,7 @@ describe("superviseProcessForever", () => {
     let probes = 0;
     const supervisor = superviseProcessForever({
       name: "test-client",
-      logger: log.logger("test:supervisor"),
+      logger: logger("test:supervisor"),
       retryDelaysMs: [0],
       healthCheckGraceMs: 1,
       healthCheckIntervalMs: 1,
@@ -127,7 +127,7 @@ describe("superviseProcessForever", () => {
     process.on("SIGINT", ignore);
     const supervisor = superviseProcessForever({
       name: "test-client",
-      logger: log.logger("test:supervisor"),
+      logger: logger("test:supervisor"),
       retryDelaysMs: [0],
       start: () => startChild(children),
     });
@@ -151,7 +151,7 @@ describe("superviseProcessForever", () => {
     process.on("SIGTERM", ignore);
     const supervisor = superviseProcessForever({
       name: "test-client",
-      logger: log.logger("test:supervisor"),
+      logger: logger("test:supervisor"),
       retryDelaysMs: [0],
       start: () => startChild(children),
     });
@@ -175,7 +175,7 @@ describe("superviseProcessForever", () => {
     let probes = 0;
     const supervisor = superviseProcessForever({
       name: "test-client",
-      logger: log.logger("test:supervisor"),
+      logger: logger("test:supervisor"),
       retryDelaysMs: [0],
       healthCheckGraceMs: 1,
       healthCheckIntervalMs: 5,

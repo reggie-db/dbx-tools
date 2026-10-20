@@ -5,22 +5,16 @@
  */
 
 import { delimiter, dirname } from "node:path";
-import { exec } from "@dbx-tools/core";
-import type { ChildProcessResult } from "@dbx-tools/core/exec";
+import { spawn } from "@dbx-tools/core";
+import type { ChildProcessResult } from "@dbx-tools/core";
+import { poll, isDatabricksAppEnv, memoize, formatListenAddress } from "@dbx-tools/shared-core";
 import {
-  asyncUtils,
-  environmentUtils,
-  functionUtils,
-  options as sharedOptions,
-} from "@dbx-tools/shared-core";
-import { coerce, rcompare, type SemVer } from "semver";
-
-import {
-  graphitiOptionsEnvironment,
-  resolveGraphitiOptions,
   type GraphitiOptions,
   type ResolvedGraphitiOptions,
-} from "./options.ts";
+  graphitiOptionsEnvironment,
+  resolveGraphitiOptions,
+} from "@dbx-tools/shared-graphiti";
+import { coerce, rcompare, type SemVer } from "semver";
 
 /** Context passed to one Graphiti sidecar readiness probe. */
 export interface GraphitiHealthCheckContext {
@@ -56,7 +50,7 @@ interface PythonCandidate {
   version: SemVer;
 }
 
-const graphitiPython = functionUtils.memoize(async (): Promise<string | undefined> => {
+const graphitiPython = memoize(async (): Promise<string | undefined> => {
   const available = (
     await Promise.all(PYTHON_CANDIDATES.map((command) => _probePython(command)))
   ).filter((candidate): candidate is PythonCandidate => candidate !== undefined);
@@ -64,7 +58,7 @@ const graphitiPython = functionUtils.memoize(async (): Promise<string | undefine
   return available[0]?.command;
 });
 
-function graphitiOptions(options: GraphitiRuntimeOptions): GraphitiOptions {
+function graphitiRuntimeOptions(options: GraphitiRuntimeOptions): GraphitiOptions {
   const { healthCheck: _healthCheck, signal: _signal, ...graphiti } = options;
   return graphiti;
 }
@@ -112,7 +106,7 @@ export async function waitForGraphitiHealth(
   signal?: AbortSignal,
 ): Promise<void> {
   const budget = Math.max(1, timeoutMs);
-  for await (const healthy of asyncUtils.poll(
+  for await (const healthy of poll(
     ({ signal: pollSignal }) => graphitiHealthCheck(options, pollSignal),
     {
       intervalMs: HEALTH_CHECK_INTERVAL_MS,
@@ -146,7 +140,7 @@ export async function resolveGraphitiPythonCommand(
 ): Promise<GraphitiPythonCommand> {
   const python = process.env.PYTHON?.trim();
   if (python) return { command: python, args };
-  if (environmentUtils.isDatabricksAppEnv()) {
+  if (isDatabricksAppEnv()) {
     const installed = await graphitiPython();
     if (installed) return { command: installed, args };
   }
@@ -162,7 +156,7 @@ export async function resolveGraphitiPythonCommand(
 }
 
 async function _probePython(command: string): Promise<PythonCandidate | undefined> {
-  const versionResult = await exec.spawn(command, ["-V"], {
+  const versionResult = await spawn(command, ["-V"], {
     check: false,
     stdin: "ignore",
     stdout: "capture",
@@ -173,7 +167,7 @@ async function _probePython(command: string): Promise<PythonCandidate | undefine
   const version = coerce(`${versionResult.stdout}\n${versionResult.stderr}`);
   if (!version) return undefined;
 
-  const importResult = await exec.spawn(command, ["-c", GRAPHITI_IMPORT_PROBE], {
+  const importResult = await spawn(command, ["-c", GRAPHITI_IMPORT_PROBE], {
     check: false,
     stdin: "ignore",
     stdout: "ignore",
@@ -187,9 +181,10 @@ export function graphitiHttpUrl(
   options: Pick<ResolvedGraphitiOptions, "listen">,
   path: string,
 ): string {
-  return `${sharedOptions
-    .formatListenAddress(options.listen)
-    .replace(/^tcp:/, "http:")}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${formatListenAddress(options.listen).replace(
+    /^tcp:/,
+    "http:",
+  )}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 /** Build one readiness-gated Graphiti sidecar from the shared typed options. */
@@ -197,13 +192,13 @@ export async function createGraphitiChildProcess(
   options: GraphitiRuntimeOptions = {},
 ): Promise<GraphitiChildProcess> {
   const healthCheck = options.healthCheck;
-  const resolved = resolveGraphitiOptions(graphitiOptions(options));
+  const resolved = resolveGraphitiOptions(graphitiRuntimeOptions(options));
   const python = await resolveGraphitiPythonCommand(
     { dev: !resolved.databaseUrl },
     "-m",
     "dbx_tools.graphiti",
   );
-  const child = exec.spawn(python.command, python.args, {
+  const child = spawn(python.command, python.args, {
     env: _runtimeEnvironment(resolved),
     forwardTerminationSignals: false,
   });
@@ -237,7 +232,7 @@ async function waitForGraphitiChild(
   timeoutMs: number,
   signal: AbortSignal,
 ): Promise<void> {
-  for await (const healthy of asyncUtils.poll(
+  for await (const healthy of poll(
     ({ attempt, signal: pollSignal }) =>
       healthCheck({ process: child, signal: pollSignal, attempt }),
     {

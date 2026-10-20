@@ -23,8 +23,21 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { file } from "@dbx-tools/core";
-import { errorUtils, functionUtils, hash, http, json, log, net } from "@dbx-tools/shared-core";
+import { statSync } from "@dbx-tools/core";
+import {
+  log,
+  toError,
+  memoize,
+  fnvHash,
+  id,
+  createFetchError,
+  parse,
+  type Cidr,
+  type UrlLike,
+  parseIp,
+  findContainingCidr,
+  parseCidr,
+} from "@dbx-tools/shared-core";
 import { resolveHostIps } from "./net.ts";
 
 const logger = log.logger("cloud");
@@ -67,7 +80,7 @@ export interface CloudLocation {
 }
 
 /** A parsed CIDR block tagged with the region it belongs to. */
-interface RegionCidr extends net.Cidr {
+interface RegionCidr extends Cidr {
   region: string;
 }
 
@@ -96,7 +109,7 @@ interface ProviderRanges {
  * // { provider: CloudProvider.Aws,
  * //   region: "us-west-2", ip: "...", cidr: "..." }
  */
-export async function resolveCloudLocation(input: net.UrlLike): Promise<CloudLocation | null> {
+export async function resolveCloudLocation(input: UrlLike): Promise<CloudLocation | null> {
   const ips = await resolveHostIps(input);
   if (ips.length === 0) {
     logger.debug("no ips resolved", { input: String(input) });
@@ -104,10 +117,10 @@ export async function resolveCloudLocation(input: net.UrlLike): Promise<CloudLoc
   }
   const providers = await loadProviderRanges();
   for (const ip of ips) {
-    const parsed = net.parseIp(ip);
+    const parsed = parseIp(ip);
     if (!parsed) continue;
     for (const { provider, ranges } of providers) {
-      const match = net.findContainingCidr(parsed, ranges);
+      const match = findContainingCidr(parsed, ranges);
       if (match) {
         return { provider, region: match.region, ip, cidr: match.cidr };
       }
@@ -132,7 +145,7 @@ export async function loadProviderRanges(): Promise<ProviderRanges[]> {
     if (result.status === "fulfilled") {
       out.push(result.value);
     } else {
-      logger.warn("provider range load failed", { error: errorUtils.toError(result.reason) });
+      logger.warn("provider range load failed", { error: toError(result.reason) });
     }
   }
   return out;
@@ -142,9 +155,9 @@ export async function loadProviderRanges(): Promise<ProviderRanges[]> {
 // Per-provider cached loaders
 // ────────────────────────────────────────────────────────────────
 
-const loadAwsRanges = functionUtils.memoize(fetchAwsRanges, { ttlMs: RANGE_CACHE_TTL_MS });
-const loadAzureRanges = functionUtils.memoize(fetchAzureRanges, { ttlMs: RANGE_CACHE_TTL_MS });
-const loadGcpRanges = functionUtils.memoize(fetchGcpRanges, { ttlMs: RANGE_CACHE_TTL_MS });
+const loadAwsRanges = memoize(fetchAwsRanges, { ttlMs: RANGE_CACHE_TTL_MS });
+const loadAzureRanges = memoize(fetchAzureRanges, { ttlMs: RANGE_CACHE_TTL_MS });
+const loadGcpRanges = memoize(fetchGcpRanges, { ttlMs: RANGE_CACHE_TTL_MS });
 
 // ────────────────────────────────────────────────────────────────
 // Provider feed fetch + parse
@@ -233,7 +246,7 @@ async function fetchAzureRanges(): Promise<ProviderRanges> {
 /** Parse `cidr` and, when valid and `region` is set, push a tagged range. */
 function addRange(ranges: RegionCidr[], cidr?: string, region?: string): void {
   if (!cidr || !region) return;
-  const parsed = net.parseCidr(cidr);
+  const parsed = parseCidr(cidr);
   if (parsed) ranges.push({ ...parsed, region });
 }
 
@@ -245,7 +258,7 @@ function addRange(ranges: RegionCidr[], cidr?: string, region?: string): void {
  */
 async function fetchJson<T>(url: string): Promise<T> {
   const text = await fetchText(url);
-  const parsed = json.parse<T>(text);
+  const parsed = parse<T>(text);
   if (parsed === undefined) {
     throw new Error(`range feed returned non-JSON content: ${url}`);
   }
@@ -262,7 +275,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 async function fetchText(url: string): Promise<string> {
   const cacheDir = join(tmpdir(), "dbx-tools", "shared", "cloud");
   const cacheDirCreated = await mkdir(cacheDir, { recursive: true });
-  const cachePath = join(cacheDir, `fetch-${hash.fnvHash(url)}.txt`);
+  const cachePath = join(cacheDir, `fetch-${fnvHash(url)}.txt`);
   const createdAt = cacheDirCreated ? undefined : await getCreated(cachePath);
   if (createdAt) {
     const expiresAt = new Date(createdAt.getTime() + RANGE_CACHE_TTL_MS);
@@ -271,11 +284,11 @@ async function fetchText(url: string): Promise<string> {
       return readFile(cachePath, "utf8");
     }
   }
-  let tempPath: string | null = join(cacheDir, `${hash.id()}.txt`);
+  let tempPath: string | null = join(cacheDir, `${id()}.txt`);
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      throw await http.createFetchError(response, url);
+      throw await createFetchError(response, url);
     }
     const responseText = await response.text();
     await mkdir(dirname(tempPath), { recursive: true });
@@ -294,5 +307,5 @@ async function fetchText(url: string): Promise<string> {
 
 /** Birth time of `path`, or `undefined` when it doesn't exist yet. */
 async function getCreated(path: string): Promise<Date | undefined> {
-  return (await file.statSync(path))?.birthtime;
+  return (await statSync(path))?.birthtime;
 }

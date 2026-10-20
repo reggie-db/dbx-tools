@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import * as exec from "@dbx-tools/core/exec";
-import { findFilesSync } from "@dbx-tools/path/find";
-import { log, object } from "@dbx-tools/shared-core";
+import { spawnSync, spawn } from "@dbx-tools/core";
+import { findFilesSync } from "@dbx-tools/path";
+import { log, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
 import { TaskRootOptionSchema } from "./options.ts";
@@ -137,7 +137,7 @@ function changedFiles(root: string, base?: string): string[] {
   const candidates = base ? [base] : ["origin/main", "main", "HEAD~1"];
   let committed: string[] = [];
   for (const candidate of candidates) {
-    const result = exec.spawnSync("git", ["diff", "--name-only", `${candidate}...HEAD`], {
+    const result = spawnSync("git", ["diff", "--name-only", `${candidate}...HEAD`], {
       cwd: root,
       stdin: "ignore",
       stdout: "capture",
@@ -148,14 +148,14 @@ function changedFiles(root: string, base?: string): string[] {
       break;
     }
   }
-  const working = exec.spawnSync("git", ["diff", "--name-only", "HEAD"], {
+  const working = spawnSync("git", ["diff", "--name-only", "HEAD"], {
     cwd: root,
     stdin: "ignore",
     stdout: "capture",
     stderr: "ignore",
     check: true,
   }).stdoutLines;
-  return [...object.sequence(committed, working).filter(Boolean).distinct()].sort();
+  return [...sequence(committed, working).filter(Boolean).distinct()].sort();
 }
 
 function selectedTests(
@@ -228,7 +228,7 @@ async function runTests(root: string, files: readonly string[]): Promise<void> {
   const started = performance.now();
   const jobs = [...groups].map(async ([name, paths]) => {
     const groupStarted = performance.now();
-    const result = await exec.spawn("bun", ["test", ...paths], {
+    const result = await spawn("bun", ["test", ...paths], {
       cwd: root,
       stdin: "ignore",
       stdout: "inherit",

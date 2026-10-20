@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as brandFiles from "../../packages/js/node/core/src/brand-files.ts";
 import * as projectUtils from "../../packages/js/node/core/src/project-utils.ts";
+import { brandUtils } from "@dbx-tools/shared-core";
 import { docsAstroScript, loadDocsToolchain } from "./docs-toolchain.mjs";
 import {
   discoverRepositoryPackages,
@@ -372,7 +373,7 @@ function llms(packages, guides, releases) {
 
 function llmsFull(packages, guides, releases, mappings) {
   const parts = [
-    brandFiles.brandContextPrompt(brandContext),
+    brandUtils.brandContextPrompt(brandContext),
     transformLinks(read(path.join(root, "README.md")), root, mappings),
   ];
   for (const guide of guides) {
@@ -503,7 +504,7 @@ function syncBrandAssets() {
   write(path.join(publicRoot, "brand.json"), `${JSON.stringify(brandContext, null, 2)}\n`);
   write(
     path.join(publicRoot, "brand.schema.json"),
-    `${JSON.stringify(brandFiles.brandContextJsonSchema(), null, 2)}\n`,
+    `${JSON.stringify(brandUtils.brandContextJsonSchema(), null, 2)}\n`,
   );
 }
 

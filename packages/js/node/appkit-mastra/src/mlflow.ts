@@ -26,9 +26,13 @@
  */
 
 import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
-import { appkit } from "@dbx-tools/appkit";
-import { asyncUtils, environmentUtils, errorUtils, log, object } from "@dbx-tools/shared-core";
-import { feedback } from "@dbx-tools/shared-mastra";
+import { type WorkspaceClientLike } from "@dbx-tools/appkit";
+import { log, sleep, isDatabricksAppEnv, toError, isRecord } from "@dbx-tools/shared-core";
+import {
+  type MlflowFeedbackRequest,
+  DEFAULT_FEEDBACK_NAME,
+  DEFAULT_COMMENT_NAME,
+} from "@dbx-tools/shared-mastra";
 import { TraceLocationType, TraceMetadataKey } from "@mlflow/core";
 import { TraceInfo } from "@mlflow/core/dist/core/entities/trace_info.js";
 import { TraceState } from "@mlflow/core/dist/core/entities/trace_state.js";
@@ -118,7 +122,7 @@ export class AgentTraceSpanProcessor implements SpanProcessor {
 }
 
 /** Workspace client carried on an AppKit execution context. */
-type WorkspaceClient = appkit.WorkspaceClientLike;
+type WorkspaceClient = WorkspaceClientLike;
 
 /** Experiment tag Databricks stores as `catalog.schema.table_prefix`. */
 const TRACE_DESTINATION_PATH_TAG = "mlflow.experiment.databricksTraceDestinationPath";
@@ -157,14 +161,14 @@ function experimentTagMap(raw: unknown): Map<string, string> {
   const tags = new Map<string, string>();
   if (Array.isArray(raw)) {
     for (const tag of raw) {
-      if (!object.isRecord(tag) || typeof tag.key !== "string" || typeof tag.value !== "string") {
+      if (!isRecord(tag) || typeof tag.key !== "string" || typeof tag.value !== "string") {
         continue;
       }
       tags.set(tag.key, tag.value);
     }
     return tags;
   }
-  if (!object.isRecord(raw)) return tags;
+  if (!isRecord(raw)) return tags;
   for (const [key, value] of Object.entries(raw)) {
     if (typeof value === "string") tags.set(key, value);
   }
@@ -327,7 +331,7 @@ function configuredExperiment(): { id?: string; name?: string } {
 
 /** Tracking URI for direct local MLflow tracing, with CLI-profile auth injected. */
 export function directMlflowTrackingUri(): string | undefined {
-  if (environmentUtils.isDatabricksAppEnv()) return undefined;
+  if (isDatabricksAppEnv()) return undefined;
   const configured = process.env.MLFLOW_TRACKING_URI?.trim();
   if (configured && configured !== "databricks") return configured;
   const profile = process.env.DATABRICKS_CONFIG_PROFILE?.trim();
@@ -360,16 +364,14 @@ export function directMlflowTraceLocation():
 /** Whether the local direct-to-experiment MLflow SDK has enough configuration. */
 export function directMlflowTracingConfigured(): boolean {
   return Boolean(
-    !environmentUtils.isDatabricksAppEnv() &&
-    process.env.MLFLOW_EXPERIMENT_ID?.trim() &&
-    directMlflowTrackingUri(),
+    !isDatabricksAppEnv() && process.env.MLFLOW_EXPERIMENT_ID?.trim() && directMlflowTrackingUri(),
   );
 }
 
 /** Whether a Databricks App can promote OTLP spans into full MLflow trace info. */
 export function appMlflowTraceInfoConfigured(): boolean {
   return Boolean(
-    environmentUtils.isDatabricksAppEnv() &&
+    isDatabricksAppEnv() &&
     (process.env.MLFLOW_EXPERIMENT_ID?.trim() || process.env.MLFLOW_EXPERIMENT_NAME?.trim()) &&
     (process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim() ||
       process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim()),
@@ -395,7 +397,7 @@ export async function initializeAppMlflowTraceInfo(client?: WorkspaceClient): Pr
     return true;
   } catch (err) {
     logger.warn("Databricks Apps MLflow trace-info promotion disabled", {
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     // Startup uses the service principal. Permit one later request-scoped
     // client to resolve experiment metadata when that principal cannot read it.
@@ -468,7 +470,7 @@ export function persistAppMlflowTraceInfo(params: AppMlflowTraceInfo): void {
     .catch((err) => {
       logger.warn("Databricks Apps MLflow trace-info promotion failed", {
         traceId: params.traceId,
-        error: errorUtils.toError(err),
+        error: toError(err),
       });
     })
     .finally(() => pendingAppMlflowTraceInfo.delete(pending));
@@ -511,7 +513,7 @@ async function detectedDirectMlflowTraceLocation(
   } catch (err) {
     logger.warn("direct MLflow UC trace-location detection failed", {
       experimentId,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     return undefined;
   }
@@ -575,7 +577,7 @@ export async function initializeDirectMlflowTracing(): Promise<boolean> {
     return true;
   } catch (err) {
     logger.warn("direct MLflow tracing disabled", {
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     return false;
   }
@@ -712,7 +714,7 @@ async function resolveExperimentId(client: WorkspaceClient): Promise<string | un
 }
 
 /** Parameters for {@link logFeedback}. */
-export type LogFeedbackParams = feedback.MlflowFeedbackRequest & {
+export type LogFeedbackParams = MlflowFeedbackRequest & {
   /** Identity the feedback is attributed to (user email / id). */
   sourceId?: string;
 };
@@ -731,9 +733,7 @@ export async function logFeedback(
   // A comment with no thumbs value is logged as text feedback; a value
   // (with an optional comment as the rationale) is the thumbs path.
   const hasValue = params.value !== undefined;
-  const name =
-    params.name?.trim() ||
-    (hasValue ? feedback.DEFAULT_FEEDBACK_NAME : feedback.DEFAULT_COMMENT_NAME);
+  const name = params.name?.trim() || (hasValue ? DEFAULT_FEEDBACK_NAME : DEFAULT_COMMENT_NAME);
   const value = hasValue ? params.value : params.comment;
   const assessmentTraceId = mlflowAssessmentTraceId(
     params.traceId,
@@ -762,7 +762,7 @@ export async function logFeedback(
       logger.warn("feedback request failed", {
         traceId: params.traceId,
         assessmentTraceId,
-        error: errorUtils.toError(err),
+        error: toError(err),
       });
       return undefined;
     }
@@ -776,7 +776,7 @@ export async function logFeedback(
     // Trace export is async; a fresh trace may not exist yet. Retry a
     // few times with a short backoff before giving up softly.
     if (res.status === 404 && attempt < NOT_FOUND_RETRIES) {
-      await asyncUtils.sleep(NOT_FOUND_BACKOFF_MS * (attempt + 1));
+      await sleep(NOT_FOUND_BACKOFF_MS * (attempt + 1));
       continue;
     }
     logger.warn("feedback not recorded", {

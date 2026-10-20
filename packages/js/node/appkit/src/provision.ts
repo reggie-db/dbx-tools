@@ -23,7 +23,7 @@
 
 import { createLakebasePool, getWorkspaceClient, ValidationError } from "@databricks/appkit";
 import { postgresConnectionOptions, quotePostgresIdentifier } from "@dbx-tools/postgres";
-import { environmentUtils, errorUtils, log } from "@dbx-tools/shared-core";
+import { log, isDatabricksAppEnv, toError, type Logger } from "@dbx-tools/shared-core";
 
 const defaultLogger = log.logger("provision");
 
@@ -87,9 +87,9 @@ export function cacheGrantStatements(role: string): readonly string[] {
  */
 export async function provisionCacheSchema(
   role: string | undefined,
-  logger: log.Logger = defaultLogger,
+  logger: Logger = defaultLogger,
 ): Promise<void> {
-  if (environmentUtils.isDatabricksAppEnv()) {
+  if (isDatabricksAppEnv()) {
     logger.debug("autopg: skip cache provisioning (inside a Databricks App)");
     return;
   }
@@ -127,7 +127,7 @@ export async function provisionCacheSchema(
   } catch (err) {
     logger.warn("autopg: cache provisioning failed (continuing)", {
       schema: CACHE_SCHEMA,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
   } finally {
     await pool.end().catch(() => {});

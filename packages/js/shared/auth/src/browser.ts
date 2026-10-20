@@ -13,11 +13,11 @@ import { WebAuthnAbortService } from "@simplewebauthn/browser";
 import { createAuthClient } from "better-auth/client";
 import { emailOTPClient } from "better-auth/client/plugins";
 
-import { AUTH_BASE_PATH } from "./_route.ts";
-import { type AuthStatus, passkeyDisplayName as formatPasskeyDisplayName } from "./auth.ts";
-
-export { AUTH_BASE_PATH } from "./_route.ts";
-export type { Passkey } from "@better-auth/passkey/client";
+import {
+  AUTH_BASE_PATH,
+  type AuthStatus,
+  passkeyDisplayName as formatPasskeyDisplayName,
+} from "./auth.ts";
 
 interface BrowserLocation {
   readonly hostname: string;

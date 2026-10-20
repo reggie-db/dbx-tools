@@ -8,7 +8,7 @@
  * @module
  */
 
-import { hash } from "@dbx-tools/shared-core";
+import { fnvHashWithOptions } from "@dbx-tools/shared-core";
 import * as posixPath from "./posix-path.ts";
 
 /** Text or binary data accepted by filesystem write operations. */
@@ -235,7 +235,7 @@ export function cache<TFileSystem extends FileSystem>(
 ): TFileSystem {
   const operations = new Set(options.operations ?? DEFAULT_CACHE_OPERATIONS);
   const namespace = options.namespace ?? "filesystem";
-  const filesystemHash = hash.fnvHashWithOptions(
+  const filesystemHash = fnvHashWithOptions(
     { length: 10 },
     namespace,
     filesystem.backend,
@@ -248,8 +248,7 @@ export function cache<TFileSystem extends FileSystem>(
     operation: CacheableFileSystemOperation,
     path: string,
     args: readonly unknown[],
-  ): string =>
-    `${filesystemHash}${hash.fnvHashWithOptions({ length: 8 }, operation, args)}_${path}`;
+  ): string => `${filesystemHash}${fnvHashWithOptions({ length: 8 }, operation, args)}_${path}`;
 
   const invalidatePaths = async (paths: readonly string[]): Promise<void> => {
     const normalized = paths.flatMap((path) => {

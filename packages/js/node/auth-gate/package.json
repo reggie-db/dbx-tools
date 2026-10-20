@@ -43,18 +43,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./auth-storage": {
-        "types": "./lib/src/auth-storage.d.ts",
-        "default": "./lib/src/auth-storage.js"
-      },
-      "./auth": {
-        "types": "./lib/src/auth.d.ts",
-        "default": "./lib/src/auth.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -68,13 +56,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./auth-storage": "./src/auth-storage.ts",
-    "./auth": "./src/auth.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import { describe, it } from "node:test";
-import { resolveServicePackageBin } from "@dbx-tools/cli-service/definition";
+import { resolveServicePackageBin } from "@dbx-tools/cli-service";
 
 import { buildProgram } from "../src/genie-code/cli.ts";
 

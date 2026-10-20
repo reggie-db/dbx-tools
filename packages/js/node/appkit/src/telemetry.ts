@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { stringUtils, token } from "@dbx-tools/shared-core";
+import { trimToNull, USER_EMAIL_HEADER, USER_ID_HEADER } from "@dbx-tools/shared-core";
 import {
   trace,
   type Span,
@@ -102,9 +102,9 @@ export function stampHttpTraceUser(span: Span, request: unknown): void {
   const first = (name: string): string | undefined => {
     const raw = record[name];
     const value = Array.isArray(raw) ? raw[0] : raw;
-    return stringUtils.trimToNull(value) ?? undefined;
+    return trimToNull(value) ?? undefined;
   };
-  const user = first(token.USER_EMAIL_HEADER) ?? first(token.USER_ID_HEADER);
+  const user = first(USER_EMAIL_HEADER) ?? first(USER_ID_HEADER);
   if (user) span.setAttribute(USER_TRACE_ATTRIBUTE, user);
 }
 

@@ -52,25 +52,16 @@
  */
 
 import { ConfigurationError, Plugin } from "@databricks/appkit";
-import { configUtils } from "@dbx-tools/core";
-import { errorUtils, log, stringUtils, token } from "@dbx-tools/shared-core";
-
-/**
- * Header the Databricks Apps front door forwards the caller's OBO token on.
- * Its presence is what makes `asUser(req)` viable, so it is the signal
- * {@link useServicePrincipal} reads in `"auto"` mode.
- *
- * Re-exported from `@dbx-tools/shared-core`'s `token` module (which reads the
- * same header to decode OAuth scopes) rather than re-spelled, so the name for
- * this wire contract exists once.
- */
-export const ACCESS_TOKEN_HEADER = token.ACCESS_TOKEN_HEADER;
-
-/** Header the Databricks Apps front door forwards the caller's user id on. */
-export const USER_ID_HEADER = token.USER_ID_HEADER;
-
-/** Header the Databricks Apps front door forwards the caller's email on. */
-export const USER_EMAIL_HEADER = token.USER_EMAIL_HEADER;
+import { string, ENV_ONLY } from "@dbx-tools/core";
+import {
+  log,
+  toError,
+  isLevelEnabled,
+  trimToNull,
+  ACCESS_TOKEN_HEADER,
+  USER_ID_HEADER,
+  USER_EMAIL_HEADER,
+} from "@dbx-tools/shared-core";
 
 /** Identity a request's Databricks calls run as. See the module docs. */
 export type IdentityMode = "user" | "service-principal" | "auto";
@@ -103,7 +94,7 @@ export function resolveIdentityMode(
   envKeys: string | readonly string[],
   field = "identity",
 ): IdentityMode {
-  const raw = configUtils.string(configured, envKeys, configUtils.ENV_ONLY);
+  const raw = string(configured, envKeys, ENV_ONLY);
   if (raw === undefined) return DEFAULT_IDENTITY_MODE;
   const mode = raw.toLowerCase() as IdentityMode;
   if (!IDENTITY_MODES.includes(mode)) {
@@ -123,17 +114,17 @@ export function resolveIdentityMode(
  * the first Databricks call.
  */
 export function requestAccessToken(req: HeaderBearing | undefined): string | undefined {
-  return stringUtils.trimToNull(req?.header(ACCESS_TOKEN_HEADER)) ?? undefined;
+  return trimToNull(req?.header(ACCESS_TOKEN_HEADER)) ?? undefined;
 }
 
 /** The forwarded user id on `req`, or `undefined`. */
 export function requestUserId(req: HeaderBearing | undefined): string | undefined {
-  return stringUtils.trimToNull(req?.header(USER_ID_HEADER)) ?? undefined;
+  return trimToNull(req?.header(USER_ID_HEADER)) ?? undefined;
 }
 
 /** The forwarded user email on `req`, or `undefined`. */
 export function requestUserEmail(req: HeaderBearing | undefined): string | undefined {
-  return stringUtils.trimToNull(req?.header(USER_EMAIL_HEADER)) ?? undefined;
+  return trimToNull(req?.header(USER_EMAIL_HEADER)) ?? undefined;
 }
 
 /**
@@ -193,7 +184,7 @@ export function installAsUserDevelopmentPatch(): void {
       );
     };
   } catch (error) {
-    logger.debug("asUser development patch skipped", { error: errorUtils.toError(error) });
+    logger.debug("asUser development patch skipped", { error: toError(error) });
   }
 }
 
@@ -212,7 +203,7 @@ function withAsUserSkipWarnSuppressed<T>(req: HeaderBearing, fn: () => T): T {
   const warn = console.warn;
   console.warn = (...args: unknown[]) => {
     if (
-      !log.isLevelEnabled("debug") &&
+      !isLevelEnabled("debug") &&
       args.some((value) => typeof value === "string" && value.includes(AS_USER_SKIP_WARN))
     ) {
       return;

@@ -46,7 +46,7 @@
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { asyncUtils, log, object } from "@dbx-tools/shared-core";
+import { log, mapConcurrent, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
 import {
@@ -56,19 +56,16 @@ import {
   TaskOutputOptionSchema,
   TaskRootOptionSchema,
 } from "./options.ts";
+import { runTaskCommand, runTaskCommandAsync } from "../src/_task-command.ts";
+import { applyPublishConfig, packNpmPackage } from "../src/npm-packaging.ts";
 import {
-  applyPublishConfig,
   npmReleaseMatches,
-  packNpmPackage,
   publishedNpmRelease,
   readNpmArchiveIdentity,
-} from "./publish-npm.ts";
-import { runTaskCommand, runTaskCommandAsync } from "../src/_task-command.ts";
+} from "../src/npm-release.ts";
 import { recordedPackages } from "../src/packages.ts";
 
 const logger = log.logger("projen:publish");
-
-export { applyPublishConfig };
 
 /** Whether selected workspace members carry the reviewed workspace version. */
 function manifestsMatchVersion(members: readonly string[], version: string): boolean {
@@ -187,9 +184,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
         `${pkg.name ?? dirname(dir)} has invalid publishConfig.access ${String(access)}`,
       );
     }
-    const compiledTargets = [
-      ...object.sequence(compiledPublishTargets(pkg.publishConfig)).distinct(),
-    ];
+    const compiledTargets = [...sequence(compiledPublishTargets(pkg.publishConfig)).distinct()];
     publishable.push({
       dir,
       name: pkg.name ?? dirname(dir),
@@ -232,7 +227,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     rmSync(output, { recursive: true, force: true });
     mkdirSync(output, { recursive: true });
   }
-  await asyncUtils.mapConcurrent(
+  await mapConcurrent(
     publishable,
     async ({ dir, name, version: packageVersion, access }) => {
       const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));

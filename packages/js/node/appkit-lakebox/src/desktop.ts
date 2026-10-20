@@ -1,7 +1,7 @@
-import { brandUtils } from "@dbx-tools/shared-core";
-import { dbxToolsAssetDataUrls, dbxToolsAssetSvg } from "@dbx-tools/ui/branding/assets";
+import { defaultBrandContext } from "@dbx-tools/shared-core";
+import { dbxToolsAssetDataUrls, dbxToolsAssetSvg } from "@dbx-tools/ui/branding/generated";
 
-const BRAND = brandUtils.defaultBrandContext;
+const BRAND = defaultBrandContext;
 const BRAND_COLORS = BRAND.colors;
 const WALLPAPER_LOGO = dbxToolsAssetSvg.logoDark.replace(
   "<svg ",

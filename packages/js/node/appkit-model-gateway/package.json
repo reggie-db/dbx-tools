@@ -47,46 +47,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./gateway": {
-        "types": "./lib/src/gateway.d.ts",
-        "default": "./lib/src/gateway.js"
-      },
-      "./models": {
-        "types": "./lib/src/models.d.ts",
-        "default": "./lib/src/models.js"
-      },
-      "./plugin": {
-        "types": "./lib/src/plugin.d.ts",
-        "default": "./lib/src/plugin.js"
-      },
-      "./reasoning-adapt": {
-        "types": "./lib/src/reasoning-adapt.d.ts",
-        "default": "./lib/src/reasoning-adapt.js"
-      },
-      "./registry": {
-        "types": "./lib/src/registry.d.ts",
-        "default": "./lib/src/registry.js"
-      },
-      "./router": {
-        "types": "./lib/src/router.d.ts",
-        "default": "./lib/src/router.js"
-      },
-      "./routes": {
-        "types": "./lib/src/routes.d.ts",
-        "default": "./lib/src/routes.js"
-      },
-      "./translation": {
-        "types": "./lib/src/translation.d.ts",
-        "default": "./lib/src/translation.js"
-      },
-      "./transport": {
-        "types": "./lib/src/transport.d.ts",
-        "default": "./lib/src/transport.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -100,20 +60,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./gateway": "./src/gateway.ts",
-    "./models": "./src/models.ts",
-    "./plugin": "./src/plugin.ts",
-    "./reasoning-adapt": "./src/reasoning-adapt.ts",
-    "./registry": "./src/registry.ts",
-    "./router": "./src/router.ts",
-    "./routes": "./src/routes.ts",
-    "./translation": "./src/translation.ts",
-    "./transport": "./src/transport.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "dist/plugins",
     "lib"

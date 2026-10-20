@@ -5,7 +5,7 @@
  */
 
 import { policy } from "@dbx-tools/model";
-import { object } from "@dbx-tools/shared-core";
+import { isRecord } from "@dbx-tools/shared-core";
 import type {
   GatewayRoute,
   ModelTarget,
@@ -75,17 +75,17 @@ export function resolveRoute(input: ResolveRouteInput): GatewayRoute {
 export function requestedFeatures(body: Readonly<Record<string, unknown>>): RequestedFeatures {
   const tools = Array.isArray(body.tools) ? body.tools : [];
   const toolTypes = tools
-    .filter((tool): tool is Record<string, unknown> => object.isRecord(tool))
+    .filter((tool): tool is Record<string, unknown> => isRecord(tool))
     .map((tool) => tool.type);
-  const text = object.isRecord(body.text) ? body.text : {};
-  const format = object.isRecord(text.format) ? text.format.type : text.format;
+  const text = isRecord(body.text) ? body.text : {};
+  const format = isRecord(text.format) ? text.format.type : text.format;
   return {
     background: body.background === true,
     customTools: toolTypes.some((type) => type === "custom"),
     parallelTools: body.parallel_tool_calls === true,
     previousResponse:
       typeof body.previous_response_id === "string" && body.previous_response_id.length > 0,
-    reasoning: object.isRecord(body.reasoning) || body.reasoning_effort !== undefined,
+    reasoning: isRecord(body.reasoning) || body.reasoning_effort !== undefined,
     storage: body.store === true,
     structuredOutput: format !== undefined && format !== "text",
     tools: tools.length > 0,

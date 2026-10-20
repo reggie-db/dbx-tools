@@ -5,7 +5,7 @@
  */
 
 import { getExecutionContext, type WorkspaceClient } from "@databricks/appkit";
-import { createCache, getOrSet } from "@dbx-tools/cache/cache";
+import { createCache, getOrSet } from "@dbx-tools/cache";
 
 import {
   RecallMemoryInputSchema,

@@ -8,8 +8,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { withFileLock } from "@dbx-tools/core/file-lock";
-import { object } from "@dbx-tools/shared-core";
+import { withFileLock } from "@dbx-tools/core";
+import { isRecord } from "@dbx-tools/shared-core";
 import {
   GenieCodeBaseConfigSchema,
   GenieCodeConfigSchema,
@@ -17,8 +17,8 @@ import {
   type GenieCodeBaseConfig,
   type GenieCodeConfig,
   type GenieCodeProviderOverlay,
-} from "@dbx-tools/shared-genie-code/config";
-import { genieCodeHomeName } from "@dbx-tools/shared-genie-code/options";
+} from "@dbx-tools/shared-genie-code";
+import { genieCodeHomeName } from "@dbx-tools/shared-genie-code";
 import { parse, stringify } from "smol-toml";
 
 /** Provider identifier written to the base and invocation overlay configurations. */
@@ -65,7 +65,7 @@ export function genieCodeBaseConfig(
 ): GenieCodeBaseConfig {
   const projects = Object.fromEntries(
     Object.entries(existingProjects).filter(
-      ([, value]) => object.isRecord(value) && value.trust_level === "trusted",
+      ([, value]) => isRecord(value) && value.trust_level === "trusted",
     ),
   );
   return GenieCodeBaseConfigSchema.parse({
@@ -118,7 +118,7 @@ export function genieCodeConfig(options: WriteGenieCodeConfigOptions): GenieCode
 async function existingProjects(path: string): Promise<Record<string, unknown>> {
   try {
     const value = parse(await readFile(path, "utf8"));
-    return object.isRecord(value.projects) ? value.projects : {};
+    return isRecord(value.projects) ? value.projects : {};
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return {};
     throw error;

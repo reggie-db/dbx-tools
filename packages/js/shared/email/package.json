@@ -35,14 +35,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./email": {
-        "types": "./lib/src/email.d.ts",
-        "default": "./lib/src/email.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -56,12 +48,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./email": "./src/email.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

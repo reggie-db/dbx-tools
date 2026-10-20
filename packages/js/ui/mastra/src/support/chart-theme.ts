@@ -20,7 +20,7 @@
  *
  * @module
  */
-import { object } from "@dbx-tools/shared-core";
+import { deepEqual } from "@dbx-tools/shared-core";
 import { type RefObject, useEffect, useState } from "react";
 
 /**
@@ -122,7 +122,7 @@ export function useChartChrome(ref: RefObject<Element | null>): ChartChrome | un
   useEffect(() => {
     const read = () => {
       const next = resolveChartChrome(ref.current);
-      setChrome((prev) => (object.deepEqual(prev, next) ? prev : next));
+      setChrome((prev) => (deepEqual(prev, next) ? prev : next));
     };
     read();
     const observer = new MutationObserver(read);

@@ -4,12 +4,12 @@
  * @module
  */
 
-import { errorUtils, log, object } from "@dbx-tools/shared-core";
-import { routes } from "@dbx-tools/shared-mastra";
+import { log, toError, errorMessage, isRecord } from "@dbx-tools/shared-core";
 import {
+  MASTRA_ROUTES,
   isStaleMastraResumeError,
   STALE_MASTRA_RESUME_STREAM_TEXT,
-} from "@dbx-tools/shared-mastra/resume";
+} from "@dbx-tools/shared-mastra";
 import { handleChatStream, toAISdkStream } from "@mastra/ai-sdk";
 import { isEventedAgent } from "@mastra/core/agent/durable";
 import { registerApiRoute } from "@mastra/core/server";
@@ -37,16 +37,14 @@ function latestUserText(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined;
   for (let index = value.length - 1; index >= 0; index -= 1) {
     const message = value[index];
-    if (!object.isRecord(message) || message.role !== "user") continue;
+    if (!isRecord(message) || message.role !== "user") continue;
     if (typeof message.content === "string" && message.content.trim()) {
       return message.content.trim();
     }
     if (!Array.isArray(message.parts)) continue;
     const text = message.parts
       .flatMap((part) =>
-        object.isRecord(part) && part.type === "text" && typeof part.text === "string"
-          ? [part.text]
-          : [],
+        isRecord(part) && part.type === "text" && typeof part.text === "string" ? [part.text] : [],
       )
       .join("\n")
       .trim();
@@ -58,11 +56,11 @@ function latestUserText(value: unknown): string | undefined {
 /** Register detached chat, durable observation, and explicit abort routes. */
 export function agentChatRoutes(config: MastraPluginConfig = {}) {
   const followUps = resolveFollowUpSuggestionsConfig(config.followUpSuggestions);
-  const chatPath = `${routes.MASTRA_ROUTES.chat}/:agentId` as `${string}:agentId`;
+  const chatPath = `${MASTRA_ROUTES.chat}/:agentId` as `${string}:agentId`;
   const runPath =
-    `${routes.MASTRA_ROUTES.chat}/:agentId${routes.MASTRA_ROUTES.runs}/:runId` as `${string}:agentId${string}:runId`;
+    `${MASTRA_ROUTES.chat}/:agentId${MASTRA_ROUTES.runs}/:runId` as `${string}:agentId${string}:runId`;
   const abortPath =
-    `${runPath}${routes.MASTRA_ROUTES.abort}` as `${string}:agentId${string}:runId${string}`;
+    `${runPath}${MASTRA_ROUTES.abort}` as `${string}:agentId${string}:runId${string}`;
   return [
     registerApiRoute(chatPath, {
       method: "POST",
@@ -180,9 +178,9 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
 function serializeChatStreamError(error: unknown): string {
   if (isStaleMastraResumeError(error)) {
     logger.warn("ignored stale mastra resume", {
-      error: errorUtils.toError(error),
+      error: toError(error),
     });
     return STALE_MASTRA_RESUME_STREAM_TEXT;
   }
-  return errorUtils.errorMessage(error);
+  return errorMessage(error);
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 /** Synthesize once or supervise Projen, barrels, and registered focused watchers. */
 import { fileURLToPath } from "node:url";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { log, toError } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
@@ -84,7 +84,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     } catch (err) {
       // A tree that doesn't synth is precisely when the watcher is most useful: the edit
       // that repairs it is the one the projenrc watcher is sitting there waiting for.
-      logger.error("initial sync failed - watching anyway", { error: errorUtils.toError(err) });
+      logger.error("initial sync failed - watching anyway", { error: toError(err) });
     }
 
     const watchers = [

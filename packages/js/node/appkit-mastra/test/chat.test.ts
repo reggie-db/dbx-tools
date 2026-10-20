@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { log } from "@dbx-tools/shared-core";
+import { logger } from "@dbx-tools/shared-core";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
@@ -27,7 +27,7 @@ describe("background chat routes", () => {
     const durable = await buildAgents({
       config: { agents: { analyst: { instructions: "Answer directly." } } },
       context: undefined,
-      log: log.logger("test/chat"),
+      log: logger("test/chat"),
     });
     const attached = await buildAgents({
       config: {
@@ -35,7 +35,7 @@ describe("background chat routes", () => {
         agents: { analyst: { instructions: "Answer directly." } },
       },
       context: undefined,
-      log: log.logger("test/chat"),
+      log: logger("test/chat"),
     });
     const signal = new AbortController().signal;
 
@@ -51,7 +51,7 @@ describe("background chat routes", () => {
       config: { agents: { analyst: { instructions: "Answer directly." } } },
       context: undefined,
       memoryBuilder: { forAgent: () => ({}) } as unknown as MemoryBuilder,
-      log: log.logger("test/chat"),
+      log: logger("test/chat"),
     });
 
     assert.deepEqual(await built.agents.analyst.getDefaultOptions({ requestContext }), {

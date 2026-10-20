@@ -5,15 +5,15 @@
  */
 
 import { ExecutionError } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { createGenieSpace } from "@dbx-tools/genie/space";
+import { toContext } from "@dbx-tools/appkit";
+import { createGenieSpace } from "@dbx-tools/genie";
 import { hash } from "@dbx-tools/shared-core";
 import {
   GeneratedGenieSpaceSchema,
   type GeneratedGenieSpace,
   type GeneratedSchema,
   type GeneratorPlan,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 import { resolveGeneratorIdentity } from "./namespace.ts";
 
 /** Inputs for one standalone generated Genie space. */
@@ -86,7 +86,7 @@ export async function createGeneratorGenieSpace(
     throw new ExecutionError("Genie principal does not match the active OBO user");
   }
   const parentPath = `/Workspace/Users/${identity.principal}/.dbx-tools/generator/${input.location.schema}`;
-  const context = signal ? databricks.toContext(signal) : undefined;
+  const context = signal ? toContext(signal) : undefined;
   await identity.userClient
     .toLegacyWorkspaceClient()
     .workspace.mkdirs({ path: parentPath }, context);

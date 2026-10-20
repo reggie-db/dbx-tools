@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { LakeboxApiError, type LakeboxEntry } from "@dbx-tools/lakebox/rest";
+import { LakeboxApiError, type LakeboxEntry } from "@dbx-tools/lakebox";
 import { LakeboxResourceRegistry, type LakeboxResourceClient } from "../src/_resource-registry.ts";
 
 class TestCache {

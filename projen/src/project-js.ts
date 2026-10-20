@@ -6,17 +6,25 @@
  * {@link DBXToolsNodeProject} (monorepo root) and {@link DBXToolsTypeScriptProject}
  * (a package, or a standalone compiling root) both implement {@link DBXToolsJavaScriptProject}.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { ignore, match } from "@dbx-tools/path";
-import { object, stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
+import { repositoryUrl } from "@dbx-tools/core";
+import { ignore, findFilesSync, toPathMatcher } from "@dbx-tools/path";
+import {
+  type OneOrMany,
+  isRecord,
+  sequence,
+  toSlug,
+  tokenize,
+  trimToNull,
+  dedent,
+} from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
 import { Component, LogLevel, Project, type Task, TextFile, javascript, typescript } from "projen";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
 import { AppKitWorkspace, type AppKitWorkspaceMode } from "./appkit-workspace.ts";
-import { generateBarrels, isGeneratedBarrel } from "./barrels.ts";
+import { folderBarrelFile, generateBarrels } from "./barrels.ts";
 
 import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
 import { BUN_VERSION, BUN_VERSION_CHECK_SCRIPT, MINIMUM_BUN_VERSION } from "./bun-workflow.ts";
@@ -113,10 +121,10 @@ export class PackageIdentifier {
    */
   static of(...names: OneOrMany<string>): PackageIdentifier {
     const segments = names.flatMap((part) => part.split("/")).filter(Boolean);
-    const scope = segments.length ? stringUtils.toSlug(segments[0]!) : "";
+    const scope = segments.length ? toSlug(segments[0]!) : "";
     const nameParts = [
       scope,
-      ...segments.slice(1).flatMap((segment) => [...stringUtils.tokenize(segment)]),
+      ...segments.slice(1).flatMap((segment) => [...tokenize(segment)]),
     ].filter(Boolean);
     if (!nameParts.length) throw new Error(`Invalid name: ${names.join(", ")}`);
     if (nameParts.length === 1) return new PackageIdentifier(undefined, nameParts[0]!);
@@ -144,11 +152,11 @@ function repositoryOptions(
   const existingRepositoryUrl =
     typeof existingRepository === "string"
       ? existingRepository
-      : object.isRecord(existingRepository)
-        ? stringUtils.trimToNull(existingRepository.url)
+      : isRecord(existingRepository)
+        ? trimToNull(existingRepository.url)
         : undefined;
   const repository =
-    options.repository ?? projectUtils.repositoryUrl(workspaceRoot, "npm") ?? existingRepositoryUrl;
+    options.repository ?? repositoryUrl(workspaceRoot, "npm") ?? existingRepositoryUrl;
   const projectRoot = options.parent
     ? resolve(options.parent.outdir, options.outdir ?? ".")
     : resolve(options.outdir ?? process.cwd());
@@ -239,7 +247,7 @@ function dependencyName(spec: string): string {
 /** Add an optional peer and make it available while developing the package. */
 export function addOptionalPeer(pkg: javascript.NodeProject, spec: string): void {
   const name = dependencyName(spec);
-  const current = object.isRecord(pkg.package.manifest.peerDependenciesMeta)
+  const current = isRecord(pkg.package.manifest.peerDependenciesMeta)
     ? pkg.package.manifest.peerDependenciesMeta
     : {};
   pkg.addPeerDeps(spec);
@@ -256,8 +264,8 @@ export function projectRepositoryUrl(project: javascript.NodeProject): string | 
   const configured =
     typeof repository === "string"
       ? repository
-      : object.isRecord(repository)
-        ? (stringUtils.trimToNull(repository.url) ?? undefined)
+      : isRecord(repository)
+        ? (trimToNull(repository.url) ?? undefined)
         : undefined;
   return configured?.replace(/^git\+/, "").replace(/\.git$/, "");
 }
@@ -285,47 +293,45 @@ export function projectReleaseBranch(project: DBXToolsJavaScriptProject): string
  */
 export function addPackageFiles(pkg: javascript.NodeProject, ...entries: string[]): void {
   const current = (pkg.package.manifest.files ?? []) as string[];
-  pkg.package.addField("files", [...object.sequence(current, entries).distinct()]);
+  pkg.package.addField("files", [...sequence(current, entries).distinct()]);
 }
 
-/**
- * The automatic subpath map for a package's public top-level TypeScript and CSS
- * files plus directory entrypoints, skipping `_`-prefixed private modules and
- * declaration files.
- *
- * This widens no API surface: the root `index.ts` barrel already re-exports every
- * non-`_` module, so those names are public through `.` either way - the subpaths
- * just add a narrower import path. Deriving the map is what lets a tag carry the
- * whole export layout, instead of each package hand-listing its own modules.
- * The wildcard resolves generated nested barrels at every depth while exact
- * exports continue to win for hand-authored entrypoints and assets.
- */
-export function srcModuleExports(pkg: javascript.NodeProject): Record<string, string> {
+/** Generate folder-only TypeScript subpaths plus public CSS asset subpaths. */
+export function srcFolderExports(
+  pkg: javascript.NodeProject,
+  additionalModules: readonly string[] = [],
+): Record<string, string> {
   const srcDir = join(pkg.outdir, "src");
   if (!existsSync(srcDir)) return {};
 
-  const exports: Record<string, string> = {};
-  for (const entry of readdirSync(srcDir, { withFileTypes: true }).sort((left, right) =>
-    left.name.localeCompare(right.name),
-  )) {
-    if (entry.name.startsWith("_")) continue;
-    if (entry.isFile() && /\.(?:ts|tsx)$/.test(entry.name) && !entry.name.endsWith(".d.ts")) {
-      exports[`./${entry.name.replace(/\.tsx?$/, "")}`] = `./src/${entry.name}`;
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith(".css")) {
-      exports[`./${entry.name}`] = `./src/${entry.name}`;
-      continue;
-    }
-    if (!entry.isDirectory()) continue;
-    const index = ["index.ts", "index.tsx"].find((file) =>
-      existsSync(join(srcDir, entry.name, file)),
-    );
-    if (index && !isGeneratedBarrel(join(srcDir, entry.name, index))) {
-      exports[`./${entry.name}`] = `./src/${entry.name}/${index}`;
-    }
+  const discovered = [...findFilesSync("**/*", { cwd: srcDir })].map(toPosix);
+  const modules = new Set([
+    ...discovered.filter(
+      (file) =>
+        /\.(?:ts|tsx)$/.test(file) &&
+        !file.endsWith(".d.ts") &&
+        !/(^|\/)_/.test(file) &&
+        !/\.(?:test|spec)\./.test(file) &&
+        !/(^|\/)index\.(?:ts|tsx)$/.test(file),
+    ),
+    ...additionalModules
+      .map((file) => toPosix(file).replace(/^src\//, ""))
+      .filter((file) => /\.(?:ts|tsx)$/.test(file) && !/(^|\/)_/.test(file)),
+  ]);
+  const directories = new Set<string>();
+  for (const module of modules) {
+    const directory = dirname(module);
+    if (directory !== ".") directories.add(directory);
   }
-  return { ...exports, "./*": "./src/*/index.ts" };
+
+  const exports: Record<string, string> = {};
+  for (const directory of [...directories].sort((left, right) => left.localeCompare(right))) {
+    exports[`./${directory}`] = `./${folderBarrelFile(directory)}`;
+  }
+  for (const file of discovered.filter((file) => file.endsWith(".css") && !/(^|\/)_/.test(file))) {
+    exports[`./${file}`] = `./src/${file}`;
+  }
+  return exports;
 }
 
 /**
@@ -376,8 +382,6 @@ const PRETTIER_SETTINGS: javascript.PrettierSettings = {
   arrowParens: javascript.ArrowParens.ALWAYS,
   endOfLine: javascript.EndOfLine.LF,
 };
-
-export { PROJEN_VERSION } from "./projen-version.ts";
 
 /** SPDX license shared by generated JavaScript and Python packages. */
 export const LICENSE = "Apache-2.0";
@@ -520,10 +524,8 @@ const DEV_DEPS_ROOT: string[] = [
 
 function configureRootBunRuntime(project: DBXToolsJavaScriptProject): void {
   new TextFile(project, BUN_VERSION_CHECK_SCRIPT, {
-    lines: stringUtils
-      .dedent(
-        // ============================================================================
-        /*ts*/ `
+    lines: dedent(// ============================================================================
+    /*ts*/ `
           /** Minimum Bun version accepted by this workspace. */
           const MINIMUM_VERSION = ${JSON.stringify(MINIMUM_BUN_VERSION)};
 
@@ -550,10 +552,8 @@ function configureRootBunRuntime(project: DBXToolsJavaScriptProject): void {
               \`Bun \${MINIMUM_VERSION} or newer is required; running \${Bun.version}. Use "bun run bun" to select the workspace-local Bun binary.\`,
             );
           }
-        `,
-        // ============================================================================
-      )
-      .split("\n"),
+        `).split("\n"),
+    // ============================================================================
   });
   const check = `bun ${BUN_VERSION_CHECK_SCRIPT}`;
   project.package.installTask.prependExec(check);
@@ -877,18 +877,18 @@ export class DBXToolsTypeScriptProject
     // instead of failing, so authoring a React component would otherwise need
     // per-package tsconfig config to be compiled at all.
     this.tsconfig?.addInclude("src/**/*.tsx");
+    this.tsconfig?.addInclude("index.*.ts");
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     // Source-first entry: point the package at its package-ROOT `index.ts` barrel
     // so packages resolve each other's `@scope/pkg` imports to source.
     this.package.addField("type", "module");
     this.package.addField("exports", {
       ".": "./index.ts",
-      ...srcModuleExports(this),
+      ...srcFolderExports(this),
       "./package.json": "./package.json",
     });
     this.package.addVersion(readWorkspaceVersion(this.root.outdir));
-    addPackageFiles(this, "index.ts", "src");
-    if (existsSync(join(this.outdir, "exports.ts"))) addPackageFiles(this, "exports.ts");
+    addPackageFiles(this, "index*.ts", "src");
     // `bun test` intercepts `node:test` (the suites keep using node:test) and
     // runs it with bun's own fast runner. The native no-tests option is portable
     // across Windows and Unix and lets packages without tests remain a no-op.
@@ -945,19 +945,11 @@ class GeneratedSource extends Component {
       }
       if (modules.length === 0) continue;
       const current = (subproject.package.manifest.exports ?? {}) as Record<string, unknown>;
-      const sourceExports = Object.fromEntries(
-        modules.map((module) => [`./${module.slice("src/".length, -".ts".length)}`, `./${module}`]),
-      );
-      const nestedExport = current["./*"];
+      const { "./package.json": packageJson, ...withoutPackageJson } = current;
       subproject.package.addField("exports", {
-        ...Object.fromEntries(
-          Object.entries(current).filter(
-            ([subpath]) => subpath !== "./*" && subpath !== "./package.json",
-          ),
-        ),
-        ...sourceExports,
-        ...(nestedExport ? { "./*": nestedExport } : {}),
-        ...(current["./package.json"] ? { "./package.json": current["./package.json"] } : {}),
+        ...withoutPackageJson,
+        ...srcFolderExports(subproject, modules),
+        ...(packageJson ? { "./package.json": packageJson } : {}),
       });
     }
   }
@@ -1074,15 +1066,14 @@ class PrettierIgnoreGenerated extends Component {
     for (const sub of this.project.subprojects) {
       if (!(sub instanceof DBXToolsTypeScriptProject)) continue;
       const rel = toPosix(relative(rootAbs, sub.outdir));
-      prettier.addIgnorePattern(`${rel}/index.ts`);
-      prettier.addIgnorePattern(`${rel}/src/**/index.ts`);
+      prettier.addIgnorePattern(`${rel}/index*.ts`);
       for (const module of codegenModulePaths(sub.dbxToolsConfig.codegenInputs)) {
         prettier.addIgnorePattern(`${rel}/${module}`);
       }
     }
     const extraMembers = (this.project as DBXToolsNodeProject).extraWorkspaceMembers ?? [];
     for (const member of extraMembers) {
-      prettier.addIgnorePattern(`${member}/index.ts`);
+      prettier.addIgnorePattern(`${member}/index*.ts`);
     }
   }
 }
@@ -1094,7 +1085,7 @@ const DEFAULT_OMIT_RELATIVE_PREFIX = ["node"];
 function resolveOmitRelativePrefix(option: OneOrMany<string> | undefined): string[] {
   const raw = option === undefined ? DEFAULT_OMIT_RELATIVE_PREFIX : option;
   const list = Array.isArray(raw) ? raw : [raw];
-  return list.map((segment) => stringUtils.toSlug(segment)).filter(Boolean);
+  return list.map((segment) => toSlug(segment)).filter(Boolean);
 }
 
 /**
@@ -1104,7 +1095,7 @@ function resolveOmitRelativePrefix(option: OneOrMany<string> | undefined): strin
  */
 function packageNameFor(scope: string, relPath: string, omitPrefixes: string[]): string {
   const segments = relPath.split("/").filter(Boolean);
-  if (segments.length > 1 && omitPrefixes.includes(stringUtils.toSlug(segments[0]!))) {
+  if (segments.length > 1 && omitPrefixes.includes(toSlug(segments[0]!))) {
     segments.shift();
   }
   return PackageIdentifier.of(scope, segments.join("/")).packageName;
@@ -1145,14 +1136,14 @@ function engineSelfDependency(project: javascript.NodeProject): string | undefin
   const enginePkgJson = join(resolvePkgRoot(), "package.json");
   if (!toPosix(enginePkgJson).includes("/node_modules/")) return undefined;
   const engine = readPackageManifest(dirname(enginePkgJson));
-  const name = stringUtils.trimToNull(engine?.name);
+  const name = trimToNull(engine?.name);
   if (!name) return undefined;
-  const version = stringUtils.trimToNull(engine?.version);
+  const version = trimToNull(engine?.version);
 
   // No existing consumer manifest (or no entry) falls through to a computed pin.
   const consumer = readPackageManifest(resolve(project.outdir));
   const dependencyOf = (field: unknown): string | undefined =>
-    object.isRecord(field) ? (stringUtils.trimToNull(field[name]) ?? undefined) : undefined;
+    isRecord(field) ? (trimToNull(field[name]) ?? undefined) : undefined;
   const existing = dependencyOf(consumer?.devDependencies) ?? dependencyOf(consumer?.dependencies);
   if (existing) return `${name}@${existing}`;
   return `${name}@^${version}`;
@@ -1174,7 +1165,7 @@ function tagPathMatches(key: string, p: DiscoveredPackage): boolean {
     return true;
   }
   // Otherwise treat the key as a glob against the same targets.
-  const isMatch = match.toPathMatcher(key);
+  const isMatch = toPathMatcher(key);
   return isMatch(p.relPath) || isMatch(p.memberPath) || p.tagCandidates.some((c) => isMatch(c));
 }
 
@@ -1317,11 +1308,11 @@ function initProject(
     ".npmrc",
   );
   for (const root of roots) {
-    project.annotateGenerated(`/${root}/**/index.ts`);
+    project.annotateGenerated(`/${root}/**/index*.ts`);
     project.annotateGenerated(`/${root}/**/src/generated/**`);
   }
   for (const member of project.extraWorkspaceMembers) {
-    project.annotateGenerated(`/${member}/index.ts`);
+    project.annotateGenerated(`/${member}/index*.ts`);
   }
 
   // ESLint lives ONLY on the root and lints every package. `projectService` resolves
@@ -1350,11 +1341,11 @@ function initProject(
   // Generated read-only outputs (barrels, app scripts, and codegen). ESLint
   // --fix cannot rewrite files owned by the barrel generator, codegen, or projen.
   for (const root of roots) {
-    eslint.addIgnorePattern(`${root}/**/index.ts`);
+    eslint.addIgnorePattern(`${root}/**/index*.ts`);
   }
   eslint.addIgnorePattern("**/src/generated/**");
   for (const member of project.extraWorkspaceMembers) {
-    eslint.addIgnorePattern(`${member}/index.ts`);
+    eslint.addIgnorePattern(`${member}/index*.ts`);
   }
   // The generated bun app scripts + unmanaged overrides live at the package root,
   // outside any `src/**` tsconfig include, so the type-aware parser cannot resolve
@@ -1423,7 +1414,7 @@ function initProject(
   // agnostic floor is set in the child's constructor; per-tag deps/tsconfig come from
   // the PACKAGE_TAG_MIXINS applied across the subtree below.
   for (const p of scanPackages(rootAbs, roots)) {
-    const tags = [...object.sequence(p.tagCandidates, resolveTags(p, tagPaths)).distinct()];
+    const tags = [...sequence(p.tagCandidates, resolveTags(p, tagPaths)).distinct()];
     const found = existing.get(p.memberPath);
     if (found) {
       found.dbxToolsConfig.tags.push(...tags);
@@ -1444,7 +1435,7 @@ function initProject(
   }
 
   // The root project may itself carry tags (via a `""`/`"."` tag-path key).
-  const rootTags = [...object.sequence(tagPaths[""], tagPaths["."]).distinct()];
+  const rootTags = [...sequence(tagPaths[""], tagPaths["."]).distinct()];
   if (rootTags.length) project.dbxToolsConfig.tags.push(...rootTags);
 
   // Apply per-tag mixins across the whole subtree now that every child exists

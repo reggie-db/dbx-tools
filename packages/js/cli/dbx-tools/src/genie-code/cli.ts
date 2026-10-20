@@ -5,9 +5,9 @@
  */
 
 import { addArgs, parseArgs } from "@dbx-tools/cli-args";
+import { GenieCodeOptionsSchema, type GenieCodeOptions } from "@dbx-tools/shared-genie-code";
 import { Command } from "commander";
 
-import { GenieCodeCliOptionsSchema, type GenieCodeCliOptions } from "./options.ts";
 import { runGenieCode } from "./runtime.ts";
 
 /** Injectable managed Genie execution boundary for parser tests and embedding. */
@@ -15,7 +15,7 @@ export interface GenieCodeCliDependencies {
   run(input: {
     cwd: string;
     genieArgs: readonly string[];
-    options: GenieCodeCliOptions;
+    options: GenieCodeOptions;
   }): Promise<void>;
 }
 
@@ -40,13 +40,13 @@ export function buildProgram(
       .passThroughOptions()
       .allowExcessArguments()
       .showHelpAfterError(),
-    GenieCodeCliOptionsSchema,
+    GenieCodeOptionsSchema,
   );
   program.action(async (genieArgs: string[]) => {
     await dependencies.run({
       cwd: process.cwd(),
       genieArgs,
-      options: parseArgs(program, GenieCodeCliOptionsSchema),
+      options: parseArgs(program, GenieCodeOptionsSchema),
     });
   });
   return program;

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
+import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project-js.ts";
 
 let temp: string;
 

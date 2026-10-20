@@ -29,17 +29,23 @@
 
 import { AppKitError, CacheManager, ExecutionError } from "@databricks/appkit";
 import {
-  asyncUtils,
-  errorUtils,
-  hash,
-  json,
   log,
-  object,
-  stringUtils,
   type BrandContext,
+  sleep,
+  toError,
+  id,
+  parseRecord,
+  toNumber,
+  toDescription,
 } from "@dbx-tools/shared-core";
-import { markers, wire, type Chart, type ChartResult } from "@dbx-tools/shared-mastra";
-import { model } from "@dbx-tools/shared-model";
+import {
+  type Chart,
+  type ChartResult,
+  formatMarker,
+  ChartTypeSchema,
+  ChartSchema,
+} from "@dbx-tools/shared-mastra";
+import { ModelClass } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
@@ -108,17 +114,17 @@ const chartDataPointSchema = z
       if (v === null || v === undefined) return null;
       if (typeof v === "number") return Number.isFinite(v) ? v : null;
       if (typeof v === "string") {
-        return object.toNumber(v) ?? null;
+        return toNumber(v) ?? null;
       }
       // Scatter `[x, y]` or heatmap `[xIndex, yIndex, value]`. Coerce
       // stringified components; reject if any component is non-finite.
       if (Array.isArray(v) && (v.length === 2 || v.length === 3)) {
-        const nums = v.map((c) => object.toNumber(c));
+        const nums = v.map((c) => toNumber(c));
         return nums.every((n) => n !== undefined) ? nums : null;
       }
       if (typeof v === "object" && v !== null && "value" in v) {
         const obj = v as { name?: unknown; value: unknown };
-        const val = object.toNumber(obj.value);
+        const val = toNumber(obj.value);
         if (val === undefined) return null;
         // Coerce numeric / boolean / nullish names to strings so a
         // pie slice keyed on a year (`2024`) or category id is
@@ -163,13 +169,13 @@ const seriesMarkTypeSchema = z
  * across charts.
  */
 export const chartPlanSchema = z.object({
-  chartType: wire.ChartTypeSchema,
+  chartType: ChartTypeSchema,
   title: z
     .string()
     .nullable()
     .default(null)
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Short title shown above the chart. Use null to fall back to the
         \`title\` argument the caller passed in.
       `),
@@ -179,7 +185,7 @@ export const chartPlanSchema = z.object({
     .nullable()
     .default(null)
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Axis label for the primary (usually bottom / value) axis.
         Used for bar / horizontalBar / line / area / combo / waterfall
         / scatter / heatmap; use null for pie / funnel / treemap / radar.
@@ -190,7 +196,7 @@ export const chartPlanSchema = z.object({
     .nullable()
     .default(null)
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Axis label for the secondary (usually left) axis. Used for
         bar / horizontalBar / line / area / combo / waterfall /
         scatter / heatmap; use null for pie / funnel / treemap / radar.
@@ -201,7 +207,7 @@ export const chartPlanSchema = z.object({
     .nullable()
     .default(null)
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Primary category labels. For \`bar\` / \`horizontalBar\` /
         \`line\` / \`area\` / \`combo\` / \`waterfall\`: one label per
         data point. For \`heatmap\`: x-axis categories. For \`radar\`:
@@ -215,7 +221,7 @@ export const chartPlanSchema = z.object({
     .nullable()
     .default(null)
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Y-axis (row) labels for \`heatmap\`. Use null when the
         row labels come from the series names, which is the preferred
         way to build a heatmap. Use null for every other chart type.
@@ -225,7 +231,7 @@ export const chartPlanSchema = z.object({
     .array(
       z.object({
         name: z.string().describe(
-          stringUtils.toDescription(`
+          toDescription(`
             Legend name for this series.
           `),
         ),
@@ -238,7 +244,7 @@ export const chartPlanSchema = z.object({
             "Which y-axis to bind (0 = left, 1 = right). Use on `combo` when series have different units or scales; use null otherwise.",
           ),
         data: z.array(chartDataPointSchema).describe(
-          stringUtils.toDescription(`
+          toDescription(`
             Data points. For category charts (\`bar\` / \`horizontalBar\`
             / \`line\` / \`area\` / \`combo\` / \`waterfall\` / \`radar\`),
             an array of numbers aligned to \`categories\`; for
@@ -254,7 +260,7 @@ export const chartPlanSchema = z.object({
     )
     .default([])
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         One or more series to plot. Required for every chart type
         except \`custom\`, which carries its series inside \`option\`.
         Slice charts (\`pie\` / \`funnel\` / \`treemap\`) and
@@ -268,7 +274,7 @@ export const chartPlanSchema = z.object({
     .nullable()
     .default(null)
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Required for \`custom\`; use null for every other chart type. A
         COMPLETE Echarts option, as a JSON object encoded in a string:
         \`series\` (each with its own \`type\` and that series' own data
@@ -294,7 +300,7 @@ type ChartPlanInput = z.input<typeof chartPlanSchema>;
  */
 export const chartPlannerRequestSchema = z.object({
   title: z.string().describe(
-    stringUtils.toDescription(`
+    toDescription(`
         Concise title shown above the chart (e.g. "Top 10 SKUs by Revenue").
       `),
   ),
@@ -302,7 +308,7 @@ export const chartPlannerRequestSchema = z.object({
     .string()
     .optional()
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         One-line intent the chart-planner uses when picking a chart type
         and axis encodings (e.g. "compare quarterly revenue across
         regions", "highlight the steep drop after position 5"). Not shown
@@ -314,7 +320,7 @@ export const chartPlannerRequestSchema = z.object({
     .nonempty("Data must contain at least one row")
     .readonly()
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Tabular dataset to chart. One object per row, keyed by column
         name. Values may be strings, numbers, booleans, or null. The
         chart-planner decides which columns are categories vs. numeric
@@ -334,7 +340,7 @@ export type ChartPlannerRequest = z.infer<typeof chartPlannerRequestSchema>;
  * cache by id, while the model gets the exact opaque token to copy into prose
  * and has no reason to invent or retype a UUID.
  */
-export const chartToolOutputSchema = wire.ChartSchema.pick({ chartId: true }).extend({
+export const chartToolOutputSchema = ChartSchema.pick({ chartId: true }).extend({
   marker: z
     .string()
     .describe(
@@ -355,7 +361,7 @@ export type ChartToolOutput = z.infer<typeof chartToolOutputSchema>;
  * the schema by construction.
  */
 function formatChartTypePicker(): string {
-  return wire.ChartTypeSchema.options
+  return ChartTypeSchema.options
     .map((opt) => `\`${opt.value}\` for ${opt.description ?? ""}`)
     .join("; ");
 }
@@ -364,7 +370,7 @@ function formatChartTypePicker(): string {
  * System prompt for the inner chart-planning agent. Tuned for a
  * fast-tier model (Haiku, GPT-5-mini, Gemini Flash Lite).
  */
-const CHART_PLANNER_INSTRUCTIONS = stringUtils.toDescription(`
+const CHART_PLANNER_INSTRUCTIONS = toDescription(`
   You design Apache Echarts visualizations. The user gives you a
   tabular dataset (rows of objects) plus a title and an optional
   description of the intent. You produce a small chart plan (chart
@@ -453,7 +459,7 @@ function getPlannerAgent(config: MastraPluginConfig): Agent {
       description: "Picks chart type and axis encodings for a dataset.",
       instructions: CHART_PLANNER_INSTRUCTIONS,
       model: ({ requestContext }) =>
-        buildModel(config, requestContext, { modelClass: model.ModelClass.ChatFast }),
+        buildModel(config, requestContext, { modelClass: ModelClass.ChatFast }),
     });
     plannerAgents.set(config, agent);
   }
@@ -472,7 +478,7 @@ async function runChartPlanner(
 ): Promise<ChartResult> {
   const { title, description, data } = request;
   const { requestContext, abortSignal } = options;
-  const prompt = stringUtils.toDescription({
+  const prompt = toDescription({
     Title: title,
     ...(description ? { Description: description } : {}),
     "Dataset (JSON, one row per object)": JSON.stringify(data, null, 2),
@@ -516,7 +522,7 @@ async function writeChart(entry: Chart, userKey: string): Promise<void> {
   } catch (err) {
     logger.warn("write-error", {
       chartId: entry.chartId,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
   }
 }
@@ -534,7 +540,7 @@ async function readChart(chartId: string, userKey: string): Promise<Chart | unde
   } catch (err) {
     logger.warn("read-error", {
       chartId,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     return undefined;
   }
@@ -594,13 +600,13 @@ export interface PrepareChartOptions {
  *   - on data / planner failure:    `{ chartId, error }`
  */
 export async function prepareChart(opts: PrepareChartOptions): Promise<ChartToolOutput> {
-  const chartId = hash.id();
+  const chartId = id();
   await writeChart({ chartId }, opts.userKey);
   logger.debug("queued", { chartId });
   // Fire-and-forget. Failures land in the cache as `error` entries;
   // never escape into an unhandled rejection.
   void runPrepareChart(chartId, opts);
-  return { chartId, marker: markers.formatMarker("chart", chartId) };
+  return { chartId, marker: formatMarker("chart", chartId) };
 }
 
 async function runPrepareChart(chartId: string, opts: PrepareChartOptions): Promise<void> {
@@ -629,7 +635,7 @@ async function runPrepareChart(chartId: string, opts: PrepareChartOptions): Prom
       elapsedMs: Date.now() - startedAt,
     });
   } catch (err) {
-    logger.warn("error", { chartId, error: errorUtils.toError(err) });
+    logger.warn("error", { chartId, error: toError(err) });
     // The entry's `error` is rendered in the chat, so only an AppKitError's
     // own message travels; anything else could carry upstream provider detail.
     const errText = err instanceof AppKitError ? err.message : CHART_FAILED_MESSAGE;
@@ -694,7 +700,7 @@ export async function fetchChart(
     if (last.result !== undefined || last.error !== undefined) return last;
     const remaining = deadline - Date.now();
     if (remaining <= 0) return last;
-    await asyncUtils.sleep(Math.min(intervalMs, remaining), options.signal);
+    await sleep(Math.min(intervalMs, remaining), options.signal);
   }
 }
 
@@ -958,7 +964,7 @@ export function planToEchartsOption(
     // note on `chartDataPointSchema`). A malformed string costs one chart.
     // Nothing here is eval'd; a string-valued Echarts formatter is a
     // template, not code.
-    const option = json.parseRecord(plan.option);
+    const option = parseRecord(plan.option);
     if (!option) {
       throw new Error('chartType "custom" needs an `option` holding a JSON object');
     }
@@ -1199,7 +1205,7 @@ export function planToEchartsOption(
 export function buildRenderDataTool(config: MastraPluginConfig) {
   return createTool({
     id: "render_data",
-    description: stringUtils.toDescription([
+    description: toDescription([
       `
         Submit a tabular dataset for inline rendering as a chart in
         the user's view. Pass a title, the raw rows (array of objects

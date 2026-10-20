@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { defaultBrandContext } from "@dbx-tools/shared-core/brand-utils";
+import { defaultBrandContext } from "@dbx-tools/shared-core";
 import {
   BrandGenerationEventSchema,
   GeneratorPluginClient,

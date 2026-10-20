@@ -1,10 +1,8 @@
-import type { FollowUpSuggestionMode, ToolProgressEvent } from "@dbx-tools/shared-mastra/wire";
+import type { FollowUpSuggestionMode, ToolProgressEvent } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { FileUIPart, UIMessage } from "ai";
 import type { ReactNode } from "react";
 import type { ExportFormat } from "../support/export.ts";
-
-export type { ExportFormat } from "../support/export.ts";
 
 // Public types for the chat UI: the controlled `ChatView` props plus
 // the supporting tool-event / approval shapes a host transport feeds

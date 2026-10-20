@@ -3,7 +3,11 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "node:test";
-import { addOptionalPeer, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
+import {
+  addOptionalPeer,
+  DBXToolsNodeProject,
+  DBXToolsTypeScriptProject,
+} from "../src/project-js.ts";
 
 it("optional peers include development resolution without becoming runtime dependencies", () => {
   process.env.PROJEN_DISABLE_POST = "1";

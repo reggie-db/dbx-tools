@@ -10,12 +10,16 @@
  */
 
 import type { WorkspaceClient } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { errorUtils, json, log, object } from "@dbx-tools/shared-core";
+import { type ContextLike, toContext } from "@dbx-tools/appkit";
+import { log, errorContext, toError, parse, isRecord, deepEqual } from "@dbx-tools/shared-core";
 import {
-  agentMode as agentModeWire,
   type GenieAgentModeEvent,
   type GenieMessage,
+  GenieAgentModeProjection,
+  type GenieAgentOutputItem,
+  GenieAgentConversationItemsSchema,
+  projectAgentModeConversation,
+  GenieAgentModeEventSchema,
 } from "@dbx-tools/shared-genie";
 
 const logger = log.logger("genie/agent-mode");
@@ -28,7 +32,7 @@ export interface GenieAgentModeOptions {
   enableVisualization?: boolean;
   /** Original user text projected into client-visible snapshots when input is augmented. */
   displayContent?: string;
-  context?: databricks.ContextLike;
+  context?: ContextLike;
 }
 
 /** Stream one Agent Mode response as `GenieMessage` snapshots. */
@@ -39,14 +43,9 @@ export async function* genieAgentModeChat(
   options: GenieAgentModeOptions = {},
 ): AsyncGenerator<GenieMessage, void, void> {
   const ownedController = options.context ? undefined : new AbortController();
-  const projection = new agentModeWire.GenieAgentModeProjection(
-    agentId,
-    options.displayContent ?? content,
-  );
+  const projection = new GenieAgentModeProjection(agentId, options.displayContent ?? content);
   try {
-    const context = options.context
-      ? databricks.toContext(options.context)
-      : databricks.toContext(ownedController!);
+    const context = options.context ? toContext(options.context) : toContext(ownedController!);
     const response = await client.apiClient.request(
       {
         path: `/api/2.0/genie/agents/${encodeURIComponent(agentId)}/responses`,
@@ -70,7 +69,7 @@ export async function* genieAgentModeChat(
       },
       context,
     );
-    const stream = object.isRecord(response) ? response.contents : undefined;
+    const stream = isRecord(response) ? response.contents : undefined;
     if (!isReadableStream(stream)) {
       throw new TypeError("Genie Agent Mode did not return an SSE stream");
     }
@@ -79,7 +78,7 @@ export async function* genieAgentModeChat(
     for await (const event of parseSse(stream)) {
       const message = projection.apply(event);
       if (!message) continue;
-      if (!object.deepEqual(message, previous)) {
+      if (!deepEqual(message, previous)) {
         yield message;
         previous = message;
       }
@@ -103,14 +102,14 @@ export async function listAgentModeConversation(
   client: WorkspaceClient,
   agentId: string,
   conversationId: string,
-  options: { context?: databricks.ContextLike } = {},
+  options: { context?: ContextLike } = {},
 ): Promise<GenieMessage[]> {
-  const context = options.context ? databricks.toContext(options.context) : undefined;
-  const items: agentModeWire.GenieAgentOutputItem[] = [];
+  const context = options.context ? toContext(options.context) : undefined;
+  const items: GenieAgentOutputItem[] = [];
   let after: string | undefined;
   let status = "completed";
   do {
-    const page = agentModeWire.GenieAgentConversationItemsSchema.parse(
+    const page = GenieAgentConversationItemsSchema.parse(
       await client.apiClient.request(
         {
           path: `/api/2.0/genie/agents/${encodeURIComponent(agentId)}/conversations/${encodeURIComponent(conversationId)}/items`,
@@ -126,17 +125,17 @@ export async function listAgentModeConversation(
     status = page.status ?? status;
     after = page.has_more ? page.last_id : undefined;
   } while (after);
-  return agentModeWire.projectAgentModeConversation(agentId, conversationId, items, status);
+  return projectAgentModeConversation(agentId, conversationId, items, status);
 }
 
 /** Return whether Agent Mode is disabled or its preview toggle is unavailable. */
 export function isAgentModeUnavailable(value: unknown): boolean {
-  const context = errorUtils.errorContext(value);
+  const context = errorContext(value);
   return context.hasMessage("feature", "disabled") || context.hasMessage("preview", "toggle");
 }
 
 function isReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
-  return object.isRecord(value) && typeof value.getReader === "function";
+  return isRecord(value) && typeof value.getReader === "function";
 }
 
 async function cancelResponse(
@@ -158,14 +157,14 @@ async function cancelResponse(
         }),
         raw: false,
       },
-      databricks.toContext(controller),
+      toContext(controller),
     );
   } catch (err) {
     logger.debug("response:cancel-failed", {
       agentId,
       conversationId,
       responseId,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
   } finally {
     clearTimeout(timeout);
@@ -207,5 +206,5 @@ function parseSseFrame(frame: string): GenieAgentModeEvent | undefined {
     .map((line) => line.slice(5).trimStart())
     .join("\n");
   if (!data || data === "[DONE]") return undefined;
-  return agentModeWire.GenieAgentModeEventSchema.parse(json.parse(data));
+  return GenieAgentModeEventSchema.parse(parse(data));
 }

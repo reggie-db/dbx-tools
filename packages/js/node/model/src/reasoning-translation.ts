@@ -21,9 +21,7 @@
  * @module
  */
 
-import { json } from "@dbx-tools/shared-core";
-import { isRecord } from "@dbx-tools/shared-core/object";
-import * as stringUtils from "@dbx-tools/shared-core/string-utils";
+import { parseRecord, parse, isRecord, trimToNull } from "@dbx-tools/shared-core";
 import Fuse from "fuse.js";
 
 import { modelFamily, modelSearchQuery } from "./policy.ts";
@@ -393,8 +391,7 @@ export function adaptRequestReasoning(
 /** Normalize labels for alias lookup (`Extra High` → `extra-high`). */
 export function normalizeReasoningToken(value: string): string {
   return (
-    stringUtils
-      .trimToNull(value)
+    trimToNull(value)
       ?.toLowerCase()
       .replace(/[_\s]+/g, "-")
       .replace(/[^a-z0-9-]/g, "")
@@ -438,7 +435,7 @@ function catalogueKeysFor(model: string): string[] {
 }
 
 function modelCatalogueKey(name: string): string | undefined {
-  const trimmed = stringUtils.trimToNull(name);
+  const trimmed = trimToNull(name);
   if (!trimmed) return undefined;
   return (
     modelSearchQuery(trimmed)?.replaceAll(" ", "-") ??
@@ -483,14 +480,14 @@ function collectTextLeaves(value: unknown, depth = 0): string[] {
 }
 
 function tryUnwrapJson(text: string): unknown {
-  const asRecord = json.parseRecord(text);
+  const asRecord = parseRecord(text);
   if (asRecord) return asRecord;
-  const parsed = json.parse(text);
+  const parsed = parse(text);
   if (parsed !== undefined) return parsed;
   if (text.includes('\\"') || text.includes("\\n")) {
     const unescaped = text.replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\");
     if (unescaped !== text) {
-      const nested = json.parse(unescaped);
+      const nested = parse(unescaped);
       if (nested !== undefined) return nested;
     }
   }

@@ -1,9 +1,9 @@
 /** Build and publish the current workspace to configured loopback registries. */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ChildProcessResult } from "@dbx-tools/core/exec";
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { log, net } from "@dbx-tools/shared-core";
+import type { ChildProcessResult } from "@dbx-tools/core";
+import { npmRegistry } from "@dbx-tools/core";
+import { log, isLoopbackHost } from "@dbx-tools/shared-core";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
 import { spawnTaskCommand } from "../src/_task-command.ts";
 
@@ -22,8 +22,8 @@ export function resolveLocalRegistry(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed || trimmed.toLowerCase() === "false") return undefined;
   if (trimmed.toLowerCase() === "auto") {
-    const registry = projectUtils.npmRegistry();
-    return registry && net.isLoopbackHost(registry) ? registry.href : undefined;
+    const registry = npmRegistry();
+    return registry && isLoopbackHost(registry) ? registry.href : undefined;
   }
   return trimmed;
 }
@@ -69,7 +69,7 @@ export async function publishLocalRelease(
 
   if (
     options.localPypi.toLowerCase() === "auto" &&
-    activeIndexes.some((index) => net.isLoopbackHost(index)) &&
+    activeIndexes.some((index) => isLoopbackHost(index)) &&
     !localPypi
   ) {
     logger.info(

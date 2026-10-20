@@ -6,8 +6,8 @@
 
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { bin } from "@dbx-tools/core";
-import { GENIE_CODE_VERSION } from "@dbx-tools/shared-genie-code/options";
+import { type BinContext, ensure } from "@dbx-tools/core";
+import { GENIE_CODE_VERSION } from "@dbx-tools/shared-genie-code";
 
 interface GenieCodeAsset {
   target: string;
@@ -63,9 +63,7 @@ export function genieCodeAsset(
 }
 
 /** Install and return the shared Genie Code package entrypoint. */
-export async function installGenieCode(
-  options: InstallGenieCodeOptions = {},
-): Promise<bin.BinContext> {
+export async function installGenieCode(options: InstallGenieCodeOptions = {}): Promise<BinContext> {
   const platform = options.platform ?? process.platform;
   const asset = genieCodeAsset(platform, options.architecture ?? process.arch);
   const executable = platform === "win32" ? "genie.exe" : "genie";
@@ -78,7 +76,7 @@ export async function installGenieCode(
     "releases",
     `${GENIE_CODE_VERSION}-${asset.target}`,
   );
-  const destination: bin.BinContext = {
+  const destination: BinContext = {
     root,
     binDir: join(root, dirname(entrypoint)),
     path: join(root, entrypoint),
@@ -86,7 +84,7 @@ export async function installGenieCode(
   const url =
     `https://github.com/databricks/genie-code-cli/releases/download/v${GENIE_CODE_VERSION}/` +
     `genie-package-${asset.target}.tar.gz`;
-  return bin.ensure(
+  return ensure(
     "genie",
     { url, sha256: asset.sha256 },
     {

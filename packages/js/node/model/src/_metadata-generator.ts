@@ -6,7 +6,7 @@ import type {
   ModelRateLimitsSnapshot,
   ReasoningModelsSnapshot,
   RetiredModelsSnapshot,
-} from "./_metadata-contract.ts";
+} from "./metadata-contract.ts";
 import { inheritsNativeWebSearch, modelSearchQuery } from "./policy.ts";
 import {
   parseReasoning,

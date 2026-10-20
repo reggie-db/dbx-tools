@@ -15,7 +15,17 @@
  * @module
  */
 
-import { searchSchemas, type UpsertResult } from "@dbx-tools/shared-search";
+import {
+  createIndexRequestSchema,
+  indexInfoSchema,
+  searchDocumentSchema,
+  searchRequestSchema,
+  searchResultSchema,
+  syncIndexRequestSchema,
+  universalSearchRequestSchema,
+  upsertResultSchema,
+  type UpsertResult,
+} from "@dbx-tools/shared-search";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
@@ -30,12 +40,6 @@ import {
   SEARCH_TOOL_DESCRIPTION,
   SYNC_INDEX_TOOL_DESCRIPTION,
   UNIVERSAL_SEARCH_TOOL_DESCRIPTION,
-  createIndexToolSchema,
-  indexInfoSchema,
-  searchResultSchema,
-  searchToolSchema,
-  syncIndexToolSchema,
-  universalSearchToolSchema,
 } from "./schema.ts";
 
 /** Options accepted by every standalone tool factory. */
@@ -84,10 +88,10 @@ export function searchTool(options: SearchToolOptions = {}) {
   return createTool({
     id: options.id ?? "search",
     description: SEARCH_TOOL_DESCRIPTION,
-    inputSchema: searchToolSchema,
+    inputSchema: searchRequestSchema,
     outputSchema: searchResultSchema,
     execute: async (input, context) => {
-      const request = searchToolSchema.parse(input);
+      const request = searchRequestSchema.parse(input);
       return runtime.client.search(request.query, toSearchOptions(request, context?.abortSignal));
     },
   });
@@ -99,10 +103,10 @@ export function universalSearchTool(options: SearchToolOptions = {}) {
   return createTool({
     id: options.id ?? "universal_search",
     description: UNIVERSAL_SEARCH_TOOL_DESCRIPTION,
-    inputSchema: universalSearchToolSchema,
+    inputSchema: universalSearchRequestSchema,
     outputSchema: searchResultSchema,
     execute: async (input, context) => {
-      const request = universalSearchToolSchema.parse(input);
+      const request = universalSearchRequestSchema.parse(input);
       return runtime.client.universalSearch(
         request.query,
         toUniversalSearchOptions(request, context?.abortSignal),
@@ -117,16 +121,14 @@ export function universalSearchTool(options: SearchToolOptions = {}) {
  */
 export function addDocumentsTool(options: SearchToolOptions = {}) {
   const runtime = toolRuntime(options);
-  const inputSchema = searchSchemas.searchDocumentSchema
+  const inputSchema = searchDocumentSchema
     .array()
     .describe("Documents to add or update. Each must include the index primary key.");
   return createTool({
     id: options.id ?? "add_documents",
     description: ADD_DOCUMENTS_TOOL_DESCRIPTION,
-    inputSchema: searchSchemas.searchRequestSchema
-      .pick({ index: true })
-      .extend({ documents: inputSchema }),
-    outputSchema: searchSchemas.upsertResultSchema,
+    inputSchema: searchRequestSchema.pick({ index: true }).extend({ documents: inputSchema }),
+    outputSchema: upsertResultSchema,
     execute: async (input, context): Promise<UpsertResult> => {
       const { client, config } = runtime;
       const record = input as { index?: string; documents: unknown };
@@ -148,10 +150,10 @@ export function createIndexTool(options: SearchToolOptions = {}) {
   return createTool({
     id: options.id ?? "create_index",
     description: CREATE_INDEX_TOOL_DESCRIPTION,
-    inputSchema: createIndexToolSchema,
+    inputSchema: createIndexRequestSchema,
     outputSchema: indexInfoSchema,
     execute: async (input, context) => {
-      const request = createIndexToolSchema.parse(input);
+      const request = createIndexRequestSchema.parse(input);
       return runtime.client.createIndex(
         request.name,
         toCreateIndexOptions(request, context?.abortSignal),
@@ -175,10 +177,10 @@ export function syncIndexTool(options: SearchToolOptions = {}) {
   return createTool({
     id: options.id ?? "sync_index",
     description: SYNC_INDEX_TOOL_DESCRIPTION,
-    inputSchema: syncIndexToolSchema,
+    inputSchema: syncIndexRequestSchema,
     outputSchema: syncIndexResultSchema,
     execute: async (input, context) => {
-      const request = syncIndexToolSchema.parse(input);
+      const request = syncIndexRequestSchema.parse(input);
       const { client, config } = runtime;
       const index = request.index ?? config.defaultIndex ?? "";
       await client.syncIndex(index, context?.abortSignal);

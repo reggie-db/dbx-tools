@@ -24,9 +24,9 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { injectRequestTags } from "@dbx-tools/appkit/request-tags";
-import { AUTH_BASE_PATH, auth as sharedAuth } from "@dbx-tools/shared-auth";
-import { log, token } from "@dbx-tools/shared-core";
+import { injectRequestTags } from "@dbx-tools/appkit";
+import { AUTH_BASE_PATH, isAuthPath } from "@dbx-tools/shared-auth";
+import { log, USER_ID_HEADER, USER_EMAIL_HEADER } from "@dbx-tools/shared-core";
 import { getRequest, setResponse } from "better-call/node";
 import type { RequestHandler } from "express";
 import { toHeaderPolicy, type HeaderPolicy } from "./headers.ts";
@@ -35,9 +35,6 @@ import type { AuthGateApi } from "./plugin.ts";
 import { requestTunnelTraceTags } from "./request-context.ts";
 
 const logger = log.logger("tunnel:gate");
-
-/** Segment-aware auth-route predicate owned by `@dbx-tools/shared-auth`. */
-export const isAuthPath = sharedAuth.isAuthPath;
 
 /** Options for {@link mountGate}. */
 export interface GateOptions {
@@ -127,8 +124,8 @@ function stripSessionCookie(req: IncomingMessage): void {
  * app service principal instead of throwing.
  */
 function injectIdentity(req: IncomingMessage, email: string): void {
-  req.headers[token.USER_ID_HEADER] = email;
-  req.headers[token.USER_EMAIL_HEADER] = email;
+  req.headers[USER_ID_HEADER] = email;
+  req.headers[USER_EMAIL_HEADER] = email;
 }
 
 /** Convert Node request headers to web-platform headers with caller IP context. */

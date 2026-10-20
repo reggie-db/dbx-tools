@@ -4,13 +4,13 @@
  * @module
  */
 
-import { model } from "@dbx-tools/shared-model";
+import { ReasoningEffortSchema, ModelStatusSchema } from "@dbx-tools/shared-model";
 import { z } from "zod";
 
 /** Capabilities published with an OpenAI-compatible model entry. */
 export const OpenAIModelCapabilitiesSchema = z.object({
   tools: z.boolean(),
-  reasoning: z.array(model.ReasoningEffortSchema),
+  reasoning: z.array(ReasoningEffortSchema),
   responses: z.boolean(),
   open_responses: z.boolean(),
   anthropic: z.boolean(),
@@ -30,7 +30,7 @@ export const OpenAIModelSchema = z.object({
   owned_by: z.string().min(1),
   name: z.string().min(1),
   task: z.string().optional(),
-  status: model.ModelStatusSchema,
+  status: ModelStatusSchema,
   capabilities: OpenAIModelCapabilitiesSchema,
 });
 /** One OpenAI-compatible model-list entry. */
@@ -46,7 +46,7 @@ export type OpenAIModelListResponse = z.infer<typeof OpenAIModelListResponseSche
 
 /** Reasoning effort advertised to Codex. */
 export const CodexReasoningLevelSchema = z.object({
-  effort: model.ReasoningEffortSchema,
+  effort: ReasoningEffortSchema,
   description: z.string(),
 });
 /** Reasoning effort advertised to Codex. */
@@ -66,9 +66,9 @@ export const CodexModelSchema = z.object({
   display_name: z.string().min(1),
   description: z.string(),
   base_instructions: z.string(),
-  status: model.ModelStatusSchema,
+  status: ModelStatusSchema,
   supported_reasoning_levels: z.array(CodexReasoningLevelSchema),
-  default_reasoning_level: model.ReasoningEffortSchema.optional(),
+  default_reasoning_level: ReasoningEffortSchema.optional(),
   shell_type: z.string().min(1),
   visibility: z.literal("list"),
   supported_in_api: z.boolean(),

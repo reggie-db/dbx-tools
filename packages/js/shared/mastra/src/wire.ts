@@ -31,8 +31,12 @@
  * @module
  */
 
-import { genieModel, type GenieChatEvent, type MessageStatus } from "@dbx-tools/shared-genie";
-import { model } from "@dbx-tools/shared-model";
+import {
+  type GenieChatEvent,
+  type MessageStatus,
+  GenieChatEventSchema,
+} from "@dbx-tools/shared-genie";
+import { ServingEndpointSummarySchema } from "@dbx-tools/shared-model";
 import { z } from "zod";
 import { FeedbackModeSchema } from "./feedback.ts";
 
@@ -141,7 +145,7 @@ export type DefaultModelResponse = z.infer<typeof DefaultModelResponseSchema>;
  * standalone `@dbx-tools/model` toolkit all agree on.
  */
 export const ServingEndpointsResponseSchema = z.object({
-  endpoints: z.array(model.ServingEndpointSummarySchema),
+  endpoints: z.array(ServingEndpointSummarySchema),
 });
 /** Available Databricks serving endpoints returned by the Mastra model route. */
 export type ServingEndpointsResponse = z.infer<typeof ServingEndpointsResponseSchema>;
@@ -486,10 +490,7 @@ export type GenieAgentEvent = z.infer<typeof GenieAgentEventSchema>;
  * both halves are themselves discriminated unions on the same
  * `type` key.
  */
-export const GenieWriterEventSchema = z.union([
-  genieModel.GenieChatEventSchema,
-  GenieAgentEventSchema,
-]);
+export const GenieWriterEventSchema = z.union([GenieChatEventSchema, GenieAgentEventSchema]);
 /** Complete event vocabulary written by the Mastra Genie integration. */
 export type GenieWriterEvent = z.infer<typeof GenieWriterEventSchema>;
 

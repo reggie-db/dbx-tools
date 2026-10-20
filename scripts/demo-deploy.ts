@@ -10,10 +10,10 @@
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readFileSync } from "node:fs";
-import { client as authClient } from "@dbx-tools/auth";
+import { createAuthClient } from "@dbx-tools/auth";
 import { parseArgv } from "@dbx-tools/cli-args";
-import * as exec from "@dbx-tools/core/exec";
-import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
+import { spawn, onParentTerminationSignal } from "@dbx-tools/core";
+import { log, sleep, toError } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
 import { z } from "zod";
 
@@ -100,7 +100,7 @@ async function deploymentAuth(options: DemoDeployOptions): Promise<{
     parse(readFileSync(path.join(STAGE_DIR, "databricks.yml"), "utf8")),
   );
   const selected = bundleTarget(config);
-  const client = await authClient.createAuthClient(options);
+  const client = await createAuthClient(options);
   await client.token({ login: true, refresh: true });
   return {
     host: client.host,
@@ -116,7 +116,7 @@ function commandError(command: readonly string[], exitCode: number): Error {
 }
 
 async function run(command: string[], cwd: string): Promise<void> {
-  const result = await exec.spawn(command[0]!, command.slice(1), {
+  const result = await spawn(command[0]!, command.slice(1), {
     cwd,
     env: process.env,
     stdin: "inherit",
@@ -127,7 +127,7 @@ async function run(command: string[], cwd: string): Promise<void> {
 }
 
 async function runOutput(command: string[], cwd: string): Promise<string> {
-  const result = await exec.spawn(command[0]!, command.slice(1), {
+  const result = await spawn(command[0]!, command.slice(1), {
     cwd,
     env: process.env,
     stdin: "inherit",
@@ -139,7 +139,7 @@ async function runOutput(command: string[], cwd: string): Promise<string> {
 }
 
 async function runObserved(command: string[], cwd: string): Promise<DeployCommandResult> {
-  return exec.spawn(command[0]!, command.slice(1), {
+  return spawn(command[0]!, command.slice(1), {
     cwd,
     env: process.env,
     stdin: "inherit",
@@ -164,7 +164,7 @@ export async function deployBundleWithRetry(
   dependencies: DeployRetryDependencies = {},
 ): Promise<void> {
   const runAttempt = dependencies.run ?? (() => runObserved(command, cwd));
-  const wait = dependencies.sleep ?? asyncUtils.sleep;
+  const wait = dependencies.sleep ?? sleep;
   for (let attempt = 1; attempt <= DEPLOY_ATTEMPTS; attempt++) {
     const result = await runAttempt();
     if (result.exitCode === 0) return;
@@ -196,7 +196,7 @@ export async function runDemoApp(
       await showLogs();
     } catch (logsError) {
       logger.warn("Could not read Databricks App logs", {
-        message: errorUtils.toError(logsError).message,
+        message: toError(logsError).message,
       });
     }
     throw error;
@@ -205,7 +205,7 @@ export async function runDemoApp(
 
 async function printAppLogs(appName: string, selection: string[], cwd: string): Promise<void> {
   logger.error("Databricks App failed to start; recent app logs follow", { appName });
-  const result = await exec.spawn(
+  const result = await spawn(
     "databricks",
     ["apps", "logs", appName, "--tail-lines", "200", ...selection],
     {
@@ -282,13 +282,13 @@ export async function main(
 
 if (import.meta.main) {
   const controller = new AbortController();
-  const unsubscribe = exec.onParentTerminationSignal((signal) => {
+  const unsubscribe = onParentTerminationSignal((signal) => {
     controller.abort(new Error(`demo deployment interrupted by ${signal}`));
   });
   try {
     await main(controller.signal);
   } catch (error) {
-    logger.error(errorUtils.toError(error).message);
+    logger.error(toError(error).message);
     process.exitCode = 1;
   } finally {
     unsubscribe();

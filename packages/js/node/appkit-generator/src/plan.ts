@@ -4,13 +4,13 @@
  * @module
  */
 
-import type { BrandPackage } from "@dbx-tools/shared-generator/brand";
-import type { KpiResearchResult } from "@dbx-tools/shared-generator/kpi";
 import {
   GeneratorPlanSchema,
+  type BrandPackage,
+  type KpiResearchResult,
   type GeneratorPlan,
   type GeneratorRequest,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 import { generateStructured } from "./structured.ts";
 
 /** Inputs for deterministic demo-data planning. */

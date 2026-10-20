@@ -1,3 +1,4 @@
+import { Button } from "@databricks/appkit-ui/react";
 import {
   EmailCard,
   emailBrandFromContext,
@@ -7,8 +8,7 @@ import {
 import { CheckIcon, MailIcon, PaperclipIcon, XIcon } from "lucide-react";
 
 import { attachmentNames, joinAddresses, type EmailDraft } from "./fields.ts";
-import { useBrand } from "../../branding/react/index.ts";
-import { Button } from "../../react/index.ts";
+import { useBrand } from "@dbx-tools/ui/branding/react";
 
 // Presentational pieces for an outbound email awaiting a human Approve /
 // Deny: a mail-client chrome (sender, recipients, subject, attachments)
@@ -17,8 +17,6 @@ import { Button } from "../../react/index.ts";
 // only render and report intent. The editable counterpart is
 // `EmailComposeView` in `./email-compose`; both share `./fields` and
 // `./email-body`.
-
-export type { EmailDraft } from "./fields.ts";
 
 /** Props for {@link EmailPreview}. */
 export interface EmailPreviewProps {

@@ -10,7 +10,7 @@
  * @module
  */
 
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { toError, type Logger } from "@dbx-tools/shared-core";
 import { GENIE_PROGRESS_PART_TYPE, type GenieWriterEvent } from "@dbx-tools/shared-mastra";
 import type { ToolExecutionContext } from "@mastra/core/tools";
 
@@ -25,7 +25,7 @@ import type { ToolExecutionContext } from "@mastra/core/tools";
  * Returns when the write resolves or rejects; never throws.
  */
 export async function safeWriteProgress(
-  log: log.Logger,
+  log: Logger,
   writer: ToolExecutionContext["writer"],
   toolCallId: string | undefined,
   event: GenieWriterEvent,
@@ -44,7 +44,7 @@ export async function safeWriteProgress(
   } catch (err) {
     log.warn("writer:error", {
       ...context,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
   }
 }

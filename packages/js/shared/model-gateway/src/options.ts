@@ -7,8 +7,8 @@
  * @module
  */
 
-import { options } from "@dbx-tools/shared-core";
-import { ModelClassSchema } from "@dbx-tools/shared-model/contracts";
+import { listenAddressSchema, DatabricksOptionsSchema } from "@dbx-tools/shared-core";
+import { ModelClassSchema } from "@dbx-tools/shared-model";
 import { z } from "zod";
 
 export const ModelOptionSchema = z
@@ -46,10 +46,10 @@ export const ModelGatewayOptionsSchema = ModelSelectionOptionsSchema.safeExtend(
     .boolean()
     .default(false)
     .describe("Prefer system.ai services over serving endpoints for non-exact model selection."),
-  listen: options
-    .listenAddressSchema({ port: 4000, loopback: true })
-    .describe("Loopback listener address."),
-  profile: options.DatabricksOptionsSchema.shape.profile.describe(
+  listen: listenAddressSchema({ port: 4000, loopback: true }).describe(
+    "Loopback listener address.",
+  ),
+  profile: DatabricksOptionsSchema.shape.profile.describe(
     "Databricks profile used for model discovery and requests.",
   ),
   bodyLimit: z.string().trim().min(1).default("100mb").describe("Maximum JSON request body size."),

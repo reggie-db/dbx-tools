@@ -44,30 +44,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./key-store": {
-        "types": "./lib/src/key-store.d.ts",
-        "default": "./lib/src/key-store.js"
-      },
-      "./lifecycle": {
-        "types": "./lib/src/lifecycle.d.ts",
-        "default": "./lib/src/lifecycle.js"
-      },
-      "./rest": {
-        "types": "./lib/src/rest.d.ts",
-        "default": "./lib/src/rest.js"
-      },
-      "./session": {
-        "types": "./lib/src/session.d.ts",
-        "default": "./lib/src/session.js"
-      },
-      "./transport": {
-        "types": "./lib/src/transport.d.ts",
-        "default": "./lib/src/transport.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -81,16 +57,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./key-store": "./src/key-store.ts",
-    "./lifecycle": "./src/lifecycle.ts",
-    "./rest": "./src/rest.ts",
-    "./session": "./src/session.ts",
-    "./transport": "./src/transport.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

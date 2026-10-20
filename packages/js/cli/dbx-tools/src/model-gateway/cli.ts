@@ -5,14 +5,18 @@
  */
 
 import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args";
-import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
-import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
+import {
+  buildServiceCommand,
+  type CliServiceCliDependencies,
+  defineService,
+  type CliServiceDefinition,
+} from "@dbx-tools/cli-service";
 import {
   ModelGatewayCliOptionsSchema,
   resolveModelGatewayCliOptions,
   type ModelGatewayCliOptions,
   type ModelGatewayOptions,
-} from "@dbx-tools/shared-model-gateway/options";
+} from "@dbx-tools/shared-model-gateway";
 import { Command } from "commander";
 
 import { startModelGateway } from "./server.ts";

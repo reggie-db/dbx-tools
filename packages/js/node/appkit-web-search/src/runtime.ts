@@ -9,9 +9,9 @@
  */
 
 import type { ExecutionResult } from "@databricks/appkit";
-import { pluginExecution } from "@dbx-tools/appkit";
+import { runPluginExecution } from "@dbx-tools/appkit";
 import { policy } from "@dbx-tools/model";
-import { execution, log } from "@dbx-tools/shared-core";
+import { log, directExecutor } from "@dbx-tools/shared-core";
 import {
   resolveWebSearchConfig,
   type ResolvedWebSearchConfig,
@@ -51,7 +51,7 @@ export type WebSearchRuntimeInput = WebSearchRuntime | ResolvedWebSearchConfig;
  * onto the same {@link ExecutionResult} shape so call sites branch on `ok`
  * either way.
  */
-const directExecute = execution.directExecutor<WebSearchExecutionSettings>();
+const directExecute = directExecutor<WebSearchExecutionSettings>();
 
 /** Build an isolated runtime for one plugin instance or standalone tool set. */
 export function createWebSearchRuntime(
@@ -109,7 +109,7 @@ export async function executeRead<T>(
   signal?: AbortSignal,
   logFailure = true,
 ): Promise<T> {
-  return pluginExecution.runPluginExecution({
+  return runPluginExecution({
     plugin: "web-search",
     logger: logFailure ? logger : { warn() {} },
     operation,

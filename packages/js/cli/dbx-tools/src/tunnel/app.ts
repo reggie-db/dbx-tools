@@ -16,11 +16,11 @@
  */
 
 import { lakebase, type WorkspaceClient } from "@databricks/appkit";
-import { appkit } from "@dbx-tools/appkit";
-import { authStorage } from "@dbx-tools/auth-gate";
+import { createApp } from "@dbx-tools/appkit";
+import { shouldUseLakebase } from "@dbx-tools/auth-gate";
 import { email } from "@dbx-tools/email";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
-import { object } from "@dbx-tools/shared-core";
+import { isRecord } from "@dbx-tools/shared-core";
 import { authGate, type AuthGateApi, type AuthGateConfig } from "@dbx-tools/tunnel";
 
 /** Boot the gate app and return the handlers the proxy authenticates against. */
@@ -30,12 +30,10 @@ export async function startGateApp(
 ): Promise<AuthGateApi> {
   // No `server()` plugin: nothing here listens. `plugins` order matters - `email`
   // registers its transport before `authGate` looks for a sibling to send with.
-  const plugins = await appkit.createApp({
+  const plugins = await createApp({
     client,
     plugins: [
-      ...(authStorage.shouldUseLakebase(config)
-        ? [lakebase({ pool: postgresConnectionOptions({}) })]
-        : []),
+      ...(shouldUseLakebase(config) ? [lakebase({ pool: postgresConnectionOptions({}) })] : []),
       ...(config.sendCode ? [] : [email()]),
       authGate(config),
     ],
@@ -47,7 +45,7 @@ export async function startGateApp(
 
 function isAuthGateApi(value: unknown): value is AuthGateApi {
   return (
-    object.isRecord(value) &&
+    isRecord(value) &&
     typeof value.basePath === "string" &&
     typeof value.passkeysEnabled === "boolean" &&
     typeof value.isProtectedHost === "function" &&

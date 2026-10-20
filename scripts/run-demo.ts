@@ -2,7 +2,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { appkit } from "@dbx-tools/appkit";
+import { autoConfigure } from "@dbx-tools/appkit";
 import { log } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
 import { main as runDevWatch } from "../projen/tasks/dev-watch.ts";
@@ -44,7 +44,7 @@ export function demoWatchArgs(argv: readonly string[] = process.argv.slice(2)): 
 async function runDemo(): Promise<void> {
   process.env.LAKEBASE_ENDPOINT ??= await demoLakebaseEndpoint();
   process.env.PYTHON = path.join(ROOT, ".venv/bin/python");
-  await appkit.autoConfigure({ autoConfigure: "env" });
+  await autoConfigure({ autoConfigure: "env" });
   await runDevWatch(demoWatchArgs());
 }
 

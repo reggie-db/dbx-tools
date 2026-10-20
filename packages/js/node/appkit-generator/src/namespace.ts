@@ -10,13 +10,13 @@ import {
   getExecutionContext,
   type WorkspaceClient,
 } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { errorUtils, hash, stringUtils } from "@dbx-tools/shared-core";
+import { toContext } from "@dbx-tools/appkit";
+import { errorContext, fnvHash, toIdentifierWithOptions, trimToNull } from "@dbx-tools/shared-core";
 import {
   GeneratedSchemaSchema,
   type GeneratedSchema,
   type GeneratorRequest,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 
 const OWNER_DIGEST_PROPERTY = "dbx_tools.generator.owner_digest";
 const REQUEST_DIGEST_PROPERTY = "dbx_tools.generator.request_digest";
@@ -43,7 +43,7 @@ export interface GeneratorIdentity {
 
 /** Derive a readable, bounded schema name with collision-resistant overflow. */
 export function generatorSchemaName(principal: string, company: string, purpose: string): string {
-  const base = stringUtils.toIdentifierWithOptions(
+  const base = toIdentifierWithOptions(
     {
       delimiter: "_",
       omitEmailDomain: true,
@@ -65,7 +65,7 @@ export async function resolveGeneratorIdentity(): Promise<GeneratorIdentity> {
     throw new ConfigurationError("Generator operations require an on-behalf-of user context");
   }
   const current = await context.client.currentUser.me();
-  const principal = stringUtils.trimToNull(current.userName);
+  const principal = trimToNull(current.userName);
   if (!principal) {
     throw new ConfigurationError("The current Databricks user has no userName");
   }
@@ -88,7 +88,7 @@ async function getSchema(
   try {
     return await client.toLegacyWorkspaceClient().schemas.get({ full_name: fullName });
   } catch (cause) {
-    const context = errorUtils.errorContext(cause);
+    const context = errorContext(cause);
     if (context.hasStatusCode(404) || context.hasMessage("does not exist")) return undefined;
     throw cause;
   }
@@ -129,7 +129,7 @@ export async function provisionGeneratorSchemaWithIdentity(
   identity: GeneratorIdentity,
   signal?: AbortSignal,
 ): Promise<GeneratedSchema> {
-  const catalog = stringUtils.trimToNull(input.catalog);
+  const catalog = trimToNull(input.catalog);
   if (!catalog) throw new ConfigurationError("GENERATOR_CATALOG is required");
 
   const schemaName = generatorSchemaName(
@@ -138,9 +138,9 @@ export async function provisionGeneratorSchemaWithIdentity(
     input.request.purpose,
   );
   const fullName = `${catalog}.${schemaName}`;
-  const ownerDigest = hash.fnvHash(identity.userId);
-  const requestDigest = hash.fnvHash(identity.userId, input.request.company, input.request.purpose);
-  const context = signal ? databricks.toContext(signal) : undefined;
+  const ownerDigest = fnvHash(identity.userId);
+  const requestDigest = fnvHash(identity.userId, input.request.company, input.request.purpose);
+  const context = signal ? toContext(signal) : undefined;
 
   await identity.userClient.toLegacyWorkspaceClient().catalogs.get({ name: catalog });
 
@@ -160,7 +160,7 @@ export async function provisionGeneratorSchemaWithIdentity(
         context,
       );
     } catch (cause) {
-      if (!errorUtils.errorContext(cause).hasMessage("already exists")) throw cause;
+      if (!errorContext(cause).hasMessage("already exists")) throw cause;
     }
     schema = await getSchema(identity.serviceClient, fullName);
   }

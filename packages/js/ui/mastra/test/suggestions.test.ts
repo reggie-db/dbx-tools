@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { FOLLOW_UP_SUGGESTIONS_PART_TYPE } from "@dbx-tools/shared-mastra/wire";
+import { FOLLOW_UP_SUGGESTIONS_PART_TYPE } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 
 import { collectSuggestions } from "../src/react/suggestions.ts";

@@ -7,7 +7,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenResponses } from "@ai-sdk/open-responses";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import * as invoke from "@dbx-tools/model/invoke";
+import { invoke } from "@dbx-tools/model";
 import {
   rewriteServingRequest,
   rewriteServingResponseBody,

@@ -38,6 +38,7 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "index.*.ts",
     "stage-deploy.ts"
   ],
   "exclude": [

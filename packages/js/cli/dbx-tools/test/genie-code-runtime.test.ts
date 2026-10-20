@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { AuthClient, DatabricksAuthOptions } from "@dbx-tools/auth";
-import type { BinContext } from "@dbx-tools/core/bin";
+import { configUtils, type BinContext } from "@dbx-tools/core";
 import { AuthType, TargetKind } from "@dbx-tools/shared-auth";
 
-import { RUNNER_OPTIONS_ENV } from "../src/genie-code/runner.ts";
+import { RUNNER_OPTIONS_KEY } from "../src/genie-code/runner.ts";
 import {
   prepareGenieCodeRuntime,
   runGenieCode,
@@ -186,7 +186,7 @@ describe("managed Genie Code runtime", () => {
     assert.equal(gateway?.env?.LISTEN, "tcp://127.0.0.1:4312");
     const genie = supervised[0]?.commands[1];
     assert.equal(genie?.name, "genie");
-    const runner = JSON.parse(String(genie?.env?.[RUNNER_OPTIONS_ENV]));
+    const runner = JSON.parse(String(genie?.env?.[configUtils.name(RUNNER_OPTIONS_KEY)]));
     assert.deepEqual(runner, {
       executable: INSTALLATION.path,
       arguments: ["-p", "dbx-run", "--search", "hello"],

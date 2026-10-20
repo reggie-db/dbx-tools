@@ -23,10 +23,10 @@ import {
   type IAppRouter,
   type PluginManifest,
 } from "@databricks/appkit";
-import { pluginRegistry } from "@dbx-tools/appkit";
-import { net as databricksNet } from "@dbx-tools/databricks";
+import { require } from "@dbx-tools/appkit";
+import { getPublicIp } from "@dbx-tools/databricks";
 import { PostgresTopicBus, type TopicMessage, type TopicMetadata } from "@dbx-tools/postgres";
-import { errorUtils, log, object } from "@dbx-tools/shared-core";
+import { log, toError, isRecord, isSerializableValue } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 /**
@@ -43,13 +43,13 @@ const logger = log.logger("demo:bus");
  * the validation errors instead of a 500 from a rejected publish.
  */
 function isTopicMetadata(value: unknown): value is TopicMetadata {
-  return object.isRecord(value) && object.isSerializableValue(value);
+  return isRecord(value) && isSerializableValue(value);
 }
 
 /** Return whether PostgreSQL is temporarily terminating or rejecting connections. */
 function isRecoverablePostgresDisconnect(value: unknown): boolean {
   return (
-    object.isRecord(value) &&
+    isRecord(value) &&
     typeof value.code === "string" &&
     ["57P01", "57P02", "57P03"].includes(value.code)
   );
@@ -60,7 +60,7 @@ const sendSchema = z.object({
   user: z.string().trim().min(1).max(80),
   type: z.string().trim().min(1).max(120),
   metadata: z.record(z.string(), z.unknown()).refine(isTopicMetadata).default({}),
-  body: z.unknown().refine(object.isSerializableValue, "Body must be JSON serializable"),
+  body: z.unknown().refine(isSerializableValue, "Body must be JSON serializable"),
 });
 
 let environmentMetadata: Promise<Record<string, string>> | undefined;
@@ -82,9 +82,9 @@ function resolveEnvironmentMetadata(): Promise<Record<string, string>> {
       project: process.env.DATABRICKS_APP_NAME?.trim() || "dbx-tools-demo",
     };
     try {
-      metadata.publicIp = await databricksNet.getPublicIp();
+      metadata.publicIp = await getPublicIp();
     } catch (cause) {
-      logger.warn("public IP unavailable", { error: errorUtils.toError(cause) });
+      logger.warn("public IP unavailable", { error: toError(cause) });
     }
     return metadata;
   })();
@@ -111,11 +111,11 @@ class BusDemoPlugin extends Plugin {
 
   override async setup(): Promise<void> {
     this.context?.onLifecycle("setup:complete", async () => {
-      const lake = pluginRegistry.require(this.context, lakebase, "bus-demo");
+      const lake = require(this.context, lakebase, "bus-demo");
       this.bus = new PostgresTopicBus(lake.exports().pool, {
         metadata: resolveEnvironmentMetadata,
         onError: (cause) => {
-          const error = errorUtils.toError(cause);
+          const error = toError(cause);
           if (isRecoverablePostgresDisconnect(cause)) {
             logger.warn("topic listener disconnected; reconnecting", { error });
           } else {

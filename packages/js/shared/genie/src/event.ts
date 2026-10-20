@@ -25,7 +25,7 @@
  * @module
  */
 
-import { object } from "@dbx-tools/shared-core";
+import { deepEqual } from "@dbx-tools/shared-core";
 
 import {
   detectAttachmentType,
@@ -245,7 +245,7 @@ export const detectSuggestedQuestions = eventDetector(
     const curr = current.suggested_questions?.questions;
     const prev = previous?.suggested_questions?.questions;
     if (!curr || curr.length === 0) return;
-    if (object.deepEqual(curr, prev)) return;
+    if (deepEqual(curr, prev)) return;
     return { ...location, questions: curr };
   },
 );

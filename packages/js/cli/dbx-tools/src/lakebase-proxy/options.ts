@@ -4,24 +4,29 @@
  * @module
  */
 
-import { options } from "@dbx-tools/shared-core";
+import {
+  PostgresConfigOptionsSchema,
+  listenAddressSchema,
+  DatabricksOptionsSchema,
+  LakebaseOptionsSchema,
+} from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 const text = (description: string) => z.string().trim().min(1).optional().describe(description);
 
 export const LakebaseProxyOptionsSchema = z
   .object({
-    ...options.PostgresConfigOptionsSchema.shape,
-    listen: options
-      .listenAddressSchema({ port: 5432, loopback: true })
-      .describe("Loopback listener address."),
+    ...PostgresConfigOptionsSchema.shape,
+    listen: listenAddressSchema({ port: 5432, loopback: true }).describe(
+      "Loopback listener address.",
+    ),
     startupTimeoutSeconds: z.coerce
       .number<number>()
       .int()
       .nonnegative()
       .default(30)
       .describe("Startup timeout in seconds."),
-    profile: options.DatabricksOptionsSchema.shape.profile.describe("Exact Databricks profile."),
+    profile: DatabricksOptionsSchema.shape.profile.describe("Exact Databricks profile."),
   })
   .strict()
   .describe("Lakebase proxy listener and service options.");
@@ -29,8 +34,8 @@ export const LakebaseProxyOptionsSchema = z
 export const LakebaseProxyUrlOptionsSchema = z
   .object({
     target: text("Lakebase project, resource path, host, or URL."),
-    lakebaseEndpoint: options.LakebaseOptionsSchema.shape.lakebaseEndpoint,
-    listen: options.listenAddressSchema({ port: 5432 }).describe("Local proxy address."),
+    lakebaseEndpoint: LakebaseOptionsSchema.shape.lakebaseEndpoint,
+    listen: listenAddressSchema({ port: 5432 }).describe("Local proxy address."),
   })
   .strict()
   .refine(

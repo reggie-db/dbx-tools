@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 /** Generate package barrels once or keep affected barrels current in watch mode. */
 import { sep } from "node:path";
-import { log, object, stringUtils } from "@dbx-tools/shared-core";
+import { log, type Sequence, sequence, pluralize } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { TaskDirectoriesOptionSchema, TaskWatchOptionSchema } from "./options.ts";
@@ -19,10 +19,9 @@ function ownerPackageDir(
   return packages.find(({ dir }) => abs === dir || abs.startsWith(dir + sep))?.dir;
 }
 
-function changedBarrelTargets(changed: readonly string[]): object.Sequence<string> {
+function changedBarrelTargets(changed: readonly string[]): Sequence<string> {
   const packages = recordedPackages();
-  return object
-    .sequence(changed)
+  return sequence(changed)
     .map((path) => ownerPackageDir(path, packages))
     .nonNull()
     .distinct();
@@ -31,7 +30,7 @@ function changedBarrelTargets(changed: readonly string[]): object.Sequence<strin
 function warnUnownedChanges(changed: readonly string[]): void {
   if (changed.length) {
     logger.warn(
-      `no recorded package owns ${stringUtils.pluralize(changed.length, "change")}; ` +
+      `no recorded package owns ${pluralize(changed.length, "change")}; ` +
         "run `bun run default` (or touch .projenrc.ts) to pick up a new package folder",
     );
   }
@@ -62,7 +61,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       watchRoots(),
       (changed) => {
         const n = generateBarrels({ dirs: [...changedBarrelTargets(changed)] });
-        if (n) logger.success(`rebuilt ${stringUtils.pluralize(n, "barrel")}`);
+        if (n) logger.success(`rebuilt ${pluralize(n, "barrel")}`);
       },
       {
         check: (changed) => {
@@ -80,9 +79,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   } else {
     const dirs = values.dir;
     const n = generateBarrels(dirs.length ? { dirs } : undefined);
-    logger.success(
-      n === 0 ? "barrels already up to date" : `updated ${stringUtils.pluralize(n, "barrel")}`,
-    );
+    logger.success(n === 0 ? "barrels already up to date" : `updated ${pluralize(n, "barrel")}`);
   }
 }
 

@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { ConfigurationError, Plugin } from "@databricks/appkit";
-import { token } from "@dbx-tools/shared-core";
+import { ACCESS_TOKEN_HEADER } from "@dbx-tools/shared-core";
 import {
-  ACCESS_TOKEN_HEADER,
   DEFAULT_IDENTITY_MODE,
   IDENTITY_MODES,
   installAsUserDevelopmentPatch,
@@ -23,8 +22,7 @@ function req(headers: Record<string, string> = {}): { header(name: string): stri
 }
 
 describe("identity headers", () => {
-  it("re-exports the shared token constants rather than re-spelling them", () => {
-    assert.equal(ACCESS_TOKEN_HEADER, token.ACCESS_TOKEN_HEADER);
+  it("uses the shared token header constant", () => {
     assert.equal(ACCESS_TOKEN_HEADER, "x-forwarded-access-token");
   });
 

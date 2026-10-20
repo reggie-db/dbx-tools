@@ -4,13 +4,19 @@
  * @module
  */
 
-import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
+import {
+  log,
+  combineAbortSignals,
+  errorMessage,
+  isRecord,
+  toDescription,
+} from "@dbx-tools/shared-core";
 import {
   FOLLOW_UP_SUGGESTIONS_PART_TYPE,
   type FollowUpSuggestionsPartData,
   FollowUpSuggestionsPartDataSchema,
-} from "@dbx-tools/shared-mastra/wire";
-import { model } from "@dbx-tools/shared-model";
+} from "@dbx-tools/shared-mastra";
+import { ModelClass } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
 import type { MessageList } from "@mastra/core/agent/message-list";
 import type { MastraModelConfig } from "@mastra/core/llm";
@@ -25,7 +31,7 @@ import { buildModel } from "./model.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 
 const logger = log.logger("mastra/follow-up-suggestions");
-const FOLLOW_UP_MODEL_CLASS = model.ModelClass.ChatFast;
+const FOLLOW_UP_MODEL_CLASS = ModelClass.ChatFast;
 const DEFAULT_QUESTION_LIMIT = 3;
 const MAX_QUESTION_LIMIT = 10;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -195,8 +201,8 @@ function acceptedQuestions(
 }
 
 function toolActivityValue(value: unknown): Record<string, unknown> | undefined {
-  if (!object.isRecord(value)) return undefined;
-  return object.isRecord(value.payload) ? value.payload : value;
+  if (!isRecord(value)) return undefined;
+  return isRecord(value.payload) ? value.payload : value;
 }
 
 function toolActivityName(value: Record<string, unknown>): string | undefined {
@@ -244,8 +250,8 @@ export async function suggestFollowUps(
   const settings = resolveFollowUpSuggestionsConfig(config.followUpSuggestions);
   if (!settings || settings.mode === "genie") return [];
   const timeout = AbortSignal.timeout(settings.timeoutMs);
-  const abortSignal = asyncUtils.combineAbortSignals(options.abortSignal, timeout);
-  const prompt = stringUtils.toDescription({
+  const abortSignal = combineAbortSignals(options.abortSignal, timeout);
+  const prompt = toDescription({
     "User message": options.userText,
     "Assistant answer": options.answer,
     ...(options.turnContext ? { "Turn tool data": options.turnContext } : {}),
@@ -264,7 +270,7 @@ export async function suggestFollowUps(
     return acceptedQuestions(parsed.questions, options, settings.limit);
   } catch (error) {
     if (!options.abortSignal?.aborted) {
-      logger.warn("generation-failed", { error: errorUtils.errorMessage(error) });
+      logger.warn("generation-failed", { error: errorMessage(error) });
     }
     return [];
   }

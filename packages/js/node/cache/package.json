@@ -42,14 +42,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./cache": {
-        "types": "./lib/src/cache.d.ts",
-        "default": "./lib/src/cache.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -63,12 +55,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./cache": "./src/cache.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

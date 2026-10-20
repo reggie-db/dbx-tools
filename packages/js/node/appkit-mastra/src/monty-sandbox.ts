@@ -10,8 +10,8 @@
  */
 
 import { availableParallelism } from "node:os";
-import { configUtils } from "@dbx-tools/core";
-import { errorUtils, functionUtils, log } from "@dbx-tools/shared-core";
+import { boolean } from "@dbx-tools/core";
+import { log, toError, errorMessage, memoize } from "@dbx-tools/shared-core";
 import {
   MastraSandbox,
   type CommandResult,
@@ -45,9 +45,9 @@ export function montyMaxProcesses(parallelism: number = availableParallelism()):
   return Math.max(4, Math.floor(parallelism) * 2);
 }
 
-const montyContext = functionUtils.memoize(async (): Promise<MontyContext> => {
+const montyContext = memoize(async (): Promise<MontyContext> => {
   const errors: Error[] = [];
-  const targets = configUtils.boolean(undefined, "MONTY_FORCE_WASM")
+  const targets = boolean(undefined, "MONTY_FORCE_WASM")
     ? [WASM_MONTY_TARGET]
     : [NATIVE_MONTY_TARGET, WASM_MONTY_TARGET];
   for (const target of targets) {
@@ -66,9 +66,9 @@ const montyContext = functionUtils.memoize(async (): Promise<MontyContext> => {
         pool,
       };
     } catch (error) {
-      errors.push(errorUtils.toError(error));
+      errors.push(toError(error));
       logger.debug(`${target.name} unavailable`, {
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
     }
   }
@@ -208,7 +208,7 @@ export class MontySandbox extends MastraSandbox {
       if (aborted || options.abortSignal?.aborted) {
         throw abortReason(options.abortSignal);
       }
-      const message = errorUtils.errorMessage(caught);
+      const message = errorMessage(caught);
       output.emit("stderr", output.stderr.value ? `\n${message}` : message);
       const { crashedError } = await montyContext();
       const timedOut = caught instanceof crashedError && caught.timedOut;

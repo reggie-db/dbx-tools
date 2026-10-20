@@ -43,18 +43,7 @@ import {
   type LakebasePool,
   ValidationError,
 } from "@databricks/appkit";
-import { configUtils, projectUtils } from "@dbx-tools/core";
-import {
-  asyncUtils,
-  errorUtils,
-  log,
-  object,
-  options as sharedOptions,
-  stringUtils,
-} from "@dbx-tools/shared-core";
-import { z } from "zod";
-
-import { toContext } from "./databricks.ts";
+import { projectUtils, resolveValue } from "@dbx-tools/core";
 import {
   parseAddress,
   parseResourcePath,
@@ -62,7 +51,20 @@ import {
   SSL_MODES,
   type LakebaseConnectionInputs,
   type SslMode,
-} from "./pgaddress.ts";
+} from "@dbx-tools/lakebase";
+import {
+  log,
+  sleep,
+  toError,
+  isRecord,
+  tcpPortSchema,
+  databricksEnvironmentNames,
+  toSlugWithOptions,
+  MAX_TCP_PORT,
+} from "@dbx-tools/shared-core";
+import { z } from "zod";
+
+import { toContext } from "./databricks.ts";
 
 const logger = log.logger("lakebase-resolver");
 const API_BASE = "/api/2.0/postgres";
@@ -238,7 +240,7 @@ const operationSchema = z.object({
 type Operation = z.infer<typeof operationSchema>;
 
 /** `PGPORT` must land inside the TCP port range. */
-const portSchema = sharedOptions.tcpPortSchema;
+const portSchema = tcpPortSchema;
 
 /**
  * Validate a `PGPORT`-shaped value. Returns `undefined` when unset, and throws
@@ -249,11 +251,7 @@ export function parsePort(value: string | number | undefined): number | undefine
   if (value === undefined || value === "") return undefined;
   const parsed = portSchema.safeParse(value);
   if (!parsed.success) {
-    throw ValidationError.invalidValue(
-      "PGPORT",
-      value,
-      `a TCP port between 1 and ${configUtils.MAX_TCP_PORT}`,
-    );
+    throw ValidationError.invalidValue("PGPORT", value, `a TCP port between 1 and ${MAX_TCP_PORT}`);
   }
   return parsed.data;
 }
@@ -289,7 +287,7 @@ export function nextPollDelay(attempt: number, baseMs: number): number {
  * instead of finishing its backoff first.
  */
 export function pollDelay(attempt: number, baseMs: number, signal?: AbortSignal): Promise<void> {
-  return asyncUtils.sleep(nextPollDelay(attempt, baseMs), signal);
+  return sleep(nextPollDelay(attempt, baseMs), signal);
 }
 
 /**
@@ -309,14 +307,10 @@ export async function readLakebaseInputs(
 ): Promise<LakebaseResolverInputs> {
   const configOptions = { bundleProfile: config?.bundleProfile };
   const rawAddress =
-    config?.endpoint ??
-    configUtils.resolveValue(
-      sharedOptions.databricksEnvironmentNames.lakebaseEndpoint,
-      configOptions,
-    );
+    config?.endpoint ?? resolveValue(databricksEnvironmentNames.lakebaseEndpoint, configOptions);
   const parsed = parseAddress(rawAddress);
-  const portEnv = parsePort(configUtils.resolveValue("PGPORT", configOptions));
-  const sslModeEnv = parseSslMode(configUtils.resolveValue("PGSSLMODE", configOptions));
+  const portEnv = parsePort(resolveValue("PGPORT", configOptions));
+  const sslModeEnv = parseSslMode(resolveValue("PGSSLMODE", configOptions));
   const configuredSslMode = parseSslMode(config?.sslMode);
   const parsedSslMode = parseSslMode(parsed.sslMode);
   return {
@@ -326,9 +320,8 @@ export async function readLakebaseInputs(
     // bare hostnames set `host` instead and leave `endpoint` undefined
     // until the REST resolver fills it in.
     endpoint: parsed.endpoint,
-    database:
-      config?.database ?? configUtils.resolveValue("PGDATABASE", configOptions) ?? parsed.database,
-    host: config?.host ?? configUtils.resolveValue("PGHOST", configOptions) ?? parsed.host,
+    database: config?.database ?? resolveValue("PGDATABASE", configOptions) ?? parsed.database,
+    host: config?.host ?? resolveValue("PGHOST", configOptions) ?? parsed.host,
     port: config?.port ?? portEnv ?? parsed.port,
     sslMode: configuredSslMode ?? sslModeEnv ?? parsedSslMode,
     autoCreate: config?.autoCreate,
@@ -444,7 +437,7 @@ export async function resolveLakebaseConnection(
  */
 export function applyLakebaseToEnv(resolved: LakebaseConnection): void {
   if (resolved.endpoint) {
-    process.env[sharedOptions.databricksEnvironmentNames.lakebaseEndpoint] ??= resolved.endpoint;
+    process.env[databricksEnvironmentNames.lakebaseEndpoint] ??= resolved.endpoint;
   }
   if (resolved.host) process.env.PGHOST ??= resolved.host;
   if (resolved.database) process.env.PGDATABASE ??= resolved.database;
@@ -721,7 +714,7 @@ async function pickOrCreateProject(
  */
 async function defaultProjectId(): Promise<string> {
   const name = projectUtils.name();
-  const slug = stringUtils.toSlugWithOptions({ maxLength: PROJECT_ID_MAX_LEN }, name);
+  const slug = toSlugWithOptions({ maxLength: PROJECT_ID_MAX_LEN }, name);
   if (!slug || !/^[a-z]/.test(slug)) {
     logger.warn("autopg: project name does not slugify to a Lakebase project id", { name });
     throw ConfigurationError.invalidConnection(
@@ -799,9 +792,9 @@ function isAlreadyExistsError(error: unknown): boolean {
 function operationFailed(opName: string, opError: unknown): ExecutionError {
   logger.error("autopg: operation failed", {
     operation: opName,
-    error: errorUtils.toError(opError),
+    error: toError(opError),
   });
-  const code = object.isRecord(opError) ? (opError.code ?? opError.reason) : undefined;
+  const code = isRecord(opError) ? (opError.code ?? opError.reason) : undefined;
   return new ExecutionError(`Lakebase operation failed: ${opName}`, {
     context: {
       operation: opName,

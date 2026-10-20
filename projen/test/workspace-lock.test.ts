@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "node:test";
-import { asyncUtils } from "@dbx-tools/shared-core";
+import { sleep } from "@dbx-tools/shared-core";
 import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
 it("does not acquire the lock when check fails before wait", async () => {
@@ -11,10 +11,10 @@ it("does not acquire the lock when check fails before wait", async () => {
   let holderDone = false;
   try {
     const holder = withWorkspaceMutationLock(root, async () => {
-      await asyncUtils.sleep(80);
+      await sleep(80);
       holderDone = true;
     });
-    await asyncUtils.sleep(10);
+    await sleep(10);
     let ran = false;
     const skipped = await withWorkspaceMutationLock(
       root,
@@ -60,10 +60,10 @@ it("logs prolonged waits every five seconds until acquisition", async () => {
   let waiter: Promise<unknown> | undefined;
   try {
     waiter = withWorkspaceMutationLock(root, () => undefined);
-    await asyncUtils.sleep(10);
+    await sleep(10);
     assert.doesNotMatch(output, /waiting for workspace mutation lock/);
 
-    await asyncUtils.sleep(55);
+    await sleep(55);
     const waiting = output.match(/waiting for workspace mutation lock/g) ?? [];
     const elapsed = output.match(/elapsedMs:\s*\d+/g) ?? [];
     assert.ok(waiting.length >= 2, output);
@@ -72,7 +72,7 @@ it("logs prolonged waits every five seconds until acquisition", async () => {
     release();
     await Promise.all([holder, waiter]);
     const acquiredOutput = output;
-    await asyncUtils.sleep(25);
+    await sleep(25);
     assert.equal(output, acquiredOutput);
   } finally {
     release();
@@ -100,7 +100,7 @@ it("re-checks after acquire and skips the callback when work is gone", async () 
       async () => {
         ran += 1;
         markStarted();
-        await asyncUtils.sleep(40);
+        await sleep(40);
         needed = false;
       },
       { check: () => needed },

@@ -2,7 +2,7 @@ import {
   FOLLOW_UP_SUGGESTIONS_PART_TYPE,
   FollowUpSuggestionsPartDataSchema,
   type FollowUpSuggestionMode,
-} from "@dbx-tools/shared-mastra/wire";
+} from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import type { ToolEvent, ToolProgress } from "./types.ts";
 

@@ -3,17 +3,12 @@
  * dbx-tools project implementations.
  */
 import { type PathMatchInput } from "@dbx-tools/path";
-import { object, type OneOrMany } from "@dbx-tools/shared-core";
+import { type OneOrMany, toOneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
 import { Project, type ProjectOptions } from "projen";
 import * as mixin from "./mixin.ts";
 import type { DBXToolsJavaScriptProject } from "./project-js.ts";
 import * as projectPredicate from "./project-predicate.ts";
-
-export * from "./project-js.ts";
-export * from "./project-py.ts";
-export * from "./python-node-bindings-component.ts";
-export * from "./python-node-runtime.ts";
 
 /** Runtime family implemented by a dbx-tools project. */
 export type DBXToolsProjectLanguage = "javascript" | "python";
@@ -91,29 +86,27 @@ export function applyToProjects<P extends Project>(
   if (!options?.includeRoots) predicate = predicate.and((project) => project.parent != null);
   if (options?.identifierPackageName) {
     predicate = predicate.and(
-      projectPredicate.hasIdentifierPackageName(
-        ...object.toOneOrMany(options.identifierPackageName),
-      ),
+      projectPredicate.hasIdentifierPackageName(...toOneOrMany(options.identifierPackageName)),
     );
   }
   if (options?.name) {
-    predicate = predicate.and(projectPredicate.hasName(...object.toOneOrMany(options.name)));
+    predicate = predicate.and(projectPredicate.hasName(...toOneOrMany(options.name)));
   }
   if (options?.identifierScope) {
     predicate = predicate.and(
-      projectPredicate.hasIdentifierScope(...object.toOneOrMany(options.identifierScope)),
+      projectPredicate.hasIdentifierScope(...toOneOrMany(options.identifierScope)),
     );
   }
   if (options?.identifierName) {
     predicate = predicate.and(
-      projectPredicate.hasIdentifierName(...object.toOneOrMany(options.identifierName)),
+      projectPredicate.hasIdentifierName(...toOneOrMany(options.identifierName)),
     );
   }
   if (options?.tags) {
-    predicate = predicate.and(projectPredicate.hasTag(...object.toOneOrMany(options.tags)));
+    predicate = predicate.and(projectPredicate.hasTag(...toOneOrMany(options.tags)));
   }
   if (options?.path) {
-    predicate = predicate.and(projectPredicate.hasPath(...object.toOneOrMany(options.path)));
+    predicate = predicate.and(projectPredicate.hasPath(...toOneOrMany(options.path)));
   }
   const projectMixin = mixin.create(predicate, (project) => {
     callbacks.forEach((callback) => callback(project as Project));

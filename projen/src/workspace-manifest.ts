@@ -17,7 +17,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import * as exec from "@dbx-tools/core/exec";
+import { spawnSync } from "@dbx-tools/core";
 
 const DEPENDENCY_FIELDS = [
   "dependencies",
@@ -102,7 +102,7 @@ export async function withStagedWorkspaceManifests<T>(
 ): Promise<T> {
   const stage = mkdtempSync(join(tmpdir(), "dbx-tools-app-deploy-"));
   try {
-    const listed = exec.spawnSync(
+    const listed = spawnSync(
       "git",
       ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
       {

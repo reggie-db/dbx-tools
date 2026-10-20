@@ -4,7 +4,7 @@
  * @module
  */
 
-import { BrandContextSchema } from "@dbx-tools/shared-core/brand-utils";
+import { BrandContextSchema } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 const nonBlankString = z.string().trim().min(1);

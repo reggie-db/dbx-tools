@@ -1,5 +1,5 @@
+import { cn } from "@databricks/appkit-ui/react";
 import type { LakeboxMetricsSnapshot } from "@dbx-tools/shared-lakebox";
-import { cn } from "@dbx-tools/ui/react";
 
 /** Props for {@link LakeboxMetrics}. */
 export interface LakeboxMetricsProps {

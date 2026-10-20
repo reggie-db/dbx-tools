@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getRequestTags } from "@dbx-tools/appkit/request-tags";
+import { getRequestTags } from "@dbx-tools/appkit";
 import { AUTH_BASE_PATH, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
 import type { Request, RequestHandler, Response } from "express";
 import {

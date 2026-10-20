@@ -9,7 +9,7 @@ import {
   metadata,
   modelCatalog,
   policy,
-  resolve as modelResolve,
+  selection,
   type ListServingEndpointsOptions,
 } from "@dbx-tools/model";
 import { log } from "@dbx-tools/shared-core";
@@ -17,7 +17,7 @@ import {
   ModelClass,
   type ResolveModelInput,
   type ServingEndpointSummary,
-} from "@dbx-tools/shared-model/contracts";
+} from "@dbx-tools/shared-model";
 import type {
   ModelCapabilities,
   ModelCapabilityOverride,
@@ -114,7 +114,7 @@ export class DatabricksModelRegistry implements ModelRegistry {
     const endpoints = targets
       .map((target) => target.endpoint)
       .filter((endpoint): endpoint is ServingEndpointSummary => endpoint !== undefined);
-    const resolved = modelResolve.resolveModel(
+    const resolved = selection.resolveModel(
       endpoints,
       {
         ...(requested !== undefined ? { explicit: requested } : {}),
@@ -140,14 +140,14 @@ export class DatabricksModelRegistry implements ModelRegistry {
       .map((target) => target.endpoint)
       .filter((endpoint): endpoint is ServingEndpointSummary => endpoint !== undefined);
     const ranked = [
-      ...modelResolve.lookupModels(
+      ...selection.lookupModels(
         endpoints,
         { search: query },
         {
           preferSystemModels: this.preferSystemModels,
         },
       ),
-      ...modelResolve.lookupModels(
+      ...selection.lookupModels(
         endpoints,
         {
           search: query,

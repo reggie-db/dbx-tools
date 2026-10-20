@@ -19,7 +19,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { json, log } from "@dbx-tools/shared-core";
+import { log, parseRecord } from "@dbx-tools/shared-core";
 
 const logger = log.logger("demo/dependencies");
 
@@ -37,7 +37,7 @@ const UNRESOLVED = "unresolved";
 /** Read a `package.json`, or `undefined` when it is missing or malformed. */
 function readManifest(file: string): Record<string, unknown> | undefined {
   try {
-    return json.parseRecord(readFileSync(file, "utf8"));
+    return parseRecord(readFileSync(file, "utf8"));
   } catch {
     return undefined;
   }

@@ -44,50 +44,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./bin": {
-        "types": "./lib/src/bin.d.ts",
-        "default": "./lib/src/bin.js"
-      },
-      "./brand-files": {
-        "types": "./lib/src/brand-files.d.ts",
-        "default": "./lib/src/brand-files.js"
-      },
-      "./bundle": {
-        "types": "./lib/src/bundle.d.ts",
-        "default": "./lib/src/bundle.js"
-      },
-      "./config-utils": {
-        "types": "./lib/src/config-utils.d.ts",
-        "default": "./lib/src/config-utils.js"
-      },
-      "./dependency-resolver": {
-        "types": "./lib/src/dependency-resolver.d.ts",
-        "default": "./lib/src/dependency-resolver.js"
-      },
-      "./exec": {
-        "types": "./lib/src/exec.d.ts",
-        "default": "./lib/src/exec.js"
-      },
-      "./file-lock": {
-        "types": "./lib/src/file-lock.d.ts",
-        "default": "./lib/src/file-lock.js"
-      },
-      "./file": {
-        "types": "./lib/src/file.d.ts",
-        "default": "./lib/src/file.js"
-      },
-      "./process-lock": {
-        "types": "./lib/src/process-lock.d.ts",
-        "default": "./lib/src/process-lock.js"
-      },
-      "./project-utils": {
-        "types": "./lib/src/project-utils.d.ts",
-        "default": "./lib/src/project-utils.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -101,21 +57,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./bin": "./src/bin.ts",
-    "./brand-files": "./src/brand-files.ts",
-    "./bundle": "./src/bundle.ts",
-    "./config-utils": "./src/config-utils.ts",
-    "./dependency-resolver": "./src/dependency-resolver.ts",
-    "./exec": "./src/exec.ts",
-    "./file-lock": "./src/file-lock.ts",
-    "./file": "./src/file.ts",
-    "./process-lock": "./src/process-lock.ts",
-    "./project-utils": "./src/project-utils.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

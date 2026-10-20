@@ -14,19 +14,16 @@ import type {
 } from "@dbx-tools/shared-model";
 
 import {
-  lookupModels,
-  rankModelId,
-  resolveModel,
-  type ModelSelectionPolicyOptions,
-} from "./_selection.ts";
-import {
   listServingEndpoints,
   type ListServingEndpointsOptions,
   type WorkspaceClientLike,
 } from "./model-catalog.ts";
-
-export { lookupModels, rankModelId, resolveModel } from "./_selection.ts";
-export type { ModelSelectionPolicyOptions } from "./_selection.ts";
+import {
+  lookupModels,
+  rankModelId,
+  resolveModel,
+  type ModelSelectionPolicyOptions,
+} from "./selection.ts";
 
 /** Intent plus catalogue cache controls passed to {@link selectModel}. */
 export interface SelectModelInput extends ResolveModelInput {

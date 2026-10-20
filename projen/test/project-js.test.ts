@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 
-import { srcModuleExports } from "../src/project-js.ts";
+import { srcFolderExports } from "../src/project-js.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -14,28 +14,25 @@ afterEach(() => {
   }
 });
 
-describe("srcModuleExports", () => {
-  it("discovers public files and directory entrypoints", () => {
+describe("srcFolderExports", () => {
+  it("discovers folder barrels and public stylesheets without module subpaths", () => {
     const directory = mkdtempSync(join(tmpdir(), "dbx-tools-project-js-"));
     temporaryDirectories.push(directory);
     mkdirSync(join(directory, "src", "react"), { recursive: true });
-    mkdirSync(join(directory, "src", "internal"), { recursive: true });
+    mkdirSync(join(directory, "src", "_internal"), { recursive: true });
     writeFileSync(join(directory, "src", "client.ts"), "");
     writeFileSync(join(directory, "src", "styles.css"), "");
     writeFileSync(join(directory, "src", "view.tsx"), "");
     writeFileSync(join(directory, "src", "_private.ts"), "");
     writeFileSync(join(directory, "src", "types.d.ts"), "");
-    writeFileSync(join(directory, "src", "react", "index.ts"), "");
-    writeFileSync(join(directory, "src", "internal", "value.ts"), "");
+    writeFileSync(join(directory, "src", "react", "component.tsx"), "");
+    writeFileSync(join(directory, "src", "_internal", "value.ts"), "");
 
     assert.deepEqual(
-      srcModuleExports({ outdir: directory } as Parameters<typeof srcModuleExports>[0]),
+      srcFolderExports({ outdir: directory } as Parameters<typeof srcFolderExports>[0]),
       {
-        "./*": "./src/*/index.ts",
-        "./client": "./src/client.ts",
-        "./react": "./src/react/index.ts",
+        "./react": "./index.react.ts",
         "./styles.css": "./src/styles.css",
-        "./view": "./src/view.tsx",
       },
     );
   });

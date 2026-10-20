@@ -1,22 +1,23 @@
 import { createHash } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
-import { exec } from "@dbx-tools/core";
-import { SshKeyStore } from "@dbx-tools/lakebox/key-store";
+import { onParentTerminationSignal } from "@dbx-tools/core";
 import {
+  SshKeyStore,
   ensureLakeboxRunning,
   ensureLakeboxStopped,
   lakeboxIdleTimeoutSeconds,
   normalizeLakeboxStatus,
-} from "@dbx-tools/lakebox/lifecycle";
+  SshCommand,
+  SshSession,
+} from "@dbx-tools/lakebox";
 import {
   isLakeboxUnavailable,
   LakeboxApiError,
   LakeboxClient,
   type LakeboxAuth,
   type LakeboxEntry,
-} from "@dbx-tools/lakebox/rest";
-import { SshCommand, SshSession } from "@dbx-tools/lakebox/session";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+} from "@dbx-tools/lakebox";
+import { log, toError } from "@dbx-tools/shared-core";
 import {
   LAKEBOX_BUILT_IN_SERVICES,
   lakeboxBuiltInServiceNameSchema,
@@ -147,9 +148,7 @@ export class LakeboxRuntime {
       (signal) => this.readMetrics(signal),
       config.metricsIntervalSeconds * 1_000,
     );
-    this.stopParentTerminationSignal = exec.onParentTerminationSignal(() =>
-      this.routes.beginShutdown(),
-    );
+    this.stopParentTerminationSignal = onParentTerminationSignal(() => this.routes.beginShutdown());
   }
 
   /**
@@ -414,7 +413,7 @@ export class LakeboxRuntime {
       );
     } catch (error) {
       if (!isLakeboxUnavailable(error)) {
-        logger.warn("legacy Lakebox cleanup failed", { error: errorUtils.toError(error) });
+        logger.warn("legacy Lakebox cleanup failed", { error: toError(error) });
       }
     }
     if (!pool) return;
@@ -429,7 +428,7 @@ export class LakeboxRuntime {
         logger.info("dropped legacy Lakebox ownership schema", { schema });
       }
     } catch (error) {
-      logger.warn("legacy ownership schema cleanup failed", { error: errorUtils.toError(error) });
+      logger.warn("legacy ownership schema cleanup failed", { error: toError(error) });
     }
   }
 
@@ -661,7 +660,7 @@ export class LakeboxRuntime {
       if (this.shutdownController.signal.aborted) return;
       logger.warn("Lakebox service restore failed", {
         user: hash,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
     }
   }
@@ -867,7 +866,7 @@ export class LakeboxRuntime {
   private wake(action: () => Promise<unknown>): void {
     if (this.waking) return;
     this.waking = action()
-      .catch((error) => logger.warn("Lakebox wake failed", { error: errorUtils.toError(error) }))
+      .catch((error) => logger.warn("Lakebox wake failed", { error: toError(error) }))
       .finally(() => {
         this.waking = undefined;
       });

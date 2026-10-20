@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { USER_TRACE_ATTRIBUTE } from "@dbx-tools/appkit";
 
 import {
   assistantTextFromJson,
@@ -9,19 +10,20 @@ import {
   CHAT_MESSAGES_ATTR,
   CHAT_RESPONSE_ATTR,
   chatTurnTelemetryMiddleware,
+  MLFLOW_SESSION_ATTR,
+  MLFLOW_SPAN_INPUTS_ATTR,
+  MLFLOW_SPAN_OUTPUTS_ATTR,
+  MLFLOW_SPAN_TYPE_ATTR,
+  textOnlyChatInput,
+  TRACE_IO_LIMIT,
+} from "../src/telemetry.ts";
+import {
   MLFLOW_AGENT_TAG_ATTR,
   MLFLOW_GENIE_TAG_ATTR,
   MLFLOW_LOCAL_TAG_ATTR,
   MLFLOW_OBO_AUTH_TAG_ATTR,
-  MLFLOW_SESSION_ATTR,
   MLFLOW_SP_AUTH_TAG_ATTR,
-  MLFLOW_SPAN_INPUTS_ATTR,
-  MLFLOW_SPAN_OUTPUTS_ATTR,
-  MLFLOW_SPAN_TYPE_ATTR,
-  MLFLOW_USER_ATTR,
-  textOnlyChatInput,
-  TRACE_IO_LIMIT,
-} from "../src/telemetry.ts";
+} from "../src/trace-attributes.ts";
 
 describe("assistantTextFromSse", () => {
   it("reassembles text-delta frames and ignores keepalives", () => {
@@ -173,7 +175,7 @@ describe("telemetry constants", () => {
     assert.equal(CHAT_IDENTITY_ATTR, "appkit.mastra.identity.mode");
     assert.equal(CHAT_GENIE_USED_ATTR, "appkit.mastra.genie.used");
     assert.equal(MLFLOW_SPAN_TYPE_ATTR, "mlflow.spanType");
-    assert.equal(MLFLOW_USER_ATTR, "user.id");
+    assert.equal(USER_TRACE_ATTRIBUTE, "user.id");
     assert.equal(MLFLOW_SESSION_ATTR, "session.id");
     assert.equal(MLFLOW_AGENT_TAG_ATTR, "mlflow.traceTag.agent");
     assert.equal(MLFLOW_GENIE_TAG_ATTR, "mlflow.traceTag.genie");

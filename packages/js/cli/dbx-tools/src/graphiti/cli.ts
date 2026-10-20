@@ -12,16 +12,20 @@ import { join } from "node:path";
 
 import { runtime as graphitiRuntime } from "@dbx-tools/appkit-memory/graphiti";
 import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args";
-import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
-import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
-import { serviceTrayIcon } from "@dbx-tools/cli-service/icon";
-import { Command } from "commander";
-
+import {
+  buildServiceCommand,
+  type CliServiceCliDependencies,
+  defineService,
+  type CliServiceDefinition,
+} from "@dbx-tools/cli-service";
+import { serviceTrayIcon } from "@dbx-tools/cli-service";
 import {
   GraphitiCliOptionsSchema,
   GraphitiOptionsSchema,
   type GraphitiOptions,
-} from "./options.ts";
+} from "@dbx-tools/shared-graphiti";
+import { Command } from "commander";
+
 import { PACKAGE_VERSION } from "../../index.ts";
 
 const DEFAULT_SERVICE_DIRECTORY = join(homedir(), ".dbx-tools", "services", "graphiti");
@@ -74,18 +78,18 @@ export function buildProgram(
       .version(PACKAGE_VERSION, "-v, --version"),
     GraphitiCliOptionsSchema,
   ).action(async () => {
-    await dependencies.run(graphitiOptions(program));
+    await dependencies.run(parseGraphitiOptions(program));
   });
 
   program.addCommand(
     buildServiceCommand(
-      () => graphitiServiceDefinition(graphitiOptions(program)),
+      () => graphitiServiceDefinition(parseGraphitiOptions(program)),
       dependencies.service,
     ),
   );
   return program;
 }
 
-function graphitiOptions(command: Command): GraphitiOptions {
+function parseGraphitiOptions(command: Command): GraphitiOptions {
   return GraphitiOptionsSchema.parse(parseArgs(command, GraphitiCliOptionsSchema));
 }

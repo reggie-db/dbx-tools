@@ -27,7 +27,7 @@
  *
  * @module
  */
-import { object } from "@dbx-tools/shared-core";
+import { isRecord } from "@dbx-tools/shared-core";
 import type { ChartChrome } from "./chart-theme.ts";
 
 /** Compact SI formatter shared across every value-axis tick. */
@@ -52,7 +52,7 @@ function compactAxisLabel(value: number): string {
 /** A permissive record view of an option node we patch field-by-field. */
 type Obj = Record<string, unknown>;
 
-const isObj = object.isRecord;
+const isObj = isRecord;
 
 /** True when `title` (object or array) carries any non-empty `text`. */
 function hasTitleText(title: unknown): boolean {

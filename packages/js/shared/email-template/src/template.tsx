@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { brandUtils, type BrandContext } from "@dbx-tools/shared-core";
+import { type BrandContext, defaultBrandContext } from "@dbx-tools/shared-core";
 import {
   Body,
   Column,
@@ -85,7 +85,7 @@ export const emailBrandFromContext = (context: BrandContext): EmailBrand => {
 
 /** The repository brand used by every email unless explicitly overridden. */
 export const defaultEmailBrand: EmailBrand = {
-  ...emailBrandFromContext(brandUtils.defaultBrandContext),
+  ...emailBrandFromContext(defaultBrandContext),
   logoUrl: dbxToolsEmailAssetDataUrls.logo,
 };
 
@@ -97,12 +97,12 @@ export const resolveEmailBrand = (input?: EmailBrand): ResolvedEmailBrand => {
     accent: merged.accent,
     onAccent: merged.onAccent ?? "#ffffff",
     fontFamily: merged.fontFamily,
-    name: merged.name ?? brandUtils.defaultBrandContext.name,
-    background: merged.background ?? brandUtils.defaultBrandContext.colors.surface,
-    surface: merged.surface ?? brandUtils.defaultBrandContext.colors.background,
-    foreground: merged.foreground ?? brandUtils.defaultBrandContext.colors.foreground,
-    muted: merged.muted ?? brandUtils.defaultBrandContext.colors.muted,
-    border: merged.border ?? brandUtils.defaultBrandContext.colors.border,
+    name: merged.name ?? defaultBrandContext.name,
+    background: merged.background ?? defaultBrandContext.colors.surface,
+    surface: merged.surface ?? defaultBrandContext.colors.background,
+    foreground: merged.foreground ?? defaultBrandContext.colors.foreground,
+    muted: merged.muted ?? defaultBrandContext.colors.muted,
+    border: merged.border ?? defaultBrandContext.colors.border,
     ...(tagline ? { tagline } : {}),
     ...(merged.logoUrl ? { logoUrl: merged.logoUrl } : {}),
     ...(merged.website ? { website: merged.website } : {}),
@@ -158,7 +158,7 @@ export const EmailBody = ({ body, brand: brandInput }: EmailBodyProps) => {
           backgroundColor: theme.background,
           borderRadius: "5px",
           color: theme.foreground,
-          fontFamily: brandUtils.defaultBrandContext.typography.mono,
+          fontFamily: defaultBrandContext.typography.mono,
           fontSize: "13px",
           padding: "2px 5px",
         },
@@ -166,7 +166,7 @@ export const EmailBody = ({ body, brand: brandInput }: EmailBodyProps) => {
           backgroundColor: theme.foreground,
           borderRadius: "10px",
           color: theme.surface,
-          fontFamily: brandUtils.defaultBrandContext.typography.mono,
+          fontFamily: defaultBrandContext.typography.mono,
           fontSize: "13px",
           lineHeight: "1.55",
           margin: "20px 0",

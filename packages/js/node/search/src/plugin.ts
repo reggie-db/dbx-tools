@@ -22,14 +22,22 @@
 
 import { toPlugin, type IAppRouter, type PluginManifest } from "@databricks/appkit";
 import { aiSearch, defineTool, type ToolRegistry } from "@databricks/appkit/beta";
-import { pluginRegistry, ToolRegistryPlugin } from "@dbx-tools/appkit";
-import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
+import { ToolRegistryPlugin, require } from "@dbx-tools/appkit";
+import { log, toError, errorMessage, trimToNull } from "@dbx-tools/shared-core";
 import {
   SEARCH_DEFAULT_BASE_PATH,
   SEARCH_PLUGIN_NAME,
   SEARCH_ROUTES,
-  searchSchemas,
   type SearchClientConfig,
+  searchRequestSchema,
+  universalSearchRequestSchema,
+  searchDocumentSchema,
+  createIndexRequestSchema,
+  syncIndexRequestSchema,
+  type SearchRequest,
+  type UniversalSearchRequest,
+  type CreateIndexRequest,
+  type SyncIndexRequest,
 } from "@dbx-tools/shared-search";
 import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
 import { SEARCH_CONFIG_SCHEMA, resolveSearchConfig, type SearchPluginConfig } from "./config.ts";
@@ -112,14 +120,14 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     const registry: ToolRegistry = {
       search: defineTool({
         description: SEARCH_TOOL_DESCRIPTION,
-        schema: searchSchemas.searchRequestSchema,
+        schema: searchRequestSchema,
         annotations: { effect: "read", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runSearch(args, signal),
       }),
       universal_search: defineTool({
         description: UNIVERSAL_SEARCH_TOOL_DESCRIPTION,
-        schema: searchSchemas.universalSearchRequestSchema,
+        schema: universalSearchRequestSchema,
         annotations: { effect: "read", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runUniversalSearch(args, signal),
@@ -128,9 +136,9 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     if (config.allowWrite) {
       registry.add_documents = defineTool({
         description: ADD_DOCUMENTS_TOOL_DESCRIPTION,
-        schema: searchSchemas.searchRequestSchema
+        schema: searchRequestSchema
           .pick({ index: true })
-          .extend({ documents: searchSchemas.searchDocumentSchema.array() }),
+          .extend({ documents: searchDocumentSchema.array() }),
         annotations: { effect: "write", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runAddDocuments(args, signal),
@@ -138,14 +146,14 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
       if (readBackend?.supportsLifecycle) {
         registry.create_index = defineTool({
           description: CREATE_INDEX_TOOL_DESCRIPTION,
-          schema: searchSchemas.createIndexRequestSchema,
+          schema: createIndexRequestSchema,
           annotations: { effect: "write", requiresUserContext: true },
           autoInheritable: false,
           execute: async (args, signal) => this.runCreateIndex(args, signal),
         });
         registry.sync_index = defineTool({
           description: SYNC_INDEX_TOOL_DESCRIPTION,
-          schema: searchSchemas.syncIndexRequestSchema,
+          schema: syncIndexRequestSchema,
           annotations: { effect: "write", requiresUserContext: true },
           autoInheritable: false,
           execute: async (args, signal) => this.runSyncIndex(args, signal),
@@ -181,7 +189,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
 
   /** Resolve the registered AppKit-compatible AI Search provider. */
   private resolveProviderBackend(): ReturnType<typeof nativeAiSearchBackend> {
-    const provider = pluginRegistry.require(this.context, aiSearch, this).exports();
+    const provider = require(this.context, aiSearch, this).exports();
     return nativeAiSearchBackend(provider, resolveSearchConfig(this.config));
   }
 
@@ -194,7 +202,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
   private async runEnsureOnSetup(config: SearchRuntime["config"]): Promise<void> {
     const spec = config.ensureOnSetup;
     if (!spec) return;
-    const index = stringUtils.trimToNull(spec.index) ?? config.defaultIndex;
+    const index = trimToNull(spec.index) ?? config.defaultIndex;
     if (!index) {
       logger.warn("ensure-skipped", {
         reason: "no index name (set `index` or `ensureOnSetup.index`)",
@@ -227,7 +235,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
         rowCount: info.rowCount ?? 0,
       });
     } catch (cause) {
-      logger.warn("ensure-failed", { index, error: errorUtils.toError(cause) });
+      logger.warn("ensure-failed", { index, error: toError(cause) });
     }
   }
 
@@ -272,7 +280,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
       path: SEARCH_ROUTES.universal,
       handler: async (req, res) => {
         await this.respond(res, "universalSearch", () => {
-          const request = searchSchemas.universalSearchRequestSchema.parse(req.body ?? {});
+          const request = universalSearchRequestSchema.parse(req.body ?? {});
           return this.asUser(req).runUniversalSearch(request);
         });
       },
@@ -347,10 +355,10 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     try {
       res.json(await run());
     } catch (cause) {
-      const message = errorUtils.errorMessage(cause);
+      const message = errorMessage(cause);
       logger.warn("route-failed", {
         operation,
-        error: errorUtils.toError(cause),
+        error: toError(cause),
       });
       res.status(500).json({ error: message });
     }
@@ -377,31 +385,30 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
   override exports() {
     return {
       /** Search one index (default when omitted). Runs as the current context user. */
-      search: (request: searchSchemas.SearchRequest, signal?: AbortSignal) =>
-        this.runSearch(request, signal),
+      search: (request: SearchRequest, signal?: AbortSignal) => this.runSearch(request, signal),
       /** Search across every configured index and merge the hits. */
-      universalSearch: (request: searchSchemas.UniversalSearchRequest, signal?: AbortSignal) =>
+      universalSearch: (request: UniversalSearchRequest, signal?: AbortSignal) =>
         this.runUniversalSearch(request, signal),
       /** Add or update documents in a direct-access index (throws when writes are disabled). */
       addDocuments: (request: { index?: string; documents: unknown }, signal?: AbortSignal) =>
         this.runAddDocuments(request, signal),
       /** Create a Vector Search index (throws when writes are disabled). */
-      createIndex: (request: searchSchemas.CreateIndexRequest, signal?: AbortSignal) =>
+      createIndex: (request: CreateIndexRequest, signal?: AbortSignal) =>
         this.runCreateIndex(request, signal),
       /** Sync a Delta Sync index from its source table (throws when writes are disabled). */
-      syncIndex: (request: searchSchemas.SyncIndexRequest, signal?: AbortSignal) =>
+      syncIndex: (request: SyncIndexRequest, signal?: AbortSignal) =>
         this.runSyncIndex(request, signal),
     };
   }
 
   private async runSearch(args: unknown, signal?: AbortSignal) {
-    const request = searchSchemas.searchRequestSchema.parse(args);
+    const request = searchRequestSchema.parse(args);
     const { client } = this.runtime;
     return client.search(request.query, toSearchOptions(request, signal));
   }
 
   private async runUniversalSearch(args: unknown, signal?: AbortSignal) {
-    const request = searchSchemas.universalSearchRequestSchema.parse(args);
+    const request = universalSearchRequestSchema.parse(args);
     const { client } = this.runtime;
     return client.universalSearch(request.query, toUniversalSearchOptions(request, signal));
   }
@@ -415,13 +422,13 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
   }
 
   private async runCreateIndex(args: unknown, signal?: AbortSignal) {
-    const request = searchSchemas.createIndexRequestSchema.parse(args);
+    const request = createIndexRequestSchema.parse(args);
     const { client } = this.runtime;
     return client.createIndex(request.name, toCreateIndexOptions(request, signal));
   }
 
   private async runSyncIndex(args: unknown, signal?: AbortSignal) {
-    const request = searchSchemas.syncIndexRequestSchema.parse(args);
+    const request = syncIndexRequestSchema.parse(args);
     const { client, config } = this.runtime;
     const index = request.index ?? config.defaultIndex ?? "";
     await client.syncIndex(index, signal);

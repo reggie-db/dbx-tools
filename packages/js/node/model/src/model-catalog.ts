@@ -23,20 +23,18 @@
 
 import { createHash } from "node:crypto";
 import { appkit } from "@dbx-tools/appkit";
-import { deleteCachedValue, getOrSet } from "@dbx-tools/cache/cache";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { deleteCachedValue, getOrSet } from "@dbx-tools/cache";
+import { log, toError } from "@dbx-tools/shared-core";
 import {
-  model,
   type ResolvedModel,
   type ResolveModelOptions,
   type ScoredEndpoint,
   type ServingEndpointSummary,
+  ModelClass,
 } from "@dbx-tools/shared-model";
 
 import { modelCatalogueCache } from "./_cache.ts";
 import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_ranking.ts";
-
-const { ModelClass } = model;
 
 const logger = log.logger("model/serving");
 
@@ -189,7 +187,7 @@ async function pingEmbeddingDimension(
     logger.warn("embedding ping returned no vector", { name });
     return undefined;
   } catch (err) {
-    logger.warn("embedding ping failed", { name, error: errorUtils.toError(err) });
+    logger.warn("embedding ping failed", { name, error: toError(err) });
     return undefined;
   }
 }

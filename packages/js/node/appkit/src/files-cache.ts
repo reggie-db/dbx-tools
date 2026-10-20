@@ -5,9 +5,9 @@
  */
 
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
-import { cacheKeys, closeCache, createCache, getOrSet } from "@dbx-tools/cache/cache";
-import { errorUtils, log, object } from "@dbx-tools/shared-core";
-import { posixPath, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
+import { cacheKeys, closeCache, createCache, getOrSet } from "@dbx-tools/cache";
+import { log, toError, toStableKey } from "@dbx-tools/shared-core";
+import { type CacheValue, type FileSystemCache, normalizeRoot } from "@dbx-tools/shared-fs";
 
 const DEFAULT_TTL_MS = 60_000;
 const DEFAULT_INVALIDATION_BATCH_MS = 25;
@@ -121,9 +121,9 @@ export class FilesCacheManager {
     load: () => T | Promise<T>,
   ): Promise<T> {
     const state = await this.resolveScopeState(input);
-    const paths = identity.paths.map((path) => posixPath.normalizeRoot(path));
+    const paths = identity.paths.map((path) => normalizeRoot(path));
     if (paths.length === 0) throw new TypeError("Filesystem source paths must not be empty");
-    const sourceKey = object.toStableKey({ paths, key: identity.key });
+    const sourceKey = toStableKey({ paths, key: identity.key });
     let source = state.sources.get(sourceKey);
     if (!source) {
       source = Promise.resolve(load());
@@ -139,7 +139,7 @@ export class FilesCacheManager {
 
   private async resolveScopeState(input: FilesCacheScope): Promise<ScopeState> {
     const scope = resolveScope(input, this.config.ttlMs);
-    const scopeKey = object.toStableKey({
+    const scopeKey = toStableKey({
       host: scope.host,
       userKey: scope.userKey,
       workspaceId: scope.workspaceId,
@@ -186,7 +186,7 @@ export class FilesCacheManager {
   }
 
   private group(scope: ResolvedFilesCacheScope): GroupState {
-    const key = object.toStableKey({
+    const key = toStableKey({
       host: scope.host,
       workspaceId: scope.workspaceId,
     });
@@ -247,7 +247,7 @@ export class FilesCacheManager {
       state.group.timer = undefined;
       void this.flushInvalidations(state.group).catch((error) => {
         logger.warn("filesystem cache invalidation batch failed", {
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
       });
     }, this.config.invalidationBatchMs);

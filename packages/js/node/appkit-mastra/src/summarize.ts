@@ -19,8 +19,8 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
-import { model } from "@dbx-tools/shared-model";
+import { toDescription } from "@dbx-tools/shared-core";
+import { ModelClass } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
@@ -32,7 +32,7 @@ import { buildModel } from "./model.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 
 /** Fast / small chat tier used for both titling and summaries. */
-const SUMMARY_MODEL_CLASS = model.ModelClass.ChatFast;
+const SUMMARY_MODEL_CLASS = ModelClass.ChatFast;
 
 /** System prompt for the summarizer agent (and the `summarize` tool). */
 const SUMMARIZER_INSTRUCTIONS = [
@@ -136,7 +136,7 @@ export async function summarizeText(
   options: SummarizeOptions = {},
 ): Promise<string> {
   const { instructions, maxWords, requestContext, abortSignal } = options;
-  const prompt = stringUtils.toDescription({
+  const prompt = toDescription({
     ...(instructions ? { Guidance: instructions } : {}),
     ...(maxWords !== undefined ? { "Max length (words)": String(maxWords) } : {}),
     Text: text,

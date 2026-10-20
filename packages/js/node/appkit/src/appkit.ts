@@ -35,8 +35,8 @@ import {
 // AppKit's root barrel re-exports `PluginData` but not `PluginMap`; the package
 // publishes this subpath for exactly that type.
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
-import { profile as authProfile } from "@dbx-tools/auth";
-import { asyncUtils, log } from "@dbx-tools/shared-core";
+import { resolveProfile } from "@dbx-tools/auth";
+import { log, tieAbortSignal } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
 import { loadBrandContext } from "./brand-context.ts";
@@ -167,8 +167,8 @@ export async function autoConfigure<T extends AppKitPlugins>(
   }
 
   const controller = new AbortController();
-  asyncUtils.tieAbortSignal(controller, signal);
-  asyncUtils.tieAbortSignal(controller, AbortSignal.timeout(AUTO_CONFIGURE_TIMEOUT_MS));
+  tieAbortSignal(controller, signal);
+  tieAbortSignal(controller, AbortSignal.timeout(AUTO_CONFIGURE_TIMEOUT_MS));
 
   logger.debug("autoConfigure: resolve lakebase", {
     provision: policy.provision,
@@ -229,7 +229,7 @@ async function autoConfigureLakebase(
 
 function applyDefaultProfile(): string | undefined {
   const configured = process.env.DATABRICKS_CONFIG_PROFILE?.trim();
-  const resolved = authProfile.resolveProfile(configured ? { profile: configured } : {});
+  const resolved = resolveProfile(configured ? { profile: configured } : {});
   if (!resolved) {
     delete process.env.DATABRICKS_CONFIG_PROFILE;
     return undefined;

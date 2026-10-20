@@ -7,7 +7,7 @@ import {
   type SshPoolOptions,
   type SshResourceLifecycle,
   type SshTransportOptions,
-} from "./_ssh.ts";
+} from "./ssh.ts";
 
 const logger = log.logger("lakebox:ssh2");
 const patchedSsh2Protocols = new WeakSet<Ssh2Protocol>();

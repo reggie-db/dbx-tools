@@ -5,8 +5,8 @@
  */
 
 import type { WorkspaceClient } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { errorUtils } from "@dbx-tools/shared-core";
+import { toContext } from "@dbx-tools/appkit";
+import { errorContext } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import type { ResolvedDatabricksMemoryOptions } from "../config.ts";
@@ -86,11 +86,11 @@ export class ManagedAgentMemoryClient {
           headers: new Headers({ accept: "application/json" }),
           raw: false,
         },
-        signal ? databricks.toContext(signal) : undefined,
+        signal ? toContext(signal) : undefined,
       );
       return true;
     } catch (error) {
-      if (errorUtils.errorContext(error).hasStatusCode(403, 404)) return false;
+      if (errorContext(error).hasStatusCode(403, 404)) return false;
       throw error;
     }
   }
@@ -117,7 +117,7 @@ export class ManagedAgentMemoryClient {
             page_size: input.limit,
           },
         },
-        input.signal ? databricks.toContext(input.signal) : undefined,
+        input.signal ? toContext(input.signal) : undefined,
       ),
     );
     if (response.results) {
@@ -143,7 +143,7 @@ export class ManagedAgentMemoryClient {
     try {
       return await this.createMemory(input);
     } catch (error) {
-      if (!errorUtils.errorContext(error).hasStatusCode(409)) throw error;
+      if (!errorContext(error).hasStatusCode(409)) throw error;
       const raced = (await this.listMemoryEntries(input))[0];
       if (!raced?.name) throw error;
       return this.updateMemory(raced as ManagedMemoryEntry & { name: string }, input);
@@ -175,7 +175,7 @@ export class ManagedAgentMemoryClient {
             source_type: "MANAGED_MEMORY_ENTRY_SOURCE_TYPE_AGENT",
           },
         },
-        input.signal ? databricks.toContext(input.signal) : undefined,
+        input.signal ? toContext(input.signal) : undefined,
       ),
     );
   }
@@ -198,7 +198,7 @@ export class ManagedAgentMemoryClient {
           },
           raw: false,
         },
-        input.signal ? databricks.toContext(input.signal) : undefined,
+        input.signal ? toContext(input.signal) : undefined,
       ),
     );
     return (response.managed_memory_entries ?? []).filter((entry) => entry.path === input.path);

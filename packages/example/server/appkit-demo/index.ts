@@ -6,3 +6,4 @@ export const PACKAGE_IDENTIFIER = "@dbx-tools/demo-appkit-server";
 export const PACKAGE_VERSION = "0.9.154";
 export * as busDemo from "./src/bus-demo.ts";
 export * as dependencies from "./src/dependencies.ts";
+export { logDependencies } from "./src/dependencies.ts";

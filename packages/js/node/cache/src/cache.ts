@@ -7,7 +7,7 @@
 import { EventEmitter } from "node:events";
 import { join } from "node:path";
 import { projectUtils } from "@dbx-tools/core";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { log, toError } from "@dbx-tools/shared-core";
 import {
   Cacheable,
   CacheableHooks,
@@ -214,7 +214,7 @@ class TieredStoreAdapter extends EventEmitter implements KeyvStoreAdapter {
     this.timer = setTimeout(() => {
       this.timer = undefined;
       void this.flush().catch((error) => {
-        logger.warn("cache persistence flush failed", { error: errorUtils.toError(error) });
+        logger.warn("cache persistence flush failed", { error: toError(error) });
         this.emit("error", error);
       });
     }, this.writeDelayMs);
@@ -259,7 +259,7 @@ class TieredStoreAdapter extends EventEmitter implements KeyvStoreAdapter {
       .catch((error) => {
         logger.warn("cache persistence promotion failed", {
           key,
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
       })
       .finally(() => {
@@ -309,7 +309,7 @@ export function createCache(options: CacheOptions = {}): Cacheable {
   });
   installValueEnvelope(cache);
   cache.on("error", (error) => {
-    logger.warn("cacheable operation failed", { error: errorUtils.toError(error) });
+    logger.warn("cacheable operation failed", { error: toError(error) });
   });
   states.set(cache, { adapter, closed: false });
   return cache;

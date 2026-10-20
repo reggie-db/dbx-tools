@@ -7,9 +7,9 @@
  */
 import { readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { find } from "@dbx-tools/path";
+import { findFiles } from "@dbx-tools/path";
 import * as core from "@dbx-tools/shared-core";
-import { PACKAGE_IDENTIFIER, object } from "@dbx-tools/shared-core";
+import { PACKAGE_IDENTIFIER, sequence } from "@dbx-tools/shared-core";
 import { PYTHON_GENERATED_PACKAGE } from "./generated.ts";
 import { readPackageManifest, recordedPackages, repoRoot } from "./packages.ts";
 
@@ -70,7 +70,7 @@ async function sourceFiles(root: string, includeGenerated: boolean): Promise<str
   ];
   if (!includeGenerated) ignore.push(`**/${PYTHON_GENERATED_PACKAGE}/**`);
   const files: string[] = [];
-  for await (const file of find.findFiles(SOURCE_PATTERN, { cwd: root, ignore })) {
+  for await (const file of findFiles(SOURCE_PATTERN, { cwd: root, ignore })) {
     files.push(resolve(root, file));
   }
   return files.sort();
@@ -173,7 +173,7 @@ export async function duplicatedOwnedHelpers(root: string = repoRoot): Promise<s
 
 /** Render a compact usage table for `shared-core:usage`. */
 export function formatSharedCoreUsage(usage: readonly SharedCoreExportUsage[]): string {
-  const counts = object.sequence(usage).group({
+  const counts = sequence(usage).group({
     production: (row) => row.kind === "production",
     binding: (row) => row.kind === "binding",
     internal: (row) => row.kind === "internal",

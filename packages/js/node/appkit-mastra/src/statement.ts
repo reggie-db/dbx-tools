@@ -20,9 +20,13 @@
  */
 
 import type { WorkspaceClient } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { object } from "@dbx-tools/shared-core";
-import { wire, type GenieDatasetData, type GenieVisualizationData } from "@dbx-tools/shared-mastra";
+import { toContext } from "@dbx-tools/appkit";
+import { toNumber } from "@dbx-tools/shared-core";
+import {
+  type GenieDatasetData,
+  type GenieVisualizationData,
+  GenieVisualizationDataSchema,
+} from "@dbx-tools/shared-mastra";
 
 /**
  * Hard server-side cap on rows returned by the
@@ -45,7 +49,7 @@ export const STATEMENT_ROW_CAP = 500;
  */
 function coerceCell(cell: string | null): unknown {
   if (cell === null) return null;
-  return object.toNumber(cell, { separators: false, percent: false }) ?? cell;
+  return toNumber(cell, { separators: false, percent: false }) ?? cell;
 }
 
 type StatementResponse = Awaited<ReturnType<WorkspaceClient["statementExecution"]["getStatement"]>>;
@@ -55,7 +59,7 @@ async function fetchStatementResponse(
   statementId: string,
   signal?: AbortSignal,
 ): Promise<StatementResponse> {
-  const context = signal ? databricks.toContext(signal) : undefined;
+  const context = signal ? toContext(signal) : undefined;
   return client.statementExecution.getStatement({ statement_id: statementId }, context);
 }
 
@@ -79,7 +83,7 @@ function normalizedStatementData(response: StatementResponse, limit?: number): G
 
 function visualizationData(response: StatementResponse, limit?: number): GenieVisualizationData {
   const dataArray = (response.result?.data_array ?? []) as Array<Array<string | null>>;
-  return wire.GenieVisualizationDataSchema.parse({
+  return GenieVisualizationDataSchema.parse({
     manifest: {
       schema: {
         columns: (response.manifest?.schema?.columns ?? []).map((column) => ({

@@ -5,7 +5,7 @@
  */
 
 import type { DriveResult, EvalDriver } from "@databricks/appkit/beta";
-import { errorUtils, hash, object } from "@dbx-tools/shared-core";
+import { errorMessage, id, isRecord } from "@dbx-tools/shared-core";
 import type { Agent } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 
@@ -29,7 +29,7 @@ export function createMastraEvalDriver(
 ): EvalDriver {
   const resourceId = options.resourceId ?? `eval:${agent.id}`;
   const requestContextFactory = options.createRequestContext ?? createRequestContext;
-  let threadId = hash.id();
+  let threadId = id();
 
   return {
     async send(message, sendOptions): Promise<DriveResult> {
@@ -41,13 +41,11 @@ export function createMastraEvalDriver(
           ...(sendOptions?.signal ? { abortSignal: sendOptions.signal } : {}),
         });
         const toolCallDetails = result.toolCalls.map((call) => {
-          const payload: Record<string, unknown> = object.isRecord(call.payload)
-            ? call.payload
-            : {};
+          const payload: Record<string, unknown> = isRecord(call.payload) ? call.payload : {};
           const args = payload.args;
           return {
             name: String(payload.toolName ?? ""),
-            args: object.isRecord(args) ? args : {},
+            args: isRecord(args) ? args : {},
           };
         });
         return {
@@ -60,7 +58,7 @@ export function createMastraEvalDriver(
         };
       } catch (caught) {
         return {
-          reply: errorUtils.errorMessage(caught),
+          reply: errorMessage(caught),
           toolCalls: [],
           toolCallDetails: [],
           succeeded: false,
@@ -69,7 +67,7 @@ export function createMastraEvalDriver(
       }
     },
     reset() {
-      threadId = hash.id();
+      threadId = id();
     },
   };
 }

@@ -36,6 +36,11 @@
       "type": "peer"
     },
     {
+      "name": "@databricks/appkit-ui",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-lakebox",
       "version": "workspace:^",
       "type": "runtime"

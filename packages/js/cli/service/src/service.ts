@@ -16,8 +16,8 @@ import { createRequire } from "node:module";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import * as bin from "@dbx-tools/core/bin";
-import { asyncUtils } from "@dbx-tools/shared-core";
+import { type BinContext, ensure } from "@dbx-tools/core";
+import { sleep } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { compileWithBun } from "./_compile.ts";
 import { readServiceDefinition, writeServiceDefinition } from "./_config.ts";
@@ -421,8 +421,8 @@ export class CliService implements CliServiceLifecycle {
     entrypoint: string,
     workingDirectory: string,
     external: readonly string[] = [],
-  ): Promise<bin.BinContext> {
-    return bin.ensure(
+  ): Promise<BinContext> {
+    return ensure(
       name,
       async ({ tempDir }) => {
         const output = join(tempDir, executableName(name, this.runtime.platform));
@@ -437,10 +437,10 @@ export class CliService implements CliServiceLifecycle {
     );
   }
 
-  private async ensureTrayBinary(): Promise<bin.BinContext> {
+  private async ensureTrayBinary(): Promise<BinContext> {
     const name = trayExecutableName(this.runtime.platform);
     const binDir = join(this.globalHomeDirectory, "bin", "traybin");
-    return bin.ensure(name, pathToFileURL(this.trayExecutable).href, {
+    return ensure(name, pathToFileURL(this.trayExecutable).href, {
       destination: {
         root: this.globalHomeDirectory,
         binDir,
@@ -450,7 +450,7 @@ export class CliService implements CliServiceLifecycle {
     });
   }
 
-  private binaryContext(name: string): bin.BinContext {
+  private binaryContext(name: string): BinContext {
     const binDir = join(this.globalHomeDirectory, "bin");
     return {
       root: this.globalHomeDirectory,
@@ -520,7 +520,7 @@ async function waitForState(
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
     if ((await read()) === expected) return;
-    await asyncUtils.sleep(POLL_INTERVAL_MILLISECONDS);
+    await sleep(POLL_INTERVAL_MILLISECONDS);
   }
   throw new Error(message);
 }

@@ -25,9 +25,9 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { extname, relative, resolve, sep } from "node:path";
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { find } from "@dbx-tools/path";
-import { json, object, stringUtils } from "@dbx-tools/shared-core";
+import { projectUtils } from "@dbx-tools/core";
+import { findFilesSync } from "@dbx-tools/path";
+import { parseRecord, isRecord, toSlug, parseList } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
 import { DBXToolsConfigDataSchema, type DBXToolsConfigData } from "./dbx-tools-config.ts";
 import { isGenerated } from "./generated.ts";
@@ -77,7 +77,7 @@ function nestingTagsFromSegments(segments: readonly string[]): string[] {
   const out: string[] = [];
   let acc = "";
   for (const segment of prefix) {
-    const token = stringUtils.toSlug(segment);
+    const token = toSlug(segment);
     if (!token) continue;
     acc = acc ? `${acc}-${token}` : token;
     out.push(acc);
@@ -154,7 +154,7 @@ export class DiscoveredPackage {
    * Matched against `packageTagPaths` to resolve applied mixin tags.
    */
   get tagCandidates(): string[] {
-    const leaf = stringUtils.toSlug(this.name);
+    const leaf = toSlug(this.name);
     if (leaf === "app" || leaf === "server") return [leaf];
     return nestingTagsFromSegments(this.relSegments);
   }
@@ -189,7 +189,7 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
  */
 function collectPackageDirs(rootAbs: string): string[] {
   const owners = new Set<string>();
-  for (const file of find.findFilesSync(SRC_MODULE_GLOB, { cwd: rootAbs })) {
+  for (const file of findFilesSync(SRC_MODULE_GLOB, { cwd: rootAbs })) {
     if (!isModuleFile(file)) continue;
     const segs = toPosix(file).split("/");
     const srcIdx = segs.indexOf("src");
@@ -255,7 +255,7 @@ export function readPackageManifest(dir: string): Record<string, unknown> | unde
   const path = resolve(dir, "package.json");
   if (!existsSync(path)) return undefined;
   try {
-    return json.parseRecord(readFileSync(path, "utf8"));
+    return parseRecord(readFileSync(path, "utf8"));
   } catch {
     return undefined; // unreadable (permissions, race with a concurrent write)
   }
@@ -282,13 +282,13 @@ function readManifestTags(dir: string): string[] | undefined {
  */
 export function syncResynthPaths(projectRoot: string = resolveRepoRoot()): string[] {
   const paths = readDbxToolsConfig(projectRoot)?.syncResynthPaths;
-  return Array.isArray(paths) ? stringUtils.parseList(paths.map((p) => String(p))) : [];
+  return Array.isArray(paths) ? parseList(paths.map((p) => String(p))) : [];
 }
 
 /** Projen task names supervised as focused processes by `sync --watch`. */
 export function syncWatchTasks(projectRoot: string = resolveRepoRoot()): string[] {
   const tasks = readDbxToolsConfig(projectRoot)?.syncWatchTasks;
-  return Array.isArray(tasks) ? stringUtils.parseList(tasks.map((task) => String(task))) : [];
+  return Array.isArray(tasks) ? parseList(tasks.map((task) => String(task))) : [];
 }
 
 /**
@@ -338,7 +338,7 @@ export function workspaceDependencyDirectories(
     directories.add(pkg.dir);
     for (const field of ["dependencies", "optionalDependencies", "peerDependencies"] as const) {
       const dependencies = pkg.manifest[field];
-      if (!object.isRecord(dependencies)) continue;
+      if (!isRecord(dependencies)) continue;
       for (const dependency of Object.keys(dependencies)) visit(dependency);
     }
   };
@@ -354,7 +354,7 @@ export function workspaceDependencyDirectories(
 export function recordedRoots(projectRoot: string = resolveRepoRoot()): string[] {
   const configured = readDbxToolsConfig(projectRoot)?.packageRoots;
   const configuredRoots = Array.isArray(configured)
-    ? stringUtils.parseList(configured.map((root) => String(root)))
+    ? parseList(configured.map((root) => String(root)))
     : [];
   const roots = new Set<string>(configuredRoots.length ? configuredRoots : DEFAULT_PACKAGE_ROOTS);
   for (const member of readRecordedMembers(projectRoot)) {

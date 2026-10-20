@@ -5,8 +5,8 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { object } from "@dbx-tools/shared-core";
-import { urlBuilder, type UrlBuilder } from "@dbx-tools/shared-core/net";
+import { isRecord } from "@dbx-tools/shared-core";
+import { urlBuilder, type UrlBuilder } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import { z } from "zod";
 
@@ -209,7 +209,7 @@ function resolveReferences(
   active: ReadonlySet<string> = new Set(),
 ): unknown {
   if (Array.isArray(value)) return value.map((item) => resolveReferences(document, item, active));
-  if (!object.isRecord(value)) return value;
+  if (!isRecord(value)) return value;
   const reference = typeof value.$ref === "string" ? value.$ref : undefined;
   if (reference) {
     if (active.has(reference)) throw new Error(`Cyclic OpenAPI reference: ${reference}`);
@@ -231,7 +231,7 @@ function referenceTarget(document: OpenApiDocument, reference: string): unknown 
   let current: unknown = document;
   for (const rawSegment of reference.slice(2).split("/")) {
     const segment = rawSegment.replaceAll("~1", "/").replaceAll("~0", "~");
-    if (!object.isRecord(current) || !(segment in current)) {
+    if (!isRecord(current) || !(segment in current)) {
       throw new Error(`Unresolved OpenAPI reference: ${reference}`);
     }
     current = current[segment];

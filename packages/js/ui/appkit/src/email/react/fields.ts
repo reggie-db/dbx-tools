@@ -3,7 +3,7 @@
 // and attachment formatting here lets both surfaces agree on how a draft
 // is displayed and how free-text address input is normalized.
 
-import { net } from "@dbx-tools/shared-core";
+import { parseEmails } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage } from "@dbx-tools/shared-email";
 
 /** A partially-filled email, as it streams in from a tool call or a form. */
@@ -23,7 +23,7 @@ export const joinAddresses = (addresses: string[] | undefined): string =>
  * {@link net.parseEmails} so the UI reads addresses the same way the
  * server does.
  */
-export const parseAddresses = (raw: string): string[] => net.parseEmails(raw);
+export const parseAddresses = (raw: string): string[] => parseEmails(raw);
 
 /** Comma-separated list of attachment filenames for a compact display. */
 export const attachmentNames = (attachments: EmailAttachment[] | undefined): string =>

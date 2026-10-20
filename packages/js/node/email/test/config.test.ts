@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { beforeEach, describe, it } from "node:test";
-import { defaultEmailBrand } from "../src/brand.ts";
+import { defaultEmailBrand } from "@dbx-tools/shared-email-template";
 import {
   DEFAULT_SMTP_PORT,
   IMPLICIT_TLS_SMTP_PORT,

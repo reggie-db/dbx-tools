@@ -5,6 +5,5 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-graphiti";
 export const PACKAGE_VERSION = "0.9.154";
 export * as options from "./src/options.ts";
-export { GraphitiOptionsSchema, GraphitiCliOptionsSchema, GRAPHITI_DEFAULTS, ResolvedGraphitiOptionsSchema } from "./src/options.ts";
+export { GraphitiOptionsSchema, GraphitiCliOptionsSchema, GRAPHITI_DEFAULTS, graphitiOptionOverrides, ResolvedGraphitiOptionsSchema, resolveGraphitiOptions, graphitiOptionsFromEnvironment, graphitiOptionsEnvironment } from "./src/options.ts";
 export type { GraphitiOptions, ResolvedGraphitiOptions } from "./src/options.ts";
-export * from "./exports.ts";

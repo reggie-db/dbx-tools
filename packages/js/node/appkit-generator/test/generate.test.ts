@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { BrandGenerationProgressEvent } from "@dbx-tools/shared-generator";
 import { generateBrandPackage, type BrandSynthesisInput } from "../src/generate.ts";
 import type { BrandResearchClient } from "../src/research.ts";
-import type { BrandGenerationProgressEvent, GeneratedBrandProfile } from "../src/schema.ts";
+import type { GeneratedBrandProfile } from "../src/schema.ts";
 
 const profile: GeneratedBrandProfile = {
   name: "Acme",

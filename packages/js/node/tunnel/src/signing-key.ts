@@ -44,8 +44,8 @@
 
 import { randomBytes } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
-import { configUtils } from "@dbx-tools/core";
-import { errorUtils, log, object } from "@dbx-tools/shared-core";
+import { configUtils, text } from "@dbx-tools/core";
+import { log, toError, toDate } from "@dbx-tools/shared-core";
 import { TUNNEL_CONFIG } from "./_config.ts";
 
 const logger = log.logger("tunnel:signing-key");
@@ -86,10 +86,10 @@ interface StoredKey {
  * than not rotating.
  */
 export function resolveSessionCutoff(configured?: string | number | Date): number {
-  const raw = configured ?? configUtils.text("TUNNEL_AUTH_SESSION_CUTOFF", TUNNEL_CONFIG);
+  const raw = configured ?? text("TUNNEL_AUTH_SESSION_CUTOFF", TUNNEL_CONFIG);
   if (raw === undefined || raw === null || raw === "") return 0;
 
-  const date = object.toDate(raw);
+  const date = toDate(raw);
   if (!date) {
     logger.warn(
       `ignoring unparseable ${configUtils.name("TUNNEL_AUTH_SESSION_CUTOFF", TUNNEL_CONFIG)}`,
@@ -187,7 +187,7 @@ let pending: Promise<SigningKey> | undefined;
 export function signingKey(configuredCutoff?: string | number | Date): Promise<SigningKey> {
   pending ??= (async () => {
     const cutoffMs = resolveSessionCutoff(configuredCutoff);
-    const configured = configUtils.text("TUNNEL_AUTH_JWT_SECRET", TUNNEL_CONFIG);
+    const configured = text("TUNNEL_AUTH_JWT_SECRET", TUNNEL_CONFIG);
     if (configured) {
       return { key: new TextEncoder().encode(configured), cutoffMs };
     }
@@ -196,7 +196,7 @@ export function signingKey(configuredCutoff?: string | number | Date): Promise<S
     } catch (error) {
       logger.warn(
         `no ${configUtils.name("TUNNEL_AUTH_JWT_SECRET", TUNNEL_CONFIG)} and the cache is unavailable - using an ephemeral per-process key; sessions will not survive a restart`,
-        { error: errorUtils.toError(error) },
+        { error: toError(error) },
       );
       return { key: new Uint8Array(randomBytes(KEY_BYTES)), cutoffMs };
     }

@@ -36,6 +36,11 @@
       "type": "peer"
     },
     {
+      "name": "@better-auth/passkey",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@databricks/appkit-ui",
       "version": "catalog:",
       "type": "runtime"

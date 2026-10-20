@@ -8,12 +8,11 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
+import { trimToNull, toLabel } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
-import { AUTH_BASE_PATH } from "./_route.ts";
-
-export { AUTH_BASE_PATH };
+/** Canonical mount for Better Auth and the dbx-tools compatibility routes. */
+export const AUTH_BASE_PATH = "/api/email/auth";
 
 /**
  * True only for the auth mount itself or one of its descendants.
@@ -38,9 +37,9 @@ export function passkeyDisplayName(
   prefix: string | undefined,
   hostname: string,
 ): string | undefined {
-  const normalizedPrefix = stringUtils.trimToNull(prefix);
-  const subdomain = stringUtils.trimToNull(hostname)?.split(".", 1)[0];
-  const suffix = subdomain ? stringUtils.toLabel(subdomain) : undefined;
+  const normalizedPrefix = trimToNull(prefix);
+  const subdomain = trimToNull(hostname)?.split(".", 1)[0];
+  const suffix = subdomain ? toLabel(subdomain) : undefined;
   if (!normalizedPrefix) return suffix;
   if (!suffix || normalizedPrefix.toLowerCase().endsWith(suffix.toLowerCase())) {
     return normalizedPrefix;

@@ -12,12 +12,10 @@ import {
   createAuthClient,
   type AuthClient,
   type DatabricksAuthDependencies,
-} from "@dbx-tools/auth/client";
-import { listProfiles as listAuthProfiles } from "@dbx-tools/auth/profile";
+} from "@dbx-tools/auth";
+import { listProfiles as listAuthProfiles } from "@dbx-tools/auth";
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
-import * as errorUtils from "@dbx-tools/shared-core/error-utils";
-import * as log from "@dbx-tools/shared-core/log";
-import * as object from "@dbx-tools/shared-core/object";
+import { toError, log, isRecord } from "@dbx-tools/shared-core";
 import {
   ModelClass,
   type ModelMetadata,
@@ -26,10 +24,9 @@ import {
   type ResolvedModelSelection,
   type ResolveModelInput,
   type ServingEndpointSummary,
-} from "@dbx-tools/shared-model/contracts";
+} from "@dbx-tools/shared-model";
 
 import { normalizeEndpoints } from "./_ranking.ts";
-import { lookupModels, resolveModel } from "./_selection.ts";
 import {
   aiGatewayCodexResponsesUrl,
   chatCompletionsUrl,
@@ -38,6 +35,7 @@ import {
 } from "./invoke.ts";
 import { hydrateModelMetadata, modelMetadataFor } from "./metadata.ts";
 import { modelServingApi, prefersSystemModelService, systemModelService } from "./policy.ts";
+import { lookupModels, resolveModel } from "./selection.ts";
 
 const logger = log.logger("model/client");
 
@@ -269,7 +267,7 @@ class DefaultModelClient implements ModelClient {
   private async fetchCatalogue(): Promise<readonly ServingEndpointSummary[]> {
     const startedAt = Date.now();
     const response = await this.client.request("/api/2.0/serving-endpoints");
-    if (!object.isRecord(response) || !Array.isArray(response.endpoints)) {
+    if (!isRecord(response) || !Array.isArray(response.endpoints)) {
       throw new Error("Databricks serving-endpoints response is missing an endpoints array");
     }
     const endpoints = await this.measureEmbeddingDimensions(normalizeEndpoints(response.endpoints));
@@ -302,7 +300,7 @@ class DefaultModelClient implements ModelClient {
         } catch (error) {
           logger.warn("embedding dimension probe failed", {
             model: endpoint.name,
-            error: errorUtils.toError(error),
+            error: toError(error),
           });
           return endpoint;
         }
@@ -312,9 +310,9 @@ class DefaultModelClient implements ModelClient {
 }
 
 function embeddingDimension(value: unknown): number | undefined {
-  if (!object.isRecord(value) || !Array.isArray(value.data)) return undefined;
+  if (!isRecord(value) || !Array.isArray(value.data)) return undefined;
   const first = value.data[0];
-  if (!object.isRecord(first) || !Array.isArray(first.embedding)) return undefined;
+  if (!isRecord(first) || !Array.isArray(first.embedding)) return undefined;
   return first.embedding.length > 0 ? first.embedding.length : undefined;
 }
 

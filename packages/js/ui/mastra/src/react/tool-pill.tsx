@@ -1,15 +1,13 @@
-import { json, stringUtils } from "@dbx-tools/shared-core";
-import { genieModel } from "@dbx-tools/shared-genie";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  detectCodeLanguage,
-  JsonBlock,
-  RecordPreview,
   Spinner,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { parse, toLabel, capitalize } from "@dbx-tools/shared-core";
+import { humanizeStatus } from "@dbx-tools/shared-genie";
+import { detectCodeLanguage, JsonBlock, RecordPreview } from "@dbx-tools/ui/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { SourceBlock, ToolMarkdown } from "./markdown.tsx";
 import type { ToolEvent, ToolProgress } from "./types.ts";
@@ -49,7 +47,7 @@ export const humanizeToolName = (toolName: string): string => {
   const label = toolName.startsWith(MASTRA_WORKSPACE_TOOL_PREFIX)
     ? toolName.slice(MASTRA_WORKSPACE_TOOL_PREFIX.length)
     : toolName;
-  return stringUtils.toLabel(label);
+  return toLabel(label);
 };
 
 /**
@@ -69,7 +67,7 @@ const runningLabelFor = (event: ToolEvent): string => {
     .reverse()
     .find((p): p is Extract<ToolProgress, { type: "status" }> => p.type === "status");
   return latest
-    ? stringUtils.capitalize(genieModel.humanizeStatus(latest.status))
+    ? capitalize(humanizeStatus(latest.status))
     : `Calling ${humanizeToolName(event.toolName)}`;
 };
 
@@ -393,7 +391,7 @@ export function structuredToolPayload(value: unknown): unknown | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
-  const parsed = json.parse(trimmed);
+  const parsed = parse(trimmed);
   return typeof parsed === "object" && parsed !== null ? parsed : undefined;
 }
 

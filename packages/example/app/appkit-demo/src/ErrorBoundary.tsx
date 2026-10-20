@@ -1,5 +1,5 @@
-import { errorUtils, log } from "@dbx-tools/shared-core";
-import { Card, CardContent, CardHeader, CardTitle } from "@dbx-tools/ui/react";
+import { Card, CardContent, CardHeader, CardTitle } from "@databricks/appkit-ui/react";
+import { log, errorMessage } from "@dbx-tools/shared-core";
 import type { ReactNode } from "react";
 import React, { Component } from "react";
 
@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <div>
                   <h3 className="font-semibold mb-2">Error Message:</h3>
                   <pre className="bg-muted p-3 rounded text-sm overflow-auto">
-                    {errorUtils.errorMessage(this.state.error)}
+                    {errorMessage(this.state.error)}
                   </pre>
                 </div>
                 {this.state.errorInfo && (

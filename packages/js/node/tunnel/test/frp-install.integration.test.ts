@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { exec } from "@dbx-tools/core";
+import { spawn } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 
 import { installFrp } from "../src/frp.ts";
@@ -21,7 +21,7 @@ describe("frpc live install", () => {
       const path = join(homeDir, ".frpc", "bin", "frpc");
       await access(path, constants.X_OK);
 
-      const version = await exec.spawn(path, ["--version"], {
+      const version = await spawn(path, ["--version"], {
         check: true,
         stderr: "capture",
         stdout: "capture",

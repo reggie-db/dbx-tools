@@ -8,7 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
 import { MonitorIcon, ServerIcon, SquareTerminalIcon } from "lucide-react";
 import { useState } from "react";
 import { useLakeboxClient } from "./client.ts";

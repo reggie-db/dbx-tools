@@ -1,4 +1,4 @@
-import { errorUtils, log, net } from "@dbx-tools/shared-core";
+import { log, toError, urlBuilder } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 const LAKEBOX_ROOT = "/api/2.0/lakebox";
@@ -94,7 +94,7 @@ export class LakeboxClient {
     return (
       process.env.DATABRICKS_WORKSPACE_ID?.trim() ||
       this.auth.workspaceId?.trim() ||
-      net.urlBuilder(this.auth.host ?? "")?.origin ||
+      urlBuilder(this.auth.host ?? "")?.origin ||
       "workspace"
     );
   }
@@ -201,7 +201,7 @@ export class LakeboxClient {
       logger.warn("lakebox REST request failed", {
         ...metadata,
         durationMs: Date.now() - startedAt,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
       throw error;
     }

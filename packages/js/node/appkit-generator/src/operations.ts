@@ -5,9 +5,11 @@
  */
 
 import { ConfigurationError } from "@databricks/appkit";
-import type { BrandGenerationRequest, BrandPackage } from "@dbx-tools/shared-generator/brand";
-import type { KpiResearchRequest, KpiResearchResult } from "@dbx-tools/shared-generator/kpi";
 import type {
+  BrandGenerationRequest,
+  BrandPackage,
+  KpiResearchRequest,
+  KpiResearchResult,
   CreateGeneratorPresentationRequest,
   GeneratedDashboard,
   GeneratedGenieSpace,
@@ -17,7 +19,7 @@ import type {
   MaterializedGeneratorData,
   PlanGeneratorDataRequest,
   ProvisionGeneratorSchemaRequest,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 import type { ResolvedGeneratorConfig } from "./config.ts";
 import { createGeneratorDashboard } from "./dashboard.ts";
 import { materializeGeneratorData } from "./data.ts";

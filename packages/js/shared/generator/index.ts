@@ -7,7 +7,7 @@ export const PACKAGE_VERSION = "0.9.154";
 export * as brand from "./src/brand.ts";
 export * as kpi from "./src/kpi.ts";
 export * as workflow from "./src/workflow.ts";
-export { GENERATOR_PLUGIN_NAME, GENERATOR_BASE_PATH, GENERATOR_ROUTES, BrandGenerationRequestSchema, BrandPackageSourceSchema, BrandVisualImageSchema, BrandVisualReferenceSchema, BrandPackageSchema, BrandGenerationStageSchema, BrandGenerationProgressEventSchema, BrandGenerationResultEventSchema, BrandGenerationErrorEventSchema, BrandGenerationEventSchema, GeneratorClientConfigSchema, GeneratorPluginClient } from "./src/brand.ts";
+export { GENERATOR_PLUGIN_NAME, GENERATOR_BASE_PATH, GENERATOR_ROUTES, BrandGenerationRequestSchema, BrandPackageSourceSchema, BrandVisualImageSchema, BrandVisualReferenceSchema, BrandPackageSchema, BrandGenerationStageSchema, BrandGenerationProgressEventSchema, BrandGenerationResultEventSchema, BrandGenerationErrorEventSchema, BrandGenerationEventSchema, GeneratorClientConfigSchema, brandGenerateUrl, GeneratorPluginClient } from "./src/brand.ts";
 export type { BrandGenerationRequest, BrandPackageSource, BrandVisualImage, BrandVisualReference, BrandPackage, BrandGenerationStage, BrandGenerationProgressEvent, BrandGenerationResultEvent, BrandGenerationErrorEvent, BrandGenerationEvent, GeneratorClientConfig, BrandGenerationStreamOptions } from "./src/brand.ts";
 export { ResearchedKpiSchema, KpiResearchRequestSchema, KpiResearchResultSchema } from "./src/kpi.ts";
 export type { ResearchedKpi, KpiResearchRequest, KpiResearchResult } from "./src/kpi.ts";

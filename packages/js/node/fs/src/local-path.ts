@@ -8,28 +8,15 @@
  */
 
 import path from "node:path";
-import { posixPath } from "@dbx-tools/shared-fs";
+import { expandHome } from "@dbx-tools/shared-fs";
 import { resolveLocalHome, type ResolveOsPathsOptions } from "./os-path.ts";
-
-export {
-  APP_HOME,
-  clearOsPathsCache,
-  resolveLocalHome,
-  resolveLocalTemp,
-  resolveOsPaths,
-  type OsPaths,
-  type ResolveOsPathsOptions,
-} from "./os-path.ts";
-
-/** True when {@link input} is `~` or a path under `~/`. See {@link posixPath.isHomeRelativePath}. */
-export const isHomeRelativePath = posixPath.isHomeRelativePath;
 
 /**
  * Expand `~` / `~/...` against {@link home}, joining with the HOST separator.
  * Non-home inputs are returned trimmed and unchanged.
  */
 export function expandLocalHomePath(input: string, home: string = resolveLocalHome()): string {
-  return posixPath.expandHome(input, home, path.join);
+  return expandHome(input, home, path.join);
 }
 
 /**

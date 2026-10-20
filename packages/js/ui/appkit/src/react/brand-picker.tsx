@@ -10,10 +10,17 @@ import {
   Separator,
   cn,
 } from "@databricks/appkit-ui/react";
-import { brandUtils, object } from "@dbx-tools/shared-core";
+import {
+  type BrandContextInput,
+  type BrandContext,
+  defaultBrandContext,
+  parseBrandContext,
+  BrandContextSchema,
+  deepEqual,
+} from "@dbx-tools/shared-core";
 import { useEffect, useId, useMemo, useState } from "react";
 
-import { useBrand } from "../branding/react/index.ts";
+import { useBrand } from "@dbx-tools/ui/branding/react";
 
 const COLOR_FIELDS = [
   ["primary", "Primary"],
@@ -33,19 +40,19 @@ export interface BrandPreset {
   id: string;
   label: string;
   description?: string;
-  context: brandUtils.BrandContextInput;
+  context: BrandContextInput;
 }
 
 /** Props for {@link BrandPicker}. */
 export interface BrandPickerProps {
   /** Current brand. Defaults to the nearest `BrandProvider` context. */
-  value?: brandUtils.BrandContextInput;
+  value?: BrandContextInput;
   /** Receives each valid edited or selected brand context. */
-  onChange: (value: brandUtils.BrandContext) => void;
+  onChange: (value: BrandContext) => void;
   /** Optional complete brand choices rendered as quick-select buttons. */
   presets?: readonly BrandPreset[];
   /** Value restored by Reset. Defaults to the dbx-tools brand. */
-  resetValue?: brandUtils.BrandContextInput;
+  resetValue?: BrandContextInput;
   /** Show editable icon, logo, and favicon references. */
   showAssets?: boolean;
   className?: string;
@@ -65,21 +72,18 @@ export function BrandPicker({
   value,
   onChange,
   presets = [],
-  resetValue = brandUtils.defaultBrandContext,
+  resetValue = defaultBrandContext,
   showAssets = true,
   className,
 }: BrandPickerProps) {
   const { context: inherited } = useBrand();
-  const current = useMemo(
-    () => brandUtils.parseBrandContext(value ?? inherited),
-    [inherited, value],
-  );
-  const reset = useMemo(() => brandUtils.parseBrandContext(resetValue), [resetValue]);
+  const current = useMemo(() => parseBrandContext(value ?? inherited), [inherited, value]);
+  const reset = useMemo(() => parseBrandContext(resetValue), [resetValue]);
   const resolvedPresets = useMemo(
     () =>
       presets.map((preset) => ({
         ...preset,
-        context: brandUtils.parseBrandContext(preset.context),
+        context: parseBrandContext(preset.context),
       })),
     [presets],
   );
@@ -88,9 +92,9 @@ export function BrandPicker({
 
   useEffect(() => setDraft(current), [current]);
 
-  const update = (next: brandUtils.BrandContext) => {
+  const update = (next: BrandContext) => {
     setDraft(next);
-    const parsed = brandUtils.BrandContextSchema.safeParse(next);
+    const parsed = BrandContextSchema.safeParse(next);
     if (parsed.success) onChange(parsed.data);
   };
 
@@ -138,7 +142,7 @@ export function BrandPicker({
             <Label>Presets</Label>
             <div className="grid gap-2 sm:grid-cols-3">
               {resolvedPresets.map((preset) => {
-                const active = object.deepEqual(current, preset.context);
+                const active = deepEqual(current, preset.context);
                 return (
                   <Button
                     key={preset.id}

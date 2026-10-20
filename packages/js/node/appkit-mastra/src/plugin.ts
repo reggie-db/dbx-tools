@@ -56,20 +56,41 @@ import {
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import { pluginRegistry, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
-import { sendGenieMessageFeedback } from "@dbx-tools/genie/feedback";
-import { modelCatalog } from "@dbx-tools/model";
-import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import {
-  feedback,
-  routes,
-  wire,
+  pluginRegistry,
+  type IdentityMode,
+  instance,
+  require,
+  configureNativeHttpTelemetry,
+  excludeUnparentedOutgoingHttpTelemetry,
+  deferredNativeTracerProvider,
+  requestUserId,
+  useServicePrincipal,
+} from "@dbx-tools/appkit";
+import { sendGenieMessageFeedback } from "@dbx-tools/genie";
+import { modelCatalog } from "@dbx-tools/model";
+import {
+  combineAbortSignals,
+  toError,
+  errorContext,
+  logger,
+  toNumber,
+  firstNonEmpty,
+} from "@dbx-tools/shared-core";
+import {
   type Chart,
   type GenieChatRequest,
   type MastraClientConfig,
   type StatementData,
+  type FeedbackMode,
+  MastraFeedbackRequestSchema,
+  type MlflowFeedbackRequest,
+  type GenieFeedbackRequest,
+  MASTRA_ROUTES,
+  genieRoutePath,
+  GenieChatRequestSchema,
 } from "@dbx-tools/shared-mastra";
-import { display, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { type ServingEndpointSummary, toModelDisplayName } from "@dbx-tools/shared-model";
 import { workflowRoute } from "@mastra/ai-sdk";
 import type { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
@@ -112,12 +133,7 @@ import {
   type GenieChatSpace,
 } from "./genie-chat.ts";
 import { collectSpaceSuggestions, resolveGenieSpaces, type GenieSpaceConfig } from "./genie.ts";
-import {
-  requestUserId,
-  resolveIdentityMode,
-  useServicePrincipal,
-  type MastraIdentityMode,
-} from "./identity.ts";
+import { resolveIdentityMode } from "./identity.ts";
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
 import { createMastraLakebasePool, createMemoryBuilder, needsLakebase } from "./memory.ts";
 import {
@@ -242,7 +258,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     return resources;
   }
 
-  private logger = log.logger(this);
+  private logger = logger(this);
   private built: BuiltAgents | null = null;
   private mastra: Mastra | null = null;
   private mastraApp: express.Express | null = null;
@@ -259,13 +275,13 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    */
   private mcp: ResolvedMcp | null = null;
   /** Resolved feedback destination published to server and browser clients. */
-  private resolvedFeedbackMode: feedback.FeedbackMode = "none";
+  private resolvedFeedbackMode: FeedbackMode = "none";
   /**
-   * Resolved {@link MastraIdentityMode}: the identity the chat path's Databricks
+   * Resolved AppKit identity mode: the identity the chat path's Databricks
    * calls run as. Read once at setup so an invalid `genieIdentity` fails the app
    * boot rather than the first request, and so every request agrees.
    */
-  private identityMode: MastraIdentityMode = "user";
+  private identityMode: IdentityMode = "user";
   override async setup(): Promise<void> {
     // Resolve the identity mode up front so an invalid `genieIdentity` fails the
     // app boot with a clear message rather than 500-ing the first chat request.
@@ -277,10 +293,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     });
     this.config.feedbackMode = this.resolvedFeedbackMode;
     if (this.config.observability !== false) {
-      await appkitTelemetry.configureNativeHttpTelemetry({
+      await configureNativeHttpTelemetry({
         // A low-level request without an active semantic span becomes a noisy
         // standalone trace. Requests inside an agent/tool span remain visible.
-        outgoingFilter: appkitTelemetry.excludeUnparentedOutgoingHttpTelemetry,
+        outgoingFilter: excludeUnparentedOutgoingHttpTelemetry,
       });
       await registerAppMlflowTraceInfoProcessor();
     }
@@ -320,7 +336,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * already in the registry by the time this fires.
    */
   private applyLakebaseAutoDefaults(): void {
-    const hasLakebase = pluginRegistry.instance(this.context, lakebase) !== undefined;
+    const hasLakebase = instance(this.context, lakebase) !== undefined;
     if (!hasLakebase) return;
     if (this.config.storage === undefined) this.config.storage = true;
     if (this.config.memory === undefined) this.config.memory = true;
@@ -335,7 +351,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         await flushDirectMlflowTracing();
       } catch (err) {
         this.logger.warn("error flushing direct MLflow traces", {
-          error: errorUtils.toError(err),
+          error: toError(err),
         });
       }
     }
@@ -494,7 +510,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   }
 
   /** Resolve the only feedback destination exposed for this plugin mode. */
-  private feedbackMode(): feedback.FeedbackMode {
+  private feedbackMode(): FeedbackMode {
     return this.resolvedFeedbackMode;
   }
 
@@ -542,7 +558,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     this.route(router, {
       name: "models",
       method: "get",
-      path: routes.MASTRA_ROUTES.models,
+      path: MASTRA_ROUTES.models,
       handler: async (req, res) => {
         const result = await this.scopedSelf(req).listModelsResult();
         if (!result.ok) {
@@ -563,7 +579,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       req: express.Request,
       res: express.Response,
     ): Promise<void> => {
-      const requested = stringUtils.firstNonEmpty(req.params.agentId);
+      const requested = firstNonEmpty(req.params.agentId);
       if (requested !== null && !this.built?.agents[requested]) {
         res.status(404).json({ error: this.unknownAgentMessage(requested) });
         return;
@@ -586,19 +602,19 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       res.json({
         agentId,
         model,
-        displayName: model ? display.toModelDisplayName(model) : null,
+        displayName: model ? toModelDisplayName(model) : null,
       });
     };
     this.route(router, {
       name: "defaultModel",
       method: "get",
-      path: routes.MASTRA_ROUTES.defaultModel,
+      path: MASTRA_ROUTES.defaultModel,
       handler: handleDefaultModel,
     });
     this.route(router, {
       name: "defaultModelByAgent",
       method: "get",
-      path: `${routes.MASTRA_ROUTES.defaultModel}/:agentId`,
+      path: `${MASTRA_ROUTES.defaultModel}/:agentId`,
       handler: handleDefaultModel,
     });
   }
@@ -663,10 +679,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     this.route(router, {
       name: "embed",
       method: "get",
-      path: `${routes.MASTRA_ROUTES.embed}/:type/:id`,
+      path: `${MASTRA_ROUTES.embed}/:type/:id`,
       handler: async (req, res) => {
-        const type = stringUtils.firstNonEmpty(req.params.type) ?? "";
-        const id = stringUtils.firstNonEmpty(req.params.id);
+        const type = firstNonEmpty(req.params.type) ?? "";
+        const id = firstNonEmpty(req.params.id);
         const resolve = embedResolvers[type];
         if (!resolve) {
           this.logger.warn("embed:unsupported", {
@@ -747,7 +763,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         // the upstream status. Log and degrade.
         this.logger.warn("suggestions:error", {
           status: result.status,
-          error: errorUtils.toError(result.message),
+          error: toError(result.message),
         });
         res.json({ questions: [] });
         return;
@@ -757,13 +773,13 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     this.route(router, {
       name: "suggestions",
       method: "get",
-      path: routes.MASTRA_ROUTES.suggestions,
+      path: MASTRA_ROUTES.suggestions,
       handler: handleSuggestions,
     });
     this.route(router, {
       name: "suggestionsByAgent",
       method: "get",
-      path: `${routes.MASTRA_ROUTES.suggestions}/:agentId`,
+      path: `${MASTRA_ROUTES.suggestions}/:agentId`,
       handler: handleSuggestions,
     });
   }
@@ -776,11 +792,11 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * written to Mastra Memory.
    */
   private registerGenieChatRoutes(router: IAppRouter): void {
-    const path = (...parts: string[]) => routes.genieRoutePath(":alias", ...parts);
-    const { chat: chatSegment, messages, suggestions, threads } = routes.MASTRA_ROUTES;
+    const path = (...parts: string[]) => genieRoutePath(":alias", ...parts);
+    const { chat: chatSegment, messages, suggestions, threads } = MASTRA_ROUTES;
     /** Resolve the route's alias, answering 404 when no such space is configured. */
     const spaceFor = (req: express.Request, res: express.Response): GenieChatSpace | undefined => {
-      const alias = stringUtils.firstNonEmpty(req.params.alias) ?? "";
+      const alias = firstNonEmpty(req.params.alias) ?? "";
       const configured = resolveGenieSpaces(this.config, this.context)[alias];
       if (configured) return { alias, spaceId: configured.spaceId };
       res.status(404).json({ error: `Unknown Genie space alias "${alias}"` });
@@ -800,7 +816,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       handler: async (req, res) => {
         const space = spaceFor(req, res);
         if (!space) return;
-        const parsed = wire.GenieChatRequestSchema.safeParse(req.body);
+        const parsed = GenieChatRequestSchema.safeParse(req.body);
         if (!parsed.success) {
           res
             .status(400)
@@ -834,7 +850,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       handler: async (req, res) => {
         const space = spaceFor(req, res);
         if (!space) return;
-        const threadId = stringUtils.firstNonEmpty(req.params.threadId) ?? "";
+        const threadId = firstNonEmpty(req.params.threadId) ?? "";
         const result = await this.asUser(req).genieConversationRead((client) =>
           listGenieThreadMessages({
             client,
@@ -856,7 +872,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       handler: async (req, res) => {
         const space = spaceFor(req, res);
         if (!space) return;
-        const threadId = stringUtils.firstNonEmpty(req.params.threadId) ?? "";
+        const threadId = firstNonEmpty(req.params.threadId) ?? "";
         const result = await this.asUser(req).genieConversationWrite((client) =>
           deleteGenieThread(client, space, threadId),
         );
@@ -879,8 +895,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       handler: async (req, res) => {
         const space = spaceFor(req, res);
         if (!space) return;
-        const threadId = stringUtils.firstNonEmpty(req.params.threadId) ?? "";
-        const messageId = stringUtils.firstNonEmpty(req.params.messageId) ?? "";
+        const threadId = firstNonEmpty(req.params.threadId) ?? "";
+        const messageId = firstNonEmpty(req.params.messageId) ?? "";
         const result = await this.asUser(req).genieConversationWrite((client) =>
           deleteGenieThreadMessage(client, space, threadId, messageId),
         );
@@ -973,14 +989,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     this.route(router, {
       name: "feedback",
       method: "post",
-      path: routes.MASTRA_ROUTES.feedback,
+      path: MASTRA_ROUTES.feedback,
       handler: async (req, res) => {
         const mode = this.feedbackMode();
         if (mode === "none") {
           res.status(404).json({ ok: false });
           return;
         }
-        const parsed = feedback.MastraFeedbackRequestSchema.safeParse(req.body);
+        const parsed = MastraFeedbackRequestSchema.safeParse(req.body);
         if (!parsed.success) {
           // A Zod issue string quotes the received body back, so only the
           // offending field names travel; the full issue list is logged.
@@ -1024,7 +1040,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     this.route(router, {
       name: "mlflowExperiment",
       method: "get",
-      path: routes.MASTRA_ROUTES.mlflowExperiment,
+      path: MASTRA_ROUTES.mlflowExperiment,
       handler: async (req, res) => {
         if (this.feedbackMode() !== "mlflow") {
           res.json({ url: null });
@@ -1088,7 +1104,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   ): void {
     this.logger.warn(`${operation}:error`, {
       status: result.status,
-      error: errorUtils.toError(result.message),
+      error: toError(result.message),
     });
     if (res.headersSent) return;
     res.status(result.status).json({ error: clientMessage });
@@ -1150,7 +1166,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     if (Object.keys(spaces).length === 0) return { ok: true, data: [] };
     const client = getExecutionContext().client;
     return this.execute((executeSignal) => {
-      const combined = asyncUtils.combineAbortSignals(signal, executeSignal);
+      const combined = combineAbortSignals(signal, executeSignal);
       return collectSpaceSuggestions({
         spaces,
         client,
@@ -1168,7 +1184,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * (see {@link logFeedback} in `./mlflow.js`).
    */
   private async logFeedback(
-    feedback: feedback.MlflowFeedbackRequest,
+    feedback: MlflowFeedbackRequest,
   ): Promise<ExecutionResult<string | undefined>> {
     const ctx = getExecutionContext();
     const sourceId =
@@ -1188,7 +1204,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   }
 
   /** Send Agent Mode rating and comment directly to the originating Genie message. */
-  private sendGenieFeedback(input: feedback.GenieFeedbackRequest): Promise<ExecutionResult<void>> {
+  private sendGenieFeedback(input: GenieFeedbackRequest): Promise<ExecutionResult<void>> {
     const client = getExecutionContext().client;
     return this.execute(
       (signal) =>
@@ -1238,7 +1254,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const limit = Math.min(options.limit ?? STATEMENT_ROW_CAP, STATEMENT_ROW_CAP);
     return this.execute(
       async (executeSignal) => {
-        const combined = asyncUtils.combineAbortSignals(options.signal, executeSignal);
+        const combined = combineAbortSignals(options.signal, executeSignal);
         try {
           const { data, visualization } = await fetchStatementEmbedData(client, statementId, {
             limit,
@@ -1254,7 +1270,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         } catch (err) {
           // The Databricks SDK throws on 404; surface as `undefined`
           // so the route maps to a clean HTTP 404 instead of a 500.
-          if (errorUtils.errorContext(err).notAccessible) return undefined;
+          if (errorContext(err).notAccessible) return undefined;
           throw err;
         }
       },
@@ -1298,7 +1314,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         fetchChart(chartId, {
           userKey,
           ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
-          signal: asyncUtils.combineAbortSignals(options.signal, executeSignal) ?? options.signal,
+          signal: combineAbortSignals(options.signal, executeSignal) ?? options.signal,
         }),
       chartFetchDefaults,
     );
@@ -1333,7 +1349,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     if (result.ok) return result.data;
     this.logger.warn("listModels:error", {
       status: result.status,
-      error: errorUtils.toError(result.message),
+      error: toError(result.message),
     });
     throw new ExecutionError(MODEL_CATALOGUE_FAILED_MESSAGE);
   }
@@ -1341,7 +1357,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   private async buildAgentAndServer(): Promise<void> {
     const memoryPool = needsLakebase(this.config)
       ? createMastraLakebasePool(
-          pluginRegistry.require(this.context, lakebase, this.config).exports().getPgConfig(),
+          require(this.context, lakebase, this.config).exports().getPgConfig(),
         )
       : undefined;
     const memoryBuilder = createMemoryBuilder(this.config, memoryPool);
@@ -1406,7 +1422,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const observability = await buildObservability({
       serviceName: this.name,
       enabled: this.config.observability,
-      tracerProvider: await appkitTelemetry.deferredNativeTracerProvider(),
+      tracerProvider: await deferredNativeTracerProvider(),
     });
     // Optional MCP exposure: build a Mastra MCP server from the
     // registered agents (and, opt-in, the ambient tools) and register
@@ -1491,7 +1507,7 @@ type EmbedResolver = (
 function parseTimeoutMs(raw: unknown): number | undefined {
   const v = Array.isArray(raw) ? raw[0] : raw;
   if (typeof v !== "string") return undefined;
-  const n = object.toNumber(v);
+  const n = toNumber(v);
   if (n === undefined || n <= 0) return undefined;
   return Math.min(Math.floor(n), MAX_EMBED_POLL_TIMEOUT_MS);
 }
@@ -1506,7 +1522,7 @@ function parseTimeoutMs(raw: unknown): number | undefined {
 function parseStatementLimit(raw: unknown): number | undefined {
   const v = Array.isArray(raw) ? raw[0] : raw;
   if (typeof v !== "string") return undefined;
-  const n = object.toNumber(v);
+  const n = toNumber(v);
   if (n === undefined || n < 0) return undefined;
   return Math.floor(n);
 }

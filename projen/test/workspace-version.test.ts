@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { DBXToolsNodeProject } from "../src/project.ts";
+import { DBXToolsNodeProject } from "../src/project-js.ts";
 import {
   parseSemver,
   resolveNextVersion,

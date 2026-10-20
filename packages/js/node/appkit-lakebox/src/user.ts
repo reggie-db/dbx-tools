@@ -10,7 +10,7 @@
  * @module
  */
 
-import { hash } from "@dbx-tools/shared-core";
+import { fnvHashWithOptions } from "@dbx-tools/shared-core";
 import type { LakeboxUser } from "@dbx-tools/shared-lakebox";
 
 /** Platform account that owns the persistent volume and the SSH session. */
@@ -80,7 +80,7 @@ export function isLakeboxUserHash(value: string): boolean {
 }
 
 function digestText(...values: string[]): string {
-  return hash.fnvHashWithOptions({ length: 7, alphabet: HASH_ALPHABET }, ...values);
+  return fnvHashWithOptions({ length: 7, alphabet: HASH_ALPHABET }, ...values);
 }
 
 function digestValue(...values: string[]): number {

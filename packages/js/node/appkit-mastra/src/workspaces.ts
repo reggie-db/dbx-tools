@@ -16,16 +16,27 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkspaceClient } from "@databricks/appkit";
-import { appkit, pluginRegistry } from "@dbx-tools/appkit";
 import {
-  filesCache as filesCachePlugin,
+  tryGetExecutionContext,
+  type PluginContextLike,
+  instance,
   type FilesCacheExports,
   type FilesCacheScope,
-} from "@dbx-tools/appkit/files-cache";
-import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
+  filesCache as filesCachePlugin,
+} from "@dbx-tools/appkit";
+import { DatabricksFileSystem, toLegacyWorkspaceClient } from "@dbx-tools/databricks";
 import { LocalFileSystem } from "@dbx-tools/fs";
-import { find, match, type PathMatchInput } from "@dbx-tools/path";
-import { errorUtils, log, object, stringUtils, token } from "@dbx-tools/shared-core";
+import { type PathMatchInput, findFiles, toPathMatcher } from "@dbx-tools/path";
+import {
+  log,
+  toError,
+  toStableKey,
+  isRecord,
+  trimToNull,
+  toSlug,
+  tokenize,
+  includesAccessTokenScope,
+} from "@dbx-tools/shared-core";
 import {
   fs as sharedFS,
   posixPath,
@@ -34,6 +45,11 @@ import {
   type FileSystemCache,
   type FileSystemCacheOptions,
   MemoryFileSystem,
+  isAbsolute,
+  normalize,
+  normalizeRoot,
+  isWithinRoot,
+  basename,
 } from "@dbx-tools/shared-fs";
 import type { RequestContext } from "@mastra/core/request-context";
 import { createSkill, validateSkillContent, type InlineSkill } from "@mastra/core/skills";
@@ -200,7 +216,7 @@ export interface DatabricksWorkspaceOptions extends Omit<
   /** Filesystem cache filters. Ignored when the AppKit files-cache plugin is absent. */
   cache?: DatabricksWorkspaceCache;
   /** AppKit plugin context used to discover optional sibling capabilities. */
-  pluginContext?: pluginRegistry.PluginContextLike;
+  pluginContext?: PluginContextLike;
   /**
    * Command sandbox. Defaults to Monty. Pass `false` to disable it, or an
    * explicit Mastra sandbox/provider resolver for a remote transport.
@@ -269,7 +285,7 @@ export function databricksWorkspaceConfig(
   const paths = resolveDatabricksWorkspacePaths(options);
   const configuredPaths = paths.length;
   const extraSkillMounts = options.extraSkillMounts ?? [];
-  const filesCache = pluginRegistry.instance(options.pluginContext, filesCachePlugin)?.exports();
+  const filesCache = instance(options.pluginContext, filesCachePlugin.filesCache)?.exports();
   const configuredCache = options.cache;
   const mountFilesCache = configuredCache === false ? undefined : filesCache;
   const retainFilesystemSource =
@@ -369,7 +385,7 @@ export function databricksWorkspace(options: DatabricksWorkspaceOptions = {}): W
 /** @internal Bind a caller-created Databricks workspace to its AppKit plugin context. */
 export function bindDatabricksWorkspaceContext(
   workspace: Workspace,
-  pluginContext: pluginRegistry.PluginContextLike | undefined,
+  pluginContext: PluginContextLike | undefined,
   excludeSkillNames: readonly string[] = [],
 ): Workspace {
   const options = databricksWorkspaceOptions.get(workspace);
@@ -447,10 +463,7 @@ function sandboxName(selection: WorkspaceSandboxSelection | undefined): string {
  * file API access (`workspace` or `all-apis` on {@link MASTRA_SCOPES_KEY}).
  */
 function hasWorkspaceFileScope(requestContext: RequestContext | undefined): boolean {
-  return token.includesAccessTokenScope(
-    requestContext?.get(MASTRA_SCOPES_KEY),
-    WORKSPACE_FILE_SCOPES,
-  );
+  return includesAccessTokenScope(requestContext?.get(MASTRA_SCOPES_KEY), WORKSPACE_FILE_SCOPES);
 }
 
 /** Resolve the request client and authorization-safe files-cache scope. */
@@ -479,19 +492,19 @@ async function resolveFilesCacheScope(context: DatabricksWorkspaceContext): Prom
 
 /** Join one relative skill path to its actual composite mount path. */
 function mountedSkillPath(mount: string, skillPath: string): string {
-  if (posixPath.isAbsolute(skillPath)) {
+  if (isAbsolute(skillPath)) {
     throw new TypeError(`Skill path must be relative to its mount: ${skillPath}`);
   }
-  const normalized = posixPath.normalize(skillPath);
+  const normalized = normalize(skillPath);
   if (!normalized.ok) {
     throw new TypeError(`Skill path escapes its mount: ${skillPath}`);
   }
-  return posixPath.join(posixPath.normalizeRoot(mount), normalized.path.slice(1));
+  return posixPath.join(normalizeRoot(mount), normalized.path.slice(1));
 }
 
 /** Return whether a Databricks path belongs to the writable Workspace namespace. */
 function isWorkspaceRoot(root: string): boolean {
-  const normalized = posixPath.normalizeRoot(root);
+  const normalized = normalizeRoot(root);
   return normalized === "/Workspace" || normalized.startsWith("/Workspace/");
 }
 
@@ -522,7 +535,7 @@ async function resolveWorkspacePathMounts(
   for (const [index, path] of paths.entries()) {
     const configured = await resolveDatabricksWorkspacePath(path, context);
     if (!configured) continue;
-    if (posixPath.isWithinRoot(SCRATCH_MOUNT, configured.path)) {
+    if (isWithinRoot(SCRATCH_MOUNT, configured.path)) {
       const mount = configured.mount ?? configured.path;
       mounts[mount] = userTempFilesystem(context, configured.path);
       hasWritableMount = true;
@@ -622,7 +635,7 @@ async function resolveSkillFolderFilesystem(
     });
     return undefined;
   }
-  const root = stringUtils.trimToNull(folder.path);
+  const root = trimToNull(folder.path);
   if (!root) return undefined;
   const writable = folder.writable ?? isWorkspaceRoot(root);
   const cacheOptions = cache.fileSystemCache
@@ -660,10 +673,10 @@ function resolveHomePath(
   input: string | undefined,
   requestContext: Record<string, unknown>,
 ): string | undefined {
-  const value = stringUtils.trimToNull(input);
+  const value = trimToNull(input);
   if (!value || (value !== "~" && !value.startsWith("~/"))) return value ?? undefined;
   const emailValue = requestContext[MASTRA_USER_EMAIL_KEY];
-  const email = typeof emailValue === "string" ? stringUtils.trimToNull(emailValue) : undefined;
+  const email = typeof emailValue === "string" ? trimToNull(emailValue) : undefined;
   if (!email) return undefined;
   const home = personalWorkspacePath(email);
   return value === "~" ? home : `${home}/${value.slice(2)}`;
@@ -693,12 +706,12 @@ function cacheFilterMatches(
     const expanded = resolveHomePath(input, requestContext);
     if (!expanded) continue;
     inputs.push(
-      !root || posixPath.isAbsolute(expanded) || expanded.startsWith("**")
+      !root || isAbsolute(expanded) || expanded.startsWith("**")
         ? expanded
-        : `${posixPath.normalizeRoot(root)}/${expanded.replace(/^\.\//, "")}`,
+        : `${normalizeRoot(root)}/${expanded.replace(/^\.\//, "")}`,
     );
   }
-  return inputs.length > 0 && match.toPathMatcher(...inputs)(path);
+  return inputs.length > 0 && toPathMatcher(...inputs)(path);
 }
 
 async function resolveFileCacheOptions(
@@ -715,8 +728,7 @@ async function resolveFileCacheOptions(
     return {
       operations: CACHEABLE_FILESYSTEM_OPERATIONS,
       filter: (operation, path) =>
-        operation !== "readFile" ||
-        roots.some((skillRoot) => posixPath.isWithinRoot(skillRoot, path)),
+        operation !== "readFile" || roots.some((skillRoot) => isWithinRoot(skillRoot, path)),
     };
   }
   const policies = toPolicyArray(resolved);
@@ -746,10 +758,10 @@ function resolveWorkspaceIdentity(options: DatabricksWorkspaceOptions): {
   let id = options.id;
   let name = options.name;
   if (!id) {
-    id = name ? stringUtils.toSlug(name) : "workspace";
+    id = name ? toSlug(name) : "workspace";
   }
   if (!name) {
-    name = Array.from(stringUtils.tokenize(id)).join(" ");
+    name = Array.from(tokenize(id)).join(" ");
   }
   return { id, name };
 }
@@ -788,10 +800,10 @@ function userTempFilesystem(
 ): WorkspaceFilesystem {
   const userKey = resolveUserKey(context.requestContext);
   const digest = createHash("sha256")
-    .update(object.toStableKey({ package: "@dbx-tools/appkit-mastra", userKey }))
+    .update(toStableKey({ package: "@dbx-tools/appkit-mastra", userKey }))
     .digest("hex")
     .slice(0, 16);
-  const normalized = posixPath.normalizeRoot(workspacePath);
+  const normalized = normalizeRoot(workspacePath);
   const relative = normalized === SCRATCH_MOUNT ? "" : normalized.slice(`${SCRATCH_MOUNT}/`.length);
   const source = new LocalFileSystem({
     root: join(tmpdir(), "dbx-tools", "mastra", digest, relative),
@@ -814,7 +826,7 @@ function localSkillMountResolvers(mounts: readonly LocalSkillMount[]): Workspace
     unique.set(`${entry.mountPath}\0${identity}`, entry);
   }
   return [...unique.values()].map((entry) => {
-    const mount = posixPath.normalizeRoot(entry.mountPath);
+    const mount = normalizeRoot(entry.mountPath);
     const filesystem = inMemorySkillFilesystem(entry);
     return async () => {
       const source = await filesystem;
@@ -866,7 +878,7 @@ export async function inlineSkillsFromLocalMounts(
           ...(metadata.compatibility !== undefined
             ? { compatibility: metadata.compatibility }
             : {}),
-          ...(object.isRecord(metadata.metadata) ? { metadata: metadata.metadata } : {}),
+          ...(isRecord(metadata.metadata) ? { metadata: metadata.metadata } : {}),
           ...(Object.keys(references).length > 0 ? { references } : {}),
         }),
       );
@@ -903,7 +915,7 @@ async function loadInMemorySkillFilesystem(mount: LocalSkillMount): Promise<File
     root: "/",
   });
   await memory.init();
-  for await (const relative of find.findFiles("**/*", { cwd: mount.root, nodir: true })) {
+  for await (const relative of findFiles("**/*", { cwd: mount.root, nodir: true })) {
     await memory.writeFile(relative, await source.readFile(relative), { overwrite: true });
   }
   await source.close();
@@ -941,7 +953,7 @@ async function databricksFilesystem(
   | undefined
 > {
   const fs = new DatabricksFileSystem({
-    client: () => workspaceClient.toLegacyWorkspaceClient(requestWorkspaceClient(client)),
+    client: () => toLegacyWorkspaceClient(requestWorkspaceClient(client)),
     root,
     readOnly,
     createRoot,
@@ -959,7 +971,7 @@ async function databricksFilesystem(
     logger.debug("databricks-mount:skipped", {
       root,
       readOnly,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
   }
   return undefined;
@@ -968,9 +980,7 @@ async function databricksFilesystem(
 /** @internal Keep service context from replacing the request-scoped workspace client. */
 export function requestWorkspaceClient(
   initialClient: WorkspaceClient,
-  executionContext: ReturnType<
-    typeof appkit.tryGetExecutionContext
-  > = appkit.tryGetExecutionContext(),
+  executionContext: ReturnType<typeof tryGetExecutionContext> = tryGetExecutionContext(),
 ): WorkspaceClient {
   if (
     executionContext &&
@@ -1008,7 +1018,7 @@ function verifyFirstFileSystemAccess<TFileSystem extends FileSystem>(
       readCheck = undefined;
       logger.debug("databricks-mount:read-check-failed", {
         root,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
       throw error;
     }
@@ -1039,7 +1049,7 @@ function verifyFirstFileSystemAccess<TFileSystem extends FileSystem>(
             if (!writeVerified) {
               logger.debug("databricks-mount:write-check-failed", {
                 root,
-                error: errorUtils.toError(error),
+                error: toError(error),
               });
             }
             throw error;
@@ -1132,7 +1142,7 @@ async function resolveDistinctSkillPaths(
     try {
       const entries = await filesystem.readdir(path);
       if (entries.some((entry) => entry.type === "file" && entry.name === "SKILL.md")) {
-        const name = posixPath.basename(path);
+        const name = basename(path);
         if (!excludedSkillNames.has(name) && !selected.has(name)) selected.set(name, path);
         continue;
       }
@@ -1149,7 +1159,7 @@ async function resolveDistinctSkillPaths(
     } catch (error) {
       logger.debug("skill-path:skipped", {
         path,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
     }
   }

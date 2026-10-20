@@ -1,6 +1,6 @@
 /** Shared subprocess policy for Projen source and task entrypoints. */
 
-import * as exec from "@dbx-tools/core/exec";
+import { spawnSync, type ChildProcessResult, spawn } from "@dbx-tools/core";
 
 export interface TaskCommandOptions {
   readonly env?: NodeJS.ProcessEnv;
@@ -23,7 +23,7 @@ export function runTaskCommand(
   args: readonly string[],
   options: TaskCommandOptions = {},
 ): void {
-  exec.spawnSync(executable(command), [...args], {
+  spawnSync(executable(command), [...args], {
     cwd,
     env: options.env,
     stdout: "inherit",
@@ -49,8 +49,8 @@ export function spawnTaskCommand(
   command: string,
   args: readonly string[],
   options: TaskCommandOptions & { readonly signal?: AbortSignal } = {},
-): exec.ChildProcessResult {
-  return exec.spawn(executable(command), [...args], {
+): ChildProcessResult {
+  return spawn(executable(command), [...args], {
     cwd,
     env: options.env,
     stdout: "inherit",
@@ -68,7 +68,7 @@ export function captureTaskCommand(
   args: readonly string[],
   options: CaptureTaskCommandOptions = {},
 ): string {
-  const result = exec.spawnSync(executable(command), [...args], {
+  const result = spawnSync(executable(command), [...args], {
     cwd,
     env: options.env,
     stdout: "capture",
@@ -87,7 +87,7 @@ export function tryTaskCommand(
   options: TaskCommandOptions = {},
 ): boolean {
   return (
-    exec.spawnSync(executable(command), [...args], {
+    spawnSync(executable(command), [...args], {
       cwd,
       env: options.env,
       stdout: "inherit",
@@ -106,7 +106,7 @@ export function taskCommandSucceeds(
   options: Pick<TaskCommandOptions, "env"> = {},
 ): boolean {
   return (
-    exec.spawnSync(executable(command), [...args], {
+    spawnSync(executable(command), [...args], {
       cwd,
       env: options.env,
       stdout: "ignore",

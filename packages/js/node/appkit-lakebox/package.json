@@ -52,50 +52,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./config": {
-        "types": "./lib/src/config.d.ts",
-        "default": "./lib/src/config.js"
-      },
-      "./desktop": {
-        "types": "./lib/src/desktop.d.ts",
-        "default": "./lib/src/desktop.js"
-      },
-      "./metrics": {
-        "types": "./lib/src/metrics.d.ts",
-        "default": "./lib/src/metrics.js"
-      },
-      "./plugin": {
-        "types": "./lib/src/plugin.d.ts",
-        "default": "./lib/src/plugin.js"
-      },
-      "./routes": {
-        "types": "./lib/src/routes.d.ts",
-        "default": "./lib/src/routes.js"
-      },
-      "./runtime": {
-        "types": "./lib/src/runtime.d.ts",
-        "default": "./lib/src/runtime.js"
-      },
-      "./services": {
-        "types": "./lib/src/services.d.ts",
-        "default": "./lib/src/services.js"
-      },
-      "./skills": {
-        "types": "./lib/src/skills.d.ts",
-        "default": "./lib/src/skills.js"
-      },
-      "./user": {
-        "types": "./lib/src/user.d.ts",
-        "default": "./lib/src/user.js"
-      },
-      "./workspace": {
-        "types": "./lib/src/workspace.d.ts",
-        "default": "./lib/src/workspace.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -109,21 +65,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./config": "./src/config.ts",
-    "./desktop": "./src/desktop.ts",
-    "./metrics": "./src/metrics.ts",
-    "./plugin": "./src/plugin.ts",
-    "./routes": "./src/routes.ts",
-    "./runtime": "./src/runtime.ts",
-    "./services": "./src/services.ts",
-    "./skills": "./src/skills.ts",
-    "./user": "./src/user.ts",
-    "./workspace": "./src/workspace.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "skills",
     "scripts",

@@ -3,9 +3,16 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Duplex, PassThrough } from "node:stream";
-import { exec } from "@dbx-tools/core";
+import { exec, spawn } from "@dbx-tools/core";
 import type { Client as Ssh2Client, ClientChannel } from "ssh2";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  nativeOpenSshArgs,
+  OPENSSH_PARENT_WATCH_SOURCE,
+  OpenSshTransport,
+  type OpenSshResource,
+  supportsNativeOpenSsh,
+} from "../src/_ssh_openssh.ts";
 import {
   createSshTransport,
   PooledSshTransport,
@@ -16,14 +23,7 @@ import {
   type SshTransport,
   type SshTransportFactories,
   type SshTransportOptions,
-} from "../src/_ssh.ts";
-import {
-  nativeOpenSshArgs,
-  OPENSSH_PARENT_WATCH_SOURCE,
-  OpenSshTransport,
-  type OpenSshResource,
-  supportsNativeOpenSsh,
-} from "../src/_ssh_openssh.ts";
+} from "../src/ssh.ts";
 
 const originalNodeEnv = process.env.NODE_ENV;
 const temporaryDirectories = new Set<string>();
@@ -91,16 +91,12 @@ describe("native OpenSSH selection", () => {
       `#!/usr/bin/env bun\nimport { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(pidPath)}, String(process.pid));\nsetInterval(() => undefined, 1_000);\n`,
     );
     await chmod(childCommand, 0o700);
-    const watcher = exec.spawn(
-      process.execPath,
-      ["-e", OPENSSH_PARENT_WATCH_SOURCE, childCommand],
-      {
-        stdin: "pipe",
-        stdout: "ignore",
-        stderr: "capture",
-        forwardTerminationSignals: false,
-      },
-    );
+    const watcher = spawn(process.execPath, ["-e", OPENSSH_PARENT_WATCH_SOURCE, childCommand], {
+      stdin: "pipe",
+      stdout: "ignore",
+      stderr: "capture",
+      forwardTerminationSignals: false,
+    });
     let childPid: number | undefined;
     try {
       await waitUntil(async () => {

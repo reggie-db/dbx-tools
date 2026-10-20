@@ -36,22 +36,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./brand": {
-        "types": "./lib/src/brand.d.ts",
-        "default": "./lib/src/brand.js"
-      },
-      "./kpi": {
-        "types": "./lib/src/kpi.d.ts",
-        "default": "./lib/src/kpi.js"
-      },
-      "./workflow": {
-        "types": "./lib/src/workflow.d.ts",
-        "default": "./lib/src/workflow.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -65,14 +49,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./brand": "./src/brand.ts",
-    "./kpi": "./src/kpi.ts",
-    "./workflow": "./src/workflow.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

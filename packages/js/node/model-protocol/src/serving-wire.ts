@@ -5,9 +5,15 @@
  * @module
  */
 
-import { chatToolReasoningEffort } from "@dbx-tools/model/policy";
-import { json, stringUtils } from "@dbx-tools/shared-core";
-import { type ChatMessage, type ChatRole, openaiChat } from "@dbx-tools/shared-model";
+import { chatToolReasoningEffort } from "@dbx-tools/model";
+import { parseRecord, trimToNull } from "@dbx-tools/shared-core";
+import {
+  type ChatMessage,
+  type ChatRole,
+  stripUnsupportedChatFields,
+  chatContentParts,
+  chatContentToText,
+} from "@dbx-tools/shared-model";
 
 /** Chat message plus provider reasoning fields emitted by Databricks models. */
 export interface ServingChatMessage extends ChatMessage {
@@ -31,11 +37,10 @@ const REASONING_PART_TYPES: ReadonlySet<string> = new Set([
 
 /** Sanitize a serialized Chat Completions request when provider quirks require it. */
 export function rewriteServingBody(body: string): string {
-  const parsed = json.parseRecord(body);
+  const parsed = parseRecord(body);
   if (!parsed) return body;
   let changed =
-    openaiChat.stripUnsupportedChatFields(parsed).length > 0 ||
-    applyToolReasoningCompatibility(parsed);
+    stripUnsupportedChatFields(parsed).length > 0 || applyToolReasoningCompatibility(parsed);
   if (Array.isArray(parsed.messages)) {
     const messages = parsed.messages as ServingChatMessage[];
     const stripped = stripReasoningFromServingMessages(messages);
@@ -67,7 +72,7 @@ export async function rewriteServingRequest(
 /** Normalize Chat Completions reasoning for GPT tool calls. */
 export function applyToolReasoningCompatibility(body: Record<string, unknown>): boolean {
   if (!Array.isArray(body.tools) || body.tools.length === 0) return false;
-  const model = stringUtils.trimToNull(body.model);
+  const model = trimToNull(body.model);
   if (!model || chatToolReasoningEffort(model) !== "none") return false;
   if (body.reasoning_effort === "none") return false;
   body.reasoning_effort = "none";
@@ -93,7 +98,7 @@ export function stripReasoningFromServingMessages(messages: ServingChatMessage[]
       delete message.reasoning_content;
       changed = true;
     }
-    const parts = openaiChat.chatContentParts(message.content);
+    const parts = chatContentParts(message.content);
     if (!parts) continue;
     const filtered = parts.filter((part) => {
       const type = part?.type;
@@ -130,8 +135,8 @@ export function repairAssistantPrefill(messages: ServingChatMessage[]): boolean 
     return false;
   }
   opener.content = [
-    stringUtils.trimToNull(textFromServingContent(opener.content)),
-    stringUtils.trimToNull(textFromServingContent(last.content)),
+    trimToNull(textFromServingContent(opener.content)),
+    trimToNull(textFromServingContent(last.content)),
   ]
     .filter((value): value is string => value !== null)
     .join("\n\n");
@@ -141,7 +146,7 @@ export function repairAssistantPrefill(messages: ServingChatMessage[]): boolean 
 
 /** Normalize array-valued content in a non-streaming Chat Completions response. */
 export function rewriteServingResponseBody(body: string): string {
-  const parsed = json.parseRecord(body);
+  const parsed = parseRecord(body);
   if (!parsed) return body;
   return flattenChoiceMessageContent(parsed) ? JSON.stringify(parsed) : body;
 }
@@ -188,7 +193,7 @@ function rewriteServingResponseStreamLine(line: string): string {
   const content = lineEnding ? line.slice(0, -lineEnding.length) : line;
   const match = /^(data:\s*)(.*)$/.exec(content);
   if (!match || match[2] === "[DONE]") return line;
-  const parsed = json.parseRecord(match[2]);
+  const parsed = parseRecord(match[2]);
   if (!parsed || !flattenChoiceDeltaContent(parsed)) return line;
   return `${match[1]}${JSON.stringify(parsed)}${lineEnding}`;
 }
@@ -204,22 +209,22 @@ function flattenChoiceContent(
     const container = (choice as Record<string, unknown>)[field];
     if (!container || typeof container !== "object") continue;
     const target = container as { content?: unknown };
-    const parts = openaiChat.chatContentParts(target.content);
+    const parts = chatContentParts(target.content);
     if (!parts) continue;
-    target.content = openaiChat.chatContentToText(parts, { types: ["text"] });
+    target.content = chatContentToText(parts, { types: ["text"] });
     changed = true;
   }
   return changed;
 }
 
 function textFromServingContent(content: ServingChatMessage["content"]): string {
-  return openaiChat.chatContentToText(content, { separator: "\n\n", types: ["text"] });
+  return chatContentToText(content, { separator: "\n\n", types: ["text"] });
 }
 
 function isEmptyServingContent(content: ServingChatMessage["content"]): boolean {
   if (content === undefined) return true;
   if (typeof content === "string") return content.trim().length === 0;
-  const parts = openaiChat.chatContentParts(content);
+  const parts = chatContentParts(content);
   if (!parts) return true;
   return parts.every((part) => {
     if (part?.type === "text") {

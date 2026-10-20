@@ -24,9 +24,9 @@ import {
   flushCache,
   projectCache,
   type CacheOptions,
-} from "@dbx-tools/cache/cache";
+} from "@dbx-tools/cache";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
-import { errorUtils, hash, log } from "@dbx-tools/shared-core";
+import { log, toError, id } from "@dbx-tools/shared-core";
 import { handleOwnershipMigrationError } from "./migration.ts";
 
 const logger = log.logger("cache-storage");
@@ -217,7 +217,7 @@ export function loadPersistentStorage(): PersistentStorageConstructor | undefine
     return loaded;
   } catch (err) {
     logger.debug("soft persistent cache skipped (PersistentStorage unavailable)", {
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     persistentStorageCtor = undefined;
     return undefined;
@@ -288,7 +288,7 @@ export function softenInitialize(
 
 /** Verify the migrated cache table can serve the reads and writes AppKit needs. */
 export async function probeStorage(storage: PersistentStorageBase): Promise<void> {
-  const key = `dbx-tools:cache-probe:${hash.id()}`;
+  const key = `dbx-tools:cache-probe:${id()}`;
   try {
     await storage.set(key, { value: key, expiry: Date.now() + 60_000 });
     const result = await storage.get(key);
@@ -330,7 +330,7 @@ async function createPersistentStorage(
     return storage;
   } catch (err) {
     logger.debug("soft persistent cache unavailable", {
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     if (pool) {
       await pool.end().catch(() => {});

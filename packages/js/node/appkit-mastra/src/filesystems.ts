@@ -9,8 +9,8 @@
  * @module
  */
 
-import { localFS } from "@dbx-tools/fs";
-import { FileSystemError, posixPath } from "@dbx-tools/shared-fs";
+import { scratchFS } from "@dbx-tools/fs";
+import { FileSystemError, dirname, normalize } from "@dbx-tools/shared-fs";
 import type {
   FileEntry as SharedFileEntry,
   FileStat as SharedFileStat,
@@ -292,7 +292,7 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
 
   /** When Mastra asks for non-recursive writes, require the parent directory. */
   private async assertParentExists(inputPath: string): Promise<void> {
-    const parent = posixPath.dirname(normalizeWorkspacePath(inputPath));
+    const parent = dirname(normalizeWorkspacePath(inputPath));
     if (parent === "/" || (await this.fs.exists(parent))) return;
     throw new DirectoryNotFoundError(parent);
   }
@@ -343,7 +343,7 @@ export class MountedCompositeFilesystem extends CompositeFilesystem {
 
 /** Fresh writable local temp mount on a root unique to this call. */
 export function scratchFilesystem(): MastraFileSystemAdapter {
-  return filesystems(localFS.scratchFS("mastra"));
+  return filesystems(scratchFS("mastra"));
 }
 
 /** Map a shared-fs error code onto the matching Mastra filesystem error. */
@@ -397,6 +397,6 @@ function toMastraStat(stat: SharedFileStat, inputPath: string): FileStat {
  * and a mount should not fail a listing over a stray segment.
  */
 function normalizeWorkspacePath(inputPath: string): string {
-  const result = posixPath.normalize(inputPath);
+  const result = normalize(inputPath);
   return result.ok ? result.path : "/";
 }

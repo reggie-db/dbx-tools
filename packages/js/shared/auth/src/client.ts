@@ -4,7 +4,7 @@
  * @module
  */
 
-import { options } from "@dbx-tools/shared-core";
+import { normalizedUrlSchema } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import { authTypeSchema, targetKindSchema } from "./config-schema.ts";
@@ -15,7 +15,7 @@ export const RUNTIME_AUTH_TYPE = "runtime" as const;
 /** Resolved secret-free Databricks authentication client fields. */
 export const databricksAuthClientInfoSchema = z.object({
   profile: z.string().min(1).optional(),
-  host: options.normalizedUrlSchema,
+  host: normalizedUrlSchema,
   accountId: z.string().min(1).optional(),
   workspaceId: z.string().min(1).optional(),
   target: targetKindSchema,

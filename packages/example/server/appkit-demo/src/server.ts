@@ -1,27 +1,33 @@
 import path from "node:path";
 import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
-import { appkit, telemetry as appkitTelemetry } from "@dbx-tools/appkit";
-import { filesCache } from "@dbx-tools/appkit/files-cache";
+import { createApp, configureNativeHttpTelemetry, filesCache } from "@dbx-tools/appkit";
 import { generator } from "@dbx-tools/appkit-generator";
-import { AppKitLakeboxPlugin, lakebox, LakeboxRuntime } from "@dbx-tools/appkit-lakebox";
-import { resolveLakeboxPluginConfig } from "@dbx-tools/appkit-lakebox/config";
-import { lakeboxSkillMounts } from "@dbx-tools/appkit-lakebox/skills";
 import {
-  agents,
-  genie as appkitMastraGenie,
+  AppKitLakeboxPlugin,
+  lakebox,
+  LakeboxRuntime,
+  resolveLakeboxPluginConfig,
+  lakeboxSkillMounts,
+} from "@dbx-tools/appkit-lakebox";
+import {
   mastra,
   type MastraAgentDefinition,
   type MastraTools,
+  createAgent,
+  tool,
+  GENIE_INSTRUCTIONS,
 } from "@dbx-tools/appkit-mastra";
 import { memory } from "@dbx-tools/appkit-memory";
 import { webSearch } from "@dbx-tools/appkit-web-search";
-import { configUtils, projectUtils } from "@dbx-tools/core";
-import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
+import { boolean, ENV_ONLY, string, root } from "@dbx-tools/core";
+import { email, emailTool } from "@dbx-tools/email";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { lakebaseAiSearch, search } from "@dbx-tools/search";
-import { brandUtils } from "@dbx-tools/shared-core";
+import { defaultBrandContext } from "@dbx-tools/shared-core";
+import { defaultEmailBrand } from "@dbx-tools/shared-email-template";
 import { authGate, tunnelInterceptor } from "@dbx-tools/tunnel";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 import {
@@ -162,14 +168,9 @@ const SEARCH_DOCUMENTS = [
     url: "https://dbx.tools/guides/memory-search-and-actions/",
   },
 ];
-
-const { createAgent, createTool, tool } = agents;
-const { GENIE_INSTRUCTIONS } = appkitMastraGenie;
-const { defaultBrandContext } = brandUtils;
-const mastraStorage =
-  configUtils.boolean(undefined, "MASTRA_STORAGE", configUtils.ENV_ONLY) ?? true;
-const mastraMemory = configUtils.boolean(undefined, "MASTRA_MEMORY", configUtils.ENV_ONLY) ?? true;
-const databricksMemoryEnabled = configUtils.boolean(undefined, "MANAGED_MEMORY", {
+const mastraStorage = boolean(undefined, "MASTRA_STORAGE", ENV_ONLY) ?? true;
+const mastraMemory = boolean(undefined, "MASTRA_MEMORY", ENV_ONLY) ?? true;
+const databricksMemoryEnabled = boolean(undefined, "MANAGED_MEMORY", {
   sources: "env",
 });
 const databricksMemoryStore = process.env.DATABRICKS_AGENT_MEMORY_STORE_ID?.trim();
@@ -182,14 +183,11 @@ const databricksMemory =
           mode: databricksMemoryEnabled === true ? ("required" as const) : ("auto" as const),
         }
       : (databricksMemoryEnabled ?? "auto");
-const graphitiEnabled =
-  configUtils.boolean(undefined, "GRAPHITI_ENABLED", configUtils.ENV_ONLY) ?? true;
-const memorySaveTurns = configUtils.boolean(undefined, "MEMORY_SAVE_TURNS", configUtils.ENV_ONLY);
-const busEnabled = configUtils.boolean(undefined, "BUS_ENABLED", configUtils.ENV_ONLY) ?? true;
-const remoteSkillsEnabled =
-  configUtils.boolean(undefined, "REMOTE_SKILLS_ENABLED", configUtils.ENV_ONLY) ?? true;
-const appkitBodyLimit =
-  configUtils.string(undefined, "APPKIT_BODY_LIMIT", { sources: "env" }) ?? "100mb";
+const graphitiEnabled = boolean(undefined, "GRAPHITI_ENABLED", ENV_ONLY) ?? true;
+const memorySaveTurns = boolean(undefined, "MEMORY_SAVE_TURNS", ENV_ONLY);
+const busEnabled = boolean(undefined, "BUS_ENABLED", ENV_ONLY) ?? true;
+const remoteSkillsEnabled = boolean(undefined, "REMOTE_SKILLS_ENABLED", ENV_ONLY) ?? true;
+const appkitBodyLimit = string(undefined, "APPKIT_BODY_LIMIT", { sources: "env" }) ?? "100mb";
 const lakeboxRuntime = new LakeboxRuntime(resolveLakeboxPluginConfig());
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
@@ -199,12 +197,9 @@ const lakeboxRuntime = new LakeboxRuntime(resolveLakeboxPluginConfig());
 // sibling path does not exist in the deployed tree.
 const clientDist =
   process.env.CLIENT_DIST ??
-  path.resolve(projectUtils.root() ?? process.cwd(), "packages/example/app/appkit-demo/dist");
-const demoClientRoot = path.resolve(
-  projectUtils.root() ?? process.cwd(),
-  "packages/example/app/appkit-demo",
-);
-const clientDevUrl = configUtils.string(undefined, "CLIENT_DEV_URL", configUtils.ENV_ONLY);
+  path.resolve(root() ?? process.cwd(), "packages/example/app/appkit-demo/dist");
+const demoClientRoot = path.resolve(root() ?? process.cwd(), "packages/example/app/appkit-demo");
+const clientDevUrl = string(undefined, "CLIENT_DEV_URL", ENV_ONLY);
 /** AppKit `server()` runs Vite middleware HMR when `staticPath` is omitted. */
 const useAppKitVite = process.env.NODE_ENV === "development" && !clientDevUrl;
 let clientDevelopmentProxy: ClientDevelopmentProxy | undefined;
@@ -394,10 +389,10 @@ const searchProvider = USE_VECTOR_SEARCH
 const previousCwd = process.cwd();
 if (useAppKitVite) process.chdir(demoClientRoot);
 try {
-  await appkitTelemetry.configureNativeHttpTelemetry({
+  await configureNativeHttpTelemetry({
     exclude: [lakeboxRuntime.config.routePrefix, `${lakeboxRuntime.config.routePrefix}/*`],
   });
-  await appkit.createApp({
+  await createApp({
     disableInternalTelemetry: true,
     plugins: [
       // Keep AppKit's native HTTP/Express tracing. The compatibility hook above
@@ -409,7 +404,7 @@ try {
       }),
       genie(),
       lakebase({ pool: postgresConnectionOptions({}) }),
-      filesCache(),
+      filesCache.filesCache(),
       lakebox({ runtime: lakeboxRuntime }),
       ...(graphitiEnabled || databricksMemory !== false
         ? [

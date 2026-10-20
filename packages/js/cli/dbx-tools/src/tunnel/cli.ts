@@ -24,16 +24,22 @@
 
 import { createServer } from "node:net";
 import { addArgs, parseArgs } from "@dbx-tools/cli-args";
-import { exec } from "@dbx-tools/core";
-import type { ChildProcessResult } from "@dbx-tools/core/exec";
+import { spawn } from "@dbx-tools/core";
+import type { ChildProcessResult } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
-import { frp, interceptor, portr } from "@dbx-tools/tunnel";
+import {
+  installFrp,
+  writeFrpConfig,
+  startFrp,
+  TunnelTransportSchema,
+  installPortr,
+  writePortrConfig,
+  startPortr,
+} from "@dbx-tools/tunnel";
 import { Command, CommanderError } from "commander";
 
 import { resolveTunnelOptions, TunnelOptionsSchema, type TunnelOptions } from "./options.ts";
 import { startProxy } from "./proxy.ts";
-
-export { CommanderError };
 
 const logger = log.logger("tunnel");
 
@@ -89,7 +95,7 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
   let appPort: number;
   if (executable) {
     appPort = resolved.appPort ?? (await freePort());
-    const app = exec.spawn(executable, args, {
+    const app = spawn(executable, args, {
       env: {
         ...process.env,
         DATABRICKS_APP_PORT: String(appPort),
@@ -137,14 +143,14 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
   });
 
   if ((resolved.transport === "portr" || resolved.transport === "both") && resolved.portr) {
-    const portrEnv = await portr.installPortr();
-    await portr.writePortrConfig(resolved.portr, portrEnv);
-    children.push(portr.startPortr(resolved.portr, portrEnv));
+    const portrEnv = await installPortr();
+    await writePortrConfig(resolved.portr, portrEnv);
+    children.push(startPortr(resolved.portr, portrEnv));
   }
   if ((resolved.transport === "frp" || resolved.transport === "both") && resolved.frp) {
-    const frpEnv = await frp.installFrp();
-    const configPath = await frp.writeFrpConfig(resolved.frp, frpEnv);
-    children.push(frp.startFrp(resolved.frp, frpEnv, configPath));
+    const frpEnv = await installFrp();
+    const configPath = await writeFrpConfig(resolved.frp, frpEnv);
+    children.push(startFrp(resolved.frp, frpEnv, configPath));
   }
   const activeTunnelCount = children.length - (executable ? 1 : 0);
   if (!activeTunnelCount) {
@@ -201,9 +207,9 @@ export function buildProgram(name = "dbx tunnel"): Command {
     .argument("[transport]", "portr, frp, or both", "portr")
     .description("Install public tunnel client binaries and exit")
     .action(async (transport: string) => {
-      const parsed = interceptor.TunnelTransportSchema.parse(transport);
-      if (parsed === "portr" || parsed === "both") await portr.installPortr();
-      if (parsed === "frp" || parsed === "both") await frp.installFrp();
+      const parsed = TunnelTransportSchema.parse(transport);
+      if (parsed === "portr" || parsed === "both") await installPortr();
+      if (parsed === "frp" || parsed === "both") await installFrp();
     });
 
   return program;

@@ -6,45 +6,20 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
-import type { BrandGenerationRequest as SharedBrandGenerationRequest } from "@dbx-tools/shared-generator/brand";
+import { toDescription } from "@dbx-tools/shared-core";
+import { type BrandGenerationRequest } from "@dbx-tools/shared-generator";
 import { z } from "zod";
-
-export {
-  BrandGenerationErrorEventSchema,
-  BrandGenerationEventSchema,
-  BrandGenerationProgressEventSchema,
-  BrandGenerationRequestSchema,
-  BrandGenerationResultEventSchema,
-  BrandGenerationStageSchema,
-  BrandPackageSchema,
-  BrandPackageSourceSchema,
-  BrandVisualImageSchema,
-  BrandVisualReferenceSchema,
-} from "@dbx-tools/shared-generator/brand";
-export type {
-  BrandGenerationErrorEvent,
-  BrandGenerationEvent,
-  BrandGenerationProgressEvent,
-  BrandGenerationRequest,
-  BrandGenerationResultEvent,
-  BrandGenerationStage,
-  BrandPackage,
-  BrandPackageSource,
-  BrandVisualImage,
-  BrandVisualReference,
-} from "@dbx-tools/shared-generator/brand";
 
 const nonBlankString = z.string().trim().min(1);
 const color = z.string().regex(/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i, "Expected a hex color.");
 
 /** Resolve the human-readable subject from a validated brand request. */
-export function brandRequestSubject(request: SharedBrandGenerationRequest): string {
+export function brandRequestSubject(request: BrandGenerationRequest): string {
   return request.name ?? request.prompt!;
 }
 
 /** Description shared by the native AppKit brand-generation tool. */
-export const GENERATE_BRAND_TOOL_DESCRIPTION = stringUtils.toDescription(`
+export const GENERATE_BRAND_TOOL_DESCRIPTION = toDescription(`
   Research a named organization or product on the web and generate a portable
   branding package. The result includes a validated BrandContext for
   application and email presentation plus the sources used. Supply the

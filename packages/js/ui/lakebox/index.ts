@@ -4,14 +4,3 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-lakebox";
 export const PACKAGE_VERSION = "0.9.154";
-export * as reactClient from "./src/react/client.ts";
-export * as reactLakeboxIndicator from "./src/react/lakebox-indicator.tsx";
-export * as reactLakeboxMetrics from "./src/react/lakebox-metrics.tsx";
-export * as reactLakeboxPanel from "./src/react/lakebox-panel.tsx";
-export * as reactServiceUrl from "./src/react/service-url.ts";
-export * as reactUseLakebox from "./src/react/use-lakebox.ts";
-export { LakeboxClient } from "./src/react/client.ts";
-export type { LakeboxIndicatorProps } from "./src/react/lakebox-indicator.tsx";
-export type { LakeboxMetricsProps } from "./src/react/lakebox-metrics.tsx";
-export type { LakeboxPanelProps } from "./src/react/lakebox-panel.tsx";
-export type { LakeboxState } from "./src/react/use-lakebox.ts";

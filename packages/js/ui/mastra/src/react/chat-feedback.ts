@@ -1,6 +1,6 @@
-import { errorUtils, log } from "@dbx-tools/shared-core";
-import { genieModel } from "@dbx-tools/shared-genie";
-import type { FeedbackMode } from "@dbx-tools/shared-mastra/feedback";
+import { log, toError } from "@dbx-tools/shared-core";
+import { GenieMessageSchema } from "@dbx-tools/shared-genie";
+import type { FeedbackMode } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import { useCallback, useRef } from "react";
 import type { ThreadSessionUpdater } from "./chat-sessions.ts";
@@ -33,7 +33,7 @@ export function genieFeedbackTarget(message: UIMessage): GenieFeedbackTarget | u
       typeof event.output === "object" && event.output !== null && "message" in event.output
         ? event.output.message
         : undefined;
-    const parsed = genieModel.GenieMessageSchema.safeParse(output);
+    const parsed = GenieMessageSchema.safeParse(output);
     if (!parsed.success) continue;
     const genieMessage = parsed.data;
     const messageId = genieMessage.message_id ?? genieMessage.id;
@@ -107,7 +107,7 @@ export function useChatFeedback({
         logger.error("feedback error", {
           feedbackMode,
           ...(traceId ? { traceId } : {}),
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
       }
     },

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
-import { find } from "@dbx-tools/path";
+import { findFiles } from "@dbx-tools/path";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const ALLOWED = new Set([
@@ -19,7 +19,7 @@ const SDK_IMPORT = /^\s*import\b[^\n]*["']@databricks\/sdk-experimental["']/m;
 describe("Databricks SDK boundary", () => {
   it("rejects direct imports outside compatibility modules", async () => {
     const imports: string[] = [];
-    for await (const file of find.findFiles("packages/js/**/*.ts", {
+    for await (const file of findFiles("packages/js/**/*.ts", {
       cwd: ROOT,
       ignoreOptions: { test: false },
     })) {

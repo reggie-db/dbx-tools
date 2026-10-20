@@ -5,7 +5,7 @@
  */
 
 import type { WorkspaceClient } from "@databricks/appkit";
-import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "@dbx-tools/appkit-mastra/model";
+import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "@dbx-tools/appkit-mastra";
 import { Agent } from "@mastra/core/agent";
 import type { MessageListInput } from "@mastra/core/agent/message-list";
 import type { z } from "zod";

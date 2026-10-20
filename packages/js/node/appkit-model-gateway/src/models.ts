@@ -4,8 +4,7 @@
  * @module
  */
 
-import { isChatClass } from "@dbx-tools/model/classes";
-import { modelFamily, modelFamilyRank } from "@dbx-tools/model/policy";
+import { isChatClass, modelFamily, modelFamilyRank } from "@dbx-tools/model";
 import type {
   CodexModel,
   CodexModelListResponse,

@@ -8,7 +8,7 @@
  * @module
  */
 
-import { object } from "@dbx-tools/shared-core";
+import { type SerializableValue, toDuration } from "@dbx-tools/shared-core";
 import type { QueryResultRow } from "pg";
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
 import { withAdvisoryTransactionLock } from "./advisory-lock.ts";
@@ -40,18 +40,14 @@ export interface ResolvedTopicBusPersistenceOptions {
   provision: boolean;
 }
 /** Persisted topic message plus replay cursor, scope, and expiry metadata. */
-export interface StoredTopicMessage<
-  TBody extends object.SerializableValue = object.SerializableValue,
-> {
+export interface StoredTopicMessage<TBody extends SerializableValue = SerializableValue> {
   cursor: string;
   expiresAt: string | null;
   scope: TopicPersistenceScope;
   message: TopicMessage<TBody>;
 }
 /** Ordered replay page and optional cursor for the next page. */
-export interface TopicHistoryPage<
-  TBody extends object.SerializableValue = object.SerializableValue,
-> {
+export interface TopicHistoryPage<TBody extends SerializableValue = SerializableValue> {
   messages: StoredTopicMessage<TBody>[];
   nextCursor?: string;
 }
@@ -161,7 +157,7 @@ function after(value: string | undefined, scope: TopicPersistenceScope): string 
 /** Convert a persistence TTL to milliseconds, preserving disabled retention. */
 export function ttlMilliseconds(value: DurationInput | false): number | null {
   if (value === false) return null;
-  const milliseconds = object.toDuration(value);
+  const milliseconds = toDuration(value);
   if (milliseconds === undefined || milliseconds <= 0) {
     throw new TypeError(`Invalid persistence TTL: ${String(value)}`);
   }
@@ -189,7 +185,7 @@ type HistoryRow = QueryResultRow & {
 };
 
 /** Read a cursor-paginated page of persisted topic history. */
-export async function history<TBody extends object.SerializableValue>(
+export async function history<TBody extends SerializableValue>(
   queryable: PgQueryable,
   channel: string,
   topic: string,
@@ -291,7 +287,7 @@ export function decodePointer(value: string | undefined): TopicPointer | undefin
  * is gone (TTL cleanup won the race) or the reader lacks the table's grant, both
  * of which are expected on the `restricted` tier rather than errors.
  */
-export async function readPointer<TBody extends object.SerializableValue>(
+export async function readPointer<TBody extends SerializableValue>(
   queryable: PgQueryable,
   channel: string,
   pointer: TopicPointer,

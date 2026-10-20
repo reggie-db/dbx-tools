@@ -1,8 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import * as exec from "@dbx-tools/core/exec";
-import { log, object } from "@dbx-tools/shared-core";
+import { spawn } from "@dbx-tools/core";
+import { log, isRecord } from "@dbx-tools/shared-core";
 
 const logger = log.logger("cli:service");
 
@@ -39,7 +39,7 @@ export async function installServiceRuntime(
   if (packages.length > 0) {
     logger.info("installing service runtime packages", { directory, packages });
   }
-  await exec.spawn(bunExecutable, ["install", "--production", "--cwd", directory], {
+  await spawn(bunExecutable, ["install", "--production", "--cwd", directory], {
     check: true,
     cwd: directory,
     stdin: "ignore",
@@ -62,7 +62,7 @@ export async function installServicePythonPackage(
 ): Promise<string> {
   logger.info("creating service Python environment", { directory, python });
   await rm(directory, { recursive: true, force: true });
-  await exec.spawn(
+  await spawn(
     uvExecutable,
     ["venv", "--managed-python", "--no-project", "--python", python, directory],
     {
@@ -78,7 +78,7 @@ export async function installServicePythonPackage(
     offline,
     packages: packageSpecifiers,
   });
-  await exec.spawn(
+  await spawn(
     uvExecutable,
     [
       "pip",
@@ -106,7 +106,7 @@ export async function installServicePythonPackage(
 async function readOptionalRecord(path: string): Promise<Record<string, unknown>> {
   try {
     const value: unknown = JSON.parse(await readFile(path, "utf8"));
-    if (!object.isRecord(value)) throw new Error(`JSON file is not an object: ${path}`);
+    if (!isRecord(value)) throw new Error(`JSON file is not an object: ${path}`);
     return value;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
@@ -115,7 +115,7 @@ async function readOptionalRecord(path: string): Promise<Record<string, unknown>
 }
 
 function stringRecord(value: unknown): Record<string, string> {
-  if (!object.isRecord(value)) return {};
+  if (!isRecord(value)) return {};
   return Object.fromEntries(
     Object.entries(value).filter(
       (entry): entry is [string, string] => typeof entry[1] === "string",

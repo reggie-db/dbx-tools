@@ -2,7 +2,7 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import * as exec from "@dbx-tools/core/exec";
+import { spawn } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("cli:service");
@@ -25,7 +25,7 @@ export async function compileWithBun(
     output: absoluteOutput,
   });
   try {
-    await exec.spawn(
+    await spawn(
       bunExecutable,
       [
         "build",

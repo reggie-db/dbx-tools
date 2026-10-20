@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { object } from "@dbx-tools/shared-core";
+import { isRecord } from "@dbx-tools/shared-core";
 import { escapeRegExp, posix } from "./repository-docs.mjs";
 
 const TYPESCRIPT_EXPORT = /\.(?:[cm]?ts|tsx)$/i;
@@ -20,7 +20,7 @@ function targetCandidates(value, context) {
   if (Array.isArray(value)) {
     return value.flatMap((candidate) => targetCandidates(candidate, context));
   }
-  if (object.isRecord(value)) {
+  if (isRecord(value)) {
     return orderedConditions(value).flatMap(([condition, candidate]) =>
       targetCandidates(candidate, `${context} condition ${condition}`),
     );
@@ -42,7 +42,7 @@ function insidePackage(packageDir, target, context) {
 }
 
 function exportMapEntries(exportsValue) {
-  if (object.isRecord(exportsValue)) {
+  if (isRecord(exportsValue)) {
     const keys = Object.keys(exportsValue);
     const subpathKeys = keys.filter((key) => key.startsWith("."));
     if (subpathKeys.length > 0) {

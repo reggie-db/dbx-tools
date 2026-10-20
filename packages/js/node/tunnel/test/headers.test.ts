@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { token } from "@dbx-tools/shared-core";
+import { ACCESS_TOKEN_HEADER, USER_ID_HEADER, USER_EMAIL_HEADER } from "@dbx-tools/shared-core";
 import { DEFAULT_FORWARD_HEADERS, PROTECTED_HEADERS, toHeaderPolicy } from "../src/headers.ts";
 
 describe("inbound header policy", () => {
@@ -49,9 +49,9 @@ describe("inbound header policy", () => {
     assert.deepEqual(
       [...PROTECTED_HEADERS],
       [
-        token.ACCESS_TOKEN_HEADER,
-        token.USER_ID_HEADER,
-        token.USER_EMAIL_HEADER,
+        ACCESS_TOKEN_HEADER,
+        USER_ID_HEADER,
+        USER_EMAIL_HEADER,
         "x-forwarded-preferred-username",
         "x-forwarded-host",
         "x-forwarded-proto",

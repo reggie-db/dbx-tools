@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { log } from "@dbx-tools/shared-core";
-import { plugin as tunnel } from "@dbx-tools/tunnel";
+import { isLevelEnabled } from "@dbx-tools/shared-core";
+import { resolveAuthGateConfig } from "@dbx-tools/tunnel";
 import { createLogger, defineConfig } from "vite";
 
 /**
@@ -16,16 +16,14 @@ export default defineConfig({
       "@": path.join(root, "src"),
     },
   },
-  ...(log.isLevelEnabled("debug")
-    ? {}
-    : { logLevel: "silent", customLogger: createLogger("silent") }),
+  ...(isLevelEnabled("debug") ? {} : { logLevel: "silent", customLogger: createLogger("silent") }),
   ...(tunnelHosts.length > 0 ? { server: { allowedHosts: tunnelHosts } } : {}),
 });
 
 /** Hostnames Vite should accept when a public tunnel is configured. */
 function tunnelAllowedHosts(): string[] {
   const hosts = new Set<string>();
-  for (const value of tunnel.resolveAuthGateConfig({}).publicDomains) {
+  for (const value of resolveAuthGateConfig({}).publicDomains) {
     const host = hostnameFrom(value);
     if (host) hosts.add(host);
   }

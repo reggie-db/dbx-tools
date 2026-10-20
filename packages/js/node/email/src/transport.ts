@@ -23,11 +23,11 @@
  */
 
 import { ConfigurationError, ValidationError, type ExecutionResult } from "@databricks/appkit";
-import { pluginExecution } from "@dbx-tools/appkit";
-import { execution, log } from "@dbx-tools/shared-core";
+import { runPluginExecution } from "@dbx-tools/appkit";
+import { log, directExecutor } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";
+import type { EmailBrand } from "@dbx-tools/shared-email-template";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
-import type { EmailBrand } from "./brand.ts";
 import { resolveEmailConfig, type EmailPluginConfig, type ResolvedEmailConfig } from "./config.ts";
 import {
   EMAIL_SEND_SETTINGS,
@@ -66,7 +66,7 @@ export interface EmailRuntime {
  * directly, mapping a throw onto the same {@link ExecutionResult} shape so
  * call sites branch on `ok` either way.
  */
-const directExecute = execution.directExecutor<EmailExecutionSettings>();
+const directExecute = directExecutor<EmailExecutionSettings>();
 
 let runtime: EmailRuntime | undefined;
 
@@ -143,7 +143,7 @@ export async function executeWrite<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   const { execute } = getEmailRuntime();
-  return pluginExecution.runPluginExecution({
+  return runPluginExecution({
     plugin: "email",
     logger,
     operation,

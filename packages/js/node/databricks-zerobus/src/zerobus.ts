@@ -5,26 +5,29 @@ import {
   type TableProperties,
   type ZerobusStream,
 } from "@databricks/zerobus-ingest-sdk";
-import { workspaceClient, cloud } from "@dbx-tools/databricks";
+import {
+  getWorkspaceUrl,
+  getWorkspaceId,
+  resolveCloudLocation,
+  CloudProvider,
+} from "@dbx-tools/databricks";
 
 /** Create a Zerobus SDK client for the active Databricks workspace. */
 export async function createSdk(): Promise<ZerobusSdk> {
-  const workspaceUrl = await workspaceClient.getWorkspaceUrl();
+  const workspaceUrl = await getWorkspaceUrl();
   if (!workspaceUrl) {
     throw new Error("Workspace URL not found");
   }
-  const workspaceId = await workspaceClient.getWorkspaceId();
+  const workspaceId = await getWorkspaceId();
   if (!workspaceId) {
     throw new Error(`Workspace ID not found: workspaceUrl=${workspaceUrl.toString()}`);
   }
-  const location = await cloud.resolveCloudLocation(workspaceUrl.toString());
+  const location = await resolveCloudLocation(workspaceUrl.toString());
   if (!location) {
     throw new Error(`Workspace location not found: workspaceUrl=${workspaceUrl.toString()}`);
   }
   const domain =
-    location.provider === cloud.CloudProvider.Azure
-      ? "azuredatabricks.net"
-      : "cloud.databricks.com";
+    location.provider === CloudProvider.Azure ? "azuredatabricks.net" : "cloud.databricks.com";
   const zerobusEndpoint = `https://${workspaceId}.zerobus.${location.region}.${domain}`;
   return new ZerobusSdk(zerobusEndpoint, workspaceUrl.toString());
 }

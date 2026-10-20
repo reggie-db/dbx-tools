@@ -2,9 +2,9 @@
 /** Verify that every committed package version matches the root VERSION file. */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { find } from "@dbx-tools/path";
-import { json, log } from "@dbx-tools/shared-core";
+import { projectUtils } from "@dbx-tools/core";
+import { findFiles } from "@dbx-tools/path";
+import { log, parseRecord } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
 import { runTaskMain } from "./cli.ts";
 import { recordedPackages } from "../src/packages.ts";
@@ -13,7 +13,7 @@ import { readWorkspaceVersion } from "../src/workspace-version.ts";
 const logger = log.logger("projen:version-check");
 
 function manifestVersion(path: string): string | undefined {
-  const manifest = json.parseRecord(readFileSync(path, "utf8"));
+  const manifest = parseRecord(readFileSync(path, "utf8"));
   return typeof manifest?.version === "string" ? manifest.version : undefined;
 }
 
@@ -37,7 +37,7 @@ export async function main(): Promise<void> {
     check(`${pkg.path}/package.json`, manifestVersion(join(pkg.dir, "package.json")));
   }
 
-  for await (const path of find.findFiles("**/pyproject.toml", { cwd: root })) {
+  for await (const path of findFiles("**/pyproject.toml", { cwd: root })) {
     check(path, pythonVersion(join(root, path)));
   }
   if (mismatches.length > 0) {

@@ -20,8 +20,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import * as exec from "@dbx-tools/core/exec";
-import { withFileLock } from "@dbx-tools/core/file-lock";
+import { spawnSync, withFileLock } from "@dbx-tools/core";
 import { parse } from "smol-toml";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
@@ -253,7 +252,7 @@ function localizeImports(
     ? segments.join(".")
     : "";
   // Captured stderr carries the localizer's reason into the thrown error.
-  const { stdout } = exec.spawnSync(
+  const { stdout } = spawnSync(
     "uv",
     [
       "run",

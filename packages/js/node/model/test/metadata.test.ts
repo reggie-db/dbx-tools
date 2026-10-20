@@ -11,9 +11,8 @@ import {
   modelMetadataFor,
   modelRateLimitsFor,
   modelReasoningLevelsFor,
-  modelStatusFor,
-  retiredModelNames,
 } from "../src/metadata.ts";
+import { modelStatusFor, retiredModelNames } from "../src/retirement.ts";
 
 describe("model metadata generation", () => {
   it("parses retirement tables and ignores unrelated tables", () => {

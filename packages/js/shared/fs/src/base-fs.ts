@@ -18,12 +18,15 @@
  */
 
 import {
-  errorUtils,
-  functionUtils,
-  hash,
   log,
-  object,
   type OneOrMany,
+  toError,
+  errorContext,
+  errorMessage,
+  memoize,
+  fnvHash,
+  isLevelEnabled,
+  toOneOrMany,
 } from "@dbx-tools/shared-core";
 import type {
   CopyOptions,
@@ -83,7 +86,7 @@ const logger = log.logger("filesystem");
  */
 export function normalizeFileSystemRoot(root?: FileSystemRootInput): string {
   if (root === undefined) return "/";
-  const segments = object.toOneOrMany(root);
+  const segments = toOneOrMany(root);
   const absolute = isAbsoluteRootStart(segments[0]);
   const parts: string[] = [];
   for (const segment of segments) {
@@ -114,7 +117,7 @@ function appendRootParts(parts: string[], segment: FileSystemRootSegment): void 
       parts.push(sanitizePathSegment(String(segment)));
       return;
     default:
-      parts.push(hash.fnvHash(segment));
+      parts.push(fnvHash(segment));
   }
 }
 
@@ -137,7 +140,7 @@ function splitPathPieces(input: string): string[] {
  */
 function sanitizePathSegment(segment: string): string {
   if (segment === ".." || UNSAFE_PATH_SEGMENT.test(segment)) {
-    return hash.fnvHash(segment);
+    return fnvHash(segment);
   }
   return segment;
 }
@@ -165,10 +168,7 @@ export class FileSystemError extends Error {
     readonly path?: string,
     options?: { cause?: unknown },
   ) {
-    super(
-      message,
-      options?.cause !== undefined ? { cause: errorUtils.toError(options.cause) } : undefined,
-    );
+    super(message, options?.cause !== undefined ? { cause: toError(options.cause) } : undefined);
   }
 }
 
@@ -180,7 +180,7 @@ export class FileSystemError extends Error {
  * "not found" / "already exists" checks. Returns undefined when nothing matches.
  */
 export function inferFileSystemErrorCode(err: unknown): FileSystemErrorCode | undefined {
-  const ctx = errorUtils.errorContext(err);
+  const ctx = errorContext(err);
   if (ctx.hasStatusCode(404) || ctx.hasMessage("not", "found") || ctx.hasMessage("not", "exist")) {
     return "NOT_FOUND";
   }
@@ -223,12 +223,12 @@ export function mapFileSystemError(
   codeOf?: (err: unknown) => FileSystemErrorCode | undefined,
 ): FileSystemError {
   if (err instanceof FileSystemError) return err;
-  const message = errorUtils.errorMessage(err);
+  const message = errorMessage(err);
   return new FileSystemError(
     codeOf?.(err) ?? inferFileSystemErrorCode(err) ?? "IO_ERROR",
     message || `Filesystem operation failed: ${filePath}`,
     filePath,
-    { cause: errorUtils.toError(err) },
+    { cause: toError(err) },
   );
 }
 
@@ -303,7 +303,7 @@ export abstract class BaseFileSystem<
   /* ------------------------------------------------------------------ */
 
   private createInit(): () => Promise<void> {
-    return functionUtils.memoize(async () => {
+    return memoize(async () => {
       this.initStarted = true;
       if (this.createRoot) {
         await this.guard(this.root, () => this.createRootDirectory());
@@ -354,7 +354,7 @@ export abstract class BaseFileSystem<
 
   /** Emit operation metadata only when debug logging is active. */
   private debug(operation: string, details: () => Readonly<Record<string, unknown>>): void {
-    if (!log.isLevelEnabled("debug")) return;
+    if (!isLevelEnabled("debug")) return;
     logger.debug("operation", {
       backend: this.backend,
       filesystemId: this.id,

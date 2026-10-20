@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
-import { exec } from "@dbx-tools/core";
-import type { ChildProcessResult } from "@dbx-tools/core/exec";
-import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
+import { spawn, onParentTerminationSignal } from "@dbx-tools/core";
+import type { ChildProcessResult } from "@dbx-tools/core";
+import { log, toError, dedent } from "@dbx-tools/shared-core";
 import { SocksClient } from "socks";
 import {
   PooledSshTransport,
@@ -14,7 +14,7 @@ import {
   type SshPoolOptions,
   type SshResourceLifecycle,
   type SshTransportOptions,
-} from "./_ssh.ts";
+} from "./ssh.ts";
 
 const SOCKS_HOST = "127.0.0.1";
 const OPENSSH_HELPER_TIMEOUT_MS = 2_000;
@@ -26,7 +26,7 @@ let stopParentTerminationSignal: (() => void) | undefined;
 let processExitHookInstalled = false;
 /** @internal JavaScript watchdog that terminates one child when its parent pipe closes. */
 export const OPENSSH_PARENT_WATCH_SOURCE =
-  stringUtils.dedent(// ============================================================================
+  dedent(// ============================================================================
   /*js*/ `
     const { spawn } = require("node:child_process");
 
@@ -176,7 +176,7 @@ class NativeOpenSshResource implements OpenSshResource {
       const socksPort = await availableLoopbackPort();
       const target = `${options.username}@${options.connectHost}`;
       const master = trackNativeOpenSshProcess(
-        exec.spawn(
+        spawn(
           process.execPath,
           [
             "-e",
@@ -228,7 +228,7 @@ class NativeOpenSshResource implements OpenSshResource {
 
   async run(script: string, execution: SshCommandExecution): Promise<number> {
     const child = trackNativeOpenSshProcess(
-      exec.spawn(
+      spawn(
         this.command,
         [
           ...nativeOpenSshArgs(this.options),
@@ -253,7 +253,7 @@ class NativeOpenSshResource implements OpenSshResource {
     let shutdown: Promise<void> | undefined;
     execution.setCancel(() => {
       shutdown ??= child.shutdown({ terminateTimeout: 0, killTimeout: 1_000 }).catch((error) => {
-        logger.warn("failed to stop native SSH command", { error: errorUtils.toError(error) });
+        logger.warn("failed to stop native SSH command", { error: toError(error) });
       });
       return shutdown;
     });
@@ -293,7 +293,7 @@ class NativeOpenSshResource implements OpenSshResource {
     } finally {
       await this.master.shutdown({ terminateTimeout: 0, killTimeout: 1_000 }).catch((error) =>
         logger.warn("failed to stop native SSH ControlMaster", {
-          error: errorUtils.toError(error),
+          error: toError(error),
         }),
       );
       await rm(this.directory, { recursive: true, force: true });
@@ -319,7 +319,7 @@ class NativeOpenSshResource implements OpenSshResource {
 
   private control(operation: "check" | "exit") {
     const child = trackNativeOpenSshProcess(
-      exec.spawn(
+      spawn(
         this.command,
         [
           "-p",
@@ -346,7 +346,7 @@ async function probeNativeOpenSsh(command: string): Promise<boolean> {
   try {
     const version = await waitForNativeOpenSshChild(
       trackNativeOpenSshProcess(
-        exec.spawn(command, ["-V"], {
+        spawn(command, ["-V"], {
           stdin: "ignore",
           stdout: "capture",
           stderr: "capture",
@@ -359,7 +359,7 @@ async function probeNativeOpenSsh(command: string): Promise<boolean> {
     if (version.exitCode !== 0 || !/(?:^|\s)OpenSSH_/m.test(versionOutput)) return false;
     const dynamicForward = await waitForNativeOpenSshChild(
       trackNativeOpenSshProcess(
-        exec.spawn(command, ["-G", "-D", `${SOCKS_HOST}:1`, "localhost"], {
+        spawn(command, ["-G", "-D", `${SOCKS_HOST}:1`, "localhost"], {
           stdin: "ignore",
           stdout: "ignore",
           stderr: "ignore",
@@ -402,7 +402,7 @@ function trackNativeOpenSshProcess(
   activeNativeOpenSshProcesses.add(child);
   if (parentBound) parentBoundNativeOpenSshProcesses.add(child);
   if (!stopParentTerminationSignal) {
-    stopParentTerminationSignal = exec.onParentTerminationSignal(forceStopNativeOpenSshProcesses);
+    stopParentTerminationSignal = onParentTerminationSignal(forceStopNativeOpenSshProcesses);
   }
   if (!processExitHookInstalled) {
     processExitHookInstalled = true;

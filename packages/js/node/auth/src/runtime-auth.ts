@@ -1,6 +1,5 @@
-import { RUNTIME_AUTH_TYPE } from "@dbx-tools/shared-auth/client";
-import { TargetKind } from "@dbx-tools/shared-auth/config";
-import { getAccessTokenPayload, getAccessTokenScopes } from "@dbx-tools/shared-core/token";
+import { RUNTIME_AUTH_TYPE, TargetKind } from "@dbx-tools/shared-auth";
+import { getAccessTokenPayload, getAccessTokenScopes } from "@dbx-tools/shared-core";
 
 import { AuthError } from "./_errors.ts";
 import { TokenLifecycle } from "./_lifecycle.ts";

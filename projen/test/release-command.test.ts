@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import * as projectUtils from "@dbx-tools/core/project-utils";
+import { parseProjectGhRemote, type ProjectGhAccount } from "@dbx-tools/core";
 
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
 import {
@@ -50,23 +50,19 @@ function fixture(): { remote: string; root: string } {
 describe("direct release tags", () => {
   it("recognizes GitHub HTTPS, SSH, and configured SSH aliases", () => {
     assert.equal(
-      projectUtils.parseProjectGhRemote("https://github.example.com/example/dbx-tools.git")
-        ?.repository,
+      parseProjectGhRemote("https://github.example.com/example/dbx-tools.git")?.repository,
       "example/dbx-tools",
     );
     assert.equal(
-      projectUtils.parseProjectGhRemote("git@github.example.com:example/dbx-tools.git")?.repository,
+      parseProjectGhRemote("git@github.example.com:example/dbx-tools.git")?.repository,
       "example/dbx-tools",
     );
-    assert.deepEqual(
-      projectUtils.parseProjectGhRemote("git@github-release:example/dbx-tools.git"),
-      {
-        accountHint: "release",
-        host: "github-release",
-        repository: "example/dbx-tools",
-      },
-    );
-    assert.equal(projectUtils.parseProjectGhRemote("/tmp/remote.git"), undefined);
+    assert.deepEqual(parseProjectGhRemote("git@github-release:example/dbx-tools.git"), {
+      accountHint: "release",
+      host: "github-release",
+      repository: "example/dbx-tools",
+    });
+    assert.equal(parseProjectGhRemote("/tmp/remote.git"), undefined);
   });
 
   it("refreshes a local tag when the remote created a different annotated tag object", () => {
@@ -147,7 +143,7 @@ describe("direct release tags", () => {
       ].join("\n"),
     );
     chmodSync(executable, 0o755);
-    const account: projectUtils.ProjectGhAccount = {
+    const account: ProjectGhAccount = {
       env: {
         ...process.env,
         PATH: `${root}:${process.env.PATH ?? ""}`,

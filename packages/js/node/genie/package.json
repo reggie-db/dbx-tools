@@ -39,26 +39,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./agent-mode": {
-        "types": "./lib/src/agent-mode.d.ts",
-        "default": "./lib/src/agent-mode.js"
-      },
-      "./chat": {
-        "types": "./lib/src/chat.d.ts",
-        "default": "./lib/src/chat.js"
-      },
-      "./feedback": {
-        "types": "./lib/src/feedback.d.ts",
-        "default": "./lib/src/feedback.js"
-      },
-      "./space": {
-        "types": "./lib/src/space.d.ts",
-        "default": "./lib/src/space.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -72,15 +52,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./agent-mode": "./src/agent-mode.ts",
-    "./chat": "./src/chat.ts",
-    "./feedback": "./src/feedback.ts",
-    "./space": "./src/space.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

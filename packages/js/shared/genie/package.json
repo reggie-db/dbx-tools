@@ -37,26 +37,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./agent-mode": {
-        "types": "./lib/src/agent-mode.d.ts",
-        "default": "./lib/src/agent-mode.js"
-      },
-      "./dashboards": {
-        "types": "./lib/src/dashboards.d.ts",
-        "default": "./lib/src/dashboards.js"
-      },
-      "./event": {
-        "types": "./lib/src/event.d.ts",
-        "default": "./lib/src/event.js"
-      },
-      "./genie-model": {
-        "types": "./lib/src/genie-model.d.ts",
-        "default": "./lib/src/genie-model.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -73,15 +53,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./agent-mode": "./src/agent-mode.ts",
-    "./dashboards": "./src/dashboards.ts",
-    "./event": "./src/event.ts",
-    "./genie-model": "./src/genie-model.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

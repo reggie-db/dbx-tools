@@ -2,10 +2,10 @@
 /** Deploy an AppKit workspace through npm-compatible temporary manifests. */
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { profile } from "@dbx-tools/auth";
+import { resolveProfile } from "@dbx-tools/auth";
 import { serializeArgs } from "@dbx-tools/cli-args";
-import * as exec from "@dbx-tools/core/exec";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { spawn, spawnSync } from "@dbx-tools/core";
+import { log, toError } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { withStagedWorkspaceManifests } from "../src/workspace-manifest.ts";
@@ -99,7 +99,7 @@ export async function deployApp(
     (dependencies.run
       ? undefined
       : (validateArgs: readonly string[], cwd: string) =>
-          exec.spawn(
+          spawn(
             "databricks",
             ["bundle", "validate", ...serializeArgs({ strict: true }), ...validateArgs],
             {
@@ -119,7 +119,7 @@ export async function deployApp(
   const run =
     dependencies.run ??
     ((deployArgs: readonly string[], cwd: string) =>
-      exec.spawn("databricks", ["apps", "deploy", ...deployArgs], {
+      spawn("databricks", ["apps", "deploy", ...deployArgs], {
         cwd,
         env: dependencies.environment ?? process.env,
         stdin: "inherit",
@@ -148,7 +148,7 @@ async function reconcileStagedBundleState(
       ? undefined
       : (args: readonly string[], cwd: string) =>
           Promise.resolve(
-            exec.spawnSync(
+            spawnSync(
               "databricks",
               ["bundle", "plan", ...serializeArgs({ quiet: true }), ...args],
               {
@@ -186,7 +186,7 @@ async function printAppLogs(
   const showLogs =
     dependencies.logs ??
     ((args: readonly string[], logsCwd: string) =>
-      exec.spawn("databricks", ["apps", "logs", ...serializeArgs({ tailLines: 200 }), ...args], {
+      spawn("databricks", ["apps", "logs", ...serializeArgs({ tailLines: 200 }), ...args], {
         cwd: logsCwd,
         env: dependencies.environment ?? process.env,
         stdin: "ignore",
@@ -200,7 +200,7 @@ async function printAppLogs(
     }
   } catch (error) {
     logger.warn("Could not read Databricks App logs", {
-      message: errorUtils.toError(error).message,
+      message: toError(error).message,
     });
   }
 }
@@ -229,7 +229,7 @@ async function resolveDeployOptions(
     configuredProfile ??
     (hasEnvironmentAuth
       ? undefined
-      : (dependencies.resolveProfile ?? (() => profile.resolveProfile()?.name))());
+      : (dependencies.resolveProfile ?? (() => resolveProfile()?.name))());
   if (!hasEnvironmentAuth && !resolvedProfile) {
     throw new Error(
       "Select a Databricks profile with --profile or configure Databricks environment credentials",

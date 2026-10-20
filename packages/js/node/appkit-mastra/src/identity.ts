@@ -51,50 +51,15 @@
  * @module
  */
 
-import { identity } from "@dbx-tools/appkit";
-
-/** Identity a chat turn's Databricks calls run as. See the module docs. */
-export type MastraIdentityMode = identity.IdentityMode;
+import { identity, type IdentityMode } from "@dbx-tools/appkit";
 
 /** Environment fallback for `config.genieIdentity`. */
 export const IDENTITY_ENV = "MASTRA_GENIE_IDENTITY";
 
-/** Every accepted {@link MastraIdentityMode}. */
-export const IDENTITY_MODES = identity.IDENTITY_MODES;
-
-/**
- * Default mode. `"user"` keeps OBO the only identity unless an app opts in, so
- * adopting this option can never silently widen an existing app's data access.
- */
-export const DEFAULT_IDENTITY_MODE = identity.DEFAULT_IDENTITY_MODE;
-
-/** Header Databricks Apps forward the signed-in user's id on. */
-export const USER_ID_HEADER = identity.USER_ID_HEADER;
-
-/** Header Databricks Apps forward the signed-in user's email on. */
-export const USER_EMAIL_HEADER = identity.USER_EMAIL_HEADER;
-
 /**
  * Resolve the configured mode: explicit plugin config, then {@link IDENTITY_ENV},
- * then {@link DEFAULT_IDENTITY_MODE}. An unrecognized value throws.
+ * then AppKit's default identity mode. An unrecognized value throws.
  */
-export function resolveIdentityMode(configured: string | undefined): MastraIdentityMode {
+export function resolveIdentityMode(configured: string | undefined): IdentityMode {
   return identity.resolveIdentityMode(configured, IDENTITY_ENV, "genieIdentity");
 }
-
-/**
- * The forwarded user id on `req`, or `undefined`. Used to attribute a turn to
- * the real caller when the Databricks client is the app SP but memory / cache /
- * traces must still key off the user.
- */
-export const requestUserId = identity.requestUserId;
-
-/** The forwarded user email on `req`, or `undefined`. */
-export const requestUserEmail = identity.requestUserEmail;
-
-/**
- * Whether this request should run its Databricks calls as the app service
- * principal rather than OBO - `"service-principal"` always, `"user"` never, and
- * `"auto"` only when the request carries no OBO token for AppKit to use.
- */
-export const useServicePrincipal = identity.useServicePrincipal;

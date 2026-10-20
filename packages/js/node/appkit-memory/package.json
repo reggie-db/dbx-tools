@@ -50,17 +50,13 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./config": {
-        "types": "./lib/src/config.d.ts",
-        "default": "./lib/src/config.js"
+      "./databricks": {
+        "types": "./lib/index.databricks.d.ts",
+        "default": "./lib/index.databricks.js"
       },
-      "./plugin": {
-        "types": "./lib/src/plugin.d.ts",
-        "default": "./lib/src/plugin.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
+      "./graphiti": {
+        "types": "./lib/index.graphiti.d.ts",
+        "default": "./lib/index.graphiti.js"
       },
       "./package.json": "./package.json"
     }
@@ -75,13 +71,12 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./config": "./src/config.ts",
-    "./plugin": "./src/plugin.ts",
-    "./*": "./src/*/index.ts",
+    "./databricks": "./index.databricks.ts",
+    "./graphiti": "./index.graphiti.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

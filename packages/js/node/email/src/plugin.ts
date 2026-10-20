@@ -37,15 +37,15 @@ import {
   type PluginManifest,
 } from "@databricks/appkit";
 import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
-import { brandContext, ToolRegistryPlugin } from "@dbx-tools/appkit";
-import { errorUtils, log, stringUtils, token } from "@dbx-tools/shared-core";
+import { ToolRegistryPlugin, getBrandContext } from "@dbx-tools/appkit";
+import { log, toError, trimToNull, ACCESS_TOKEN_HEADER } from "@dbx-tools/shared-core";
 import {
-  email as sharedEmail,
   type EmailMessage,
   type EmailResult,
   type EmailSenders,
+  emailMessageSchema,
 } from "@dbx-tools/shared-email";
-import { emailBrandFromContext } from "./brand.ts";
+import { emailBrandFromContext } from "@dbx-tools/shared-email-template";
 import { EMAIL_CONFIG_SCHEMA, type EmailPluginConfig } from "./config.ts";
 import { EMAIL_SENDERS_SETTINGS, EMAIL_VERIFY_SETTINGS } from "./defaults.ts";
 import { isSenderAllowed, listSenderOptions, resolveSenderAddress } from "./sender.ts";
@@ -116,11 +116,10 @@ export class EmailPlugin extends ToolRegistryPlugin<EmailPluginConfig> {
   protected readonly toolRegistry: ToolRegistry = {
     [SEND_TOOL]: defineTool({
       description: SEND_EMAIL_DESCRIPTION,
-      schema: sharedEmail.emailMessageSchema,
+      schema: emailMessageSchema,
       annotations: { effect: "write", requiresUserContext: true },
       autoInheritable: false,
-      execute: async (args, signal) =>
-        this.send(sharedEmail.emailMessageSchema.parse(args), undefined, signal),
+      execute: async (args, signal) => this.send(emailMessageSchema.parse(args), undefined, signal),
     }),
   };
 
@@ -138,7 +137,7 @@ export class EmailPlugin extends ToolRegistryPlugin<EmailPluginConfig> {
   override async setup(): Promise<void> {
     const { transporter, config } = getEmailRuntime({
       ...this.config,
-      brand: this.config.brand ?? emailBrandFromContext(brandContext.getBrandContext()),
+      brand: this.config.brand ?? emailBrandFromContext(getBrandContext()),
     });
     setEmailExecutor((fn, settings) => this.execute(fn, settings));
     const policy = {
@@ -164,7 +163,7 @@ export class EmailPlugin extends ToolRegistryPlugin<EmailPluginConfig> {
         host: config.host,
         port: config.port,
         status: verified.status,
-        error: errorUtils.toError(verified.message),
+        error: toError(verified.message),
       });
       throw ConfigurationError.invalidConnection(
         "SMTP",
@@ -222,7 +221,7 @@ export class EmailPlugin extends ToolRegistryPlugin<EmailPluginConfig> {
       method: "get",
       path: SENDERS_ROUTE,
       handler: async (req, res) => {
-        const oboToken = stringUtils.trimToNull(req.header(token.ACCESS_TOKEN_HEADER));
+        const oboToken = trimToNull(req.header(ACCESS_TOKEN_HEADER));
         const scoped = oboToken === null ? this : this.asUser(req);
         const result = await scoped.executeListSenders();
         if (!result.ok) {

@@ -16,7 +16,7 @@
  *
  * Two compiler options make the emitted tree loadable, both native `tsc`:
  *
- * - `rootDir: "."` so the package-ROOT `index.ts` barrel is compiled at all.
+ * - `rootDir: "."` so package-root `index*.ts` barrels are compiled at all.
  *   projen's default `rootDir: "src"` puts the barrel outside the compilation,
  *   which is why `lib/` would otherwise have no `index.js`.
  * - `rewriteRelativeImportExtensions`, which turns the `./x.ts` specifiers this
@@ -80,7 +80,7 @@ function compiledStem(target: string): string | undefined {
  * target that ships as-is (`./package.json`, a stylesheet, an SVG asset).
  *
  * `rootDir: "."` means the emitted tree mirrors the package layout, so the
- * mapping is positional: `./src/react/index.ts` -> `./lib/src/react/index.js`.
+ * mapping is positional: `./index.react.ts` -> `./lib/index.react.js`.
  */
 function compiledTarget(target: string): { types: string; default: string } | undefined {
   const stem = compiledStem(target);
@@ -145,7 +145,7 @@ export function applyCompiledPublish(pkg: javascript.NodeProject): void {
   if (!publishesCompiled(pkg)) return;
 
   applyCompilerOptions(pkg, COMPILED_COMPILER_OPTIONS);
-  applyIncludes(pkg, "index.ts");
+  applyIncludes(pkg, "index*.ts");
   addPackageFiles(pkg, COMPILED_DIR);
 
   const config = publishConfig(pkg);

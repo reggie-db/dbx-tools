@@ -10,7 +10,7 @@ import {
   workflowTrigger,
   type WorkflowDefinition,
 } from "./workflow.ts";
-import { DBXToolsNodeProject } from "../src/project.ts";
+import { DBXToolsNodeProject } from "../src/project-js.ts";
 
 let outdir: string;
 let release: WorkflowDefinition;

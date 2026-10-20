@@ -1,6 +1,5 @@
-import * as exec from "@dbx-tools/core/exec";
-import * as errorUtils from "@dbx-tools/shared-core/error-utils";
-import * as stringUtils from "@dbx-tools/shared-core/string-utils";
+import { spawn } from "@dbx-tools/core";
+import { toError, trimToNull } from "@dbx-tools/shared-core";
 
 import { AuthError } from "./_errors.ts";
 import { authLogger, failureMetadata, tokenMetadata } from "./_logging.ts";
@@ -54,7 +53,7 @@ async function compatibleDatabricksCli(executable: string): Promise<boolean> {
   } catch (cause) {
     logger.debug("Databricks CLI version probe unavailable", {
       executable,
-      ...failureMetadata(errorUtils.toError(cause)),
+      ...failureMetadata(toError(cause)),
     });
     return false;
   }
@@ -131,7 +130,7 @@ async function runProcess(
   const controller = timeoutMs === undefined ? undefined : new AbortController();
   const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
   try {
-    return await exec.spawn(command, args, {
+    return await spawn(command, args, {
       env: { ...process.env, ...environment },
       stdin: "ignore",
       stdout: "capture",
@@ -206,5 +205,5 @@ export class DatabricksCliProvider implements TokenProvider {
 }
 
 function stringValue(value: unknown): string | undefined {
-  return stringUtils.trimToNull(value) ?? undefined;
+  return trimToNull(value) ?? undefined;
 }

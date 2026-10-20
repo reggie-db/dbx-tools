@@ -5,10 +5,6 @@
  * @module
  */
 
-import { BracesIcon, Table2Icon } from "lucide-react";
-import { Fragment, useState } from "react";
-import { Streamdown } from "streamdown";
-
 import {
   Button,
   Table,
@@ -20,7 +16,11 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "./appkit-ui.ts";
+} from "@databricks/appkit-ui/react";
+import { BracesIcon, Table2Icon } from "lucide-react";
+import { Fragment, useState } from "react";
+import { Streamdown } from "streamdown";
+
 import { detectCodeLanguage, HighlightedCodeBlock, JsonBlock } from "./highlighted-code.tsx";
 import {
   formatRecordPreviewJson,
@@ -29,15 +29,6 @@ import {
   parseNestedJsonText,
   recordPreviewRows,
   type RecordPreviewRow,
-} from "./record-preview-data.ts";
-
-export type { RecordPreviewRow } from "./record-preview-data.ts";
-export {
-  formatRecordPreviewJson,
-  looksLikeMarkdown,
-  markdownForPreview,
-  parseNestedJsonText,
-  recordPreviewRows,
 } from "./record-preview-data.ts";
 
 /** Compact Streamdown in a table cell: match 11px rows, keep lists tight. */

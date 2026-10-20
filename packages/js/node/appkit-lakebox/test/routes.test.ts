@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer, request as httpRequest, type IncomingHttpHeaders } from "node:http";
 import { connect } from "node:net";
 import { afterEach, describe, it } from "node:test";
-import type { SshSession } from "@dbx-tools/lakebox/session";
+import type { SshSession } from "@dbx-tools/lakebox";
 import express from "express";
 import { LakeboxRouteRegistry, type LakeboxRouteResolution } from "../src/routes.ts";
 import { lakeboxUser } from "../src/user.ts";

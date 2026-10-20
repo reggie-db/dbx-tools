@@ -7,24 +7,24 @@
 import { randomBytes } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { delimiter, dirname } from "node:path";
-import { DatabricksModelRegistry, models } from "@dbx-tools/appkit-model-gateway";
+import { DatabricksModelRegistry, codexModelSlug } from "@dbx-tools/appkit-model-gateway";
 import * as auth from "@dbx-tools/auth";
-import { resolveServicePackageBin } from "@dbx-tools/cli-service/definition";
-import type { BinContext } from "@dbx-tools/core/bin";
-import { workspaceClient } from "@dbx-tools/databricks";
+import { resolveServicePackageBin } from "@dbx-tools/cli-service";
+import { configUtils, type BinContext } from "@dbx-tools/core";
+import { createWorkspaceClient } from "@dbx-tools/databricks";
 import { log } from "@dbx-tools/shared-core";
 import {
   resolveGenieCodeOptions,
   type GenieCodeOptions,
   type GenieCodeRunnerOptions,
-} from "@dbx-tools/shared-genie-code/options";
-import type { ModelClass } from "@dbx-tools/shared-model/contracts";
+} from "@dbx-tools/shared-genie-code";
+import type { ModelClass } from "@dbx-tools/shared-model";
 import concurrently from "concurrently";
 import getPort from "get-port";
 
 import { writeGenieCodeConfig, type GenieCodeHome } from "./config.ts";
 import { installGenieCode } from "./install.ts";
-import { RUNNER_OPTIONS_ENV } from "./runner.ts";
+import { RUNNER_OPTIONS_KEY } from "./runner.ts";
 
 const logger = log.logger("genie-code");
 
@@ -61,7 +61,7 @@ async function resolveCodexModel(
   profile: string,
   modelClass?: ModelClass,
 ): Promise<string> {
-  const client = await workspaceClient.createWorkspaceClient({ profile });
+  const client = await createWorkspaceClient({ profile });
   const target = await new DatabricksModelRegistry({ client }).resolve(model, {
     requiresTools: true,
     ...(modelClass ? { modelClass } : {}),
@@ -72,7 +72,7 @@ async function resolveCodexModel(
     );
   }
   // Genie Code pins the exact system.ai service slug, which wins regardless of gateway preference.
-  return models.codexModelSlug(target, true);
+  return codexModelSlug(target, true);
 }
 
 /** Inputs accepted by managed Genie Code preparation and execution. */
@@ -205,7 +205,7 @@ export async function runGenieCode(input: RunGenieCodeOptions = {}): Promise<voi
           ...process.env,
           PATH: path,
           DATABRICKS_CONFIG_PROFILE: prepared.profile,
-          [RUNNER_OPTIONS_ENV]: JSON.stringify(runnerOptions),
+          [configUtils.name(RUNNER_OPTIONS_KEY)]: JSON.stringify(runnerOptions),
         },
       },
     ],

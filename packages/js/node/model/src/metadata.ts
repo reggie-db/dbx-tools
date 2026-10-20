@@ -11,38 +11,20 @@
  *
  * @module
  */
-import * as functionUtils from "@dbx-tools/shared-core/function-utils";
+import { memoize } from "@dbx-tools/shared-core";
 import type {
   ModelCapabilities,
   ModelMetadata,
   ModelRateLimits,
   ServingEndpointSummary,
-} from "@dbx-tools/shared-model/contracts";
+} from "@dbx-tools/shared-model";
 
-import {
-  MODEL_METADATA_TTL_MS,
-  MODEL_RATE_LIMITS_URL,
-  OPENAI_RESPONSES_MODELS_URL,
-  QUERY_REASON_MODELS_URL,
-  RETIRED_MODELS_URL,
-  WEB_SEARCH_MODELS_URL,
-  type ModelCapabilitiesSnapshot,
-  type ModelCapabilityCatalogue,
-  type ModelRateLimitsSnapshot,
-  type ReasoningModelsSnapshot,
-} from "./_metadata-contract.ts";
 import {
   parseModelCapabilities,
   parseModelRateLimits,
   parseReasoningModels,
   parseRetiredModels,
 } from "./_metadata-generator.ts";
-import {
-  COMMITTED_RETIRED_MODELS,
-  modelStatusFor,
-  replaceRetiredModelNames,
-  RETIRED_MODELS_GENERATED_AT,
-} from "./_retirement.ts";
 import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
 import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
 import reasoningSnapshotJson from "./generated/model-reasoning.json" with { type: "json" };
@@ -52,6 +34,17 @@ import {
   mergePreferFreshRecord,
   type MetadataCache,
 } from "./metadata-cache.ts";
+import {
+  MODEL_RATE_LIMITS_URL,
+  OPENAI_RESPONSES_MODELS_URL,
+  QUERY_REASON_MODELS_URL,
+  RETIRED_MODELS_URL,
+  WEB_SEARCH_MODELS_URL,
+  type ModelCapabilitiesSnapshot,
+  type ModelCapabilityCatalogue,
+  type ModelRateLimitsSnapshot,
+  type ReasoningModelsSnapshot,
+} from "./metadata-contract.ts";
 import { inheritsNativeWebSearch, isFoundationModelIdentity, modelSearchQuery } from "./policy.ts";
 import {
   defaultReasoningLevels,
@@ -62,15 +55,12 @@ import {
   type ReasoningModelCatalogue,
   uniqueReasoningLevels,
 } from "./reasoning-translation.ts";
-
-export {
-  MODEL_METADATA_TTL_MS,
-  MODEL_RATE_LIMITS_URL,
-  OPENAI_RESPONSES_MODELS_URL,
-  QUERY_REASON_MODELS_URL,
-  RETIRED_MODELS_URL,
-  WEB_SEARCH_MODELS_URL,
-};
+import {
+  COMMITTED_RETIRED_MODELS,
+  modelStatusFor,
+  replaceRetiredModelNames,
+  RETIRED_MODELS_GENERATED_AT,
+} from "./retirement.ts";
 
 const capabilitiesSnapshot = capabilitiesSnapshotJson as ModelCapabilitiesSnapshot;
 const rateLimitsSnapshot = rateLimitsSnapshotJson as ModelRateLimitsSnapshot;
@@ -156,9 +146,7 @@ const learnedReasoningCache = createMetadataCache<
 
 let liveIndex: MetadataIndex | undefined;
 
-const metadataIndex = functionUtils.memoize<MetadataIndex>(
-  () => liveIndex ?? buildIndexFromCommitted(),
-);
+const metadataIndex = memoize<MetadataIndex>(() => liveIndex ?? buildIndexFromCommitted());
 
 function buildIndexFromCommitted(): MetadataIndex {
   return buildIndex({
@@ -276,8 +264,6 @@ async function peekOrFallback<T>(cache: MetadataCache<T>, fallback: T): Promise<
   if (peeked !== undefined) return peeked;
   return cache.get().catch(() => fallback);
 }
-
-export { modelStatusFor, retiredModelNames } from "./_retirement.ts";
 
 /** Return the committed reasoning-effort catalogue. Cached per process. */
 export function reasoningModelCatalogue(): ReasoningModelCatalogue {

@@ -7,7 +7,7 @@
  */
 
 import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { escapeHtml, dedent } from "@dbx-tools/shared-core";
 import { LOGIN_CLIENT_SOURCE } from "./generated/_login-client.ts";
 
 /** Brand label and validated return path rendered into the standalone sign-in page. */
@@ -22,11 +22,11 @@ export interface LoginPageOptions {
 
 /** The login page HTML for a `text/html` request to a gated path with no session. */
 export function loginPageHtml(options: LoginPageOptions): string {
-  const brand = stringUtils.escapeHtml(options.brandName);
-  const passkeyNamePrefix = stringUtils.escapeHtml(options.passkeyNamePrefix ?? "");
-  const returnTo = stringUtils.escapeHtml(options.returnTo);
+  const brand = escapeHtml(options.brandName);
+  const passkeyNamePrefix = escapeHtml(options.passkeyNamePrefix ?? "");
+  const returnTo = escapeHtml(options.returnTo);
   // prettier-ignore
-  return stringUtils.dedent(
+  return dedent(
     // ============================================================================
     /*html*/`
     <!doctype html>

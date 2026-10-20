@@ -6,7 +6,7 @@
 
 import type { BasePluginConfig } from "@databricks/appkit";
 import { projectUtils } from "@dbx-tools/core";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { toSlugWithOptions } from "@dbx-tools/shared-core";
 import {
   GraphitiOptionsSchema,
   graphitiOptionOverrides,
@@ -119,10 +119,7 @@ export function resolveMemoryPluginConfig(
 }
 
 function defaultMemoryStore(): string {
-  const slug = stringUtils.toSlugWithOptions(
-    { maxLength: 56, truncateStrategy: "hash" },
-    projectUtils.name(),
-  );
+  const slug = toSlugWithOptions({ maxLength: 56, truncateStrategy: "hash" }, projectUtils.name());
   const id = /^[a-z]/.test(slug) ? slug : `app-${slug}`;
   return (id.length < 3 ? `${id}-store` : id).slice(0, 56);
 }

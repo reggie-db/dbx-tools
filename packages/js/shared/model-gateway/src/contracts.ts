@@ -4,7 +4,7 @@
  * @module
  */
 
-import { model } from "@dbx-tools/shared-model";
+import { ServingEndpointSummarySchema, ReasoningEffortSchema } from "@dbx-tools/shared-model";
 import { z } from "zod";
 
 export const ClientProtocolSchema = z
@@ -59,14 +59,14 @@ export const ModelTargetSchema = z
       .string()
       .optional()
       .describe("Canonical model-service name for metadata lookup."),
-    endpoint: model.ServingEndpointSummarySchema.optional().describe(
+    endpoint: ServingEndpointSummarySchema.optional().describe(
       "Normalized serving endpoint backing this target, when discovered.",
     ),
     capabilities: ModelCapabilitiesSchema.describe(
       "Protocol and feature capabilities for this target.",
     ),
     reasoningEfforts: z
-      .array(model.ReasoningEffortSchema)
+      .array(ReasoningEffortSchema)
       .describe("Reasoning effort values this target accepts."),
   })
   .describe("One discovered model plus every alias accepted by the gateway.");

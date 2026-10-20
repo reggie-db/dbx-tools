@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
+import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project-js.ts";
 
 function fixture(description?: string) {
   const outdir = mkdtempSync(join(tmpdir(), "package-metadata-"));

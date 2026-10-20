@@ -26,12 +26,16 @@ import { mkdir, open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import * as asyncUtils from "@dbx-tools/shared-core/async-utils";
-import * as errorUtils from "@dbx-tools/shared-core/error-utils";
-import * as functionUtils from "@dbx-tools/shared-core/function-utils";
-import * as hash from "@dbx-tools/shared-core/hash";
-import * as log from "@dbx-tools/shared-core/log";
-import * as object from "@dbx-tools/shared-core/object";
+import {
+  sleep,
+  toError,
+  memoize,
+  fnvHash,
+  log,
+  toNumber,
+  toOneOrMany,
+  toStableKey,
+} from "@dbx-tools/shared-core";
 import lockfile from "proper-lockfile";
 
 const logger = log.logger("core:file-lock");
@@ -49,10 +53,10 @@ const POLL_MS = 50;
  * Matches `proper-lockfile`'s default. Not caller-configurable: every process
  * must share the same threshold or a live holder can be mistaken for stale.
  */
-const STALE_MS = object.toNumber(process.env.FILE_LOCK_STALE_MS) ?? 10_000;
+const STALE_MS = toNumber(process.env.FILE_LOCK_STALE_MS) ?? 10_000;
 
 /** Heartbeat interval for refreshing lock-directory mtime (`STALE_MS / 2`). */
-const UPDATE_MS = object.toNumber(process.env.FILE_LOCK_UPDATE_MS) ?? STALE_MS / 2;
+const UPDATE_MS = toNumber(process.env.FILE_LOCK_UPDATE_MS) ?? STALE_MS / 2;
 
 /** `flock(2)` operation bits (Linux / macOS / BSD). */
 const LOCK_EX = 2;
@@ -208,13 +212,12 @@ export async function acquireFileLock(
 
 /** Canonical filesystem-safe id for a lock key. */
 function lockId(key: unknown): string {
-  const stable = object
-    .toOneOrMany(key)
-    .map((part) => object.toStableKey(part))
+  const stable = toOneOrMany(key)
+    .map((part) => toStableKey(part))
     .join("\u0000");
   // Short digest so paths stay well under OS limits; collisions are fine — they
   // only merge critical sections that already shared a key string.
-  return hash.fnvHash(stable);
+  return fnvHash(stable);
 }
 
 /**
@@ -225,7 +228,7 @@ function lockId(key: unknown): string {
  * callers fall through to the next backend. A miss is cached too, so a process
  * that cannot flock never retries the load.
  */
-const resolveFlock = functionUtils.memoize(async (): Promise<FlockFn | undefined> => {
+const resolveFlock = memoize(async (): Promise<FlockFn | undefined> => {
   if (process.platform === "win32") return undefined;
   if (!process.versions.bun) return undefined;
 
@@ -240,7 +243,7 @@ const resolveFlock = functionUtils.memoize(async (): Promise<FlockFn | undefined
     });
     return lib.symbols.flock;
   } catch (cause) {
-    logger.debug("flock FFI unavailable", { error: errorUtils.toError(cause) });
+    logger.debug("flock FFI unavailable", { error: toError(cause) });
     return undefined;
   }
 });
@@ -282,7 +285,7 @@ async function waitForFlock(
       onWait();
     }
     assertBeforeDeadline(lockPath, deadline);
-    await asyncUtils.sleep(POLL_MS);
+    await sleep(POLL_MS);
   }
 }
 
@@ -333,13 +336,13 @@ async function acquireLockDirectory(
       });
     } catch (cause) {
       const err = cause as NodeJS.ErrnoException;
-      if (err.code !== "ELOCKED") throw errorUtils.toError(cause);
+      if (err.code !== "ELOCKED") throw toError(cause);
       if (!waiting) {
         waiting = true;
         onWait();
       }
       assertBeforeDeadline(lockPath, deadline);
-      await asyncUtils.sleep(POLL_MS);
+      await sleep(POLL_MS);
     }
   }
 }

@@ -1,6 +1,6 @@
 /** Cross-process coordination for generated workspace mutations. */
 import { resolve } from "node:path";
-import * as fileLock from "@dbx-tools/core/file-lock";
+import { withFileLock } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 
 const MUTATION_LOCK_SCOPE = "dbx-tools-workspace-mutation";
@@ -36,7 +36,7 @@ export async function withWorkspaceMutationLock<T>(
   }
   let waitLogTimer: ReturnType<typeof setInterval> | undefined;
   try {
-    return await fileLock.withFileLock(
+    return await withFileLock(
       [MUTATION_LOCK_SCOPE, repository],
       async () => {
         if (check && !(await check())) {

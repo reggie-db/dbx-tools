@@ -3,10 +3,9 @@
 // `useSearch` (or any `SearchResult`) and it renders a scored, index-tagged
 // list; pass `renderHit` to control a row. Styled with AppKit tokens.
 
+import { Badge, cn } from "@databricks/appkit-ui/react";
 import type { SearchHit } from "@dbx-tools/shared-search";
 import type { ReactNode } from "react";
-
-import { Badge, cn } from "../../react/index.ts";
 
 /** Props for {@link SearchResults}. */
 export interface SearchResultsProps {

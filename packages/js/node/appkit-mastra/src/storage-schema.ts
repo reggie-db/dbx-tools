@@ -8,7 +8,7 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
+import { toIdentifierWithOptions } from "@dbx-tools/shared-core";
 
 const SCHEMA_PREFIX = "mastra_";
 const MAX_PG_IDENTIFIER_LEN = 63;
@@ -19,7 +19,7 @@ const MAX_PG_IDENTIFIER_LEN = 63;
  */
 export function agentStorageSchemaName(agentId: string): string {
   const maxSlugLen = MAX_PG_IDENTIFIER_LEN - SCHEMA_PREFIX.length;
-  const slug = stringUtils.toIdentifierWithOptions(
+  const slug = toIdentifierWithOptions(
     {
       delimiter: "_",
       maxLength: maxSlugLen,
@@ -30,7 +30,7 @@ export function agentStorageSchemaName(agentId: string): string {
   );
   const body =
     slug ||
-    stringUtils.toIdentifierWithOptions(
+    toIdentifierWithOptions(
       {
         delimiter: "_",
         maxLength: maxSlugLen,

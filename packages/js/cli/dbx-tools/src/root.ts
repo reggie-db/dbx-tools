@@ -6,7 +6,7 @@
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { projectUtils } from "@dbx-tools/core";
-import { functionUtils } from "@dbx-tools/shared-core";
+import { memoize } from "@dbx-tools/shared-core";
 
 /**
  * Walk upward from `startDir` for `.projenrc.ts`. If none is found, try git
@@ -52,7 +52,7 @@ export function needsToolchain(root: string): boolean {
 }
 
 /** Async, memoized root lookup from the process cwd at first use. */
-export const workspaceRoot = functionUtils.memoize(() => findWorkspaceRoot());
+export const workspaceRoot = memoize(() => findWorkspaceRoot());
 
 /** Short label for log output (`basename` of the resolved root). */
 export function rootLabel(root: string): string {

@@ -4,7 +4,7 @@ import {
   ModelClass,
   type ReasoningEffort,
   type ServingEndpointSummary,
-} from "@dbx-tools/shared-model/contracts";
+} from "@dbx-tools/shared-model";
 
 import { compareVersionTuples, supportsToolsByFamily, versionTuple } from "./classify.ts";
 

@@ -12,10 +12,13 @@ import {
   parseResourcePath as parseLakebaseResourcePath,
   parseSslMode as parseLakebaseSslMode,
   SslMode,
-} from "@dbx-tools/lakebase/address";
-import * as hash from "@dbx-tools/shared-core/hash";
-import * as object from "@dbx-tools/shared-core/object";
-import * as stringUtils from "@dbx-tools/shared-core/string-utils";
+} from "@dbx-tools/lakebase";
+import {
+  fnvHashWithOptions,
+  toOneOrMany,
+  toStableKey,
+  toIdentifierWithOptions,
+} from "@dbx-tools/shared-core";
 
 const SIGNED_BIGINT_BITS = 64;
 const MAX_CHANNEL_LENGTH = 63;
@@ -29,28 +32,27 @@ export function advisoryLockId(key: unknown, explicit = false): string {
 
 function resolveAdvisoryLockId(key: unknown): bigint {
   if (typeof key === "bigint") return BigInt.asIntN(SIGNED_BIGINT_BITS, key);
-  const parts = object.toOneOrMany(key);
+  const parts = toOneOrMany(key);
   const digest = createHash("sha256");
   parts.forEach((part, index) => {
     if (index > 0) digest.update(Buffer.from([0]));
-    digest.update(object.toStableKey(part), "utf8");
+    digest.update(toStableKey(part), "utf8");
   });
   return digest.digest().readBigInt64BE(0);
 }
 
 /** Derive a legal deterministic Postgres channel name from structured input. */
 export function channelName(value: unknown): string {
-  const parts = object.toOneOrMany(value);
-  const suffix = hash.fnvHashWithOptions(
+  const parts = toOneOrMany(value);
+  const suffix = fnvHashWithOptions(
     { length: CHANNEL_HASH_LENGTH },
-    parts.map((part) => object.toStableKey(part)).join("\u0000"),
+    parts.map((part) => toStableKey(part)).join("\u0000"),
   );
   const labelled = parts.filter((part) => {
     const type = typeof part;
     return type === "string" || type === "number" || type === "boolean" || type === "bigint";
   });
-  const body = stringUtils
-    .toIdentifierWithOptions({ delimiter: "_" }, ...labelled)
+  const body = toIdentifierWithOptions({ delimiter: "_" }, ...labelled)
     .slice(0, MAX_CHANNEL_LENGTH - suffix.length - 1)
     .replace(/_+$/, "");
   const prefix = /^[A-Za-z_]/.test(body) ? body : `${CHANNEL_FALLBACK}_${body}`;

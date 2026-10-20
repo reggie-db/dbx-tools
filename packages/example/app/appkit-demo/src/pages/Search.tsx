@@ -7,7 +7,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
 import { useSearch } from "@dbx-tools/ui/search/react";
 import type { SearchHit } from "@dbx-tools/ui/search/react";
 import { ArrowUpRightIcon, SearchIcon, SparklesIcon, XIcon } from "lucide-react";

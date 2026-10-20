@@ -2,8 +2,6 @@ import type { RequestContext } from "@mastra/client-js";
 import type { UIMessage } from "ai";
 import type { ChatStatus, MessageFeedback, PendingApproval, QueuedSteer } from "../react/types.ts";
 
-export type { QueuedSteer } from "../react/types.ts";
-
 /** A queued steer plus the application context captured when it was submitted. */
 export type SessionQueuedSteer = QueuedSteer & {
   requestContext?: RequestContext;

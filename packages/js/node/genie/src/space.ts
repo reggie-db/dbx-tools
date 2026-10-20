@@ -22,9 +22,14 @@
  */
 
 import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { errorUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
-import { genieModel, type CreateGenieSpaceRequest, type GenieSpace } from "@dbx-tools/shared-genie";
+import { type ContextLike, toContext } from "@dbx-tools/appkit";
+import { log, toError, errorContext, parse, sequence, firstNonEmpty } from "@dbx-tools/shared-core";
+import {
+  type CreateGenieSpaceRequest,
+  type GenieSpace,
+  CreateGenieSpaceRequestSchema,
+  GenieSpaceSchema,
+} from "@dbx-tools/shared-genie";
 
 const logger = log.logger("genie/space");
 
@@ -50,7 +55,7 @@ export interface GetGenieSpaceOptions {
    * External cancellation. Accepts a WHATWG `AbortSignal` or a fully-built SDK
    * `Context` (see `databricks.ContextLike`).
    */
-  context?: databricks.ContextLike;
+  context?: ContextLike;
 }
 
 /** Options for creating a Genie space with explicit workspace identity. */
@@ -58,7 +63,7 @@ export interface CreateGenieSpaceOptions {
   /** Workspace client whose identity owns the new space. */
   workspaceClient?: WorkspaceClient;
   /** External cancellation. */
-  context?: databricks.ContextLike;
+  context?: ContextLike;
 }
 
 /** Create a Genie space from one validated serialized definition. */
@@ -66,9 +71,9 @@ export async function createGenieSpace(
   input: CreateGenieSpaceRequest,
   options?: CreateGenieSpaceOptions,
 ): Promise<GenieSpace> {
-  const request = genieModel.CreateGenieSpaceRequestSchema.parse(input);
+  const request = CreateGenieSpaceRequestSchema.parse(input);
   const client = options?.workspaceClient ?? createWorkspaceClient();
-  const context = options?.context ? databricks.toContext(options.context) : undefined;
+  const context = options?.context ? toContext(options.context) : undefined;
   const raw = await client.apiClient.request(
     {
       path: "/api/2.0/genie/spaces",
@@ -79,7 +84,7 @@ export async function createGenieSpace(
     },
     context,
   );
-  return genieModel.GenieSpaceSchema.parse(raw);
+  return GenieSpaceSchema.parse(raw);
 }
 
 /**
@@ -102,7 +107,7 @@ export async function getGenieSpace(
 ): Promise<GenieSpace> {
   const client = options?.workspaceClient ?? createWorkspaceClient();
   const serialized = options?.serialized !== false;
-  const ctx = options?.context ? databricks.toContext(options.context) : undefined;
+  const ctx = options?.context ? toContext(options.context) : undefined;
   const request = (includeSerialized: boolean): Promise<unknown> =>
     client.apiClient.request(
       {
@@ -122,11 +127,11 @@ export async function getGenieSpace(
     if (!serialized || !isSerializedSpaceForbidden(err)) throw err;
     logger.debug("serialized-space:forbidden", {
       spaceId,
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     raw = await request(false);
   }
-  return genieModel.GenieSpaceSchema.parse(raw);
+  return GenieSpaceSchema.parse(raw);
 }
 
 /**
@@ -136,7 +141,7 @@ export async function getGenieSpace(
  * SDK surfaces the error code without always carrying a status.
  */
 function isSerializedSpaceForbidden(err: unknown): boolean {
-  const context = errorUtils.errorContext(err);
+  const context = errorContext(err);
   return (
     context.hasStatusCode(403) ||
     context.hasMessage("permission denied") ||
@@ -165,7 +170,7 @@ interface SerializedSampleQuestion {
 export function genieSampleQuestions(space: GenieSpace): string[] {
   const serialized = space.serialized_space;
   if (!serialized) return [];
-  const parsed = json.parse(serialized);
+  const parsed = parse(serialized);
   if (parsed === undefined) {
     logger.warn("serialized-space:parse-error", { spaceId: space.space_id });
     return [];
@@ -175,9 +180,8 @@ export function genieSampleQuestions(space: GenieSpace): string[] {
   if (!Array.isArray(sampleQuestions)) return [];
 
   return [
-    ...object
-      .sequence(sampleQuestions as SerializedSampleQuestion[])
-      .map((entry) => stringUtils.firstNonEmpty(entry?.question))
+    ...sequence(sampleQuestions as SerializedSampleQuestion[])
+      .map((entry) => firstNonEmpty(entry?.question))
       .nonNull()
       .distinct(),
   ];

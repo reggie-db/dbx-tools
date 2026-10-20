@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
+import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project-js.ts";
 import { PACKAGE_TAG_MIXINS } from "../src/tags.ts";
 
 it("generates React libraries with peer-owned runtimes", () => {

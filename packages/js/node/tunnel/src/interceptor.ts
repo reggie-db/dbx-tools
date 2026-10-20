@@ -17,7 +17,7 @@
  */
 
 import type { Interceptor, InterceptorContext } from "@dbx-tools/appkit";
-import { errorUtils, log, object, options as sharedOptions } from "@dbx-tools/shared-core";
+import { log, toError, toNumber, tcpPortOrZeroSchema } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { installFrp, resolveFrpConfig, superviseFrp, writeFrpConfig } from "./frp.ts";
 import { startPathProxy } from "./path-proxy.ts";
@@ -26,8 +26,7 @@ import { installPortr, resolvePortrConfig, supervisePortr, writePortrConfig } fr
 const logger = log.logger("tunnel:interceptor");
 
 const text = (description: string) => z.string().trim().min(1).optional().describe(description);
-const port = (description: string) =>
-  sharedOptions.tcpPortOrZeroSchema.optional().describe(description);
+const port = (description: string) => tcpPortOrZeroSchema.optional().describe(description);
 
 export const TunnelTransportSchema = z
   .enum(["portr", "frp", "both"])
@@ -102,7 +101,7 @@ export function resolveTunnelTransport(transport?: string): TunnelTransport {
 
 /** Resolve the public port portr should target: explicit, else the Apps contract. */
 function resolvePublicPort(port?: number): number {
-  return port ?? object.toNumber(process.env.DATABRICKS_APP_PORT) ?? 8000;
+  return port ?? toNumber(process.env.DATABRICKS_APP_PORT) ?? 8000;
 }
 
 /**
@@ -179,7 +178,7 @@ export function tunnelInterceptor(
       for (const result of results) {
         if (result.status === "rejected") {
           logger.error("tunnel failed to start", {
-            error: errorUtils.toError(result.reason),
+            error: toError(result.reason),
           });
           continue;
         }

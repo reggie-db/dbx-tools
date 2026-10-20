@@ -12,9 +12,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
-import { bin, configUtils, exec } from "@dbx-tools/core";
-import type { ChildProcessResult, ChildProcessTerminationOptions } from "@dbx-tools/core/exec";
-import { log, options as sharedOptions, stringUtils } from "@dbx-tools/shared-core";
+import { ensure, parseVersion, string, text, spawnSync, spawn } from "@dbx-tools/core";
+import type { ChildProcessResult, ChildProcessTerminationOptions } from "@dbx-tools/core";
+import { log, tcpPortOrZeroSchema, dedent } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
@@ -52,7 +52,7 @@ export const PortrOptionsSchema = z
     subdomain: z.string().trim().min(1).optional().describe("Portr subdomain."),
     sshUrl: z.string().trim().min(1).optional().describe("Portr SSH control endpoint."),
     token: z.string().trim().min(1).optional().describe("Portr authentication token."),
-    port: sharedOptions.tcpPortOrZeroSchema.describe("Public listener port."),
+    port: tcpPortOrZeroSchema.describe("Public listener port."),
   })
   .strict()
   .describe("Portr tunnel resolution options.");
@@ -68,8 +68,8 @@ export type PortrOptions = z.input<typeof PortrOptionsSchema>;
 export function resolvePortrConfig(opts: PortrOptions): PortrConfig | undefined {
   const options = PortrOptionsSchema.parse(opts);
   // PORTR_* is upstream portr's own namespace, so it keeps its name.
-  const token = configUtils.string(options.token, "PORTR_TOKEN");
-  const domain = configUtils.string(options.publicDomain, "TUNNEL_PUBLIC_DOMAIN", TUNNEL_CONFIG);
+  const token = string(options.token, "PORTR_TOKEN");
+  const domain = string(options.publicDomain, "TUNNEL_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   if (!token) return undefined;
   let subdomain = options.subdomain;
   let server: string | undefined;
@@ -77,9 +77,9 @@ export function resolvePortrConfig(opts: PortrOptions): PortrConfig | undefined 
     subdomain ??= domain.split(".")[0];
     server = domain.slice(domain.indexOf(".") + 1);
   }
-  server ??= configUtils.text("PORTR_SERVER");
+  server ??= text("PORTR_SERVER");
   if (!subdomain || !server || server === domain) return undefined;
-  const sshUrl = configUtils.string(options.sshUrl, "PORTR_SSH_URL") ?? `${server}:4444`;
+  const sshUrl = string(options.sshUrl, "PORTR_SSH_URL") ?? `${server}:4444`;
   return { subdomain, server, sshUrl, token, port: options.port };
 }
 
@@ -106,13 +106,13 @@ function portrDownloadUrl(): string {
 /** Install portr when absent and return the environment used by its process. */
 export async function installPortr(options: PortrInstallOptions = {}): Promise<NodeJS.ProcessEnv> {
   const homeDir = options.homeDir ?? os.homedir();
-  const context = await bin.ensure("portr", portrDownloadUrl, {
+  const context = await ensure("portr", portrDownloadUrl, {
     autoUnpackage: true,
     homeDir,
     minVersion: PORTR_MIN_VERSION,
     selector: ({ source }) => join(source, "portr"),
     versionParser: (output) => {
-      const version = bin.parseVersion(output);
+      const version = parseVersion(output);
       return version === PORTR_VERSION ? version : undefined;
     },
   });
@@ -148,7 +148,7 @@ export async function writePortrConfig(
     `
     // ============================================================================
   );
-  const contents = stringUtils.dedent(template, { trimEnd: false });
+  const contents = dedent(template, { trimEnd: false });
   await writeFile(path, contents);
 }
 
@@ -159,14 +159,14 @@ export function startPortr(
   options: ChildProcessTerminationOptions = {},
 ): ChildProcessResult {
   // Reclaim the subdomain from any portr left by a previous boot in this container.
-  exec.spawnSync("pkill", ["-x", "portr"], {
+  spawnSync("pkill", ["-x", "portr"], {
     stdin: "ignore",
     stdout: "ignore",
     stderr: "ignore",
   });
 
   logger.info(`portr tunneling https://${config.subdomain}.${config.server} -> :${config.port}`);
-  return exec.spawn("portr", ["start"], {
+  return spawn("portr", ["start"], {
     ...options,
     env: childEnv,
     stdin: "inherit",

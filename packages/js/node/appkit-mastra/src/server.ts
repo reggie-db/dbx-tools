@@ -6,9 +6,24 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { errorUtils, hash, http, log, object, stringUtils, token } from "@dbx-tools/shared-core";
-import { feedback, thread } from "@dbx-tools/shared-mastra";
-import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra/resume";
+import { requestUserEmail, requestUserId } from "@dbx-tools/appkit";
+import {
+  log,
+  toError,
+  id,
+  parseCookies,
+  type Logger,
+  sequence,
+  toIdentifierWithOptions,
+  trimToNull,
+  getAccessTokenScopes,
+} from "@dbx-tools/shared-core";
+import {
+  MLFLOW_TRACE_ID_HEADER,
+  THREAD_ID_HEADER,
+  THREAD_ID_QUERY,
+  isStaleMastraResumeError,
+} from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
@@ -34,7 +49,6 @@ import {
   FOLLOW_UP_RUN_ID_KEY,
   FOLLOW_UP_USER_TEXT_KEY,
 } from "./follow-up-suggestions.ts";
-import { requestUserEmail, requestUserId } from "./identity.ts";
 import { initializeRequestMlflowTraceInfo } from "./mlflow.ts";
 import { MASTRA_ORIGIN_KEY } from "./request-context.ts";
 import {
@@ -198,7 +212,7 @@ export async function createRequestContext(
   // Stamped AFTER the user so an explicit resource id wins over the ambient
   // identity `stampRequestContextUser` defaulted to.
   if (options.resourceId) requestContext.set(MASTRA_RESOURCE_ID_KEY, options.resourceId);
-  requestContext.set(MASTRA_REQUEST_ID_KEY, options.requestId ?? hash.id());
+  requestContext.set(MASTRA_REQUEST_ID_KEY, options.requestId ?? id());
   return requestContext;
 }
 
@@ -208,7 +222,7 @@ export async function createRequestContext(
  * session cookie (`appkit_<plugin-name>_session_id`).
  */
 export class MastraServer extends ExpressMastraServer {
-  private log: log.Logger;
+  private log: Logger;
   /**
    * Whether to stamp the MLflow trace-id header on responses.
    */
@@ -299,7 +313,7 @@ export class MastraServer extends ExpressMastraServer {
     if (requestContext.get(MASTRA_REQUEST_ID_KEY)) return;
     const headerValue = req.headers["x-request-id"];
     const upstream = Array.isArray(headerValue) ? headerValue[0] : headerValue;
-    const requestId = upstream?.trim() || hash.id();
+    const requestId = upstream?.trim() || id();
     requestContext.set(MASTRA_REQUEST_ID_KEY, requestId);
     res.setHeader("X-Request-Id", requestId);
   }
@@ -310,9 +324,7 @@ export class MastraServer extends ExpressMastraServer {
    */
   configureRequestContextScopes(req: express.Request, requestContext: RequestContext) {
     const scopes = [
-      ...object
-        .sequence(token.getAccessTokenScopes(req), token.getAccessTokenScopes(req, "authorization"))
-        .distinct(),
+      ...sequence(getAccessTokenScopes(req), getAccessTokenScopes(req, "authorization")).distinct(),
     ];
     requestContext.set(MASTRA_SCOPES_KEY, scopes);
   }
@@ -332,10 +344,10 @@ export class MastraServer extends ExpressMastraServer {
    */
   configureMlflowTraceId(res: express.Response) {
     if (!this.mlflowFeedback || res.headersSent) return;
-    if (res.getHeader(feedback.MLFLOW_TRACE_ID_HEADER)) return;
+    if (res.getHeader(MLFLOW_TRACE_ID_HEADER)) return;
     const traceId = trace.getActiveSpan()?.spanContext().traceId;
     if (!traceId || traceId === INVALID_TRACE_ID) return;
-    res.setHeader(feedback.MLFLOW_TRACE_ID_HEADER, `tr-${traceId}`);
+    res.setHeader(MLFLOW_TRACE_ID_HEADER, `tr-${traceId}`);
   }
 
   /**
@@ -367,8 +379,8 @@ export class MastraServer extends ExpressMastraServer {
       requestContext.set(MASTRA_THREAD_ID_KEY, requested);
       return;
     }
-    const cookies = http.parseCookies(req.headers.cookie);
-    const cookieName = stringUtils.toIdentifierWithOptions(
+    const cookies = parseCookies(req.headers.cookie);
+    const cookieName = toIdentifierWithOptions(
       { delimiter: "_", distinct: true },
       "appkit",
       this.config.name!,
@@ -376,7 +388,7 @@ export class MastraServer extends ExpressMastraServer {
     );
     let sessionId = cookies[cookieName];
     if (!sessionId) {
-      sessionId = hash.id();
+      sessionId = id();
       res.cookie(cookieName, sessionId, {
         httpOnly: true,
         sameSite: "lax",
@@ -394,11 +406,11 @@ export class MastraServer extends ExpressMastraServer {
    * back to the session cookie.
    */
   private readRequestedThreadId(req: express.Request): string | null {
-    const headerValue = req.headers[thread.THREAD_ID_HEADER];
-    const queryValue = req.query[thread.THREAD_ID_QUERY];
+    const headerValue = req.headers[THREAD_ID_HEADER];
+    const queryValue = req.query[THREAD_ID_QUERY];
     return (
-      stringUtils.trimToNull(Array.isArray(headerValue) ? headerValue[0] : headerValue) ??
-      stringUtils.trimToNull(Array.isArray(queryValue) ? queryValue[0] : queryValue)
+      trimToNull(Array.isArray(headerValue) ? headerValue[0] : headerValue) ??
+      trimToNull(Array.isArray(queryValue) ? queryValue[0] : queryValue)
     );
   }
 
@@ -526,7 +538,7 @@ export function attachStaleResumeRecovery(app: express.Express): void {
       }
       logger.warn("ignored stale mastra resume", {
         path: req.path,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
       if (res.headersSent) {
         res.end();

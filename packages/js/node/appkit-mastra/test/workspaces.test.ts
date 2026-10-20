@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, describe, it } from "node:test";
 import { CacheManager, type WorkspaceClient } from "@databricks/appkit";
-import type { FilesCacheExports } from "@dbx-tools/appkit/files-cache";
-import { log } from "@dbx-tools/shared-core";
+import type { FilesCacheExports } from "@dbx-tools/appkit";
+import { logger } from "@dbx-tools/shared-core";
 import { MemoryFileSystem, type CacheValue, type FileSystemCache } from "@dbx-tools/shared-fs";
 import { isEventedAgent } from "@mastra/core/agent/durable";
 import { RequestContext } from "@mastra/core/request-context";
@@ -770,7 +770,7 @@ describe("agent workspace selection", () => {
     const durable = await buildAgents({
       config: { agents: { analyst: { instructions: "Answer directly." } } },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
     const attached = await buildAgents({
       config: {
@@ -778,7 +778,7 @@ describe("agent workspace selection", () => {
         agents: { analyst: { instructions: "Answer directly." } },
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     assert.equal(isEventedAgent(durable.agents.analyst), true);
@@ -796,7 +796,7 @@ describe("agent workspace selection", () => {
         styleInstructions: false,
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const instructions = await built.agents.analyst?.getInstructions();
@@ -834,7 +834,7 @@ describe("agent workspace selection", () => {
         styleInstructions: false,
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const requestContext = new RequestContext();
@@ -889,7 +889,7 @@ describe("agent workspace selection", () => {
         styleInstructions: false,
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const requestContext = new RequestContext();
@@ -962,7 +962,7 @@ describe("agent workspace selection", () => {
         styleInstructions: false,
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
     const requestContext = new RequestContext();
     const tools = await built.agents.analyst?.listTools({ requestContext });
@@ -1017,7 +1017,7 @@ describe("agent workspace selection", () => {
         styleInstructions: false,
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     try {
@@ -1085,7 +1085,7 @@ describe("agent workspace selection", () => {
         styleInstructions: false,
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     try {
@@ -1130,7 +1130,7 @@ describe("agent workspace selection", () => {
         styleInstructions: false,
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const instructions = await built.agents.analyst?.getInstructions();
@@ -1166,7 +1166,7 @@ describe("agent workspace selection", () => {
         styleInstructions: false,
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const instructions = await built.agents.analyst?.getInstructions();
@@ -1193,7 +1193,7 @@ describe("agent workspace selection", () => {
         },
       },
       context: { getPlugins: () => new Map() },
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const bound = await built.agents.analyst?.getWorkspace();
@@ -1213,7 +1213,7 @@ describe("agent workspace selection", () => {
         },
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     assert.equal(await built.agents.analyst?.getWorkspace(), undefined);
@@ -1231,7 +1231,7 @@ describe("agent workspace selection", () => {
         },
       },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const options = await built.agents.analyst?.getDefaultOptions();
@@ -1242,7 +1242,7 @@ describe("agent workspace selection", () => {
     const built = await buildAgents({
       config: {},
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const processors = await built.agents[built.defaultAgentId]?.listConfiguredInputProcessors();
@@ -1262,7 +1262,7 @@ describe("agent workspace selection", () => {
     const built = await buildAgents({
       config: {},
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
       standardSkills: [
         createSkill({
           name: "dbx-tools",
@@ -1285,7 +1285,7 @@ describe("agent workspace selection", () => {
     const built = await buildAgents({
       config: { workspaceSkills: false },
       context: undefined,
-      log: log.logger("test/agents"),
+      log: logger("test/agents"),
     });
 
     const processors = await built.agents[built.defaultAgentId]?.listConfiguredInputProcessors();

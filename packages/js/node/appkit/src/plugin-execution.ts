@@ -1,7 +1,7 @@
 /** AppKit-specific adapters over the shared intercepted-execution contract. */
 
 import { ExecutionError } from "@databricks/appkit";
-import { errorUtils, execution, type Logger } from "@dbx-tools/shared-core";
+import { type Logger, toError, type Executor, run } from "@dbx-tools/shared-core";
 
 /** Inputs for one plugin operation routed through AppKit interceptors. */
 export interface RunPluginExecutionOptions<T, Settings> {
@@ -9,7 +9,7 @@ export interface RunPluginExecutionOptions<T, Settings> {
   readonly logger: Pick<Logger, "warn">;
   readonly operation: string;
   readonly settings: Settings;
-  readonly execute: execution.Executor<Settings>;
+  readonly execute: Executor<Settings>;
   readonly fn: (signal?: AbortSignal) => Promise<T>;
   readonly signal?: AbortSignal;
 }
@@ -21,7 +21,7 @@ export interface RunPluginExecutionOptions<T, Settings> {
 export function runPluginExecution<T, Settings>(
   options: RunPluginExecutionOptions<T, Settings>,
 ): Promise<T> {
-  return execution.run({
+  return run({
     operation: options.operation,
     settings: options.settings,
     execute: options.execute,
@@ -32,7 +32,7 @@ export function runPluginExecution<T, Settings>(
       options.logger.warn("execution-failed", {
         operation: failure.operation,
         status: failure.status,
-        error: errorUtils.toError(failure.message),
+        error: toError(failure.message),
       });
       return new ExecutionError(`${options.plugin}: ${failure.operation} failed`, {
         context: { operation: failure.operation, status: failure.status },

@@ -1,7 +1,7 @@
-import { errorUtils, hash, log } from "@dbx-tools/shared-core";
-import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra/resume";
+import { getAuthStatus } from "@dbx-tools/shared-auth";
+import { hash, log, toError } from "@dbx-tools/shared-core";
+import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
-import { getAuthStatus } from "@dbx-tools/ui/auth/react";
 import { useBrand } from "@dbx-tools/ui/branding/react";
 import type { RequestContext } from "@mastra/client-js";
 import type { FileUIPart, UIMessage } from "ai";
@@ -660,7 +660,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           }
           logger.warn("chat stream disconnected; reconnecting to background run", {
             runId,
-            error: errorUtils.toError(initialError),
+            error: toError(initialError),
           });
           const messagesBeforeReplay = getSession(threadId).messages;
           writeMessages(
@@ -705,7 +705,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         if (getSession(threadId).runToken !== token) return;
         if (isStaleMastraResumeError(caught)) {
           logger.warn("ignored stale mastra resume", {
-            error: errorUtils.toError(caught),
+            error: toError(caught),
           });
           updateSession(threadId, (session) => {
             if (session.runToken !== token) return session;
@@ -725,11 +725,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           return;
         }
         logger.error("stream error", {
-          error: errorUtils.toError(caught),
+          error: toError(caught),
         });
         updateSession(threadId, (session) => ({
           ...session,
-          error: errorUtils.toError(caught),
+          error: toError(caught),
           status: "error",
           abortController: session.abortController === controller ? null : session.abortController,
           runId: runIdRef.current,
@@ -905,7 +905,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           .catch((error: unknown) => {
             logger.warn("failed to abort background run", {
               runId: current.runId,
-              error: errorUtils.toError(error),
+              error: toError(error),
             });
           });
       }
@@ -948,7 +948,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
               .catch((error: unknown) => {
                 logger.warn("failed to observe interrupted background run", {
                   runId,
-                  error: errorUtils.toError(error),
+                  error: toError(error),
                 });
               })
           : undefined;
@@ -962,7 +962,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
               .catch((error: unknown) => {
                 logger.warn("failed to abort interrupted background run", {
                   runId,
-                  error: errorUtils.toError(error),
+                  error: toError(error),
                 });
               })
           : undefined;
@@ -1105,7 +1105,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       logger.info("history cleared", { threadId });
     } catch (error) {
       logger.error("history clear error", {
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
     }
     resetSession(threadId, true);
@@ -1164,7 +1164,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("thread delete error", {
           threadId,
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
         setRemovedThreadIds((prev) => {
           if (!prev.has(threadId)) return prev;
@@ -1207,7 +1207,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("thread rename error", {
           threadId,
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
         setRenamedThreads((prev) => {
           if (!(threadId in prev)) return prev;
@@ -1250,11 +1250,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       .catch((error: unknown) => {
         logger.error("regenerate cleanup error", {
           threadId,
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
         updateSession(threadId, (session) => ({
           ...session,
-          error: errorUtils.toError(error),
+          error: toError(error),
           status: "error",
         }));
       });
@@ -1321,7 +1321,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("conversation export error", {
           format,
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
       }
     },
@@ -1343,7 +1343,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("message export error", {
           format,
-          error: errorUtils.toError(error),
+          error: toError(error),
         });
       }
     },

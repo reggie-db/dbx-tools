@@ -9,8 +9,6 @@
 import type { Predicate } from "@dbx-tools/shared-core";
 import type { IConstruct, IMixin as ConstructsMixin } from "constructs";
 
-export type { ConstructsMixin };
-
 /**
  * Builds a {@link ConstructsMixin} from `supports` and `applyTo` callbacks.
  *

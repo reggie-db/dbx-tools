@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { model } from "@dbx-tools/shared-model";
+import { ModelClass } from "@dbx-tools/shared-model";
 
 import {
   CHAT_CLASS_ORDER,
@@ -10,8 +10,6 @@ import {
   MODEL_CLASS_ORDER,
   parseModelClass,
 } from "../src/classes.ts";
-
-const { ModelClass } = model;
 
 describe("CHAT_CLASS_ORDER / MODEL_CLASS_ORDER", () => {
   it("orders chat bands most-capable first, embedding excluded from the ladder", () => {

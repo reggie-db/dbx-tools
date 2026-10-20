@@ -23,8 +23,8 @@ import {
 } from "@databricks/appkit";
 import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
 import { ToolRegistryPlugin } from "@dbx-tools/appkit";
-import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
-import { log, stringUtils } from "@dbx-tools/shared-core";
+import type { AgentToolExecutionContext } from "@dbx-tools/appkit";
+import { log, trimToNull } from "@dbx-tools/shared-core";
 import {
   MODEL_ENV,
   SERVING_ENDPOINT_ENV,
@@ -134,9 +134,9 @@ export class WebSearchPlugin extends ToolRegistryPlugin<WebSearchPluginConfig> {
    */
   static getResourceRequirements(config: WebSearchPluginConfig): ResourceRequirement[] {
     const pinned =
-      stringUtils.trimToNull(config.model) ??
-      stringUtils.trimToNull(process.env[MODEL_ENV]) ??
-      stringUtils.trimToNull(process.env[SERVING_ENDPOINT_ENV]);
+      trimToNull(config.model) ??
+      trimToNull(process.env[MODEL_ENV]) ??
+      trimToNull(process.env[SERVING_ENDPOINT_ENV]);
     return pinned === null ? [] : [{ ...SERVING_ENDPOINT_RESOURCE, required: true }];
   }
 

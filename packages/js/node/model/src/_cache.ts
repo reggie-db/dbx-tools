@@ -1,4 +1,4 @@
-import { projectCache } from "@dbx-tools/cache/cache";
+import { projectCache } from "@dbx-tools/cache";
 
 /** Memory-first cache for endpoint catalogues, isolated for full invalidation. */
 export const modelCatalogueCache = projectCache("model-catalog", {

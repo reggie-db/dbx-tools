@@ -1,5 +1,3 @@
-import { stringUtils } from "@dbx-tools/shared-core";
-import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import {
   Button,
   DropdownMenu,
@@ -17,7 +15,9 @@ import {
   Slider,
   Spinner,
   useIsMobile,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { toLabel } from "@dbx-tools/shared-core";
+import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ChatModelOption, ChatViewProps } from "./types.ts";
@@ -38,7 +38,7 @@ interface ModelSelectorProps {
 
 /** Convert a normalized family token into a compact menu label. */
 function familyLabel(family: string): string {
-  return family.length <= 3 ? family.toUpperCase() : stringUtils.toLabel(family);
+  return family.length <= 3 ? family.toUpperCase() : toLabel(family);
 }
 
 /** Resolve the label shown for a model endpoint. */
@@ -57,7 +57,7 @@ const ReasoningControl = ({
   onChange: NonNullable<ChatViewProps["onReasoningEffortChange"]>;
 }) => {
   const selectedIndex = value === undefined ? 0 : Math.max(0, efforts.indexOf(value) + 1);
-  const selectedLabel = value === undefined ? "Auto" : stringUtils.toLabel(value);
+  const selectedLabel = value === undefined ? "Auto" : toLabel(value);
 
   return (
     <div className="space-y-2 px-2 py-1.5">

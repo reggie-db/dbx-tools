@@ -22,8 +22,7 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import * as errorUtils from "@dbx-tools/shared-core/error-utils";
-import * as log from "@dbx-tools/shared-core/log";
+import { toError, log } from "@dbx-tools/shared-core";
 import extractZip from "extract-zip";
 import { coerce, gte, type SemVer } from "semver";
 import { x as extractTar } from "tar";
@@ -247,7 +246,7 @@ async function isValidBin(path: string, options: BinOptions): Promise<boolean> {
   } catch (cause) {
     logger.debug("binary version command failed", {
       path,
-      error: errorUtils.toError(cause),
+      error: toError(cause),
     });
     return false;
   }

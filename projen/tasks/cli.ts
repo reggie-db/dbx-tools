@@ -2,8 +2,8 @@
 import { basename, extname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { addArgs, parseArgs, type CliArgsOptions } from "@dbx-tools/cli-args";
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { projectUtils } from "@dbx-tools/core";
+import { tokenize } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { z } from "zod";
 
@@ -15,7 +15,7 @@ export function taskName(moduleUrl: string): string {
 
 /** Config resolution shared by task schemas. */
 export function taskCliArgsOptions(moduleUrl: string): CliArgsOptions {
-  const prefix = [...stringUtils.tokenize(taskName(moduleUrl))].join("_").toUpperCase();
+  const prefix = [...tokenize(taskName(moduleUrl))].join("_").toUpperCase();
   return {
     cwd: process.cwd(),
     prefix: `PROJEN_${prefix}`,

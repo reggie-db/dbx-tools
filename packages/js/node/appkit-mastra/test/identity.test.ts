@@ -1,15 +1,10 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { ConfigurationError } from "@databricks/appkit";
+import { DEFAULT_IDENTITY_MODE, IDENTITY_MODES, useServicePrincipal } from "@dbx-tools/appkit";
 
 import { MASTRA_CONFIG_SCHEMA } from "../src/config.ts";
-import {
-  DEFAULT_IDENTITY_MODE,
-  IDENTITY_ENV,
-  IDENTITY_MODES,
-  resolveIdentityMode,
-  useServicePrincipal,
-} from "../src/identity.ts";
+import { IDENTITY_ENV, resolveIdentityMode } from "../src/identity.ts";
 
 /** Minimal Express-ish request carrying only the headers the resolver reads. */
 function req(headers: Record<string, string>): { header(name: string): string | undefined } {

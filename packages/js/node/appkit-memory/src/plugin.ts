@@ -13,12 +13,12 @@ import {
   type ToolRegistry,
 } from "@databricks/appkit/beta";
 import {
-  appkit as dbxAppkit,
-  toolkitEntries,
   ToolRegistryPlugin,
   type AgentToolExecutionContext,
+  tryGetExecutionContext,
+  entries,
 } from "@dbx-tools/appkit";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { errorContext, logger } from "@dbx-tools/shared-core";
 
 import {
   RecallMemoryInputSchema,
@@ -50,7 +50,7 @@ export class MemoryPlugin extends ToolRegistryPlugin<MemoryPluginConfig> {
     config: { schema: MEMORY_CONFIG_SCHEMA },
   };
 
-  private readonly logger = log.logger(this);
+  private readonly logger = logger(this);
   private resolved?: ResolvedMemoryPluginConfig;
   private databricks?: DatabricksMemoryRuntime;
   private graphiti?: GraphitiMemoryBackend;
@@ -96,7 +96,7 @@ export class MemoryPlugin extends ToolRegistryPlugin<MemoryPluginConfig> {
   }
 
   async toolkit(options?: ToolkitOptions): Promise<Record<string, ToolkitEntry>> {
-    return toolkitEntries.entries("memory", this.getAgentTools(), {
+    return entries("memory", this.getAgentTools(), {
       ...options,
       prefix: options?.prefix ?? "",
     });
@@ -205,7 +205,7 @@ export class MemoryPlugin extends ToolRegistryPlugin<MemoryPluginConfig> {
     return (
       configured !== false &&
       configured.mode === "auto" &&
-      errorUtils.errorContext(error).hasStatusCode(403, 404)
+      errorContext(error).hasStatusCode(403, 404)
     );
   }
 
@@ -239,7 +239,7 @@ export class MemoryPlugin extends ToolRegistryPlugin<MemoryPluginConfig> {
 
   private actorId(resourceId?: string): string {
     if (resourceId) return resourceId;
-    const context = dbxAppkit.tryGetExecutionContext();
+    const context = tryGetExecutionContext();
     if (!context) throw new Error("Memory tools require an AppKit execution context");
     return "userId" in context ? context.userId : context.serviceUserId;
   }

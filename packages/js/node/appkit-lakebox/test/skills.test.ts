@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
-import { workspaces } from "@dbx-tools/appkit-mastra";
+import { databricksWorkspace } from "@dbx-tools/appkit-mastra";
 import { createLakeboxServiceRequestSchema } from "@dbx-tools/shared-lakebox";
 import { RequestContext } from "@mastra/core/request-context";
 import { AppKitLakeboxPlugin } from "../src/plugin.ts";
@@ -45,7 +45,7 @@ describe("lakeboxSkillMounts", () => {
   });
 
   it("routes generic app, page, and service deployment requests to the HTML recipe", async () => {
-    const workspace = workspaces.databricksWorkspace({
+    const workspace = databricksWorkspace({
       assistantPaths: false,
       sandbox: false,
       extraSkillMounts: lakeboxSkillMounts(),
@@ -65,7 +65,7 @@ describe("lakeboxSkillMounts", () => {
   });
 
   it("routes broad Lakebox capability and demo questions to the showcase", async () => {
-    const workspace = workspaces.databricksWorkspace({
+    const workspace = databricksWorkspace({
       assistantPaths: false,
       sandbox: false,
       extraSkillMounts: lakeboxSkillMounts(),

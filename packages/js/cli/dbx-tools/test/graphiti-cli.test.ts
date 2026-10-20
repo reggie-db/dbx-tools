@@ -2,24 +2,16 @@ import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import {
-  options as graphitiOptions,
-  runtime as graphitiRuntime,
-} from "@dbx-tools/appkit-memory/graphiti";
+import { runtime as graphitiRuntime } from "@dbx-tools/appkit-memory/graphiti";
 import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
-import { serviceTrayIcon } from "@dbx-tools/cli-service/icon";
+import { serviceTrayIcon } from "@dbx-tools/cli-service";
+import { GRAPHITI_DEFAULTS } from "@dbx-tools/shared-graphiti";
 import { PACKAGE_VERSION } from "../index.ts";
 import { buildProgram, graphitiServiceDefinition } from "../src/graphiti/cli.ts";
-import { GRAPHITI_DEFAULTS, GraphitiOptionsSchema } from "../src/graphiti/options.ts";
 
 type GraphitiRuntimeOptions = graphitiRuntime.GraphitiRuntimeOptions;
-const RuntimeGraphitiOptionsSchema = graphitiOptions.GraphitiOptionsSchema;
 
 describe("Graphiti CLI", () => {
-  it("exposes the exact shared Graphiti option schema", () => {
-    assert.equal(GraphitiOptionsSchema, RuntimeGraphitiOptionsSchema);
-  });
-
   it("constructs without starting Graphiti", () => {
     const program = buildProgram();
     const help = program.helpInformation();

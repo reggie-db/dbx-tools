@@ -38,18 +38,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./config": {
-        "types": "./lib/src/config.d.ts",
-        "default": "./lib/src/config.js"
-      },
-      "./options": {
-        "types": "./lib/src/options.d.ts",
-        "default": "./lib/src/options.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -63,13 +51,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./config": "./src/config.ts",
-    "./options": "./src/options.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

@@ -1,7 +1,7 @@
-import { brandUtils } from "@dbx-tools/shared-core";
-import { getAuthStatus, logout as logoutAuth } from "@dbx-tools/ui/auth/react";
+import { Button, Separator } from "@databricks/appkit-ui/react";
+import { browser, getAuthStatus } from "@dbx-tools/shared-auth";
+import { defaultBrandContext } from "@dbx-tools/shared-core";
 import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui/branding/react";
-import { Button, Separator } from "@dbx-tools/ui/react";
 import { MastraAssistant, useMastraAssistant } from "@dbx-tools/ui-mastra/react";
 import { CircleHelpIcon, LoaderCircleIcon, LogOutIcon, PanelRightCloseIcon } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -71,7 +71,7 @@ type RouteDef = {
 };
 
 const docsUrl = (path: string): string =>
-  new URL(path, brandUtils.defaultBrandContext.links.documentation).toString();
+  new URL(path, defaultBrandContext.links.documentation).toString();
 
 const BASE_ROUTES: RouteDef[] = [
   {
@@ -236,7 +236,7 @@ const Nav = ({
 
   useEffect(() => {
     let cancelled = false;
-    void getAuthStatus()
+    void browsertus()
       .then((status) => {
         if (!cancelled) setLogoutEnabled(status.enabled && status.authenticated);
       })
@@ -252,7 +252,7 @@ const Nav = ({
     if (!logoutEnabled || loggingOut) return;
     setLoggingOut(true);
     try {
-      if (!(await logoutAuth())) setLoggingOut(false);
+      if (!(await browser.logout())) setLoggingOut(false);
     } catch {
       setLoggingOut(false);
     }
@@ -541,7 +541,7 @@ const GuideList = ({ title, items }: { title: string; items: readonly string[] }
 
 const App = () => {
   useVisualViewportShell();
-  const [brandContext, setBrandContext] = useState(brandUtils.defaultBrandContext);
+  const [brandContext, setBrandContext] = useState(defaultBrandContext);
   const routes: RouteDef[] = [
     ...BASE_ROUTES,
     {

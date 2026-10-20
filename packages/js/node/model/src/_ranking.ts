@@ -1,15 +1,14 @@
-import { object, stringUtils } from "@dbx-tools/shared-core";
+import { isRecord, trimToUndefined } from "@dbx-tools/shared-core";
 import {
   ModelClass as ModelClassValues,
   type ModelClass as ModelClassType,
   type ModelQuery,
   type RankedModel,
   type ServingEndpointSummary,
-} from "@dbx-tools/shared-model/contracts";
-import { toModelDisplayName } from "@dbx-tools/shared-model/display";
+} from "@dbx-tools/shared-model";
+import { toModelDisplayName } from "@dbx-tools/shared-model";
 import Fuse from "fuse.js";
 
-import { modelStatusFor } from "./_retirement.ts";
 import { classesAtOrBelow, CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./classes.ts";
 import {
   classifyEndpoints,
@@ -23,6 +22,7 @@ import {
   modelReasoningEfforts,
   modelServiceNames,
 } from "./policy.ts";
+import { modelStatusFor } from "./retirement.ts";
 
 type ModelClass = ModelClassType;
 const ModelClass = ModelClassValues;
@@ -201,49 +201,46 @@ export function classifyEndpointClasses(
 export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpointSummary[] {
   const summaries = endpoints.flatMap((value) => {
     const endpoint = record(value);
-    const name = stringUtils.trimToUndefined(endpoint.name);
+    const name = trimToUndefined(endpoint.name);
     if (!name) return [];
     const entities = arrayValue(record(endpoint.config).served_entities).map(record);
     const identities = [
       name,
       ...entities.flatMap((entity) =>
         [
-          stringUtils.trimToUndefined(entity.entity_name),
-          stringUtils.trimToUndefined(record(entity.foundation_model).name),
-          stringUtils.trimToUndefined(record(entity.external_model).name),
+          trimToUndefined(entity.entity_name),
+          trimToUndefined(record(entity.foundation_model).name),
+          trimToUndefined(record(entity.external_model).name),
         ].filter((identity): identity is string => Boolean(identity)),
       ),
     ];
     const modelServiceName = entities
       .map(
         (entity) =>
-          stringUtils.trimToUndefined(record(entity.foundation_model).name) ??
-          stringUtils.trimToUndefined(entity.entity_name),
+          trimToUndefined(record(entity.foundation_model).name) ??
+          trimToUndefined(entity.entity_name),
       )
       .find(Boolean);
     const foundationModels = entities.map((entity) => record(entity.foundation_model));
     const family =
-      foundationModels
-        .map((model) => stringUtils.trimToUndefined(model.model_class))
-        .find(Boolean) ?? identities.map(modelFamily).find(Boolean);
+      foundationModels.map((model) => trimToUndefined(model.model_class)).find(Boolean) ??
+      identities.map(modelFamily).find(Boolean);
     const reasoningEfforts =
       identities.map(modelReasoningEfforts).sort((left, right) => right.length - left.length)[0] ??
       [];
     const profile = entities.map(modelProfile).find(Boolean);
     const capabilitiesRecord = record(endpoint.capabilities);
     const foundationDescription = foundationModels
-      .map((model) => stringUtils.trimToUndefined(model.description))
+      .map((model) => trimToUndefined(model.description))
       .find(Boolean);
-    const description = stringUtils.trimToUndefined(endpoint.description) ?? foundationDescription;
+    const description = trimToUndefined(endpoint.description) ?? foundationDescription;
     const summary: ServingEndpointSummary = {
       name,
       displayName: toModelDisplayName(name, providedDisplayName(endpoint, entities)),
       ...(family ? { family } : {}),
-      ...(stringUtils.trimToUndefined(endpoint.task)
-        ? { task: stringUtils.trimToUndefined(endpoint.task) }
-        : {}),
-      ...(stringUtils.trimToUndefined(record(endpoint.state).ready)
-        ? { state: stringUtils.trimToUndefined(record(endpoint.state).ready) }
+      ...(trimToUndefined(endpoint.task) ? { task: trimToUndefined(endpoint.task) } : {}),
+      ...(trimToUndefined(record(endpoint.state).ready)
+        ? { state: trimToUndefined(record(endpoint.state).ready) }
         : {}),
       ...(description ? { description } : {}),
       supportsTools:
@@ -336,21 +333,19 @@ function providedDisplayName(
 ): string | undefined {
   for (const tag of arrayValue(endpoint.tags).map(record)) {
     if (!["display_name", "displayName", "name"].includes(String(tag.key))) continue;
-    const value = stringUtils.trimToUndefined(tag.value);
+    const value = trimToUndefined(tag.value);
     if (value) return value;
   }
   return (
     entities
-      .map((entity) => stringUtils.trimToUndefined(record(entity.foundation_model).display_name))
+      .map((entity) => trimToUndefined(record(entity.foundation_model).display_name))
       .find(Boolean) ??
-    entities
-      .map((entity) => stringUtils.trimToUndefined(record(entity.external_model).name))
-      .find(Boolean)
+    entities.map((entity) => trimToUndefined(record(entity.external_model).name)).find(Boolean)
   );
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return object.isRecord(value) ? value : {};
+  return isRecord(value) ? value : {};
 }
 
 function arrayValue(value: unknown): unknown[] {

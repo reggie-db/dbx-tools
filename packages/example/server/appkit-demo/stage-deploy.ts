@@ -38,12 +38,9 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { workspaceManifest as workspaceManifestUtils } from "@dbx-tools/projen";
 import { buildPythonProjects } from "@dbx-tools/projen/python-release-packaging";
-import {
-  applyPublishConfig,
-  materializeWorkspaceManifest,
-  packNpmPackage,
-} from "@dbx-tools/projen/release-packaging";
+import { applyPublishConfig, packNpmPackage } from "@dbx-tools/projen/release-packaging";
 import { parse, stringify } from "yaml";
 
 const serverDir = dirname(fileURLToPath(import.meta.url));
@@ -75,7 +72,7 @@ const rootWorkspace = parse(readFileSync(join(repoRoot, "pnpm-workspace.yaml"), 
   packages?: string[];
 };
 const allowBuilds = rootWorkspace.allowBuilds ?? {};
-const deployPkg = materializeWorkspaceManifest(
+const deployPkg = workspaceManifestUtils.materializeWorkspaceManifest(
   {
     name: "dbx-tools-demo-app",
     version,
@@ -144,7 +141,7 @@ function externalPeerDependencies(packages: readonly WorkspacePackage[]): Record
   const selected = new Set(packages.map((workspacePackage) => workspacePackage.name));
   const peers = new Map<string, string>();
   for (const workspacePackage of packages) {
-    const manifest = materializeWorkspaceManifest(
+    const manifest = workspaceManifestUtils.materializeWorkspaceManifest(
       workspacePackage.manifest,
       workspaceManifest,
     ) as Record<string, unknown>;

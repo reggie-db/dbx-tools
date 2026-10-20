@@ -53,90 +53,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./appkit": {
-        "types": "./lib/src/appkit.d.ts",
-        "default": "./lib/src/appkit.js"
-      },
-      "./brand-context": {
-        "types": "./lib/src/brand-context.d.ts",
-        "default": "./lib/src/brand-context.js"
-      },
-      "./bundle": {
-        "types": "./lib/src/bundle.d.ts",
-        "default": "./lib/src/bundle.js"
-      },
-      "./cache-storage": {
-        "types": "./lib/src/cache-storage.d.ts",
-        "default": "./lib/src/cache-storage.js"
-      },
-      "./databricks": {
-        "types": "./lib/src/databricks.d.ts",
-        "default": "./lib/src/databricks.js"
-      },
-      "./files-cache": {
-        "types": "./lib/src/files-cache.d.ts",
-        "default": "./lib/src/files-cache.js"
-      },
-      "./identity": {
-        "types": "./lib/src/identity.d.ts",
-        "default": "./lib/src/identity.js"
-      },
-      "./interceptor": {
-        "types": "./lib/src/interceptor.d.ts",
-        "default": "./lib/src/interceptor.js"
-      },
-      "./lakebase-resolver": {
-        "types": "./lib/src/lakebase-resolver.d.ts",
-        "default": "./lib/src/lakebase-resolver.js"
-      },
-      "./migration": {
-        "types": "./lib/src/migration.d.ts",
-        "default": "./lib/src/migration.js"
-      },
-      "./openapi-tool": {
-        "types": "./lib/src/openapi-tool.d.ts",
-        "default": "./lib/src/openapi-tool.js"
-      },
-      "./pgaddress": {
-        "types": "./lib/src/pgaddress.d.ts",
-        "default": "./lib/src/pgaddress.js"
-      },
-      "./plugin-execution": {
-        "types": "./lib/src/plugin-execution.d.ts",
-        "default": "./lib/src/plugin-execution.js"
-      },
-      "./plugin-registry": {
-        "types": "./lib/src/plugin-registry.d.ts",
-        "default": "./lib/src/plugin-registry.js"
-      },
-      "./provision": {
-        "types": "./lib/src/provision.d.ts",
-        "default": "./lib/src/provision.js"
-      },
-      "./request-tags": {
-        "types": "./lib/src/request-tags.d.ts",
-        "default": "./lib/src/request-tags.js"
-      },
-      "./telemetry": {
-        "types": "./lib/src/telemetry.d.ts",
-        "default": "./lib/src/telemetry.js"
-      },
-      "./tool-operations": {
-        "types": "./lib/src/tool-operations.d.ts",
-        "default": "./lib/src/tool-operations.js"
-      },
-      "./tool-provider": {
-        "types": "./lib/src/tool-provider.d.ts",
-        "default": "./lib/src/tool-provider.js"
-      },
-      "./toolkit-entries": {
-        "types": "./lib/src/toolkit-entries.d.ts",
-        "default": "./lib/src/toolkit-entries.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -150,31 +66,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./appkit": "./src/appkit.ts",
-    "./brand-context": "./src/brand-context.ts",
-    "./bundle": "./src/bundle.ts",
-    "./cache-storage": "./src/cache-storage.ts",
-    "./databricks": "./src/databricks.ts",
-    "./files-cache": "./src/files-cache.ts",
-    "./identity": "./src/identity.ts",
-    "./interceptor": "./src/interceptor.ts",
-    "./lakebase-resolver": "./src/lakebase-resolver.ts",
-    "./migration": "./src/migration.ts",
-    "./openapi-tool": "./src/openapi-tool.ts",
-    "./pgaddress": "./src/pgaddress.ts",
-    "./plugin-execution": "./src/plugin-execution.ts",
-    "./plugin-registry": "./src/plugin-registry.ts",
-    "./provision": "./src/provision.ts",
-    "./request-tags": "./src/request-tags.ts",
-    "./telemetry": "./src/telemetry.ts",
-    "./tool-operations": "./src/tool-operations.ts",
-    "./tool-provider": "./src/tool-provider.ts",
-    "./toolkit-entries": "./src/toolkit-entries.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

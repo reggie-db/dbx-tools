@@ -14,8 +14,8 @@ import {
   type PluginManifest,
 } from "@databricks/appkit";
 import type { IndexConfig, SearchRequest, SearchResponse } from "@databricks/appkit/beta";
-import { pluginRegistry } from "@dbx-tools/appkit";
-import { log, object, stringUtils } from "@dbx-tools/shared-core";
+import { require } from "@dbx-tools/appkit";
+import { log, isRecord, trimToNull } from "@dbx-tools/shared-core";
 import type { SearchDocument } from "@dbx-tools/shared-search";
 import type express from "express";
 import type { JSONSchema7 } from "json-schema";
@@ -96,8 +96,8 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
     const indexes = this.indexes();
     for (const index of indexes) this.validateAuth(index);
     this.context?.onLifecycle("setup:complete", async () => {
-      const lake = pluginRegistry.require(this.context, lakebase, this);
-      const schema = stringUtils.trimToNull(this.config.schema) ?? "public";
+      const lake = require(this.context, lakebase, this);
+      const schema = trimToNull(this.config.schema) ?? "public";
       this.servicePrincipalBackend = new LakebaseSearchBackend(lake.exports().pool, schema);
       this.userBackend = new LakebaseSearchBackend(
         { managedPool: () => lake.exports().pool },
@@ -125,9 +125,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
         try {
           const alias = routeParam(req.params.alias);
           const index = this.resolveIndex(alias);
-          const { columns: _untrustedColumns, ...request } = object.isRecord(req.body)
-            ? req.body
-            : {};
+          const { columns: _untrustedColumns, ...request } = isRecord(req.body) ? req.body : {};
           res.json(await this.routeRuntime(index, req).query(alias, request as SearchRequest));
         } catch (error) {
           res.status(400).json({
@@ -162,7 +160,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
           const alias = routeParam(req.params.alias);
           const index = this.resolveIndex(alias);
           const documents = Array.isArray(req.body?.documents)
-            ? req.body.documents.filter(object.isRecord)
+            ? req.body.documents.filter(isRecord)
             : [];
           res.json(await this.routeRuntime(index, req).addDocuments(alias, documents));
         },
@@ -211,7 +209,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
     const index = this.resolveIndex(alias);
     return this.requireBackend(index).addDocuments(
       index.indexName,
-      documents.filter(object.isRecord),
+      documents.filter(isRecord),
       index.config.textColumn ?? "text",
     );
   }
@@ -243,7 +241,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
   private indexes(): ResolvedLakebaseIndex[] {
     return Object.entries(this.config.indexes ?? {}).map(([alias, config]) => ({
       alias,
-      indexName: stringUtils.trimToNull(config.indexName) ?? alias,
+      indexName: trimToNull(config.indexName) ?? alias,
       config,
     }));
   }

@@ -8,8 +8,8 @@ import {
   AuthOptionsSchema,
   DatabricksAuthOptionsSchema,
   type DatabricksAuthOptions,
-} from "@dbx-tools/auth/config";
-import { stringUtils } from "@dbx-tools/shared-core";
+} from "@dbx-tools/auth";
+import { parseList } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 export const AuthCliOptionsSchema = z
@@ -25,9 +25,7 @@ export const AuthCliOptionsSchema = z
     scopes: z
       .preprocess(
         (value) =>
-          Array.isArray(value)
-            ? value.flatMap((entry) => stringUtils.parseList(String(entry)))
-            : value,
+          Array.isArray(value) ? value.flatMap((entry) => parseList(String(entry))) : value,
         z.array(z.string().trim().min(1)),
       )
       .default([])

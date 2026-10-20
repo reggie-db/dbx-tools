@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 /** Interactively remove generated files and installed dependency directories. */
 import { relative } from "node:path";
-import { log, stringUtils } from "@dbx-tools/shared-core";
+import { log, pluralize } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean.ts";
@@ -43,7 +43,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   if (yes) {
     const n = removePaths(targets);
     logger.success(
-      `removed ${stringUtils.pluralize(n, "path")} (${files.length} generated + ${nodeModules.length} node_modules) - ${regenHint(nodeModules.length > 0)}`,
+      `removed ${pluralize(n, "path")} (${files.length} generated + ${nodeModules.length} node_modules) - ${regenHint(nodeModules.length > 0)}`,
     );
     process.exit(0);
   }
@@ -83,7 +83,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
 
   const removedNodeModules = picked.some((p) => nodeModules.includes(p));
   const n = removePaths(picked);
-  clack.outro(`removed ${stringUtils.pluralize(n, "path")} - ${regenHint(removedNodeModules)}`);
+  clack.outro(`removed ${pluralize(n, "path")} - ${regenHint(removedNodeModules)}`);
 }
 
 await runTaskMain(import.meta, main);

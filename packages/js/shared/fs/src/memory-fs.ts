@@ -8,7 +8,7 @@
  * @module
  */
 
-import { hash } from "@dbx-tools/shared-core";
+import { fnvHash } from "@dbx-tools/shared-core";
 import {
   BaseFileSystem,
   FileSystemError,
@@ -49,7 +49,7 @@ export class MemoryFileSystem extends BaseFileSystem<"memory"> {
   constructor(options: MemoryFileSystemOptions = {}) {
     const root = options.root ?? "/memory";
     super({
-      id: options.id ?? `memory-${hash.fnvHash(normalizeFileSystemRoot(root))}`,
+      id: options.id ?? `memory-${fnvHash(normalizeFileSystemRoot(root))}`,
       backend: "memory",
       root,
       readOnly: options.readOnly,

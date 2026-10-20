@@ -12,7 +12,13 @@ import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { json, net, object, stringUtils } from "@dbx-tools/shared-core";
+import {
+  parseRecord,
+  type UrlBuilder,
+  urlBuilder,
+  isRecord,
+  trimToNull,
+} from "@dbx-tools/shared-core";
 import { parse as parseYaml } from "yaml";
 import { cachedRecord, statSync as fileStatSync } from "./file.ts";
 
@@ -26,7 +32,7 @@ const ROOT_MARKERS = [
 
 /** Resolve a blank, null, omitted, relative, or absolute cwd to an absolute path. */
 export function resolveWorkingDirectory(cwd?: string | null): string {
-  return resolve(stringUtils.trimToNull(cwd) ?? process.cwd());
+  return resolve(trimToNull(cwd) ?? process.cwd());
 }
 
 /** A command's stdout, classified as a filesystem path and/or a URL. */
@@ -43,7 +49,7 @@ export interface ProjectContext {
    * network URL - a non-blank scheme (not `file:`) AND a non-blank hostname.
    * Bare paths, scp-like `git@host:...` remotes, and `file:` URLs stay unset.
    */
-  readonly url?: net.UrlBuilder;
+  readonly url?: UrlBuilder;
 }
 
 /**
@@ -77,7 +83,7 @@ function projectContextCommandOutput(
     // synthesizes one (a bare `example.com` -> `https://…`, an absolute path ->
     // `http://localhost/…`), which would mislabel directory outputs and bare
     // tokens - so gate on the raw output already carrying a scheme + authority.
-    const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(output) ? net.urlBuilder(output) : undefined;
+    const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(output) ? urlBuilder(output) : undefined;
     return { output, path: pathStats ? output : undefined, pathStats, success: true, url };
   }
   return { output, success: result.status === 0 };
@@ -109,7 +115,7 @@ function projectCommand(command: string) {
   return {
     context,
     output(args: string[], cwd?: string, options?: ProjectCommandOptions): string | undefined {
-      return stringUtils.trimToNull(context(args, cwd, options).output) ?? undefined;
+      return trimToNull(context(args, cwd, options).output) ?? undefined;
     },
     root(args: string[], cwd: string): string | undefined {
       const parsed = context(args, cwd);
@@ -151,7 +157,7 @@ function npmRoot(cwd?: string): string | undefined {
 }
 
 function envDirectory(value: string | undefined): string | undefined {
-  const path = stringUtils.trimToNull(value);
+  const path = trimToNull(value);
   if (!path) return undefined;
   const resolved = resolve(path);
   return fileStatSync(resolved)?.isDirectory() ? resolved : undefined;
@@ -300,7 +306,7 @@ function repositoryUrlFromGh(cwd?: string): string | undefined {
     account.root,
     { cache: true, env: account.env },
   );
-  return stringUtils.trimToNull(json.parseRecord(out)?.url) ?? undefined;
+  return trimToNull(parseRecord(out)?.url) ?? undefined;
 }
 
 /** Resolve an ssh host alias (`~/.ssh/config`) to its effective `hostname` via `ssh -G`. */
@@ -373,7 +379,7 @@ export function resolveProjectGhAccount(
   options: ResolveProjectGhAccountOptions = {},
 ): ProjectGhAccount | undefined {
   const root = resolveWorkingDirectory(cwd);
-  const remoteName = stringUtils.trimToNull(options.remote) ?? "origin";
+  const remoteName = trimToNull(options.remote) ?? "origin";
   const key = JSON.stringify([root, remoteName, homedir(), process.env.GH_CONFIG_DIR ?? ""]);
   if (!options.refresh && projectGhAccountCache.has(key)) {
     return projectGhAccountCache.get(key) ?? undefined;
@@ -468,7 +474,7 @@ function repositoryUrlFromGit(cwd?: string): string | undefined {
   if (scp) https = `https://${scp[1]}/${scp[2]}`;
   https = https.replace(/^(ssh|git):\/\//, "https://");
 
-  let builder = net.urlBuilder(https);
+  let builder = urlBuilder(https);
   if (!builder) return undefined;
   // Drop any embedded `user[:pass]@` credentials.
   if (builder.username || builder.password) {
@@ -516,7 +522,7 @@ export type NpmRegistryOptions = {
   envVars?: boolean;
 };
 
-const npmRegistryCache = new Map<string, net.UrlBuilder | undefined>();
+const npmRegistryCache = new Map<string, UrlBuilder | undefined>();
 
 /**
  * The active npm registry as a chainable {@link net.UrlBuilder}.
@@ -529,7 +535,7 @@ const npmRegistryCache = new Map<string, net.UrlBuilder | undefined>();
 export function npmRegistry(
   cwd?: string | null,
   options?: NpmRegistryOptions,
-): net.UrlBuilder | undefined {
+): UrlBuilder | undefined {
   const resolved = resolveWorkingDirectory(cwd);
   const envVars = options?.envVars !== false;
   const overrideOnly = Boolean(options?.overrideOnly);
@@ -554,7 +560,7 @@ export function npmRegistry(
 function resolveNpmRegistry(
   cwd: string,
   options: { overrideOnly: boolean; envVars: boolean },
-): net.UrlBuilder | undefined {
+): UrlBuilder | undefined {
   for (const candidate of npmRegistryCandidates(cwd, options.envVars)) {
     const url = toRegistryUrl(candidate, options.overrideOnly);
     if (url) return url;
@@ -588,16 +594,16 @@ function* npmRegistryCandidates(cwd: string, envVars: boolean): Generator<string
 function toRegistryUrl(
   candidate: string | undefined,
   overrideOnly: boolean,
-): net.UrlBuilder | undefined {
-  const trimmed = stringUtils.trimToNull(candidate);
+): UrlBuilder | undefined {
+  const trimmed = trimToNull(candidate);
   if (!trimmed) return undefined;
-  const url = net.urlBuilder(trimmed);
+  const url = urlBuilder(trimmed);
   if (!url) return undefined;
   if (overrideOnly && isPublicNpmRegistry(url)) return undefined;
   return url;
 }
 
-function isPublicNpmRegistry(url: net.UrlBuilder): boolean {
+function isPublicNpmRegistry(url: UrlBuilder): boolean {
   return url.hostname === "registry.npmjs.org";
 }
 
@@ -650,7 +656,7 @@ function readYamlRegistry(path: string): string | undefined {
     const text = readTextFile(path);
     if (!text) return undefined;
     const parsed = parseYaml(text);
-    if (!object.isRecord(parsed)) return undefined;
+    if (!isRecord(parsed)) return undefined;
     const registry = yamlRegistry(parsed);
     return registry ? { registry } : undefined;
   })?.registry;
@@ -702,7 +708,7 @@ function parseBunfigRegistry(text: string): string | undefined {
 function yamlRegistry(data: Record<string, unknown>): string | undefined {
   if (typeof data.registry === "string") return data.registry;
   const registries = data.registries;
-  if (object.isRecord(registries) && typeof registries.default === "string") {
+  if (isRecord(registries) && typeof registries.default === "string") {
     return registries.default;
   }
   return undefined;
@@ -725,5 +731,5 @@ function stripTomlComment(line: string): string {
 
 function readPackageName(pkgPath: string): string | undefined {
   if (!fileStatSync(pkgPath)?.isFile()) return undefined;
-  return stringUtils.trimToNull(json.parseRecord(readFileSync(pkgPath, "utf8"))?.name) ?? undefined;
+  return trimToNull(parseRecord(readFileSync(pkgPath, "utf8"))?.name) ?? undefined;
 }

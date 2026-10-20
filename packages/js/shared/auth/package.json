@@ -39,34 +39,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./auth": {
-        "types": "./lib/src/auth.d.ts",
-        "default": "./lib/src/auth.js"
-      },
-      "./browser": {
-        "types": "./lib/src/browser.d.ts",
-        "default": "./lib/src/browser.js"
-      },
-      "./client": {
-        "types": "./lib/src/client.d.ts",
-        "default": "./lib/src/client.js"
-      },
-      "./config-schema": {
-        "types": "./lib/src/config-schema.d.ts",
-        "default": "./lib/src/config-schema.js"
-      },
-      "./config": {
-        "types": "./lib/src/config.d.ts",
-        "default": "./lib/src/config.js"
-      },
-      "./profile": {
-        "types": "./lib/src/profile.d.ts",
-        "default": "./lib/src/profile.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -80,17 +52,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./auth": "./src/auth.ts",
-    "./browser": "./src/browser.ts",
-    "./client": "./src/client.ts",
-    "./config-schema": "./src/config-schema.ts",
-    "./config": "./src/config.ts",
-    "./profile": "./src/profile.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

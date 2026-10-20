@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { type ServingEndpointSummary, ModelClass } from "@dbx-tools/shared-model";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
 import {
@@ -11,9 +11,8 @@ import {
   searchServingEndpoints,
   type WorkspaceClientLike,
 } from "../src/model-catalog.ts";
-import { lookupModels, resolveModel, selectModel } from "../src/resolve.ts";
-
-const { ModelClass } = model;
+import { selectModel } from "../src/resolve.ts";
+import { lookupModels, resolveModel } from "../src/selection.ts";
 
 const CHAT_TASK = "llm/v1/chat";
 const EMBEDDING_TASK = "llm/v1/embeddings";

@@ -1,11 +1,11 @@
-import { authTypeSchema, targetKindSchema } from "@dbx-tools/shared-auth/config-schema";
-import { options } from "@dbx-tools/shared-core";
+import { authTypeSchema, targetKindSchema } from "@dbx-tools/shared-auth";
+import { DatabricksOptionsSchema } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 const text = (description: string) => z.string().trim().min(1).optional().describe(description);
 const safeInteger = (description: string) =>
   z.coerce.number<number>().int().safe().describe(description);
-const authTypeOptionMeta = options.DatabricksOptionsSchema.shape.authType.meta() ?? {};
+const authTypeOptionMeta = DatabricksOptionsSchema.shape.authType.meta() ?? {};
 
 export const AuthOptionsSchema = z
   .object({
@@ -23,15 +23,15 @@ export interface AuthOptions extends z.input<typeof AuthOptionsSchema> {}
 
 export const DatabricksAuthOptionsSchema = z
   .object({
-    profile: options.DatabricksOptionsSchema.shape.profile,
-    host: options.DatabricksOptionsSchema.shape.host,
-    accountId: options.DatabricksOptionsSchema.shape.accountId,
-    workspaceId: options.DatabricksOptionsSchema.shape.workspaceId,
-    configFile: options.DatabricksOptionsSchema.shape.configFile,
-    clientId: options.DatabricksOptionsSchema.shape.clientId,
-    clientSecret: options.DatabricksOptionsSchema.shape.clientSecret,
-    accessToken: options.DatabricksOptionsSchema.shape.accessToken,
-    groupId: options.DatabricksOptionsSchema.shape.groupId,
+    profile: DatabricksOptionsSchema.shape.profile,
+    host: DatabricksOptionsSchema.shape.host,
+    accountId: DatabricksOptionsSchema.shape.accountId,
+    workspaceId: DatabricksOptionsSchema.shape.workspaceId,
+    configFile: DatabricksOptionsSchema.shape.configFile,
+    clientId: DatabricksOptionsSchema.shape.clientId,
+    clientSecret: DatabricksOptionsSchema.shape.clientSecret,
+    accessToken: DatabricksOptionsSchema.shape.accessToken,
+    groupId: DatabricksOptionsSchema.shape.groupId,
     authType: authTypeSchema
       .optional()
       .describe("Databricks authentication type.")

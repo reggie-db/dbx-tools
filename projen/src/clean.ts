@@ -19,8 +19,8 @@
  */
 import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { find } from "@dbx-tools/path";
-import { json } from "@dbx-tools/shared-core";
+import { findFiles } from "@dbx-tools/path";
+import { parseRecord } from "@dbx-tools/shared-core";
 import { isGenerated, makeWritable } from "./generated.ts";
 import { resolveRepoRoot, toPosix } from "./packages.ts";
 
@@ -39,11 +39,11 @@ const CLEAN_SKIP_FILES: ReadonlySet<string> = new Set([".gitignore"]);
  */
 async function nativeGeneratedFiles(root: string): Promise<string[]> {
   const files = new Set<string>();
-  for await (const manifestPath of find.findFiles("**/.projen/files.json", {
+  for await (const manifestPath of findFiles("**/.projen/files.json", {
     cwd: root,
     ignoreOptions: { dot: false },
   })) {
-    const manifest = json.parseRecord(readFileSync(resolve(root, manifestPath), "utf8"));
+    const manifest = parseRecord(readFileSync(resolve(root, manifestPath), "utf8"));
     const projectRoot = dirname(dirname(resolve(root, manifestPath)));
     const entries = manifest?.files;
     if (!Array.isArray(entries)) continue;
@@ -57,7 +57,7 @@ async function nativeGeneratedFiles(root: string): Promise<string[]> {
 export async function listGeneratedFiles(root: string = resolveRepoRoot()): Promise<string[]> {
   const rel = (f: string): string => toPosix(relative(root, f));
   const custom: string[] = [];
-  for await (const file of find.findFiles("**/*", { cwd: root })) {
+  for await (const file of findFiles("**/*", { cwd: root })) {
     const absolute = join(root, file);
     if (isGenerated(absolute)) custom.push(absolute);
   }
@@ -85,7 +85,7 @@ export async function listNodeModulesDirs(root: string = resolveRepoRoot()): Pro
   if (!existsSync(root)) return [];
   const rel = (f: string): string => toPosix(relative(root, f));
   const directories: string[] = [];
-  for await (const match of find.findFiles("**/node_modules", {
+  for await (const match of findFiles("**/node_modules", {
     cwd: root,
     ignoreOptions: { dot: false },
   })) {

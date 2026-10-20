@@ -8,7 +8,7 @@
  * @module
  */
 
-import { object, predicate, type Predicate, type PredicateFunction } from "@dbx-tools/shared-core";
+import { type Predicate, type PredicateFunction, sequence, create } from "@dbx-tools/shared-core";
 import { Minimatch } from "minimatch";
 
 /** Plain path predicate accepted anywhere a glob pattern can be supplied. */
@@ -36,7 +36,7 @@ function toTest(pattern: PathMatchInput): PathMatchPredicate {
 export function pathMatchTests(
   ...inputs: readonly (PathMatchInput | null | undefined)[]
 ): readonly PathMatchPredicate[] {
-  return object.sequence(inputs).nonNull().map(toTest).toArray();
+  return sequence(inputs).nonNull().map(toTest).toArray();
 }
 
 /**
@@ -51,8 +51,6 @@ export function toPathMatcher(
   ...inputs: readonly (PathMatchInput | null | undefined)[]
 ): PathMatcher {
   const tests = pathMatchTests(...inputs);
-  if (tests.length === 0) return predicate.create(() => false);
-  return tests
-    .slice(1)
-    .reduce<PathMatcher>((acc, test) => acc.or(test), predicate.create(tests[0]!));
+  if (tests.length === 0) return create(() => false);
+  return tests.slice(1).reduce<PathMatcher>((acc, test) => acc.or(test), create(tests[0]!));
 }

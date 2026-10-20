@@ -38,7 +38,7 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
+import { tokenizeWithOptions } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import * as dashboards from "./dashboards.ts";
 
@@ -369,9 +369,7 @@ export function humanizeStatus(status: MessageStatus): string {
     case "CANCELLED":
       return "Cancelled";
     default:
-      return [
-        ...stringUtils.tokenizeWithOptions({ capitalize: true, lowerCase: true }, status),
-      ].join(" ");
+      return [...tokenizeWithOptions({ capitalize: true, lowerCase: true }, status)].join(" ");
   }
 }
 

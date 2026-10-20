@@ -42,30 +42,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./cloud": {
-        "types": "./lib/src/cloud.d.ts",
-        "default": "./lib/src/cloud.js"
-      },
-      "./databricks-fs": {
-        "types": "./lib/src/databricks-fs.d.ts",
-        "default": "./lib/src/databricks-fs.js"
-      },
-      "./databricks-path": {
-        "types": "./lib/src/databricks-path.d.ts",
-        "default": "./lib/src/databricks-path.js"
-      },
-      "./net": {
-        "types": "./lib/src/net.d.ts",
-        "default": "./lib/src/net.js"
-      },
-      "./workspace-client": {
-        "types": "./lib/src/workspace-client.d.ts",
-        "default": "./lib/src/workspace-client.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -79,16 +55,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./cloud": "./src/cloud.ts",
-    "./databricks-fs": "./src/databricks-fs.ts",
-    "./databricks-path": "./src/databricks-path.ts",
-    "./net": "./src/net.ts",
-    "./workspace-client": "./src/workspace-client.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

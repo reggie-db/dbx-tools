@@ -4,7 +4,7 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
+import { escapeHtml, dedent } from "@dbx-tools/shared-core";
 import type { BrandPackage } from "@dbx-tools/shared-generator";
 
 function safeAsset(value: string | undefined): string | undefined {
@@ -22,13 +22,13 @@ function safeFontFamily(value: string): string {
 }
 
 function listItems(values: readonly string[]): string {
-  return values.map((value) => `<li>${stringUtils.escapeHtml(value)}</li>`).join("");
+  return values.map((value) => `<li>${escapeHtml(value)}</li>`).join("");
 }
 
 /** Render one responsive brand presentation with desktop and mobile mockups. */
 export function renderBrandShowcase(brandPackage: BrandPackage): string {
   const { brand, visualReferences } = brandPackage;
-  const html = stringUtils.escapeHtml;
+  const html = escapeHtml;
   const logo = safeAsset(brand.assets.logo.light) ?? safeAsset(brand.assets.icon.light);
   const icon = safeAsset(brand.assets.icon.light);
   const website = safeWebsite(brand.links.website);
@@ -75,7 +75,7 @@ export function renderBrandShowcase(brandPackage: BrandPackage): string {
   const headline = brand.tagline ?? brand.name;
 
   // prettier-ignore
-  return stringUtils.dedent(
+  return dedent(
     // ============================================================================
     /*html*/`
     <!doctype html>

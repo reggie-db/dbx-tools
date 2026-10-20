@@ -11,7 +11,7 @@
  * @module
  */
 
-import { json, object } from "@dbx-tools/shared-core";
+import { parse, isRecord } from "@dbx-tools/shared-core";
 import { maxSatisfying, satisfies, valid, validRange } from "semver";
 
 import { npmRegistry } from "./project-utils.ts";
@@ -330,7 +330,7 @@ function normalizeDependency(request: DependencyInfo): DependencyInfo {
 
 function parseSpecifierInput(name: string, value: unknown): DependencyInfo | undefined {
   if (typeof value === "string") return specifierToDependency(name, value);
-  if (!object.isRecord(value)) return undefined;
+  if (!isRecord(value)) return undefined;
   const version = typeof value.version === "string" ? value.version : undefined;
   const semverValue = typeof value.semver === "string" ? value.semver : undefined;
   const range = typeof value.range === "string" ? value.range : undefined;
@@ -347,7 +347,7 @@ function dependencyMap(
 }
 
 function parseDependencyField(value: unknown): Record<string, DependencyInfo> {
-  if (!object.isRecord(value)) return {};
+  if (!isRecord(value)) return {};
   const out: Record<string, DependencyInfo> = {};
   for (const [name, spec] of Object.entries(value)) {
     const parsed = parseSpecifierInput(name, spec);
@@ -563,7 +563,7 @@ async function fetchRegistryJson(url: string): Promise<unknown> {
   }).catch(() => undefined);
   if (!response?.ok) return undefined;
   const text = await response.text();
-  return json.parse(text);
+  return parse(text);
 }
 
 function createPackageInfoLookup(
@@ -587,7 +587,7 @@ async function loadPackageInfo(
   registryUrl?: string | URL,
 ): Promise<PackageInfo | undefined> {
   const packument = await fetchRegistryJson(packumentUrl(name, registryUrl));
-  if (!object.isRecord(packument)) return undefined;
+  if (!isRecord(packument)) return undefined;
   const versions = publishedVersions(packument);
   if (versions.length === 0) return undefined;
   return {
@@ -606,7 +606,7 @@ async function loadVersionDependencies(
   const doc = await fetchRegistryJson(
     `${packumentUrl(name, registryUrl)}/${encodeURIComponent(version)}`,
   );
-  if (!object.isRecord(doc)) return {};
+  if (!isRecord(doc)) return {};
   return stringMap(doc.dependencies);
 }
 
@@ -618,13 +618,13 @@ function publishedVersions(packument: Record<string, unknown>): string[] {
   if (Array.isArray(versions)) {
     return versions.filter((value): value is string => typeof value === "string");
   }
-  if (object.isRecord(versions)) return Object.keys(versions);
+  if (isRecord(versions)) return Object.keys(versions);
   return [];
 }
 
 function latestTag(packument: Record<string, unknown>): string | undefined {
   const tags = packument["dist-tags"];
-  if (!object.isRecord(tags) || typeof tags.latest !== "string") return undefined;
+  if (!isRecord(tags) || typeof tags.latest !== "string") return undefined;
   return tags.latest;
 }
 
@@ -632,20 +632,20 @@ function versionDependencies(
   packument: Record<string, unknown>,
 ): Record<string, Record<string, string>> {
   const versions = packument.versions;
-  if (!object.isRecord(versions)) {
+  if (!isRecord(versions)) {
     return typeof packument.version === "string"
       ? { [packument.version]: stringMap(packument.dependencies) }
       : {};
   }
   const out: Record<string, Record<string, string>> = {};
   for (const [version, value] of Object.entries(versions)) {
-    if (object.isRecord(value)) out[version] = stringMap(value.dependencies);
+    if (isRecord(value)) out[version] = stringMap(value.dependencies);
   }
   return out;
 }
 
 function stringMap(value: unknown): Record<string, string> {
-  if (!object.isRecord(value)) return {};
+  if (!isRecord(value)) return {};
   const out: Record<string, string> = {};
   for (const [name, spec] of Object.entries(value)) {
     if (typeof spec === "string") out[name] = spec;

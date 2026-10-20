@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { wire } from "@dbx-tools/shared-mastra";
+import { GENIE_CONVERSATION_PART_TYPE } from "@dbx-tools/shared-mastra";
 import { RequestContext } from "@mastra/client-js";
 import type { UIMessage } from "ai";
 import { GenieChatClient } from "../src/support/genie-client.ts";
@@ -41,7 +41,7 @@ describe("GenieChatClient", () => {
       return sseResponse([
         { type: "start" },
         {
-          type: wire.GENIE_CONVERSATION_PART_TYPE,
+          type: GENIE_CONVERSATION_PART_TYPE,
           data: { conversationId: "conv-1", messageId: "msg-1" },
           transient: true,
         },
@@ -85,7 +85,7 @@ describe("GenieChatClient", () => {
       }
       return sseResponse([
         {
-          type: wire.GENIE_CONVERSATION_PART_TYPE,
+          type: GENIE_CONVERSATION_PART_TYPE,
           data: { conversationId: "conv-1", messageId: "msg-1" },
           transient: true,
         },

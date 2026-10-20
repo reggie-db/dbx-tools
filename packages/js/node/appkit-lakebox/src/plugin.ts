@@ -14,16 +14,16 @@ import {
   type ToolRegistry,
 } from "@databricks/appkit/beta";
 import {
-  USER_EMAIL_HEADER,
-  USER_ID_HEADER,
-  appkit,
-  lakebaseResolver,
-  pluginRegistry,
-  toolkitEntries,
-  toolOperations,
   ToolRegistryPlugin,
   type AgentToolExecutionContext,
+  tryGetExecutionContext,
+  captureServicePrincipalPool,
+  require,
+  entries,
+  defineOperations,
+  toolRegistryFromOperations,
 } from "@dbx-tools/appkit";
+import { USER_ID_HEADER, USER_EMAIL_HEADER } from "@dbx-tools/shared-core";
 import {
   createLakeboxServiceOperationSchema,
   executeLakeboxCommandOperationSchema,
@@ -109,8 +109,8 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
 
   override async setup(): Promise<void> {
     this.context?.onLifecycle("setup:complete", async () => {
-      const pool = lakebaseResolver.captureServicePrincipalPool(
-        pluginRegistry.require(this.context, lakebase, "appkit-lakebox").exports().pool,
+      const pool = captureServicePrincipalPool(
+        require(this.context, lakebase, "appkit-lakebox").exports().pool,
       );
       this.runtime.initialize(
         createWorkspaceClient().config,
@@ -202,7 +202,7 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
 
   /** Returns selected AppKit toolkit entries backed by this plugin's agent tools. */
   toolkit(options?: ToolkitOptions): Record<string, ToolkitEntry> {
-    return toolkitEntries.entries(LAKEBOX_PLUGIN_NAME, this.getAgentTools(), {
+    return entries(LAKEBOX_PLUGIN_NAME, this.getAgentTools(), {
       ...options,
       prefix: options?.prefix ?? "",
     });
@@ -263,7 +263,7 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
   operations(identity?: string, origin?: string) {
     const user = () => identity ?? this.executionIdentity();
     const presentService = (value: LakeboxService) => omitLog(withServiceOrigin(value, origin));
-    return toolOperations.defineOperations({
+    return defineOperations({
       get_lakebox: {
         schema: getLakeboxOperationSchema,
         execute: async (_input, signal) => {
@@ -313,11 +313,11 @@ export class AppKitLakeboxPlugin extends ToolRegistryPlugin<LakeboxPluginConfig>
   }
 
   private createToolRegistry(identity?: string, origin?: string): ToolRegistry {
-    return toolOperations.toolRegistryFromOperations(this.operations(identity, origin));
+    return toolRegistryFromOperations(this.operations(identity, origin));
   }
 
   private executionIdentity(): string {
-    const context = appkit.tryGetExecutionContext();
+    const context = tryGetExecutionContext();
     if (!context) throw new Error("Lakebox tools require an AppKit execution context");
     return "userId" in context ? context.userId : context.serviceUserId;
   }

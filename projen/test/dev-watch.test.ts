@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY } from "../src/dev-watch.ts";
-import { DBXToolsNodeProject } from "../src/project.ts";
+import { DBXToolsNodeProject } from "../src/project-js.ts";
 import {
   devWatchDirectories,
   devWatchTargets,

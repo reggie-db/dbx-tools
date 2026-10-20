@@ -17,14 +17,14 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
+import { toDescription } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 /**
  * Description the model reads for `web_search`. Shared by the Mastra tool and
  * the AppKit tool provider so both hosts describe the tool identically.
  */
-export const WEB_SEARCH_TOOL_DESCRIPTION = stringUtils.toDescription(`
+export const WEB_SEARCH_TOOL_DESCRIPTION = toDescription(`
   Search the web for current information and get an answer synthesized from
   live results, with the sources it used. Pass a natural-language query;
   the search runs inside a web-search-capable model (chosen independently
@@ -34,7 +34,7 @@ export const WEB_SEARCH_TOOL_DESCRIPTION = stringUtils.toDescription(`
 `);
 
 /** Description the model reads for `web_fetch`. Shared like {@link WEB_SEARCH_TOOL_DESCRIPTION}. */
-export const WEB_FETCH_TOOL_DESCRIPTION = stringUtils.toDescription(`
+export const WEB_FETCH_TOOL_DESCRIPTION = toDescription(`
   Fetch a single web page and return its readable contents. Pass an
   absolute URL (including https://); set format to "html" for raw markup
   instead of extracted text. Use it to read a page returned by web_search
@@ -53,7 +53,7 @@ export const webSearchRequestSchema = z.object({
     .string()
     .optional()
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Optional calling-model preference. The tool always tries the highest
         web-search-capable Gemini first. When Gemini is unavailable, a matching
         GPT endpoint wins before the highest-ranked GPT fallback.
@@ -108,7 +108,7 @@ export const webFetchRequestSchema = z.object({
     .enum(["text", "html"])
     .optional()
     .describe(
-      stringUtils.toDescription(`
+      toDescription(`
         Return format: "text" (default) strips the page to readable plain
         text; "html" returns the raw response body. Prefer "text" unless you
         need the markup.

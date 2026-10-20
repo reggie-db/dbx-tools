@@ -32,7 +32,7 @@ import {
   ModelClass as ModelClassValues,
   type ModelClass as ModelClassType,
   type ServingEndpointSummary,
-} from "@dbx-tools/shared-model/contracts";
+} from "@dbx-tools/shared-model";
 
 type ModelClass = ModelClassType;
 const ModelClass = ModelClassValues;

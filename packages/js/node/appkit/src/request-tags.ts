@@ -5,7 +5,7 @@ export type RequestTagValue = string | number | boolean;
 
 type RequestTagMap = Map<string, RequestTagValue>;
 
-const STORE_KEY = Symbol.for("@dbx-tools/appkit/request-tags");
+const STORE_KEY = Symbol.for("@dbx-tools/appkit");
 const globalStore = globalThis as typeof globalThis & {
   [STORE_KEY]?: WeakMap<object, RequestTagMap>;
 };

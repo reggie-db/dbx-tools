@@ -50,54 +50,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./client": {
-        "types": "./lib/src/client.d.ts",
-        "default": "./lib/src/client.js"
-      },
-      "./config": {
-        "types": "./lib/src/config.d.ts",
-        "default": "./lib/src/config.js"
-      },
-      "./index-options": {
-        "types": "./lib/src/index-options.d.ts",
-        "default": "./lib/src/index-options.js"
-      },
-      "./lakebase-plugin": {
-        "types": "./lib/src/lakebase-plugin.d.ts",
-        "default": "./lib/src/lakebase-plugin.js"
-      },
-      "./lakebase": {
-        "types": "./lib/src/lakebase.d.ts",
-        "default": "./lib/src/lakebase.js"
-      },
-      "./native": {
-        "types": "./lib/src/native.d.ts",
-        "default": "./lib/src/native.js"
-      },
-      "./plugin": {
-        "types": "./lib/src/plugin.d.ts",
-        "default": "./lib/src/plugin.js"
-      },
-      "./query": {
-        "types": "./lib/src/query.d.ts",
-        "default": "./lib/src/query.js"
-      },
-      "./runtime": {
-        "types": "./lib/src/runtime.d.ts",
-        "default": "./lib/src/runtime.js"
-      },
-      "./schema": {
-        "types": "./lib/src/schema.d.ts",
-        "default": "./lib/src/schema.js"
-      },
-      "./tool": {
-        "types": "./lib/src/tool.d.ts",
-        "default": "./lib/src/tool.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -111,22 +63,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./client": "./src/client.ts",
-    "./config": "./src/config.ts",
-    "./index-options": "./src/index-options.ts",
-    "./lakebase-plugin": "./src/lakebase-plugin.ts",
-    "./lakebase": "./src/lakebase.ts",
-    "./native": "./src/native.ts",
-    "./plugin": "./src/plugin.ts",
-    "./query": "./src/query.ts",
-    "./runtime": "./src/runtime.ts",
-    "./schema": "./src/schema.ts",
-    "./tool": "./src/tool.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

@@ -23,10 +23,20 @@ import type {
   ToolkitOptions as AppKitToolkitOptions,
   ToolProvider,
 } from "@databricks/appkit/beta";
-import { pluginRegistry, toolkitEntries } from "@dbx-tools/appkit";
-import type { AgentToolExecutionContext } from "@dbx-tools/appkit/tool-provider";
-import { errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
-import { TOOL_PROGRESS_PART_TYPE, ToolProgressEventSchema } from "@dbx-tools/shared-mastra/wire";
+import {
+  toolkitEntries,
+  type PluginContextLike,
+  AgentToolExecutionContext,
+} from "@dbx-tools/appkit";
+import {
+  log,
+  toError,
+  type Logger,
+  sequence,
+  toUniqueSlug,
+  toIdentifier,
+} from "@dbx-tools/shared-core";
+import { TOOL_PROGRESS_PART_TYPE, ToolProgressEventSchema } from "@dbx-tools/shared-mastra";
 import type {
   AgentConfig,
   AgentExecutionOptions,
@@ -153,9 +163,6 @@ function loadQuickJsDependency(): Promise<typeof import("@mastra/quickjs")> {
  */
 export type MastraTools = ToolsInput;
 
-/** Re-export of Mastra's native `createTool` for full-feature access. */
-export { createTool } from "@mastra/core/tools";
-
 /**
  * AppKit-shaped tool factory. Lets users mix-and-match tools across
  * AppKit's `agents` plugin and `mastra` with a single import:
@@ -235,7 +242,7 @@ export interface AppKitToolOptions {
  * words don't collide in traces. Stable across runs.
  */
 function deriveToolId(description: string): string {
-  return stringUtils.toUniqueSlug(description, { fallbackPrefix: "tool" });
+  return toUniqueSlug(description, { fallbackPrefix: "tool" });
 }
 
 /**
@@ -688,7 +695,7 @@ async function tryCodeModeTransport(
     } catch (caught) {
       return {
         category: "dependency-unavailable",
-        error: errorUtils.toError(caught),
+        error: toError(caught),
         provider,
       };
     }
@@ -697,7 +704,7 @@ async function tryCodeModeTransport(
     } catch (caught) {
       return {
         category: "construction-failed",
-        error: errorUtils.toError(caught),
+        error: toError(caught),
         provider,
       };
     }
@@ -712,7 +719,7 @@ async function tryCodeModeTransport(
   } catch (caught) {
     return {
       category: "dependency-unavailable",
-      error: errorUtils.toError(caught),
+      error: toError(caught),
       provider,
     };
   }
@@ -721,7 +728,7 @@ async function tryCodeModeTransport(
   } catch (caught) {
     return {
       category: "construction-failed",
-      error: errorUtils.toError(caught),
+      error: toError(caught),
       provider,
     };
   }
@@ -867,10 +874,10 @@ function defaultAgentDescription(name: string): string {
  */
 export async function buildAgents(opts: {
   config: MastraPluginConfig;
-  context: pluginRegistry.PluginContextLike | undefined;
+  context: PluginContextLike | undefined;
   memoryBuilder?: MemoryBuilder;
   outputProcessorFactories?: readonly MastraOutputProcessorFactory[];
-  log: log.Logger;
+  log: Logger;
   /**
    * Local skill filesystems mounted into every auto-created default workspace.
    * Skill activation comes from {@link standardSkills}, not workspace search.
@@ -1040,12 +1047,12 @@ export async function buildAgents(opts: {
 }
 
 /** Log failed tool calls without changing the chunks returned to the client. */
-function toolErrorLoggingProcessor(logger: log.Logger): OutputProcessor {
+function toolErrorLoggingProcessor(logger: Logger): OutputProcessor {
   return {
     id: "tool-error-logger",
     async processOutputStream({ part }) {
       if (part.type === "tool-error") {
-        const error = errorUtils.toError(part.payload.error);
+        const error = toError(part.payload.error);
         logger.error("tool execution failed", {
           toolName: part.payload.toolName,
           toolCallId: part.payload.toolCallId,
@@ -1084,8 +1091,7 @@ function workspaceSkillInputProcessors(
 export function approvalGatedToolIds(tools: MastraTools): string[] {
   if (!tools || typeof tools !== "object") return [];
   return [
-    ...object
-      .sequence(Object.entries(tools))
+    ...sequence(Object.entries(tools))
       .filter(([, tool]) => isApprovalGatedTool(tool))
       .map(([key, tool]) => resolveToolId(tool, key)),
   ];
@@ -1202,7 +1208,7 @@ function resolveDefinitions(config: MastraPluginConfig): Record<string, AnyMastr
 /** Derive a registry id from a definition's `name`, with a fallback. */
 function deriveAgentKey(def: AnyMastraAgentDefinition, index?: number): string {
   if (def.name) {
-    const slug = stringUtils.toIdentifier(def.name);
+    const slug = toIdentifier(def.name);
     if (slug) return slug;
   }
   return index === undefined ? FALLBACK_AGENT_ID : `agent_${index}`;
@@ -1292,7 +1298,7 @@ function resolveAgentWorkspace(
  */
 function buildPluginsMap(
   config: MastraPluginConfig,
-  context: pluginRegistry.PluginContextLike | undefined,
+  context: PluginContextLike | undefined,
 ): MastraPlugins {
   const cache = new Map<string, MastraPluginToolkitProvider | null>();
   return new Proxy({} as MastraPlugins, {
@@ -1326,7 +1332,7 @@ function buildPluginsMap(
  */
 function resolveProvider(
   config: MastraPluginConfig,
-  context: pluginRegistry.PluginContextLike | undefined,
+  context: PluginContextLike | undefined,
   propName: string,
 ): MastraPluginToolkitProvider | null {
   if (propName === "genie") {

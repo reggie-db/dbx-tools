@@ -9,8 +9,6 @@ import { isLoopbackHost, MAX_TCP_PORT, urlBuilder } from "./net.ts";
 import { isRecord, toBoolean } from "./object.ts";
 import { parseList, toIdentifierWithOptions, toSlug } from "./string-utils.ts";
 
-export { MAX_TCP_PORT } from "./net.ts";
-
 const environmentName = <T extends string>(name: T, description: string) =>
   z.literal(name).default(name).describe(description);
 

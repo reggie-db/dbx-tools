@@ -1,6 +1,10 @@
-import { GenieQueryVisualization } from "@databricks/appkit-ui/react";
-import { markers, type ParsedMarker } from "@dbx-tools/shared-mastra";
-import { Spinner } from "@dbx-tools/ui/react";
+import { GenieQueryVisualization, Spinner } from "@databricks/appkit-ui/react";
+import {
+  type ParsedMarker,
+  isUuid,
+  parseMarkers,
+  stripIncompleteMarkerTail,
+} from "@dbx-tools/shared-mastra";
 import { ClockIcon } from "lucide-react";
 import { lazy, Suspense, useMemo, useRef } from "react";
 import { DataGrid, humanizeLabel } from "./data-grid.tsx";
@@ -209,7 +213,7 @@ type RenderSegment =
  * known, renderable type resolves to a slot.
  */
 const markerSegment = (marker: ParsedMarker): RenderSegment => {
-  if (!markers.isUuid(marker.id)) return { kind: "text", text: "" };
+  if (!isUuid(marker.id)) return { kind: "text", text: "" };
   switch (marker.type) {
     case "chart":
       return { kind: "chart", chartId: marker.id };
@@ -228,7 +232,7 @@ const splitTextWithEmbeds = (text: string): RenderSegment[] => {
   // `parseMarkers` yields hits in source order with no overlaps (one
   // regex pass), so the spans splice in directly - no sort or
   // overlap guard needed.
-  for (const marker of markers.parseMarkers(text)) {
+  for (const marker of parseMarkers(text)) {
     if (marker.start > lastIdx) {
       segments.push({ kind: "text", text: text.slice(lastIdx, marker.start) });
     }
@@ -273,7 +277,7 @@ export const MarkdownWithEmbeds = ({
   text: string;
   streaming?: boolean;
 }) => {
-  const segments = splitTextWithEmbeds(markers.stripIncompleteMarkerTail(text));
+  const segments = splitTextWithEmbeds(stripIncompleteMarkerTail(text));
   return (
     <>
       {segments.map((seg, i) => {

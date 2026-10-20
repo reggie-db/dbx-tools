@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import { describe, it } from "node:test";
 
-import { RUNTIME_AUTH_TYPE } from "@dbx-tools/shared-auth/client";
+import { RUNTIME_AUTH_TYPE } from "@dbx-tools/shared-auth";
 import { createAuthClient } from "../src/client.ts";
 import {
   _databricksRuntimeAuthClient,

@@ -21,9 +21,9 @@
 
 import { ExecutionError, getExecutionContext } from "@databricks/appkit";
 import { Context } from "@databricks/sdk-experimental";
-import { appkit, databricks } from "@dbx-tools/appkit";
-import { invoke, resolve as modelResolve, modelCatalog } from "@dbx-tools/model";
-import { asyncUtils, json, log, stringUtils } from "@dbx-tools/shared-core";
+import { appkit, tryGetExecutionContext, toContext } from "@dbx-tools/appkit";
+import { invoke, selection, modelCatalog } from "@dbx-tools/model";
+import { log, sleep, parseRecord, trimToEmpty, trimToNull } from "@dbx-tools/shared-core";
 import { ModelClass } from "@dbx-tools/shared-model";
 import type {
   IndexInfo,
@@ -141,9 +141,6 @@ export class SearchIndex {
   }
 }
 
-/** A resolved live index definition. */
-export type { IndexInfo };
-
 /**
  * Options for {@link SearchClient.createIndex} / {@link SearchClient.ensureIndex}.
  * The goal is the same as the rest of the client: name a source table and a
@@ -250,7 +247,7 @@ export class SearchClient {
     query: string,
     options: SearchOptions & { index?: string } = {},
   ): Promise<SearchResult> {
-    const text = stringUtils.trimToEmpty(query);
+    const text = trimToEmpty(query);
     const name = resolveIndexName(this.config, options.index);
     if (name === null) {
       throw new ExecutionError("search: no index configured; set a default index or pass one", {
@@ -279,7 +276,7 @@ export class SearchClient {
     query: string,
     options: UniversalSearchOptions = {},
   ): Promise<SearchResult> {
-    const text = stringUtils.trimToEmpty(query);
+    const text = trimToEmpty(query);
     const names =
       options.indexes && options.indexes.length > 0
         ? options.indexes.map((ref) => resolveIndexName(this.config, ref) ?? ref)
@@ -318,7 +315,7 @@ export class SearchClient {
    * `ENDPOINT_NOT_FOUND` instead of naming the real problem.
    */
   private requireIndexName(reference: string, operation: string): string {
-    const name = stringUtils.trimToNull(resolveIndexName(this.config, reference) ?? reference);
+    const name = trimToNull(resolveIndexName(this.config, reference) ?? reference);
     if (name === null) {
       throw new ExecutionError(
         `search: no index configured; set a default index or pass one to ${operation}`,
@@ -351,7 +348,7 @@ export class SearchClient {
     let columns = (spec?.embedding_source_columns ?? []).map((c) => c.name ?? "").filter(Boolean);
     const schemaJson = index.direct_access_index_spec?.schema_json;
     if (directAccess && schemaJson) {
-      const schema = json.parseRecord(schemaJson) ?? {};
+      const schema = parseRecord(schemaJson) ?? {};
       const vectorNames = new Set(
         (index.direct_access_index_spec?.embedding_vector_columns ?? [])
           .map((c) => c.name)
@@ -415,7 +412,7 @@ export class SearchClient {
    * live catalogue, otherwise the highest-ranked embedding endpoint is chosen.
    */
   async resolveEmbeddingModel(requested?: string, signal?: AbortSignal): Promise<string | null> {
-    const explicit = stringUtils.trimToNull(requested ?? this.config.embeddingModel);
+    const explicit = trimToNull(requested ?? this.config.embeddingModel);
     // An explicit name that already looks like an endpoint id (no whitespace)
     // is used verbatim - no need to fetch and fuzzy-match the live catalogue.
     // A genuinely loose name (e.g. "gte large") still resolves against it.
@@ -425,10 +422,10 @@ export class SearchClient {
     const host = (await client.config.getHost()).toString();
     const endpoints = await modelCatalog.listServingEndpoints(client, host);
     signal?.throwIfAborted();
-    const { modelId } = modelResolve.resolveModel(endpoints, {
+    const { modelId } = selection.resolveModel(endpoints, {
       ...(explicit ? { explicit } : { modelClass: ModelClass.Embedding }),
     });
-    return stringUtils.trimToNull(modelId);
+    return trimToNull(modelId);
   }
 
   /**
@@ -621,7 +618,7 @@ export class SearchClient {
       const needEmbed = seed.some((doc) => doc[vectorColumn] === undefined);
       let rows = seed;
       if (needEmbed) {
-        const texts = seed.map((doc) => stringUtils.trimToEmpty(String(doc[sourceColumn] ?? "")));
+        const texts = seed.map((doc) => trimToEmpty(String(doc[sourceColumn] ?? "")));
         const vectors = await this.embed(texts, options.embeddingModel, options.signal);
         rows = seed.map((doc, i) =>
           doc[vectorColumn] === undefined ? { ...doc, [vectorColumn]: vectors[i] } : doc,
@@ -648,7 +645,7 @@ export class SearchClient {
           context: { operation: "provision" },
         });
       }
-      await asyncUtils.sleep(5000, signal);
+      await sleep(5000, signal);
       info = await this.getIndex(name, signal);
     }
     return info;
@@ -735,7 +732,7 @@ export class SearchClient {
     const client = this.workspaceClientFactory();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.config.timeoutMs);
-    const context = databricks.toContext(controller, signal);
+    const context = toContext(controller, signal);
     try {
       return await fn(client, context);
     } catch (err) {
@@ -755,7 +752,7 @@ function defaultWorkspaceClient(): WorkspaceClientLike {
 
 /** AppKit workspace-client facade from the active request or service context. */
 function defaultAppKitWorkspaceClient(): appkit.WorkspaceClientLike {
-  const ctx = appkit.tryGetExecutionContext();
+  const ctx = tryGetExecutionContext();
   if (ctx?.client) return ctx.client;
   // Outside a request scope (a script, a test): a fresh env-auth client.
   return getExecutionContext().client;

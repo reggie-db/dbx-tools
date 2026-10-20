@@ -1,4 +1,13 @@
-import { routes, wire, type MastraClientConfig } from "@dbx-tools/shared-mastra";
+import {
+  type MastraClientConfig,
+  genieRoutePath,
+  MASTRA_ROUTES,
+  GENIE_CONVERSATION_PART_TYPE,
+  GenieConversationPartDataSchema,
+  MastraSuggestionsResponseSchema,
+  GenieThreadsResponseSchema,
+  GenieThreadMessagesResponseSchema,
+} from "@dbx-tools/shared-mastra";
 import type {
   ListAgentSuspendedRunsResponse,
   ListMemoryThreadMessagesResponse,
@@ -44,7 +53,7 @@ export class GenieChatClient extends MastraPluginClient {
   }
 
   #url(...parts: string[]): string {
-    return `${this.basePath}${routes.genieRoutePath(this.alias, ...parts)}`;
+    return `${this.basePath}${genieRoutePath(this.alias, ...parts)}`;
   }
 
   async #delete(url: string, signal?: AbortSignal): Promise<void> {
@@ -72,7 +81,7 @@ export class GenieChatClient extends MastraPluginClient {
     const conversationId =
       params.threadId && this.#conversations.has(params.threadId) ? params.threadId : undefined;
     const response = await this.uiStream({
-      path: this.#url(routes.MASTRA_ROUTES.chat),
+      path: this.#url(MASTRA_ROUTES.chat),
       chatId: params.threadId ?? params.runId,
       messages: userMessage ? [userMessage] : [],
       body: {
@@ -87,8 +96,8 @@ export class GenieChatClient extends MastraPluginClient {
     const stream = response.stream.pipeThrough(
       new TransformStream<UIMessageChunk, UIMessageChunk>({
         transform: (chunk, controller) => {
-          if (chunk.type === wire.GENIE_CONVERSATION_PART_TYPE) {
-            const data = wire.GenieConversationPartDataSchema.safeParse(chunk.data);
+          if (chunk.type === GENIE_CONVERSATION_PART_TYPE) {
+            const data = GenieConversationPartDataSchema.safeParse(chunk.data);
             if (data.success) {
               resolved = data.data.conversationId;
               this.#conversations.add(resolved);
@@ -122,8 +131,8 @@ export class GenieChatClient extends MastraPluginClient {
   /** Starter questions for this client's Genie space. */
   override async suggestions(_agentId?: string, signal?: AbortSignal): Promise<string[]> {
     const payload = await this.getJson(
-      this.#url(routes.MASTRA_ROUTES.suggestions),
-      wire.MastraSuggestionsResponseSchema,
+      this.#url(MASTRA_ROUTES.suggestions),
+      MastraSuggestionsResponseSchema,
       signal,
     );
     return payload.questions;
@@ -134,8 +143,8 @@ export class GenieChatClient extends MastraPluginClient {
     options: { signal?: AbortSignal } = {},
   ): Promise<ListMemoryThreadsResponse> {
     const payload = await this.getJson(
-      this.#url(routes.MASTRA_ROUTES.threads),
-      wire.GenieThreadsResponseSchema,
+      this.#url(MASTRA_ROUTES.threads),
+      GenieThreadsResponseSchema,
       options.signal,
     );
     for (const thread of payload.threads) this.#conversations.add(thread.id);
@@ -169,8 +178,8 @@ export class GenieChatClient extends MastraPluginClient {
     let messages: UIMessage[] = [];
     if (page === 0) {
       const payload = await this.getJson(
-        this.#url(routes.MASTRA_ROUTES.threads, options.threadId, routes.MASTRA_ROUTES.messages),
-        wire.GenieThreadMessagesResponseSchema,
+        this.#url(MASTRA_ROUTES.threads, options.threadId, MASTRA_ROUTES.messages),
+        GenieThreadMessagesResponseSchema,
         options.signal,
       );
       messages = await validateUIMessages({ messages: payload.messages });
@@ -195,7 +204,7 @@ export class GenieChatClient extends MastraPluginClient {
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
     if (!this.#conversations.has(threadId)) return;
-    await this.#delete(this.#url(routes.MASTRA_ROUTES.threads, threadId), options.signal);
+    await this.#delete(this.#url(MASTRA_ROUTES.threads, threadId), options.signal);
     this.#conversations.delete(threadId);
   }
 
@@ -224,7 +233,7 @@ export class GenieChatClient extends MastraPluginClient {
     );
     for (const genieId of genieIds) {
       await this.#delete(
-        this.#url(routes.MASTRA_ROUTES.threads, threadId, routes.MASTRA_ROUTES.messages, genieId),
+        this.#url(MASTRA_ROUTES.threads, threadId, MASTRA_ROUTES.messages, genieId),
         options.signal,
       );
     }

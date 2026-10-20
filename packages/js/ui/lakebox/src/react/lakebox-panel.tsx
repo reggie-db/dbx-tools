@@ -1,4 +1,3 @@
-import type { LakeboxService, LakeboxStatus } from "@dbx-tools/shared-lakebox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +15,8 @@ import {
   CardTitle,
   Spinner,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import type { LakeboxService, LakeboxStatus } from "@dbx-tools/shared-lakebox";
 import {
   CheckIcon,
   ChevronDownIcon,

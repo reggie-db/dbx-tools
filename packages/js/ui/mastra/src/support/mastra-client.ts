@@ -1,10 +1,6 @@
-import { errorUtils } from "@dbx-tools/shared-core";
+import { usePluginClientConfig } from "@databricks/appkit-ui/react";
+import { toError } from "@dbx-tools/shared-core";
 import {
-  feedback,
-  override,
-  routes,
-  thread,
-  wire,
   type Chart,
   type DefaultModelResponse,
   type MastraClientConfig,
@@ -12,9 +8,20 @@ import {
   type MastraFeedbackResponse,
   type MastraMlflowExperimentResponse,
   type StatementData,
+  type FeedbackMode,
+  MastraFeedbackResponseSchema,
+  MastraMlflowExperimentResponseSchema,
+  MODEL_OVERRIDE_HEADER,
+  MASTRA_ROUTES,
+  THREAD_ID_HEADER,
+  MastraRunAbortResponseSchema,
+  ServingEndpointsResponseSchema,
+  DefaultModelResponseSchema,
+  MastraSuggestionsResponseSchema,
+  ChartSchema,
+  StatementDataSchema,
 } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
-import { usePluginClientConfig } from "@dbx-tools/ui/react";
 import {
   MastraClient,
   type ListAgentSuspendedRunsResponse,
@@ -80,7 +87,7 @@ export class MastraPluginClient extends MastraClient {
   /** Registered agent ids, surfaced for pickers. */
   readonly agents: readonly string[];
   /** Resolved feedback destination published by the server. */
-  readonly feedbackMode: feedback.FeedbackMode;
+  readonly feedbackMode: FeedbackMode;
   /**
    * Whether the agents run their Databricks calls as the app service principal
    * rather than on-behalf-of the signed-in user. When `true` the chat works for
@@ -131,8 +138,8 @@ export class MastraPluginClient extends MastraClient {
    */
   #routingHeaders(routing: { threadId?: string; model?: string }): Record<string, string> {
     const headers: Record<string, string> = {};
-    if (routing.threadId) headers[thread.THREAD_ID_HEADER] = routing.threadId;
-    if (routing.model) headers[override.MODEL_OVERRIDE_HEADER] = routing.model;
+    if (routing.threadId) headers[THREAD_ID_HEADER] = routing.threadId;
+    if (routing.model) headers[MODEL_OVERRIDE_HEADER] = routing.model;
     return headers;
   }
 
@@ -232,7 +239,7 @@ export class MastraPluginClient extends MastraClient {
     signal?: AbortSignal;
   }): Promise<MastraStreamResponse> {
     return this.uiStream({
-      path: `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}`,
+      path: `${this.basePath}${MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}`,
       chatId: params.threadId ?? params.runId,
       messages: params.messages,
       body: {
@@ -256,7 +263,7 @@ export class MastraPluginClient extends MastraClient {
     signal?: AbortSignal;
   }): Promise<MastraStreamResponse> {
     return this.#uiReconnect({
-      path: `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}${routes.MASTRA_ROUTES.runs}/${encodeURIComponent(params.runId)}`,
+      path: `${this.basePath}${MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}${MASTRA_ROUTES.runs}/${encodeURIComponent(params.runId)}`,
       chatId: params.runId,
       routing: params,
       signal: params.signal,
@@ -273,11 +280,11 @@ export class MastraPluginClient extends MastraClient {
     const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
     const response = await this.#mutateJson(
       new URL(
-        `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}${routes.MASTRA_ROUTES.runs}/${encodeURIComponent(params.runId)}${routes.MASTRA_ROUTES.abort}`,
+        `${this.basePath}${MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}${MASTRA_ROUTES.runs}/${encodeURIComponent(params.runId)}${MASTRA_ROUTES.abort}`,
         origin,
       ).toString(),
       "POST",
-      wire.MastraRunAbortResponseSchema,
+      MastraRunAbortResponseSchema,
       {
         headers: this.#routingHeaders({ threadId: params.threadId }),
         signal: params.signal,
@@ -333,7 +340,7 @@ export class MastraPluginClient extends MastraClient {
     },
   ): Promise<MastraStreamResponse> {
     return this.uiStream({
-      path: `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(agentId)}`,
+      path: `${this.basePath}${MASTRA_ROUTES.chat}/${encodeURIComponent(agentId)}`,
       chatId: params.threadId ?? params.runId,
       messages: [],
       body: {
@@ -358,8 +365,8 @@ export class MastraPluginClient extends MastraClient {
    */
   async models(signal?: AbortSignal): Promise<ServingEndpointSummary[]> {
     const payload = await this.getJson(
-      `${this.basePath}${routes.MASTRA_ROUTES.models}`,
-      wire.ServingEndpointsResponseSchema,
+      `${this.basePath}${MASTRA_ROUTES.models}`,
+      ServingEndpointsResponseSchema,
       signal,
     );
     return payload.endpoints;
@@ -382,8 +389,8 @@ export class MastraPluginClient extends MastraClient {
   /** Fetch the complete resolved default-model descriptor for an agent. */
   async defaultModelDetails(agentId?: string, signal?: AbortSignal): Promise<DefaultModelResponse> {
     const payload = await this.getJson(
-      this.#agentScoped(routes.MASTRA_ROUTES.defaultModel, agentId),
-      wire.DefaultModelResponseSchema,
+      this.#agentScoped(MASTRA_ROUTES.defaultModel, agentId),
+      DefaultModelResponseSchema,
       signal,
     );
     return payload;
@@ -396,8 +403,8 @@ export class MastraPluginClient extends MastraClient {
    */
   async suggestions(agentId?: string, signal?: AbortSignal): Promise<string[]> {
     const payload = await this.getJson(
-      this.#agentScoped(routes.MASTRA_ROUTES.suggestions, agentId),
-      wire.MastraSuggestionsResponseSchema,
+      this.#agentScoped(MASTRA_ROUTES.suggestions, agentId),
+      MastraSuggestionsResponseSchema,
       signal,
     );
     return payload.questions;
@@ -512,9 +519,9 @@ export class MastraPluginClient extends MastraClient {
    */
   async feedback(input: MastraFeedbackRequest): Promise<MastraFeedbackResponse> {
     return this.#mutateJson(
-      `${this.basePath}${routes.MASTRA_ROUTES.feedback}`,
+      `${this.basePath}${MASTRA_ROUTES.feedback}`,
       "POST",
-      feedback.MastraFeedbackResponseSchema,
+      MastraFeedbackResponseSchema,
       { body: input },
     );
   }
@@ -526,8 +533,8 @@ export class MastraPluginClient extends MastraClient {
    */
   async mlflowExperiment(signal?: AbortSignal): Promise<MastraMlflowExperimentResponse> {
     return this.getJson(
-      `${this.basePath}${routes.MASTRA_ROUTES.mlflowExperiment}`,
-      feedback.MastraMlflowExperimentResponseSchema,
+      `${this.basePath}${MASTRA_ROUTES.mlflowExperiment}`,
+      MastraMlflowExperimentResponseSchema,
       signal,
     );
   }
@@ -540,7 +547,7 @@ export class MastraPluginClient extends MastraClient {
    * resolves to `undefined` so the slot renders nothing.
    */
   chart(id: string, signal?: AbortSignal): Promise<Chart | undefined> {
-    return this.#embed("chart", id, wire.ChartSchema.parse, signal);
+    return this.#embed("chart", id, ChartSchema.parse, signal);
   }
 
   /**
@@ -550,12 +557,12 @@ export class MastraPluginClient extends MastraClient {
    * `undefined`.
    */
   statement(id: string, signal?: AbortSignal): Promise<StatementData | undefined> {
-    return this.#embed("data", id, wire.StatementDataSchema.parse, signal);
+    return this.#embed("data", id, StatementDataSchema.parse, signal);
   }
 
   /** Resolve AppKit UI visualization data for a direct Genie statement. */
   visualization(id: string, signal?: AbortSignal): Promise<StatementData | undefined> {
-    return this.#embed("visualization", id, wire.StatementDataSchema.parse, signal);
+    return this.#embed("visualization", id, StatementDataSchema.parse, signal);
   }
 
   /**
@@ -638,7 +645,7 @@ export class MastraPluginClient extends MastraClient {
     parse: (raw: unknown) => T,
     signal?: AbortSignal,
   ): Promise<T | undefined> {
-    const url = `${this.basePath}${routes.MASTRA_ROUTES.embed}/${encodeURIComponent(
+    const url = `${this.basePath}${MASTRA_ROUTES.embed}/${encodeURIComponent(
       type,
     )}/${encodeURIComponent(id)}`;
     const init: RequestInit = { credentials: "include" };
@@ -792,7 +799,7 @@ export const useMastraModels = (
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
-        setError(errorUtils.toError(e));
+        setError(toError(e));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -960,7 +967,7 @@ export const useMastraThreads = (
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted || (e as { name?: string }).name === "AbortError") return;
-        setError(errorUtils.toError(e));
+        setError(toError(e));
         setThreads([]);
       })
       .finally(() => {
@@ -1125,7 +1132,7 @@ function useByIdFetch<T>(
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setError(errorUtils.toError(e));
+        setError(toError(e));
         setLoading(false);
       });
 

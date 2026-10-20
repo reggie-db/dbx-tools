@@ -44,11 +44,11 @@ import {
   ValidationError,
 } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
-import { pluginRegistry } from "@dbx-tools/appkit";
-import { createCache } from "@dbx-tools/cache/cache";
-import { chat, space as genieSpace } from "@dbx-tools/genie";
-import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
-import { genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
+import { type PluginContextLike, instance } from "@dbx-tools/appkit";
+import { createCache } from "@dbx-tools/cache";
+import { genieEventChat, getGenieSpace, genieSampleQuestions } from "@dbx-tools/genie";
+import { log, toError, errorContext, toDescription, toIdentifier } from "@dbx-tools/shared-core";
+import { type GenieMessage, GenieMessageSchema } from "@dbx-tools/shared-genie";
 import type { StartedEvent } from "@dbx-tools/shared-mastra";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
@@ -249,7 +249,7 @@ async function readCachedConversationId(cacheKey: string | undefined): Promise<s
     return v ?? undefined;
   } catch (err) {
     logger.warn("conversation-cache:read-error", {
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
     return undefined;
   }
@@ -273,7 +273,7 @@ async function saveCachedConversationId(
     });
   } catch (err) {
     logger.warn("conversation-cache:write-error", {
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
   }
 }
@@ -285,7 +285,7 @@ async function evictCachedConversationId(cacheKey: string | undefined): Promise<
     await CacheManager.getInstanceSync().delete(cacheKey);
   } catch (err) {
     logger.warn("conversation-cache:delete-error", {
-      error: errorUtils.toError(err),
+      error: toError(err),
     });
   }
 }
@@ -328,7 +328,7 @@ const prepareChartRequestSchema = chartPlannerRequestSchema
       .string()
       .min(1, "statement_id is required")
       .describe(
-        stringUtils.toDescription(`
+        toDescription(`
           Genie \`statement_id\` to chart. Read from
           \`message.query_result.statement_id\` or
           \`message.attachments[*].query.statement_id\` returned by
@@ -349,7 +349,7 @@ const prepareChartRequestSchema = chartPlannerRequestSchema
  */
 function aliasSuffix(alias: string): string {
   if (alias === DEFAULT_GENIE_ALIAS) return "";
-  const slug = stringUtils.toIdentifier(alias);
+  const slug = toIdentifier(alias);
   return slug ? `_${slug}` : "";
 }
 
@@ -390,7 +390,7 @@ function buildAskGenieTool(opts: {
   const hintLine = hint ? ` (${hint})` : "";
   return createTool({
     id: toolId,
-    description: stringUtils.toDescription(`
+    description: toDescription(`
       Ask the Genie space "${alias}"${hintLine} ONE focused
       natural-language sub-question and wait for the turn to
       complete. Genie answers best when each call covers a
@@ -422,7 +422,7 @@ function buildAskGenieTool(opts: {
         .string()
         .min(1, "question is required")
         .describe(
-          stringUtils.toDescription(`
+          toDescription(`
             ONE focused natural-language question about the data in this
             space, covering a single metric / dimension / time window
             (e.g. "What was Q3 revenue by region?"). Decompose a
@@ -432,7 +432,7 @@ function buildAskGenieTool(opts: {
         ),
     }),
     outputSchema: z.object({
-      message: genieModel.GenieMessageSchema,
+      message: GenieMessageSchema,
     }),
     execute: async ({ question }, ctxRaw) => {
       const ctx = ctxRaw as ToolExecuteCtx;
@@ -485,7 +485,7 @@ function buildAskGenieTool(opts: {
         const runTurn = async (): Promise<GenieMessage> => {
           const seedConversationId = conversationId;
           let finalMessage: GenieMessage | undefined;
-          for await (const event of chat.genieEventChat(spaceId, question, {
+          for await (const event of genieEventChat(spaceId, question, {
             workspaceClient: client,
             ...(agentMode !== undefined ? { agentMode } : {}),
             ...(seedConversationId ? { conversationId: seedConversationId } : {}),
@@ -525,11 +525,11 @@ function buildAskGenieTool(opts: {
           // A rejected conversation id is stale or inaccessible. Reset this
           // lane and retry once with a fresh Genie conversation.
           const rejectedConversationId = conversationId;
-          if (rejectedConversationId && errorUtils.errorContext(err).notAccessible) {
+          if (rejectedConversationId && errorContext(err).notAccessible) {
             logger.warn("conversation-cache:stale, resetting", {
               spaceId,
               conversationId: rejectedConversationId,
-              error: errorUtils.toError(err),
+              error: toError(err),
             });
             if (ownsReusableConversation) {
               await evictCachedConversationId(cacheKey);
@@ -559,7 +559,7 @@ function buildSpaceDescriptionTool(opts: { spaceId: string; alias: string }) {
   const toolId = `get_space_description${aliasSuffix(alias)}`;
   return createTool({
     id: toolId,
-    description: stringUtils.toDescription(`
+    description: toDescription(`
       Return the Genie space "${alias}"'s title, description, and
       warehouse id. Cheap (single REST call, no LLM round-trip).
       Call this FIRST on any user turn that's going to touch
@@ -584,7 +584,7 @@ function buildSpaceDescriptionTool(opts: { spaceId: string; alias: string }) {
       // description surface (title / description / warehouse id) lives
       // on the directory-listing shape, so skip the larger
       // `serialized_space` payload here.
-      const space = await genieSpace.getGenieSpace(spaceId, {
+      const space = await getGenieSpace(spaceId, {
         workspaceClient: client,
         serialized: false,
         ...(signal ? { context: signal } : {}),
@@ -604,7 +604,7 @@ function buildSpaceSerializedTool(opts: { spaceId: string; alias: string }) {
   const toolId = `get_space_serialized${aliasSuffix(alias)}`;
   return createTool({
     id: toolId,
-    description: stringUtils.toDescription(`
+    description: toDescription(`
       Return the full \`GenieSpace\` JSON for the "${alias}" space.
       Use only when you need exact column / table identifiers
       \`get_space_description\` doesn't expose. Larger payload, so
@@ -619,7 +619,7 @@ function buildSpaceSerializedTool(opts: { spaceId: string; alias: string }) {
       // Central Genie space fetch with the opt-in `serialized_space`
       // blob (catalogs, tables, sample questions, prompts) that the
       // typed SDK `getSpace` omits - the whole point of this tool.
-      const space = await genieSpace.getGenieSpace(spaceId, {
+      const space = await getGenieSpace(spaceId, {
         workspaceClient: client,
         ...(signal ? { context: signal } : {}),
       });
@@ -643,7 +643,7 @@ function buildGetStatementTool() {
   const toolId = "get_statement";
   return createTool({
     id: toolId,
-    description: stringUtils.toDescription(`
+    description: toDescription(`
       Fetch the rows of a Genie statement by its \`statement_id\` (the
       value at \`message.query_result.statement_id\` or
       \`message.attachments[*].query.statement_id\` returned from
@@ -663,7 +663,7 @@ function buildGetStatementTool() {
         .string()
         .min(1, "statement_id is required")
         .describe(
-          stringUtils.toDescription(`
+          toDescription(`
             Genie \`statement_id\` whose rows to read. Take it from
             \`message.query_result.statement_id\` or
             \`message.attachments[*].query.statement_id\` on an
@@ -728,7 +728,7 @@ function buildPrepareChartTool(opts: { config: MastraPluginConfig }) {
   const toolId = "prepare_chart";
   return createTool({
     id: toolId,
-    description: stringUtils.toDescription([
+    description: toDescription([
       `
         Queue a chart for the rows of a Genie statement. Mints a
         \`chartId\` plus its complete \`marker\` synchronously and
@@ -800,7 +800,7 @@ function buildPrepareChartTool(opts: { config: MastraPluginConfig }) {
  * variant that names the suffixed per-space tools
  * (e.g. `ask_genie_sales`).
  */
-export const GENIE_INSTRUCTIONS = stringUtils.toDescription([
+export const GENIE_INSTRUCTIONS = toDescription([
   "Genie orchestration. For every user question that needs SQL-backed data:",
   {
     numbered: [
@@ -993,7 +993,7 @@ type AppKitGenieConfig = NonNullable<Parameters<typeof genie>[0]>;
  */
 export function resolveGenieSpaces(
   config: MastraPluginConfig,
-  context: pluginRegistry.PluginContextLike | undefined,
+  context: PluginContextLike | undefined,
 ): Record<string, GenieSpaceConfig> {
   const merged: Record<string, GenieSpaceConfig> = {};
 
@@ -1006,7 +1006,7 @@ export function resolveGenieSpaces(
   // Source 2: AppKit `genie()` plugin instance config. Use a
   // structural cast - `Plugin.config` is `protected` in TS only,
   // and the runtime layout is plain object property access.
-  const geniePlugin = pluginRegistry.instance(context, genie);
+  const geniePlugin = instance(context, genie);
   if (geniePlugin) {
     const pluginSpaces = (geniePlugin as unknown as { config?: AppKitGenieConfig }).config?.spaces;
     if (pluginSpaces) {
@@ -1147,17 +1147,17 @@ export async function collectSpaceSuggestions(opts: {
     let questions = await readSuggestionCache(spaceId);
     if (!questions) {
       try {
-        const space = await genieSpace.getGenieSpace(spaceId, {
+        const space = await getGenieSpace(spaceId, {
           workspaceClient: opts.client,
           ...(opts.signal ? { context: opts.signal } : {}),
         });
-        questions = genieSpace.genieSampleQuestions(space);
+        questions = genieSampleQuestions(space);
         await writeSuggestionCache(spaceId, questions);
       } catch (err) {
         if (opts.signal?.aborted) return merged;
         logger.warn("suggestions:fetch-error", {
           spaceId,
-          error: errorUtils.toError(err),
+          error: toError(err),
         });
         questions = [];
       }

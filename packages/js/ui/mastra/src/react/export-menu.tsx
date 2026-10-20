@@ -7,7 +7,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
 import { DownloadIcon, FileTextIcon } from "lucide-react";
 import type { ExportFormat } from "../support/export.ts";
 

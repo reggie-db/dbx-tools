@@ -32,8 +32,8 @@
  * @module
  */
 
-import { migration as appkitMigration } from "@dbx-tools/appkit";
-import { hash, log } from "@dbx-tools/shared-core";
+import { handleOwnershipMigrationError } from "@dbx-tools/appkit";
+import { log, id } from "@dbx-tools/shared-core";
 import type { AgentMemoryOption } from "@mastra/core/agent";
 import {
   MASTRA_RESOURCE_ID_KEY,
@@ -108,7 +108,7 @@ export function withSoftStorageInit(store: PostgresStore): PostgresStore {
         await originalInit();
       } catch (err) {
         if (
-          !appkitMigration.handleOwnershipMigrationError(err, {
+          !handleOwnershipMigrationError(err, {
             scope: "mastra-storage",
             logger,
             event: "mastra storage migration failed",
@@ -347,7 +347,7 @@ export class MemoryBuilder {
  */
 function buildSharedPgVector(pool: Pool): PgVector {
   const vector = new PgVector({
-    id: `pg${hash.id()}`,
+    id: `pg${id()}`,
     // Keep the recall index out of `public`: on a Lakebase database the app
     // service principal has no CREATE on `public` (PG15+ locks it down), so a
     // default-schema PgVector fails on CREATE INDEX with "permission denied for
@@ -371,7 +371,7 @@ function buildSharedPgVector(pool: Pool): PgVector {
 /** Per-agent dedicated `PgVector` (rare; opt-in via object override). */
 function buildPgVector(setting: MastraMemoryConfigOverride): PgVector {
   return new PgVector(
-    withId(setting, `pg-vector__${hash.id()}`) as ConstructorParameters<typeof PgVector>[0],
+    withId(setting, `pg-vector__${id()}`) as ConstructorParameters<typeof PgVector>[0],
   );
 }
 

@@ -6,10 +6,10 @@
 
 import { defineManifest, toPlugin, type IAppRouter } from "@databricks/appkit";
 import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
-import { pluginRegistry, ToolRegistryPlugin } from "@dbx-tools/appkit";
+import { ToolRegistryPlugin, require } from "@dbx-tools/appkit";
 import { mastra } from "@dbx-tools/appkit-mastra";
 import { webSearch } from "@dbx-tools/appkit-web-search";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { log, toError } from "@dbx-tools/shared-core";
 import {
   GENERATOR_ROUTES,
   GeneratorClientConfigSchema,
@@ -17,9 +17,10 @@ import {
   BrandGenerationEventSchema,
   BrandGenerationRequestSchema,
   type BrandGenerationEvent,
-} from "@dbx-tools/shared-generator/brand";
-import { KpiResearchRequestSchema, KpiResearchResultSchema } from "@dbx-tools/shared-generator/kpi";
+} from "@dbx-tools/shared-generator";
 import {
+  KpiResearchRequestSchema,
+  KpiResearchResultSchema,
   CreateGeneratorPresentationRequestSchema,
   GeneratedAssetsSchema,
   GeneratedDashboardSchema,
@@ -30,7 +31,7 @@ import {
   MaterializedGeneratorDataSchema,
   PlanGeneratorDataRequestSchema,
   ProvisionGeneratorSchemaRequestSchema,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 import {
   resolveGeneratorConfig,
   type GeneratorPluginConfig,
@@ -129,10 +130,7 @@ export class GeneratorPlugin extends ToolRegistryPlugin<GeneratorPluginConfig> {
       researchClient: this.researchClient(),
     });
     this.workflow = createGeneratorWorkflow(this.operations);
-    pluginRegistry
-      .require(this.context, mastra, this)
-      .exports()
-      .registerWorkflow(WORKFLOW_KEY, this.workflow);
+    require(this.context, mastra, this).exports().registerWorkflow(WORKFLOW_KEY, this.workflow);
     logger.info("ready", {
       model: this.resolved.model ?? "automatic",
       catalog: this.resolved.catalog ?? "brand-only",
@@ -185,7 +183,7 @@ export class GeneratorPlugin extends ToolRegistryPlugin<GeneratorPluginConfig> {
             .generateBrand(parsed.data, controller.signal, send);
           send({ type: "result", package: generated });
         } catch (cause) {
-          logger.warn("brand-route-failed", { error: errorUtils.toError(cause) });
+          logger.warn("brand-route-failed", { error: toError(cause) });
           send({
             type: "error",
             message:
@@ -224,7 +222,7 @@ export class GeneratorPlugin extends ToolRegistryPlugin<GeneratorPluginConfig> {
 
   /** Resolve the sibling web-search plugin without recreating its policy. */
   private researchClient(): BrandResearchClient {
-    const sibling = pluginRegistry.require(this.context, webSearch, this).exports();
+    const sibling = require(this.context, webSearch, this).exports();
     return {
       search: sibling.search,
       fetch: sibling.fetch,

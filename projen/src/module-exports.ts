@@ -86,13 +86,12 @@ const FUNCTION_DECLARATIONS = new Set(["FunctionDeclaration", "TSDeclareFunction
 export function moduleExports(file: string): ModuleExport[] {
   const body = moduleStatements(file);
 
-  // Dedupe within the module: an overloaded `export function f(...)` declares
-  // `f` once per signature, but it's a single exported name. First occurrence
-  // wins (a value declaration and a same-named type would be unusual and are
-  // collapsed to whichever appears first).
+  // Dedupe within the module. When TypeScript merges a type and value with the
+  // same name, the value export carries both namespaces and must win.
   const byName = new Map<string, ModuleExport>();
   const push = (e: ModuleExport): void => {
-    if (!byName.has(e.name)) byName.set(e.name, e);
+    const existing = byName.get(e.name);
+    if (!existing || (existing.isType && !e.isType)) byName.set(e.name, e);
   };
   for (const stmt of body) {
     if (stmt.type !== "ExportNamedDeclaration") continue;

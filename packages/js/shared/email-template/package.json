@@ -38,13 +38,9 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./template": {
-        "types": "./lib/src/template.d.ts",
-        "default": "./lib/src/template.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
+      "./generated": {
+        "types": "./lib/index.generated.d.ts",
+        "default": "./lib/index.generated.js"
       },
       "./package.json": "./package.json"
     }
@@ -59,12 +55,11 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./template": "./src/template.tsx",
-    "./*": "./src/*/index.ts",
+    "./generated": "./index.generated.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

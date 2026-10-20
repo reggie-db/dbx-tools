@@ -5,7 +5,13 @@
  */
 
 import type { WorkspaceClient } from "@databricks/appkit";
-import { brandUtils } from "@dbx-tools/shared-core";
+import { BrandContextSchema } from "@dbx-tools/shared-core";
+import {
+  BrandGenerationRequestSchema,
+  BrandPackageSchema,
+  type BrandGenerationRequest,
+  type BrandPackage,
+} from "@dbx-tools/shared-generator";
 import type { ModelMessage } from "ai";
 import { discoverBrandAssets } from "./assets.ts";
 import { normalizeBrandPalette } from "./palette.ts";
@@ -15,14 +21,7 @@ import {
   type BrandResearch,
   type BrandResearchClient,
 } from "./research.ts";
-import {
-  BrandGenerationRequestSchema,
-  BrandPackageSchema,
-  GeneratedBrandProfileSchema,
-  type BrandGenerationRequest,
-  type BrandPackage,
-  type GeneratedBrandProfile,
-} from "./schema.ts";
+import { GeneratedBrandProfileSchema, type GeneratedBrandProfile } from "./schema.ts";
 import { generateStructured } from "./structured.ts";
 
 /** Inputs passed to a structured brand-profile synthesizer. */
@@ -227,7 +226,7 @@ export async function generateBrandPackage(
   );
   const assets = discoverBrandAssets(research.officialPageHtml ?? "", research.officialPageUrl);
   const links = evidenceLinks(profile, research);
-  const brand = brandUtils.BrandContextSchema.parse({
+  const brand = BrandContextSchema.parse({
     schemaVersion: "1",
     ...profile,
     assets,

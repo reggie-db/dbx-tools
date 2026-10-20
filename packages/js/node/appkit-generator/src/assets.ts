@@ -4,8 +4,8 @@
  * @module
  */
 
-import { object } from "@dbx-tools/shared-core";
-import type { BrandAssetSet } from "@dbx-tools/shared-core/brand-utils";
+import { isRecord } from "@dbx-tools/shared-core";
+import type { BrandAssetSet } from "@dbx-tools/shared-core";
 import { load } from "cheerio";
 
 /** Asset references extracted from one official HTML page. */
@@ -68,7 +68,7 @@ function jsonLdAssetUrls(value: unknown, depth = 0, assetContext = false): strin
   if (Array.isArray(value)) {
     return value.flatMap((entry) => jsonLdAssetUrls(entry, depth + 1, assetContext));
   }
-  if (!object.isRecord(value)) return [];
+  if (!isRecord(value)) return [];
 
   const direct = assetContext
     ? [value.url, value.contentUrl].flatMap((entry) => (typeof entry === "string" ? [entry] : []))
@@ -88,7 +88,7 @@ function jsonLdMobileImageUrls(value: unknown, depth = 0, imageContext = false):
   if (Array.isArray(value)) {
     return value.flatMap((entry) => jsonLdMobileImageUrls(entry, depth + 1, imageContext));
   }
-  if (!object.isRecord(value)) return [];
+  if (!isRecord(value)) return [];
   const direct = imageContext
     ? [value.url, value.contentUrl].flatMap((entry) => (typeof entry === "string" ? [entry] : []))
     : [];

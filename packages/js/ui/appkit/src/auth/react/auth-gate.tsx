@@ -1,18 +1,18 @@
-import { net } from "@dbx-tools/shared-core";
+import { Button, Checkbox, Input, Label } from "@databricks/appkit-ui/react";
+import {
+  browser,
+  type PasskeyOperation,
+  getAuthStatus,
+  passkeysAvailable,
+  beginPasskeySignIn,
+  requestEmailOtp,
+  verifyEmailOtp,
+  beginPasskeyEnrollment,
+} from "@dbx-tools/shared-auth";
+import { parseEmails, isEmail } from "@dbx-tools/shared-core";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import {
-  beginPasskeyEnrollment,
-  beginPasskeySignIn,
-  getAuthStatus,
-  passkeyDisplayName,
-  passkeysAvailable,
-  requestEmailOtp,
-  type PasskeyOperation,
-  verifyEmailOtp,
-} from "./auth-client.ts";
-import { BrandIcon, useBrand } from "../../branding/react/index.ts";
-import { Button, Checkbox, Input, Label } from "../../react/index.ts";
+import { BrandIcon, useBrand } from "@dbx-tools/ui/branding/react";
 
 type Phase = "loading" | "email" | "code" | "authed" | "open";
 
@@ -112,9 +112,9 @@ export function AuthGate({
     async (event: FormEvent) => {
       event.preventDefault();
       if (busy) return;
-      const addresses = net.parseEmails(email);
+      const addresses = parseEmails(email);
       const address = addresses[0];
-      if (addresses.length !== 1 || !address || !net.isEmail(address)) {
+      if (addresses.length !== 1 || !address || !isEmail(address)) {
         setNotice("Enter a valid email address.");
         return;
       }
@@ -155,7 +155,7 @@ export function AuthGate({
           let operation: PasskeyOperation | undefined;
           try {
             operation = beginPasskeyEnrollment(
-              passkeyDisplayName(passkeyNamePrefix ?? configuredPasskeyNamePrefix),
+              browser.passkeyDisplayName(passkeyNamePrefix ?? configuredPasskeyNamePrefix),
             );
             passkeyOperation.current = operation;
             await operation.result;

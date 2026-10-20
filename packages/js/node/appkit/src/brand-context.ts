@@ -1,7 +1,7 @@
 import { brandFiles } from "@dbx-tools/core";
-import { brandUtils, type BrandContext } from "@dbx-tools/shared-core";
+import { type BrandContext, defaultBrandContext } from "@dbx-tools/shared-core";
 
-let activeBrandContext: BrandContext = brandUtils.defaultBrandContext;
+let activeBrandContext: BrandContext = defaultBrandContext;
 
 /** Load and activate the brand context found from the supplied directory. */
 export async function loadBrandContext(cwd: string = process.cwd()): Promise<BrandContext> {

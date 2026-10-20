@@ -11,7 +11,7 @@
 
 import { opendir, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { json, object, stringUtils } from "@dbx-tools/shared-core";
+import { parseRecord, isRecord, optional, trimToNull } from "@dbx-tools/shared-core";
 import { spawn } from "./exec.ts";
 import { resolveWorkingDirectory, root } from "./project-utils.ts";
 
@@ -68,17 +68,14 @@ export async function* appResources(
   for await (const bundlePath of bundlePaths(boundary, startDirectory)) {
     const validated = await validateBundle(bundlePath, profile);
     for (const [key, config] of Object.entries(bundleApps(validated.data))) {
-      if (!object.isRecord(config)) continue;
+      if (!isRecord(config)) continue;
       yield {
         bundlePath,
         key,
         config,
         data: validated.data,
-        ...object.optional(
-          "sourceCodePath",
-          resolveSourceCodePath(bundlePath, config.source_code_path),
-        ),
-        ...object.optional("bundleFailure", validated.bundleFailure),
+        ...optional("sourceCodePath", resolveSourceCodePath(bundlePath, config.source_code_path)),
+        ...optional("bundleFailure", validated.bundleFailure),
       };
     }
   }
@@ -174,7 +171,7 @@ async function validateBundle(
       stderr: "capture",
     },
   );
-  const detail = stringUtils.trimToNull(result.stderr) ?? stringUtils.trimToNull(result.stdout);
+  const detail = trimToNull(result.stderr) ?? trimToNull(result.stdout);
   const bundleFailure =
     result.exitCode === 0
       ? undefined
@@ -184,17 +181,17 @@ async function validateBundle(
           }`,
         );
 
-  const parsed = json.parseRecord(result.stdout);
+  const parsed = parseRecord(result.stdout);
   if (!parsed) {
     if (bundleFailure) return { data: {}, bundleFailure };
     throw new Error(`Databricks CLI returned invalid bundle JSON for ${bundlePath}`);
   }
-  return { data: parsed, ...object.optional("bundleFailure", bundleFailure) };
+  return { data: parsed, ...optional("bundleFailure", bundleFailure) };
 }
 
 function bundleApps(bundle: Record<string, unknown>): Record<string, unknown> {
-  const resources = object.isRecord(bundle.resources) ? bundle.resources : undefined;
-  return object.isRecord(resources?.apps) ? resources.apps : {};
+  const resources = isRecord(bundle.resources) ? bundle.resources : undefined;
+  return isRecord(resources?.apps) ? resources.apps : {};
 }
 
 async function isFile(path: string): Promise<boolean> {

@@ -4,18 +4,21 @@
  * @module
  */
 
-import { exec } from "@dbx-tools/core";
-import { asyncUtils, log } from "@dbx-tools/shared-core";
-import { GenieCodeRunnerOptionsSchema } from "@dbx-tools/shared-genie-code/options";
+import { configUtils, spawn } from "@dbx-tools/core";
+import { log, poll } from "@dbx-tools/shared-core";
+import { GenieCodeRunnerOptionsSchema } from "@dbx-tools/shared-genie-code";
 
-/** Private environment field carrying serialized runner options. */
-const RUNNER_OPTIONS_ENV = "DBX_TOOLS_GENIE_RUNNER_OPTIONS";
+/** Logical configuration key carrying serialized runner options. */
+export const RUNNER_OPTIONS_KEY = "GENIE_RUNNER_OPTIONS";
 const logger = log.logger("genie-code:runner");
 
 /** Parse the serialized runner boundary from its private environment field. */
 export function genieCodeRunnerOptions(environment: NodeJS.ProcessEnv = process.env) {
-  const serialized = environment[RUNNER_OPTIONS_ENV];
-  if (!serialized) throw new Error(`${RUNNER_OPTIONS_ENV} is required`);
+  const serialized = configUtils.resolveValue(RUNNER_OPTIONS_KEY, {
+    data: environment,
+    sources: "config",
+  });
+  if (!serialized) throw new Error(`${configUtils.name(RUNNER_OPTIONS_KEY)} is required`);
   return GenieCodeRunnerOptionsSchema.parse(JSON.parse(serialized));
 }
 
@@ -25,7 +28,7 @@ export async function waitForGenieCodeGateway(
   bearerToken: string,
   timeoutMs: number,
 ): Promise<void> {
-  for await (const ready of asyncUtils.poll(
+  for await (const ready of poll(
     async ({ signal }) => {
       try {
         const response = await fetch(healthUrl, {
@@ -65,7 +68,7 @@ export async function runGenieCodeChild(
     executable: options.executable,
     home: options.home,
   });
-  const child = exec.spawn(options.executable, [...options.arguments], {
+  const child = spawn(options.executable, [...options.arguments], {
     cwd: process.cwd(),
     env: {
       ...environment,
@@ -80,5 +83,3 @@ export async function runGenieCodeChild(
   const result = await child;
   if (result.exitCode !== 0) process.exitCode = result.exitCode;
 }
-
-export { RUNNER_OPTIONS_ENV };

@@ -4,7 +4,7 @@
  * @module
  */
 
-import { DatabricksAuthOptionsSchema } from "@dbx-tools/auth/config";
+import { DatabricksAuthOptionsSchema } from "@dbx-tools/auth";
 import { z } from "zod";
 
 /** Options for exporting one researched brand package. */

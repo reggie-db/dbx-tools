@@ -8,15 +8,22 @@
  * @module
  */
 
-import { options } from "@dbx-tools/shared-core";
-import { ChatModelClassOptionSchema } from "@dbx-tools/shared-model-gateway/options";
+import {
+  DatabricksOptionsSchema,
+  listenAddressSchema,
+  PostgresConfigOptionsSchema,
+  PostgresOptionsSchema,
+  parseOpts,
+  serializeOptsEnvironment,
+} from "@dbx-tools/shared-core";
+import { ChatModelClassOptionSchema } from "@dbx-tools/shared-model-gateway";
 import { z } from "zod";
 
 const graphitiText = (description: string) => z.string().trim().min(1).describe(description);
 
 export const GraphitiOptionsSchema = z
   .object({
-    profile: options.DatabricksOptionsSchema.shape.profile.describe(
+    profile: DatabricksOptionsSchema.shape.profile.describe(
       "Databricks profile used for model discovery and authentication.",
     ),
     bearer: graphitiText("Optional bearer token required by every Graphiti HTTP endpoint.")
@@ -45,12 +52,11 @@ export const GraphitiOptionsSchema = z
       .default(180_000)
       .describe("Maximum milliseconds allowed for the Graphiti runtime to become ready.")
       .meta({ env: "GRAPHITI_STARTUP_TIMEOUT_MS" }),
-    listen: options
-      .listenAddressSchema({
-        host: "127.0.0.1",
-        loopback: true,
-        port: 7272,
-      })
+    listen: listenAddressSchema({
+      host: "127.0.0.1",
+      loopback: true,
+      port: 7272,
+    })
       .describe("Graphiti HTTP listener.")
       .meta({ env: "GRAPHITI_LISTEN" }),
     databaseUrl: z
@@ -64,7 +70,7 @@ export const GraphitiOptionsSchema = z
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Database schema must be a PostgreSQL identifier.")
       .default("dbx_tools_graphiti")
       .meta({ env: "GRAPHITI_DATABASE_SCHEMA" }),
-    ...options.PostgresConfigOptionsSchema.shape,
+    ...PostgresConfigOptionsSchema.shape,
   })
   .strict()
   .describe("Graphiti options accepted by Node, CLI, AppKit, and browser callers.");
@@ -73,7 +79,7 @@ const GraphitiProcessEnvironmentSchema = GraphitiOptionsSchema.safeExtend({
   startupTimeoutMs: GraphitiOptionsSchema.shape.startupTimeoutMs.meta({
     env: "DBX_TOOLS_GRAPHITI_STARTUP_TIMEOUT_MS",
   }),
-  postgresRole: options.PostgresOptionsSchema.shape.postgresRole,
+  postgresRole: PostgresOptionsSchema.shape.postgresRole,
 });
 
 /** Graphiti options represented as Commander flags. */
@@ -118,12 +124,12 @@ export function resolveGraphitiOptions(options: GraphitiOptions = {}): ResolvedG
 export function graphitiOptionsFromEnvironment(
   environment: Readonly<Record<string, string | undefined>>,
 ): GraphitiOptions {
-  return options.parseOpts(GraphitiProcessEnvironmentSchema, null, environment);
+  return parseOpts(GraphitiProcessEnvironmentSchema, null, environment);
 }
 
 /** Serialize one Graphiti configuration for the Python process environment. */
 export function graphitiOptionsEnvironment(
   value: GraphitiOptions = {},
 ): Readonly<Record<string, string>> {
-  return options.serializeOptsEnvironment(GraphitiProcessEnvironmentSchema, value);
+  return serializeOptsEnvironment(GraphitiProcessEnvironmentSchema, value);
 }

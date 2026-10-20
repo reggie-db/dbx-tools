@@ -9,23 +9,21 @@ import type {
   WebAssetPageFetchRequest,
   WebImageFetchRequest,
   WebImageFetchResult,
-} from "@dbx-tools/appkit-web-search/fetch";
-import type {
   WebFetchRequest,
   WebFetchResult,
   WebSearchCitation,
   WebSearchRequest,
   WebSearchResult,
-} from "@dbx-tools/appkit-web-search/schema";
-import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
+} from "@dbx-tools/appkit-web-search";
+import { log, toError, toDescription } from "@dbx-tools/shared-core";
+import type {
+  BrandGenerationProgressEvent,
+  BrandGenerationRequest,
+  BrandPackageSource,
+  BrandVisualReference,
+} from "@dbx-tools/shared-generator";
 import { discoverMobileAppVisuals } from "./assets.ts";
-import {
-  brandRequestSubject,
-  type BrandGenerationProgressEvent,
-  type BrandGenerationRequest,
-  type BrandPackageSource,
-  type BrandVisualReference,
-} from "./schema.ts";
+import { brandRequestSubject } from "./schema.ts";
 
 const logger = log.logger("brand/research");
 
@@ -118,7 +116,7 @@ function fetchAssetPage(
 export function brandResearchQuery(request: BrandGenerationRequest): string {
   const subject = brandRequestSubject(request);
   const website = request.website ? ` The known official website is ${request.website}.` : "";
-  return stringUtils.toDescription(`
+  return toDescription(`
     Research the official brand identity and design direction for "${subject}".${website}
     The broader brief is: ${request.prompt ?? subject}.
     Prefer first-party sources and cite the official website first. Identify
@@ -193,7 +191,7 @@ async function researchMobileStore(
           logger.warn("mobile-image-fetch-failed", {
             platform,
             url,
-            error: errorUtils.toError(error),
+            error: toError(error),
           });
           return { url };
         } finally {
@@ -217,7 +215,7 @@ async function researchMobileStore(
   } catch (error) {
     logger.warn("mobile-store-research-failed", {
       platform,
-      error: errorUtils.toError(error),
+      error: toError(error),
     });
     await onProgress?.({
       type: "progress",
@@ -304,7 +302,7 @@ async function fetchSource(
   } catch (error) {
     logger.warn("source-fetch-failed", {
       url: citation.url,
-      error: errorUtils.toError(error),
+      error: toError(error),
     });
     return { ...citation, fetched: false };
   } finally {
@@ -403,7 +401,7 @@ export async function researchBrand(
     ).catch((error: unknown) => {
       logger.warn("official-page-html-fetch-failed", {
         url: official.url,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
       return undefined;
     }),

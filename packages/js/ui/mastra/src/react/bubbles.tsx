@@ -8,12 +8,12 @@ import {
   Item,
   ItemContent,
   ItemMedia,
-  RecordPreview,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { RecordPreview } from "@dbx-tools/ui/react";
 import type { UIMessage } from "ai";
 import {
   BugIcon,
@@ -39,13 +39,13 @@ import { ToolSessionPill, humanizeToolName } from "./tool-pill.tsx";
 import type {
   ApprovalDecision,
   ChatStatus,
-  ExportFormat,
   FeedbackSubmission,
   FeedbackValue,
   PendingApproval,
   ToolEvent,
 } from "./types.ts";
 import { copyText } from "../support/clipboard.ts";
+import type { ExportFormat } from "../support/export.ts";
 import { mergeToolEvents, toolEventsFromParts } from "../support/tool-events.ts";
 
 // User / assistant message bubbles plus the inline approval card and

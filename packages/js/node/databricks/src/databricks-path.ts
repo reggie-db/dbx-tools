@@ -11,7 +11,13 @@
  * @module
  */
 
-import { posixPath } from "@dbx-tools/shared-fs";
+import {
+  isHomeRelativePath,
+  toPosix,
+  expandHome,
+  normalizeRoot,
+  isAbsolute,
+} from "@dbx-tools/shared-fs";
 import { getCurrentUserName, type WorkspaceClient } from "./workspace-client.ts";
 
 /** Which Databricks Files API serves an absolute path. */
@@ -37,9 +43,6 @@ export interface ResolveDatabricksRootOptions {
   client?: WorkspaceClient;
 }
 
-/** True when {@link input} is `~` or a path under `~/`. See {@link posixPath.isHomeRelativePath}. */
-export const isHomeRelativePath = posixPath.isHomeRelativePath;
-
 /**
  * Expand `~` / `~/...` to `/Workspace/Users/<userName>/...`.
  * Non-home inputs are returned unchanged (POSIX separators only).
@@ -50,9 +53,9 @@ export function expandHomePath(input: string, userName: string): string {
     throw new TypeError("Databricks home expansion requires a non-empty userName");
   }
   if (!isHomeRelativePath(input)) {
-    return posixPath.toPosix(input.trim());
+    return toPosix(input.trim());
   }
-  return posixPath.expandHome(input, `/Workspace/Users/${name}`);
+  return expandHome(input, `/Workspace/Users/${name}`);
 }
 
 /**
@@ -80,26 +83,26 @@ export function normalizeDatabricksRoot(
         `Databricks home path "${root}" requires userName; use resolveDatabricksRoot() or pass userName`,
       );
     }
-    return posixPath.normalizeRoot(expandHomePath(trimmed, options.userName));
+    return normalizeRoot(expandHomePath(trimmed, options.userName));
   }
 
   const threePart = VOLUME_THREE_PART.exec(trimmed);
   if (threePart) {
-    return posixPath.normalizeRoot(`/Volumes/${threePart[1]}/${threePart[2]}/${threePart[3]}`);
+    return normalizeRoot(`/Volumes/${threePart[1]}/${threePart[2]}/${threePart[3]}`);
   }
 
-  let posix = posixPath.toPosix(trimmed);
+  let posix = toPosix(trimmed);
   if (posix === "/Volume" || posix.startsWith("/Volume/")) {
     posix = `/Volumes${posix.slice("/Volume".length)}`;
   }
 
-  if (!posixPath.isAbsolute(posix)) {
+  if (!isAbsolute(posix)) {
     throw new TypeError(
       `Databricks filesystem root must be absolute, catalog.schema.volume, or ~, got: ${root}`,
     );
   }
 
-  return posixPath.normalizeRoot(posix);
+  return normalizeRoot(posix);
 }
 
 /**
@@ -119,7 +122,7 @@ export async function resolveDatabricksRoot(
 
 /** True when {@link absolutePath} is served by the workspace objects API. */
 export function isWorkspaceFilesPath(absolutePath: string): boolean {
-  const p = posixPath.toPosix(absolutePath);
+  const p = toPosix(absolutePath);
   return (
     p === "/Workspace" ||
     p.startsWith("/Workspace/") ||
@@ -131,13 +134,13 @@ export function isWorkspaceFilesPath(absolutePath: string): boolean {
 
 /** True when {@link absolutePath} is a Unity Catalog volume path. */
 export function isVolumesPath(absolutePath: string): boolean {
-  const p = posixPath.toPosix(absolutePath);
+  const p = toPosix(absolutePath);
   return p === "/Volumes" || p.startsWith("/Volumes/");
 }
 
 /** True when {@link absolutePath} is a DBFS path. */
 export function isDbfsPath(absolutePath: string): boolean {
-  const p = posixPath.toPosix(absolutePath);
+  const p = toPosix(absolutePath);
   return p === "/dbfs" || p.startsWith("/dbfs/");
 }
 

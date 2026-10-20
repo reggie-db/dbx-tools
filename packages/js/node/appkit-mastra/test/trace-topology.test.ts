@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 
-import { injectRequestTags } from "@dbx-tools/appkit/request-tags";
-import { feedback } from "@dbx-tools/shared-mastra";
+import { injectRequestTags, USER_TRACE_ATTRIBUTE } from "@dbx-tools/appkit";
+import { MLFLOW_TRACE_ID_HEADER } from "@dbx-tools/shared-mastra";
 import { context, propagation, ROOT_CONTEXT, trace, type Tracer } from "@opentelemetry/api";
 import {
   getRPCMetadata,
@@ -23,18 +23,12 @@ import {
   CHAT_RESPONSE_ATTR,
   chatTurnTelemetryMiddleware,
   GEN_AI_OPERATION_NAME_ATTR,
-  MLFLOW_AGENT_TAG_ATTR,
-  MLFLOW_GENIE_TAG_ATTR,
-  MLFLOW_LOCAL_TAG_ATTR,
-  MLFLOW_OBO_AUTH_TAG_ATTR,
   MLFLOW_SESSION_ATTR,
   MLFLOW_SPAN_INPUTS_ATTR,
   MLFLOW_SPAN_OUTPUTS_ATTR,
   MLFLOW_SPAN_TYPE_AGENT,
   MLFLOW_SPAN_TYPE_ATTR,
   MLFLOW_SPAN_TYPE_GENIE,
-  MLFLOW_SP_AUTH_TAG_ATTR,
-  MLFLOW_USER_ATTR,
   recordActiveTraceAuth,
   recordActiveTraceModel,
   recordActiveTraceTag,
@@ -42,6 +36,13 @@ import {
   recordActiveTraceUser,
   stampGenieToolSpan,
 } from "../src/telemetry.ts";
+import {
+  MLFLOW_AGENT_TAG_ATTR,
+  MLFLOW_GENIE_TAG_ATTR,
+  MLFLOW_LOCAL_TAG_ATTR,
+  MLFLOW_OBO_AUTH_TAG_ATTR,
+  MLFLOW_SP_AUTH_TAG_ATTR,
+} from "../src/trace-attributes.ts";
 
 const INCOMING_TRACE_ID = "0123456789abcdef0123456789abcdef";
 const INCOMING_SPAN_ID = "0123456789abcdef";
@@ -225,7 +226,7 @@ describe("chat trace topology", () => {
     assert.match(String(exportedRoot.attributes[CHAT_RESPONSE_ATTR]), /root answer/);
     assert.equal(exportedRoot.attributes[CHAT_IDENTITY_ATTR], "service-principal");
     assert.equal(exportedRoot.attributes[CHAT_GENIE_USED_ATTR], true);
-    assert.equal(exportedRoot.attributes[MLFLOW_USER_ATTR], "ada@example.com");
+    assert.equal(exportedRoot.attributes[USER_TRACE_ATTRIBUTE], "ada@example.com");
     assert.equal(exportedRoot.attributes[MLFLOW_SESSION_ATTR], "thread-1");
     assert.equal(exportedRoot.attributes[MLFLOW_SPAN_TYPE_ATTR], MLFLOW_SPAN_TYPE_AGENT);
     assert.equal(exportedRoot.attributes[GEN_AI_OPERATION_NAME_ATTR], "invoke_agent");
@@ -253,10 +254,7 @@ describe("chat trace topology", () => {
       spans.every((span) => span.spanContext().traceId === exportedRoot.spanContext().traceId),
       true,
     );
-    assert.equal(
-      response.headers[feedback.MLFLOW_TRACE_ID_HEADER],
-      `tr-${agentTracingOptions?.traceId}`,
-    );
+    assert.equal(response.headers[MLFLOW_TRACE_ID_HEADER], `tr-${agentTracingOptions?.traceId}`);
     assert.match(agentTracingOptions?.traceId ?? "", /^[0-9a-f]{32}$/);
     assert.equal(agentTracingOptions?.traceId, exportedRoot.spanContext().traceId);
     assert.equal(agentTracingOptions?.parentSpanId, exportedRoot.spanContext().spanId);
@@ -311,7 +309,7 @@ describe("chat trace topology", () => {
     assert.equal(roots[0]?.attributes[CHAT_IDENTITY_ATTR], "obo");
     assert.equal(roots[0]?.attributes[CHAT_GENIE_USED_ATTR], false);
     assert.equal(roots[0]?.attributes[MLFLOW_GENIE_TAG_ATTR], undefined);
-    assert.equal(roots[0]?.attributes[MLFLOW_USER_ATTR], "local-user@example.com");
+    assert.equal(roots[0]?.attributes[USER_TRACE_ATTRIBUTE], "local-user@example.com");
     assert.equal(roots[0]?.attributes[MLFLOW_OBO_AUTH_TAG_ATTR], "true");
     assert.equal(roots[0]?.attributes[MLFLOW_SP_AUTH_TAG_ATTR], undefined);
     assert.equal(roots[0]?.attributes[MLFLOW_LOCAL_TAG_ATTR], "true");
@@ -322,10 +320,7 @@ describe("chat trace topology", () => {
       true,
     );
     assert.deepEqual(downstream, {});
-    assert.equal(
-      response.headers[feedback.MLFLOW_TRACE_ID_HEADER],
-      `tr-${roots[0]?.spanContext().traceId}`,
-    );
+    assert.equal(response.headers[MLFLOW_TRACE_ID_HEADER], `tr-${roots[0]?.spanContext().traceId}`);
     assert.equal(agentTracingOptions?.traceId, roots[0]?.spanContext().traceId);
     assert.equal(agentTracingOptions?.parentSpanId, roots[0]?.spanContext().spanId);
   });

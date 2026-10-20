@@ -4,7 +4,7 @@
  * generated version surface. This task has no git, registry, or publication
  * side effects; release preparation owns those operations.
  */
-import * as projectUtils from "@dbx-tools/core/project-utils";
+import { projectUtils } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskRoot } from "./cli.ts";

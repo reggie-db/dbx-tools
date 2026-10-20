@@ -6,7 +6,7 @@
 
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { log, toError } from "@dbx-tools/shared-core";
 import type { ClientProtocol } from "@dbx-tools/shared-model-gateway";
 import type express from "express";
 
@@ -43,7 +43,7 @@ export async function sendModels(
     logger.error("models request failed", {
       ...requestContext(request),
       elapsedMs: Date.now() - startedAt,
-      error: errorUtils.toError(error),
+      error: toError(error),
     });
     sendError("openai-responses", response, error);
   }
@@ -112,7 +112,7 @@ export async function sendInference(
     logger.error("inference request failed", {
       ...requestContext(request),
       elapsedMs: Date.now() - startedAt,
-      error: errorUtils.toError(error),
+      error: toError(error),
       protocol,
     });
     if (response.headersSent) {

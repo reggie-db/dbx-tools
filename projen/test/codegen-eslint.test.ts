@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
+import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project-js.ts";
 
 /**
  * Synthesize a root with one codegen package that holds BOTH a generated module

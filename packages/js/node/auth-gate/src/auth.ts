@@ -10,8 +10,8 @@
 
 import { passkey } from "@better-auth/passkey";
 import { type AuthStatus, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
-import { passkeyDisplayName } from "@dbx-tools/shared-auth/auth";
-import { environmentUtils, errorUtils, log } from "@dbx-tools/shared-core";
+import { auth as sharedAuth } from "@dbx-tools/shared-auth";
+import { log, isDatabricksAppEnv, toError } from "@dbx-tools/shared-core";
 import { APIError, betterAuth, type BetterAuthOptions } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
 
@@ -77,7 +77,7 @@ export async function createPasswordlessAuth(
   const trustedOrigins = [
     ...new Set([origin, ...(config.trustedOrigins ?? []).map((value) => new URL(value).origin)]),
   ];
-  const allowDatabricksAppOrigins = environmentUtils.isDatabricksAppEnv();
+  const allowDatabricksAppOrigins = isDatabricksAppEnv();
   const rpID = new URL(origin).hostname;
   const passkeyNamePrefix = config.passkeyNamePrefix ?? config.appName;
   const basePath = config.basePath ?? "/api/auth";
@@ -173,14 +173,14 @@ export async function createPasswordlessAuth(
           void config.sendCode(address, otp, emailOptions).catch((error: unknown) => {
             logger.error("verification email failed", {
               email: address,
-              error: errorUtils.toError(error),
+              error: toError(error),
             });
           });
         },
       }),
       passkey({
         rpID,
-        rpName: passkeyDisplayName(passkeyNamePrefix, rpID) ?? config.appName,
+        rpName: sharedAuth.passkeyDisplayName(passkeyNamePrefix, rpID) ?? config.appName,
         origin,
         authenticatorSelection: {
           residentKey: "preferred",

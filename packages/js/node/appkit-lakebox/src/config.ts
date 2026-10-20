@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { BasePluginConfig } from "@databricks/appkit";
-import { configUtils, projectUtils } from "@dbx-tools/core";
-import { Ssh2PatchModeSchema, SshTransportModeSchema } from "@dbx-tools/lakebox/transport";
+import { configUtils, string, ENV_ONLY, positiveInt, root } from "@dbx-tools/core";
+import { Ssh2PatchModeSchema, SshTransportModeSchema } from "@dbx-tools/lakebox";
 import { LAKEBOX_DEFAULT_ROUTE_PREFIX } from "@dbx-tools/shared-lakebox";
 import { z } from "zod";
 
@@ -118,11 +118,11 @@ export function resolveLakeboxPluginConfig(
   return LakeboxPluginConfigSchema.parse({
     ...serializable,
     application:
-      configUtils.string(application, APPLICATION_CONFIG_KEY) ??
-      configUtils.string(undefined, "DATABRICKS_APP_NAME", configUtils.ENV_ONLY) ??
-      basename(projectUtils.root() ?? process.cwd()),
-    idleTimeoutSeconds: configUtils.positiveInt(idleTimeoutSeconds, IDLE_TIMEOUT_CONFIG_KEY, 3_600),
-    sshTransport: configUtils.string(sshTransport, SSH_TRANSPORT_CONFIG_KEY),
-    ssh2Patch: configUtils.string(ssh2Patch, SSH2_PATCH_CONFIG_KEY),
+      string(application, APPLICATION_CONFIG_KEY) ??
+      string(undefined, "DATABRICKS_APP_NAME", ENV_ONLY) ??
+      basename(root() ?? process.cwd()),
+    idleTimeoutSeconds: positiveInt(idleTimeoutSeconds, IDLE_TIMEOUT_CONFIG_KEY, 3_600),
+    sshTransport: string(sshTransport, SSH_TRANSPORT_CONFIG_KEY),
+    ssh2Patch: string(ssh2Patch, SSH2_PATCH_CONFIG_KEY),
   });
 }

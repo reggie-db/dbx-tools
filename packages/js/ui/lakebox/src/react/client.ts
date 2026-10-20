@@ -1,3 +1,4 @@
+import { usePluginClientConfig } from "@databricks/appkit-ui/react";
 import {
   LAKEBOX_DEFAULT_BASE_PATH,
   LAKEBOX_PLUGIN_NAME,
@@ -18,7 +19,6 @@ import {
   type LakeboxServiceLogsRequest,
   type LakeboxSummary,
 } from "@dbx-tools/shared-lakebox";
-import { usePluginClientConfig } from "@dbx-tools/ui/react";
 import { useMemo } from "react";
 
 /** Browser client for the Lakebox AppKit plugin API. */

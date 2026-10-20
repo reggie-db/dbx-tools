@@ -5,11 +5,6 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/demo-appkit-app";
 export const PACKAGE_VERSION = "0.9.154";
 export * as app from "./src/App.tsx";
+export * from "./src/App.tsx";
 export * as errorBoundary from "./src/ErrorBoundary.tsx";
-export * as hooksUseChatThreadQuery from "./src/hooks/use-chat-thread-query.ts";
-export * as pagesBrand from "./src/pages/Brand.tsx";
-export * as pagesBus from "./src/pages/Bus.tsx";
-export * as pagesChat from "./src/pages/Chat.tsx";
-export * as pagesLakebox from "./src/pages/Lakebox.tsx";
-export * as pagesSearch from "./src/pages/Search.tsx";
 export { ErrorBoundary } from "./src/ErrorBoundary.tsx";

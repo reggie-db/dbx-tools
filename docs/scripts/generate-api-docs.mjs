@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { asyncUtils, object } from "@dbx-tools/shared-core";
+import { mapConcurrent, sequence } from "@dbx-tools/shared-core";
 import { addApiGuideLink, apiSymbolLinks, linkPackageGuideApi } from "./api-guide-links.mjs";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import {
@@ -416,8 +416,7 @@ async function generatePackageApi(pkg, typedocBin) {
     DOCS_NODE,
     [
       typedocBin,
-      ...object
-        .sequence(pkg.entries.map((entry) => entry.file))
+      ...sequence(pkg.entries.map((entry) => entry.file))
         .distinct()
         .map((entry) => posix(path.relative(siteRoot, entry)))
         .toArray(),
@@ -550,12 +549,12 @@ async function main() {
   fs.mkdirSync(apiRoot, { recursive: true });
 
   const [typescriptGenerated, pythonGenerated] = await Promise.all([
-    asyncUtils.mapConcurrent(
+    mapConcurrent(
       typescriptPackages,
       async (pkg) => ((await generatePackageApi(pkg, typedocBin)) ? pkg : undefined),
       { concurrency: typedocWorkers },
     ),
-    asyncUtils.mapConcurrent(
+    mapConcurrent(
       pythonPackages,
       async (pkg) => ((await generatePythonPackageApi(pkg)) ? pkg : undefined),
       { concurrency: 5 },

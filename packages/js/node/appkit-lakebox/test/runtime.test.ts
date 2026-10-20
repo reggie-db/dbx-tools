@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { LakeboxEntry } from "@dbx-tools/lakebox/rest";
+import type { LakeboxEntry } from "@dbx-tools/lakebox";
 import type { LakeboxResourceRegistry } from "../src/_resource-registry.ts";
 import { resolveLakeboxPluginConfig } from "../src/config.ts";
 import { LakeboxRuntime } from "../src/runtime.ts";

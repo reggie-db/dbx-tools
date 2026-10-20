@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { appkit } from "@dbx-tools/appkit";
+import { type ExecutionContextLike } from "@dbx-tools/appkit";
 
 import { attributedUserId } from "../src/config.ts";
 
 /** Minimal OBO context: `isUserContext` is the discriminator AppKit stamps. */
-function userContext(userId: string): appkit.ExecutionContextLike {
-  return { isUserContext: true, userId } as unknown as appkit.ExecutionContextLike;
+function userContext(userId: string): ExecutionContextLike {
+  return { isUserContext: true, userId } as unknown as ExecutionContextLike;
 }
 
 /** Minimal service-principal context: no `isUserContext`, no `userId`. */
-function servicePrincipalContext(serviceUserId: string): appkit.ExecutionContextLike {
-  return { serviceUserId } as unknown as appkit.ExecutionContextLike;
+function servicePrincipalContext(serviceUserId: string): ExecutionContextLike {
+  return { serviceUserId } as unknown as ExecutionContextLike;
 }
 
 describe("attributedUserId", () => {

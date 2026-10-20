@@ -23,8 +23,8 @@
  * @module
  */
 
-import { stringUtils } from "@dbx-tools/shared-core";
-import { markers, type Chart, type StatementData } from "@dbx-tools/shared-mastra";
+import { capitalize, toLabel, toSlugWithOptions, escapeHtml } from "@dbx-tools/shared-core";
+import { type Chart, type StatementData, parseMarkers, isUuid } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import type { EChartsCoreOption } from "echarts";
 import { normalizeChartOption } from "./chart-option.ts";
@@ -199,15 +199,15 @@ type Segment =
 function splitSegments(text: string): Segment[] {
   const segments: Segment[] = [];
   let last = 0;
-  for (const marker of markers.parseMarkers(text)) {
+  for (const marker of parseMarkers(text)) {
     if (marker.start > last) {
       segments.push({ kind: "text", text: text.slice(last, marker.start) });
     }
-    if (markers.isUuid(marker.id) && marker.type === "chart") {
+    if (isUuid(marker.id) && marker.type === "chart") {
       segments.push({ kind: "chart", id: marker.id });
-    } else if (markers.isUuid(marker.id) && marker.type === "data") {
+    } else if (isUuid(marker.id) && marker.type === "data") {
       segments.push({ kind: "data", id: marker.id });
-    } else if (markers.isUuid(marker.id) && marker.type === "visualization") {
+    } else if (isUuid(marker.id) && marker.type === "visualization") {
       segments.push({ kind: "visualization", id: marker.id });
     }
     last = marker.end;
@@ -232,7 +232,7 @@ export function messageText(message: UIMessage): string {
 function roleLabel(role: UIMessage["role"], userLabel: string): string {
   if (role === "user") return userLabel;
   if (role === "assistant") return "Assistant";
-  return stringUtils.capitalize(role);
+  return capitalize(role);
 }
 
 /* --------------------------------- HTML ---------------------------------- */
@@ -345,7 +345,7 @@ async function dataTableHtml(
 ): Promise<string | null> {
   const data = await safeStatement(resolver, id, visualization);
   if (!data || data.rows.length === 0) return null;
-  const head = data.columns.map((c) => `<th>${escapeHtml(stringUtils.toLabel(c))}</th>`).join("");
+  const head = data.columns.map((c) => `<th>${escapeHtml(toLabel(c))}</th>`).join("");
   const body = data.rows
     .map(
       (row) =>
@@ -417,7 +417,7 @@ async function dataTableMarkdown(
 ): Promise<string | null> {
   const data = await safeStatement(resolver, id, visualization);
   if (!data || data.rows.length === 0) return null;
-  const header = `| ${data.columns.map((c) => mdCell(stringUtils.toLabel(c))).join(" | ")} |`;
+  const header = `| ${data.columns.map((c) => mdCell(toLabel(c))).join(" | ")} |`;
   const sep = `| ${data.columns.map(() => "---").join(" | ")} |`;
   const rows = data.rows.map(
     (row) => `| ${data.columns.map((c) => mdCell(cellText(row[c]))).join(" | ")} |`,
@@ -462,12 +462,9 @@ function mdCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
-/** Escape HTML-significant characters (from the shared string utils). */
-const escapeHtml = stringUtils.escapeHtml;
-
 /** Turn a title into a safe, lowercase filename stem. */
 function slugify(value: string): string {
-  return stringUtils.toSlugWithOptions({ maxLength: 60 }, value) || "conversation";
+  return toSlugWithOptions({ maxLength: 60 }, value) || "conversation";
 }
 
 /**

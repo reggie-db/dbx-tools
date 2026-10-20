@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { brandUtils } from "@dbx-tools/shared-core";
-import { defaultEmailBrand, emailBrandFromContext } from "../src/brand.ts";
+import { defaultBrandContext, parseBrandContext } from "@dbx-tools/shared-core";
+import { defaultEmailBrand, emailBrandFromContext } from "@dbx-tools/shared-email-template";
 import { renderEmailHtml, renderEmailText } from "../src/email-html.ts";
 
 describe("email brand", () => {
   it("derives accent, font, and name from a brand context", () => {
-    const b = emailBrandFromContext(brandUtils.defaultBrandContext);
-    assert.equal(b.accent, brandUtils.defaultBrandContext.colors.primary);
-    assert.equal(b.fontFamily, brandUtils.defaultBrandContext.typography.sans);
-    assert.equal(b.name, brandUtils.defaultBrandContext.name);
+    const b = emailBrandFromContext(defaultBrandContext);
+    assert.equal(b.accent, defaultBrandContext.colors.primary);
+    assert.equal(b.fontFamily, defaultBrandContext.typography.sans);
+    assert.equal(b.name, defaultBrandContext.name);
   });
 
   it("embeds the default logo as an email-safe PNG data URL", () => {
@@ -17,7 +17,7 @@ describe("email brand", () => {
   });
 
   it("keeps an http(s) or data URL logo", () => {
-    const ctx = brandUtils.parseBrandContext({
+    const ctx = parseBrandContext({
       assets: { logo: { light: "https://ex.com/l.svg", dark: "https://ex.com/d.svg" } },
     });
     // Dark logo wins - the header band is dark.
@@ -25,7 +25,7 @@ describe("email brand", () => {
   });
 
   it("does not add a tagline when the brand omits one", async () => {
-    const brand = emailBrandFromContext(brandUtils.parseBrandContext());
+    const brand = emailBrandFromContext(parseBrandContext());
     assert.equal(brand.tagline, undefined);
     assert.doesNotMatch(
       await renderEmailHtml({ subject: "S", body: "b", brand }),

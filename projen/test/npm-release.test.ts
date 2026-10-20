@@ -14,13 +14,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
+import { packNpmPackage } from "../src/npm-packaging.ts";
 import {
-  materializeWorkspaceManifest,
   npmReleaseMatches,
-  packNpmPackage,
   readNpmArchiveIdentity,
   type NpmReleaseIdentity,
-} from "../tasks/publish-npm.ts";
+} from "../src/npm-release.ts";
+import { materializeWorkspaceManifest } from "../src/workspace-manifest.ts";
 
 let outdir: string;
 let archive: string;

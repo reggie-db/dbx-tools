@@ -3,10 +3,14 @@
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
+import { log, poll, mapConcurrent, toError } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
-import { npmReleaseMatches, publishedNpmRelease, readNpmArchiveIdentity } from "./publish-npm.ts";
+import {
+  npmReleaseMatches,
+  publishedNpmRelease,
+  readNpmArchiveIdentity,
+} from "../src/npm-release.ts";
 import { PUBLIC_NPM_REGISTRY_URL, PUBLIC_PYPI_REGISTRY_URL } from "../src/release-context.ts";
 
 const DEFAULT_CONCURRENCY = 8;
@@ -65,9 +69,9 @@ export async function waitForPublications(
   let pending = [...probes];
   let previousCount: number | undefined;
   try {
-    for await (const unavailable of asyncUtils.poll<PublicationProbe[]>(
+    for await (const unavailable of poll<PublicationProbe[]>(
       async ({ signal }) => {
-        const results = await asyncUtils.mapConcurrent(
+        const results = await mapConcurrent(
           pending,
           async (probe) => {
             try {
@@ -75,7 +79,7 @@ export async function waitForPublications(
               if (available) errors.delete(probe.label);
               return { available, probe };
             } catch (error) {
-              errors.set(probe.label, errorUtils.toError(error));
+              errors.set(probe.label, toError(error));
               return { available: false, probe };
             }
           },

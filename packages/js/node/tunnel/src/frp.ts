@@ -14,9 +14,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
 
-import { bin, configUtils, exec } from "@dbx-tools/core";
-import type { ChildProcessResult, ChildProcessTerminationOptions } from "@dbx-tools/core/exec";
-import { log, options as sharedOptions } from "@dbx-tools/shared-core";
+import { exec, ensure, parseVersion, string, port, boolean } from "@dbx-tools/core";
+import type { ChildProcessResult, ChildProcessTerminationOptions } from "@dbx-tools/core";
+import { log, tcpPortOrZeroSchema } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
@@ -49,14 +49,14 @@ export const FrpOptionsSchema = z
   .object({
     publicDomain: z.string().trim().min(1).optional().describe("FRP public HTTP host."),
     server: z.string().trim().min(1).optional().describe("FRP control host."),
-    serverPort: sharedOptions.tcpPortOrZeroSchema.optional().describe("FRP control port."),
+    serverPort: tcpPortOrZeroSchema.optional().describe("FRP control port."),
     protocol: z.string().trim().min(1).optional().describe("FRP transport protocol."),
     token: z.string().trim().min(1).optional().describe("FRP authentication token."),
     proxyName: z.string().trim().min(1).optional().describe("FRP proxy registration name."),
     path: z.string().trim().min(1).optional().describe("FRP public path."),
     stripPrefix: z.boolean().optional().describe("Strip the FRP path before forwarding."),
-    port: sharedOptions.tcpPortOrZeroSchema.describe("Public listener port."),
-    targetPort: sharedOptions.tcpPortOrZeroSchema.optional().describe("Private target port."),
+    port: tcpPortOrZeroSchema.describe("Public listener port."),
+    targetPort: tcpPortOrZeroSchema.optional().describe("Private target port."),
   })
   .strict()
   .describe("FRP tunnel resolution options.");
@@ -82,22 +82,22 @@ function normalizePath(value: string | undefined): string {
 export function resolveFrpConfig(opts: FrpOptions): FrpConfig | undefined {
   const options = FrpOptionsSchema.parse(opts);
   const publicDomain = bareHost(
-    configUtils.string(
+    string(
       options.publicDomain,
       ["TUNNEL_FRP_PUBLIC_DOMAIN", "TUNNEL_PUBLIC_DOMAIN"],
       TUNNEL_CONFIG,
     ),
   );
   if (!publicDomain) return undefined;
-  const server = bareHost(configUtils.string(options.server, "FRP_SERVER")) ?? publicDomain;
-  const serverPort = configUtils.port(options.serverPort, "FRP_SERVER_PORT", 443);
-  const protocol = configUtils.string(options.protocol, "FRP_PROTOCOL") ?? "wss";
-  const token = configUtils.string(options.token, ["FRP_TOKEN", "TUNNEL_TOKEN"]);
+  const server = bareHost(string(options.server, "FRP_SERVER")) ?? publicDomain;
+  const serverPort = port(options.serverPort, "FRP_SERVER_PORT", 443);
+  const protocol = string(options.protocol, "FRP_PROTOCOL") ?? "wss";
+  const token = string(options.token, ["FRP_TOKEN", "TUNNEL_TOKEN"]);
   const proxyName =
-    configUtils.string(options.proxyName, "FRP_PROXY_NAME") ?? publicDomain.split(".")[0] ?? "app";
-  const appName = configUtils.string(undefined, "DATABRICKS_APP_NAME") ?? proxyName;
-  const path = normalizePath(configUtils.string(options.path, "FRP_PATH") ?? appName);
-  const stripPrefix = configUtils.boolean(options.stripPrefix, "FRP_STRIP_PREFIX") ?? path !== "/";
+    string(options.proxyName, "FRP_PROXY_NAME") ?? publicDomain.split(".")[0] ?? "app";
+  const appName = string(undefined, "DATABRICKS_APP_NAME") ?? proxyName;
+  const path = normalizePath(string(options.path, "FRP_PATH") ?? appName);
+  const stripPrefix = boolean(options.stripPrefix, "FRP_STRIP_PREFIX") ?? path !== "/";
   return {
     publicDomain,
     server,
@@ -149,13 +149,13 @@ async function selectFrpc(source: string): Promise<string> {
 /** Install frpc when absent and return the environment used by its process. */
 export async function installFrp(options: FrpInstallOptions = {}): Promise<NodeJS.ProcessEnv> {
   const homeDir = options.homeDir ?? os.homedir();
-  const context = await bin.ensure("frpc", frpDownloadUrl, {
+  const context = await ensure("frpc", frpDownloadUrl, {
     autoUnpackage: true,
     homeDir,
     minVersion: FRP_VERSION,
     selector: ({ source }) => selectFrpc(source),
     versionParser: ({ stdout, stderr }) => {
-      const version = bin.parseVersion({ stdout, stderr });
+      const version = parseVersion({ stdout, stderr });
       return version === FRP_VERSION ? version : undefined;
     },
   });

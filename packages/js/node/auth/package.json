@@ -42,30 +42,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./bindings": {
-        "types": "./lib/src/bindings.d.ts",
-        "default": "./lib/src/bindings.js"
-      },
-      "./client": {
-        "types": "./lib/src/client.d.ts",
-        "default": "./lib/src/client.js"
-      },
-      "./config": {
-        "types": "./lib/src/config.d.ts",
-        "default": "./lib/src/config.js"
-      },
-      "./profile": {
-        "types": "./lib/src/profile.d.ts",
-        "default": "./lib/src/profile.js"
-      },
-      "./runtime-auth": {
-        "types": "./lib/src/runtime-auth.d.ts",
-        "default": "./lib/src/runtime-auth.js"
-      },
-      "./*": {
-        "types": "./lib/src/*/index.d.ts",
-        "default": "./lib/src/*/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -79,16 +55,10 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./bindings": "./src/bindings.ts",
-    "./client": "./src/client.ts",
-    "./config": "./src/config.ts",
-    "./profile": "./src/profile.ts",
-    "./runtime-auth": "./src/runtime-auth.ts",
-    "./*": "./src/*/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
+    "index*.ts",
     "src",
     "lib"
   ],

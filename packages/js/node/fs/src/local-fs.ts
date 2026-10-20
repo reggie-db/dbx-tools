@@ -22,19 +22,22 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { fileLock } from "@dbx-tools/core";
-import { hash } from "@dbx-tools/shared-core";
+import { withFileLock } from "@dbx-tools/core";
+import { fnvHash, id } from "@dbx-tools/shared-core";
 import {
   BaseFileSystem,
-  baseFS,
   FileSystemError,
-  posixPath,
   type CopyOptions,
   type FileEntry,
   type FileEntryType,
   type FileStat,
   type FileSystemErrorCode,
   type WriteFileOptions,
+  mapFileSystemError,
+  normalizeRoot,
+  toPosix,
+  toHost,
+  toRelativeSegment,
 } from "@dbx-tools/shared-fs";
 import { resolveLocalRoot } from "./local-path.ts";
 import { resolveLocalHome, resolveLocalTemp, type ResolveOsPathsOptions } from "./os-path.ts";
@@ -105,9 +108,9 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
 
   constructor(options: LocalFileSystemOptions) {
     const hostRoot = resolveLocalRoot(options.root, options.os);
-    const root = posixPath.normalizeRoot(posixPath.toPosix(hostRoot));
+    const root = normalizeRoot(toPosix(hostRoot));
     super({
-      id: options.id ?? `local-${hash.fnvHash(root)}`,
+      id: options.id ?? `local-${fnvHash(root)}`,
       backend: "local",
       root,
       readOnly: options.readOnly,
@@ -118,7 +121,7 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
   }
 
   protected override toBackendPath(posixBackendPath: string): string {
-    return posixPath.toHost(posixBackendPath, path.sep);
+    return toHost(posixBackendPath, path.sep);
   }
 
   protected override async createRootDirectory(): Promise<void> {
@@ -146,7 +149,7 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
       const resolved = path.isAbsolute(inputPath)
         ? path.resolve(inputPath)
         : path.resolve(this.toBackendPath(this.root), inputPath);
-      return this.toBackendPath(posixPath.toPosix(resolved));
+      return this.toBackendPath(toPosix(resolved));
     }
     return super.resolvePath(inputPath);
   }
@@ -200,7 +203,7 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
 
   /** Classify Node errno codes; {@link BaseFileSystem} wraps every primitive. */
   protected override mapError(err: unknown, filePath: string): FileSystemError {
-    return baseFS.mapFileSystemError(err, filePath, nodeErrorCode);
+    return mapFileSystemError(err, filePath, nodeErrorCode);
   }
 
   protected override async readBytesAt(resolvedPath: string): Promise<Uint8Array> {
@@ -406,7 +409,7 @@ export function tmpFS(
  * ```
  */
 export function scratchFS(prefix: string, options: OsFileSystemOptions = {}): LocalFileSystem {
-  return tmpFS(`${prefix}-${hash.id()}`, options);
+  return tmpFS(`${prefix}-${id()}`, options);
 }
 
 /**
@@ -452,7 +455,7 @@ export async function rebuildFS(
 
   const stable = tmpFS(key, options);
   const stableHost = path.resolve(stable.root);
-  return fileLock.withFileLock(["rebuildFS", stableHost], async () => {
+  return withFileLock(["rebuildFS", stableHost], async () => {
     await rm(stableHost, { recursive: true, force: true });
     await mkdir(path.dirname(stableHost), { recursive: true });
     await rename(path.resolve(scratch.root), stableHost);
@@ -465,6 +468,6 @@ export async function rebuildFS(
  * leading `~` or `/` is stripped so an absolute-looking input cannot escape.
  */
 function joinUnderBase(base: string, relativeRoot: string): string {
-  const rest = posixPath.toRelativeSegment(relativeRoot);
+  const rest = toRelativeSegment(relativeRoot);
   return rest ? path.resolve(base, rest) : base;
 }

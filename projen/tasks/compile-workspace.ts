@@ -3,8 +3,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join, resolve } from "node:path";
-import * as exec from "@dbx-tools/core/exec";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { type ExecResult, spawn } from "@dbx-tools/core";
+import { log, toError } from "@dbx-tools/shared-core";
 import type { TaskSpec, TasksManifest } from "projen";
 import { runTaskMain } from "./cli.ts";
 
@@ -80,7 +80,7 @@ const emoji = /[\p{Extended_Pictographic}\uFE0F\u200D]/gu;
 export async function main(): Promise<void> {
   const root = process.cwd();
   const plan = compilePlan(root);
-  const jobs: Array<{ name: string; result: Promise<exec.ExecResult> }> = [];
+  const jobs: Array<{ name: string; result: Promise<ExecResult> }> = [];
   if (plan.typescriptConfigs.length > 0) {
     const batchCount = Math.min(4, availableParallelism(), plan.typescriptConfigs.length);
     const batches = Array.from({ length: batchCount }, () => [] as string[]);
@@ -91,7 +91,7 @@ export async function main(): Promise<void> {
     for (const [index, batch] of batches.entries()) {
       jobs.push({
         name: `TypeScript batch ${index + 1}`,
-        result: exec.spawn("bunx", ["tsc", "--build", ...batch], {
+        result: spawn("bunx", ["tsc", "--build", ...batch], {
           cwd: root,
           stdin: "ignore",
           stdout: "inherit",
@@ -111,7 +111,7 @@ export async function main(): Promise<void> {
   for (const [index, result] of results.entries()) {
     if (result.status === "rejected") {
       logger.error(`${jobs[index]!.name} compile failed`, {
-        error: errorUtils.toError(result.reason),
+        error: toError(result.reason),
       });
       failed = true;
     } else if (result.value.exitCode !== 0) {
@@ -125,10 +125,10 @@ export async function main(): Promise<void> {
 async function compileCustomPackage(pkg: {
   readonly name: string;
   readonly directory: string;
-}): Promise<exec.ExecResult> {
-  let result: exec.ExecResult | undefined;
+}): Promise<ExecResult> {
+  let result: ExecResult | undefined;
   for (const task of ["pre-compile", "compile", "post-compile"]) {
-    result = await exec.spawn("bun", ["run", task], {
+    result = await spawn("bun", ["run", task], {
       cwd: pkg.directory,
       stdin: "ignore",
       stdout: (line) => logger.info(`${pkg.name}: ${line.replace(emoji, "")}`),

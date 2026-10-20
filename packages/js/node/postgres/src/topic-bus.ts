@@ -25,7 +25,17 @@
  */
 
 import { hostname } from "node:os";
-import { asyncUtils, errorUtils, hash, json, object, stringUtils } from "@dbx-tools/shared-core";
+import {
+  object,
+  sleep,
+  errorMessage,
+  toError,
+  id,
+  parseRecord,
+  isSerializableValue,
+  firstNonEmpty,
+  trimToNull,
+} from "@dbx-tools/shared-core";
 import type { Notification, PoolClient } from "pg";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
@@ -226,7 +236,7 @@ function definedMetadata(values: Record<string, SerializableValue | undefined>):
 function machineMetadata(): TopicMetadata {
   return definedMetadata({
     project:
-      stringUtils.firstNonEmpty([
+      firstNonEmpty([
         process.env.DATABRICKS_APP_NAME,
         process.env.DATABRICKS_BUNDLE_NAME,
         process.env.PROJECT_NAME,
@@ -234,10 +244,10 @@ function machineMetadata(): TopicMetadata {
       ]) ?? undefined,
     hostname: hostname(),
     platform: process.platform,
-    environment: stringUtils.trimToNull(process.env.NODE_ENV) ?? undefined,
-    appName: stringUtils.trimToNull(process.env.DATABRICKS_APP_NAME) ?? undefined,
-    deploymentId: stringUtils.trimToNull(process.env.DATABRICKS_APP_DEPLOYMENT_ID) ?? undefined,
-    databricksHost: stringUtils.trimToNull(process.env.DATABRICKS_HOST) ?? undefined,
+    environment: trimToNull(process.env.NODE_ENV) ?? undefined,
+    appName: trimToNull(process.env.DATABRICKS_APP_NAME) ?? undefined,
+    deploymentId: trimToNull(process.env.DATABRICKS_APP_DEPLOYMENT_ID) ?? undefined,
+    databricksHost: trimToNull(process.env.DATABRICKS_HOST) ?? undefined,
   });
 }
 
@@ -260,9 +270,9 @@ async function senderMetadata(): Promise<TopicMetadata> {
   try {
     const context = appkit.getExecutionContext();
     return definedMetadata({
-      senderId: stringUtils.trimToNull(context.userId) ?? undefined,
-      senderName: stringUtils.trimToNull(context.userName) ?? undefined,
-      senderEmail: stringUtils.trimToNull(context.userEmail) ?? undefined,
+      senderId: trimToNull(context.userId) ?? undefined,
+      senderName: trimToNull(context.userName) ?? undefined,
+      senderEmail: trimToNull(context.userEmail) ?? undefined,
     });
   } catch {
     return {};
@@ -280,7 +290,7 @@ async function senderMetadata(): Promise<TopicMetadata> {
  */
 function decode(value: string | undefined): TopicMessage | undefined {
   if (!value) return undefined;
-  const record = json.parseRecord(value);
+  const record = parseRecord(value);
   if (
     !record ||
     typeof record.id !== "string" ||
@@ -291,8 +301,8 @@ function decode(value: string | undefined): TopicMessage | undefined {
     typeof record.metadata !== "object" ||
     Array.isArray(record.metadata) ||
     !("body" in record) ||
-    !object.isSerializableValue(record.metadata) ||
-    !object.isSerializableValue(record.body)
+    !isSerializableValue(record.metadata) ||
+    !isSerializableValue(record.body)
   ) {
     return undefined;
   }
@@ -402,16 +412,13 @@ export class PostgresTopicBus {
   ): Promise<TopicMessage<TBody>> {
     if (!topic.trim()) throw new TypeError("Topic must not be empty");
     if (!input.type.trim()) throw new TypeError("Message type must not be empty");
-    if (
-      !object.isSerializableValue(input.metadata ?? {}) ||
-      !object.isSerializableValue(input.body)
-    ) {
+    if (!isSerializableValue(input.metadata ?? {}) || !isSerializableValue(input.body)) {
       throw new TypeError("Message metadata and body must be JSON serializable without coercion");
     }
     if (this.closed) throw new Error("Postgres topic bus is closed");
     const automatic = await this.resolveMetadata();
     const message: TopicMessage<TBody> = {
-      id: hash.id(),
+      id: id(),
       topic,
       type: input.type,
       metadata: { ...automatic, ...input.metadata },
@@ -422,7 +429,7 @@ export class PostgresTopicBus {
     try {
       encoded = JSON.stringify(message);
     } catch (cause) {
-      throw new TypeError(`Message must be JSON serializable: ${errorUtils.errorMessage(cause)}`);
+      throw new TypeError(`Message must be JSON serializable: ${errorMessage(cause)}`);
     }
     if (!decode(encoded)) {
       throw new TypeError("Message type, metadata, and body must be JSON serializable");
@@ -557,7 +564,7 @@ export class PostgresTopicBus {
     try {
       await client.query(`UNLISTEN ${quotePostgresIdentifier(this.channelName)}`);
     } catch (cause) {
-      releaseError = errorUtils.toError(cause);
+      releaseError = toError(cause);
     }
     client.release(releaseError);
   }
@@ -582,7 +589,7 @@ export class PostgresTopicBus {
     } catch (cause) {
       client.removeListener("notification", this.handleNotification);
       client.removeListener("error", this.handleClientError);
-      client.release(errorUtils.toError(cause));
+      client.release(toError(cause));
       throw cause;
     }
   }
@@ -661,7 +668,7 @@ export class PostgresTopicBus {
     while (!this.closed && this.listeners.size > 0) {
       if (delay > 0) {
         try {
-          await asyncUtils.sleep(delay, this.reconnectAbort.signal);
+          await sleep(delay, this.reconnectAbort.signal);
         } catch {
           return;
         }

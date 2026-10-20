@@ -6,14 +6,18 @@
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createApp, server } from "@databricks/appkit";
-import { ModelGateway } from "@dbx-tools/appkit-model-gateway";
-import { sendHealth, sendInference, sendModels } from "@dbx-tools/appkit-model-gateway/routes";
-import { workspaceClient } from "@dbx-tools/databricks";
+import {
+  ModelGateway,
+  sendHealth,
+  sendInference,
+  sendModels,
+} from "@dbx-tools/appkit-model-gateway";
+import { createWorkspaceClient } from "@dbx-tools/databricks";
 import {
   resolveModelGatewayOptions,
   type ModelGatewayOptions,
   type ResolvedModelGatewayOptions,
-} from "@dbx-tools/shared-model-gateway/options";
+} from "@dbx-tools/shared-model-gateway";
 import type express from "express";
 
 type AppKitServerOptions = NonNullable<Parameters<typeof server>[0]>;
@@ -65,7 +69,7 @@ export async function startModelGateway(options: ModelGatewayOptions = {}): Prom
     ...(resolved.modelClass ? { modelClass: resolved.modelClass } : {}),
     preferSystemModels: resolved.preferSystemModels,
   });
-  const client = await workspaceClient.createWorkspaceClient({
+  const client = await createWorkspaceClient({
     ...(resolved.profile ? { profile: resolved.profile } : {}),
   });
   await createApp({

@@ -5,7 +5,7 @@
 import type { IncomingMessage, Server as HttpServer } from "node:http";
 import type { Socket } from "node:net";
 import type { AuthGateApi } from "@dbx-tools/tunnel";
-import { gate } from "@dbx-tools/tunnel";
+import { webHeaders } from "@dbx-tools/tunnel";
 import type { Application, NextFunction, Request, Response } from "express";
 import ProxyModule from "http-proxy-3";
 
@@ -103,7 +103,7 @@ export function createClientDevelopmentProxy(
 
   const canProxy = async (request: IncomingMessage): Promise<boolean> => {
     if (!authGate) return true;
-    const headers = gate.webHeaders(request);
+    const headers = webHeaders(request);
     return !authGate.isProtectedHost(headers) || Boolean(await authGate.session(headers));
   };
 

@@ -59,7 +59,13 @@
  * @module
  */
 
-import { pattern, token, type Predicate } from "@dbx-tools/shared-core";
+import {
+  type Predicate,
+  toPatternMatcher,
+  ACCESS_TOKEN_HEADER,
+  USER_ID_HEADER,
+  USER_EMAIL_HEADER,
+} from "@dbx-tools/shared-core";
 
 /**
  * Headers the gate strips UNCONDITIONALLY, before the allow-list is consulted -
@@ -76,9 +82,9 @@ import { pattern, token, type Predicate } from "@dbx-tools/shared-core";
  * so a host app that does read it cannot be fed one.
  */
 export const PROTECTED_HEADERS: readonly string[] = [
-  token.ACCESS_TOKEN_HEADER,
-  token.USER_ID_HEADER,
-  token.USER_EMAIL_HEADER,
+  ACCESS_TOKEN_HEADER,
+  USER_ID_HEADER,
+  USER_EMAIL_HEADER,
   "x-forwarded-preferred-username",
   "x-forwarded-host",
   "x-forwarded-proto",
@@ -129,7 +135,7 @@ export interface HeaderPolicy {
  */
 export function toHeaderPolicy(configured: readonly string[] = []): HeaderPolicy {
   const patterns = [...DEFAULT_FORWARD_HEADERS, ...configured];
-  const allowed: Predicate<string> = pattern.toPatternMatcher(patterns);
+  const allowed: Predicate<string> = toPatternMatcher(patterns);
   const protectedNames = new Set(PROTECTED_HEADERS);
 
   const forwards = (name: string): boolean => {

@@ -8,13 +8,11 @@
  */
 
 import { addArgs, parseArgs } from "@dbx-tools/cli-args";
-import * as exec from "@dbx-tools/core/exec";
+import { spawn } from "@dbx-tools/core";
 import { Command } from "commander";
 
 import type { CliServiceDefinition } from "./definition.ts";
 import { CliService, CliServiceInstallOptionsSchema, type CliServiceLifecycle } from "./service.ts";
-
-export { CliServiceInstallOptionsSchema, type CliServiceInstallOptions } from "./service.ts";
 
 /** Static definition or action-time factory used by a service command group. */
 export type CliServiceDefinitionSource = CliServiceDefinition | (() => CliServiceDefinition);
@@ -33,7 +31,7 @@ const DEFAULT_DEPENDENCIES = {
   create: (definition) => new CliService(definition),
   write: (value) => process.stdout.write(value),
   execute: async (command: string, arguments_: readonly string[]) => {
-    await exec.spawn(command, arguments_, { check: true });
+    await spawn(command, arguments_, { check: true });
   },
 } satisfies CliServiceCliDependencies;
 

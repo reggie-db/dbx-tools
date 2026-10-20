@@ -3,12 +3,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 
-import { AuthType, TargetKind } from "@dbx-tools/shared-auth/config";
-import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth/profile";
-import * as environmentUtils from "@dbx-tools/shared-core/environment-utils";
-import * as object from "@dbx-tools/shared-core/object";
-import * as stringUtils from "@dbx-tools/shared-core/string-utils";
-import { trimToUndefined } from "@dbx-tools/shared-core/string-utils";
+import { AuthType, TargetKind } from "@dbx-tools/shared-auth";
+import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
+import {
+  isDatabricksAppEnv,
+  isRecord,
+  stringUtils,
+  parseList,
+  trimToUndefined,
+} from "@dbx-tools/shared-core";
 import { parse as parseIni } from "ini";
 
 import { AuthError } from "./_errors.ts";
@@ -103,7 +106,7 @@ export function parseDatabricksConfig(source: string): IniConfig {
   }
   const config: IniConfig = new Map();
   for (const [name, value] of Object.entries(parsed)) {
-    if (!name.trim() || !object.isRecord(value)) {
+    if (!name.trim() || !isRecord(value)) {
       throw new AuthError("config", "Databricks configuration values must belong to a profile");
     }
     _appendConfigSections(config, [name.trim()], value);
@@ -119,7 +122,7 @@ function _appendConfigSections(
   const section = new Map<string, string>();
   let nested = false;
   for (const [key, entry] of Object.entries(value)) {
-    if (object.isRecord(entry)) {
+    if (isRecord(entry)) {
       nested = true;
       _appendConfigSections(config, [...path, key], entry);
     } else if (entry !== undefined && entry !== null) {
@@ -380,7 +383,7 @@ export function resolveDatabricksProfile(
   options: DatabricksAuthOptions,
   environment: Environment = process.env,
 ): DatabricksProfile {
-  const inApp = environmentUtils.isDatabricksAppEnv({ ...environment });
+  const inApp = isDatabricksAppEnv({ ...environment });
   const configPath = resolveConfigFile(options.configFile, environment);
   const config = loadConfig(options.configFile, false, environment);
   const optionProfile = stringUtils.trimToUndefined(options.profile);
@@ -472,8 +475,8 @@ export function resolveDatabricksProfile(
         ? (clientIdValue ?? missing(credentialName, "client_id"))
         : (clientIdValue ?? "");
   const scopes = options.scopes?.length
-    ? stringUtils.parseList(options.scopes)
-    : stringUtils.parseList(configured.scopes?.split(",") ?? ["all-apis"]);
+    ? parseList(options.scopes)
+    : parseList(configured.scopes?.split(",") ?? ["all-apis"]);
   const target = options.target ? parseTarget(options.target) : inferTarget(host, accountId);
   const groupId =
     stringUtils.trimToUndefined(options.groupId) ??
@@ -528,7 +531,7 @@ export function resolveDatabricksProfile(
 
 /** Normalize OAuth scopes for machine credentials. */
 export function machineScopes(scopes: readonly string[]): string[] {
-  return stringUtils.parseList(scopes.length ? scopes : ["all-apis"]).sort();
+  return parseList(scopes.length ? scopes : ["all-apis"]).sort();
 }
 
 function credentialCacheKey(

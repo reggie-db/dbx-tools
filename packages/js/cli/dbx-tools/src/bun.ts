@@ -22,8 +22,8 @@
  */
 import { existsSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
-import { exec, projectUtils } from "@dbx-tools/core";
-import { functionUtils, log } from "@dbx-tools/shared-core";
+import { spawnSync, npmRegistry } from "@dbx-tools/core";
+import { log, memoize } from "@dbx-tools/shared-core";
 import { needsInstall } from "./root.ts";
 
 const logger = log.logger("dbx-tools:bun");
@@ -43,8 +43,8 @@ const REGISTRY_SUBCOMMANDS = new Set(["add", "install", "i", "update", "up"]);
  * container may export it without any `.npmrc` for lookup. Memoized: resolution
  * shells out.
  */
-const registryOverride = functionUtils.memoize((): string | undefined =>
-  projectUtils.npmRegistry(null, { overrideOnly: true, envVars: true })?.toString(),
+const registryOverride = memoize((): string | undefined =>
+  npmRegistry(null, { overrideOnly: true, envVars: true })?.toString(),
 );
 
 /** `--registry <url>` for a bun invocation, or `[]` when the subcommand doesn't resolve. */
@@ -98,7 +98,7 @@ function resolveBunArgvImpl(): string[] {
 }
 
 /** Memoized `[command, ...prefix]` argv prefix to run bun. */
-export const resolveBunArgv = functionUtils.memoize(resolveBunArgvImpl);
+export const resolveBunArgv = memoize(resolveBunArgvImpl);
 
 /** Run bun with inherited stdio from `cwd`, forcing the resolved registry. */
 export function runBun(args: string[], cwd: string): void {
@@ -107,7 +107,7 @@ export function runBun(args: string[], cwd: string): void {
   if (registryArgs.length > 0) {
     logger.info(`running bun with registry: ${registryArgs[1]}`);
   }
-  exec.spawnSync(command, [...prefix, ...args, ...registryArgs], {
+  spawnSync(command, [...prefix, ...args, ...registryArgs], {
     cwd,
     check: true,
     env: childEnv(),

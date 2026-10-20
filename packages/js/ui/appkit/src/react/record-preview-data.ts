@@ -4,7 +4,7 @@
  * @module
  */
 
-import { json, object as objectUtils, stringUtils } from "@dbx-tools/shared-core";
+import { parse, isRecord, toLabel } from "@dbx-tools/shared-core";
 
 /** One field shown in the table view of {@link RecordPreview}. */
 export interface RecordPreviewRow {
@@ -24,7 +24,7 @@ export function recordPreviewRows(value: unknown): RecordPreviewRow[] {
   }
   return Object.entries(value as Record<string, unknown>).map(([key, nested]) => ({
     key,
-    label: stringUtils.toLabel(key),
+    label: toLabel(key),
     value: nested,
   }));
 }
@@ -46,9 +46,9 @@ export function parseNestedJsonText(
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
-  const parsed = json.parse(trimmed);
+  const parsed = parse(trimmed);
   if (Array.isArray(parsed)) return parsed;
-  return objectUtils.isRecord(parsed) ? parsed : undefined;
+  return isRecord(parsed) ? parsed : undefined;
 }
 
 /** YAML document fence at the start of a markdown file (`---` ... `---`). */

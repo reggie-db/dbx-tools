@@ -108,8 +108,8 @@ project.package.addField("exports", {
   ".": "./index.ts",
   "./pypi-trusted-publisher-instructions":
     "./tasks/pypi-trusted-publisher-instructions.ts",
-  "./python-release-packaging": "./tasks/publish-python.ts",
-  "./release-packaging": "./tasks/publish-npm.ts",
+  "./python-release-packaging": "./src/python-packaging.ts",
+  "./release-packaging": "./src/npm-packaging.ts",
   "./package.json": "./package.json",
 });
 

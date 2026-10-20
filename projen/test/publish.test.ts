@@ -15,7 +15,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { applyExports, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
+import { applyExports, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project-js.ts";
 
 let outdir: string;
 
@@ -55,8 +55,7 @@ before(() => {
   node.dbxToolsConfig.tags.push("node");
   applyExports(node, {
     ".": "./index.ts",
-    "./*": "./src/*/index.ts",
-    "./deep": "./src/nested/deep.ts",
+    "./nested": "./index.nested.ts",
     "./package.json": "./package.json",
   });
 
@@ -69,7 +68,8 @@ before(() => {
   });
   ui.dbxToolsConfig.tags.push("ui");
   applyExports(ui, {
-    "./react": "./src/react/index.ts",
+    ".": "./index.ts",
+    "./react": "./index.react.ts",
     "./styles.css": "./src/styles.css",
   });
 
@@ -102,8 +102,7 @@ describe("compiled publish surface", () => {
     // resolves to `.ts` so packages type-check with no build step.
     assert.deepEqual(manifest("packages/node/thing").exports, {
       ".": "./index.ts",
-      "./*": "./src/*/index.ts",
-      "./deep": "./src/nested/deep.ts",
+      "./nested": "./index.nested.ts",
       "./package.json": "./package.json",
     });
   });
@@ -113,11 +112,10 @@ describe("compiled publish surface", () => {
     // mapping is a path prefix - not a flattening.
     assert.deepEqual(manifest("packages/node/thing").publishConfig.exports, {
       ".": { types: "./lib/index.d.ts", default: "./lib/index.js" },
-      "./*": {
-        types: "./lib/src/*/index.d.ts",
-        default: "./lib/src/*/index.js",
+      "./nested": {
+        types: "./lib/index.nested.d.ts",
+        default: "./lib/index.nested.js",
       },
-      "./deep": { types: "./lib/src/nested/deep.d.ts", default: "./lib/src/nested/deep.js" },
       "./package.json": "./package.json",
     });
   });
@@ -137,14 +135,15 @@ describe("compiled publish surface", () => {
   it("ships the emitted output alongside the source", () => {
     const { files } = manifest("packages/node/thing");
     assert.ok(files.includes("lib"), "lib must be in the tarball allowlist");
-    assert.ok(files.includes("index.ts"), "source still ships");
+    assert.ok(files.includes("index*.ts"), "source barrels still ship");
   });
 
   it("leaves UI packages publishing source", () => {
     const ui = manifest("packages/ui/app");
     assert.equal(ui.publishConfig?.main, undefined, "no compiled entry point");
     assert.deepEqual(ui.exports, {
-      "./react": "./src/react/index.ts",
+      ".": "./index.ts",
+      "./react": "./index.react.ts",
       "./styles.css": "./src/styles.css",
     });
     assert.ok(!(ui.files ?? []).includes("lib"), "nothing compiled to ship");
@@ -161,7 +160,7 @@ describe("compiled publish surface", () => {
     // Without this the emitted tree has no `index.js` at all and every `.`
     // export in publishConfig points at a file that was never written.
     assert.equal(tsconfig("packages/node/thing").compilerOptions.rootDir, ".");
-    assert.ok(tsconfig("packages/node/thing").include.includes("index.ts"));
+    assert.ok(tsconfig("packages/node/thing").include.includes("index*.ts"));
   });
 
   it("lets tsc rewrite the emitted specifiers, with no post-processing step", () => {

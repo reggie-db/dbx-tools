@@ -12,7 +12,7 @@
 import { once } from "node:events";
 import { readFileSync, type Stats } from "node:fs";
 import { isAbsolute, relative, resolve } from "path";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { log, toError } from "@dbx-tools/shared-core";
 import { ChokidarOptions, MatchFunction, watch, type FSWatcher } from "chokidar";
 import { hasMagic } from "glob";
 import { findFiles, type FileFindOptions } from "./find.ts";
@@ -216,7 +216,7 @@ async function createGitIgnoreControls(
     } catch (error) {
       logger.warn("failed to reload .gitignore", {
         path,
-        error: errorUtils.toError(error),
+        error: toError(error),
       });
     }
   };

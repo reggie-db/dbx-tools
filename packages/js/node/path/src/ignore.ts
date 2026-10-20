@@ -20,8 +20,8 @@
  * @module
  */
 
-import * as projectUtils from "@dbx-tools/core/project-utils";
-import { functionUtils, object, type Sequence } from "@dbx-tools/shared-core";
+import { npmRegistry } from "@dbx-tools/core";
+import { type Sequence, memoize, sequence } from "@dbx-tools/shared-core";
 import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match.ts";
 import { directoryNamePattern, fileExtensionPattern } from "./pattern.ts";
 
@@ -62,8 +62,8 @@ const PUBLIC_NPM_REGISTRY_HOST = "registry.npmjs.org";
  * registry - a lockfile produced against a private mirror pins URLs that other
  * machines cannot reach, so it should not be committed.
  */
-const lockIgnoreMatchersAutoEnabled = functionUtils.memoize(() => {
-  const registry = projectUtils.npmRegistry();
+const lockIgnoreMatchersAutoEnabled = memoize(() => {
+  const registry = npmRegistry();
   return registry !== undefined && registry.hostname !== PUBLIC_NPM_REGISTRY_HOST;
 });
 
@@ -172,7 +172,7 @@ function ignoreMatchPredicates(
  * @param options - Group toggles; omitted flags default to enabled.
  */
 export function ignorePatterns(options?: IgnorePatternOptions): Sequence<string> {
-  return object.sequence(ignoreMatchPredicates(options)).flatMap(Object.keys).distinct();
+  return sequence(ignoreMatchPredicates(options)).flatMap(Object.keys).distinct();
 }
 
 /**

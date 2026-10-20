@@ -13,6 +13,7 @@
  * across the subtree; the root applies built-in tag mixins during construction and
  * callers add their own afterward.
  */
+import { relative } from "node:path";
 import type { IMixin as ConstructsMixin } from "constructs";
 import { DependencyType, javascript } from "projen";
 import { BunBuildFile, BunDevServerFile, BunfigFile } from "./bun-app.ts";
@@ -23,7 +24,7 @@ import {
   applyCompilerOptions,
   applyExports,
   applyIncludes,
-  srcModuleExports,
+  srcFolderExports,
 } from "./project-js.ts";
 import * as projectPredicate from "./project-predicate.ts";
 
@@ -83,11 +84,13 @@ export const PACKAGE_TAG_MIXINS = {
     applyCompilerOptions(p, {
       target: "ES2022",
       lib: [...DOM_LIB],
+      noEmit: true,
+      rootDir: relative(p.outdir, p.root.outdir).replaceAll("\\", "/") || ".",
     });
-    // UI libraries are subpath-only. Their React entrypoint, optional stylesheet,
-    // and any other public source modules are discovered from the source tree.
+    // UI libraries expose their package barrel, folder barrels, and public CSS.
     applyExports(p, {
-      ...srcModuleExports(p),
+      ".": "./index.ts",
+      ...srcFolderExports(p),
       "./package.json": "./package.json",
     });
   }),
@@ -149,13 +152,11 @@ export const PACKAGE_TAG_MIXINS = {
     // A CLI compiles code OUTSIDE `src/` - its root `index.ts` barrel and the
     // `bin/` entries - which the src-only tag default doesn't reach.
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
-    applyIncludes(p, "index.ts", "bin/**/*.ts");
-    // A CLI's standard surface: the `.` root entry, a `./<module>` subpath per
-    // top-level `src` module, and `./package.json`. Derived rather than declared
-    // so no CLI has to hand-list its own modules.
+    applyIncludes(p, "index*.ts", "bin/**/*.ts");
+    // A CLI's standard surface: the root barrel, folder barrels, and package metadata.
     applyExports(p, {
       ".": "./index.ts",
-      ...srcModuleExports(p),
+      ...srcFolderExports(p),
       "./package.json": "./package.json",
     });
     // A CLI is the one shape whose entry point lives outside `src`, so its

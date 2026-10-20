@@ -5,16 +5,16 @@
  */
 
 import { ExecutionError } from "@databricks/appkit";
-import { databricks } from "@dbx-tools/appkit";
-import { hash } from "@dbx-tools/shared-core";
-import type { BrandContext } from "@dbx-tools/shared-core/brand-utils";
+import { toContext } from "@dbx-tools/appkit";
+import { id } from "@dbx-tools/shared-core";
+import type { BrandContext } from "@dbx-tools/shared-core";
 import {
   GeneratedDashboardSchema,
   type GeneratedDashboard,
   type GeneratedMetric,
   type GeneratedSchema,
   type GeneratorPlan,
-} from "@dbx-tools/shared-generator/workflow";
+} from "@dbx-tools/shared-generator";
 import { z } from "zod";
 import { resolveGeneratorIdentity } from "./namespace.ts";
 
@@ -263,12 +263,12 @@ export async function createGeneratorDashboard(
   }
   const legacy = identity.userClient.toLegacyWorkspaceClient();
   const parentPath = `/Workspace/Users/${identity.principal}/.dbx-tools/generator/${input.location.schema}`;
-  const context = signal ? databricks.toContext(signal) : undefined;
+  const context = signal ? toContext(signal) : undefined;
   await legacy.workspace.mkdirs({ path: parentPath }, context);
   const created = await legacy.lakeview.create(
     {
       dashboard: {
-        display_name: `${input.company} ${input.purpose} ${hash.id(6)}`,
+        display_name: `${input.company} ${input.purpose} ${id(6)}`,
         parent_path: parentPath,
         warehouse_id: input.warehouseId,
         serialized_dashboard: JSON.stringify(buildGeneratorDashboard(input)),

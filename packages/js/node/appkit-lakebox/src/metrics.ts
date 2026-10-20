@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { log, toError } from "@dbx-tools/shared-core";
 import type { LakeboxMetricsSnapshot } from "@dbx-tools/shared-lakebox";
 
 const logger = log.logger("appkit-lakebox:metrics");
@@ -88,7 +88,7 @@ export class LakeboxMetrics extends EventEmitter<LakeboxMetricsEvents> {
       this.record(counters, true);
     } catch (error) {
       if (!signal.aborted) {
-        logger.debug("Lakebox metrics sample failed", { error: errorUtils.toError(error) });
+        logger.debug("Lakebox metrics sample failed", { error: toError(error) });
       }
     }
     if (signal.aborted) return;

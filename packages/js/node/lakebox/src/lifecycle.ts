@@ -1,4 +1,4 @@
-import { asyncUtils } from "@dbx-tools/shared-core";
+import { sleep } from "@dbx-tools/shared-core";
 import type { LakeboxStatus } from "@dbx-tools/shared-lakebox";
 import type { LakeboxClient, LakeboxEntry } from "./rest.ts";
 
@@ -81,7 +81,7 @@ async function waitForLakeboxStatus(
     if (Date.now() >= deadline) {
       throw new Error(`Timed out waiting for Lakebox ${entry.sandboxId} to become ${expected}`);
     }
-    await asyncUtils.sleep(POLL_INTERVAL_MS, signal);
+    await sleep(POLL_INTERVAL_MS, signal);
     entry = await api.get(entry.sandboxId, signal);
   }
   return entry;

@@ -23,14 +23,14 @@
  */
 
 import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
-import { appkit } from "@dbx-tools/appkit";
-import { classes, policy, resolve } from "@dbx-tools/model";
+import { tryGetExecutionContext } from "@dbx-tools/appkit";
+import { classes, policy, resolve, selection } from "@dbx-tools/model";
 import {
   createDatabricksLanguageModel,
   type DatabricksLanguageModel,
-} from "@dbx-tools/model-protocol/provider";
+} from "@dbx-tools/model-protocol";
 import { log } from "@dbx-tools/shared-core";
-import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { contracts, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
@@ -41,7 +41,7 @@ import {
 } from "./serving.ts";
 import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
 
-type ModelClass = model.ModelClass;
+type ModelClass = contracts.ModelClass;
 const { parseModelClass } = classes;
 const { selectModel } = resolve;
 
@@ -89,7 +89,7 @@ function resolveModelWorkspaceContext(
   requestContext?: RequestContext,
 ): ResolvedModelWorkspaceClient {
   const user = requestContext?.get(MASTRA_USER_KEY) as User | undefined;
-  const executionContext = user?.executionContext ?? appkit.tryGetExecutionContext();
+  const executionContext = user?.executionContext ?? tryGetExecutionContext();
   if (executionContext?.client.config) {
     return {
       client: executionContext.client,
@@ -137,7 +137,7 @@ export function resolveDefaultModelId(
   overrides: BuildModelOverrides = {},
 ): string {
   const requested = overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
-  return resolve.resolveModel(endpoints, selectionInput(config, requested, overrides.modelClass))
+  return selection.resolveModel(endpoints, selectionInput(config, requested, overrides.modelClass))
     .modelId;
 }
 

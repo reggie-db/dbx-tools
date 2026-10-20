@@ -121,6 +121,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-graphiti",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-model-gateway",
       "version": "workspace:^",
       "type": "runtime"

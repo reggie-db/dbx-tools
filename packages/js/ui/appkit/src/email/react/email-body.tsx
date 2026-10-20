@@ -3,8 +3,8 @@
 // render the drafted Markdown identically (links, lists, emphasis, and
 // tables rather than raw syntax).
 
+import { cn } from "@databricks/appkit-ui/react";
 import { EmailBody as SharedEmailBody, type EmailBrand } from "@dbx-tools/shared-email-template";
-import { cn } from "@dbx-tools/ui/react";
 
 /** Props for {@link EmailBody}. */
 export interface EmailBodyProps {

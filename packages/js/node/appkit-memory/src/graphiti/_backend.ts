@@ -7,10 +7,17 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 import { ConfigurationError } from "@databricks/appkit";
-import { openApiTools, type OpenApiTool } from "@dbx-tools/appkit/openapi-tool";
-import { profile as authProfile } from "@dbx-tools/auth";
-import { configUtils } from "@dbx-tools/core";
-import type { ChildProcessResult } from "@dbx-tools/core/exec";
+import { openApiTools, type OpenApiTool } from "@dbx-tools/appkit";
+import { resolveProfile } from "@dbx-tools/auth";
+import { configUtils, ENV_ONLY } from "@dbx-tools/core";
+import type { ChildProcessResult } from "@dbx-tools/core";
+import {
+  type ResolvedGraphitiOptions,
+  type GraphitiOptions,
+  resolveGraphitiOptions,
+  graphitiOptionsFromEnvironment,
+  graphitiOptionOverrides,
+} from "@dbx-tools/shared-graphiti";
 import { z } from "zod";
 
 import {
@@ -21,13 +28,6 @@ import {
   type RememberMemoryInput,
   type RememberMemoryResult,
 } from "../_contracts.ts";
-import {
-  graphitiOptionOverrides,
-  graphitiOptionsFromEnvironment,
-  resolveGraphitiOptions,
-  type GraphitiOptions,
-  type ResolvedGraphitiOptions,
-} from "./options.ts";
 import {
   createGraphitiChildProcess,
   graphitiHealthCheck,
@@ -187,7 +187,7 @@ export async function startGraphitiBackend(
     throw new Error("AppKit memory requires a TCP Graphiti listener");
   }
   const [graphitiPort] = await distinctPorts(
-    configUtils.port(undefined, "DATABRICKS_APP_PORT", 8000, configUtils.ENV_ONLY),
+    configUtils.port(undefined, "DATABRICKS_APP_PORT", 8000, ENV_ONLY),
     configured.listen.port,
   );
   const resolved = resolveGraphitiOptions({
@@ -226,7 +226,7 @@ export async function startGraphitiBackend(
 
 function resolveGraphitiConfig(options: GraphitiOptions): ResolvedGraphitiOptions {
   const environment = graphitiOptionsFromEnvironment(process.env);
-  if (environment.profile && !authProfile.resolveProfile({ profile: environment.profile })) {
+  if (environment.profile && !resolveProfile({ profile: environment.profile })) {
     environment.profile = undefined;
   }
   const overrides = graphitiOptionOverrides(options);

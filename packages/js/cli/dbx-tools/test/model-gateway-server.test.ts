@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { server } from "@databricks/appkit";
 import { createTestPlugin, getListeningPort } from "@databricks/appkit/testing";
-import { MODEL_GATEWAY_DEFAULTS } from "@dbx-tools/shared-model-gateway/options";
+import { MODEL_GATEWAY_DEFAULTS } from "@dbx-tools/shared-model-gateway";
 
 import { gatewayBearerMiddleware, modelGatewayServerOptions } from "../src/model-gateway/server.ts";
 

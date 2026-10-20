@@ -7,9 +7,9 @@ dbx-tools workspaces.
 ## Define a workspace root
 
 ```ts
-import { project } from "@dbx-tools/projen";
+import { projectJs } from "@dbx-tools/projen";
 
-const rootProject = new project.DBXToolsNodeProject({
+const rootProject = new projectJs.DBXToolsNodeProject({
   name: "my-apps",
   scope: "my-apps",
   packageRoots: ["packages", "examples"],
@@ -88,9 +88,9 @@ sibling registry requirements there with parsed TOML. Source manifests already
 carry the root `VERSION` and are never rewritten for publication.
 
 ```ts
-import { project, projectPy } from "@dbx-tools/projen";
+import { projectJs, projectPy } from "@dbx-tools/projen";
 
-const root = new project.DBXToolsNodeProject({ name: "my-apps" });
+const root = new projectJs.DBXToolsNodeProject({ name: "my-apps" });
 
 new projectPy.DBXToolsPythonWorkspace(root, {
   root: "python/packages",
@@ -131,9 +131,9 @@ one binding object or an array. Projen writes one
 in consuming repositories after `@dbx-tools/projen` is installed.
 
 ```ts
-import { project, projectPy } from "@dbx-tools/projen";
+import { projectJs, projectPy } from "@dbx-tools/projen";
 
-const root = new project.DBXToolsNodeProject({ name: "my-apps" });
+const root = new projectJs.DBXToolsNodeProject({ name: "my-apps" });
 
 new projectPy.DBXToolsPythonWorkspace(root, {
   root: "packages/py",
@@ -238,9 +238,9 @@ Use a package's `sync` field when published Python code must include a reviewed
 subset of a Git repository instead of exposing a direct URL dependency:
 
 ```ts
-import { project, projectPy } from "@dbx-tools/projen";
+import { projectJs, projectPy } from "@dbx-tools/projen";
 
-const root = new project.DBXToolsNodeProject({ name: "my-apps" });
+const root = new projectJs.DBXToolsNodeProject({ name: "my-apps" });
 
 new projectPy.DBXToolsPythonWorkspace(root, {
   root: "packages/py",
@@ -292,9 +292,9 @@ pinned source intentionally.
 ## Customize packages with mixins
 
 ```ts
-import { project } from "@dbx-tools/projen";
+import { project, projectJs } from "@dbx-tools/projen";
 
-const rootProject = new project.DBXToolsNodeProject();
+const rootProject = new projectJs.DBXToolsNodeProject();
 
 project.applyToProjects(rootProject, { tags: "shared" }, (pkg) => {
   pkg.addDeps("zod@catalog:");
@@ -431,9 +431,9 @@ barrels.generateBarrels();
 Add declaration inputs through the owning package's typed config:
 
 ```ts
-import { project } from "@dbx-tools/projen";
+import { project, projectJs } from "@dbx-tools/projen";
 
-const rootProject = new project.DBXToolsNodeProject({ name: "my-apps" });
+const rootProject = new projectJs.DBXToolsNodeProject({ name: "my-apps" });
 project.applyToProjects(rootProject, { path: "packages/shared/generated" }, (pkg) => {
   pkg.dbxToolsConfig.codegenInputs.push("node_modules/example/model.d.ts");
 });
@@ -448,16 +448,15 @@ added to `ignorePatterns` at synth - named individually using
 package may hold hand-written modules beside its generated ones, and those must
 stay linted.
 
-`generateBarrels()` writes the package-root `index.ts` and, for packages with the
-generated `"./*": "./src/*/index.ts"` export, read-only entrypoints in nested
-source directories. For example, `src/example/one.ts` becomes importable through
-`@scope/package/example`, and `src/example/wasm/one.ts` through
-`@scope/package/example/wasm`. A sibling `exports.ts` can extend or override the
-generated surface at the package root or any nested level. Existing hand-written
-`index.ts` entrypoints remain authoritative.
+`generateBarrels()` writes read-only entrypoints at the package root. Modules
+directly under `src` go into `index.ts`; modules directly under
+`src/example/wasm` go into `index.example.wasm.ts` and are importable through
+`@scope/package/example/wasm`. The generator never writes nested
+`src/**/index.ts` files or per-module package exports.
 
-Generated barrels include module namespaces and flat unique type/value exports.
-The package root additionally exposes `PACKAGE_IDENTIFIER`. A name two modules
+Generated barrels include module namespaces and conflict-free flat value and
+type exports. The package root additionally exposes `PACKAGE_IDENTIFIER` and
+`PACKAGE_VERSION`, even when no module lives directly under `src`. A name two modules
 both declare is ambiguous and stays namespace-only, except when one is generated:
 the hand-written module is the curated view of the generated shape
 (`shared-genie`'s `genie-model.ts` extends its own codegen'd `dashboards.ts`), so
@@ -469,9 +468,9 @@ is attempted even if one fails. Failures are re-thrown together as an
 ## Configure pnpm catalogs
 
 ```ts
-import { project } from "@dbx-tools/projen";
+import { projectJs } from "@dbx-tools/projen";
 
-const rootProject = new project.DBXToolsNodeProject({ name: "my-apps" });
+const rootProject = new projectJs.DBXToolsNodeProject({ name: "my-apps" });
 rootProject.pnpmWorkspace?.addCatalog("react", "^19");
 rootProject.pnpmWorkspace?.allowBuild("esbuild");
 ```
@@ -483,9 +482,9 @@ setting goes through the root's `workspaceYaml` option, which is projen's typed
 `PnpmWorkspaceYamlOptions`:
 
 ```ts
-import { project } from "@dbx-tools/projen";
+import { projectJs } from "@dbx-tools/projen";
 
-const rootProject = new project.DBXToolsNodeProject({
+const rootProject = new projectJs.DBXToolsNodeProject({
   name: "my-apps",
   pnpmOptions: {
     workspaceYamlOptions: {

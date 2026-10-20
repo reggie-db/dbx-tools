@@ -7,7 +7,7 @@
  * @module
  */
 
-import { json, object } from "@dbx-tools/shared-core";
+import { parseRecord, isRecord } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import {
@@ -152,7 +152,7 @@ export function projectAgentModeMessage(
   response: GenieAgentResponse,
   items: GenieAgentOutputItem[],
 ): GenieMessage {
-  const errorValue = object.isRecord(response.error) ? response.error : undefined;
+  const errorValue = isRecord(response.error) ? response.error : undefined;
   const errorMessage =
     typeof errorValue?.message === "string"
       ? errorValue.message
@@ -220,7 +220,7 @@ export function projectAgentModeConversation(
 }
 
 function itemMetadata(item: GenieAgentOutputItem): Record<string, unknown> | undefined {
-  return object.isRecord(item.metadata) ? item.metadata : undefined;
+  return isRecord(item.metadata) ? item.metadata : undefined;
 }
 
 function itemMessageId(item: GenieAgentOutputItem): string | undefined {
@@ -271,7 +271,7 @@ function itemAttachments(item: GenieAgentOutputItem): GenieAttachment[] {
   }
   if (item.type === "function_call") {
     const callId = item.call_id ?? item.id;
-    const argumentsValue = json.parseRecord(item.arguments);
+    const argumentsValue = parseRecord(item.arguments);
     const query =
       typeof argumentsValue?.sql === "string"
         ? argumentsValue.sql
@@ -295,7 +295,7 @@ function itemAttachments(item: GenieAgentOutputItem): GenieAttachment[] {
   }
   if (item.type === "function_call_output" && item.output !== undefined) {
     const viz = itemMetadata(item)?.viz;
-    if (object.isRecord(viz) && typeof viz.attachment_id === "string") {
+    if (isRecord(viz) && typeof viz.attachment_id === "string") {
       return [
         {
           attachment_id: viz.attachment_id,
@@ -323,7 +323,7 @@ function itemAttachments(item: GenieAgentOutputItem): GenieAttachment[] {
 }
 
 function visualizationAttachmentId(metadata: unknown): string | undefined {
-  if (!object.isRecord(metadata) || !object.isRecord(metadata.viz)) return undefined;
+  if (!isRecord(metadata) || !isRecord(metadata.viz)) return undefined;
   return typeof metadata.viz.attachment_id === "string" ? metadata.viz.attachment_id : undefined;
 }
 

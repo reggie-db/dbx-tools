@@ -24,7 +24,7 @@
  * @module
  */
 
-import { pattern } from "@dbx-tools/shared-core";
+import { toPattern } from "@dbx-tools/shared-core";
 
 /** True when `email` matches a single allow-list `pattern`. */
 function matchesPattern(email: string, entry: string): boolean {
@@ -42,7 +42,7 @@ function matchesPattern(email: string, entry: string): boolean {
     return at >= 0 && address.slice(at + 1) === domain;
   }
 
-  return pattern.toPattern(trimmed)?.(address) ?? false;
+  return toPattern(trimmed)?.(address) ?? false;
 }
 
 /**

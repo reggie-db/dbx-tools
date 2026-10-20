@@ -10,9 +10,9 @@ import {
   createWorkspaceClient as _createWorkspaceClient,
   type WorkspaceClient as AppKitWorkspaceClient,
 } from "@databricks/appkit";
-import { appkit } from "@dbx-tools/appkit";
-import { client as authClient, type AuthClient, type DatabricksAuthOptions } from "@dbx-tools/auth";
-import { functionUtils, net, stringUtils } from "@dbx-tools/shared-core";
+import { tryGetExecutionContext } from "@dbx-tools/appkit";
+import { type AuthClient, type DatabricksAuthOptions, createAuthClient } from "@dbx-tools/auth";
+import { memoize, type UrlBuilder, urlBuilder, trimToUndefined } from "@dbx-tools/shared-core";
 
 /** Databricks workspace ids are a 10-20 digit run embedded in the host. */
 const WORKSPACE_ID_REGEX = /\d{10,20}/;
@@ -34,7 +34,7 @@ type Config = WorkspaceClient["config"];
 export async function createWorkspaceClient(
   options: DatabricksAuthOptions = {},
 ): Promise<AppKitWorkspaceClient> {
-  const auth = await authClient.createAuthClient(options);
+  const auth = await createAuthClient(options);
   const client = _createWorkspaceClient({ host: auth.host });
   client.config.credentials = {
     name: "pat",
@@ -76,7 +76,7 @@ export function toLegacyWorkspaceClient(
  * construction happens at most once per process. Used only when there's no
  * AppKit execution context to borrow a client from.
  */
-const getDefaultWorkspaceClient = functionUtils.memoize(async () =>
+const getDefaultWorkspaceClient = memoize(async () =>
   (await createWorkspaceClient()).toLegacyWorkspaceClient(),
 );
 
@@ -86,7 +86,7 @@ const getDefaultWorkspaceClient = functionUtils.memoize(async () =>
  * missing AppKit scope.
  */
 export function tryGetWorkspaceClient(): WorkspaceClient | undefined {
-  return appkit.tryGetExecutionContext()?.client.toLegacyWorkspaceClient();
+  return tryGetExecutionContext()?.client.toLegacyWorkspaceClient();
 }
 
 /**
@@ -118,7 +118,7 @@ async function getWorkspaceConfig(): Promise<Config | undefined> {
  * calls `currentUser.me()` on {@link client} (or {@link getWorkspaceClient}).
  */
 export async function getCurrentUserName(client?: WorkspaceClient): Promise<string> {
-  const contextUser = readContextUserName(appkit.tryGetExecutionContext());
+  const contextUser = readContextUserName(tryGetExecutionContext());
   if (contextUser) return contextUser;
 
   const resolved = client ?? (await getWorkspaceClient());
@@ -134,20 +134,20 @@ export async function getCurrentUserName(client?: WorkspaceClient): Promise<stri
 function readContextUserName(ctx: unknown): string | undefined {
   if (typeof ctx !== "object" || ctx === null || !("userName" in ctx)) return undefined;
   const value = (ctx as { userName?: unknown }).userName;
-  return stringUtils.trimToUndefined(value);
+  return trimToUndefined(value);
 }
 
 /**
  * Resolve the current workspace host as a `net.UrlBuilder`: the workspace
  * `Config` host first, then the `DATABRICKS_HOST` env var, else `undefined`.
  */
-export async function getWorkspaceUrl(): Promise<net.UrlBuilder | undefined> {
+export async function getWorkspaceUrl(): Promise<UrlBuilder | undefined> {
   const config = await getWorkspaceConfig();
   if (config) {
-    const configHost = net.urlBuilder(await config.getHost());
+    const configHost = urlBuilder(await config.getHost());
     if (configHost) return configHost;
   }
-  const databricksHost = net.urlBuilder(process.env.DATABRICKS_HOST);
+  const databricksHost = urlBuilder(process.env.DATABRICKS_HOST);
   if (databricksHost) return databricksHost;
   return undefined;
 }

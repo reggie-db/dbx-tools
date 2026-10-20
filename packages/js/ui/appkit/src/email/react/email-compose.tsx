@@ -1,9 +1,3 @@
-import type { EmailAttachment, EmailMessage } from "@dbx-tools/shared-email";
-import { EyeIcon, PaperclipIcon, PencilIcon, SendIcon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-
-import { EmailPreview } from "./email-approval-card.tsx";
-import { joinAddresses, parseAddresses, type EmailDraft } from "./fields.ts";
 import {
   Button,
   Input,
@@ -15,7 +9,13 @@ import {
   SelectValue,
   Textarea,
   cn,
-} from "../../react/index.ts";
+} from "@databricks/appkit-ui/react";
+import type { EmailAttachment, EmailMessage } from "@dbx-tools/shared-email";
+import { EyeIcon, PaperclipIcon, PencilIcon, SendIcon, XIcon } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+
+import { EmailPreview } from "./email-approval-card.tsx";
+import { joinAddresses, parseAddresses, type EmailDraft } from "./fields.ts";
 
 // A standard, editable email compose form usable outside a chat bubble
 // (a settings page, a standalone "send" view, etc.). It shares the

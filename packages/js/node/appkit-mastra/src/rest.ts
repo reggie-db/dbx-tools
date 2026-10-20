@@ -10,11 +10,11 @@
  * @module
  */
 
-import { appkit } from "@dbx-tools/appkit";
-import { json } from "@dbx-tools/shared-core";
+import { type WorkspaceClientLike } from "@dbx-tools/appkit";
+import { parse } from "@dbx-tools/shared-core";
 
 /** Workspace client carried on an AppKit execution context. */
-type WorkspaceClient = appkit.WorkspaceClientLike;
+type WorkspaceClient = WorkspaceClientLike;
 
 /** Request options for {@link databricksFetch}. */
 export interface DatabricksFetchInit {
@@ -62,5 +62,5 @@ export async function readResponseText(res: Response): Promise<string> {
 /** Parse a response body as JSON, returning `{}` on empty / invalid bodies. */
 export async function readResponseJson(res: Response): Promise<unknown> {
   const text = await readResponseText(res);
-  return json.parse<unknown>(text, {});
+  return parse<unknown>(text, {});
 }

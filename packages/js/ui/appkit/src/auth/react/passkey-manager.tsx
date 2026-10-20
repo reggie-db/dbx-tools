@@ -1,17 +1,16 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-
+import type { Passkey } from "@better-auth/passkey/client";
+import { Button, Input } from "@databricks/appkit-ui/react";
 import {
-  beginPasskeyEnrollment,
-  getAuthStatus,
-  listPasskeys,
-  passkeyDisplayName,
+  browser,
   passkeysAvailable,
   type PasskeyOperation,
-  type Passkey,
-  removePasskey,
+  listPasskeys,
+  getAuthStatus,
+  beginPasskeyEnrollment,
   renamePasskey,
-} from "./auth-client.ts";
-import { Button, Input } from "../../react/index.ts";
+  removePasskey,
+} from "@dbx-tools/shared-auth";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 /** Styling options for the authenticated passkey management surface. */
 export interface PasskeyManagerProps {
@@ -58,7 +57,7 @@ export function PasskeyManager({ className, passkeyNamePrefix }: PasskeyManagerP
   const add = useCallback(async () => {
     cancelEnrollment();
     const operation = beginPasskeyEnrollment(
-      passkeyDisplayName(passkeyNamePrefix ?? configuredPasskeyNamePrefix),
+      browser.passkeyDisplayName(passkeyNamePrefix ?? configuredPasskeyNamePrefix),
     );
     enrollment.current = operation;
     setBusy(true);

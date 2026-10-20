@@ -1,4 +1,3 @@
-import { stringUtils } from "@dbx-tools/shared-core";
 import {
   Button,
   DropdownMenu,
@@ -12,7 +11,8 @@ import {
   TableHeader,
   TableRow,
   cn,
-} from "@dbx-tools/ui/react";
+} from "@databricks/appkit-ui/react";
+import { type TokenizeOptions, toLabel } from "@dbx-tools/shared-core";
 import {
   flexRender,
   getCoreRowModel,
@@ -83,8 +83,8 @@ export function renderDataCell(value: unknown): React.ReactNode {
  * column id, accessor key, and CSV header, so only the on-screen label
  * is prettified.
  */
-export function humanizeLabel(value: string, options?: stringUtils.TokenizeOptions): string {
-  return stringUtils.toLabel(value, options);
+export function humanizeLabel(value: string, options?: TokenizeOptions): string {
+  return toLabel(value, options);
 }
 
 /**

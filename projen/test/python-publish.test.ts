@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { parse, stringify } from "smol-toml";
-import { buildPythonProjects, pythonDistributionPaths } from "../tasks/publish-python.ts";
-import { preparePythonProjectForPublication } from "../tasks/python-release.ts";
+import { buildPythonProjects, pythonDistributionPaths } from "../src/python-packaging.ts";
+import { preparePythonProjectForPublication } from "../src/python-release.ts";
 
 describe("Python release packaging", () => {
   it("selects only publishable distributions", () => {
@@ -123,7 +123,7 @@ describe("Python release packaging", () => {
         ].join("\n"),
       );
       chmodSync(join(bin, "uv"), 0o755);
-      const owner = resolve(import.meta.dirname, "../tasks/publish-python.ts");
+      const owner = resolve(import.meta.dirname, "../src/python-packaging.ts");
       const script = [
         `import { publishPythonProjects } from ${JSON.stringify(owner)};`,
         "let failed = false;",

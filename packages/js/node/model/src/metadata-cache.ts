@@ -4,12 +4,11 @@
  * @module
  */
 
-import { createCache, getOrSet } from "@dbx-tools/cache/cache";
-import * as errorUtils from "@dbx-tools/shared-core/error-utils";
-import * as log from "@dbx-tools/shared-core/log";
+import { createCache, getOrSet } from "@dbx-tools/cache";
+import { toError, log } from "@dbx-tools/shared-core";
 
 import { modelMetadataCache } from "./_cache.ts";
-import { MODEL_METADATA_TTL_MS } from "./_metadata-contract.ts";
+import { MODEL_METADATA_TTL_MS } from "./metadata-contract.ts";
 
 const logger = log.logger("model/metadata-cache");
 
@@ -78,7 +77,7 @@ export function createMetadataCache<T>(
           } catch (error) {
             logger.warn("metadata cache refresh failed; using cached or committed value", {
               key: options.key,
-              error: errorUtils.toError(error),
+              error: toError(error),
             });
             staleRefreshFailed = previous !== undefined;
           }

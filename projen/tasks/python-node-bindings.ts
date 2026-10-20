@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { log, stringUtils } from "@dbx-tools/shared-core";
+import { log, toIdentifierWithOptions } from "@dbx-tools/shared-core";
 import type { BunPlugin } from "bun";
 import stdLibBrowser from "node-stdlib-browser";
 import ts from "typescript";
@@ -949,7 +949,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   function pythonObjectName(type: ts.Type, path: string, suffix: string): string {
     const name = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
     if (name && name !== "__type") return name;
-    const identifier = stringUtils.toIdentifierWithOptions({ delimiter: "_" }, path);
+    const identifier = toIdentifierWithOptions({ delimiter: "_" }, path);
     return `${identifier
       .split("_")
       .filter(Boolean)

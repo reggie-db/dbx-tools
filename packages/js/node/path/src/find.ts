@@ -9,7 +9,7 @@
  * @module
  */
 
-import { object, type Sequence } from "@dbx-tools/shared-core";
+import { type Sequence, sequence } from "@dbx-tools/shared-core";
 import { globIterate, globIterateSync, IgnoreLike, type GlobOptionsWithFileTypesUnset } from "glob";
 import { GitIgnore } from "./git-ignore.ts";
 import { ignorePathMatcher } from "./ignore.ts";
@@ -47,7 +47,7 @@ export function findFilesSync(
   pattern: string | string[],
   options?: FileFindOptions,
 ): Sequence<string> {
-  return object.sequence(globIterateSync(pattern, toGlobOptionsSync(options)));
+  return sequence(globIterateSync(pattern, toGlobOptionsSync(options)));
 }
 
 async function toGlobOptions(

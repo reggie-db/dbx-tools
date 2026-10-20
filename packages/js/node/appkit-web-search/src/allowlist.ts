@@ -30,8 +30,8 @@
  */
 
 import { ValidationError } from "@databricks/appkit";
-import { match, type PathMatcher } from "@dbx-tools/path";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { type PathMatcher, toPathMatcher } from "@dbx-tools/path";
+import { parseList } from "@dbx-tools/shared-core";
 
 /** A compiled URL allow-list. Build one with {@link toUrlAllowList}. */
 export interface UrlAllowList {
@@ -65,7 +65,7 @@ export function normalizeUrlPattern(pattern: string): string {
  * identically.
  */
 export function parseAllowedUrls(raw: string | string[] | undefined): string[] {
-  return stringUtils.parseList(raw, normalizeUrlPattern);
+  return parseList(raw, normalizeUrlPattern);
 }
 
 /** One compiled entry: which URL slice it tests, and the matcher for it. */
@@ -78,12 +78,12 @@ interface CompiledPattern {
 function compilePattern(pattern: string): CompiledPattern {
   if (pattern.includes("/")) {
     // A path entry matches against `host + pathname` (no scheme, no query).
-    return { target: "hostPath", matcher: match.toPathMatcher(pattern) };
+    return { target: "hostPath", matcher: toPathMatcher(pattern) };
   }
   // A host entry matches the hostname. A bare host (no wildcard) also
   // permits its subdomains via an added `*.<host>` alternative.
   const globs = pattern.includes("*") ? [pattern] : [pattern, `*.${pattern}`];
-  return { target: "hostname", matcher: match.toPathMatcher(...globs) };
+  return { target: "hostname", matcher: toPathMatcher(...globs) };
 }
 
 /** The URL slices a compiled pattern is tested against. */

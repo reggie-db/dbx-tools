@@ -2,9 +2,9 @@
 /** Restart a development command after relevant workspace changes settle. */
 import { isAbsolute, relative, resolve } from "node:path";
 import { serializeArgs } from "@dbx-tools/cli-args";
-import * as exec from "@dbx-tools/core/exec";
-import { watch as pathWatch } from "@dbx-tools/path";
-import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
+import { spawn, type ChildProcessResult } from "@dbx-tools/core";
+import { watchFiles } from "@dbx-tools/path";
+import { log, sleep, toError } from "@dbx-tools/shared-core";
 import { CommanderError } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand, taskPositionals } from "./cli.ts";
@@ -232,7 +232,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   if (options.watchDisable) {
     logger.info(`watch disabled; running ${commandLabel}`);
     const [command, ...commandArgs] = options.command;
-    const { exitCode } = await exec.spawn(command!, commandArgs, {
+    const { exitCode } = await spawn(command!, commandArgs, {
       cwd,
       stdin: "inherit",
       stdout: "inherit",
@@ -250,13 +250,13 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     options.watchInclude,
     options.watchExclude,
   );
-  let child: exec.ChildProcessResult | undefined;
+  let child: ChildProcessResult | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let restartReason: string | undefined;
   let restarting = false;
   let stopping = false;
 
-  const watcher = await pathWatch.watchFiles([...watchPaths], {
+  const watcher = await watchFiles([...watchPaths], {
     cwd: root,
     ignore: watchIgnore.length > 0 ? [...watchIgnore] : undefined,
     ignoreInitial: true,
@@ -276,7 +276,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       });
     } catch (err) {
       logger.error("failed to stop command process tree", {
-        error: errorUtils.toError(err),
+        error: toError(err),
       });
     }
   }
@@ -284,7 +284,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   function startChild(reason: string): void {
     logger.info(`${reason}; starting ${commandLabel}`);
     const [command, ...commandArgs] = options.command;
-    const current = exec.spawn(command!, commandArgs, {
+    const current = spawn(command!, commandArgs, {
       cwd,
       stdin: "ignore",
       stdout: "inherit",
@@ -304,7 +304,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       .catch((err) => {
         if (child !== current || stopping) return;
         child = undefined;
-        logger.error("command failed", { error: errorUtils.toError(err) });
+        logger.error("command failed", { error: toError(err) });
       });
   }
 
@@ -337,7 +337,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   }
 
   watcher.on("all", scheduleRestart);
-  watcher.on("error", (err) => logger.error("watcher error", { error: errorUtils.toError(err) }));
+  watcher.on("error", (err) => logger.error("watcher error", { error: toError(err) }));
   watcher.on("ready", () => {
     const count = watchPaths.length;
     const source = options.watchInclude.length > 0 ? "include glob" : "workspace directory";
@@ -380,7 +380,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     restoreStdin();
     await Promise.race([
       Promise.allSettled([watcher.close(), stopChild()]),
-      asyncUtils.sleep(SHUTDOWN_TIMEOUT_MS),
+      sleep(SHUTDOWN_TIMEOUT_MS),
     ]);
     process.exit(exitCode);
   }

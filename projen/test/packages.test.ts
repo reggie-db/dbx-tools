@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { DiscoveredPackage, recordedRoots } from "../src/packages.ts";
-import { DBXToolsNodeProject } from "../src/project.ts";
+import { DBXToolsNodeProject } from "../src/project-js.ts";
 
 let outdir: string;
 
