@@ -1064,9 +1064,14 @@ override that location. The local provider forwards only marked chat roots and
 their descendants, so unrelated AppKit HTTP, cache, and plugin spans
 do not become traces. Before export it also writes the resolved email, user
 name, or resource id to MLflow's trace user field. Direct mode requires a
-UC-linked experiment. Inside a Databricks App (`environmentUtils.isDatabricksAppEnv()`), this
-provider stays off so AppKit remains the single global OTel provider and the
-platform telemetry sidecar owns export.
+UC-linked experiment.
+
+Inside a Databricks App (`environmentUtils.isDatabricksAppEnv()`), this provider
+stays off so AppKit remains the single global OTel provider and the platform
+telemetry sidecar owns export. Agent execution is explicitly parented to the
+chat trace, and unparented low-level HTTP calls are excluded so endpoint
+discovery, token refresh, and AppKit usage telemetry do not appear as standalone
+MLflow traces.
 
 ### Export Databricks Apps traces to Unity Catalog
 
@@ -1127,6 +1132,13 @@ Verify with SQL against the UC `*_trace_unified` view (the REST
 `traces/search` API only covers the experiment store, not UC-backed traces).
 Schema names with hyphens need backticks. `attributes` is a `VARIANT`, so use
 `attributes:['key']::string` rather than `map_keys()`.
+
+Trace-info promotion reads the UC prefix from experiment tags or
+`trace_location`. If the app service principal cannot read experiment metadata
+during startup, the first OBO chat request retries resolution with the user's
+workspace client while retaining the service principal for trace-info writes.
+Service-principal-only deployments should set `MLFLOW_UC_TRACE_PREFIX`
+explicitly.
 
 ## MCP exposure
 

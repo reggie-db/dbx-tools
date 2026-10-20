@@ -18,6 +18,7 @@ import {
   directMlflowTrackingUri,
   flushDirectMlflowTracing,
   initializeAppMlflowTraceInfo,
+  initializeRequestMlflowTraceInfo,
   logFeedback,
   mlflowAssessmentTraceId,
   mlflowEnabled,
@@ -143,6 +144,33 @@ describe("direct MLflow configuration", () => {
 });
 
 describe("Databricks Apps MLflow trace-info promotion", () => {
+  it("retries trace-location discovery with a request-scoped client", async () => {
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4314";
+    let requests = 0;
+    globalThis.fetch = async () => {
+      requests += 1;
+      if (requests === 1) return new Response("forbidden", { status: 403 });
+      return Response.json({
+        experiment: {
+          experiment_id: "123",
+          trace_location: {
+            uc_trace_location: {
+              catalog: "cat",
+              schema: "schema",
+              table_prefix: "demo",
+            },
+          },
+        },
+      });
+    };
+
+    assert.equal(await initializeAppMlflowTraceInfo(workspaceClient()), false);
+    assert.equal(await initializeRequestMlflowTraceInfo(workspaceClient()), true);
+    assert.equal(requests, 2);
+  });
+
   it("persists trace tags and user metadata without uploading spans", async () => {
     process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
     process.env.MLFLOW_EXPERIMENT_ID = "123";
@@ -156,12 +184,14 @@ describe("Databricks Apps MLflow trace-info promotion", () => {
         return Response.json({
           experiment: {
             experiment_id: "123",
-            tags: [
-              {
-                key: "mlflow.experiment.databricksTraceDestinationPath",
-                value: "cat.schema.demo",
+            trace_location: {
+              uc_trace_location: {
+                catalog: "cat",
+                schema: "schema",
+                table_prefix: "demo",
+                effective_table_prefix: "demo",
               },
-            ],
+            },
           },
         });
       }

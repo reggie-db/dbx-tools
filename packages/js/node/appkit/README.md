@@ -390,7 +390,10 @@ Running as the service principal does not change which user owns the request. Th
 caller still arrives on `x-forwarded-user` / `x-forwarded-email` (read them with
 `identity.requestUserId()` / `requestUserEmail()`), so memory threads, cache
 namespaces, and trace attribution stay per-user - only the Databricks credential
-is shared. `@dbx-tools/appkit-mastra` exposes this as its `genieIdentity` option.
+is shared. `appkit.createApp()` stamps the forwarded email, or user id when no
+email is present, onto every native HTTP request root as OpenTelemetry
+`user.id`. `@dbx-tools/appkit-mastra` exposes the credential choice as its
+`genieIdentity` option.
 
 ## Modules
 

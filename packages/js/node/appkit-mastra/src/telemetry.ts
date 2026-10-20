@@ -42,6 +42,7 @@ import type express from "express";
 import { MASTRA_AUTH_MODE_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_NAME_KEY } from "./config.ts";
 import { USER_EMAIL_HEADER, USER_ID_HEADER } from "./identity.ts";
 import {
+  appMlflowTraceInfoConfigured,
   directMlflowTracingActive,
   initializeAppMlflowTraceInfo,
   persistAppMlflowTraceInfo,
@@ -118,7 +119,7 @@ export const GEN_AI_OPERATION_NAME_ATTR = "gen_ai.operation.name";
  * Root-span user id the MLflow experiment UI's User column reads from OTel
  * traces. Prefer the forwarded email when present so the column is human.
  */
-export const MLFLOW_USER_ATTR = "user.id";
+export const MLFLOW_USER_ATTR = appkitTelemetry.USER_TRACE_ATTRIBUTE;
 /** Root-span session id that enables the MLflow Sessions tab. */
 export const MLFLOW_SESSION_ATTR = "session.id";
 /** Root-span type for a Mastra agent turn. */
@@ -507,7 +508,8 @@ let appMlflowTraceInfoProcessorRegistered = false;
 /** Register trace enrichment before AppKit constructs its native provider. */
 export async function registerAppMlflowTraceInfoProcessor(): Promise<boolean> {
   if (appMlflowTraceInfoProcessorRegistered) return true;
-  if (!(await initializeAppMlflowTraceInfo())) return false;
+  if (!appMlflowTraceInfoConfigured()) return false;
+  await initializeAppMlflowTraceInfo();
   await appkitTelemetry.registerNativeSpanProcessor(new AppMlflowTraceInfoSpanProcessor());
   appMlflowTraceInfoProcessorRegistered = true;
   return true;

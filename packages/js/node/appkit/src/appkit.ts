@@ -51,7 +51,11 @@ import {
 } from "./interceptor.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
-import { bindNativeTelemetryProvider } from "./telemetry.ts";
+import {
+  bindNativeTelemetryProvider,
+  configureNativeHttpTelemetry,
+  stampHttpTraceUser,
+} from "./telemetry.ts";
 
 const logger = log.logger("appkit");
 
@@ -289,6 +293,7 @@ export async function createApp<T extends AppKitPlugins>(
   config?: CreateAppConfig<T>,
 ): Promise<PluginMap<T>> {
   installAsUserDevelopmentPatch();
+  await configureNativeHttpTelemetry({ spanHook: stampHttpTraceUser });
   const plugins = pluginNames(config);
   const interceptors = interceptorList(config?.interceptor);
   logger.debug("createApp: start", {

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { AssistantMarkdown } from "../src/react/markdown.tsx";
+import { AssistantMarkdown, ToolMarkdown } from "../src/react/markdown.tsx";
 
 const TABLE = "| KPI | Latest week |\n| --- | ---: |\n| Sales per store per week | $48,138.36 |";
 
@@ -20,5 +20,19 @@ describe("streaming Markdown tables", () => {
     assert.doesNotMatch(streaming, /Sales per store per week/);
     assert.match(settled, /Sales per store per week/);
     assert.doesNotMatch(settled, /Building table/);
+  });
+});
+
+describe("tool Markdown typography", () => {
+  it("pins prose and inline code to one text size", () => {
+    const html = renderToStaticMarkup(
+      createElement(ToolMarkdown, {
+        children: "Checking `market_name` before querying the next table.",
+      }),
+    );
+
+    assert.match(html, /!text-xs/);
+    assert.match(html, /\[&amp;_p\]:!text-xs/);
+    assert.match(html, /\[&amp;_code\]:!text-xs/);
   });
 });

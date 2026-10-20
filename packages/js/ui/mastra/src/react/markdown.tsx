@@ -314,13 +314,13 @@ export const ToolMarkdown = ({ children, className }: { children: string; classN
     linkSafety={LINK_SAFETY}
     className={cn(
       "prose prose-sm dark:prose-invert min-w-0 max-w-full overflow-x-hidden break-words",
-      "text-xs leading-tight text-muted-foreground sm:leading-snug",
-      "prose-p:my-0.5 prose-p:leading-tight [&_p]:!leading-tight sm:prose-p:leading-snug sm:[&_p]:!leading-snug",
+      "!text-xs leading-tight text-muted-foreground sm:leading-snug",
+      "prose-p:my-0.5 prose-p:leading-tight [&_p]:!text-xs [&_p]:!leading-tight sm:prose-p:leading-snug sm:[&_p]:!leading-snug",
       "prose-ul:my-0.5 prose-ul:pl-4 prose-ol:my-0.5 prose-ol:pl-4",
-      "prose-li:my-0 prose-li:leading-tight prose-li:marker:text-muted-foreground/60 sm:prose-li:leading-snug",
+      "prose-li:my-0 prose-li:leading-tight prose-li:marker:text-muted-foreground/60 [&_li]:!text-xs sm:prose-li:leading-snug",
       "prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold",
-      "prose-strong:text-foreground/90 prose-strong:font-medium",
-      "prose-code:text-xs prose-code:font-medium",
+      "prose-strong:text-foreground/90 prose-strong:font-medium [&_strong]:!text-xs",
+      "prose-code:font-medium [&_code]:!text-xs [&_a]:!text-xs",
       className,
     )}
   >

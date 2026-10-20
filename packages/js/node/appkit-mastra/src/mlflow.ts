@@ -49,6 +49,7 @@ let directMlflowInitStarted = false;
 let directMlflowProvider: NodeTracerProvider | undefined;
 let directMlflowProcessor: SpanProcessor | undefined;
 let appMlflowTraceInfoInitStarted = false;
+let appMlflowTraceInfoRequestInitStarted = false;
 let appMlflowTraceInfoClient: WorkspaceClient | undefined;
 let appMlflowTracePrefix: string | undefined;
 const pendingAppMlflowTraceInfo = new Set<Promise<void>>();
@@ -209,7 +210,18 @@ async function resolveUcTracePrefix(client: WorkspaceClient): Promise<string | u
   if (loadedUcPrefix) return loadedUcPrefix.prefix;
   const experiment = await fetchExperiment(client);
   if (!experiment) return undefined;
-  const prefix = ucTracePrefixFromExperimentTags(experiment.tags);
+  const location = experiment.trace_location?.uc_trace_location;
+  const prefix =
+    ucTracePrefixFromExperimentTags(experiment.tags) ??
+    (location
+      ? [
+          location.catalog,
+          location.schema,
+          location.effective_table_prefix ?? location.table_prefix,
+        ]
+          .filter(Boolean)
+          .join(".")
+      : undefined);
   loadedUcPrefix = { prefix };
   return prefix;
 }
@@ -229,6 +241,23 @@ const MlflowExperimentResponseSchema = z
       .object({
         experiment_id: z.string().min(1).describe("Workspace MLflow experiment identifier."),
         tags: z.unknown().optional().describe("Experiment tags, including the UC trace location."),
+        trace_location: z
+          .object({
+            uc_trace_location: z
+              .object({
+                catalog: z.string().describe("Unity Catalog catalog name."),
+                schema: z.string().describe("Unity Catalog schema name."),
+                table_prefix: z.string().describe("Configured trace table prefix."),
+                effective_table_prefix: z
+                  .string()
+                  .optional()
+                  .describe("Effective trace table prefix selected by Databricks."),
+              })
+              .optional()
+              .describe("Unity Catalog trace location."),
+          })
+          .optional()
+          .describe("Experiment trace storage location."),
       })
       .passthrough()
       .describe("Configured MLflow experiment."),
@@ -354,13 +383,13 @@ export async function initializeAppMlflowTraceInfo(client?: WorkspaceClient): Pr
   appMlflowTraceInfoInitStarted = true;
   try {
     const resolvedClient = client ?? (createWorkspaceClient() as WorkspaceClient);
+    appMlflowTraceInfoClient ??= resolvedClient;
     const prefix = await resolveUcTracePrefix(resolvedClient);
     if (!prefix || prefix.split(".").length !== 3) {
       throw new ConfigurationError(
         "Databricks Apps MLflow trace-info promotion requires a UC-linked experiment or MLFLOW_UC_TRACE_PREFIX.",
       );
     }
-    appMlflowTraceInfoClient = resolvedClient;
     appMlflowTracePrefix = prefix;
     logger.info("Databricks Apps MLflow trace-info promotion enabled", { prefix });
     return true;
@@ -368,8 +397,23 @@ export async function initializeAppMlflowTraceInfo(client?: WorkspaceClient): Pr
     logger.warn("Databricks Apps MLflow trace-info promotion disabled", {
       error: errorUtils.toError(err),
     });
+    // Startup uses the service principal. Permit one later request-scoped
+    // client to resolve experiment metadata when that principal cannot read it.
+    if (client === undefined) appMlflowTraceInfoInitStarted = false;
     return false;
   }
+}
+
+/**
+ * Retry Apps trace-location discovery once with a request-scoped workspace
+ * client after service-principal startup discovery failed.
+ */
+export async function initializeRequestMlflowTraceInfo(client: WorkspaceClient): Promise<boolean> {
+  if (appMlflowTraceInfoClient && appMlflowTracePrefix) return true;
+  if (appMlflowTraceInfoRequestInitStarted || !appMlflowTraceInfoConfigured()) return false;
+  appMlflowTraceInfoRequestInitStarted = true;
+  appMlflowTraceInfoInitStarted = false;
+  return initializeAppMlflowTraceInfo(client);
 }
 
 /** Trace-level values persisted beside spans already exported by the Apps OTLP sidecar. */
@@ -434,6 +478,7 @@ export function persistAppMlflowTraceInfo(params: AppMlflowTraceInfo): void {
 /** Reset Apps trace-info promotion state for tests. */
 export function resetAppMlflowTraceInfo(): void {
   appMlflowTraceInfoInitStarted = false;
+  appMlflowTraceInfoRequestInitStarted = false;
   appMlflowTraceInfoClient = undefined;
   appMlflowTracePrefix = undefined;
   pendingAppMlflowTraceInfo.clear();
@@ -644,7 +689,7 @@ async function resolveMlflowExperimentManagerUrl(
 
 async function fetchExperiment(
   client: WorkspaceClient,
-): Promise<{ experiment_id: string; tags?: unknown } | undefined> {
+): Promise<z.infer<typeof MlflowExperimentResponseSchema>["experiment"] | undefined> {
   const experiment = configuredExperiment();
   const path = experiment.id
     ? `/api/2.0/mlflow/experiments/get?experiment_id=${encodeURIComponent(experiment.id)}`

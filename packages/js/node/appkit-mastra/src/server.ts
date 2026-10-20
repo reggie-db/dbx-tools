@@ -35,6 +35,7 @@ import {
   FOLLOW_UP_USER_TEXT_KEY,
 } from "./follow-up-suggestions.ts";
 import { requestUserEmail, requestUserId } from "./identity.ts";
+import { initializeRequestMlflowTraceInfo } from "./mlflow.ts";
 import { MASTRA_ORIGIN_KEY } from "./request-context.ts";
 import {
   extractModelOverride,
@@ -137,6 +138,7 @@ export async function stampRequestContextUser(
 ): Promise<void> {
   if ([MASTRA_USER_KEY, MASTRA_RESOURCE_ID_KEY].every((key) => requestContext.get(key))) return;
   const executionContext = getExecutionContext();
+  await initializeRequestMlflowTraceInfo(executionContext.client);
   const isUserContext = "isUserContext" in executionContext;
   // The Databricks CREDENTIAL is always the ambient execution context's client
   // (OBO in a user context, the service principal otherwise). WHO the turn is
@@ -184,8 +186,8 @@ export async function stampRequestContextUser(
  * a request id so the turn's spans join up in traces. The result is passed as
  * `requestContext` to `agent.generate` / `agent.stream`.
  *
- * This is what makes a card turn answer with the SAME data a chat turn does: the
- * difference between the two endpoints is presentation, not capability.
+ * This gives an out-of-band turn the same data and tool capability as a chat
+ * turn.
  */
 export async function createRequestContext(
   options: { threadId?: string; resourceId?: string; requestId?: string } = {},
@@ -193,8 +195,8 @@ export async function createRequestContext(
   const requestContext = new RequestContext();
   await stampRequestContextUser(requestContext);
   if (options.threadId) requestContext.set(MASTRA_THREAD_ID_KEY, options.threadId);
-  // Stamped AFTER the user so an explicit resource id (a channel member, say)
-  // wins over the ambient identity `stampRequestContextUser` defaulted to.
+  // Stamped AFTER the user so an explicit resource id wins over the ambient
+  // identity `stampRequestContextUser` defaulted to.
   if (options.resourceId) requestContext.set(MASTRA_RESOURCE_ID_KEY, options.resourceId);
   requestContext.set(MASTRA_REQUEST_ID_KEY, options.requestId ?? hash.id());
   return requestContext;

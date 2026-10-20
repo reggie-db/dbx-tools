@@ -5,14 +5,28 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { Tracer, TracerOptions, TracerProvider } from "@opentelemetry/api";
+import { stringUtils, token } from "@dbx-tools/shared-core";
+import {
+  trace,
+  type Span,
+  type Tracer,
+  type TracerOptions,
+  type TracerProvider,
+} from "@opentelemetry/api";
 import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
 
 type IncomingRequestFilter = (request: IncomingMessage) => boolean;
+type OutgoingRequestFilter = (request: unknown) => boolean;
+type SpanAttributeHook = (span: Span, request: unknown) => void;
+
+/** Root-span user attribute consumed by MLflow and OpenTelemetry backends. */
+export const USER_TRACE_ATTRIBUTE = "user.id";
 
 interface NativeHttpInstrumentationConfig {
   readonly enabled?: boolean;
   readonly ignoreIncomingRequestHook?: IncomingRequestFilter;
+  readonly ignoreOutgoingRequestHook?: OutgoingRequestFilter;
+  readonly applyCustomAttributesOnSpan?: SpanAttributeHook;
   readonly [key: string]: unknown;
 }
 
@@ -43,6 +57,10 @@ export interface NativeHttpTelemetryOptions {
   readonly exclude?: readonly string[];
   /** Additional caller-owned request filter. Returning `true` excludes the request. */
   readonly filter?: IncomingRequestFilter;
+  /** Additional caller-owned outgoing request filter. Returning `true` excludes the request. */
+  readonly outgoingFilter?: OutgoingRequestFilter;
+  /** Additional caller-owned hook for attributes on native HTTP spans. */
+  readonly spanHook?: SpanAttributeHook;
 }
 
 /** Return the request pathname without its query string. */
@@ -65,6 +83,29 @@ export function excludeHttpTelemetryRequest(
     }
   }
   return options.filter?.(request) ?? false;
+}
+
+/** Exclude outgoing HTTP spans that have no recording semantic parent. */
+export function excludeUnparentedOutgoingHttpTelemetry(
+  _request?: unknown,
+  span: Span | undefined = trace.getActiveSpan(),
+): boolean {
+  return !span?.isRecording();
+}
+
+/** Stamp the forwarded request identity onto a native AppKit HTTP span. */
+export function stampHttpTraceUser(span: Span, request: unknown): void {
+  if (!request || typeof request !== "object") return;
+  const headers = (request as { headers?: unknown }).headers;
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) return;
+  const record = headers as Record<string, string | string[] | undefined>;
+  const first = (name: string): string | undefined => {
+    const raw = record[name];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return stringUtils.trimToNull(value) ?? undefined;
+  };
+  const user = first(token.USER_EMAIL_HEADER) ?? first(token.USER_ID_HEADER);
+  if (user) span.setAttribute(USER_TRACE_ATTRIBUTE, user);
 }
 
 function appKitInternalModuleUrl(relativePath: string): string {
@@ -132,10 +173,18 @@ export async function configureNativeHttpTelemetry(
   const instrumentation = await nativeHttpInstrumentation();
   const config = instrumentation.getConfig();
   const appKitFilter = config.ignoreIncomingRequestHook;
+  const appKitOutgoingFilter = config.ignoreOutgoingRequestHook;
+  const appKitSpanHook = config.applyCustomAttributesOnSpan;
   instrumentation.setConfig({
     ...config,
     ignoreIncomingRequestHook: (request) =>
       Boolean(appKitFilter?.(request)) || excludeHttpTelemetryRequest(request, options),
+    ignoreOutgoingRequestHook: (request) =>
+      Boolean(appKitOutgoingFilter?.(request)) || Boolean(options.outgoingFilter?.(request)),
+    applyCustomAttributesOnSpan: (span, request) => {
+      appKitSpanHook?.(span, request);
+      options.spanHook?.(span, request);
+    },
   });
 }
 

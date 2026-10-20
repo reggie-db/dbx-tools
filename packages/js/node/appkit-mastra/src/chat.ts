@@ -24,6 +24,7 @@ import {
   resolveFollowUpSuggestionsConfig,
 } from "./follow-up-suggestions.ts";
 import { withRequestMemoryScope } from "./memory.ts";
+import { activeChatTracingOptions } from "./telemetry.ts";
 
 const logger = log.logger("mastra/chat");
 
@@ -93,6 +94,7 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
         if (userText) requestContext.setRaw(FOLLOW_UP_USER_TEXT_KEY, userText);
         requestContext.setRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY, []);
         requestContext.setRaw(FOLLOW_UP_RUN_ID_KEY, runId);
+        const tracingOptions = activeChatTracingOptions(undefined);
         const stream = await handleChatStream({
           mastra,
           agentId,
@@ -106,6 +108,7 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
               ...params,
               runId,
               requestContext,
+              ...(tracingOptions ? { tracingOptions } : {}),
               ...(abortSignal ? { abortSignal } : {}),
             },
             requestContext,

@@ -278,6 +278,11 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     });
     this.config.feedbackMode = this.resolvedFeedbackMode;
     if (this.config.observability !== false) {
+      await appkitTelemetry.configureNativeHttpTelemetry({
+        // A low-level request without an active semantic span becomes a noisy
+        // standalone trace. Requests inside an agent/tool span remain visible.
+        outgoingFilter: appkitTelemetry.excludeUnparentedOutgoingHttpTelemetry,
+      });
       await registerAppMlflowTraceInfoProcessor();
     }
     // Wait until sibling plugins (e.g. `lakebase`) finish `setup()` so
