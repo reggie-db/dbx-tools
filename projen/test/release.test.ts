@@ -77,6 +77,7 @@ describe("unified release workflow", () => {
 
     const verifyJob = release.jobs["build-release"]!;
     assert.deepEqual(verifyJob.permissions, { contents: "read" });
+    assert.equal(verifyJob.env?.ONNXRUNTIME_NODE_INSTALL, "skip");
     assert.equal(step(verifyJob, "Checkout release source").with?.["fetch-depth"], 0);
     assert.equal(step(verifyJob, "Install dependencies").run, "bun install");
     const verify = step(verifyJob, "Verify release context");
@@ -266,7 +267,10 @@ describe("release task contracts", () => {
     assert.match(driver, /publishNpmArchive\(/);
     assert.doesNotMatch(driver, /runAsync\(dir, "bun", \["publish", \.\.\.publishArgs\]/);
     assert.doesNotMatch(driver, /restoreManifestMode|chmodSync|lstatSync/);
-    const publisher = readFileSync(join(import.meta.dirname, "..", "src", "npm-release.ts"), "utf8");
+    const publisher = readFileSync(
+      join(import.meta.dirname, "..", "src", "npm-release.ts"),
+      "utf8",
+    );
     assert.match(publisher, /"npm",\s*\[[\s\S]*"publish",[\s\S]*archive/);
     assert.match(publisher, /"--ignore-scripts"/);
     assert.match(publisher, /\["--access", identity\.access\]/);

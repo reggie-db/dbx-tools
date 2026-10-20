@@ -37,6 +37,7 @@ function fixture(): { remote: string; root: string } {
       'import { writeFileSync } from "node:fs";',
       'writeFileSync("VERSION", "1.0.1\\n");',
       'writeFileSync("generated.txt", "1.0.1\\n");',
+      'writeFileSync("install-env.txt", `${process.env.ONNXRUNTIME_NODE_INSTALL ?? ""}\\n`);',
       "",
     ].join("\n"),
   );
@@ -265,6 +266,7 @@ describe("direct release tags", () => {
         git(root, "rev-parse", "HEAD"),
       );
       assert.equal(readFileSync(join(root, "VERSION"), "utf8"), "1.0.1\n");
+      assert.equal(readFileSync(join(root, "install-env.txt"), "utf8"), "skip\n");
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
     }

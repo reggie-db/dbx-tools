@@ -19,6 +19,7 @@ import { projectReleaseBranch, taskCommand, type DBXToolsJavaScriptProject } fro
 import {
   PUBLIC_NPM_REGISTRY_URL,
   PUBLICATION_WAIT_TIMEOUT_SECONDS,
+  RELEASE_INSTALL_ENV,
   RELEASE_VERSION,
   RELEASE_WORKFLOW_FILE,
 } from "./release-context.ts";
@@ -254,6 +255,7 @@ function releaseBuildJob(
     timeoutMinutes: 60,
     env: {
       CI: "true",
+      ...RELEASE_INSTALL_ENV,
       ...(options.docs
         ? { DOCS_SITE_URL: options.docs.siteUrl, DOCS_BASE: options.docs.base ?? "/" }
         : {}),

@@ -23,6 +23,7 @@ jobs:
       docs: ${{ steps.release.outputs.docs }}
     env:
       CI: "true"
+      ONNXRUNTIME_NODE_INSTALL: skip
       DOCS_SITE_URL: https://docs.dbx.tools
       DOCS_BASE: /
     steps:

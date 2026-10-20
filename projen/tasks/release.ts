@@ -13,7 +13,7 @@ import { TaskDirectoriesOptionSchema, TaskRootOptionSchema } from "./options.ts"
 import { writeReleaseNotes } from "./release-notes.ts";
 import { assertReleaseVersion } from "./release-version.ts";
 import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
-import { RELEASE_WORKFLOW_FILE } from "../src/release-context.ts";
+import { RELEASE_INSTALL_ENV, RELEASE_WORKFLOW_FILE } from "../src/release-context.ts";
 import {
   RELEASE_INSTALL_MODES,
   RELEASE_PUBLISH_TARGETS,
@@ -504,7 +504,11 @@ export async function runRelease(
     throw new Error("--no-release-notes cannot be combined with supplied release notes");
   }
 
-  if (install === "always") runTaskCommand(root, "bun", ["install"]);
+  if (install === "always") {
+    runTaskCommand(root, "bun", ["install"], {
+      env: { ...process.env, ...RELEASE_INSTALL_ENV },
+    });
+  }
   if (selection.validation && hasPackageScript(root, "eslint:fix")) {
     runTaskCommand(root, "bun", ["run", "eslint:fix"]);
   }
@@ -514,7 +518,11 @@ export async function runRelease(
   runTaskCommand(root, "git", ["fetch", remote, branch, "--tags"]);
   if (options.bump ?? true) {
     runTaskCommand(root, "bun", ["run", "bump"], {
-      env: { ...process.env, DBX_TOOLS_RELEASE_INSTALL: install === "auto" ? "auto" : "never" },
+      env: {
+        ...process.env,
+        ...RELEASE_INSTALL_ENV,
+        DBX_TOOLS_RELEASE_INSTALL: install === "auto" ? "auto" : "never",
+      },
     });
   }
 
