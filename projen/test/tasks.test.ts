@@ -131,12 +131,14 @@ describe("workspace validation tasks", () => {
   it("keeps watcher dependencies in the engine and tracks generated extra-member barrels", () => {
     assert.equal(tasks.packageJson.devDependencies?.concurrently, undefined);
     assert.match(tasks.prettierIgnore, /^tooling\/index\.ts$/m);
+    assert.match(tasks.prettierIgnore, /^packages\/member\/src\/\*\*\/index\.ts$/m);
     assert.match(tasks.attributes, /^\/tooling\/index\.ts linguist-generated$/m);
   });
 
   it("ignores local lockfiles independently of the active registry", () => {
     assert.match(tasks.gitignore, /^\*\*\/\*\.lock$/m);
     assert.match(tasks.gitignore, /^\.npmrc$/m);
+    assert.match(tasks.gitignore, /^!\*\*\/src\/lib\/\*\*$/m);
     assert.match(tasks.prettierIgnore, /^\*\*\/\*\.lock$/m);
   });
 

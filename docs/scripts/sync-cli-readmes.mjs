@@ -1,13 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { parseArgv } from "@dbx-tools/cli-args";
 import { format, resolveConfig } from "prettier";
+import { z } from "zod";
 import { commanderReference, serviceReference, withCliReference } from "./cli-reference.mjs";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import { discoverJavaScriptPackages } from "./repository-docs.mjs";
 
 const root = process.cwd();
-const check = process.argv.includes("--check");
+const CliReadmeSyncOptionsSchema = z.object({
+  check: z
+    .boolean()
+    .default(false)
+    .describe("Verify that generated CLI references are current")
+    .meta({ env: [], short: false }),
+});
+const { check } = parseArgv(CliReadmeSyncOptionsSchema);
 const references = [];
 for (const pkg of discoverJavaScriptPackages(root).filter((pkg) => pkg.group === "cli")) {
   const entry = resolvePackageTypeScriptExports(pkg.manifest).find(

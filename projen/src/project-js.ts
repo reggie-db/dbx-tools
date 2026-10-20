@@ -40,7 +40,7 @@ import { applyCompiledPublish } from "./publish.ts";
 import { generatePythonNodeBindings } from "./python-node-bindings.ts";
 import { DBXToolsRelease, type ReleaseDocsOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
-import { DBXToolsRootTsconfig } from "./tsconfig.ts";
+import { DBXToolsRootTsconfig, type DBXToolsRootTsconfigOptions } from "./tsconfig.ts";
 import { configureVsCode } from "./vscode.ts";
 import { readWorkspaceVersion, syncWorkspaceManifestVersion } from "./workspace-version.ts";
 
@@ -140,7 +140,15 @@ function repositoryOptions(
   options: DBXToolsJavaScriptProjectOptions,
 ): Pick<javascript.NodeProjectOptions, "repository" | "repositoryDirectory"> {
   const workspaceRoot = resolve(options.parent?.root.outdir ?? options.outdir ?? process.cwd());
-  const repository = options.repository ?? projectUtils.repositoryUrl(workspaceRoot, "npm");
+  const existingRepository = readPackageManifest(workspaceRoot)?.repository;
+  const existingRepositoryUrl =
+    typeof existingRepository === "string"
+      ? existingRepository
+      : object.isRecord(existingRepository)
+        ? stringUtils.trimToNull(existingRepository.url)
+        : undefined;
+  const repository =
+    options.repository ?? projectUtils.repositoryUrl(workspaceRoot, "npm") ?? existingRepositoryUrl;
   const projectRoot = options.parent
     ? resolve(options.parent.outdir, options.outdir ?? ".")
     : resolve(options.outdir ?? process.cwd());
@@ -623,6 +631,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      * a list = only those tags.
      */
     readonly defaultTagMixins?: false | PackageTag[];
+    /** Overrides for the generated repository-root TypeScript program. */
+    readonly rootTsconfig?: DBXToolsRootTsconfigOptions;
     /**
      * Apply AppKit conventions to `app` and `server` packages. Defaults to
      * `auto`; `true` also validates the required package roles and entry files.
@@ -1065,6 +1075,7 @@ class PrettierIgnoreGenerated extends Component {
       if (!(sub instanceof DBXToolsTypeScriptProject)) continue;
       const rel = toPosix(relative(rootAbs, sub.outdir));
       prettier.addIgnorePattern(`${rel}/index.ts`);
+      prettier.addIgnorePattern(`${rel}/src/**/index.ts`);
       for (const module of codegenModulePaths(sub.dbxToolsConfig.codegenInputs)) {
         prettier.addIgnorePattern(`${rel}/${module}`);
       }
@@ -1236,7 +1247,7 @@ function initProject(
   }
 
   if (project instanceof DBXToolsNodeProject) {
-    project.rootTsconfig = new DBXToolsRootTsconfig(project);
+    project.rootTsconfig = new DBXToolsRootTsconfig(project, options.rootTsconfig);
   }
   const projenrc = new typescript.ProjenrcTs(project, {
     runner: typescript.TypeScriptRunner.nodejs(),
@@ -1264,7 +1275,9 @@ function initProject(
   // lockfiles, so the CI-named install task must resolve from manifests as well.
   project.package.installCiTask.reset("bun install");
   configureRootBunRuntime(project);
-  const roots = options.packageRoots ?? DEFAULT_PACKAGE_ROOTS;
+  const roots =
+    options.packageRoots ??
+    (existsSync(resolve(project.outdir, "packages/js")) ? ["packages/js"] : DEFAULT_PACKAGE_ROOTS);
   project.dbxToolsConfig.packageRoots = [...roots];
   if (options.syncResynthPaths?.length) {
     project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
@@ -1289,6 +1302,9 @@ function initProject(
   project.gitignore.addPatterns(
     ...[...ignore.ignorePatterns({ test: false, dot: false, lock: true })],
   );
+  // The generic compiled-output pattern `**/lib/**` must not hide authored
+  // modules beneath a package's `src/lib/`.
+  project.gitignore.include("**/src/lib/**");
   // What the dot group was actually earning here, named explicitly: secrets and
   // local editor state. Both ignore CONTENTS (`.idea/*`) rather than the
   // directory, so a later `!` negation can still reach a file inside.

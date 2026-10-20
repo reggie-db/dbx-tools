@@ -100,16 +100,22 @@ export interface CliServiceRuntimeOptions {
 
 export const CliServiceInstallOptionsSchema = z
   .object({
-    start: z.boolean().default(true).describe("Start the service after installation."),
+    start: z
+      .boolean()
+      .default(true)
+      .describe("Start the service after installation.")
+      .meta({ env: [], short: false }),
     pythonProject: z
       .string()
       .min(1)
       .optional()
-      .describe("Local Python project installed instead of the registry package."),
+      .describe("Local Python project installed instead of the registry package.")
+      .meta({ env: [], short: false }),
     offline: z
       .boolean()
       .default(false)
-      .describe("Install Python packages from the uv cache without network access."),
+      .describe("Install Python packages from the uv cache without network access.")
+      .meta({ env: [], short: false }),
   })
   .strict()
   .describe("Options for installing a current-user CLI service.");

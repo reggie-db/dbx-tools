@@ -64,7 +64,7 @@ const DEFAULT_CATALOG: Catalog = {
   "@types/react-dom": "^19.2.2",
   tailwindcss: "^4.3.2",
   "@tailwindcss/vite": "^4.3.2",
-  vite: "^7.2.4",
+  vite: "npm:rolldown-vite@7.1.14",
   "@vitejs/plugin-react": "^5.1.1",
   // Tailwind v4 compiler for bun's dev server + `Bun.build` (the `app` tag).
   "bun-plugin-tailwind": "^0.1.2",

@@ -1,9 +1,11 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
+import { existsSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, github, javascript, python } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
-import { PYTHON_GENERATED_PACKAGE } from "./generated.ts";
+import { header, PYTHON_GENERATED_PACKAGE } from "./generated.ts";
 import { LICENSE, projectRepositoryUrl, taskCommand } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
@@ -107,7 +109,10 @@ interface PythonPublication {
 
 /** Options for {@link DBXToolsPythonWorkspace}. */
 export interface DBXToolsPythonWorkspaceOptions {
-  readonly packages: readonly PythonPackageOptions[];
+  /** Package-specific options merged over packages discovered under the Python root. */
+  readonly packages?: readonly PythonPackageOptions[];
+  /** Discover direct child directories containing `src/`. Defaults to true. */
+  readonly discoverPackages?: boolean;
   readonly repository?: PythonRepositoryOptions;
   /** Repository-relative Python package root. Defaults to `packages/py`. */
   readonly root?: string;
@@ -212,6 +217,15 @@ export function pythonPackagePath(repository: PythonRepositoryOptions, directory
 /** Derive a dotted Python module from an npm-style scope and package directory. */
 export function pythonModuleName(scope: string, directory: string): string {
   return [scope, ...directory.split("/")].map((part) => part.replaceAll("-", "_")).join(".");
+}
+
+/** Discover direct Python workspace members by their conventional source directory. */
+function discoverPythonPackages(root: string): string[] {
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(resolve(root, entry.name, "src")))
+    .map((entry) => entry.name)
+    .sort();
 }
 
 /** A Python package implemented with projen's `PythonProject` and uv backend. */
@@ -349,11 +363,30 @@ export class DBXToolsPythonWorkspace extends Component {
       ref: options.repository?.ref ?? "main",
       root: options.root ?? options.repository?.root ?? "packages/py",
     };
-    const packageIdentities: ResolvedPythonPackageOptions[] = options.packages.map((pkg) => ({
-      ...pkg,
-      name: pkg.name ?? `${scope}-${stringUtils.toSlug(pkg.directory)}`,
-      module: pkg.module ?? pythonModuleName(scope, pkg.directory),
-    }));
+    const configuredPackages = new Map((options.packages ?? []).map((pkg) => [pkg.directory, pkg]));
+    const discoveredDirectories =
+      options.discoverPackages === false
+        ? []
+        : discoverPythonPackages(resolve(project.outdir, this.repository.root));
+    const directories = [
+      ...configuredPackages.keys(),
+      ...discoveredDirectories.filter((directory) => !configuredPackages.has(directory)),
+    ];
+    const packageIdentities: ResolvedPythonPackageOptions[] = directories.map((directory) => {
+      const pkg = configuredPackages.get(directory);
+      return {
+        directory,
+        description: `${scope} ${directory} Python package.`,
+        ...pkg,
+        name: pkg?.name ?? `${scope}-${stringUtils.toSlug(directory)}`,
+        module: pkg?.module ?? pythonModuleName(scope, directory),
+      };
+    });
+    if (packageIdentities.length === 0) {
+      throw new Error(
+        `No Python packages were configured or discovered under ${this.repository.root}`,
+      );
+    }
     const configuredNodeRuntimes = packageIdentities.filter(({ nodeRuntime }) => nodeRuntime);
     if (configuredNodeRuntimes.length > 1) {
       throw new Error("A Python workspace can configure only one shared Node runtime package");
@@ -760,26 +793,24 @@ export class DBXToolsPythonWorkspace extends Component {
       }),
     ];
     const helper = ".projen/pypi-trusted-publisher-instructions.mjs";
+    const helperHeader = header({ tool: "projen", source: ".projenrc.ts" })
+      .trimEnd()
+      .replaceAll("\n", "\n          ");
     new TextFile(project.root, helper, {
+      marker: true,
+      readonly: true,
       // prettier-ignore
       lines: stringUtils.dedent(
         // ============================================================================
         /*js*/`
           #!/usr/bin/env bun
-          import { parseArgs } from "node:util";
+          ${helperHeader}
+          import { printPypiTrustedPublisherInstructions } from "@dbx-tools/projen/pypi-trusted-publisher-instructions";
 
-          const { values } = parseArgs({
-            options: { secretFile: { type: "string" } },
+          await printPypiTrustedPublisherInstructions({
+            beforeAuthentication: ${JSON.stringify(linesBeforeAuthentication)},
+            afterAuthentication: ${JSON.stringify(linesAfterAuthentication)},
           });
-          const beforeAuthentication = ${JSON.stringify(linesBeforeAuthentication)};
-          const afterAuthentication = ${JSON.stringify(linesAfterAuthentication)};
-          const authentication = values.secretFile
-            ? [
-                \`- If browser authentication is required, read credentials from \${values.secretFile} directly into the browser without printing, logging, or exposing secret values.\`,
-                \`- If \${values.secretFile} is absent, invalid, or insufficient for authentication, pause and ask the user to complete authentication.\`,
-              ]
-            : ["- If browser authentication is required, pause and ask the user to complete authentication."];
-          process.stdout.write(\`\${[...beforeAuthentication, ...authentication, ...afterAuthentication].join("\\n").trimEnd()}\\n\`);
         `
         // ============================================================================
       ).split("\n"),

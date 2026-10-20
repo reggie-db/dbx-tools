@@ -15,3 +15,4 @@
 /package.json linguist-generated
 /test/tsconfig.json linguist-generated linguist-language=JSON-with-Comments
 /tsconfig.json linguist-generated linguist-language=JSON-with-Comments
+/vite.config.ts linguist-generated

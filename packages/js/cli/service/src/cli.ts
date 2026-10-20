@@ -7,6 +7,7 @@
  * @module
  */
 
+import { addArgs, parseArgs } from "@dbx-tools/cli-args";
 import * as exec from "@dbx-tools/core/exec";
 import { Command } from "commander";
 
@@ -52,22 +53,12 @@ export function buildServiceCommand(
         : `Install and manage the ${source.name} desktop service`,
     );
 
-  const install = command
-    .command("install")
-    .description("Install the service for the current user and start it")
-    .option("--no-start", "Do not start the service after installation")
-    .option(
-      "--python-project <path>",
-      "Install a local Python project instead of the registry package",
-    )
-    .option("--offline", "Install Python packages from the uv cache without network access");
+  const install = addArgs(
+    command.command("install").description("Install the service for the current user and start it"),
+    CliServiceInstallOptionsSchema,
+  );
   install.action(async () => {
-    const options = CliServiceInstallOptionsSchema.parse({
-      start: install.getOptionValue("start"),
-      pythonProject: install.getOptionValue("pythonProject"),
-      offline: install.getOptionValue("offline"),
-    });
-    await service().install(options);
+    await service().install(parseArgs(install, CliServiceInstallOptionsSchema));
   });
 
   command

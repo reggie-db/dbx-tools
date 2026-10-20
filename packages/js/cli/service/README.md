@@ -134,11 +134,13 @@ Install the service for the current user and start it
 
 #### Options
 
-| Option                    | Description                                                      |
-| ------------------------- | ---------------------------------------------------------------- |
-| `--no-start`              | Do not start the service after installation                      |
-| `--python-project <path>` | Install a local Python project instead of the registry package   |
-| `--offline`               | Install Python packages from the uv cache without network access |
+| Option                     | Description                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `--start`                  | Start the service after installation. (default: true)                              |
+| `--no-start`               | Disable start the service after installation.                                      |
+| `--python-project <value>` | Local Python project installed instead of the registry package.                    |
+| `--offline`                | Install Python packages from the uv cache without network access. (default: false) |
+| `--no-offline`             | Disable install python packages from the uv cache without network access.          |
 
 ### `<cli> service start`
 

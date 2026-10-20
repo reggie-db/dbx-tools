@@ -1,9 +1,11 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { parseArgv } from "@dbx-tools/cli-args";
 import ts from "typescript";
+import { z } from "zod";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import { posix, walk } from "./repository-docs.mjs";
 import { zodDocumentationForDeclaration } from "./zod-docs.mjs";
@@ -16,6 +18,20 @@ const GENERATED_PATHS = [
   /\/src\/dashboards\.ts$/,
   /\/src\/_release-binaries\.ts$/,
 ];
+const SourceDocsCheckOptionsSchema = z.object({
+  baseline: z
+    .string()
+    .trim()
+    .min(1)
+    .default(DEFAULT_BASELINE)
+    .describe("Source documentation baseline file")
+    .meta({ env: [], short: false }),
+  writeBaseline: z
+    .boolean()
+    .default(false)
+    .describe("Replace the source documentation baseline")
+    .meta({ env: [], short: false }),
+});
 
 function discoverPackages(root) {
   return [
@@ -176,6 +192,7 @@ function printRecords(label, records) {
 
 function main() {
   const root = process.cwd();
+  const options = parseArgv(SourceDocsCheckOptionsSchema);
   const python = spawnSync(
     process.env.PYTHON ?? "python3",
     [path.join(root, "docs", "scripts", "check_python_source_docs.py")],
@@ -186,13 +203,9 @@ function main() {
   if (python.status !== 0) {
     throw new Error("Public Python source documentation validation failed.");
   }
-  const baselineArgument = process.argv.find((argument) => argument.startsWith("--baseline="));
-  const baseline = path.resolve(
-    root,
-    baselineArgument?.slice("--baseline=".length) ?? DEFAULT_BASELINE,
-  );
+  const baseline = path.resolve(root, options.baseline);
   const findings = collectUndocumentedPublicSymbols(root);
-  if (process.argv.includes("--write-baseline")) {
+  if (options.writeBaseline) {
     writeBaseline(baseline, findings);
     console.log(
       `Wrote ${findings.length} undocumented public symbols to ${posix(path.relative(root, baseline))}`,

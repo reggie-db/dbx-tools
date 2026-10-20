@@ -76,6 +76,7 @@ jspm_packages/
 **/*-lock.yaml
 **/*-lock.yml
 **/*.lock
+!**/src/lib/**
 .env
 .env.*
 !.env.example

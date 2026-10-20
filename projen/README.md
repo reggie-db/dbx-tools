@@ -24,10 +24,13 @@ packages. It can also generate Zod schemas from declarations and coordinate
 generated-file cleanup and watch tasks.
 
 Every `src`-bearing folder under the configured roots becomes a
-`DBXToolsTypeScriptProject`. Folder path drives package name and runtime tags.
+`DBXToolsTypeScriptProject`. `packages/js` is selected automatically when it
+exists; otherwise discovery uses `packages`. Folder path drives package name and
+runtime tags.
 Use `packageDefaults` for native options shared by every discovered package,
 such as `{ publishable: false }`; reserve `resolvePackageOptions` for genuine
-per-package differences.
+per-package differences. Use `rootTsconfig` only for repository-wide compiler
+differences; root tests, Bun/Node types, and React JSX are already included.
 
 Use `DBXToolsTypeScriptProject` itself as the root when one package needs the
 same Bun workspace, repository, task, and release defaults without a separate
@@ -107,7 +110,11 @@ new projectPy.DBXToolsPythonWorkspace(root, {
 ```
 
 Distribution names and modules come from the parent scope plus each package
-directory. The repository comes from the parent project metadata or Git remote.
+directory. Direct children of the Python root that contain `src/` are discovered
+automatically; `packages` only needs entries whose metadata differs from the
+generated defaults. Set `discoverPackages: false` for a fully explicit list.
+The repository comes from the parent project metadata, existing generated root
+manifest, or Git remote.
 `internalDependencies` renders standalone Git `#subdirectory=` requirements
 without repeating repository coordinates. Pass `repository`, `name`, or
 `module` only to override those conventions. `root.vscode` is Projen's existing
@@ -315,13 +322,18 @@ parameter to `Project`). Drop to `mixin.create(predicate, fn)` +
 Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
 `ui`, and `app`. Repo-specific mixins layer package-specific dependencies,
 scripts, and generated files on top. `ui` is for reusable React component
-libraries. `app` owns a Bun-built browser application.
+libraries. `app` owns a Bun-built browser application. Terminal
+`packages/**/app` and `packages/**/server` directories select those specific
+roles instead of inheriting a generic `ui` or `node` ancestor.
 
 AppKit mode defaults to `auto`: when the workspace has both `app` and `server`
 packages, the engine adds the AppKit, Vite, React plugin, and Tailwind
 dependencies to the package that uses each one. It also disables AppKit's
 package migration, includes the Vite and generated-type inputs in the browser
-tsconfig, adds `appkit:sync`, and ignores local Databricks state. Set
+tsconfig, generates a read-only monorepo-safe `vite.config.ts`, adds
+`appkit:sync`, and ignores local Databricks state. Put repository-specific Vite
+settings in the optional unmanaged `vite.config.override.ts`; the generated
+config merges it over the engine defaults. Set
 `appkit: false` to disable this ownership. Set `appkit: true` to require AppKit
 and fail synthesis when either package role or its required entry files are
 missing. Keep application-specific UI and server dependencies in the consuming
@@ -338,8 +350,12 @@ with concrete versions and keeps every manifest stable through upload. The
 generated working tree is never modified. The task passes an explicit profile,
 using the supplied flag or resolving one through `@dbx-tools/auth`, and fails
 before staging when neither profile nor complete environment credentials are
-available. A repository-owned deployment flow can run its own Bun checks and
-spawn `appkit:deploy` for the upload step instead of maintaining staging or
+available. It validates the bundle strictly, removes only stale direct-engine
+state from the temporary snapshot, and defaults to active-run protection while
+skipping duplicate npm validation and tests. If deployment or app startup
+fails, the task prints the current Databricks App logs before returning the
+original failure. A repository-owned deployment flow can run its own Bun checks
+and spawn `appkit:deploy` for the upload step instead of maintaining staging or
 materialization code.
 
 Every workspace root exposes a generic development watcher:

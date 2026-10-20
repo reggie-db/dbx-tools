@@ -577,15 +577,17 @@ dbx lakebase-proxy service install [options]
 
 #### Options
 
-| Option                                  | Description                                                             |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| `--no-start`                            | Do not start the service after installation                             |
-| `--python-project <path>`               | Install a local Python project instead of the registry package          |
-| `--offline`                             | Install Python packages from the uv cache without network access        |
-| `--postgres-role <value>`               | PostgreSQL role assumed after authentication. (env: POSTGRES_ROLE)      |
-| `-l, --listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN) |
-| `-s, --startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS) |
-| `--profile <value>`                     | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)              |
+| Option                                  | Description                                                                        |
+| --------------------------------------- | ---------------------------------------------------------------------------------- |
+| `--start`                               | Start the service after installation. (default: true)                              |
+| `--no-start`                            | Disable start the service after installation.                                      |
+| `--python-project <value>`              | Local Python project installed instead of the registry package.                    |
+| `--offline`                             | Install Python packages from the uv cache without network access. (default: false) |
+| `--no-offline`                          | Disable install python packages from the uv cache without network access.          |
+| `--postgres-role <value>`               | PostgreSQL role assumed after authentication. (env: POSTGRES_ROLE)                 |
+| `-l, --listen <value>`                  | Loopback listener address. (default: tcp://localhost:5432, env: LISTEN)            |
+| `-s, --startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS)            |
+| `--profile <value>`                     | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)                         |
 
 ### `dbx lakebase-proxy service start`
 
@@ -700,11 +702,13 @@ dbx model-gateway service install [options]
 
 #### Options
 
-| Option                    | Description                                                      |
-| ------------------------- | ---------------------------------------------------------------- |
-| `--no-start`              | Do not start the service after installation                      |
-| `--python-project <path>` | Install a local Python project instead of the registry package   |
-| `--offline`               | Install Python packages from the uv cache without network access |
+| Option                     | Description                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `--start`                  | Start the service after installation. (default: true)                              |
+| `--no-start`               | Disable start the service after installation.                                      |
+| `--python-project <value>` | Local Python project installed instead of the registry package.                    |
+| `--offline`                | Install Python packages from the uv cache without network access. (default: false) |
+| `--no-offline`             | Disable install python packages from the uv cache without network access.          |
 
 ### `dbx model-gateway service start`
 
@@ -844,11 +848,13 @@ dbx graphiti service install [options]
 
 #### Options
 
-| Option                    | Description                                                      |
-| ------------------------- | ---------------------------------------------------------------- |
-| `--no-start`              | Do not start the service after installation                      |
-| `--python-project <path>` | Install a local Python project instead of the registry package   |
-| `--offline`               | Install Python packages from the uv cache without network access |
+| Option                     | Description                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `--start`                  | Start the service after installation. (default: true)                              |
+| `--no-start`               | Disable start the service after installation.                                      |
+| `--python-project <value>` | Local Python project installed instead of the registry package.                    |
+| `--offline`                | Install Python packages from the uv cache without network access. (default: false) |
+| `--no-offline`             | Disable install python packages from the uv cache without network access.          |
 
 ### `dbx graphiti service start`
 

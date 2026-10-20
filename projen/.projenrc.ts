@@ -106,6 +106,8 @@ project.package.addVersion(PACKAGE_VERSION);
 project.package.addField("type", "module");
 project.package.addField("exports", {
   ".": "./index.ts",
+  "./pypi-trusted-publisher-instructions":
+    "./tasks/pypi-trusted-publisher-instructions.ts",
   "./python-release-packaging": "./tasks/publish-python.ts",
   "./release-packaging": "./tasks/publish-npm.ts",
   "./package.json": "./package.json",

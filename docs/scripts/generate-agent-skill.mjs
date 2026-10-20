@@ -1,18 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgv } from "@dbx-tools/cli-args";
+import { z } from "zod";
 
-import {
-  discoverRepositoryPackages,
-  groupTitle,
-  summaryText,
-} from "./repository-docs.mjs";
+import { discoverRepositoryPackages, groupTitle, summaryText } from "./repository-docs.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDir, "../..");
 const outputDir = path.join(root, "docs", "agent-skills", "dbx-tools-reuse");
 const referenceDir = path.join(outputDir, "references");
-const check = process.argv.includes("--check");
+const GenerateAgentSkillOptionsSchema = z.object({
+  check: z
+    .boolean()
+    .default(false)
+    .describe("Verify that the generated agent skill is current")
+    .meta({ env: [], short: false }),
+});
+const { check } = parseArgv(GenerateAgentSkillOptionsSchema);
 
 function read(file) {
   return fs.readFileSync(file, "utf8");
@@ -42,10 +47,13 @@ const catalogue = [
   "",
 ];
 
-for (const [group, entries] of [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+for (const [group, entries] of [...groups.entries()].sort(([left], [right]) =>
+  left.localeCompare(right),
+)) {
   catalogue.push(`## ${groupTitle(group)}`, "");
   for (const entry of entries) {
-    const summary = summaryText(read(entry.readme)) || "See the package README for its current surface.";
+    const summary =
+      summaryText(read(entry.readme)) || "See the package README for its current surface.";
     catalogue.push(`- \`${entry.name}\` - ${summary} Source: \`${entry.relDir}\`.`);
   }
   catalogue.push("");
@@ -100,4 +108,6 @@ repositories as defunct. Do not recommend or import from them.
 writeGenerated(path.join(outputDir, "SKILL.md"), skill);
 writeGenerated(path.join(referenceDir, "package-catalog.md"), catalogue.join("\n"));
 
-console.log(check ? "dbx-tools agent skill is current" : `generated ${path.relative(root, outputDir)}`);
+console.log(
+  check ? "dbx-tools agent skill is current" : `generated ${path.relative(root, outputDir)}`,
+);

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { recordedRoots } from "../src/packages.ts";
+import { DiscoveredPackage, recordedRoots } from "../src/packages.ts";
 import { DBXToolsNodeProject } from "../src/project.ts";
 
 let outdir: string;
@@ -39,5 +39,44 @@ describe("recordedRoots", () => {
     };
     assert.deepEqual(manifest.dbxToolsConfig?.packageRoots, ["packages/js"]);
     assert.deepEqual(recordedRoots(outdir), ["packages/js", "tooling"]);
+  });
+
+  it("prefers packages/js when the conventional JavaScript root exists", () => {
+    const root = mkdtempSync(join(tmpdir(), "packages-js-default-"));
+    try {
+      mkdirSync(join(root, "packages/js/example/src"), { recursive: true });
+      writeFileSync(join(root, "packages/js/example/src/example.ts"), "export const value = 1;\n");
+      const project = new DBXToolsNodeProject({
+        name: "fixture",
+        outdir: root,
+        defaultTagMixins: false,
+        releaseMode: "disabled",
+      });
+      project.synth();
+
+      const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+        dbxToolsConfig?: { packageRoots?: string[] };
+      };
+      assert.deepEqual(manifest.dbxToolsConfig?.packageRoots, ["packages/js"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("package role tags", () => {
+  it("uses terminal app and server directory names as specific runtime roles", () => {
+    assert.deepEqual(
+      new DiscoveredPackage("/workspace", "packages/js", ["ui", "app"]).tagCandidates,
+      ["app"],
+    );
+    assert.deepEqual(
+      new DiscoveredPackage("/workspace", "packages/js", ["node", "server"]).tagCandidates,
+      ["server"],
+    );
+    assert.deepEqual(
+      new DiscoveredPackage("/workspace", "packages/js", ["shared", "investigation"]).tagCandidates,
+      ["shared"],
+    );
   });
 });

@@ -37,3 +37,4 @@ jspm_packages/
 !/bunfig.toml
 !/dev.ts
 !/build.ts
+!/vite.config.ts

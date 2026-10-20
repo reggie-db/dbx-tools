@@ -23,6 +23,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "bun": "1.4.2",

@@ -4,8 +4,9 @@
  * @module
  */
 import { existsSync } from "node:fs";
-import { join, relative, sep } from "node:path";
-import { Component, type Task, javascript, typescript } from "projen";
+import { basename, join, relative, sep } from "node:path";
+import { Component, type Task, TextFile, javascript, typescript } from "projen";
+import { headerLines } from "./generated.ts";
 
 /** AppKit workspace discovery and validation mode. */
 export type AppKitWorkspaceMode = "auto" | boolean;
@@ -94,9 +95,7 @@ function validateWorkspace(options: AppKitWorkspaceOptions): void {
   if (options.apps.length === 0) missing.push("an `app` package");
   if (options.servers.length === 0) missing.push("a `server` package");
   for (const app of options.apps) {
-    for (const file of ["index.html", "vite.config.ts"]) {
-      if (!existsSync(join(app.outdir, file))) missing.push(`${app.name}/${file}`);
-    }
+    if (!existsSync(join(app.outdir, "index.html"))) missing.push(`${app.name}/index.html`);
   }
   for (const server of options.servers) {
     const entrypoint = serverEntrypoint(server);
@@ -117,11 +116,47 @@ function configureApp(project: javascript.NodeProject): void {
     "@tailwindcss/vite@catalog:",
     "tailwindcss@catalog:",
   );
-  project.addDevDeps("vite@catalog:");
+  project.addDevDeps("@databricks/appkit@catalog:", "vite@catalog:");
+  const typesDirectory = `${basename(project.outdir)}/shared/appkit-types`;
+  new TextFile(project, "vite.config.ts", {
+    marker: true,
+    readonly: true,
+    lines: [
+      ...headerLines({ tool: "projen", source: ".projenrc.ts" }),
+      'import { existsSync } from "node:fs";',
+      'import { appKitServingTypesPlugin, appKitTypesPlugin } from "@databricks/appkit";',
+      'import tailwindcss from "@tailwindcss/vite";',
+      'import { defineConfig, mergeConfig, type UserConfig } from "vite";',
+      "",
+      `const appKitTypesDirectory = ${JSON.stringify(typesDirectory)};`,
+      'const overrideUrl = new URL("./vite.config.override.ts", import.meta.url);',
+      "const override = existsSync(overrideUrl)",
+      "  ? ((await import(overrideUrl.href)).default as UserConfig)",
+      "  : {};",
+      "",
+      "export default defineConfig(",
+      "  mergeConfig(",
+      "    {",
+      "      plugins: [",
+      "        tailwindcss(),",
+      "        appKitTypesPlugin({",
+      "          outFile: `${appKitTypesDirectory}/analytics.d.ts`,",
+      "        }),",
+      "        appKitServingTypesPlugin({",
+      "          outFile: `${appKitTypesDirectory}/serving.d.ts`,",
+      "        }),",
+      "      ],",
+      "    },",
+      "    override,",
+      "  ),",
+      ");",
+    ],
+  });
 
   if (!(project instanceof typescript.TypeScriptProject)) return;
   project.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
   project.tsconfig?.addInclude("vite.config.ts");
+  project.tsconfig?.addInclude("vite.config.override.ts");
   project.tsconfig?.addInclude("shared/appkit-types");
 }
 

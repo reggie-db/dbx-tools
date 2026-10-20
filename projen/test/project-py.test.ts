@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,6 +32,47 @@ after(() => {
 });
 
 describe("DBXToolsPythonWorkspace", () => {
+  it("discovers conventional Python packages and merges configured overrides", () => {
+    const discoveryOutdir = mkdtempSync(join(tmpdir(), "project-py-discovery-"));
+    try {
+      mkdirSync(join(discoveryOutdir, "packages/py/common/src"), { recursive: true });
+      mkdirSync(join(discoveryOutdir, "packages/py/pipeline/src"), { recursive: true });
+      const project = new DBXToolsNodeProject({
+        name: "fixture",
+        outdir: discoveryOutdir,
+        defaultTagMixins: false,
+        repository: "https://github.com/example/fixture.git",
+      });
+      const workspace = new DBXToolsPythonWorkspace(project, {
+        packages: [
+          {
+            directory: "pipeline",
+            description: "Configured pipeline",
+            dependencies: ["requests>=2"],
+          },
+        ],
+      });
+      project.synth();
+
+      assert.deepEqual(
+        workspace.packages.map((pkg) => pkg.packageOptions.directory),
+        ["pipeline", "common"],
+      );
+      assert.equal(
+        workspace.packages.find((pkg) => pkg.packageOptions.directory === "common")?.packageOptions
+          .description,
+        "fixture common Python package.",
+      );
+      assert.equal(
+        workspace.packages.find((pkg) => pkg.packageOptions.directory === "pipeline")
+          ?.packageOptions.description,
+        "Configured pipeline",
+      );
+    } finally {
+      rmSync(discoveryOutdir, { recursive: true, force: true });
+    }
+  });
+
   it("requires an explicitly marked canonical shared Node runtime", () => {
     const validationOutdir = mkdtempSync(join(tmpdir(), "project-py-runtime-validation-"));
     try {
@@ -253,9 +295,16 @@ describe("DBXToolsPythonWorkspace", () => {
     const instructionsCommand = instructionsTask?.steps?.[0]?.exec;
     assert.equal(instructionsCommand, "bun .projen/pypi-trusted-publisher-instructions.mjs");
     const helper = join(outdir, ".projen/pypi-trusted-publisher-instructions.mjs");
-    const result = spawnSync(process.execPath, [helper, "--secretFile", "/run/secrets/pypi.json"], {
-      encoding: "utf8",
-    });
+    const packageDirectory = join(outdir, "node_modules/@dbx-tools");
+    mkdirSync(packageDirectory, { recursive: true });
+    symlinkSync(join(process.cwd(), "projen"), join(packageDirectory, "projen"), "dir");
+    const result = spawnSync(
+      process.execPath,
+      [helper, "--secret-file", "/run/secrets/pypi.json"],
+      {
+        encoding: "utf8",
+      },
+    );
     assert.equal(result.status, 0, result.stderr);
     const instructions = result.stdout;
     assert.match(

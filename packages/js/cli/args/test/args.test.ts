@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { options as sharedOptions } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { z } from "zod";
-import { addArgs, parseArgs, serializeArgs } from "../src/args.ts";
+import { addArgs, parseArgs, parseArgv, serializeArgs } from "../src/args.ts";
 
 const schema = z.object({
   port: z.coerce.number().default(3000).describe("Server listening port").meta({ short: "p" }),
@@ -220,6 +220,15 @@ describe("parseArgs", () => {
     assert.deepEqual(await parse(configured, isolated, ["--listen", ":4400"]), {
       listen: { scheme: "tcp", host: "localhost", port: 4400 },
     });
+  });
+});
+
+describe("parseArgv", () => {
+  it("parses standalone command options through the schema", () => {
+    const configured = z.object({
+      check: z.boolean().default(false).describe("Verify generated output").meta({ env: [] }),
+    });
+    assert.deepEqual(parseArgv(configured, ["--check"], isolated), { check: true });
   });
 });
 

@@ -47,6 +47,7 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "vite.config.ts",
+    "vite.config.override.ts",
     "shared/appkit-types"
   ],
   "exclude": [

@@ -16,6 +16,7 @@ import { afterEach, it } from "node:test";
 import { deployApp } from "../tasks/appkit-deploy.ts";
 
 const fixtures: string[] = [];
+const DEPLOY_DEFAULTS = ["--fail-on-active-runs", "--skip-tests", "--skip-validation"] as const;
 
 afterEach(() => {
   for (const root of fixtures.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -73,7 +74,7 @@ it("materializes manifests only while Databricks deploy runs", async () => {
     run: async (actualArgs, cwd) => {
       called = true;
       stage = cwd;
-      assert.deepEqual(actualArgs, ["--skip-validation", ...args]);
+      assert.deepEqual(actualArgs, [...args, ...DEPLOY_DEFAULTS]);
       assert.notEqual(cwd, root);
       assert.equal(readFileSync(join(root, "package.json"), "utf8"), rootManifest);
       const materializedRoot = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as {
@@ -97,16 +98,32 @@ it("materializes manifests only while Databricks deploy runs", async () => {
   assert.equal(statSync(join(root, "packages/app/package.json")).mode & 0o777, 0o444);
 });
 
-it("restores manifests when Databricks deploy fails", async () => {
+it("prints current app logs and restores manifests when deploy fails", async () => {
   const { root, rootManifest, childManifest } = fixture();
   let stage = "";
+  let logsRead = false;
 
   await assert.rejects(
-    deployApp([], {
+    deployApp(["--target", "dev", "--var", "app_name=test"], {
+      environment: {},
+      logs: async (args, cwd) => {
+        logsRead = true;
+        assert.deepEqual(args, ["--target", "dev", "--profile", "TEST", "--var", "app_name=test"]);
+        assert.equal(cwd, stage);
+        return { exitCode: 0 };
+      },
       root,
       resolveProfile: () => "TEST",
       run: async (actualArgs, cwd) => {
-        assert.deepEqual(actualArgs, ["--skip-validation", "--profile", "TEST"]);
+        assert.deepEqual(actualArgs, [
+          "--target",
+          "dev",
+          "--profile",
+          "TEST",
+          "--var",
+          "app_name=test",
+          ...DEPLOY_DEFAULTS,
+        ]);
         stage = cwd;
         return { exitCode: 1 };
       },
@@ -116,18 +133,72 @@ it("restores manifests when Databricks deploy fails", async () => {
 
   assert.equal(readFileSync(join(root, "package.json"), "utf8"), rootManifest);
   assert.equal(readFileSync(join(root, "packages/app/package.json"), "utf8"), childManifest);
+  assert.equal(logsRead, true);
   assert.equal(existsSync(stage), false);
 });
 
-it("preserves an explicit skip-validation flag without duplicating it", async () => {
+it("preserves the deploy failure when reading logs also fails", async () => {
   const { root } = fixture();
-  await deployApp(["--skip-validation", "--target", "dev", "--profile", "TEST"], {
+  await assert.rejects(
+    deployApp(["--profile", "TEST"], {
+      logs: async () => {
+        throw new Error("logs unavailable");
+      },
+      root,
+      run: async () => ({ exitCode: 2 }),
+    }),
+    /databricks apps deploy exited with code 2/,
+  );
+});
+
+it("preserves explicit deployment defaults without duplicating them", async () => {
+  const { root } = fixture();
+  await deployApp([...DEPLOY_DEFAULTS, "--target", "dev", "--profile", "TEST"], {
     root,
     run: async (args) => {
-      assert.deepEqual(args, ["--skip-validation", "--target", "dev", "--profile", "TEST"]);
+      assert.deepEqual(args, ["--target", "dev", "--profile", "TEST", ...DEPLOY_DEFAULTS]);
       return { exitCode: 0 };
     },
   });
+});
+
+it("validates the source bundle with the resolved deployment context", async () => {
+  const { root } = fixture();
+  let validated = false;
+  await deployApp(["--target", "dev"], {
+    environment: {},
+    resolveProfile: () => "TEST",
+    root,
+    run: async () => ({ exitCode: 0 }),
+    validate: async (args, cwd) => {
+      validated = true;
+      assert.deepEqual(args, ["--target", "dev", "--profile", "TEST"]);
+      assert.equal(cwd, root);
+      return { exitCode: 0 };
+    },
+  });
+  assert.equal(validated, true);
+});
+
+it("removes only stale direct-engine state from the staged snapshot", async () => {
+  const { root } = fixture();
+  const state = join(root, ".databricks/bundle/dev/resources.json");
+  mkdirSync(join(root, ".databricks/bundle/dev"), { recursive: true });
+  writeFileSync(state, "{}\n");
+
+  await deployApp(["--target", "dev", "--profile", "TEST"], {
+    plan: async () => ({
+      exitCode: 1,
+      stderr: "Lineage mismatch in state files: local state conflicts with remote direct state",
+    }),
+    root,
+    run: async (_args, stage) => {
+      assert.equal(existsSync(join(stage, ".databricks/bundle/dev/resources.json")), false);
+      return { exitCode: 0 };
+    },
+  });
+
+  assert.equal(existsSync(state), true);
 });
 
 it("fails before staging when no explicit authentication resolves", async () => {

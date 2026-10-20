@@ -146,11 +146,16 @@ export class DiscoveredPackage {
 
   /**
    * Tag candidates from nesting under the discovery root: cumulative kebab-case join
-   * of every ancestor folder, excluding the leaf package folder when depth >= 2
+   * of every ancestor folder, excluding the leaf package folder when depth >= 2.
+   * Terminal `app` and `server` directories are runtime roles and replace their
+   * generic ancestor (`ui/app` -> `app`, `node/server` -> `server`).
+   * Other paths keep cumulative tags
    * (`shared/path/coolDude/another` -> `[shared, shared-path, shared-path-cool-dude]`).
    * Matched against `packageTagPaths` to resolve applied mixin tags.
    */
   get tagCandidates(): string[] {
+    const leaf = stringUtils.toSlug(this.name);
+    if (leaf === "app" || leaf === "server") return [leaf];
     return nestingTagsFromSegments(this.relSegments);
   }
 }

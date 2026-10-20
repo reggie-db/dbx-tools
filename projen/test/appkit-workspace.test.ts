@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, it } from "node:test";
+import { header } from "../src/generated.ts";
 import { DBXToolsNodeProject } from "../src/project-js.ts";
 
 const fixtures: string[] = [];
@@ -61,6 +70,7 @@ it("auto-configures AppKit app and server packages without broadening UI librari
   assert.equal(appDependencies["@databricks/appkit-ui"], "catalog:");
   assert.equal(appDependencies["@tailwindcss/vite"], "catalog:");
   assert.equal(appDependencies.tailwindcss, "catalog:");
+  assert.equal(appDevDependencies["@databricks/appkit"], "catalog:");
   assert.equal(appDevDependencies.vite, "catalog:");
   assert.equal(serverDependencies["@databricks/appkit"], "catalog:");
   assert.equal(serverDependencies["@vitejs/plugin-react"], "catalog:");
@@ -136,7 +146,7 @@ it("fails immediately when explicit AppKit mode lacks a required package role", 
 it("fails immediately when explicit AppKit mode lacks a required entry file", () => {
   process.env.PROJEN_DISABLE_POST = "1";
   const root = fixture();
-  unlinkSync(join(root, "packages/app/demo/vite.config.ts"));
+  unlinkSync(join(root, "packages/app/demo/index.html"));
 
   assert.throws(
     () =>
@@ -147,8 +157,31 @@ it("fails immediately when explicit AppKit mode lacks a required entry file", ()
         packageRoots: ["packages"],
         releaseMode: "disabled",
       }),
-    /@fixture\/app-demo\/vite\.config\.ts/,
+    /@fixture\/app-demo\/index\.html/,
   );
+});
+
+it("generates a monorepo-safe Vite config when the app does not provide one", () => {
+  process.env.PROJEN_DISABLE_POST = "1";
+  const root = fixture();
+  unlinkSync(join(root, "packages/app/demo/vite.config.ts"));
+  const options = {
+    appkit: true,
+    name: "fixture",
+    outdir: root,
+    packageRoots: ["packages"],
+    releaseMode: "disabled" as const,
+  };
+  new DBXToolsNodeProject(options).synth();
+  new DBXToolsNodeProject(options).synth();
+
+  const viteConfig = readFileSync(join(root, "packages/app/demo/vite.config.ts"), "utf8");
+  assert.ok(viteConfig.startsWith(header({ tool: "projen", source: ".projenrc.ts" })));
+  assert.match(viteConfig, /appKitServingTypesPlugin/);
+  assert.match(viteConfig, /appKitTypesPlugin/);
+  assert.match(viteConfig, /demo\/shared\/appkit-types/);
+  assert.match(viteConfig, /vite\.config\.override\.ts/);
+  assert.equal(statSync(join(root, "packages/app/demo/vite.config.ts")).mode & 0o777, 0o444);
 });
 
 it("accepts complete explicit AppKit package roles", () => {

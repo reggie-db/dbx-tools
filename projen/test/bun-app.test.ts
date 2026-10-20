@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
 import { PACKAGE_TAG_MIXINS } from "../src/tags.ts";
+import { header } from "../src/generated.ts";
 
 let outdir: string;
 let bunfig: string;
@@ -39,6 +40,12 @@ before(() => {
 after(() => rmSync(outdir, { recursive: true, force: true }));
 
 describe("generated Bun app", () => {
+  it("stamps every generated app file", () => {
+    assert.ok(bunfig.startsWith(header({ comment: "#", tool: "projen", source: ".projenrc.ts" })));
+    assert.ok(dev.startsWith(header({ tool: "projen", source: ".projenrc.ts" })));
+    assert.ok(build.startsWith(header({ tool: "projen", source: ".projenrc.ts" })));
+  });
+
   it("loads TypeScript overrides only when they exist", () => {
     assert.match(dev, /bun-dev\.override\.ts/);
     assert.match(build, /bun-build\.override\.ts/);

@@ -1,1 +1,1 @@
-export { addArgs, parseArgs, serializeArgs } from "./src/args.ts";
+export { addArgs, parseArgs, parseArgv, serializeArgs } from "./src/args.ts";

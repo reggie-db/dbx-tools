@@ -3,6 +3,12 @@
  */
 import { Component, type Project, javascript, typescript } from "projen";
 
+/** Consumer overrides for the repository-root TypeScript program. */
+export interface DBXToolsRootTsconfigOptions {
+  readonly compilerOptions?: javascript.TypeScriptCompilerOptions;
+  readonly include?: readonly string[];
+}
+
 /**
  * Compiler options for the ROOT program only (`.projenrc.ts` + the engine as
  * seen from the root). Each package owns its own projen-generated
@@ -40,7 +46,7 @@ export class DBXToolsRootTsconfig extends Component {
   /** Root program config inherited by the generated Projen config. */
   readonly config?: javascript.TypescriptConfig;
 
-  constructor(scope: Project) {
+  constructor(scope: Project, options: DBXToolsRootTsconfigOptions = {}) {
     super(scope);
 
     if (scope instanceof typescript.TypeScriptProject) {
@@ -57,8 +63,9 @@ export class DBXToolsRootTsconfig extends Component {
         lib: ["ESNext"],
         types: ["node", "bun"],
         jsx: javascript.TypeScriptJsxMode.REACT_JSX,
+        ...options.compilerOptions,
       },
-      include: [".projenrc.ts", "test/**/*.ts", "test/**/*.tsx"],
+      include: [".projenrc.ts", "test/**/*.ts", "test/**/*.tsx", ...(options.include ?? [])],
       exclude: ["node_modules", "**/dist", "**/node_modules"],
     });
   }

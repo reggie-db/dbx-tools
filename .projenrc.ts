@@ -209,6 +209,7 @@ const root = new project.DBXToolsNodeProject({
   devDeps: [
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/auth@workspace:^",
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/projen@workspace:^",
@@ -1117,6 +1118,7 @@ project.applyToProjects(root, { identifierName: "cli-service", tags: "cli" }, (p
     "Cross-platform service lifecycle, uv Python runtimes, and system tray menus for CLIs",
   );
   p.addDeps(
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     `bun@${bunWorkflow.BUN_VERSION}`,

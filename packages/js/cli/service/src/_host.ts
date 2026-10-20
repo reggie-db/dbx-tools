@@ -3,9 +3,11 @@ import { closeSync, openSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { parseArgv } from "@dbx-tools/cli-args";
 import * as systrayModule from "systray2";
 import type SysTrayType from "systray2";
 import type { MenuItem } from "systray2";
+import { z } from "zod";
 
 import { readServiceDefinition } from "./_config.ts";
 import {
@@ -17,6 +19,15 @@ import { defaultRuntimeContext, resolveServicePaths, type ServicePaths } from ".
 import type { CliServiceCommand, CliServiceDefinition, CliServiceMenuItem } from "./definition.ts";
 
 const CHILD_STOP_TIMEOUT_MILLISECONDS = 5_000;
+const CliServiceHostOptionsSchema = z.object({
+  serviceConfig: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("Serialized CLI service definition")
+    .meta({ env: [], short: false }),
+});
 const SysTray = systrayConstructor();
 
 interface ActionMenuItem extends MenuItem {
@@ -235,12 +246,7 @@ async function logMessage(path: string, message: string): Promise<void> {
   await appendFile(path, `${new Date().toISOString()} ${message}\n`, "utf8");
 }
 
-function argumentValue(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
-}
-
-const configFile = argumentValue("--service-config");
+const { serviceConfig: configFile } = parseArgv(CliServiceHostOptionsSchema);
 if (configFile) {
   void runCliServiceHost(configFile).catch(async (error: unknown) => {
     await logError(join(dirname(configFile), "host.log"), error);

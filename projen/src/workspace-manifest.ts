@@ -43,6 +43,10 @@ export function materializeWorkspaceManifest(
     workspace.catalog && typeof workspace.catalog === "object"
       ? (workspace.catalog as Readonly<Record<string, unknown>>)
       : {};
+  const overrides =
+    workspace.overrides && typeof workspace.overrides === "object"
+      ? (workspace.overrides as Readonly<Record<string, unknown>>)
+      : {};
   if (typeof version !== "string" || !version) {
     throw new Error("Workspace manifest has no version");
   }
@@ -52,7 +56,7 @@ export function materializeWorkspaceManifest(
     manifest[field] = Object.fromEntries(
       Object.entries(dependencies).map(([name, value]) => [
         name,
-        materializeDependency(name, value, version, catalog),
+        materializeDependency(name, value, version, catalog, overrides),
       ]),
     );
   }
@@ -134,7 +138,12 @@ function materializeDependency(
   value: unknown,
   version: string,
   catalog: Readonly<Record<string, unknown>>,
+  overrides: Readonly<Record<string, unknown>>,
 ): unknown {
+  const override = overrides[name];
+  if (typeof override === "string" && override && !override.startsWith("$")) {
+    return override;
+  }
   if (value === "catalog:") {
     const resolved = catalog[name];
     if (typeof resolved !== "string" || !resolved) {

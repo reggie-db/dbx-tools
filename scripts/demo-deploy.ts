@@ -11,9 +11,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import { client as authClient } from "@dbx-tools/auth";
+import { parseArgv } from "@dbx-tools/cli-args";
 import * as exec from "@dbx-tools/core/exec";
 import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
-import { Command } from "commander";
 import { parse } from "yaml";
 import { z } from "zod";
 
@@ -44,9 +44,16 @@ const AppResponseSchema = z.object({
   service_principal_client_id: z.string().uuid(),
 });
 
-interface DemoDeployOptions {
-  readonly profile?: string;
-}
+const DemoDeployOptionsSchema = z.object({
+  profile: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("Databricks CLI profile override")
+    .meta({ env: [], short: false }),
+});
+type DemoDeployOptions = z.output<typeof DemoDeployOptionsSchema>;
 
 /** Result surface needed to classify a bundle deployment attempt. */
 export interface DeployCommandResult {
@@ -60,6 +67,12 @@ export interface DeployRetryDependencies {
   readonly run?: () => Promise<DeployCommandResult>;
   readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   readonly signal?: AbortSignal;
+}
+
+/** Injectable commands used to run the deployed demo and retrieve failure logs. */
+export interface DemoAppRunDependencies {
+  readonly logs?: () => Promise<void>;
+  readonly run?: () => Promise<void>;
 }
 
 function bundleTarget(config: BundleConfig): { name: string; target: BundleTarget } {
@@ -166,6 +179,48 @@ export async function deployBundleWithRetry(
   }
 }
 
+/** Run the deployed app resource and print current app logs before preserving a failure. */
+export async function runDemoApp(
+  appName: string,
+  selection: string[],
+  cwd: string,
+  dependencies: DemoAppRunDependencies = {},
+): Promise<void> {
+  const runApp =
+    dependencies.run ?? (() => run(["databricks", "bundle", "run", "demo_app", ...selection], cwd));
+  const showLogs = dependencies.logs ?? (() => printAppLogs(appName, selection, cwd));
+  try {
+    await runApp();
+  } catch (error) {
+    try {
+      await showLogs();
+    } catch (logsError) {
+      logger.warn("Could not read Databricks App logs", {
+        message: errorUtils.toError(logsError).message,
+      });
+    }
+    throw error;
+  }
+}
+
+async function printAppLogs(appName: string, selection: string[], cwd: string): Promise<void> {
+  logger.error("Databricks App failed to start; recent app logs follow", { appName });
+  const result = await exec.spawn(
+    "databricks",
+    ["apps", "logs", appName, "--tail-lines", "200", ...selection],
+    {
+      cwd,
+      env: process.env,
+      stdin: "ignore",
+      stdout: "inherit",
+      stderr: "inherit",
+    },
+  );
+  if (result.exitCode !== 0) {
+    logger.warn("Could not read Databricks App logs", { exitCode: result.exitCode });
+  }
+}
+
 async function grantGeneratorCatalog(
   auth: Awaited<ReturnType<typeof deploymentAuth>>,
   selection: string[],
@@ -200,12 +255,11 @@ async function grantGeneratorCatalog(
   );
 }
 
-export async function main(signal?: AbortSignal): Promise<void> {
-  const options = new Command()
-    .name("demo:deploy")
-    .option("--profile <name>", "Databricks CLI profile override")
-    .parse()
-    .opts<DemoDeployOptions>();
+export async function main(
+  signal?: AbortSignal,
+  argv: readonly string[] = process.argv.slice(2),
+): Promise<void> {
+  const options = parseArgv(DemoDeployOptionsSchema, argv);
   logger.info("compiling demo client");
   await run([process.execPath, "run", "--filter", "@dbx-tools/demo-appkit-app", "compile"], ROOT);
   logger.info("compiling workspace packages for local deployment");
@@ -222,7 +276,7 @@ export async function main(signal?: AbortSignal): Promise<void> {
     { signal },
   );
   await grantGeneratorCatalog(auth, selection);
-  await run(["databricks", "bundle", "run", "demo_app", ...selection], STAGE_DIR);
+  await runDemoApp(auth.appName, selection, STAGE_DIR);
   logger.info("demo app deployed");
 }
 

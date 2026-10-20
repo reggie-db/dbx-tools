@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   deployBundleWithRetry,
   isPermissionDeadlineFailure,
+  runDemoApp,
   type DeployCommandResult,
 } from "./demo-deploy.ts";
 
@@ -112,5 +113,35 @@ describe("demo bundle deployment retry", () => {
     }, /deployment interrupted/);
     assert.equal(attempts, 1);
     assert.equal(continued, false);
+  });
+});
+
+describe("demo app startup logs", () => {
+  it("prints app logs before preserving a startup failure", async () => {
+    const startupError = new Error("startup failed");
+    let logsRead = false;
+    await assert.rejects(
+      runDemoApp("demo", ["-t", "dev", "--profile", "TEST"], ".", {
+        logs: async () => {
+          logsRead = true;
+        },
+        run: async () => {
+          throw startupError;
+        },
+      }),
+      (error) => error === startupError,
+    );
+    assert.equal(logsRead, true);
+  });
+
+  it("does not read logs after successful startup", async () => {
+    let logsRead = false;
+    await runDemoApp("demo", ["-t", "dev"], ".", {
+      logs: async () => {
+        logsRead = true;
+      },
+      run: async () => {},
+    });
+    assert.equal(logsRead, false);
   });
 });

@@ -10,7 +10,10 @@ import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.t
 let temp: string;
 
 interface ProjenTsconfig {
-  readonly compilerOptions?: { readonly types?: string[] };
+  readonly compilerOptions?: {
+    readonly noUncheckedIndexedAccess?: boolean;
+    readonly types?: string[];
+  };
   readonly extends?: string | string[];
   readonly include?: string[];
 }
@@ -79,6 +82,41 @@ describe("external project roots", () => {
       assert.deepEqual(rootTsconfig.compilerOptions?.types, ["node", "bun"]);
     },
   );
+
+  it("reuses generated repository metadata when staged source has no Git directory", () => {
+    const outdir = join(temp, "staged");
+    mkdirSync(outdir, { recursive: true });
+    writeFileSync(
+      join(outdir, "package.json"),
+      JSON.stringify({
+        name: "staged",
+        repository: {
+          type: "git",
+          url: "git+https://github.com/example-org/staged.git",
+        },
+      }),
+    );
+
+    const project = new DBXToolsNodeProject({
+      name: "staged",
+      outdir,
+      defaultTagMixins: false,
+      releaseMode: "disabled",
+      rootTsconfig: {
+        compilerOptions: { noUncheckedIndexedAccess: false },
+        include: ["scripts/**/*.ts"],
+      },
+    });
+    project.synth();
+
+    const manifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
+      repository?: { url?: string };
+    };
+    assert.equal(manifest.repository?.url, "git+https://github.com/example-org/staged.git");
+    const tsconfig = readProjenTsconfig(join(outdir, "tsconfig.json"));
+    assert.equal(tsconfig.compilerOptions?.noUncheckedIndexedAccess, false);
+    assert.ok(tsconfig.include?.includes("scripts/**/*.ts"));
+  });
 
   it("supports a standalone compiling TypeScript workspace root", { timeout: 15_000 }, () => {
     const outdir = join(temp, "standalone");

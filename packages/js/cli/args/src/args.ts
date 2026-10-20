@@ -115,6 +115,17 @@ export function parseArgs<TSchema extends CliObjectSchema>(
   return schema.parse(values) as ReturnType<TSchema["parse"]>;
 }
 
+/** Parse a standalone argv array through Commander and an owning Zod schema. */
+export function parseArgv<TSchema extends CliObjectSchema>(
+  schema: TSchema,
+  argv: readonly string[] = process.argv.slice(2),
+  options: CliArgsOptions = {},
+): ReturnType<TSchema["parse"]> {
+  const command = addArgs(new Command(), schema, options);
+  command.parse([...argv], { from: "user" });
+  return parseArgs(command, schema, options);
+}
+
 /** Convert schema defaults or concrete option values into Commander arguments. */
 export function serializeArgs(source: ArgumentSource): string[] {
   if (isCliObjectSchema(source)) {

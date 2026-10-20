@@ -72,23 +72,32 @@ after(() => {
 });
 
 describe("npm release recovery", () => {
-  it("materializes workspace and catalog dependency protocols", () => {
+  it("materializes workspace protocols, catalog entries, and concrete overrides", () => {
     const resolved = materializeWorkspaceManifest(
       {
         dependencies: {
           "@fixture/dependency": "workspace:^",
           zod: "catalog:",
         },
+        devDependencies: {
+          "@typescript-eslint/parser": "^8",
+        },
       },
       {
         version: "1.2.3",
         catalog: { zod: "4.3.6" },
+        overrides: {
+          "@typescript-eslint/parser": "8.71.0",
+        },
       },
     );
 
     assert.deepEqual(resolved.dependencies, {
       "@fixture/dependency": "^1.2.3",
       zod: "4.3.6",
+    });
+    assert.deepEqual(resolved.devDependencies, {
+      "@typescript-eslint/parser": "8.71.0",
     });
   });
 

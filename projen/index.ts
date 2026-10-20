@@ -77,6 +77,7 @@ export type { SharedCoreUsageKind, SharedCoreExportUsage } from "./src/shared-co
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
 export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";
+export type { DBXToolsRootTsconfigOptions } from "./src/tsconfig.ts";
 export type { IgnoreGroupOptions, WatchLoopOptions } from "./src/watch.ts";
 export type { WorkspaceMutationLockOptions } from "./src/workspace-lock.ts";
 export { VERSION_FILE, DEFAULT_VERSION } from "./src/workspace-version.ts";

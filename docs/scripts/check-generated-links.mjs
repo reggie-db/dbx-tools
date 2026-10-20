@@ -2,7 +2,10 @@
 /** Validate internal routes and fragments directly from generated Markdown. */
 import fs from "node:fs";
 import path from "node:path";
+import { addArgs, parseArgs } from "@dbx-tools/cli-args";
+import { Command } from "commander";
 import { lexer, walkTokens } from "marked";
+import { z } from "zod";
 import { posix, walk } from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
@@ -10,6 +13,13 @@ const MARKDOWN_EXTENSIONS = new Set([".md", ".mdx"]);
 const HTML_LINK = /\b(?:href|src)=["']([^"']+)["']/gi;
 const EXPLICIT_FRAGMENT = /\b(?:id|name)=["']([^"']+)["']/gi;
 const PUNCTUATION = /[\u2000-\u206f\u2e00-\u2e7f\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g;
+const GeneratedLinkCheckOptionsSchema = z.object({
+  allowApiStubs: z
+    .boolean()
+    .default(false)
+    .describe("Allow generated API routes that do not have source pages")
+    .meta({ env: [], short: false }),
+});
 
 function routeForFile(contentRoot, file) {
   const relative = posix(path.relative(contentRoot, file)).replace(/\.(?:md|mdx)$/i, "");
@@ -135,10 +145,13 @@ export function generatedLinkFailures(siteRoot, options = {}) {
   return { checkedPages: pages.length, failures };
 }
 
-function main() {
-  const args = process.argv.slice(2);
-  const allowApiStubs = args.includes("--allow-api-stubs");
-  const directory = args.find((arg) => !arg.startsWith("--")) ?? ".docs-build/site";
+function main(argv = process.argv.slice(2)) {
+  const command = addArgs(
+    new Command().argument("[directory]", "Generated documentation site root"),
+    GeneratedLinkCheckOptionsSchema,
+  ).parse([...argv], { from: "user" });
+  const { allowApiStubs } = parseArgs(command, GeneratedLinkCheckOptionsSchema);
+  const [directory = ".docs-build/site"] = command.processedArgs;
   const siteRoot = path.resolve(directory);
   const result = generatedLinkFailures(siteRoot, { allowApiStubs });
   if (result.failures.length > 0) {
