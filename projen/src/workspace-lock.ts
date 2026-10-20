@@ -7,6 +7,26 @@ const MUTATION_LOCK_SCOPE = "dbx-tools-workspace-mutation";
 const WAIT_LOG_INTERVAL_MS = 5_000;
 const logger = log.logger("projen:workspace-lock");
 
+/** Cancelable recurring task returned by a workspace-lock scheduler. */
+export interface WorkspaceMutationLockTimer {
+  cancel(): void;
+}
+
+/** Clock and recurring scheduler used by workspace-lock wait logging. */
+export interface WorkspaceMutationLockScheduler {
+  now(): number;
+  repeat(callback: () => void, intervalMs: number): WorkspaceMutationLockTimer;
+}
+
+const _systemScheduler: WorkspaceMutationLockScheduler = {
+  now: Date.now,
+  repeat(callback, intervalMs) {
+    const timer = setInterval(callback, intervalMs);
+    timer.unref?.();
+    return { cancel: () => clearInterval(timer) };
+  },
+};
+
 /** Optional preflight used before and after acquiring the workspace mutation lock. */
 export interface WorkspaceMutationLockOptions {
   /**
@@ -15,6 +35,8 @@ export interface WorkspaceMutationLockOptions {
    * without taking the critical section only to return.
    */
   check?: () => boolean | Promise<boolean>;
+  /** Scheduler override for deterministic wait-logging tests. */
+  scheduler?: WorkspaceMutationLockScheduler;
 }
 
 /**
@@ -31,10 +53,11 @@ export async function withWorkspaceMutationLock<T>(
 ): Promise<T | undefined> {
   const repository = resolve(root);
   const check = options?.check;
+  const scheduler = options?.scheduler ?? _systemScheduler;
   if (check && !(await check())) {
     return undefined;
   }
-  let waitLogTimer: ReturnType<typeof setInterval> | undefined;
+  let waitLogTimer: WorkspaceMutationLockTimer | undefined;
   try {
     return await withFileLock(
       [MUTATION_LOCK_SCOPE, repository],
@@ -48,20 +71,19 @@ export async function withWorkspaceMutationLock<T>(
         backends: process.platform === "win32" ? ["file"] : ["flock", "file"],
         onWait: () => {
           if (waitLogTimer) return;
-          const startedAt = Date.now();
-          waitLogTimer = setInterval(
+          const startedAt = scheduler.now();
+          waitLogTimer = scheduler.repeat(
             () =>
               logger.info("waiting for workspace mutation lock", {
                 repository,
-                elapsedMs: Date.now() - startedAt,
+                elapsedMs: scheduler.now() - startedAt,
               }),
             WAIT_LOG_INTERVAL_MS,
           );
-          waitLogTimer.unref?.();
         },
       },
     );
   } finally {
-    if (waitLogTimer) clearInterval(waitLogTimer);
+    waitLogTimer?.cancel();
   }
 }

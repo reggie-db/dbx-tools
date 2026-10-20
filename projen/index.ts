@@ -100,7 +100,7 @@ export { configureVsCode } from "./src/vscode.ts";
 export { watchRoots, watchLoop } from "./src/watch.ts";
 export type { IgnoreGroupOptions, WatchLoopOptions } from "./src/watch.ts";
 export { withWorkspaceMutationLock } from "./src/workspace-lock.ts";
-export type { WorkspaceMutationLockOptions } from "./src/workspace-lock.ts";
+export type { WorkspaceMutationLockTimer, WorkspaceMutationLockScheduler, WorkspaceMutationLockOptions } from "./src/workspace-lock.ts";
 export { materializeWorkspaceManifest, withMaterializedWorkspaceManifests, withStagedWorkspaceManifests } from "./src/workspace-manifest.ts";
 export { VERSION_FILE, DEFAULT_VERSION, parseSemver, compareSemver, incrementSemver, versionPath, readWorkspaceVersion, writeWorkspaceVersion, syncWorkspaceManifestVersion, resolveNextVersion } from "./src/workspace-version.ts";
 export type { Semver, VersionLevel } from "./src/workspace-version.ts";

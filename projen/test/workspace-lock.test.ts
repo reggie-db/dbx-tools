@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "node:test";
-import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
+import {
+  withWorkspaceMutationLock,
+  type WorkspaceMutationLockScheduler,
+} from "../src/workspace-lock.ts";
 
 /** Create an explicitly released synchronization point for lock tests. */
 function _deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -56,33 +59,36 @@ it("logs prolonged waits every five seconds until acquisition", async () => {
   await started.promise;
 
   const originalWrite = process.stdout.write;
-  const originalSetInterval = globalThis.setInterval;
-  const originalClearInterval = globalThis.clearInterval;
   let output = "";
   let logWait: (() => void) | undefined;
   let timerCleared = false;
-  const timer = { unref() {} } as unknown as ReturnType<typeof setInterval>;
+  let now = 0;
+  const scheduler: WorkspaceMutationLockScheduler = {
+    now: () => now,
+    repeat: (callback, intervalMs) => {
+      assert.equal(intervalMs, 5_000);
+      logWait = callback;
+      scheduled.resolve();
+      return {
+        cancel: () => {
+          timerCleared = true;
+        },
+      };
+    },
+  };
   process.stdout.write = ((chunk: string | Uint8Array) => {
     output += chunk.toString();
     return true;
   }) as typeof process.stdout.write;
-  globalThis.setInterval = ((callback: () => void, delay?: number) => {
-    assert.equal(delay, 5_000);
-    logWait = callback;
-    scheduled.resolve();
-    return timer;
-  }) as typeof setInterval;
-  globalThis.clearInterval = ((candidate: ReturnType<typeof setInterval>) => {
-    assert.equal(candidate, timer);
-    timerCleared = true;
-  }) as typeof clearInterval;
   let waiter: Promise<unknown> | undefined;
   try {
-    waiter = withWorkspaceMutationLock(root, () => undefined);
+    waiter = withWorkspaceMutationLock(root, () => undefined, { scheduler });
     await scheduled.promise;
     assert.doesNotMatch(output, /waiting for workspace mutation lock/);
 
+    now = 5_000;
     logWait!();
+    now = 10_000;
     logWait!();
     const waiting = output.match(/waiting for workspace mutation lock/g) ?? [];
     const elapsed = output.match(/elapsedMs:\s*\d+/g) ?? [];
@@ -98,8 +104,6 @@ it("logs prolonged waits every five seconds until acquisition", async () => {
       await Promise.all([holder, waiter]);
     } finally {
       process.stdout.write = originalWrite;
-      globalThis.setInterval = originalSetInterval;
-      globalThis.clearInterval = originalClearInterval;
       rmSync(root, { recursive: true, force: true });
     }
   }

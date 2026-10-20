@@ -270,7 +270,7 @@ describe("direct release tags", () => {
     }
   });
 
-  it("passes an optional demo profile through without requiring it", async () => {
+  it("passes the release validation selection and optional profile to demo deploy", async () => {
     const { remote, root } = fixture();
     try {
       writeFileSync(
@@ -303,9 +303,11 @@ describe("direct release tags", () => {
         localPublish: false,
         demoDeploy: true,
         demoProfile: "FEVM-REGGIE-PIERCE-AWS",
+        validation: false,
         releaseNotes: false,
       });
       assert.deepEqual(JSON.parse(readFileSync(join(root, "demo-deployed"), "utf8")), [
+        "--no-validation",
         "--profile",
         "FEVM-REGGIE-PIERCE-AWS",
       ]);

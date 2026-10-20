@@ -30,13 +30,18 @@ const AppResponseSchema = z.object({
   service_principal_client_id: z.string().uuid(),
 });
 
-const DemoDeployOptionsSchema = z.object({
+export const DemoDeployOptionsSchema = z.object({
   profile: z
     .string()
     .trim()
     .min(1)
     .optional()
     .describe("Databricks CLI profile override")
+    .meta({ env: [], short: false }),
+  validation: z
+    .boolean()
+    .default(true)
+    .describe("Run the repository check before deployment")
     .meta({ env: [], short: false }),
 });
 
@@ -127,7 +132,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   await client.token({ login: true, refresh: true });
   const selection = ["--target", target, ...(client.profile ? ["--profile", client.profile] : [])];
 
-  await run([process.execPath, "run", "check"], ROOT);
+  if (options.validation) await run([process.execPath, "run", "check"], ROOT);
   await run(
     [
       process.execPath,

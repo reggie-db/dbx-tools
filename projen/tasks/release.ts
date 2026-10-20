@@ -2,6 +2,7 @@
 /** Run the configured release transaction. */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { serializeArgs } from "@dbx-tools/cli-args";
 import { projectUtils, type ProjectGhAccount, resolveProjectGhAccount } from "@dbx-tools/core";
 import { log, toError, parse } from "@dbx-tools/shared-core";
 import type { Command } from "commander";
@@ -598,10 +599,14 @@ export async function runRelease(
   }
 
   if (options.demoDeploy) {
+    const demoArgs = serializeArgs({
+      ...(selection.validation ? {} : { validation: false }),
+      ...(options.demoProfile ? { profile: options.demoProfile } : {}),
+    });
     runTaskCommand(root, "bun", [
       "run",
       "demo:deploy",
-      ...(options.demoProfile ? ["--", "--profile", options.demoProfile] : []),
+      ...(demoArgs.length > 0 ? ["--", ...demoArgs] : []),
     ]);
   }
 
