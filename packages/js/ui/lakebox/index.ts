@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-lakebox";
-export const PACKAGE_VERSION = "0.9.144";
+export const PACKAGE_VERSION = "0.9.145";
 export * as reactClient from "./src/react/client.ts";
 export * as reactLakeboxIndicator from "./src/react/lakebox-indicator.tsx";
 export * as reactLakeboxMetrics from "./src/react/lakebox-metrics.tsx";
