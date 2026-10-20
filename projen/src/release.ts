@@ -18,6 +18,7 @@ import { BUN_VERSION } from "./bun-workflow.ts";
 import { projectReleaseBranch, taskCommand, type DBXToolsJavaScriptProject } from "./project-js.ts";
 import {
   PUBLIC_NPM_REGISTRY_URL,
+  PUBLICATION_WAIT_TIMEOUT_SECONDS,
   RELEASE_VERSION,
   RELEASE_WORKFLOW_FILE,
 } from "./release-context.ts";
@@ -73,7 +74,7 @@ export function releaseTagPattern(project: DBXToolsJavaScriptProject): string {
 /** Run a release job after all explicit prerequisite results succeed. */
 export function releaseCondition(prerequisites: readonly string[] = []): string {
   if (prerequisites.length === 0) return "${{ success() }}";
-  return `\${{ always() && ${prerequisites.map((condition) => `(${condition})`).join(" && ")} }}`;
+  return `\${{ always() && !cancelled() && ${prerequisites.map((condition) => `(${condition})`).join(" && ")} }}`;
 }
 
 /** Gate shared-build steps using the same per-run flag, preserving their existing conditions. */
@@ -171,7 +172,7 @@ export function refreshPublicationVerification(project: DBXToolsJavaScriptProjec
     needs: ["build-release", ...registryJobs],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ },
-    timeoutMinutes: 15,
+    timeoutMinutes: Math.ceil(PUBLICATION_WAIT_TIMEOUT_SECONDS / 60) + 5,
     steps: [
       {
         name: "Download publication verifier",

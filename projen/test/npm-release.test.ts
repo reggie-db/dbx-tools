@@ -11,12 +11,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { packNpmPackage } from "../src/npm-packaging.ts";
 import {
+  isNpmStagedVersionConflict,
   npmReleaseMatches,
+  publishNpmArchive,
   readNpmArchiveIdentity,
   type NpmReleaseIdentity,
 } from "../src/npm-release.ts";
@@ -207,5 +209,94 @@ describe("npm release recovery", () => {
         }),
       /repository does not match/,
     );
+  });
+
+  it("recognizes a staged-version publish conflict", () => {
+    assert.equal(
+      isNpmStagedVersionConflict(
+        new Error(
+          'npm error 409 Conflict - PUT https://registry.npmjs.org/@dbx-tools%2fshared-email - Cannot publish over previously staged version "0.9.160".',
+        ),
+      ),
+      true,
+    );
+    assert.equal(isNpmStagedVersionConflict(new Error("npm error 409 Conflict - already exists")), false);
+  });
+
+  it("waits for a previously staged version instead of publishing again", async () => {
+    const bin = join(outdir, "staged-bin");
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, "npm"),
+      [
+        "#!/usr/bin/env bun",
+        "import { appendFileSync } from \"node:fs\";",
+        `appendFileSync(${JSON.stringify(join(outdir, "npm-invocations"))}, "publish\\n");`,
+        'process.stderr.write(\'npm error 409 Conflict - PUT https://registry.npmjs.org/@fixture%2fnative - Cannot publish over previously staged version "1.2.3".\\n\');',
+        "process.exit(1);",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(join(bin, "npm"), 0o755);
+    let lookups = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("tarballs.invalid")) {
+        return new Response(readFileSync(archive));
+      }
+      lookups += 1;
+      if (lookups < 3) return new Response(null, { status: 404 });
+      return Response.json({
+        name: identity.name,
+        version: identity.version,
+        repository: identity.repository,
+        dist: { integrity: identity.integrity, tarball: "https://tarballs.invalid/package.tgz" },
+      });
+    };
+    try {
+      const outcome = await publishNpmArchive({
+        archive,
+        identity,
+        env: { ...process.env, PATH: `${bin}${delimiter}${process.env.PATH ?? ""}` },
+        intervalMs: 1,
+        timeoutMs: 1_000,
+      });
+      assert.equal(outcome, "staged");
+      assert.equal(readFileSync(join(outdir, "npm-invocations"), "utf8").trim(), "publish");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not wait for an unpublished npm failure", async () => {
+    const bin = join(outdir, "failed-bin");
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, "npm"),
+      [
+        "#!/usr/bin/env bun",
+        "process.stderr.write('npm error 403 Forbidden\\n');",
+        "process.exit(1);",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(join(bin, "npm"), 0o755);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(null, { status: 404 });
+    try {
+      await assert.rejects(
+        publishNpmArchive({
+          archive,
+          identity,
+          env: { ...process.env, PATH: `${bin}${delimiter}${process.env.PATH ?? ""}` },
+          intervalMs: 1,
+          timeoutMs: 50,
+        }),
+        /403 Forbidden/,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

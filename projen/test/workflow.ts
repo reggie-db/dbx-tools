@@ -19,6 +19,7 @@ export interface WorkflowJob {
   readonly environment?: Record<string, string>;
   readonly env?: Record<string, string>;
   readonly if?: string;
+  readonly "timeout-minutes"?: number;
   readonly strategy?: {
     readonly matrix?: {
       readonly include?: readonly Record<string, unknown>[];

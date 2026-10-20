@@ -340,9 +340,12 @@ to `appkit:deploy` unless the repository already owns `deploy`. The AppKit task
 runs `databricks apps deploy --skip-validation` with all forwarded arguments
 from an isolated source snapshot, so the Databricks CLI never runs npm locally.
 Because the remote builder selects npm when no portable pnpm lockfile is
-uploaded, the snapshot replaces `catalog:` and `workspace:` dependency protocols
-with concrete versions and keeps every manifest stable through upload. The
-generated working tree is never modified. The task passes an explicit profile,
+uploaded, the snapshot replaces `catalog:` protocols with concrete versions.
+When the application uses `workspace:` dependencies, the task packs their
+transitive runtime workspace closure and links those archives from the staged
+application, so deployment does not wait for a matching public release. Every
+source manifest stays stable through upload and the generated working tree is
+never modified. The task passes an explicit profile,
 using the supplied flag or resolving one through `@dbx-tools/auth`, and fails
 before staging when neither profile nor complete environment credentials are
 available. It validates the bundle strictly, removes only stale direct-engine
@@ -574,9 +577,10 @@ the current branch is pushed first. A non-`main` branch then fast-forwards
 diverged. From `main`, it calls the existing `bump` task, commits the generated
 version changes, pushes `main`, and pushes the matching annotated `vX.Y.Z` tag.
 Pass `--no-bump` only to release an existing synchronized local bump. The tag
-workflow verifies that the tag points at the exact `origin/main` commit. The
-local task completes local publication and demo deployment first, then waits for
-this workflow by default. It prints the initial job and step state, then only
+workflow verifies that the tag points at the exact `origin/main` commit. A newer
+tag cancels the previous release run, including leftover publish, wait, and docs
+jobs. The local task completes local publication and demo deployment first, then
+waits for this workflow by default. It prints the initial job and step state, then only
 append-only status changes, without annotations. Successful runs omit full logs;
 unsuccessful runs print failed-step logs only. Local-only releases and
 repositories without a resolved authenticated GitHub account skip the watcher.
@@ -590,8 +594,10 @@ site. Install validation prerequisites through `releaseSetupSteps`.
 Publication jobs download the resulting artifacts rather than rebuilding the
 workspace. Each Python package retains its own publishing environment and waits
 for its package dependencies to publish. The npm job uses the bundled archive
-publisher without a checkout or workspace install. After all selected public
-publishers finish, one verifier downloads the complete release artifact set and
+publisher without a checkout or workspace install. If npm reports that a version
+is already staged, that publisher waits for the public artifact instead of
+publishing the version again. After all selected public publishers finish, one
+verifier downloads the complete release artifact set and
 polls only unresolved packages concurrently. It validates npm tarball contents
 and PyPI distribution hashes before Pages deploys the already built site. Local
 npm and Python registry publication remains available through the direct local

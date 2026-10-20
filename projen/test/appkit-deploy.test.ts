@@ -30,16 +30,18 @@ function fixture(): {
   const root = mkdtempSync(join(tmpdir(), "appkit-deploy-"));
   fixtures.push(root);
   const childDirectory = join(root, "packages/app");
+  const sharedDirectory = join(root, "packages/shared");
   mkdirSync(join(root, "client/dist"), { recursive: true });
   writeFileSync(join(root, "client/dist/index.html"), "<html></html>\n");
   mkdirSync(childDirectory, { recursive: true });
+  mkdirSync(sharedDirectory, { recursive: true });
   mkdirSync(join(childDirectory, "client/dist"), { recursive: true });
   writeFileSync(join(childDirectory, "client/dist/index.html"), "<html></html>\n");
   const rootManifest = `${JSON.stringify(
     {
       name: "fixture",
       version: "1.2.3",
-      workspaces: ["packages/app"],
+      workspaces: ["packages/app", "packages/shared"],
       catalog: { react: "19.2.7" },
       devDependencies: { react: "catalog:" },
     },
@@ -59,7 +61,16 @@ function fixture(): {
     2,
   )}\n`;
   writeFileSync(join(root, "package.json"), rootManifest);
+  writeFileSync(
+    join(root, "pnpm-workspace.yaml"),
+    'packages:\n  - "packages/app"\n  - "packages/shared"\n',
+  );
   writeFileSync(join(childDirectory, "package.json"), childManifest);
+  writeFileSync(
+    join(sharedDirectory, "package.json"),
+    `${JSON.stringify({ name: "@fixture/shared", version: "1.2.3" })}\n`,
+  );
+  writeFileSync(join(sharedDirectory, "index.ts"), "export const shared = true;\n");
   chmodSync(join(root, "package.json"), 0o444);
   chmodSync(join(childDirectory, "package.json"), 0o444);
   const initialized = spawnSync("git", ["init", "--quiet"], { cwd: root, encoding: "utf8" });
@@ -193,6 +204,11 @@ it("runs validation and deployment from the configured application directory", a
     run: async (args, cwd) => {
       assert.deepEqual(args, ["--target", "dev", "--profile", "TEST", ...DEPLOY_DEFAULTS]);
       assert.ok(cwd.endsWith("packages/app"));
+      const manifest = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as {
+        dependencies: Record<string, string>;
+      };
+      assert.match(manifest.dependencies["@fixture/shared"]!, /^file:\.\/vendor\/npm\/.+\.tgz$/);
+      assert.equal(existsSync(join(cwd, "vendor/npm")), true);
       return { exitCode: 0 };
     },
     validate: async (args, cwd) => {

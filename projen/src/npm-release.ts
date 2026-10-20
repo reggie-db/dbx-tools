@@ -11,8 +11,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { spawnSync } from "@dbx-tools/core";
-import { PUBLIC_NPM_REGISTRY_URL } from "./release-context.ts";
+import { spawn, spawnSync } from "@dbx-tools/core";
+import { log, poll, toError } from "@dbx-tools/shared-core";
+import {
+  PUBLIC_NPM_REGISTRY_URL,
+  PUBLICATION_WAIT_INTERVAL_SECONDS,
+  PUBLICATION_WAIT_TIMEOUT_SECONDS,
+} from "./release-context.ts";
+
+const logger = log.logger("projen:npm-release");
 
 /** Registry and archive identity used to verify idempotent npm publication. */
 export interface NpmReleaseIdentity {
@@ -72,6 +79,7 @@ export async function publishedNpmRelease(
   version: string,
   registry = process.env.NPM_CONFIG_REGISTRY ?? PUBLIC_NPM_REGISTRY_URL,
   signal?: AbortSignal,
+  options: { readonly content?: boolean } = {},
 ): Promise<NpmReleaseIdentity | undefined> {
   const response = await fetch(registryUrl(registry, name, version), {
     headers: { accept: "application/json" },
@@ -91,7 +99,7 @@ export async function publishedNpmRelease(
     throw new Error(`npm registry returned an incomplete identity for ${name}@${version}`);
   }
   let contentDigest: string | undefined;
-  if (metadata.dist?.tarball) {
+  if (options.content !== false && metadata.dist?.tarball) {
     const archive = await fetch(metadata.dist.tarball, { signal });
     if (!archive.ok) {
       throw new Error(`npm tarball lookup failed for ${name}@${version}: ${archive.status}`);
@@ -112,6 +120,106 @@ export async function publishedNpmRelease(
     repository: metadata.repository,
     version: metadata.version,
   };
+}
+
+/** Whether npm refused a retry because it already accepted this version for staging. */
+export function isNpmStagedVersionConflict(error: unknown): boolean {
+  const message = toError(error).message;
+  return /409\b/.test(message) && /previously staged version/i.test(message);
+}
+
+/** Wait until the public registry serves the exact local npm archive. */
+export async function waitForMatchingNpmRelease(
+  local: NpmReleaseIdentity,
+  registry?: string,
+  options: { readonly intervalMs?: number; readonly timeoutMs?: number } = {},
+): Promise<void> {
+  const selectedRegistry = registry ?? process.env.NPM_CONFIG_REGISTRY ?? PUBLIC_NPM_REGISTRY_URL;
+  try {
+    for await (const _available of poll(
+      async ({ signal }) => {
+        const published = await publishedNpmRelease(
+          local.name,
+          local.version,
+          selectedRegistry,
+          signal,
+          { content: false },
+        );
+        if (!published) return false;
+        return npmReleaseMatches(
+          local,
+          await publishedNpmRelease(local.name, local.version, selectedRegistry, signal),
+        );
+      },
+      {
+        intervalMs: options.intervalMs ?? PUBLICATION_WAIT_INTERVAL_SECONDS * 1_000,
+        timeoutMs: options.timeoutMs ?? PUBLICATION_WAIT_TIMEOUT_SECONDS * 1_000,
+        predicate: (available) => !available,
+      },
+    )) {
+      void _available;
+    }
+  } catch (error) {
+    throw new Error(
+      `Staged npm version ${local.name}@${local.version} did not become available`,
+      { cause: error },
+    );
+  }
+}
+
+/** Outcome of one idempotent npm archive publication. */
+export type NpmPublishOutcome = "published" | "skipped" | "staged";
+
+/** Publish one archive, or wait when npm has already staged that exact version. */
+export async function publishNpmArchive(options: {
+  readonly archive: string;
+  readonly identity: NpmReleaseIdentity;
+  readonly cwd?: string;
+  readonly dryRun?: boolean;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly intervalMs?: number;
+  readonly registry?: string;
+  readonly timeoutMs?: number;
+}): Promise<NpmPublishOutcome> {
+  const { archive, identity } = options;
+  if (!options.dryRun) {
+    const published = await publishedNpmRelease(identity.name, identity.version, options.registry);
+    if (npmReleaseMatches(identity, published)) return "skipped";
+  }
+  const result = await spawn(
+    "npm",
+    [
+      "publish",
+      archive,
+      "--ignore-scripts",
+      ...(identity.access ? ["--access", identity.access] : []),
+      ...(options.registry ? ["--registry", options.registry] : []),
+      ...(options.dryRun ? ["--dry-run"] : []),
+    ],
+    {
+      cwd: options.cwd ?? process.cwd(),
+      env: options.env,
+      stdin: "ignore",
+      stdout: "inherit",
+      stderr: "capture",
+      check: false,
+    },
+  );
+  if (result.stderr) process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : `${result.stderr}\n`);
+  if (result.exitCode === 0) return "published";
+  const error = new Error(
+    `npm publish failed (exit ${result.exitCode})${result.stderr ? `: ${result.stderr}` : ""}`,
+  );
+  if (options.dryRun) throw error;
+  const published = await publishedNpmRelease(identity.name, identity.version, options.registry);
+  if (npmReleaseMatches(identity, published)) return "skipped";
+  if (!isNpmStagedVersionConflict(error)) throw error;
+  logger.info(`waiting for staged ${identity.name}@${identity.version}`);
+  await waitForMatchingNpmRelease(identity, options.registry, {
+    intervalMs: options.intervalMs,
+    timeoutMs: options.timeoutMs,
+  });
+  return "staged";
 }
 
 /** Read one npm package manifest directly from its archive. */

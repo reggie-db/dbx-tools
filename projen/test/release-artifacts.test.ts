@@ -179,7 +179,14 @@ writeFileSync(join(root, \`done-\${name}\`), "");
           readFileSync(join(root, `publish-args-${name}`), "utf8")
             .trim()
             .split("\n"),
-          ["publish", join(output, `${name}.tgz`), "--access", "public", "--dry-run"],
+          [
+            "publish",
+            join(output, `${name}.tgz`),
+            "--ignore-scripts",
+            "--access",
+            "public",
+            "--dry-run",
+          ],
         );
       }
       assert.throws(

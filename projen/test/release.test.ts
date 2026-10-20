@@ -11,6 +11,7 @@ import {
   type WorkflowDefinition,
 } from "./workflow.ts";
 import { DBXToolsNodeProject } from "../src/project-js.ts";
+import { PUBLICATION_WAIT_TIMEOUT_SECONDS } from "../src/release-context.ts";
 
 let outdir: string;
 let release: WorkflowDefinition;
@@ -69,6 +70,9 @@ describe("unified release workflow", () => {
       group: "release",
       "cancel-in-progress": true,
     });
+    for (const name of ["publish-node", "verify-publications", "deploy-docs"] as const) {
+      assert.match(release.jobs[name]?.if ?? "", /always\(\) && !cancelled\(\)/);
+    }
     assert.deepEqual(release.permissions, { contents: "read" });
 
     const verifyJob = release.jobs["build-release"]!;
@@ -164,6 +168,10 @@ describe("unified release workflow", () => {
     assert.doesNotMatch(publish.run ?? "", /release-automation|ACCEPT_STAGED/);
 
     const availability = release.jobs["verify-publications"]!;
+    assert.equal(
+      availability["timeout-minutes"],
+      Math.ceil(PUBLICATION_WAIT_TIMEOUT_SECONDS / 60) + 5,
+    );
     assert.deepEqual(availability.needs, ["build-release", "publish-node"]);
     assert.deepEqual(step(availability, "Download publication verifier").with, {
       name: "release-publication-verifier",
@@ -255,10 +263,13 @@ describe("release task contracts", () => {
     assert.doesNotMatch(driver, /applyPublishConfig\(manifestPath\)/);
     assert.match(driver, /import \{ delimiter,/);
     assert.doesNotMatch(driver, /split\(":"\)/);
-    assert.match(driver, /"npm",\s*\["publish",[\s\S]*archive\]/);
+    assert.match(driver, /publishNpmArchive\(/);
     assert.doesNotMatch(driver, /runAsync\(dir, "bun", \["publish", \.\.\.publishArgs\]/);
-    assert.match(driver, /\["--access", access\]/);
     assert.doesNotMatch(driver, /restoreManifestMode|chmodSync|lstatSync/);
+    const publisher = readFileSync(join(import.meta.dirname, "..", "src", "npm-release.ts"), "utf8");
+    assert.match(publisher, /"npm",\s*\[[\s\S]*"publish",[\s\S]*archive/);
+    assert.match(publisher, /"--ignore-scripts"/);
+    assert.match(publisher, /\["--access", identity\.access\]/);
   });
 
   it("publishes reviewed versions without repairing manifests", () => {

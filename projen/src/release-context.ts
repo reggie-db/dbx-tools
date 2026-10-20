@@ -7,3 +7,7 @@ export const RELEASE_WORKFLOW_FILE = "release.yml";
 export const PUBLIC_NPM_REGISTRY_URL = "https://registry.npmjs.org";
 /** Public PyPI JSON API queried after Python publication completes. */
 export const PUBLIC_PYPI_REGISTRY_URL = "https://pypi.org/pypi";
+/** Shared wait for every unresolved public npm and PyPI artifact. */
+export const PUBLICATION_WAIT_TIMEOUT_SECONDS = 20 * 60;
+/** Delay between public registry probes while a release is still invisible. */
+export const PUBLICATION_WAIT_INTERVAL_SECONDS = 5;

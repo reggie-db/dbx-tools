@@ -6,10 +6,8 @@ import { log, mapConcurrent } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { TaskConcurrencyOptionSchema, TaskDryRunOptionSchema } from "./options.ts";
-import { runTaskCommandAsync } from "../src/_task-command.ts";
 import {
-  npmReleaseMatches,
-  publishedNpmRelease,
+  publishNpmArchive,
   readNpmArchiveIdentity,
   readNpmArchiveManifest,
 } from "../src/npm-release.ts";
@@ -84,20 +82,15 @@ export async function publishNpmArchives(options: {
             `npm archive ${archive} carries ${local.version}, expected ${options.version}`,
           );
         }
-        if (!options.dryRun) {
-          const published = await publishedNpmRelease(local.name, local.version, options.registry);
-          if (npmReleaseMatches(local, published)) {
-            logger.info(`skip published ${local.name}@${local.version}`);
-            return;
-          }
-        }
-        await runTaskCommandAsync(process.cwd(), "npm", [
-          "publish",
+        const outcome = await publishNpmArchive({
           archive,
-          ...(local.access ? ["--access", local.access] : []),
-          ...(options.registry ? ["--registry", options.registry] : []),
-          ...(options.dryRun ? ["--dry-run"] : []),
-        ]);
+          identity: local,
+          dryRun: options.dryRun,
+          registry: options.registry,
+        });
+        if (outcome === "skipped") {
+          logger.info(`skip published ${local.name}@${local.version}`);
+        }
       },
       {
         concurrency: options.concurrency ?? DEFAULT_PUBLISH_CONCURRENCY,

@@ -75,6 +75,10 @@ it("auto-configures one application project at packages/app", () => {
   ]);
   assert.equal(tasks.tasks.dev?.cwd, "packages/app");
   assert.equal(tasks.tasks.dev?.steps?.[0]?.exec, "bun --watch server/server.ts");
+
+  const prettierIgnore = readFileSync(join(root, ".prettierignore"), "utf8");
+  assert.match(prettierIgnore, /packages\/app\/client\/vite\.config\.ts/);
+  assert.doesNotMatch(prettierIgnore, /^client\/vite\.config\.ts$/m);
 });
 
 it("supports an overridden application root and application-owned bundle", () => {
@@ -98,6 +102,22 @@ it("supports an overridden application root and application-owned bundle", () =>
     "bundle:\n  name: custom\n",
   );
   assert.equal(existsSync(join(root, "packages/demo/client/package.json")), false);
+});
+
+it("lints an application root when no package roots are configured", () => {
+  process.env.PROJEN_DISABLE_POST = "1";
+  const root = fixture();
+  new DBXToolsNodeProject({
+    name: "fixture",
+    outdir: root,
+    packageRoots: [],
+    releaseMode: "disabled",
+  }).synth();
+
+  const tasks = JSON.parse(readFileSync(join(root, ".projen/tasks.json"), "utf8")) as {
+    tasks: Record<string, { steps?: Array<{ execArgs?: string[] }> }>;
+  };
+  assert.ok(tasks.tasks.eslint?.steps?.[0]?.execArgs?.includes("packages/app"));
 });
 
 it("generates only the minimal AppKit and Bun configuration", () => {

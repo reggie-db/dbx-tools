@@ -32,7 +32,8 @@
  *     standalone publishes.
  *   - **release recovery** compares each packed archive's integrity and
  *     repository identity with registry metadata. A matching immutable version
- *     is skipped, while any mismatch fails the retry.
+ *     is skipped. A 409 for a previously staged version waits for that exact
+ *     public artifact instead of publishing again. Any other mismatch fails.
  *
  * `--dry-run` forwards to `npm publish`: it packs + validates
  * but uploads nothing. `--registry` targets a non-default registry (a local
@@ -56,13 +57,9 @@ import {
   TaskOutputOptionSchema,
   TaskRootOptionSchema,
 } from "./options.ts";
-import { runTaskCommand, runTaskCommandAsync } from "../src/_task-command.ts";
+import { runTaskCommand } from "../src/_task-command.ts";
 import { applyPublishConfig, packNpmPackage } from "../src/npm-packaging.ts";
-import {
-  npmReleaseMatches,
-  publishedNpmRelease,
-  readNpmArchiveIdentity,
-} from "../src/npm-release.ts";
+import { publishNpmArchive, readNpmArchiveIdentity } from "../src/npm-release.ts";
 import { recordedPackages } from "../src/packages.ts";
 
 const logger = log.logger("projen:publish");
@@ -153,11 +150,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   }
   logger.info(`validated ${members.length} selected member manifests`);
 
-  const publishArgs = [
-    "--ignore-scripts",
-    ...(registry ? ["--registry", registry] : []),
-    ...(dryRun ? ["--dry-run"] : []),
-  ];
   const publishable: Array<{
     dir: string;
     name: string;
@@ -253,20 +245,19 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
           logger.info(`packed ${name} @ ${packageVersion}`);
           return;
         }
-        if (!dryRun) {
-          const published = await publishedNpmRelease(local.name, local.version, registry);
-          if (npmReleaseMatches(local, published)) {
-            logger.info(`skip published ${name} @ ${packageVersion}`);
-            return;
-          }
+        const outcome = await publishNpmArchive({
+          archive,
+          identity: local,
+          cwd: dir,
+          dryRun,
+          env: { ...process.env, PATH: path },
+          registry,
+        });
+        if (outcome === "skipped") {
+          logger.info(`skip published ${name} @ ${packageVersion}`);
+          return;
         }
-        logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
-        await runTaskCommandAsync(
-          dir,
-          "npm",
-          ["publish", ...(access ? ["--access", access] : []), ...publishArgs, archive],
-          { env: { ...process.env, PATH: path } },
-        );
+        logger.info(`${dryRun ? "dry-run published" : "published"} ${name} @ ${packageVersion}`);
       } finally {
         rmSync(packed, { recursive: true, force: true });
       }

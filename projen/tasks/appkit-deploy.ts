@@ -9,6 +9,7 @@ import { log, toError } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { withStagedWorkspaceManifests } from "../src/workspace-manifest.ts";
+import { vendorWorkspaceDependencies } from "../src/workspace-vendor.ts";
 
 const logger = log.logger("projen:appkit-deploy");
 
@@ -146,6 +147,13 @@ export async function deployApp(
       }));
   await withStagedWorkspaceManifests(root, async (stage) => {
     const stagedApplication = resolve(stage, options.directory);
+    const vendored = vendorWorkspaceDependencies(root, stage, applicationPath);
+    if (vendored.packages.length > 0) {
+      logger.info("Vendored workspace packages for deployment", {
+        count: vendored.packages.length,
+        packages: vendored.packages,
+      });
+    }
     cpSync(clientDist, join(stagedApplication, "client", "dist"), { recursive: true });
     await reconcileStagedBundleState(stagedApplication, contextArgs, options.target, dependencies);
     const result = await run(deployArgs, stagedApplication);

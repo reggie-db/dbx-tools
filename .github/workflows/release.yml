@@ -195,7 +195,7 @@ jobs:
       id-token: write
     env:
       CI: "true"
-    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.npm == 'true') }}
+    if: ${{ always() && !cancelled() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.npm == 'true') }}
     steps:
       - name: Download npm archives
         id: download_npm_archives
@@ -235,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.npm == 'true' || needs['build-release'].outputs.pypi == 'true') && (needs['build-release'].outputs.npm != 'true' || needs['publish-node'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-node-runtime'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-graphiti'].result == 'success') }}
+    if: ${{ always() && !cancelled() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.npm == 'true' || needs['build-release'].outputs.pypi == 'true') && (needs['build-release'].outputs.npm != 'true' || needs['publish-node'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-node-runtime'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-graphiti'].result == 'success') }}
     steps:
       - name: Download publication verifier
         id: download_publication_verifier
@@ -279,7 +279,7 @@ jobs:
           fi
           bun .release/verifier/verify-publications.mjs "${args[@]}"
         shell: bash
-    timeout-minutes: 15
+    timeout-minutes: 25
   deploy-docs:
     needs:
       - build-release
@@ -291,7 +291,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['verify-publications'].result == 'success' || needs['verify-publications'].result == 'skipped') }}
+    if: ${{ always() && !cancelled() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['verify-publications'].result == 'success' || needs['verify-publications'].result == 'skipped') }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
@@ -305,7 +305,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-node-runtime
       url: https://pypi.org/project/dbx-tools-node-runtime/
-    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') }}
+    if: ${{ always() && !cancelled() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') }}
     steps:
       - name: Download dbx-tools-node-runtime distributions
         id: download_dbx-tools-node-runtime_distributions
@@ -329,7 +329,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-graphiti
       url: https://pypi.org/project/dbx-tools-graphiti/
-    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') && (needs['publish-pypi-node-runtime'].result == 'success') }}
+    if: ${{ always() && !cancelled() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') && (needs['publish-pypi-node-runtime'].result == 'success') }}
     steps:
       - name: Download dbx-tools-graphiti distributions
         id: download_dbx-tools-graphiti_distributions

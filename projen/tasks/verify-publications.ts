@@ -11,11 +11,16 @@ import {
   publishedNpmRelease,
   readNpmArchiveIdentity,
 } from "../src/npm-release.ts";
-import { PUBLIC_NPM_REGISTRY_URL, PUBLIC_PYPI_REGISTRY_URL } from "../src/release-context.ts";
+import {
+  PUBLIC_NPM_REGISTRY_URL,
+  PUBLIC_PYPI_REGISTRY_URL,
+  PUBLICATION_WAIT_INTERVAL_SECONDS,
+  PUBLICATION_WAIT_TIMEOUT_SECONDS,
+} from "../src/release-context.ts";
 
 const DEFAULT_CONCURRENCY = 8;
-const DEFAULT_INTERVAL_SECONDS = 5;
-const DEFAULT_TIMEOUT_SECONDS = 10 * 60;
+const DEFAULT_INTERVAL_SECONDS = PUBLICATION_WAIT_INTERVAL_SECONDS;
+const DEFAULT_TIMEOUT_SECONDS = PUBLICATION_WAIT_TIMEOUT_SECONDS;
 const logger = log.logger("projen:verify-publications");
 
 const PypiReleaseSchema = z

@@ -240,6 +240,8 @@ describe("DBXToolsPythonWorkspace", () => {
     const release = readWorkflow(outdir);
     assert.equal(release.jobs["build-python"], undefined);
     const publishCore = release.jobs["publish-pypi-core"]!;
+    assert.match(publishCore.if ?? "", /always\(\) && !cancelled\(\)/);
+    assert.match(release.jobs["publish-pypi-app"]?.if ?? "", /always\(\) && !cancelled\(\)/);
     assert.equal(publishCore.needs, "build-release");
     assert.equal(publishCore.env?.BUN_VERSION, undefined);
     const build = release.jobs["build-release"]!;

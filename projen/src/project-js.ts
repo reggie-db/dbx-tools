@@ -1397,7 +1397,11 @@ function initProject(
   // repairs the worktree it is meant to validate; `eslint:fix` is the explicit
   // local mutation path.
   const eslint = new javascript.Eslint(project, {
-    dirs: [...roots, ...project.extraWorkspaceMembers],
+    dirs: [
+      ...roots,
+      ...project.extraWorkspaceMembers,
+      ...(configuredAppRoot ? [configuredAppRoot] : []),
+    ],
     fileExtensions: [".ts", ".tsx"],
     projectService: true,
     prettier: Boolean(project.prettier),
@@ -1605,9 +1609,12 @@ function preSynthesizeProject(project: javascript.NodeProject): void {
   const subtree = project.node.findAll().filter(Project.isProject);
   if (project.prettier) {
     const ignorePatterns = new Set<string>();
+    const root = resolve(project.outdir);
     for (const p of subtree) {
+      const prefix = toPosix(relative(root, p.outdir));
       p.files.forEach((file) => {
-        if (file.readonly) ignorePatterns.add(file.path);
+        if (!file.readonly) return;
+        ignorePatterns.add(prefix ? `${prefix}/${file.path}` : file.path);
       });
     }
     ignorePatterns.forEach((pattern) => project.prettier!.addIgnorePattern(pattern));

@@ -25,7 +25,9 @@ class TestCache {
 
 class TestClient implements LakeboxResourceClient {
   readonly entries = new Map<string, LakeboxEntry>();
+  createError?: Error;
   createCalls = 0;
+  deleteError?: Error;
   listCalls = 0;
 
   async workspaceScope(): Promise<string> {
@@ -44,6 +46,7 @@ class TestClient implements LakeboxResourceClient {
   }
 
   async create(): Promise<LakeboxEntry> {
+    if (this.createError) throw this.createError;
     this.createCalls += 1;
     const entry = {
       sandboxId: `generated-${this.createCalls}`,
@@ -55,6 +58,7 @@ class TestClient implements LakeboxResourceClient {
   }
 
   async delete(id: string): Promise<void> {
+    if (this.deleteError) throw this.deleteError;
     this.entries.delete(id);
   }
 }
@@ -110,5 +114,52 @@ describe("LakeboxResourceRegistry", () => {
 
     assert.equal(await registry.read(client), undefined);
     assert.equal(client.listCalls, 1);
+  });
+
+  it("replaces one failed machine and reuses a replacement created by another caller", async () => {
+    const cache = new TestCache();
+    const client = new TestClient();
+    const registry = new LakeboxResourceRegistry("demo", undefined, () => cache);
+    const failed = await registry.getOrCreate(client);
+
+    const replacement = await registry.recreate(client, failed.sandboxId);
+    const reused = await registry.recreate(client, failed.sandboxId);
+
+    assert.equal(replacement.sandboxId, "generated-2");
+    assert.equal(reused.sandboxId, replacement.sandboxId);
+    assert.equal(client.entries.has(failed.sandboxId), false);
+    assert.equal(client.createCalls, 2);
+  });
+
+  it("retains the failed machine when deletion fails", async () => {
+    const cache = new TestCache();
+    const client = new TestClient();
+    const registry = new LakeboxResourceRegistry("demo", undefined, () => cache);
+    const failed = await registry.getOrCreate(client);
+    client.deleteError = new Error("delete denied");
+
+    await assert.rejects(
+      registry.recreate(client, failed.sandboxId),
+      /Destroying the unreachable Lakebox failed/,
+    );
+
+    assert.equal((await registry.read(client))?.sandboxId, failed.sandboxId);
+    assert.equal(client.createCalls, 1);
+  });
+
+  it("reports replacement creation failure after deleting the failed machine", async () => {
+    const cache = new TestCache();
+    const client = new TestClient();
+    const registry = new LakeboxResourceRegistry("demo", undefined, () => cache);
+    const failed = await registry.getOrCreate(client);
+    client.createError = new Error("capacity unavailable");
+
+    await assert.rejects(
+      registry.recreate(client, failed.sandboxId),
+      /Creating a replacement Lakebox failed/,
+    );
+
+    assert.equal(client.entries.has(failed.sandboxId), false);
+    assert.equal(await registry.read(client), undefined);
   });
 });
