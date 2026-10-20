@@ -56,8 +56,9 @@ export class DBXToolsRootTsconfig extends Component {
       compilerOptions: {
         lib: ["ESNext"],
         types: ["node", "bun"],
+        jsx: javascript.TypeScriptJsxMode.REACT_JSX,
       },
-      include: [".projenrc.ts"],
+      include: [".projenrc.ts", "test/**/*.ts", "test/**/*.tsx"],
       exclude: ["node_modules", "**/dist", "**/node_modules"],
     });
   }

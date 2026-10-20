@@ -8,10 +8,13 @@
     "types": [
       "node",
       "bun"
-    ]
+    ],
+    "jsx": "react-jsx"
   },
   "include": [
-    ".projenrc.ts"
+    ".projenrc.ts",
+    "test/**/*.ts",
+    "test/**/*.tsx"
   ],
   "exclude": [
     "node_modules",

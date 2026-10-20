@@ -73,6 +73,7 @@ export class DBXToolsConfig {
     this.tags = [...(options.tags ?? [])];
     this.codegenInputs = [...(options.codegenInputs ?? [])];
     this.publishable = options.publishable ?? true;
+    project.package.addField("private", () => (this.publishable ? undefined : true));
     project.package.addField(CONFIG_KEY, () => {
       const data = this.data();
       return Object.keys(data).length === 0 ? undefined : data;

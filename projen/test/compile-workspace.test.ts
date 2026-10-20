@@ -17,6 +17,7 @@ it("batches plain TypeScript tasks and preserves custom and newly added workspac
   fixtures.push(root);
   const members = ["packages/plain", "packages/custom", "packages/lifecycle", "packages/no-script"];
   writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: members }));
+  writeFileSync(join(root, "tsconfig.json"), JSON.stringify({ compilerOptions: { noEmit: true } }));
   for (const member of members) mkdirSync(join(root, member, ".projen"), { recursive: true });
   writeFileSync(
     join(root, members[0]!, "package.json"),
@@ -50,7 +51,10 @@ it("batches plain TypeScript tasks and preserves custom and newly added workspac
   writeFileSync(join(root, members[3]!, "package.json"), JSON.stringify({ name: "@fixture/no" }));
 
   const plan = compilePlan(root);
-  assert.deepEqual(plan.typescriptConfigs, [join(root, members[0]!, "tsconfig.json")]);
+  assert.deepEqual(plan.typescriptConfigs, [
+    join(root, "tsconfig.json"),
+    join(root, members[0]!, "tsconfig.json"),
+  ]);
   assert.deepEqual(plan.customPackages, [
     { name: "@fixture/custom", directory: join(root, members[1]!) },
     { name: "@fixture/lifecycle", directory: join(root, members[2]!) },

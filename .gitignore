@@ -81,7 +81,9 @@ jspm_packages/
 !.env.example
 !.env.sample
 .idea/*
+.npmrc
 !/.eslintrc.json
+.databricks
 .release/
 !/.github/workflows/release.yml
 .codex/

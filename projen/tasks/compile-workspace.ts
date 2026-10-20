@@ -50,7 +50,8 @@ function hasLifecycle(task: TaskSpec | undefined): boolean {
 /** Read the root's concrete workspace paths on every run, including newly added members. */
 export function compilePlan(root: string): CompilePlan {
   const workspace = readJson<PackageManifest>(join(root, "package.json"));
-  const typescriptConfigs: string[] = [];
+  const rootConfig = join(root, "tsconfig.json");
+  const typescriptConfigs: string[] = existsSync(rootConfig) ? [rootConfig] : [];
   const customPackages: CompilePlan["customPackages"] = [];
   for (const member of workspace.workspaces ?? []) {
     const directory = resolve(root, member);

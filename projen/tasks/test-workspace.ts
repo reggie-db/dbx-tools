@@ -167,6 +167,8 @@ function selectedTests(
 ): string[] {
   const all = [
     ...graph.packages.flatMap((pkg) => testFiles(join(root, pkg.path, "test"))),
+    ...testFiles(join(root, "test")),
+    ...testFiles(join(root, "scripts")),
     ...testFiles(join(root, "docs/scripts")),
   ];
   if (mode === "unit") return all.filter((path) => !integrationTest(path));

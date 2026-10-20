@@ -68,8 +68,18 @@ for (const mode of ["all", "unit", "changed"]) {
   it(`runs JavaScript documentation tests in ${mode} mode and skips dependency tests`, () => {
     const root = fixture();
     mkdirSync(join(root, ".projen"));
+    mkdirSync(join(root, "test"));
+    mkdirSync(join(root, "scripts"));
     mkdirSync(join(root, "docs/scripts/node_modules/dependency"), { recursive: true });
     writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: [] }));
+    writeFileSync(
+      join(root, "test/root.test.ts"),
+      'import { writeFileSync } from "node:fs";\nimport { it } from "node:test";\nit("runs root tests", () => writeFileSync("root-test-ran", "yes"));\n',
+    );
+    writeFileSync(
+      join(root, "scripts/script.test.ts"),
+      'import { writeFileSync } from "node:fs";\nimport { it } from "node:test";\nit("runs script tests", () => writeFileSync("script-test-ran", "yes"));\n',
+    );
     writeFileSync(
       join(root, "docs/scripts/example.test.mjs"),
       'import { writeFileSync } from "node:fs";\nimport { it } from "node:test";\nit("runs docs", () => writeFileSync("docs-ran", "yes"));\n',
@@ -115,5 +125,7 @@ for (const mode of ["all", "unit", "changed"]) {
     );
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.equal(readFileSync(join(root, "docs-ran"), "utf8"), "yes");
+    assert.equal(readFileSync(join(root, "root-test-ran"), "utf8"), "yes");
+    assert.equal(readFileSync(join(root, "script-test-ran"), "utf8"), "yes");
   });
 }

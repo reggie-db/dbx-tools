@@ -20,6 +20,9 @@ import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { TaskConcurrencyOptionSchema, TaskDryRunOptionSchema } from "./options.ts";
 import { runTaskCommandAsync } from "../src/_task-command.ts";
+import { materializeWorkspaceManifest } from "../src/workspace-manifest.ts";
+
+export { materializeWorkspaceManifest } from "../src/workspace-manifest.ts";
 
 const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 const DEFAULT_PUBLISH_CONCURRENCY = 4;
@@ -52,60 +55,6 @@ export type NpmArchiveManifestTransform = (
 
 /** Entry-point fields projected from publishConfig into a packed manifest. */
 const PUBLISH_CONFIG_ENTRY_FIELDS = ["main", "types", "bin", "exports"] as const;
-const DEPENDENCY_FIELDS = [
-  "dependencies",
-  "devDependencies",
-  "optionalDependencies",
-  "peerDependencies",
-] as const;
-
-/** Replace workspace and catalogue protocols with publishable registry ranges. */
-export function materializeWorkspaceManifest(
-  source: Readonly<Record<string, unknown>>,
-  workspace: Readonly<Record<string, unknown>>,
-): Readonly<Record<string, unknown>> {
-  const manifest = structuredClone(source) as Record<string, unknown>;
-  const version = workspace.version;
-  const catalog =
-    workspace.catalog && typeof workspace.catalog === "object"
-      ? (workspace.catalog as Readonly<Record<string, unknown>>)
-      : {};
-  if (typeof version !== "string" || !version) {
-    throw new Error("Workspace manifest has no version");
-  }
-  for (const field of DEPENDENCY_FIELDS) {
-    const dependencies = manifest[field];
-    if (!dependencies || typeof dependencies !== "object") continue;
-    manifest[field] = Object.fromEntries(
-      Object.entries(dependencies).map(([name, value]) => [
-        name,
-        materializeDependency(name, value, version, catalog),
-      ]),
-    );
-  }
-  return manifest;
-}
-
-function materializeDependency(
-  name: string,
-  value: unknown,
-  version: string,
-  catalog: Readonly<Record<string, unknown>>,
-): unknown {
-  if (value === "catalog:") {
-    const resolved = catalog[name];
-    if (typeof resolved !== "string" || !resolved) {
-      throw new Error(`Workspace catalog has no version for ${name}`);
-    }
-    return resolved;
-  }
-  if (typeof value !== "string" || !value.startsWith("workspace:")) return value;
-  const selector = value.slice("workspace:".length);
-  if (selector === "*" || !selector) return version;
-  if (selector === "^" || selector === "~") return `${selector}${version}`;
-  return selector;
-}
-
 /**
  * Fold compiled publish entry points onto an archive manifest without changing
  * the source checkout.

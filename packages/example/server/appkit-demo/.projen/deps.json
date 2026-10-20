@@ -196,11 +196,6 @@
       "type": "runtime"
     },
     {
-      "name": "vite",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "yaml",
       "version": "^2.9.0",
       "type": "runtime"

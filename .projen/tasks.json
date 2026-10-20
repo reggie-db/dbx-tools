@@ -4,6 +4,28 @@
     "PATH": "$(bun --eval \"console.log(process.env.PATH)\")"
   },
   "tasks": {
+    "appkit:deploy": {
+      "name": "appkit:deploy",
+      "description": "Deploy the AppKit workspace from an npm-compatible source snapshot",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/appkit-deploy.ts"
+          ],
+          "receiveArgs": true
+        }
+      ]
+    },
+    "appkit:sync": {
+      "name": "appkit:sync",
+      "description": "Synchronize installed AppKit plugin metadata",
+      "steps": [
+        {
+          "exec": "appkit plugin sync --write --silent"
+        }
+      ]
+    },
     "barrels": {
       "name": "barrels",
       "steps": [
@@ -52,6 +74,15 @@
         },
         {
           "exec": "bun docs/scripts/generate-agent-skill.mjs"
+        }
+      ]
+    },
+    "check": {
+      "name": "check",
+      "description": "Validate the generated workspace with Bun",
+      "steps": [
+        {
+          "spawn": "build"
         }
       ]
     },
@@ -171,6 +202,31 @@
       "steps": [
         {
           "exec": "bun scripts/demo-deploy.ts",
+          "receiveArgs": true
+        }
+      ]
+    },
+    "deploy": {
+      "name": "deploy",
+      "description": "Validate with Bun and deploy the AppKit workspace",
+      "steps": [
+        {
+          "spawn": "check"
+        },
+        {
+          "spawn": "appkit:deploy"
+        }
+      ]
+    },
+    "dev": {
+      "name": "dev",
+      "description": "Run the AppKit server in development mode",
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "steps": [
+        {
+          "exec": "bun --watch packages/example/server/appkit-demo/src/server.ts",
           "receiveArgs": true
         }
       ]
@@ -572,6 +628,19 @@
         }
       ]
     },
+    "start": {
+      "name": "start",
+      "description": "Run the AppKit server in production mode",
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "steps": [
+        {
+          "exec": "bun packages/example/server/appkit-demo/src/server.ts",
+          "receiveArgs": true
+        }
+      ]
+    },
     "sync": {
       "name": "sync",
       "steps": [
@@ -618,6 +687,9 @@
             "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
             "all"
           ]
+        },
+        {
+          "spawn": "py:test"
         },
         {
           "spawn": "py:test"

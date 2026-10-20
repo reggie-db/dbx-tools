@@ -88,7 +88,6 @@ before(() => {
     name: "@fixture/private-app",
     publishable: false,
   });
-  privateApp.package.addField("private", true);
 
   root.synth();
 });
@@ -153,6 +152,7 @@ describe("compiled publish surface", () => {
 
   it("does not add publication machinery to private packages", () => {
     const packageManifest = manifest("packages/app/private");
+    assert.equal(packageManifest.private, true);
     assert.equal(packageManifest.publishConfig, undefined);
     assert.ok(!packageManifest.files.includes("lib"));
   });

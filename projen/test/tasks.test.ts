@@ -40,6 +40,7 @@ function synthTasks(): {
     outdir: "packages/member",
     name: "@fixture/member",
   });
+  root.addTask("py:test", { exec: "uv run pytest" });
   root.synth();
 
   const read = (path: string): TaskManifest =>
@@ -87,6 +88,7 @@ describe("workspace validation tasks", () => {
     }
     assert.equal(tasks.root.tasks["test:focused"]?.steps?.[0]?.receiveArgs, true);
     assert.equal(tasks.root.tasks["test:changed"]?.steps?.[0]?.receiveArgs, true);
+    assert.equal(tasks.root.tasks["test:all"]?.steps?.at(-1)?.spawn, "py:test");
   });
 
   it("checks lint without mutating and exposes fixes explicitly", () => {
@@ -134,6 +136,7 @@ describe("workspace validation tasks", () => {
 
   it("ignores local lockfiles independently of the active registry", () => {
     assert.match(tasks.gitignore, /^\*\*\/\*\.lock$/m);
+    assert.match(tasks.gitignore, /^\.npmrc$/m);
     assert.match(tasks.prettierIgnore, /^\*\*\/\*\.lock$/m);
   });
 

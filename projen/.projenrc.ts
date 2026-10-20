@@ -69,6 +69,7 @@ const project = new typescript.TypeScriptProject({
     // bun links these three from local source and rewrites them to the real
     // published range at publish time (root synthesis supplies that version),
     // so the engine still cannot resolve an older sibling than it was built with.
+    "@dbx-tools/auth@workspace:^",
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/path@workspace:^",

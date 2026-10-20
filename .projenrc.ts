@@ -136,10 +136,6 @@ const root = new project.DBXToolsNodeProject({
     "env-paths": "^4.0.0",
     "keyv": "5.6.0",
     "keyv-file": "5.3.5",
-    "tailwindcss": "^4.3.2",
-    "@tailwindcss/vite": "^4.3.2",
-    "vite": "^7.2.4",
-    "@vitejs/plugin-react": "^5.1.1",
     "tw-animate-css": "^1.4.0",
     "lucide-react": "^0.554.0",
     "react-router-dom": "^7.6.2",
@@ -212,6 +208,8 @@ const root = new project.DBXToolsNodeProject({
   // by source path either way.
   devDeps: [
     "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/auth@workspace:^",
+    "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/projen@workspace:^",
     "commander@catalog:",
@@ -1293,7 +1291,6 @@ project.applyToProjects(
   { path: "packages/example/server/appkit-demo", tags: "server" },
   (p) => {
     // A private runnable app, not an importable library: entry is `src/server.ts`.
-    p.package.addField("private", true);
     p.package.addField("exports", { "./package.json": "./package.json" });
     projectJs.applyCompilerOptions(p, { rootDir: "." });
     projectJs.applyIncludes(p, "stage-deploy.ts");
@@ -1315,7 +1312,6 @@ project.applyToProjects(
       // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
       // runs the server directly rather than through a wrapper bin.
       "@dbx-tools/tunnel@workspace:^",
-      "@databricks/appkit@catalog:",
       "@mastra/core@catalog:",
       "@mastra/ai-sdk@catalog:",
       "@mastra/express@catalog:",
@@ -1333,8 +1329,6 @@ project.applyToProjects(
       "fuse.js@^7.4.2",
       "yaml@^2.9.0",
       "tsx@^4.22.4",
-      "vite@catalog:",
-      "@vitejs/plugin-react@catalog:",
     );
     p.addDevDeps(
       "@dbx-tools/projen@workspace:^",
@@ -1349,10 +1343,7 @@ project.applyToProjects(
 // (Tailwind via bun-plugin-tailwind). Local `bun run demo` omits `staticPath` so
 // AppKit `server()` serves this package through Vite middleware HMR.
 project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: "app" }, (p) => {
-  projectJs.applyCompilerOptions(p, { rootDir: "." });
-  projectJs.applyIncludes(p, "vite.config.ts");
-  p.package.addField("private", true);
-  p.addDevDeps("@dbx-tools/tunnel@workspace:^", "vite@catalog:");
+  p.addDevDeps("@dbx-tools/tunnel@workspace:^");
   p.addDeps(
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email-template@workspace:^",
@@ -1362,11 +1353,7 @@ project.applyToProjects(root, { path: "packages/example/app/appkit-demo", tags: 
     "@dbx-tools/ui-lakebox@workspace:^",
     "lucide-react@catalog:",
     "react-router-dom@catalog:",
-    // `src/index.css` `@import`s these directly, so the app declares them.
-    "@databricks/appkit-ui@catalog:",
     "tw-animate-css@catalog:",
-    "tailwindcss@catalog:",
-    "@tailwindcss/vite@catalog:",
   );
 });
 

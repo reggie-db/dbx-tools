@@ -25,6 +25,9 @@ generated-file cleanup and watch tasks.
 
 Every `src`-bearing folder under the configured roots becomes a
 `DBXToolsTypeScriptProject`. Folder path drives package name and runtime tags.
+Use `packageDefaults` for native options shared by every discovered package,
+such as `{ publishable: false }`; reserve `resolvePackageOptions` for genuine
+per-package differences.
 
 Use `DBXToolsTypeScriptProject` itself as the root when one package needs the
 same Bun workspace, repository, task, and release defaults without a separate
@@ -310,8 +313,34 @@ parameter to `Project`). Drop to `mixin.create(predicate, fn)` +
 `project.with(...)` only when you need a predicate the filters cannot express.
 
 Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
-and `ui`. Repo-specific mixins layer package-specific dependencies,
-scripts, and generated files on top.
+`ui`, and `app`. Repo-specific mixins layer package-specific dependencies,
+scripts, and generated files on top. `ui` is for reusable React component
+libraries. `app` owns a Bun-built browser application.
+
+AppKit mode defaults to `auto`: when the workspace has both `app` and `server`
+packages, the engine adds the AppKit, Vite, React plugin, and Tailwind
+dependencies to the package that uses each one. It also disables AppKit's
+package migration, includes the Vite and generated-type inputs in the browser
+tsconfig, adds `appkit:sync`, and ignores local Databricks state. Set
+`appkit: false` to disable this ownership. Set `appkit: true` to require AppKit
+and fail synthesis when either package role or its required entry files are
+missing. Keep application-specific UI and server dependencies in the consuming
+`.projenrc.ts`. A workspace with one `server` package also receives standard
+`check`, `dev`, and `start` tasks unless the repository defines them.
+
+The generated `deploy` task validates with the native Bun build, then delegates
+to `appkit:deploy` unless the repository already owns `deploy`. The AppKit task
+runs `databricks apps deploy --skip-validation` with all forwarded arguments
+from an isolated source snapshot, so the Databricks CLI never runs npm locally.
+Because the remote builder selects npm when no portable pnpm lockfile is
+uploaded, the snapshot replaces `catalog:` and `workspace:` dependency protocols
+with concrete versions and keeps every manifest stable through upload. The
+generated working tree is never modified. The task passes an explicit profile,
+using the supplied flag or resolving one through `@dbx-tools/auth`, and fails
+before staging when neither profile nor complete environment credentials are
+available. A repository-owned deployment flow can run its own Bun checks and
+spawn `appkit:deploy` for the upload step instead of maintaining staging or
+materialization code.
 
 Every workspace root exposes a generic development watcher:
 

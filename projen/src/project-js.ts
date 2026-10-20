@@ -15,6 +15,7 @@ import { type IConstruct } from "constructs";
 import { Component, LogLevel, Project, type Task, TextFile, javascript, typescript } from "projen";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
+import { AppKitWorkspace, type AppKitWorkspaceMode } from "./appkit-workspace.ts";
 import { generateBarrels, isGeneratedBarrel } from "./barrels.ts";
 
 import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
@@ -603,6 +604,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      * disable. Defaults to `"node"`.
      */
     readonly omitRelativePrefix?: OneOrMany<string>;
+    /** Native defaults merged into every filesystem-discovered package. */
+    readonly packageDefaults?: Omit<DiscoveredTypeScriptPackageOptions, "name">;
     /** Resolve native constructor fields before a discovered package is constructed. */
     readonly resolvePackageOptions?: (
       pkg: DiscoveredPackage,
@@ -620,6 +623,11 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      * a list = only those tags.
      */
     readonly defaultTagMixins?: false | PackageTag[];
+    /**
+     * Apply AppKit conventions to `app` and `server` packages. Defaults to
+     * `auto`; `true` also validates the required package roles and entry files.
+     */
+    readonly appkit?: AppKitWorkspaceMode;
     /**
      * Extra repo-root paths that trigger a full re-synth during `sync --watch`
      * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
@@ -679,7 +687,7 @@ export class DBXToolsNodeProject
   readonly language = "javascript" as const;
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
-  pnpmWorkspace?: PnpmWorkspaceState;
+  pnpmWorkspace: PnpmWorkspaceState;
   rootTsconfig?: DBXToolsRootTsconfig;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
@@ -1007,7 +1015,10 @@ class WorkspaceValidationTasks extends Component {
       return;
     }
     project.compileTask.execArgs(taskCommand("compile-workspace.ts"));
-    project.testTask.spawn(project.tasks.tryFind("test:all")!);
+    const testAll = project.tasks.tryFind("test:all")!;
+    const pythonTests = project.tasks.tryFind("py:test");
+    if (pythonTests) testAll.spawn(pythonTests);
+    project.testTask.spawn(testAll);
   }
 }
 
@@ -1281,7 +1292,14 @@ function initProject(
   // What the dot group was actually earning here, named explicitly: secrets and
   // local editor state. Both ignore CONTENTS (`.idea/*`) rather than the
   // directory, so a later `!` negation can still reach a file inside.
-  project.gitignore.addPatterns(".env", ".env.*", "!.env.example", "!.env.sample", ".idea/*");
+  project.gitignore.addPatterns(
+    ".env",
+    ".env.*",
+    "!.env.example",
+    "!.env.sample",
+    ".idea/*",
+    ".npmrc",
+  );
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/**/src/generated/**`);
@@ -1396,9 +1414,11 @@ function initProject(
       continue;
     }
     const defaultPackageName = packageNameFor(project.scope, p.relPath, omitPrefixes);
-    const packageOptions =
-      options.resolvePackageOptions?.(p, { name: defaultPackageName }) ??
-      ({ name: defaultPackageName } satisfies DiscoveredTypeScriptPackageOptions);
+    const defaults = {
+      name: defaultPackageName,
+      ...options.packageDefaults,
+    } satisfies DiscoveredTypeScriptPackageOptions;
+    const packageOptions = options.resolvePackageOptions?.(p, defaults) ?? defaults;
     new DBXToolsTypeScriptProject({
       parent: project,
       outdir: p.memberPath,
@@ -1416,6 +1436,25 @@ function initProject(
   // via the caller's own `project.with(...)`.
   if (enabledTagMixins.length) {
     project.with(...enabledTagMixins.map((t) => PACKAGE_TAG_MIXINS[t]));
+  }
+  const appkitMode = options.appkit ?? "auto";
+  if (appkitMode !== false) {
+    const projects = [project, ...project.subprojects].filter(
+      (candidate): candidate is DBXToolsNodeProject | DBXToolsTypeScriptProject =>
+        candidate instanceof DBXToolsNodeProject || candidate instanceof DBXToolsTypeScriptProject,
+    );
+    const apps = projects.filter((candidate) => candidate.dbxToolsConfig.tags.includes("app"));
+    const servers = projects.filter((candidate) =>
+      candidate.dbxToolsConfig.tags.includes("server"),
+    );
+    const enabled = appkitMode === true || (apps.length > 0 && servers.length > 0);
+    if (enabled) {
+      new AppKitWorkspace(project, {
+        apps,
+        servers,
+        validate: appkitMode === true,
+      });
+    }
   }
 
   new WorkspaceValidationTasks(project);

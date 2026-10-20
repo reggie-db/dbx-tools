@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
+    "@dbx-tools/auth": "workspace:^",
     "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/path": "workspace:^",

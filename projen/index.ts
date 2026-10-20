@@ -4,6 +4,7 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
 export const PACKAGE_VERSION = "0.9.151";
+export * as appkitWorkspace from "./src/appkit-workspace.ts";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -36,7 +37,10 @@ export * as tsconfig from "./src/tsconfig.ts";
 export * as vscode from "./src/vscode.ts";
 export * as watch from "./src/watch.ts";
 export * as workspaceLock from "./src/workspace-lock.ts";
+export * as workspaceManifest from "./src/workspace-manifest.ts";
 export * as workspaceVersion from "./src/workspace-version.ts";
+export { AppKitWorkspace } from "./src/appkit-workspace.ts";
+export type { AppKitWorkspaceMode, AppKitWorkspaceOptions } from "./src/appkit-workspace.ts";
 export { BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE, BUN_APP_OVERRIDES, RootBunfigFile, BunfigFile, BunDevServerFile, BunBuildFile } from "./src/bun-app.ts";
 export { BUN_VERSION, MINIMUM_BUN_VERSION, BUN_VERSION_CHECK_SCRIPT } from "./src/bun-workflow.ts";
 export { DBXToolsConfigDataSchema, DBXToolsConfig } from "./src/dbx-tools-config.ts";
