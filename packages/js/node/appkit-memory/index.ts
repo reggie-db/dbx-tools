@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-memory";
-export const PACKAGE_VERSION = "0.9.148";
+export const PACKAGE_VERSION = "0.9.149";
 export * as config from "./src/config.ts";
 export * as databricksClient from "./src/databricks/client.ts";
 export * as graphitiOptions from "./src/graphiti/options.ts";
