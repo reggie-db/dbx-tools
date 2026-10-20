@@ -77,10 +77,7 @@ describe("LakeboxRuntime readiness", () => {
     };
 
     try {
-      assert.equal(
-        await internals.connect(entry, new AbortController().signal, 30_000),
-        expected,
-      );
+      assert.equal(await internals.connect(entry, new AbortController().signal, 30_000), expected);
       assert.equal(attempts, 3);
       assert.deepEqual(delays, [1_000, 2_000]);
     } finally {
