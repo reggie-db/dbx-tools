@@ -11,7 +11,12 @@ import { publishLocalRelease } from "./local-publish.ts";
 import { TaskDirectoriesOptionSchema, TaskRootOptionSchema } from "./options.ts";
 import { writeReleaseNotes } from "./release-notes.ts";
 import { assertReleaseVersion } from "./release-version.ts";
-import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
+import {
+  captureTaskCommand,
+  runTaskCommand,
+  streamTaskCommand,
+  taskCommandSucceeds,
+} from "../src/_task-command.ts";
 import { RELEASE_WORKFLOW_FILE } from "../src/release-context.ts";
 import {
   RELEASE_INSTALL_MODES,
@@ -134,11 +139,19 @@ export async function watchReleaseGithubActions(
     url: run.url,
   });
   try {
-    runTaskCommand(
+    await streamTaskCommand(
       root,
       "gh",
-      ["run", "watch", String(run.databaseId), "--repo", repository, "--interval", "3"],
-      { env: account.env },
+      [
+        "run",
+        "watch",
+        String(run.databaseId),
+        "--repo",
+        repository,
+        "--interval",
+        String(Math.max(1, Math.round(pollIntervalMs / 1_000))),
+      ],
+      { env: { ...account.env, NO_COLOR: "1" } },
     );
     runTaskCommand(
       root,
@@ -374,9 +387,10 @@ export async function runRelease(
     /** Path to complete release notes supplied instead of invoking Genie. */
     readonly releaseNotesFile?: string;
     readonly writeReleaseNotes?: typeof writeReleaseNotes;
-    /** Wait for and stream a matching tag-triggered GitHub Actions run. */
+    /** After local release actions, wait for and stream the matching GitHub Actions run. */
     readonly watchGithubActions?: boolean;
     readonly githubActionsWatcher?: ReleaseGithubActionsWatcher;
+    readonly resolveGithubAccount?: typeof projectUtils.resolveProjectGhAccount;
   },
 ): Promise<string> {
   const { branch, prefix, remote, root } = options;
@@ -480,23 +494,6 @@ export async function runRelease(
   }
   logger.success(`released ${tag}`, { sha: head });
 
-  if (shouldWatchReleaseGithubActions(options, selection)) {
-    const account = projectUtils.resolveProjectGhAccount(root, { remote });
-    if (account) {
-      await (options.githubActionsWatcher ?? watchReleaseGithubActions)({
-        account,
-        head,
-        root,
-        tag,
-      });
-    } else {
-      logger.info("skipping GitHub Actions release watch: no authenticated account", {
-        remote,
-        tag,
-      });
-    }
-  }
-
   // Restore local deploys: when a non-standard (loopback) npm or uv registry is
   // configured, publish the freshly tagged version to it directly. Detection and
   // publishing are owned by local-publish.ts; this no-ops on standard registries.
@@ -516,6 +513,25 @@ export async function runRelease(
       "demo:deploy",
       ...(options.demoProfile ? ["--", "--profile", options.demoProfile] : []),
     ]);
+  }
+
+  if (shouldWatchReleaseGithubActions(options, selection)) {
+    const account = (options.resolveGithubAccount ?? projectUtils.resolveProjectGhAccount)(root, {
+      remote,
+    });
+    if (account) {
+      await (options.githubActionsWatcher ?? watchReleaseGithubActions)({
+        account,
+        head,
+        root,
+        tag,
+      });
+    } else {
+      logger.info("skipping GitHub Actions release watch: no authenticated account", {
+        remote,
+        tag,
+      });
+    }
   }
 
   return tag;
@@ -552,7 +568,7 @@ export const ReleaseOptionsSchema = z.object({
   watchGithubActions: z
     .boolean()
     .default(true)
-    .describe("Wait for and stream the tag-triggered GitHub Actions release"),
+    .describe("Wait for and log the tag-triggered GitHub Actions release"),
   releaseNotes: z
     .boolean()
     .default(true)

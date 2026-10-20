@@ -316,14 +316,14 @@ scripts, and generated files on top.
 Every workspace root exposes a generic development watcher:
 
 ```bash
-bun run dev:watch [--debounce-ms 15000] [--restart-key r] <command> [args...]
+bun run dev:watch <command> [args...]
 ```
 
-It restarts after watched writes have been quiet for 15 seconds. Command paths,
-`--cwd`, and `--filter` identify the owning package. Its transitive workspace
+It restarts after watched writes have been quiet for 15 seconds. Command paths
+and task selectors identify the owning package. Its transitive workspace
 dependencies are watched with the shared generated/dependency/test/temp ignores.
-Press the configured key for an immediate restart. The demo uses this task to
-run its concrete server entrypoint. The `server` tag does not assume one.
+The configured restart key triggers an immediate restart. The demo uses this
+task to run its concrete server entrypoint. The `server` tag does not assume one.
 
 AppKit 0.81's `appkitServerConfig()` is the preferred tsdown preset for a
 consumer app using conventional compiled `server/agents/*/agent.ts` entries. It
@@ -541,10 +541,11 @@ diverged. From `main`, it calls the existing `bump` task, commits the generated
 version changes, pushes `main`, and pushes the matching annotated `vX.Y.Z` tag.
 Pass `--no-bump` only to release an existing synchronized local bump. The tag
 workflow verifies that the tag points at the exact `origin/main` commit. The
-local task waits for this workflow by default, displays live job and step
-progress, then prints its logs. Local-only releases and repositories without a
-resolved authenticated GitHub account skip the watcher. Stopping the local
-watcher does not cancel the remote run.
+local task completes local publication and demo deployment first, then waits for
+this workflow by default. It preserves the live checklist through a scroll-safe
+non-TTY stream and prints the final logs. Local-only releases and repositories
+without a resolved authenticated GitHub account skip the watcher. Stopping the
+local watcher does not cancel the remote run.
 
 One `build-release` job installs workspace dependencies, runs validation, packs
 the npm archives, builds all Python distributions, and builds the documentation
@@ -658,8 +659,8 @@ release [options]
 | `--no-docs`                            | Disable build and deploy documentation                                                                                                                            |
 | `--validation`                         | Run optional release validation tasks before publishing (default: true, env: PROJEN_RELEASE_VALIDATION)                                                           |
 | `--no-validation`                      | Disable run optional release validation tasks before publishing                                                                                                   |
-| `-w, --watch-github-actions`           | Wait for and stream the tag-triggered GitHub Actions release (default: true, env: PROJEN_RELEASE_WATCH_GITHUB_ACTIONS)                                            |
-| `--no-watch-github-actions`            | Disable wait for and stream the tag-triggered github actions release                                                                                              |
+| `-w, --watch-github-actions`           | Wait for and log the tag-triggered GitHub Actions release (default: true, env: PROJEN_RELEASE_WATCH_GITHUB_ACTIONS)                                               |
+| `--no-watch-github-actions`            | Disable wait for and log the tag-triggered github actions release                                                                                                 |
 | `--release-notes`                      | Generate and commit release notes for a new version bump (default: true, env: PROJEN_RELEASE_RELEASE_NOTES)                                                       |
 | `--no-release-notes`                   | Disable generate and commit release notes for a new version bump                                                                                                  |
 | `--release-notes-text <value>`         | Write supplied release-note Markdown without invoking Genie (env: PROJEN_RELEASE_RELEASE_NOTES_TEXT)                                                              |

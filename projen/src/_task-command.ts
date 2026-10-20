@@ -51,6 +51,31 @@ export async function runTaskCommandAsync(
   });
 }
 
+/**
+ * Run a command with piped stdout forwarded line-by-line.
+ *
+ * The child sees a non-TTY output stream, so interactive redraw commands fall
+ * back to append-only output while the parent still receives live progress.
+ */
+export async function streamTaskCommand(
+  cwd: string,
+  command: string,
+  args: readonly string[],
+  options: TaskCommandOptions = {},
+): Promise<void> {
+  await exec.spawn(executable(command), [...args], {
+    cwd,
+    env: options.env,
+    stdout: {
+      capture: false,
+      onLine: (line) => console.log(line),
+    },
+    stderr: options.stderr ?? "inherit",
+    stdin: "ignore",
+    check: true,
+  });
+}
+
 /** Capture trimmed stdout, optionally throwing when the command fails. */
 export function captureTaskCommand(
   cwd: string,

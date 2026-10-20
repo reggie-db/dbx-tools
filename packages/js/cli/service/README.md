@@ -45,6 +45,10 @@ the Python version uv manages and defaults to `3.11`. uv must be available on
 `PATH` during installation. Uninstalling the service removes the environment
 with the rest of the service-owned data.
 
+Local-project installations preserve package extras and companion dependencies.
+Offline installations resolve only from uv's cache and fail immediately when a
+required artifact is unavailable.
+
 `command.options` accepts either a concrete option object or a Zod object
 schema. Objects serialize their current values. Schemas parse `{}` and serialize
 their defaults. Boolean values become positive or negated flags, arrays become
@@ -70,18 +74,12 @@ For the example program above:
 ```sh
 example service install
 example service status
-example service stop
-example service start
-example service restart
-example service logs
 example service logs -- tail -f
 example service uninstall
 ```
 
-Installation starts the service by default. `status` reports installation and
-process state as JSON. `logs` prints the managed process log path. Arguments
-after `--` run as a command with that path appended, so `logs -- cat` prints the
-log and `logs -- tail -f` follows it.
+Arguments after `--` run as a command with the service log path appended, so
+`logs -- cat` prints the log and `logs -- tail -f` follows it.
 
 The service belongs to the current user. Login startup uses a LaunchAgent on
 macOS, an XDG autostart entry on Linux, and a Startup command on Windows. Package

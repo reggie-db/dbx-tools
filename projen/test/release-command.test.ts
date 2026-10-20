@@ -154,7 +154,7 @@ describe("direct release tags", () => {
       });
       const invocations = readFileSync(calls, "utf8");
       assert.match(invocations, /run list .*--workflow release\.yml/);
-      assert.match(invocations, /run watch 42/);
+      assert.match(invocations, /run watch 42 .*--interval 1/);
       assert.match(invocations, /run view 42 .*--log/);
       assert.doesNotMatch(invocations, /\bcancel\b/);
     } finally {
@@ -285,8 +285,9 @@ describe("direct release tags", () => {
     }
   });
 
-  it("runs demo deployment without a profile override", async () => {
+  it("runs demo deployment before watching GitHub Actions", async () => {
     const { remote, root } = fixture();
+    let watched = false;
     try {
       writeFileSync(
         join(root, "demo-deploy.mjs"),
@@ -318,8 +319,20 @@ describe("direct release tags", () => {
         localPublish: false,
         demoDeploy: true,
         releaseNotes: false,
+        resolveGithubAccount: () => ({
+          env: process.env,
+          host: "github.com",
+          login: "release-user",
+          remote: { host: "github.com", repository: "example/repo" },
+          root,
+        }),
+        githubActionsWatcher: async () => {
+          assert.deepEqual(JSON.parse(readFileSync(join(root, "demo-deployed"), "utf8")), []);
+          watched = true;
+        },
       });
       assert.deepEqual(JSON.parse(readFileSync(join(root, "demo-deployed"), "utf8")), []);
+      assert.equal(watched, true);
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
     }
