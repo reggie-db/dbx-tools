@@ -65,7 +65,7 @@ export { PYTHON_NODE_RUNTIME_DISTRIBUTION, PYTHON_NODE_RUNTIME_MODULE, PYTHON_NO
 export type { PythonNodeRuntimeOptions } from "./src/python-node-runtime.ts";
 export { DBXToolsRelease } from "./src/release.ts";
 export type { ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
-export { RELEASE_VERSION } from "./src/release-context.ts";
+export { RELEASE_VERSION, RELEASE_WORKFLOW_FILE } from "./src/release-context.ts";
 export { RELEASE_PUBLISH_TARGETS, RELEASE_INSTALL_MODES, ReleaseStepSelectionSchema } from "./src/release-options.ts";
 export type { ReleasePublishTarget, ReleaseInstallMode, ReleaseStepSelection, ReleaseSelectionOptions } from "./src/release-options.ts";
 export { SHARED_CORE_BINDING_EXPORTS } from "./src/shared-core-usage.ts";

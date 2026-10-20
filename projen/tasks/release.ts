@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import { errorUtils, json, log } from "@dbx-tools/shared-core";
 import type { Command } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand } from "./cli.ts";
@@ -12,6 +12,7 @@ import { TaskDirectoriesOptionSchema, TaskRootOptionSchema } from "./options.ts"
 import { writeReleaseNotes } from "./release-notes.ts";
 import { assertReleaseVersion } from "./release-version.ts";
 import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
+import { RELEASE_WORKFLOW_FILE } from "../src/release-context.ts";
 import {
   RELEASE_INSTALL_MODES,
   RELEASE_PUBLISH_TARGETS,
@@ -24,6 +25,135 @@ import {
 import { readWorkspaceVersion } from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
+const GITHUB_ACTIONS_START_TIMEOUT_MS = 2 * 60_000;
+const GITHUB_ACTIONS_POLL_INTERVAL_MS = 2_000;
+
+const GithubReleaseRunSchema = z
+  .object({
+    databaseId: z.number().int().positive(),
+    headBranch: z.string(),
+    headSha: z.string(),
+    status: z.string(),
+    url: z.string(),
+  })
+  .passthrough();
+
+/** Inputs required to locate and watch one tag-triggered release workflow. */
+export interface WatchReleaseGithubActionsOptions {
+  readonly account: projectUtils.ProjectGhAccount;
+  readonly head: string;
+  readonly root: string;
+  readonly tag: string;
+  readonly pollIntervalMs?: number;
+  readonly startTimeoutMs?: number;
+}
+
+/** GitHub release watcher boundary replaceable by release tests. */
+export type ReleaseGithubActionsWatcher = (
+  options: WatchReleaseGithubActionsOptions,
+) => Promise<void>;
+
+function githubRepository(account: projectUtils.ProjectGhAccount): string {
+  return account.host === "github.com"
+    ? account.remote.repository
+    : `${account.host}/${account.remote.repository}`;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/** Whether this release selection has remote work worth watching. */
+export function shouldWatchReleaseGithubActions(
+  options: Pick<ReleaseSelectionOptions, "publish"> & { readonly watchGithubActions?: boolean },
+  selection: ReturnType<typeof releaseStepSelection>,
+): boolean {
+  if (options.watchGithubActions === false) return false;
+  if (options.publish === "local" && !selection.npm && !selection.pypi && !selection.docs) {
+    return false;
+  }
+  return Object.values(selection).some(Boolean);
+}
+
+/** Wait for a tag-triggered workflow, show live progress, then print its logs. */
+export async function watchReleaseGithubActions(
+  options: WatchReleaseGithubActionsOptions,
+): Promise<void> {
+  const {
+    account,
+    head,
+    root,
+    tag,
+    pollIntervalMs = GITHUB_ACTIONS_POLL_INTERVAL_MS,
+    startTimeoutMs = GITHUB_ACTIONS_START_TIMEOUT_MS,
+  } = options;
+  const repository = githubRepository(account);
+  const deadline = Date.now() + startTimeoutMs;
+  let run: z.infer<typeof GithubReleaseRunSchema> | undefined;
+  while (!run && Date.now() < deadline) {
+    const output = captureTaskCommand(
+      root,
+      "gh",
+      [
+        "run",
+        "list",
+        "--repo",
+        repository,
+        "--workflow",
+        RELEASE_WORKFLOW_FILE,
+        "--commit",
+        head,
+        "--event",
+        "push",
+        "--limit",
+        "20",
+        "--json",
+        "databaseId,headBranch,headSha,status,url",
+      ],
+      { check: true, env: account.env, stderr: "inherit" },
+    );
+    const parsed = z.array(GithubReleaseRunSchema).safeParse(json.parse(output, []));
+    if (!parsed.success) throw new Error("GitHub returned invalid release workflow metadata");
+    run = parsed.data.find(
+      (candidate) => candidate.headSha === head && candidate.headBranch === tag,
+    );
+    if (!run) await delay(pollIntervalMs);
+  }
+  if (!run) {
+    logger.warn("GitHub Actions release run did not start before the watch timeout", {
+      repository: account.remote.repository,
+      tag,
+    });
+    return;
+  }
+
+  logger.info("watching GitHub Actions release", {
+    repository: account.remote.repository,
+    runId: run.databaseId,
+    status: run.status,
+    url: run.url,
+  });
+  try {
+    runTaskCommand(
+      root,
+      "gh",
+      ["run", "watch", String(run.databaseId), "--repo", repository, "--interval", "3"],
+      { env: account.env },
+    );
+    runTaskCommand(
+      root,
+      "gh",
+      ["run", "view", String(run.databaseId), "--repo", repository, "--log"],
+      { env: account.env },
+    );
+  } catch (error) {
+    logger.warn("GitHub Actions release watch stopped; the remote run was not cancelled", {
+      error: errorUtils.toError(error),
+      runId: run.databaseId,
+      url: run.url,
+    });
+  }
+}
 
 /** Whether the root manifest exposes one repository-owned script. */
 function hasPackageScript(root: string, name: string): boolean {
@@ -244,6 +374,9 @@ export async function runRelease(
     /** Path to complete release notes supplied instead of invoking Genie. */
     readonly releaseNotesFile?: string;
     readonly writeReleaseNotes?: typeof writeReleaseNotes;
+    /** Wait for and stream a matching tag-triggered GitHub Actions run. */
+    readonly watchGithubActions?: boolean;
+    readonly githubActionsWatcher?: ReleaseGithubActionsWatcher;
   },
 ): Promise<string> {
   const { branch, prefix, remote, root } = options;
@@ -347,6 +480,23 @@ export async function runRelease(
   }
   logger.success(`released ${tag}`, { sha: head });
 
+  if (shouldWatchReleaseGithubActions(options, selection)) {
+    const account = projectUtils.resolveProjectGhAccount(root, { remote });
+    if (account) {
+      await (options.githubActionsWatcher ?? watchReleaseGithubActions)({
+        account,
+        head,
+        root,
+        tag,
+      });
+    } else {
+      logger.info("skipping GitHub Actions release watch: no authenticated account", {
+        remote,
+        tag,
+      });
+    }
+  }
+
   // Restore local deploys: when a non-standard (loopback) npm or uv registry is
   // configured, publish the freshly tagged version to it directly. Detection and
   // publishing are owned by local-publish.ts; this no-ops on standard registries.
@@ -383,12 +533,15 @@ export const ReleaseOptionsSchema = z.object({
     .default("packages/py")
     .describe("Python package root for local publish"),
   validate: TaskDirectoriesOptionSchema.describe("Repeatable task to run before pushing"),
-  bump: z.boolean().default(true).describe("Create and synchronize a patch version bump"),
+  bump: z
+    .boolean()
+    .default(true)
+    .describe("Create and synchronize a patch bump; disable only for an existing committed bump"),
   publish: z.enum(RELEASE_PUBLISH_TARGETS).default("auto").describe("Publication scope"),
   install: z
     .enum(RELEASE_INSTALL_MODES)
     .default("auto")
-    .describe("Local workspace dependency installation"),
+    .describe("Dependency install mode: auto follows manifests, always installs, never reuses"),
   npm: z.boolean().default(true).describe("Build and publish npm packages"),
   pypi: z.boolean().default(true).describe("Build and publish Python packages"),
   docs: z.boolean().optional().describe("Build and deploy documentation"),
@@ -396,7 +549,14 @@ export const ReleaseOptionsSchema = z.object({
     .boolean()
     .default(true)
     .describe("Run optional release validation tasks before publishing"),
-  releaseNotes: z.boolean().default(true).describe("Write release notes before tagging"),
+  watchGithubActions: z
+    .boolean()
+    .default(true)
+    .describe("Wait for and stream the tag-triggered GitHub Actions release"),
+  releaseNotes: z
+    .boolean()
+    .default(true)
+    .describe("Generate and commit release notes for a new version bump"),
   releaseNotesText: z
     .string()
     .optional()
@@ -414,7 +574,7 @@ export const ReleaseOptionsSchema = z.object({
   demoDeploy: z
     .boolean()
     .optional()
-    .describe("Deploy the AppKit demo after tagging and local publication"),
+    .describe("Run the local-only AppKit demo deployment after tagging and publication"),
   profile: z
     .string()
     .trim()
@@ -460,6 +620,7 @@ export function createReleaseCommand(): Command {
       pypi: options.pypi,
       docs: options.docs,
       validation: options.validation,
+      watchGithubActions: options.watchGithubActions,
       validationTasks: options.validate,
       demoDeploy: options.demoDeploy,
       demoProfile: options.profile,

@@ -8,7 +8,7 @@ import {
   type ReleaseSelectionOptions,
 } from "../src/release-options.ts";
 import { releaseBuildSteps } from "../src/release.ts";
-import { createReleaseCommand } from "../tasks/release.ts";
+import { createReleaseCommand, shouldWatchReleaseGithubActions } from "../tasks/release.ts";
 
 async function flags(args: string[]): Promise<
   ReleaseSelectionOptions & {
@@ -19,6 +19,7 @@ async function flags(args: string[]): Promise<
     releaseNotesInstructions?: string;
     releaseNotesText?: string;
     releaseNotesFile?: string;
+    watchGithubActions: boolean;
   }
 > {
   const command = createReleaseCommand().action(() => {});
@@ -39,6 +40,8 @@ describe("per-run release selection", () => {
     assert.equal(options.localPublish, true);
     assert.equal(options.demoDeploy, undefined);
     assert.equal(options.releaseNotes, true);
+    assert.equal(options.watchGithubActions, true);
+    assert.equal(shouldWatchReleaseGithubActions(options, releaseStepSelection(options)), true);
     assert.equal(releaseTagAnnotation("v1.2.3", releaseStepSelection(options)), "v1.2.3");
     assert.equal(releasePublishesLocally(options.publish), true);
   });
@@ -90,12 +93,26 @@ describe("per-run release selection", () => {
     });
   });
 
+  it("can disable GitHub Actions watching and skips local-only releases", async () => {
+    const disabled = await flags(["--no-watch-github-actions"]);
+    assert.equal(disabled.watchGithubActions, false);
+    assert.equal(shouldWatchReleaseGithubActions(disabled, releaseStepSelection(disabled)), false);
+
+    const local = await flags(["--publish", "local"]);
+    assert.equal(shouldWatchReleaseGithubActions(local, releaseStepSelection(local)), false);
+    const localWithDocs = await flags(["--publish", "local", "--docs"]);
+    assert.equal(
+      shouldWatchReleaseGithubActions(localWithDocs, releaseStepSelection(localWithDocs)),
+      true,
+    );
+  });
+
   it("round-trips CI selections through the annotated tag without leaking local configuration", () => {
     const selection = releaseStepSelection({ publish: "pypi", docs: false });
     const annotation = releaseTagAnnotation("v1.2.3", selection);
     assert.deepEqual(parseReleaseTagAnnotation(annotation), selection);
     assert.deepEqual(parseReleaseTagAnnotation("v1.2.3\n"), releaseStepSelection());
-    assert.doesNotMatch(annotation, /registry|install|localhost|demo|notes/);
+    assert.doesNotMatch(annotation, /registry|install|localhost|demo|notes|watch/);
   });
 
   it("opts into demo-app deploy without recording it in the annotated tag", async () => {

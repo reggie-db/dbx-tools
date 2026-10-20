@@ -540,9 +540,14 @@ the current branch is pushed first. A non-`main` branch then fast-forwards
 diverged. From `main`, it calls the existing `bump` task, commits the generated
 version changes, pushes `main`, and pushes the matching annotated `vX.Y.Z` tag.
 Pass `--no-bump` only to release an existing synchronized local bump. The tag
-workflow verifies that the tag points at the exact `origin/main` commit. One
-`build-release` job installs workspace dependencies, runs validation, packs the
-npm archives, builds all Python distributions, and builds the documentation
+workflow verifies that the tag points at the exact `origin/main` commit. The
+local task waits for this workflow by default, displays live job and step
+progress, then prints its logs. Local-only releases and repositories without a
+resolved authenticated GitHub account skip the watcher. Stopping the local
+watcher does not cancel the remote run.
+
+One `build-release` job installs workspace dependencies, runs validation, packs
+the npm archives, builds all Python distributions, and builds the documentation
 site. Install validation prerequisites through `releaseSetupSteps`.
 `releaseDocs.prepareSteps` runs after validation.
 
@@ -553,56 +558,37 @@ publisher without a checkout or workspace install. Pages deploys the already
 built site after registry publication succeeds. Local npm and Python registry publication remains available
 through the direct local publication tooling.
 
-The default release still publishes npm, Python, and docs, then publishes to
-configured local registries automatically. Select a scope or disable individual
-steps for one run without changing the Projen definition:
+The default release publishes npm, Python, and docs, then publishes to
+configured local registries. Use `bun run release --help` or the generated
+[command reference](#release) for the complete option set. Common workflows:
 
 ```bash
+bun run release
 bun run release --publish pypi --no-docs
-bun run release --no-npm --no-local-publish
 bun run release --publish local --install never
-bun run release --local-registry false --local-pypi auto
 bun run release --demo-deploy --profile <profile>
-bun run release --no-release-notes
-bun run release --release-notes-text "# Release 1.2.3"
-bun run release --release-notes-file ./notes.md
-bun run release --release-notes-instructions "Focus on operator-visible changes."
 ```
 
-`--demo-deploy` is off by default. After tagging and any local registry
-publication it runs `bun run demo:deploy`, which stages the AppKit demo from
-locally compiled Node packages and locally built Python wheels, resolves
-the default environment or configured credentials through
+Demo deployment is a local post-tag action. It stages locally compiled Node
+packages and Python wheels, resolves credentials through
 `@dbx-tools/auth`, including `DATABRICKS_CONFIG_PROFILE`, `DATABRICKS_HOST`,
 and the other auth options, force-refreshes its token with interactive login
 fallback, and deploys it. When auth selects a profile, the deploy passes that
-resolved profile explicitly to every bundle command. That step is local only
-and is not recorded in the annotated tag.
-
-Pass `--profile <name>` to set `DATABRICKS_CONFIG_PROFILE` only for that local
-demo deployment. The profile is not forwarded as a release subcommand
-argument or stored in the release tag.
+resolved profile explicitly to every bundle command. The deployment selection
+and profile are not recorded in the annotated tag.
 
 After bump and configured validation, release writes
 `docs/releases/vX.Y.Z.md` with `dbx genie exec -C "$PWD" --sandbox read-only
---ephemeral -o`. The standard prompt forbids running tests or other validation
-commands. If Genie fails or writes an empty file, the step keeps going with a
-short git-log summary. `--no-release-notes` skips the file.
-`--release-notes-text` writes supplied markdown directly, while
-`--release-notes-file` copies a prepared markdown file. Both bypass Genie.
-`--release-notes-instructions` appends run-specific guidance to the standard
-Genie prompt. Notes are committed with the version bump and are not recorded in
-the annotated tag. They are skipped on `--no-bump` because that path requires an
-already committed tree.
+--ephemeral -o`. The standard prompt cannot run validation commands. Failures
+fall back to a short git-log summary. Notes are committed with the version bump,
+not stored in the annotated tag, and are omitted for an existing committed bump.
 
-`--install auto` keeps Projen's normal local dependency-install behavior.
-`always` performs a manifest-resolved install first, and `never` uses dependencies already
-installed while still regenerating versioned sources. Local release validation
-runs `eslint:fix` before branch preparation and bump, then runs the selected
-fail-closed tasks. CI remains check-only.
-CI rebuilds the selected release artifacts instead of checking generated-source fingerprints.
-`--no-validation` skips optional task checks locally and in CI, not workspace-version or immutable-source checks.
-`--no-docs` skips building and deploying the site, not package README validation.
+Automatic installation retains Projen's manifest-based install trigger; the
+other install modes force installation or reuse the current dependency tree.
+Local release validation runs `eslint:fix` before branch preparation and bump,
+then runs the selected fail-closed tasks. CI remains check-only and rebuilds
+selected release artifacts instead of checking generated-source fingerprints.
+
 Scopes select artifacts, not the normal commit and tag-push transaction.
 The annotated tag records CI step selections, so publishing a selected scope does
 not change the next release's defaults. Local registry URLs stay local.
@@ -652,37 +638,39 @@ release [options]
 
 #### Options
 
-| Option                                 | Description                                                                                                                |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `--root <value>`                       | Repository or workspace root (env: PROJEN_RELEASE_ROOT)                                                                    |
-| `--branch <value>`                     | Release branch (default: "main", env: PROJEN_RELEASE_BRANCH)                                                               |
-| `--prefix <value>`                     | Release tag prefix (default: "v", env: PROJEN_RELEASE_PREFIX)                                                              |
-| `--remote <value>`                     | Git remote (default: "origin", env: PROJEN_RELEASE_REMOTE)                                                                 |
-| `--python-root <value>`                | Python package root for local publish (default: "packages/py", env: PROJEN_RELEASE_PYTHON_ROOT)                            |
-| `--validate <value>`                   | Repeatable task to run before pushing (default: [], env: PROJEN_RELEASE_VALIDATE)                                          |
-| `--bump`                               | Create and synchronize a patch version bump (default: true, env: PROJEN_RELEASE_BUMP)                                      |
-| `--no-bump`                            | Disable create and synchronize a patch version bump                                                                        |
-| `--publish <value>`                    | Publication scope (choices: "auto", "npm", "pypi", "local", "none", default: "auto", env: PROJEN_RELEASE_PUBLISH)          |
-| `-i, --install <value>`                | Local workspace dependency installation (choices: "auto", "always", "never", default: "auto", env: PROJEN_RELEASE_INSTALL) |
-| `-n, --npm`                            | Build and publish npm packages (default: true, env: PROJEN_RELEASE_NPM)                                                    |
-| `--no-npm`                             | Disable build and publish npm packages                                                                                     |
-| `--pypi`                               | Build and publish Python packages (default: true, env: PROJEN_RELEASE_PYPI)                                                |
-| `--no-pypi`                            | Disable build and publish python packages                                                                                  |
-| `--docs`                               | Build and deploy documentation (env: PROJEN_RELEASE_DOCS)                                                                  |
-| `--no-docs`                            | Disable build and deploy documentation                                                                                     |
-| `--validation`                         | Run optional release validation tasks before publishing (default: true, env: PROJEN_RELEASE_VALIDATION)                    |
-| `--no-validation`                      | Disable run optional release validation tasks before publishing                                                            |
-| `--release-notes`                      | Write release notes before tagging (default: true, env: PROJEN_RELEASE_RELEASE_NOTES)                                      |
-| `--no-release-notes`                   | Disable write release notes before tagging                                                                                 |
-| `--release-notes-text <value>`         | Write supplied release-note Markdown without invoking Genie (env: PROJEN_RELEASE_RELEASE_NOTES_TEXT)                       |
-| `--release-notes-file <value>`         | Copy release-note Markdown from this file without invoking Genie (env: PROJEN_RELEASE_RELEASE_NOTES_FILE)                  |
-| `--release-notes-instructions <value>` | Append instructions to the Genie release-note prompt (env: PROJEN_RELEASE_RELEASE_NOTES_INSTRUCTIONS)                      |
-| `--demo-deploy`                        | Deploy the AppKit demo after tagging and local publication (env: PROJEN_RELEASE_DEMO_DEPLOY)                               |
-| `--no-demo-deploy`                     | Disable deploy the appkit demo after tagging and local publication                                                         |
-| `--profile <value>`                    | Optional Databricks CLI profile passed to the demo deployment (env: PROJEN_RELEASE_PROFILE)                                |
-| `--local-publish`                      | Publish to configured local registries (default: true, env: PROJEN_RELEASE_LOCAL_PUBLISH)                                  |
-| `--no-local-publish`                   | Disable publish to configured local registries                                                                             |
-| `--local-registry <value>`             | Local npm registry selection: auto, false, or URL (default: "auto", env: PROJEN_RELEASE_LOCAL_REGISTRY)                    |
-| `--local-pypi <value>`                 | Local devpi registry selection: auto, false, or URL (default: "auto", env: PROJEN_RELEASE_LOCAL_PYPI)                      |
+| Option                                 | Description                                                                                                                                                       |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root <value>`                       | Repository or workspace root (env: PROJEN_RELEASE_ROOT)                                                                                                           |
+| `--branch <value>`                     | Release branch (default: "main", env: PROJEN_RELEASE_BRANCH)                                                                                                      |
+| `--prefix <value>`                     | Release tag prefix (default: "v", env: PROJEN_RELEASE_PREFIX)                                                                                                     |
+| `--remote <value>`                     | Git remote (default: "origin", env: PROJEN_RELEASE_REMOTE)                                                                                                        |
+| `--python-root <value>`                | Python package root for local publish (default: "packages/py", env: PROJEN_RELEASE_PYTHON_ROOT)                                                                   |
+| `--validate <value>`                   | Repeatable task to run before pushing (default: [], env: PROJEN_RELEASE_VALIDATE)                                                                                 |
+| `--bump`                               | Create and synchronize a patch bump; disable only for an existing committed bump (default: true, env: PROJEN_RELEASE_BUMP)                                        |
+| `--no-bump`                            | Disable create and synchronize a patch bump; disable only for an existing committed bump                                                                          |
+| `--publish <value>`                    | Publication scope (choices: "auto", "npm", "pypi", "local", "none", default: "auto", env: PROJEN_RELEASE_PUBLISH)                                                 |
+| `-i, --install <value>`                | Dependency install mode: auto follows manifests, always installs, never reuses (choices: "auto", "always", "never", default: "auto", env: PROJEN_RELEASE_INSTALL) |
+| `-n, --npm`                            | Build and publish npm packages (default: true, env: PROJEN_RELEASE_NPM)                                                                                           |
+| `--no-npm`                             | Disable build and publish npm packages                                                                                                                            |
+| `--pypi`                               | Build and publish Python packages (default: true, env: PROJEN_RELEASE_PYPI)                                                                                       |
+| `--no-pypi`                            | Disable build and publish python packages                                                                                                                         |
+| `--docs`                               | Build and deploy documentation (env: PROJEN_RELEASE_DOCS)                                                                                                         |
+| `--no-docs`                            | Disable build and deploy documentation                                                                                                                            |
+| `--validation`                         | Run optional release validation tasks before publishing (default: true, env: PROJEN_RELEASE_VALIDATION)                                                           |
+| `--no-validation`                      | Disable run optional release validation tasks before publishing                                                                                                   |
+| `-w, --watch-github-actions`           | Wait for and stream the tag-triggered GitHub Actions release (default: true, env: PROJEN_RELEASE_WATCH_GITHUB_ACTIONS)                                            |
+| `--no-watch-github-actions`            | Disable wait for and stream the tag-triggered github actions release                                                                                              |
+| `--release-notes`                      | Generate and commit release notes for a new version bump (default: true, env: PROJEN_RELEASE_RELEASE_NOTES)                                                       |
+| `--no-release-notes`                   | Disable generate and commit release notes for a new version bump                                                                                                  |
+| `--release-notes-text <value>`         | Write supplied release-note Markdown without invoking Genie (env: PROJEN_RELEASE_RELEASE_NOTES_TEXT)                                                              |
+| `--release-notes-file <value>`         | Copy release-note Markdown from this file without invoking Genie (env: PROJEN_RELEASE_RELEASE_NOTES_FILE)                                                         |
+| `--release-notes-instructions <value>` | Append instructions to the Genie release-note prompt (env: PROJEN_RELEASE_RELEASE_NOTES_INSTRUCTIONS)                                                             |
+| `--demo-deploy`                        | Run the local-only AppKit demo deployment after tagging and publication (env: PROJEN_RELEASE_DEMO_DEPLOY)                                                         |
+| `--no-demo-deploy`                     | Disable run the local-only appkit demo deployment after tagging and publication                                                                                   |
+| `--profile <value>`                    | Optional Databricks CLI profile passed to the demo deployment (env: PROJEN_RELEASE_PROFILE)                                                                       |
+| `--local-publish`                      | Publish to configured local registries (default: true, env: PROJEN_RELEASE_LOCAL_PUBLISH)                                                                         |
+| `--no-local-publish`                   | Disable publish to configured local registries                                                                                                                    |
+| `--local-registry <value>`             | Local npm registry selection: auto, false, or URL (default: "auto", env: PROJEN_RELEASE_LOCAL_REGISTRY)                                                           |
+| `--local-pypi <value>`                 | Local devpi registry selection: auto, false, or URL (default: "auto", env: PROJEN_RELEASE_LOCAL_PYPI)                                                             |
 
 <!-- cli-reference:end -->

@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
-import { refreshReleaseTagFromRemote, runRelease } from "../tasks/release.ts";
+import {
+  refreshReleaseTagFromRemote,
+  runRelease,
+  watchReleaseGithubActions,
+} from "../tasks/release.ts";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -99,6 +103,65 @@ describe("direct release tags", () => {
     }
   });
 
+  it("watches the matching GitHub Actions run without cancelling it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "release-watch-"));
+    const executable = join(root, "gh");
+    const calls = join(root, "calls");
+    const head = "0123456789abcdef0123456789abcdef01234567";
+    const tag = "v1.0.1";
+    writeFileSync(
+      executable,
+      [
+        "#!/usr/bin/env node",
+        'import { appendFileSync } from "node:fs";',
+        "const args = process.argv.slice(2);",
+        'appendFileSync(process.env.TEST_CALLS, `${args.join(" ")}\\n`);',
+        'if (args[0] === "run" && args[1] === "list") {',
+        "  console.log(JSON.stringify([{",
+        "    databaseId: 42,",
+        "    headBranch: process.env.TEST_TAG,",
+        "    headSha: process.env.TEST_HEAD,",
+        '    status: "in_progress",',
+        '    url: "https://github.com/example/repo/actions/runs/42",',
+        "  }]));",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(executable, 0o755);
+    const account: projectUtils.ProjectGhAccount = {
+      env: {
+        ...process.env,
+        PATH: `${root}:${process.env.PATH ?? ""}`,
+        TEST_CALLS: calls,
+        TEST_HEAD: head,
+        TEST_TAG: tag,
+      },
+      host: "github.com",
+      login: "release-user",
+      remote: { host: "github.com", repository: "example/repo" },
+      root,
+    };
+
+    try {
+      await watchReleaseGithubActions({
+        account,
+        head,
+        root,
+        tag,
+        pollIntervalMs: 1,
+        startTimeoutMs: 100,
+      });
+      const invocations = readFileSync(calls, "utf8");
+      assert.match(invocations, /run list .*--workflow release\.yml/);
+      assert.match(invocations, /run watch 42/);
+      assert.match(invocations, /run view 42 .*--log/);
+      assert.doesNotMatch(invocations, /\bcancel\b/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("carries task selections through the pushed annotation and skips optional checks", async () => {
     const { remote, root } = fixture();
     try {
@@ -157,6 +220,8 @@ describe("direct release tags", () => {
           remote: "origin",
           localPublish: false,
           releaseNotes: false,
+          githubActionsWatcher: async () =>
+            assert.fail("watcher should be skipped without account"),
         }),
         "v1.0.1",
       );

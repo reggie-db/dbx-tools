@@ -35,10 +35,10 @@ Use the standalone CLI when a tool expects an OpenAI-compatible base URL:
 dbx model-gateway --profile PROFILE --listen tcp://127.0.0.1:4000
 ```
 
-Add `--prefer-system-models` to route non-exact Responses requests, including
+The system-model preference routes non-exact Responses requests, including
 Codex traffic, through `system.ai.*` AI Gateway services instead of workspace
-serving endpoints. Codex model slugs follow the same choice. The flag defaults to
-off, and an exact endpoint id or `system.ai.*` name always wins.
+serving endpoints. Codex model slugs follow the same choice. An exact endpoint
+id or `system.ai.*` name always wins.
 
 Configure the client with
 [http://127.0.0.1:4000/v1](http://127.0.0.1:4000/v1). For an embedded AppKit

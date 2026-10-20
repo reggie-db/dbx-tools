@@ -11,8 +11,8 @@ bun add --global @dbx-tools/cli
 ```
 
 `dbx-tools` is an alias for `dbx`. Authentication and a configured Databricks
-profile are resolved automatically. Pass `--profile` only to override that
-selection. Examples that use `MY-PROFILE` show the explicit form.
+profile are resolved automatically. Examples that use `MY-PROFILE` show an
+explicit override.
 
 ## Export a brand package
 
@@ -37,10 +37,7 @@ and prints its paths when generation completes. The directory contains:
 - `references/ios/` and `references/android/`, with the mobile images used for
   visual research.
 
-Use `--name` or `--website` to disambiguate the prompt. Pass `--output` to keep
-the package at a stable path, and `--force` to replace an existing package.
-The showcase is enabled by default; pass `--no-showcase` to export only the
-portable package and research files:
+For a persistent package with known brand coordinates:
 
 ```sh
 dbx brand "Retail analytics for store operators" \
@@ -59,9 +56,8 @@ Point an OpenAI-compatible client at
 [http://127.0.0.1:4000/v1](http://127.0.0.1:4000/v1). The generated
 command reference includes all gateway and desktop-service options.
 
-Requests may omit `model` to select the best available chat endpoint. Set a
-gateway default with `--model` or `--model-class`, or select a class per request
-with the `x-dbx-tools-model-class` header.
+Requests may omit `model` to select the best available chat endpoint. Clients
+can select a class per request with the `x-dbx-tools-model-class` header.
 
 Run the gateway in the foreground for one terminal session. Install its
 current-user service when local tools need the endpoint after the terminal
@@ -84,30 +80,18 @@ before the first non-interactive Genie command:
 - No Genie onboarding or separate `genie` initialization.
 - No Genie configuration profile to create or pass.
 - No manual provider URL, token command, workspace header, or `config.toml`.
-- No required `--profile` when dbx-tools can discover a configured Databricks
-  profile automatically.
+- No explicit profile selection when dbx-tools discovers a configured
+  Databricks profile.
 - No restriction to Genie Code's default model. Select any compatible model
   available in the workspace, including GPT, Grok, Claude, Gemini, and custom
   serving endpoints.
 
-With no model option, dbx-tools selects the best available tool-capable chat
-model. Use either `--model` for fuzzy or exact model selection, or
-`--model-class` for a capability band:
+With no model selection, dbx-tools chooses the best available tool-capable chat
+model. Selection accepts a fuzzy or exact endpoint name or a capability band:
 
 ```sh
-# Select the best available chat model.
 dbx genie
-
-# Select the best fast chat model.
 dbx genie --model-class chat-fast
-
-# Select the best matching GPT model.
-dbx genie --model gpt
-
-# Select another model family.
-dbx genie --model grok
-
-# Pin an exact model or serving endpoint.
 dbx genie --profile MY-PROFILE --model databricks-gpt-5-6-sol
 ```
 
@@ -157,8 +141,7 @@ passwordless access to an existing process.
 eval "$(dbx appkit env --quiet)"
 ```
 
-Use the resolved AppKit environment before starting another process. The AppKit
-and authentication command groups below include JSON, Windows, and token options.
+Use the resolved AppKit environment before starting another process.
 
 ## Bootstrap a workspace
 

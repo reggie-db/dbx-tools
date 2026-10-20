@@ -16,7 +16,7 @@ import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { projectReleaseBranch, taskCommand, type DBXToolsJavaScriptProject } from "./project-js.ts";
-import { RELEASE_VERSION } from "./release-context.ts";
+import { RELEASE_VERSION, RELEASE_WORKFLOW_FILE } from "./release-context.ts";
 import type { ReleaseStepSelection } from "./release-options.ts";
 
 const NODE_VERSION = "24";
@@ -339,7 +339,7 @@ export class DBXToolsRelease extends Component {
     if (!project.github) return;
 
     const workflow = new GithubWorkflow(project.github, "release", {
-      fileName: "release.yml",
+      fileName: RELEASE_WORKFLOW_FILE,
       limitConcurrency: true,
       concurrencyOptions: {
         group: "release",

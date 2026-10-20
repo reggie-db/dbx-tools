@@ -45,12 +45,6 @@ the Python version uv manages and defaults to `3.11`. uv must be available on
 `PATH` during installation. Uninstalling the service removes the environment
 with the rest of the service-owned data.
 
-Pass `--python-project <path>` to `service install` to install the primary
-Python package from a local project instead of the versioned registry package.
-Package extras such as `[dev]` and companion dependencies remain active. Add
-`--offline` to resolve entirely from uv's cache and fail immediately when an
-artifact is unavailable instead of contacting a package index.
-
 `command.options` accepts either a concrete option object or a Zod object
 schema. Objects serialize their current values. Schemas parse `{}` and serialize
 their defaults. Boolean values become positive or negated flags, arrays become
@@ -75,7 +69,6 @@ For the example program above:
 
 ```sh
 example service install
-example service install --python-project packages/py/example --offline
 example service status
 example service stop
 example service start
@@ -85,11 +78,10 @@ example service logs -- tail -f
 example service uninstall
 ```
 
-Installation starts the service by default. Pass `--no-start` to install without
-launching it. `status` reports installation and process state as JSON. `logs`
-prints the managed process log path. Arguments after `--` run as a command with
-that path appended, so `logs -- cat` prints the log and `logs -- tail -f` follows
-it.
+Installation starts the service by default. `status` reports installation and
+process state as JSON. `logs` prints the managed process log path. Arguments
+after `--` run as a command with that path appended, so `logs -- cat` prints the
+log and `logs -- tail -f` follows it.
 
 The service belongs to the current user. Login startup uses a LaunchAgent on
 macOS, an XDG autostart entry on Linux, and a Startup command on Windows. Package
