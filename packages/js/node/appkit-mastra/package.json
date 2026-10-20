@@ -31,6 +31,8 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@mastra/isolated-vm": "catalog:",
+    "@mastra/quickjs": "catalog:",
     "@mlflow/core": "catalog:",
     "skills": "^1"
   },
@@ -104,11 +106,13 @@
     "src",
     "lib"
   ],
-  "optionalDependencies": {
-    "@mastra/isolated-vm": "catalog:",
-    "@mastra/quickjs": "catalog:"
-  },
   "peerDependenciesMeta": {
+    "@mastra/isolated-vm": {
+      "optional": true
+    },
+    "@mastra/quickjs": {
+      "optional": true
+    },
     "skills": {
       "optional": true
     },

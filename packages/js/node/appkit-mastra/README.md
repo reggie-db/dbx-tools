@@ -527,9 +527,9 @@ their results, and perform calculations in one isolated program. Agent,
 plugin-level, and enabled native workspace tools are exposed as `external_*`
 functions for the current request.
 
-Both Code Mode transports are optional dependencies. The plugin checks the
-selected dependency once during startup and uses a Vite-ignored dynamic import,
-so bundlers do not turn an unselected transport into a hard dependency.
+Both Code Mode transports are optional peer dependencies. The plugin checks
+the selected dependency once during startup and uses a Vite-ignored dynamic
+import, so bundlers do not turn an unselected transport into a hard dependency.
 `codeMode: "auto"` prefers isolated-vm when the runtime supports it, then tries
 QuickJS, and leaves Code Mode disabled when neither optional transport can run.
 Explicit `"isolated-vm"` or `"quickjs"` selection fails startup when that

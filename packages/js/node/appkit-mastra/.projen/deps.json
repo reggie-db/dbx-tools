@@ -53,12 +53,12 @@
     {
       "name": "@mastra/isolated-vm",
       "version": "catalog:",
-      "type": "optional"
+      "type": "peer"
     },
     {
       "name": "@mastra/quickjs",
       "version": "catalog:",
-      "type": "optional"
+      "type": "peer"
     },
     {
       "name": "@mlflow/core",

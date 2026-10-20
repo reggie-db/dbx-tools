@@ -18,7 +18,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { bunWorkflow, project, projectJs, projectPy } from "@dbx-tools/projen";
-import { Component, DependencyType, javascript } from "projen";
+import { Component, javascript } from "projen";
 
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
@@ -780,19 +780,13 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "yaml@^2.9.0",
   );
   p.addDevDeps(
-    "@mastra/isolated-vm@catalog:",
-    "@mastra/quickjs@catalog:",
     "@types/express@catalog:",
     "@types/json-schema@^7",
     "@types/pg@^8",
     "vitest@catalog:",
   );
-  p.deps.addDependency("@mastra/isolated-vm@catalog:", DependencyType.OPTIONAL);
-  p.deps.addDependency("@mastra/quickjs@catalog:", DependencyType.OPTIONAL);
-  p.package.addField("optionalDependencies", {
-    "@mastra/isolated-vm": "catalog:",
-    "@mastra/quickjs": "catalog:",
-  });
+  projectJs.addOptionalPeer(p, "@mastra/isolated-vm@catalog:");
+  projectJs.addOptionalPeer(p, "@mastra/quickjs@catalog:");
   // `skills` (https://www.npmjs.com/package/skills) is the OPTIONAL Agent-Skills
   // CLI `remote-skills.ts` shells out to when present. Left as an optional peer
   // so consumers opt in; the runtime falls back to a direct fetch when it is

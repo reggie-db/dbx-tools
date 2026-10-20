@@ -6,6 +6,8 @@ interface PackageManifest {
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
   readonly optionalDependencies?: Readonly<Record<string, string>>;
+  readonly peerDependencies?: Readonly<Record<string, string>>;
+  readonly peerDependenciesMeta?: Readonly<Record<string, { readonly optional?: boolean }>>;
 }
 
 describe("appkit-mastra package", () => {
@@ -14,11 +16,12 @@ describe("appkit-mastra package", () => {
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as PackageManifest;
 
-    assert.equal(manifest.dependencies?.["@mastra/isolated-vm"], undefined);
-    assert.equal(manifest.dependencies?.["@mastra/quickjs"], undefined);
-    assert.equal(manifest.optionalDependencies?.["@mastra/isolated-vm"], "catalog:");
-    assert.equal(manifest.optionalDependencies?.["@mastra/quickjs"], "catalog:");
-    assert.equal(manifest.devDependencies?.["@mastra/isolated-vm"], "catalog:");
-    assert.equal(manifest.devDependencies?.["@mastra/quickjs"], "catalog:");
+    for (const dependency of ["@mastra/isolated-vm", "@mastra/quickjs"]) {
+      assert.equal(manifest.dependencies?.[dependency], undefined);
+      assert.equal(manifest.optionalDependencies?.[dependency], undefined);
+      assert.equal(manifest.peerDependencies?.[dependency], "catalog:");
+      assert.equal(manifest.peerDependenciesMeta?.[dependency]?.optional, true);
+      assert.equal(manifest.devDependencies?.[dependency], "catalog:");
+    }
   });
 });
