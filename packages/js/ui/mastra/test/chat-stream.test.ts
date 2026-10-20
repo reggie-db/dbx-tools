@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { MLFLOW_TRACE_PART_TYPE } from "@dbx-tools/shared-mastra";
 import type { UIMessageChunk } from "ai";
 
-import { closeOnTerminalChunk, waitForTerminalChunk } from "../src/react/chat-stream.ts";
+import {
+  closeOnTerminalChunk,
+  readMlflowTracePart,
+  waitForTerminalChunk,
+} from "../src/react/chat-stream.ts";
 
 describe("chat stream completion", () => {
   it("closes after forwarding the finish chunk without waiting for upstream", async () => {
@@ -48,6 +53,18 @@ describe("chat stream completion", () => {
     await reader.cancel("stop");
 
     assert.equal(cancelled, true);
+  });
+
+  it("reads the transient MLflow trace fallback", () => {
+    const traceId = "tr-0123456789abcdef0123456789abcdef";
+    assert.equal(
+      readMlflowTracePart({
+        type: MLFLOW_TRACE_PART_TYPE,
+        data: { traceId },
+        transient: true,
+      } as UIMessageChunk),
+      traceId,
+    );
   });
 
   it("waits for an abort chunk and cancels the remaining observation", async () => {

@@ -33,7 +33,7 @@ export type { GenieFeedbackTarget } from "./src/react/chat-feedback.ts";
 export { useChatHistory } from "./src/react/chat-history.ts";
 export { useChatSessions } from "./src/react/chat-sessions.ts";
 export type { ThreadSessionReader, ThreadSessionUpdater, ThreadMessageWriter } from "./src/react/chat-sessions.ts";
-export { closeOnTerminalChunk, waitForTerminalChunk, useChatStream } from "./src/react/chat-stream.ts";
+export { readMlflowTracePart, closeOnTerminalChunk, waitForTerminalChunk, useChatStream } from "./src/react/chat-stream.ts";
 export { ChatThreadLayout } from "./src/react/chat-thread-layout.tsx";
 export { useChatTranscriptController, ChatTranscript } from "./src/react/chat-transcript.tsx";
 export type { ChatTranscriptController } from "./src/react/chat-transcript.tsx";

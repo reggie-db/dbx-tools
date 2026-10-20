@@ -4,19 +4,29 @@
  * @module
  */
 
-import { defineManifest, toPlugin, type IAppRouter } from "@databricks/appkit";
+import { CacheManager, defineManifest, toPlugin, type IAppRouter } from "@databricks/appkit";
 import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
-import { ToolRegistryPlugin, require } from "@dbx-tools/appkit";
+import {
+  ToolRegistryPlugin,
+  requestUserEmail,
+  requestUserId,
+  require,
+  type HeaderBearing,
+} from "@dbx-tools/appkit";
 import { mastra } from "@dbx-tools/appkit-mastra";
 import { webSearch } from "@dbx-tools/appkit-web-search";
 import { log, toError } from "@dbx-tools/shared-core";
 import {
+  BrandHistoryResponseSchema,
   GENERATOR_ROUTES,
   GeneratorClientConfigSchema,
   GeneratorPluginClient,
   BrandGenerationEventSchema,
   BrandGenerationRequestSchema,
   type BrandGenerationEvent,
+  type BrandGenerationRequest,
+  type BrandHistoryEntry,
+  type BrandPackage,
 } from "@dbx-tools/shared-generator";
 import {
   KpiResearchRequestSchema,
@@ -32,11 +42,17 @@ import {
   PlanGeneratorDataRequestSchema,
   ProvisionGeneratorSchemaRequestSchema,
 } from "@dbx-tools/shared-generator";
+import { updateBrandHistory } from "./brand-history.ts";
 import {
   resolveGeneratorConfig,
   type GeneratorPluginConfig,
   type ResolvedGeneratorConfig,
 } from "./config.ts";
+import {
+  BRAND_HISTORY_LIMIT,
+  BRAND_HISTORY_TTL_SECONDS,
+  BRAND_HISTORY_VERSION,
+} from "./defaults.ts";
 import manifest from "./manifest.json" with { type: "json" };
 import { GeneratorOperations } from "./operations.ts";
 import type { BrandResearchClient } from "./research.ts";
@@ -51,6 +67,7 @@ export class GeneratorPlugin extends ToolRegistryPlugin<GeneratorPluginConfig> {
   static manifest = defineManifest<"generator">(manifest);
 
   private readonly resolved: ResolvedGeneratorConfig = resolveGeneratorConfig(this.config);
+  private readonly brandHistoryWrites = new Map<string, Promise<void>>();
   private operations: GeneratorOperations | undefined;
   private workflow: GeneratorWorkflow | undefined;
 
@@ -150,13 +167,25 @@ export class GeneratorPlugin extends ToolRegistryPlugin<GeneratorPluginConfig> {
   /** Stream standalone brand generation to the existing Brand page. */
   override injectRoutes(router: IAppRouter): void {
     this.route(router, {
+      name: "brandHistory",
+      method: "get",
+      path: GENERATOR_ROUTES.brandHistory,
+      handler: async (req, res) => {
+        res.json(
+          BrandHistoryResponseSchema.parse({
+            brands: await this.readBrandHistory(this.brandHistoryUser(req)),
+          }),
+        );
+      },
+    });
+    this.route(router, {
       name: "generateBrand",
       method: "post",
       path: GENERATOR_ROUTES.generateBrand,
       handler: async (req, res) => {
         const parsed = BrandGenerationRequestSchema.safeParse(req.body);
         if (!parsed.success) {
-          res.status(400).json({ error: "Enter a brand name and an optional HTTPS website." });
+          res.status(400).json({ error: "Enter brand information to research." });
           return;
         }
         res.set({
@@ -181,6 +210,9 @@ export class GeneratorPlugin extends ToolRegistryPlugin<GeneratorPluginConfig> {
           const generated = await this.asUser(req)
             .requireOperations()
             .generateBrand(parsed.data, controller.signal, send);
+          await this.rememberBrand(this.brandHistoryUser(req), parsed.data, generated).catch(
+            (error) => logger.warn("brand-history-write-failed", { error: toError(error) }),
+          );
           send({ type: "result", package: generated });
         } catch (cause) {
           logger.warn("brand-route-failed", { error: toError(cause) });
@@ -218,6 +250,57 @@ export class GeneratorPlugin extends ToolRegistryPlugin<GeneratorPluginConfig> {
       },
       client: GeneratorPluginClient,
     };
+  }
+
+  private brandHistoryUser(request: HeaderBearing): string {
+    return requestUserId(request) ?? requestUserEmail(request) ?? "development";
+  }
+
+  private brandHistoryKey(userKey: string): string {
+    return CacheManager.getInstanceSync().generateKey(
+      ["appkit-generator", "brand-history", BRAND_HISTORY_VERSION],
+      userKey,
+    );
+  }
+
+  private async readBrandHistory(userKey: string): Promise<BrandHistoryEntry[]> {
+    const cache = CacheManager.getInstanceSync();
+    const key = this.brandHistoryKey(userKey);
+    const value = await cache.get<unknown>(key);
+    const cached = BrandHistoryResponseSchema.safeParse(value);
+    if (cached.success) return cached.data.brands;
+    if (value !== null) await cache.delete(key);
+    return [];
+  }
+
+  private async rememberBrand(
+    userKey: string,
+    request: BrandGenerationRequest,
+    brandPackage: BrandPackage,
+  ): Promise<void> {
+    const previous = this.brandHistoryWrites.get(userKey) ?? Promise.resolve();
+    const write = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const cache = CacheManager.getInstanceSync();
+        const brands = updateBrandHistory(
+          await this.readBrandHistory(userKey),
+          request,
+          brandPackage,
+          BRAND_HISTORY_LIMIT,
+        );
+        await cache.set(
+          this.brandHistoryKey(userKey),
+          BrandHistoryResponseSchema.parse({ brands }),
+          { ttl: BRAND_HISTORY_TTL_SECONDS },
+        );
+      });
+    this.brandHistoryWrites.set(userKey, write);
+    try {
+      await write;
+    } finally {
+      if (this.brandHistoryWrites.get(userKey) === write) this.brandHistoryWrites.delete(userKey);
+    }
   }
 
   /** Resolve the sibling web-search plugin without recreating its policy. */

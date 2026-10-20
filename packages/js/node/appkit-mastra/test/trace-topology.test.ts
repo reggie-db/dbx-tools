@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 
 import { injectRequestTags, USER_TRACE_ATTRIBUTE } from "@dbx-tools/appkit";
-import { MLFLOW_TRACE_ID_HEADER } from "@dbx-tools/shared-mastra";
+import { MLFLOW_TRACE_ID_HEADER, MLFLOW_TRACE_PART_TYPE } from "@dbx-tools/shared-mastra";
 import { context, propagation, ROOT_CONTEXT, trace, type Tracer } from "@opentelemetry/api";
 import {
   getRPCMetadata,
@@ -53,6 +53,7 @@ const ORIGINAL_APP_ENV = process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
 interface TestResponse {
   headers: Record<string, string>;
   headersSent: boolean;
+  writes: unknown[];
   setHeader(name: string, value: string): void;
   write(chunk: unknown): boolean;
   end(chunk?: unknown): TestResponse;
@@ -63,13 +64,16 @@ interface TestResponse {
 function createResponse(): TestResponse {
   const closeListeners: (() => void)[] = [];
   const headers: Record<string, string> = {};
+  const writes: unknown[] = [];
   const response: TestResponse = {
     headers,
     headersSent: false,
+    writes,
     setHeader(name: string, value: string) {
       headers[name.toLowerCase()] = value;
     },
-    write() {
+    write(chunk: unknown) {
+      writes.push(chunk);
       return true;
     },
     end() {
@@ -255,6 +259,8 @@ describe("chat trace topology", () => {
       true,
     );
     assert.equal(response.headers[MLFLOW_TRACE_ID_HEADER], `tr-${agentTracingOptions?.traceId}`);
+    assert.match(String(response.writes[0]), new RegExp(MLFLOW_TRACE_PART_TYPE));
+    assert.match(String(response.writes[0]), new RegExp(`tr-${agentTracingOptions?.traceId}`));
     assert.match(agentTracingOptions?.traceId ?? "", /^[0-9a-f]{32}$/);
     assert.equal(agentTracingOptions?.traceId, exportedRoot.spanContext().traceId);
     assert.equal(agentTracingOptions?.parentSpanId, exportedRoot.spanContext().spanId);

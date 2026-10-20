@@ -1,5 +1,10 @@
 import { log, toError, trimToUndefined } from "@dbx-tools/shared-core";
-import { MLFLOW_TRACE_ID_HEADER, isStaleMastraResumeError } from "@dbx-tools/shared-mastra";
+import {
+  MLFLOW_TRACE_ID_HEADER,
+  MLFLOW_TRACE_PART_TYPE,
+  MlflowTracePartDataSchema,
+  isStaleMastraResumeError,
+} from "@dbx-tools/shared-mastra";
 import { readUIMessageStream, type UIMessage, type UIMessageChunk } from "ai";
 import { useCallback } from "react";
 import type {
@@ -17,12 +22,20 @@ const readMlflowTraceId = (stream: unknown): string | undefined => {
   return trimToUndefined(headers?.get?.(MLFLOW_TRACE_ID_HEADER));
 };
 
+/** Read the trace-id fallback carried by one transient AI SDK data part. */
+export const readMlflowTracePart = (chunk: UIMessageChunk): string | undefined => {
+  if ((chunk as { type?: string }).type !== MLFLOW_TRACE_PART_TYPE) return undefined;
+  const parsed = MlflowTracePartDataSchema.safeParse((chunk as { data?: unknown }).data);
+  return parsed.success ? parsed.data.traceId : undefined;
+};
+
 class StreamAborted extends Error {}
 
 /** Stop reading a background run once the AI SDK has delivered its terminal chunk. */
 export function closeOnTerminalChunk(
   stream: ReadableStream<UIMessageChunk>,
   onTerminal?: () => void,
+  onChunk?: (chunk: UIMessageChunk) => void,
 ): ReadableStream<UIMessageChunk> {
   let reader: ReadableStreamDefaultReader<UIMessageChunk> | undefined;
   let cancelled = false;
@@ -36,6 +49,7 @@ export function closeOnTerminalChunk(
             controller.close();
             return;
           }
+          onChunk?.(value);
           controller.enqueue(value);
           if (value.type === "finish" || value.type === "abort") {
             onTerminal?.();
@@ -95,8 +109,8 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
       runIdRef: { current: string | null },
       signal: AbortSignal,
     ) => {
-      const traceId = readMlflowTraceId(stream);
-      if (traceId) {
+      const recordTraceId = (traceId: string | undefined): void => {
+        if (!traceId) return;
         updateSession(threadId, (session) =>
           session.feedbackByMessage[assistantId]?.traceId === traceId
             ? session
@@ -111,7 +125,8 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
                 },
               },
         );
-      }
+      };
+      recordTraceId(readMlflowTraceId(stream));
 
       try {
         let terminalReceived = false;
@@ -120,9 +135,13 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
         );
         for await (const message of readUIMessageStream({
           ...(existing ? { message: existing } : {}),
-          stream: closeOnTerminalChunk(stream.stream, () => {
-            terminalReceived = true;
-          }),
+          stream: closeOnTerminalChunk(
+            stream.stream,
+            () => {
+              terminalReceived = true;
+            },
+            (chunk) => recordTraceId(readMlflowTracePart(chunk)),
+          ),
           terminateOnError: true,
         })) {
           if (signal.aborted) throw new StreamAborted();

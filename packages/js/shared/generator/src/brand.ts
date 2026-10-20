@@ -18,6 +18,7 @@ export const GENERATOR_BASE_PATH = `/api/${GENERATOR_PLUGIN_NAME}`;
 /** Mount-relative route segments owned by the generator plugin. */
 export const GENERATOR_ROUTES = {
   generateBrand: "/brand/generate",
+  brandHistory: "/brand/history",
 } as const;
 
 /** Input accepted by brand generation. */
@@ -113,6 +114,31 @@ export const BrandPackageSchema = z
 /** Generated branding package. */
 export type BrandPackage = z.infer<typeof BrandPackageSchema>;
 
+/** One persisted generated brand available to the browser picker. */
+export const BrandHistoryEntrySchema = z
+  .object({
+    id: nonBlankString.describe("Stable request-derived brand history identifier."),
+    request: BrandGenerationRequestSchema.describe("Free-form request that generated the brand."),
+    generatedAt: z.iso.datetime().describe("Time the generated brand was stored."),
+    package: BrandPackageSchema.describe("Cached generated branding package."),
+  })
+  .strict()
+  .describe("Persisted generated brand available to one user.");
+
+/** Persisted generated brand available to one user. */
+export type BrandHistoryEntry = z.infer<typeof BrandHistoryEntrySchema>;
+
+/** Browser response containing the current user's generated brands. */
+export const BrandHistoryResponseSchema = z
+  .object({
+    brands: z.array(BrandHistoryEntrySchema).describe("Generated brands, newest first."),
+  })
+  .strict()
+  .describe("Current user's persisted generated-brand history.");
+
+/** Current user's persisted generated-brand history. */
+export type BrandHistoryResponse = z.infer<typeof BrandHistoryResponseSchema>;
+
 /** Observable stages in one brand-generation workflow. */
 export const BrandGenerationStageSchema = z.enum([
   "search",
@@ -198,6 +224,11 @@ export function brandGenerateUrl(basePath: string = GENERATOR_BASE_PATH): string
   return `${basePath.replace(/\/+$/, "")}${GENERATOR_ROUTES.generateBrand}`;
 }
 
+/** Build the generated-brand history endpoint from the published base path. */
+export function brandHistoryUrl(basePath: string = GENERATOR_BASE_PATH): string {
+  return `${basePath.replace(/\/+$/, "")}${GENERATOR_ROUTES.brandHistory}`;
+}
+
 /** Parse one complete SSE frame into its validated brand event. */
 function parseEventFrame(frame: string): BrandGenerationEvent | undefined {
   const data = frame
@@ -269,5 +300,17 @@ export class GeneratorPluginClient {
     }
     const event = parseEventFrame(buffer.trim());
     if (event) yield event;
+  }
+
+  /** List the current user's persisted generated brands, newest first. */
+  async brandHistory(options: BrandGenerationStreamOptions = {}): Promise<BrandHistoryEntry[]> {
+    const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+    const response = await fetcher(brandHistoryUrl(this.config.basePath), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    if (!response.ok) throw new Error(await responseError(response));
+    return BrandHistoryResponseSchema.parse(await response.json()).brands;
   }
 }

@@ -14,12 +14,14 @@ import {
 import {
   PUBLIC_NPM_REGISTRY_URL,
   PUBLIC_PYPI_REGISTRY_URL,
+  PUBLICATION_REQUEST_TIMEOUT_SECONDS,
   PUBLICATION_WAIT_INTERVAL_SECONDS,
   PUBLICATION_WAIT_TIMEOUT_SECONDS,
 } from "../src/release-context.ts";
 
 const DEFAULT_CONCURRENCY = 8;
 const DEFAULT_INTERVAL_SECONDS = PUBLICATION_WAIT_INTERVAL_SECONDS;
+const DEFAULT_REQUEST_TIMEOUT_SECONDS = PUBLICATION_REQUEST_TIMEOUT_SECONDS;
 const DEFAULT_TIMEOUT_SECONDS = PUBLICATION_WAIT_TIMEOUT_SECONDS;
 const logger = log.logger("projen:verify-publications");
 
@@ -60,7 +62,14 @@ export interface PublicationProbe {
 export interface PublicationWaitOptions {
   readonly concurrency?: number;
   readonly intervalMs?: number;
+  readonly requestTimeoutMs?: number;
   readonly timeoutMs?: number;
+}
+
+/** Human-readable state for one sorted set of unresolved publications. */
+export function publicationWaitMessage(probes: readonly PublicationProbe[]): string {
+  const labels = probes.map(({ label }) => label).sort((left, right) => left.localeCompare(right));
+  return `waiting for ${labels.length} public publication${labels.length === 1 ? "" : "s"} - ${labels.join(", ")}`;
 }
 
 /** Poll every unresolved publication concurrently and stop after one shared timeout. */
@@ -70,9 +79,10 @@ export async function waitForPublications(
 ): Promise<void> {
   if (probes.length === 0) throw new Error("No public publications were provided");
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_SECONDS * 1_000;
   const errors = new Map<string, Error>();
-  let pending = [...probes];
-  let previousCount: number | undefined;
+  let pending = [...probes].sort((left, right) => left.label.localeCompare(right.label));
+  let previousPending = "";
   try {
     for await (const unavailable of poll<PublicationProbe[]>(
       async ({ signal }) => {
@@ -80,7 +90,9 @@ export async function waitForPublications(
           pending,
           async (probe) => {
             try {
-              const available = await probe.available(signal);
+              const available = await probe.available(
+                AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
+              );
               if (available) errors.delete(probe.label);
               return { available, probe };
             } catch (error) {
@@ -90,7 +102,10 @@ export async function waitForPublications(
           },
           { concurrency },
         );
-        return results.filter(({ available }) => !available).map(({ probe }) => probe);
+        return results
+          .filter(({ available }) => !available)
+          .map(({ probe }) => probe)
+          .sort((left, right) => left.label.localeCompare(right.label));
       },
       {
         intervalMs: options.intervalMs ?? DEFAULT_INTERVAL_SECONDS * 1_000,
@@ -99,12 +114,11 @@ export async function waitForPublications(
       },
     )) {
       pending = unavailable;
-      if (pending.length > 0 && pending.length !== previousCount) {
-        logger.info(
-          `waiting for ${pending.length} public publication${pending.length === 1 ? "" : "s"}`,
-        );
+      const pendingKey = pending.map(({ label }) => label).join("\0");
+      if (pending.length > 0 && pendingKey !== previousPending) {
+        logger.info(publicationWaitMessage(pending));
       }
-      previousCount = pending.length;
+      previousPending = pendingKey;
     }
   } catch (error) {
     if (pending.length === 0) throw error;
@@ -243,6 +257,11 @@ export const VerifyPublicationsOptionsSchema = z
       .positive()
       .default(DEFAULT_TIMEOUT_SECONDS)
       .describe("Maximum time to wait for the complete publication batch"),
+    requestTimeoutSeconds: z.coerce
+      .number()
+      .positive()
+      .default(DEFAULT_REQUEST_TIMEOUT_SECONDS)
+      .describe("Maximum duration of one public registry request"),
   })
   .refine((options) => options.npmDirectory || options.pypiDirectory, {
     message: "At least one publication directory is required",
@@ -271,6 +290,7 @@ export async function main(args: readonly string[] = process.argv.slice(2)): Pro
   await waitForPublications(probes, {
     concurrency: options.concurrency,
     intervalMs: options.intervalSeconds * 1_000,
+    requestTimeoutMs: options.requestTimeoutSeconds * 1_000,
     timeoutMs: options.timeoutSeconds * 1_000,
   });
 }

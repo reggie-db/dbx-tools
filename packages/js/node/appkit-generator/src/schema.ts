@@ -13,6 +13,35 @@ import { z } from "zod";
 const nonBlankString = z.string().trim().min(1);
 const color = z.string().regex(/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i, "Expected a hex color.");
 
+/** Extract the first web address or bare domain from a free-form brand brief. */
+function _promptWebsite(prompt: string): string | undefined {
+  for (const part of prompt.split(/\s+/)) {
+    const token = part.replace(/^[("'[<{]+|[)"'\]}>.,;:!?]+$/g, "");
+    if (!/^https?:\/\//i.test(token) && !/^(?:www\.)?[\w-]+(?:\.[\w-]+)+(?:\/\S*)?$/i.test(token)) {
+      continue;
+    }
+    try {
+      const url = new URL(/^https?:\/\//i.test(token) ? token : `https://${token}`);
+      if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+      url.protocol = "https:";
+      url.hash = "";
+      return url.toString();
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+/** Infer structured hints from a free-form brand brief without discarding it. */
+export function normalizeBrandGenerationRequest(
+  request: BrandGenerationRequest,
+): BrandGenerationRequest {
+  if (request.website || !request.prompt) return request;
+  const website = _promptWebsite(request.prompt);
+  return website ? { ...request, website } : request;
+}
+
 /** Resolve the human-readable subject from a validated brand request. */
 export function brandRequestSubject(request: BrandGenerationRequest): string {
   return request.name ?? request.prompt!;
@@ -20,10 +49,10 @@ export function brandRequestSubject(request: BrandGenerationRequest): string {
 
 /** Description shared by the native AppKit brand-generation tool. */
 export const GENERATE_BRAND_TOOL_DESCRIPTION = toDescription(`
-  Research a named organization or product on the web and generate a portable
-  branding package. The result includes a validated BrandContext for
-  application and email presentation plus the sources used. Supply the
-  official website when known to disambiguate brands with similar names.
+  Research an organization or product from a free-form brand brief and generate
+  a portable branding package. The result includes a validated BrandContext for
+  application and email presentation plus the sources used. Names, official
+  websites, domains, and disambiguating context may be included in the brief.
 `);
 
 /**

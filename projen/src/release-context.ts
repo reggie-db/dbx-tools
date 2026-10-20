@@ -15,3 +15,5 @@ export const PUBLIC_PYPI_REGISTRY_URL = "https://pypi.org/pypi";
 export const PUBLICATION_WAIT_TIMEOUT_SECONDS = 20 * 60;
 /** Delay between public registry probes while a release is still invisible. */
 export const PUBLICATION_WAIT_INTERVAL_SECONDS = 5;
+/** Maximum duration of one public registry request before the next poll can proceed. */
+export const PUBLICATION_REQUEST_TIMEOUT_SECONDS = 10;

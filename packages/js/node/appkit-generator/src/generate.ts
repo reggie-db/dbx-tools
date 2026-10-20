@@ -21,7 +21,11 @@ import {
   type BrandResearch,
   type BrandResearchClient,
 } from "./research.ts";
-import { GeneratedBrandProfileSchema, type GeneratedBrandProfile } from "./schema.ts";
+import {
+  GeneratedBrandProfileSchema,
+  normalizeBrandGenerationRequest,
+  type GeneratedBrandProfile,
+} from "./schema.ts";
 import { generateStructured } from "./structured.ts";
 
 /** Inputs passed to a structured brand-profile synthesizer. */
@@ -193,7 +197,7 @@ export async function generateBrandPackage(
   options: GenerateBrandPackageOptions,
   signal?: AbortSignal,
 ): Promise<BrandPackage> {
-  const request = BrandGenerationRequestSchema.parse(input);
+  const request = normalizeBrandGenerationRequest(BrandGenerationRequestSchema.parse(input));
   const research = await researchBrand(
     request,
     options.client,

@@ -6,10 +6,10 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Input,
+  Textarea,
   usePluginClientConfig,
 } from "@databricks/appkit-ui/react";
-import { defaultBrandContext, type BrandContext } from "@dbx-tools/shared-core";
+import { deepEqual, defaultBrandContext, type BrandContext } from "@dbx-tools/shared-core";
 import { emailBrandFromContext, type EmailBrand } from "@dbx-tools/shared-email-template";
 import {
   GENERATOR_PLUGIN_NAME,
@@ -17,13 +17,14 @@ import {
   type GeneratorClientConfig,
   type BrandGenerationProgressEvent,
   type BrandGenerationStage,
+  type BrandHistoryEntry,
   type BrandPackage,
 } from "@dbx-tools/shared-generator";
 import { BrandIcon, useBrand } from "@dbx-tools/ui/branding/react";
 import { EmailPreview } from "@dbx-tools/ui/email/react";
 import { BrandPicker, type BrandPreset } from "@dbx-tools/ui/react";
 import { CheckCircle2, Circle, CircleX, LoaderCircle } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const SITE_PRESETS: readonly BrandPreset[] = [
   {
@@ -164,14 +165,12 @@ const campaignBrand = {
 } satisfies EmailBrand;
 
 interface BrandGeneratorProps {
-  onGenerated: (brand: BrandContext) => void;
+  client: GeneratorPluginClient;
+  onGenerated: (brandPackage: BrandPackage) => void;
 }
 
-const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
-  const config = usePluginClientConfig<GeneratorClientConfig>(GENERATOR_PLUGIN_NAME);
-  const client = useMemo(() => new GeneratorPluginClient(config), [config.basePath]);
-  const [name, setName] = useState("Databricks");
-  const [website, setWebsite] = useState("https://www.databricks.com/");
+const BrandGenerator = ({ client, onGenerated }: BrandGeneratorProps) => {
+  const [brandInfo, setBrandInfo] = useState("");
   const [progress, setProgress] = useState<
     Partial<Record<BrandGenerationStage, BrandGenerationProgressEvent>>
   >({});
@@ -189,7 +188,7 @@ const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
 
   const generate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!name.trim() || running) return;
+    if (!brandInfo.trim() || running) return;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -202,10 +201,7 @@ const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
 
     try {
       for await (const update of client.generate(
-        {
-          name: name.trim(),
-          ...(website.trim() ? { website: website.trim() } : {}),
-        },
+        { prompt: brandInfo.trim() },
         { signal: controller.signal },
       )) {
         if (update.type === "progress") {
@@ -215,7 +211,7 @@ const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
         if (update.type === "error") throw new Error(update.message);
         completed = true;
         setGenerated(update.package);
-        onGenerated(update.package.brand);
+        onGenerated(update.package);
       }
       if (!completed) throw new Error("Brand generation ended before returning a package.");
     } catch (cause) {
@@ -237,35 +233,22 @@ const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
     <Card>
       <CardHeader>
         <CardTitle>Generate from a brand</CardTitle>
-        <CardDescription>
-          Research official sources, build a portable context, and apply it to this page.
-        </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <form className="space-y-4" onSubmit={generate}>
-          <label className="block space-y-1.5 text-sm font-medium">
-            <span>Brand name</span>
-            <Input
-              value={name}
-              maxLength={200}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Databricks"
+        <form className="flex h-full min-h-0 flex-col gap-4" onSubmit={generate}>
+          <label className="flex min-h-0 flex-1 flex-col gap-1.5 text-sm font-medium">
+            <span>Brand info</span>
+            <Textarea
+              value={brandInfo}
+              maxLength={2_000}
+              rows={4}
+              className="min-h-40 flex-1 resize-none field-sizing-fixed"
+              onChange={(event) => setBrandInfo(event.target.value)}
+              placeholder={"Databricks\ndatabricks.com"}
               required
             />
           </label>
-          <label className="block space-y-1.5 text-sm font-medium">
-            <span>Official website</span>
-            <Input
-              type="url"
-              value={website}
-              onChange={(event) => setWebsite(event.target.value)}
-              placeholder="https://www.example.com/"
-            />
-            <span className="block text-xs font-normal text-muted-foreground">
-              Optional. Use it to distinguish brands with similar names.
-            </span>
-          </label>
-          <Button type="submit" disabled={running || !name.trim()}>
+          <Button type="submit" disabled={running || !brandInfo.trim()}>
             {running ? (
               <>
                 <LoaderCircle className="motion-safe:animate-spin" />
@@ -356,6 +339,12 @@ const BrandGenerator = ({ onGenerated }: BrandGeneratorProps) => {
   );
 };
 
+/** Compact provenance label for one persisted generated brand. */
+function _brandHistoryDescription(entry: BrandHistoryEntry): string {
+  const source = entry.request.website ?? entry.package.sources[0]?.url;
+  return source ? new URL(source).hostname.replace(/^www\./, "") : "Generated brand";
+}
+
 interface BrandPageProps {
   value: BrandContext;
   onChange: (value: BrandContext) => void;
@@ -363,6 +352,30 @@ interface BrandPageProps {
 
 const BrandPage = ({ value, onChange }: BrandPageProps) => {
   const { context, resolveAsset } = useBrand();
+  const generatorConfig = usePluginClientConfig<GeneratorClientConfig>(GENERATOR_PLUGIN_NAME);
+  const generatorClient = useMemo(
+    () => new GeneratorPluginClient(generatorConfig),
+    [generatorConfig.basePath],
+  );
+  const [brandHistory, setBrandHistory] = useState<BrandHistoryEntry[]>([]);
+  const refreshBrandHistory = useCallback(
+    async (signal?: AbortSignal) => {
+      setBrandHistory(await generatorClient.brandHistory({ signal }));
+    },
+    [generatorClient],
+  );
+  useEffect(() => {
+    const controller = new AbortController();
+    void refreshBrandHistory(controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [refreshBrandHistory]);
+  const applyGeneratedBrand = useCallback(
+    (brandPackage: BrandPackage) => {
+      onChange(brandPackage.brand);
+      void refreshBrandHistory();
+    },
+    [onChange, refreshBrandHistory],
+  );
   const siteEmailBrand = {
     ...emailBrandFromContext(context),
     logoUrl: resolveAsset(context.assets.icon.light),
@@ -379,9 +392,44 @@ const BrandPage = ({ value, onChange }: BrandPageProps) => {
           </p>
         </section>
 
-        <BrandGenerator onGenerated={onChange} />
+        <BrandGenerator client={generatorClient} onGenerated={applyGeneratedBrand} />
 
         <BrandPicker value={value} onChange={onChange} presets={SITE_PRESETS} />
+
+        {brandHistory.length > 0 ? (
+          <section className="space-y-2" aria-labelledby="generated-brands-title">
+            <h2 id="generated-brands-title" className="text-sm font-medium text-foreground">
+              Generated brands
+            </h2>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {brandHistory.map((entry) => {
+                const active = deepEqual(value, entry.package.brand);
+                return (
+                  <Button
+                    key={entry.id}
+                    type="button"
+                    variant={active ? "default" : "outline"}
+                    className="h-auto justify-start gap-3 px-3 py-2 text-left"
+                    onClick={() => onChange(entry.package.brand)}
+                  >
+                    <span
+                      className="size-6 shrink-0 rounded-md border border-black/10"
+                      style={{ backgroundColor: entry.package.brand.colors.primary }}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {entry.package.brand.name}
+                      </span>
+                      <span className="block truncate text-xs font-normal opacity-75">
+                        {_brandHistoryDescription(entry)}
+                      </span>
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         <Card>
           <CardHeader>

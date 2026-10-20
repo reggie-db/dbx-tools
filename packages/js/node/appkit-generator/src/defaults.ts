@@ -26,6 +26,15 @@ export const BRAND_CACHE_TTL_SECONDS = 21_600;
 /** Cache-key version for the generated package shape and asset policy. */
 export const BRAND_CACHE_VERSION = 5;
 
+/** Maximum persisted generated brands retained per user. */
+export const BRAND_HISTORY_LIMIT = 12;
+
+/** Persistence lifetime for one user's generated-brand history. */
+export const BRAND_HISTORY_TTL_SECONDS = 365 * 24 * 60 * 60;
+
+/** Cache-key version for persisted generated-brand history. */
+export const BRAND_HISTORY_VERSION = 1;
+
 /** Attempts for the idempotent structured synthesis call. */
 export const BRAND_GENERATION_ATTEMPTS = 2;
 

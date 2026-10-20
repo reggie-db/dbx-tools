@@ -60,4 +60,30 @@ describe("brand generation browser contract", () => {
     });
     assert.deepEqual(received, events);
   });
+
+  it("loads persisted generated brands from the published history route", async () => {
+    let requestUrl = "";
+    const client = new GeneratorPluginClient({ basePath: "/api/custom-generator" });
+    const brands = await client.brandHistory({
+      fetch: async (input) => {
+        requestUrl = String(input);
+        return Response.json({
+          brands: [
+            {
+              id: "brand-1",
+              request: { prompt: "dbx tools\ndbx.tools" },
+              generatedAt: "2026-10-20T12:00:00.000Z",
+              package: {
+                brand: defaultBrandContext,
+                sources: [{ url: "https://dbx.tools/", fetched: true }],
+              },
+            },
+          ],
+        });
+      },
+    });
+
+    assert.equal(requestUrl, "/api/custom-generator/brand/history");
+    assert.equal(brands[0]?.package.brand.name, defaultBrandContext.name);
+  });
 });

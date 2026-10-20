@@ -36,6 +36,7 @@ import {
 } from "@dbx-tools/shared-core";
 import {
   MLFLOW_TRACE_ID_HEADER,
+  MLFLOW_TRACE_PART_TYPE,
   THREAD_ID_HEADER,
   THREAD_ID_QUERY,
 } from "@dbx-tools/shared-mastra";
@@ -268,6 +269,15 @@ function stampMlflowTraceId(res: express.Response, traceId: string): void {
   if (res.headersSent) return;
   if (!traceId || traceId === INVALID_TRACE_ID) return;
   res.setHeader(MLFLOW_TRACE_ID_HEADER, `tr-${traceId}`);
+}
+
+/** Serialize a transient trace-id part for proxies that remove custom headers. */
+function mlflowTracePart(traceId: string): string {
+  return `data: ${JSON.stringify({
+    type: MLFLOW_TRACE_PART_TYPE,
+    data: { traceId: `tr-${traceId}` },
+    transient: true,
+  })}\n\n`;
 }
 
 /** Return one raw prompt when the request is exactly one text-only user message. */
@@ -713,6 +723,7 @@ export function chatTurnTelemetryMiddleware(
   let genieRecorded = false;
   let ownedSpanEnded = false;
   let traceFinalized = false;
+  let tracePartWritten = false;
   const passThroughWrite = res.write.bind(res) as (...args: unknown[]) => boolean;
   const passThroughEnd = res.end.bind(res) as (...args: unknown[]) => unknown;
   const passThroughJson = res.json.bind(res) as (body?: unknown) => express.Response;
@@ -773,6 +784,10 @@ export function chatTurnTelemetryMiddleware(
   };
 
   res.write = ((chunk: unknown, ...rest: unknown[]) => {
+    if (!tracePartWritten) {
+      tracePartWritten = true;
+      passThroughWrite(mlflowTracePart(traceState.traceId));
+    }
     collector.write(chunk);
     return passThroughWrite(chunk, ...rest);
   }) as typeof res.write;

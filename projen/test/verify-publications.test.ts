@@ -5,9 +5,24 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { main, waitForPublications, type PublicationProbe } from "../tasks/verify-publications.ts";
+import {
+  main,
+  publicationWaitMessage,
+  waitForPublications,
+  type PublicationProbe,
+} from "../tasks/verify-publications.ts";
 
 describe("public release availability", () => {
+  it("lists unresolved publications in stable sorted order", () => {
+    assert.equal(
+      publicationWaitMessage([
+        { label: "@dbx-tools/core@1.2.3", available: () => false },
+        { label: "@dbx-tools/appkit-ui@1.2.3", available: () => false },
+      ]),
+      "waiting for 2 public publications - @dbx-tools/appkit-ui@1.2.3, @dbx-tools/core@1.2.3",
+    );
+  });
+
   it("checks unresolved publications concurrently at the end of the batch", async () => {
     const attempts = new Map<string, number>();
     let active = 0;

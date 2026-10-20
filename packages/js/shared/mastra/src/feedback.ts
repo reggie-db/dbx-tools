@@ -6,10 +6,10 @@
  * Feedback is logged to MLflow as a trace *assessment* (thumbs up/down
  * as a boolean, or a freeform comment as text), so it must be tied to a
  * trace. The plugin stamps the active OTel trace id of each turn on the
- * response as {@link MLFLOW_TRACE_ID_HEADER} (`tr-<hex>`); the client
- * captures it per assistant message and sends it back here when the
- * user reacts. Kept dependency-free so both the browser client and the
- * server plugin share one definition.
+ * response as {@link MLFLOW_TRACE_ID_HEADER} (`tr-<hex>`) and streams the same
+ * value as {@link MLFLOW_TRACE_PART_TYPE} when an ingress proxy removes custom
+ * response headers. The client captures it per assistant message and sends it
+ * back here when the user reacts.
  *
  * @module
  */
@@ -25,6 +25,17 @@ import { z } from "zod";
  * right trace.
  */
 export const MLFLOW_TRACE_ID_HEADER = "x-mlflow-trace-id";
+
+/** Transient AI SDK data-part carrying the turn's MLflow trace id. */
+export const MLFLOW_TRACE_PART_TYPE = "data-mlflow-trace" as const;
+
+/** Data attached to {@link MLFLOW_TRACE_PART_TYPE}. */
+export const MlflowTracePartDataSchema = z.object({
+  traceId: z.string().regex(/^tr-[0-9a-f]{32}$/),
+});
+
+/** Validated payload carrying one MLflow trace id through the chat stream. */
+export type MlflowTracePartData = z.infer<typeof MlflowTracePartDataSchema>;
 
 /** Assessment name used for thumbs feedback when the caller omits one. */
 export const DEFAULT_FEEDBACK_NAME = "user_feedback";
