@@ -11,11 +11,6 @@
       "type": "build"
     },
     {
-      "name": "@mlflow/core",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
       "name": "@types/express",
       "version": "catalog:",
       "type": "build"
@@ -57,11 +52,6 @@
     },
     {
       "name": "@mastra/quickjs",
-      "version": "catalog:",
-      "type": "peer"
-    },
-    {
-      "name": "@mlflow/core",
       "version": "catalog:",
       "type": "peer"
     },
@@ -192,6 +182,11 @@
     },
     {
       "name": "@mastra/pg",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@mlflow/core",
       "version": "catalog:",
       "type": "runtime"
     },

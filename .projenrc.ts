@@ -770,6 +770,13 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@mastra/otel-bridge@catalog:",
     "@mastra/pg@catalog:",
     "@pydantic/monty@catalog:",
+    // `mlflow.ts` statically imports runtime values (TraceLocationType,
+    // TraceMetadataKey, TraceInfo, TraceState) from `@mlflow/core`, so the
+    // module requires it at load time. Declared as a real dep - not an optional
+    // peer - so it resolves from this package's own tree and is installed by
+    // production/service installers that drop peers (same reason express and
+    // `@modelcontextprotocol/sdk` are direct deps above).
+    "@mlflow/core@catalog:",
     "@opentelemetry/api@catalog:",
     "@opentelemetry/core@catalog:",
     "@opentelemetry/sdk-trace-base@catalog:",
@@ -792,9 +799,6 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
   // so consumers opt in; the runtime falls back to a direct fetch when it is
   // not installed. Present in devDeps for local typecheck/tests.
   projectJs.addOptionalPeer(p, "skills@^1");
-  // Direct-to-experiment tracing for local development. Deployed Databricks
-  // Apps keep using AppKit's single OTLP provider and UC telemetry sidecar.
-  projectJs.addOptionalPeer(p, "@mlflow/core@catalog:");
 });
 
 root.pnpmWorkspace.allowBuild("isolated-vm");
