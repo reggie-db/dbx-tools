@@ -25,6 +25,7 @@ import {
   isMastraRequestAllowed,
   requestOrigin,
 } from "../src/server.ts";
+import { MASTRA_SMART_ROUTER_INPUT_KEY } from "../src/serving.ts";
 
 describe("application request context boundary", () => {
   it("keeps application values and removes client-spoofable trusted fields", () => {
@@ -37,6 +38,7 @@ describe("application request context boundary", () => {
     context.setRaw(MASTRA_REQUEST_ID_KEY, "attacker-request");
     context.setRaw(MASTRA_ORIGIN_KEY, "https://attacker.example");
     context.setRaw(MASTRA_SCOPES_KEY, ["all-apis"]);
+    context.setRaw(MASTRA_SMART_ROUTER_INPUT_KEY, { input: "attacker task" });
     context.setRaw(FOLLOW_UP_USER_TEXT_KEY, "attacker question");
     context.setRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY, ["attacker suggestion"]);
     context.setRaw(FOLLOW_UP_RUN_ID_KEY, "attacker-run");
@@ -52,6 +54,7 @@ describe("application request context boundary", () => {
       MASTRA_REQUEST_ID_KEY,
       MASTRA_ORIGIN_KEY,
       MASTRA_SCOPES_KEY,
+      MASTRA_SMART_ROUTER_INPUT_KEY,
       FOLLOW_UP_USER_TEXT_KEY,
       FOLLOW_UP_NATIVE_QUESTIONS_KEY,
       FOLLOW_UP_RUN_ID_KEY,

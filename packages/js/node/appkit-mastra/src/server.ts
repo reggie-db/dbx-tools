@@ -55,6 +55,7 @@ import {
   extractModelOverride,
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
+  MASTRA_SMART_ROUTER_INPUT_KEY,
   resolveServingConfig,
 } from "./serving.ts";
 import { recordActiveTraceAuth, recordActiveTraceUser } from "./telemetry.ts";
@@ -78,6 +79,7 @@ const TRUSTED_REQUEST_CONTEXT_KEYS = [
   MASTRA_SCOPES_KEY,
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
+  MASTRA_SMART_ROUTER_INPUT_KEY,
   FOLLOW_UP_USER_TEXT_KEY,
   FOLLOW_UP_NATIVE_QUESTIONS_KEY,
   FOLLOW_UP_RUN_ID_KEY,
@@ -245,6 +247,7 @@ export class MastraServer extends ExpressMastraServer {
       await this.configureRequestContextUser(req, requestContext);
       this.configureRequestContextThreadId(req, res, requestContext);
       this.configureRequestContextModelOverride(req, requestContext);
+      this.configureRequestContextSmartRouterInput(req, requestContext);
       this.configureRequestContextRequestId(req, res, requestContext);
       this.configureRequestContextOrigin(req, requestContext);
       this.configureRequestContextScopes(req, requestContext);
@@ -428,6 +431,14 @@ export class MastraServer extends ExpressMastraServer {
       });
       if (override) requestContext.set(MASTRA_MODEL_OVERRIDE_KEY, override);
     }
+  }
+
+  /** Preserve the parsed request body for task-aware Smart Router selection. */
+  configureRequestContextSmartRouterInput(
+    req: express.Request,
+    requestContext: RequestContext,
+  ): void {
+    if (req.body !== undefined) requestContext.set(MASTRA_SMART_ROUTER_INPUT_KEY, req.body);
   }
 }
 

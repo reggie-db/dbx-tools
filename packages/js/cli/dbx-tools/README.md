@@ -653,18 +653,25 @@ dbx model-gateway [options] [command]
 
 #### Options
 
-| Option                      | Description                                                                                                                                                  |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-v, --version`             | output the version number                                                                                                                                    |
-| `--model <value>`           | Optional fuzzy or exact model name. (env: MODEL)                                                                                                             |
-| `--model-class <value>`     | Optional model capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", "embedding", env: MODEL_CLASS) |
-| `--prefer-system-models`    | Prefer system.ai services over serving endpoints for non-exact model selection. (default: false, env: PREFER_SYSTEM_MODELS)                                  |
-| `--no-prefer-system-models` | Disable prefer system.ai services over serving endpoints for non-exact model selection.                                                                      |
-| `-l, --listen <value>`      | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                                                                                      |
-| `--profile <value>`         | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE)                                                                   |
-| `--body-limit <value>`      | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                                                                                          |
-| `-r, --runtime-info`        | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                                                                                   |
-| `--no-runtime-info`         | Disable print runtime implementation metadata.                                                                                                               |
+| Option                                             | Description                                                                                                                                                                |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-v, --version`                                    | output the version number                                                                                                                                                  |
+| `--model <value>`                                  | Optional fuzzy or exact model name. (env: MODEL)                                                                                                                           |
+| `--model-class <value>`                            | Optional model capability class used when selecting a default model. (choices: "chat-thinking", "chat-balanced", "chat-fast", "embedding", env: MODEL_CLASS)               |
+| `--smart-router <value>`                           | Smart Router mode: auto advertises it only when available, true requires it, and false disables it. (choices: "auto", "true", "false", default: "auto", env: SMART_ROUTER) |
+| `--smart-router-timeout-ms <value>`                | Maximum milliseconds allowed for one Databricks Smart Router request. (default: 10000, env: SMART_ROUTER_TIMEOUT_MS)                                                       |
+| `--smart-router-context-token-budget <value>`      | o200k_base token budget used to build Smart Router task context. (default: 4096, env: SMART_ROUTER_CONTEXT_TOKEN_BUDGET)                                                   |
+| `--smart-router-probe-ttl-ms <value>`              | Milliseconds a successful memoized Smart Router capability probe remains valid. (default: 300000, env: SMART_ROUTER_PROBE_TTL_MS)                                          |
+| `--smart-router-probe-refresh-interval-ms <value>` | Milliseconds between unref'd background refreshes of cached Smart Router probes. (default: 3600000, env: SMART_ROUTER_PROBE_REFRESH_INTERVAL_MS)                           |
+| `--smart-router-route-ttl-seconds <value>`         | Seconds a logical turn remains pinned to its Smart Router-selected model. (default: 21600, env: SMART_ROUTER_ROUTE_TTL_SECONDS)                                            |
+| `--prefer-system-models`                           | Prefer system.ai services over serving endpoints for non-exact model selection. (default: false, env: PREFER_SYSTEM_MODELS)                                                |
+| `--no-prefer-system-models`                        | Disable prefer system.ai services over serving endpoints for non-exact model selection.                                                                                    |
+| `-l, --listen <value>`                             | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                                                                                                    |
+| `--profile <value>`                                | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE)                                                                                 |
+| `--body-limit <value>`                             | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                                                                                                        |
+| `-r, --runtime-info`                               | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                                                                                                 |
+| `--no-runtime-info`                                | Disable print runtime implementation metadata.                                                                                                                             |
+| `--select-model-from <value>`                      | Select a Smart Router model from a JSON or text file; use - for standard input. (env: SELECT_MODEL_FROM)                                                                   |
 
 #### Commands
 

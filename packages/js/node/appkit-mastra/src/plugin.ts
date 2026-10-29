@@ -142,7 +142,7 @@ import {
   mlflowEnabled,
   mlflowExperimentManagerUrl,
 } from "./mlflow.ts";
-import { resolveDefaultModelId } from "./model.ts";
+import { resolveDefaultModelId, withSmartRouterEndpoint } from "./model.ts";
 import { buildObservability, configureOtelPropagation } from "./observability.ts";
 import { provisionRemoteSkills } from "./remote-skills.ts";
 import {
@@ -1332,10 +1332,11 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       const cacheIdentity = executionContextUserId(context);
       const host = (await client.config.getHost()).toString();
       const serving = resolveServingConfig(this.config);
-      return modelCatalog.listServingEndpoints(client, host, {
+      const endpoints = await modelCatalog.listServingEndpoints(client, host, {
         ttlMs: serving.ttlMs,
         cacheIdentity,
       });
+      return withSmartRouterEndpoint(endpoints, client);
     }, modelCatalogueDefaults);
   }
 

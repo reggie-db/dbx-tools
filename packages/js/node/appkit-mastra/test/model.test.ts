@@ -8,6 +8,7 @@ import {
   resolveDefaultModelId,
   resolveModelWorkspaceClient,
   RESPONSES_PROVIDER_OPTIONS,
+  SMART_ROUTER_ENDPOINT,
   servingApi,
 } from "../src/model.ts";
 
@@ -77,5 +78,15 @@ describe("Mastra serving API selection", () => {
       if (previous === undefined) delete process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
       else process.env.DATABRICKS_SERVING_ENDPOINT_NAME = previous;
     }
+  });
+
+  it("uses Smart Router as the default when its live probe published the virtual endpoint", () => {
+    assert.equal(
+      resolveDefaultModelId({}, [
+        SMART_ROUTER_ENDPOINT,
+        { name: "databricks-gpt-6-1-sol", task: "llm/v1/chat" },
+      ]),
+      "smart_router",
+    );
   });
 });

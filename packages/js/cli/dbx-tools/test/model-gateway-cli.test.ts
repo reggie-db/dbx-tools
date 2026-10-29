@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
@@ -23,7 +26,10 @@ describe("model gateway CLI", () => {
     assert.match(help, /PROFILE/);
     assert.match(help, /--model <value>/);
     assert.match(help, /--model-class <value>/);
+    assert.match(help, /--smart-router <value>/);
+    assert.match(help, /choices: "auto", "true", "false"/);
     assert.match(help, /--prefer-system-models/);
+    assert.match(help, /--select-model-from <value>/);
     assert.match(help, /--body-limit <value>/);
     assert.match(help, /BODY_LIMIT/);
     assert.doesNotMatch(help, /bearer-token/i);
@@ -83,6 +89,18 @@ describe("model gateway CLI", () => {
     );
 
     assert.deepEqual(definition?.command?.arguments, [
+      "--smart-router",
+      "auto",
+      "--smart-router-timeout-ms",
+      "10000",
+      "--smart-router-context-token-budget",
+      "4096",
+      "--smart-router-probe-ttl-ms",
+      "300000",
+      "--smart-router-probe-refresh-interval-ms",
+      "3600000",
+      "--smart-router-route-ttl-seconds",
+      "21600",
       "--no-prefer-system-models",
       "--listen",
       "tcp://localhost:4401",
@@ -121,6 +139,12 @@ describe("model gateway CLI", () => {
 
     assert.deepEqual(calls, [
       {
+        smartRouter: "auto",
+        smartRouterTimeoutMs: 10000,
+        smartRouterContextTokenBudget: 4096,
+        smartRouterProbeRefreshIntervalMs: 3600000,
+        smartRouterProbeTtlMs: 300000,
+        smartRouterRouteTtlSeconds: 21600,
         listen: { scheme: "tcp", host: "localhost", port: 4410 },
         profile: "MODEL-PROFILE",
         bodyLimit: "100mb",
@@ -138,6 +162,30 @@ describe("model gateway CLI", () => {
     }).parseAsync(["--prefer-system-models"], { from: "user" });
 
     assert.equal(calls[0]?.preferSystemModels, true);
+  });
+
+  it("selects from a JSON file without starting the server", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-smart-router-"));
+    const path = join(directory, "request.json");
+    await writeFile(path, JSON.stringify({ input: "Refactor the parser" }));
+    let input: unknown;
+    let started = false;
+    try {
+      await buildProgram("dbx model-gateway", {
+        async start() {
+          started = true;
+        },
+        async select(_options, value) {
+          input = value;
+          return { model: "databricks-gpt-test" };
+        },
+      }).parseAsync(["--select-model-from", path], { from: "user" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+
+    assert.deepEqual(input, { input: "Refactor the parser" });
+    assert.equal(started, false);
   });
 
   it("reads the hidden bearer token only from the environment", async () => {

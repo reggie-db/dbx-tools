@@ -9,7 +9,6 @@ import { log } from "@dbx-tools/shared-core";
 import {
   ModelClass,
   ModelClassSchema,
-  type AutomaticRouteObservation,
   type ServingEndpointSummary,
   type ModelClass as ModelClassType,
 } from "@dbx-tools/shared-model";
@@ -18,25 +17,22 @@ import type {
   GatewayRoute,
   ModelCapabilityOverride,
   ModelListResponse,
+  SmartRouterObservation,
+  SmartRouterMode,
 } from "@dbx-tools/shared-model-gateway";
 import {
-  AUTOMATIC_CONFIDENCE_HEADER,
-  AUTOMATIC_DEGRADED_HEADER,
-  AUTOMATIC_MODEL_ID,
-  AUTOMATIC_REASON_CODE_HEADER,
-  AUTOMATIC_REASONING_HEADER,
-  AUTOMATIC_SELECTED_MODEL_HEADER,
-  AUTOMATIC_SOURCE_HEADER,
-  AUTOMATIC_TIER_HEADER,
   MODEL_GATEWAY_DEFAULTS,
-  isAutomaticModelId,
+  SMART_ROUTER_HARNESS_HEADER,
+  SMART_ROUTER_MODEL_ID,
+  SMART_ROUTER_PROFILER_STATUS_HEADER,
+  SMART_ROUTER_ROUTE_MODEL_HEADER,
+  SMART_ROUTER_SELECTED_MODEL_HEADER,
+  SMART_ROUTER_SERVED_TIER_HEADER,
+  SMART_ROUTER_SOURCE_HEADER,
+  SMART_ROUTER_TASK_TIER_HEADER,
+  isSmartRouterModelId,
 } from "@dbx-tools/shared-model-gateway";
 
-import {
-  AutomaticModelRouter,
-  type AutomaticRouteSelector,
-  type AutomaticRouteStore,
-} from "./automatic-routing.ts";
 import { listModelsPayload } from "./models.ts";
 import { adaptInferenceReasoning, learnAndAdaptReasoningRetry } from "./reasoning-adapt.ts";
 import {
@@ -45,6 +41,11 @@ import {
   type ModelRegistryOptions,
 } from "./registry.ts";
 import { isCodexOriginator, requestedFeatures, resolveRoute } from "./router.ts";
+import {
+  SmartModelRouter,
+  type SmartRouterService,
+  type SmartRouterStore,
+} from "./smart-router.ts";
 import { translateGatewayRequest } from "./translation.ts";
 import { fetchDatabricks, gatewayResponseHeaders } from "./transport.ts";
 
@@ -55,15 +56,14 @@ const DATABRICKS_TEMPERATURE_MAX = 2;
 /** Model gateway runtime configuration. */
 export interface ModelGatewayOptions {
   readonly cacheTtlMs?: number;
-  readonly automaticRouting?: boolean;
-  readonly automaticSelectorModel?: string;
-  readonly automaticSelectorTokenBudget?: number;
-  readonly automaticSelectorTimeoutMs?: number;
-  readonly automaticMinimumConfidence?: number;
-  readonly automaticPreferCostEfficientModels?: boolean;
-  readonly automaticRouteTtlSeconds?: number;
-  readonly automaticSelector?: AutomaticRouteSelector;
-  readonly automaticRouteStore?: AutomaticRouteStore;
+  readonly smartRouter?: SmartRouterMode;
+  readonly smartRouterContextTokenBudget?: number;
+  readonly smartRouterProbeRefreshIntervalMs?: number;
+  readonly smartRouterProbeTtlMs?: number;
+  readonly smartRouterRouteTtlSeconds?: number;
+  readonly smartRouterTimeoutMs?: number;
+  readonly smartRouterService?: SmartRouterService;
+  readonly smartRouterStore?: SmartRouterStore;
   readonly overrides?: readonly ModelCapabilityOverride[];
   readonly model?: string;
   readonly modelClass?: ModelClassType;
@@ -84,7 +84,8 @@ export class ModelGatewayError extends Error {
 /** AppKit-scoped model gateway with dynamic model discovery and streaming inference. */
 export class ModelGateway {
   private readonly registry: ModelRegistry;
-  private readonly automaticRouter?: AutomaticModelRouter;
+  private readonly smartRouter?: SmartModelRouter;
+  private readonly smartRouterMode: SmartRouterMode;
   private readonly model?: string;
   private readonly modelClass?: ModelClassType;
   private readonly preferSystemModels: boolean;
@@ -98,26 +99,24 @@ export class ModelGateway {
         : {}),
     };
     this.registry = registry ?? new DatabricksModelRegistry(registryOptions);
-    if (options.automaticRouting ?? MODEL_GATEWAY_DEFAULTS.automaticRouting) {
-      this.automaticRouter = new AutomaticModelRouter(
+    this.smartRouterMode = options.smartRouter ?? MODEL_GATEWAY_DEFAULTS.smartRouter;
+    if (this.smartRouterMode !== "false") {
+      this.smartRouter = new SmartModelRouter(
         {
-          selectorModel:
-            options.automaticSelectorModel ?? MODEL_GATEWAY_DEFAULTS.automaticSelectorModel,
-          selectorTokenBudget:
-            options.automaticSelectorTokenBudget ??
-            MODEL_GATEWAY_DEFAULTS.automaticSelectorTokenBudget,
-          selectorTimeoutMs:
-            options.automaticSelectorTimeoutMs ?? MODEL_GATEWAY_DEFAULTS.automaticSelectorTimeoutMs,
-          minimumConfidence:
-            options.automaticMinimumConfidence ?? MODEL_GATEWAY_DEFAULTS.automaticMinimumConfidence,
-          preferCostEfficientModels:
-            options.automaticPreferCostEfficientModels ??
-            MODEL_GATEWAY_DEFAULTS.automaticPreferCostEfficientModels,
+          contextTokenBudget:
+            options.smartRouterContextTokenBudget ??
+            MODEL_GATEWAY_DEFAULTS.smartRouterContextTokenBudget,
+          probeRefreshIntervalMs:
+            options.smartRouterProbeRefreshIntervalMs ??
+            MODEL_GATEWAY_DEFAULTS.smartRouterProbeRefreshIntervalMs,
+          probeTtlMs: options.smartRouterProbeTtlMs ?? MODEL_GATEWAY_DEFAULTS.smartRouterProbeTtlMs,
           routeTtlSeconds:
-            options.automaticRouteTtlSeconds ?? MODEL_GATEWAY_DEFAULTS.automaticRouteTtlSeconds,
+            options.smartRouterRouteTtlSeconds ?? MODEL_GATEWAY_DEFAULTS.smartRouterRouteTtlSeconds,
+          routerName: "task_v3",
+          timeoutMs: options.smartRouterTimeoutMs ?? MODEL_GATEWAY_DEFAULTS.smartRouterTimeoutMs,
         },
-        options.automaticSelector,
-        options.automaticRouteStore,
+        options.smartRouterService,
+        options.smartRouterStore,
       );
     }
     this.model = options.model;
@@ -131,15 +130,33 @@ export class ModelGateway {
     const codex = isCodexOriginator(originator);
     logger.debug("listing models", { codex, search });
     const query = search?.trim();
-    const targets = query ? await this.registry.search(query) : await this.registry.list();
+    const smartRouterSearch =
+      query !== undefined && SMART_ROUTER_MODEL_ID.includes(query.toLowerCase());
+    const targets =
+      query && !smartRouterSearch ? await this.registry.search(query) : await this.registry.list();
+    const smartRouterTargets =
+      this.smartRouterMode === "true" && query && !smartRouterSearch
+        ? await this.registry.list()
+        : targets;
+    const shouldProbeSmartRouter =
+      Boolean(this.smartRouter) && (this.smartRouterMode === "true" || !query || smartRouterSearch);
+    const smartRouterEnabled =
+      shouldProbeSmartRouter && (await this.smartRouter!.isEnabled(smartRouterTargets));
+    if (this.smartRouterMode === "true" && !smartRouterEnabled) {
+      throw new ModelGatewayError(
+        503,
+        "Databricks Smart Router is required but unavailable for the active workspace identity",
+      );
+    }
     logger.debug("listed models", { codex, count: targets.length });
-    return listModelsPayload(
+    const payload = listModelsPayload(
       targets,
       codex,
       query !== undefined && query.length > 0,
       this.preferSystemModels,
-      Boolean(this.automaticRouter) && (!query || AUTOMATIC_MODEL_ID.includes(query.toLowerCase())),
+      smartRouterEnabled && (!query || smartRouterSearch),
     );
+    return smartRouterSearch ? onlySmartRouter(payload) : payload;
   }
 
   /** Resolve and execute one inference request. */
@@ -160,7 +177,7 @@ export class ModelGateway {
       protocol,
     );
     logger.debug("resolving request", {
-      automatic: selection.automatic === true,
+      smartRouter: selection.smartRouter === true,
       clientProtocol: protocol,
       model: selection.model,
       modelClass: selection.modelClass,
@@ -168,12 +185,12 @@ export class ModelGateway {
       stream: sanitizedBody.stream === true,
     });
     const features = requestedFeatures(sanitizedBody);
-    if (selection.automatic && protocol === "openai-embeddings") {
-      throw new ModelGatewayError(400, "Model auto is available only for chat requests");
+    if (selection.smartRouter && protocol === "openai-embeddings") {
+      throw new ModelGatewayError(400, "Model smart_router is available only for chat requests");
     }
-    const automatic =
-      selection.automatic && this.automaticRouter
-        ? await this.automaticRouter.resolve({
+    const smartRouter =
+      selection.smartRouter && this.smartRouter
+        ? await this.smartRouter.resolve({
             protocol: protocol as Exclude<ClientProtocol, "openai-embeddings">,
             body: sanitizedBody,
             headers,
@@ -183,11 +200,11 @@ export class ModelGateway {
             signal,
           })
         : undefined;
-    if (selection.automatic && !automatic) {
-      throw new ModelGatewayError(404, "Automatic model routing is disabled");
+    if (selection.smartRouter && !smartRouter) {
+      throw new ModelGatewayError(404, "Databricks Smart Router is disabled");
     }
     const target =
-      automatic?.target ??
+      smartRouter?.target ??
       (await this.registry.resolve(selection.model, {
         ...(protocol === "openai-embeddings" ? { modelClass: ModelClass.Embedding } : {}),
         ...(selection.modelClass ? { modelClass: selection.modelClass } : {}),
@@ -203,7 +220,7 @@ export class ModelGateway {
     }
     const route = resolveRoute({
       clientProtocol: protocol,
-      ...(!automatic && selection.model ? { requestedModel: selection.model } : {}),
+      ...(!smartRouter && selection.model ? { requestedModel: selection.model } : {}),
       originator: headers.get("originator") ?? undefined,
       preferSystemModels: this.preferSystemModels,
       features,
@@ -217,7 +234,7 @@ export class ModelGateway {
 
     const temperatureBody = adaptInferenceTemperature(
       target.endpoint ?? target.id,
-      automatic?.body ?? sanitizedBody,
+      smartRouter?.body ?? sanitizedBody,
     );
     const adapted = adaptInferenceReasoning(target.id, temperatureBody);
     let response = await this.forward(route, adapted.body, headers, signal);
@@ -235,12 +252,14 @@ export class ModelGateway {
     logResponse(route.upstreamProtocol, target.id, response);
     if (route.upstreamProtocol === "ai-sdk") {
       response.headers.set("x-dbx-tools-upstream", route.upstreamProtocol);
-      if (automatic) applyAutomaticObservationHeaders(response.headers, automatic.observation);
+      if (smartRouter) {
+        applySmartRouterObservationHeaders(response.headers, smartRouter.observation);
+      }
       return response;
     }
     const forwarded = gatewayResponseHeaders(response.headers);
     forwarded.set("x-dbx-tools-upstream", route.upstreamProtocol);
-    if (automatic) applyAutomaticObservationHeaders(forwarded, automatic.observation);
+    if (smartRouter) applySmartRouterObservationHeaders(forwarded, smartRouter.observation);
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -310,7 +329,7 @@ export function gatewayModelSelection(
   defaults: { readonly model?: string; readonly modelClass?: ModelClassType } = {},
   protocol?: ClientProtocol,
 ): {
-  readonly automatic?: boolean;
+  readonly smartRouter?: boolean;
   readonly model?: string;
   readonly modelClass?: ModelClassType;
 } {
@@ -323,29 +342,52 @@ export function gatewayModelSelection(
   if (model && parsedClass?.data) {
     throw new ModelGatewayError(400, "Model and model class are mutually exclusive");
   }
-  if (model) return isAutomaticModelId(model) ? { automatic: true } : { model };
+  if (model) return isSmartRouterModelId(model) ? { smartRouter: true } : { model };
   if (parsedClass?.data) return { modelClass: parsedClass.data };
   if (defaults.model) {
-    return isAutomaticModelId(defaults.model) ? { automatic: true } : { model: defaults.model };
+    return isSmartRouterModelId(defaults.model) ? { smartRouter: true } : { model: defaults.model };
   }
   if (defaults.modelClass) return { modelClass: defaults.modelClass };
   if (protocol === "openai-embeddings") return { modelClass: ModelClass.Embedding };
   return {};
 }
 
-function applyAutomaticObservationHeaders(
+function applySmartRouterObservationHeaders(
   headers: Headers,
-  observation: AutomaticRouteObservation,
+  observation: SmartRouterObservation,
 ): void {
-  headers.set(AUTOMATIC_SELECTED_MODEL_HEADER, observation.selectedModel);
-  headers.set(AUTOMATIC_TIER_HEADER, observation.tier);
-  headers.set(AUTOMATIC_CONFIDENCE_HEADER, String(observation.confidence));
-  headers.set(AUTOMATIC_SOURCE_HEADER, observation.source);
-  headers.set(AUTOMATIC_REASON_CODE_HEADER, observation.reasonCode);
-  headers.set(AUTOMATIC_DEGRADED_HEADER, String(observation.degraded));
-  if (observation.reasoningEffort) {
-    headers.set(AUTOMATIC_REASONING_HEADER, observation.reasoningEffort);
+  headers.set(SMART_ROUTER_SELECTED_MODEL_HEADER, observation.selectedModel);
+  headers.set(SMART_ROUTER_ROUTE_MODEL_HEADER, observation.routeModel);
+  headers.set(SMART_ROUTER_HARNESS_HEADER, observation.harness);
+  headers.set(SMART_ROUTER_SOURCE_HEADER, observation.source);
+  const taskTier = stringParam(observation.params, "task_tier");
+  const servedTier = stringParam(observation.params, "served_tier");
+  const profilerStatus = stringParam(observation.params, "profiler_status");
+  if (taskTier) headers.set(SMART_ROUTER_TASK_TIER_HEADER, taskTier);
+  if (servedTier) headers.set(SMART_ROUTER_SERVED_TIER_HEADER, servedTier);
+  if (profilerStatus) headers.set(SMART_ROUTER_PROFILER_STATUS_HEADER, profilerStatus);
+}
+
+function stringParam(
+  params: Readonly<Record<string, unknown>> | undefined,
+  key: string,
+): string | undefined {
+  const value = params?.[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function onlySmartRouter(payload: ModelListResponse): ModelListResponse {
+  if ("models" in payload) {
+    return {
+      models: payload.models.filter((model) =>
+        model.slug.toLowerCase().endsWith(`/${SMART_ROUTER_MODEL_ID}`),
+      ),
+    };
   }
+  return {
+    object: "list",
+    data: payload.data.filter((model) => model.id === SMART_ROUTER_MODEL_ID),
+  };
 }
 
 function logResponse(upstreamProtocol: string, model: string, response: Response): void {

@@ -64,7 +64,7 @@ export type { ResolvedMcp } from "./src/mcp.ts";
 export { requestMemoryScope, withRequestMemoryScope, withSoftStorageInit, needsLakebase, createMemoryBuilder, createMastraLakebasePool, MemoryBuilder } from "./src/memory.ts";
 export { AgentTraceSpanProcessor, ucTracePrefixFromExperimentTags, resetUcTracePrefixCache, mlflowAssessmentTraceId, directMlflowTrackingUri, directMlflowTraceLocation, directMlflowTracingConfigured, appMlflowTraceInfoConfigured, initializeAppMlflowTraceInfo, initializeRequestMlflowTraceInfo, persistAppMlflowTraceInfo, resetAppMlflowTraceInfo, initializeDirectMlflowTracing, updateActiveMlflowTrace, updateActiveMlflowTraceTags, directMlflowTracingActive, flushDirectMlflowTracing, mlflowEnabled, mlflowExperimentManagerUrl, logFeedback } from "./src/mlflow.ts";
 export type { AppMlflowTraceInfo, LogFeedbackParams } from "./src/mlflow.ts";
-export { RESPONSES_PROVIDER_OPTIONS, servingApi, resolveModelWorkspaceClient, resolveDefaultModelId, buildModel } from "./src/model.ts";
+export { SMART_ROUTER_ENDPOINT, RESPONSES_PROVIDER_OPTIONS, servingApi, resolveModelWorkspaceClient, resolveDefaultModelId, buildModel, withSmartRouterEndpoint } from "./src/model.ts";
 export type { BuildModelOverrides } from "./src/model.ts";
 export { montyMaxProcesses, MontySandbox } from "./src/monty-sandbox.ts";
 export type { MontySandboxOptions } from "./src/monty-sandbox.ts";
@@ -79,7 +79,7 @@ export { databricksFetch, readResponseText, readResponseJson } from "./src/rest.
 export type { DatabricksFetchInit } from "./src/rest.ts";
 export { clearTrustedRequestContext, requestOrigin, stampRequestContextUser, createRequestContext, MastraServer, isMastraRequestAllowed, attachRoutePatchMiddleware, attachStaleResumeRecovery } from "./src/server.ts";
 export type { AttributedIdentity, MastraApiGateOptions } from "./src/server.ts";
-export { MASTRA_MODEL_OVERRIDE_KEY, MASTRA_RESOLVED_MODEL_KEY, extractModelOverride, resolveServingConfig } from "./src/serving.ts";
+export { MASTRA_MODEL_OVERRIDE_KEY, MASTRA_RESOLVED_MODEL_KEY, MASTRA_SMART_ROUTER_INPUT_KEY, extractModelOverride, resolveServingConfig } from "./src/serving.ts";
 export type { ModelOverrideRequest } from "./src/serving.ts";
 export { ORGANIZATION_ASSISTANT_PATH, ORGANIZATION_SKILLS_PATH, personalWorkspacePath, personalSkillsPath } from "./src/skill-paths.ts";
 export { STATEMENT_ROW_CAP, fetchStatementData, fetchStatementEmbedData } from "./src/statement.ts";

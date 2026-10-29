@@ -24,20 +24,20 @@ const CAPABILITIES: ModelCapabilities = {
 };
 
 describe("model gateway catalogue", () => {
-  it("publishes one virtual auto model for OpenAI and Codex discovery", () => {
+  it("publishes one virtual smart_router model for OpenAI and Codex discovery", () => {
     const openAi = listModelsPayload([target("gpt")], false, false, false, true);
     const codex = listModelsPayload([target("gpt")], true, false, false, true);
 
-    assert.equal(openAi.data[0]?.id, "auto");
-    assert.equal(openAi.data[0]?.capabilities.automatic, true);
+    assert.equal(openAi.data[0]?.id, "smart_router");
+    assert.equal(openAi.data[0]?.capabilities.smart_router, true);
     assert.equal(openAi.data[0]?.capabilities.web_search, false);
     assert.equal(openAi.data[0]?.capabilities.image_input, false);
     assert.equal(openAi.data[0]?.capabilities.apply_patch, false);
-    assert.equal(codex.models[0]?.slug, "databricks/auto");
-    assert.equal(codex.models[0]?.display_name, "Auto");
+    assert.equal(codex.models[0]?.slug, "databricks/smart_router");
+    assert.equal(codex.models[0]?.display_name, "Smart Router");
   });
 
-  it("aggregates automatic capabilities from the live chat candidate pool", () => {
+  it("aggregates Smart Router capabilities from the live chat candidate pool", () => {
     const payload = listModelsPayload(
       [
         target("gpt", { webSearch: true, applyPatch: true, customTools: true }),

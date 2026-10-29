@@ -10,6 +10,16 @@ import {
   sanitizeInferenceBody,
 } from "../src/gateway.ts";
 import type { ModelRegistry } from "../src/registry.ts";
+import { SmartRouterService } from "../src/smart-router.ts";
+
+const SMART_ROUTER_SETTINGS = {
+  contextTokenBudget: 1_024,
+  probeRefreshIntervalMs: 60_000,
+  probeTtlMs: 60_000,
+  routeTtlSeconds: 600,
+  routerName: "task_v3",
+  timeoutMs: 1_000,
+} as const;
 
 describe("ModelGateway model discovery", () => {
   it("uses registry search for the optional models query", async () => {
@@ -28,7 +38,7 @@ describe("ModelGateway model discovery", () => {
       },
       async refresh() {},
     };
-    const gateway = new ModelGateway({}, registry);
+    const gateway = new ModelGateway({ smartRouter: "false" }, registry);
 
     const response = await gateway.models(undefined, "gte large");
 
@@ -36,7 +46,7 @@ describe("ModelGateway model discovery", () => {
     assert.equal("data" in response ? response.data[0]?.id : undefined, target.id);
   });
 
-  it("publishes auto through the standard and Codex /v1/models shapes", async () => {
+  it("publishes smart_router after its capability probe succeeds", async () => {
     const target = chatTarget();
     const registry: ModelRegistry = {
       async list() {
@@ -50,13 +60,45 @@ describe("ModelGateway model discovery", () => {
       },
       async refresh() {},
     };
-    const gateway = new ModelGateway({}, registry);
+    const service = new (class extends SmartRouterService {
+      override isEnabled<T>(): Promise<boolean> {
+        return Promise.resolve(true);
+      }
+    })(SMART_ROUTER_SETTINGS);
+    const gateway = new ModelGateway({ smartRouterService: service }, registry);
 
     const standard = await gateway.models();
     const codex = await gateway.models("codex_cli_rs");
 
-    assert.equal("data" in standard ? standard.data[0]?.id : undefined, "auto");
-    assert.equal("models" in codex ? codex.models[0]?.slug : undefined, "databricks/auto");
+    assert.equal("data" in standard ? standard.data[0]?.id : undefined, "smart_router");
+    assert.equal("models" in codex ? codex.models[0]?.slug : undefined, "databricks/smart_router");
+  });
+
+  it("fails model discovery when Smart Router is required but unavailable", async () => {
+    const target = chatTarget();
+    const registry: ModelRegistry = {
+      async list() {
+        return [target];
+      },
+      async search() {
+        return [target];
+      },
+      async resolve() {
+        return target;
+      },
+      async refresh() {},
+    };
+    const service = new (class extends SmartRouterService {
+      override isEnabled<T>(): Promise<boolean> {
+        return Promise.resolve(false);
+      }
+    })(SMART_ROUTER_SETTINGS);
+    const gateway = new ModelGateway(
+      { smartRouter: "true", smartRouterService: service },
+      registry,
+    );
+
+    await assert.rejects(() => gateway.models(), /required but unavailable/);
   });
 });
 
@@ -73,11 +115,11 @@ describe("ModelGateway request sanitization", () => {
     assert.deepEqual(gatewayModelSelection({ model: "gpt" }, new Headers()), {
       model: "gpt",
     });
-    assert.deepEqual(gatewayModelSelection({ model: "auto" }, new Headers()), {
-      automatic: true,
+    assert.deepEqual(gatewayModelSelection({ model: "smart_router" }, new Headers()), {
+      smartRouter: true,
     });
-    assert.deepEqual(gatewayModelSelection({ model: "databricks/auto" }, new Headers()), {
-      automatic: true,
+    assert.deepEqual(gatewayModelSelection({ model: "databricks/smart_router" }, new Headers()), {
+      smartRouter: true,
     });
     assert.throws(
       () =>

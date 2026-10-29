@@ -6,4 +6,4 @@ export * as cli from "./src/model-gateway/cli.ts";
 export * as server from "./src/model-gateway/server.ts";
 export { modelGatewayServiceDefinition, buildProgram } from "./src/model-gateway/cli.ts";
 export type { ModelGatewayCliDependencies } from "./src/model-gateway/cli.ts";
-export { modelGatewayServerOptions, gatewayBearerMiddleware, startModelGateway } from "./src/model-gateway/server.ts";
+export { modelGatewayServerOptions, gatewayBearerMiddleware, startModelGateway, selectSmartRouterModel } from "./src/model-gateway/server.ts";

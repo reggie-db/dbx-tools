@@ -51,33 +51,39 @@ The gateway supports:
 - OpenAI-compatible embeddings.
 - Codex model discovery and Responses traffic.
 
-## Use automatic routing
+## Use Smart Router
 
-Select the virtual `auto` model from any supported chat protocol:
+Select the virtual `smart_router` model from any supported chat protocol:
 
 ```json
 {
-  "model": "auto",
+  "model": "smart_router",
   "input": "Refactor the authorization layer across the repository"
 }
 ```
 
-The gateway sends a bounded summary of the current request and recent portable
-chat context to Databricks System One. It excludes transport credentials, tool
-arguments, and binary data. System One chooses a `fast`, `balanced`, or
-`thinking` tier plus a reasoning budget. The model package then resolves that
-decision against the live workspace catalogue and hard requirements such as
-tools, web search, images, structured output, apply-patch support, and the
-client protocol.
+Before returning `GET /v1/models`, the gateway makes one memoized
+`task_v3` capability request to Databricks
+`/ai-gateway/routing/v1/routes:select`. The virtual model is listed only when
+that request succeeds for the active identity and live `system.ai.*`
+candidates. Positive probes are shared for five minutes and concurrent probes
+coalesce into one request.
 
-The same `auto` id works with Responses, Chat Completions, Anthropic Messages,
-and Codex-compatible Responses traffic. Embeddings require an explicit model.
-Explicit concrete models, model-class headers, and reasoning fields continue to
-override automatic policy.
+For inference, the gateway extracts bounded task context from Responses input,
+Chat Completions or Anthropic messages, plain text, or generic JSON objects. It
+excludes credentials, tool schemas, and tool arguments. OpenAI-shaped requests
+use the `codex` Smart Router harness policy; Anthropic Messages uses `claude`.
+The selected route must match one of the offered, protocol-compatible live
+models. There is no local tier classifier or fallback selector.
 
-Automatic selections are pinned for the logical user turn. The default store
+The same `smart_router` id works with Responses, Chat Completions, Anthropic
+Messages, and Codex-compatible Responses traffic. Embeddings require an
+explicit model. Explicit concrete models and model-class headers continue to
+win.
+
+Smart Router selections are pinned for the logical user turn. The default store
 uses AppKit `CacheManager`, so configured Lakebase/PostgreSQL persistence is
-reused across app replicas. Supply `automaticRouteStore` to use another storage
+reused across app replicas. Supply `smartRouterStore` to use another storage
 implementation with the same `get`/`set` contract, including a SQLite-backed
 adapter. Only the selected model and bounded route metadata are stored; prompts
 and responses are not.
@@ -90,10 +96,16 @@ expiring table because it already handles process-local reuse, project-scoped
 disk fallback, and configured Lakebase/PostgreSQL storage. A consumer can still
 inject a different store when its deployment needs another backend.
 
-Selector failure or low confidence uses a compatible deterministic fallback.
-Response headers expose the concrete model, tier, reasoning effort, confidence,
-reason code, source, and degraded state without rewriting the upstream response
-body's model identity.
+Response headers expose the selected concrete model, returned route model,
+harness, cache source, and any `task_v3` task tier, served tier, or profiler
+status without rewriting the upstream response body's model identity.
+
+Select a model without starting the server by passing a JSON or text file, or
+`-` for standard input:
+
+```sh
+dbx model-gateway --profile PROFILE --select-model-from request.json
+```
 
 ## Discover models
 
@@ -150,18 +162,15 @@ Use `wire_api = "responses"` and `supports_websockets = false`.
 `system.ai.*` AI Gateway services for non-exact eligible requests. An exact
 serving endpoint or `system.ai.*` name still wins.
 
-Automatic routing is enabled by default and is invoked only by `model: "auto"`.
-Configure `automaticSelectorModel`, `automaticSelectorTimeoutMs`,
-`automaticSelectorTokenBudget`, `automaticMinimumConfidence`, and
-`automaticRouteTtlSeconds` to tune selector and pinning policy.
-`automaticPreferCostEfficientModels` defaults to `true`; within the selected
-tier it prefers a lower published Databricks cost score, then a model-owned
-open-weight eligibility policy, before preserving normal quality/version order.
-The token budget prioritizes the current request, then includes as many newest
-complete prior user and assistant messages as fit; it is not a fixed turn count.
-Budgeting uses the standard `js-tiktoken` `o200k_base` encoding consistently
-across providers. Set `automaticRouting: false` to hide and reject the virtual
-model.
+Smart Router defaults to `smartRouter: "auto"` and is advertised only after its
+capability probe succeeds. Set `smartRouter: "true"` to make model discovery
+fail when the router is unavailable, or `smartRouter: "false"` to disable it.
+Configure `smartRouterTimeoutMs`,
+`smartRouterContextTokenBudget`, `smartRouterProbeTtlMs`,
+`smartRouterProbeRefreshIntervalMs`, and `smartRouterRouteTtlSeconds` to tune
+transport, context, request-driven probe expiry, background probe refresh, and
+turn-pinning behavior. A failed real selection immediately invalidates the
+positive probe.
 
 Use `overrides` when workspace metadata must be corrected for a specific model.
 For example, disable an advertised capability that the selected gateway route
@@ -188,4 +197,5 @@ Overrides affect routing and the OpenAI and Codex model catalogues.
 - `gateway` handles protocol-neutral gateway requests.
 - `registry` discovers and resolves workspace models.
 - `router` selects a compatible route from model capabilities.
+- `smartRouter` builds task context, probes availability, and calls `task_v3`.
 - `transport` sends requests to Databricks model APIs.

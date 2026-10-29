@@ -4,7 +4,6 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-model-gateway";
 export const PACKAGE_VERSION = "0.9.174";
-export * as automaticRouting from "./src/automatic-routing.ts";
 export * as gateway from "./src/gateway.ts";
 export * as models from "./src/models.ts";
 export * as plugin from "./src/plugin.ts";
@@ -12,10 +11,9 @@ export * as reasoningAdapt from "./src/reasoning-adapt.ts";
 export * as registry from "./src/registry.ts";
 export * as router from "./src/router.ts";
 export * as routes from "./src/routes.ts";
+export * as smartRouter from "./src/smart-router.ts";
 export * as translation from "./src/translation.ts";
 export * as transport from "./src/transport.ts";
-export { AutomaticRoutingError, AppKitAutomaticRouteStore, SystemOneAutomaticRouteSelector, AutomaticModelRouter, summarizeAutomaticRequest, automaticTurnKey } from "./src/automatic-routing.ts";
-export type { AutomaticRouteSelector, AutomaticRouteStore, AutomaticRouteSettings, AutomaticRouteResult, AutomaticTurnKeyContext } from "./src/automatic-routing.ts";
 export { ModelGatewayError, ModelGateway, sanitizeInferenceBody, adaptInferenceTemperature, gatewayModelSelection } from "./src/gateway.ts";
 export type { ModelGatewayOptions } from "./src/gateway.ts";
 export { listModelsPayload, codexModelSlug } from "./src/models.ts";
@@ -27,6 +25,8 @@ export { DatabricksModelRegistry } from "./src/registry.ts";
 export type { ModelRegistryResolveOptions, ModelRegistry, ModelRegistryOptions } from "./src/registry.ts";
 export { UnsupportedGatewayFeatureError, resolveRoute, requestedFeatures, isCodexOriginator } from "./src/router.ts";
 export { sendHealth, sendModels, sendInference } from "./src/routes.ts";
+export { SmartRouterProbeRecordSchema, SmartRouterError, AppKitSmartRouterStore, AppKitSmartRouterProbeStore, SmartRouterService, smartRouterCandidates, SmartRouterContextBuilder, SmartModelRouter, smartRouterTurnKey, SMART_ROUTER_DEFAULT_SETTINGS } from "./src/smart-router.ts";
+export type { SmartRouterSettings, SmartRouterCandidate, SmartRouterSelection, SmartRouterStore, SmartRouterProbeRecord, SmartRouterProbeStore, SmartRouterResult, SmartRouterContext, SmartRouterSelectOptions } from "./src/smart-router.ts";
 export { translateGatewayRequest } from "./src/translation.ts";
 export { fetchDatabricks, directDatabricksRequestBody, gatewayResponseHeaders } from "./src/transport.ts";
 export type { DatabricksTransportRequest } from "./src/transport.ts";
