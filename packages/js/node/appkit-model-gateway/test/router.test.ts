@@ -26,6 +26,8 @@ const BASE_CAPABILITIES: ModelCapabilities = {
   customTools: false,
   structuredOutput: true,
   webSearch: false,
+  imageInput: false,
+  applyPatch: false,
 };
 
 const NO_FEATURES: RequestedFeatures = {
@@ -39,6 +41,8 @@ const NO_FEATURES: RequestedFeatures = {
   tools: false,
   unsupportedOpenResponsesTools: false,
   webSearch: false,
+  imageInput: false,
+  applyPatch: false,
 };
 
 describe("model gateway routing", () => {
@@ -236,7 +240,14 @@ describe("model gateway routing", () => {
         tools: true,
         unsupportedOpenResponsesTools: true,
         webSearch: false,
+        imageInput: false,
+        applyPatch: true,
       },
+    );
+    assert.equal(
+      requestedFeatures({ thinking: { type: "adaptive" }, output_config: { effort: "high" } })
+        .reasoning,
+      true,
     );
   });
 });

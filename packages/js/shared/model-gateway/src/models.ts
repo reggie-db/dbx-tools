@@ -9,6 +9,7 @@ import { z } from "zod";
 
 /** Capabilities published with an OpenAI-compatible model entry. */
 export const OpenAIModelCapabilitiesSchema = z.object({
+  automatic: z.boolean().describe("True for the virtual automatic-routing model."),
   tools: z.boolean(),
   reasoning: z.array(ReasoningEffortSchema),
   responses: z.boolean(),
@@ -18,6 +19,8 @@ export const OpenAIModelCapabilitiesSchema = z.object({
   ai_gateway_codex: z.boolean(),
   streaming: z.boolean(),
   web_search: z.boolean(),
+  image_input: z.boolean(),
+  apply_patch: z.boolean(),
 });
 /** Capabilities published with an OpenAI-compatible model entry. */
 export type OpenAIModelCapabilities = z.infer<typeof OpenAIModelCapabilitiesSchema>;

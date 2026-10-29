@@ -4,6 +4,7 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-model-gateway";
 export const PACKAGE_VERSION = "0.9.174";
+export * as automaticRouting from "./src/automatic-routing.ts";
 export * as gateway from "./src/gateway.ts";
 export * as models from "./src/models.ts";
 export * as plugin from "./src/plugin.ts";
@@ -13,6 +14,8 @@ export * as router from "./src/router.ts";
 export * as routes from "./src/routes.ts";
 export * as translation from "./src/translation.ts";
 export * as transport from "./src/transport.ts";
+export { AutomaticRoutingError, AppKitAutomaticRouteStore, SystemOneAutomaticRouteSelector, AutomaticModelRouter, summarizeAutomaticRequest, automaticTurnKey } from "./src/automatic-routing.ts";
+export type { AutomaticRouteSelector, AutomaticRouteStore, AutomaticRouteSettings, AutomaticRouteResult, AutomaticTurnKeyContext } from "./src/automatic-routing.ts";
 export { ModelGatewayError, ModelGateway, sanitizeInferenceBody, adaptInferenceTemperature, gatewayModelSelection } from "./src/gateway.ts";
 export type { ModelGatewayOptions } from "./src/gateway.ts";
 export { listModelsPayload, codexModelSlug } from "./src/models.ts";

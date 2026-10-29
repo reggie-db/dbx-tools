@@ -83,6 +83,8 @@ const CAPABILITIES: ModelCapabilities = {
   customTools: true,
   structuredOutput: true,
   webSearch: true,
+  imageInput: true,
+  applyPatch: true,
 };
 
 const TARGET: ModelTarget = {

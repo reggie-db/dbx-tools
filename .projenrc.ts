@@ -847,6 +847,7 @@ project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "n
     "@dbx-tools/shared-model-gateway@workspace:^",
     "@dbx-tools/shared-model@workspace:^",
     "ai@catalog:",
+    "js-tiktoken@^1.0.21",
     "zod@catalog:",
   );
   p.addDevDeps(

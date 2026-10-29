@@ -10,6 +10,7 @@ import { log, toError } from "@dbx-tools/shared-core";
 import type { ClientProtocol } from "@dbx-tools/shared-model-gateway";
 import type express from "express";
 
+import { AutomaticRoutingError } from "./automatic-routing.ts";
 import { ModelGateway, ModelGatewayError } from "./gateway.ts";
 import { UnsupportedGatewayFeatureError } from "./router.ts";
 
@@ -128,7 +129,9 @@ export async function sendInference(
 
 function sendError(protocol: ClientProtocol, response: express.Response, error: unknown): void {
   const status =
-    error instanceof ModelGatewayError || error instanceof UnsupportedGatewayFeatureError
+    error instanceof ModelGatewayError ||
+    error instanceof AutomaticRoutingError ||
+    error instanceof UnsupportedGatewayFeatureError
       ? error.status
       : 500;
   const message = error instanceof Error ? error.message : "Model gateway request failed";

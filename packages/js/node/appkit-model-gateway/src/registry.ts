@@ -202,6 +202,8 @@ export class DatabricksModelRegistry implements ModelRegistry {
       customTools: published.applyPatch || endpoint.name.includes("codex"),
       structuredOutput: true,
       webSearch: published.webSearch,
+      imageInput: published.imageInput,
+      applyPatch: published.applyPatch,
     };
     const aliases = new Set(
       [

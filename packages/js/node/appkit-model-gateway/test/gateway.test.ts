@@ -35,6 +35,29 @@ describe("ModelGateway model discovery", () => {
     assert.deepEqual(calls, ["gte large"]);
     assert.equal("data" in response ? response.data[0]?.id : undefined, target.id);
   });
+
+  it("publishes auto through the standard and Codex /v1/models shapes", async () => {
+    const target = chatTarget();
+    const registry: ModelRegistry = {
+      async list() {
+        return [target];
+      },
+      async search() {
+        return [target];
+      },
+      async resolve() {
+        return target;
+      },
+      async refresh() {},
+    };
+    const gateway = new ModelGateway({}, registry);
+
+    const standard = await gateway.models();
+    const codex = await gateway.models("codex_cli_rs");
+
+    assert.equal("data" in standard ? standard.data[0]?.id : undefined, "auto");
+    assert.equal("models" in codex ? codex.models[0]?.slug : undefined, "databricks/auto");
+  });
 });
 
 describe("ModelGateway request sanitization", () => {
@@ -49,6 +72,12 @@ describe("ModelGateway request sanitization", () => {
     });
     assert.deepEqual(gatewayModelSelection({ model: "gpt" }, new Headers()), {
       model: "gpt",
+    });
+    assert.deepEqual(gatewayModelSelection({ model: "auto" }, new Headers()), {
+      automatic: true,
+    });
+    assert.deepEqual(gatewayModelSelection({ model: "databricks/auto" }, new Headers()), {
+      automatic: true,
     });
     assert.throws(
       () =>
@@ -126,7 +155,41 @@ function embeddingTarget(): ModelTarget {
       customTools: false,
       structuredOutput: false,
       webSearch: false,
+      imageInput: false,
+      applyPatch: false,
     },
     reasoningEfforts: [],
+  };
+}
+
+function chatTarget(): ModelTarget {
+  return {
+    id: "databricks-gpt-oss-120b",
+    aliases: ["databricks-gpt-oss-120b"],
+    displayName: "GPT OSS 120B",
+    endpoint: {
+      name: "databricks-gpt-oss-120b",
+      task: "llm/v1/chat",
+      class: "chat-balanced",
+      status: { deprecated: false },
+    },
+    capabilities: {
+      responses: true,
+      openResponses: true,
+      chat: true,
+      anthropic: false,
+      embeddings: false,
+      aiGatewayCodex: true,
+      tools: true,
+      reasoning: true,
+      streaming: true,
+      parallelTools: true,
+      customTools: true,
+      structuredOutput: true,
+      webSearch: false,
+      imageInput: false,
+      applyPatch: true,
+    },
+    reasoningEfforts: ["low", "medium", "high"],
   };
 }

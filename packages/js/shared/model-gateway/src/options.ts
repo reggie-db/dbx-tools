@@ -42,6 +42,49 @@ export const ChatModelSelectionOptionsSchema = ModelSelectionOptionsSchema.safeE
 }).describe("Chat-model selection by name or capability class.");
 
 export const ModelGatewayOptionsSchema = ModelSelectionOptionsSchema.safeExtend({
+  automaticRouting: z
+    .boolean()
+    .default(true)
+    .describe("Expose model auto and route each top-level chat turn by request complexity."),
+  automaticSelectorModel: z
+    .string()
+    .trim()
+    .min(1)
+    .default("system.ai.openjev-qwen3.5-4b")
+    .describe("System One model used to classify automatic chat requests."),
+  automaticSelectorTimeoutMs: z
+    .number()
+    .int()
+    .min(100)
+    .max(30_000)
+    .default(2_000)
+    .describe("Maximum milliseconds allowed for one System One routing decision."),
+  automaticSelectorTokenBudget: z
+    .number()
+    .int()
+    .min(256)
+    .max(32_768)
+    .default(4_096)
+    .describe("o200k_base token budget for the current request and recent chat context."),
+  automaticMinimumConfidence: z
+    .number()
+    .min(0)
+    .max(1)
+    .default(0.55)
+    .describe("Minimum System One confidence accepted before deterministic fallback."),
+  automaticRouteTtlSeconds: z
+    .number()
+    .int()
+    .min(60)
+    .max(86_400)
+    .default(21_600)
+    .describe("Seconds a logical turn keeps its selected concrete model and reasoning effort."),
+  automaticPreferCostEfficientModels: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Within the selected tier, prefer lower-cost profiles and then recognized open-weight models.",
+    ),
   preferSystemModels: z
     .boolean()
     .default(false)

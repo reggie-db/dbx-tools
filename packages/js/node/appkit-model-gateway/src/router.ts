@@ -74,18 +74,31 @@ export function resolveRoute(input: ResolveRouteInput): GatewayRoute {
 /** Detect route-affecting features from an OpenAI or Anthropic request body. */
 export function requestedFeatures(body: Readonly<Record<string, unknown>>): RequestedFeatures {
   const tools = Array.isArray(body.tools) ? body.tools : [];
-  const toolTypes = tools
-    .filter((tool): tool is Record<string, unknown> => isRecord(tool))
-    .map((tool) => tool.type);
+  const toolRecords = tools.filter((tool): tool is Record<string, unknown> => isRecord(tool));
+  const toolTypes = toolRecords.map((tool) => tool.type);
+  const toolNames = toolRecords
+    .map((tool) =>
+      typeof tool.name === "string"
+        ? tool.name
+        : isRecord(tool.function) && typeof tool.function.name === "string"
+          ? tool.function.name
+          : undefined,
+    )
+    .filter((name): name is string => name !== undefined);
   const text = isRecord(body.text) ? body.text : {};
   const format = isRecord(text.format) ? text.format.type : text.format;
+  const outputConfig = isRecord(body.output_config) ? body.output_config : {};
   return {
     background: body.background === true,
     customTools: toolTypes.some((type) => type === "custom"),
     parallelTools: body.parallel_tool_calls === true,
     previousResponse:
       typeof body.previous_response_id === "string" && body.previous_response_id.length > 0,
-    reasoning: isRecord(body.reasoning) || body.reasoning_effort !== undefined,
+    reasoning:
+      isRecord(body.reasoning) ||
+      body.reasoning_effort !== undefined ||
+      isRecord(body.thinking) ||
+      outputConfig.effort !== undefined,
     storage: body.store === true,
     structuredOutput: format !== undefined && format !== "text",
     tools: tools.length > 0,
@@ -93,6 +106,8 @@ export function requestedFeatures(body: Readonly<Record<string, unknown>>): Requ
       (type) => type !== "function" && type !== "web_search" && type !== "web_search_preview",
     ),
     webSearch: toolTypes.some((type) => type === "web_search" || type === "web_search_preview"),
+    imageInput: containsImageInput(body.input) || containsImageInput(body.messages),
+    applyPatch: toolNames.some((name) => /^apply[_-]?patch$/i.test(name)),
   };
 }
 
@@ -168,5 +183,15 @@ function canUseAiGatewayCodex(target: ModelTarget, features: RequestedFeatures):
   return (
     Boolean(target.capabilities.aiGatewayCodex && target.modelServiceName) &&
     supportsDirectResponses(target, features)
+  );
+}
+
+function containsImageInput(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsImageInput);
+  if (!isRecord(value)) return false;
+  const type = typeof value.type === "string" ? value.type.toLowerCase() : "";
+  if (type.includes("image")) return true;
+  return Object.entries(value).some(
+    ([key, nested]) => key !== "arguments" && key !== "input" && containsImageInput(nested),
   );
 }

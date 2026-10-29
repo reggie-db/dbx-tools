@@ -9,6 +9,13 @@ import {
 describe("model-gateway options", () => {
   it("owns shared server defaults", () => {
     assert.deepEqual(MODEL_GATEWAY_DEFAULTS, {
+      automaticRouting: true,
+      automaticSelectorModel: "system.ai.openjev-qwen3.5-4b",
+      automaticSelectorTokenBudget: 4096,
+      automaticSelectorTimeoutMs: 2000,
+      automaticMinimumConfidence: 0.55,
+      automaticRouteTtlSeconds: 21600,
+      automaticPreferCostEfficientModels: true,
       preferSystemModels: false,
       listen: { scheme: "tcp", host: "localhost", port: 4000 },
       bodyLimit: "100mb",
@@ -23,6 +30,13 @@ describe("model-gateway options", () => {
         profile: " PROFILE ",
       }),
       {
+        automaticRouting: true,
+        automaticSelectorModel: "system.ai.openjev-qwen3.5-4b",
+        automaticSelectorTokenBudget: 4096,
+        automaticSelectorTimeoutMs: 2000,
+        automaticMinimumConfidence: 0.55,
+        automaticRouteTtlSeconds: 21600,
+        automaticPreferCostEfficientModels: true,
         preferSystemModels: false,
         listen: { scheme: "tcp", host: "localhost", port: 4400 },
         profile: "PROFILE",

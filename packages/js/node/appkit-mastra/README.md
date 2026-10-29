@@ -946,7 +946,10 @@ Databricks-hosted GPT 5.6 Chat Completions with function tools receives
 Other Chat models receive no synthesized effort, while an explicit supported
 caller value is preserved. Responses-only models such as GPT Astra use the
 native Responses provider. Claude reasoning replay and Gemini/Claude structured
-response content continue through the same shared sanitizer.
+response content continue through the same shared sanitizer. Chat routes emit
+provider reasoning parts to the AI SDK UI stream by default; set
+`sendReasoning: false` on `mastra(...)` only when the application should hide
+those parts.
 
 Responses turns set `store: false`. The OpenAI provider automatically includes
 encrypted reasoning state so a tool continuation sends the complete stateless

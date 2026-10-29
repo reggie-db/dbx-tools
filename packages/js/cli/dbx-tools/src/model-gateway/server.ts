@@ -65,6 +65,13 @@ export function gatewayBearerMiddleware(token: string): express.RequestHandler {
 export async function startModelGateway(options: ModelGatewayOptions = {}): Promise<void> {
   const resolved = resolveModelGatewayOptions(options);
   const gateway = new ModelGateway({
+    automaticRouting: resolved.automaticRouting,
+    automaticSelectorModel: resolved.automaticSelectorModel,
+    automaticSelectorTokenBudget: resolved.automaticSelectorTokenBudget,
+    automaticSelectorTimeoutMs: resolved.automaticSelectorTimeoutMs,
+    automaticMinimumConfidence: resolved.automaticMinimumConfidence,
+    automaticPreferCostEfficientModels: resolved.automaticPreferCostEfficientModels,
+    automaticRouteTtlSeconds: resolved.automaticRouteTtlSeconds,
     ...(resolved.model ? { model: resolved.model } : {}),
     ...(resolved.modelClass ? { modelClass: resolved.modelClass } : {}),
     preferSystemModels: resolved.preferSystemModels,

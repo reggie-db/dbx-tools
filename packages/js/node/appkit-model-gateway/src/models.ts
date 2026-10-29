@@ -5,9 +5,12 @@
  */
 
 import { isChatClass, modelFamily, modelFamilyRank } from "@dbx-tools/model";
+import { ModelClass, ReasoningEffort } from "@dbx-tools/shared-model";
+import { AUTOMATIC_MODEL_ID } from "@dbx-tools/shared-model-gateway";
 import type {
   CodexModel,
   CodexModelListResponse,
+  ModelCapabilities,
   ModelListResponse,
   ModelTarget,
   OpenAIModel,
@@ -33,24 +36,28 @@ export function listModelsPayload(
   includeCodex: true,
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
+  includeAutomatic?: boolean,
 ): CodexModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: false,
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
+  includeAutomatic?: boolean,
 ): OpenAIModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
+  includeAutomatic?: boolean,
 ): ModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
   preserveOrder = false,
   preferSystemModels = false,
+  includeAutomatic = false,
 ): ModelListResponse {
   const available = targets
     .filter((target) => target.endpoint?.status?.deprecated !== true)
@@ -59,6 +66,10 @@ export function listModelsPayload(
     available.sort((left, right) =>
       compareCatalogueTargets(left, right, (target) => target.displayName),
     );
+  }
+  const automaticCandidates = available.filter((target) => target.capabilities.chat);
+  if (includeAutomatic && automaticCandidates.length > 0) {
+    available.unshift(automaticModelTarget(automaticCandidates));
   }
   if (includeCodex) {
     return {
@@ -81,6 +92,7 @@ function openAiModel(target: ModelTarget): OpenAIModel {
     task: target.endpoint?.task,
     status: target.endpoint?.status ?? { deprecated: false },
     capabilities: {
+      automatic: target.id === AUTOMATIC_MODEL_ID,
       tools: target.capabilities.tools,
       reasoning: target.reasoningEfforts,
       responses: target.capabilities.responses,
@@ -90,7 +102,49 @@ function openAiModel(target: ModelTarget): OpenAIModel {
       ai_gateway_codex: target.capabilities.aiGatewayCodex,
       streaming: target.capabilities.streaming,
       web_search: target.capabilities.webSearch,
+      image_input: target.capabilities.imageInput,
+      apply_patch: target.capabilities.applyPatch,
     },
+  };
+}
+
+function automaticModelTarget(candidates: readonly ModelTarget[]): ModelTarget {
+  const has = (capability: keyof ModelCapabilities) =>
+    candidates.some((target) => target.capabilities[capability]);
+  const reasoningEfforts = Object.values(ReasoningEffort).filter((effort) =>
+    candidates.some((target) => target.reasoningEfforts.includes(effort)),
+  );
+  return {
+    id: AUTOMATIC_MODEL_ID,
+    aliases: [AUTOMATIC_MODEL_ID],
+    displayName: "Auto",
+    endpoint: {
+      name: AUTOMATIC_MODEL_ID,
+      displayName: "Auto",
+      description:
+        "Selects a compatible Databricks model and reasoning budget for each top-level chat turn.",
+      task: "llm/v1/chat",
+      class: ModelClass.ChatBalanced,
+      status: { deprecated: false },
+    },
+    capabilities: {
+      responses: true,
+      openResponses: true,
+      chat: true,
+      anthropic: true,
+      embeddings: false,
+      aiGatewayCodex: true,
+      tools: has("tools"),
+      reasoning: reasoningEfforts.length > 0,
+      streaming: true,
+      parallelTools: has("parallelTools"),
+      customTools: has("customTools"),
+      structuredOutput: has("structuredOutput"),
+      webSearch: has("webSearch"),
+      imageInput: has("imageInput"),
+      applyPatch: has("applyPatch"),
+    },
+    reasoningEfforts,
   };
 }
 

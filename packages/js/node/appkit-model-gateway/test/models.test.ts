@@ -19,9 +19,41 @@ const CAPABILITIES: ModelCapabilities = {
   customTools: false,
   structuredOutput: true,
   webSearch: false,
+  imageInput: false,
+  applyPatch: false,
 };
 
 describe("model gateway catalogue", () => {
+  it("publishes one virtual auto model for OpenAI and Codex discovery", () => {
+    const openAi = listModelsPayload([target("gpt")], false, false, false, true);
+    const codex = listModelsPayload([target("gpt")], true, false, false, true);
+
+    assert.equal(openAi.data[0]?.id, "auto");
+    assert.equal(openAi.data[0]?.capabilities.automatic, true);
+    assert.equal(openAi.data[0]?.capabilities.web_search, false);
+    assert.equal(openAi.data[0]?.capabilities.image_input, false);
+    assert.equal(openAi.data[0]?.capabilities.apply_patch, false);
+    assert.equal(codex.models[0]?.slug, "databricks/auto");
+    assert.equal(codex.models[0]?.display_name, "Auto");
+  });
+
+  it("aggregates automatic capabilities from the live chat candidate pool", () => {
+    const payload = listModelsPayload(
+      [
+        target("gpt", { webSearch: true, applyPatch: true, customTools: true }),
+        target("gemini", { imageInput: true }),
+      ],
+      false,
+      false,
+      false,
+      true,
+    );
+
+    assert.equal(payload.data[0]?.capabilities.web_search, true);
+    assert.equal(payload.data[0]?.capabilities.image_input, true);
+    assert.equal(payload.data[0]?.capabilities.apply_patch, true);
+  });
+
   it("derives Codex slugs from the model-service name when AI Gateway Codex is available", () => {
     const gpt = target("gpt", { responses: true, openResponses: false, customTools: true });
     const claude = target("claude", { anthropic: true, aiGatewayCodex: false });

@@ -51,6 +51,50 @@ The gateway supports:
 - OpenAI-compatible embeddings.
 - Codex model discovery and Responses traffic.
 
+## Use automatic routing
+
+Select the virtual `auto` model from any supported chat protocol:
+
+```json
+{
+  "model": "auto",
+  "input": "Refactor the authorization layer across the repository"
+}
+```
+
+The gateway sends a bounded summary of the current request and recent portable
+chat context to Databricks System One. It excludes transport credentials, tool
+arguments, and binary data. System One chooses a `fast`, `balanced`, or
+`thinking` tier plus a reasoning budget. The model package then resolves that
+decision against the live workspace catalogue and hard requirements such as
+tools, web search, images, structured output, apply-patch support, and the
+client protocol.
+
+The same `auto` id works with Responses, Chat Completions, Anthropic Messages,
+and Codex-compatible Responses traffic. Embeddings require an explicit model.
+Explicit concrete models, model-class headers, and reasoning fields continue to
+override automatic policy.
+
+Automatic selections are pinned for the logical user turn. The default store
+uses AppKit `CacheManager`, so configured Lakebase/PostgreSQL persistence is
+reused across app replicas. Supply `automaticRouteStore` to use another storage
+implementation with the same `get`/`set` contract, including a SQLite-backed
+adapter. Only the selected model and bounded route metadata are stored; prompts
+and responses are not.
+
+This state is a TTL route pin, not conversation history. The gateway does not
+read Mastra `PostgresStore`: supported chat requests already carry the portable
+transcript, and coupling routing to Mastra would exclude other chat clients.
+AppKit cache persistence is also preferable to a gateway-owned file or a second
+expiring table because it already handles process-local reuse, project-scoped
+disk fallback, and configured Lakebase/PostgreSQL storage. A consumer can still
+inject a different store when its deployment needs another backend.
+
+Selector failure or low confidence uses a compatible deterministic fallback.
+Response headers expose the concrete model, tier, reasoning effort, confidence,
+reason code, source, and degraded state without rewriting the upstream response
+body's model identity.
+
 ## Discover models
 
 ```ts
@@ -105,6 +149,19 @@ Use `wire_api = "responses"` and `supports_websockets = false`.
 `model` and `modelClass` set the default selection. `preferSystemModels` selects
 `system.ai.*` AI Gateway services for non-exact eligible requests. An exact
 serving endpoint or `system.ai.*` name still wins.
+
+Automatic routing is enabled by default and is invoked only by `model: "auto"`.
+Configure `automaticSelectorModel`, `automaticSelectorTimeoutMs`,
+`automaticSelectorTokenBudget`, `automaticMinimumConfidence`, and
+`automaticRouteTtlSeconds` to tune selector and pinning policy.
+`automaticPreferCostEfficientModels` defaults to `true`; within the selected
+tier it prefers a lower published Databricks cost score, then a model-owned
+open-weight eligibility policy, before preserving normal quality/version order.
+The token budget prioritizes the current request, then includes as many newest
+complete prior user and assistant messages as fit; it is not a fixed turn count.
+Budgeting uses the standard `js-tiktoken` `o200k_base` encoding consistently
+across providers. Set `automaticRouting: false` to hide and reject the virtual
+model.
 
 Use `overrides` when workspace metadata must be corrected for a specific model.
 For example, disable an advertised capability that the selected gateway route

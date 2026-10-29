@@ -17,6 +17,14 @@ describe("mastra config schema", () => {
       assert.ok((description as string).length > 0, `${name} description must be non-empty`);
     }
   });
+
+  it("publishes default-on reasoning stream control", () => {
+    assert.deepEqual(MASTRA_CONFIG_SCHEMA.properties?.sendReasoning, {
+      type: "boolean",
+      description:
+        "Include model reasoning parts in chat UI streams when the provider returns them. Defaults to true.",
+    });
+  });
 });
 
 describe("genie space normalization", () => {

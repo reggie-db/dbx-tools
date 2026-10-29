@@ -66,6 +66,11 @@
       "type": "runtime"
     },
     {
+      "name": "js-tiktoken",
+      "version": "^1.0.21",
+      "type": "runtime"
+    },
+    {
       "name": "zod",
       "version": "catalog:",
       "type": "runtime"

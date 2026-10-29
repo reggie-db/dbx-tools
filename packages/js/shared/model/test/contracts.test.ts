@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  AutomaticRouteDecisionSchema,
+  AutomaticRouteObservationSchema,
+  AutomaticRouteRequestSchema,
   EndpointCapabilitiesSchema,
   ModelMetadataSchema,
   ModelRateLimitsSchema,
@@ -100,6 +103,57 @@ describe("browser-safe model schemas", () => {
       ServingEndpointSummarySchema.parse({
         name: "databricks-gpt-test",
         reasoningEfforts: ["impossible"],
+      }),
+    );
+  });
+
+  it("validates automatic route requests, decisions, and observations", () => {
+    assert.doesNotThrow(() =>
+      AutomaticRouteRequestSchema.parse({
+        protocol: "openai-responses",
+        currentRequest: "Refactor the authorization layer",
+        recentContext: ["user: inspect the repository"],
+        toolNames: ["apply_patch"],
+        inputCharacters: 128,
+        selectorTokens: 64,
+        continuation: false,
+        features: {
+          tools: true,
+          webSearch: false,
+          imageInput: false,
+          structuredOutput: false,
+          applyPatch: true,
+        },
+        eligibleTiers: ["balanced", "thinking"],
+      }),
+    );
+    assert.doesNotThrow(() =>
+      AutomaticRouteDecisionSchema.parse({
+        tier: "thinking",
+        reasoningEffort: "xhigh",
+        confidence: 0.9,
+        reasonCode: "large_refactor",
+      }),
+    );
+    assert.doesNotThrow(() =>
+      AutomaticRouteObservationSchema.parse({
+        selectedModel: "system.ai.example",
+        tier: "thinking",
+        reasoningEffort: "xhigh",
+        confidence: 0.9,
+        reasonCode: "large_refactor",
+        source: "selector",
+        degraded: false,
+        selectorModel: "system.ai.openjev-qwen3.5-4b",
+        selectorLatencyMs: 20,
+      }),
+    );
+    assert.throws(() =>
+      AutomaticRouteDecisionSchema.parse({
+        tier: "thinking",
+        reasoningEffort: "xhigh",
+        confidence: 2,
+        reasonCode: "large_refactor",
       }),
     );
   });

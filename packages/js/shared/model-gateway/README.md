@@ -15,6 +15,10 @@ const response = await client.listModels({ search: "claude sonnet" });
 const modelIds = "data" in response ? response.data.map((model) => model.id) : [];
 ```
 
+The catalogue includes the virtual `auto` chat model when automatic routing is
+enabled. Its `capabilities.automatic` field distinguishes it from concrete
+Databricks endpoints.
+
 In a browser, the client uses the active origin. Supply `baseUrl` in tests,
 server rendering, or any runtime without `globalThis.location`:
 
@@ -64,6 +68,8 @@ import {
 } from "@dbx-tools/shared-model-gateway/options";
 
 const options = resolveModelGatewayOptions({
+  automaticRouting: true,
+  automaticSelectorModel: "system.ai.openjev-qwen3.5-4b",
   listen: "localhost:4400",
   modelClass: "chat-balanced",
   preferSystemModels: true,
@@ -78,6 +84,10 @@ ModelGatewayOptionsSchema.parse(options);
 select the best available chat model. `preferSystemModels` defaults to `false`.
 When enabled, non-exact requests use `system.ai.*` services instead of workspace
 serving endpoints.
+
+The `automatic` module exports the canonical `auto` id and the response-header
+names used to observe the selected concrete model, tier, reasoning effort,
+confidence, reason code, decision source, and fallback state.
 
 ## Runtime boundary
 
@@ -94,3 +104,4 @@ model discovery and selection.
 - `models`: validates public model, embedding, and error payloads.
 - `contracts`: validates shared routing and capability values.
 - `options`: validates shared server and CLI configuration.
+- `automatic`: owns the virtual model id and automatic-route observation headers.

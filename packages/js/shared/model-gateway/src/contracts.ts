@@ -44,6 +44,8 @@ export const ModelCapabilitiesSchema = z
     customTools: z.boolean().describe("True when the model accepts custom tool definitions."),
     structuredOutput: z.boolean().describe("True when the model can return structured output."),
     webSearch: z.boolean().describe("True when the model can use web search."),
+    imageInput: z.boolean().describe("True when the model accepts image input."),
+    applyPatch: z.boolean().describe("True when the model accepts the apply-patch tool."),
   })
   .describe("Capabilities used to determine whether a request can remain on a direct path.");
 
@@ -79,7 +81,9 @@ export const RequestedFeaturesSchema = z
     customTools: z.boolean().describe("True when the request includes custom tools."),
     parallelTools: z.boolean().describe("True when the request asks for parallel tool calls."),
     previousResponse: z.boolean().describe("True when the request continues a stored response."),
-    reasoning: z.boolean().describe("True when the request sets reasoning effort."),
+    reasoning: z
+      .boolean()
+      .describe("True when the request sets reasoning effort or Anthropic thinking control."),
     storage: z
       .boolean()
       .describe("True when the request asks the provider to persist the response."),
@@ -89,6 +93,8 @@ export const RequestedFeaturesSchema = z
       .boolean()
       .describe("True when tools cannot ride the Open Responses fast path."),
     webSearch: z.boolean().describe("True when the request includes web search."),
+    imageInput: z.boolean().describe("True when the request includes image input."),
+    applyPatch: z.boolean().describe("True when the request includes an apply-patch tool."),
   })
   .describe("Request features that constrain direct protocol routes.");
 

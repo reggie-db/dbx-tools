@@ -28,6 +28,8 @@ const CAPABILITIES = {
   customTools: true,
   structuredOutput: true,
   webSearch: true,
+  imageInput: true,
+  applyPatch: true,
 };
 
 describe("shared model-gateway schemas", () => {
@@ -104,6 +106,7 @@ describe("shared model-gateway schemas", () => {
             name: "GPT Test",
             status: { deprecated: false },
             capabilities: {
+              automatic: false,
               tools: true,
               reasoning: ["high"],
               responses: true,
@@ -113,6 +116,8 @@ describe("shared model-gateway schemas", () => {
               ai_gateway_codex: true,
               streaming: true,
               web_search: true,
+              image_input: true,
+              apply_patch: true,
             },
           },
         ],

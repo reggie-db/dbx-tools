@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { compareVersionTuples, versionTuple } from "../src/classify.ts";
-import { inheritsNativeWebSearch, modelFamily, ModelFamily } from "../src/policy.ts";
+import {
+  inheritsNativeWebSearch,
+  isOpenWeightsModel,
+  modelFamily,
+  ModelFamily,
+} from "../src/policy.ts";
 
 describe("native web-search version inheritance", () => {
   const documented = ["gpt-5", "gpt-5-4", "gemini-3-1-pro"];
@@ -39,5 +44,22 @@ describe("model family values", () => {
     assert.equal(modelFamily("databricks-gpt-6-1-sol"), ModelFamily.Gpt);
     assert.equal(modelFamily("databricks-gemini-3-8-flash"), ModelFamily.Gemini);
     assert.equal(modelFamily("custom-endpoint"), undefined);
+  });
+
+  it("owns open-weight eligibility for automatic cost preference", () => {
+    for (const name of [
+      "databricks-gpt-oss-120b",
+      "databricks-meta-llama-3-3-70b-instruct",
+      "system.ai.qwen3-next-80b-a3b-instruct",
+      "databricks-deepseek-r1",
+      "databricks-glm-5-2",
+      "databricks-kimi-k3",
+      "databricks-gemma-3-27b",
+    ]) {
+      assert.equal(isOpenWeightsModel(name), true, name);
+    }
+    assert.equal(isOpenWeightsModel("databricks-claude-sonnet-4-6"), false);
+    assert.equal(isOpenWeightsModel("system.ai.gpt-6-1-sol"), false);
+    assert.equal(isOpenWeightsModel("custom-endpoint"), false);
   });
 });

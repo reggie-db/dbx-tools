@@ -13,6 +13,22 @@ dbx model-gateway \
   --listen tcp://127.0.0.1:4000
 ```
 
+Select `auto` when the gateway should choose both the concrete model and
+reasoning budget for the current user turn:
+
+```bash
+curl http://127.0.0.1:4000/v1/responses \
+  -H 'content-type: application/json' \
+  -d '{
+    "model": "auto",
+    "input": "Refactor the authorization layer across the repository"
+  }'
+```
+
+`auto` also works with Chat Completions and Anthropic Messages. It is not valid
+for embeddings. Concrete model ids, model-class headers, and explicit reasoning
+fields remain authoritative.
+
 Install the current-user service when local tools need the endpoint after the
 terminal closes:
 
@@ -151,6 +167,39 @@ authoritative.
 Use model overrides only to correct workspace metadata for a known model. For
 example, disable web search when the selected gateway route cannot use an
 advertised capability.
+
+## Understand automatic routing
+
+Automatic routing calls Databricks System One with token-budgeted recent text,
+tool names, protocol, and required capabilities. The budget prioritizes the
+current request and then fills remaining space from the newest prior user and
+assistant messages. It never sends credentials, tool arguments, image bytes, or
+unbounded conversation history. System One chooses a logical tier and reasoning
+budget; `@dbx-tools/model` resolves the concrete live endpoint.
+
+With `automaticPreferCostEfficientModels` enabled (the default), resolution
+prefers lower published Databricks cost scores within the selected tier. When
+cost does not distinguish candidates, the model package's centrally owned
+open-weight policy is preferred before normal quality/version order. Protocol,
+capability, requested reasoning, lifecycle, and tier constraints are always
+applied first.
+
+Selections are pinned through tool calls and retries with AppKit's shared cache.
+In a Databricks App, the cache reuses configured Lakebase/PostgreSQL persistence.
+The storage contract is injectable, so another runtime can provide SQLite or a
+different key-value backend without changing routing policy.
+
+If the selector times out, fails, or returns confidence below the configured
+minimum, the gateway uses a deterministic compatible fallback. Inspect these
+response headers for the result:
+
+- `x-dbx-tools-selected-model`
+- `x-dbx-tools-auto-tier`
+- `x-dbx-tools-auto-reasoning-effort`
+- `x-dbx-tools-auto-confidence`
+- `x-dbx-tools-auto-reason-code`
+- `x-dbx-tools-auto-source`
+- `x-dbx-tools-auto-degraded`
 
 ## Understand protocol limits
 

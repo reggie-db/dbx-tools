@@ -56,6 +56,36 @@ The package:
   while committed fallbacks keep refreshes and runtime startup offline-safe.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
+- Resolves validated automatic `fast`, `balanced`, and `thinking` decisions
+  against the same live catalogue, ranking, lifecycle, and reasoning metadata
+  used by explicit model selection.
+
+## Resolve an automatic decision
+
+The model package owns pure automatic candidate selection. It does not call the
+remote selector or persist conversation state:
+
+```ts
+import { automaticRouting } from "@dbx-tools/model";
+
+const selected = automaticRouting.resolveAutomaticModel(
+  endpoints,
+  {
+    tier: "thinking",
+    reasoningEffort: "high",
+    confidence: 0.92,
+    reasonCode: "large_refactor",
+  },
+  { preferSystemModels: true },
+);
+```
+
+The gateway supplies only candidates that satisfy protocol and feature
+requirements. This function preserves model-package ownership of class ranking,
+system-model preference, retirement handling, and reasoning-ladder mapping.
+With `preferCostEfficientModels`, it compares published `profile.cost` values
+first, then uses the package's single open-weight family policy before preserving
+normal quality and version order.
 
 ## Use with AppKit Model Serving
 
