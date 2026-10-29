@@ -183,6 +183,8 @@ export class MemoryPlugin extends ToolRegistryPlugin<MemoryPluginConfig> {
 
   private async saveTurn(turn: MemoryTurn, signal?: AbortSignal): Promise<void> {
     if (await this.databricksBackend(turn.actorId, signal)) return;
+    const saveTurns = this.requireConfig().saveTurns;
+    if (saveTurns !== true && !this.graphiti?.running && !this.graphitiStarting) return;
     await (await this.graphitiBackend()).saveTurn(turn, signal);
   }
 

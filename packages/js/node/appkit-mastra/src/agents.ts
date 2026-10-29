@@ -919,8 +919,16 @@ export async function buildAgents(opts: {
       ? { suggest_follow_ups: buildSuggestFollowUpsTool(config) }
       : {}),
   };
-  const standardSkillTools =
-    standardSkills.length > 0 ? createSkillTools(resolveAgentSkills([...standardSkills])) : {};
+  let standardSkillTools: MastraTools = {};
+  if (standardSkills.length > 0) {
+    const processSkills = resolveAgentSkills([...standardSkills]);
+    // These skills are immutable startup snapshots. Build their shared BM25
+    // catalogue while the app initializes so no chat session pays the first
+    // parse/index cost. Workspace-file skills retain their separate dynamic,
+    // non-blocking refresh path below.
+    await processSkills.list();
+    standardSkillTools = createSkillTools(processSkills);
+  }
   const ambientTools = {
     ...systemTools,
     ...standardSkillTools,
@@ -960,6 +968,7 @@ export async function buildAgents(opts: {
         extraSkillMounts,
         excludeSkillNames: excludedWorkspaceSkillNames,
         fallbackToTmp: config.workspaceFallbackToTmp,
+        ...(config.workspaceSkills === false ? { skills: [] } : {}),
         ...(config.workspaceTools !== undefined ? { tools: config.workspaceTools } : {}),
         pluginContext: context,
         sandbox: config.sandbox,

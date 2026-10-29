@@ -62,9 +62,10 @@ Mastra continues to store threads and messages in its configured
 `PostgresStore` and semantic recall in `PgVector`. `saveTurns` defaults to
 `"auto"`, which attaches the memory plugin's output processor when both Mastra
 and Graphiti are registered. Set it to `true` to require attachment at startup
-or `false` to disable it. Completed turns are mirrored to Graphiti only when
-Databricks managed memory is unavailable. Managed-memory session extraction is
-not used.
+or `false` to disable it. Auto mode mirrors completed turns only after another
+memory operation has already started Graphiti, so an ordinary chat turn does
+not pay the sidecar startup cost. `saveTurns: true` may start Graphiti solely to
+mirror a turn. Managed-memory session extraction is not used.
 
 ## Configure the backends
 
@@ -76,7 +77,7 @@ not used.
 | `databricks.memoryStore` | Project-derived store name | Selects an existing memory store by ID or resource name.                                                                                  |
 | `databricks.mode`        | `"auto"`                   | Set to `"required"` to fail instead of selecting Graphiti.                                                                                |
 | `graphiti`               | `true`                     | Enables the lazy Graphiti fallback. Pass a Graphiti options object to override its model, database, listener, or authentication settings. |
-| `saveTurns`              | `"auto"`                   | Attaches a Mastra output processor when Mastra and Graphiti are registered.                                                               |
+| `saveTurns`              | `"auto"`                   | Attaches a Mastra output processor but starts Graphiti only when set to `true`; auto mode reuses an already-running fallback.             |
 
 At least one backend must remain enabled. `saveTurns: true` requires both a
 registered Mastra plugin and the Graphiti backend. `databricks: true` requires
@@ -105,7 +106,8 @@ because the plugin supervises the fallback process.
 
 - Memory is partitioned by the trusted AppKit request identity. An `actor_id`
   is a storage key, not an authorization mechanism.
-- Graphiti starts only after an operation cannot use Databricks managed memory.
+- Graphiti starts only after an explicit memory operation cannot use Databricks
+  managed memory, or when completed-turn saving is explicitly set to `true`.
   Registering the plugin doesn't start Python or PostgreSQL.
 - The plugin stops a Graphiti process that it started when AppKit shuts down.
 - Mastra thread storage and PgVector semantic recall remain separate from these

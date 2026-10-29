@@ -4,7 +4,7 @@
  * @module
  */
 
-import { log, toError, errorMessage, isRecord } from "@dbx-tools/shared-core";
+import { log, toError, errorMessage, isRecord, sleep } from "@dbx-tools/shared-core";
 import {
   MASTRA_ROUTES,
   isStaleMastraResumeError,
@@ -12,8 +12,10 @@ import {
 } from "@dbx-tools/shared-mastra";
 import { handleChatStream, toAISdkStream } from "@mastra/ai-sdk";
 import { isEventedAgent } from "@mastra/core/agent/durable";
+import type { EventedAgent } from "@mastra/core/agent/durable";
 import { registerApiRoute } from "@mastra/core/server";
 import { createUIMessageStreamResponse } from "ai";
+import type { UIMessageChunk } from "ai";
 
 import type { MastraPluginConfig } from "./config.ts";
 import {
@@ -27,6 +29,106 @@ import { withRequestMemoryScope } from "./memory.ts";
 import { activeChatTracingOptions } from "./telemetry.ts";
 
 const logger = log.logger("mastra/chat");
+
+/** Keep a quiet chat stream below the Databricks Apps ingress idle window. */
+export const CHAT_STREAM_KEEPALIVE_MS = 10_000;
+
+/** Bound reconnects to producerless durable-run topics before ingress times out. */
+export const CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS = 15_000;
+
+/** Maximum age for a persisted `running` snapshot without a local producer. */
+const CHAT_REMOTE_RUN_FRESHNESS_MS = 60_000;
+
+const chatStreamHeartbeat = (): UIMessageChunk => ({
+  type: "data-stream-heartbeat",
+  data: null,
+  transient: true,
+});
+
+function deferredChatStream(open: () => Promise<ReadableStream<UIMessageChunk>>): Response {
+  let reader: ReadableStreamDefaultReader<UIMessageChunk> | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let settled = false;
+
+  const stream = new ReadableStream<UIMessageChunk>({
+    start(controller) {
+      const writeHeartbeat = () => {
+        if (!settled) controller.enqueue(chatStreamHeartbeat());
+      };
+      writeHeartbeat();
+      timer = setInterval(writeHeartbeat, CHAT_STREAM_KEEPALIVE_MS);
+      timer.unref?.();
+
+      void (async () => {
+        try {
+          const opened = await open();
+          if (settled) {
+            await opened.cancel();
+            return;
+          }
+          reader = opened.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        } catch (error) {
+          if (!settled) {
+            controller.enqueue({ type: "error", errorText: errorMessage(error) });
+          }
+        } finally {
+          const shouldClose = !settled;
+          settled = true;
+          if (timer) clearInterval(timer);
+          reader?.releaseLock();
+          if (shouldClose) controller.close();
+        }
+      })();
+    },
+    async cancel(reason) {
+      settled = true;
+      if (timer) clearInterval(timer);
+      await reader?.cancel(reason);
+    },
+  });
+  return createUIMessageStreamResponse({
+    stream,
+    keepAliveMs: CHAT_STREAM_KEEPALIVE_MS,
+  });
+}
+
+async function backgroundRunAvailable(agent: EventedAgent, runId: string): Promise<boolean> {
+  if (agent.runRegistry.has(runId)) return true;
+  const active = await agent.listActiveRuns();
+  const run = active.runs.find((candidate) => candidate.runId === runId);
+  if (!run) return false;
+  const updatedAt =
+    run.updatedAt instanceof Date ? run.updatedAt.getTime() : Date.parse(String(run.updatedAt));
+  return Number.isFinite(updatedAt) && Date.now() - updatedAt <= CHAT_REMOTE_RUN_FRESHNESS_MS;
+}
+
+async function observeBackgroundRun(agent: EventedAgent, runId: string) {
+  const available = await Promise.race([
+    backgroundRunAvailable(agent, runId),
+    sleep(CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS).then(() => false),
+  ]);
+  if (!available) throw new Error(`Run ${runId} is no longer available`);
+
+  const pending = agent.observe(runId, {
+    idleTimeoutMs: CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS,
+    isAlive: () =>
+      Promise.race([
+        backgroundRunAvailable(agent, runId),
+        sleep(CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS).then(() => false),
+      ]),
+  });
+  return Promise.race([
+    pending,
+    sleep(CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS).then(() => {
+      throw new Error(`Run ${runId} is no longer available`);
+    }),
+  ]);
+}
 
 /** Client request cancellation is detached only for evented background agents. */
 export function agentAbortSignal(agent: unknown, signal: AbortSignal): AbortSignal | undefined {
@@ -94,33 +196,34 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
         requestContext.setRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY, []);
         requestContext.setRaw(FOLLOW_UP_RUN_ID_KEY, runId);
         const tracingOptions = activeChatTracingOptions(undefined);
-        const stream = await handleChatStream({
-          mastra,
-          agentId,
-          ...(versionId
-            ? { agentVersion: { versionId } }
-            : status
-              ? { agentVersion: { status } }
-              : {}),
-          params: withRequestMemoryScope(
-            {
-              ...params,
-              runId,
+        return deferredChatStream(async () => {
+          return handleChatStream({
+            mastra,
+            agentId,
+            ...(versionId
+              ? { agentVersion: { versionId } }
+              : status
+                ? { agentVersion: { status } }
+                : {}),
+            params: withRequestMemoryScope(
+              {
+                ...params,
+                runId,
+                requestContext,
+                ...(tracingOptions ? { tracingOptions } : {}),
+                ...(abortSignal ? { abortSignal } : {}),
+              },
               requestContext,
-              ...(tracingOptions ? { tracingOptions } : {}),
-              ...(abortSignal ? { abortSignal } : {}),
-            },
-            requestContext,
-          ),
-          ...(followUps && followUps.mode !== "genie"
-            ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
-            : {}),
-          version: "v7",
-          sendReasoning,
-          sendSources: true,
-          onError: serializeChatStreamError,
+            ),
+            ...(followUps && followUps.mode !== "genie"
+              ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
+              : {}),
+            version: "v7",
+            sendReasoning,
+            sendSources: true,
+            onError: serializeChatStreamError,
+          });
         });
-        return createUIMessageStreamResponse({ stream });
       },
     }),
     registerApiRoute(runPath, {
@@ -137,18 +240,19 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
             { status: 409 },
           );
         }
-        const observed = await agent.observe(runId);
-        const stream = toAISdkStream(observed.output, {
-          from: "agent",
-          ...(followUps && followUps.mode !== "genie"
-            ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
-            : {}),
-          version: "v7",
-          sendReasoning,
-          sendSources: true,
-          onError: serializeChatStreamError,
+        return deferredChatStream(async () => {
+          const observed = await observeBackgroundRun(agent, runId);
+          return toAISdkStream(observed.output, {
+            from: "agent",
+            ...(followUps && followUps.mode !== "genie"
+              ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
+              : {}),
+            version: "v7",
+            sendReasoning,
+            sendSources: true,
+            onError: serializeChatStreamError,
+          });
         });
-        return createUIMessageStreamResponse({ stream });
       },
     }),
     registerApiRoute(abortPath, {

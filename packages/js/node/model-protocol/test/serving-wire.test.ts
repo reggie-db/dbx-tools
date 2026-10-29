@@ -125,6 +125,30 @@ describe("serving request sanitize", () => {
     assert.equal(JSON.parse(await received.clone().text()).reasoning_effort, "none");
   });
 
+  it("routes Chat Completions with the configured model when the body omits it", async () => {
+    let received: Request | undefined;
+    const wrapped = createDatabricksServingFetch(
+      async (input, init) => {
+        received = new Request(input, init);
+        return Response.json({});
+      },
+      "https://example.com/",
+      "databricks-fast",
+    );
+
+    await wrapped(
+      new Request("https://example.com/serving-endpoints/chat/completions", {
+        method: "POST",
+        body: JSON.stringify({ messages: [{ role: "user", content: "hello" }] }),
+      }),
+    );
+
+    assert.equal(
+      received?.url,
+      "https://example.com/serving-endpoints/databricks-fast/invocations",
+    );
+  });
+
   it("does not apply Chat Completions mutations to Responses requests", async () => {
     let received: Request | undefined;
     const original = (async (input, init) => {

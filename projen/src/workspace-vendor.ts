@@ -1,6 +1,15 @@
 /** Workspace package vendoring for isolated AppKit deployment snapshots. */
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { isRecord } from "@dbx-tools/shared-core";
 import { applyPublishConfig, packNpmPackage } from "./npm-packaging.ts";
 import { readPackageManifest, workspaceDependencyDirectories } from "./packages.ts";
@@ -37,6 +46,14 @@ function _includeVendorArchives(application: string): void {
   if (missing.length === 0) return;
   if (existsSync(gitignore)) chmodSync(gitignore, statSync(gitignore).mode | 0o200);
   writeFileSync(gitignore, `${before.replace(/\s*$/, "")}\n${missing.join("\n")}\n`);
+}
+
+/** Give a local package archive a content identity that invalidates installer caches. */
+function _contentAddressArchive(archive: string): string {
+  const digest = createHash("sha256").update(readFileSync(archive)).digest("hex").slice(0, 16);
+  const addressed = join(dirname(archive), `${basename(archive, ".tgz")}-${digest}.tgz`);
+  renameSync(archive, addressed);
+  return addressed;
 }
 
 /**
@@ -77,11 +94,8 @@ export function vendorWorkspaceDependencies(
   mkdirSync(archiveDirectory, { recursive: true });
   const links = Object.fromEntries(
     selected.map(({ directory, name }) => {
-      const archive = packNpmPackage(
-        directory,
-        archiveDirectory,
-        process.env.PATH,
-        applyPublishConfig,
+      const archive = _contentAddressArchive(
+        packNpmPackage(directory, archiveDirectory, process.env.PATH, applyPublishConfig),
       );
       return [name, `file:./vendor/npm/${basename(archive)}`];
     }),

@@ -163,7 +163,7 @@ const SEARCH_DOCUMENTS = [
   },
 ];
 const mastraStorage = boolean(undefined, "MASTRA_STORAGE", ENV_ONLY) ?? true;
-const mastraMemory = boolean(undefined, "MASTRA_MEMORY", ENV_ONLY) ?? true;
+const mastraMemory = boolean(undefined, "MASTRA_MEMORY", ENV_ONLY) ?? false;
 const databricksMemoryEnabled = boolean(undefined, "MANAGED_MEMORY", {
   sources: "env",
 });
@@ -180,7 +180,7 @@ const databricksMemory =
 const graphitiEnabled = boolean(undefined, "GRAPHITI_ENABLED", ENV_ONLY) ?? true;
 const memorySaveTurns = boolean(undefined, "MEMORY_SAVE_TURNS", ENV_ONLY);
 const busEnabled = boolean(undefined, "BUS_ENABLED", ENV_ONLY) ?? true;
-const remoteSkillsEnabled = boolean(undefined, "REMOTE_SKILLS_ENABLED", ENV_ONLY) ?? true;
+const remoteSkillsEnabled = boolean(undefined, "REMOTE_SKILLS_ENABLED", ENV_ONLY) ?? false;
 const appkitBodyLimit = string(undefined, "APPKIT_BODY_LIMIT", { sources: "env" }) ?? "100mb";
 const lakeboxRuntime = new LakeboxRuntime(resolveLakeboxPluginConfig());
 
@@ -441,7 +441,9 @@ await createApp({
       // Agent Mode feedback goes directly to Genie. If Agent Mode is disabled,
       // auto falls back to the deployed MLflow experiment and OTLP sidecar.
       feedbackMode: "auto",
-      followUpSuggestions: true,
+      // Native Genie questions remain available without adding a second model
+      // call after every answer and delaying the terminal stream chunk.
+      followUpSuggestions: "genie",
       agents: { support },
       defaultAgent: "support",
       genieAgentMode: true,
@@ -461,6 +463,10 @@ await createApp({
       // back to Echarts' defaults.
       brand: defaultBrandContext,
       localSkillMounts: lakeboxSkillMounts(),
+      // The mounted and downloaded skills already use Mastra's native skill
+      // tools. Avoid embedding unrelated personal Workspace skill directories
+      // on the first ordinary chat turn.
+      workspaceSkills: false,
       // Fold Databricks' own AI Tools skills into the agents. Read straight
       // from the public databricks/databricks-agent-skills repo, so this works
       // in a deployed App container where the `databricks` CLI is absent.

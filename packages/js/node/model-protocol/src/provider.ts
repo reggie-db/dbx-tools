@@ -8,6 +8,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenResponses } from "@ai-sdk/open-responses";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { invoke } from "@dbx-tools/model";
+import { parseRecord, trimToNull } from "@dbx-tools/shared-core";
 import {
   rewriteServingRequest,
   rewriteServingResponseBody,
@@ -63,7 +64,7 @@ export function createDatabricksLanguageModel(
         baseURL: invoke.servingEndpointsUrl(options.host),
         headers,
         supportsStructuredOutputs: true,
-        fetch: createDatabricksServingFetch(options.fetch),
+        fetch: createDatabricksServingFetch(options.fetch, options.host, options.modelId),
       }).chatModel(options.modelId);
     default: {
       const protocol: never = options.protocol;
@@ -78,12 +79,39 @@ export function createDatabricksLanguageModel(
  */
 export function createDatabricksServingFetch(
   fetcher: typeof globalThis.fetch = globalThis.fetch.bind(globalThis),
+  host?: string,
+  modelId?: string,
 ): typeof globalThis.fetch {
   return (async (input, init) => {
     const rewritten = await rewriteServingRequest(input, init);
-    const response = await fetcher(rewritten.input, rewritten.init);
+    const routed = routeServingChatRequest(rewritten, host, modelId);
+    const response = await fetcher(routed.input, routed.init);
     return repairServingResponse(response);
   }) as typeof globalThis.fetch;
+}
+
+function routeServingChatRequest(
+  request: Awaited<ReturnType<typeof rewriteServingRequest>>,
+  host: string | undefined,
+  configuredModelId: string | undefined,
+): Pick<Awaited<ReturnType<typeof rewriteServingRequest>>, "input" | "init"> {
+  if (!host) return request;
+  const current = new Request(request.input, request.init);
+  if (!current.url.endsWith(`/${invoke.CHAT_COMPLETIONS_PATH}`)) return request;
+  const model = trimToNull(parseRecord(request.body)?.model) ?? trimToNull(configuredModelId);
+  if (!model) return request;
+  const headers = new Headers(current.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  return {
+    input: new Request(invoke.invocationsUrl(host, model), {
+      method: current.method,
+      headers,
+      body: request.body,
+      signal: current.signal,
+    }),
+    init: undefined,
+  };
 }
 
 async function repairServingResponse(response: Response): Promise<Response> {

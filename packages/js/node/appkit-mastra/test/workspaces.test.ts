@@ -1283,14 +1283,18 @@ describe("agent workspace selection", () => {
 
   it("can disable Mastra's skill search processor explicitly", async () => {
     const built = await buildAgents({
-      config: { workspaceSkills: false },
+      config: { backgroundTurns: false, workspaceSkills: false },
       context: undefined,
       log: logger("test/agents"),
     });
 
-    const processors = await built.agents[built.defaultAgentId]?.listConfiguredInputProcessors();
+    const agent = built.agents[built.defaultAgentId];
+    const processors = await agent?.listConfiguredInputProcessors();
     assert.ok(
       processors?.every((processor) => !("id" in processor) || processor.id !== "skill-search"),
     );
+    const workspace = await agent?.getWorkspace();
+    assert.ok(workspace);
+    assert.equal(workspace.skills, undefined);
   });
 });

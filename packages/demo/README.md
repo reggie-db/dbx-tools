@@ -36,9 +36,11 @@ The main settings are:
 | `LAKEBASE_ENDPOINT` or `LAKEBASE_PROJECT`     | Lakebase Autoscaling resource used by AppKit and Mastra persistence.                              |
 | `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASSWORD` | SMTP delivery for approved email.                                                                 |
 | `EMAIL_OUTBOX_MODE=1`                         | Write approved email to a local outbox instead of SMTP.                                           |
+| `MASTRA_MEMORY=1`                             | Enable PgVector semantic recall and its local embedding model.                                    |
 | `GRAPHITI_ENABLED=0`                          | Disable the Graphiti fallback for focused UI work.                                                |
+| `MEMORY_SAVE_TURNS=1`                         | Allow completed-turn mirroring to start Graphiti without an explicit memory tool call.            |
 | `BUS_ENABLED=0`                               | Disable the Postgres topic-bus example.                                                           |
-| `REMOTE_SKILLS_ENABLED=0`                     | Disable remote skill loading.                                                                     |
+| `REMOTE_SKILLS_ENABLED=1`                     | Load and index the remote AI Tools skill bundle.                                                  |
 
 For every available setting, see
 [.env.example](.env.example).
@@ -132,7 +134,8 @@ Databricks App deployment behavior, see
   public tunnel provides identity without that token.
 - The Lakebox plugin creates at most one Lakebox for the app. Each authenticated
   user receives a separate non-sudo account and service route.
-- Graphiti starts only when Databricks managed memory is unavailable for the
-  current actor. Disable Graphiti when you don't need that fallback.
+- Graphiti starts only when an explicit memory operation cannot use Databricks
+  managed memory. Automatic turn saving reuses an already-running fallback;
+  set `MEMORY_SAVE_TURNS=1` only when every completed turn should be mirrored.
 - Email outbox mode records rendered messages for development. It doesn't send
   mail or reproduce attachment files on disk.

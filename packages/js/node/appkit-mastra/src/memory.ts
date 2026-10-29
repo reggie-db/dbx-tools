@@ -48,7 +48,7 @@ import { Pool, type PoolConfig } from "pg";
 import type { AnyMastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
 import type { MastraPluginConfig } from "./config.ts";
 import { agentStorageSchemaName } from "./storage-schema.ts";
-import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
+import { TITLE_INSTRUCTIONS } from "./summarize.ts";
 
 const logger = log.logger("mastra/memory");
 
@@ -257,16 +257,13 @@ export class MemoryBuilder {
         ...(vector
           ? { semanticRecall: { topK: 3, messageRange: 2, scope: "resource" as const } }
           : {}),
-        // Auto-name each thread from its opening turn so the
-        // conversation list the UI renders shows meaningful titles
-        // instead of raw ids. Titling runs on the small / fast chat
-        // tier (see `summarize.ts`) rather than the agent's primary
-        // model, so naming a thread never spends the heavyweight model.
-        // Only meaningful when storage is on; harmless otherwise.
+        // Auto-name each thread from its opening turn so the conversation list
+        // shows meaningful titles instead of raw ids. Let Mastra reuse the
+        // agent's already-working dynamic model rather than constructing a
+        // separate Chat Completions model for this background request.
         ...(storage
           ? {
               generateTitle: {
-                model: summaryModel(this.config),
                 instructions: TITLE_INSTRUCTIONS,
               },
             }

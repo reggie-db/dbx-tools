@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, it } from "node:test";
 
 import { withMaterializedWorkspaceManifests } from "../src/workspace-manifest.ts";
@@ -80,8 +80,14 @@ it("vendors the transitive runtime closure when the application uses workspace p
     const manifest = JSON.parse(readFileSync(join(stage, "packages/app/package.json"), "utf8")) as {
       dependencies: Record<string, string>;
     };
-    assert.match(manifest.dependencies["@fixture/shared"]!, /^file:\.\/vendor\/npm\/.+\.tgz$/);
-    assert.match(manifest.dependencies["@fixture/core"]!, /^file:\.\/vendor\/npm\/.+\.tgz$/);
+    assert.match(
+      manifest.dependencies["@fixture/shared"]!,
+      /^file:\.\/vendor\/npm\/.+-[0-9a-f]{16}\.tgz$/,
+    );
+    assert.match(
+      manifest.dependencies["@fixture/core"]!,
+      /^file:\.\/vendor\/npm\/.+-[0-9a-f]{16}\.tgz$/,
+    );
     assert.equal(
       readdirSync(join(stage, "packages/app/vendor/npm")).filter((file) => file.endsWith(".tgz"))
         .length,
@@ -131,4 +137,21 @@ it("does not create vendor output without workspace protocol dependencies", asyn
     assert.deepEqual(result, { archives: [], packages: [] });
   });
   assert.equal(existsSync(join(stage, "packages/app/vendor")), false);
+});
+
+it("changes the archive identity when unpublished package content changes", async () => {
+  const { root, stage } = fixture();
+  const first = vendorWorkspaceDependencies(root, stage, "packages/app");
+  const firstShared = first.archives.find((archive) => archive.includes("fixture-shared"));
+  assert.ok(firstShared);
+
+  writeFileSync(join(root, "packages/shared/index.ts"), 'export const name = "shared-updated";\n');
+  const updatedStage = mkdtempSync(join(tmpdir(), "workspace-vendor-stage-updated-"));
+  fixtures.push(updatedStage);
+  cpSync(root, updatedStage, { recursive: true });
+  const second = vendorWorkspaceDependencies(root, updatedStage, "packages/app");
+  const secondShared = second.archives.find((archive) => archive.includes("fixture-shared"));
+  assert.ok(secondShared);
+
+  assert.notEqual(basename(firstShared), basename(secondShared));
 });

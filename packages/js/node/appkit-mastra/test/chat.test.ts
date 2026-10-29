@@ -8,7 +8,11 @@ import {
 } from "@mastra/core/request-context";
 
 import { buildAgents } from "../src/agents.ts";
-import { agentAbortSignal, agentChatRoutes } from "../src/chat.ts";
+import {
+  agentAbortSignal,
+  agentChatRoutes,
+  CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS,
+} from "../src/chat.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "../src/memory.ts";
 
 describe("background chat routes", () => {
@@ -41,6 +45,83 @@ describe("background chat routes", () => {
 
     assert.equal(agentAbortSignal(durable.agents.analyst, signal), undefined);
     assert.equal(agentAbortSignal(attached.agents.analyst, signal), signal);
+  });
+
+  it("bounds producerless run observation and preserves live runs", async () => {
+    const built = await buildAgents({
+      config: { agents: { analyst: { instructions: "Answer directly." } } },
+      context: undefined,
+      log: logger("test/chat"),
+    });
+    const agent = built.agents.analyst;
+    let observeOptions: Parameters<typeof agent.observe>[1];
+    agent.observe = (async (_runId, options) => {
+      observeOptions = options;
+      throw new Error("stop after options");
+    }) as typeof agent.observe;
+    agent.listActiveRuns = (async () => ({
+      runs: [
+        {
+          runId: "run-7",
+          status: "running",
+          updatedAt: new Date(),
+        },
+      ],
+      total: 1,
+    })) as typeof agent.listActiveRuns;
+    const route = agentChatRoutes().find(
+      (candidate) => candidate.method === "GET" && candidate.path.includes("/runs/"),
+    );
+    assert.ok(route);
+
+    const response = (await route.handler({
+      get: (key: string) => (key === "mastra" ? { getAgentById: () => agent } : undefined),
+      req: {
+        param: (key: string) => (key === "agentId" ? "analyst" : "run-7"),
+      },
+    } as never)) as Response;
+    const reader = response.body!.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+    const second = new TextDecoder().decode((await reader.read()).value);
+    assert.match(`${first}${second}`, /data-stream-heartbeat/);
+
+    assert.equal(observeOptions?.idleTimeoutMs, CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS);
+    assert.equal(await observeOptions?.isAlive?.(), true);
+    await reader.cancel();
+  });
+
+  it("rejects orphaned persisted runs even when their snapshot still says running", async () => {
+    const built = await buildAgents({
+      config: { agents: { analyst: { instructions: "Answer directly." } } },
+      context: undefined,
+      log: logger("test/chat"),
+    });
+    const agent = built.agents.analyst;
+    agent.listActiveRuns = (async () => ({
+      runs: [
+        {
+          runId: "run-orphaned",
+          status: "running",
+          updatedAt: new Date(0),
+        },
+      ],
+      total: 1,
+    })) as typeof agent.listActiveRuns;
+    const route = agentChatRoutes().find(
+      (candidate) => candidate.method === "GET" && candidate.path.includes("/runs/"),
+    );
+    assert.ok(route);
+
+    const response = (await route.handler({
+      get: (key: string) => (key === "mastra" ? { getAgentById: () => agent } : undefined),
+      req: {
+        param: (key: string) => (key === "agentId" ? "analyst" : "run-orphaned"),
+      },
+    } as never)) as Response;
+    const body = await response.text();
+
+    assert.match(body, /data-stream-heartbeat/);
+    assert.match(body, /Run run-orphaned is no longer available/);
   });
 
   it("pins durable agent memory to the AppKit request context", async () => {

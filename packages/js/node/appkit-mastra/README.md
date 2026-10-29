@@ -404,12 +404,15 @@ export const workspace = new Workspace({
 Mastra discovers skills from explicit `skills` paths, including the paths
 declared under the default Assistant paths and read-only `localSkillMounts`.
 Those paths use the skill-search processor. Set `workspaceSkills: false` to
-omit that processor, or pass `{ topK, minScore, ttlMs }` to tune it. Local
-mounts are also passed as native agent-level skills, so the standard `skill`,
-`skill_search`, and `skill_read` tools remain available. Startup-provisioned
-remote skills use their native tools without duplicating their virtual mounts
-in workspace search. Set the workspace's `skills` to an empty list when the
-workspace should expose no skills.
+disable workspace-file skill discovery on auto-created workspaces, or pass
+`{ topK, minScore, ttlMs }` to tune its process-cached, asynchronously refreshed
+index. Local mounts are also passed as native agent-level skills and indexed
+once during app startup, so the standard `skill`, `skill_search`, and
+`skill_read` tools remain available without a first-turn indexing delay.
+Startup-provisioned remote skills use the same process-wide native index without
+duplicating their virtual mounts in workspace search. Set a caller-created
+workspace's `skills` to an empty list when that explicit workspace should expose
+no skills.
 
 ### Cache workspace metadata
 

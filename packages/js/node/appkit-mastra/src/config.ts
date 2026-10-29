@@ -275,8 +275,9 @@ export interface MastraPluginConfig extends BasePluginConfig {
   /** Native Mastra workspace tool availability, approval, and hook configuration. */
   workspaceTools?: WorkspaceToolsConfig;
   /**
-   * Use Mastra's native workspace skill manager. Defaults to true. Pass an
-   * object to tune on-demand discovery and loaded-skill state.
+   * Use Mastra's native workspace-file skill manager. Defaults to true. Pass
+   * false to disable workspace-file discovery on auto-created workspaces, or
+   * an object to tune its process-cached, asynchronously refreshed index.
    */
   workspaceSkills?: boolean | MastraWorkspaceSkillsConfig;
   /**
@@ -748,7 +749,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     workspaceSkills: {
       type: ["boolean", "object"],
       description:
-        "Use Mastra's native on-demand workspace skill search and writable skill saves. Defaults to true.",
+        "Use Mastra's native process-cached workspace-file skill search with asynchronous refresh. Defaults to true; false disables workspace-file discovery on auto-created workspaces.",
     },
     workspaceTools: {
       type: "object",

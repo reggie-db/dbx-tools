@@ -53,7 +53,7 @@ export const MemoryPluginOptionsSchema = z
       .union([z.literal("auto"), z.boolean()])
       .default("auto")
       .describe(
-        "Completed-turn saving mode: auto attaches when possible, true requires attachment, and false disables it.",
+        "Completed-turn saving mode: auto mirrors only through an already-running Graphiti fallback, true may start Graphiti and requires attachment, and false disables it.",
       ),
   })
   .strict()

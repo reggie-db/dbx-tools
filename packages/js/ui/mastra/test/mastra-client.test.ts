@@ -16,7 +16,7 @@ describe("MastraPluginClient AI SDK transport", () => {
       const request = new Request(input, init);
       received.push(request);
       if (request.method === "POST") return Response.json({ aborted: true });
-      return new Response("data: [DONE]\n\n", {
+      return new Response(": keepalive\n\ndata: [DONE]\n\n", {
         headers: { "content-type": "text/event-stream" },
       });
     }) as typeof fetch;

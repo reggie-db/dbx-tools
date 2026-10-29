@@ -48,11 +48,13 @@ describe("Databricks AI SDK provider", () => {
   });
 
   it("surfaces Chat Completions thinking as AI SDK reasoning", async () => {
+    let received: Request | undefined;
     const model = createDatabricksLanguageModel({
       ...baseOptions,
       protocol: "chat",
-      fetch: async () =>
-        Response.json({
+      fetch: async (input, init) => {
+        received = new Request(input, init);
+        return Response.json({
           id: "chatcmpl_1",
           created: 1,
           model: baseOptions.modelId,
@@ -72,11 +74,18 @@ describe("Databricks AI SDK provider", () => {
             },
           ],
           usage: { prompt_tokens: 2, completion_tokens: 4, total_tokens: 6 },
-        }),
+        });
+      },
     });
 
     const result = await generateText({ model, prompt: "Check the result." });
 
+    assert.equal(
+      received?.url,
+      "https://example.cloud.databricks.com/serving-endpoints/databricks-demo-model/invocations",
+    );
+    assert.ok(received);
+    assert.equal(JSON.parse(await received.clone().text()).model, baseOptions.modelId);
     assert.equal(result.reasoningText, "Checking the result.");
     assert.equal(result.text, "The result is valid.");
   });

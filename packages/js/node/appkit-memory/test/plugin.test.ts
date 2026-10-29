@@ -182,7 +182,7 @@ describe("MemoryPlugin", () => {
     await expect(plugin.setup()).rejects.toThrow(/requires a registered Mastra plugin/);
   });
 
-  test("mirrors completed turns only when managed memory is unavailable", async () => {
+  test("auto turn saving does not start an idle Graphiti fallback", async () => {
     const plugin = new MemoryPlugin({ databricks: false, graphiti: {} });
     const calls: string[] = [];
     const graphiti = graphitiFixture(calls);
@@ -199,8 +199,10 @@ describe("MemoryPlugin", () => {
       }
     ).saveTurn.bind(plugin);
     Object.assign(plugin, {
-      databricks: { available: async () => true },
-      graphitiBackend: async () => graphiti,
+      graphitiBackend: async () => {
+        calls.push("graphiti:start");
+        return graphiti;
+      },
     });
 
     await saveTurn({
@@ -212,9 +214,8 @@ describe("MemoryPlugin", () => {
     });
     expect(calls).toEqual([]);
 
-    Object.assign(plugin, {
-      databricks: { available: async () => false },
-    });
+    delete (plugin as unknown as { graphitiBackend?: unknown }).graphitiBackend;
+    Object.assign(plugin, { graphiti });
     await saveTurn({
       agentId: "support",
       actorId: "user-1",
@@ -223,5 +224,44 @@ describe("MemoryPlugin", () => {
       assistant: "Understood",
     });
     expect(calls).toEqual(["graphiti:turn"]);
+  });
+
+  test("explicit turn saving may start Graphiti", async () => {
+    const plugin = new MemoryPlugin({ databricks: false, graphiti: {} });
+    const calls: string[] = [];
+    const graphiti = graphitiFixture(calls);
+    await plugin.setup();
+    const saveTurn = (
+      plugin as unknown as {
+        saveTurn(turn: {
+          agentId: string;
+          actorId: string;
+          threadId: string;
+          user: string;
+          assistant: string;
+        }): Promise<void>;
+      }
+    ).saveTurn.bind(plugin);
+    Object.assign(plugin, {
+      resolved: {
+        databricks: false,
+        graphiti: {},
+        saveTurns: true,
+      },
+      graphitiBackend: async () => {
+        calls.push("graphiti:start");
+        return graphiti;
+      },
+    });
+
+    await saveTurn({
+      agentId: "support",
+      actorId: "user-1",
+      threadId: "thread-1",
+      user: "Remember this",
+      assistant: "Understood",
+    });
+
+    expect(calls).toEqual(["graphiti:start", "graphiti:turn"]);
   });
 });

@@ -1,16 +1,9 @@
 /**
  * Small-tier summarization for the Mastra plugin.
  *
- * Two surfaces, both backed by the fast / small chat tier
+ * A dedicated `summarize` tool backed by the fast / small chat tier
  * ({@link model.ModelClass.ChatFast}) resolved through the same
- * `/serving-endpoints` pipeline as the main agents:
- *
- *   - A dedicated `summarize` tool (see {@link buildSummarizeTool})
- *     agents can call to condense arbitrary text without burning the
- *     heavyweight chat model.
- *   - The model + instructions Mastra's memory uses to auto-name
- *     conversation threads (`generateTitle`), so titling reuses the
- *     same small tier rather than the agent's primary model.
+ * `/serving-endpoints` pipeline as the main agents.
  *
  * Mirrors the chart-planner wiring in `chart.ts`: a per-config cached
  * `Agent` on the fast tier, invoked via `agent.generate(...)` inside
@@ -46,9 +39,9 @@ const SUMMARIZER_INSTRUCTIONS = [
 ].join("\n");
 
 /**
- * Instructions Mastra's `generateTitle` hands the small-tier model to
- * name a conversation thread from its opening turn. Kept terse so the
- * model returns a bare title with no decoration.
+ * Instructions Mastra's `generateTitle` hands the agent model to name a
+ * conversation thread from its opening turn. Kept terse so the model returns
+ * a bare title with no decoration.
  */
 export const TITLE_INSTRUCTIONS = [
   "Generate a short, specific title for this conversation, 3 to 6 words.",
@@ -59,8 +52,7 @@ export const TITLE_INSTRUCTIONS = [
 ].join(" ");
 
 /**
- * Resolve the small-tier model for summarization / titling. Reused by
- * both the summarizer agent and Mastra memory's `generateTitle`.
+ * Resolve the small-tier model for summarization.
  *
  * Returned as a `requestContext`-taking function (a Mastra
  * `DynamicArgument<MastraModelConfig>`) so each call mints user-scoped
