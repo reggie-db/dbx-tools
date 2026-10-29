@@ -30,6 +30,7 @@ describe("browser-safe model schemas", () => {
           reasoning: true,
           tools: true,
           structuredOutput: true,
+          temperature: true,
         },
         rateLimits: {
           inputTokensPerMinute: 100,

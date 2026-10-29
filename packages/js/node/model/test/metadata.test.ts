@@ -13,6 +13,7 @@ import {
   modelMetadataFor,
   modelRateLimitsFor,
   modelReasoningLevelsFor,
+  modelTemperatureSupportFor,
 } from "../src/metadata.ts";
 import { modelStatusFor, retiredModelNames } from "../src/retirement.ts";
 
@@ -78,7 +79,20 @@ describe("model metadata generation", () => {
               ],
               tool_call: true,
               structured_output: true,
+              temperature: false,
               modalities: { input: ["text", "image"], output: ["text"] },
+            },
+          },
+        },
+        databricks: {
+          models: {
+            "databricks-gpt-5-4": {
+              id: "databricks-gpt-5-4",
+              temperature: true,
+            },
+            "databricks-gpt-5-5": {
+              id: "databricks-gpt-5-5",
+              temperature: false,
             },
           },
         },
@@ -90,6 +104,8 @@ describe("model metadata generation", () => {
       reasoning: ["claude-5-1-fable"],
       tools: ["claude-5-1-fable"],
       structuredOutput: ["claude-5-1-fable"],
+      temperatureSupported: ["gpt-5-4"],
+      temperatureUnsupported: ["gpt-5-5"],
     });
   });
 
@@ -168,6 +184,12 @@ describe("model metadata lookup", () => {
     assert.equal(modelCapabilitiesFor("databricks-claude-sonnet-4-6").webSearch, false);
     assert.equal(modelCapabilitiesFor("databricks-claude-sonnet-4-6").tools, true);
     assert.equal(modelCapabilitiesFor("databricks-gpt-5-5").reasoning, true);
+    assert.equal(modelTemperatureSupportFor("databricks-gpt-5-4"), true);
+    assert.equal(modelCapabilitiesFor("databricks-gpt-5-4").temperature, true);
+    assert.equal(modelTemperatureSupportFor("databricks-gpt-5-5"), false);
+    assert.equal(modelCapabilitiesFor("databricks-gpt-5-5").temperature, false);
+    assert.equal(modelTemperatureSupportFor("custom-temperature-model"), undefined);
+    assert.equal(modelCapabilitiesFor("custom-temperature-model").temperature, false);
     assert.deepEqual(modelRateLimitsFor(endpoint), modelRateLimitsFor("gpt-5.4"));
     assert.equal(modelRateLimitsFor("system.ai.bge-large-en")?.queriesPerHour, 2_160_000);
     assert.deepEqual(modelMetadataFor(endpoint).status, { deprecated: false });

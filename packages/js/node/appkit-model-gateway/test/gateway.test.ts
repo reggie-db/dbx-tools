@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ModelTarget } from "@dbx-tools/shared-model-gateway";
 
-import { gatewayModelSelection, ModelGateway, sanitizeInferenceBody } from "../src/gateway.ts";
+import {
+  adaptInferenceTemperature,
+  gatewayModelSelection,
+  ModelGateway,
+  ModelGatewayError,
+  sanitizeInferenceBody,
+} from "../src/gateway.ts";
 import type { ModelRegistry } from "../src/registry.ts";
 
 describe("ModelGateway model discovery", () => {
@@ -70,6 +76,34 @@ describe("ModelGateway request sanitization", () => {
 
     assert.equal(sanitizeInferenceBody(numeric), numeric);
     assert.equal(sanitizeInferenceBody(omitted), omitted);
+  });
+
+  it("rejects explicit nonnumeric or nonfinite temperatures", () => {
+    for (const temperature of ["1", {}, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(
+        () => sanitizeInferenceBody({ model: "chat", temperature }),
+        (error) => error instanceof ModelGatewayError && error.status === 400,
+      );
+    }
+  });
+
+  it("clamps temperature for models.dev-supported Databricks models", () => {
+    assert.deepEqual(adaptInferenceTemperature("databricks-gpt-5-4", { temperature: -1 }), {
+      temperature: 0,
+    });
+    assert.deepEqual(adaptInferenceTemperature("databricks-gpt-5-4", { temperature: 3 }), {
+      temperature: 2,
+    });
+    const supported = { temperature: 1 };
+    assert.equal(adaptInferenceTemperature("databricks-gpt-5-4", supported), supported);
+  });
+
+  it("omits unsupported temperature and preserves unknown custom models", () => {
+    assert.deepEqual(adaptInferenceTemperature("databricks-gpt-5-5", { temperature: 1 }), {});
+    const custom = { temperature: 3 };
+    const omitted = { model: "custom-model" };
+    assert.equal(adaptInferenceTemperature("custom-model", custom), custom);
+    assert.equal(adaptInferenceTemperature("databricks-gpt-5-4", omitted), omitted);
   });
 });
 

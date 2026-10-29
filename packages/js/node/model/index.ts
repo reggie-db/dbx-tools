@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model";
-export const PACKAGE_VERSION = "0.9.169";
+export const PACKAGE_VERSION = "0.9.170";
 export * as bindings from "./src/bindings.ts";
 export * from "./src/bindings.ts";
 export * as classes from "./src/classes.ts";
@@ -29,7 +29,7 @@ export { createMetadataCache, mergePreferFreshList, mergePreferFreshRecord } fro
 export type { MetadataCacheOptions, MetadataCacheMergeInput, MetadataCache } from "./src/metadata-cache.ts";
 export { MODEL_METADATA_TTL_MS, RETIRED_MODELS_URL, OPENAI_RESPONSES_MODELS_URL, WEB_SEARCH_MODELS_URL, MODEL_RATE_LIMITS_URL, QUERY_REASON_MODELS_URL, MODELS_DEV_API_URL, MODELPARAMS_DEV_MODELS_URL } from "./src/metadata-contract.ts";
 export type { RetiredModelsSnapshot, ModelCapabilityCatalogue, ModelCapabilitiesSnapshot, ModelRateLimitCatalogue, ModelRateLimitsSnapshot, ReasoningModelsSnapshot, ModelsDevCapabilityCatalogue, ModelsDevSnapshot, ModelParamsCatalogue, ModelParamsSnapshot } from "./src/metadata-contract.ts";
-export { refreshModelMetadata, hydrateModelMetadata, reasoningModelCatalogue, learnedReasoningCatalogue, rememberReasoningLevels, learnReasoningLevelsFromError, modelCapabilitiesFor, modelRateLimitsFor, modelReasoningLevelsFor, modelMetadataFor, modelMetadataGeneratedAt } from "./src/metadata.ts";
+export { refreshModelMetadata, hydrateModelMetadata, reasoningModelCatalogue, learnedReasoningCatalogue, rememberReasoningLevels, learnReasoningLevelsFromError, modelCapabilitiesFor, modelTemperatureSupportFor, modelRateLimitsFor, modelReasoningLevelsFor, modelMetadataFor, modelMetadataGeneratedAt } from "./src/metadata.ts";
 export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD, listServingEndpoints, listServingEndpointsUncached, clearServingEndpointsCache, searchServingEndpoints, resolveModelId } from "./src/model-catalog.ts";
 export type { WorkspaceClientLike, ListServingEndpointsOptions } from "./src/model-catalog.ts";
 export { DEFAULT_MODEL_CLIENT_CACHE_TTL_MS, createModelClient, listProfiles, createModelClientWithDatabricksClient, createModelClientWithDependencies } from "./src/model-client.ts";

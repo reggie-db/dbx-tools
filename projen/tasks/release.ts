@@ -187,7 +187,7 @@ export function resolveSuccessfulReleaseTag(
   const parsed = z.array(GithubReleaseRunSchema).safeParse(parse(output, []));
   if (!parsed.success) {
     logger.warn("GitHub returned invalid successful release workflow metadata", {
-      error: parsed.error.message,
+      error: parsed.error,
       repository: account.remote.repository,
     });
     return undefined;
