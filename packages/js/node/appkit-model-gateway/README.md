@@ -148,6 +148,13 @@ discovered value.
 `Originator: codex`. Codex slugs prefer fully qualified Databricks model service
 names.
 
+Codex merges provider models with its bundled catalogue. The gateway reserves a
+separate provider priority range so bundled recommendations remain together,
+then places Smart Router before the Databricks model list. Codex-specific model
+ordering puts GPT models first and newer family versions before older versions.
+Databricks GPT labels include the `Databricks` prefix so they remain distinct
+from bundled GPT models after Codex applies its compact label formatting.
+
 Point a Codex provider at:
 
 ```text

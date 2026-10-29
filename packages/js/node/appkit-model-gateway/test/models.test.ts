@@ -35,6 +35,8 @@ describe("model gateway catalogue", () => {
     assert.equal(openAi.data[0]?.capabilities.apply_patch, false);
     assert.equal(codex.models[0]?.slug, "databricks/smart-router");
     assert.equal(codex.models[0]?.display_name, "Smart Router");
+    assert.equal(codex.models[0]?.priority, 9000);
+    assert.equal(codex.models[1]?.priority, 10000);
   });
 
   it("aggregates Smart Router capabilities from the live chat candidate pool", () => {
@@ -62,7 +64,7 @@ describe("model gateway catalogue", () => {
     assert.equal(codexModelSlug(claude, true), "databricks/databricks-claude-test");
   });
 
-  it("publishes Codex models with a chat class, sorted by major family then display name", () => {
+  it("publishes Codex models after bundled priorities with GPT first", () => {
     const targets = [
       target("gpt", { responses: true, openResponses: false, customTools: true }),
       target("claude", { anthropic: true }),
@@ -76,17 +78,43 @@ describe("model gateway catalogue", () => {
     assert.deepEqual(
       codex.map((entry) => entry.slug),
       [
-        "databricks/databricks-claude-test",
         "databricks/databricks-gpt-test",
+        "databricks/databricks-claude-test",
         "databricks/databricks-gemini-test",
       ],
     );
     assert.deepEqual(
       codex.map((entry) => entry.priority),
-      [1, 2, 3],
+      [10000, 10001, 10002],
     );
     assert.equal("object" in payload, false);
     assert.equal("data" in payload, false);
+  });
+
+  it("sorts newer Codex models first and distinguishes Databricks GPT labels", () => {
+    const payload = listModelsPayload(
+      [
+        named("GPT-5.6 Sol", "gpt"),
+        named("Claude Sonnet 5", "claude"),
+        named("GPT-6.1 Sol", "gpt"),
+        named("GPT-5.5 Pro", "gpt"),
+        named("gpt-3.5-turbo-0125", "gpt"),
+        { ...named("GPT OSS 120B", "gpt"), id: "databricks-gpt-oss-120b" },
+      ],
+      true,
+    );
+
+    assert.deepEqual(
+      payload.models.map((entry) => entry.display_name),
+      [
+        "Databricks GPT-6.1 Sol",
+        "Databricks GPT-5.6 Sol",
+        "Databricks GPT-5.5 Pro",
+        "Databricks GPT-3.5-turbo-0125",
+        "Databricks GPT OSS 120B",
+        "Claude Sonnet 5",
+      ],
+    );
   });
 
   it("publishes discovered web search on OpenAI and Codex catalogues", () => {

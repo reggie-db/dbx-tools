@@ -4,7 +4,16 @@
  * @module
  */
 
-import { isChatClass, modelFamily, modelFamilyRank } from "@dbx-tools/model";
+import {
+  CHAT_CLASS_ORDER,
+  compareVersionTuples,
+  isChatClass,
+  isOpenWeightsGpt,
+  ModelFamily,
+  modelFamily,
+  modelFamilyRank,
+  versionTuple,
+} from "@dbx-tools/model";
 import { ModelClass, ReasoningEffort } from "@dbx-tools/shared-model";
 import { SMART_ROUTER_MODEL_ID } from "@dbx-tools/shared-model-gateway";
 import type {
@@ -19,6 +28,12 @@ import type {
 
 const CODEX_BASE_INSTRUCTIONS =
   "You are a coding agent. Follow the user's instructions and use the available tools to work in the current repository.";
+const CODEX_SMART_ROUTER_PRIORITY = 9_000;
+const CODEX_MODEL_PRIORITY_BASE = 10_000;
+const CODEX_FAMILY_ORDER = [
+  ModelFamily.Gpt,
+  ...Object.values(ModelFamily).filter((family) => family !== ModelFamily.Gpt),
+] as const;
 
 const REASONING_DESCRIPTIONS: Readonly<Record<string, string>> = {
   none: "Disable explicit reasoning",
@@ -63,8 +78,11 @@ export function listModelsPayload(
     .filter((target) => target.endpoint?.status?.deprecated !== true)
     .filter((target) => !includeCodex || hasChatClass(target));
   if (!preserveOrder) {
-    available.sort((left, right) =>
-      compareCatalogueTargets(left, right, (target) => target.displayName),
+    available.sort(
+      includeCodex
+        ? compareCodexCatalogueTargets
+        : (left, right) =>
+            compareCatalogueTargets(left, right, (target) => target.displayName),
     );
   }
   const smartRouterCandidates = available.filter((target) => target.capabilities.chat);
@@ -72,8 +90,17 @@ export function listModelsPayload(
     available.unshift(smartRouterModelTarget(smartRouterCandidates));
   }
   if (includeCodex) {
+    let modelIndex = 0;
     return {
-      models: available.map((target, index) => codexModel(target, index + 1, preferSystemModels)),
+      models: available.map((target) =>
+        codexModel(
+          target,
+          target.id === SMART_ROUTER_MODEL_ID
+            ? CODEX_SMART_ROUTER_PRIORITY
+            : CODEX_MODEL_PRIORITY_BASE + modelIndex++,
+          preferSystemModels,
+        ),
+      ),
     };
   }
   return {
@@ -165,7 +192,7 @@ function codexModel(
   const efforts = target.reasoningEfforts;
   return {
     slug: codexModelSlug(target, preferSystemModels),
-    display_name: target.displayName,
+    display_name: codexDisplayName(target),
     description: target.endpoint?.description ?? "Databricks model service",
     base_instructions: CODEX_BASE_INSTRUCTIONS,
     status: target.endpoint?.status ?? { deprecated: false },
@@ -193,6 +220,48 @@ function codexModel(
     supports_search_tool: target.capabilities.webSearch,
     supports_image_detail_original: false,
   };
+}
+
+function codexDisplayName(target: ModelTarget): string {
+  if (catalogueFamily(target) !== ModelFamily.Gpt) return target.displayName;
+  const displayName = target.displayName.replace(/^gpt(?=[\s._-])/i, "GPT");
+  return `Databricks ${displayName}`;
+}
+
+function compareCodexCatalogueTargets(left: ModelTarget, right: ModelTarget): number {
+  const familyOrder = codexFamilyRank(left) - codexFamilyRank(right);
+  if (familyOrder !== 0) return familyOrder;
+  const modelKindOrder = codexModelKindRank(left) - codexModelKindRank(right);
+  if (modelKindOrder !== 0) return modelKindOrder;
+  const versionOrder = compareVersionTuples(codexVersion(right), codexVersion(left));
+  if (versionOrder !== 0) return versionOrder;
+  const classOrder = codexClassRank(left) - codexClassRank(right);
+  if (classOrder !== 0) return classOrder;
+  return compareCatalogueLabel(left.displayName, right.displayName);
+}
+
+function codexModelKindRank(target: ModelTarget): number {
+  return [target.displayName, target.id, target.modelServiceName].some(
+    (identity) => identity && isOpenWeightsGpt(identity),
+  )
+    ? 1
+    : 0;
+}
+
+function codexFamilyRank(target: ModelTarget): number {
+  const family = catalogueFamily(target);
+  const index = family ? CODEX_FAMILY_ORDER.indexOf(family as ModelFamily) : -1;
+  return index >= 0 ? index : CODEX_FAMILY_ORDER.length;
+}
+
+function codexVersion(target: ModelTarget): readonly number[] {
+  return versionTuple(target.displayName);
+}
+
+function codexClassRank(target: ModelTarget): number {
+  const modelClass = target.endpoint?.class;
+  const index = modelClass ? CHAT_CLASS_ORDER.indexOf(modelClass) : -1;
+  return index >= 0 ? index : CHAT_CLASS_ORDER.length;
 }
 
 /**
