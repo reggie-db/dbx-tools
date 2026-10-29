@@ -34,6 +34,15 @@ interface ActionMenuItem extends MenuItem {
   readonly click?: () => void;
 }
 
+type ServiceTray = Pick<SysTrayType, "ready" | "onClick" | "onError" | "onExit"> & {
+  readonly process?: ChildProcess | null;
+};
+
+interface CliServiceHostDependencies {
+  readonly createTray?: () => ServiceTray;
+  readonly listenForControl?: typeof listenForServiceControl;
+}
+
 function systrayConstructor(): typeof SysTrayType {
   const loaded: unknown = systrayModule.default;
   if (typeof loaded === "function") return loaded as typeof SysTrayType;
@@ -43,46 +52,47 @@ function systrayConstructor(): typeof SysTrayType {
   throw new TypeError("systray2 did not provide a constructor");
 }
 
-class CliServiceHost {
+export class CliServiceHost {
   private readonly definition: CliServiceDefinition;
   private readonly paths: ServicePaths;
   private readonly requestStop: () => void;
-  private tray?: SysTrayType;
+  private readonly createServiceTray: () => ServiceTray;
+  private readonly listenForControl: typeof listenForServiceControl;
+  private tray?: ServiceTray;
   private service?: ChildProcess;
   private control?: Awaited<ReturnType<typeof listenForServiceControl>>;
   private stopping = false;
 
-  constructor(definition: CliServiceDefinition, paths: ServicePaths, requestStop: () => void) {
+  constructor(
+    definition: CliServiceDefinition,
+    paths: ServicePaths,
+    requestStop: () => void,
+    dependencies: CliServiceHostDependencies = {},
+  ) {
     this.definition = definition;
     this.paths = paths;
     this.requestStop = requestStop;
+    this.createServiceTray = dependencies.createTray ?? (() => this.createTray());
+    this.listenForControl = dependencies.listenForControl ?? listenForServiceControl;
   }
 
   async start(): Promise<void> {
     await mkdir(this.paths.directory, { recursive: true });
-    this.service = this.definition.command
-      ? this.startProcess(this.definition.command, true)
-      : undefined;
-    this.tray = this.createTray();
-    await this.tray.ready();
-    this.tray.onError((error) => {
-      void logError(this.paths.hostLog, error);
-      this.requestStop();
-    });
-    this.tray.onExit((code, signal) => {
-      if (this.stopping) return;
-      void logMessage(this.paths.hostLog, `system tray exited (${signal ?? String(code)})`);
-      this.requestStop();
-    });
-    await this.tray.onClick((action) => {
-      const item = action.item as ActionMenuItem;
-      item.click?.();
-    });
-    this.control = await listenForServiceControl(
-      this.paths.controlAddress,
-      () => this.status(),
-      this.requestStop,
-    );
+    try {
+      this.control = await this.listenForControl(
+        this.paths.controlAddress,
+        () => this.status(),
+        this.requestStop,
+      );
+      this.service = this.definition.command
+        ? this.startProcess(this.definition.command, true)
+        : undefined;
+      this.tray = this.createServiceTray();
+      void this.initializeTray(this.tray);
+    } catch (error) {
+      await this.stop();
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
@@ -93,9 +103,7 @@ class CliServiceHost {
       this.control = undefined;
     }
     if (this.tray) {
-      if (this.tray.process.exitCode === null && this.tray.process.signalCode === null) {
-        await this.tray.kill(false);
-      }
+      await stopTray(this.tray);
       this.tray = undefined;
     }
     if (this.service) {
@@ -110,6 +118,30 @@ class CliServiceHost {
       pid: process.pid,
       ...(this.service?.pid ? { servicePid: this.service.pid } : {}),
     };
+  }
+
+  private async initializeTray(tray: ServiceTray): Promise<void> {
+    try {
+      await tray.ready();
+      if (this.stopping || this.tray !== tray) return;
+      tray.onError((error) => {
+        void logError(this.paths.hostLog, error);
+      });
+      tray.onExit((code, signal) => {
+        if (this.tray === tray) this.tray = undefined;
+        if (this.stopping) return;
+        void logMessage(this.paths.hostLog, `system tray exited (${signal ?? String(code)})`);
+      });
+      await tray.onClick((action) => {
+        const item = action.item as ActionMenuItem;
+        item.click?.();
+      });
+    } catch (error) {
+      await logError(this.paths.hostLog, error);
+      if (this.tray !== tray) return;
+      await stopTray(tray);
+      this.tray = undefined;
+    }
   }
 
   private startProcess(command: CliServiceCommand, managed: boolean): ChildProcess {
@@ -235,6 +267,11 @@ async function stopProcess(child: ChildProcess): Promise<void> {
     child.kill("SIGKILL");
     await exited;
   }
+}
+
+async function stopTray(tray: ServiceTray): Promise<void> {
+  const child = tray.process;
+  if (child) await stopProcess(child);
 }
 
 async function logError(path: string, error: unknown): Promise<void> {

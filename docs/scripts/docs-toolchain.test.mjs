@@ -8,6 +8,7 @@ import { DOCS_NODE, docsAstroScript, loadDocsToolchain } from "./docs-toolchain.
 const complete = {
   "@astrojs/starlight": "0.41.11",
   astro: "7.3.2",
+  mermaid: "12.2.0",
   typedoc: "0.28.20",
   "typedoc-plugin-markdown": "4.13.0",
 };

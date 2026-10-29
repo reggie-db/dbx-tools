@@ -1,5 +1,11 @@
 # Code cleanup audit
 
+Date: 2026-10-09
+
+Status: Complete
+
+Archived: October 29, 2026
+
 ## Scope
 
 This audit reviewed the filesystem cache and approval path, AppKit and Mastra ownership boundaries, repeated local utilities, search client/server contracts, workspace task orchestration, and the generated build and release pipeline. It combined focused source review with AI-SLOP Detector `3.8.6` pulse, duplicate, boundary, dead-code, and unused-dependency scans.
@@ -47,7 +53,11 @@ The build graph is large but follows repository ownership: Projen defines packag
 
 The custom release transaction is complex because it owns branch preparation, synchronized versioning, validation selection, release notes, local publication, annotated tags, and optional demo deployment. That complexity is concentrated in `projen/tasks/release.ts` instead of duplicated across workflows. Demo authentication remains owned by `scripts/demo-deploy.ts` and `@dbx-tools/auth`, rather than by the release transaction. Future cleanup should split pure selection and validation helpers from side-effecting Git operations only when tests can preserve the transaction order.
 
-## Remaining work
+## Upstream watch items
+
+The cleanup identified no remaining repository-owned implementation work. Keep
+the compatibility adaptations below until their owning frameworks expose the
+required public extension points:
 
 - Replace the private AppKit persistent-storage load when AppKit publishes the required storage API.
 - Remove `MountedCompositeFilesystem` after Mastra supports virtual-root ignore probing.

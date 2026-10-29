@@ -85,9 +85,11 @@ The service belongs to the current user. Login startup uses a LaunchAgent on
 macOS, an XDG autostart entry on Linux, and a Startup command on Windows. Package
 entrypoints are compiled with Bun into versioned, per-install generations under
 `~/.dbx-tools/bin`; Python environments use the same versioned generation under
-the service data directory. Installing on macOS also clears any persisted
-disabled override for the LaunchAgent. Concurrent service installs serialize
-both service replacement and updates to the shared runtime dependency directory.
+the service data directory, and each host generation carries its matching tray
+executable. Installing on macOS unloads any stale LaunchAgent definition, clears
+any persisted disabled override, and starts the current generation through
+launchd. Concurrent service installs serialize both service replacement and
+updates to the shared runtime dependency directory.
 
 `restart` stops and starts the installed executable. It does not rebuild it.
 Re-run `install` after upgrading a consuming package to replace compiled

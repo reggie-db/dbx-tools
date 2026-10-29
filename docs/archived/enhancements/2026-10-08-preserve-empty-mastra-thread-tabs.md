@@ -2,7 +2,18 @@
 
 Date: 2026-10-08
 
-Status: Proposed
+Status: Complete
+
+Archived: October 29, 2026
+
+## Outcome
+
+The top thread layout now seeds recent conversations only during its initial
+reconciliation. Later reconciliations pass `seed: false`, so an explicitly
+empty tab strip remains empty until a new active conversation is created.
+Closing the final active tab starts one new conversation, and pure helper tests
+cover initial seeding, explicit emptiness, new active threads, deletion,
+closing, and successor selection.
 
 ## Problem
 

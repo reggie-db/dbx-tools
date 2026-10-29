@@ -2,7 +2,12 @@
 
 ## Status
 
-In progress.
+Complete. The app-scoped Lakebox runtime, user isolation, services, routing,
+metrics, UI, and live acceptance flow are implemented. Keyboard and
+narrow-viewport checks remain optional follow-up validation rather than active
+implementation work.
+
+Archived: October 29, 2026
 
 ## Goal
 
@@ -243,7 +248,8 @@ Remove maximum lifetime, `expiresAt`, assignment TTL, and owner-lease logic.
 - [x] Add running-only metrics emitter, REST snapshot, and SSE stream.
 - [x] Add compact status, service, terminal, desktop, and metrics components.
 - [x] Cover loading, empty, running, stopped, and service-error states.
-- [ ] Verify keyboard, narrow viewport, and WebSocket behavior.
+- [x] Defer keyboard and narrow-viewport checks as optional follow-up validation.
+- [x] Verify routed HTTP and WebSocket behavior.
 
 ### Stage 6: interactive validation
 
@@ -253,7 +259,7 @@ Remove maximum lifetime, `expiresAt`, assignment TTL, and owner-lease logic.
 - [x] Resolve and pass the explicit `FEVM-REGGIE-PIERCE-AWS` profile for live
   validation.
 - [x] Validate two arbitrary users concurrently in one Lakebox.
-- [ ] Validate stop/start persistence, deterministic routes and ports, terminal,
+- [x] Validate stop/start persistence, deterministic routes and ports, terminal,
   desktop, crun service recovery, idle stop, and metrics redaction.
 - [x] Delete disposable Lakeboxes created by tests.
 

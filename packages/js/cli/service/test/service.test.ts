@@ -133,7 +133,7 @@ describe("CLI service lifecycle", () => {
       "utf8",
     );
     assert.match(startup, /example-gateway/);
-    await stat(join(globalHomeDirectory, "bin", "traybin", "tray_linux_release"));
+    await stat(join(dirname(configuration.hostExecutable), "traybin", "tray_linux_release"));
 
     const pythonProject = join(root, "python-project");
     await mkdir(pythonProject);

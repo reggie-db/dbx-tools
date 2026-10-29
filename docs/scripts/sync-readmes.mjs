@@ -439,6 +439,9 @@ export default defineConfig({
       },
       favicon: ${JSON.stringify(withBase("/brand-favicon.svg"))},
       customCss: ["./src/styles/brand.css"],
+      components: {
+        Head: "./src/components/Head.astro",
+      },
       sidebar: generatedNav.sidebar,
       social: [{ icon: "github", label: "GitHub", href: ${JSON.stringify(brandContext.links.repository ?? repoUrl)} }],
       editLink: {
@@ -483,6 +486,110 @@ function brandCss() {
 a:not([class]) {
   text-decoration-color: color-mix(in srgb, ${colors.accent} 65%, transparent);
 }
+
+.mermaid-diagram {
+  margin-block: 1.5rem;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid-diagram svg {
+  display: block;
+  height: auto;
+  margin-inline: auto;
+  max-width: 100%;
+}
+`;
+}
+
+function mermaidHead() {
+  return `---
+import DefaultHead from "@astrojs/starlight/components/Head.astro";
+---
+
+<DefaultHead />
+
+<script>
+  const runtimeKey = Symbol.for("dbx-tools.mermaid-runtime");
+  if (!Reflect.get(window, runtimeKey)) {
+    Reflect.set(window, runtimeKey, true);
+    const blockSelector = [
+      'code.language-mermaid',
+      '[data-language="mermaid"] code',
+      'pre.language-mermaid code',
+    ].join(",");
+    let mermaidPromise: Promise<typeof import("mermaid").default> | undefined;
+    let renderQueue = Promise.resolve();
+
+    function loadMermaid() {
+      mermaidPromise ??= import("mermaid").then(({ default: mermaid }) => mermaid);
+      return mermaidPromise;
+    }
+
+    function sourceText(codeBlock: HTMLElement) {
+      const expressiveCodeLines = codeBlock.querySelectorAll(".ec-line .code");
+      if (expressiveCodeLines.length > 0) {
+        return Array.from(expressiveCodeLines, (line) => line.textContent ?? "").join("\\n");
+      }
+      return codeBlock.textContent ?? "";
+    }
+
+    function prepareDiagrams() {
+      const codeBlocks = new Set(document.querySelectorAll(blockSelector));
+      for (const codeBlock of codeBlocks) {
+        if (!(codeBlock instanceof HTMLElement)) continue;
+        if (codeBlock.closest(".mermaid-diagram")) continue;
+        const renderedBlock =
+          codeBlock.closest("figure.expressive-code") ?? codeBlock.closest("pre");
+        if (!renderedBlock) continue;
+        const diagram = document.createElement("div");
+        diagram.className = "mermaid-diagram";
+        diagram.dataset.mermaidSource = sourceText(codeBlock);
+        renderedBlock.replaceWith(diagram);
+      }
+    }
+
+    async function renderDiagrams() {
+      prepareDiagrams();
+      const diagrams = Array.from(document.querySelectorAll(".mermaid-diagram"));
+      if (diagrams.length === 0) return;
+      const mermaid = await loadMermaid();
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+        theme: document.documentElement.dataset.theme === "dark" ? "dark" : "default",
+      });
+      for (const diagram of diagrams) {
+        if (!(diagram instanceof HTMLElement)) continue;
+        const source = diagram.dataset.mermaidSource;
+        if (!source) continue;
+        diagram.replaceChildren(document.createTextNode(source));
+        diagram.removeAttribute("data-processed");
+      }
+      await mermaid.run({ nodes: diagrams });
+    }
+
+    function queueRender() {
+      renderQueue = renderQueue.then(renderDiagrams, renderDiagrams).catch((error) => {
+        console.error("Failed to render Mermaid diagrams", error);
+      });
+    }
+
+    document.addEventListener("astro:page-load", queueRender);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", queueRender, { once: true });
+    } else {
+      queueRender();
+    }
+
+    new MutationObserver((mutations) => {
+      if (mutations.some((mutation) => mutation.attributeName === "data-theme")) queueRender();
+    }).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  }
+</script>
 `;
 }
 
@@ -646,6 +753,7 @@ function main() {
   write(path.join(sourceRoot, "package.json"), docsPackageJson());
   write(path.join(sourceRoot, "pnpm-workspace.yaml"), docsWorkspaceYaml());
   write(path.join(sourceRoot, "astro.config.mjs"), astroConfig());
+  write(path.join(sourceRoot, "src", "components", "Head.astro"), mermaidHead());
   write(path.join(sourceRoot, "src", "content.config.ts"), contentConfig());
   syncBrandAssets();
 

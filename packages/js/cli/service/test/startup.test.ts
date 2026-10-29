@@ -10,6 +10,7 @@ import {
   renderDesktopEntry,
   renderLaunchAgent,
   renderWindowsStartup,
+  startStartup,
 } from "../src/_startup.ts";
 import type { CliServiceDefinition } from "../src/definition.ts";
 
@@ -27,19 +28,32 @@ const LAUNCH = {
 };
 
 describe("CLI service startup entries", () => {
-  it("re-enables the macOS LaunchAgent during installation", async () => {
+  it("reloads a stale macOS LaunchAgent and starts the current plist", async () => {
     const root = await mkdtemp(join(tmpdir(), "dbx-tools-cli-service-startup-"));
     const binDirectory = join(root, "bin");
     const launchctlLog = join(root, "launchctl.log");
+    const launchctlState = join(root, "launchctl.loaded");
     await mkdir(binDirectory);
     const launchctl = join(binDirectory, "launchctl");
-    await writeFile(launchctl, '#!/bin/sh\nprintf "%s\\n" "$@" > "$LAUNCHCTL_LOG"\n');
+    await writeFile(
+      launchctl,
+      [
+        "#!/bin/sh",
+        'printf "%s\\n" "$*" >> "$LAUNCHCTL_LOG"',
+        'if [ "$1" = "print" ]; then [ -f "$LAUNCHCTL_STATE" ]; exit $?; fi',
+        'if [ "$1" = "bootout" ]; then /bin/rm -f "$LAUNCHCTL_STATE"; fi',
+        'if [ "$1" = "bootstrap" ]; then : > "$LAUNCHCTL_STATE"; fi',
+        "",
+      ].join("\n"),
+    );
     await chmod(launchctl, 0o755);
+    await writeFile(launchctlState, "loaded");
     const runtime = {
       platform: "darwin" as const,
       environment: {
         PATH: binDirectory,
         LAUNCHCTL_LOG: launchctlLog,
+        LAUNCHCTL_STATE: launchctlState,
       },
       homeDirectory: root,
       temporaryDirectory: root,
@@ -51,9 +65,60 @@ describe("CLI service startup entries", () => {
 
     assert.equal(
       await readFile(launchctlLog, "utf8"),
-      `enable\ngui/${runtime.userId}/${DEFINITION.id}\n`,
+      [
+        `print gui/${runtime.userId}/${DEFINITION.id}`,
+        `bootout gui/${runtime.userId}/${DEFINITION.id}`,
+        `enable gui/${runtime.userId}/${DEFINITION.id}`,
+        "",
+      ].join("\n"),
     );
     assert.match(await readFile(paths.startupFile, "utf8"), /<key>RunAtLoad<\/key>/);
+
+    await startStartup(DEFINITION, paths, runtime, LAUNCH);
+
+    assert.equal(
+      await readFile(launchctlLog, "utf8"),
+      [
+        `print gui/${runtime.userId}/${DEFINITION.id}`,
+        `bootout gui/${runtime.userId}/${DEFINITION.id}`,
+        `enable gui/${runtime.userId}/${DEFINITION.id}`,
+        `print gui/${runtime.userId}/${DEFINITION.id}`,
+        `bootstrap gui/${runtime.userId} ${paths.startupFile}`,
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("kickstarts an already loaded macOS LaunchAgent", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-tools-cli-service-startup-"));
+    const binDirectory = join(root, "bin");
+    const launchctlLog = join(root, "launchctl.log");
+    await mkdir(binDirectory);
+    const launchctl = join(binDirectory, "launchctl");
+    await writeFile(
+      launchctl,
+      '#!/bin/sh\nprintf "%s\\n" "$*" >> "$LAUNCHCTL_LOG"\nexit 0\n',
+    );
+    await chmod(launchctl, 0o755);
+    const runtime = {
+      platform: "darwin" as const,
+      environment: { PATH: binDirectory, LAUNCHCTL_LOG: launchctlLog },
+      homeDirectory: root,
+      temporaryDirectory: root,
+      userId: 502,
+    };
+    const paths = resolveServicePaths(DEFINITION, runtime);
+
+    await startStartup(DEFINITION, paths, runtime, LAUNCH);
+
+    assert.equal(
+      await readFile(launchctlLog, "utf8"),
+      [
+        `print gui/${runtime.userId}/${DEFINITION.id}`,
+        `kickstart -k gui/${runtime.userId}/${DEFINITION.id}`,
+        "",
+      ].join("\n"),
+    );
   });
 
   it("renders a macOS per-user LaunchAgent", () => {

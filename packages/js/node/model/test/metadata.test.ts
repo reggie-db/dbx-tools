@@ -139,6 +139,18 @@ describe("model metadata generation", () => {
               },
             ],
           },
+          {
+            provider: "alibaba",
+            apiSurface: "openai-chat-completions",
+            model: "qwen3-next-80b-a3b-instruct",
+            params: [
+              {
+                path: "extra_body.chat_template_kwargs.enable_thinking",
+                group: "reasoning",
+                type: "boolean",
+              },
+            ],
+          },
         ],
       },
       42,
@@ -152,6 +164,7 @@ describe("model metadata generation", () => {
     ]);
     assert.deepEqual(snapshot.catalogue.models["gemini-3-1-pro"], ["low", "high"]);
     assert.ok(snapshot.catalogue.reasoning.includes("gemini-3-1-pro-preview"));
+    assert.ok(!snapshot.catalogue.reasoning.includes("qwen-3-next-80b-a3b-instruct"));
   });
 });
 

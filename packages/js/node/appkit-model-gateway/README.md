@@ -78,6 +78,9 @@ models.dev metadata, unsupported temperatures are omitted and supported values
 are clamped to Databricks' `0..2` range. Unknown custom endpoints keep finite
 numeric temperatures unchanged.
 
+See [request parameter translation](../../../../docs/model-gateway.md#understand-request-parameter-translation)
+for the temperature and reasoning flows.
+
 Web-search and custom-tool requests use a direct route only when the discovered
 model advertises the required capability. OpenAI model-list
 `capabilities.web_search` and Codex `supports_search_tool` use that same

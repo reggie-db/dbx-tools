@@ -1,6 +1,12 @@
 import fs from "node:fs";
 
-const REQUIRED_PACKAGES = ["@astrojs/starlight", "astro", "typedoc", "typedoc-plugin-markdown"];
+const REQUIRED_PACKAGES = [
+  "@astrojs/starlight",
+  "astro",
+  "mermaid",
+  "typedoc",
+  "typedoc-plugin-markdown",
+];
 const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 /**

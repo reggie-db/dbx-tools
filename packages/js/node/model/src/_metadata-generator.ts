@@ -243,11 +243,10 @@ export function parseModelParams(
         .flatMap((parameter) => parameter.values ?? [])
         .flatMap((value) => parseReasoning(value) ?? []),
     );
+    if (levels.length === 0) continue;
     for (const key of keys) {
       reasoning.add(key);
-      if (levels.length > 0) {
-        models[key] = sortReasoningLevels([...(models[key] ?? []), ...levels]);
-      }
+      models[key] = sortReasoningLevels([...(models[key] ?? []), ...levels]);
     }
   }
   if (reasoning.size === 0) {

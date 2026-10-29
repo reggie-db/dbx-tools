@@ -85,8 +85,8 @@ Source of truth:
   export maps and generates Python references from source ASTs and docstrings.
 - `docs/scripts/repository-docs.mjs` owns the package catalogue, route slugging,
   and README summary rules shared by both generators.
-- `docs/toolchain.json` pins the exact Astro, Starlight, TypeDoc, and TypeDoc
-  Markdown versions written into the generated site package.
+- `docs/toolchain.json` pins the exact Astro, Starlight, Mermaid, TypeDoc, and
+  TypeDoc Markdown versions written into the generated site package.
 - `docs/scripts/check-source-docs.mjs` rejects undocumented handwritten Python
   declarations and new undocumented TypeScript declarations exposed by package
   export maps. The TypeScript baseline ratchets downward as existing

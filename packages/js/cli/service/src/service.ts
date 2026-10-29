@@ -9,7 +9,6 @@
  * @module
  */
 
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
@@ -34,7 +33,13 @@ import {
   installServicePythonPackage,
   installServiceRuntime,
 } from "./_runtime.ts";
-import { installStartup, removeStartup, type ServiceLaunch } from "./_startup.ts";
+import {
+  installStartup,
+  removeStartup,
+  startStartup,
+  stopStartup,
+  type ServiceLaunch,
+} from "./_startup.ts";
 import {
   CliServiceDefinitionSchema,
   type CliServiceCommand,
@@ -247,7 +252,7 @@ export class CliService implements CliServiceLifecycle {
       [],
       artifactBinDirectory,
     );
-    await this.ensureTrayBinary();
+    await this.ensureTrayBinary(artifactBinDirectory);
     await this.stop();
     const installed = { ...installedDefinition, hostExecutable: host.path };
     await writeServiceDefinition(paths.configFile, installed);
@@ -279,19 +284,19 @@ export class CliService implements CliServiceLifecycle {
         this.binaryContext(this.binaryName(installedDefinition, "service")).path,
       paths.configFile,
     );
-    const child = spawn(launch.executable, launch.arguments, {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-
+    const child = await startStartup(installedDefinition, paths, this.runtime, launch);
+    const started = waitForState(
+      async () => (await requestServiceControl(paths.controlAddress, "status")) !== undefined,
+      true,
+      DEFAULT_START_TIMEOUT_MILLISECONDS,
+      `${this.definition.name} did not start`,
+    );
+    if (!child) {
+      await started;
+      return;
+    }
     await Promise.race([
-      waitForState(
-        async () => (await requestServiceControl(paths.controlAddress, "status")) !== undefined,
-        true,
-        DEFAULT_START_TIMEOUT_MILLISECONDS,
-        `${this.definition.name} did not start`,
-      ),
+      started,
       new Promise<never>((_resolve, reject) => {
         child.once("error", reject);
         child.once("exit", (code, signal) => {
@@ -309,7 +314,10 @@ export class CliService implements CliServiceLifecycle {
   async stop(): Promise<void> {
     const paths = resolveServicePaths(this.definition, this.runtime);
     const response = await requestServiceControl(paths.controlAddress, "stop");
-    if (!response) return;
+    if (!response) {
+      await stopStartup(this.definition, this.runtime);
+      return;
+    }
     await waitForState(
       async () => (await requestServiceControl(paths.controlAddress, "status")) !== undefined,
       false,
@@ -333,7 +341,7 @@ export class CliService implements CliServiceLifecycle {
   async uninstall(): Promise<void> {
     const paths = resolveServicePaths(this.definition, this.runtime);
     await this.stop();
-    await removeStartup(paths);
+    await removeStartup(this.definition, paths, this.runtime);
     await rm(paths.directory, { recursive: true, force: true });
   }
 
@@ -480,9 +488,9 @@ export class CliService implements CliServiceLifecycle {
     );
   }
 
-  private async ensureTrayBinary(): Promise<BinContext> {
+  private async ensureTrayBinary(artifactBinDirectory: string): Promise<BinContext> {
     const name = trayExecutableName(this.runtime.platform);
-    const binDir = join(this.globalHomeDirectory, "bin", "traybin");
+    const binDir = join(artifactBinDirectory, "traybin");
     return ensure(name, pathToFileURL(this.trayExecutable).href, {
       destination: {
         root: this.globalHomeDirectory,

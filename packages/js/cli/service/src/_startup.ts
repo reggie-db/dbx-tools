@@ -1,3 +1,4 @@
+import { spawn as spawnChild, type ChildProcess } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
@@ -28,10 +29,48 @@ export async function installStartup(
     encoding: "utf8",
     mode: runtime.platform === "win32" ? undefined : 0o644,
   });
-  if (runtime.platform === "darwin") await enableLaunchAgent(definition, runtime);
+  if (runtime.platform === "darwin") {
+    await unloadLaunchAgent(definition, runtime);
+    await runLaunchctl(["enable", launchAgentTarget(definition, runtime)], runtime, true);
+  }
 }
 
-export async function removeStartup(paths: ServicePaths): Promise<void> {
+export async function startStartup(
+  definition: CliServiceDefinition,
+  paths: ServicePaths,
+  runtime: ServiceRuntimeContext,
+  launch: ServiceLaunch,
+): Promise<ChildProcess | undefined> {
+  if (runtime.platform === "darwin") {
+    const target = launchAgentTarget(definition, runtime);
+    if (await launchAgentLoaded(definition, runtime)) {
+      await runLaunchctl(["kickstart", "-k", target], runtime, true);
+    } else {
+      await runLaunchctl(["bootstrap", launchAgentDomain(runtime), paths.startupFile], runtime, true);
+    }
+    return undefined;
+  }
+  const child = spawnChild(launch.executable, launch.arguments, {
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+  return child;
+}
+
+export async function stopStartup(
+  definition: CliServiceDefinition,
+  runtime: ServiceRuntimeContext,
+): Promise<void> {
+  if (runtime.platform === "darwin") await unloadLaunchAgent(definition, runtime);
+}
+
+export async function removeStartup(
+  definition: CliServiceDefinition,
+  paths: ServicePaths,
+  runtime: ServiceRuntimeContext,
+): Promise<void> {
+  await stopStartup(definition, runtime);
   await rm(paths.startupFile, { force: true });
 }
 
@@ -80,14 +119,46 @@ export function renderWindowsStartup(launch: ServiceLaunch): string {
   return `@echo off\r\nstart "" /b ${command}\r\n`;
 }
 
-async function enableLaunchAgent(
+async function unloadLaunchAgent(
   definition: CliServiceDefinition,
   runtime: ServiceRuntimeContext,
 ): Promise<void> {
+  if (!(await launchAgentLoaded(definition, runtime))) return;
+  await runLaunchctl(["bootout", launchAgentTarget(definition, runtime)], runtime, true);
+}
+
+async function launchAgentLoaded(
+  definition: CliServiceDefinition,
+  runtime: ServiceRuntimeContext,
+): Promise<boolean> {
+  const result = await runLaunchctl(
+    ["print", launchAgentTarget(definition, runtime)],
+    runtime,
+    false,
+  );
+  return result.exitCode === 0;
+}
+
+function launchAgentDomain(runtime: ServiceRuntimeContext): string {
   const userId = runtime.userId;
   if (userId === undefined) throw new Error("macOS service installation requires a user ID");
-  await spawn("launchctl", ["enable", `gui/${userId}/${definition.id}`], {
-    check: true,
+  return `gui/${userId}`;
+}
+
+function launchAgentTarget(
+  definition: CliServiceDefinition,
+  runtime: ServiceRuntimeContext,
+): string {
+  return `${launchAgentDomain(runtime)}/${definition.id}`;
+}
+
+function runLaunchctl(
+  arguments_: readonly string[],
+  runtime: ServiceRuntimeContext,
+  check: boolean,
+) {
+  return spawn("launchctl", [...arguments_], {
+    check,
     env: runtime.environment,
     stdin: "ignore",
     stdout: "capture",

@@ -71,6 +71,30 @@ describe("reasoning adaptation", () => {
     assert.equal(noRetry, undefined);
   });
 
+  it("removes reasoning and retries when the model rejects the feature", async () => {
+    const retry = await learnAndAdaptReasoningRetry({
+      model: "system.ai.qwen3-next-80b-a3b-instruct",
+      body: {
+        model: "system.ai.qwen3-next-80b-a3b-instruct",
+        reasoning: { effort: "max" },
+        reasoning_effort: "max",
+        temperature: 1,
+      },
+      response: new Response(
+        JSON.stringify({
+          error_code: "INVALID_PARAMETER_VALUE",
+          message: "This model does not support 'reasoning' for the Open Responses API.",
+        }),
+        { status: 400 },
+      ),
+      previousWireEffort: "high",
+    });
+    assert.deepEqual(retry, {
+      model: "system.ai.qwen3-next-80b-a3b-instruct",
+      temperature: 1,
+    });
+  });
+
   it("does not retry non-reasoning failures", async () => {
     const response = new Response(JSON.stringify({ message: "rate limited" }), { status: 429 });
     const retry = await learnAndAdaptReasoningRetry({

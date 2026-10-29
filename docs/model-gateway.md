@@ -60,6 +60,69 @@ The gateway resolves loose model names and capability classes against the live
 workspace catalogue. An exact serving endpoint or `system.ai.*` service name
 wins over automatic selection.
 
+## Understand request parameter translation
+
+The gateway translates parameters only when it has provider-safe metadata or a
+specific Databricks error response. Unknown custom endpoints keep valid numeric
+sampling values unchanged.
+
+### Temperature translation
+
+The following flow shows how the gateway handles `temperature`.
+
+```mermaid
+flowchart TD
+    accTitle: Temperature translation
+    accDescr: The gateway preserves omitted and unknown numeric temperatures, removes null and unsupported temperatures, rejects invalid values, and clamps supported Databricks values.
+    start["Receive temperature"] --> present{"Is the field present?"}
+    present -->|No| unchanged["Leave the request unchanged"]
+    present -->|Yes| null{"Is the value null?"}
+    null -->|Yes| remove["Remove temperature"]
+    null -->|No| finite{"Is the value a finite number?"}
+    finite -->|No| invalid["Return HTTP 400"]
+    finite -->|Yes| metadata{"Does the Databricks model have models.dev metadata?"}
+    metadata -->|No| preserve["Preserve the numeric value"]
+    metadata -->|Yes| supported{"Does the model support temperature?"}
+    supported -->|No| remove
+    supported -->|Yes| clamp["Clamp the value to 0 through 2"]
+```
+
+Temperature support comes from the Databricks provider records in the committed
+models.dev snapshot. The daily metadata refresh keeps the previous cached or
+committed snapshot when models.dev is unavailable.
+
+### Reasoning translation
+
+The following flow shows how the gateway maps reasoning effort and retries a
+Databricks request.
+
+```mermaid
+flowchart TD
+    accTitle: Reasoning effort translation
+    accDescr: The gateway normalizes reasoning effort, selects the first available supported ladder, scales down to a supported level, and retries once after a reasoning-specific Databricks error.
+    start["Read reasoning_effort or reasoning.effort"] --> normalize["Normalize a known level or alias"]
+    normalize --> valid{"Is the normalized level valid?"}
+    valid -->|No, null, or none| centered["Use a medium-centered request"]
+    valid -->|Yes| ladder["Select the first available supported ladder"]
+    ladder --> docs["1. Databricks documentation"]
+    docs --> params["2. modelparams.dev effort enums"]
+    params --> learned["3. Learned Databricks error values"]
+    learned --> family["4. Model family fallback"]
+    family --> scale["Scale down to the nearest supported level"]
+    centered --> scale
+    scale --> send["Send the Databricks request"]
+    send --> rejected{"Does Databricks reject reasoning?"}
+    rejected -->|No| response["Return the response"]
+    rejected -->|Lists supported values| learn["Learn the values and retry once"]
+    rejected -->|Does not support reasoning| strip["Remove reasoning fields and retry once"]
+```
+
+The reasoning ladder uses Databricks documentation first, then modelparams.dev
+effort enums, learned Databricks error values, and family defaults. A
+provider-specific boolean such as Qwen `enable_thinking` does not define a
+generic effort ladder. If Databricks reports that the model does not support the
+reasoning field, the gateway removes the field and retries once.
+
 ## Use Anthropic, embeddings, or Codex
 
 The gateway also serves:
