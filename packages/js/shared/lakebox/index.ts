@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-lakebox";
-export const PACKAGE_VERSION = "0.9.176";
+export const PACKAGE_VERSION = "0.9.177";
 export * as client from "./src/client.ts";
 export * as schemas from "./src/schemas.ts";
 export { LAKEBOX_PLUGIN_NAME, LAKEBOX_DEFAULT_BASE_PATH, LAKEBOX_DEFAULT_ROUTE_PREFIX, LAKEBOX_ROUTES, LakeboxClientConfigSchema, lakeboxRoute, lakeboxServicePath } from "./src/client.ts";
