@@ -24,7 +24,14 @@ _LOCK_DIRECTORY_ENVIRONMENT = "DBX_TOOLS_NODE_RUNTIME_LOCK_DIRECTORY"
 _NODEJS_WHEEL_REQUIREMENT = "nodejs-wheel>=22.20,<23"
 _PYTHONMONKEY_VERSION = "1.3.2"
 _PROCESS_LOCK = RLock()
-_PROCESS_RUNTIME: ModuleType | None = None
+
+
+@dataclass
+class _ProcessRuntime:
+    module: ModuleType | None = None
+
+
+_PROCESS_RUNTIME = _ProcessRuntime()
 
 
 @dataclass(frozen=True)
@@ -330,33 +337,36 @@ def _verify_runtime() -> None:
         raise RuntimeError(f"Installed PythonMonkey runtime failed verification:\n{result.stdout}")
 
 
+def _install_pythonmonkey(lock_directory: str | Path | None) -> ModuleType:
+    with _pythonmonkey_install_environment(lock_directory) as environment:
+        _pip_install(
+            f"pythonmonkey=={_PYTHONMONKEY_VERSION}",
+            environment=environment,
+            only_binary=("pythonmonkey",),
+        )
+    _verify_runtime()
+    runtime = _environment_pythonmonkey()
+    if runtime is None:
+        raise RuntimeError(
+            "The locked PythonMonkey installation is unavailable in the active "
+            f"Python environment {sys.prefix}"
+        )
+    return runtime
+
+
+def _load_pythonmonkey(lock_directory: str | Path | None) -> ModuleType:
+    runtime = _environment_pythonmonkey()
+    if runtime is not None:
+        return runtime
+    with _file_lock(_lock_path("pythonmonkey", lock_directory)):
+        runtime = _environment_pythonmonkey()
+        return runtime if runtime is not None else _install_pythonmonkey(lock_directory)
+
+
 def ensure_pythonmonkey(lock_directory: str | Path | None = None) -> ModuleType:
     """Return PythonMonkey, installing its locked version into the active environment."""
 
-    global _PROCESS_RUNTIME
     with _PROCESS_LOCK:
-        if _PROCESS_RUNTIME is not None:
-            return _PROCESS_RUNTIME
-        environment_runtime = _environment_pythonmonkey()
-        if environment_runtime is not None:
-            _PROCESS_RUNTIME = environment_runtime
-            return environment_runtime
-
-        with _file_lock(_lock_path("pythonmonkey", lock_directory)):
-            environment_runtime = _environment_pythonmonkey()
-            if environment_runtime is None:
-                with _pythonmonkey_install_environment(lock_directory) as environment:
-                    _pip_install(
-                        f"pythonmonkey=={_PYTHONMONKEY_VERSION}",
-                        environment=environment,
-                        only_binary=("pythonmonkey",),
-                    )
-                _verify_runtime()
-                environment_runtime = _environment_pythonmonkey()
-            if environment_runtime is None:
-                raise RuntimeError(
-                    "The locked PythonMonkey installation is unavailable in the active "
-                    f"Python environment {sys.prefix}"
-                )
-            _PROCESS_RUNTIME = environment_runtime
-            return environment_runtime
+        if _PROCESS_RUNTIME.module is None:
+            _PROCESS_RUNTIME.module = _load_pythonmonkey(lock_directory)
+        return _PROCESS_RUNTIME.module

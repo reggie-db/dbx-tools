@@ -105,10 +105,13 @@ flowchart TD
     valid -->|No, null, or none| centered["Use a medium-centered request"]
     valid -->|Yes| ladder["Select the first available supported ladder"]
     ladder --> docs["1. Databricks documentation"]
-    docs --> params["2. modelparams.dev effort enums"]
-    params --> learned["3. Learned Databricks error values"]
-    learned --> family["4. Model family fallback"]
-    family --> scale["Scale down to the nearest supported level"]
+    ladder --> params["2. modelparams.dev effort enums"]
+    ladder --> learned["3. Learned Databricks error values"]
+    ladder --> family["4. Model family fallback"]
+    docs --> scale["Scale down to the nearest supported level"]
+    params --> scale
+    learned --> scale
+    family --> scale
     centered --> scale
     scale --> send["Send the Databricks request"]
     send --> rejected{"Does Databricks reject reasoning?"}

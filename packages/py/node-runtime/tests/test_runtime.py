@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import Mock
 
 import pytest
 from dbx_tools.node_runtime import bootstrap
@@ -22,7 +23,7 @@ def _fake_nodejs_wheel(tmp_path: Path) -> Path:
 
 @pytest.fixture(autouse=True)
 def reset_process_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(bootstrap, "_PROCESS_RUNTIME", None)
+    monkeypatch.setattr(bootstrap._PROCESS_RUNTIME, "module", None)
 
 
 def test_prepare_node_environment_uses_direct_launchers(tmp_path: Path) -> None:
@@ -42,18 +43,16 @@ def test_prepare_node_environment_uses_direct_launchers(tmp_path: Path) -> None:
 
 
 def test_pip_install_targets_the_active_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[list[str]] = []
-
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="")
+    run = Mock(
+        side_effect=lambda command, **_: subprocess.CompletedProcess(command, 0, stdout="")
+    )
 
     monkeypatch.setattr(bootstrap.importlib.util, "find_spec", lambda _: object())
     monkeypatch.setattr(bootstrap.subprocess, "run", run)
 
     bootstrap._pip_install("example==1.0", only_binary=("example",))
 
-    assert calls == [
+    assert [call.args[0] for call in run.call_args_list] == [
         [
             sys.executable,
             "-m",
@@ -66,27 +65,26 @@ def test_pip_install_targets_the_active_environment(monkeypatch: pytest.MonkeyPa
             "example==1.0",
         ]
     ]
-    assert "--target" not in calls[0]
+    assert "--target" not in run.call_args.args[0]
 
 
 def test_pip_install_bootstraps_pip_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[list[str]] = []
     pip_checks = iter([None, object()])
     original_find_spec = bootstrap.importlib.util.find_spec
 
     def find_spec(name: str):
         return next(pip_checks) if name == "pip" else original_find_spec(name)
 
-    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="")
+    run = Mock(
+        side_effect=lambda command, **_: subprocess.CompletedProcess(command, 0, stdout="")
+    )
 
     monkeypatch.setattr(bootstrap.importlib.util, "find_spec", find_spec)
     monkeypatch.setattr(bootstrap.subprocess, "run", run)
 
     bootstrap._pip_install("example==1.0")
 
-    assert calls == [
+    assert [call.args[0] for call in run.call_args_list] == [
         [sys.executable, "-m", "ensurepip", "--upgrade"],
         [
             sys.executable,

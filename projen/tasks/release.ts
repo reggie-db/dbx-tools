@@ -314,7 +314,8 @@ export async function watchReleaseGithubActions(
         root,
         "gh",
         ["run", "view", String(run.databaseId), "--repo", repository, "--log-failed"],
-        { env: account.env },
+        // gh pipes TTY log output through its pager; release logs must stream inline.
+        { env: { ...account.env, GH_PAGER: "cat" } },
       );
     }
   } catch (error) {

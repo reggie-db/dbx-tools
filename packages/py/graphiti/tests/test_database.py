@@ -1,5 +1,7 @@
 import builtins
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from dbx_tools.graphiti import database
@@ -12,20 +14,77 @@ async def _connect(calls, connection, dsn, options):
     return connection
 
 
-class _StaticLakebaseClient:
-    """Return one stable Lakebase target and credential for ownership tests."""
+def _static_lakebase_client() -> SimpleNamespace:
+    return SimpleNamespace(
+        resolve=AsyncMock(
+            return_value={
+                "endpoint": "projects/project/branches/branch/endpoints/primary",
+                "host": "primary.example",
+                "port": 5432,
+                "database": "databricks_postgres",
+                "user": "app_login",
+            }
+        ),
+        generate_database_credential=AsyncMock(return_value="token"),
+    )
 
-    async def resolve(self, _target: object) -> dict[str, object]:
+
+def _credential_connection(calls: list[object], owners) -> SimpleNamespace:
+    def fetchval(query: str, *_: object) -> str | None:
+        calls.append(query)
+        if query == "SELECT session_user":
+            return "app_login"
+        if query == database._SCHEMA_OWNER_QUERY:
+            return next(owners)
+        return "extensions"
+
+    return SimpleNamespace(
+        execute=AsyncMock(side_effect=calls.append),
+        fetchval=AsyncMock(side_effect=fetchval),
+        close=AsyncMock(side_effect=lambda: calls.append("closed")),
+    )
+
+
+def _credential_client(calls: list[object]) -> SimpleNamespace:
+    def resolve(target: object) -> dict[str, object]:
+        calls.append(target)
         return {
+            "project": "project",
+            "branch": "branch",
             "endpoint": "projects/project/branches/branch/endpoints/primary",
             "host": "primary.example",
             "port": 5432,
             "database": "databricks_postgres",
-            "user": "app_login",
+            "user": "user@example.com",
         }
 
-    async def generate_database_credential(self, _endpoint: str) -> str:
-        return "token"
+    def credential(endpoint: str) -> str:
+        calls.append(endpoint)
+        return f"token-{len(calls)}"
+
+    return SimpleNamespace(
+        resolve=AsyncMock(side_effect=resolve),
+        generate_database_credential=AsyncMock(side_effect=credential),
+    )
+
+
+def _schema_connection(
+    schema_owner: str,
+    calls: list[str] | None = None,
+) -> SimpleNamespace:
+    def fetchval(query: str, *_: object) -> str:
+        if calls is not None:
+            calls.append(query)
+        return "app_login" if query == "SELECT session_user" else schema_owner
+
+    def close() -> None:
+        if calls is not None:
+            calls.append("closed")
+
+    return SimpleNamespace(
+        fetchval=AsyncMock(side_effect=fetchval),
+        close=AsyncMock(side_effect=close),
+    )
 
 
 @pytest.mark.asyncio
@@ -70,49 +129,19 @@ async def test_missing_database_starts_persistent_embedded_postgres(
 async def test_lakebase_credentials_are_minted_for_each_connection(monkeypatch) -> None:
     calls: list[object] = []
     owners = iter([None, "graphiti_owner"])
-
-    class Connection:
-        async def execute(self, query: str) -> None:
-            calls.append(query)
-
-        async def fetchval(self, query: str, *_: object) -> str | None:
-            calls.append(query)
-            if query == "SELECT session_user":
-                return "app_login"
-            if query == database._SCHEMA_OWNER_QUERY:
-                return next(owners)
-            return "extensions"
-
-        async def close(self) -> None:
-            calls.append("closed")
-
-    class Client:
-        async def resolve(self, target):
-            calls.append(target)
-            return {
-                "project": "project",
-                "branch": "branch",
-                "endpoint": "projects/project/branches/branch/endpoints/primary",
-                "host": "primary.example",
-                "port": 5432,
-                "database": "databricks_postgres",
-                "user": "user@example.com",
-            }
-
-        async def generate_database_credential(self, endpoint: str) -> str:
-            calls.append(endpoint)
-            return f"token-{len(calls)}"
+    connection = _credential_connection(calls, owners)
+    client = _credential_client(calls)
 
     monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
     monkeypatch.setattr(
         database,
         "create_lakebase_client",
-        lambda options=None: calls.append(options) or Client(),
+        lambda options=None: calls.append(options) or client,
     )
     monkeypatch.setattr(
         database.asyncpg,
         "connect",
-        lambda dsn, **options: _connect(calls, Connection(), dsn, options),
+        lambda dsn, **options: _connect(calls, connection, dsn, options),
     )
 
     runtime = await database._start_database(
@@ -171,41 +200,40 @@ async def test_prepare_lakebase_schema_recreates_current_users_schema(monkeypatc
         async def __aexit__(self, *_: object) -> None:
             calls.append("commit")
 
-    class Connection:
-        async def fetchval(self, query: str, *_: object) -> str:
-            calls.append(query)
-            return "app_login"
+    def fetchval(query: str, *_: object) -> str:
+        calls.append(query)
+        return "app_login"
 
-        async def execute(self, query: str) -> None:
-            calls.append(query)
+    connection = SimpleNamespace(
+        fetchval=AsyncMock(side_effect=fetchval),
+        execute=AsyncMock(side_effect=calls.append),
+        transaction=Transaction,
+        close=AsyncMock(side_effect=lambda: calls.append("closed")),
+    )
 
-        def transaction(self) -> Transaction:
-            return Transaction()
+    def resolve(target: object) -> dict[str, object]:
+        calls.append(target)
+        return {
+            "endpoint": "projects/project/branches/branch/endpoints/primary",
+            "host": "primary.example",
+            "port": 5432,
+            "database": "databricks_postgres",
+            "user": "app_login",
+        }
 
-        async def close(self) -> None:
-            calls.append("closed")
-
-    class Client:
-        async def resolve(self, target):
-            calls.append(target)
-            return {
-                "endpoint": "projects/project/branches/branch/endpoints/primary",
-                "host": "primary.example",
-                "port": 5432,
-                "database": "databricks_postgres",
-                "user": "app_login",
-            }
-
-        async def generate_database_credential(self, endpoint: str) -> str:
-            calls.append(endpoint)
-            return "token"
+    client = SimpleNamespace(
+        resolve=AsyncMock(side_effect=resolve),
+        generate_database_credential=AsyncMock(
+            side_effect=lambda endpoint: calls.append(endpoint) or "token"
+        ),
+    )
 
     monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
-    monkeypatch.setattr(database, "create_lakebase_client", lambda: Client())
+    monkeypatch.setattr(database, "create_lakebase_client", lambda: client)
     monkeypatch.setattr(
         database.asyncpg,
         "connect",
-        lambda dsn, **options: _connect(calls, Connection(), dsn, options),
+        lambda dsn, **options: _connect(calls, connection, dsn, options),
     )
 
     recreated = await database.prepare_lakebase_schema(
@@ -222,19 +250,12 @@ async def test_prepare_lakebase_schema_recreates_current_users_schema(monkeypatc
 
 @pytest.mark.asyncio
 async def test_prepare_lakebase_schema_rejects_another_owner(monkeypatch) -> None:
-    class Connection:
-        async def fetchval(self, query: str, *_: object) -> str:
-            return "app_login" if query == "SELECT session_user" else "another_owner"
-
-        async def close(self) -> None:
-            pass
-
     monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
-    monkeypatch.setattr(database, "create_lakebase_client", _StaticLakebaseClient)
+    monkeypatch.setattr(database, "create_lakebase_client", _static_lakebase_client)
     monkeypatch.setattr(
         database.asyncpg,
         "connect",
-        lambda dsn, **options: _connect([], Connection(), dsn, options),
+        lambda dsn, **options: _connect([], _schema_connection("another_owner"), dsn, options),
     )
 
     with pytest.raises(RuntimeError, match="another_owner"):
@@ -247,19 +268,12 @@ async def test_prepare_lakebase_schema_rejects_another_owner(monkeypatch) -> Non
 
 @pytest.mark.asyncio
 async def test_prepare_lakebase_schema_requires_distinct_shared_role(monkeypatch) -> None:
-    class Connection:
-        async def fetchval(self, query: str, *_: object) -> str:
-            return "app_login" if query == "SELECT session_user" else "another_owner"
-
-        async def close(self) -> None:
-            pass
-
     monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
-    monkeypatch.setattr(database, "create_lakebase_client", _StaticLakebaseClient)
+    monkeypatch.setattr(database, "create_lakebase_client", _static_lakebase_client)
     monkeypatch.setattr(
         database.asyncpg,
         "connect",
-        lambda dsn, **options: _connect([], Connection(), dsn, options),
+        lambda dsn, **options: _connect([], _schema_connection("another_owner"), dsn, options),
     )
 
     with pytest.raises(RuntimeError, match="distinct shared role"):
@@ -272,19 +286,12 @@ async def test_prepare_lakebase_schema_requires_distinct_shared_role(monkeypatch
 
 @pytest.mark.asyncio
 async def test_prepare_lakebase_schema_allows_login_owned_noop(monkeypatch) -> None:
-    class Connection:
-        async def fetchval(self, _query: str, *_: object) -> str:
-            return "app_login"
-
-        async def close(self) -> None:
-            pass
-
     monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
-    monkeypatch.setattr(database, "create_lakebase_client", _StaticLakebaseClient)
+    monkeypatch.setattr(database, "create_lakebase_client", _static_lakebase_client)
     monkeypatch.setattr(
         database.asyncpg,
         "connect",
-        lambda dsn, **options: _connect([], Connection(), dsn, options),
+        lambda dsn, **options: _connect([], _schema_connection("app_login"), dsn, options),
     )
 
     recreated = await database.prepare_lakebase_schema(
@@ -311,20 +318,17 @@ async def test_lakebase_schema_rejects_mismatched_owner(
 ) -> None:
     calls: list[str] = []
 
-    class Connection:
-        async def fetchval(self, query: str, *_: object) -> str:
-            calls.append(query)
-            return "app_login" if query == "SELECT session_user" else "another_owner"
-
-        async def close(self) -> None:
-            calls.append("closed")
-
     monkeypatch.setattr(database, "parse_address", lambda value: {"project": value})
-    monkeypatch.setattr(database, "create_lakebase_client", _StaticLakebaseClient)
+    monkeypatch.setattr(database, "create_lakebase_client", _static_lakebase_client)
     monkeypatch.setattr(
         database.asyncpg,
         "connect",
-        lambda dsn, **options: _connect([], Connection(), dsn, options),
+        lambda dsn, **options: _connect(
+            [],
+            _schema_connection("another_owner", calls),
+            dsn,
+            options,
+        ),
     )
 
     with pytest.raises(RuntimeError, match=message):
@@ -342,17 +346,13 @@ async def test_lakebase_schema_rejects_mismatched_owner(
 async def test_missing_vector_extension_is_installed_in_graphiti_schema() -> None:
     calls: list[str] = []
     schemas = iter([None, "graphiti_memory"])
-
-    class Connection:
-        async def fetchval(self, query: str):
-            calls.append(query)
-            return next(schemas)
-
-        async def execute(self, query: str) -> None:
-            calls.append(query)
+    connection = SimpleNamespace(
+        fetchval=AsyncMock(side_effect=lambda query: calls.append(query) or next(schemas)),
+        execute=AsyncMock(side_effect=calls.append),
+    )
 
     extension_schema = await database._ensure_vector_extension(
-        Connection(),
+        connection,
         "graphiti_memory",
     )
 

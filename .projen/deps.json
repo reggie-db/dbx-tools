@@ -126,6 +126,11 @@
       "type": "build"
     },
     {
+      "name": "@ai-sdk/provider",
+      "version": "4.0.31",
+      "type": "override"
+    },
+    {
       "name": "@opentelemetry/api",
       "version": "1.9.1",
       "type": "override"

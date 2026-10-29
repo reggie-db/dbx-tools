@@ -26,16 +26,6 @@ def test_shared_runtime_and_bundle_registry() -> None:
     assert get_builtin("fs") is not None
     assert get_builtin("node:crypto") is not None
 
-
-def test_read_file_sync_missing_is_enoent() -> None:
-    missing = str(Path("/no/such/dbx-tools/model-catalog.json"))
-    try:
-        get_builtin("fs").readFileSync(missing)
-    except SpiderMonkeyError as exc:
-        assert getattr(exc, "code", None) == "ENOENT" or "ENOENT" in str(exc)
-        return
-    raise AssertionError("readFileSync should fail for a missing cache file")
-
     first = load_bundle(FIXTURES / "first.js", bundle_id="first")
     second = load_bundle(FIXTURES / "second.js", bundle_id="second")
 
@@ -67,6 +57,16 @@ def test_read_file_sync_missing_is_enoent() -> None:
         "stdout": "runtime-ok",
         "stderr": "",
     }
+
+
+def test_read_file_sync_missing_is_enoent() -> None:
+    missing = str(Path("/no/such/dbx-tools/model-catalog.json"))
+    try:
+        get_builtin("fs").readFileSync(missing)
+    except SpiderMonkeyError as exc:
+        assert getattr(exc, "code", None) == "ENOENT" or "ENOENT" in str(exc)
+        return
+    raise AssertionError("readFileSync should fail for a missing cache file")
 
 
 def test_python_environment_is_available_at_runtime_start() -> None:
@@ -137,8 +137,8 @@ async def test_fetch_serializes_url_search_params() -> None:
             self.end_headers()
             self.wfile.write(b"ok")
 
-        def log_message(self, *_: object) -> None:
-            return
+        def log_message(self, _format: str, *_args: object) -> None:
+            del _format, _args
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)

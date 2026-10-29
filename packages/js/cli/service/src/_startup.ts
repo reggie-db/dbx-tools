@@ -3,9 +3,13 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import { spawn } from "@dbx-tools/core";
+import { sleep } from "@dbx-tools/shared-core";
 
 import type { ServicePaths, ServiceRuntimeContext } from "./_paths.ts";
 import type { CliServiceDefinition } from "./definition.ts";
+
+const LAUNCH_AGENT_STATE_TIMEOUT_MILLISECONDS = 10_000;
+const LAUNCH_AGENT_POLL_INTERVAL_MILLISECONDS = 100;
 
 export interface ServiceLaunch {
   readonly executable: string;
@@ -125,6 +129,20 @@ async function unloadLaunchAgent(
 ): Promise<void> {
   if (!(await launchAgentLoaded(definition, runtime))) return;
   await runLaunchctl(["bootout", launchAgentTarget(definition, runtime)], runtime, true);
+  await waitForLaunchAgentState(definition, runtime, false);
+}
+
+async function waitForLaunchAgentState(
+  definition: CliServiceDefinition,
+  runtime: ServiceRuntimeContext,
+  loaded: boolean,
+): Promise<void> {
+  const deadline = Date.now() + LAUNCH_AGENT_STATE_TIMEOUT_MILLISECONDS;
+  while (Date.now() < deadline) {
+    if ((await launchAgentLoaded(definition, runtime)) === loaded) return;
+    await sleep(LAUNCH_AGENT_POLL_INTERVAL_MILLISECONDS);
+  }
+  throw new Error(`${definition.name} LaunchAgent did not ${loaded ? "load" : "unload"}`);
 }
 
 async function launchAgentLoaded(

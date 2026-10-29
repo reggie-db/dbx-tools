@@ -81,3 +81,19 @@ ignore:
   - "**/__pycache__/**"
   - "**/*.py[cod]"
   - "packages/py/**/dist/**"
+  - "**/_generated/**"
+phantom_import_allowlist:
+  - "dbx_tools"
+  - "pytest"
+  - "pythonmonkey"
+  - "starlette"
+  - "tomli"
+patterns:
+  disabled:
+    - "function_clone_cluster"
+  god_function:
+    domain_overrides:
+      - function_pattern: "add_memory_sync"
+        complexity_threshold: 10
+        lines_threshold: 80
+        reason: "Public tool signature, field documentation, and typed forwarding"

@@ -6,6 +6,8 @@ import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 import pythonmonkey
@@ -207,13 +209,12 @@ def test_postgraph_driver_defers_schema_initialization_to_graphiti_runtime() -> 
 
 @pytest.mark.asyncio
 async def test_postgraph_schema_initialization_surfaces_creation_failures() -> None:
-    class Client:
-        async def create_vertex_table(self, *_args, **_kwargs) -> None:
-            raise RuntimeError("schema is not writable")
-
+    client = SimpleNamespace(
+        create_vertex_table=AsyncMock(side_effect=RuntimeError("schema is not writable"))
+    )
     operations = PGGraphMaintenanceOperations(768)
     with pytest.raises(RuntimeError, match="schema is not writable"):
-        await operations.build_indices_and_constraints_pg(Client(), 768)
+        await operations.build_indices_and_constraints_pg(client, 768)
 
 
 @pytest.mark.asyncio
@@ -380,6 +381,7 @@ def test_embedding_dimensions_require_discovered_metadata() -> None:
 
 @pytest.mark.asyncio
 async def test_runtime_logs_startup_and_shutdown_timing(monkeypatch, caplog) -> None:
+    built: list[str] = []
     closed: list[str] = []
 
     class Http:
@@ -406,7 +408,7 @@ async def test_runtime_logs_startup_and_shutdown_timing(monkeypatch, caplog) -> 
 
     class Graphiti:
         async def build_indices_and_constraints(self) -> None:
-            pass
+            built.append("indices")
 
         async def close(self) -> None:
             closed.append("graphiti")
@@ -436,6 +438,7 @@ async def test_runtime_logs_startup_and_shutdown_timing(monkeypatch, caplog) -> 
     assert any(
         "Graphiti runtime stopped duration_ms=25.0" in message for message in caplog.messages
     )
+    assert built == ["indices"]
     assert closed == ["graphiti", "database", "http"]
 
 
@@ -727,6 +730,7 @@ def test_uvicorn_shutdown_log_is_filtered() -> None:
 async def test_docs_are_served_before_runtime_ready(monkeypatch) -> None:
     started = asyncio.Event()
     release = asyncio.Event()
+    closed = asyncio.Event()
 
     class Clients:
         llm_model = "chat"
@@ -738,7 +742,7 @@ async def test_docs_are_served_before_runtime_ready(monkeypatch) -> None:
         graphiti = object()
 
         def __init__(self, options) -> None:
-            pass
+            self.options = options
 
         async def start(self):
             started.set()
@@ -746,7 +750,7 @@ async def test_docs_are_served_before_runtime_ready(monkeypatch) -> None:
             return self.graphiti
 
         async def close(self) -> None:
-            pass
+            closed.set()
 
     class Session:
         async def __aenter__(self):
@@ -781,6 +785,8 @@ async def test_docs_are_served_before_runtime_ready(monkeypatch) -> None:
         assert healthy.status_code == 200
         assert json.loads(healthy.body) == {"status": "healthy"}
 
+    assert closed.is_set()
+
 
 @pytest.mark.parametrize(
     ("failure_stage", "message"),
@@ -808,7 +814,7 @@ async def test_runtime_or_mcp_failure_requests_process_shutdown(
         graphiti = object()
 
         def __init__(self, _options) -> None:
-            pass
+            self.options = _options
 
         async def start(self) -> None:
             if failure_stage == "runtime":
@@ -838,22 +844,22 @@ async def test_runtime_or_mcp_failure_requests_process_shutdown(
 @pytest.mark.asyncio
 async def test_runtime_cleanup_closes_database_after_async_queue_failure(monkeypatch) -> None:
     closed: list[str] = []
-
-    class Queue:
-        async def close(self) -> None:
-            raise RuntimeError("queued write failed")
+    queue = SimpleNamespace(
+        close=AsyncMock(side_effect=RuntimeError("queued write failed"))
+    )
 
     class Runtime:
         async def close(self) -> None:
             closed.append("runtime")
 
-    monkeypatch.setattr(main.graphiti_mcp, "queue_service", Queue())
+    monkeypatch.setattr(main.graphiti_mcp, "queue_service", queue)
     main.app.state.runtime = Runtime()
 
     with pytest.raises(RuntimeError, match="queued write failed"):
         await main._close_runtime(main.app)
 
     assert closed == ["runtime"]
+    queue.close.assert_awaited_once_with()
     assert main.app.state.runtime is None
 
 
@@ -933,12 +939,11 @@ async def test_queue_monitoring_waits_for_in_flight_work() -> None:
 
 @pytest.mark.asyncio
 async def test_queue_monitoring_surfaces_processing_errors(caplog) -> None:
-    class Graphiti:
-        async def add_episode(self, **kwargs) -> None:
-            raise ValueError(f"cannot persist {kwargs['name']}")
-
+    graphiti = SimpleNamespace(
+        add_episode=AsyncMock(side_effect=ValueError("cannot persist broken memory"))
+    )
     queue = main.QueueService()
-    await queue.initialize(Graphiti())
+    await queue.initialize(graphiti)
     await queue.add_episode(
         group_id="notebook-validation",
         name="broken memory",

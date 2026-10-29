@@ -33,6 +33,7 @@ describe("CLI service startup entries", () => {
     const binDirectory = join(root, "bin");
     const launchctlLog = join(root, "launchctl.log");
     const launchctlState = join(root, "launchctl.loaded");
+    const launchctlTransition = join(root, "launchctl.transition");
     await mkdir(binDirectory);
     const launchctl = join(binDirectory, "launchctl");
     await writeFile(
@@ -40,8 +41,19 @@ describe("CLI service startup entries", () => {
       [
         "#!/bin/sh",
         'printf "%s\\n" "$*" >> "$LAUNCHCTL_LOG"',
-        'if [ "$1" = "print" ]; then [ -f "$LAUNCHCTL_STATE" ]; exit $?; fi',
-        'if [ "$1" = "bootout" ]; then /bin/rm -f "$LAUNCHCTL_STATE"; fi',
+        'if [ "$1" = "print" ]; then',
+        '  if [ -f "$LAUNCHCTL_TRANSITION" ]; then',
+        '    if [ "$(/bin/cat "$LAUNCHCTL_TRANSITION")" = "pending" ]; then',
+        '      printf "%s\\n" ready > "$LAUNCHCTL_TRANSITION"',
+        "      exit 0",
+        "    fi",
+        '    /bin/rm -f "$LAUNCHCTL_STATE" "$LAUNCHCTL_TRANSITION"',
+        "    exit 1",
+        "  fi",
+        '  [ -f "$LAUNCHCTL_STATE" ]',
+        "  exit $?",
+        "fi",
+        'if [ "$1" = "bootout" ]; then printf "%s\\n" pending > "$LAUNCHCTL_TRANSITION"; fi',
         'if [ "$1" = "bootstrap" ]; then : > "$LAUNCHCTL_STATE"; fi',
         "",
       ].join("\n"),
@@ -54,6 +66,7 @@ describe("CLI service startup entries", () => {
         PATH: binDirectory,
         LAUNCHCTL_LOG: launchctlLog,
         LAUNCHCTL_STATE: launchctlState,
+        LAUNCHCTL_TRANSITION: launchctlTransition,
       },
       homeDirectory: root,
       temporaryDirectory: root,
@@ -68,6 +81,8 @@ describe("CLI service startup entries", () => {
       [
         `print gui/${runtime.userId}/${DEFINITION.id}`,
         `bootout gui/${runtime.userId}/${DEFINITION.id}`,
+        `print gui/${runtime.userId}/${DEFINITION.id}`,
+        `print gui/${runtime.userId}/${DEFINITION.id}`,
         `enable gui/${runtime.userId}/${DEFINITION.id}`,
         "",
       ].join("\n"),
@@ -81,6 +96,8 @@ describe("CLI service startup entries", () => {
       [
         `print gui/${runtime.userId}/${DEFINITION.id}`,
         `bootout gui/${runtime.userId}/${DEFINITION.id}`,
+        `print gui/${runtime.userId}/${DEFINITION.id}`,
+        `print gui/${runtime.userId}/${DEFINITION.id}`,
         `enable gui/${runtime.userId}/${DEFINITION.id}`,
         `print gui/${runtime.userId}/${DEFINITION.id}`,
         `bootstrap gui/${runtime.userId} ${paths.startupFile}`,

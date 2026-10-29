@@ -60,14 +60,8 @@ class PGSearchOperations(SearchOperations):
         min_score: float = 0.6,
     ) -> list[EntityNode]:
         client = executor.client
-
-        results = []
-        realms = group_ids or []
-        if not realms:
-            realm_rows = await client._fetch('SELECT DISTINCT realm FROM "entity_nodes"')
-            realms = [r['realm'] for r in realm_rows]
-
-        for realm in realms:
+        results: list[tuple[float, EntityNode]] = []
+        for realm in await _resolve_realms(client, 'entity_nodes', group_ids):
             hits = await client.vector_search(
                 'entity_nodes',
                 realm,
@@ -75,15 +69,10 @@ class PGSearchOperations(SearchOperations):
                 top_k=limit,
                 distance_metric='cosine',
             )
-            for vertex, distance in hits:
-                score = 1.0 - distance
-                if score > min_score:
-                    node = _vertex_to_entity(vertex)
-                    if _matches_node_filter(node, search_filter):
-                        results.append((score, node))
+            results.extend(_matching_node_hits(hits, search_filter, min_score))
 
-        results.sort(key=lambda x: x[0], reverse=True)
-        return [n for _, n in results[:limit]]
+        results.sort(key=lambda result: result[0], reverse=True)
+        return [node for _, node in results[:limit]]
 
     async def node_bfs_search(
         self,
@@ -98,47 +87,27 @@ class PGSearchOperations(SearchOperations):
             return []
 
         client = executor.client
-        results = []
+        results: list[EntityNode] = []
+        seen: set[str] = set()
 
         for origin_uuid in origin_uuids:
-            origin_row = await client._fetch(
-                'SELECT realm, id FROM "entity_nodes" WHERE payload @> $1::jsonb',
-                json.dumps({'uuid': origin_uuid}),
-            )
-            if not origin_row:
+            origin = await _resolve_origin(client, origin_uuid, group_ids)
+            if origin is None:
                 continue
-            realm = origin_row[0]['realm']
-            v_id = str(origin_row[0]['id'])
-
-            if group_ids and realm not in group_ids:
-                continue
-
-            traversal = await client.traverse(
-                realm=realm,
-                start_table='entity_nodes',
-                start_id=v_id,
-                edge_tables=['entity_edges'],
-                max_depth=max_depth,
-                direction='both',
-            )
-
-            for step in traversal:
-                if step['depth'] == 0:
-                    continue
-                step_id = step['id']
-                v_rows = await client._fetch(
-                    'SELECT realm, id, payload, created_at, '
-                    "to_jsonb(t)->>'embedding' AS embedding_text "
-                    'FROM "entity_nodes" t WHERE realm = $1 AND id = $2',
+            realm, vertex_id = origin
+            traversal = await _traverse_from_node(client, realm, vertex_id, max_depth)
+            results.extend(
+                await _nodes_from_traversal(
+                    client,
                     realm,
-                    int(step_id),
+                    traversal,
+                    search_filter,
+                    seen,
+                    limit - len(results),
                 )
-                if v_rows:
-                    node = _parse_entity(v_rows[0])
-                    if _matches_node_filter(node, search_filter) and not any(
-                        n.uuid == node.uuid for n in results
-                    ):
-                        results.append(node)
+            )
+            if len(results) >= limit:
+                break
 
         return results[:limit]
 
@@ -189,14 +158,8 @@ class PGSearchOperations(SearchOperations):
         min_score: float = 0.6,
     ) -> list[EntityEdge]:
         client = executor.client
-
-        results = []
-        realms = group_ids or []
-        if not realms:
-            realm_rows = await client._fetch('SELECT DISTINCT realm FROM "entity_edges"')
-            realms = [r['realm'] for r in realm_rows]
-
-        for realm in realms:
+        results: list[tuple[float, EntityEdge]] = []
+        for realm in await _resolve_realms(client, 'entity_edges', group_ids):
             hits = await client.vector_search_edges(
                 'entity_edges',
                 realm,
@@ -204,21 +167,18 @@ class PGSearchOperations(SearchOperations):
                 top_k=limit,
                 distance_metric='cosine',
             )
-            for edge_obj, distance in hits:
-                score = 1.0 - distance
-                if score <= min_score:
-                    continue
-                p = edge_obj.payload
-                if source_node_uuid and p.get('source_node_uuid') != source_node_uuid:
-                    continue
-                if target_node_uuid and p.get('target_node_uuid') != target_node_uuid:
-                    continue
-                edge = _edge_from_pg_edge(edge_obj)
-                if _matches_edge_filter(edge, search_filter):
-                    results.append((score, edge))
+            results.extend(
+                _matching_edge_hits(
+                    hits,
+                    source_node_uuid,
+                    target_node_uuid,
+                    search_filter,
+                    min_score,
+                )
+            )
 
-        results.sort(key=lambda x: x[0], reverse=True)
-        return [e for _, e in results[:limit]]
+        results.sort(key=lambda result: result[0], reverse=True)
+        return [edge for _, edge in results[:limit]]
 
     async def edge_bfs_search(
         self,
@@ -233,41 +193,27 @@ class PGSearchOperations(SearchOperations):
             return []
 
         client = executor.client
-        results = []
+        results: list[EntityEdge] = []
+        visited_edge_ids: set[int] = set()
 
         for origin_uuid in origin_uuids:
-            origin_row = await client._fetch(
-                'SELECT realm, id FROM "entity_nodes" WHERE payload @> $1::jsonb',
-                json.dumps({'uuid': origin_uuid}),
-            )
-            if not origin_row:
+            origin = await _resolve_origin(client, origin_uuid, group_ids)
+            if origin is None:
                 continue
-            realm = origin_row[0]['realm']
-            v_id = str(origin_row[0]['id'])
-
-            if group_ids and realm not in group_ids:
-                continue
-
-            traversal = await client.traverse(
-                realm=realm,
-                start_table='entity_nodes',
-                start_id=v_id,
-                edge_tables=['entity_edges'],
-                max_depth=max_depth,
-                direction='both',
+            realm, vertex_id = origin
+            traversal = await _traverse_from_node(client, realm, vertex_id, max_depth)
+            results.extend(
+                await _edges_from_traversal(
+                    client,
+                    realm,
+                    traversal,
+                    search_filter,
+                    visited_edge_ids,
+                    limit - len(results),
+                )
             )
-
-            visited_edge_ids = set()
-            for step in traversal:
-                for eid in step.get('edge_ids') or []:
-                    if eid in visited_edge_ids:
-                        continue
-                    visited_edge_ids.add(eid)
-                    edge_obj = await client.get_edge('entity_edges', realm, eid)
-                    if edge_obj:
-                        edge = _edge_from_pg_edge(edge_obj)
-                        if _matches_edge_filter(edge, search_filter):
-                            results.append(edge)
+            if len(results) >= limit:
+                break
 
         return results[:limit]
 
@@ -394,41 +340,16 @@ class PGSearchOperations(SearchOperations):
     ) -> list[EntityNode]:
         client = executor.client
         filtered_uuids = [u for u in node_uuids if u != center_node_uuid]
-        scores: dict[str, float] = {center_node_uuid: 0.0}
-
-        center_row = await client._fetch(
-            'SELECT realm, id FROM "entity_nodes" WHERE payload @> $1::jsonb',
-            json.dumps({'uuid': center_node_uuid}),
-        )
-        if not center_row:
+        center = await _resolve_origin(client, center_node_uuid, None)
+        if center is None:
             return []
-        realm = center_row[0]['realm']
-        center_vid = center_row[0]['id']
-
-        for uuid in filtered_uuids:
-            vid_rows = await client._fetch(
-                'SELECT id FROM "entity_nodes" WHERE realm = $1 AND payload @> $2::jsonb',
-                realm,
-                json.dumps({'uuid': uuid}),
-            )
-            if not vid_rows:
-                scores[uuid] = float('inf')
-                continue
-
-            vid = vid_rows[0]['id']
-            edge_rows = await client._fetch(
-                """
-                SELECT 1 FROM "entity_edges"
-                WHERE realm = $1
-                  AND ((from_id = $2 AND to_id = $3)
-                    OR (from_id = $3 AND to_id = $2))
-                LIMIT 1
-                """,
-                realm,
-                center_vid,
-                vid,
-            )
-            scores[uuid] = 1.0 if edge_rows else float('inf')
+        realm, center_vertex_id = center
+        scores = await _node_distance_scores(
+            client,
+            filtered_uuids,
+            realm,
+            center_vertex_id,
+        )
 
         filtered_uuids.sort(key=lambda u: scores.get(u, float('inf')))
 
@@ -442,18 +363,7 @@ class PGSearchOperations(SearchOperations):
 
         if not reranked_uuids:
             return []
-
-        result_nodes = []
-        for uuid in reranked_uuids:
-            rows = await client._fetch(
-                'SELECT realm, id, payload, created_at, '
-                "to_jsonb(t)->>'embedding' AS embedding_text "
-                'FROM "entity_nodes" t WHERE payload @> $1::jsonb',
-                json.dumps({'uuid': uuid}),
-            )
-            if rows:
-                result_nodes.append(_parse_entity(rows[0]))
-        return result_nodes
+        return await _load_entities_by_uuid(client, reranked_uuids)
 
     async def episode_mentions_reranker(
         self,
@@ -492,18 +402,7 @@ class PGSearchOperations(SearchOperations):
 
         if not reranked_uuids:
             return []
-
-        result_nodes = []
-        for uuid in reranked_uuids:
-            rows = await client._fetch(
-                'SELECT realm, id, payload, created_at, '
-                "to_jsonb(t)->>'embedding' AS embedding_text "
-                'FROM "entity_nodes" t WHERE payload @> $1::jsonb',
-                json.dumps({'uuid': uuid}),
-            )
-            if rows:
-                result_nodes.append(_parse_entity(rows[0]))
-        return result_nodes
+        return await _load_entities_by_uuid(client, reranked_uuids)
 
     # --- Filter builders ---
 
@@ -539,6 +438,194 @@ def _where(conditions: list[str]) -> str:
     if not conditions:
         return ''
     return 'WHERE ' + ' AND '.join(conditions)
+
+
+async def _resolve_realms(client: Any, table: str, group_ids: list[str] | None) -> list[str]:
+    if group_ids:
+        return group_ids
+    rows = await client._fetch(f'SELECT DISTINCT realm FROM "{table}"')
+    return [row['realm'] for row in rows]
+
+
+def _matching_node_hits(
+    hits: list[tuple[Any, float]],
+    search_filter: SearchFilters,
+    min_score: float,
+) -> list[tuple[float, EntityNode]]:
+    results: list[tuple[float, EntityNode]] = []
+    for vertex, distance in hits:
+        score = 1.0 - distance
+        if score <= min_score:
+            continue
+        node = _vertex_to_entity(vertex)
+        if _matches_node_filter(node, search_filter):
+            results.append((score, node))
+    return results
+
+
+def _matching_edge_hits(
+    hits: list[tuple[Any, float]],
+    source_node_uuid: str | None,
+    target_node_uuid: str | None,
+    search_filter: SearchFilters,
+    min_score: float,
+) -> list[tuple[float, EntityEdge]]:
+    results: list[tuple[float, EntityEdge]] = []
+    for edge_object, distance in hits:
+        score = 1.0 - distance
+        payload = edge_object.payload
+        if score <= min_score:
+            continue
+        if source_node_uuid and payload.get('source_node_uuid') != source_node_uuid:
+            continue
+        if target_node_uuid and payload.get('target_node_uuid') != target_node_uuid:
+            continue
+        edge = _edge_from_pg_edge(edge_object)
+        if _matches_edge_filter(edge, search_filter):
+            results.append((score, edge))
+    return results
+
+
+async def _resolve_origin(
+    client: Any,
+    origin_uuid: str,
+    group_ids: list[str] | None,
+) -> tuple[str, str] | None:
+    rows = await client._fetch(
+        'SELECT realm, id FROM "entity_nodes" WHERE payload @> $1::jsonb',
+        json.dumps({'uuid': origin_uuid}),
+    )
+    if not rows:
+        return None
+    realm = rows[0]['realm']
+    if group_ids and realm not in group_ids:
+        return None
+    return realm, str(rows[0]['id'])
+
+
+async def _traverse_from_node(
+    client: Any,
+    realm: str,
+    vertex_id: str,
+    max_depth: int,
+) -> list[dict[str, Any]]:
+    return await client.traverse(
+        realm=realm,
+        start_table='entity_nodes',
+        start_id=vertex_id,
+        edge_tables=['entity_edges'],
+        max_depth=max_depth,
+        direction='both',
+    )
+
+
+async def _node_from_traversal_step(
+    client: Any,
+    realm: str,
+    step: dict[str, Any],
+) -> EntityNode | None:
+    if step['depth'] == 0:
+        return None
+    rows = await client._fetch(
+        'SELECT realm, id, payload, created_at, '
+        "to_jsonb(t)->>'embedding' AS embedding_text "
+        'FROM "entity_nodes" t WHERE realm = $1 AND id = $2',
+        realm,
+        int(step['id']),
+    )
+    return _parse_entity(rows[0]) if rows else None
+
+
+async def _nodes_from_traversal(
+    client: Any,
+    realm: str,
+    traversal: list[dict[str, Any]],
+    search_filter: SearchFilters,
+    seen: set[str],
+    limit: int,
+) -> list[EntityNode]:
+    results: list[EntityNode] = []
+    for step in traversal:
+        node = await _node_from_traversal_step(client, realm, step)
+        if node is None or node.uuid in seen or not _matches_node_filter(node, search_filter):
+            continue
+        seen.add(node.uuid)
+        results.append(node)
+        if len(results) >= limit:
+            break
+    return results
+
+
+async def _edges_from_traversal(
+    client: Any,
+    realm: str,
+    traversal: list[dict[str, Any]],
+    search_filter: SearchFilters,
+    visited_edge_ids: set[int],
+    limit: int,
+) -> list[EntityEdge]:
+    results: list[EntityEdge] = []
+    for step in traversal:
+        for edge_id in step.get('edge_ids') or []:
+            if edge_id in visited_edge_ids:
+                continue
+            visited_edge_ids.add(edge_id)
+            edge_object = await client.get_edge('entity_edges', realm, edge_id)
+            if edge_object is None:
+                continue
+            edge = _edge_from_pg_edge(edge_object)
+            if not _matches_edge_filter(edge, search_filter):
+                continue
+            results.append(edge)
+            if len(results) >= limit:
+                return results
+    return results
+
+
+async def _node_distance_scores(
+    client: Any,
+    node_uuids: list[str],
+    realm: str,
+    center_vertex_id: str,
+) -> dict[str, float]:
+    scores: dict[str, float] = {}
+    for node_uuid in node_uuids:
+        rows = await client._fetch(
+            'SELECT id FROM "entity_nodes" WHERE realm = $1 AND payload @> $2::jsonb',
+            realm,
+            json.dumps({'uuid': node_uuid}),
+        )
+        if not rows:
+            scores[node_uuid] = float('inf')
+            continue
+        edge_rows = await client._fetch(
+            """
+            SELECT 1 FROM "entity_edges"
+            WHERE realm = $1
+              AND ((from_id = $2 AND to_id = $3)
+                OR (from_id = $3 AND to_id = $2))
+            LIMIT 1
+            """,
+            realm,
+            center_vertex_id,
+            rows[0]['id'],
+        )
+        scores[node_uuid] = 1.0 if edge_rows else float('inf')
+    return scores
+
+
+async def _load_entities_by_uuid(client: Any, node_uuids: list[str]) -> list[EntityNode]:
+    nodes: list[EntityNode] = []
+    for node_uuid in node_uuids:
+        rows = await client._fetch(
+            'SELECT realm, id, payload, created_at, '
+            "to_jsonb(t)->>'embedding' AS embedding_text "
+            'FROM "entity_nodes" t WHERE payload @> $1::jsonb',
+            json.dumps({'uuid': node_uuid}),
+        )
+        if rows:
+            nodes.append(_parse_entity(rows[0]))
+    return nodes
 
 
 def _node_filter_conditions(
@@ -592,22 +679,29 @@ def _add_date_filters(
         date_lists = getattr(filters, field_name, None)
         if date_lists is None:
             continue
-        or_parts = []
-        for or_list in date_lists:
-            and_parts = []
-            for df in or_list:
-                op = df.comparison_operator.value
-                if op in ('IS NULL', 'IS NOT NULL'):
-                    and_parts.append(f"((payload->>'{field_name}') {op})")
-                else:
-                    params.append(
-                        df.date.isoformat() if hasattr(df.date, 'isoformat') else str(df.date)
-                    )
-                    and_parts.append(
-                        f"((payload->>'{field_name}')::timestamptz {op} ${len(params)}::timestamptz)"
-                    )
-            or_parts.append('(' + ' AND '.join(and_parts) + ')')
+        or_parts = [_date_filter_group(field_name, group, params) for group in date_lists]
         conditions.append('(' + ' OR '.join(or_parts) + ')')
+
+
+def _date_filter_group(field_name: str, date_filters: list[Any], params: list[Any]) -> str:
+    conditions = [_date_filter_condition(field_name, date_filter, params) for date_filter in date_filters]
+    return '(' + ' AND '.join(conditions) + ')'
+
+
+def _date_filter_condition(field_name: str, date_filter: Any, params: list[Any]) -> str:
+    operator = date_filter.comparison_operator.value
+    if operator in ('IS NULL', 'IS NOT NULL'):
+        return f"((payload->>'{field_name}') {operator})"
+    value = (
+        date_filter.date.isoformat()
+        if hasattr(date_filter.date, 'isoformat')
+        else str(date_filter.date)
+    )
+    params.append(value)
+    return (
+        f"((payload->>'{field_name}')::timestamptz "
+        f"{operator} ${len(params)}::timestamptz)"
+    )
 
 
 def _vertex_to_entity(v) -> EntityNode:
@@ -757,4 +851,3 @@ def _matches_edge_filter(edge: EntityEdge, sf: SearchFilters) -> bool:
     if sf.edge_types is not None and edge.name not in sf.edge_types:
         return False
     return not (sf.edge_uuids is not None and edge.uuid not in sf.edge_uuids)
-

@@ -273,6 +273,41 @@ async def _close_runtime(app: FastAPI) -> None:
         raise failure
 
 
+async def _boot_runtime(
+    app: FastAPI,
+    options: dict[str, Any],
+    shutdown: asyncio.Event,
+) -> None:
+    runtime = GraphitiRuntime(options)
+    app.state.runtime = runtime
+    try:
+        await runtime.start()
+        if runtime.clients is None or runtime.graphiti is None:
+            raise RuntimeError("Graphiti runtime did not initialize")
+        with _upstream_openai_credentials():
+            await initialize_mcp(
+                mcp_settings(
+                    options,
+                    runtime.clients.llm_model,
+                    runtime.clients.embedder_model,
+                    runtime.clients.embedder_dimensions,
+                ),
+                runtime.graphiti,
+                runtime.clients,
+            )
+            async with graphiti_mcp.mcp.session_manager.run():
+                app.state.ready = True
+                await shutdown.wait()
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        app.state.failure = error
+        _LOGGER.exception("Graphiti runtime failed to start")
+        _request_process_shutdown()
+    finally:
+        await _close_runtime(app)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Serve OpenAPI immediately, then start Graphiti and MCP in the background.
@@ -288,38 +323,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.ready = False
     app.state.runtime = None
     shutdown = asyncio.Event()
+    task = asyncio.create_task(_boot_runtime(app, options, shutdown))
 
-    async def boot() -> None:
-        runtime = GraphitiRuntime(options)
-        app.state.runtime = runtime
-        try:
-            await runtime.start()
-            if runtime.clients is None or runtime.graphiti is None:
-                raise RuntimeError("Graphiti runtime did not initialize")
-            with _upstream_openai_credentials():
-                await initialize_mcp(
-                    mcp_settings(
-                        options,
-                        runtime.clients.llm_model,
-                        runtime.clients.embedder_model,
-                        runtime.clients.embedder_dimensions,
-                    ),
-                    runtime.graphiti,
-                    runtime.clients,
-                )
-                async with graphiti_mcp.mcp.session_manager.run():
-                    app.state.ready = True
-                    await shutdown.wait()
-        except asyncio.CancelledError:
-            raise
-        except Exception as error:
-            app.state.failure = error
-            logging.getLogger(__name__).exception("Graphiti runtime failed to start")
-            _request_process_shutdown()
-        finally:
-            await _close_runtime(app)
-
-    task = asyncio.create_task(boot())
     try:
         yield
     finally:
@@ -329,7 +334,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            _LOGGER.debug("Graphiti startup task cancelled during shutdown")
 
 
 app = FastAPI(
@@ -482,34 +487,22 @@ async def add_memory_sync(
     except ValueError as error:
         return graphiti_mcp.ErrorResponse(error=f"Invalid reference_time: {error}")
     try:
-        episode_type = graphiti_mcp.EpisodeType.text
-        if source:
-            try:
-                episode_type = graphiti_mcp.EpisodeType[source.lower()]
-            except (KeyError, AttributeError):
-                _LOGGER.warning(
-                    "Unknown source type %r, using text as default",
-                    source,
-                    exc_info=True,
-                )
-        effective_group_id = group_id or graphiti_mcp.config.graphiti.group_id or None
-        await runtime.graphiti.add_episode(
+        effective_group_id = await _persist_episode(
+            runtime,
+            service,
             name=name,
             episode_body=episode_body,
+            group_id=group_id,
+            source=source,
             source_description=source_description,
-            source=episode_type,
-            group_id=effective_group_id,
-            reference_time=parsed_reference_time or datetime.now(timezone.utc),
-            entity_types=service.entity_types,
-            edge_types=service.edge_types,
-            edge_type_map=service.edge_type_map,
+            uuid=uuid,
+            reference_time=parsed_reference_time,
             excluded_entity_types=excluded_entity_types,
-            previous_episode_uuids=previous_episode_uuids,
             custom_extraction_instructions=custom_extraction_instructions,
+            previous_episode_uuids=previous_episode_uuids,
             update_communities=update_communities,
             saga=saga,
             saga_previous_episode_uuid=saga_previous_episode_uuid,
-            uuid=uuid,
         )
         return graphiti_mcp.SuccessResponse(
             message=f"Episode '{name}' persisted in group '{effective_group_id or ''}'"
@@ -517,6 +510,60 @@ async def add_memory_sync(
     except Exception as error:
         _LOGGER.exception("Graphiti add-memory request failed")
         return graphiti_mcp.ErrorResponse(error=f"Error adding episode: {error}")
+
+
+def _episode_type(source: str) -> Any:
+    if not source:
+        return graphiti_mcp.EpisodeType.text
+    try:
+        return graphiti_mcp.EpisodeType[source.lower()]
+    except (KeyError, AttributeError):
+        _LOGGER.warning(
+            "Unknown source type %r, using text as default",
+            source,
+            exc_info=True,
+        )
+        return graphiti_mcp.EpisodeType.text
+
+
+async def _persist_episode(
+    runtime: Any,
+    service: Any,
+    *,
+    name: str,
+    episode_body: str,
+    group_id: str | None,
+    source: str,
+    source_description: str,
+    uuid: str | None,
+    reference_time: datetime | None,
+    excluded_entity_types: list[str] | None,
+    custom_extraction_instructions: str | None,
+    previous_episode_uuids: list[str] | None,
+    update_communities: bool,
+    saga: str | None,
+    saga_previous_episode_uuid: str | None,
+) -> str | None:
+    effective_group_id = group_id or graphiti_mcp.config.graphiti.group_id or None
+    await runtime.graphiti.add_episode(
+        name=name,
+        episode_body=episode_body,
+        source_description=source_description,
+        source=_episode_type(source),
+        group_id=effective_group_id,
+        reference_time=reference_time or datetime.now(timezone.utc),
+        entity_types=service.entity_types,
+        edge_types=service.edge_types,
+        edge_type_map=service.edge_type_map,
+        excluded_entity_types=excluded_entity_types,
+        previous_episode_uuids=previous_episode_uuids,
+        custom_extraction_instructions=custom_extraction_instructions,
+        update_communities=update_communities,
+        saga=saga,
+        saga_previous_episode_uuid=saga_previous_episode_uuid,
+        uuid=uuid,
+    )
+    return effective_group_id
 
 
 class QueueStatusResponse(BaseModel):
@@ -571,13 +618,7 @@ async def runtime_status() -> graphiti_mcp.StatusResponse:
         )
     try:
         driver = runtime.graphiti.driver
-        if getattr(driver, "provider", None) == "postgraph":
-            await driver.client._fetch("SELECT 1 AS ok")
-        else:
-            async with driver.session() as session:
-                result = await session.run("MATCH (n) RETURN count(n) as count")
-                if result:
-                    _ = [record async for record in result]
+        await _probe_driver(driver)
         provider = getattr(driver, "provider", "configured")
         return graphiti_mcp.StatusResponse(
             status="ok",
@@ -589,6 +630,16 @@ async def runtime_status() -> graphiti_mcp.StatusResponse:
             status="error",
             message=f"Graphiti runtime database connection failed: {error}",
         )
+
+
+async def _probe_driver(driver: Any) -> None:
+    if getattr(driver, "provider", None) == "postgraph":
+        await driver.client._fetch("SELECT 1 AS ok")
+        return
+    async with driver.session() as session:
+        result = await session.run("MATCH (n) RETURN count(n) as count")
+        if result:
+            _ = [record async for record in result]
 
 
 for _tool_name in _TOOL_NAMES:

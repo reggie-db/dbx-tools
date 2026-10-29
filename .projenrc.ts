@@ -52,12 +52,15 @@ class SlopDetectorConfig extends Component {
     const gitignore = readFileSync(resolve(this.project.outdir, ".gitignore"), "utf8");
     const patterns = [
       ...new Set(
-        gitignore
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line && !line.startsWith("#") && !line.startsWith("!"))
-          .map((line) => line.replace(/^\//, ""))
-          .map((line) => (line.endsWith("/") ? `${line}**` : line)),
+        [
+          ...gitignore
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line && !line.startsWith("#") && !line.startsWith("!"))
+            .map((line) => line.replace(/^\//, ""))
+            .map((line) => (line.endsWith("/") ? `${line}**` : line)),
+          "**/_generated/**",
+        ],
       ),
     ];
     const config = [
@@ -65,6 +68,19 @@ class SlopDetectorConfig extends Component {
       'version: "2.0"',
       "ignore:",
       ...patterns.map((pattern) => `  - ${JSON.stringify(pattern)}`),
+      "phantom_import_allowlist:",
+      ...["dbx_tools", "pytest", "pythonmonkey", "starlette", "tomli"].map(
+        (module) => `  - ${JSON.stringify(module)}`,
+      ),
+      "patterns:",
+      "  disabled:",
+      '    - "function_clone_cluster"',
+      "  god_function:",
+      "    domain_overrides:",
+      '      - function_pattern: "add_memory_sync"',
+      "        complexity_threshold: 10",
+      "        lines_threshold: 80",
+      '        reason: "Public tool signature, field documentation, and typed forwarding"',
       "",
     ].join("\n");
     writeFileSync(resolve(this.project.outdir, ".slopconfig.yaml"), config);
@@ -221,6 +237,13 @@ const root = new projectJs.DBXToolsNodeProject({
 // AppKit 0.81 pins api@1.9.0 while Mastra requires ^1.9.1; without one override
 // Bun installs two physical API copies and Mastra sees AppKit's provider as noop.
 root.pnpmWorkspace?.addOverride("@opentelemetry/api", "1.9.1");
+
+// Mastra types AI SDK models against its own bundled @ai-sdk/provider copy
+// (4.0.29 as of Mastra 1.79). Provider 4.0.32 widened the V4 finish-reason
+// union with "interrupted", so newer AI SDK providers no longer satisfy
+// Mastra's LanguageModelV4. Keep one provider copy below that change until
+// Mastra bundles a compatible version.
+root.pnpmWorkspace?.addOverride("@ai-sdk/provider", "4.0.31");
 
 const eslintTask = javascript.Eslint.of(root)!.eslintTask;
 eslintTask.reset();
