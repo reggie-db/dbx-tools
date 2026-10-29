@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { WorkspaceClient } from "@databricks/appkit";
 import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY } from "../src/config.ts";
 import {
+  buildModel,
   resolveDefaultModelId,
   resolveModelWorkspaceClient,
   RESPONSES_PROVIDER_OPTIONS,
@@ -88,5 +90,67 @@ describe("Mastra serving API selection", () => {
       ]),
       "smart-router",
     );
+  });
+
+  it("selects an explicit Smart Router model once per request context", async () => {
+    const previousFetch = globalThis.fetch;
+    let routeCalls = 0;
+    let catalogueCalls = 0;
+    const client = {
+      config: {
+        getHost: () => Promise.resolve(new URL("https://example.cloud.databricks.com")),
+        authenticate: (headers: Headers) => {
+          headers.set("authorization", "Bearer test");
+          return Promise.resolve();
+        },
+      },
+      servingEndpoints: {
+        async *list() {
+          catalogueCalls += 1;
+          yield {
+            name: "databricks-gpt-6-1-sol",
+            task: "llm/v1/chat",
+            capabilities: { function_calling: true },
+            config: {
+              served_entities: [
+                {
+                  entity_name: "system.ai.databricks-gpt-6-1-sol",
+                  foundation_model: { name: "system.ai.databricks-gpt-6-1-sol" },
+                },
+              ],
+            },
+          };
+        },
+      },
+    } as unknown as WorkspaceClient;
+    globalThis.fetch = async (input, init) => {
+      const request = new Request(input, init);
+      assert.equal(
+        request.url,
+        "https://example.cloud.databricks.com/ai-gateway/routing/v1/routes:select",
+      );
+      routeCalls += 1;
+      return Response.json({
+        route_selection: [
+          { route_option: { model: "system.ai.databricks-gpt-6-1-sol", harness: "codex" } },
+        ],
+      });
+    };
+
+    try {
+      const requestContext = new RequestContext();
+      const overrides = {
+        modelId: "smart-router",
+        smartRouterInput: { messages: [{ role: "user", content: "Explain the space" }] },
+        workspaceClient: client,
+      } as const;
+      await buildModel({}, requestContext, overrides);
+      await buildModel({}, requestContext, overrides);
+
+      assert.equal(routeCalls, 1);
+      assert.equal(catalogueCalls, 1);
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
   });
 });

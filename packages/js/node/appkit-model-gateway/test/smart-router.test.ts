@@ -46,6 +46,27 @@ const SETTINGS = {
 } as const;
 
 describe("Smart Router service", () => {
+  it("merges partial settings with the shared defaults", async () => {
+    let timeoutMs: number | undefined;
+    const service = new SmartRouterService(
+      { timeoutMs: 321 },
+      (_client, request, _signal, timeout) => {
+        timeoutMs = timeout;
+        return Promise.resolve({
+          route_selection: [{ route_option: request.route_options[0] }],
+        });
+      },
+    );
+
+    const result = await service.select("Route this task", smartRouterCandidates(targets(), "codex"), {
+      client: fakeClient(),
+    });
+
+    assert.equal(timeoutMs, 321);
+    assert.equal(result.routerName, "task_v3");
+    service.dispose();
+  });
+
   it("extracts task context from Responses, messages JSON, generic objects, and text", () => {
     const builder = new SmartRouterContextBuilder(1_024);
     assert.match(
@@ -114,7 +135,7 @@ describe("Smart Router service", () => {
     service.dispose();
   });
 
-  it("refreshes a cached positive probe in the background and observes disablement", async () => {
+  it("refreshes a cached positive probe after access and observes disablement", async () => {
     let calls = 0;
     const service = new SmartRouterService(
       { ...SETTINGS, probeRefreshIntervalMs: 10 },
@@ -130,8 +151,10 @@ describe("Smart Router service", () => {
     const candidates = smartRouterCandidates(targets(), "codex");
 
     assert.equal(await service.isEnabled(candidates, client), true);
-    await waitFor(() => calls > 1);
-    assert.equal(await service.isEnabled(candidates, client), false);
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    assert.equal(calls, 1);
+    assert.equal(await service.isEnabled(candidates, client), true);
+    await waitFor(async () => (await service.isEnabled(candidates, client)) === false);
     assert.equal(calls, 2);
     service.dispose();
   });
@@ -380,9 +403,9 @@ function fakeClient(): WorkspaceClient {
   return { config: {} } as unknown as WorkspaceClient;
 }
 
-async function waitFor(predicate: () => boolean): Promise<void> {
+async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<void> {
   const deadline = Date.now() + 1_000;
-  while (!predicate()) {
+  while (!(await predicate())) {
     if (Date.now() >= deadline) throw new Error("Timed out waiting for Smart Router refresh");
     await new Promise((resolve) => setTimeout(resolve, 5));
   }

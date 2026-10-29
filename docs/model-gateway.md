@@ -208,11 +208,12 @@ disables the virtual model.
 
 The first model-list lookup waits for an identity-scoped AppKit cache lookup or
 a live probe. Later stale in-process values return immediately while one refresh
-runs in the background. Probe results use AppKit's configured memory or
-persistent cache when available, are revalidated hourly by default, and are
-invalidated immediately when a real Smart Router selection fails. Logical-turn
-model selections remain pinned through tool calls and retries with AppKit's
-shared cache.
+runs in the background through `@dbx-tools/cache` `refreshAfterWrite`. Unused
+entries do not run timers. Probe results use AppKit's configured persistent
+cache when available and are invalidated immediately when a real Smart Router
+selection fails. Explicit inference skips the synthetic probe because the real
+selection is already the availability check. Logical-turn model selections
+remain pinned through tool calls and retries with AppKit's shared cache.
 
 Inspect these response headers for the selected route:
 

@@ -15,6 +15,7 @@ import {
   type CacheableOptions,
   type GetOrSetFunctionOptions,
   type KeyvStoreAdapter,
+  shorthandToMilliseconds,
 } from "cacheable";
 import envPaths from "env-paths";
 import { Keyv } from "keyv";
@@ -29,6 +30,7 @@ const logger = log.logger("cache");
 interface ValueEnvelope {
   readonly __dbxToolsCacheEnvelope: typeof ENVELOPE_VERSION;
   readonly value: unknown;
+  readonly writtenAt?: number;
 }
 
 interface SetMutation {
@@ -45,6 +47,7 @@ type Mutation = DeleteMutation | SetMutation;
 
 interface CacheState {
   readonly adapter?: TieredStoreAdapter;
+  readonly refreshes: Map<string, Promise<void>>;
   path?: string;
   registryKey?: string;
   closed: boolean;
@@ -85,16 +88,25 @@ export interface ProjectCacheOptions extends CacheOptions {
   readonly projectName?: string;
 }
 
+/** Age after which a cache hit returns its value and starts an asynchronous refresh. */
+export type RefreshAfterWrite<T> = number | string | ((value: T) => number | string);
+
 /** Options for the Cacheable-compatible get-or-set extension. */
-export interface GetOrSetOptions extends GetOrSetFunctionOptions {
+export interface GetOrSetOptions<T = unknown> extends GetOrSetFunctionOptions {
   /** Return a separately retained successful value when the loader fails. Defaults to false. */
   readonly returnCachedOnError?: boolean;
   /** TTL for the cached-on-error value. Defaults to 0, meaning no expiration. */
   readonly cachedOnErrorTtl?: number | string;
+  /**
+   * Return an older cached value immediately and refresh it once in the background after this
+   * duration since its last successful write. The hard `ttl` still controls final expiration.
+   */
+  readonly refreshAfterWrite?: RefreshAfterWrite<T>;
 }
 
 const states = new WeakMap<Cacheable, CacheState>();
 const projectCaches = new Map<string, Cacheable>();
+const resultWriteTimes = new WeakMap<object, number>();
 
 /**
  * Keyv adapter that composes arbitrary ordered levels behind Cacheable's one
@@ -311,7 +323,7 @@ export function createCache(options: CacheOptions = {}): Cacheable {
   cache.on("error", (error) => {
     logger.warn("cacheable operation failed", { error: toError(error) });
   });
-  states.set(cache, { adapter, closed: false });
+  states.set(cache, { adapter, refreshes: new Map(), closed: false });
   return cache;
 }
 
@@ -362,6 +374,7 @@ export async function flushCache(cache: Cacheable): Promise<void> {
 export async function closeCache(cache: Cacheable): Promise<void> {
   const state = requireState(cache);
   if (state.closed) return;
+  while (state.refreshes.size > 0) await Promise.all([...state.refreshes.values()]);
   await state.adapter?.disconnect();
   state.closed = true;
   if (state.registryKey && projectCaches.get(state.registryKey) === cache) {
@@ -395,21 +408,50 @@ export async function getOrSet<T>(
   cache: Cacheable,
   key: string,
   load: () => Promise<T>,
-  options: GetOrSetOptions = {},
+  options: GetOrSetOptions<T> = {},
 ): Promise<T | undefined> {
-  const { returnCachedOnError = false, cachedOnErrorTtl = 0, ...cacheableOptions } = options;
-  if (!returnCachedOnError) return cache.getOrSet(key, load, cacheableOptions);
+  const {
+    returnCachedOnError = false,
+    cachedOnErrorTtl = 0,
+    refreshAfterWrite,
+    ...cacheableOptions
+  } = options;
+  const loadFresh = async (): Promise<T> => {
+    const value = await load();
+    if (returnCachedOnError) {
+      await cache.set(cachedOnErrorKey(key), value, { ttl: cachedOnErrorTtl });
+    }
+    return value;
+  };
+
+  if (refreshAfterWrite !== undefined) {
+    const getOptions =
+      cacheableOptions.nonBlocking === undefined
+        ? undefined
+        : { nonBlocking: cacheableOptions.nonBlocking };
+    let cached = await cache.getRaw<T>(key, getOptions);
+    if (!cached) {
+      const refresh = requireState(cache).refreshes.get(key);
+      if (refresh) {
+        await refresh;
+        cached = await cache.getRaw<T>(key, getOptions);
+      }
+    }
+    if (cached) {
+      const value = cached.value as T;
+      const writtenAt = resultWriteTimes.get(cached as object);
+      const refreshMs = resolveRefreshAfterWrite(refreshAfterWrite, value);
+      if (writtenAt === undefined || Date.now() - writtenAt >= refreshMs) {
+        startRefresh(cache, key, loadFresh, cacheableOptions);
+      }
+      return value;
+    }
+  }
+
+  if (!returnCachedOnError) return cache.getOrSet(key, loadFresh, cacheableOptions);
 
   try {
-    return await cache.getOrSet(
-      key,
-      async () => {
-        const value = await load();
-        await cache.set(cachedOnErrorKey(key), value, { ttl: cachedOnErrorTtl });
-        return value;
-      },
-      { ...cacheableOptions, throwErrors: true },
-    );
+    return await cache.getOrSet(key, loadFresh, { ...cacheableOptions, throwErrors: true });
   } catch (error) {
     const cached = await cache.get<T>(cachedOnErrorKey(key));
     if (cached !== undefined) return cached;
@@ -426,21 +468,26 @@ function installValueEnvelope(cache: Cacheable): void {
     for (const item of items) item.value = envelope(item.value);
   });
   cache.onHook(CacheableHooks.AFTER_GET, (item) => {
-    if (item.result) item.result.value = unwrap(item.result.value);
+    if (item.result) unwrapResult(item.result);
   });
   cache.onHook(CacheableHooks.AFTER_GET_MANY, (item) => {
     for (const result of item.result) {
-      if (result) result.value = unwrap(result.value);
+      if (result) unwrapResult(result);
     }
   });
 }
 
 function envelope(value: unknown): ValueEnvelope {
-  return { __dbxToolsCacheEnvelope: ENVELOPE_VERSION, value };
+  return { __dbxToolsCacheEnvelope: ENVELOPE_VERSION, value, writtenAt: Date.now() };
 }
 
-function unwrap(value: unknown): unknown {
-  return isEnvelope(value) ? value.value : value;
+function unwrapResult(result: { value?: unknown }): void {
+  if (!isEnvelope(result.value)) return;
+  const { writtenAt } = result.value;
+  if (typeof writtenAt === "number" && Number.isFinite(writtenAt)) {
+    resultWriteTimes.set(result, writtenAt);
+  }
+  result.value = result.value.value;
 }
 
 function isEnvelope(value: unknown): value is ValueEnvelope {
@@ -455,6 +502,41 @@ function isEnvelope(value: unknown): value is ValueEnvelope {
 
 function cachedOnErrorKey(key: string): string {
   return `${ERROR_VALUE_PREFIX}${key}`;
+}
+
+function startRefresh<T>(
+  cache: Cacheable,
+  key: string,
+  load: () => Promise<T>,
+  options: GetOrSetFunctionOptions,
+): void {
+  const state = requireState(cache);
+  if (state.refreshes.has(key)) return;
+  let refresh!: Promise<void>;
+  refresh = (async () => {
+    const value = await load();
+    await cache.set(key, value, {
+      ...(options.ttl === undefined ? {} : { ttl: options.ttl }),
+      ...(options.nonBlocking === undefined ? {} : { nonBlocking: options.nonBlocking }),
+    });
+  })()
+    .catch((error) => {
+      logger.warn("cache background refresh failed", { key, error: toError(error) });
+    })
+    .finally(() => {
+      if (state.refreshes.get(key) === refresh) state.refreshes.delete(key);
+    });
+  state.refreshes.set(key, refresh);
+}
+
+function resolveRefreshAfterWrite<T>(option: RefreshAfterWrite<T>, value: T): number {
+  const configured = typeof option === "function" ? option(value) : option;
+  const resolved =
+    typeof configured === "number" ? configured : shorthandToMilliseconds(configured);
+  if (resolved === undefined || !Number.isFinite(resolved) || resolved <= 0) {
+    throw new RangeError("refreshAfterWrite must resolve to a positive duration");
+  }
+  return resolved;
 }
 
 async function settleLevels(

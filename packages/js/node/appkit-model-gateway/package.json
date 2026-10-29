@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
+    "@dbx-tools/cache": "workspace:^",
     "@dbx-tools/databricks": "workspace:^",
     "@dbx-tools/model": "workspace:^",
     "@dbx-tools/model-protocol": "workspace:^",

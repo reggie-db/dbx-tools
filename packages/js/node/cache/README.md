@@ -20,6 +20,25 @@ await closeCache(cache);
 `projectCache` reuses the same named cache within the process. Call `closeCache`
 during application shutdown to flush pending disk writes.
 
+## Refresh hot values without blocking
+
+Set `refreshAfterWrite` when callers should keep receiving the current value
+while one asynchronous reload updates it. The duration can depend on the cached
+value:
+
+```ts
+const enabled = await getOrSet(cache, "smart-router", probeSmartRouter, {
+  ttl: "2h",
+  refreshAfterWrite: (value) => (value ? "5m" : "30s"),
+});
+```
+
+The first miss blocks for the loader. After `refreshAfterWrite`, the next access
+returns the cached value immediately and starts one coalesced background refresh.
+Unused entries are not refreshed, and `ttl` remains the hard expiration. A
+failed background refresh keeps the previous value. `closeCache()` waits for
+active refreshes before disconnecting persistence.
+
 ## Create a memory-only cache
 
 Use `createCache` without persistence levels when values should remain local to

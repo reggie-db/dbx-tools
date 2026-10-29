@@ -6,4 +6,4 @@ export const PACKAGE_IDENTIFIER = "@dbx-tools/cache";
 export const PACKAGE_VERSION = "0.9.176";
 export * as cache from "./src/cache.ts";
 export { createCache, cachePath, projectCache, flushCache, closeCache, cacheKeys, deleteCachedValue, getOrSet } from "./src/cache.ts";
-export type { CacheLevel, CacheOptions, ProjectCacheOptions, GetOrSetOptions } from "./src/cache.ts";
+export type { CacheLevel, CacheOptions, ProjectCacheOptions, RefreshAfterWrite, GetOrSetOptions } from "./src/cache.ts";

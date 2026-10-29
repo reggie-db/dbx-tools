@@ -119,6 +119,131 @@ describe("createCache", () => {
     );
     await closeCache(cache);
   });
+
+  it("returns a stale value while coalescing one value-dependent background refresh", async () => {
+    const cache = createCache();
+    let calls = 0;
+    let finishRefresh: ((value: boolean) => void) | undefined;
+    const options = {
+      ttl: "1h",
+      refreshAfterWrite: (value: boolean) => (value ? 1 : "1h"),
+    } as const;
+
+    assert.equal(
+      await getOrSet(
+        cache,
+        "enabled",
+        async () => {
+          calls += 1;
+          return true;
+        },
+        options,
+      ),
+      true,
+    );
+    await delay(5);
+
+    const refresh = async (): Promise<boolean> => {
+      calls += 1;
+      return new Promise((resolve) => {
+        finishRefresh = resolve;
+      });
+    };
+    assert.equal(await getOrSet(cache, "enabled", refresh, options), true);
+    assert.equal(await getOrSet(cache, "enabled", refresh, options), true);
+    assert.equal(calls, 2);
+
+    finishRefresh?.(false);
+    await waitFor(async () => (await cache.get("enabled")) === false);
+    assert.equal(
+      await getOrSet(
+        cache,
+        "enabled",
+        async () => {
+          calls += 1;
+          return true;
+        },
+        options,
+      ),
+      false,
+    );
+    assert.equal(calls, 2);
+    await closeCache(cache);
+  });
+
+  it("blocks for a new load after the hard ttl expires", async () => {
+    const cache = createCache();
+    assert.equal(
+      await getOrSet(cache, "catalog", async () => "old", {
+        ttl: 5,
+        refreshAfterWrite: "1h",
+      }),
+      "old",
+    );
+    await delay(10);
+    assert.equal(
+      await getOrSet(cache, "catalog", async () => "fresh", {
+        ttl: "1h",
+        refreshAfterWrite: "1h",
+      }),
+      "fresh",
+    );
+    await closeCache(cache);
+  });
+
+  it("keeps the previous value when a background refresh fails", async () => {
+    const cache = createCache();
+    const options = { ttl: "1h", refreshAfterWrite: 1 } as const;
+    assert.equal(await getOrSet(cache, "catalog", async () => "old", options), "old");
+    await delay(5);
+
+    assert.equal(
+      await getOrSet(
+        cache,
+        "catalog",
+        async () => {
+          throw new Error("offline");
+        },
+        options,
+      ),
+      "old",
+    );
+    await delay(5);
+    assert.equal(await cache.get("catalog"), "old");
+    await closeCache(cache);
+  });
+
+  it("waits for an active background refresh before closing", async () => {
+    const cache = createCache();
+    const options = { ttl: "1h", refreshAfterWrite: 1 } as const;
+    let finishRefresh: ((value: string) => void) | undefined;
+    assert.equal(await getOrSet(cache, "catalog", async () => "old", options), "old");
+    await delay(5);
+
+    assert.equal(
+      await getOrSet(
+        cache,
+        "catalog",
+        () =>
+          new Promise((resolve) => {
+            finishRefresh = resolve;
+          }),
+        options,
+      ),
+      "old",
+    );
+
+    let closed = false;
+    const closing = closeCache(cache).then(() => {
+      closed = true;
+    });
+    await Promise.resolve();
+    assert.equal(closed, false);
+
+    finishRefresh?.("fresh");
+    await closing;
+    assert.equal(await cache.get("catalog"), "fresh");
+  });
 });
 
 describe("projectCache", () => {
@@ -143,3 +268,15 @@ describe("projectCache", () => {
     await closeCache(first);
   });
 });
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitFor(predicate: () => Promise<boolean>): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (!(await predicate())) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for cache refresh");
+    await delay(5);
+  }
+}

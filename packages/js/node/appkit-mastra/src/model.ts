@@ -24,11 +24,7 @@
 
 import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
 import { tryGetExecutionContext } from "@dbx-tools/appkit";
-import {
-  SmartRouterService,
-  SMART_ROUTER_DEFAULT_SETTINGS,
-  smartRouterCandidates,
-} from "@dbx-tools/appkit-model-gateway";
+import { SmartRouterService, smartRouterCandidates } from "@dbx-tools/appkit-model-gateway";
 import {
   classes,
   endpointCapabilities,
@@ -58,7 +54,13 @@ import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
 type ModelClass = contracts.ModelClass;
 const { parseModelClass } = classes;
 const { selectModel } = resolve;
-const smartRouter = new SmartRouterService(SMART_ROUTER_DEFAULT_SETTINGS);
+const smartRouter = new SmartRouterService();
+const MASTRA_SMART_ROUTER_RESOLUTION_KEY = "mastra__smart_router_resolution";
+
+interface SmartRouterModelResolution {
+  readonly modelId: string;
+  readonly source: string;
+}
 
 /** Virtual endpoint shown when Smart Router is enabled for the active identity. */
 export const SMART_ROUTER_ENDPOINT: ServingEndpointSummary = {
@@ -225,26 +227,40 @@ export async function buildModel(
     overrides.modelClass === undefined &&
     smartRouterInput !== undefined
   ) {
-    const endpoints = await listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
-    const candidates = smartRouterCandidates(
-      endpoints.filter((endpoint) => endpointCapabilities(endpoint).tools),
-      "codex",
-    );
-    const enabled = await smartRouter.isEnabled(candidates, client);
-    if (enabled) {
-      const selected = await smartRouter.select(smartRouterInput, candidates, { client });
-      modelId = selected.value.name;
-      source = SMART_ROUTER_MODEL_ID;
-    } else if (smartRouterRequested) {
-      throw new Error("Databricks Smart Router is not enabled for the active workspace identity");
-    } else {
-      const resolved = await selectModel(
-        client,
-        host,
-        selectionInput(config, requested, overrides.modelClass, serving),
-      );
-      modelId = resolved.modelId;
-      source = resolved.source;
+    let pending = context.get(MASTRA_SMART_ROUTER_RESOLUTION_KEY) as
+      | Promise<SmartRouterModelResolution>
+      | undefined;
+    if (!pending) {
+      pending = (async () => {
+        const endpoints = await listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
+        const candidates = smartRouterCandidates(
+          endpoints.filter((endpoint) => endpointCapabilities(endpoint).tools),
+          "codex",
+        );
+        // An explicit Smart Router request does not need a synthetic preflight:
+        // the real selection is the availability check. Auto mode still probes
+        // so it can fall back to the configured model policy when unavailable.
+        const enabled = smartRouterRequested || (await smartRouter.isEnabled(candidates, client));
+        if (enabled) {
+          const selected = await smartRouter.select(smartRouterInput, candidates, { client });
+          return { modelId: selected.value.name, source: SMART_ROUTER_MODEL_ID };
+        }
+        const fallback = await selectModel(
+          client,
+          host,
+          selectionInput(config, requested, overrides.modelClass, serving),
+        );
+        return { modelId: fallback.modelId, source: fallback.source };
+      })();
+      context.set(MASTRA_SMART_ROUTER_RESOLUTION_KEY, pending);
+    }
+    try {
+      ({ modelId, source } = await pending);
+    } catch (error) {
+      if (context.get(MASTRA_SMART_ROUTER_RESOLUTION_KEY) === pending) {
+        context.set(MASTRA_SMART_ROUTER_RESOLUTION_KEY, undefined);
+      }
+      throw error;
     }
   } else {
     const resolved = await selectModel(

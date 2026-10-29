@@ -6,6 +6,7 @@
 
 import { createHash } from "node:crypto";
 import { CacheManager, getExecutionContext, type WorkspaceClient } from "@databricks/appkit";
+import { closeCache, createCache, getOrSet } from "@dbx-tools/cache";
 import { refreshWorkspaceClientAuthentication } from "@dbx-tools/databricks";
 import { isRecord, log, toError } from "@dbx-tools/shared-core";
 import { ReasoningEffortSchema, type ReasoningEffort } from "@dbx-tools/shared-model";
@@ -45,6 +46,16 @@ export interface SmartRouterSettings {
   readonly routerName: string;
   readonly timeoutMs: number;
 }
+
+/** Defaults shared by gateway, Mastra, and CLI Smart Router callers. */
+export const SMART_ROUTER_DEFAULT_SETTINGS: SmartRouterSettings = Object.freeze({
+  contextTokenBudget: 4_096,
+  probeRefreshIntervalMs: 3_600_000,
+  probeTtlMs: 300_000,
+  routeTtlSeconds: 21_600,
+  routerName: SMART_ROUTER_NAME,
+  timeoutMs: 10_000,
+});
 
 /** One route option associated with the caller-owned value it represents. */
 export interface SmartRouterCandidate<T> {
@@ -158,15 +169,7 @@ export class AppKitSmartRouterProbeStore implements SmartRouterProbeStore {
   }
 }
 
-interface ProbeEntry {
-  readonly cache: Map<string, ProbeEntry>;
-  readonly candidates: readonly SmartRouterCandidate<unknown>[];
-  readonly client: WeakRef<WorkspaceClient>;
-  readonly key: string;
-  expiresAt: number;
-  refresh?: Promise<boolean>;
-  value?: boolean;
-}
+type SmartRouterProbeCache = ReturnType<typeof createCache>;
 
 /** Optional identity and cancellation inputs for one Smart Router call. */
 export interface SmartRouterSelectOptions {
@@ -187,16 +190,18 @@ type SmartRouterInvoker = (
  */
 export class SmartRouterService {
   readonly context: SmartRouterContextBuilder;
-  private readonly probes = new WeakMap<object, Map<string, ProbeEntry>>();
-  private readonly probeEntries = new Set<ProbeEntry>();
-  private probeRefreshTimer?: NodeJS.Timeout;
+  private readonly settings: SmartRouterSettings;
+  private readonly probes = new WeakMap<object, SmartRouterProbeCache>();
+  private readonly probeKeys = new WeakMap<object, Set<string>>();
+  private readonly probeCaches = new Set<SmartRouterProbeCache>();
 
   constructor(
-    private readonly settings: SmartRouterSettings,
+    settings: Partial<SmartRouterSettings> = {},
     private readonly invoke: SmartRouterInvoker = invokeSmartRouter,
     private readonly probeStore: SmartRouterProbeStore = new AppKitSmartRouterProbeStore(),
   ) {
-    this.context = new SmartRouterContextBuilder(settings.contextTokenBudget);
+    this.settings = { ...SMART_ROUTER_DEFAULT_SETTINGS, ...settings };
+    this.context = new SmartRouterContextBuilder(this.settings.contextTokenBudget);
   }
 
   /** Select one offered route for arbitrary input content. */
@@ -227,85 +232,49 @@ export class SmartRouterService {
     if (offered.length === 0) return false;
     const cache = this.probeCache(client);
     const key = probeKey(offered, this.settings.routerName);
-    const now = Date.now();
-    const cached = cache.get(key);
-    if (cached) {
-      if (cached.value === undefined) return cached.refresh!;
-      if (cached.expiresAt <= now && !cached.refresh) void this.refreshProbe(cached);
-      return cached.value;
-    }
-    const entry = this.createProbeEntry(cache, key, offered, client);
-    return this.initializeProbe(entry);
+    this.rememberProbeKey(client, key);
+    const probe = await getOrSet(
+      cache,
+      key,
+      () => this.loadProbe(key, offered, client),
+      {
+        ttl: this.probeCacheTtlMs(),
+        refreshAfterWrite: (value) => this.probeRefreshAfterWrite(value.enabled),
+      },
+    );
+    return probe?.enabled ?? false;
   }
 
-  /** Stop this service's unref'd background probe refresh timer. */
+  /** Stop process-local probe caches after their active refreshes settle. */
   dispose(): void {
-    if (this.probeRefreshTimer) clearInterval(this.probeRefreshTimer);
-    this.probeRefreshTimer = undefined;
-    this.probeEntries.clear();
+    for (const cache of this.probeCaches) void closeCache(cache);
+    this.probeCaches.clear();
   }
 
-  private createProbeEntry<T>(
-    cache: Map<string, ProbeEntry>,
+  private async loadProbe<T>(
     key: string,
     candidates: readonly SmartRouterCandidate<T>[],
     client: WorkspaceClient,
-  ): ProbeEntry {
-    const entry: ProbeEntry = {
-      cache,
-      candidates,
-      client: new WeakRef(client),
-      key,
-      expiresAt: 0,
-    };
-    this.replaceProbe(cache, key, entry);
-    return entry;
+  ): Promise<SmartRouterProbeRecord> {
+    const stored = await this.readStoredProbe(key, client);
+    if (stored && stored.expiresAt > Date.now()) return stored;
+    return this.executeProbe(key, candidates, client);
   }
 
-  private initializeProbe(entry: ProbeEntry): Promise<boolean> {
-    const client = entry.client.deref();
-    if (!client) return Promise.resolve(false);
-    let refresh!: Promise<boolean>;
-    refresh = this.readStoredProbe(entry, client)
-      .then((stored) => {
-        if (stored && stored.expiresAt > Date.now()) {
-          entry.value = stored.enabled;
-          entry.expiresAt = stored.expiresAt;
-          return stored.enabled;
-        }
-        return this.executeProbe(entry, client);
-      })
-      .finally(() => {
-        if (entry.refresh === refresh) entry.refresh = undefined;
-      });
-    entry.refresh = refresh;
-    return refresh;
-  }
-
-  private refreshProbe(entry: ProbeEntry): Promise<boolean> {
-    if (entry.refresh) return entry.refresh;
-    const client = entry.client.deref();
-    if (!client) return Promise.resolve(false);
-    let refresh!: Promise<boolean>;
-    refresh = this.executeProbe(entry, client).finally(() => {
-      if (entry.refresh === refresh) entry.refresh = undefined;
-    });
-    entry.refresh = refresh;
-    return refresh;
-  }
-
-  private async executeProbe(entry: ProbeEntry, client: WorkspaceClient): Promise<boolean> {
-    const enabled = await this.selectTask(PROBE_TASK, entry.candidates, { client })
+  private async executeProbe<T>(
+    key: string,
+    candidates: readonly SmartRouterCandidate<T>[],
+    client: WorkspaceClient,
+  ): Promise<SmartRouterProbeRecord> {
+    const enabled = await this.selectTask(PROBE_TASK, candidates, { client })
       .then(() => true)
       .catch((error) => {
         logger.debug("Smart Router capability probe unavailable", { error: toError(error) });
         return false;
       });
-    if (entry.cache.get(entry.key) === entry) {
-      this.updateProbeEntry(entry, enabled);
-      void this.writeStoredProbe(entry, enabled, client);
-    }
-    return enabled;
+    const probe = this.probeRecord(enabled);
+    void this.writeStoredProbe(key, probe, client);
+    return probe;
   }
 
   private setProbeValue<T>(
@@ -317,9 +286,10 @@ export class SmartRouterService {
     if (offered.length === 0) return;
     const cache = this.probeCache(client);
     const key = probeKey(offered, this.settings.routerName);
-    const entry = cache.get(key) ?? this.createProbeEntry(cache, key, offered, client);
-    this.updateProbeEntry(entry, enabled);
-    void this.writeStoredProbe(entry, enabled, client);
+    this.rememberProbeKey(client, key);
+    const probe = this.probeRecord(enabled);
+    void this.writeProcessProbe(cache, key, probe);
+    void this.writeStoredProbe(key, probe, client);
   }
 
   private setProbeUnavailable<T>(
@@ -327,26 +297,27 @@ export class SmartRouterService {
     client: WorkspaceClient,
   ): void {
     const cache = this.probeCache(client);
-    for (const cached of cache.values()) {
-      this.updateProbeEntry(cached, false);
-      void this.writeStoredProbe(cached, false, client);
+    const offered = uniqueCandidates(candidates);
+    const requestedKey = probeKey(offered, this.settings.routerName);
+    this.rememberProbeKey(client, requestedKey);
+    const keys = this.probeKeys.get(client.config as object) ?? new Set([requestedKey]);
+    for (const key of keys) {
+      const probe = this.probeRecord(false);
+      void this.writeProcessProbe(cache, key, probe);
+      void this.writeStoredProbe(key, probe, client);
     }
-    this.setProbeValue(candidates, client, false);
   }
 
-  private updateProbeEntry(entry: ProbeEntry, enabled: boolean): void {
-    entry.value = enabled;
-    entry.expiresAt = Date.now() + this.probeTtl(enabled);
+  private probeRecord(enabled: boolean): SmartRouterProbeRecord {
+    return { enabled, expiresAt: Date.now() + this.probeTtl(enabled) };
   }
 
   private async readStoredProbe(
-    entry: ProbeEntry,
+    key: string,
     client: WorkspaceClient,
   ): Promise<SmartRouterProbeRecord | undefined> {
     try {
-      const parsed = SmartRouterProbeRecordSchema.safeParse(
-        await this.probeStore.get(entry.key, client),
-      );
+      const parsed = SmartRouterProbeRecordSchema.safeParse(await this.probeStore.get(key, client));
       return parsed.success ? parsed.data : undefined;
     } catch (error) {
       logger.debug("Smart Router probe cache read failed", { error: toError(error) });
@@ -354,21 +325,28 @@ export class SmartRouterService {
     }
   }
 
+  private async writeProcessProbe(
+    cache: SmartRouterProbeCache,
+    key: string,
+    probe: SmartRouterProbeRecord,
+  ): Promise<void> {
+    try {
+      await cache.set(key, probe, { ttl: this.probeCacheTtlMs() });
+    } catch (error) {
+      logger.debug("Smart Router process probe cache write failed", { error: toError(error) });
+    }
+  }
+
   private async writeStoredProbe(
-    entry: ProbeEntry,
-    enabled: boolean,
+    key: string,
+    probe: SmartRouterProbeRecord,
     client: WorkspaceClient,
   ): Promise<void> {
     try {
       await this.probeStore.set(
-        entry.key,
-        { enabled, expiresAt: entry.expiresAt },
-        Math.max(
-          1,
-          Math.ceil(
-            (Math.max(this.settings.probeRefreshIntervalMs, this.settings.probeTtlMs) * 2) / 1_000,
-          ),
-        ),
+        key,
+        probe,
+        Math.max(1, Math.ceil(this.probeCacheTtlMs() / 1_000)),
         client,
       );
     } catch (error) {
@@ -376,22 +354,29 @@ export class SmartRouterService {
     }
   }
 
-  private probeCache(client: WorkspaceClient): Map<string, ProbeEntry> {
+  private probeCache(client: WorkspaceClient): SmartRouterProbeCache {
     const owner = client.config as object;
     let cache = this.probes.get(owner);
     if (!cache) {
-      cache = new Map();
+      cache = createCache({ maxEntries: 32, useClone: false });
       this.probes.set(owner, cache);
+      this.probeCaches.add(cache);
     }
     return cache;
   }
 
-  private replaceProbe(cache: Map<string, ProbeEntry>, key: string, entry: ProbeEntry): void {
-    const previous = cache.get(key);
-    if (previous) this.probeEntries.delete(previous);
-    cache.set(key, entry);
-    this.probeEntries.add(entry);
-    this.ensureProbeRefreshTimer();
+  private rememberProbeKey(client: WorkspaceClient, key: string): void {
+    const owner = client.config as object;
+    let keys = this.probeKeys.get(owner);
+    if (!keys) {
+      keys = new Set();
+      this.probeKeys.set(owner, keys);
+    }
+    keys.add(key);
+  }
+
+  private probeCacheTtlMs(): number {
+    return Math.max(this.settings.probeRefreshIntervalMs, this.settings.probeTtlMs) * 2;
   }
 
   private probeTtl(enabled: boolean): number {
@@ -400,30 +385,8 @@ export class SmartRouterService {
       : Math.min(this.settings.probeTtlMs, NEGATIVE_PROBE_TTL_MS);
   }
 
-  private ensureProbeRefreshTimer(): void {
-    if (this.probeRefreshTimer) return;
-    this.probeRefreshTimer = setInterval(() => {
-      void this.refreshProbes();
-    }, this.settings.probeRefreshIntervalMs);
-    this.probeRefreshTimer.unref();
-  }
-
-  private async refreshProbes(): Promise<void> {
-    const refreshes: Promise<boolean>[] = [];
-    for (const entry of [...this.probeEntries]) {
-      if (entry.cache.get(entry.key) !== entry) {
-        this.probeEntries.delete(entry);
-        continue;
-      }
-      const client = entry.client.deref();
-      if (!client) {
-        entry.cache.delete(entry.key);
-        this.probeEntries.delete(entry);
-        continue;
-      }
-      if (!entry.refresh) refreshes.push(this.refreshProbe(entry));
-    }
-    await Promise.allSettled(refreshes);
+  private probeRefreshAfterWrite(enabled: boolean): number {
+    return Math.min(this.settings.probeRefreshIntervalMs, this.probeTtl(enabled));
   }
 
   private async selectTask<T>(
@@ -510,14 +473,16 @@ export class SmartRouterContextBuilder {
 /** Smart Router orchestration shared by Responses, Chat Completions, and Messages. */
 export class SmartModelRouter {
   readonly service: SmartRouterService;
+  private readonly settings: SmartRouterSettings;
 
   constructor(
-    private readonly settings: SmartRouterSettings,
-    service = new SmartRouterService(settings),
+    settings: Partial<SmartRouterSettings> = {},
+    service: SmartRouterService | undefined = undefined,
     private readonly store: SmartRouterStore = new AppKitSmartRouterStore(),
     private readonly client?: WorkspaceClient,
   ) {
-    this.service = service;
+    this.settings = { ...SMART_ROUTER_DEFAULT_SETTINGS, ...settings };
+    this.service = service ?? new SmartRouterService(this.settings);
   }
 
   /** Probe whether Smart Router is usable for the current model catalogue. */
@@ -971,13 +936,3 @@ async function invokeSmartRouter(
   }
   return response.json();
 }
-
-/** Defaults shared by gateway, Mastra, and CLI Smart Router callers. */
-export const SMART_ROUTER_DEFAULT_SETTINGS: SmartRouterSettings = Object.freeze({
-  contextTokenBudget: 4_096,
-  probeRefreshIntervalMs: 3_600_000,
-  probeTtlMs: 300_000,
-  routeTtlSeconds: 21_600,
-  routerName: SMART_ROUTER_NAME,
-  timeoutMs: 10_000,
-});

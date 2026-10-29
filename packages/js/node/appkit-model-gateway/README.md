@@ -67,7 +67,10 @@ Before returning `GET /v1/models`, the gateway makes one memoized
 `/ai-gateway/routing/v1/routes:select`. The virtual model is listed only when
 that request succeeds for the active identity and live `system.ai.*`
 candidates. Positive probes are shared for five minutes and concurrent probes
-coalesce into one request.
+coalesce into one request. Stale values are returned immediately while
+`@dbx-tools/cache` `refreshAfterWrite` coalesces one access-triggered background
+refresh. An explicit inference request skips this synthetic preflight because
+its real route selection is already the availability check.
 
 For inference, the gateway extracts bounded task context from Responses input,
 Chat Completions or Anthropic messages, plain text, or generic JSON objects. It

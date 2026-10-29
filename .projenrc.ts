@@ -842,6 +842,7 @@ project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "n
   projectJs.applyIncludes(p, "scripts/**/*.ts");
   p.addDeps(
     "@databricks/appkit@catalog:",
+    "@dbx-tools/cache@workspace:^",
     "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/model@workspace:^",
     "@dbx-tools/model-protocol@workspace:^",
