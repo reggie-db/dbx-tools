@@ -401,3 +401,42 @@ def test_embedded_mode_names_the_optional_extra_when_missing(monkeypatch, tmp_pa
 
     with pytest.raises(RuntimeError, match=r"dbx-tools-graphiti\[dev\]"):
         database._open_embedded_server(tmp_path / "postgres")
+
+
+def test_embedded_server_prunes_dead_handle_pids(monkeypatch, tmp_path: Path) -> None:
+    import embedded_postgres
+    from embedded_postgres import utils as embedded_utils
+
+    class Lock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+    class Handles:
+        def __init__(self) -> None:
+            self.values = [101, 202, 303]
+
+        def get(self) -> list[int]:
+            return self.values.copy()
+
+        def put(self, values: list[int]) -> None:
+            self.values = values
+
+    class Server:
+        _lock = Lock()
+        global_process_id_list = Handles()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+    server = Server()
+    monkeypatch.setattr(embedded_postgres, "get_server", lambda *_args, **_kwargs: server)
+    monkeypatch.setattr(embedded_utils, "process_is_running", lambda pid: pid == 202)
+
+    assert database._open_embedded_server(tmp_path) is server
+    assert server.global_process_id_list.values == [202]

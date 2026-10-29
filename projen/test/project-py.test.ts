@@ -291,6 +291,7 @@ describe("DBXToolsPythonWorkspace", () => {
       "publish-node",
       "publish-pypi-core",
       "publish-pypi-app",
+      "deploy-docs",
     ]);
     assert.deepEqual(workflowStep(availability, "Download Python distributions").with, {
       pattern: "release-python-*",
@@ -303,7 +304,12 @@ describe("DBXToolsPythonWorkspace", () => {
       ),
     );
     assert.equal(release.jobs["build-docs"], undefined);
-    assert.deepEqual(release.jobs["deploy-docs"]?.needs, ["build-release", "verify-publications"]);
+    assert.deepEqual(release.jobs["deploy-docs"]?.needs, [
+      "build-release",
+      "publish-node",
+      "publish-pypi-core",
+      "publish-pypi-app",
+    ]);
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");

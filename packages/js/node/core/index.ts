@@ -22,7 +22,7 @@ export { ENV_ONLY, valueSchema, bundleResourceSchema, bundleEnvEntrySchema, bund
 export type { ConfigMapValue, ConfigData, ConfigSource, ConfigOptions, ConfigFile } from "./src/config-utils.ts";
 export { missingDependencies, resolveVersion, resolveDependencies } from "./src/dependency-resolver.ts";
 export type { DependencyResolverOptions, DependencyInfo, ResolvedNpmVersion, NpmSpecifierInput, ResolvedNpmDependencies, MissingDependencyInfo } from "./src/dependency-resolver.ts";
-export { COMMAND_NOT_FOUND_EXIT_CODE, onParentTerminationSignal, spawn, spawnSync, shlex } from "./src/exec.ts";
+export { COMMAND_NOT_FOUND_EXIT_CODE, onParentTerminationSignal, shutdownProcessTree, spawn, spawnSync, shlex } from "./src/exec.ts";
 export type { ExecStdio, LineHandler, LineOutputOptions, StdioOption, ExecResult, ChildProcessResult, ChildProcessTerminationOptions, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
 export { withFileLock, acquireFileLock } from "./src/file-lock.ts";
 export type { FileLockBackend, FileLockAcquisition, FileLockOptions, FileLockLease } from "./src/file-lock.ts";

@@ -233,6 +233,7 @@ jobs:
       - publish-node
       - publish-pypi-node-runtime
       - publish-pypi-graphiti
+      - deploy-docs
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -284,7 +285,9 @@ jobs:
   deploy-docs:
     needs:
       - build-release
-      - verify-publications
+      - publish-node
+      - publish-pypi-node-runtime
+      - publish-pypi-graphiti
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -292,7 +295,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    if: ${{ always() && !cancelled() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['verify-publications'].result == 'success' || needs['verify-publications'].result == 'skipped') }}
+    if: ${{ always() && !cancelled() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['build-release'].outputs.npm != 'true' || needs['publish-node'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-node-runtime'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-graphiti'].result == 'success') }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

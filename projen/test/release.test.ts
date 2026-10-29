@@ -173,7 +173,8 @@ describe("unified release workflow", () => {
       availability["timeout-minutes"],
       Math.ceil(PUBLICATION_WAIT_TIMEOUT_SECONDS / 60) + 5,
     );
-    assert.deepEqual(availability.needs, ["build-release", "publish-node"]);
+    assert.deepEqual(availability.needs, ["build-release", "publish-node", "deploy-docs"]);
+    assert.doesNotMatch(availability.if ?? "", /deploy-docs/);
     assert.deepEqual(step(availability, "Download publication verifier").with, {
       name: "release-publication-verifier",
       path: ".release/verifier",
@@ -209,10 +210,11 @@ describe("unified release workflow", () => {
     });
 
     const deploy = release.jobs["deploy-docs"]!;
-    assert.deepEqual(deploy.needs, ["build-release", "verify-publications"]);
+    assert.deepEqual(deploy.needs, ["build-release", "publish-node"]);
     assert.equal(release.jobs["build-docs"], undefined);
     assert.ok(deploy.if?.includes("outputs.docs == 'true'"));
-    assert.ok(deploy.if?.includes("needs['verify-publications'].result == 'skipped'"));
+    assert.ok(deploy.if?.includes("needs['publish-node'].result == 'success'"));
+    assert.doesNotMatch(deploy.if ?? "", /verify-publications/);
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
       url: "${{ steps.deployment.outputs.page_url }}",
@@ -394,10 +396,7 @@ describe("optional Node release stage", () => {
       assert.equal(workflow.jobs["build-docs"], undefined);
       assert.equal(workflow.jobs["build-release"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
       assert.equal(workflow.jobs["build-release"]?.env?.DOCS_BASE, "/");
-      assert.deepEqual(workflow.jobs["deploy-docs"]?.needs, [
-        "build-release",
-        "verify-publications",
-      ]);
+      assert.deepEqual(workflow.jobs["deploy-docs"]?.needs, ["build-release", "publish-node"]);
       assert.equal("release-please" in workflow.jobs, false);
       assert.equal("release-plan" in workflow.jobs, false);
       assert.equal("publish-github-release" in workflow.jobs, false);

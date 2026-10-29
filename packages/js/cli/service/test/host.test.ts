@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -20,6 +20,42 @@ const DEFINITION: CliServiceDefinition = {
   version: "1.2.3",
   icon: "",
 };
+
+const PROCESS_TREE_FIXTURE = join(import.meta.dirname, "fixtures", "process-tree.cjs");
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+function forceKill(pid: number | undefined): void {
+  if (pid === undefined) return;
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+  }
+}
+
+async function readProcessTree(path: string): Promise<{ parentPid: number; childPid: number }> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      return JSON.parse(await readFile(path, "utf8")) as {
+        parentPid: number;
+        childPid: number;
+      };
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw new Error(`process tree did not start: ${path}`);
+}
 
 describe("CLI service host", () => {
   it("claims singleton control before spawning the managed command", async () => {
@@ -88,5 +124,52 @@ describe("CLI service host", () => {
     });
     await host.stop();
     assert.equal(await requestServiceControl(paths.controlAddress, "status"), undefined);
+  });
+
+  it("stops the managed command and its descendants", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-tools-cli-service-host-"));
+    const statePath = join(root, "process-tree.json");
+    const runtime = {
+      platform: "linux" as const,
+      environment: {},
+      homeDirectory: root,
+      temporaryDirectory: root,
+    };
+    const paths = resolveServicePaths(DEFINITION, runtime);
+    const tray = {
+      process: null,
+      ready: async () => {},
+      onClick: async () => tray,
+      onError: () => {},
+      onExit: () => {},
+    };
+    const host = new CliServiceHost(
+      {
+        ...DEFINITION,
+        command: {
+          executable: process.execPath,
+          arguments: [PROCESS_TREE_FIXTURE, statePath],
+        },
+      },
+      paths,
+      () => {},
+      { createTray: () => tray as never },
+    );
+
+    let tree: { parentPid: number; childPid: number } | undefined;
+    try {
+      await host.start();
+      tree = await readProcessTree(statePath);
+      assert.equal(processExists(tree.parentPid), true);
+      assert.equal(processExists(tree.childPid), true);
+
+      await host.stop();
+
+      assert.equal(processExists(tree.parentPid), false);
+      assert.equal(processExists(tree.childPid), false);
+    } finally {
+      forceKill(tree?.childPid);
+      forceKill(tree?.parentPid);
+    }
   });
 });

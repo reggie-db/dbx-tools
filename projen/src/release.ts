@@ -118,18 +118,45 @@ export function uvSetupStep(): JobStep {
   };
 }
 
-function refreshDocsRegistryDependencies(workflow: GithubWorkflow): void {
-  const docs = workflow.getJob("deploy-docs") as Job | undefined;
-  if (!docs) return;
-  if (workflow.getJob(PUBLICATION_VERIFIER_JOB)) {
-    workflow.updateJob("deploy-docs", {
+const DOCS_JOB = "deploy-docs";
+
+function publicationRegistryJobs(workflow: GithubWorkflow): string[] {
+  return Object.keys(workflow.jobs).filter(
+    (name) => name === "publish-node" || name.startsWith("publish-pypi-"),
+  );
+}
+
+function publisherPrerequisites(registryJobs: readonly string[]): string[] {
+  return registryJobs.map((name) => {
+    const output = name === "publish-node" ? "npm" : "pypi";
+    return `needs['build-release'].outputs.${output} != 'true' || needs['${name}'].result == 'success'`;
+  });
+}
+
+/**
+ * Deploy docs after selected publishers succeed, then run the availability
+ * verifier. Docs never consume registry availability, so the slow public
+ * availability poll must not delay their deployment.
+ */
+function refreshReleaseOrdering(workflow: GithubWorkflow): void {
+  const registryJobs = publicationRegistryJobs(workflow);
+  const docs = workflow.getJob(DOCS_JOB) as Job | undefined;
+  if (docs) {
+    workflow.updateJob(DOCS_JOB, {
       ...docs,
-      needs: ["build-release", PUBLICATION_VERIFIER_JOB],
+      needs: ["build-release", ...registryJobs],
       if: releaseCondition([
         "needs['build-release'].result == 'success'",
         "needs['build-release'].outputs.docs == 'true'",
-        `needs['${PUBLICATION_VERIFIER_JOB}'].result == 'success' || needs['${PUBLICATION_VERIFIER_JOB}'].result == 'skipped'`,
+        ...publisherPrerequisites(registryJobs),
       ]),
+    });
+  }
+  const verifier = workflow.getJob(PUBLICATION_VERIFIER_JOB) as Job | undefined;
+  if (verifier) {
+    workflow.updateJob(PUBLICATION_VERIFIER_JOB, {
+      ...verifier,
+      needs: ["build-release", ...registryJobs, ...(docs ? [DOCS_JOB] : [])],
     });
   }
 }
@@ -138,14 +165,8 @@ function refreshDocsRegistryDependencies(workflow: GithubWorkflow): void {
 export function refreshReleaseDocsDependencies(project: DBXToolsJavaScriptProject): void {
   const workflow = releaseWorkflows.get(project);
   if (workflow) {
-    refreshDocsRegistryDependencies(workflow);
+    refreshReleaseOrdering(workflow);
   }
-}
-
-function publicationRegistryJobs(workflow: GithubWorkflow): string[] {
-  return Object.keys(workflow.jobs).filter(
-    (name) => name === "publish-node" || name.startsWith("publish-pypi-"),
-  );
 }
 
 /** Keep one public availability barrier behind every configured registry publisher. */
@@ -160,10 +181,7 @@ export function refreshPublicationVerification(project: DBXToolsJavaScriptProjec
     ...(hasNpm ? ["needs['build-release'].outputs.npm == 'true'"] : []),
     ...(hasPypi ? ["needs['build-release'].outputs.pypi == 'true'"] : []),
   ].join(" || ");
-  const prerequisites = registryJobs.map((name) => {
-    const output = name === "publish-node" ? "npm" : "pypi";
-    return `needs['build-release'].outputs.${output} != 'true' || needs['${name}'].result == 'success'`;
-  });
+  const prerequisites = publisherPrerequisites(registryJobs);
   const job: Job = {
     if: releaseCondition([
       "needs['build-release'].result == 'success'",
@@ -240,7 +258,7 @@ export function refreshPublicationVerification(project: DBXToolsJavaScriptProjec
   } else {
     workflow.addJob(PUBLICATION_VERIFIER_JOB, job);
   }
-  refreshDocsRegistryDependencies(workflow);
+  refreshReleaseOrdering(workflow);
 }
 
 function releaseBuildJob(
@@ -398,7 +416,7 @@ function nodePublishJob(): Job {
 }
 
 function addDocsJobs(workflow: GithubWorkflow): void {
-  workflow.addJob("deploy-docs", {
+  workflow.addJob(DOCS_JOB, {
     if: releaseCondition([
       "needs['build-release'].result == 'success'",
       "needs['build-release'].outputs.docs == 'true'",
@@ -419,7 +437,7 @@ function addDocsJobs(workflow: GithubWorkflow): void {
       },
     ],
   });
-  refreshDocsRegistryDependencies(workflow);
+  refreshReleaseOrdering(workflow);
 }
 
 /** Owns the single release workflow and local release preparation tasks. */

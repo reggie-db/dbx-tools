@@ -259,6 +259,7 @@ def test_command_uses_standard_asyncio_loop(monkeypatch) -> None:
             "port": 8100,
             "loop": "asyncio",
             "access_log": False,
+            "timeout_graceful_shutdown": 5,
         }
     ]
 
@@ -440,6 +441,37 @@ async def test_runtime_logs_startup_and_shutdown_timing(monkeypatch, caplog) -> 
     )
     assert built == ["indices"]
     assert closed == ["graphiti", "database", "http"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_cleanup_continues_after_graphiti_close_failure() -> None:
+    closed: list[str] = []
+
+    class Graphiti:
+        async def close(self) -> None:
+            closed.append("graphiti")
+            raise RuntimeError("graphiti cleanup failed")
+
+    class Database:
+        async def close(self) -> None:
+            closed.append("database")
+
+    class Http:
+        async def aclose(self) -> None:
+            closed.append("http")
+
+    runtime = graphiti_runtime.GraphitiRuntime(_resolved_options())
+    runtime.graphiti = Graphiti()
+    runtime.database = Database()
+    runtime.clients = SimpleNamespace(http=Http())
+
+    with pytest.raises(RuntimeError, match="graphiti cleanup failed"):
+        await runtime.close()
+
+    assert closed == ["graphiti", "database", "http"]
+    assert runtime.graphiti is None
+    assert runtime.database is None
+    assert runtime.clients is None
 
 
 def test_llm_client_normalizes_structured_content_before_json_parsing() -> None:

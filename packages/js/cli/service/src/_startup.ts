@@ -8,7 +8,8 @@ import { sleep } from "@dbx-tools/shared-core";
 import type { ServicePaths, ServiceRuntimeContext } from "./_paths.ts";
 import type { CliServiceDefinition } from "./definition.ts";
 
-const LAUNCH_AGENT_STATE_TIMEOUT_MILLISECONDS = 10_000;
+const LAUNCH_AGENT_EXIT_TIMEOUT_SECONDS = 40;
+const LAUNCH_AGENT_STATE_TIMEOUT_MILLISECONDS = 45_000;
 const LAUNCH_AGENT_POLL_INTERVAL_MILLISECONDS = 100;
 
 export interface ServiceLaunch {
@@ -95,6 +96,8 @@ export function renderLaunchAgent(definition: CliServiceDefinition, launch: Serv
     "    </array>",
     "    <key>RunAtLoad</key>",
     "    <true/>",
+    "    <key>ExitTimeOut</key>",
+    `    <integer>${LAUNCH_AGENT_EXIT_TIMEOUT_SECONDS}</integer>`,
     "    <key>ProcessType</key>",
     "    <string>Interactive</string>",
     "  </dict>",

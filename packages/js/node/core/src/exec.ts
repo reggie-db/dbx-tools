@@ -1022,22 +1022,23 @@ function linesFromCapturedOutput(output: string): string[] {
 }
 
 /**
- * Stop a child process and descendants discovered through operating-system
- * process snapshots.
+ * Stop an existing child process and every descendant discovered through
+ * operating-system process snapshots.
  *
- * The initial tree is retained before signaling so descendants remain
- * targetable after their parent exits or they are reparented. Polling refreshes
- * the process table, merges newly created descendants, and sends each one the
- * active shutdown signal once. macOS and other POSIX platforms use `ps`;
- * Windows uses the built-in PowerShell CIM process provider.
- *
- * Windows does not implement POSIX signal semantics. Node terminates processes
- * unconditionally for supported signals there, including `SIGTERM`.
+ * Use this when a caller must retain native `child_process.spawn` behavior but
+ * still needs the same process-tree shutdown policy as {@link spawn}.
  *
  * @param child - Root child process whose snapshotted tree should stop
  * @param options - Graceful and forced shutdown timeout policy
- * @param terminateSignal - Internal signal selected from the parent event or platform default
  */
+export async function shutdownProcessTree(
+  child: ChildProcess,
+  options: ChildProcessTerminationOptions = {},
+): Promise<void> {
+  await terminateProcessTree(child, options);
+}
+
+/** Stop a process tree with an internally selected graceful signal. */
 async function terminateProcessTree(
   child: ChildProcess,
   options: ChildProcessTerminationOptions = {},

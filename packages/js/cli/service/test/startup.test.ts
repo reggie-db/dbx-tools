@@ -143,6 +143,7 @@ describe("CLI service startup entries", () => {
 
     assert.match(content, /<string>com\.example\.gateway<\/string>/);
     assert.match(content, /<key>RunAtLoad<\/key>/);
+    assert.match(content, /<key>ExitTimeOut<\/key>\s+<integer>40<\/integer>/);
     assert.match(content, /<string>\/opt\/node\/bin\/node<\/string>/);
   });
 

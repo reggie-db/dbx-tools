@@ -7,6 +7,8 @@ import uvicorn
 
 from .main import app, load_graphiti_options
 
+_GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS = 5
+
 
 def main(argv: list[str] | None = None) -> None:
     """Start the environment-configured server, or print OpenAPI for ``docs``."""
@@ -29,6 +31,7 @@ def main(argv: list[str] | None = None) -> None:
         port=int(listen["port"]),
         loop="asyncio",
         access_log=False,
+        timeout_graceful_shutdown=_GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS,
     )
     failure = getattr(app.state, "failure", None)
     if failure is not None:

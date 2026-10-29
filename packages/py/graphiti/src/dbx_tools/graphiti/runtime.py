@@ -137,18 +137,38 @@ class GraphitiRuntime(AbstractAsyncContextManager["GraphitiRuntime"]):
             return
         started_at = perf_counter()
         _LOGGER.info("Graphiti runtime stopping")
-        if self.graphiti is not None:
-            await self.graphiti.close()
-            self.graphiti = None
-        if self.database is not None:
-            await self.database.close()
-            self.database = None
-        if self.clients is not None:
-            await self.clients.http.aclose()
-            self.clients = None
+        failure: BaseException | None = None
+        graphiti = self.graphiti
+        self.graphiti = None
+        if graphiti is not None:
+            try:
+                await graphiti.close()
+            except BaseException as error:
+                failure = error
+                _LOGGER.exception("Graphiti client cleanup failed")
+        database = self.database
+        self.database = None
+        if database is not None:
+            try:
+                await database.close()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+                _LOGGER.exception("Graphiti database cleanup failed")
+        clients = self.clients
+        self.clients = None
+        if clients is not None:
+            try:
+                await clients.http.aclose()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+                _LOGGER.exception("Graphiti model transport cleanup failed")
         _LOGGER.info(
             "Graphiti runtime stopped duration_ms=%.1f", (perf_counter() - started_at) * 1000
         )
+        if failure is not None:
+            raise failure
 
 
 async def create_runtime_clients(

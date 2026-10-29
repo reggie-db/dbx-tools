@@ -199,6 +199,7 @@ export async function createGraphitiChildProcess(
     "dbx_tools.graphiti",
   );
   const child = spawn(python.command, python.args, {
+    detached: false,
     env: _runtimeEnvironment(resolved),
     forwardTerminationSignals: false,
   });

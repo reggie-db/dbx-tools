@@ -4,6 +4,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { parseArgv } from "@dbx-tools/cli-args";
+import { shutdownProcessTree } from "@dbx-tools/core";
 import * as systrayModule from "systray2";
 import type SysTrayType from "systray2";
 import type { MenuItem } from "systray2";
@@ -18,7 +19,8 @@ import {
 import { defaultRuntimeContext, resolveServicePaths, type ServicePaths } from "./_paths.ts";
 import type { CliServiceCommand, CliServiceDefinition, CliServiceMenuItem } from "./definition.ts";
 
-const CHILD_STOP_TIMEOUT_MILLISECONDS = 5_000;
+const CHILD_TERMINATE_TIMEOUT_MILLISECONDS = 30_000;
+const CHILD_KILL_TIMEOUT_MILLISECONDS = 5_000;
 const CliServiceHostOptionsSchema = z.object({
   serviceConfig: z
     .string()
@@ -257,16 +259,10 @@ async function runCliServiceHost(configFile: string): Promise<void> {
 }
 
 async function stopProcess(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
-  child.kill("SIGTERM");
-  const timedOut = new Promise<"timeout">((resolve) => {
-    setTimeout(() => resolve("timeout"), CHILD_STOP_TIMEOUT_MILLISECONDS);
+  await shutdownProcessTree(child, {
+    terminateTimeout: CHILD_TERMINATE_TIMEOUT_MILLISECONDS,
+    killTimeout: CHILD_KILL_TIMEOUT_MILLISECONDS,
   });
-  if ((await Promise.race([exited, timedOut])) === "timeout") {
-    child.kill("SIGKILL");
-    await exited;
-  }
 }
 
 async function stopTray(tray: ServiceTray): Promise<void> {

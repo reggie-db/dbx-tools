@@ -240,12 +240,24 @@ def _open_embedded_server(path: Path) -> embedded_postgres.PostgresServer:
     """Open a counted embedded PostgreSQL handle for deterministic cleanup."""
     try:
         import embedded_postgres
+        from embedded_postgres.utils import process_is_running
     except ImportError as error:
         raise RuntimeError(
             "Embedded Graphiti storage requires dbx-tools-graphiti[dev]; "
             "configure databaseUrl for Lakebase or external PostgreSQL instead"
         ) from error
-    return embedded_postgres.get_server(path, cleanup_mode="stop").__enter__()
+    server = embedded_postgres.get_server(path, cleanup_mode="stop").__enter__()
+    try:
+        with server._lock:
+            handles = server.global_process_id_list
+            pids = handles.get()
+            live_pids = [pid for pid in pids if process_is_running(pid)]
+            if live_pids != pids:
+                handles.put(live_pids)
+    except BaseException:
+        server.__exit__(None, None, None)
+        raise
+    return server
 
 
 def _uses_lakebase_credentials(address: str) -> bool:
