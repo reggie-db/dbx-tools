@@ -73,6 +73,11 @@ direct Databricks embeddings route and are not translated.
 The gateway rejects stateful Responses options it cannot preserve, including
 `previous_response_id`, `store: true`, and `background: true`.
 
+Explicit `temperature: null` is omitted. For Databricks models with published
+models.dev metadata, unsupported temperatures are omitted and supported values
+are clamped to Databricks' `0..2` range. Unknown custom endpoints keep finite
+numeric temperatures unchanged.
+
 Web-search and custom-tool requests use a direct route only when the discovered
 model advertises the required capability. OpenAI model-list
 `capabilities.web_search` and Codex `supports_search_tool` use that same
