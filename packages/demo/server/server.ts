@@ -441,9 +441,9 @@ await createApp({
       // Agent Mode feedback goes directly to Genie. If Agent Mode is disabled,
       // auto falls back to the deployed MLflow experiment and OTLP sidecar.
       feedbackMode: "auto",
-      // Native Genie questions remain available without adding a second model
-      // call after every answer and delaying the terminal stream chunk.
-      followUpSuggestions: "genie",
+      // Prefer native Genie questions when available. Agent Mode currently emits
+      // none, so ChatFast generates grounded fallback questions after the answer.
+      followUpSuggestions: true,
       agents: { support },
       defaultAgent: "support",
       genieAgentMode: true,

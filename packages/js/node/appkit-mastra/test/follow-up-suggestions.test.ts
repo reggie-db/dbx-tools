@@ -34,6 +34,52 @@ describe("follow-up suggestion config", () => {
 });
 
 describe("native Mastra output integration", () => {
+  test("auto generates fallback questions when Genie supplies none", async () => {
+    const config = { followUpSuggestions: true } satisfies MastraPluginConfig;
+    const requestContext = new RequestContext();
+    requestContext.setRaw(FOLLOW_UP_RUN_ID_KEY, "run-no-native");
+    requestContext.setRaw(FOLLOW_UP_USER_TEXT_KEY, "How did revenue change?");
+    requestContext.setRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY, []);
+    let received: SuggestFollowUpsOptions | undefined;
+    const messageList = new MessageList().add(
+      {
+        id: "answer-no-native",
+        role: "assistant",
+        parts: [{ type: "text", text: "Revenue increased by 12%." }],
+      },
+      "response",
+    );
+    const processor = buildFollowUpSuggestionsProcessor(config, async (_config, options) => {
+      received = options;
+      return ["Which region contributed most to the increase?"];
+    });
+
+    await processor?.processOutputResult?.({
+      result: {
+        text: "Revenue increased by 12%.",
+        finishReason: "stop",
+        steps: [],
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      },
+      messageList,
+      requestContext,
+    } as never);
+
+    expect(received?.nativeQuestions).toBeUndefined();
+    expect(
+      messageList
+        .get.response.db()
+        .at(-1)
+        ?.content.parts.find((part) => part.type === FOLLOW_UP_SUGGESTIONS_PART_TYPE),
+    ).toMatchObject({
+      type: FOLLOW_UP_SUGGESTIONS_PART_TYPE,
+      data: {
+        questions: ["Which region contributed most to the increase?"],
+        source: "model",
+      },
+    });
+  });
+
   test("auto persists and streams generated questions after considering Genie", async () => {
     const config = { followUpSuggestions: true } satisfies MastraPluginConfig;
     const requestContext = new RequestContext();
