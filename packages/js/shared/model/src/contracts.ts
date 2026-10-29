@@ -200,6 +200,7 @@ export const ModelCapabilitiesSchema = z
     reasoning: z.boolean().describe("True when the model supports explicit reasoning controls."),
     tools: z.boolean().describe("True when the model supports tool calling."),
     structuredOutput: z.boolean().describe("True when the model supports structured output."),
+    temperature: z.boolean().describe("True when the model accepts temperature sampling."),
   })
   .describe("Published capabilities resolved for one model identity.");
 

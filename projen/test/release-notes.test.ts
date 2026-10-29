@@ -34,11 +34,25 @@ function fixture(): string {
 
 describe("release notes", () => {
   it("appends trimmed custom instructions to the Genie prompt", () => {
-    const prompt = releaseNotesPrompt("  Focus on operator-visible changes.  ");
+    const prompt = releaseNotesPrompt({
+      instructions: "  Focus on operator-visible changes.  ",
+      prefix: "v",
+      successfulTag: "v1.0.0",
+    });
 
-    assert.match(prompt, /Compare HEAD and the working tree/);
+    assert.match(prompt, /Compare v1\.0\.0\.\.HEAD plus the working tree/);
+    assert.match(prompt, /newer v\* tags and their release-note files as failed release attempts/);
+    assert.match(prompt, /Do not reduce the notes to retry-only deployment or workflow fixes/);
     assert.match(prompt, /do not run tests or other validation commands/);
     assert.match(prompt, /Additional instructions:\nFocus on operator-visible changes\.$/);
+  });
+
+  it("does not assume the newest tag deployed when no successful baseline exists", () => {
+    const prompt = releaseNotesPrompt({ prefix: "release-" });
+
+    assert.match(prompt, /No successful GitHub release workflow baseline was found/);
+    assert.match(prompt, /Do not assume the latest release-\* tag deployed successfully/);
+    assert.match(prompt, /produce cumulative notes/);
   });
 
   it("keeps Genie output when exec succeeds and writes a file", () => {
@@ -47,6 +61,7 @@ describe("release notes", () => {
       const destination = writeReleaseNotes({
         prefix: "v",
         root,
+        successfulTag: "v1.0.0",
         version: "1.0.1",
         runGenie: (args) => {
           assert.deepEqual(args.slice(0, 7), [
@@ -59,6 +74,7 @@ describe("release notes", () => {
             "-o",
           ]);
           assert.equal(args[7], "docs/releases/v1.0.1.md");
+          assert.match(args[8]!, /Compare v1\.0\.0\.\.HEAD plus the working tree/);
           writeFileSync(join(root, args[7]!), "# Release 1.0.1\n\nGenie wrote this.\n");
           return true;
         },
@@ -77,6 +93,7 @@ describe("release notes", () => {
         content: "# Release 1.0.1\n\nSupplied notes.",
         prefix: "v",
         root,
+        successfulTag: "v1.0.0",
         version: "1.0.1",
         runGenie: () => assert.fail("Genie must not run for supplied notes"),
       });
@@ -109,6 +126,7 @@ describe("release notes", () => {
       const destination = writeReleaseNotes({
         prefix: "v",
         root,
+        successfulTag: "v1.0.0",
         version: "1.0.1",
         runGenie: () => false,
       });

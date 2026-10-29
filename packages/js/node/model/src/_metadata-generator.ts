@@ -64,6 +64,7 @@ const ModelsDevModelSchema = z
       .boolean()
       .optional()
       .describe("Whether the model supports structured output."),
+    temperature: z.boolean().optional().describe("Whether the model accepts temperature."),
     modalities: z
       .object({
         input: z.array(z.string()).describe("Accepted input modalities."),
@@ -185,8 +186,10 @@ export function parseModelsDev(
   const reasoning = new Set<string>();
   const tools = new Set<string>();
   const structuredOutput = new Set<string>();
+  const temperatureSupported = new Set<string>();
+  const temperatureUnsupported = new Set<string>();
 
-  for (const provider of Object.values(providers)) {
+  for (const [providerId, provider] of Object.entries(providers)) {
     for (const [catalogueId, model] of Object.entries(provider.models)) {
       const keys = externalModelKeys(catalogueId, model.id, model.canonical_model_id);
       if (keys.length === 0) continue;
@@ -195,6 +198,10 @@ export function parseModelsDev(
         if (model.reasoning === true) reasoning.add(key);
         if (model.tool_call === true) tools.add(key);
         if (model.structured_output === true) structuredOutput.add(key);
+        if (providerId === "databricks") {
+          if (model.temperature === true) temperatureSupported.add(key);
+          if (model.temperature === false) temperatureUnsupported.add(key);
+        }
       }
     }
   }
@@ -208,6 +215,8 @@ export function parseModelsDev(
       reasoning: [...reasoning].sort(),
       tools: [...tools].sort(),
       structuredOutput: [...structuredOutput].sort(),
+      temperatureSupported: [...temperatureSupported].sort(),
+      temperatureUnsupported: [...temperatureUnsupported].sort(),
     },
   };
 }

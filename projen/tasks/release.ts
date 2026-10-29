@@ -81,6 +81,18 @@ export type ReleaseGithubActionsWatcher = (
   options: WatchReleaseGithubActionsOptions,
 ) => Promise<void>;
 
+/** Inputs required to find the newest successfully deployed release tag. */
+export interface ResolveSuccessfulReleaseTagOptions {
+  readonly account: ProjectGhAccount;
+  readonly prefix: string;
+  readonly root: string;
+}
+
+/** Successful release lookup boundary replaceable by release tests. */
+export type SuccessfulReleaseTagResolver = (
+  options: ResolveSuccessfulReleaseTagOptions,
+) => string | undefined;
+
 function githubRepository(account: ProjectGhAccount): string {
   return account.host === "github.com"
     ? account.remote.repository
@@ -144,6 +156,61 @@ function reportGithubProgress(
     previous.set(entry.key, state);
     logger.info(`${githubProgressMarker(entry)} ${entry.label}`);
   }
+}
+
+/** Find the newest release tag whose GitHub Actions release workflow succeeded. */
+export function resolveSuccessfulReleaseTag(
+  options: ResolveSuccessfulReleaseTagOptions,
+): string | undefined {
+  const { account, prefix, root } = options;
+  const output = captureTaskCommand(
+    root,
+    "gh",
+    [
+      "run",
+      "list",
+      "--repo",
+      githubRepository(account),
+      "--workflow",
+      RELEASE_WORKFLOW_FILE,
+      "--event",
+      "push",
+      "--status",
+      "success",
+      "--limit",
+      "100",
+      "--json",
+      "databaseId,headBranch,headSha,status,url",
+    ],
+    { env: account.env, stderr: "inherit" },
+  );
+  const parsed = z.array(GithubReleaseRunSchema).safeParse(parse(output, []));
+  if (!parsed.success) {
+    logger.warn("GitHub returned invalid successful release workflow metadata", {
+      error: parsed.error.message,
+      repository: account.remote.repository,
+    });
+    return undefined;
+  }
+  for (const run of parsed.data) {
+    if (!run.headBranch.startsWith(prefix)) continue;
+    const tagHead = gitHead(root, `refs/tags/${run.headBranch}^{}`);
+    if (tagHead !== run.headSha) continue;
+    if (!taskCommandSucceeds(root, "git", ["merge-base", "--is-ancestor", tagHead, "HEAD"])) {
+      continue;
+    }
+    logger.info("using successful GitHub release as the release-note baseline", {
+      repository: account.remote.repository,
+      runId: run.databaseId,
+      tag: run.headBranch,
+      url: run.url,
+    });
+    return run.headBranch;
+  }
+  logger.info("no successful GitHub release baseline was found", {
+    repository: account.remote.repository,
+  });
+  return undefined;
 }
 
 /** Whether this release selection has remote work worth watching. */
@@ -482,11 +549,21 @@ export async function runRelease(
     readonly watchGithubActions?: boolean;
     readonly githubActionsWatcher?: ReleaseGithubActionsWatcher;
     readonly resolveGithubAccount?: typeof resolveProjectGhAccount;
+    readonly resolveSuccessfulReleaseTag?: SuccessfulReleaseTagResolver;
   },
 ): Promise<string> {
   const { branch, prefix, remote, root } = options;
   const selection = releaseStepSelection(options);
   const install = options.install ?? "auto";
+  let githubAccount: ProjectGhAccount | undefined;
+  let githubAccountResolved = false;
+  const getGithubAccount = (): ProjectGhAccount | undefined => {
+    if (!githubAccountResolved) {
+      githubAccount = (options.resolveGithubAccount ?? resolveProjectGhAccount)(root, { remote });
+      githubAccountResolved = true;
+    }
+    return githubAccount;
+  };
 
   if (options.releaseNotesText !== undefined && options.releaseNotesFile !== undefined) {
     throw new Error("--release-notes-text and --release-notes-file are mutually exclusive");
@@ -539,9 +616,25 @@ export async function runRelease(
     runTaskCommand(root, "bun", ["run", task]);
   }
   if ((options.releaseNotes ?? true) && (options.bump ?? true)) {
+    let successfulTag: string | undefined;
+    if (options.releaseNotesText === undefined && options.releaseNotesFile === undefined) {
+      const account = getGithubAccount();
+      if (account) {
+        successfulTag = (options.resolveSuccessfulReleaseTag ?? resolveSuccessfulReleaseTag)({
+          account,
+          prefix,
+          root,
+        });
+      } else {
+        logger.info("successful GitHub release baseline is unavailable: no authenticated account", {
+          remote,
+        });
+      }
+    }
     (options.writeReleaseNotes ?? writeReleaseNotes)({
       prefix,
       root,
+      successfulTag,
       version,
       content: options.releaseNotesText,
       file: options.releaseNotesFile,
@@ -619,9 +712,7 @@ export async function runRelease(
   }
 
   if (shouldWatchReleaseGithubActions(options, selection)) {
-    const account = (options.resolveGithubAccount ?? resolveProjectGhAccount)(root, {
-      remote,
-    });
+    const account = getGithubAccount();
     if (account) {
       await (options.githubActionsWatcher ?? watchReleaseGithubActions)({
         account,

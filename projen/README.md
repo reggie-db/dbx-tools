@@ -626,9 +626,14 @@ and profile are not recorded in the annotated tag.
 
 After bump and configured validation, release writes
 `docs/releases/vX.Y.Z.md` with `dbx genie exec -C "$PWD" --sandbox read-only
---ephemeral -o`. The standard prompt cannot run validation commands. Failures
-fall back to a short git-log summary. Notes are committed with the version bump,
-not stored in the annotated tag, and are omitted for an existing committed bump.
+--ephemeral -o`. It first finds the newest tag whose GitHub Actions release
+workflow succeeded, then asks Genie for cumulative notes from that deployed
+baseline through HEAD. Newer failed-release tags and their notes remain source
+material instead of shortening the delta to a retry-only workflow fix. The
+standard prompt cannot run validation commands. Failures fall back to a short
+git-log summary from the same successful baseline. Notes are committed with the
+version bump, not stored in the annotated tag, and are omitted for an existing
+committed bump.
 
 Automatic installation retains Projen's manifest-based install trigger; the
 other install modes force installation or reuse the current dependency tree.

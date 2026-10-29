@@ -77,6 +77,8 @@ export interface ModelsDevCapabilityCatalogue {
   readonly reasoning: readonly string[];
   readonly tools: readonly string[];
   readonly structuredOutput: readonly string[];
+  readonly temperatureSupported: readonly string[];
+  readonly temperatureUnsupported: readonly string[];
 }
 
 /** Build-generated models.dev capability and reasoning snapshot. */

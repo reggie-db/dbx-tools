@@ -9,6 +9,7 @@ import { parseProjectGhRemote, type ProjectGhAccount } from "@dbx-tools/core";
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
 import {
   refreshReleaseTagFromRemote,
+  resolveSuccessfulReleaseTag,
   runRelease,
   watchReleaseGithubActions,
 } from "../tasks/release.ts";
@@ -189,6 +190,76 @@ describe("direct release tags", () => {
       assert.match(readFileSync(calls, "utf8"), /run view 42 .*--log-failed/);
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the newest valid tag from successful GitHub release workflow runs", () => {
+    const { root } = fixture();
+    const executable = join(root, "gh");
+    const calls = join(root, "gh-calls");
+    try {
+      const successfulHead = git(root, "rev-parse", "HEAD");
+      git(root, "tag", "-a", "v1.0.0", "-m", "v1.0.0");
+      writeFileSync(join(root, "feature.txt"), "feature\n");
+      git(root, "add", ".");
+      git(root, "commit", "-m", "feat: unreleased change");
+      git(root, "tag", "-a", "v1.0.1", "-m", "v1.0.1");
+      writeFileSync(
+        executable,
+        [
+          "#!/usr/bin/env node",
+          'import { appendFileSync } from "node:fs";',
+          "const args = process.argv.slice(2);",
+          'appendFileSync(process.env.TEST_CALLS, `${args.join(" ")}\\n`);',
+          "console.log(process.env.TEST_RUNS);",
+          "",
+        ].join("\n"),
+      );
+      chmodSync(executable, 0o755);
+      const account: ProjectGhAccount = {
+        env: {
+          ...process.env,
+          PATH: `${root}:${process.env.PATH ?? ""}`,
+          TEST_CALLS: calls,
+          TEST_RUNS: JSON.stringify([
+            {
+              databaseId: 43,
+              headBranch: "v1.0.1",
+              headSha: "0000000000000000000000000000000000000000",
+              status: "completed",
+              url: "https://github.com/example/repo/actions/runs/43",
+            },
+            {
+              databaseId: 42,
+              headBranch: "v1.0.0",
+              headSha: successfulHead,
+              status: "completed",
+              url: "https://github.com/example/repo/actions/runs/42",
+            },
+          ]),
+        },
+        host: "github.com",
+        login: "release-user",
+        remote: { host: "github.com", repository: "example/repo" },
+        root,
+      };
+
+      assert.equal(resolveSuccessfulReleaseTag({ account, prefix: "v", root }), "v1.0.0");
+      const invocation = readFileSync(calls, "utf8");
+      assert.match(invocation, /run list .*--workflow release\.yml/);
+      assert.match(invocation, /--event push/);
+      assert.match(invocation, /--status success/);
+
+      assert.equal(
+        resolveSuccessfulReleaseTag({
+          account: { ...account, env: { ...account.env, TEST_RUNS: "[]" } },
+          prefix: "v",
+          root,
+        }),
+        undefined,
+      );
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
     }
   });
 
@@ -439,6 +510,7 @@ describe("direct release tags", () => {
   it("commits Genie or fallback release notes with the version bump", async () => {
     const { root } = fixture();
     let releaseNotesInstructions: string | undefined;
+    let releaseNotesSuccessfulTag: string | undefined;
     try {
       git(root, "tag", "-a", "v1.0.0", "-m", "v1.0.0");
       await runRelease({
@@ -448,8 +520,18 @@ describe("direct release tags", () => {
         remote: "origin",
         localPublish: false,
         releaseNotesInstructions: "Focus on operator-visible changes.",
-        writeReleaseNotes: ({ root: notesRoot, version, instructions }) => {
+        watchGithubActions: false,
+        resolveGithubAccount: () => ({
+          env: process.env,
+          host: "github.com",
+          login: "release-user",
+          remote: { host: "github.com", repository: "example/repo" },
+          root,
+        }),
+        resolveSuccessfulReleaseTag: () => "v1.0.0",
+        writeReleaseNotes: ({ root: notesRoot, version, instructions, successfulTag }) => {
           releaseNotesInstructions = instructions;
+          releaseNotesSuccessfulTag = successfulTag;
           const dest = join(notesRoot, "docs", "releases", `v${version}.md`);
           mkdirSync(join(notesRoot, "docs", "releases"), { recursive: true });
           writeFileSync(dest, `# Release ${version}\n\nGenie notes.\n`);
@@ -461,6 +543,7 @@ describe("direct release tags", () => {
         "# Release 1.0.1\n\nGenie notes.\n",
       );
       assert.equal(releaseNotesInstructions, "Focus on operator-visible changes.");
+      assert.equal(releaseNotesSuccessfulTag, "v1.0.0");
       assert.match(git(root, "ls-tree", "-r", "--name-only", "HEAD"), /docs\/releases\/v1.0.1.md/);
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });

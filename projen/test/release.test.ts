@@ -264,7 +264,7 @@ describe("release task contracts", () => {
     assert.doesNotMatch(driver, /applyPublishConfig\(manifestPath\)/);
     assert.match(driver, /import \{ delimiter,/);
     assert.doesNotMatch(driver, /split\(":"\)/);
-    assert.match(driver, /publishNpmArchive\(/);
+    assert.match(driver, /publishNpmArchives\(/);
     assert.doesNotMatch(driver, /runAsync\(dir, "bun", \["publish", \.\.\.publishArgs\]/);
     assert.doesNotMatch(driver, /restoreManifestMode|chmodSync|lstatSync/);
     const publisher = readFileSync(

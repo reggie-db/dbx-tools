@@ -229,6 +229,7 @@ export class CliService implements CliServiceLifecycle {
     const artifactBinDirectory = join(
       this.globalHomeDirectory,
       "bin",
+      "services",
       this.binaryName(this.definition, "service"),
       "versions",
       artifactId,

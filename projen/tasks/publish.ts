@@ -50,6 +50,7 @@ import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:pa
 import { log, mapConcurrent, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
+import { publishNpmArchives } from "./publish-npm.ts";
 import {
   TaskConcurrencyOptionSchema,
   TaskDirectoriesOptionSchema,
@@ -59,7 +60,7 @@ import {
 } from "./options.ts";
 import { runTaskCommand } from "../src/_task-command.ts";
 import { applyPublishConfig, packNpmPackage } from "../src/npm-packaging.ts";
-import { publishNpmArchive, readNpmArchiveIdentity } from "../src/npm-release.ts";
+import { readNpmArchiveIdentity } from "../src/npm-release.ts";
 import { recordedPackages } from "../src/packages.ts";
 
 const logger = log.logger("projen:publish");
@@ -212,58 +213,52 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     }
   }
 
-  logger.info(
-    `${output ? "packing" : dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
-  );
-  if (output) {
-    rmSync(output, { recursive: true, force: true });
-    mkdirSync(output, { recursive: true });
-  }
-  await mapConcurrent(
-    publishable,
-    async ({ dir, name, version: packageVersion, access }) => {
-      const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));
-      try {
-        const archive = packNpmPackage(dir, packed, path, applyPublishConfig);
-        const local = readNpmArchiveIdentity(archive);
-        if (local.name !== name || local.version !== packageVersion) {
-          throw new Error(
-            `Packed npm identity ${local.name}@${local.version} does not match ${name}@${packageVersion}`,
-          );
-        }
-        if (local.access !== access) {
-          throw new Error(
-            `Packed npm access ${String(local.access)} does not match ${String(access)} for ${name}`,
-          );
-        }
-        if (output) {
-          const destination = join(output, archive.split(/[\\/]/).at(-1)!);
+  logger.info(`packing ${publishable.length} packages with concurrency ${concurrency}`);
+  const archiveDirectory = output ?? mkdtempSync(join(tmpdir(), "projen-npm-publish-"));
+  if (output) rmSync(archiveDirectory, { recursive: true, force: true });
+  mkdirSync(archiveDirectory, { recursive: true });
+  try {
+    await mapConcurrent(
+      publishable,
+      async ({ dir, name, version: packageVersion, access }) => {
+        const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));
+        try {
+          const archive = packNpmPackage(dir, packed, path, applyPublishConfig);
+          const local = readNpmArchiveIdentity(archive);
+          if (local.name !== name || local.version !== packageVersion) {
+            throw new Error(
+              `Packed npm identity ${local.name}@${local.version} does not match ${name}@${packageVersion}`,
+            );
+          }
+          if (local.access !== access) {
+            throw new Error(
+              `Packed npm access ${String(local.access)} does not match ${String(access)} for ${name}`,
+            );
+          }
+          const destination = join(archiveDirectory, archive.split(/[\\/]/).at(-1)!);
           if (existsSync(destination)) {
             throw new Error(`Duplicate npm archive name: ${destination}`);
           }
           copyFileSync(archive, destination);
           logger.info(`packed ${name} @ ${packageVersion}`);
-          return;
+        } finally {
+          rmSync(packed, { recursive: true, force: true });
         }
-        const outcome = await publishNpmArchive({
-          archive,
-          identity: local,
-          cwd: dir,
-          dryRun,
-          env: { ...process.env, PATH: path },
-          registry,
-        });
-        if (outcome === "skipped") {
-          logger.info(`skip published ${name} @ ${packageVersion}`);
-          return;
-        }
-        logger.info(`${dryRun ? "dry-run published" : "published"} ${name} @ ${packageVersion}`);
-      } finally {
-        rmSync(packed, { recursive: true, force: true });
-      }
-    },
-    { concurrency, errorMode: "settle" },
-  );
+      },
+      { concurrency, errorMode: "settle" },
+    );
+    if (!output) {
+      await publishNpmArchives({
+        concurrency,
+        directory: archiveDirectory,
+        dryRun,
+        registry,
+        version,
+      });
+    }
+  } finally {
+    if (!output) rmSync(archiveDirectory, { recursive: true, force: true });
+  }
   logger.success(
     `${output || dryRun ? "packed" : "published"} ${publishable.length} packages${output ? ` to ${output}` : ""}`,
   );

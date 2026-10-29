@@ -5,9 +5,11 @@
  */
 
 import { log } from "@dbx-tools/shared-core";
+import { modelTemperatureSupportFor } from "@dbx-tools/model";
 import {
   ModelClass,
   ModelClassSchema,
+  type ServingEndpointSummary,
   type ModelClass as ModelClassType,
 } from "@dbx-tools/shared-model";
 import type {
@@ -29,6 +31,8 @@ import { translateGatewayRequest } from "./translation.ts";
 import { fetchDatabricks, gatewayResponseHeaders } from "./transport.ts";
 
 const logger = log.logger("appkit/model-gateway");
+const DATABRICKS_TEMPERATURE_MIN = 0;
+const DATABRICKS_TEMPERATURE_MAX = 2;
 
 /** Model gateway runtime configuration. */
 export interface ModelGatewayOptions {
@@ -138,11 +142,15 @@ export class ModelGateway {
       upstreamProtocol: route.upstreamProtocol,
     });
 
-    const adapted = adaptInferenceReasoning(target.id, sanitizedBody);
+    const temperatureBody = adaptInferenceTemperature(
+      target.endpoint ?? target.id,
+      sanitizedBody,
+    );
+    const adapted = adaptInferenceReasoning(target.id, temperatureBody);
     let response = await this.forward(route, adapted.body, headers, signal);
     const retryBody = await learnAndAdaptReasoningRetry({
       model: target.id,
-      body: sanitizedBody,
+      body: temperatureBody,
       response,
       previousWireEffort: adapted.wireEffort,
     });
@@ -184,14 +192,40 @@ export class ModelGateway {
   }
 }
 
-/** Remove an explicit null temperature while preserving omitted and numeric values. */
+/** Remove null temperature and reject explicit nonnumeric values. */
 export function sanitizeInferenceBody(
   body: Readonly<Record<string, unknown>>,
 ): Readonly<Record<string, unknown>> {
-  if (body.temperature !== null) return body;
+  if (!Object.hasOwn(body, "temperature")) return body;
+  if (body.temperature !== null) {
+    if (typeof body.temperature !== "number" || !Number.isFinite(body.temperature)) {
+      throw new ModelGatewayError(400, "temperature must be a finite number, null, or omitted");
+    }
+    return body;
+  }
   const sanitized = { ...body };
   delete sanitized.temperature;
   return sanitized;
+}
+
+/** Apply published Databricks temperature support and range policy. */
+export function adaptInferenceTemperature(
+  model: string | ServingEndpointSummary,
+  body: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  if (!Object.hasOwn(body, "temperature") || typeof body.temperature !== "number") return body;
+  const supported = modelTemperatureSupportFor(model);
+  if (supported === undefined) return body;
+  if (!supported) {
+    const adapted = { ...body };
+    delete adapted.temperature;
+    return adapted;
+  }
+  const temperature = Math.min(
+    DATABRICKS_TEMPERATURE_MAX,
+    Math.max(DATABRICKS_TEMPERATURE_MIN, body.temperature),
+  );
+  return temperature === body.temperature ? body : { ...body, temperature };
 }
 
 /** Resolve request, header, configured, and protocol model-selection inputs. */

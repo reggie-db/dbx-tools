@@ -93,6 +93,7 @@ interface MetadataIndex {
   readonly reasoningDocs: ReasoningModelCatalogue;
   readonly modelParamsReasoning: ReasoningModelCatalogue;
   readonly learnedReasoning: ReasoningModelCatalogue;
+  readonly temperatureUnsupported: ReadonlySet<string>;
 }
 
 type CapabilitySets = ModelCapabilityCatalogue;
@@ -241,6 +242,7 @@ function buildIndex(input: {
       ]),
       tools: new Set(input.modelsDev.tools),
       structuredOutput: new Set(input.modelsDev.structuredOutput),
+      temperature: new Set(input.modelsDev.temperatureSupported),
     },
     rateLimits: new Map(Object.entries(input.rateLimits)),
     reasoning: Object.freeze({
@@ -250,6 +252,7 @@ function buildIndex(input: {
     reasoningDocs,
     modelParamsReasoning,
     learnedReasoning: freezeLearnedCatalogue(input.learnedReasoning),
+    temperatureUnsupported: new Set(input.modelsDev.temperatureUnsupported),
   };
 }
 
@@ -438,7 +441,19 @@ export function modelCapabilitiesFor(model: string | ServingEndpointSummary): Mo
     tools:
       keys.some((key) => capabilities.tools.has(key)) || identities.some(modelSupportsTools),
     structuredOutput: keys.some((key) => capabilities.structuredOutput.has(key)),
+    temperature: modelTemperatureSupportFor(model) === true,
   };
+}
+
+/** Resolve explicit Databricks temperature support, or undefined when unpublished. */
+export function modelTemperatureSupportFor(
+  model: string | ServingEndpointSummary,
+): boolean | undefined {
+  const index = metadataIndex();
+  const keys = modelIdentities(model).flatMap((identity) => modelKey(identity) ?? []);
+  if (keys.some((key) => index.temperatureUnsupported.has(key))) return false;
+  if (keys.some((key) => index.capabilities.temperature.has(key))) return true;
+  return undefined;
 }
 
 /** Resolve published ITPM, OTPM, and QPH limits from a model identity. */
@@ -574,6 +589,8 @@ function mergeModelsDevData(input: {
     reasoning: capability("reasoning"),
     tools: capability("tools"),
     structuredOutput: capability("structuredOutput"),
+    temperatureSupported: capability("temperatureSupported"),
+    temperatureUnsupported: capability("temperatureUnsupported"),
   };
 }
 

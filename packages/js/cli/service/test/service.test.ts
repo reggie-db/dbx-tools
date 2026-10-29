@@ -18,6 +18,12 @@ describe("CLI service lifecycle", () => {
     await writeFile(commandEntrypoint, "");
     await writeFile(trayExecutable, "#!/bin/sh\nexit 0\n");
     await chmod(trayExecutable, 0o755);
+    await mkdir(join(globalHomeDirectory, "bin"), { recursive: true });
+    await writeFile(join(globalHomeDirectory, "bin", "example-gateway"), "legacy host");
+    await writeFile(
+      join(globalHomeDirectory, "bin", "example-gateway-command"),
+      "legacy command",
+    );
     const compiled: string[] = [];
     const pythonInstalls: unknown[] = [];
     const service = new CliService(
@@ -88,6 +94,7 @@ describe("CLI service lifecycle", () => {
       join(
         globalHomeDirectory,
         "bin",
+        "services",
         "example-gateway",
         "versions",
         artifactId,
@@ -99,6 +106,7 @@ describe("CLI service lifecycle", () => {
       join(
         globalHomeDirectory,
         "bin",
+        "services",
         "example-gateway",
         "versions",
         artifactId,
