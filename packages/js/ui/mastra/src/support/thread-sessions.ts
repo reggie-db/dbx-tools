@@ -1,6 +1,12 @@
 import type { RequestContext } from "@mastra/client-js";
 import type { UIMessage } from "ai";
-import type { ChatStatus, MessageFeedback, PendingApproval, QueuedSteer } from "../react/types.ts";
+import {
+  isActiveChatStatus,
+  type ChatStatus,
+  type MessageFeedback,
+  type PendingApproval,
+  type QueuedSteer,
+} from "../react/types.ts";
 
 /** A queued steer plus the application context captured when it was submitted. */
 export type SessionQueuedSteer = QueuedSteer & {
@@ -60,9 +66,9 @@ export function createThreadSession(): ThreadSession {
   };
 }
 
-/** Return whether a thread has a submitted or actively streaming run. */
+/** Return whether a thread still owns an active run. */
 export function isSessionRunning(session: ThreadSession): boolean {
-  return session.status === "submitted" || session.status === "streaming";
+  return isActiveChatStatus(session.status);
 }
 
 /** Return the newest user message in a transcript or turn. */

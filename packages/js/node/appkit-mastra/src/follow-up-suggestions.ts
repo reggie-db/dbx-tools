@@ -11,13 +11,12 @@ import {
   FollowUpSuggestionsPartDataSchema,
 } from "@dbx-tools/shared-mastra";
 import { ModelClass } from "@dbx-tools/shared-model";
-import { Agent } from "@mastra/core/agent";
 import type { MessageList } from "@mastra/core/agent/message-list";
-import type { MastraModelConfig } from "@mastra/core/llm";
 import type { OutputProcessor } from "@mastra/core/processors";
 import type { RequestContext } from "@mastra/core/request-context";
 import type { DataChunkType, LLMStepResult, MastraStreamTransform } from "@mastra/core/stream";
 import { createTool } from "@mastra/core/tools";
+import { generateText, Output } from "ai";
 import { z } from "zod";
 
 import type { FollowUpSuggestionsConfig, MastraPluginConfig } from "./config.ts";
@@ -117,7 +116,6 @@ const FOLLOW_UP_INSTRUCTIONS = [
   TYPOGRAPHY_RULE,
 ].join(" ");
 
-const suggestionAgents = new WeakMap<MastraPluginConfig, Agent>();
 const generatedRunParts = new Map<string, FollowUpSuggestionsPartData>();
 const GENERATED_RUN_PART_TTL_MS = 5 * 60_000;
 
@@ -133,28 +131,6 @@ export function resolveFollowUpSuggestionsConfig(
     timeoutMs: Math.min(30_000, Math.max(1_000, configured.timeoutMs ?? DEFAULT_TIMEOUT_MS)),
     exposeTool: configured.exposeTool ?? false,
   };
-}
-
-function followUpModel(
-  config: MastraPluginConfig,
-): (args: { requestContext: RequestContext }) => Promise<MastraModelConfig> {
-  return ({ requestContext }) =>
-    buildModel(config, requestContext, { modelClass: FOLLOW_UP_MODEL_CLASS });
-}
-
-function suggestionAgent(config: MastraPluginConfig): Agent {
-  let agent = suggestionAgents.get(config);
-  if (!agent) {
-    agent = new Agent({
-      id: "follow-up-suggestions",
-      name: "Follow-up suggestions",
-      description: "Generates grounded next questions using the fast chat model.",
-      instructions: FOLLOW_UP_INSTRUCTIONS,
-      model: followUpModel(config),
-    });
-    suggestionAgents.set(config, agent);
-  }
-  return agent;
 }
 
 function normalizedQuestion(value: string): string {
@@ -255,12 +231,17 @@ export async function suggestFollowUps(
     "Maximum questions": String(settings.limit),
   });
   try {
-    const result = await suggestionAgent(config).generate(prompt, {
-      structuredOutput: { schema: FollowUpOutputSchema },
-      ...(options.requestContext ? { requestContext: options.requestContext } : {}),
+    const model = await buildModel(config, options.requestContext, {
+      modelClass: FOLLOW_UP_MODEL_CLASS,
+    });
+    const result = await generateText({
+      model,
+      instructions: FOLLOW_UP_INSTRUCTIONS,
+      prompt,
+      output: Output.object({ schema: FollowUpOutputSchema }),
       abortSignal,
     });
-    const parsed = FollowUpOutputSchema.parse(result.object);
+    const parsed = FollowUpOutputSchema.parse(result.output);
     return acceptedQuestions(parsed.questions, options, settings.limit);
   } catch (error) {
     if (!options.abortSignal?.aborted) {

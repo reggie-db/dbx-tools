@@ -25,7 +25,7 @@ export { DatabricksModelRegistry } from "./src/registry.ts";
 export type { ModelRegistryResolveOptions, ModelRegistry, ModelRegistryOptions } from "./src/registry.ts";
 export { UnsupportedGatewayFeatureError, resolveRoute, requestedFeatures, isCodexOriginator } from "./src/router.ts";
 export { sendHealth, sendModels, sendInference } from "./src/routes.ts";
-export { SmartRouterProbeRecordSchema, SmartRouterError, AppKitSmartRouterStore, AppKitSmartRouterProbeStore, SmartRouterService, smartRouterCandidates, SmartRouterContextBuilder, SmartModelRouter, smartRouterTurnKey, SMART_ROUTER_DEFAULT_SETTINGS } from "./src/smart-router.ts";
+export { SMART_ROUTER_DEFAULT_SETTINGS, SmartRouterProbeRecordSchema, SmartRouterError, AppKitSmartRouterStore, AppKitSmartRouterProbeStore, SmartRouterService, smartRouterCandidates, SmartRouterContextBuilder, SmartModelRouter, smartRouterTurnKey } from "./src/smart-router.ts";
 export type { SmartRouterSettings, SmartRouterCandidate, SmartRouterSelection, SmartRouterStore, SmartRouterProbeRecord, SmartRouterProbeStore, SmartRouterResult, SmartRouterContext, SmartRouterSelectOptions } from "./src/smart-router.ts";
 export { translateGatewayRequest } from "./src/translation.ts";
 export { fetchDatabricks, directDatabricksRequestBody, gatewayResponseHeaders } from "./src/transport.ts";

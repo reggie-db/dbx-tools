@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WorkspaceClient } from "@databricks/appkit";
-import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { ModelClass, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY } from "../src/config.ts";
@@ -13,6 +13,7 @@ import {
   SMART_ROUTER_ENDPOINT,
   servingApi,
 } from "../src/model.ts";
+import { MASTRA_MODEL_OVERRIDE_KEY, MASTRA_SMART_ROUTER_INPUT_KEY } from "../src/serving.ts";
 
 describe("Mastra serving API selection", () => {
   it("routes Responses-only models through the native Responses provider", () => {
@@ -152,5 +153,106 @@ describe("Mastra serving API selection", () => {
     } finally {
       globalThis.fetch = previousFetch;
     }
+  });
+
+  it("keeps internal model classes independent from the request model override", async () => {
+    const previousEndpoint = process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+    process.env.DATABRICKS_SERVING_ENDPOINT_NAME = "smart-router";
+    const client = {
+      config: {
+        getHost: () => Promise.resolve(new URL("https://example.cloud.databricks.com")),
+        authenticate: (headers: Headers) => {
+          headers.set("authorization", "Bearer test");
+          return Promise.resolve();
+        },
+      },
+      servingEndpoints: {
+        async *list() {
+          yield {
+            name: "databricks-gpt-6-1-sol",
+            task: "llm/v1/chat",
+          };
+          yield {
+            name: "databricks-gpt-5-nano",
+            task: "llm/v1/chat",
+          };
+        },
+      },
+    } as unknown as WorkspaceClient;
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_MODEL_OVERRIDE_KEY, "smart-router");
+    requestContext.set(MASTRA_SMART_ROUTER_INPUT_KEY, {
+      messages: [{ role: "user", content: "Use the primary router only for this answer" }],
+    });
+
+    try {
+      const model = await buildModel({}, requestContext, {
+        modelClass: ModelClass.ChatFast,
+        workspaceClient: client,
+      });
+
+      assert.equal(model.modelId, "databricks-gpt-5-nano");
+    } finally {
+      if (previousEndpoint === undefined) delete process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+      else process.env.DATABRICKS_SERVING_ENDPOINT_NAME = previousEndpoint;
+    }
+  });
+
+  it("never sends the virtual Smart Router id to Model Serving", async () => {
+    const client = {
+      config: {
+        getHost: () => Promise.resolve(new URL("https://example.cloud.databricks.com")),
+        authenticate: (headers: Headers) => {
+          headers.set("authorization", "Bearer test");
+          return Promise.resolve();
+        },
+      },
+    } as unknown as WorkspaceClient;
+
+    await assert.rejects(
+      buildModel({}, undefined, {
+        modelId: "smart-router",
+        workspaceClient: client,
+      }),
+      /Smart Router requires task input/,
+    );
+  });
+
+  it("reuses the credential-scoped catalogue for internal model classes", async () => {
+    let catalogueCalls = 0;
+    const identity = `user-${crypto.randomUUID()}`;
+    const host = new URL(`https://${crypto.randomUUID()}.cloud.databricks.com`);
+    const client = {
+      config: {
+        getHost: () => Promise.resolve(host),
+        authenticate: (headers: Headers) => {
+          headers.set("authorization", "Bearer test");
+          return Promise.resolve();
+        },
+      },
+      servingEndpoints: {
+        async *list() {
+          catalogueCalls += 1;
+          yield {
+            name: "databricks-gpt-5-nano",
+            task: "llm/v1/chat",
+          };
+        },
+      },
+    } as unknown as WorkspaceClient;
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_USER_KEY, {
+      id: identity,
+      executionContext: {
+        client,
+        isUserContext: true,
+        userId: identity,
+      },
+    });
+
+    await buildModel({}, requestContext, { modelClass: ModelClass.ChatFast });
+    await buildModel({}, requestContext, { modelClass: ModelClass.ChatFast });
+
+    assert.equal(catalogueCalls, 1);
   });
 });

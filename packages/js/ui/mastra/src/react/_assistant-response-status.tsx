@@ -1,13 +1,13 @@
 import { Spinner } from "@databricks/appkit-ui/react";
 
-import type { ChatStatus } from "./types.ts";
+import { isRespondingChatStatus, type ChatStatus } from "./types.ts";
 
 /** Whether an assistant bubble should show its active-response status. */
 export const shouldShowAssistantResponseStatus = (
   isLast: boolean,
   status: ChatStatus,
   hasVisibleResponse: boolean,
-): boolean => isLast && hasVisibleResponse && (status === "submitted" || status === "streaming");
+): boolean => isLast && hasVisibleResponse && isRespondingChatStatus(status);
 
 /** Compact progress affordance for an active assistant response. */
 export const AssistantResponseSpinner = () => (

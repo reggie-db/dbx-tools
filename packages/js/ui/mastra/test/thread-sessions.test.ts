@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 import type { UIMessage } from "ai";
 import type { QueuedSteer } from "../src/react/types.ts";
 import {
+  createThreadSession,
   enqueueSteer,
   interruptedTurnMessages,
+  isSessionRunning,
   removeSteer,
   reorderSteers,
 } from "../src/support/thread-sessions.ts";
@@ -89,5 +91,12 @@ describe("steer queue", () => {
     };
 
     assert.deepEqual(interruptedTurnMessages([original, partial], steer), [original, steer]);
+  });
+});
+
+describe("thread session lifecycle", () => {
+  it("keeps finishing runs active for queueing and ownership", () => {
+    assert.equal(isSessionRunning({ ...createThreadSession(), status: "finishing" }), true);
+    assert.equal(isSessionRunning({ ...createThreadSession(), status: "ready" }), false);
   });
 });

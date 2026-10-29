@@ -24,6 +24,7 @@ describe("AssistantResponseSpinner", () => {
     assert.equal(shouldShowAssistantResponseStatus(true, "streaming", true), true);
     assert.equal(shouldShowAssistantResponseStatus(true, "streaming", false), false);
     assert.equal(shouldShowAssistantResponseStatus(false, "streaming", true), false);
+    assert.equal(shouldShowAssistantResponseStatus(true, "finishing", true), false);
     assert.equal(shouldShowAssistantResponseStatus(true, "ready", true), false);
     assert.equal(shouldShowAssistantResponseStatus(true, "error", true), false);
   });

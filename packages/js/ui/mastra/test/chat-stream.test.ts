@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { MLFLOW_TRACE_PART_TYPE } from "@dbx-tools/shared-mastra";
+import { MLFLOW_TRACE_PART_TYPE, RESPONSE_COMPLETE_PART_TYPE } from "@dbx-tools/shared-mastra";
 import type { UIMessageChunk } from "ai";
 
 import {
   closeOnTerminalChunk,
+  chatStatusForChunk,
   readMlflowTracePart,
   waitForTerminalChunk,
 } from "../src/react/chat-stream.ts";
@@ -53,6 +54,60 @@ describe("chat stream completion", () => {
     await reader.cancel("stop");
 
     assert.equal(cancelled, true);
+  });
+
+  it("does not treat a step boundary as terminal", async () => {
+    let terminal = false;
+    const upstream = new ReadableStream<UIMessageChunk>({
+      start(controller) {
+        controller.enqueue({ type: "start-step" });
+        controller.enqueue({ type: "finish-step" });
+        controller.enqueue({ type: "finish", finishReason: "stop" });
+      },
+    });
+
+    const chunks: UIMessageChunk[] = [];
+    for await (const chunk of closeOnTerminalChunk(upstream, () => (terminal = true))) {
+      chunks.push(chunk);
+    }
+
+    assert.deepEqual(
+      chunks.map((chunk) => chunk.type),
+      ["start-step", "finish-step", "finish"],
+    );
+    assert.equal(terminal, true);
+  });
+
+  it("enters finishing only for the response-complete marker", () => {
+    assert.equal(chatStatusForChunk({ type: "finish-step" }), undefined);
+    assert.equal(
+      chatStatusForChunk({
+        type: RESPONSE_COMPLETE_PART_TYPE,
+        data: null,
+        transient: true,
+      } as UIMessageChunk),
+      "finishing",
+    );
+  });
+
+  it("settles to ready on the real terminal chunk", () => {
+    assert.equal(chatStatusForChunk({ type: "finish", finishReason: "stop" }), "ready");
+    assert.equal(chatStatusForChunk({ type: "abort", reason: "interrupted" }), "ready");
+  });
+
+  it("rejects a stream that closes before finish or abort", async () => {
+    const upstream = new ReadableStream<UIMessageChunk>({
+      start(controller) {
+        controller.enqueue({ type: "start", messageId: "assistant-1" });
+        controller.close();
+      },
+    });
+
+    await assert.rejects(async () => {
+      for await (const _chunk of closeOnTerminalChunk(upstream)) {
+        // Drain until the wrapper detects the missing terminal chunk.
+      }
+    }, /ended before a terminal AI SDK chunk/);
   });
 
   it("reads the transient MLflow trace fallback", () => {

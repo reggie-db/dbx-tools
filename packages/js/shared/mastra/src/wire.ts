@@ -549,6 +549,12 @@ export const ToolProgressPartDataSchema = z
 /** Validated payload carried by a native generic tool progress data part. */
 export type ToolProgressPartData = z.infer<typeof ToolProgressPartDataSchema>;
 
+/**
+ * Transient stream marker emitted after the final model response step, before
+ * post-turn processors such as generated follow-up suggestions finish.
+ */
+export const RESPONSE_COMPLETE_PART_TYPE = "data-response-complete" as const;
+
 /** Native AI SDK data-part type carrying post-turn follow-up questions. */
 export const FOLLOW_UP_SUGGESTIONS_PART_TYPE = "data-follow-up-suggestions" as const;
 

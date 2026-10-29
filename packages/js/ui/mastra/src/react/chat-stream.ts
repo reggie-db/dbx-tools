@@ -3,6 +3,7 @@ import {
   MLFLOW_TRACE_ID_HEADER,
   MLFLOW_TRACE_PART_TYPE,
   MlflowTracePartDataSchema,
+  RESPONSE_COMPLETE_PART_TYPE,
   isStaleMastraResumeError,
 } from "@dbx-tools/shared-mastra";
 import { readUIMessageStream, type UIMessage, type UIMessageChunk } from "ai";
@@ -12,6 +13,7 @@ import type {
   ThreadSessionReader,
   ThreadSessionUpdater,
 } from "./chat-sessions.ts";
+import type { ChatStatus } from "./types.ts";
 import type { MastraStreamResponse } from "../support/mastra-client.ts";
 
 const logger = log.logger("ui-mastra/chat");
@@ -27,6 +29,13 @@ export const readMlflowTracePart = (chunk: UIMessageChunk): string | undefined =
   if ((chunk as { type?: string }).type !== MLFLOW_TRACE_PART_TYPE) return undefined;
   const parsed = MlflowTracePartDataSchema.safeParse((chunk as { data?: unknown }).data);
   return parsed.success ? parsed.data.traceId : undefined;
+};
+
+/** Map lifecycle-only chunks onto the UI's active-turn state. */
+export const chatStatusForChunk = (chunk: UIMessageChunk): ChatStatus | undefined => {
+  if ((chunk as { type?: string }).type === RESPONSE_COMPLETE_PART_TYPE) return "finishing";
+  if (chunk.type === "finish" || chunk.type === "abort") return "ready";
+  return undefined;
 };
 
 class StreamAborted extends Error {}
@@ -46,7 +55,7 @@ export function closeOnTerminalChunk(
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
-            controller.close();
+            controller.error(new Error("Chat stream ended before a terminal AI SDK chunk"));
             return;
           }
           onChunk?.(value);
@@ -140,7 +149,15 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
             () => {
               terminalReceived = true;
             },
-            (chunk) => recordTraceId(readMlflowTracePart(chunk)),
+            (chunk) => {
+              recordTraceId(readMlflowTracePart(chunk));
+              const status = chatStatusForChunk(chunk);
+              if (!status) return;
+              updateSession(threadId, (current) => ({
+                ...current,
+                status,
+              }));
+            },
           ),
           terminateOnError: true,
         })) {
@@ -150,7 +167,12 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
           updateSession(threadId, (current) => ({
             ...current,
             runId: runIdRef.current,
-            status: terminalReceived ? "ready" : "streaming",
+            status:
+              terminalReceived || current.status === "finishing"
+                ? terminalReceived
+                  ? "ready"
+                  : "finishing"
+                : "streaming",
           }));
         }
       } catch (error) {

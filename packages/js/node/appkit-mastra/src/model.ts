@@ -42,7 +42,12 @@ import { contracts, type ServingEndpointSummary } from "@dbx-tools/shared-model"
 import { SMART_ROUTER_MODEL_ID, isSmartRouterModelId } from "@dbx-tools/shared-model-gateway";
 import { RequestContext } from "@mastra/core/request-context";
 
-import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
+import {
+  executionContextUserId,
+  MASTRA_USER_KEY,
+  type MastraPluginConfig,
+  type User,
+} from "./config.ts";
 import {
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
@@ -92,12 +97,12 @@ export interface BuildModelOverrides {
    */
   modelId?: string;
   /**
-   * Chat capability class to resolve when no explicit model id is
-   * supplied. Used by internal agents (e.g. the chart planner asks for
-   * {@link model.ModelClass.ChatFast}) to express intent without pinning an
-   * endpoint name; the live catalogue is classified and the top
-   * available model in the class is chosen, falling back to the
-   * class's static list when the workspace has none.
+   * Chat capability class for internal model work. When no model id is
+   * supplied, this bypasses request and environment model overrides so
+   * background tasks such as titles and follow-ups cannot inherit the
+   * primary agent's Smart Router selection. The live catalogue chooses
+   * the top available model in the class, falling back to the class's
+   * static list when the workspace has none.
    */
   modelClass?: ModelClass;
   /** Arbitrary request, messages, JSON, or text used to build Smart Router task context. */
@@ -110,6 +115,7 @@ export interface BuildModelOverrides {
 interface ResolvedModelWorkspaceClient {
   client: WorkspaceClient;
   auth: "obo" | "service-principal";
+  cacheIdentity?: string;
 }
 
 /** Resolve an OBO workspace client when present, else a service-principal client. */
@@ -122,6 +128,7 @@ function resolveModelWorkspaceContext(
     return {
       client: executionContext.client,
       auth: "isUserContext" in executionContext ? "obo" : "service-principal",
+      cacheIdentity: executionContextUserId(executionContext),
     };
   }
   return { client: createWorkspaceClient(), auth: "service-principal" };
@@ -136,6 +143,7 @@ function selectionInput(
   config: MastraPluginConfig,
   requested: string | undefined,
   defaultClass: ModelClass | undefined,
+  cacheIdentity: string | undefined,
   serving = resolveServingConfig(config),
 ) {
   const requestedClass = requested !== undefined ? parseModelClass(requested) : null;
@@ -149,6 +157,7 @@ function selectionInput(
     fallbacks: serving.fallbacks.slice(),
     liveOnly: requested === undefined,
     ttlMs: serving.ttlMs,
+    ...(cacheIdentity !== undefined ? { cacheIdentity } : {}),
   };
 }
 
@@ -168,8 +177,10 @@ export function resolveDefaultModelId(
     return SMART_ROUTER_MODEL_ID;
   }
   const requested = overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
-  return selection.resolveModel(endpoints, selectionInput(config, requested, overrides.modelClass))
-    .modelId;
+  return selection.resolveModel(
+    endpoints,
+    selectionInput(config, requested, overrides.modelClass, undefined),
+  ).modelId;
 }
 
 /**
@@ -198,7 +209,7 @@ export async function buildModel(
   const resolved = overrides.workspaceClient
     ? { client: overrides.workspaceClient, auth: "service-principal" as const }
     : resolveModelWorkspaceContext(context);
-  const { client, auth } = resolved;
+  const { client, auth, cacheIdentity } = resolved;
   recordActiveTraceAuth(auth);
   const clientConfig = client.config;
   const host = (await clientConfig.getHost()).toString();
@@ -206,20 +217,29 @@ export async function buildModel(
   await clientConfig.authenticate(headers);
   const logger = log.logger(config);
   const serving = resolveServingConfig(config);
-  const override = serving.allowOverride
-    ? (context.get(MASTRA_MODEL_OVERRIDE_KEY) as string | undefined)
-    : undefined;
+  const internalClassOnly = overrides.modelClass !== undefined && overrides.modelId === undefined;
+  const override =
+    serving.allowOverride && !internalClassOnly
+      ? (context.get(MASTRA_MODEL_OVERRIDE_KEY) as string | undefined)
+      : undefined;
 
   // The override / agent default / env value can be either a concrete
   // endpoint name or a model class slug ("chat-thinking" /
   // "chat-balanced" / "chat-fast"). A class slug becomes a class intent
   // (let the live catalogue pick the best model in that band); anything
   // else is an explicit name fuzzy-matched against the catalogue. An
-  // internal `overrides.modelClass` (e.g. the chart planner) is the
-  // floor when nothing was requested.
-  const requested = override ?? overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+  // internal `overrides.modelClass` (e.g. titles, follow-ups, or the chart
+  // planner) is authoritative unless that caller also pins `modelId`. It must
+  // not inherit the primary agent's request or environment selection.
+  const requested =
+    override ??
+    overrides.modelId ??
+    (!internalClassOnly ? process.env.DATABRICKS_SERVING_ENDPOINT_NAME : undefined);
   const smartRouterInput = overrides.smartRouterInput ?? context.get(MASTRA_SMART_ROUTER_INPUT_KEY);
   const smartRouterRequested = isSmartRouterModelId(requested);
+  if (smartRouterRequested && smartRouterInput === undefined) {
+    throw new Error("Smart Router requires task input before it can resolve a concrete model");
+  }
   let modelId: string;
   let source: string;
   if (
@@ -228,11 +248,13 @@ export async function buildModel(
     smartRouterInput !== undefined
   ) {
     let pending = context.get(MASTRA_SMART_ROUTER_RESOLUTION_KEY) as
-      | Promise<SmartRouterModelResolution>
-      | undefined;
+      Promise<SmartRouterModelResolution> | undefined;
     if (!pending) {
       pending = (async () => {
-        const endpoints = await listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
+        const endpoints = await listServingEndpoints(client, host, {
+          ttlMs: serving.ttlMs,
+          ...(cacheIdentity !== undefined ? { cacheIdentity } : {}),
+        });
         const candidates = smartRouterCandidates(
           endpoints.filter((endpoint) => endpointCapabilities(endpoint).tools),
           "codex",
@@ -248,7 +270,7 @@ export async function buildModel(
         const fallback = await selectModel(
           client,
           host,
-          selectionInput(config, requested, overrides.modelClass, serving),
+          selectionInput(config, requested, overrides.modelClass, cacheIdentity, serving),
         );
         return { modelId: fallback.modelId, source: fallback.source };
       })();
@@ -266,10 +288,13 @@ export async function buildModel(
     const resolved = await selectModel(
       client,
       host,
-      selectionInput(config, requested, overrides.modelClass, serving),
+      selectionInput(config, requested, overrides.modelClass, cacheIdentity, serving),
     );
     modelId = resolved.modelId;
     source = resolved.source;
+  }
+  if (isSmartRouterModelId(modelId)) {
+    throw new Error("Smart Router did not resolve to a concrete serving endpoint");
   }
   logger.debug("model selected", { modelId, source, requested });
   context.set(MASTRA_RESOLVED_MODEL_KEY, modelId);

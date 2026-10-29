@@ -2,7 +2,7 @@ import { ChatComposer } from "./chat-composer.tsx";
 import { ChatThreadLayout } from "./chat-thread-layout.tsx";
 import { ChatTranscript, useChatTranscriptController } from "./chat-transcript.tsx";
 import { collectSuggestions } from "./suggestions.ts";
-import type { ChatViewProps } from "./types.ts";
+import { isActiveChatStatus, type ChatViewProps } from "./types.ts";
 
 /**
  * Controlled chat facade for hosts that own message and transport state.
@@ -81,7 +81,7 @@ export const ChatView = ({
   });
   const latestMessage = messages[messages.length - 1];
   const latestAssistant = latestMessage?.role === "assistant" ? latestMessage : undefined;
-  const running = status === "submitted" || status === "streaming";
+  const running = isActiveChatStatus(status);
   const followUpQuestions =
     latestAssistant && !running
       ? collectSuggestions(

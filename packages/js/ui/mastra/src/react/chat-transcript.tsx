@@ -17,7 +17,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
 import { genieFeedbackTarget } from "./chat-feedback.ts";
 import { SuggestionPills } from "./suggestion-pills.tsx";
-import type { ChatViewProps } from "./types.ts";
+import { isRespondingChatStatus, type ChatViewProps } from "./types.ts";
 import { messageText } from "../support/export.ts";
 
 const BOTTOM_THRESHOLD_PX = 24;
@@ -186,7 +186,7 @@ export const ChatTranscript = ({
   onFeedback,
   mlflowExperimentUrl,
 }: ChatTranscriptProps) => {
-  const isRunning = status === "submitted" || status === "streaming";
+  const isRunning = isRespondingChatStatus(status);
   const lastMessage = messages.at(-1);
   const lastEvents = lastMessage ? toolEventsByMessage[lastMessage.id] : undefined;
   const lastAssistantParts = lastMessage?.role === "assistant" ? lastMessage.parts : [];

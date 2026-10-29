@@ -36,13 +36,14 @@ import { ExportMenu } from "./export-menu.tsx";
 import { FeedbackControls } from "./feedback-controls.tsx";
 import { ToolMarkdown } from "./markdown.tsx";
 import { ToolSessionPill, humanizeToolName } from "./tool-pill.tsx";
-import type {
-  ApprovalDecision,
-  ChatStatus,
-  FeedbackSubmission,
-  FeedbackValue,
-  PendingApproval,
-  ToolEvent,
+import {
+  isRespondingChatStatus,
+  type ApprovalDecision,
+  type ChatStatus,
+  type FeedbackSubmission,
+  type FeedbackValue,
+  type PendingApproval,
+  type ToolEvent,
 } from "./types.ts";
 import { copyText } from "../support/clipboard.ts";
 import type { ExportFormat } from "../support/export.ts";
@@ -390,7 +391,7 @@ export const AssistantBubble = ({
   // pop in mid-stream. A bubble is "settled" if it isn't the active
   // streaming target - either the agent has returned to `ready` /
   // `error`, or a newer message has taken over the `isLast` slot.
-  const isStreamingThisBubble = isLast && (status === "streaming" || status === "submitted");
+  const isStreamingThisBubble = isLast && isRespondingChatStatus(status);
   const showResponseStatus = shouldShowAssistantResponseStatus(
     isLast,
     status,

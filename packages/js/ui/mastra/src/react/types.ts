@@ -10,7 +10,15 @@ import type { ExportFormat } from "../support/export.ts";
 // layer and the `useMastraChat` driver can share them.
 
 /** User-visible lifecycle state of the active chat turn. */
-export type ChatStatus = "submitted" | "streaming" | "ready" | "error";
+export type ChatStatus = "submitted" | "streaming" | "finishing" | "ready" | "error";
+
+/** Whether a turn still owns its session and queues new messages. */
+export const isActiveChatStatus = (status: ChatStatus): boolean =>
+  status === "submitted" || status === "streaming" || status === "finishing";
+
+/** Whether the assistant is still visibly producing its response. */
+export const isRespondingChatStatus = (status: ChatStatus): boolean =>
+  status === "submitted" || status === "streaming";
 
 /**
  * Lifecycle of a single tool invocation surfaced inline in the assistant

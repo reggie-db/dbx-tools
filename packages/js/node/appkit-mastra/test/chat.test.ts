@@ -1,21 +1,94 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { logger } from "@dbx-tools/shared-core";
+import { RESPONSE_COMPLETE_PART_TYPE } from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
   RequestContext,
 } from "@mastra/core/request-context";
+import type { ChunkType } from "@mastra/core/stream";
 
 import { buildAgents } from "../src/agents.ts";
 import {
   agentAbortSignal,
   agentChatRoutes,
+  buildResponseCompleteTransform,
   CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS,
 } from "../src/chat.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "../src/memory.ts";
 
+async function transformResponseChunks(chunks: ChunkType[]): Promise<ChunkType[]> {
+  const stream = new ReadableStream<ChunkType>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    },
+  }).pipeThrough(buildResponseCompleteTransform()());
+  const transformed: ChunkType[] = [];
+  for await (const chunk of stream) transformed.push(chunk);
+  return transformed;
+}
+
 describe("background chat routes", () => {
+  it("marks only the final non-tool response step complete", async () => {
+    const toolStep = {
+      type: "step-finish",
+      runId: "run-1",
+      from: "agent",
+      payload: {
+        stepResult: { reason: "tool-calls" },
+        output: {
+          usage: {},
+          toolCalls: [{ toolCallId: "tool-1", toolName: "lookup", input: {} }],
+        },
+        metadata: {},
+      },
+    } as unknown as ChunkType;
+    const finalStep = {
+      type: "step-finish",
+      runId: "run-1",
+      from: "agent",
+      payload: {
+        stepResult: { reason: "stop" },
+        output: { usage: {}, toolCalls: [] },
+        metadata: {},
+      },
+    } as unknown as ChunkType;
+
+    const transformed = await transformResponseChunks([toolStep, finalStep]);
+
+    assert.deepEqual(
+      transformed.map((chunk) => chunk.type),
+      ["step-finish", "step-finish", RESPONSE_COMPLETE_PART_TYPE],
+    );
+    assert.deepEqual(transformed[2], {
+      type: RESPONSE_COMPLETE_PART_TYPE,
+      data: null,
+      transient: true,
+    });
+  });
+
+  it("does not mark a continued text step complete", async () => {
+    const continuedStep = {
+      type: "step-finish",
+      runId: "run-1",
+      from: "agent",
+      payload: {
+        stepResult: { reason: "stop", isContinued: true },
+        output: { usage: {}, toolCalls: [] },
+        metadata: {},
+      },
+    } as unknown as ChunkType;
+
+    const transformed = await transformResponseChunks([continuedStep]);
+
+    assert.deepEqual(
+      transformed.map((chunk) => chunk.type),
+      ["step-finish"],
+    );
+  });
+
   it("registers chat, observe, and abort endpoints", () => {
     assert.deepEqual(
       agentChatRoutes().map((route) => [route.method, route.path]),

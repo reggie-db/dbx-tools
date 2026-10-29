@@ -34,7 +34,7 @@ import { imageFileToUIPart, MAX_COMPOSER_IMAGES } from "./_image-attachments.ts"
 import { ModelSelector } from "./_model-selector.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { SuggestionPills } from "./suggestion-pills.tsx";
-import type { ChatViewProps } from "./types.ts";
+import { isActiveChatStatus, isRespondingChatStatus, type ChatViewProps } from "./types.ts";
 
 type QueuedSteerListProps = {
   queuedSteers: NonNullable<ChatViewProps["queuedSteers"]>;
@@ -316,7 +316,8 @@ export const ChatComposer = ({
     return observeComposerWidth(group, resizeTextarea);
   }, [resizeTextarea]);
 
-  const isRunning = status === "submitted" || status === "streaming";
+  const isRunning = isActiveChatStatus(status);
+  const canStop = isRespondingChatStatus(status);
   const hasDraft = Boolean(input.trim() || files.length > 0);
   const submit = () => {
     const text = input.trim();
@@ -560,7 +561,7 @@ export const ChatComposer = ({
                     )}
                   </span>
                 ))}
-              {isRunning && onStop && !hasDraft ? (
+              {canStop && onStop && !hasDraft ? (
                 <InputGroupButton
                   type="button"
                   size="icon-sm"

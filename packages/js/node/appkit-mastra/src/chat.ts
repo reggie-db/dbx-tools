@@ -7,6 +7,7 @@
 import { log, toError, errorMessage, isRecord, sleep } from "@dbx-tools/shared-core";
 import {
   MASTRA_ROUTES,
+  RESPONSE_COMPLETE_PART_TYPE,
   isStaleMastraResumeError,
   STALE_MASTRA_RESUME_STREAM_TEXT,
 } from "@dbx-tools/shared-mastra";
@@ -14,6 +15,7 @@ import { handleChatStream, toAISdkStream } from "@mastra/ai-sdk";
 import { isEventedAgent } from "@mastra/core/agent/durable";
 import type { EventedAgent } from "@mastra/core/agent/durable";
 import { registerApiRoute } from "@mastra/core/server";
+import type { DataChunkType, MastraStreamTransform } from "@mastra/core/stream";
 import { createUIMessageStreamResponse } from "ai";
 import type { UIMessageChunk } from "ai";
 
@@ -44,6 +46,42 @@ const chatStreamHeartbeat = (): UIMessageChunk => ({
   data: null,
   transient: true,
 });
+
+/** Mark the answer complete while post-turn processors continue before finish. */
+export function buildResponseCompleteTransform(): MastraStreamTransform {
+  return () => {
+    let emitted = false;
+    return new TransformStream({
+      transform(chunk, controller) {
+        controller.enqueue(chunk);
+        if (
+          !emitted &&
+          chunk.type === "step-finish" &&
+          chunk.payload.stepResult.isContinued !== true &&
+          (chunk.payload.output.toolCalls?.length ?? 0) === 0
+        ) {
+          emitted = true;
+          const part: DataChunkType = {
+            type: RESPONSE_COMPLETE_PART_TYPE,
+            data: null,
+            transient: true,
+          };
+          controller.enqueue(part as never);
+        }
+      },
+    });
+  };
+}
+
+function chatStreamTransforms(
+  runId: string,
+  generatedFollowUps: boolean,
+): readonly MastraStreamTransform[] {
+  return [
+    buildResponseCompleteTransform(),
+    ...(generatedFollowUps ? [buildFollowUpSuggestionsTransform(runId)] : []),
+  ];
+}
 
 function deferredChatStream(open: () => Promise<ReadableStream<UIMessageChunk>>): Response {
   let reader: ReadableStreamDefaultReader<UIMessageChunk> | undefined;
@@ -215,9 +253,10 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
               },
               requestContext,
             ),
-            ...(followUps && followUps.mode !== "genie"
-              ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
-              : {}),
+            experimentalTransform: chatStreamTransforms(
+              runId,
+              Boolean(followUps && followUps.mode !== "genie"),
+            ),
             version: "v7",
             sendReasoning,
             sendSources: true,
@@ -244,9 +283,10 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
           const observed = await observeBackgroundRun(agent, runId);
           return toAISdkStream(observed.output, {
             from: "agent",
-            ...(followUps && followUps.mode !== "genie"
-              ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
-              : {}),
+            experimentalTransform: chatStreamTransforms(
+              runId,
+              Boolean(followUps && followUps.mode !== "genie"),
+            ),
             version: "v7",
             sendReasoning,
             sendSources: true,
