@@ -3,4 +3,4 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-lakebox";
-export const PACKAGE_VERSION = "0.9.175";
+export const PACKAGE_VERSION = "0.9.176";
