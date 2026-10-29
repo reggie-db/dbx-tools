@@ -35,7 +35,7 @@ class PGSearchOperations(SearchOperations):
         ts_idx = len(params)
 
         where = _where(conditions)
-        and_kw = 'AND' if conditions else 'WHERE'
+        and_kw = "AND" if conditions else "WHERE"
 
         sql = f"""
             SELECT realm, id, payload, created_at,
@@ -61,13 +61,13 @@ class PGSearchOperations(SearchOperations):
     ) -> list[EntityNode]:
         client = executor.client
         results: list[tuple[float, EntityNode]] = []
-        for realm in await _resolve_realms(client, 'entity_nodes', group_ids):
+        for realm in await _resolve_realms(client, "entity_nodes", group_ids):
             hits = await client.vector_search(
-                'entity_nodes',
+                "entity_nodes",
                 realm,
                 search_vector,
                 top_k=limit,
-                distance_metric='cosine',
+                distance_metric="cosine",
             )
             results.extend(_matching_node_hits(hits, search_filter, min_score))
 
@@ -131,7 +131,7 @@ class PGSearchOperations(SearchOperations):
         ts_idx = len(params)
 
         where = _where(conditions)
-        and_kw = 'AND' if conditions else 'WHERE'
+        and_kw = "AND" if conditions else "WHERE"
 
         sql = f"""
             SELECT realm, id, from_id, to_id, relation_type, payload,
@@ -159,13 +159,13 @@ class PGSearchOperations(SearchOperations):
     ) -> list[EntityEdge]:
         client = executor.client
         results: list[tuple[float, EntityEdge]] = []
-        for realm in await _resolve_realms(client, 'entity_edges', group_ids):
+        for realm in await _resolve_realms(client, "entity_edges", group_ids):
             hits = await client.vector_search_edges(
-                'entity_edges',
+                "entity_edges",
                 realm,
                 search_vector,
                 top_k=limit,
-                distance_metric='cosine',
+                distance_metric="cosine",
             )
             results.extend(
                 _matching_edge_hits(
@@ -237,13 +237,13 @@ class PGSearchOperations(SearchOperations):
 
         if group_ids is not None:
             params.append(group_ids)
-            conditions.append(f'realm = ANY(${len(params)})')
+            conditions.append(f"realm = ANY(${len(params)})")
 
         params.append(ts_query)
         ts_idx = len(params)
 
         where = _where(conditions)
-        and_kw = 'AND' if conditions else 'WHERE'
+        and_kw = "AND" if conditions else "WHERE"
 
         sql = f"""
             SELECT realm, id, payload, created_at,
@@ -276,13 +276,13 @@ class PGSearchOperations(SearchOperations):
 
         if group_ids is not None:
             params.append(group_ids)
-            conditions.append(f'realm = ANY(${len(params)})')
+            conditions.append(f"realm = ANY(${len(params)})")
 
         params.append(ts_query)
         ts_idx = len(params)
 
         where = _where(conditions)
-        and_kw = 'AND' if conditions else 'WHERE'
+        and_kw = "AND" if conditions else "WHERE"
 
         sql = f"""
             SELECT realm, id, payload, created_at,
@@ -311,15 +311,15 @@ class PGSearchOperations(SearchOperations):
         realms = group_ids or []
         if not realms:
             realm_rows = await client._fetch('SELECT DISTINCT realm FROM "community_nodes"')
-            realms = [r['realm'] for r in realm_rows]
+            realms = [r["realm"] for r in realm_rows]
 
         for realm in realms:
             hits = await client.vector_search(
-                'community_nodes',
+                "community_nodes",
                 realm,
                 search_vector,
                 top_k=limit,
-                distance_metric='cosine',
+                distance_metric="cosine",
             )
             for vertex, distance in hits:
                 score = 1.0 - distance
@@ -351,14 +351,14 @@ class PGSearchOperations(SearchOperations):
             center_vertex_id,
         )
 
-        filtered_uuids.sort(key=lambda u: scores.get(u, float('inf')))
+        filtered_uuids.sort(key=lambda u: scores.get(u, float("inf")))
 
         if center_node_uuid in node_uuids:
             scores[center_node_uuid] = 0.1
             filtered_uuids = [center_node_uuid] + filtered_uuids
 
         reranked_uuids = [
-            u for u in filtered_uuids if (1 / scores.get(u, float('inf'))) >= min_score
+            u for u in filtered_uuids if (1 / scores.get(u, float("inf"))) >= min_score
         ]
 
         if not reranked_uuids:
@@ -380,23 +380,23 @@ class PGSearchOperations(SearchOperations):
         for uuid in node_uuids:
             vid_rows = await client._fetch(
                 'SELECT realm, id FROM "entity_nodes" WHERE payload @> $1::jsonb',
-                json.dumps({'uuid': uuid}),
+                json.dumps({"uuid": uuid}),
             )
             if not vid_rows:
-                scores[uuid] = float('inf')
+                scores[uuid] = float("inf")
                 continue
 
-            realm = vid_rows[0]['realm']
-            vid = vid_rows[0]['id']
+            realm = vid_rows[0]["realm"]
+            vid = vid_rows[0]["id"]
             count_rows = await client._fetch(
                 'SELECT count(*) AS cnt FROM "episodic_edges" WHERE realm = $1 AND to_id = $2',
                 realm,
                 vid,
             )
-            scores[uuid] = float(count_rows[0]['cnt']) if count_rows else float('inf')
+            scores[uuid] = float(count_rows[0]["cnt"]) if count_rows else float("inf")
 
         sorted_uuids = list(node_uuids)
-        sorted_uuids.sort(key=lambda u: scores.get(u, float('inf')))
+        sorted_uuids.sort(key=lambda u: scores.get(u, float("inf")))
 
         reranked_uuids = [u for u in sorted_uuids if scores.get(u, 0) >= min_score]
 
@@ -408,11 +408,11 @@ class PGSearchOperations(SearchOperations):
 
     def build_node_search_filters(self, search_filters: SearchFilters) -> Any:
         conditions, params = _node_filter_conditions(search_filters, None)
-        return {'filter_queries': conditions, 'filter_params': params}
+        return {"filter_queries": conditions, "filter_params": params}
 
     def build_edge_search_filters(self, search_filters: SearchFilters) -> Any:
         conditions, params = _edge_filter_conditions(search_filters, None)
-        return {'filter_queries': conditions, 'filter_params': params}
+        return {"filter_queries": conditions, "filter_params": params}
 
     def build_fulltext_query(
         self,
@@ -430,21 +430,21 @@ def _build_ts_query(query: str, max_length: int = 128) -> str:
     words = query.strip().split()[:max_length]
     terms = [w for w in words if w]
     if not terms:
-        return ''
-    return ' '.join(terms)
+        return ""
+    return " ".join(terms)
 
 
 def _where(conditions: list[str]) -> str:
     if not conditions:
-        return ''
-    return 'WHERE ' + ' AND '.join(conditions)
+        return ""
+    return "WHERE " + " AND ".join(conditions)
 
 
 async def _resolve_realms(client: Any, table: str, group_ids: list[str] | None) -> list[str]:
     if group_ids:
         return group_ids
     rows = await client._fetch(f'SELECT DISTINCT realm FROM "{table}"')
-    return [row['realm'] for row in rows]
+    return [row["realm"] for row in rows]
 
 
 def _matching_node_hits(
@@ -476,9 +476,9 @@ def _matching_edge_hits(
         payload = edge_object.payload
         if score <= min_score:
             continue
-        if source_node_uuid and payload.get('source_node_uuid') != source_node_uuid:
+        if source_node_uuid and payload.get("source_node_uuid") != source_node_uuid:
             continue
-        if target_node_uuid and payload.get('target_node_uuid') != target_node_uuid:
+        if target_node_uuid and payload.get("target_node_uuid") != target_node_uuid:
             continue
         edge = _edge_from_pg_edge(edge_object)
         if _matches_edge_filter(edge, search_filter):
@@ -493,14 +493,14 @@ async def _resolve_origin(
 ) -> tuple[str, str] | None:
     rows = await client._fetch(
         'SELECT realm, id FROM "entity_nodes" WHERE payload @> $1::jsonb',
-        json.dumps({'uuid': origin_uuid}),
+        json.dumps({"uuid": origin_uuid}),
     )
     if not rows:
         return None
-    realm = rows[0]['realm']
+    realm = rows[0]["realm"]
     if group_ids and realm not in group_ids:
         return None
-    return realm, str(rows[0]['id'])
+    return realm, str(rows[0]["id"])
 
 
 async def _traverse_from_node(
@@ -511,11 +511,11 @@ async def _traverse_from_node(
 ) -> list[dict[str, Any]]:
     return await client.traverse(
         realm=realm,
-        start_table='entity_nodes',
+        start_table="entity_nodes",
         start_id=vertex_id,
-        edge_tables=['entity_edges'],
+        edge_tables=["entity_edges"],
         max_depth=max_depth,
-        direction='both',
+        direction="both",
     )
 
 
@@ -524,14 +524,14 @@ async def _node_from_traversal_step(
     realm: str,
     step: dict[str, Any],
 ) -> EntityNode | None:
-    if step['depth'] == 0:
+    if step["depth"] == 0:
         return None
     rows = await client._fetch(
-        'SELECT realm, id, payload, created_at, '
+        "SELECT realm, id, payload, created_at, "
         "to_jsonb(t)->>'embedding' AS embedding_text "
         'FROM "entity_nodes" t WHERE realm = $1 AND id = $2',
         realm,
-        int(step['id']),
+        int(step["id"]),
     )
     return _parse_entity(rows[0]) if rows else None
 
@@ -566,11 +566,11 @@ async def _edges_from_traversal(
 ) -> list[EntityEdge]:
     results: list[EntityEdge] = []
     for step in traversal:
-        for edge_id in step.get('edge_ids') or []:
+        for edge_id in step.get("edge_ids") or []:
             if edge_id in visited_edge_ids:
                 continue
             visited_edge_ids.add(edge_id)
-            edge_object = await client.get_edge('entity_edges', realm, edge_id)
+            edge_object = await client.get_edge("entity_edges", realm, edge_id)
             if edge_object is None:
                 continue
             edge = _edge_from_pg_edge(edge_object)
@@ -593,10 +593,10 @@ async def _node_distance_scores(
         rows = await client._fetch(
             'SELECT id FROM "entity_nodes" WHERE realm = $1 AND payload @> $2::jsonb',
             realm,
-            json.dumps({'uuid': node_uuid}),
+            json.dumps({"uuid": node_uuid}),
         )
         if not rows:
-            scores[node_uuid] = float('inf')
+            scores[node_uuid] = float("inf")
             continue
         edge_rows = await client._fetch(
             """
@@ -608,9 +608,9 @@ async def _node_distance_scores(
             """,
             realm,
             center_vertex_id,
-            rows[0]['id'],
+            rows[0]["id"],
         )
-        scores[node_uuid] = 1.0 if edge_rows else float('inf')
+        scores[node_uuid] = 1.0 if edge_rows else float("inf")
     return scores
 
 
@@ -618,10 +618,10 @@ async def _load_entities_by_uuid(client: Any, node_uuids: list[str]) -> list[Ent
     nodes: list[EntityNode] = []
     for node_uuid in node_uuids:
         rows = await client._fetch(
-            'SELECT realm, id, payload, created_at, '
+            "SELECT realm, id, payload, created_at, "
             "to_jsonb(t)->>'embedding' AS embedding_text "
             'FROM "entity_nodes" t WHERE payload @> $1::jsonb',
-            json.dumps({'uuid': node_uuid}),
+            json.dumps({"uuid": node_uuid}),
         )
         if rows:
             nodes.append(_parse_entity(rows[0]))
@@ -641,7 +641,7 @@ def _node_filter_conditions(
 
     if group_ids is not None:
         params.append(group_ids)
-        conditions.append(f'realm = ANY(${len(params)})')
+        conditions.append(f"realm = ANY(${len(params)})")
 
     return conditions, params
 
@@ -663,7 +663,7 @@ def _edge_filter_conditions(
 
     if group_ids is not None:
         params.append(group_ids)
-        conditions.append(f'realm = ANY(${len(params)})')
+        conditions.append(f"realm = ANY(${len(params)})")
 
     _add_date_filters(conditions, params, search_filter)
 
@@ -675,171 +675,170 @@ def _add_date_filters(
     params: list[Any],
     filters: SearchFilters,
 ) -> None:
-    for field_name in ('valid_at', 'invalid_at', 'created_at', 'expired_at'):
+    for field_name in ("valid_at", "invalid_at", "created_at", "expired_at"):
         date_lists = getattr(filters, field_name, None)
         if date_lists is None:
             continue
         or_parts = [_date_filter_group(field_name, group, params) for group in date_lists]
-        conditions.append('(' + ' OR '.join(or_parts) + ')')
+        conditions.append("(" + " OR ".join(or_parts) + ")")
 
 
 def _date_filter_group(field_name: str, date_filters: list[Any], params: list[Any]) -> str:
-    conditions = [_date_filter_condition(field_name, date_filter, params) for date_filter in date_filters]
-    return '(' + ' AND '.join(conditions) + ')'
+    conditions = [
+        _date_filter_condition(field_name, date_filter, params) for date_filter in date_filters
+    ]
+    return "(" + " AND ".join(conditions) + ")"
 
 
 def _date_filter_condition(field_name: str, date_filter: Any, params: list[Any]) -> str:
     operator = date_filter.comparison_operator.value
-    if operator in ('IS NULL', 'IS NOT NULL'):
+    if operator in ("IS NULL", "IS NOT NULL"):
         return f"((payload->>'{field_name}') {operator})"
     value = (
         date_filter.date.isoformat()
-        if hasattr(date_filter.date, 'isoformat')
+        if hasattr(date_filter.date, "isoformat")
         else str(date_filter.date)
     )
     params.append(value)
-    return (
-        f"((payload->>'{field_name}')::timestamptz "
-        f"{operator} ${len(params)}::timestamptz)"
-    )
+    return f"((payload->>'{field_name}')::timestamptz {operator} ${len(params)}::timestamptz)"
 
 
 def _vertex_to_entity(v) -> EntityNode:
     p = v.payload
-    labels = list(p.get('labels', []))
+    labels = list(p.get("labels", []))
     group_id = v.realm
-    dynamic_label = 'Entity_' + group_id.replace('-', '')
+    dynamic_label = "Entity_" + group_id.replace("-", "")
     if dynamic_label in labels:
         labels.remove(dynamic_label)
     return EntityNode(
-        uuid=p['uuid'],
-        name=p.get('name', ''),
+        uuid=p["uuid"],
+        name=p.get("name", ""),
         name_embedding=v.embedding,
         group_id=group_id,
         labels=labels,
-        created_at=parse_db_date(p.get('created_at')) or v.created_at,
-        summary=p.get('summary', ''),
-        attributes=dict(p.get('attributes', {})),
+        created_at=parse_db_date(p.get("created_at")) or v.created_at,
+        summary=p.get("summary", ""),
+        attributes=dict(p.get("attributes", {})),
     )
 
 
 def _vertex_to_community(v) -> CommunityNode:
     p = v.payload
     return CommunityNode(
-        uuid=p['uuid'],
-        name=p.get('name', ''),
+        uuid=p["uuid"],
+        name=p.get("name", ""),
         group_id=v.realm,
         name_embedding=v.embedding,
-        created_at=parse_db_date(p.get('created_at')) or v.created_at,
-        summary=p.get('summary', ''),
+        created_at=parse_db_date(p.get("created_at")) or v.created_at,
+        summary=p.get("summary", ""),
     )
 
 
 def _parse_entity(row: dict) -> EntityNode:
-    p = row['payload'] if isinstance(row['payload'], dict) else json.loads(row['payload'])
-    labels = list(p.get('labels', []))
-    group_id = row['realm']
-    dynamic_label = 'Entity_' + group_id.replace('-', '')
+    p = row["payload"] if isinstance(row["payload"], dict) else json.loads(row["payload"])
+    labels = list(p.get("labels", []))
+    group_id = row["realm"]
+    dynamic_label = "Entity_" + group_id.replace("-", "")
     if dynamic_label in labels:
         labels.remove(dynamic_label)
 
     emb = None
-    if row.get('embedding_text'):
-        emb = [float(x) for x in row['embedding_text'].strip('[]').split(',') if x.strip()]
+    if row.get("embedding_text"):
+        emb = [float(x) for x in row["embedding_text"].strip("[]").split(",") if x.strip()]
 
     return EntityNode(
-        uuid=p['uuid'],
-        name=p.get('name', ''),
+        uuid=p["uuid"],
+        name=p.get("name", ""),
         name_embedding=emb,
         group_id=group_id,
         labels=labels,
-        created_at=parse_db_date(p.get('created_at')) or row.get('created_at'),
-        summary=p.get('summary', ''),
-        attributes=dict(p.get('attributes', {})),
+        created_at=parse_db_date(p.get("created_at")) or row.get("created_at"),
+        summary=p.get("summary", ""),
+        attributes=dict(p.get("attributes", {})),
     )
 
 
 def _parse_edge(row: dict) -> EntityEdge:
-    p = row['payload'] if isinstance(row['payload'], dict) else json.loads(row['payload'])
+    p = row["payload"] if isinstance(row["payload"], dict) else json.loads(row["payload"])
 
     emb = None
-    if row.get('embedding_text'):
-        emb = [float(x) for x in row['embedding_text'].strip('[]').split(',') if x.strip()]
+    if row.get("embedding_text"):
+        emb = [float(x) for x in row["embedding_text"].strip("[]").split(",") if x.strip()]
 
     return EntityEdge(
-        uuid=p['uuid'],
-        source_node_uuid=p['source_node_uuid'],
-        target_node_uuid=p['target_node_uuid'],
-        fact=p.get('fact', ''),
+        uuid=p["uuid"],
+        source_node_uuid=p["source_node_uuid"],
+        target_node_uuid=p["target_node_uuid"],
+        fact=p.get("fact", ""),
         fact_embedding=emb,
-        name=p.get('name', ''),
-        group_id=row['realm'],
-        episodes=list(p.get('episodes', [])),
-        created_at=parse_db_date(p.get('created_at')) or row.get('created_at'),
-        expired_at=parse_db_date(p.get('expired_at')),
-        valid_at=parse_db_date(p.get('valid_at')),
-        invalid_at=parse_db_date(p.get('invalid_at')),
-        reference_time=parse_db_date(p.get('reference_time')),
-        attributes=dict(p.get('attributes', {})),
+        name=p.get("name", ""),
+        group_id=row["realm"],
+        episodes=list(p.get("episodes", [])),
+        created_at=parse_db_date(p.get("created_at")) or row.get("created_at"),
+        expired_at=parse_db_date(p.get("expired_at")),
+        valid_at=parse_db_date(p.get("valid_at")),
+        invalid_at=parse_db_date(p.get("invalid_at")),
+        reference_time=parse_db_date(p.get("reference_time")),
+        attributes=dict(p.get("attributes", {})),
     )
 
 
 def _edge_from_pg_edge(edge_obj) -> EntityEdge:
     p = edge_obj.payload
     return EntityEdge(
-        uuid=p['uuid'],
-        source_node_uuid=p['source_node_uuid'],
-        target_node_uuid=p['target_node_uuid'],
-        fact=p.get('fact', ''),
+        uuid=p["uuid"],
+        source_node_uuid=p["source_node_uuid"],
+        target_node_uuid=p["target_node_uuid"],
+        fact=p.get("fact", ""),
         fact_embedding=edge_obj.embedding,
-        name=p.get('name', ''),
+        name=p.get("name", ""),
         group_id=edge_obj.realm,
-        episodes=list(p.get('episodes', [])),
-        created_at=parse_db_date(p.get('created_at')) or edge_obj.created_at,
-        expired_at=parse_db_date(p.get('expired_at')),
-        valid_at=parse_db_date(p.get('valid_at')),
-        invalid_at=parse_db_date(p.get('invalid_at')),
-        reference_time=parse_db_date(p.get('reference_time')),
-        attributes=dict(p.get('attributes', {})),
+        episodes=list(p.get("episodes", [])),
+        created_at=parse_db_date(p.get("created_at")) or edge_obj.created_at,
+        expired_at=parse_db_date(p.get("expired_at")),
+        valid_at=parse_db_date(p.get("valid_at")),
+        invalid_at=parse_db_date(p.get("invalid_at")),
+        reference_time=parse_db_date(p.get("reference_time")),
+        attributes=dict(p.get("attributes", {})),
     )
 
 
 def _parse_episode(row: dict) -> EpisodicNode:
-    p = row['payload'] if isinstance(row['payload'], dict) else json.loads(row['payload'])
-    created_at = parse_db_date(p.get('created_at')) or row.get('created_at')
-    valid_at = parse_db_date(p.get('valid_at'))
+    p = row["payload"] if isinstance(row["payload"], dict) else json.loads(row["payload"])
+    created_at = parse_db_date(p.get("created_at")) or row.get("created_at")
+    valid_at = parse_db_date(p.get("valid_at"))
 
     if created_at is None:
-        raise ValueError(f'created_at cannot be None for episode {p.get("uuid", "unknown")}')
+        raise ValueError(f"created_at cannot be None for episode {p.get('uuid', 'unknown')}")
     if valid_at is None:
-        raise ValueError(f'valid_at cannot be None for episode {p.get("uuid", "unknown")}')
+        raise ValueError(f"valid_at cannot be None for episode {p.get('uuid', 'unknown')}")
 
     return EpisodicNode(
-        content=p.get('content', ''),
+        content=p.get("content", ""),
         created_at=created_at,
         valid_at=valid_at,
-        uuid=p['uuid'],
-        group_id=row['realm'],
-        source=EpisodeType.from_str(p.get('source', 'text')),
-        name=p.get('name', ''),
-        source_description=p.get('source_description', ''),
-        entity_edges=list(p.get('entity_edges', [])),
+        uuid=p["uuid"],
+        group_id=row["realm"],
+        source=EpisodeType.from_str(p.get("source", "text")),
+        name=p.get("name", ""),
+        source_description=p.get("source_description", ""),
+        entity_edges=list(p.get("entity_edges", [])),
     )
 
 
 def _parse_community(row: dict) -> CommunityNode:
-    p = row['payload'] if isinstance(row['payload'], dict) else json.loads(row['payload'])
+    p = row["payload"] if isinstance(row["payload"], dict) else json.loads(row["payload"])
     emb = None
-    if row.get('embedding_text'):
-        emb = [float(x) for x in row['embedding_text'].strip('[]').split(',') if x.strip()]
+    if row.get("embedding_text"):
+        emb = [float(x) for x in row["embedding_text"].strip("[]").split(",") if x.strip()]
 
     return CommunityNode(
-        uuid=p['uuid'],
-        name=p.get('name', ''),
-        group_id=row['realm'],
+        uuid=p["uuid"],
+        name=p.get("name", ""),
+        group_id=row["realm"],
         name_embedding=emb,
-        created_at=parse_db_date(p.get('created_at')) or row.get('created_at'),
-        summary=p.get('summary', ''),
+        created_at=parse_db_date(p.get("created_at")) or row.get("created_at"),
+        summary=p.get("summary", ""),
     )
 
 

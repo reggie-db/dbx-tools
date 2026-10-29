@@ -844,9 +844,7 @@ async def test_runtime_or_mcp_failure_requests_process_shutdown(
 @pytest.mark.asyncio
 async def test_runtime_cleanup_closes_database_after_async_queue_failure(monkeypatch) -> None:
     closed: list[str] = []
-    queue = SimpleNamespace(
-        close=AsyncMock(side_effect=RuntimeError("queued write failed"))
-    )
+    queue = SimpleNamespace(close=AsyncMock(side_effect=RuntimeError("queued write failed")))
 
     class Runtime:
         async def close(self) -> None:
