@@ -116,6 +116,27 @@ describe("model gateway CLI", () => {
         url: "http://localhost:4401/v1/models",
       },
     ]);
+
+    const calls: Parameters<ModelGatewayCliDependencies["start"]>[0][] = [];
+    await buildProgram("dbx-model-gateway", {
+      async start(options) {
+        calls.push(options);
+      },
+    }).parseAsync(definition?.command?.arguments ?? [], { from: "user" });
+    assert.deepEqual(calls, [
+      {
+        smartRouter: "auto",
+        smartRouterTimeoutMs: 10000,
+        smartRouterContextTokenBudget: 4096,
+        smartRouterProbeRefreshIntervalMs: 3600000,
+        smartRouterProbeTtlMs: 300000,
+        smartRouterRouteTtlSeconds: 21600,
+        listen: { scheme: "tcp", host: "localhost", port: 4401 },
+        profile: "SERVICE-PROFILE",
+        bodyLimit: "100mb",
+        preferSystemModels: false,
+      },
+    ]);
   });
 
   it("never serializes a bearer token into service arguments", () => {

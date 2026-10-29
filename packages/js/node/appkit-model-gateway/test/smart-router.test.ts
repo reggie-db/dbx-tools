@@ -173,6 +173,7 @@ describe("Smart Router service", () => {
 
     assert.equal(await first.isEnabled(candidates, fakeClient()), true);
     await waitFor(() => store.size > 0);
+    assert.equal(store.ttlSeconds, 120);
     first.dispose();
 
     let calls = 0;
@@ -322,13 +323,15 @@ class MemoryStore implements SmartRouterStore {
 
 class MemoryProbeStore implements SmartRouterProbeStore {
   private readonly values = new Map<string, SmartRouterProbeRecord>();
+  ttlSeconds?: number;
 
   get(key: string): Promise<unknown> {
     return Promise.resolve(this.values.get(key));
   }
 
-  set(key: string, value: SmartRouterProbeRecord): Promise<void> {
+  set(key: string, value: SmartRouterProbeRecord, ttlSeconds: number): Promise<void> {
     this.values.set(key, value);
+    this.ttlSeconds = ttlSeconds;
     return Promise.resolve();
   }
 

@@ -85,7 +85,7 @@ export interface SmartRouterProbeStore {
   set(
     key: string,
     value: SmartRouterProbeRecord,
-    ttlMs: number,
+    ttlSeconds: number,
     client: WorkspaceClient,
   ): Promise<void>;
 }
@@ -144,7 +144,7 @@ export class AppKitSmartRouterProbeStore implements SmartRouterProbeStore {
   async set(
     key: string,
     value: SmartRouterProbeRecord,
-    ttlMs: number,
+    ttlSeconds: number,
     client: WorkspaceClient,
   ): Promise<void> {
     const cache = appKitCacheManager();
@@ -153,7 +153,7 @@ export class AppKitSmartRouterProbeStore implements SmartRouterProbeStore {
     await cache.set(
       cache.generateKey([PROBE_CACHE_NAMESPACE, PROBE_CACHE_VERSION], `${identity}:${key}`),
       value,
-      { ttl: ttlMs },
+      { ttl: ttlSeconds },
     );
   }
 }
@@ -363,7 +363,12 @@ export class SmartRouterService {
       await this.probeStore.set(
         entry.key,
         { enabled, expiresAt: entry.expiresAt },
-        Math.max(this.settings.probeRefreshIntervalMs, this.settings.probeTtlMs) * 2,
+        Math.max(
+          1,
+          Math.ceil(
+            (Math.max(this.settings.probeRefreshIntervalMs, this.settings.probeTtlMs) * 2) / 1_000,
+          ),
+        ),
         client,
       );
     } catch (error) {
@@ -590,7 +595,7 @@ export class SmartModelRouter {
       ...(selected.params ? { params: selected.params } : {}),
     });
     await this.writeCached(key, observation);
-    logger.info("selected Smart Router model", {
+    logger.debug("selected Smart Router model", {
       candidateCount: candidates.length,
       harness,
       latencyMs: observation.latencyMs,
