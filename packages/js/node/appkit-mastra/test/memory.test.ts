@@ -2,10 +2,24 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { PostgresStore } from "@mastra/pg";
 
-import { createMastraLakebasePool, withSoftStorageInit } from "../src/memory.ts";
+import type { AnyMastraAgentDefinition } from "../src/agents.ts";
+import type { MastraPluginConfig } from "../src/config.ts";
+import {
+  createMastraLakebasePool,
+  createMemoryBuilder,
+  withSoftStorageInit,
+} from "../src/memory.ts";
 
 type SoftStore = PostgresStore & {
   isInitialized: boolean;
+};
+
+type MemoryThreadConfig = {
+  threadConfig: {
+    generateTitle?: {
+      model?: unknown;
+    };
+  };
 };
 
 function failingStore(
@@ -60,6 +74,36 @@ describe("soft storage initialization", () => {
 
     assert.equal(attempts.count, 1);
     assert.equal((store as SoftStore).isInitialized, false);
+  });
+});
+
+describe("thread title generation", () => {
+  it("uses a dedicated model instead of the primary agent model", async () => {
+    const pool = createMastraLakebasePool({
+      database: "test",
+      host: "127.0.0.1",
+      password: "test",
+      port: 1,
+      user: "test",
+    });
+    const config: MastraPluginConfig = {
+      storage: {
+        id: "title-test",
+        pool,
+      },
+    };
+    const definition: AnyMastraAgentDefinition = {
+      instructions: "Test agent",
+    };
+
+    try {
+      const memory = createMemoryBuilder(config).forAgent("title-test", definition);
+      const generateTitle = (memory as unknown as MemoryThreadConfig).threadConfig.generateTitle;
+
+      assert.equal(typeof generateTitle?.model, "function");
+    } finally {
+      await pool.end();
+    }
   });
 });
 
