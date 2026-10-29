@@ -14,6 +14,23 @@ describe("reasoning adaptation", () => {
     assert.deepEqual(adapted.body.reasoning, { effort: "medium" });
   });
 
+  it("clamps Qwen requests to its published low-medium ladder", () => {
+    for (const requested of ["high", "xhigh", "max", "none", null, "not-a-level"]) {
+      const adapted = adaptInferenceReasoning("databricks-qwen-3-32b", {
+        model: "databricks-qwen-3-32b",
+        reasoning_effort: requested,
+      });
+      assert.equal(adapted.changed, true);
+      assert.equal(adapted.wireEffort, "medium");
+      assert.equal(adapted.body.reasoning_effort, "medium");
+    }
+
+    const absent = adaptInferenceReasoning("databricks-qwen-3-32b", {
+      model: "databricks-qwen-3-32b",
+    });
+    assert.equal(absent.changed, false);
+  });
+
   it("learns from a BAD_REQUEST body and retries once with a remapped effort", async () => {
     const error = {
       error_code: "BAD_REQUEST",

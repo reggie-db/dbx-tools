@@ -289,7 +289,8 @@ function toMailAttachments(
   }));
 }
 
-const INLINE_BRAND_CID = "dbx-tools-brand-logo";
+/** RFC 2392-style identifier used by the HTML and its related logo attachment. */
+const INLINE_BRAND_CID = "dbx-tools-brand-logo@dbx.tools";
 
 function inlineBrandImage(brand: EmailBrand): {
   brand: EmailBrand;
@@ -310,7 +311,6 @@ function inlineBrandImage(brand: EmailBrand): {
       content,
       encoding: "base64",
       contentType,
-      contentDisposition: "inline",
       cid: INLINE_BRAND_CID,
     },
   };

@@ -164,13 +164,13 @@ describe("listServingEndpointsUncached model policy", () => {
         {
           name: "databricks-gpt-5-3-codex",
           family: "gpt",
-          reasoningEfforts: ["low", "medium", "high"],
+          reasoningEfforts: ["low", "medium", "high", "xhigh"],
           supportsTools: true,
         },
         {
           name: "databricks-grok-4-7",
           family: "grok",
-          reasoningEfforts: undefined,
+          reasoningEfforts: ["low", "medium", "high", "xhigh"],
           supportsTools: true,
         },
         {
@@ -196,6 +196,7 @@ describe("listServingEndpointsUncached model policy", () => {
       supportsTools: true,
       serviceNames: { xai: "grok-4.7" },
       modelServiceName: "system.ai.databricks-grok-4-7",
+      reasoningEfforts: ["low", "medium", "high", "xhigh"],
       status: { deprecated: false },
     });
     assert.deepEqual(endpoints[3], {

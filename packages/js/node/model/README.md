@@ -50,7 +50,10 @@ The package:
 - Builds the invocations URL and mints per-request auth headers for callers that
   issue their own OpenAI-shaped HTTP requests.
 - Provides build-generated retirement, Responses, image-input, apply-patch,
-  web-search, ITPM, OTPM, and QPH metadata through cached in-process lookups.
+  web-search, reasoning, tool-calling, structured-output, ITPM, OTPM, and QPH
+  metadata through cached in-process lookups. Databricks documentation is
+  enriched with models.dev and modelparams.dev snapshots, while committed
+  fallbacks keep refreshes and runtime startup offline-safe.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 

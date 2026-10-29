@@ -1,17 +1,28 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import { z } from "zod";
 import { CliServiceDefinitionSchema, type CliServiceDefinition } from "./definition.ts";
 
-export async function readServiceDefinition(path: string): Promise<CliServiceDefinition> {
-  return CliServiceDefinitionSchema.parse(JSON.parse(await readFile(path, "utf8")));
+const InstalledCliServiceDefinitionSchema = CliServiceDefinitionSchema.unwrap().extend({
+  hostExecutable: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Installed service host executable. Absent on legacy installations."),
+}).readonly();
+
+export type InstalledCliServiceDefinition = z.infer<typeof InstalledCliServiceDefinitionSchema>;
+
+export async function readServiceDefinition(path: string): Promise<InstalledCliServiceDefinition> {
+  return InstalledCliServiceDefinitionSchema.parse(JSON.parse(await readFile(path, "utf8")));
 }
 
 export async function writeServiceDefinition(
   path: string,
-  definition: CliServiceDefinition,
+  definition: CliServiceDefinition & { readonly hostExecutable: string },
 ): Promise<void> {
-  const parsed = CliServiceDefinitionSchema.parse(definition);
+  const parsed = InstalledCliServiceDefinitionSchema.parse(definition);
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify(parsed, null, 2)}\n`, {

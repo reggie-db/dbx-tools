@@ -145,7 +145,7 @@ describe("caller-supplied plain-text alternative", () => {
   interface CapturedEmail {
     text: string;
     html: string;
-    attachments: Array<{ cid?: string; contentDisposition?: string }>;
+    attachments: Array<{ cid?: string }>;
   }
 
   /** Send through a stubbed SMTP transporter and return the captured payload. */
@@ -165,7 +165,7 @@ describe("caller-supplied plain-text alternative", () => {
       (runtime.transporter as unknown as Record<string, unknown>).sendMail = async (payload: {
         text: string;
         html: string;
-        attachments: Array<{ cid?: string; contentDisposition?: string }>;
+        attachments: Array<{ cid?: string }>;
       }) => {
         captured = payload;
         return { messageId: "stub" };
@@ -203,13 +203,9 @@ describe("caller-supplied plain-text alternative", () => {
     assert.match(html, /Verification code\s*<\/h1>/);
     assert.match(html, /Your verification code is: 123456/);
     assert.doesNotMatch(html, />Subject\s*<\/h1>/);
-    assert.match(html, /src="cid:dbx-tools-brand-logo"/);
+    assert.match(html, /src="cid:dbx-tools-brand-logo@dbx\.tools"/);
     assert.equal(
-      attachments.some(({ cid }) => cid === "dbx-tools-brand-logo"),
-      true,
-    );
-    assert.equal(
-      attachments.some(({ contentDisposition }) => contentDisposition === "inline"),
+      attachments.some(({ cid }) => cid === "dbx-tools-brand-logo@dbx.tools"),
       true,
     );
   });

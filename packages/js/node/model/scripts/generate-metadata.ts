@@ -3,20 +3,26 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  parseModelParams,
   parseModelCapabilities,
   parseModelRateLimits,
+  parseModelsDev,
   parseReasoningModels,
   parseRetiredModels,
 } from "../src/_metadata-generator.ts";
 import {
+  MODELPARAMS_DEV_MODELS_URL,
+  MODELS_DEV_API_URL,
   MODEL_METADATA_TTL_MS,
   MODEL_RATE_LIMITS_URL,
   OPENAI_RESPONSES_MODELS_URL,
   QUERY_REASON_MODELS_URL,
   RETIRED_MODELS_URL,
   WEB_SEARCH_MODELS_URL,
+  type ModelParamsSnapshot,
   type ModelCapabilitiesSnapshot,
   type ModelRateLimitsSnapshot,
+  type ModelsDevSnapshot,
   type ReasoningModelsSnapshot,
   type RetiredModelsSnapshot,
 } from "../src/metadata-contract.ts";
@@ -41,6 +47,12 @@ await Promise.all([
   ),
   refreshSnapshot<ReasoningModelsSnapshot>("model-reasoning.json", async () =>
     parseReasoningModels(await loadPage(QUERY_REASON_MODELS_URL), now),
+  ),
+  refreshSnapshot<ModelsDevSnapshot>("models-dev-capabilities.json", async () =>
+    parseModelsDev(await loadJson(MODELS_DEV_API_URL), now),
+  ),
+  refreshSnapshot<ModelParamsSnapshot>("modelparams-reasoning.json", async () =>
+    parseModelParams(await loadJson(MODELPARAMS_DEV_MODELS_URL), now),
   ),
 ]);
 
@@ -75,6 +87,17 @@ async function loadPage(url: string): Promise<string> {
     throw new Error(`Databricks documentation returned HTTP ${response.status}: ${url}`);
   }
   return response.text();
+}
+
+async function loadJson(url: string): Promise<unknown> {
+  const response = await fetch(url, {
+    headers: { "user-agent": "dbx-tools-model-metadata/1" },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Model metadata source returned HTTP ${response.status}: ${url}`);
+  }
+  return response.json();
 }
 
 async function readSnapshot<T>(path: string): Promise<T | undefined> {

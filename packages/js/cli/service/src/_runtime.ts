@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
-import { spawn } from "@dbx-tools/core";
+import { spawn, withFileLock } from "@dbx-tools/core";
 import { log, isRecord } from "@dbx-tools/shared-core";
 
 const logger = log.logger("cli:service");
@@ -15,40 +15,64 @@ export async function installServiceRuntime(
   directory: string,
   dependencies: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const packages = Object.keys(dependencies);
-  await mkdir(directory, { recursive: true });
-  const manifestPath = join(directory, "package.json");
-  const current = await readOptionalRecord(manifestPath);
-  await writeFile(
-    manifestPath,
-    `${JSON.stringify(
-      {
-        ...current,
-        name: "@dbx-tools/service-runtime",
-        private: true,
-        dependencies: {
-          ...stringRecord(current.dependencies),
-          ...dependencies,
+  const runtimeDirectory = resolve(directory);
+  if (await serviceRuntimeSatisfied(runtimeDirectory, dependencies)) return;
+  await withFileLock(["cli-service-runtime", runtimeDirectory], async () => {
+    if (await serviceRuntimeSatisfied(runtimeDirectory, dependencies)) return;
+    await mkdir(runtimeDirectory, { recursive: true });
+    const packages = Object.keys(dependencies);
+    const manifestPath = join(runtimeDirectory, "package.json");
+    const current = await readOptionalRecord(manifestPath);
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify(
+        {
+          ...current,
+          name: "@dbx-tools/service-runtime",
+          private: true,
+          dependencies: {
+            ...stringRecord(current.dependencies),
+            ...dependencies,
+          },
         },
-      },
-      null,
-      2,
-    )}\n`,
-    "utf8",
-  );
-  if (packages.length > 0) {
-    logger.info("installing service runtime packages", { directory, packages });
-  }
-  await spawn(bunExecutable, ["install", "--production", "--cwd", directory], {
-    check: true,
-    cwd: directory,
-    stdin: "ignore",
-    stdout: "capture",
-    stderr: "capture",
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    if (packages.length > 0) {
+      logger.info("installing service runtime packages", { directory: runtimeDirectory, packages });
+    }
+    await spawn(bunExecutable, ["install", "--production", "--cwd", runtimeDirectory], {
+      check: true,
+      cwd: runtimeDirectory,
+      stdin: "ignore",
+      stdout: "capture",
+      stderr: "capture",
+    });
+    if (packages.length > 0) {
+      logger.info("service runtime packages installed", {
+        directory: runtimeDirectory,
+        packages,
+      });
+    }
   });
-  if (packages.length > 0) {
-    logger.info("service runtime packages installed", { directory, packages });
+}
+
+async function serviceRuntimeSatisfied(
+  directory: string,
+  dependencies: Readonly<Record<string, string>>,
+): Promise<boolean> {
+  const manifest = await readOptionalRecord(join(directory, "package.json"));
+  const declared = stringRecord(manifest.dependencies);
+  for (const [name, version] of Object.entries(dependencies)) {
+    if (declared[name] !== version) return false;
+    const installed = await readOptionalRecord(
+      join(directory, "node_modules", ...name.split("/"), "package.json"),
+    );
+    if (installed.version !== version) return false;
   }
+  return true;
 }
 
 /** Create a clean uv environment and install the primary and companion Python packages. */

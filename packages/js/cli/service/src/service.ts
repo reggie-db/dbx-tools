@@ -10,13 +10,14 @@
  */
 
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { type BinContext, ensure } from "@dbx-tools/core";
+import { type BinContext, ensure, withFileLock } from "@dbx-tools/core";
 import { sleep } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { compileWithBun } from "./_compile.ts";
@@ -80,6 +81,8 @@ export interface CliServiceRuntimeOptions {
   readonly homeDirectory?: string;
   /** Temporary directory used for the local control socket. */
   readonly temporaryDirectory?: string;
+  /** Current user ID used for platform login registration. */
+  readonly userId?: number;
   /** Shared dbx-tools home containing installed service binaries. */
   readonly globalHomeDirectory?: string;
   /** Package-provided Bun executable override. */
@@ -181,6 +184,7 @@ export class CliService implements CliServiceLifecycle {
       environment: options.environment ?? defaults.environment,
       homeDirectory: options.homeDirectory ?? defaults.homeDirectory,
       temporaryDirectory: options.temporaryDirectory ?? defaults.temporaryDirectory,
+      userId: options.userId ?? defaults.userId,
     };
     this.globalHomeDirectory =
       options.globalHomeDirectory ?? join(this.runtime.homeDirectory, ".dbx-tools");
@@ -201,6 +205,16 @@ export class CliService implements CliServiceLifecycle {
     if (options.pythonProject && !this.definition.pythonPackage) {
       throw new Error(`${this.definition.name} does not define a Python package`);
     }
+    const paths = resolveServicePaths(this.definition, this.runtime);
+    await withFileLock(["cli-service-install", paths.directory], () =>
+      this.installLocked(paths, options),
+    );
+  }
+
+  private async installLocked(
+    paths: ReturnType<typeof resolveServicePaths>,
+    options: CliServiceInstallOptions,
+  ): Promise<void> {
     const owner = resolveServicePackage(this.definition.packageName);
     const dependencies = owner.dependencies();
     const external = new Set(externalRuntimePackages(dependencies));
@@ -209,23 +223,45 @@ export class CliService implements CliServiceLifecycle {
       this.globalHomeDirectory,
       Object.fromEntries(Object.entries(dependencies).filter(([name]) => external.has(name))),
     );
-    const paths = resolveServicePaths(this.definition, this.runtime);
-    const installedDefinition = await this.installDefinition(owner, paths.directory, options);
+    const version = this.definition.version ?? owner.version;
+    const artifactId = `${safeToken(version)}-${randomUUID()}`;
+    const artifactDirectory = join(paths.directory, "versions", artifactId);
+    const artifactBinDirectory = join(
+      this.globalHomeDirectory,
+      "bin",
+      this.binaryName(this.definition, "service"),
+      "versions",
+      artifactId,
+    );
+    const installedDefinition = await this.installDefinition(
+      owner,
+      artifactDirectory,
+      artifactBinDirectory,
+      options,
+    );
     const host = await this.ensureCompiledBinary(
       this.binaryName(installedDefinition, "service"),
       this.hostEntrypoint,
       resolve(dirname(this.hostEntrypoint), ".."),
+      [],
+      artifactBinDirectory,
     );
     await this.ensureTrayBinary();
     await this.stop();
-    await writeServiceDefinition(paths.configFile, installedDefinition);
+    const installed = { ...installedDefinition, hostExecutable: host.path };
+    await writeServiceDefinition(paths.configFile, installed);
     await installStartup(
-      installedDefinition,
+      installed,
       paths,
       this.runtime,
       this.launch(host.path, paths.configFile),
     );
     if (options.start ?? true) await this.start();
+    await Promise.all([
+      removeOtherArtifacts(dirname(artifactDirectory), artifactId),
+      removeOtherArtifacts(dirname(artifactBinDirectory), artifactId),
+      rm(join(paths.directory, "python"), { recursive: true, force: true }),
+    ]);
   }
 
   /** Start the installed service when it is not already running. */
@@ -238,7 +274,8 @@ export class CliService implements CliServiceLifecycle {
 
     const installedDefinition = await readServiceDefinition(paths.configFile);
     const launch = this.launch(
-      this.binaryContext(this.binaryName(installedDefinition, "service")).path,
+      installedDefinition.hostExecutable ??
+        this.binaryContext(this.binaryName(installedDefinition, "service")).path,
       paths.configFile,
     );
     const child = spawn(launch.executable, launch.arguments, {
@@ -325,7 +362,8 @@ export class CliService implements CliServiceLifecycle {
 
   private async installDefinition(
     owner: ServicePackage,
-    directory: string,
+    artifactDirectory: string,
+    artifactBinDirectory: string,
     options: CliServiceInstallOptions,
   ): Promise<CliServiceDefinition> {
     const definition = CliServiceDefinitionSchema.parse({
@@ -346,7 +384,7 @@ export class CliService implements CliServiceLifecycle {
         : `${pythonPackage.name}==${pythonPackage.version}`;
       pythonEnvironment.PYTHON = await this.pythonInstaller(
         this.uvExecutable,
-        join(directory, "python"),
+        join(artifactDirectory, "python"),
         [primarySpecifier, ...pythonPackage.dependencies],
         pythonPackage.python,
         this.runtime.platform,
@@ -360,6 +398,7 @@ export class CliService implements CliServiceLifecycle {
           definition.command,
           "command",
           pythonEnvironment,
+          artifactBinDirectory,
         )
       : undefined;
     const menu: CliServiceMenuItem[] = [];
@@ -374,6 +413,7 @@ export class CliService implements CliServiceLifecycle {
                 item.command,
                 `menu-${index + 1}`,
                 pythonEnvironment,
+                artifactBinDirectory,
               ),
             }
           : item,
@@ -393,6 +433,7 @@ export class CliService implements CliServiceLifecycle {
     command: CliServiceCommand,
     purpose: string,
     runtimeEnvironment: Readonly<Record<string, string>>,
+    artifactBinDirectory: string,
   ): Promise<CliServiceCommand> {
     const environment = { ...command.environment, ...runtimeEnvironment };
     if (command.executable) {
@@ -407,6 +448,7 @@ export class CliService implements CliServiceLifecycle {
       resolve(entrypoint),
       owner.directory,
       externalRuntimePackages(owner.dependencies()),
+      artifactBinDirectory,
     );
     return {
       executable: installed.path,
@@ -421,6 +463,7 @@ export class CliService implements CliServiceLifecycle {
     entrypoint: string,
     workingDirectory: string,
     external: readonly string[] = [],
+    binDirectory?: string,
   ): Promise<BinContext> {
     return ensure(
       name,
@@ -430,9 +473,8 @@ export class CliService implements CliServiceLifecycle {
         return pathToFileURL(output).href;
       },
       {
-        destination: this.binaryContext(name),
+        destination: this.binaryContext(name, binDirectory),
         skipVersionCheck: true,
-        force: true,
       },
     );
   }
@@ -450,8 +492,8 @@ export class CliService implements CliServiceLifecycle {
     });
   }
 
-  private binaryContext(name: string): BinContext {
-    const binDir = join(this.globalHomeDirectory, "bin");
+  private binaryContext(name: string, directory?: string): BinContext {
+    const binDir = directory ?? join(this.globalHomeDirectory, "bin");
     return {
       root: this.globalHomeDirectory,
       binDir,
@@ -463,6 +505,21 @@ export class CliService implements CliServiceLifecycle {
     const name = safeToken(definition.name.toLowerCase()).replace(/[._]+/g, "-");
     return purpose === "service" ? name : `${name}-${purpose}`;
   }
+}
+
+async function removeOtherArtifacts(directory: string, current: string): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  await Promise.all(
+    entries
+      .filter((entry) => entry.name !== current)
+      .map((entry) => rm(join(directory, entry.name), { recursive: true, force: true })),
+  );
 }
 
 /** Preserve a package's extras while replacing its registry name with a local project path. */

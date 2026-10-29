@@ -1,6 +1,8 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import { spawn } from "@dbx-tools/core";
+
 import type { ServicePaths, ServiceRuntimeContext } from "./_paths.ts";
 import type { CliServiceDefinition } from "./definition.ts";
 
@@ -26,6 +28,7 @@ export async function installStartup(
     encoding: "utf8",
     mode: runtime.platform === "win32" ? undefined : 0o644,
   });
+  if (runtime.platform === "darwin") await enableLaunchAgent(definition, runtime);
 }
 
 export async function removeStartup(paths: ServicePaths): Promise<void> {
@@ -75,6 +78,21 @@ export function renderDesktopEntry(
 export function renderWindowsStartup(launch: ServiceLaunch): string {
   const command = [launch.executable, ...launch.arguments].map(quoteWindowsArgument).join(" ");
   return `@echo off\r\nstart "" /b ${command}\r\n`;
+}
+
+async function enableLaunchAgent(
+  definition: CliServiceDefinition,
+  runtime: ServiceRuntimeContext,
+): Promise<void> {
+  const userId = runtime.userId;
+  if (userId === undefined) throw new Error("macOS service installation requires a user ID");
+  await spawn("launchctl", ["enable", `gui/${userId}/${definition.id}`], {
+    check: true,
+    env: runtime.environment,
+    stdin: "ignore",
+    stdout: "capture",
+    stderr: "capture",
+  });
 }
 
 function escapeDesktopValue(value: string): string {

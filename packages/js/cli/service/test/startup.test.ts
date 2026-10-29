@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { renderDesktopEntry, renderLaunchAgent, renderWindowsStartup } from "../src/_startup.ts";
+import { resolveServicePaths } from "../src/_paths.ts";
+import {
+  installStartup,
+  renderDesktopEntry,
+  renderLaunchAgent,
+  renderWindowsStartup,
+} from "../src/_startup.ts";
 import type { CliServiceDefinition } from "../src/definition.ts";
 
 const DEFINITION: CliServiceDefinition = {
@@ -18,6 +27,35 @@ const LAUNCH = {
 };
 
 describe("CLI service startup entries", () => {
+  it("re-enables the macOS LaunchAgent during installation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-tools-cli-service-startup-"));
+    const binDirectory = join(root, "bin");
+    const launchctlLog = join(root, "launchctl.log");
+    await mkdir(binDirectory);
+    const launchctl = join(binDirectory, "launchctl");
+    await writeFile(launchctl, '#!/bin/sh\nprintf "%s\\n" "$@" > "$LAUNCHCTL_LOG"\n');
+    await chmod(launchctl, 0o755);
+    const runtime = {
+      platform: "darwin" as const,
+      environment: {
+        PATH: binDirectory,
+        LAUNCHCTL_LOG: launchctlLog,
+      },
+      homeDirectory: root,
+      temporaryDirectory: root,
+      userId: 502,
+    };
+    const paths = resolveServicePaths(DEFINITION, runtime);
+
+    await installStartup(DEFINITION, paths, runtime, LAUNCH);
+
+    assert.equal(
+      await readFile(launchctlLog, "utf8"),
+      `enable\ngui/${runtime.userId}/${DEFINITION.id}\n`,
+    );
+    assert.match(await readFile(paths.startupFile, "utf8"), /<key>RunAtLoad<\/key>/);
+  });
+
   it("renders a macOS per-user LaunchAgent", () => {
     const content = renderLaunchAgent(DEFINITION, LAUNCH);
 

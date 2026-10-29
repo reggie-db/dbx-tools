@@ -197,8 +197,11 @@ export const ModelCapabilitiesSchema = z
     imageInput: z.boolean().describe("True when the model accepts image inputs."),
     applyPatch: z.boolean().describe("True when the model supports the apply-patch tool."),
     webSearch: z.boolean().describe("True when the model supports web search."),
+    reasoning: z.boolean().describe("True when the model supports explicit reasoning controls."),
+    tools: z.boolean().describe("True when the model supports tool calling."),
+    structuredOutput: z.boolean().describe("True when the model supports structured output."),
   })
-  .describe("Documented capabilities resolved for one model identity.");
+  .describe("Published capabilities resolved for one model identity.");
 
 export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
 
@@ -231,7 +234,7 @@ export const ModelMetadataSchema = z
   .object({
     status: ModelStatusSchema.describe("Retirement status for this model identity."),
     capabilities: ModelCapabilitiesSchema.describe(
-      "Documented capabilities for this model identity.",
+      "Published capabilities for this model identity.",
     ),
     rateLimits: ModelRateLimitsSchema.optional().describe("Published rate limits when available."),
   })

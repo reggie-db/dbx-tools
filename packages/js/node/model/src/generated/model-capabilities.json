@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1791150180,
+  "generatedAt": 1793283170,
   "capabilities": {
     "responses": [
       "gpt-5",
@@ -17,6 +17,7 @@
       "gpt-5-mini",
       "gpt-5-nano",
       "gpt-6-1-sol",
+      "gpt-6-1-terra",
       "gpt-6-astra",
       "gpt-6-luna",
       "gpt-6-sol"
@@ -37,6 +38,7 @@
       "gpt-5-mini",
       "gpt-5-nano",
       "gpt-6-1-sol",
+      "gpt-6-1-terra",
       "gpt-6-astra",
       "gpt-6-luna",
       "gpt-6-sol"
@@ -57,13 +59,12 @@
       "gpt-5-mini",
       "gpt-5-nano",
       "gpt-6-1-sol",
+      "gpt-6-1-terra",
       "gpt-6-astra",
       "gpt-6-luna",
       "gpt-6-sol"
     ],
     "webSearch": [
-      "gemini-2-5-flash",
-      "gemini-2-5-pro",
       "gemini-3-1-flash-lite",
       "gemini-3-1-pro",
       "gemini-3-flash",
@@ -82,6 +83,7 @@
       "gpt-5-mini",
       "gpt-5-nano",
       "gpt-6-1-sol",
+      "gpt-6-1-terra",
       "gpt-6-astra",
       "gpt-6-luna",
       "gpt-6-sol"

@@ -9,6 +9,7 @@ export interface ServiceRuntimeContext {
   readonly environment: Readonly<NodeJS.ProcessEnv>;
   readonly homeDirectory: string;
   readonly temporaryDirectory: string;
+  readonly userId?: number;
 }
 
 export interface ServicePaths {
@@ -26,6 +27,7 @@ export function defaultRuntimeContext(): ServiceRuntimeContext {
     environment: process.env,
     homeDirectory: homedir(),
     temporaryDirectory: tmpdir(),
+    userId: process.getuid?.(),
   };
 }
 

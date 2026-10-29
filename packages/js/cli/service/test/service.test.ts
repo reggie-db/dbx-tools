@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 
 import { CliService } from "../src/service.ts";
@@ -69,6 +69,7 @@ describe("CLI service lifecycle", () => {
       await readFile(join(dataDirectory, "service.json"), "utf8"),
     ) as {
       id: string;
+      hostExecutable: string;
       pythonPackage: { name: string; version: string; python: string; dependencies: string[] };
       command: { executable: string; entrypoint?: string; environment: Record<string, string> };
     };
@@ -80,18 +81,38 @@ describe("CLI service lifecycle", () => {
       dependencies: ["companion-runtime==4.5.6"],
     });
     assert.equal(configuration.command.entrypoint, undefined);
+    const artifactId = configuration.command.executable.split("/").at(-2)!;
+    assert.match(artifactId, /^1\.2\.3-[0-9a-f-]{36}$/);
     assert.equal(
       configuration.command.executable,
-      join(globalHomeDirectory, "bin", "example-gateway-command"),
+      join(
+        globalHomeDirectory,
+        "bin",
+        "example-gateway",
+        "versions",
+        artifactId,
+        "example-gateway-command",
+      ),
+    );
+    assert.equal(
+      configuration.hostExecutable,
+      join(
+        globalHomeDirectory,
+        "bin",
+        "example-gateway",
+        "versions",
+        artifactId,
+        "example-gateway",
+      ),
     );
     assert.equal(
       configuration.command.environment.PYTHON,
-      join(dataDirectory, "python/bin/python"),
+      join(dataDirectory, "versions", artifactId, "python/bin/python"),
     );
     assert.deepEqual(pythonInstalls, [
       {
         uv: "/opt/uv",
-        directory: join(dataDirectory, "python"),
+        directory: join(dataDirectory, "versions", artifactId, "python"),
         packageSpecifiers: ["example-runtime[dev]==1.2.3", "companion-runtime==4.5.6"],
         python: "3.12",
         platform: "linux",
@@ -111,9 +132,18 @@ describe("CLI service lifecycle", () => {
     await writeFile(join(pythonProject, "pyproject.toml"), "");
     await service.install({ start: false, pythonProject, offline: true });
 
+    const updatedConfiguration = JSON.parse(
+      await readFile(join(dataDirectory, "service.json"), "utf8"),
+    ) as { command: { executable: string } };
+    const updatedArtifactId = updatedConfiguration.command.executable.split("/").at(-2)!;
+    assert.notEqual(updatedArtifactId, artifactId);
+    await assert.rejects(() => stat(dirname(configuration.command.executable)), {
+      code: "ENOENT",
+    });
+
     assert.deepEqual(pythonInstalls[1], {
       uv: "/opt/uv",
-      directory: join(dataDirectory, "python"),
+      directory: join(dataDirectory, "versions", updatedArtifactId, "python"),
       packageSpecifiers: [`${pythonProject}[dev]`, "companion-runtime==4.5.6"],
       python: "3.12",
       platform: "linux",

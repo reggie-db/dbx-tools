@@ -273,23 +273,24 @@ const DISABLED_REASONING_TOKENS = new Set(["none", "off", "disable", "disabled"]
 /**
  * Remap a requested effort onto the nearest supported {@link ReasoningLevel}.
  *
- * `none` / `off` (and disable aliases) are not a low budget: when the model
- * requires reasoning, they snap to the supported level closest to
- * {@link ReasoningLevel.Medium}. Other requests prefer the highest allowed
- * level at or below the request, otherwise the lowest allowed level.
+ * `none` / `off` (and disable aliases), null, and unrecognized explicit values
+ * are not treated as a low budget: when the model requires reasoning, they
+ * snap to the supported level closest to {@link ReasoningLevel.Medium}. Other
+ * requests prefer the highest allowed level at or below the request, otherwise
+ * the lowest allowed level.
  *
- * Returns `undefined` when the request cannot be parsed or `levels` is empty.
+ * Returns `undefined` only when `levels` is empty.
  */
 export function remapReasoning(
   requested: unknown,
   levels: readonly ReasoningLevel[],
 ): ReasoningLevel | undefined {
   if (levels.length === 0) return undefined;
-  if (isDisabledReasoningToken(requested)) {
+  if (requested == null || isDisabledReasoningToken(requested)) {
     return nearestReasoning(ReasoningLevel.Medium, levels);
   }
   const parsed = parseReasoning(requested);
-  if (!parsed) return undefined;
+  if (!parsed) return nearestReasoning(ReasoningLevel.Medium, levels);
   if (levels.includes(parsed)) return parsed;
   const requestedIndex = REASONING_LEVELS.indexOf(parsed);
   let best: ReasoningLevel | undefined;
@@ -349,7 +350,8 @@ export interface AdaptedRequestReasoning {
  * Rewrite `reasoning_effort` / `reasoning.effort` onto a supported ladder.
  *
  * Model-agnostic: callers supply the allowed levels (learned, documented, or
- * defaults). Bodies without reasoning fields are returned unchanged.
+ * defaults). Explicit null or unrecognized values use the medium-centered
+ * fallback. Bodies without reasoning fields are returned unchanged.
  */
 export function adaptRequestReasoning(
   body: Readonly<Record<string, unknown>>,
@@ -357,11 +359,13 @@ export function adaptRequestReasoning(
 ): AdaptedRequestReasoning {
   if (levels.length === 0) return { body, changed: false };
 
+  const hasTopLevel = Object.hasOwn(body, "reasoning_effort");
   const topLevel = body.reasoning_effort;
   const reasoning = isRecord(body.reasoning) ? body.reasoning : undefined;
+  const hasNested = reasoning ? Object.hasOwn(reasoning, "effort") : false;
   const nested = reasoning?.effort;
-  const requested = topLevel ?? nested;
-  if (requested === undefined) return { body, changed: false };
+  if (!hasTopLevel && !hasNested) return { body, changed: false };
+  const requested = hasTopLevel ? topLevel : nested;
 
   const remapped = remapReasoning(requested, levels);
   if (!remapped) return { body, changed: false };
@@ -370,13 +374,13 @@ export function adaptRequestReasoning(
   let changed = false;
   let next: Record<string, unknown> = { ...body };
 
-  if (typeof topLevel === "string" || typeof topLevel === "number") {
+  if (hasTopLevel) {
     if (String(topLevel) !== wire) {
       next = { ...next, reasoning_effort: wire };
       changed = true;
     }
   }
-  if (reasoning && (typeof nested === "string" || typeof nested === "number")) {
+  if (reasoning && hasNested) {
     if (String(nested) !== wire) {
       next = { ...next, reasoning: { ...reasoning, effort: wire } };
       changed = true;

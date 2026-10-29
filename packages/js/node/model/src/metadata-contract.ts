@@ -23,6 +23,12 @@ export const MODEL_RATE_LIMITS_URL =
 export const QUERY_REASON_MODELS_URL =
   "https://docs.databricks.com/aws/en/machine-learning/model-serving/query-reason-models";
 
+/** models.dev provider catalogue URL. */
+export const MODELS_DEV_API_URL = "https://models.dev/api.json";
+
+/** modelparams.dev normalized model-parameter catalogue URL. */
+export const MODELPARAMS_DEV_MODELS_URL = "https://modelparams.dev/api/v1/models.json";
+
 /** Build-generated retired-model snapshot. */
 export interface RetiredModelsSnapshot {
   readonly generatedAt: number;
@@ -63,4 +69,29 @@ export interface ReasoningModelCatalogue {
 export interface ReasoningModelsSnapshot {
   readonly generatedAt: number;
   readonly catalogue: ReasoningModelCatalogue;
+}
+
+/** Portable capability sets normalized from models.dev. */
+export interface ModelsDevCapabilityCatalogue {
+  readonly imageInput: readonly string[];
+  readonly reasoning: readonly string[];
+  readonly tools: readonly string[];
+  readonly structuredOutput: readonly string[];
+}
+
+/** Build-generated models.dev capability and reasoning snapshot. */
+export interface ModelsDevSnapshot {
+  readonly generatedAt: number;
+  readonly capabilities: ModelsDevCapabilityCatalogue;
+}
+
+/** Reasoning support and discrete effort levels normalized from modelparams.dev. */
+export interface ModelParamsCatalogue extends ReasoningModelCatalogue {
+  readonly reasoning: readonly string[];
+}
+
+/** Build-generated modelparams.dev reasoning snapshot. */
+export interface ModelParamsSnapshot {
+  readonly generatedAt: number;
+  readonly catalogue: ModelParamsCatalogue;
 }

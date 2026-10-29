@@ -1,9 +1,12 @@
 import { load, type CheerioAPI } from "cheerio";
+import { z } from "zod";
 
 import type {
+  ModelParamsSnapshot,
   ModelCapabilitiesSnapshot,
   ModelRateLimitCatalogue,
   ModelRateLimitsSnapshot,
+  ModelsDevSnapshot,
   ReasoningModelsSnapshot,
   RetiredModelsSnapshot,
 } from "./metadata-contract.ts";
@@ -39,6 +42,82 @@ const DOCUMENTATION_EFFORT_TOKENS = new Set([
   "maximum",
   "disabled",
 ]);
+const EFFORT_PARAMETER_PATHS = new Set([
+  "generationConfig.thinkingConfig.thinkingLevel",
+  "output_config.effort",
+  "reasoning.effort",
+  "reasoning_effort",
+]);
+const EXTERNAL_ALIAS_SUFFIX_PATTERN = /-(?:customtools|latest|preview|subscription)$/i;
+const EXTERNAL_DATE_TOKEN_PATTERN = /-(?:19|20)\d{6}(?=-|$)/g;
+
+const ModelsDevModelSchema = z
+  .object({
+    id: z.string().describe("Provider-specific model identifier."),
+    canonical_model_id: z
+      .string()
+      .optional()
+      .describe("Provider-independent canonical model identifier."),
+    reasoning: z.boolean().optional().describe("Whether the model supports reasoning."),
+    tool_call: z.boolean().optional().describe("Whether the model supports tool calls."),
+    structured_output: z
+      .boolean()
+      .optional()
+      .describe("Whether the model supports structured output."),
+    modalities: z
+      .object({
+        input: z.array(z.string()).describe("Accepted input modalities."),
+      })
+      .passthrough()
+      .optional()
+      .describe("Model input and output modalities."),
+  })
+  .passthrough()
+  .describe("One provider model from models.dev.");
+
+const ModelsDevApiSchema = z
+  .record(
+    z.string(),
+    z
+      .object({
+        models: z
+          .record(z.string(), ModelsDevModelSchema)
+          .describe("Models available through this provider."),
+      })
+      .passthrough()
+      .describe("One models.dev provider catalogue."),
+  )
+  .describe("models.dev provider catalogue response.");
+
+const ModelParamsParameterSchema = z
+  .object({
+    path: z.string().describe("Request-body path for the parameter."),
+    group: z.string().optional().describe("Functional parameter group."),
+    type: z.string().describe("Parameter value type."),
+    values: z
+      .array(z.string().nullable())
+      .optional()
+      .describe("Allowed enum values, including null when omission is supported."),
+  })
+  .passthrough()
+  .describe("One modelparams.dev request parameter.");
+
+const ModelParamsModelSchema = z
+  .object({
+    provider: z.string().describe("Provider identifier."),
+    apiSurface: z.string().describe("Provider API surface."),
+    model: z.string().describe("Provider model identifier."),
+    params: z.array(ModelParamsParameterSchema).describe("Accepted request parameters."),
+  })
+  .passthrough()
+  .describe("One model and API surface from modelparams.dev.");
+
+const ModelParamsApiSchema = z
+  .object({
+    models: z.array(ModelParamsModelSchema).describe("Normalized model parameter records."),
+  })
+  .passthrough()
+  .describe("modelparams.dev model catalogue response.");
 
 /** Parse retired model names from Databricks retirement-policy HTML. */
 export function parseRetiredModels(html: string, generatedAt: number): RetiredModelsSnapshot {
@@ -93,6 +172,84 @@ export function parseModelCapabilities(
   return {
     generatedAt,
     capabilities: { responses, imageInput, applyPatch, webSearch },
+  };
+}
+
+/** Normalize portable model capabilities and effort ladders from models.dev JSON. */
+export function parseModelsDev(
+  input: unknown,
+  generatedAt: number,
+): ModelsDevSnapshot {
+  const providers = ModelsDevApiSchema.parse(input);
+  const imageInput = new Set<string>();
+  const reasoning = new Set<string>();
+  const tools = new Set<string>();
+  const structuredOutput = new Set<string>();
+
+  for (const provider of Object.values(providers)) {
+    for (const [catalogueId, model] of Object.entries(provider.models)) {
+      const keys = externalModelKeys(catalogueId, model.id, model.canonical_model_id);
+      if (keys.length === 0) continue;
+      for (const key of keys) {
+        if (model.modalities?.input.includes("image")) imageInput.add(key);
+        if (model.reasoning === true) reasoning.add(key);
+        if (model.tool_call === true) tools.add(key);
+        if (model.structured_output === true) structuredOutput.add(key);
+      }
+    }
+  }
+  if (reasoning.size === 0 && imageInput.size === 0 && tools.size === 0) {
+    throw new Error("models.dev contained no recognized model capabilities");
+  }
+  return {
+    generatedAt,
+    capabilities: {
+      imageInput: [...imageInput].sort(),
+      reasoning: [...reasoning].sort(),
+      tools: [...tools].sort(),
+      structuredOutput: [...structuredOutput].sort(),
+    },
+  };
+}
+
+/** Normalize reasoning support and effort ladders from modelparams.dev JSON. */
+export function parseModelParams(
+  input: unknown,
+  generatedAt: number,
+): ModelParamsSnapshot {
+  const response = ModelParamsApiSchema.parse(input);
+  const reasoning = new Set<string>();
+  const models: Record<string, ReasoningLevel[]> = {};
+
+  for (const model of response.models) {
+    const reasoningParameters = model.params.filter((parameter) => parameter.group === "reasoning");
+    if (reasoningParameters.length === 0) continue;
+    const keys = externalModelKeys(model.model);
+    const levels = sortReasoningLevels(
+      reasoningParameters
+        .filter(
+          (parameter) =>
+            parameter.type === "enum" && EFFORT_PARAMETER_PATHS.has(parameter.path),
+        )
+        .flatMap((parameter) => parameter.values ?? [])
+        .flatMap((value) => parseReasoning(value) ?? []),
+    );
+    for (const key of keys) {
+      reasoning.add(key);
+      if (levels.length > 0) {
+        models[key] = sortReasoningLevels([...(models[key] ?? []), ...levels]);
+      }
+    }
+  }
+  if (reasoning.size === 0) {
+    throw new Error("modelparams.dev contained no recognized reasoning models");
+  }
+  return {
+    generatedAt,
+    catalogue: {
+      reasoning: [...reasoning].sort(),
+      models: sortRecord(models),
+    },
   };
 }
 
@@ -344,6 +501,22 @@ function modelKey(value: string | undefined): string | undefined {
     if (name.endsWith(suffix)) name = name.slice(0, -suffix.length).trim();
   }
   return modelSearchQuery(name)?.replaceAll(" ", "-");
+}
+
+function externalModelKeys(...values: readonly (string | undefined)[]): string[] {
+  const aliases = new Set<string>();
+  for (const value of values) {
+    if (!value) continue;
+    const queue = [value, value.replace(EXTERNAL_DATE_TOKEN_PATTERN, "")];
+    while (queue.length > 0) {
+      const candidate = queue.shift()!;
+      if (aliases.has(candidate)) continue;
+      aliases.add(candidate);
+      const trimmed = candidate.replace(EXTERNAL_ALIAS_SUFFIX_PATTERN, "");
+      if (trimmed !== candidate) queue.push(trimmed);
+    }
+  }
+  return [...new Set([...aliases].flatMap((alias) => modelKey(alias) ?? []))].sort();
 }
 
 function number(value: string | undefined): number | null {

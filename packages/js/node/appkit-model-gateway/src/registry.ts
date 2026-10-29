@@ -196,7 +196,7 @@ export class DatabricksModelRegistry implements ModelRegistry {
       aiGatewayCodex:
         !embeddings && Boolean(modelServiceName) && family !== "claude" && family !== "gemini",
       tools: endpoint.supportsTools === true,
-      reasoning: policy.modelReasoningEfforts(endpoint.name).length > 0,
+      reasoning: Boolean(endpoint.reasoningEfforts?.length) || published.reasoning,
       streaming: true,
       parallelTools: endpoint.supportsTools === true,
       customTools: published.applyPatch || endpoint.name.includes("codex"),

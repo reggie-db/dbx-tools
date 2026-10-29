@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1791233726,
+  "generatedAt": 1793283170,
   "catalogue": {
     "models": {
       "claude-5-1-fable": [
@@ -9,6 +9,11 @@
         "extra-high",
         "max"
       ],
+      "claude-5-5-haiku": [
+        "low",
+        "medium",
+        "high"
+      ],
       "claude-5-5-opus": [
         "low",
         "medium",
@@ -17,6 +22,12 @@
         "max"
       ],
       "deepseek-4-1-flash": [
+        "low",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "deepseek-4-1-flash-1017": [
         "low",
         "high",
         "extra-high",
@@ -72,6 +83,11 @@
         "medium",
         "high"
       ],
+      "gemini-4-argon": [
+        "low",
+        "medium",
+        "high"
+      ],
       "glm-5-2": [
         "high",
         "max"
@@ -87,6 +103,13 @@
         "max"
       ],
       "gpt-6-1-sol": [
+        "low",
+        "medium",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "gpt-6-1-terra": [
         "low",
         "medium",
         "high",

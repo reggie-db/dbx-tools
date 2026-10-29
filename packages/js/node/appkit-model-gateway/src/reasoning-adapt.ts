@@ -2,8 +2,8 @@
  * Reasoning-effort adaptation for gateway round trips.
  *
  * Proactively remaps client efforts onto the known ladder, then on a single
- * unsupported-value 400 learns from the error and retries once with the
- * updated ladder.
+ * unsupported-value 400 resolves the preferred published-or-learned ladder
+ * and retries once.
  *
  * @module
  */
@@ -45,8 +45,8 @@ export function adaptInferenceReasoning(
 }
 
 /**
- * On an unsupported-reasoning 400, learn once and optionally produce a
- * remapped retry body. Returns `undefined` when no retry should occur.
+ * On an unsupported-reasoning 400, resolve the preferred ladder and optionally
+ * produce a remapped retry body. Returns `undefined` when no retry should occur.
  */
 export async function learnAndAdaptReasoningRetry(input: {
   readonly model: string;
@@ -66,7 +66,7 @@ export async function learnAndAdaptReasoningRetry(input: {
   if (parseReasoningLevels(errorBody).length === 0) return undefined;
 
   const levels = await learnReasoningLevelsFromError(input.model, errorBody);
-  logger.info("learned reasoning levels from upstream error", {
+  logger.info("resolved reasoning levels after upstream error", {
     model: input.model,
     levels,
   });

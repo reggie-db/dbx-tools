@@ -4,6 +4,7 @@ import {
   type ModelClass as ModelClassType,
   type ModelQuery,
   type RankedModel,
+  type ReasoningEffort,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 import { toModelDisplayName } from "@dbx-tools/shared-model";
@@ -16,6 +17,7 @@ import {
   supportsToolsByFamily,
   versionTuple,
 } from "./classify.ts";
+import { modelCapabilitiesFor, modelReasoningLevelsFor } from "./metadata.ts";
 import {
   isOpenWeightsGpt,
   modelFamily,
@@ -225,9 +227,13 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
     const family =
       foundationModels.map((model) => trimToUndefined(model.model_class)).find(Boolean) ??
       identities.map(modelFamily).find(Boolean);
+    const publishedReasoning = identities
+      .filter((identity) => modelCapabilitiesFor(identity).reasoning)
+      .map((identity) => modelReasoningLevelsFor(identity).map(reasoningEffort));
     const reasoningEfforts =
-      identities.map(modelReasoningEfforts).sort((left, right) => right.length - left.length)[0] ??
-      [];
+      [...publishedReasoning, ...identities.map(modelReasoningEfforts)].sort(
+        (left, right) => right.length - left.length,
+      )[0] ?? [];
     const profile = entities.map(modelProfile).find(Boolean);
     const capabilitiesRecord = record(endpoint.capabilities);
     const foundationDescription = foundationModels
@@ -258,6 +264,10 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
     const modelClass = classes.get(summary.name);
     return modelClass ? { ...summary, class: modelClass } : summary;
   });
+}
+
+function reasoningEffort(level: ReturnType<typeof modelReasoningLevelsFor>[number]): ReasoningEffort {
+  return level === "extra-high" ? "xhigh" : level;
 }
 
 function compareRanked(left: RankedModel, right: RankedModel, preferSystemModels: boolean): number {

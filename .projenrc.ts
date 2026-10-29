@@ -525,6 +525,7 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@databricks/appkit@catalog:",
     "cheerio@^1.2.0",
     "fuse.js@^7.4.2",
+    "zod@catalog:",
   );
   p.addTask("metadata", {
     exec: "bun scripts/generate-metadata.ts",

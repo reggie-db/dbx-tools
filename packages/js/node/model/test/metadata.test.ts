@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 
 import {
   parseModelCapabilities,
+  parseModelParams,
   parseModelRateLimits,
+  parseModelsDev,
   parseRetiredModels,
 } from "../src/_metadata-generator.ts";
 import {
@@ -61,6 +63,80 @@ describe("model metadata generation", () => {
       queriesPerHour: 3600,
     });
   });
+
+  it("normalizes models.dev capabilities and effort aliases", () => {
+    const snapshot = parseModelsDev(
+      {
+        anthropic: {
+          models: {
+            "claude-fable-5-1": {
+              id: "claude-fable-5-1",
+              canonical_model_id: "anthropic/claude-fable-5-1",
+              reasoning: true,
+              reasoning_options: [
+                { type: "effort", values: ["low", "medium", "high", "xhigh", "max"] },
+              ],
+              tool_call: true,
+              structured_output: true,
+              modalities: { input: ["text", "image"], output: ["text"] },
+            },
+          },
+        },
+      },
+      42,
+    );
+    assert.deepEqual(snapshot.capabilities, {
+      imageInput: ["claude-5-1-fable"],
+      reasoning: ["claude-5-1-fable"],
+      tools: ["claude-5-1-fable"],
+      structuredOutput: ["claude-5-1-fable"],
+    });
+  });
+
+  it("normalizes modelparams.dev effort fields and preview aliases", () => {
+    const snapshot = parseModelParams(
+      {
+        models: [
+          {
+            provider: "openai",
+            apiSurface: "openai-responses",
+            model: "gpt-5.6-sol",
+            params: [
+              {
+                path: "reasoning.effort",
+                group: "reasoning",
+                type: "enum",
+                values: ["none", "low", "medium", "high", "xhigh", "max"],
+              },
+            ],
+          },
+          {
+            provider: "google",
+            apiSurface: "google-generate-content",
+            model: "gemini-3.1-pro-preview",
+            params: [
+              {
+                path: "generationConfig.thinkingConfig.thinkingLevel",
+                group: "reasoning",
+                type: "enum",
+                values: ["low", "high"],
+              },
+            ],
+          },
+        ],
+      },
+      42,
+    );
+    assert.deepEqual(snapshot.catalogue.models["gpt-5-6-sol"], [
+      "low",
+      "medium",
+      "high",
+      "extra-high",
+      "max",
+    ]);
+    assert.deepEqual(snapshot.catalogue.models["gemini-3-1-pro"], ["low", "high"]);
+    assert.ok(snapshot.catalogue.reasoning.includes("gemini-3-1-pro-preview"));
+  });
 });
 
 describe("model metadata lookup", () => {
@@ -90,6 +166,8 @@ describe("model metadata lookup", () => {
     );
     assert.equal(modelCapabilitiesFor("system.ai.gemini-3-1-pro").webSearch, true);
     assert.equal(modelCapabilitiesFor("databricks-claude-sonnet-4-6").webSearch, false);
+    assert.equal(modelCapabilitiesFor("databricks-claude-sonnet-4-6").tools, true);
+    assert.equal(modelCapabilitiesFor("databricks-gpt-5-5").reasoning, true);
     assert.deepEqual(modelRateLimitsFor(endpoint), modelRateLimitsFor("gpt-5.4"));
     assert.equal(modelRateLimitsFor("system.ai.bge-large-en")?.queriesPerHour, 2_160_000);
     assert.deepEqual(modelMetadataFor(endpoint).status, { deprecated: false });

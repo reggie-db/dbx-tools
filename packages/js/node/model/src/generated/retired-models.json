@@ -1,11 +1,13 @@
 {
-  "generatedAt": 1791144427,
+  "generatedAt": 1793283170,
   "models": [
     "Anthropic Claude 3.7 Sonnet",
     "Anthropic Claude Sonnet 4",
     "DBRX",
     "DBRX Instruct",
+    "DeepSeek V4 Flash (0731)",
     "DeepSeek V4 Pro (0813)",
+    "DeepSeek V4.1 Flash",
     "Gemini 2.5 Flash",
     "Gemini 2.5 Pro",
     "Gemini 3 Pro",

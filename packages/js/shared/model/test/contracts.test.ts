@@ -27,6 +27,9 @@ describe("browser-safe model schemas", () => {
           imageInput: false,
           applyPatch: true,
           webSearch: false,
+          reasoning: true,
+          tools: true,
+          structuredOutput: true,
         },
         rateLimits: {
           inputTokensPerMinute: 100,
