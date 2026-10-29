@@ -29,6 +29,14 @@ export const ModelFamily = {
 export type ModelFamily = (typeof ModelFamily)[keyof typeof ModelFamily];
 
 const FAMILIES = Object.values(ModelFamily);
+const OPEN_WEIGHT_FAMILIES = new Set<ModelFamily>([
+  ModelFamily.Llama,
+  ModelFamily.Deepseek,
+  ModelFamily.Qwen,
+  ModelFamily.Glm,
+  ModelFamily.Kimi,
+  ModelFamily.Gemma,
+]);
 
 const STANDARD: ReasoningEffort[] = ["low", "medium", "high"];
 const GPT_5_6: ReasoningEffort[] = ["none", "low", "medium", "high", "xhigh", "max"];
@@ -142,6 +150,13 @@ export function prefersSystemModelService(
 /** Return whether an identity is hosted GPT-OSS rather than a GPT generation. */
 export function isOpenWeightsGpt(name: string): boolean {
   return modelFamily(name) === "gpt" && /(?:^|[-_.])oss(?:[-_.]|$)/i.test(name);
+}
+
+/** Return whether policy recognizes a hosted identity as an open-weight model. */
+export function isOpenWeightsModel(name: string): boolean {
+  if (isOpenWeightsGpt(name)) return true;
+  const family = modelFamily(name);
+  return family !== undefined && OPEN_WEIGHT_FAMILIES.has(family);
 }
 
 function isZeroVersion(version: readonly number[]): boolean {

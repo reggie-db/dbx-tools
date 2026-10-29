@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { generateText } from "ai";
 
 import { createDatabricksLanguageModel } from "../src/provider.ts";
 
@@ -44,5 +45,39 @@ describe("Databricks AI SDK provider", () => {
       providerName: "databricks",
     });
     assert.equal(model.provider, "databricks.responses");
+  });
+
+  it("surfaces Chat Completions thinking as AI SDK reasoning", async () => {
+    const model = createDatabricksLanguageModel({
+      ...baseOptions,
+      protocol: "chat",
+      fetch: async () =>
+        Response.json({
+          id: "chatcmpl_1",
+          created: 1,
+          model: baseOptions.modelId,
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                role: "assistant",
+                content: [
+                  {
+                    type: "reasoning",
+                    summary: [{ type: "summary_text", text: "Checking the result." }],
+                  },
+                  { type: "text", text: "The result is valid." },
+                ],
+              },
+            },
+          ],
+          usage: { prompt_tokens: 2, completion_tokens: 4, total_tokens: 6 },
+        }),
+    });
+
+    const result = await generateText({ model, prompt: "Check the result." });
+
+    assert.equal(result.reasoningText, "Checking the result.");
+    assert.equal(result.text, "The result is valid.");
   });
 });

@@ -90,4 +90,5 @@ Responses features such as `previous_response_id`, `store: true`, or
 The Chat provider's request-scoped fetch removes unsupported fields, applies
 GPT 5.6 tool-call reasoning compatibility, strips provider reasoning blocks
 that can't be replayed, repairs assistant prefill after tool results, and
-flattens array-valued response content. It doesn't modify `globalThis.fetch`.
+flattens array-valued response content while preserving returned thinking as
+AI SDK reasoning events. It doesn't modify `globalThis.fetch`.

@@ -12,7 +12,6 @@ date and final status.
 
 ## Active plans
 
-- [Add context-aware `auto` routing to the model gateway](2026-10-29-model-gateway-auto-routing.md)
 - [Support service-principal MLflow feedback in Databricks Apps](2026-10-08-apps-feedback-service-principal-client.md)
 
 ## Cross-repository suggestions

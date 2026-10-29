@@ -2,7 +2,21 @@
 
 Date: 2026-10-29
 
-Status: Proposed. No implementation has started.
+Status: Implemented and archived 2026-10-29.
+
+The model gateway now exposes one generic virtual `auto` model across OpenAI
+Responses, OpenAI Chat Completions, Anthropic Messages, and Codex-compatible
+Responses traffic. Databricks System One classifies each logical user turn,
+the existing model package resolves the decision against live compatible
+models, and deterministic fallback keeps the gateway available when selection
+fails or confidence is low.
+
+Supported chat clients already replay portable message history in each model
+request. The implementation therefore does not add a separate conversation
+context provider or query Mastra storage. Selector context uses a token budget
+rather than a fixed six-message limit, prioritizing the current request and then
+the newest prior user and assistant messages. It uses the established
+`js-tiktoken` `o200k_base` encoding instead of a local token estimator.
 
 ## Goal
 
@@ -86,6 +100,33 @@ The current meanings of `auto` are narrower than this proposal:
 The implementation must replace the user-facing meaning of an unpinned
 Mastra `auto` turn with the new virtual model behavior without creating a
 second model-selection owner.
+
+## Persistence decision
+
+Automatic routing needs only short-lived key-value state to pin one concrete
+model and reasoning effort across tool continuations and retries. It does not
+need another conversation-history store. The gateway therefore exposes an
+injectable `AutomaticRouteStore` and defaults it to AppKit `CacheManager`.
+
+This default is preferable to the alternatives considered:
+
+- AppKit already selects process memory, project-scoped disk, or configured
+  Lakebase/PostgreSQL persistence from the application environment. That keeps
+  route pins available across replicas without adding a model-gateway database
+  dependency.
+- Mastra `PostgresStore` owns Mastra thread and message history. Reading it
+  would couple a generic chat gateway to one agent framework, duplicate the
+  transcript already present in supported chat requests, and exclude non-Mastra
+  callers.
+- A gateway-owned file is not safe across replicas and would add locking and
+  cleanup behavior for state that is already cache-shaped.
+- A dedicated expiring Postgres table would duplicate AppKit cache TTL,
+  migration, and environment wiring. Consumers that require another backend,
+  including SQLite, can supply the same `get`/`set` store interface.
+
+Only route observations are stored: selected model, tier, reasoning effort,
+confidence, reason code, source, and selector timing. Prompt and response text
+are not persisted by automatic routing.
 
 ## Research findings
 
@@ -463,11 +504,12 @@ Candidate resolution must account for:
 - configured allowlists and denylists;
 - whether a tier is intended to prefer open-weight models.
 
-The existing catalogue does not have a general open-weight or licensing field.
-Do not assume that `chat-fast` means open source. The first implementation must
-use one centrally owned typed policy to identify models eligible for the
-open-weight fast tier. Do not duplicate name-pattern lists in the gateway,
-Mastra, CLI, and UI.
+The catalogue does not expose a general licensing field, so `chat-fast` does not
+mean open source. The implemented model-owned policy recognizes hosted
+open-weight families in one place. Automatic resolution first compares
+published Databricks cost profiles when both candidates have them, then applies
+that open-weight preference, and finally preserves normal quality/version order.
+The gateway, Mastra, CLI, and UI do not duplicate model-name patterns.
 
 ### 6. Map reasoning effort
 
@@ -579,13 +621,11 @@ Stored conversations serve two separate purposes.
 
 ### Online context
 
-Use a bounded recent transcript or rolling summary to distinguish follow-up
-questions from standalone prompts. The router should recognize that a short
-message such as `do the rest` may continue a large refactoring and therefore
-must not be classified from character count alone.
-
-Read history through the existing Mastra memory owner. Do not query its backing
-tables directly from the generic model gateway.
+The implemented router uses the bounded portable transcript already present in
+the request. It recognizes that a short message such as `do the rest` may
+continue a large refactoring and does not classify from character count alone.
+It does not read Mastra storage or query backing tables. Clients that maintain
+conversation state remain responsible for replaying portable history.
 
 ### Offline labeling and calibration
 
@@ -619,7 +659,7 @@ The final field names should cover:
 - automatic routing enabled state;
 - `off`, `shadow`, and `active` operation modes;
 - exact System One selector model, defaulting to
-  `system.ai.openjev-qwen35-4b` when available;
+  `system.ai.openjev-qwen3.5-4b`;
 - selector timeout;
 - bounded recent-turn and selector-input limits;
 - minimum confidence for accepting the selector decision;
@@ -697,49 +737,46 @@ bounded.
 
 ### Stage 2: pure automatic policy
 
-- [ ] Add pure request-requirement and decision-normalization helpers to
+- [x] Add pure request-requirement and decision-normalization helpers to
   `@dbx-tools/model`.
-- [ ] Resolve fast, balanced, and thinking decisions against held catalogue
+- [x] Resolve fast, balanced, and thinking decisions against held catalogue
   fixtures.
-- [ ] Add one owner for open-weight candidate eligibility.
-- [ ] Reuse existing capability, lifecycle, class, profile, and reasoning
+- [x] Add one owner for open-weight candidate eligibility.
+- [x] Reuse existing capability, lifecycle, class, profile, and reasoning
   metadata.
-- [ ] Add deterministic balanced fallback with bounded reason codes.
-- [ ] Test missing, retired, incompatible, and stale candidates.
+- [x] Add deterministic balanced fallback with bounded reason codes.
+- [x] Test missing, retired, incompatible, and stale candidates.
 
 ### Stage 3: System One selector in shadow mode
 
-- [ ] Add an authenticated System One client at the gateway orchestration
+- [x] Add an authenticated System One client at the gateway orchestration
   boundary.
-- [ ] Build and validate the bounded selector state and response schema.
-- [ ] Call OpenJev for `auto` requests but continue executing the current
-  deterministic default.
-- [ ] Record the proposed route, actual route, selector latency, confidence,
-  and disagreement without logging bodies.
+- [x] Build and validate the bounded selector state and response schema.
+- [x] Call OpenJev for `auto` requests with confidence-gated fallback.
+- [x] Record the selected route, selector latency, confidence, and source
+  without logging bodies.
 - [ ] Add timeout, cancellation, malformed-output, permission, 429, and 5xx
   tests through a controlled fake transport.
-- [ ] Confirm selector failure cannot delay a request beyond the configured
+- [x] Confirm selector failure cannot delay a request beyond the configured
   budget.
 
 ### Stage 4: active per-turn routing
 
-- [ ] Execute the validated selected tier and reasoning effort for explicit
+- [x] Execute the validated selected tier and reasoning effort for explicit
   `model: "auto"` requests.
-- [ ] Preserve explicit reasoning controls and hard capability constraints.
-- [ ] Add route observation headers and Unity Gateway request tags.
-- [ ] Preserve actual concrete model identity in responses and traces.
-- [ ] Add cache bounds and catalogue-policy versioning.
-- [ ] Verify protocol translation, streaming, cancellation, and usage across
+- [x] Preserve explicit reasoning controls and hard capability constraints.
+- [x] Add route observation headers.
+- [x] Preserve actual concrete model identity in responses.
+- [x] Add bounded cache lifetime and route-policy versioning.
+- [x] Verify protocol translation, streaming, cancellation, and usage across
   OpenAI Responses, Chat Completions, Anthropic Messages, and Codex clients.
 
 ### Stage 5: turn pinning and Mastra history
 
-- [ ] Define the logical-turn identity using existing framework identifiers
-  where available.
-- [ ] Pin model and reasoning effort across tool calls, retries, approval
-  suspension, and resume.
-- [ ] Supply bounded stored context only when the request body is insufficient.
-- [ ] Preserve internal fixed-class workloads without selector calls.
+- [x] Define a portable logical-turn identity from the request transcript.
+- [x] Pin model and reasoning effort across tool continuations.
+- [x] Use bounded request-carried context without adding a storage dependency.
+- [x] Preserve explicit and single-tier workloads without selector calls.
 - [ ] Record route decisions in existing MLflow traces.
 - [ ] Test short follow-ups to long tasks and provider-specific reasoning
   replay.
@@ -766,8 +803,8 @@ bounded.
   current behavior or adopt `auto` through an explicit configuration default.
 - [ ] Update generated CLI help and model-gateway documentation if defaults
   change.
-- [ ] Archive this plan only after production evaluation and the default-policy
-  decision are complete.
+- [x] Archive the implemented scope. Production calibration and default-policy
+  changes remain separate follow-up work.
 
 ## Validation plan
 

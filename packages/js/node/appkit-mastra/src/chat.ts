@@ -56,6 +56,7 @@ function latestUserText(value: unknown): string | undefined {
 /** Register detached chat, durable observation, and explicit abort routes. */
 export function agentChatRoutes(config: MastraPluginConfig = {}) {
   const followUps = resolveFollowUpSuggestionsConfig(config.followUpSuggestions);
+  const sendReasoning = config.sendReasoning !== false;
   const chatPath = `${MASTRA_ROUTES.chat}/:agentId` as `${string}:agentId`;
   const runPath =
     `${MASTRA_ROUTES.chat}/:agentId${MASTRA_ROUTES.runs}/:runId` as `${string}:agentId${string}:runId`;
@@ -115,7 +116,7 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
             ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
             : {}),
           version: "v7",
-          sendReasoning: true,
+          sendReasoning,
           sendSources: true,
           onError: serializeChatStreamError,
         });
@@ -143,7 +144,7 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
             ? { experimentalTransform: buildFollowUpSuggestionsTransform(runId) }
             : {}),
           version: "v7",
-          sendReasoning: true,
+          sendReasoning,
           sendSources: true,
           onError: serializeChatStreamError,
         });

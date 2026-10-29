@@ -237,6 +237,8 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * to `true`.
    */
   backgroundTurns?: boolean;
+  /** Include model reasoning parts in chat UI streams when the provider returns them. Defaults to true. */
+  sendReasoning?: boolean;
   /** AI SDK provider-options namespace. Defaults to `"openai"`; no env fallback. */
   providerId?: string;
   /**
@@ -702,6 +704,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: "boolean",
       description:
         "Run turns through Mastra evented durable execution so they continue after browser disconnects and remain reconnectable by run id. Defaults to true.",
+    },
+    sendReasoning: {
+      type: "boolean",
+      description:
+        "Include model reasoning parts in chat UI streams when the provider returns them. Defaults to true.",
     },
     providerId: {
       type: "string",

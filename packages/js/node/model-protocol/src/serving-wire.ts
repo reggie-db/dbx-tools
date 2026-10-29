@@ -208,13 +208,43 @@ function flattenChoiceContent(
     if (!choice || typeof choice !== "object") continue;
     const container = (choice as Record<string, unknown>)[field];
     if (!container || typeof container !== "object") continue;
-    const target = container as { content?: unknown };
+    const target = container as {
+      content?: unknown;
+      reasoning?: unknown;
+      reasoning_content?: unknown;
+    };
     const parts = chatContentParts(target.content);
     if (!parts) continue;
+    const reasoning = reasoningContent(parts);
+    if (reasoning && !nonEmptyText(target.reasoning) && !nonEmptyText(target.reasoning_content)) {
+      target.reasoning_content = reasoning;
+    }
     target.content = chatContentToText(parts, { types: ["text"] });
     changed = true;
   }
   return changed;
+}
+
+function reasoningContent(parts: readonly Record<string, unknown>[]): string {
+  return parts
+    .flatMap((part) => {
+      if (!REASONING_PART_TYPES.has(String(part.type))) return [];
+      const direct = nonEmptyText(part.text);
+      if (direct) return [direct];
+      const nested = part.summary ?? part.thinking;
+      if (typeof nested === "string") return [nested];
+      if (!Array.isArray(nested)) return [];
+      return nested.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const text = nonEmptyText((entry as Record<string, unknown>).text);
+        return text ? [text] : [];
+      });
+    })
+    .join("");
+}
+
+function nonEmptyText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
 function textFromServingContent(content: ServingChatMessage["content"]): string {

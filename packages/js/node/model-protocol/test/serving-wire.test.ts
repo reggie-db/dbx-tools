@@ -229,7 +229,7 @@ describe("serving response sanitize", () => {
     );
   });
 
-  it("flattens Claude reasoning and text arrays across split SSE chunks", async () => {
+  it("preserves Claude reasoning while flattening text across split SSE chunks", async () => {
     const sse = [
       `data: ${JSON.stringify({
         choices: [
@@ -239,7 +239,10 @@ describe("serving response sanitize", () => {
               content: [
                 {
                   type: "reasoning",
-                  summary: [{ type: "summary_text", text: "", signature: "" }],
+                  summary: [
+                    { type: "summary_text", text: "Planning ", signature: "" },
+                    { type: "summary_text", text: "the answer.", signature: "" },
+                  ],
                 },
               ],
             },
@@ -268,8 +271,32 @@ describe("serving response sanitize", () => {
       .map((line) => JSON.parse(line.slice(6)));
 
     assert.equal(data[0].choices[0].delta.content, "");
+    assert.equal(data[0].choices[0].delta.reasoning_content, "Planning the answer.");
     assert.equal(data[0].choices[0].delta.role, "assistant");
     assert.equal(data[1].choices[0].delta.content, "KPI summary");
     assert.ok(rewritten.endsWith("data: [DONE]\n\n"));
+  });
+
+  it("preserves reasoning in non-streaming Chat Completions responses", () => {
+    const body = JSON.stringify({
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: [
+              {
+                type: "reasoning",
+                summary: [{ type: "summary_text", text: "Checking the result." }],
+              },
+              { type: "text", text: "The result is valid." },
+            ],
+          },
+        },
+      ],
+    });
+
+    const result = JSON.parse(rewriteServingResponseBody(body));
+    assert.equal(result.choices[0].message.reasoning_content, "Checking the result.");
+    assert.equal(result.choices[0].message.content, "The result is valid.");
   });
 });

@@ -29,15 +29,7 @@ export class ModelGatewayPlugin extends Plugin<ModelGatewayPluginConfig> {
 
   constructor(config: ModelGatewayPluginConfig = {}) {
     super(config);
-    this.gateway = new ModelGateway({
-      ...(config.cacheTtlMs !== undefined ? { cacheTtlMs: config.cacheTtlMs } : {}),
-      ...(config.overrides ? { overrides: config.overrides } : {}),
-      ...(config.model ? { model: config.model } : {}),
-      ...(config.modelClass ? { modelClass: config.modelClass } : {}),
-      ...(config.preferSystemModels !== undefined
-        ? { preferSystemModels: config.preferSystemModels }
-        : {}),
-    });
+    this.gateway = new ModelGateway(config);
   }
 
   override injectRoutes(router: IAppRouter): void {

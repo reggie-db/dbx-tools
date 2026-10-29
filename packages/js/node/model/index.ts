@@ -4,6 +4,7 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model";
 export const PACKAGE_VERSION = "0.9.175";
+export * as automaticRouting from "./src/automatic-routing.ts";
 export * as bindings from "./src/bindings.ts";
 export * from "./src/bindings.ts";
 export * as classes from "./src/classes.ts";
@@ -20,6 +21,8 @@ export * as reasoningTranslation from "./src/reasoning-translation.ts";
 export * as resolve from "./src/resolve.ts";
 export * as retirement from "./src/retirement.ts";
 export * as selection from "./src/selection.ts";
+export { automaticTierModelClass, automaticTierForModelClass, fallbackAutomaticRouteDecision, automaticDecisionForOnlyTier, automaticDecisionForReasoning, resolveAutomaticModel, nearestReasoningEffort } from "./src/automatic-routing.ts";
+export type { ResolveAutomaticModelOptions, ResolvedAutomaticModel } from "./src/automatic-routing.ts";
 export { CHAT_CLASS_ORDER, MODEL_CLASS_ORDER, isChatClass, parseModelClass, classesAtOrBelow } from "./src/classes.ts";
 export { supportsToolsByFamily, endpointCapabilities, versionTuple, compareVersionTuples, classifyByFamily, classifyEndpoints } from "./src/classify.ts";
 export { modelsForClass, modelForClass, FALLBACK_MODEL_IDS } from "./src/fallback.ts";
@@ -34,7 +37,7 @@ export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD, listServingEndpoin
 export type { WorkspaceClientLike, ListServingEndpointsOptions } from "./src/model-catalog.ts";
 export { DEFAULT_MODEL_CLIENT_CACHE_TTL_MS, createModelClient, listProfiles, createModelClientWithDatabricksClient, createModelClientWithDependencies } from "./src/model-client.ts";
 export type { ModelAuthOptions, ModelClientOptions, ModelClientStatus, ModelProtocol, ModelRouteInput, ModelRoute, ModelClient } from "./src/model-client.ts";
-export { ModelFamily, modelFamily, modelFamilyRank, modelSearchQuery, inheritsNativeWebSearch, isFoundationModelIdentity, modelServiceName, systemModelService, prefersSystemModelService, isOpenWeightsGpt, modelReasoningEfforts, modelSupportsTools, endpointSupportsTools, modelServingApi, chatToolReasoningEffort, modelServiceNames } from "./src/policy.ts";
+export { ModelFamily, modelFamily, modelFamilyRank, modelSearchQuery, inheritsNativeWebSearch, isFoundationModelIdentity, modelServiceName, systemModelService, prefersSystemModelService, isOpenWeightsGpt, isOpenWeightsModel, modelReasoningEfforts, modelSupportsTools, endpointSupportsTools, modelServingApi, chatToolReasoningEffort, modelServiceNames } from "./src/policy.ts";
 export { ReasoningLevel, REASONING_LEVELS, parseReasoning, parseReasoningLevels, documentedReasoningLevels, defaultReasoningLevels, reasoningLevelsFor, formatReasoning, remapReasoning, adaptRequestReasoning, normalizeReasoningToken, uniqueReasoningLevels } from "./src/reasoning-translation.ts";
 export type { AdaptedRequestReasoning } from "./src/reasoning-translation.ts";
 export { rankModelIdLive, searchModels, selectModel } from "./src/resolve.ts";
