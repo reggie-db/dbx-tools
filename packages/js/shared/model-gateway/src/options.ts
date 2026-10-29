@@ -41,50 +41,49 @@ export const ChatModelSelectionOptionsSchema = ModelSelectionOptionsSchema.safeE
   modelClass: ChatModelClassOptionSchema,
 }).describe("Chat-model selection by name or capability class.");
 
+export const SmartRouterModeSchema = z
+  .enum(["auto", "true", "false"])
+  .describe(
+    "Smart Router mode: auto advertises it only when available, true requires it, and false disables it.",
+  );
+
 export const ModelGatewayOptionsSchema = ModelSelectionOptionsSchema.safeExtend({
-  automaticRouting: z
-    .boolean()
-    .default(true)
-    .describe("Expose model auto and route each top-level chat turn by request complexity."),
-  automaticSelectorModel: z
-    .string()
-    .trim()
-    .min(1)
-    .default("system.ai.openjev-qwen3.5-4b")
-    .describe("System One model used to classify automatic chat requests."),
-  automaticSelectorTimeoutMs: z
+  smartRouter: SmartRouterModeSchema.default("auto"),
+  smartRouterTimeoutMs: z
     .number()
     .int()
     .min(100)
-    .max(30_000)
-    .default(2_000)
-    .describe("Maximum milliseconds allowed for one System One routing decision."),
-  automaticSelectorTokenBudget: z
+    .max(60_000)
+    .default(10_000)
+    .describe("Maximum milliseconds allowed for one Databricks Smart Router request."),
+  smartRouterContextTokenBudget: z
     .number()
     .int()
     .min(256)
     .max(32_768)
     .default(4_096)
-    .describe("o200k_base token budget for the current request and recent chat context."),
-  automaticMinimumConfidence: z
+    .describe("o200k_base token budget used to build Smart Router task context."),
+  smartRouterProbeTtlMs: z
     .number()
-    .min(0)
-    .max(1)
-    .default(0.55)
-    .describe("Minimum System One confidence accepted before deterministic fallback."),
-  automaticRouteTtlSeconds: z
+    .int()
+    .min(1_000)
+    .max(3_600_000)
+    .default(300_000)
+    .describe("Milliseconds a successful memoized Smart Router capability probe remains valid."),
+  smartRouterProbeRefreshIntervalMs: z
+    .number()
+    .int()
+    .min(60_000)
+    .max(86_400_000)
+    .default(3_600_000)
+    .describe("Milliseconds between unref'd background refreshes of cached Smart Router probes."),
+  smartRouterRouteTtlSeconds: z
     .number()
     .int()
     .min(60)
     .max(86_400)
     .default(21_600)
-    .describe("Seconds a logical turn keeps its selected concrete model and reasoning effort."),
-  automaticPreferCostEfficientModels: z
-    .boolean()
-    .default(true)
-    .describe(
-      "Within the selected tier, prefer lower-cost profiles and then recognized open-weight models.",
-    ),
+    .describe("Seconds a logical turn remains pinned to its Smart Router-selected model."),
   preferSystemModels: z
     .boolean()
     .default(false)
@@ -113,6 +112,12 @@ export const ModelGatewayOptionsSchema = ModelSelectionOptionsSchema.safeExtend(
 
 export const ModelGatewayCliOptionsSchema = ModelGatewayOptionsSchema.safeExtend({
   runtimeInfo: z.boolean().default(false).describe("Print runtime implementation metadata."),
+  selectModelFrom: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("Select a Smart Router model from a JSON or text file; use - for standard input."),
 })
   .refine((options) => options.listen.port > 0, {
     message: "Port must be an integer from 1 through 65535.",
@@ -125,6 +130,8 @@ export type ModelGatewayOptions = z.input<typeof ModelGatewayOptionsSchema>;
 export type ResolvedModelGatewayOptions = z.output<typeof ModelGatewayOptionsSchema>;
 
 export type ModelGatewayCliOptions = z.output<typeof ModelGatewayCliOptionsSchema>;
+
+export type SmartRouterMode = z.infer<typeof SmartRouterModeSchema>;
 
 /** Defaults parsed from the owning runtime schema. */
 export const MODEL_GATEWAY_DEFAULTS = Object.freeze(ModelGatewayOptionsSchema.parse({}));

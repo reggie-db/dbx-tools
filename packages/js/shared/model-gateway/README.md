@@ -15,9 +15,12 @@ const response = await client.listModels({ search: "claude sonnet" });
 const modelIds = "data" in response ? response.data.map((model) => model.id) : [];
 ```
 
-The catalogue includes the virtual `auto` chat model when automatic routing is
-enabled. Its `capabilities.automatic` field distinguishes it from concrete
-Databricks endpoints.
+The catalogue includes the virtual `smart-router` chat model only when the
+gateway's memoized Databricks Smart Router probe succeeds. Its
+`capabilities.smart_router` field distinguishes it from concrete endpoints.
+Successful probes expire after five minutes by default and are also refreshed
+hourly in the background. A failed routed request invalidates a positive probe
+immediately so later model-list responses stop advertising the virtual model.
 
 In a browser, the client uses the active origin. Supply `baseUrl` in tests,
 server rendering, or any runtime without `globalThis.location`:
@@ -68,8 +71,8 @@ import {
 } from "@dbx-tools/shared-model-gateway/options";
 
 const options = resolveModelGatewayOptions({
-  automaticRouting: true,
-  automaticSelectorModel: "system.ai.openjev-qwen3.5-4b",
+  smartRouter: "auto",
+  smartRouterTimeoutMs: 10000,
   listen: "localhost:4400",
   modelClass: "chat-balanced",
   preferSystemModels: true,
@@ -85,9 +88,9 @@ select the best available chat model. `preferSystemModels` defaults to `false`.
 When enabled, non-exact requests use `system.ai.*` services instead of workspace
 serving endpoints.
 
-The `automatic` module exports the canonical `auto` id and the response-header
-names used to observe the selected concrete model, tier, reasoning effort,
-confidence, reason code, decision source, and fallback state.
+The `smartRouter` module exports the canonical `smart-router` id, validated
+`routes:select` contracts, and response-header names used to observe the
+selected concrete model and `task_v3` profile.
 
 ## Runtime boundary
 
@@ -104,4 +107,4 @@ model discovery and selection.
 - `models`: validates public model, embedding, and error payloads.
 - `contracts`: validates shared routing and capability values.
 - `options`: validates shared server and CLI configuration.
-- `automatic`: owns the virtual model id and automatic-route observation headers.
+- `smartRouter`: owns the virtual model id, wire schemas, and observation headers.

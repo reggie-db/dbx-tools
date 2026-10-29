@@ -168,38 +168,67 @@ Use model overrides only to correct workspace metadata for a known model. For
 example, disable web search when the selected gateway route cannot use an
 advertised capability.
 
-## Understand automatic routing
+## Use Smart Router
 
-Automatic routing calls Databricks System One with token-budgeted recent text,
-tool names, protocol, and required capabilities. The budget prioritizes the
-current request and then fills remaining space from the newest prior user and
-assistant messages. It never sends credentials, tool arguments, image bytes, or
-unbounded conversation history. System One chooses a logical tier and reasoning
-budget; `@dbx-tools/model` resolves the concrete live endpoint.
+Request the virtual model `smart-router` to let Databricks `task_v3` select one
+compatible `system.ai.*` model. The gateway sends the candidate model-service
+names, coding-agent harness, and bounded task context to
+`POST /ai-gateway/routing/v1/routes:select`, validates that the returned model
+was offered, then forwards the original request unchanged to that concrete
+model. OpenAI Responses and Chat Completions use the `codex` harness; Anthropic
+Messages uses `claude`.
 
-With `automaticPreferCostEfficientModels` enabled (the default), resolution
-prefers lower published Databricks cost scores within the selected tier. When
-cost does not distinguish candidates, the model package's centrally owned
-open-weight policy is preferred before normal quality/version order. Protocol,
-capability, requested reasoning, lifecycle, and tier constraints are always
-applied first.
+Unity Gateway itself routes before launching the concrete Claude or Codex
+model, so it has no virtual `auto` model. This gateway's `smart-router` adapter
+uses Unity Gateway's public skill and command spelling (`smart-router`) while
+providing equivalent selection through ordinary model APIs.
 
-Selections are pinned through tool calls and retries with AppKit's shared cache.
-In a Databricks App, the cache reuses configured Lakebase/PostgreSQL persistence.
-The storage contract is injectable, so another runtime can provide SQLite or a
-different key-value backend without changing routing policy.
+The context service accepts a Responses request, a Chat or Anthropic message
+array, JSON text, plain text, or a generic object. It extracts task-like fields
+and recent user/assistant text while excluding credentials, headers, tool
+schemas, tool arguments, image bytes, and other secret-bearing fields. Typical
+inputs include:
 
-If the selector times out, fails, or returns confidence below the configured
-minimum, the gateway uses a deterministic compatible fallback. Inspect these
-response headers for the result:
+- A coding request with tools or patch application: offer tool-capable coding
+  models and let Smart Router choose the appropriate task tier.
+- A long repository refactor or multi-file debugging request: preserve bounded
+  recent context and offer reasoning-capable coding models.
+- A short explanation, rewrite, or lookup: Smart Router can choose a faster
+  compatible model without a local task classifier.
+- An Anthropic Messages request: use the Claude harness and only offer models
+  that support the Anthropic protocol and requested features.
+- A Responses request with image input, web search, structured output, or an
+  explicit reasoning effort: filter the candidate menu to models that support
+  every requested capability before routing.
 
-- `x-dbx-tools-selected-model`
-- `x-dbx-tools-auto-tier`
-- `x-dbx-tools-auto-reasoning-effort`
-- `x-dbx-tools-auto-confidence`
-- `x-dbx-tools-auto-reason-code`
-- `x-dbx-tools-auto-source`
-- `x-dbx-tools-auto-degraded`
+`smartRouter` accepts `auto`, `true`, or `false`. `auto` is the default and
+advertises the virtual model only when the capability probe succeeds. `true`
+makes `/v1/models` return an error when Smart Router is unavailable. `false`
+disables the virtual model.
+
+The first model-list lookup waits for an identity-scoped AppKit cache lookup or
+a live probe. Later stale in-process values return immediately while one refresh
+runs in the background. Probe results use AppKit's configured memory or
+persistent cache when available, are revalidated hourly by default, and are
+invalidated immediately when a real Smart Router selection fails. Logical-turn
+model selections remain pinned through tool calls and retries with AppKit's
+shared cache.
+
+Inspect these response headers for the selected route:
+
+- `x-dbx-tools-smart-router-model`
+- `x-dbx-tools-smart-router-route-model`
+- `x-dbx-tools-smart-router-harness`
+- `x-dbx-tools-smart-router-source`
+- `x-dbx-tools-smart-router-task-tier`
+- `x-dbx-tools-smart-router-served-tier`
+- `x-dbx-tools-smart-router-profiler-status`
+
+Select a model for a request file without starting the gateway:
+
+```sh
+dbx model-gateway --profile PROFILE --select-model-from request.json
+```
 
 ## Understand protocol limits
 

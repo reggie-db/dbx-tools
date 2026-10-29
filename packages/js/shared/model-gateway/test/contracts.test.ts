@@ -13,6 +13,11 @@ import {
   GatewayErrorResponseSchema,
   OpenAIModelListResponseSchema,
 } from "../src/models.ts";
+import {
+  SmartRouterObservationSchema,
+  SmartRouterRequestSchema,
+  SmartRouterResponseSchema,
+} from "../src/smart-router.ts";
 
 const CAPABILITIES = {
   responses: true,
@@ -106,7 +111,7 @@ describe("shared model-gateway schemas", () => {
             name: "GPT Test",
             status: { deprecated: false },
             capabilities: {
-              automatic: false,
+              smart_router: false,
               tools: true,
               reasoning: ["high"],
               responses: true,
@@ -152,6 +157,38 @@ describe("shared model-gateway schemas", () => {
             supports_image_detail_original: false,
           },
         ],
+      }),
+    );
+  });
+
+  it("validates Smart Router requests, responses, and observations", () => {
+    assert.doesNotThrow(() =>
+      SmartRouterRequestSchema.parse({
+        route_options: [{ model: "system.ai.gpt-test", harness: "codex" }],
+        task: { prompt: "Refactor the parser" },
+        route_selector: { router_name: "task_v3" },
+      }),
+    );
+    assert.doesNotThrow(() =>
+      SmartRouterResponseSchema.parse({
+        route_selection: [
+          {
+            route_option: { model: "system.ai.gpt-test", harness: "codex" },
+            params: { task_tier: "High" },
+          },
+        ],
+        rationale: "Cross-cutting task.",
+      }),
+    );
+    assert.doesNotThrow(() =>
+      SmartRouterObservationSchema.parse({
+        selectedModel: "databricks-gpt-test",
+        routeModel: "system.ai.gpt-test",
+        harness: "codex",
+        routerName: "task_v3",
+        source: "router",
+        params: { profiler_status: "ok" },
+        latencyMs: 20,
       }),
     );
   });

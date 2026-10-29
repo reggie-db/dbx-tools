@@ -9,7 +9,7 @@ import { z } from "zod";
 
 /** Capabilities published with an OpenAI-compatible model entry. */
 export const OpenAIModelCapabilitiesSchema = z.object({
-  automatic: z.boolean().describe("True for the virtual automatic-routing model."),
+  smart_router: z.boolean().describe("True for the virtual Databricks Smart Router model."),
   tools: z.boolean(),
   reasoning: z.array(ReasoningEffortSchema),
   responses: z.boolean(),

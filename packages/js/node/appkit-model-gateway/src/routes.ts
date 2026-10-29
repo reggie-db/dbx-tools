@@ -10,9 +10,9 @@ import { log, toError } from "@dbx-tools/shared-core";
 import type { ClientProtocol } from "@dbx-tools/shared-model-gateway";
 import type express from "express";
 
-import { AutomaticRoutingError } from "./automatic-routing.ts";
 import { ModelGateway, ModelGatewayError } from "./gateway.ts";
 import { UnsupportedGatewayFeatureError } from "./router.ts";
+import { SmartRouterError } from "./smart-router.ts";
 
 const logger = log.logger("appkit/model-gateway/http");
 
@@ -130,7 +130,7 @@ export async function sendInference(
 function sendError(protocol: ClientProtocol, response: express.Response, error: unknown): void {
   const status =
     error instanceof ModelGatewayError ||
-    error instanceof AutomaticRoutingError ||
+    error instanceof SmartRouterError ||
     error instanceof UnsupportedGatewayFeatureError
       ? error.status
       : 500;

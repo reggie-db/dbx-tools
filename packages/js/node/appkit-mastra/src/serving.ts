@@ -31,6 +31,9 @@ export const MASTRA_MODEL_OVERRIDE_KEY = "mastra__model_override";
 /** RequestContext key carrying the endpoint selected for the active agent step. */
 export const MASTRA_RESOLVED_MODEL_KEY = "mastra__resolved_model";
 
+/** RequestContext key carrying the raw request body used to build Smart Router context. */
+export const MASTRA_SMART_ROUTER_INPUT_KEY = "mastra__smart_router_input";
+
 /**
  * Minimal Express-ish request shape used by {@link extractModelOverride}.
  * Keeps this module independent of `express` so the helper can be

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ModelGatewayOptionsSchema,
   MODEL_GATEWAY_DEFAULTS,
   resolveModelGatewayCliOptions,
   resolveModelGatewayOptions,
@@ -9,13 +10,12 @@ import {
 describe("model-gateway options", () => {
   it("owns shared server defaults", () => {
     assert.deepEqual(MODEL_GATEWAY_DEFAULTS, {
-      automaticRouting: true,
-      automaticSelectorModel: "system.ai.openjev-qwen3.5-4b",
-      automaticSelectorTokenBudget: 4096,
-      automaticSelectorTimeoutMs: 2000,
-      automaticMinimumConfidence: 0.55,
-      automaticRouteTtlSeconds: 21600,
-      automaticPreferCostEfficientModels: true,
+      smartRouter: "auto",
+      smartRouterContextTokenBudget: 4096,
+      smartRouterTimeoutMs: 10000,
+      smartRouterProbeRefreshIntervalMs: 3600000,
+      smartRouterProbeTtlMs: 300000,
+      smartRouterRouteTtlSeconds: 21600,
       preferSystemModels: false,
       listen: { scheme: "tcp", host: "localhost", port: 4000 },
       bodyLimit: "100mb",
@@ -30,13 +30,12 @@ describe("model-gateway options", () => {
         profile: " PROFILE ",
       }),
       {
-        automaticRouting: true,
-        automaticSelectorModel: "system.ai.openjev-qwen3.5-4b",
-        automaticSelectorTokenBudget: 4096,
-        automaticSelectorTimeoutMs: 2000,
-        automaticMinimumConfidence: 0.55,
-        automaticRouteTtlSeconds: 21600,
-        automaticPreferCostEfficientModels: true,
+        smartRouter: "auto",
+        smartRouterContextTokenBudget: 4096,
+        smartRouterTimeoutMs: 10000,
+        smartRouterProbeRefreshIntervalMs: 3600000,
+        smartRouterProbeTtlMs: 300000,
+        smartRouterRouteTtlSeconds: 21600,
         preferSystemModels: false,
         listen: { scheme: "tcp", host: "localhost", port: 4400 },
         profile: "PROFILE",
@@ -66,6 +65,13 @@ describe("model-gateway options", () => {
   it("defaults system-model preference off and allows explicit opt-in", () => {
     assert.equal(resolveModelGatewayOptions().preferSystemModels, false);
     assert.equal(resolveModelGatewayOptions({ preferSystemModels: true }).preferSystemModels, true);
+  });
+
+  it("supports auto, required, and disabled Smart Router modes", () => {
+    assert.equal(resolveModelGatewayOptions().smartRouter, "auto");
+    assert.equal(resolveModelGatewayOptions({ smartRouter: "true" }).smartRouter, "true");
+    assert.equal(resolveModelGatewayOptions({ smartRouter: "false" }).smartRouter, "false");
+    assert.throws(() => ModelGatewayOptionsSchema.parse({ smartRouter: true }));
   });
 
   it("rejects public listener hosts", () => {

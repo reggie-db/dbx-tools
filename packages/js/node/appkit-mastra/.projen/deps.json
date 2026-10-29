@@ -66,6 +66,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/appkit-model-gateway",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/appkit",
       "version": "workspace:^",
       "type": "runtime"
@@ -132,6 +137,11 @@
     },
     {
       "name": "@dbx-tools/shared-mastra",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-model-gateway",
       "version": "workspace:^",
       "type": "runtime"
     },

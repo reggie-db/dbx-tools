@@ -37,6 +37,7 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:^",
+    "@dbx-tools/appkit-model-gateway": "workspace:^",
     "@dbx-tools/cache": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/databricks": "workspace:^",
@@ -51,6 +52,7 @@
     "@dbx-tools/shared-genie": "workspace:^",
     "@dbx-tools/shared-mastra": "workspace:^",
     "@dbx-tools/shared-model": "workspace:^",
+    "@dbx-tools/shared-model-gateway": "workspace:^",
     "@mastra/ai-sdk": "catalog:",
     "@mastra/core": "catalog:",
     "@mastra/express": "catalog:",

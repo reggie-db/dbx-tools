@@ -24,19 +24,33 @@
 
 import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
 import { tryGetExecutionContext } from "@dbx-tools/appkit";
-import { classes, policy, resolve, selection } from "@dbx-tools/model";
+import {
+  SmartRouterService,
+  SMART_ROUTER_DEFAULT_SETTINGS,
+  smartRouterCandidates,
+} from "@dbx-tools/appkit-model-gateway";
+import {
+  classes,
+  endpointCapabilities,
+  listServingEndpoints,
+  policy,
+  resolve,
+  selection,
+} from "@dbx-tools/model";
 import {
   createDatabricksLanguageModel,
   type DatabricksLanguageModel,
 } from "@dbx-tools/model-protocol";
 import { log } from "@dbx-tools/shared-core";
 import { contracts, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { SMART_ROUTER_MODEL_ID, isSmartRouterModelId } from "@dbx-tools/shared-model-gateway";
 import { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
 import {
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
+  MASTRA_SMART_ROUTER_INPUT_KEY,
   resolveServingConfig,
 } from "./serving.ts";
 import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
@@ -44,6 +58,16 @@ import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
 type ModelClass = contracts.ModelClass;
 const { parseModelClass } = classes;
 const { selectModel } = resolve;
+const smartRouter = new SmartRouterService(SMART_ROUTER_DEFAULT_SETTINGS);
+
+/** Virtual endpoint shown when Smart Router is enabled for the active identity. */
+export const SMART_ROUTER_ENDPOINT: ServingEndpointSummary = {
+  name: SMART_ROUTER_MODEL_ID,
+  displayName: "Smart Router",
+  description: "Selects a Databricks system model with the task_v3 Smart Router.",
+  task: "llm/v1/chat",
+  status: { deprecated: false },
+};
 
 /** Keep Responses turns stateless so tool continuations replay encrypted reasoning inline. */
 export const RESPONSES_PROVIDER_OPTIONS = {
@@ -74,6 +98,8 @@ export interface BuildModelOverrides {
    * class's static list when the workspace has none.
    */
   modelClass?: ModelClass;
+  /** Arbitrary request, messages, JSON, or text used to build Smart Router task context. */
+  smartRouterInput?: unknown;
   /** Explicit workspace client for standalone callers such as CLIs. */
   workspaceClient?: WorkspaceClient;
 }
@@ -136,6 +162,9 @@ export function resolveDefaultModelId(
   endpoints: readonly ServingEndpointSummary[],
   overrides: BuildModelOverrides = {},
 ): string {
+  if (endpoints.some((endpoint) => endpoint.name === SMART_ROUTER_MODEL_ID)) {
+    return SMART_ROUTER_MODEL_ID;
+  }
   const requested = overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
   return selection.resolveModel(endpoints, selectionInput(config, requested, overrides.modelClass))
     .modelId;
@@ -187,12 +216,45 @@ export async function buildModel(
   // internal `overrides.modelClass` (e.g. the chart planner) is the
   // floor when nothing was requested.
   const requested = override ?? overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
-
-  const { modelId, source } = await selectModel(
-    client,
-    host,
-    selectionInput(config, requested, overrides.modelClass, serving),
-  );
+  const smartRouterInput = overrides.smartRouterInput ?? context.get(MASTRA_SMART_ROUTER_INPUT_KEY);
+  const smartRouterRequested = isSmartRouterModelId(requested);
+  let modelId: string;
+  let source: string;
+  if (
+    (requested === undefined || smartRouterRequested) &&
+    overrides.modelClass === undefined &&
+    smartRouterInput !== undefined
+  ) {
+    const endpoints = await listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
+    const candidates = smartRouterCandidates(
+      endpoints.filter((endpoint) => endpointCapabilities(endpoint).tools),
+      "codex",
+    );
+    const enabled = await smartRouter.isEnabled(candidates, client);
+    if (enabled) {
+      const selected = await smartRouter.select(smartRouterInput, candidates, { client });
+      modelId = selected.value.name;
+      source = SMART_ROUTER_MODEL_ID;
+    } else if (smartRouterRequested) {
+      throw new Error("Databricks Smart Router is not enabled for the active workspace identity");
+    } else {
+      const resolved = await selectModel(
+        client,
+        host,
+        selectionInput(config, requested, overrides.modelClass, serving),
+      );
+      modelId = resolved.modelId;
+      source = resolved.source;
+    }
+  } else {
+    const resolved = await selectModel(
+      client,
+      host,
+      selectionInput(config, requested, overrides.modelClass, serving),
+    );
+    modelId = resolved.modelId;
+    source = resolved.source;
+  }
   logger.debug("model selected", { modelId, source, requested });
   context.set(MASTRA_RESOLVED_MODEL_KEY, modelId);
   recordActiveTraceModel(modelId);
@@ -204,4 +266,18 @@ export async function buildModel(
     headers: Object.fromEntries(headers.entries()),
     providerName: config.providerId ?? "openai",
   });
+}
+
+/** Append the virtual Smart Router endpoint only after its memoized live probe succeeds. */
+export async function withSmartRouterEndpoint(
+  endpoints: readonly ServingEndpointSummary[],
+  client: WorkspaceClient,
+): Promise<ServingEndpointSummary[]> {
+  const candidates = smartRouterCandidates(
+    endpoints.filter((endpoint) => endpointCapabilities(endpoint).tools),
+    "codex",
+  );
+  return (await smartRouter.isEnabled(candidates, client))
+    ? [SMART_ROUTER_ENDPOINT, ...endpoints]
+    : [...endpoints];
 }

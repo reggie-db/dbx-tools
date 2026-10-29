@@ -8,9 +8,13 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createApp, server } from "@databricks/appkit";
 import {
   ModelGateway,
+  SmartRouterService,
+  SMART_ROUTER_DEFAULT_SETTINGS,
+  DatabricksModelRegistry,
   sendHealth,
   sendInference,
   sendModels,
+  smartRouterCandidates,
 } from "@dbx-tools/appkit-model-gateway";
 import { createWorkspaceClient } from "@dbx-tools/databricks";
 import {
@@ -65,13 +69,12 @@ export function gatewayBearerMiddleware(token: string): express.RequestHandler {
 export async function startModelGateway(options: ModelGatewayOptions = {}): Promise<void> {
   const resolved = resolveModelGatewayOptions(options);
   const gateway = new ModelGateway({
-    automaticRouting: resolved.automaticRouting,
-    automaticSelectorModel: resolved.automaticSelectorModel,
-    automaticSelectorTokenBudget: resolved.automaticSelectorTokenBudget,
-    automaticSelectorTimeoutMs: resolved.automaticSelectorTimeoutMs,
-    automaticMinimumConfidence: resolved.automaticMinimumConfidence,
-    automaticPreferCostEfficientModels: resolved.automaticPreferCostEfficientModels,
-    automaticRouteTtlSeconds: resolved.automaticRouteTtlSeconds,
+    smartRouter: resolved.smartRouter,
+    smartRouterContextTokenBudget: resolved.smartRouterContextTokenBudget,
+    smartRouterProbeRefreshIntervalMs: resolved.smartRouterProbeRefreshIntervalMs,
+    smartRouterProbeTtlMs: resolved.smartRouterProbeTtlMs,
+    smartRouterRouteTtlSeconds: resolved.smartRouterRouteTtlSeconds,
+    smartRouterTimeoutMs: resolved.smartRouterTimeoutMs,
     ...(resolved.model ? { model: resolved.model } : {}),
     ...(resolved.modelClass ? { modelClass: resolved.modelClass } : {}),
     preferSystemModels: resolved.preferSystemModels,
@@ -106,4 +109,42 @@ export async function startModelGateway(options: ModelGatewayOptions = {}): Prom
       });
     },
   });
+}
+
+/** Select one concrete model from arbitrary file/stdin content and exit. */
+export async function selectSmartRouterModel(
+  options: ModelGatewayOptions,
+  input: unknown,
+): Promise<Readonly<Record<string, unknown>>> {
+  const resolved = resolveModelGatewayOptions(options);
+  const client = await createWorkspaceClient({
+    ...(resolved.profile ? { profile: resolved.profile } : {}),
+  });
+  const registry = new DatabricksModelRegistry({
+    client,
+    preferSystemModels: resolved.preferSystemModels,
+  });
+  const targets = (await registry.list()).filter(
+    (target) => target.capabilities.chat && target.capabilities.aiGatewayCodex,
+  );
+  const candidates = smartRouterCandidates(targets, "codex");
+  const service = new SmartRouterService({
+    ...SMART_ROUTER_DEFAULT_SETTINGS,
+    contextTokenBudget: resolved.smartRouterContextTokenBudget,
+    probeRefreshIntervalMs: resolved.smartRouterProbeRefreshIntervalMs,
+    probeTtlMs: resolved.smartRouterProbeTtlMs,
+    routeTtlSeconds: resolved.smartRouterRouteTtlSeconds,
+    timeoutMs: resolved.smartRouterTimeoutMs,
+  });
+  const selected = await service.select(input, candidates, { client });
+  return {
+    model: selected.value.id,
+    modelServiceName: selected.value.modelServiceName,
+    routeModel: selected.routeModel,
+    harness: selected.harness,
+    routerName: selected.routerName,
+    latencyMs: selected.latencyMs,
+    ...(selected.rationale ? { rationale: selected.rationale } : {}),
+    ...(selected.params ? { params: selected.params } : {}),
+  };
 }

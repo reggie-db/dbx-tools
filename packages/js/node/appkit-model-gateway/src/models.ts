@@ -6,7 +6,7 @@
 
 import { isChatClass, modelFamily, modelFamilyRank } from "@dbx-tools/model";
 import { ModelClass, ReasoningEffort } from "@dbx-tools/shared-model";
-import { AUTOMATIC_MODEL_ID } from "@dbx-tools/shared-model-gateway";
+import { SMART_ROUTER_MODEL_ID } from "@dbx-tools/shared-model-gateway";
 import type {
   CodexModel,
   CodexModelListResponse,
@@ -36,28 +36,28 @@ export function listModelsPayload(
   includeCodex: true,
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
-  includeAutomatic?: boolean,
+  includeSmartRouter?: boolean,
 ): CodexModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: false,
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
-  includeAutomatic?: boolean,
+  includeSmartRouter?: boolean,
 ): OpenAIModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
-  includeAutomatic?: boolean,
+  includeSmartRouter?: boolean,
 ): ModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
   preserveOrder = false,
   preferSystemModels = false,
-  includeAutomatic = false,
+  includeSmartRouter = false,
 ): ModelListResponse {
   const available = targets
     .filter((target) => target.endpoint?.status?.deprecated !== true)
@@ -67,9 +67,9 @@ export function listModelsPayload(
       compareCatalogueTargets(left, right, (target) => target.displayName),
     );
   }
-  const automaticCandidates = available.filter((target) => target.capabilities.chat);
-  if (includeAutomatic && automaticCandidates.length > 0) {
-    available.unshift(automaticModelTarget(automaticCandidates));
+  const smartRouterCandidates = available.filter((target) => target.capabilities.chat);
+  if (includeSmartRouter && smartRouterCandidates.length > 0) {
+    available.unshift(smartRouterModelTarget(smartRouterCandidates));
   }
   if (includeCodex) {
     return {
@@ -92,7 +92,7 @@ function openAiModel(target: ModelTarget): OpenAIModel {
     task: target.endpoint?.task,
     status: target.endpoint?.status ?? { deprecated: false },
     capabilities: {
-      automatic: target.id === AUTOMATIC_MODEL_ID,
+      smart_router: target.id === SMART_ROUTER_MODEL_ID,
       tools: target.capabilities.tools,
       reasoning: target.reasoningEfforts,
       responses: target.capabilities.responses,
@@ -108,21 +108,21 @@ function openAiModel(target: ModelTarget): OpenAIModel {
   };
 }
 
-function automaticModelTarget(candidates: readonly ModelTarget[]): ModelTarget {
+function smartRouterModelTarget(candidates: readonly ModelTarget[]): ModelTarget {
   const has = (capability: keyof ModelCapabilities) =>
     candidates.some((target) => target.capabilities[capability]);
   const reasoningEfforts = Object.values(ReasoningEffort).filter((effort) =>
     candidates.some((target) => target.reasoningEfforts.includes(effort)),
   );
   return {
-    id: AUTOMATIC_MODEL_ID,
-    aliases: [AUTOMATIC_MODEL_ID],
-    displayName: "Auto",
+    id: SMART_ROUTER_MODEL_ID,
+    aliases: [SMART_ROUTER_MODEL_ID],
+    displayName: "Smart Router",
     endpoint: {
-      name: AUTOMATIC_MODEL_ID,
-      displayName: "Auto",
+      name: SMART_ROUTER_MODEL_ID,
+      displayName: "Smart Router",
       description:
-        "Selects a compatible Databricks model and reasoning budget for each top-level chat turn.",
+        "Uses Databricks task_v3 Smart Router to select a compatible system model for each turn.",
       task: "llm/v1/chat",
       class: ModelClass.ChatBalanced,
       status: { deprecated: false },

@@ -4,19 +4,20 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-model-gateway";
 export const PACKAGE_VERSION = "0.9.175";
-export * as automatic from "./src/automatic.ts";
 export * as client from "./src/client.ts";
 export * as contracts from "./src/contracts.ts";
 export * as models from "./src/models.ts";
 export * as options from "./src/options.ts";
+export * as smartRouter from "./src/smart-router.ts";
 export * as upstream from "./src/upstream.ts";
-export { AUTOMATIC_MODEL_ID, AUTOMATIC_SELECTED_MODEL_HEADER, AUTOMATIC_TIER_HEADER, AUTOMATIC_REASONING_HEADER, AUTOMATIC_CONFIDENCE_HEADER, AUTOMATIC_SOURCE_HEADER, AUTOMATIC_REASON_CODE_HEADER, AUTOMATIC_DEGRADED_HEADER, isAutomaticModelId } from "./src/automatic.ts";
 export { ModelGatewayClientError, createModelGatewayClient } from "./src/client.ts";
 export type { ModelGatewayClientOptions, ListModelsOptions, ModelGatewayClient } from "./src/client.ts";
 export { ClientProtocolSchema, UpstreamProtocolSchema, ModelCapabilitiesSchema, ModelTargetSchema, RequestedFeaturesSchema, GatewayRouteSchema, ModelCapabilityOverrideSchema, ResolveRouteInputSchema } from "./src/contracts.ts";
 export type { ClientProtocol, UpstreamProtocol, ModelCapabilities, ModelTarget, RequestedFeatures, GatewayRoute, ModelCapabilityOverride, ResolveRouteInput } from "./src/contracts.ts";
 export { OpenAIModelCapabilitiesSchema, OpenAIModelSchema, OpenAIModelListResponseSchema, CodexReasoningLevelSchema, CodexTruncationPolicySchema, CodexModelSchema, CodexModelListResponseSchema, ModelListResponseSchema, EmbeddingRequestSchema, EmbeddingDataSchema, EmbeddingUsageSchema, EmbeddingResponseSchema, OpenAIErrorResponseSchema, AnthropicErrorResponseSchema, GatewayErrorResponseSchema } from "./src/models.ts";
 export type { OpenAIModelCapabilities, OpenAIModel, OpenAIModelListResponse, CodexReasoningLevel, CodexTruncationPolicy, CodexModel, CodexModelListResponse, ModelListResponse, EmbeddingRequest, EmbeddingData, EmbeddingUsage, EmbeddingResponse, OpenAIErrorResponse, AnthropicErrorResponse, GatewayErrorResponse } from "./src/models.ts";
-export { ModelOptionSchema, ModelClassOptionSchema, ChatModelClassOptionSchema, ModelSelectionOptionsSchema, ChatModelSelectionOptionsSchema, ModelGatewayOptionsSchema, ModelGatewayCliOptionsSchema, MODEL_GATEWAY_DEFAULTS, resolveModelGatewayOptions, resolveModelGatewayCliOptions } from "./src/options.ts";
-export type { ModelGatewayOptions, ResolvedModelGatewayOptions, ModelGatewayCliOptions } from "./src/options.ts";
+export { ModelOptionSchema, ModelClassOptionSchema, ChatModelClassOptionSchema, ModelSelectionOptionsSchema, ChatModelSelectionOptionsSchema, SmartRouterModeSchema, ModelGatewayOptionsSchema, ModelGatewayCliOptionsSchema, MODEL_GATEWAY_DEFAULTS, resolveModelGatewayOptions, resolveModelGatewayCliOptions } from "./src/options.ts";
+export type { ModelGatewayOptions, ResolvedModelGatewayOptions, ModelGatewayCliOptions, SmartRouterMode } from "./src/options.ts";
+export { SMART_ROUTER_MODEL_ID, SMART_ROUTER_NAME, SMART_ROUTER_SELECTED_MODEL_HEADER, SMART_ROUTER_ROUTE_MODEL_HEADER, SMART_ROUTER_HARNESS_HEADER, SMART_ROUTER_SOURCE_HEADER, SMART_ROUTER_TASK_TIER_HEADER, SMART_ROUTER_SERVED_TIER_HEADER, SMART_ROUTER_PROFILER_STATUS_HEADER, SmartRouterHarnessSchema, SmartRouterRouteOptionSchema, SmartRouterRequestSchema, SmartRouterRouteSelectionSchema, SmartRouterResponseSchema, SmartRouterObservationSchema, isSmartRouterModelId } from "./src/smart-router.ts";
+export type { SmartRouterHarness, SmartRouterRouteOption, SmartRouterRequest, SmartRouterRouteSelection, SmartRouterResponse, SmartRouterObservation } from "./src/smart-router.ts";
 export { upstreamUrl } from "./src/upstream.ts";
