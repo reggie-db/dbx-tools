@@ -90,6 +90,19 @@
         }
       ]
     },
+    "bun-lockfile": {
+      "name": "bun-lockfile",
+      "description": "Rewrite private npm registry tarball URLs in bun.lock",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/bun-lockfile.ts"
+          ],
+          "receiveArgs": true
+        }
+      ]
+    },
     "check": {
       "name": "check",
       "description": "Validate the generated workspace with Bun",
@@ -424,6 +437,9 @@
         },
         {
           "exec": "bun install"
+        },
+        {
+          "spawn": "bun-lockfile"
         }
       ],
       "condition": "bun -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\""
@@ -436,7 +452,7 @@
           "exec": "bun scripts/check-bun.ts"
         },
         {
-          "exec": "bun install"
+          "exec": "bun install --frozen-lockfile"
         }
       ],
       "condition": "bun -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\""

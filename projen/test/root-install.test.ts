@@ -46,9 +46,9 @@ function synthFixture(
 }
 
 /** Steps generated for task `name` in a project directory. */
-function taskSteps(outdir: string, name: string): Array<{ exec?: string }> {
+function taskSteps(outdir: string, name: string): Array<{ exec?: string; spawn?: string }> {
   const tasks = JSON.parse(readFileSync(join(outdir, ".projen", "tasks.json"), "utf8")) as {
-    tasks: Record<string, { steps: Array<{ exec?: string }> }>;
+    tasks: Record<string, { steps: Array<{ exec?: string; spawn?: string }> }>;
   };
   return tasks.tasks[name]?.steps ?? [];
 }
@@ -67,13 +67,14 @@ describe("ROOT_INSTALL_ONLY_MIXIN", () => {
   it("keeps root installs and suppresses late-attached child installs by default", () => {
     const { child, outdir, root } = synthFixture("default");
 
-    assert.deepEqual(taskSteps(outdir, "install").slice(0, 2), [
+    assert.deepEqual(taskSteps(outdir, "install"), [
       { exec: "bun scripts/check-bun.ts" },
       { exec: "bun install" },
+      { spawn: "bun-lockfile" },
     ]);
-    assert.deepEqual(taskSteps(outdir, "install:ci").slice(0, 2), [
+    assert.deepEqual(taskSteps(outdir, "install:ci"), [
       { exec: "bun scripts/check-bun.ts" },
-      { exec: "bun install" },
+      { exec: "bun install --frozen-lockfile" },
     ]);
     assert.deepEqual(taskSteps(join(outdir, "packages/child"), "install"), []);
     assert.deepEqual(taskSteps(join(outdir, "packages/child"), "install:ci"), []);
@@ -81,8 +82,15 @@ describe("ROOT_INSTALL_ONLY_MIXIN", () => {
     assert.equal(Object.hasOwn(child.package, "installDependencies"), true);
     const manifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
       devDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
     };
     assert.equal(manifest.devDependencies?.bun, "1.4.2");
+    assert.equal(
+      manifest.scripts?.postinstall,
+      "bun node_modules/@dbx-tools/projen/tasks/bun-lockfile.ts",
+    );
+    const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8").split("\n");
+    assert.ok(gitignore.indexOf("!/bun.lock") > gitignore.indexOf("**/*.lock"));
     const check = readFileSync(join(outdir, "scripts/check-bun.ts"), "utf8");
     assert.match(check, /MINIMUM_VERSION = "1\.4\.2"/);
     assert.match(check, /bun run bun/);

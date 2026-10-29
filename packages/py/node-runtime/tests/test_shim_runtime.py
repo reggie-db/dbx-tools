@@ -14,7 +14,7 @@ from dbx_tools.node_runtime.runtime import (
     get_runtime,
     load_bundle,
 )
-from pythonmonkey import SpiderMonkeyError
+from pythonmonkey import SpiderMonkeyError, null
 
 FIXTURES = Path(__file__).with_name("fixtures")
 
@@ -56,6 +56,21 @@ def test_shared_runtime_and_bundle_registry() -> None:
         "status": 0,
         "stdout": "runtime-ok",
         "stderr": "",
+    }
+
+    missing_command = "dbx-tools-node-runtime-command-that-does-not-exist"
+    assert first._exports["runSync"](missing_command, ["--version"]) == {
+        "status": null,
+        "stdout": "",
+        "stderr": "",
+        "error": {
+            "message": f"spawnSync {missing_command} ENOENT",
+            "code": "ENOENT",
+            "errno": -2,
+            "syscall": f"spawnSync {missing_command}",
+            "path": missing_command,
+            "spawnargs": ["--version"],
+        },
     }
 
 

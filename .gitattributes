@@ -17,6 +17,7 @@
 /.vscode/extensions.json linguist-generated linguist-language=JSON-with-Comments
 /.vscode/settings.json linguist-generated
 /.vscode/tasks.json linguist-generated
+/bun.lock linguist-generated
 /bun.lockb linguist-generated
 /bunfig.toml linguist-generated
 /LICENSE linguist-generated

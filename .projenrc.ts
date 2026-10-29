@@ -293,13 +293,14 @@ root.addTask("shared-core:usage", {
 });
 
 // ---------------------------------------------------------------------------
-// JavaScript and Python lockfiles stay UNTRACKED
+// Lockfiles
 // ---------------------------------------------------------------------------
-// Deliberately NOT committed: a lockfile resolved on a dev machine can bake its
-// active npm or Python registry into `bun.lock` / `uv.lock`, then fail in CI or
-// on another developer's machine. Local installs still generate both files, but
-// the repo ignores them and CI resolves fresh. Verify before ever committing one:
-//   grep -c 'localhost:4873' bun.lock
+// The root `bun.lock` is committed so CI installs with `--frozen-lockfile`. The
+// generated `bun-lockfile` task runs after every install and as `postinstall`;
+// it detects the active npm registry and, when that is not public npm, rewrites
+// every tarball URL under it so the committed lockfile never names a private
+// mirror. Python `uv.lock` files stay untracked. Verify before committing:
+//   bun run bun-lockfile -- --check
 
 // ---------------------------------------------------------------------------
 // Generated dot-directories

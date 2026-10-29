@@ -85,7 +85,23 @@ module.exports = {
     const result = globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")].modules[
       "node:child_process"
     ].spawnSync(command, args);
-    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+    return {
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      ...(result.error
+        ? {
+            error: {
+              message: result.error.message,
+              code: result.error.code,
+              errno: result.error.errno,
+              syscall: result.error.syscall,
+              path: result.error.path,
+              spawnargs: result.error.spawnargs,
+            },
+          }
+        : {}),
+    };
   },
   runtimeAbi: () => globalThis[Symbol.for("@dbx-tools/node-runtime/runtime")].abiVersion,
 };

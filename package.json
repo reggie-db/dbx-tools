@@ -11,6 +11,7 @@
     "barrels": "projen barrels",
     "build": "projen build",
     "bump": "projen bump",
+    "bun-lockfile": "projen bun-lockfile",
     "check": "projen check",
     "clean": "projen clean",
     "clobber": "projen clobber",
@@ -65,7 +66,8 @@
     "ui:bundle-sizes": "projen ui:bundle-sizes",
     "version:check": "projen version:check",
     "workspace:graph": "projen workspace:graph",
-    "projen": "projen"
+    "projen": "projen",
+    "postinstall": "bun node_modules/@dbx-tools/projen/tasks/bun-lockfile.ts"
   },
   "devDependencies": {
     "@dbx-tools/appkit": "workspace:^",

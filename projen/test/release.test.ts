@@ -79,7 +79,7 @@ describe("unified release workflow", () => {
     assert.deepEqual(verifyJob.permissions, { contents: "read" });
     assert.equal(verifyJob.env?.ONNXRUNTIME_NODE_INSTALL, "skip");
     assert.equal(step(verifyJob, "Checkout release source").with?.["fetch-depth"], 0);
-    assert.equal(step(verifyJob, "Install dependencies").run, "bun install");
+    assert.equal(step(verifyJob, "Install dependencies").run, "bun install --frozen-lockfile");
     const verify = step(verifyJob, "Verify release context");
     assert.equal(verify.env?.RELEASE_TAG, "${{ github.ref_name }}");
     assert.ok(verify.run?.includes("tasks/release-version.ts"));

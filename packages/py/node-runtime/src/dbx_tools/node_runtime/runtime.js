@@ -18819,7 +18819,25 @@ function execFile(command, args, _options, callback) {
   }, (error) => callback(error instanceof Error ? error : new Error(String(error))));
 }
 function spawnSync(command, args = [], options = {}) {
-  const result = pythonHost().process.run(command, args, options.env, options.input, options.cwd);
+  let result;
+  try {
+    result = pythonHost().process.run(command, args, options.env, options.input, options.cwd);
+  } catch (error) {
+    if (!String(error).includes("Python FileNotFoundError: [Errno 2]"))
+      throw error;
+    return {
+      status: null,
+      stdout: "",
+      stderr: "",
+      error: Object.assign(new Error(`spawnSync ${command} ENOENT`), {
+        code: "ENOENT",
+        errno: -2,
+        syscall: `spawnSync ${command}`,
+        path: command,
+        spawnargs: args
+      })
+    };
+  }
   return {
     status: result.exitCode,
     stdout: result.stdout ?? "",

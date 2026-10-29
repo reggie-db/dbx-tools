@@ -276,7 +276,7 @@ function releaseBuildJob(
           fetchDepth: 0,
         },
       }),
-      ...project.renderWorkflowSetup({ mutable: true }),
+      ...project.renderWorkflowSetup({ mutable: false }),
       {
         name: "Verify release context",
         id: "release",

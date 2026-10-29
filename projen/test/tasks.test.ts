@@ -135,8 +135,9 @@ describe("workspace validation tasks", () => {
     assert.match(tasks.attributes, /^\/tooling\/index\*\.ts linguist-generated$/m);
   });
 
-  it("ignores local lockfiles independently of the active registry", () => {
+  it("ignores local lockfiles except the registry-neutral root bun.lock", () => {
     assert.match(tasks.gitignore, /^\*\*\/\*\.lock$/m);
+    assert.match(tasks.gitignore, /^!\/bun\.lock$/m);
     assert.match(tasks.gitignore, /^\.npmrc$/m);
     assert.match(tasks.gitignore, /^!\*\*\/src\/lib\/\*\*$/m);
     assert.match(tasks.prettierIgnore, /^\*\*\/\*\.lock$/m);

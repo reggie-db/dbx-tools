@@ -669,6 +669,24 @@ whole-tree operation driven by the root `.projenrc.ts`, so a member-level run
 re-synths the entire workspace from the member's directory. Run `bun run sync`
 from the root instead.
 
+## Commit a registry-neutral lockfile
+
+The root `bun.lock` is committed, and generated CI installs run
+`bun install --frozen-lockfile`. A private npm mirror would otherwise appear in
+every resolved tarball URL, so the generated `bun-lockfile` task runs after each
+root install and as the root `postinstall` script, which also covers `bun add`,
+`bun remove`, and `bun update`. It detects the active registry from the same
+environment, `.npmrc`, `bunfig.toml`, and pnpm configuration a package manager
+reads. When that registry is not public npm, it rewrites every tarball URL under
+it and leaves all other URLs unchanged. Bun 1.4.2 has no native setting that
+omits registry URLs from `bun.lock`.
+
+The default replacement is an empty tarball field, which Bun resolves through
+the installing machine's registry; integrity hashes still pin the content.
+Run `bun run bun-lockfile -- --check` to confirm a lockfile is clean without
+writing it. Options can also come from `PROJEN_BUN_LOCKFILE_*` environment
+variables or `.env`.
+
 ## Manage workspace versions
 
 `VERSION` is the language-neutral version seam. Real package manifests remain

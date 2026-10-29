@@ -487,6 +487,57 @@ a:not([class]) {
   text-decoration-color: color-mix(in srgb, ${colors.accent} 65%, transparent);
 }
 
+@media (min-width: 50rem) {
+  :root {
+    --sl-sidebar-width: var(--dbx-sidebar-width, 20rem);
+  }
+}
+
+/* Keep the current page the same weight so selecting it never re-wraps the label. */
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover,
+.sidebar-content a[aria-current="page"]:focus {
+  font-weight: inherit;
+}
+
+.sidebar-content a {
+  overflow-wrap: anywhere;
+}
+
+.dbx-sidebar-resizer {
+  display: none;
+}
+
+@media (min-width: 50rem) {
+  .dbx-sidebar-resizer {
+    display: block;
+    position: fixed;
+    z-index: calc(var(--sl-z-index-menu) + 1);
+    inset-block: var(--sl-nav-height) 0;
+    inset-inline-start: calc(var(--sl-sidebar-width) - 1px);
+    width: 6px;
+    cursor: col-resize;
+    touch-action: none;
+    background: transparent;
+    outline: none;
+  }
+
+  /* No visible bar: hovering or dragging only darkens Starlight's own sidebar hairline. */
+  :root:has(.dbx-sidebar-resizer:hover) .sidebar-pane,
+  :root[data-dbx-sidebar-resizing] .sidebar-pane {
+    border-inline-end-color: var(--sl-color-gray-4);
+  }
+
+  .dbx-sidebar-resizer:focus-visible {
+    background: var(--sl-color-gray-5);
+  }
+
+  :root[data-dbx-sidebar-resizing] {
+    cursor: col-resize;
+    user-select: none;
+  }
+}
+
 .mermaid-diagram {
   margin-block: 1.5rem;
   overflow-x: auto;
@@ -502,12 +553,135 @@ a:not([class]) {
 `;
 }
 
+/** Mermaid theme variables derived from the brand palette for both color schemes. */
+function mermaidThemes() {
+  const { colors, typography } = brandContext;
+  const shared = { fontFamily: typography.sans, fontSize: "13px" };
+  return {
+    light: {
+      ...shared,
+      background: colors.background,
+      primaryColor: colors.surface,
+      primaryTextColor: colors.foreground,
+      primaryBorderColor: colors.muted,
+      secondaryColor: colors.surface,
+      tertiaryColor: colors.background,
+      lineColor: colors.muted,
+      textColor: colors.foreground,
+      edgeLabelBackground: colors.background,
+    },
+    dark: {
+      ...shared,
+      darkMode: true,
+      background: colors.foreground,
+      primaryColor: colors.primary,
+      primaryTextColor: colors.surface,
+      primaryBorderColor: colors.muted,
+      secondaryColor: colors.primary,
+      tertiaryColor: colors.foreground,
+      lineColor: colors.muted,
+      textColor: colors.surface,
+      edgeLabelBackground: colors.primary,
+    },
+  };
+}
+
 function mermaidHead() {
   return `---
 import DefaultHead from "@astrojs/starlight/components/Head.astro";
 ---
 
 <DefaultHead />
+
+<script is:inline>
+  (() => {
+    try {
+      const width = Number(localStorage.getItem("dbx-tools.sidebar-width"));
+      if (width >= 256 && width <= 640) {
+        document.documentElement.style.setProperty("--dbx-sidebar-width", width + "px");
+      }
+    } catch {}
+  })();
+</script>
+
+<script>
+  const sidebarKey = Symbol.for("dbx-tools.sidebar-resizer");
+  if (!Reflect.get(window, sidebarKey)) {
+    Reflect.set(window, sidebarKey, true);
+    const storageKey = "dbx-tools.sidebar-width";
+    const minWidth = 256;
+    const maxWidth = 640;
+    const step = 16;
+    const root = document.documentElement;
+
+    function currentWidth() {
+      const pane = document.querySelector(".sidebar-pane");
+      return pane instanceof HTMLElement ? pane.getBoundingClientRect().width : 320;
+    }
+
+    function applyWidth(width: number, persist: boolean) {
+      const limit = Math.min(maxWidth, Math.max(minWidth, window.innerWidth * 0.5));
+      const clamped = Math.round(Math.min(limit, Math.max(minWidth, width)));
+      root.style.setProperty("--dbx-sidebar-width", clamped + "px");
+      if (!persist) return;
+      try {
+        localStorage.setItem(storageKey, String(clamped));
+      } catch {}
+    }
+
+    function resetWidth() {
+      root.style.removeProperty("--dbx-sidebar-width");
+      try {
+        localStorage.removeItem(storageKey);
+      } catch {}
+    }
+
+    function mountResizer() {
+      if (!document.querySelector(".sidebar-pane")) return;
+      if (document.querySelector(".dbx-sidebar-resizer")) return;
+      const handle = document.createElement("div");
+      handle.className = "dbx-sidebar-resizer";
+      handle.tabIndex = 0;
+      handle.setAttribute("role", "separator");
+      handle.setAttribute("aria-orientation", "vertical");
+      handle.setAttribute("aria-label", "Resize sidebar");
+      handle.title = "Drag to resize. Double-click to reset.";
+
+      handle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        handle.setPointerCapture(event.pointerId);
+        root.dataset.dbxSidebarResizing = "";
+        const move = (moveEvent: PointerEvent) => applyWidth(moveEvent.clientX, false);
+        const end = (endEvent: PointerEvent) => {
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", end);
+          handle.removeEventListener("pointercancel", end);
+          delete root.dataset.dbxSidebarResizing;
+          applyWidth(endEvent.clientX, true);
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", end);
+        handle.addEventListener("pointercancel", end);
+      });
+      handle.addEventListener("dblclick", resetWidth);
+      handle.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowLeft") applyWidth(currentWidth() - step, true);
+        else if (event.key === "ArrowRight") applyWidth(currentWidth() + step, true);
+        else if (event.key === "Home" || event.key === "Escape") resetWidth();
+        else return;
+        event.preventDefault();
+      });
+      document.body.append(handle);
+    }
+
+    document.addEventListener("astro:page-load", mountResizer);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", mountResizer, { once: true });
+    } else {
+      mountResizer();
+    }
+  }
+</script>
 
 <script>
   const runtimeKey = Symbol.for("dbx-tools.mermaid-runtime");
@@ -518,6 +692,7 @@ import DefaultHead from "@astrojs/starlight/components/Head.astro";
       '[data-language="mermaid"] code',
       'pre.language-mermaid code',
     ].join(",");
+    const themes = ${JSON.stringify(mermaidThemes())};
     let mermaidPromise: Promise<typeof import("mermaid").default> | undefined;
     let renderQueue = Promise.resolve();
 
@@ -554,10 +729,21 @@ import DefaultHead from "@astrojs/starlight/components/Head.astro";
       const diagrams = Array.from(document.querySelectorAll(".mermaid-diagram"));
       if (diagrams.length === 0) return;
       const mermaid = await loadMermaid();
+      const dark = document.documentElement.dataset.theme === "dark";
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: "strict",
-        theme: document.documentElement.dataset.theme === "dark" ? "dark" : "default",
+        theme: "base",
+        look: "classic",
+        themeVariables: dark ? themes.dark : themes.light,
+        minNodeWidth: 0,
+        flowchart: {
+          useMaxWidth: false,
+          minNodeWidth: 0,
+          nodeSpacing: 24,
+          rankSpacing: 32,
+          padding: 8,
+        },
       });
       for (const diagram of diagrams) {
         if (!(diagram instanceof HTMLElement)) continue;

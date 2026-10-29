@@ -1,7 +1,11 @@
 import { EventEmitter } from "node:events";
 import { Readable, Writable } from "node:stream";
 
-import { pythonHost, type PythonProcessHandle } from "./host.ts";
+import {
+  pythonHost,
+  type PythonProcessHandle,
+  type PythonProcessResult,
+} from "./host.ts";
 
 interface SpawnOptions {
   cwd?: string;
@@ -11,9 +15,16 @@ interface SpawnOptions {
 }
 
 interface SpawnSyncResult {
-  status: number;
+  status: number | null;
   stdout: string;
   stderr: string;
+  error?: Error & {
+    code: "ENOENT";
+    errno: -2;
+    syscall: string;
+    path: string;
+    spawnargs: string[];
+  };
 }
 
 class PythonChildProcess extends EventEmitter {
@@ -100,13 +111,30 @@ export function spawnSync(
   args: string[] = [],
   options: SpawnOptions = {},
 ): SpawnSyncResult {
-  const result = pythonHost().process.run(
-    command,
-    args,
-    options.env,
-    options.input,
-    options.cwd,
-  );
+  let result: PythonProcessResult;
+  try {
+    result = pythonHost().process.run(
+      command,
+      args,
+      options.env,
+      options.input,
+      options.cwd,
+    );
+  } catch (error) {
+    if (!String(error).includes("Python FileNotFoundError: [Errno 2]")) throw error;
+    return {
+      status: null,
+      stdout: "",
+      stderr: "",
+      error: Object.assign(new Error(`spawnSync ${command} ENOENT`), {
+        code: "ENOENT" as const,
+        errno: -2 as const,
+        syscall: `spawnSync ${command}`,
+        path: command,
+        spawnargs: args,
+      }),
+    };
+  }
   return {
     status: result.exitCode,
     stdout: result.stdout ?? "",

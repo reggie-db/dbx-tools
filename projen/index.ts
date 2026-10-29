@@ -7,6 +7,7 @@ export const PACKAGE_VERSION = "0.9.173";
 export * as appkitWorkspace from "./src/appkit-workspace.ts";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
+export * as bunLockfile from "./src/bun-lockfile.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
 export * as clean from "./src/clean.ts";
 export * as codegen from "./src/codegen.ts";
@@ -48,6 +49,8 @@ export type { AppKitWorkspaceMode, AppKitBundleOptions, AppKitWorkspaceOptions }
 export { isGeneratedBarrel, folderBarrelFile, generateBarrels } from "./src/barrels.ts";
 export { BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE, BUN_APP_OVERRIDES, RootBunfigFile, BunfigFile, BunDevServerFile, BunBuildFile } from "./src/bun-app.ts";
 export type { BunBuildFileOptions } from "./src/bun-app.ts";
+export { BUN_LOCKFILE, BunLockfileReplacementSchema, BunLockfileOptionsSchema, bunLockfileRegistries, normalizeBunLockfile, normalizeBunLockfileAt } from "./src/bun-lockfile.ts";
+export type { BunLockfileOptions, BunLockfileOptionsInput, NormalizedBunLockfile, BunLockfileNormalization } from "./src/bun-lockfile.ts";
 export { BUN_VERSION, MINIMUM_BUN_VERSION, BUN_VERSION_CHECK_SCRIPT } from "./src/bun-workflow.ts";
 export { listGeneratedFiles, listNodeModulesDirs, removePaths } from "./src/clean.ts";
 export { codegenModulePaths, generateCodegen } from "./src/codegen.ts";
@@ -68,7 +71,7 @@ export { resolveRepoRoot, repoRoot, DEFAULT_PACKAGE_ROOTS, projectName, toPosix,
 export type { RecordedPackage } from "./src/packages.ts";
 export { PnpmWorkspaceState } from "./src/pnpm-workspace.ts";
 export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace.ts";
-export { PackageIdentifier, identifier, applyCompilerOptions, applyIncludes, applyExports, addExports, addOptionalPeer, projectRepositoryUrl, projectReleaseBranch, addPackageFiles, srcFolderExports, LICENSE, DBXToolsNodeProject, ROOT_INSTALL_ONLY_MIXIN, DBXToolsTypeScriptProject, taskCommand } from "./src/project-js.ts";
+export { PackageIdentifier, identifier, applyCompilerOptions, applyIncludes, applyExports, addExports, addOptionalPeer, projectRepositoryUrl, projectReleaseBranch, addPackageFiles, srcFolderExports, LICENSE, BUN_LOCKFILE_TASK, DBXToolsNodeProject, ROOT_INSTALL_ONLY_MIXIN, DBXToolsTypeScriptProject, taskCommand } from "./src/project-js.ts";
 export type { DBXToolsJavaScriptProject, DBXToolsReleaseMode, DiscoveredTypeScriptPackageOptions, DBXToolsJavaScriptProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
 export { isProject, isDBXToolsProject, isDBXToolsJavaScriptProject, hasName, hasIdentifierPackageName, hasIdentifierName, hasIdentifierScope, hasTag, hasPath } from "./src/project-predicate.ts";
 export { pythonPackagePath, pythonModuleName, DBXToolsPythonProject, DBXToolsPythonWorkspace } from "./src/project-py.ts";

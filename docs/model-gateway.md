@@ -74,17 +74,17 @@ The following flow shows how the gateway handles `temperature`.
 flowchart TD
     accTitle: Temperature translation
     accDescr: The gateway preserves omitted and unknown numeric temperatures, removes null and unsupported temperatures, rejects invalid values, and clamps supported Databricks values.
-    start["Receive temperature"] --> present{"Is the field present?"}
-    present -->|No| unchanged["Leave the request unchanged"]
-    present -->|Yes| null{"Is the value null?"}
-    null -->|Yes| remove["Remove temperature"]
-    null -->|No| finite{"Is the value a finite number?"}
-    finite -->|No| invalid["Return HTTP 400"]
-    finite -->|Yes| metadata{"Does the Databricks model have models.dev metadata?"}
-    metadata -->|No| preserve["Preserve the numeric value"]
-    metadata -->|Yes| supported{"Does the model support temperature?"}
+    start["temperature"] --> present{{"Present?"}}
+    present -->|No| unchanged["Unchanged"]
+    present -->|Yes| null{{"Null?"}}
+    null -->|Yes| remove["Remove"]
+    null -->|No| finite{{"Finite number?"}}
+    finite -->|No| invalid["HTTP 400"]
+    finite -->|Yes| metadata{{"models.dev metadata?"}}
+    metadata -->|No| preserve["Keep value"]
+    metadata -->|Yes| supported{{"Supported?"}}
     supported -->|No| remove
-    supported -->|Yes| clamp["Clamp the value to 0 through 2"]
+    supported -->|Yes| clamp["Clamp to 0-2"]
 ```
 
 Temperature support comes from the Databricks provider records in the committed
@@ -100,24 +100,24 @@ Databricks request.
 flowchart TD
     accTitle: Reasoning effort translation
     accDescr: The gateway normalizes reasoning effort, selects the first available supported ladder, scales down to a supported level, and retries once after a reasoning-specific Databricks error.
-    start["Read reasoning_effort or reasoning.effort"] --> normalize["Normalize a known level or alias"]
-    normalize --> valid{"Is the normalized level valid?"}
-    valid -->|No, null, or none| centered["Use a medium-centered request"]
-    valid -->|Yes| ladder["Select the first available supported ladder"]
-    ladder --> docs["1. Databricks documentation"]
-    ladder --> params["2. modelparams.dev effort enums"]
-    ladder --> learned["3. Learned Databricks error values"]
-    ladder --> family["4. Model family fallback"]
-    docs --> scale["Scale down to the nearest supported level"]
+    start["Read effort"] --> normalize["Normalize level or alias"]
+    normalize --> valid{{"Valid?"}}
+    valid -->|No, null, none| centered["Center on medium"]
+    valid -->|Yes| ladder["First available ladder"]
+    ladder --> docs["1. Databricks docs"]
+    ladder --> params["2. modelparams.dev"]
+    ladder --> learned["3. Learned errors"]
+    ladder --> family["4. Family fallback"]
+    docs --> scale["Scale to nearest level"]
     params --> scale
     learned --> scale
     family --> scale
     centered --> scale
-    scale --> send["Send the Databricks request"]
-    send --> rejected{"Does Databricks reject reasoning?"}
-    rejected -->|No| response["Return the response"]
-    rejected -->|Lists supported values| learn["Learn the values and retry once"]
-    rejected -->|Does not support reasoning| strip["Remove reasoning fields and retry once"]
+    scale --> send["Send request"]
+    send --> rejected{{"Rejected?"}}
+    rejected -->|No| response["Return response"]
+    rejected -->|Lists values| learn["Learn values, retry once"]
+    rejected -->|Unsupported| strip["Strip reasoning, retry once"]
 ```
 
 The reasoning ladder uses Databricks documentation first, then modelparams.dev

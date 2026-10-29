@@ -40,7 +40,7 @@ jobs:
           bun-version: 1.4.2
       - name: Install dependencies
         id: install_dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
       - name: Verify release context
         id: release
         env:
