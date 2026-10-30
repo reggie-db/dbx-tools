@@ -84,6 +84,10 @@ body {
 .demo-header {
   padding-top: env(safe-area-inset-top);
   background: var(--background);
+  /* Keep the header on a stable composited layer while Safari resizes the shell for its keyboard. */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
 }
 
 .demo-nav > div {

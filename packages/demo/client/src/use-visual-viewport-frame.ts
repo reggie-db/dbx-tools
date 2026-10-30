@@ -4,16 +4,6 @@ const COMPOSER_INPUT_SELECTOR = ".aui-composer-input";
 const VISUAL_VIEWPORT_EVENTS = ["resize", "scroll", "scrollend"] as const;
 const KEYBOARD_INSET_THRESHOLD_PX = 80;
 const KEYBOARD_CLOSE_FALLBACK_MS = 700;
-const FOCUS_GUARD_FALLBACK_MS = 600;
-const FOCUS_GUARD_SETTLE_MS = 120;
-
-const isIOSWebKit = () => {
-  const userAgent = window.navigator.userAgent;
-  return (
-    /iPad|iPhone|iPod/.test(userAgent) ||
-    (userAgent.includes("Macintosh") && window.navigator.maxTouchPoints > 1)
-  );
-};
 
 const isKeyboardVisible = (viewport: VisualViewport | null): boolean =>
   Boolean(viewport && window.innerHeight - viewport.height > KEYBOARD_INSET_THRESHOLD_PX);
@@ -32,43 +22,8 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
     if (!frame) return;
 
     const viewport = window.visualViewport;
-    const iosWebKit = isIOSWebKit();
     let keyboardClosing = false;
     let keyboardCloseTimer = 0;
-    let guardedInput: HTMLTextAreaElement | null = null;
-    let guardedOpacity = "";
-    let guardViewportHeight = 0;
-    let guardViewportTop = 0;
-    let focusRevealTimer = 0;
-
-    const revealGuardedInput = () => {
-      if (!guardedInput) return;
-      guardedInput.style.opacity = guardedOpacity;
-      delete guardedInput.dataset.iosFocusGuard;
-      guardedInput = null;
-      guardedOpacity = "";
-      guardViewportHeight = 0;
-      guardViewportTop = 0;
-      window.clearTimeout(focusRevealTimer);
-      focusRevealTimer = 0;
-    };
-
-    const scheduleGuardReveal = (delay: number) => {
-      window.clearTimeout(focusRevealTimer);
-      focusRevealTimer = window.setTimeout(revealGuardedInput, delay);
-    };
-
-    const guardInput = (input: HTMLTextAreaElement) => {
-      if (!iosWebKit || guardedInput === input) return;
-      revealGuardedInput();
-      guardedInput = input;
-      guardedOpacity = input.style.opacity;
-      guardViewportHeight = viewport?.height ?? window.innerHeight;
-      guardViewportTop = viewport?.offsetTop ?? 0;
-      input.dataset.iosFocusGuard = "true";
-      input.style.opacity = "0";
-      scheduleGuardReveal(FOCUS_GUARD_FALLBACK_MS);
-    };
 
     const clearKeyboardClosingState = () => {
       keyboardClosing = false;
@@ -95,24 +50,6 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
       frame.style.setProperty("--demo-viewport-left", `${left}px`);
       frame.style.setProperty("--demo-viewport-width", `${width}px`);
       frame.style.setProperty("--demo-viewport-height", `${height}px`);
-
-      if (!guardedInput || !viewport) return;
-      const heightChanged = guardViewportHeight - viewport.height > KEYBOARD_INSET_THRESHOLD_PX;
-      const topChanged =
-        Math.abs(viewport.offsetTop - guardViewportTop) > KEYBOARD_INSET_THRESHOLD_PX;
-      if (heightChanged || topChanged) scheduleGuardReveal(FOCUS_GUARD_SETTLE_MS);
-    };
-
-    const handleTouchStart = (event: TouchEvent) => {
-      const target = event.target instanceof Element ? event.target : null;
-      const input = target?.closest<HTMLTextAreaElement>(COMPOSER_INPUT_SELECTOR);
-      if (input) guardInput(input);
-    };
-
-    const handleFocusIn = (event: FocusEvent) => {
-      const input = event.target instanceof HTMLTextAreaElement ? event.target : null;
-      if (input?.matches(COMPOSER_INPUT_SELECTOR)) guardInput(input);
-      commit();
     };
 
     const handleFocusOut = (event: FocusEvent) => {
@@ -137,8 +74,7 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
     }
     window.addEventListener("resize", commit);
     window.addEventListener("scroll", commit, { passive: true });
-    frame.addEventListener("touchstart", handleTouchStart, { passive: true, capture: true });
-    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusin", commit);
     document.addEventListener("focusout", handleFocusOut);
     commit();
 
@@ -147,11 +83,9 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
         viewport?.removeEventListener(eventName, commit);
       }
       clearKeyboardClosingState();
-      revealGuardedInput();
       window.removeEventListener("resize", commit);
       window.removeEventListener("scroll", commit);
-      frame.removeEventListener("touchstart", handleTouchStart, true);
-      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusin", commit);
       document.removeEventListener("focusout", handleFocusOut);
     };
   }, [frameRef]);
