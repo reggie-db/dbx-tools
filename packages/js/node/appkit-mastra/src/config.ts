@@ -169,6 +169,14 @@ export interface MastraWorkspaceSkillsConfig {
   ttlMs?: number;
 }
 
+/** Standard process-memory skill tools exposed alongside configured skills. */
+export interface MastraSkillToolsConfig {
+  /** Expose `skill_search`. Defaults to true. */
+  search?: boolean;
+  /** Expose `skill_read`. Defaults to true. */
+  read?: boolean;
+}
+
 /** Native Mastra Code Mode execution transport. */
 export type MastraCodeModeTransport = "auto" | "isolated-vm" | "quickjs";
 
@@ -284,6 +292,8 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * an object to tune its process-cached, asynchronously refreshed index.
    */
   workspaceSkills?: boolean | MastraWorkspaceSkillsConfig;
+  /** Select optional standard tools for process-memory skills. */
+  skillTools?: MastraSkillToolsConfig;
   /**
    * Code-defined agents. Accepts three shapes for convenience:
    *
@@ -762,6 +772,21 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: ["boolean", "object"],
       description:
         "Use Mastra's native process-cached workspace-file skill search with asynchronous refresh. Defaults to true; false disables workspace-file discovery on auto-created workspaces.",
+    },
+    skillTools: {
+      type: "object",
+      description:
+        "Select optional standard tools for process-memory skills. The activation tool is always present; search and read default to enabled.",
+      properties: {
+        search: {
+          type: "boolean",
+          description: "Expose the skill_search tool. Defaults to true.",
+        },
+        read: {
+          type: "boolean",
+          description: "Expose the skill_read tool. Defaults to true.",
+        },
+      },
     },
     workspaceTools: {
       type: "object",

@@ -409,6 +409,8 @@ disable workspace-file skill discovery on auto-created workspaces, or pass
 index. Local mounts are also passed as native agent-level skills and indexed
 once during app startup, so the standard `skill`, `skill_search`, and
 `skill_read` tools remain available without a first-turn indexing delay.
+Set `skillTools: { search: false }` to keep direct skill activation and reads
+while hiding the process-memory search tool.
 Startup-provisioned remote skills use the same process-wide native index without
 duplicating their virtual mounts in workspace search. Set a caller-created
 workspace's `skills` to an empty list when that explicit workspace should expose
@@ -1310,6 +1312,8 @@ The main plugin options are:
 - `workspaceSkills` enables Mastra's native on-demand skill search by default.
   Pass `false` to disable it or an object with `topK`, `minScore`, and `ttlMs`
   overrides.
+- `skillTools` controls optional process-memory `skill_search` and `skill_read`
+  tools. Direct skill activation remains available.
 - `workspaceTools` forwards Mastra's native workspace-tool configuration.
   All tools are enabled without approval by default. Global and per-tool
   settings can require approval or disable selected tools.

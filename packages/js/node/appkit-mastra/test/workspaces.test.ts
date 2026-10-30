@@ -1281,6 +1281,26 @@ describe("agent workspace selection", () => {
     assert.ok(processors.some((processor) => "id" in processor && processor.id === "skill-search"));
   });
 
+  it("can disable standard skill search while retaining activation and read", async () => {
+    const built = await buildAgents({
+      config: { skillTools: { search: false } },
+      context: undefined,
+      log: logger("test/agents"),
+      standardSkills: [
+        createSkill({
+          name: "databricks-core",
+          description: "Use Databricks tools.",
+          instructions: "Follow Databricks guidance.",
+        }),
+      ],
+    });
+
+    const tools = await built.agents[built.defaultAgentId]!.listTools();
+    assert.ok("skill" in tools);
+    assert.ok(!("skill_search" in tools));
+    assert.ok("skill_read" in tools);
+  });
+
   it("can disable Mastra's skill search processor explicitly", async () => {
     const built = await buildAgents({
       config: { backgroundTurns: false, workspaceSkills: false },

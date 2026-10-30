@@ -7,7 +7,6 @@ import {
   lakebox,
   LakeboxRuntime,
   resolveLakeboxPluginConfig,
-  lakeboxSkillMounts,
 } from "@dbx-tools/appkit-lakebox";
 import {
   mastra,
@@ -180,7 +179,6 @@ const databricksMemory =
 const graphitiEnabled = boolean(undefined, "GRAPHITI_ENABLED", ENV_ONLY) ?? true;
 const memorySaveTurns = boolean(undefined, "MEMORY_SAVE_TURNS", ENV_ONLY);
 const busEnabled = boolean(undefined, "BUS_ENABLED", ENV_ONLY) ?? true;
-const remoteSkillsEnabled = boolean(undefined, "REMOTE_SKILLS_ENABLED", ENV_ONLY) ?? false;
 const appkitBodyLimit = string(undefined, "APPKIT_BODY_LIMIT", { sources: "env" }) ?? "100mb";
 const lakeboxRuntime = new LakeboxRuntime(resolveLakeboxPluginConfig());
 
@@ -469,15 +467,12 @@ await createApp({
       // generated chart matches the surrounding AppKit UI instead of falling
       // back to Echarts' defaults.
       brand: defaultBrandContext,
-      localSkillMounts: lakeboxSkillMounts(),
-      // The mounted and downloaded skills already use Mastra's native skill
-      // tools. Avoid embedding unrelated personal Workspace skill directories
-      // on the first ordinary chat turn.
+      // Keep this demo's skills limited to the default Databricks AI Tools set.
+      // Workspace discovery and the process-memory search tool stay disabled;
+      // agents can activate a known skill and read its supporting files.
       workspaceSkills: false,
-      // Fold Databricks' own AI Tools skills into the agents. Read straight
-      // from the public databricks/databricks-agent-skills repo, so this works
-      // in a deployed App container where the `databricks` CLI is absent.
-      ...(remoteSkillsEnabled ? { remoteSkills: "aitools" as const } : {}),
+      skillTools: { search: false },
+      remoteSkills: "aitools",
     }),
     // Registered after Mastra so setup can add its workflow before Mastra's
     // deferred instance build. Brand-page generation uses the read-only route.

@@ -932,7 +932,12 @@ export async function buildAgents(opts: {
     // parse/index cost. Workspace-file skills retain their separate dynamic,
     // non-blocking refresh path below.
     await processSkills.list();
-    standardSkillTools = createSkillTools(processSkills);
+    const { skill_search, skill_read, ...requiredSkillTools } = createSkillTools(processSkills);
+    standardSkillTools = {
+      ...requiredSkillTools,
+      ...(config.skillTools?.search === false ? {} : { skill_search }),
+      ...(config.skillTools?.read === false ? {} : { skill_read }),
+    };
   }
   const ambientTools = {
     ...systemTools,
