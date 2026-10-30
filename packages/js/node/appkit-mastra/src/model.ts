@@ -304,9 +304,6 @@ export async function buildModel(
             route: {
               model: selected.value.name,
               selection: "smart-router",
-              ...(selected.value.profile?.cost !== undefined
-                ? { costPerMillionTokens: selected.value.profile.cost }
-                : {}),
               smartRouter: observation,
             },
           };
@@ -342,13 +339,9 @@ export async function buildModel(
     );
     modelId = resolved.modelId;
     source = resolved.source;
-    const endpoint = endpoints.find((candidate) => candidate.name === modelId);
     route = {
       model: modelId,
       selection: source,
-      ...(endpoint?.profile?.cost !== undefined
-        ? { costPerMillionTokens: endpoint.profile.cost }
-        : {}),
     };
   }
   if (isSmartRouterModelId(modelId)) {
@@ -359,14 +352,9 @@ export async function buildModel(
     if (source === SMART_ROUTER_MODEL_ID) {
       throw new Error("Smart Router selection metadata is unavailable");
     }
-    const endpoints = await loadEndpoints();
-    const endpoint = endpoints.find((candidate) => candidate.name === modelId);
     route = {
       model: modelId,
       selection: source,
-      ...(endpoint?.profile?.cost !== undefined
-        ? { costPerMillionTokens: endpoint.profile.cost }
-        : {}),
     };
   }
   context.set(MASTRA_RESOLVED_MODEL_KEY, modelId);

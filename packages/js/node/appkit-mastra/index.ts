@@ -43,7 +43,7 @@ export { tool, createAgent, FALLBACK_AGENT_ID, DEFAULT_AGENT_MAX_STEPS, DEFAULT_
 export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolkitProvider, MastraPlugins, MastraToolsFn, MastraAgentWorkspaceResolver, MastraAgentDefinition, AnyMastraAgentDefinition, MastraStorageConfigOverride, MastraMemoryConfigOverride, AgentDefaultModel, BuiltAgents, MastraOutputProcessorFactory } from "./src/agents.ts";
 export { chartPlanSchema, chartPlannerRequestSchema, chartToolOutputSchema, prepareChart, fetchChart, planToEchartsOption, buildRenderDataTool } from "./src/chart.ts";
 export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
-export { CHAT_STREAM_KEEPALIVE_MS, CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS, buildResponseCompleteTransform, buildModelUsageTransform, startThreadTitle, buildThreadTitleTransform, agentAbortSignal, agentChatRoutes } from "./src/chat.ts";
+export { CHAT_STREAM_KEEPALIVE_MS, CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS, buildResponseCompleteTransform, buildModelRouteTransform, buildModelUsageTransform, startThreadTitle, buildThreadTitleTransform, agentAbortSignal, agentChatRoutes } from "./src/chat.ts";
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_AUTH_MODE_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, executionContextUserId, attributedUserId, resolveUserKey, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
 export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraCodeModeTransport, MastraCodeModeConfig, MastraMcpConfig, FollowUpSuggestionsConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, genieConversationReadDefaults, genieConversationWriteDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
@@ -65,7 +65,7 @@ export type { ResolvedMcp } from "./src/mcp.ts";
 export { requestMemoryScope, withRequestMemoryScope, withSoftStorageInit, needsLakebase, createMemoryBuilder, createMastraLakebasePool, MemoryBuilder } from "./src/memory.ts";
 export { AgentTraceSpanProcessor, ucTracePrefixFromExperimentTags, resetUcTracePrefixCache, mlflowAssessmentTraceId, mlflowUcTracePrefix, directMlflowTrackingUri, directMlflowTraceLocation, directMlflowTracingConfigured, appMlflowTraceInfoConfigured, initializeAppMlflowTraceInfo, initializeRequestMlflowTraceInfo, persistAppMlflowTraceInfo, resetAppMlflowTraceInfo, initializeDirectMlflowTracing, updateActiveMlflowTrace, updateActiveMlflowTraceTags, directMlflowTracingActive, flushDirectMlflowTracing, mlflowEnabled, mlflowExperimentManagerUrl, mlflowExperimentViewerUrl, logFeedback } from "./src/mlflow.ts";
 export type { AppMlflowTraceInfo, LogFeedbackParams } from "./src/mlflow.ts";
-export { modelUsagePartData, emitModelUsagePart } from "./src/model-usage.ts";
+export { modelRoutePartData, modelUsagePartData, emitModelRoutePart, emitModelUsagePart } from "./src/model-usage.ts";
 export type { MastraTurnUsage, MastraFinishWriter } from "./src/model-usage.ts";
 export { SMART_ROUTER_ENDPOINT, RESPONSES_PROVIDER_OPTIONS, servingApi, resolveModelWorkspaceClient, resolveDefaultModelId, buildModel, withSmartRouterEndpoint } from "./src/model.ts";
 export type { BuildModelOverrides } from "./src/model.ts";

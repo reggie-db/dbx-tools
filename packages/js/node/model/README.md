@@ -54,9 +54,10 @@ The package:
   issue their own OpenAI-shaped HTTP requests.
 - Provides build-generated retirement, Responses, image-input, apply-patch,
   web-search, reasoning, tool-calling, structured-output, temperature-support,
-  ITPM, OTPM, and QPH metadata through cached in-process lookups. Databricks
+  ITPM, OTPM, QPH, and token-price metadata through cached in-process lookups. Databricks
   documentation is enriched with models.dev and modelparams.dev snapshots,
-  while committed fallbacks keep refreshes and runtime startup offline-safe.
+  while token prices come only from Databricks pricing pages and committed
+  fallbacks keep refreshes and runtime startup offline-safe.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
@@ -282,14 +283,23 @@ import { metadata } from "@dbx-tools/model";
 
 const capabilities = metadata.modelCapabilitiesFor("databricks-gpt-5-4");
 const limits = metadata.modelRateLimitsFor("gpt-5.4");
+const prices = metadata.modelTokenPricesFor("system.ai.gpt-5-4");
+const estimate = metadata.estimateModelTokenPrice(
+  "databricks-gpt-5-4",
+  { inputTokens: 1_000_000, outputTokens: 500_000 },
+  { condition: "short-context", usdPerDbu: 0.07 },
+);
 const status = metadata.modelStatusFor("system.ai.gemini-2-5-pro");
 ```
 
 The package ships committed snapshots generated from Databricks documentation
 by `bun run --filter '@dbx-tools/model' metadata`. Runtime calls normalize endpoint, display,
 foundation-model, and provider identities into memoized sets and maps. They do
-not fetch documentation. `modelMetadataFor()` returns status, capabilities, and
-published limits together for a string or `ServingEndpointSummary`.
+not fetch documentation. `modelMetadataFor()` returns status, capabilities,
+published limits, and Databricks DBU rates per million input, output,
+cache-read, and cache-write tokens together for a string or
+`ServingEndpointSummary`. Multiply those rates by the applicable Databricks SKU
+price per DBU to estimate currency cost.
 
 Native web-search capability starts with the documented model set. Later
 versions in the same hosted foundation-model family inherit the capability by
@@ -323,7 +333,7 @@ policy decisions. Use fallbacks only when live resolution is unavailable.
   search, and endpoint-id resolution.
 - `invoke` - serving-path constants, URL construction, and per-request auth
   headers for calling an endpoint over raw HTTP.
-- `metadata` - build-generated retirement, capability, and rate-limit snapshots
+- `metadata` - build-generated retirement, capability, rate-limit, and token-price snapshots
   with cached normalized lookups.
 - `modelClient` - portable authentication-aware discovery, selection, routing,
   profile, and metadata facade.

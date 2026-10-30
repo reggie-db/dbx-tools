@@ -3,6 +3,7 @@ import { hash, log, toError } from "@dbx-tools/shared-core";
 import {
   isStaleMastraResumeError,
   type GenieVisualizationMode,
+  type ModelRoutePartData,
   type ModelUsagePartData,
 } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
@@ -271,6 +272,8 @@ export interface UseMastraChatOptions<
    * `requestContext` field. A resolver is read when each turn is submitted.
    */
   requestContext?: MastraRequestContextSource<TValues>;
+  /** Receives the concrete model route before response generation begins. */
+  onModelRoute?: (route: ModelRoutePartData) => void;
   /** Receives the resolved model, cumulative tokens, and estimated cost for each completed turn. */
   onModelUsage?: (usage: ModelUsagePartData) => void;
 }
@@ -334,6 +337,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   reasoningEffortRef.current = reasoningEffort;
   const requestContextRef = useRef(options.requestContext);
   requestContextRef.current = options.requestContext;
+  const modelRouteRef = useRef(options.onModelRoute);
+  modelRouteRef.current = options.onModelRoute;
+  const handleModelRoute = useCallback((route: ModelRoutePartData) => {
+    modelRouteRef.current?.(route);
+  }, []);
   const modelUsageRef = useRef(options.onModelUsage);
   modelUsageRef.current = options.onModelUsage;
   const handleModelUsage = useCallback((usage: ModelUsagePartData) => {
@@ -670,6 +678,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
 
   const processStream = useChatStream({
     getSession,
+    onModelRoute: handleModelRoute,
     onModelUsage: handleModelUsage,
     updateSession,
     writeMessages,

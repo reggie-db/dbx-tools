@@ -5,6 +5,7 @@ import {
   EndpointCapabilitiesSchema,
   ModelMetadataSchema,
   ModelRateLimitsSchema,
+  ModelTokenPriceSchema,
   ModelStatusSchema,
   ResolveModelInputSchema,
   ResolveModelOptionsSchema,
@@ -71,6 +72,31 @@ describe("browser-safe model schemas", () => {
         inputTokensPerMinute: 1.5,
         outputTokensPerMinute: 0,
         queriesPerHour: 1,
+      }),
+    );
+  });
+
+  it("validates Databricks token prices", () => {
+    assert.doesNotThrow(() =>
+      ModelTokenPriceSchema.parse({
+        tier: "priority",
+        condition: "long-context",
+        inputDbuPerMillionTokens: 57.143,
+        outputDbuPerMillionTokens: 214.286,
+        cacheReadDbuPerMillionTokens: 2.857,
+        cacheWriteDbuPerMillionTokens: 71.429,
+        cacheWriteOneHourDbuPerMillionTokens: null,
+      }),
+    );
+    assert.throws(() =>
+      ModelTokenPriceSchema.parse({
+        tier: "priority",
+        condition: "long-context",
+        inputDbuPerMillionTokens: -1,
+        outputDbuPerMillionTokens: null,
+        cacheReadDbuPerMillionTokens: null,
+        cacheWriteDbuPerMillionTokens: null,
+        cacheWriteOneHourDbuPerMillionTokens: null,
       }),
     );
   });

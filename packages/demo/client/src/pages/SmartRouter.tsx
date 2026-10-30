@@ -8,10 +8,11 @@ import {
   Textarea,
 } from "@databricks/appkit-ui/react";
 import { getAuthStatus } from "@dbx-tools/shared-auth";
-import type { ModelUsagePartData } from "@dbx-tools/shared-mastra";
+import type { ModelRoutePartData, ModelUsagePartData } from "@dbx-tools/shared-mastra";
 import {
   ChatView,
   isActiveChatStatus,
+  SuggestionPills,
   type ChatModelOption,
   type ChatStatus,
   useMastraChat,
@@ -30,8 +31,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const SMART_ROUTER_MODEL = "smart-router";
 const GENIE_VALUE = "__genie__";
-const EXAMPLES = [
+const FALLBACK_SUGGESTIONS = [
   "Explain idempotency in API retries in two concise sentences.",
+  "Compare optimistic and pessimistic locking, including when you would choose each.",
   "Design a zero-downtime plan to extract authentication from a TypeScript monolith, including rollout, rollback, observability, and data migration.",
 ] as const;
 
@@ -87,7 +89,7 @@ function defaultPanes(
 
 const SmartRouter = () => {
   const [prompt, setPrompt] = useState("");
-  const [placeholderSuggestion, setPlaceholderSuggestion] = useState<string>();
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionLoading, setSuggestionLoading] = useState(true);
   const [panes, setPanes] = useState<PaneDescriptor[]>([]);
   const [genieAvailable, setGenieAvailable] = useState<boolean>();
@@ -104,13 +106,7 @@ const SmartRouter = () => {
   const mastraClient = useMastraClient();
   const { models, loading: modelsLoading } = useMastraModels();
 
-  const cancelSuggestion = useCallback(() => {
-    suggestionController.current?.abort();
-    suggestionController.current = undefined;
-    setPlaceholderSuggestion(undefined);
-    setSuggestionLoading(false);
-  }, []);
-  const generateSuggestion = useCallback(
+  const generateSuggestions = useCallback(
     (sentPrompt?: string) => {
       if (sentPrompt) {
         recentPrompts.current = [...recentPrompts.current, sentPrompt].slice(-8);
@@ -118,18 +114,23 @@ const SmartRouter = () => {
       suggestionController.current?.abort();
       const controller = new AbortController();
       suggestionController.current = controller;
-      setPlaceholderSuggestion(undefined);
+      setSuggestions([]);
       setSuggestionLoading(true);
       void mastraClient
         .generateSuggestions(
           {
             context: {
               purpose: "Compare how the available models answer the same prompt.",
+              requestedQuestions: [
+                "One simple, focused question",
+                "One medium-complexity comparison or tradeoff question",
+                "One complex design or planning question",
+              ],
               recentUserMessages: recentPrompts.current,
-              exampleQueries: EXAMPLES,
+              exampleQueries: FALLBACK_SUGGESTIONS,
             },
-            maxSuggestions: 1,
-            maxTokens: 96,
+            maxSuggestions: 3,
+            maxTokens: 192,
             existingSuggestions: recentPrompts.current,
           },
           controller.signal,
@@ -137,17 +138,18 @@ const SmartRouter = () => {
         .then((questions) => {
           if (controller.signal.aborted) return;
           const recent = new Set(recentPrompts.current.map((value) => value.trim().toLowerCase()));
-          const unique = [...new Set([...questions, ...EXAMPLES])].filter(
+          const unique = [...new Set([...questions, ...FALLBACK_SUGGESTIONS])].filter(
             (question) => !recent.has(question.trim().toLowerCase()),
           );
-          const candidates = unique.length > 0 ? unique : [...new Set([...questions, ...EXAMPLES])];
-          const suggestion = candidates[Math.floor(Math.random() * candidates.length)];
-          setPlaceholderSuggestion(suggestion);
+          const candidates =
+            unique.length > 0
+              ? unique
+              : [...new Set([...questions, ...FALLBACK_SUGGESTIONS])];
+          setSuggestions(candidates.slice(0, 3));
         })
         .catch(() => {
           if (controller.signal.aborted) return;
-          const suggestion = EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)];
-          setPlaceholderSuggestion(suggestion);
+          setSuggestions([...FALLBACK_SUGGESTIONS]);
         })
         .finally(() => {
           if (controller.signal.aborted) return;
@@ -159,9 +161,9 @@ const SmartRouter = () => {
   );
 
   useEffect(() => {
-    generateSuggestion();
+    generateSuggestions();
     return () => suggestionController.current?.abort();
-  }, [generateSuggestion]);
+  }, [generateSuggestions]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -225,12 +227,11 @@ const SmartRouter = () => {
     return status ? isActiveChatStatus(status) : false;
   });
   const submit = () => {
-    const text = prompt.trim() || placeholderSuggestion?.trim() || "";
+    const text = prompt.trim();
     if (!text || panes.length === 0) return;
     setPrompt("");
-    setPlaceholderSuggestion(undefined);
     setClearArmed(false);
-    generateSuggestion(text);
+    generateSuggestions(text);
     for (const pane of panes) controllers.current.get(pane.id)?.send(text);
   };
   const addPane = (value: string) => {
@@ -268,8 +269,8 @@ const SmartRouter = () => {
     }
     setClearArmed(false);
     setPrompt("");
-    cancelSuggestion();
     recentPrompts.current = [];
+    generateSuggestions();
     void Promise.all([...controllers.current.values()].map((controller) => controller.clear()));
   };
 
@@ -298,7 +299,7 @@ const SmartRouter = () => {
       </div>
 
       {panes.length > 0 ? (
-        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-1 touch-pan-x">
+        <div className="flex min-h-0 flex-1 snap-x snap-proximity scroll-px-3 gap-3 overflow-x-auto overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
           {panes.map((pane) => (
             <ModelChatPane
               key={pane.id}
@@ -326,40 +327,36 @@ const SmartRouter = () => {
           submit();
         }}
       >
+        <div className="mb-2 min-h-8">
+          {suggestionLoading ? (
+            <div className="flex h-8 items-center gap-2 px-1 text-xs text-muted-foreground">
+              <LoaderCircleIcon className="size-3.5 animate-spin" aria-hidden />
+              <span>Generating suggestions...</span>
+            </div>
+          ) : (
+            <SuggestionPills
+              questions={suggestions}
+              onSelect={setPrompt}
+              className="flex-nowrap overflow-x-auto md:flex-nowrap md:overflow-x-auto"
+            />
+          )}
+        </div>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <label className="min-w-0 flex-1 space-y-1.5">
             <span className="text-sm font-medium">Shared input</span>
-            <div className="relative">
-              <Textarea
-                value={prompt}
-                rows={2}
-                className="min-h-20 resize-none text-base"
-                placeholder={
-                  suggestionLoading
-                    ? undefined
-                    : (placeholderSuggestion ?? "Enter one prompt to send to every chat")
-                }
-                onFocus={cancelSuggestion}
-                onChange={(event) => {
-                  if (suggestionLoading || placeholderSuggestion) cancelSuggestion();
-                  setPrompt(event.target.value);
-                }}
-              />
-              {suggestionLoading && !prompt ? (
-                <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 text-base text-muted-foreground">
-                  <LoaderCircleIcon className="size-4 animate-spin" aria-hidden />
-                  <span>Generating next question...</span>
-                </div>
-              ) : null}
-            </div>
+            <Textarea
+              value={prompt}
+              rows={2}
+              className="min-h-20 resize-none text-base"
+              placeholder="Enter one prompt to send to every chat"
+              onChange={(event) => setPrompt(event.target.value)}
+            />
           </label>
           <div className="flex gap-2 lg:mb-0.5">
             <Button
               type="submit"
               className="flex-1 gap-2 lg:flex-none"
-              disabled={
-                (!prompt.trim() && !placeholderSuggestion?.trim()) || panes.length === 0
-              }
+              disabled={!prompt.trim() || panes.length === 0}
             >
               Send to all
               <ArrowRightIcon className="size-4" />
@@ -376,23 +373,6 @@ const SmartRouter = () => {
               <Trash2Icon className="size-4" />
             </Button>
           </div>
-        </div>
-        <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {EXAMPLES.map((example, index) => (
-            <Button
-              key={example}
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-auto shrink-0 rounded-full px-3 py-1.5 text-xs"
-              onClick={() => {
-                cancelSuggestion();
-                setPrompt(example);
-              }}
-            >
-              {index === 0 ? "Simple explanation" : "Complex migration"}
-            </Button>
-          ))}
         </div>
       </form>
     </div>
@@ -412,6 +392,8 @@ const ModelChatPane = ({
 }) => {
   const [threadId] = useState(() => crypto.randomUUID());
   const [usage, setUsage] = useState<UsageMap>({});
+  const [requestUsage, setRequestUsage] = useState<ModelUsagePartData>();
+  const [route, setRoute] = useState<ModelRoutePartData>();
   const [latencyMs, setLatencyMs] = useState<number>();
   const [totalTimeMs, setTotalTimeMs] = useState(0);
   const [timerNow, setTimerNow] = useState(() => performance.now());
@@ -424,15 +406,21 @@ const ModelChatPane = ({
     startedAt.current = undefined;
   }, []);
   const recordModelUsage = useCallback((item: ModelUsagePartData) => {
+    setRequestUsage(item);
+    setRoute(item);
     recordUsage(setUsage, item);
     finishTiming();
   }, [finishTiming]);
+  const recordModelRoute = useCallback((item: ModelRoutePartData) => {
+    setRoute(item);
+  }, []);
   const chat = useMastraChat({
     ...(pane.kind === "genie"
       ? { genieSpace: "default" }
       : {
           agentId: "models",
           model: pane.initialModel,
+          onModelRoute: recordModelRoute,
           onModelUsage: recordModelUsage,
         }),
     enableClear: true,
@@ -468,12 +456,16 @@ const ModelChatPane = ({
           setTotalTimeMs((total) => total + interruptedElapsed);
         }
         startedAt.current = now;
+        setRequestUsage(undefined);
+        if (pane.initialModel === SMART_ROUTER_MODEL) setRoute(undefined);
         chat.sendMessage({ text });
       },
       clear: async () => {
         startedAt.current = undefined;
         await chat.onClear?.();
         setUsage({});
+        setRequestUsage(undefined);
+        setRoute(undefined);
         setLatencyMs(undefined);
         setTotalTimeMs(0);
         setTimerNow(performance.now());
@@ -486,8 +478,13 @@ const ModelChatPane = ({
   }, [chat.onClear, chat.sendMessage, onRegister, onStatusChange, pane.id]);
 
   const usageValues = Object.values(usage);
-  const latest = usageValues.at(-1);
   const totalTokens = usageValues.reduce((sum, item) => sum + item.usage.totalTokens, 0);
+  const requestCost = requestUsage?.estimatedCostDbu;
+  const totalCost = usageValues.reduce(
+    (sum, item) => sum + (item.estimatedCostDbu ?? 0),
+    0,
+  );
+  const hasCost = usageValues.some((item) => item.estimatedCostDbu !== undefined);
   const activeElapsed =
     startedAt.current === undefined ? 0 : Math.max(0, timerNow - startedAt.current);
   const requestTimeMs = startedAt.current === undefined ? latencyMs : activeElapsed;
@@ -499,7 +496,7 @@ const ModelChatPane = ({
     pane.initialModel !== "claude"
       ? pane.initialModel
       : undefined;
-  const model = latest?.model ?? knownInitialModel;
+  const model = route?.model ?? knownInitialModel;
   return (
     <section className="flex min-h-0 w-full min-w-full shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-background sm:min-w-[21rem] sm:flex-1 sm:basis-0 xl:min-w-[23rem]">
       <header className="shrink-0 border-b border-border px-3 py-2.5">
@@ -528,15 +525,16 @@ const ModelChatPane = ({
         </div>
         <div className="mt-2 text-xs">
           <Metric label="Model" value={model ?? "—"} title={model} />
-          <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
             <Metric
               label="Request tokens"
-              value={latest ? latest.usage.totalTokens.toLocaleString() : "—"}
+              value={requestUsage ? requestUsage.usage.totalTokens.toLocaleString() : "—"}
             />
             <Metric
               label="Request time"
               value={requestTimeMs === undefined ? "—" : formatDuration(requestTimeMs)}
             />
+            <Metric label="Request cost" value={formatCost(requestCost)} />
             <Metric
               label="Total tokens"
               value={usageValues.length > 0 ? totalTokens.toLocaleString() : "—"}
@@ -545,6 +543,7 @@ const ModelChatPane = ({
               label="Total time"
               value={displayedTotalTimeMs > 0 ? formatDuration(displayedTotalTimeMs) : "—"}
             />
+            <Metric label="Total cost" value={hasCost ? formatCost(totalCost) : "—"} />
           </div>
         </div>
       </header>
@@ -583,6 +582,11 @@ function recordUsage(
 
 function formatDuration(value: number): string {
   return value < 1_000 ? `${Math.round(value)} ms` : `${(value / 1_000).toFixed(1)} s`;
+}
+
+function formatCost(value: number | undefined): string {
+  if (value === undefined) return "—";
+  return `${value < 0.001 ? value.toFixed(6) : value.toFixed(4)} DBU`;
 }
 
 export default SmartRouter;

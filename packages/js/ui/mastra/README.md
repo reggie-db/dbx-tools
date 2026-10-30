@@ -186,9 +186,10 @@ Configure the client with these options:
 - `agentId` selects a registered agent and defaults to the plugin default agent.
 - `genieSpace` selects a configured Genie alias and bypasses the agent.
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
+- `onModelRoute` receives the concrete endpoint as soon as routing completes.
 - `onModelUsage` receives each completed turn's resolved endpoint, cumulative
-  tokens, Smart Router observation when applicable, and estimated USD cost when
-  the model catalogue publishes a blended rate.
+  tokens, Smart Router observation when applicable, and estimated DBU cost when
+  Databricks publishes token rates for the model.
 - `composerActions` places host-owned per-turn controls beside the model
   selector without replacing the built-in composer.
 - `modelSelectorActions` places host-owned controls inside the model menu after

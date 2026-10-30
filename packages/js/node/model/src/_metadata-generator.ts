@@ -1,3 +1,8 @@
+import type {
+  ModelTokenPrice,
+  ModelTokenPriceCondition,
+  ModelTokenPriceTier,
+} from "@dbx-tools/shared-model";
 import { load, type CheerioAPI } from "cheerio";
 import { z } from "zod";
 
@@ -6,6 +11,7 @@ import type {
   ModelCapabilitiesSnapshot,
   ModelRateLimitCatalogue,
   ModelRateLimitsSnapshot,
+  ModelTokenPricesSnapshot,
   ModelsDevSnapshot,
   ReasoningModelsSnapshot,
   RetiredModelsSnapshot,
@@ -50,6 +56,16 @@ const EFFORT_PARAMETER_PATHS = new Set([
 ]);
 const EXTERNAL_ALIAS_SUFFIX_PATTERN = /-(?:customtools|latest|preview|subscription)$/i;
 const EXTERNAL_DATE_TOKEN_PATTERN = /-(?:19|20)\d{6}(?=-|$)/g;
+const PRICING_FOOTNOTE_PATTERN = /(?:\*+|⌖)+/g;
+const PRICING_VERSION_PATTERN = /\bV?\d+(?:\.\d+)*\b/i;
+const PRICING_CONDITIONS = new Map<string, ModelTokenPriceCondition>([
+  ["", "default"],
+  ["short context", "short-context"],
+  ["long context", "long-context"],
+  ["text tokens", "text-tokens"],
+  ["image tokens", "image-tokens"],
+  ["audio tokens", "audio-tokens"],
+]);
 
 const ModelsDevModelSchema = z
   .object({
@@ -289,6 +305,30 @@ export function parseModelRateLimits(html: string, generatedAt: number): ModelRa
   return { generatedAt, catalogue: { models: sortRecord(models) } };
 }
 
+/** Parse Databricks Foundation Model Serving DBU rates per million tokens. */
+export function parseModelTokenPrices(
+  foundationHtml: string,
+  proprietaryHtml: string,
+  generatedAt: number,
+): ModelTokenPricesSnapshot {
+  const models: Record<string, ModelTokenPrice[]> = {};
+  parseModelTokenPriceDocument(foundationHtml, models);
+  parseModelTokenPriceDocument(proprietaryHtml, models);
+  if (Object.keys(models).length === 0) {
+    throw new Error("Databricks pricing documentation contained no token prices");
+  }
+  return {
+    generatedAt,
+    catalogue: {
+      models: sortRecord(
+        Object.fromEntries(
+          Object.entries(models).map(([key, prices]) => [key, sortModelTokenPrices(prices)]),
+        ),
+      ),
+    },
+  };
+}
+
 /** Parse reasoning-effort ladders from the Query reasoning models HTML table. */
 export function parseReasoningModels(html: string, generatedAt: number): ReasoningModelsSnapshot {
   const $ = load(html);
@@ -343,6 +383,123 @@ function reasoningModelNamesFromCell(cell: Selection, $: CheerioAPI): string[] {
     }
   }
   return [...names];
+}
+
+function parseModelTokenPriceDocument(
+  html: string,
+  models: Record<string, ModelTokenPrice[]>,
+): void {
+  const $ = load(html);
+  $("table").each((_, table) => {
+    const rows = $(table).find("tr");
+    const title = collapseText($(rows.get(0))).toLowerCase();
+    if (!title.includes("pay per token") || !title.includes("dbu per 1m tokens")) return;
+    const tier: ModelTokenPriceTier = title.includes("priority") ? "priority" : "standard";
+    const rateHeaders = $(rows.get(1))
+      .find("th, td")
+      .toArray()
+      .map((cell) => collapseText($(cell)).toLowerCase());
+    if (!rateHeaders.includes("input")) return;
+    let currentModelKeys: string[] = [];
+    rows.slice(2).each((__, row) => {
+      const cells = $(row)
+        .find("th, td")
+        .toArray()
+        .map((cell) => collapseText($(cell)));
+      if (cells.length <= rateHeaders.length) return;
+      const descriptors = cells.slice(0, cells.length - rateHeaders.length);
+      const continuedCondition = pricingCondition(descriptors[0]);
+      let condition: ModelTokenPriceCondition;
+      if (continuedCondition && descriptors.length === 1) {
+        condition = continuedCondition;
+      } else {
+        currentModelKeys = pricingModelKeys(descriptors[0]);
+        condition = pricingCondition(descriptors[1]) ?? "default";
+      }
+      if (currentModelKeys.length === 0) return;
+      const values = cells.slice(-rateHeaders.length);
+      const price: ModelTokenPrice = {
+        tier,
+        condition,
+        inputDbuPerMillionTokens: pricingRate(rateHeaders, values, "input"),
+        outputDbuPerMillionTokens: pricingRate(rateHeaders, values, "output"),
+        cacheReadDbuPerMillionTokens: pricingRate(rateHeaders, values, "cache read"),
+        cacheWriteDbuPerMillionTokens: pricingRate(rateHeaders, values, "cache write"),
+        cacheWriteOneHourDbuPerMillionTokens: pricingRate(rateHeaders, values, "cache write (1hr)"),
+      };
+      for (const key of currentModelKeys) {
+        const prices = models[key] ?? [];
+        models[key] = [...prices.filter((existing) => !samePriceRow(existing, price)), price];
+      }
+    });
+  });
+}
+
+function pricingCondition(value: string | undefined): ModelTokenPriceCondition | undefined {
+  if (value === undefined) return undefined;
+  return PRICING_CONDITIONS.get(value.trim().toLowerCase());
+}
+
+function pricingRate(
+  headers: readonly string[],
+  values: readonly string[],
+  header: string,
+): number | null {
+  const index = headers.indexOf(header);
+  return index < 0 ? null : decimal(values[index]);
+}
+
+function pricingModelKeys(value: string | undefined): string[] {
+  if (!value) return [];
+  const clean = value.replace(PRICING_FOOTNOTE_PATTERN, "").trim();
+  const parts = clean.split(",").map((part) => part.trim());
+  const firstVersion = PRICING_VERSION_PATTERN.exec(parts[0] ?? "");
+  const prefix = firstVersion ? parts[0]!.slice(0, firstVersion.index) : "";
+  const names = parts.map((part, index) => {
+    if (index === 0 || !prefix || !PRICING_VERSION_PATTERN.test(part)) return part;
+    const version = PRICING_VERSION_PATTERN.exec(part);
+    return version?.index === 0 ? `${prefix}${part}` : part;
+  });
+  return [
+    ...new Set(
+      names.flatMap((name) => {
+        const recognized = modelKey(name);
+        if (recognized) return [recognized];
+        const literal = literalModelKey(name);
+        return literal ? [literal] : [];
+      }),
+    ),
+  ].sort();
+}
+
+function literalModelKey(value: string): string | undefined {
+  const normalized = value
+    .toLowerCase()
+    .replace(/^system\.ai[.-]/, "")
+    .replace(/^databricks-/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || undefined;
+}
+
+function samePriceRow(left: ModelTokenPrice, right: ModelTokenPrice): boolean {
+  return left.tier === right.tier && left.condition === right.condition;
+}
+
+function sortModelTokenPrices(prices: readonly ModelTokenPrice[]): ModelTokenPrice[] {
+  const tiers: readonly ModelTokenPriceTier[] = ["standard", "priority"];
+  const conditions: readonly ModelTokenPriceCondition[] = [
+    "default",
+    "short-context",
+    "long-context",
+    "text-tokens",
+    "image-tokens",
+    "audio-tokens",
+  ];
+  return [...prices].sort((left, right) => {
+    const tier = tiers.indexOf(left.tier) - tiers.indexOf(right.tier);
+    return tier || conditions.indexOf(left.condition) - conditions.indexOf(right.condition);
+  });
 }
 
 function extractAcceptedReasoningLevels(text: string): ReasoningLevel[] {
@@ -524,6 +681,12 @@ function number(value: string | undefined): number | null {
   if (!value) return null;
   const parsed = Number(value.replaceAll(",", "").trim());
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function decimal(value: string | undefined): number | null {
+  if (!value || value.trim() === "-") return null;
+  const parsed = Number(value.replaceAll(",", "").trim());
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function sortRecord<T>(record: Readonly<Record<string, T>>): Record<string, T> {

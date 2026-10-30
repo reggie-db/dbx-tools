@@ -1,10 +1,14 @@
 /** Caller-facing Mastra model routing and token-usage events. */
 
 import {
+  MODEL_ROUTE_PART_TYPE,
   MODEL_USAGE_PART_TYPE,
+  ModelRoutePartDataSchema,
   ModelUsagePartDataSchema,
+  type ModelRoutePartData,
   type ModelUsagePartData,
 } from "@dbx-tools/shared-mastra";
+import { estimateModelTokenPrice } from "@dbx-tools/model";
 import type { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_MODEL_ROUTE_KEY, type MastraModelRoute } from "./serving.ts";
@@ -27,6 +31,21 @@ export interface MastraFinishWriter {
   }): void | Promise<void>;
 }
 
+/** Build the validated caller-facing route event once model selection resolves. */
+export function modelRoutePartData(
+  requestContext: Pick<RequestContext, "get">,
+  runId?: string,
+): ModelRoutePartData | undefined {
+  const route = requestContext.get(MASTRA_MODEL_ROUTE_KEY) as MastraModelRoute | undefined;
+  if (!route) return undefined;
+  return ModelRoutePartDataSchema.parse({
+    ...(runId ? { runId } : {}),
+    model: route.model,
+    selection: route.selection,
+    ...(route.smartRouter ? { smartRouter: route.smartRouter } : {}),
+  });
+}
+
 /** Build the validated caller-facing event for one completed agent turn. */
 export function modelUsagePartData(
   requestContext: Pick<RequestContext, "get">,
@@ -38,15 +57,14 @@ export function modelUsagePartData(
   const inputTokens = tokenCount(usage.inputTokens);
   const outputTokens = tokenCount(usage.outputTokens);
   const totalTokens = tokenCount(usage.totalTokens ?? inputTokens + outputTokens);
-  const estimatedCostUsd =
-    route.costPerMillionTokens !== undefined
-      ? (totalTokens * route.costPerMillionTokens) / 1_000_000
-      : undefined;
+  const cachedInputTokens = tokenCount(usage.cachedInputTokens);
+  const price = estimateModelTokenPrice(route.model, {
+    inputTokens: Math.max(0, inputTokens - cachedInputTokens),
+    outputTokens,
+    cacheReadTokens: cachedInputTokens,
+  });
   return ModelUsagePartDataSchema.parse({
-    ...(runId ? { runId } : {}),
-    model: route.model,
-    selection: route.selection,
-    ...(route.smartRouter ? { smartRouter: route.smartRouter } : {}),
+    ...modelRoutePartData(requestContext, runId),
     usage: {
       inputTokens,
       outputTokens,
@@ -54,15 +72,21 @@ export function modelUsagePartData(
       ...(usage.reasoningTokens !== undefined
         ? { reasoningTokens: tokenCount(usage.reasoningTokens) }
         : {}),
-      ...(usage.cachedInputTokens !== undefined
-        ? { cachedInputTokens: tokenCount(usage.cachedInputTokens) }
-        : {}),
+      ...(usage.cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
     },
-    ...(route.costPerMillionTokens !== undefined
-      ? { costPerMillionTokens: route.costPerMillionTokens }
-      : {}),
-    ...(estimatedCostUsd !== undefined ? { estimatedCostUsd } : {}),
+    ...(price ? { estimatedCostDbu: price.price.dbu } : {}),
   });
+}
+
+/** Emit the selected route through a Mastra custom writer. */
+export async function emitModelRoutePart(
+  requestContext: Pick<RequestContext, "get">,
+  writer: MastraFinishWriter | undefined,
+  runId?: string,
+): Promise<void> {
+  const data = modelRoutePartData(requestContext, runId);
+  if (!data || !writer) return;
+  await writer.custom({ type: MODEL_ROUTE_PART_TYPE, data });
 }
 
 /** Emit a persistent AI SDK data part through Mastra's native finish writer. */

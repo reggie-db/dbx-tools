@@ -586,43 +586,50 @@ export const ToolProgressPartDataSchema = z
 /** Validated payload carried by a native generic tool progress data part. */
 export type ToolProgressPartData = z.infer<typeof ToolProgressPartDataSchema>;
 
-/** Native AI SDK data-part type carrying the resolved model and token usage for one turn. */
-export const MODEL_USAGE_PART_TYPE = "data-model-usage" as const;
+/** Native AI SDK data-part type carrying the resolved model as soon as routing completes. */
+export const MODEL_ROUTE_PART_TYPE = "data-model-route" as const;
 
-/** Model selection and usage emitted after one Mastra agent turn completes. */
-export const ModelUsagePartDataSchema = z
+/** Model route selected for one Mastra agent turn. */
+export const ModelRoutePartDataSchema = z
   .object({
-    runId: z.string().optional().describe("Mastra run id that produced this usage record."),
-    model: z.string().trim().min(1).describe("Concrete serving endpoint used for the turn."),
+    runId: z.string().optional().describe("Mastra run id using this model route."),
+    model: z.string().trim().min(1).describe("Concrete serving endpoint selected for the turn."),
     selection: z
       .enum(["smart-router", "explicit", "fuzzy-match", "class", "fallback"])
       .describe("Policy branch that selected the concrete model."),
     smartRouter: SmartRouterObservationSchema.optional().describe(
       "Smart Router decision details when the virtual model selected the endpoint.",
     ),
-    usage: z
-      .object({
-        inputTokens: z.number().int().nonnegative(),
-        outputTokens: z.number().int().nonnegative(),
-        totalTokens: z.number().int().nonnegative(),
-        reasoningTokens: z.number().int().nonnegative().optional(),
-        cachedInputTokens: z.number().int().nonnegative().optional(),
-      })
-      .strict()
-      .describe("Cumulative token usage across every model step in the turn."),
-    costPerMillionTokens: z
-      .number()
-      .nonnegative()
-      .optional()
-      .describe("Catalogue blended cost in USD per million tokens when published."),
-    estimatedCostUsd: z
-      .number()
-      .nonnegative()
-      .optional()
-      .describe("Estimated turn cost from total tokens and the published blended rate."),
   })
   .strict()
-  .describe("Caller-consumable model routing, usage, and estimated cost for one Mastra turn.");
+  .describe("Caller-consumable model route emitted before response generation streams.");
+
+/** Model route selected for one Mastra agent turn. */
+export type ModelRoutePartData = z.infer<typeof ModelRoutePartDataSchema>;
+
+/** Native AI SDK data-part type carrying token usage and cost for one completed turn. */
+export const MODEL_USAGE_PART_TYPE = "data-model-usage" as const;
+
+/** Model selection and usage emitted after one Mastra agent turn completes. */
+export const ModelUsagePartDataSchema = ModelRoutePartDataSchema.extend({
+  usage: z
+    .object({
+      inputTokens: z.number().int().nonnegative(),
+      outputTokens: z.number().int().nonnegative(),
+      totalTokens: z.number().int().nonnegative(),
+      reasoningTokens: z.number().int().nonnegative().optional(),
+      cachedInputTokens: z.number().int().nonnegative().optional(),
+    })
+    .strict()
+    .describe("Cumulative token usage across every model step in the turn."),
+  estimatedCostDbu: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe("Estimated turn cost in DBUs from documented Databricks token rates."),
+})
+  .strict()
+  .describe("Caller-consumable model routing, usage, and estimated DBU cost for one turn.");
 
 /** Model selection and usage emitted after one Mastra agent turn completes. */
 export type ModelUsagePartData = z.infer<typeof ModelUsagePartDataSchema>;

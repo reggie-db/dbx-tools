@@ -162,7 +162,6 @@ describe("Mastra serving API selection", () => {
       const route = requestContext.get(MASTRA_MODEL_ROUTE_KEY) as MastraModelRoute;
       assert.equal(route.model, "databricks-gpt-6-1-sol");
       assert.equal(route.selection, "smart-router");
-      assert.equal(route.costPerMillionTokens, 3.5);
       assert.equal(route.smartRouter?.routeModel, "system.ai.databricks-gpt-6-1-sol");
     } finally {
       globalThis.fetch = previousFetch;

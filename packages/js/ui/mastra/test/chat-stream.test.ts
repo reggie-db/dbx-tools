@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   MLFLOW_TRACE_PART_TYPE,
+  MODEL_ROUTE_PART_TYPE,
   MODEL_USAGE_PART_TYPE,
   RESPONSE_COMPLETE_PART_TYPE,
   THREAD_TITLE_PART_TYPE,
@@ -12,12 +13,26 @@ import {
   closeOnTerminalChunk,
   chatStatusForChunk,
   readMlflowTracePart,
+  readModelRoutePart,
   readModelUsagePart,
   readThreadTitlePart,
   waitForTerminalChunk,
 } from "../src/react/chat-stream.ts";
 
 describe("model usage parts", () => {
+  it("reads model routes before usage completes", () => {
+    const data = readModelRoutePart({
+      type: MODEL_ROUTE_PART_TYPE,
+      data: {
+        runId: "run-1",
+        model: "databricks-gpt-5-4",
+        selection: "smart-router",
+      },
+    } as UIMessageChunk);
+
+    assert.equal(data?.model, "databricks-gpt-5-4");
+  });
+
   it("reads caller-facing routing and usage data", () => {
     const data = readModelUsagePart({
       type: MODEL_USAGE_PART_TYPE,
@@ -26,7 +41,7 @@ describe("model usage parts", () => {
         model: "databricks-gpt-test",
         selection: "smart-router",
         usage: { inputTokens: 8, outputTokens: 2, totalTokens: 10 },
-        estimatedCostUsd: 0.00002,
+        estimatedCostDbu: 0.00002,
       },
     } as UIMessageChunk);
 

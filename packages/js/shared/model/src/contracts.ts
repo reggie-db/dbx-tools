@@ -248,6 +248,54 @@ export const ModelRateLimitsSchema = z
 
 export type ModelRateLimits = z.infer<typeof ModelRateLimitsSchema>;
 
+export const ModelTokenPriceTierSchema = z
+  .enum(["standard", "priority"])
+  .describe("Databricks pay-per-token service tier.");
+
+export type ModelTokenPriceTier = z.infer<typeof ModelTokenPriceTierSchema>;
+
+export const ModelTokenPriceConditionSchema = z
+  .enum(["default", "short-context", "long-context", "text-tokens", "image-tokens", "audio-tokens"])
+  .describe("Documented context or modality condition for one token price row.");
+
+export type ModelTokenPriceCondition = z.infer<typeof ModelTokenPriceConditionSchema>;
+
+export const ModelTokenPriceSchema = z
+  .object({
+    tier: ModelTokenPriceTierSchema.describe("Databricks pay-per-token service tier."),
+    condition: ModelTokenPriceConditionSchema.describe(
+      "Context or modality condition for this price row.",
+    ),
+    inputDbuPerMillionTokens: z
+      .number()
+      .min(0)
+      .nullable()
+      .describe("Input DBUs per million tokens, or null when unavailable."),
+    outputDbuPerMillionTokens: z
+      .number()
+      .min(0)
+      .nullable()
+      .describe("Output DBUs per million tokens, or null when unavailable."),
+    cacheReadDbuPerMillionTokens: z
+      .number()
+      .min(0)
+      .nullable()
+      .describe("Cache-read DBUs per million tokens, or null when unavailable."),
+    cacheWriteDbuPerMillionTokens: z
+      .number()
+      .min(0)
+      .nullable()
+      .describe("Cache-write DBUs per million tokens, or null when unavailable."),
+    cacheWriteOneHourDbuPerMillionTokens: z
+      .number()
+      .min(0)
+      .nullable()
+      .describe("One-hour cache-write DBUs per million tokens, or null when unavailable."),
+  })
+  .describe("Databricks list-price DBU rates for one model, tier, and token condition.");
+
+export type ModelTokenPrice = z.infer<typeof ModelTokenPriceSchema>;
+
 export const ModelMetadataSchema = z
   .object({
     status: ModelStatusSchema.describe("Retirement status for this model identity."),
@@ -255,8 +303,12 @@ export const ModelMetadataSchema = z
       "Published capabilities for this model identity.",
     ),
     rateLimits: ModelRateLimitsSchema.optional().describe("Published rate limits when available."),
+    tokenPrices: z
+      .array(ModelTokenPriceSchema)
+      .optional()
+      .describe("Databricks list-price token rates when available."),
   })
-  .describe("Combined retirement, capability, and rate-limit metadata.");
+  .describe("Combined retirement, capability, rate-limit, and token-price metadata.");
 
 export type ModelMetadata = z.infer<typeof ModelMetadataSchema>;
 

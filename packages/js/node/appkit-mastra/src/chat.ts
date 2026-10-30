@@ -7,6 +7,7 @@
 import { log, toError, errorMessage, isRecord, sleep } from "@dbx-tools/shared-core";
 import {
   MASTRA_ROUTES,
+  MODEL_ROUTE_PART_TYPE,
   MODEL_USAGE_PART_TYPE,
   RESPONSE_COMPLETE_PART_TYPE,
   THREAD_TITLE_PART_TYPE,
@@ -32,7 +33,7 @@ import {
   resolveFollowUpSuggestionsConfig,
 } from "./follow-up-suggestions.ts";
 import { requestMemoryScope, withRequestMemoryScope } from "./memory.ts";
-import { modelUsagePartData } from "./model-usage.ts";
+import { modelRoutePartData, modelUsagePartData } from "./model-usage.ts";
 import { titleModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 import { activeChatTracingOptions } from "./telemetry.ts";
 
@@ -79,7 +80,30 @@ export function buildResponseCompleteTransform(): MastraStreamTransform {
   };
 }
 
-/** Emit the resolved route and cumulative usage on the terminal response step. */
+/** Emit the selected route before the first model stream chunk. */
+export function buildModelRouteTransform(
+  requestContext: RequestContext,
+  runId: string,
+): MastraStreamTransform {
+  return () => {
+    let emitted = false;
+    return new TransformStream({
+      transform(chunk, controller) {
+        if (!emitted) {
+          const data = modelRoutePartData(requestContext, runId);
+          if (data) {
+            emitted = true;
+            const part: DataChunkType = { type: MODEL_ROUTE_PART_TYPE, data };
+            controller.enqueue(part as never);
+          }
+        }
+        controller.enqueue(chunk);
+      },
+    });
+  };
+}
+
+/** Emit cumulative model usage on the terminal response step. */
 export function buildModelUsageTransform(
   requestContext: RequestContext,
   runId: string,
@@ -118,6 +142,7 @@ function chatStreamTransforms(
   requestContext?: RequestContext,
 ): readonly MastraStreamTransform[] {
   return [
+    ...(requestContext ? [buildModelRouteTransform(requestContext, runId)] : []),
     buildResponseCompleteTransform(),
     ...(requestContext ? [buildModelUsageTransform(requestContext, runId)] : []),
     ...(generatedFollowUps ? [buildFollowUpSuggestionsTransform(runId)] : []),

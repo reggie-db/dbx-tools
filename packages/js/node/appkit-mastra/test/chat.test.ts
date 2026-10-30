@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { logger } from "@dbx-tools/shared-core";
 import {
+  MODEL_ROUTE_PART_TYPE,
   MODEL_USAGE_PART_TYPE,
   RESPONSE_COMPLETE_PART_TYPE,
   THREAD_TITLE_PART_TYPE,
@@ -17,6 +18,7 @@ import { buildAgents } from "../src/agents.ts";
 import {
   agentAbortSignal,
   agentChatRoutes,
+  buildModelRouteTransform,
   buildModelUsageTransform,
   buildResponseCompleteTransform,
   buildThreadTitleTransform,
@@ -42,9 +44,8 @@ describe("background chat routes", () => {
   it("emits caller-facing model routing and cumulative usage", async () => {
     const requestContext = new RequestContext();
     requestContext.set(MASTRA_MODEL_ROUTE_KEY, {
-      model: "databricks-gpt-test",
+      model: "databricks-gpt-5-4",
       selection: "smart-router",
-      costPerMillionTokens: 2,
     });
     const finalStep = {
       type: "step-finish",
@@ -62,20 +63,29 @@ describe("background chat routes", () => {
         controller.enqueue(finalStep);
         controller.close();
       },
-    }).pipeThrough(buildModelUsageTransform(requestContext, "run-1")());
+    })
+      .pipeThrough(buildModelRouteTransform(requestContext, "run-1")())
+      .pipeThrough(buildModelUsageTransform(requestContext, "run-1")());
     const transformed: ChunkType[] = [];
     for await (const chunk of stream) transformed.push(chunk);
 
-    assert.equal(transformed[1]?.type, MODEL_USAGE_PART_TYPE);
-    assert.deepEqual(transformed[1], {
+    assert.deepEqual(transformed[0], {
+      type: MODEL_ROUTE_PART_TYPE,
+      data: {
+        runId: "run-1",
+        model: "databricks-gpt-5-4",
+        selection: "smart-router",
+      },
+    });
+    assert.equal(transformed[2]?.type, MODEL_USAGE_PART_TYPE);
+    assert.deepEqual(transformed[2], {
       type: MODEL_USAGE_PART_TYPE,
       data: {
         runId: "run-1",
-        model: "databricks-gpt-test",
+        model: "databricks-gpt-5-4",
         selection: "smart-router",
         usage: { inputTokens: 400, outputTokens: 100, totalTokens: 500 },
-        costPerMillionTokens: 2,
-        estimatedCostUsd: 0.001,
+        estimatedCostDbu: 0.0357142,
       },
     });
   });

@@ -44,8 +44,6 @@ export interface MastraModelRoute {
   model: string;
   /** Policy branch that selected the concrete endpoint. */
   selection: "smart-router" | "explicit" | "fuzzy-match" | "class" | "fallback";
-  /** Catalogue blended USD rate per million tokens when the endpoint publishes one. */
-  costPerMillionTokens?: number;
   /** Full Smart Router decision when the virtual model selected the endpoint. */
   smartRouter?: SmartRouterObservation;
 }
