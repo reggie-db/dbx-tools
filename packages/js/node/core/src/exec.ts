@@ -54,7 +54,7 @@ import * as readline from "node:readline";
 import { Readable } from "node:stream";
 import { text } from "node:stream/consumers";
 import { finished } from "node:stream/promises";
-import { log, toError, memoize } from "@dbx-tools/shared-core";
+import { log, toError, memoize, sleep } from "@dbx-tools/shared-core";
 
 /** Shell-compatible exit code returned when an executable cannot be found. */
 export const COMMAND_NOT_FOUND_EXIT_CODE = 127;
@@ -722,11 +722,6 @@ function signalProcesses(
   }
 }
 
-/** Pause without detaching the shutdown operation from the event loop. */
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 /**
  * Poll refreshed process snapshots until the retained tree exits or the
  * timeout elapses. Descendants created during shutdown are retained and may
@@ -745,7 +740,7 @@ async function waitForProcessTreeExit(
   const deadline = Date.now() + timeoutMs;
   while (survivors.length > 0) {
     const remainingMs = deadline - Date.now();
-    if (remainingMs > 0) await delay(Math.min(pollIntervalMs, remainingMs));
+    if (remainingMs > 0) await sleep(Math.min(pollIntervalMs, remainingMs));
 
     const snapshot = await tryProcessSnapshot();
     if (snapshot === undefined) {

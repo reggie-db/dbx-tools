@@ -15,6 +15,7 @@ interface State {
   errorInfo: React.ErrorInfo | null;
 }
 
+/** Render a diagnostic fallback when a descendant React component throws. */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -46,19 +47,19 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="min-h-screen bg-background p-4">
           <Card className="max-w-2xl mx-auto mt-8">
             <CardHeader>
-              <CardTitle className="text-destructive">Application Error</CardTitle>
+              <CardTitle className="text-destructive">Application error</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div>
-                  <h3 className="font-semibold mb-2">Error Message:</h3>
+                  <h3 className="font-semibold mb-2">Error message</h3>
                   <pre className="bg-muted p-3 rounded text-sm overflow-auto">
                     {errorMessage(this.state.error)}
                   </pre>
                 </div>
                 {this.state.errorInfo && (
                   <div>
-                    <h3 className="font-semibold mb-2">Component Stack:</h3>
+                    <h3 className="font-semibold mb-2">Component stack</h3>
                     <pre className="bg-muted p-3 rounded text-sm overflow-auto">
                       {this.state.errorInfo.componentStack}
                     </pre>
@@ -66,7 +67,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 )}
                 {this.state.error?.stack && (
                   <div>
-                    <h3 className="font-semibold mb-2">Stack Trace:</h3>
+                    <h3 className="font-semibold mb-2">Stack trace</h3>
                     <pre className="bg-muted p-3 rounded text-sm overflow-auto max-h-96">
                       {this.state.error.stack}
                     </pre>

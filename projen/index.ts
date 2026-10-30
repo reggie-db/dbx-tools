@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.9.182";
+export const PACKAGE_VERSION = "0.9.183";
 export * as appkitWorkspace from "./src/appkit-workspace.ts";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";

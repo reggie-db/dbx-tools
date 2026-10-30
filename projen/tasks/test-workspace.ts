@@ -1,11 +1,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { spawnSync, spawn } from "@dbx-tools/core";
 import { findFilesSync } from "@dbx-tools/path";
 import { log, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
 import { TaskRootOptionSchema } from "./options.ts";
+import { toPosix } from "../src/packages.ts";
 
 const logger = log.logger("projen:test");
 
@@ -42,10 +43,6 @@ const PROJEN_INTEGRATION_TEST =
 
 function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
-}
-
-function toPosix(path: string): string {
-  return path.split(sep).join("/");
 }
 
 export function workspaceGraph(root: string): WorkspaceGraph {

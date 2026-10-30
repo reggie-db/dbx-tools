@@ -46,7 +46,7 @@ const OWNED_HELPER_FILES = new Set([
   "docs/scripts/repository-docs.mjs",
 ]);
 
-export function sharedCorePackageDir(root: string = repoRoot): string {
+function sharedCorePackageDir(root: string = repoRoot): string {
   for (const pkg of recordedPackages(root)) {
     if (readPackageManifest(pkg.dir)?.name === PACKAGE_IDENTIFIER) return pkg.dir;
   }

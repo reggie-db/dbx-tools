@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.182";
+export const PACKAGE_VERSION = "0.9.183";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -71,7 +71,7 @@ export type { MontySandboxOptions } from "./src/monty-sandbox.ts";
 export { isOtlpTracingConfigured, configureOtelPropagation, buildObservability } from "./src/observability.ts";
 export type { BuildObservabilityOptions } from "./src/observability.ts";
 export { MastraPlugin, mastra } from "./src/plugin.ts";
-export { buildResponsesProviderOptionsProcessor, stripForeignResponsesState, providerHistoryCompatProcessor, stripStaleChartsProcessor } from "./src/processors.ts";
+export { buildResponsesProviderOptionsProcessor, sanitizeResponsesReasoningReplay, stripForeignResponsesState, providerHistoryCompatProcessor, stripStaleChartsProcessor } from "./src/processors.ts";
 export { AITOOLS_SKILLS_MOUNT, REMOTE_SKILLS_MOUNT, AITOOLS_REFRESH_TTL_MS, AITOOLS_SOURCE, normalizeRemoteSkillsOption, provisionRemoteSkills } from "./src/remote-skills.ts";
 export type { AiToolsSource, RemoteSkillSourceOptions, RemoteSkillSource, RemoteSkillsOption, LocalSkillDirectoryMount, MemorySkillMount, LocalSkillMount, ProvisionRemoteSkillsOptions, ProvisionedRemoteSkills, RemoteSkillCacheEntry, RemoteSkillsMetadata } from "./src/remote-skills.ts";
 export { MASTRA_ORIGIN_KEY } from "./src/request-context.ts";

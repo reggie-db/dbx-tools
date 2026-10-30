@@ -54,6 +54,7 @@ async function nativeGeneratedFiles(root: string): Promise<string[]> {
   return [...files];
 }
 
+/** List existing generated files that the clean task can safely remove. */
 export async function listGeneratedFiles(root: string = resolveRepoRoot()): Promise<string[]> {
   const rel = (f: string): string => toPosix(relative(root, f));
   const custom: string[] = [];

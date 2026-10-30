@@ -69,6 +69,7 @@ export type ChatModelOption = Pick<
  */
 export type ChatInputMessage = { text?: string; files?: FileUIPart[] };
 
+/** Queued chat input with the stable identifier used for ordering and removal. */
 export type QueuedSteer = ChatInputMessage & { id: string };
 
 /** Thumbs reaction a user can leave on an assistant turn. */

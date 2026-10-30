@@ -19,7 +19,10 @@ const RETIRED_MODEL_PREFIXES = new Set([
 let names: readonly string[] = Object.freeze([...snapshot.models]);
 let keys = retiredKeys(names);
 
+/** Retired model names from the committed metadata snapshot. */
 export const COMMITTED_RETIRED_MODELS = snapshot.models;
+
+/** Generation timestamp recorded in the committed retired-model snapshot. */
 export const RETIRED_MODELS_GENERATED_AT = snapshot.generatedAt;
 
 /** Replace retirement state after metadata cache hydration or refresh. */

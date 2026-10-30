@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/lakebox";
-export const PACKAGE_VERSION = "0.9.182";
+export const PACKAGE_VERSION = "0.9.183";
 export * as keyStore from "./src/key-store.ts";
 export * as lifecycle from "./src/lifecycle.ts";
 export * as rest from "./src/rest.ts";

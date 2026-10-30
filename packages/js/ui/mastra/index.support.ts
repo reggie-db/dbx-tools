@@ -37,4 +37,4 @@ export { threadStorageKey } from "./src/support/thread-persistence.ts";
 export { DEFAULT_THREAD_SESSION_KEY, createThreadSession, isSessionRunning, lastUserMessage, interruptedTurnMessages, enqueueSteer, removeSteer, reorderSteers, sessionKey } from "./src/support/thread-sessions.ts";
 export type { SessionQueuedSteer, SessionRun, ThreadSession } from "./src/support/thread-sessions.ts";
 export { THREAD_TAB_SEED_MAX, syncThreadTabs, closeThreadTab, nextActiveThreadTab } from "./src/support/thread-tabs.ts";
-export { compactReasoningText, genieReasoningText, toolEventsFromParts, mergeToolEvents } from "./src/support/tool-events.ts";
+export { compactReasoningText, genieOutputReasoningSections, toolReasoningSections, genieReasoningText, toolEventsFromParts, mergeToolEvents } from "./src/support/tool-events.ts";

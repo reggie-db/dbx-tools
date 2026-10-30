@@ -1,6 +1,8 @@
 # MLflow feedback trace header is missing from chat responses
 
-Status: Fixed pending release
+Status: Fixed
+
+Archived: October 30, 2026
 
 ## Summary
 

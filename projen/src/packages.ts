@@ -61,6 +61,7 @@ const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 /** Glob for module files under any `src/`, built from {@link MODULE_EXTS} exts. */
 const SRC_MODULE_GLOB = `**/src/**/*.{${[...MODULE_EXTS].map((e) => e.slice(1)).join(",")}}`;
 
+/** Convert an operating-system path to slash-separated form. */
 export function toPosix(p: string): string {
   return p.split(sep).join("/");
 }

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeArgs } from "@dbx-tools/cli-args";
 import { projectUtils, type ProjectGhAccount, resolveProjectGhAccount } from "@dbx-tools/core";
-import { log, toError, parse } from "@dbx-tools/shared-core";
+import { log, toError, parse, sleep } from "@dbx-tools/shared-core";
 import type { Command } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand } from "./cli.ts";
@@ -97,10 +97,6 @@ function githubRepository(account: ProjectGhAccount): string {
   return account.host === "github.com"
     ? account.remote.repository
     : `${account.host}/${account.remote.repository}`;
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 interface GithubProgressEntry {
@@ -267,7 +263,7 @@ export async function watchReleaseGithubActions(
     run = parsed.data.find(
       (candidate) => candidate.headSha === head && candidate.headBranch === tag,
     );
-    if (!run) await delay(pollIntervalMs);
+    if (!run) await sleep(pollIntervalMs);
   }
   if (!run) {
     logger.warn("GitHub Actions release run did not start before the watch timeout", {
@@ -307,7 +303,7 @@ export async function watchReleaseGithubActions(
       reportGithubProgress(parsed.data, progress);
       completed = parsed.data.status === "completed";
       conclusion = parsed.data.conclusion;
-      if (!completed) await delay(pollIntervalMs);
+      if (!completed) await sleep(pollIntervalMs);
     }
     if (conclusion !== "success" && conclusion !== "skipped") {
       runTaskCommand(

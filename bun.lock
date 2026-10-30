@@ -35,7 +35,7 @@
     },
     "packages/demo": {
       "name": "@dbx-tools/demo",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@databricks/appkit-ui": "catalog:",
@@ -84,7 +84,7 @@
     },
     "packages/js/cli/args": {
       "name": "@dbx-tools/cli-args",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/core": "workspace:^",
         "@dbx-tools/shared-core": "workspace:^",
@@ -98,7 +98,7 @@
     },
     "packages/js/cli/dbx-tools": {
       "name": "@dbx-tools/cli",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "bin": {
         "dbx": "./bin/dbx-tools.ts",
         "dbx-genie": "./bin/dbx-genie.ts",
@@ -149,7 +149,7 @@
     },
     "packages/js/cli/service": {
       "name": "@dbx-tools/cli-service",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/cli-args": "workspace:^",
         "@dbx-tools/core": "workspace:^",
@@ -166,7 +166,7 @@
     },
     "packages/js/node/appkit": {
       "name": "@dbx-tools/appkit",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/sdk-experimental": "catalog:",
         "@dbx-tools/auth": "workspace:^",
@@ -197,7 +197,7 @@
     },
     "packages/js/node/appkit-generator": {
       "name": "@dbx-tools/appkit-generator",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@databricks/sdk-experimental": "catalog:",
@@ -221,7 +221,7 @@
     },
     "packages/js/node/appkit-lakebox": {
       "name": "@dbx-tools/appkit-lakebox",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -248,7 +248,7 @@
     },
     "packages/js/node/appkit-mastra": {
       "name": "@dbx-tools/appkit-mastra",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -315,7 +315,7 @@
     },
     "packages/js/node/appkit-memory": {
       "name": "@dbx-tools/appkit-memory",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -343,7 +343,7 @@
     },
     "packages/js/node/appkit-model-gateway": {
       "name": "@dbx-tools/appkit-model-gateway",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/cache": "workspace:^",
@@ -367,7 +367,7 @@
     },
     "packages/js/node/appkit-web-search": {
       "name": "@dbx-tools/appkit-web-search",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -393,7 +393,7 @@
     },
     "packages/js/node/auth": {
       "name": "@dbx-tools/auth",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/core": "workspace:^",
         "@dbx-tools/shared-auth": "workspace:^",
@@ -410,7 +410,7 @@
     },
     "packages/js/node/auth-gate": {
       "name": "@dbx-tools/auth-gate",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@better-auth/passkey": "catalog:",
         "@dbx-tools/core": "workspace:^",
@@ -428,7 +428,7 @@
     },
     "packages/js/node/cache": {
       "name": "@dbx-tools/cache",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/core": "workspace:^",
         "@dbx-tools/shared-core": "workspace:^",
@@ -445,7 +445,7 @@
     },
     "packages/js/node/core": {
       "name": "@dbx-tools/core",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
         "extract-zip": "^2.0.1",
@@ -464,7 +464,7 @@
     },
     "packages/js/node/databricks": {
       "name": "@dbx-tools/databricks",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -481,7 +481,7 @@
     },
     "packages/js/node/databricks-zerobus": {
       "name": "@dbx-tools/databricks-zerobus",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/zerobus-ingest-sdk": "^1.1.0",
         "@dbx-tools/databricks": "workspace:^",
@@ -493,7 +493,7 @@
     },
     "packages/js/node/email": {
       "name": "@dbx-tools/email",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -517,7 +517,7 @@
     },
     "packages/js/node/fs": {
       "name": "@dbx-tools/fs",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/core": "workspace:^",
         "@dbx-tools/shared-core": "workspace:^",
@@ -530,7 +530,7 @@
     },
     "packages/js/node/genie": {
       "name": "@dbx-tools/genie",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -544,7 +544,7 @@
     },
     "packages/js/node/lakebase": {
       "name": "@dbx-tools/lakebase",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/auth": "workspace:^",
         "@dbx-tools/shared-auth": "workspace:^",
@@ -558,7 +558,7 @@
     },
     "packages/js/node/lakebox": {
       "name": "@dbx-tools/lakebox",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/core": "workspace:^",
         "@dbx-tools/shared-core": "workspace:^",
@@ -577,7 +577,7 @@
     },
     "packages/js/node/model": {
       "name": "@dbx-tools/model",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -597,7 +597,7 @@
     },
     "packages/js/node/model-protocol": {
       "name": "@dbx-tools/model-protocol",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@ai-sdk/anthropic": "catalog:",
         "@ai-sdk/open-responses": "catalog:",
@@ -617,7 +617,7 @@
     },
     "packages/js/node/path": {
       "name": "@dbx-tools/path",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/core": "workspace:^",
         "@dbx-tools/shared-core": "workspace:^",
@@ -633,7 +633,7 @@
     },
     "packages/js/node/postgres": {
       "name": "@dbx-tools/postgres",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/lakebase": "workspace:^",
         "@dbx-tools/shared-core": "workspace:^",
@@ -654,7 +654,7 @@
     },
     "packages/js/node/search": {
       "name": "@dbx-tools/search",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@databricks/sdk-experimental": "catalog:",
@@ -679,7 +679,7 @@
     },
     "packages/js/node/tunnel": {
       "name": "@dbx-tools/tunnel",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit": "catalog:",
         "@dbx-tools/appkit": "workspace:^",
@@ -707,7 +707,7 @@
     },
     "packages/js/shared/auth": {
       "name": "@dbx-tools/shared-auth",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@better-auth/passkey": "catalog:",
         "@dbx-tools/shared-core": "workspace:^",
@@ -721,7 +721,7 @@
     },
     "packages/js/shared/core": {
       "name": "@dbx-tools/shared-core",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "zod": "catalog:",
       },
@@ -731,7 +731,7 @@
     },
     "packages/js/shared/email": {
       "name": "@dbx-tools/shared-email",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "zod": "catalog:",
       },
@@ -741,7 +741,7 @@
     },
     "packages/js/shared/email-template": {
       "name": "@dbx-tools/shared-email-template",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
         "@react-email/components": "catalog:",
@@ -754,7 +754,7 @@
     },
     "packages/js/shared/fs": {
       "name": "@dbx-tools/shared-fs",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
       },
@@ -764,7 +764,7 @@
     },
     "packages/js/shared/generator": {
       "name": "@dbx-tools/shared-generator",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
         "zod": "catalog:",
@@ -775,7 +775,7 @@
     },
     "packages/js/shared/genie": {
       "name": "@dbx-tools/shared-genie",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
         "zod": "catalog:",
@@ -787,7 +787,7 @@
     },
     "packages/js/shared/genie-code": {
       "name": "@dbx-tools/shared-genie-code",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
         "@dbx-tools/shared-model": "workspace:^",
@@ -800,7 +800,7 @@
     },
     "packages/js/shared/graphiti": {
       "name": "@dbx-tools/shared-graphiti",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
         "@dbx-tools/shared-model-gateway": "workspace:^",
@@ -812,7 +812,7 @@
     },
     "packages/js/shared/lakebox": {
       "name": "@dbx-tools/shared-lakebox",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "zod": "catalog:",
       },
@@ -822,7 +822,7 @@
     },
     "packages/js/shared/mastra": {
       "name": "@dbx-tools/shared-mastra",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-genie": "workspace:^",
         "@dbx-tools/shared-model": "workspace:^",
@@ -834,7 +834,7 @@
     },
     "packages/js/shared/model": {
       "name": "@dbx-tools/shared-model",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
         "zod": "catalog:",
@@ -845,7 +845,7 @@
     },
     "packages/js/shared/model-gateway": {
       "name": "@dbx-tools/shared-model-gateway",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@dbx-tools/shared-core": "workspace:^",
         "@dbx-tools/shared-model": "workspace:^",
@@ -857,7 +857,7 @@
     },
     "packages/js/shared/search": {
       "name": "@dbx-tools/shared-search",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "zod": "catalog:",
       },
@@ -867,7 +867,7 @@
     },
     "packages/js/ui/appkit": {
       "name": "@dbx-tools/ui",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@better-auth/passkey": "catalog:",
         "@databricks/appkit-ui": "catalog:",
@@ -895,7 +895,7 @@
     },
     "packages/js/ui/lakebox": {
       "name": "@dbx-tools/ui-lakebox",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit-ui": "catalog:",
         "@dbx-tools/shared-lakebox": "workspace:^",
@@ -916,7 +916,7 @@
     },
     "packages/js/ui/mastra": {
       "name": "@dbx-tools/ui-mastra",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@databricks/appkit-ui": "catalog:",
         "@dbx-tools/shared-auth": "workspace:^",
@@ -957,7 +957,7 @@
     },
     "projen": {
       "name": "@dbx-tools/projen",
-      "version": "0.9.182",
+      "version": "0.9.183",
       "dependencies": {
         "@clack/prompts": "^1.7.0",
         "@dbx-tools/auth": "workspace:^",

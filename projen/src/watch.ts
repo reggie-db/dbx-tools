@@ -88,6 +88,7 @@ export interface WatchLoopOptions {
   check?: (changed: string[]) => boolean | Promise<boolean>;
 }
 
+/** Watch paths and serialize debounced batches through the workspace mutation lock. */
 export async function watchLoop(
   tag: string,
   paths: string[],
