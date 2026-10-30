@@ -34,7 +34,7 @@ import {
 import { MarkdownWithEmbeds } from "./embed-slots.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { FeedbackControls } from "./feedback-controls.tsx";
-import { ToolMarkdown } from "./markdown.tsx";
+import { CHAT_LINK_SAFETY, ToolMarkdown } from "./markdown.tsx";
 import { ToolSessionPill, humanizeToolName } from "./tool-pill.tsx";
 import {
   isRespondingChatStatus,
@@ -62,13 +62,13 @@ const UserAvatar = () => (
 );
 
 const ThoughtsDisclosure = ({ text }: { text: string }) => (
-  <Collapsible>
-    <CollapsibleTrigger className="group flex w-fit cursor-pointer items-center gap-1.5 px-0 py-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+  <Collapsible className="min-w-0 max-w-full overflow-hidden rounded-md border border-border/40 bg-background/30 px-2 py-1 transition-colors">
+    <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
       Thoughts
     </CollapsibleTrigger>
-    <CollapsibleContent>
-      <div className="mt-1 border-l-2 border-border/60 pl-2.5 text-xs text-muted-foreground">
+    <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
+      <div className="mt-1.5 min-w-0 max-w-full overflow-hidden text-xs text-muted-foreground">
         <ToolMarkdown className="prose-p:my-0 [&_p]:!my-0">{text}</ToolMarkdown>
       </div>
     </CollapsibleContent>
@@ -198,7 +198,11 @@ const ToolApprovalCard = ({
       {asEmailInput(input) ? (
         <EmailApprovalPreview email={asEmailInput(input)!} />
       ) : (
-        <RecordPreview value={input} className="rounded bg-background/40" />
+        <RecordPreview
+          value={input}
+          linkSafety={CHAT_LINK_SAFETY}
+          className="rounded bg-background/40"
+        />
       )}
       {expired ? (
         <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -313,6 +317,8 @@ type AssistantBubbleProps = {
   message: UIMessage;
   isLast: boolean;
   status: ChatStatus;
+  /** Tighten the transcript gap when this is another segment of the same assistant turn. */
+  continuation?: boolean;
   events?: ToolEvent[];
   regenerate?: () => void;
   /** Approve / deny handler for inline {@link ToolApprovalCard}s. */
@@ -348,6 +354,7 @@ export const AssistantBubble = ({
   message,
   isLast,
   status,
+  continuation = false,
   events,
   regenerate,
   onResolveToolApproval,
@@ -410,7 +417,12 @@ export const AssistantBubble = ({
   // nothing so the prose flows unaffected. Suggested questions
   // stay gated on settle to avoid pop-in mid-stream.
   return (
-    <Item className="min-w-0 max-w-full items-start gap-0 overflow-hidden border-none bg-transparent p-0">
+    <Item
+      className={cn(
+        "min-w-0 max-w-full items-start gap-0 overflow-hidden border-none bg-transparent p-0",
+        continuation && "-mt-1.5",
+      )}
+    >
       {/*
        * `min-w-0` is required so wide content (markdown tables, long
        * code blocks) can shrink to fit instead of pushing the whole

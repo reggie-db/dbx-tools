@@ -35,6 +35,14 @@ describe("email template brand", () => {
     assert.equal(emailBrandFromContext(defaultBrandContext).logoUrl, undefined);
     assert.equal(defaultEmailBrand.logoUrl, dbxToolsEmailAssetDataUrls.logo);
   });
+
+  it("embeds a transparent PNG for the dark email header", () => {
+    const encoded = dbxToolsEmailAssetDataUrls.logo.split(",", 2)[1];
+    assert.ok(encoded);
+    const png = Buffer.from(encoded, "base64");
+    assert.equal(png.subarray(1, 4).toString("ascii"), "PNG");
+    assert.equal(png[25], 6, "PNG color type must be RGBA");
+  });
 });
 
 describe("email content normalization", () => {

@@ -33,7 +33,7 @@ import { autosizeComposerTextarea, observeComposerWidth } from "./_composer-auto
 import { imageFileToUIPart, MAX_COMPOSER_IMAGES } from "./_image-attachments.ts";
 import { ModelSelector } from "./_model-selector.tsx";
 import { ExportMenu } from "./export-menu.tsx";
-import { isActiveChatStatus, isRespondingChatStatus, type ChatViewProps } from "./types.ts";
+import { isActiveChatStatus, type ChatViewProps } from "./types.ts";
 
 type QueuedSteerListProps = {
   queuedSteers: NonNullable<ChatViewProps["queuedSteers"]>;
@@ -319,7 +319,7 @@ export const ChatComposer = ({
   }, [focusRequest, isLoadingHistory]);
 
   const isRunning = isActiveChatStatus(status);
-  const canStop = isRespondingChatStatus(status);
+  const canStop = isRunning;
   const hasDraft = Boolean(input.trim() || files.length > 0);
   const submit = () => {
     const text = input.trim();
@@ -468,7 +468,7 @@ export const ChatComposer = ({
             }}
             placeholder="Send a message..."
             rows={1}
-            className="aui-composer-input field-sizing-fixed min-h-10 max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-base sm:text-sm"
+            className="aui-composer-input field-sizing-fixed min-h-10 max-h-[min(12rem,35dvh)] w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-base sm:text-sm"
           />
           {allowAttachments && fileError && (
             <div className="px-4 text-xs text-destructive" role="alert">

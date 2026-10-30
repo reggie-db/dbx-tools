@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { UIMessage } from "ai";
 
 import {
+  genieOutputReasoningSections,
   genieReasoningText,
   mergeToolEvents,
   toolEventsFromParts,
@@ -292,6 +293,74 @@ describe("native persisted tool events", () => {
         },
       ]),
       "Finding the relevant sales data.\nComparing the current period with last quarter.",
+    );
+  });
+
+  it("recovers reasoning from completed Genie message attachments", () => {
+    assert.deepEqual(
+      genieOutputReasoningSections({
+        message: {
+          id: "message-1",
+          message_id: "message-1",
+          space_id: "space-1",
+          conversation_id: "conversation-1",
+          content: "What were inside sales this week?",
+          status: "COMPLETED",
+          attachments: [
+            {
+              attachment_id: "query-1",
+              attachment_type: "query",
+              query: {
+                id: "query-1",
+                thoughts: [
+                  {
+                    thought_type: "THOUGHT_TYPE_STEPS",
+                    content:
+                      "I'm pulling Inside Sales PSPW for the current reporting week, which is the latest complete week in the data.",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+      [
+        "I'm pulling Inside Sales PSPW for the current reporting week, which is the latest complete week in the data.",
+      ],
+    );
+  });
+
+  it("does not repeat reasoning present in both the live stream and completed output", () => {
+    assert.equal(
+      genieReasoningText([
+        {
+          id: "tool-1",
+          toolName: "ask_genie",
+          status: "done",
+          progress: [{ type: "thinking", text: "Checking the latest complete week." }],
+          output: {
+            message: {
+              id: "message-1",
+              space_id: "space-1",
+              content: "What were inside sales this week?",
+              status: "COMPLETED",
+              attachments: [
+                {
+                  query: {
+                    thoughts: [
+                      {
+                        thought_type: "THOUGHT_TYPE_STEPS",
+                        content: "Checking the latest complete week.",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ]),
+      "Checking the latest complete week.",
     );
   });
 

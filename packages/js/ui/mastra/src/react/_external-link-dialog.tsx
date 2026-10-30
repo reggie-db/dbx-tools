@@ -20,17 +20,14 @@ export interface LinkPresentation {
   absoluteUrl: string;
 }
 
-/** Return whether a chat URL belongs to the current app's Sandbox route space. */
-export function isSandboxLink(url: string, baseUrl?: string): boolean {
+/** Return whether a chat URL resolves within the current app origin. */
+export function isSameOriginLink(url: string, baseUrl?: string): boolean {
   const base = baseUrl ?? (typeof window === "undefined" ? undefined : window.location.href);
   if (!base) return false;
   try {
     const resolved = new URL(url, base);
     const current = new URL(base);
-    return (
-      resolved.origin === current.origin &&
-      (resolved.pathname === "/sandbox" || resolved.pathname.startsWith("/sandbox/"))
-    );
+    return resolved.origin === current.origin;
   } catch {
     return false;
   }
@@ -85,10 +82,10 @@ export const ExternalLinkDialog = ({ isOpen, onClose, onConfirm, url }: LinkSafe
 
   return (
     <AlertDialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <AlertDialogContent className="border-border/60 p-5 shadow-2xl dark:border-white/10 sm:max-w-md">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2">
-            <ExternalLinkIcon className="size-4" aria-hidden="true" />
+      <AlertDialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-lg gap-5 overflow-y-auto border-border/60 p-5 shadow-2xl dark:border-white/10 sm:w-full sm:p-6">
+        <AlertDialogHeader className="text-left">
+          <AlertDialogTitle className="flex items-center gap-2.5">
+            <ExternalLinkIcon className="size-5 shrink-0" aria-hidden="true" />
             Open external link?
           </AlertDialogTitle>
           <AlertDialogDescription>
@@ -96,14 +93,14 @@ export const ExternalLinkDialog = ({ isOpen, onClose, onConfirm, url }: LinkSafe
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div
-          className="max-h-32 overflow-y-auto break-all rounded-md bg-muted px-3 py-2 font-mono text-sm"
+          className="max-h-32 overflow-y-auto break-all rounded-md border border-border/50 bg-muted/70 px-3 py-2.5 font-mono text-sm leading-5"
           title={link.absoluteUrl}
         >
           {link.displayUrl}
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <Button type="button" variant="outline" onClick={copyLink}>
+          <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+          <Button className="w-full sm:w-auto" type="button" variant="outline" onClick={copyLink}>
             {copied ? (
               <CheckIcon className="size-4" aria-hidden="true" />
             ) : (
@@ -111,7 +108,7 @@ export const ExternalLinkDialog = ({ isOpen, onClose, onConfirm, url }: LinkSafe
             )}
             {copied ? "Copied" : "Copy link"}
           </Button>
-          <AlertDialogAction onClick={onConfirm}>
+          <AlertDialogAction className="w-full sm:w-auto" onClick={onConfirm}>
             <ExternalLinkIcon className="size-4" aria-hidden="true" />
             Open link
           </AlertDialogAction>

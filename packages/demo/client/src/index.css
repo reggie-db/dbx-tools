@@ -14,13 +14,7 @@ body,
   height: 100%;
 }
 
-/*
- * Lock the app to the viewport so the chat owns all scrolling internally
- * (its own transcript container). Without this, mobile browsers let the whole
- * page rubber-band / scroll around behind the fixed composer. `100dvh` tracks
- * the *dynamic* viewport so the layout doesn't jump as mobile browser chrome
- * shows/hides, and `overscroll-behavior: none` kills the bounce.
- */
+/* The document never scrolls; each feature owns an explicit internal scroller. */
 html,
 body {
   overflow: hidden;
@@ -32,6 +26,7 @@ html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 #root::-webkit-scrollbar,
 .demo-shell::-webkit-scrollbar {
+  /* Safari can expose a page-level overlay thumb while panning visualViewport on focus. */
   display: none;
   width: 0;
   height: 0;
@@ -48,6 +43,7 @@ body {
 }
 
 .demo-shell {
+  /* `useVisualViewportFrame` writes these values synchronously during Safari keyboard changes. */
   position: absolute;
   top: var(--demo-viewport-top, 0px);
   left: var(--demo-viewport-left, 0px);
@@ -61,6 +57,7 @@ body {
 }
 
 .demo-shell[data-keyboard-closing="true"] {
+  /* Smooth only the delayed height restoration after the composer loses focus. */
   transition: height 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 

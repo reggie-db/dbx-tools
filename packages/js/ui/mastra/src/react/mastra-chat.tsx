@@ -81,6 +81,7 @@ export type ThreadIdChangeReason = "hydrate" | "select" | "new" | "delete" | "mi
 // preserving the visual scroll position across the prepend.
 
 const logger = log.logger("ui-mastra/chat");
+const STEER_INTERRUPT_SETTLEMENT_TIMEOUT_MS = 2_000;
 
 const makeUserMessage = (text: string, files: FileUIPart[] = []): UIMessage => ({
   id: hash.id(),
@@ -661,6 +662,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           if (
             controller.signal.aborted ||
             getSession(threadId).runToken !== token ||
+            getSession(threadId).status === "error" ||
             initialError instanceof MastraChatRequestError ||
             !mastraClient.backgroundTurns ||
             !runId
@@ -994,12 +996,24 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       if (!isSessionRunning(current)) return;
       const streamThreadId = threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
       const runId = current.runId;
+      const settlementSignal = AbortSignal.timeout(STEER_INTERRUPT_SETTLEMENT_TIMEOUT_MS);
       const settlement =
         mastraClient.backgroundTurns && runId
           ? mastraClient
-              .observeAgentStream({ agentId, runId, threadId: streamThreadId })
+              .observeAgentStream({
+                agentId,
+                runId,
+                threadId: streamThreadId,
+                signal: settlementSignal,
+              })
               .then((stream) => waitForTerminalChunk(stream.stream))
               .catch((error: unknown) => {
+                if (settlementSignal.aborted) {
+                  logger.warn("interrupted background run did not settle before replacement", {
+                    runId,
+                  });
+                  return;
+                }
                 logger.warn("failed to observe interrupted background run", {
                   runId,
                   error: toError(error),
@@ -1100,10 +1114,10 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     [appendUserMessage, runStream, activeKey, getSession, updateSession],
   );
 
-  // Fire a queued steer immediately, out of order: remove it from the queue,
-  // append it, and start a turn. `runStream`/`driveStream` supersede any
-  // in-flight run (abort + runToken bump + settle running pills), so this
-  // interrupts the current turn and sends the chosen steer now.
+  // Fire a queued steer immediately, out of order: remove it from the queue
+  // and append it first so acceptance is visible while the prior durable run
+  // settles. `runStream`/`driveStream` then supersede the in-flight run (abort
+  // + runToken bump + settle running pills) and send the chosen steer.
   const sendSteerNow = useCallback(
     (steerId: string) => {
       const threadId = activeKey;
@@ -1115,14 +1129,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         queuedSteers: removeSteerFromQueue(session.queuedSteers, steerId),
       }));
       logger.info("steer:send-now", { threadId });
+      const { message } = appendUserMessage(threadId, steer.text ?? "", steer.files);
+      const replacementMessages = interruptedTurnMessages(current.messages, message);
       void (async () => {
         await interruptActiveRun(threadId);
-        const { message } = appendUserMessage(threadId, steer.text ?? "", steer.files);
-        void runStream(
-          threadId,
-          interruptedTurnMessages(current.messages, message),
-          steer.requestContext,
-        );
+        void runStream(threadId, replacementMessages, steer.requestContext);
       })();
     },
     [activeKey, appendUserMessage, getSession, interruptActiveRun, runStream, updateSession],

@@ -1,7 +1,7 @@
 import { isToolUIPart, type UIMessage } from "ai";
 
 import type { ToolEvent } from "./types.ts";
-import { compactReasoningText } from "../support/tool-events.ts";
+import { compactReasoningText, toolReasoningSections } from "../support/tool-events.ts";
 
 /** One ordered activity entry rendered before an assistant's answer text. */
 export type AssistantActivityItem =
@@ -20,11 +20,7 @@ export const assistantActivityItems = (
     if (renderedEventIds.has(event.id)) return;
     renderedEventIds.add(event.id);
     items.push({ type: "tool", key: `tool-${event.id}`, event });
-    const thoughts = (event.progress ?? []).flatMap((progress) => {
-      if (progress.type !== "thinking") return [];
-      const text = compactReasoningText(progress.text);
-      return text ? [text] : [];
-    });
+    const thoughts = toolReasoningSections(event);
     if (thoughts.length > 0) {
       items.push({ type: "thought", key: `thought-${event.id}`, text: thoughts.join("\n\n") });
     }

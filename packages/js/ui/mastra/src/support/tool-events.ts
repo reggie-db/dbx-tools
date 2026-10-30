@@ -4,6 +4,7 @@ import {
   TOOL_PROGRESS_PART_TYPE,
   ToolProgressPartDataSchema,
 } from "@dbx-tools/shared-mastra";
+import { GenieMessageSchema } from "@dbx-tools/shared-genie";
 import { getToolOrDynamicToolName, isToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 
@@ -16,6 +17,39 @@ export function compactReasoningText(text: string): string {
     .join(" ");
 }
 
+/** Read reasoning persisted in a completed Genie's message attachments. */
+export function genieOutputReasoningSections(output: unknown): string[] {
+  if (!output || typeof output !== "object") return [];
+  const candidate = "message" in output ? output.message : output;
+  const parsed = GenieMessageSchema.safeParse(candidate);
+  if (!parsed.success) return [];
+
+  return (parsed.data.attachments ?? []).flatMap((attachment) =>
+    (attachment.query?.thoughts ?? []).flatMap((thought) => {
+      const text = compactReasoningText(thought.content);
+      return text ? [text] : [];
+    }),
+  );
+}
+
+/** Collect one tool's streamed and persisted reasoning without duplicates. */
+export function toolReasoningSections(event: ToolEvent): string[] {
+  const sections: string[] = [];
+  const seen = new Set<string>();
+  const append = (text: string) => {
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    sections.push(text);
+  };
+
+  for (const progress of event.progress ?? []) {
+    if (progress.type !== "thinking") continue;
+    append(compactReasoningText(progress.text));
+  }
+  for (const text of genieOutputReasoningSections(event.output)) append(text);
+  return sections;
+}
+
 /**
  * Collect Genie `thinking` events for the assistant Thoughts panel.
  *
@@ -25,13 +59,7 @@ export function compactReasoningText(text: string): string {
  */
 export function genieReasoningText(events: ToolEvent[]): string {
   const sections: string[] = [];
-  for (const event of events) {
-    for (const progress of event.progress ?? []) {
-      if (progress.type !== "thinking") continue;
-      const text = compactReasoningText(progress.text);
-      if (text) sections.push(text);
-    }
-  }
+  for (const event of events) sections.push(...toolReasoningSections(event));
   return sections.join("\n");
 }
 

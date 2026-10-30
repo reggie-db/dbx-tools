@@ -26,6 +26,9 @@ const FOCUS_RESIZE_BOTTOM_THRESHOLD_PX = 2;
 const FOCUS_RESIZE_SETTLE_MS = 650;
 const TOP_LOAD_MORE_THRESHOLD_PX = 120;
 
+/** Gestures that indicate the user is intentionally navigating transcript history. */
+export const TRANSCRIPT_FOLLOW_CANCEL_EVENTS = ["touchmove", "wheel"] as const;
+
 const assistantMessageHasVisibleContent = (
   message: ChatViewProps["messages"][number],
   events: ToolEvent[] | undefined,
@@ -162,7 +165,10 @@ export const useChatTranscriptController = ({
     };
     const handleReaderGesture = () => {
       finishFocusResize();
-      pinnedRef.current = false;
+      // A wheel/touch gesture at the bottom may not move the viewport. Let the
+      // ensuing scroll event decide whether follow mode should stop so inert
+      // or downward gestures cannot detach desktop chat from new content.
+      programmaticScrollRef.current = false;
     };
     const observer = new ResizeObserver(() => {
       restoreFocusPosition();
@@ -172,9 +178,9 @@ export const useChatTranscriptController = ({
     frame.addEventListener("touchstart", handleFocusStart, { passive: true, capture: true });
     frame.addEventListener("focusin", handleFocusStart);
     frame.addEventListener("focusout", finishFocusResize);
-    element.addEventListener("touchmove", handleReaderGesture, { passive: true });
-    element.addEventListener("pointermove", handleReaderGesture, { passive: true });
-    element.addEventListener("wheel", handleReaderGesture, { passive: true });
+    for (const eventName of TRANSCRIPT_FOLLOW_CANCEL_EVENTS) {
+      element.addEventListener(eventName, handleReaderGesture, { passive: true });
+    }
     observer.observe(element);
 
     return () => {
@@ -182,9 +188,9 @@ export const useChatTranscriptController = ({
       frame.removeEventListener("touchstart", handleFocusStart, true);
       frame.removeEventListener("focusin", handleFocusStart);
       frame.removeEventListener("focusout", finishFocusResize);
-      element.removeEventListener("touchmove", handleReaderGesture);
-      element.removeEventListener("pointermove", handleReaderGesture);
-      element.removeEventListener("wheel", handleReaderGesture);
+      for (const eventName of TRANSCRIPT_FOLLOW_CANCEL_EVENTS) {
+        element.removeEventListener(eventName, handleReaderGesture);
+      }
       observer.disconnect();
     };
   }, []);
@@ -299,45 +305,7 @@ export const ChatTranscript = ({
   const visibleSuggestions = messages.length === 0 ? suggestions : followUpQuestions;
   const scrollToBottomButtonRef = useRef<HTMLButtonElement>(null);
   const scrollToBottomFrameRef = useRef<number | null>(null);
-  const scrollIndicatorRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const transcript = controller.scrollRef.current;
-    const content = controller.contentRef.current;
-    const indicator = scrollIndicatorRef.current;
-    if (!transcript || !content || !indicator) return;
-
-    const syncScrollIndicator = () => {
-      const maxScrollTop = transcript.scrollHeight - transcript.clientHeight;
-      const keyboardScroller = transcript.hasAttribute("data-keyboard-touch-scroller");
-      indicator.hidden = !keyboardScroller || maxScrollTop <= 0;
-      if (indicator.hidden) return;
-
-      const height = Math.max(
-        28,
-        Math.round((transcript.clientHeight / transcript.scrollHeight) * transcript.clientHeight),
-      );
-      const top = Math.round((transcript.scrollTop / maxScrollTop) * (transcript.clientHeight - height));
-      indicator.style.height = `${height}px`;
-      indicator.style.transform = `translateY(${top}px)`;
-    };
-
-    const resizeObserver = new ResizeObserver(syncScrollIndicator);
-    const attributeObserver = new MutationObserver(syncScrollIndicator);
-    resizeObserver.observe(transcript);
-    resizeObserver.observe(content);
-    attributeObserver.observe(transcript, {
-      attributeFilter: ["data-keyboard-touch-scroller"],
-    });
-    transcript.addEventListener("scroll", syncScrollIndicator, { passive: true });
-    syncScrollIndicator();
-
-    return () => {
-      resizeObserver.disconnect();
-      attributeObserver.disconnect();
-      transcript.removeEventListener("scroll", syncScrollIndicator);
-    };
-  }, [controller.contentRef, controller.scrollRef]);
+  const scrollToBottomOverflowRef = useRef<string | null>(null);
 
   const activateScrollToBottomFromTouch = useCallback(() => {
     const transcript = controller.scrollRef.current;
@@ -346,15 +314,21 @@ export const ChatTranscript = ({
       return;
     }
 
-    const previousOverflowY = transcript.style.overflowY;
+    if (scrollToBottomOverflowRef.current === null) {
+      scrollToBottomOverflowRef.current = transcript.style.overflowY;
+    }
     transcript.dispatchEvent(new Event(CANCEL_TRANSCRIPT_KINETIC_SCROLL_EVENT));
+
+    // Hiding overflow cancels WebKit's native momentum immediately. The second assignment on the
+    // next frame keeps the transcript pinned after its normal scroll range has been restored.
     transcript.style.overflowY = "hidden";
     controller.scrollToBottomNow();
     if (scrollToBottomFrameRef.current !== null) {
       window.cancelAnimationFrame(scrollToBottomFrameRef.current);
     }
     scrollToBottomFrameRef.current = window.requestAnimationFrame(() => {
-      transcript.style.overflowY = previousOverflowY;
+      transcript.style.overflowY = scrollToBottomOverflowRef.current ?? "";
+      scrollToBottomOverflowRef.current = null;
       controller.scrollToBottomNow();
       scrollToBottomFrameRef.current = null;
     });
@@ -364,6 +338,9 @@ export const ChatTranscript = ({
     const button = scrollToBottomButtonRef.current;
     if (!button) return;
 
+    // React delegates touch events through a passive document listener in Mobile Safari. Native
+    // non-passive listeners are required here so the button can scroll without transferring focus
+    // away from the composer and closing the keyboard.
     const handlePointerDown = (event: PointerEvent) => {
       event.preventDefault();
     };
@@ -381,6 +358,12 @@ export const ChatTranscript = ({
     return () => {
       if (scrollToBottomFrameRef.current !== null) {
         window.cancelAnimationFrame(scrollToBottomFrameRef.current);
+        scrollToBottomFrameRef.current = null;
+      }
+      const transcript = controller.scrollRef.current;
+      if (transcript && scrollToBottomOverflowRef.current !== null) {
+        transcript.style.overflowY = scrollToBottomOverflowRef.current;
+        scrollToBottomOverflowRef.current = null;
       }
       button.removeEventListener("pointerdown", handlePointerDown);
       button.removeEventListener("touchstart", handleTouchStart);
@@ -451,6 +434,7 @@ export const ChatTranscript = ({
                       message={message}
                       isLast={isLast}
                       status={status}
+                      continuation={messages[index - 1]?.role === "assistant"}
                       events={toolEventsByMessage[message.id]}
                       regenerate={regenerate}
                       onResolveToolApproval={onResolveToolApproval}
@@ -522,7 +506,6 @@ export const ChatTranscript = ({
         </div>
       </div>
       <div
-        ref={scrollIndicatorRef}
         data-slot="aui_thread-scroll-indicator"
         className="pointer-events-none absolute right-0.5 top-0 z-20 w-0.5 rounded-full bg-foreground/50"
         hidden

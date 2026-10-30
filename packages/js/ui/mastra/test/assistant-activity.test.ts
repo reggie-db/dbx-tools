@@ -114,4 +114,78 @@ describe("assistantActivityItems", () => {
       ["tool:genie-1", "First thought.\n\nSecond thought."],
     );
   });
+
+  it("renders persisted Genie attachment thoughts like model reasoning summaries", () => {
+    const items = assistantActivityItems(
+      [
+        {
+          type: "dynamic-tool",
+          toolCallId: "genie-1",
+          toolName: "ask_genie",
+          state: "output-available",
+          input: { question: "What were inside sales this week?" },
+          output: {
+            message: {
+              id: "message-1",
+              message_id: "message-1",
+              conversation_id: "conversation-1",
+              space_id: "space-1",
+              content: "What were inside sales this week?",
+              status: "COMPLETED",
+              attachments: [
+                {
+                  attachment_id: "query-1",
+                  query: {
+                    id: "query-1",
+                    thoughts: [
+                      {
+                        thought_type: "THOUGHT_TYPE_STEPS",
+                        content: "I'm pulling the latest complete reporting week.",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ] as UIMessage["parts"],
+      [
+        {
+          id: "genie-1",
+          toolName: "ask_genie",
+          status: "done",
+          output: {
+            message: {
+              id: "message-1",
+              message_id: "message-1",
+              conversation_id: "conversation-1",
+              space_id: "space-1",
+              content: "What were inside sales this week?",
+              status: "COMPLETED",
+              attachments: [
+                {
+                  attachment_id: "query-1",
+                  query: {
+                    id: "query-1",
+                    thoughts: [
+                      {
+                        thought_type: "THOUGHT_TYPE_STEPS",
+                        content: "I'm pulling the latest complete reporting week.",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    );
+
+    assert.deepEqual(
+      items.map((item) => (item.type === "tool" ? `tool:${item.event.id}` : `thought:${item.text}`)),
+      ["tool:genie-1", "thought:I'm pulling the latest complete reporting week."],
+    );
+  });
 });

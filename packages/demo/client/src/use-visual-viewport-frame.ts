@@ -1,9 +1,21 @@
 import { useLayoutEffect, type RefObject } from "react";
 
-const KEYBOARD_INSET_THRESHOLD = 80;
+const COMPOSER_INPUT_SELECTOR = ".aui-composer-input";
+const VISUAL_VIEWPORT_EVENTS = ["resize", "scroll", "scrollend"] as const;
+const KEYBOARD_INSET_THRESHOLD_PX = 80;
 const KEYBOARD_CLOSE_FALLBACK_MS = 700;
 
-/** Keep the application shell aligned with Mobile Safari's visual viewport. */
+const isKeyboardVisible = (viewport: VisualViewport | null): boolean =>
+  Boolean(viewport && window.innerHeight - viewport.height > KEYBOARD_INSET_THRESHOLD_PX);
+
+/**
+ * Synchronize the absolute application shell with Mobile Safari's visual viewport.
+ *
+ * Safari can pan the visual viewport without changing `window.scrollY`, especially while revealing
+ * a focused textarea. Updating the shell synchronously from `pageTop`, `pageLeft`, `width`, and
+ * `height` keeps the header, transcript, and composer in one coordinate system throughout the
+ * keyboard animation.
+ */
 export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) => {
   useLayoutEffect(() => {
     const frame = frameRef.current;
@@ -13,17 +25,23 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
     let keyboardClosing = false;
     let keyboardCloseTimer = 0;
 
+    const clearKeyboardClosingState = () => {
+      keyboardClosing = false;
+      window.clearTimeout(keyboardCloseTimer);
+      delete frame.dataset.keyboardClosing;
+    };
+
     const commit = () => {
       const top = viewport?.pageTop ?? window.scrollY;
       const left = viewport?.pageLeft ?? window.scrollX;
       const width = viewport?.width ?? window.innerWidth;
       const measuredHeight = viewport?.height ?? window.innerHeight;
-      const viewportRestored = window.innerHeight - measuredHeight <= KEYBOARD_INSET_THRESHOLD;
-      if (keyboardClosing && viewportRestored) {
-        keyboardClosing = false;
-        window.clearTimeout(keyboardCloseTimer);
-        delete frame.dataset.keyboardClosing;
-      }
+      const viewportRestored = window.innerHeight - measuredHeight <= KEYBOARD_INSET_THRESHOLD_PX;
+      if (keyboardClosing && viewportRestored) clearKeyboardClosingState();
+
+      // WebKit can report intermediate keyboard-close heights after the textarea has blurred. Keep
+      // the larger layout height during that short interval so the composer does not jump upward,
+      // while CSS smooths the shell back to the restored viewport.
       const height = keyboardClosing
         ? Math.max(measuredHeight, window.innerHeight)
         : measuredHeight;
@@ -36,12 +54,7 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
 
     const handleFocusOut = (event: FocusEvent) => {
       const target = event.target instanceof Element ? event.target : null;
-      const composerBlurred = target?.classList.contains("aui-composer-input") ?? false;
-      const keyboardVisible =
-        viewport !== null &&
-        viewport !== undefined &&
-        window.innerHeight - viewport.height > KEYBOARD_INSET_THRESHOLD;
-      if (!composerBlurred || !keyboardVisible) {
+      if (!target?.matches(COMPOSER_INPUT_SELECTOR) || !isKeyboardVisible(viewport)) {
         commit();
         return;
       }
@@ -50,16 +63,15 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
       frame.dataset.keyboardClosing = "true";
       window.clearTimeout(keyboardCloseTimer);
       keyboardCloseTimer = window.setTimeout(() => {
-        keyboardClosing = false;
-        delete frame.dataset.keyboardClosing;
+        clearKeyboardClosingState();
         commit();
       }, KEYBOARD_CLOSE_FALLBACK_MS);
       commit();
     };
 
-    viewport?.addEventListener("resize", commit);
-    viewport?.addEventListener("scroll", commit);
-    viewport?.addEventListener("scrollend", commit);
+    for (const eventName of VISUAL_VIEWPORT_EVENTS) {
+      viewport?.addEventListener(eventName, commit);
+    }
     window.addEventListener("resize", commit);
     window.addEventListener("scroll", commit, { passive: true });
     document.addEventListener("focusin", commit);
@@ -67,11 +79,10 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
     commit();
 
     return () => {
-      viewport?.removeEventListener("resize", commit);
-      viewport?.removeEventListener("scroll", commit);
-      viewport?.removeEventListener("scrollend", commit);
-      window.clearTimeout(keyboardCloseTimer);
-      delete frame.dataset.keyboardClosing;
+      for (const eventName of VISUAL_VIEWPORT_EVENTS) {
+        viewport?.removeEventListener(eventName, commit);
+      }
+      clearKeyboardClosingState();
       window.removeEventListener("resize", commit);
       window.removeEventListener("scroll", commit);
       document.removeEventListener("focusin", commit);

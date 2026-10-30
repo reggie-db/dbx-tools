@@ -8,6 +8,7 @@ import { generateText } from "ai";
 
 import {
   buildResponsesProviderOptionsProcessor,
+  sanitizeResponsesReasoningReplay,
   stripForeignResponsesState,
 } from "../src/processors.ts";
 
@@ -102,6 +103,107 @@ describe("Responses provider options", () => {
 });
 
 describe("Responses model history compatibility", () => {
+  it("drops partial streamed reasoning that has no replay metadata", () => {
+    const prompt = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "An interrupted partial thought",
+          },
+          {
+            type: "text",
+            text: "A completed answer fragment",
+          },
+        ],
+      },
+    ];
+
+    assert.deepEqual(
+      sanitizeResponsesReasoningReplay.applyToPrompt!({
+        prompt: prompt as never,
+        model: { provider: "databricks.responses", modelId: "model-a" },
+      }),
+      [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "A completed answer fragment",
+            },
+          ],
+        },
+      ],
+    );
+  });
+
+  it("replays completed summaries without raw reasoning content", () => {
+    const prompt = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "A completed summary",
+            providerOptions: {
+              openai: {
+                itemId: "rs-a",
+                reasoningSummary: [{ type: "summary_text", text: "A completed summary" }],
+                reasoningContent: [{ type: "reasoning_text", text: "Private chain" }],
+                reasoningEncryptedContent: "encrypted-a",
+              },
+            },
+          },
+        ],
+      },
+    ];
+
+    assert.deepEqual(
+      sanitizeResponsesReasoningReplay.applyToPrompt!({
+        prompt: prompt as never,
+        model: { provider: "openai.responses", modelId: "model-a" },
+      }),
+      [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "reasoning",
+              text: "A completed summary",
+              providerOptions: {
+                openai: {
+                  itemId: "rs-a",
+                  reasoningSummary: [{ type: "summary_text", text: "A completed summary" }],
+                  reasoningContent: null,
+                  reasoningEncryptedContent: "encrypted-a",
+                },
+              },
+            },
+          ],
+        },
+      ],
+    );
+  });
+
+  it("leaves non-Responses reasoning unchanged", () => {
+    const prompt = [
+      {
+        role: "assistant",
+        content: [{ type: "reasoning", text: "Native chat reasoning" }],
+      },
+    ];
+
+    assert.equal(
+      sanitizeResponsesReasoningReplay.applyToPrompt!({
+        prompt: prompt as never,
+        model: { provider: "openai.chat", modelId: "model-a" },
+      }),
+      undefined,
+    );
+  });
+
   it("removes only model-bound state from a different concrete model", () => {
     const messageList = new MessageList()
       .add(

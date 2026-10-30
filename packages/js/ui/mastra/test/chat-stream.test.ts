@@ -100,6 +100,33 @@ describe("chat stream completion", () => {
     assert.equal(chatStatusForChunk({ type: "abort", reason: "interrupted" }), "finishing");
   });
 
+  it("treats a streamed error as terminal and releases the upstream reader", async () => {
+    let cancelled = false;
+    let terminal = false;
+    const errorChunk = {
+      type: "error",
+      errorText: "Provider rejected the request",
+    } as UIMessageChunk;
+    const upstream = new ReadableStream<UIMessageChunk>({
+      start(controller) {
+        controller.enqueue(errorChunk);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    const chunks: UIMessageChunk[] = [];
+    for await (const chunk of closeOnTerminalChunk(upstream, () => (terminal = true))) {
+      chunks.push(chunk);
+    }
+
+    assert.deepEqual(chunks, [errorChunk]);
+    assert.equal(chatStatusForChunk(errorChunk), "error");
+    assert.equal(cancelled, true);
+    assert.equal(terminal, true);
+  });
+
   it("rejects a stream that closes before finish or abort", async () => {
     const upstream = new ReadableStream<UIMessageChunk>({
       start(controller) {

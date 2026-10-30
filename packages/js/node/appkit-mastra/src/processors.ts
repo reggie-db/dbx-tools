@@ -167,6 +167,63 @@ function stripForeignItemIds<T>(part: T, state: ModelBoundResponsesState): T {
   } as T;
 }
 
+function sanitizeResponsesReasoningPart<T>(part: T, providerName: string): T | undefined {
+  const record = asRecord(part);
+  if (record?.type !== "reasoning") return part;
+  const providerOptions = asRecord(record.providerOptions);
+  const provider = asRecord(providerOptions?.[providerName]);
+  const replayable =
+    provider &&
+    (typeof provider.reasoningEncryptedContent === "string" ||
+      Array.isArray(provider.reasoningSummary));
+  if (!provider || !replayable) return undefined;
+  if (provider.reasoningContent === null) return part;
+  return {
+    ...record,
+    providerOptions: {
+      ...providerOptions,
+      [providerName]: {
+        ...provider,
+        reasoningContent: null,
+      },
+    },
+  } as T;
+}
+
+/** Omit incomplete thoughts and raw reasoning content that Responses cannot replay. */
+export const sanitizeResponsesReasoningReplay: CompatRule = {
+  name: "databricks-sanitize-responses-reasoning-replay",
+  applyToPrompt({ prompt, model }) {
+    const providerName = responsesProviderName(model);
+    if (!providerName) return;
+
+    let changed = false;
+    const next = [];
+    for (const message of prompt) {
+      if (message.role !== "assistant" || !Array.isArray(message.content)) {
+        next.push(message);
+        continue;
+      }
+      const content = [];
+      let messageChanged = false;
+      for (const part of message.content) {
+        const sanitized = sanitizeResponsesReasoningPart(part, providerName);
+        if (sanitized !== part) {
+          changed = true;
+          messageChanged = true;
+        }
+        if (sanitized) content.push(sanitized);
+      }
+      if (!messageChanged) {
+        next.push(message);
+      } else if (content.length > 0) {
+        next.push({ ...message, content });
+      }
+    }
+    return changed ? next : undefined;
+  },
+};
+
 /** Remove Responses continuation state produced by a different concrete model. */
 export const stripForeignResponsesState: CompatRule = {
   name: "databricks-strip-foreign-responses-state",
@@ -211,7 +268,7 @@ export const stripForeignResponsesState: CompatRule = {
 
 /** Mastra-owned compatibility processor extended for Databricks Responses routing. */
 export const providerHistoryCompatProcessor = new ProviderHistoryCompat({
-  additionalRules: [stripForeignResponsesState],
+  additionalRules: [sanitizeResponsesReasoningReplay, stripForeignResponsesState],
 });
 
 /**

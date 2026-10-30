@@ -4,7 +4,7 @@ Status: Fixed pending release
 
 ## Summary
 
-The demo has two related Responses API defects:
+The demo has three related Responses API defects:
 
 1. The chat stream enables reasoning output downstream but does not request a
    visible reasoning summary from the upstream model. The model can spend
@@ -12,11 +12,16 @@ The demo has two related Responses API defects:
 2. Smart Router can select a different concrete model on a later chat turn and
    replay encrypted reasoning metadata produced by the previous model. The new
    model can reject that metadata with `invalid encrypted reasoning`.
+3. Steering can abort a turn while a reasoning item is incomplete. Replaying
+   that partial item adds raw reasoning `content`, which Databricks Responses
+   rejects. The client can then remain pending while it waits for a durable-run
+   terminal event that never arrives.
 
-The first cause is confirmed by the request construction, stream adapters, UI
-code, and a local stream probe. The second cause is the strongest explanation
-supported by the routing and provider replay paths. The exact failing request
-or trace was not available to confirm which two concrete models were involved.
+The first and third causes are confirmed by request construction, stream
+adapters, UI code, logs, and local probes. The second cause is the strongest
+explanation supported by the routing and provider replay paths. The exact
+failing request or trace was not available to confirm which two concrete
+models were involved.
 
 AppKit-Mastra must own provider-aware reasoning defaults for every supported
 reasoning-capable model. The demo and other consumers must receive normalized
@@ -40,6 +45,17 @@ A separate Smart Router turn returned:
   "message": "{\"error\":{\"code\":\"validation_error\",\"message\":\"invalid encrypted reasoning\",\"param\":null,\"type\":\"invalid_request_error\"}}"
 }
 ```
+
+A steer that interrupted an active thought aborted the original durable run,
+then failed replacement runs with:
+
+```text
+Invalid 'input[19].content': array too long. Expected an array with maximum
+length 0, but got an array with length 1 instead.
+```
+
+The accepted steer did not appear until the durable-run observation settled,
+and the thread could lose its Stop action while in the `finishing` state.
 
 ## Cause of missing reasoning events
 
@@ -108,10 +124,41 @@ Commit `524966c09` coalesced Smart Router selection within one request. That
 change reduces the older risk of selecting different models across steps of
 one tool turn. It does not prevent a model change between separate user turns.
 
+## Cause of failed and stuck steers
+
+The Open Responses stream attaches replay metadata at `reasoning-end`. A steer
+can abort after `reasoning-start` and one or more deltas but before that closing
+event. The persisted partial reasoning part then has visible text without
+`reasoningSummary`, `reasoningContent`, encrypted content, or other completed
+provider state.
+
+When the installed Open Responses provider converts that partial part back to
+Responses input, it treats the visible text as raw reasoning content:
+
+```json
+{
+  "type": "reasoning",
+  "summary": [],
+  "content": [{ "type": "reasoning_text", "text": "partial thought" }]
+}
+```
+
+Databricks Responses accepts summary or encrypted replay state but rejects raw
+reasoning input content. This produces the `array_above_max_length` error.
+
+The UI also treated only `finish` and `abort` chunks as terminal. A streamed
+error entered the background reconnection path instead of settling the turn.
+Steering separately waited for the old durable observation before appending
+the steer message. If the abort event was missed, the UI waited for the
+server's 15-second observer timeout and appeared stuck. The composer hid Stop
+in `finishing`, even though that state still owned an active run.
+
 ## Confidence and limitations
 
 The missing-reasoning cause is confirmed by local source inspection, the
-installed provider implementation, and a local SSE probe.
+installed provider implementation, and a local SSE probe. The steer failure is
+confirmed by server logs, provider serialization, and a local browser
+reproduction.
 
 The encrypted-reasoning cause is strongly supported by these facts:
 
@@ -144,6 +191,14 @@ confirms those IDs.
    reasoning remains available for stateless continuation.
 6. Databricks Responses remains stateless and sends no `item_reference`
    inputs.
+7. Responses history sanitization drops incomplete reasoning parts and clears
+   raw `reasoningContent` from completed summary or encrypted replay state.
+8. Streamed error chunks are terminal. They release the upstream reader, set
+   the chat to `error`, and do not enter background reconnection.
+9. A steer is appended to the transcript immediately after acceptance. The
+   durable-run settlement wait is bounded at two seconds before the replacement
+   turn starts.
+10. Stop remains available during `submitted`, `streaming`, and `finishing`.
 
 ## Validation coverage
 
@@ -154,5 +209,12 @@ confirms those IDs.
 - A model A to model B switch removes model A's encrypted reasoning and item
   ids while preserving text and tool calls.
 - A model A to model A continuation retains compatible encrypted reasoning.
-- Focused AppKit-Mastra tests and the package TypeScript build pass.
+- Partial reasoning without replay metadata is removed.
+- Completed summaries retain summary and encrypted state without raw reasoning
+  content.
+- Streamed errors close as terminal events.
+- AppKit-Mastra passed 233 tests and its TypeScript build.
+- UI-Mastra passed 139 tests and its TypeScript build.
+- A local demo steer appeared immediately, began replacement processing within
+  the two-second bound, emitted thoughts and tool activity, and stopped cleanly.
 

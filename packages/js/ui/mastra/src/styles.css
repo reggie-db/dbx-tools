@@ -22,6 +22,8 @@
 @source "./react";
 
 [data-slot="aui_thread-viewport"][data-keyboard-touch-scroller] {
+  /* The adjacent custom thumb uses the transcript's keyboard-resized geometry. */
+  scrollbar-gutter: auto;
   scrollbar-width: none;
 }
 
@@ -29,9 +31,4 @@
   display: none;
   width: 0;
   height: 0;
-}
-
-[data-slot="aui_thread-frame"][data-ios-keyboard-open] {
-  overscroll-behavior: none;
-  touch-action: none;
 }

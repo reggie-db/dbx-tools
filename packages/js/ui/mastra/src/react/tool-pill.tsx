@@ -9,7 +9,7 @@ import { parse, toLabel, capitalize } from "@dbx-tools/shared-core";
 import { humanizeStatus } from "@dbx-tools/shared-genie";
 import { detectCodeLanguage, JsonBlock, RecordPreview } from "@dbx-tools/ui/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
-import { SourceBlock, ToolMarkdown } from "./markdown.tsx";
+import { CHAT_LINK_SAFETY, SourceBlock, ToolMarkdown } from "./markdown.tsx";
 import type { ToolEvent, ToolProgress } from "./types.ts";
 
 // Consolidated tool-session pill and its Genie progress detail view:
@@ -298,7 +298,7 @@ const MessageGroupBody = ({
         // opens directly to its SQL instead of adding a redundant
         // second "SQL" pill around the only child.
         <Collapsible key={bucket.key} className="rounded border border-border/60 bg-background/40">
-          <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
+          <CollapsibleTrigger className="group flex w-full items-center gap-1.5 py-1 pl-0 pr-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
             <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
             <span>{queryBuckets.length > 1 ? `Query ${i + 1}` : "Query"}</span>
             {bucket.query?.title ? (
@@ -412,13 +412,20 @@ const RawToolPayload = ({
       <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
         <div className="max-h-48 max-w-full overflow-auto overscroll-contain sm:max-h-64">
           {structured === undefined ? (
-            <JsonBlock
-              json={formatRawToolPayload(value)}
-              className="py-2 leading-tight text-foreground sm:leading-relaxed"
-            />
+            typeof value === "string" ? (
+              <div className="px-2 py-1.5">
+                <ToolMarkdown>{value}</ToolMarkdown>
+              </div>
+            ) : (
+              <JsonBlock
+                json={formatRawToolPayload(value)}
+                className="py-2 leading-tight text-foreground sm:leading-relaxed"
+              />
+            )
           ) : (
             <RecordPreview
               value={structured}
+              linkSafety={CHAT_LINK_SAFETY}
               className="max-w-full bg-transparent text-foreground [&_pre]:rounded-none [&_pre]:bg-transparent"
             />
           )}
@@ -591,14 +598,18 @@ const WebSearchProgressDetails = ({ event }: { event: ToolEvent }) => {
 };
 
 /** Latest cumulative detail emitted by a non-search tool. */
-const ToolStatusProgressDetails = ({ event }: { event: ToolEvent }) => {
-  if (event.toolName === "web_search") return null;
-  const detail = [...(event.progress ?? [])]
+const toolStatusProgressDetail = (event: ToolEvent): string | undefined => {
+  if (event.toolName === "web_search") return undefined;
+  return [...(event.progress ?? [])]
     .reverse()
     .find(
       (progress): progress is ToolStatusProgress =>
         progress.type === "tool_status" && Boolean(progress.detail?.trim()),
     )?.detail;
+};
+
+const ToolStatusProgressDetails = ({ event }: { event: ToolEvent }) => {
+  const detail = toolStatusProgressDetail(event);
   if (!detail) return null;
   return (
     <SourceBlock
@@ -616,8 +627,10 @@ const ToolStatusProgressDetails = ({ event }: { event: ToolEvent }) => {
  * a row whose only content is the question stays non-expandable.
  */
 const hasExpandableDetails = (event: ToolEvent): boolean => {
-  if (event.status === "running") return true;
-  if ("input" in event || "output" in event) return true;
+  if (!event.toolName.startsWith("ask_genie") && event.input !== undefined) return true;
+  if (event.output !== undefined) return true;
+  if (webSearchProgressGroups(event).length > 0) return true;
+  if (toolStatusProgressDetail(event)) return true;
   const summary = summarizeProgress(event.progress ?? []);
   return summary.groups.some(
     (g) => g.attachments.some(isAttachmentRenderable) || g.errors.length > 0,
@@ -724,7 +737,7 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
   return (
     <Collapsible className="min-w-0 max-w-full overflow-hidden rounded border border-border/40 bg-background/30">
       <CollapsibleTrigger className="group flex w-full items-start gap-2 px-2 py-1 text-left text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-        <ChevronDownIcon className="mt-0.5 size-3 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+        <ChevronDownIcon className="mt-0.5 size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
         <span className="mt-0.5 shrink-0">
           <ToolStatusIcon status={event.status} />
         </span>
@@ -774,6 +787,32 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
       ? `Calling ${latestName}`
       : `Called ${latestName}`;
   const countSuffix = events.length > 1 ? ` · ${events.length} calls` : "";
+  const expandable =
+    events.length > 1 || hasExpandableDetails(latest) || Boolean(askGenieQuestion(latest));
+
+  const header = (
+    <>
+      {expandable ? (
+        <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
+      ) : null}
+      <ToolStatusIcon status={tone} />
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate",
+          tone === "running" && "animate-pulse text-foreground/90",
+        )}
+      >
+        {verb}
+        {countSuffix}
+      </span>
+      {tone === "running" && (
+        <span className="relative ml-1 flex size-2 shrink-0" aria-hidden>
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/60" />
+          <span className="relative inline-flex size-2 rounded-full bg-primary" />
+        </span>
+      )}
+    </>
+  );
 
   return (
     <div
@@ -790,53 +829,31 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
             : "border-border/40",
       )}
     >
-      <Collapsible>
-        <CollapsibleTrigger className="group flex w-full items-center gap-2 text-left text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-          <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
-          <ToolStatusIcon status={tone} />
-          {/*
-           * Verb + count share one span so the `·` separator reads
-           * as a natural inline divider. `min-w-0` lets the truncate
-           * clip without forcing the row to overflow when the verb
-           * is long.
-           */}
-          <span
-            className={cn(
-              "min-w-0 flex-1 truncate",
-              tone === "running" && "animate-pulse text-foreground/90",
-            )}
-          >
-            {verb}
-            {countSuffix}
-          </span>
-          {/*
-           * Trailing "live" pip on the right edge while any tool is
-           * in flight. Two-layer: a static dot under an animated
-           * ping ring, matching the convention native chat apps use
-           * for active recording / streaming indicators.
-           */}
-          {tone === "running" && (
-            <span className="relative ml-1 flex size-2 shrink-0" aria-hidden>
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/60" />
-              <span className="relative inline-flex size-2 rounded-full bg-primary" />
-            </span>
-          )}
-        </CollapsibleTrigger>
-        <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
-          <div
-            className={cn(
-              "mt-1.5 min-w-0 max-w-full overflow-hidden",
-              events.length > 1 && "flex flex-col gap-1",
-            )}
-          >
-            {events.length === 1 ? (
-              <ToolCallDetails event={latest} showQuestion />
-            ) : (
-              events.map((event) => <ToolCallRow key={event.id} event={event} />)
-            )}
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+      {expandable ? (
+        <Collapsible>
+          <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 text-left text-xs text-muted-foreground hover:text-foreground">
+            {header}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="min-w-0 max-w-full overflow-hidden">
+            <div
+              className={cn(
+                "mt-1.5 min-w-0 max-w-full overflow-hidden",
+                events.length > 1 && "flex flex-col gap-1",
+              )}
+            >
+              {events.length === 1 ? (
+                <ToolCallDetails event={latest} showQuestion />
+              ) : (
+                events.map((event) => <ToolCallRow key={event.id} event={event} />)
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      ) : (
+        <div className="flex w-full items-center gap-2 text-left text-xs text-muted-foreground">
+          {header}
+        </div>
+      )}
     </div>
   );
 };

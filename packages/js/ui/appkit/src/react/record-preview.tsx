@@ -18,8 +18,8 @@ import {
   cn,
 } from "@databricks/appkit-ui/react";
 import { BracesIcon, Table2Icon } from "lucide-react";
-import { Fragment, useState } from "react";
-import { Streamdown } from "streamdown";
+import { createContext, Fragment, useContext, useState } from "react";
+import { Streamdown, type LinkSafetyConfig } from "streamdown";
 
 import { detectCodeLanguage, HighlightedCodeBlock, JsonBlock } from "./highlighted-code.tsx";
 import {
@@ -42,15 +42,21 @@ const MARKDOWN_CELL_CLASSES = cn(
   "[&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded",
   "[&_pre]:bg-background/60 [&_pre]:p-1.5 [&_pre]:text-[10px] [&_code]:text-[10px]",
   "[&_[data-streamdown=table-wrapper]]:my-1 [&_[data-streamdown=table-wrapper]]:gap-1",
-  "[&_[data-streamdown=table-wrapper]]:rounded [&_[data-streamdown=table-wrapper]]:p-1",
+  "[&_[data-streamdown=table-wrapper]]:!rounded-none [&_[data-streamdown=table-wrapper]]:!border-0",
+  "[&_[data-streamdown=table-wrapper]]:!bg-transparent [&_[data-streamdown=table-wrapper]]:!p-0",
   "[&_[data-streamdown=table-header-cell]]:px-2 [&_[data-streamdown=table-header-cell]]:py-1",
   "[&_[data-streamdown=table-header-cell]]:text-[11px] [&_[data-streamdown=table-header-cell]]:leading-snug",
   "[&_[data-streamdown=table-cell]]:px-2 [&_[data-streamdown=table-cell]]:py-1",
   "[&_[data-streamdown=table-cell]]:text-[11px] [&_[data-streamdown=table-cell]]:leading-snug",
+  "[&_[data-streamdown=link]]:font-normal [&_[data-streamdown=link]]:text-blue-700",
+  "[&_[data-streamdown=link]]:decoration-blue-700/40 [&_[data-streamdown=link]]:underline-offset-2",
+  "[&_[data-streamdown=link]]:hover:text-blue-800 [&_[data-streamdown=link]]:hover:decoration-current",
+  "dark:[&_[data-streamdown=link]]:text-blue-300 dark:[&_[data-streamdown=link]]:decoration-blue-300/40 dark:[&_[data-streamdown=link]]:hover:text-blue-200",
 );
 
 const MAX_NESTED_DEPTH = 12;
 const MAX_INDENT_DEPTH = 4;
+const RecordPreviewLinkSafetyContext = createContext<LinkSafetyConfig | undefined>(undefined);
 
 /** Props for {@link RecordPreview}. */
 export interface RecordPreviewProps {
@@ -58,48 +64,52 @@ export interface RecordPreviewProps {
   value: unknown;
   /** Extra classes on the outer frame. */
   className?: string;
+  /** Optional Streamdown confirmation behavior for detected links. */
+  linkSafety?: LinkSafetyConfig;
 }
 
 /** Compact labeled table of a JSON object, with a JSON/raw icon toggle. */
-export function RecordPreview({ value, className }: RecordPreviewProps) {
+export function RecordPreview({ value, className, linkSafety }: RecordPreviewProps) {
   const [raw, setRaw] = useState(false);
   const rows = recordPreviewRows(value);
   const rawJson = formatRecordPreviewJson(value);
   return (
-    <div
-      className={cn(
-        "relative min-w-0 max-w-full overflow-hidden [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-x-hidden",
-        className,
-      )}
-    >
-      <div className="sticky top-1 z-10 float-right mr-1 h-0">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-pressed={raw}
-              aria-label={raw ? "Show table" : "Show JSON"}
-              className="size-6 bg-background/85 backdrop-blur-sm"
-              onClick={() => setRaw((current) => !current)}
-            >
-              {raw ? <Table2Icon className="size-3" /> : <BracesIcon className="size-3" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{raw ? "Table" : "JSON"}</TooltipContent>
-        </Tooltip>
+    <RecordPreviewLinkSafetyContext.Provider value={linkSafety}>
+      <div
+        className={cn(
+          "relative min-w-0 max-w-full overflow-clip [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-x-hidden",
+          className,
+        )}
+      >
+        <div className="pointer-events-none sticky top-1 z-20 flex h-0 justify-end pr-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-pressed={raw}
+                aria-label={raw ? "Show table" : "Show JSON"}
+                className="pointer-events-auto size-6 bg-background shadow-sm ring-1 ring-border/40"
+                onClick={() => setRaw((current) => !current)}
+              >
+                {raw ? <Table2Icon className="size-3" /> : <BracesIcon className="size-3" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{raw ? "Table" : "JSON"}</TooltipContent>
+          </Tooltip>
+        </div>
+        {raw ? (
+          <JsonBlock json={rawJson} className="rounded bg-background/40 p-2 pr-8 text-[11px]" />
+        ) : rows.length === 0 ? (
+          <pre className="whitespace-pre-wrap break-words rounded bg-background/40 p-2 pr-8 font-mono text-[11px] leading-relaxed">
+            {rawJson}
+          </pre>
+        ) : (
+          <RecordTable rows={rows} />
+        )}
       </div>
-      {raw ? (
-        <JsonBlock json={rawJson} className="rounded bg-background/40 p-2 pr-8 text-[11px]" />
-      ) : rows.length === 0 ? (
-        <pre className="whitespace-pre-wrap break-words rounded bg-background/40 p-2 pr-8 font-mono text-[11px] leading-relaxed">
-          {rawJson}
-        </pre>
-      ) : (
-        <RecordTable rows={rows} />
-      )}
-    </div>
+    </RecordPreviewLinkSafetyContext.Provider>
   );
 }
 
@@ -348,6 +358,7 @@ function nestedRecordValue(
 }
 
 function RecordValue({ value, depth }: { value: unknown; depth: number }) {
+  const linkSafety = useContext(RecordPreviewLinkSafetyContext);
   if (value == null) {
     return <span className="text-muted-foreground">null</span>;
   }
@@ -365,19 +376,22 @@ function RecordValue({ value, depth }: { value: unknown; depth: number }) {
         />
       );
     }
-    if (looksLikeMarkdown(value)) {
-      return (
-        <div className={MARKDOWN_CELL_CLASSES}>
-          <Streamdown controls={false}>{markdownForPreview(value)}</Streamdown>
-        </div>
-      );
-    }
-    return <span className="whitespace-pre-wrap break-words">{value}</span>;
+    return (
+      <div className={MARKDOWN_CELL_CLASSES}>
+        <Streamdown controls={false} linkSafety={linkSafety}>
+          {markdownForPreview(value)}
+        </Streamdown>
+      </div>
+    );
   }
   if (Array.isArray(value)) {
     if (value.every((item) => item == null || typeof item !== "object")) {
       return (
-        <span className="whitespace-pre-wrap break-words">{value.map(String).join(", ")}</span>
+        <div className={MARKDOWN_CELL_CLASSES}>
+          <Streamdown controls={false} linkSafety={linkSafety}>
+            {value.map(String).join(", ")}
+          </Streamdown>
+        </div>
       );
     }
     if (depth < MAX_NESTED_DEPTH) {

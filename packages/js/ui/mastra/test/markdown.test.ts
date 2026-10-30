@@ -23,6 +23,30 @@ describe("streaming Markdown tables", () => {
   });
 });
 
+describe("Markdown links", () => {
+  it("preserves Streamdown link safety instead of rendering a raw anchor", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantMarkdown, {
+        children: "[Example](https://example.com)",
+      }),
+    );
+
+    assert.match(html, /<button[^>]*data-streamdown="link"/);
+    assert.doesNotMatch(html, /<a[^>]*href="https:\/\/example\.com/);
+  });
+
+  it("autolinks a bare URL with the same safety behavior", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantMarkdown, {
+        children: "Source: https://example.com/docs",
+      }),
+    );
+
+    assert.match(html, /<button[^>]*data-streamdown="link"/);
+    assert.match(html, />https:\/\/example\.com\/docs<\/button>/);
+  });
+});
+
 describe("tool Markdown typography", () => {
   it("pins prose and inline code to one text size", () => {
     const html = renderToStaticMarkup(

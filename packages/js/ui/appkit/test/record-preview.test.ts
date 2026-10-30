@@ -33,7 +33,13 @@ describe("RecordPreview", () => {
     assert.doesNotMatch(html, />[12]<\/(?:th|span|h3)>/);
     assert.equal(html.match(/data-slot="table"/g)?.length, 1);
     assert.doesNotMatch(html, /max-h-\[inherit\] min-w-0 overflow-auto/);
-    assert.match(html, /sticky top-1 z-10 float-right/);
+    assert.match(html, /overflow-clip/);
+    assert.match(html, /pointer-events-none sticky top-1 z-20 flex h-0 justify-end pr-1/);
+    assert.match(
+      html,
+      /pointer-events-auto size-6 bg-background shadow-sm ring-1 ring-border\/40/,
+    );
+    assert.doesNotMatch(html, /relative min-w-0 max-w-full overflow-hidden/);
     assert.doesNotMatch(html, /border-l-2 border-border\/70/);
   });
 
@@ -48,7 +54,7 @@ describe("RecordPreview", () => {
 
     assert.match(html, /aria-label="JSON parsed from text"/);
     assert.match(html, />Warehouse<\/div>/);
-    assert.match(html, />Serverless<\/span><\/div><\/div><\/td>/);
+    assert.match(html, /<p>Serverless<\/p>/);
     assert.match(html, />Output<\/span>/);
     assert.equal(html.match(/data-slot="table"/g)?.length, 1);
   });
@@ -70,7 +76,7 @@ describe("RecordPreview", () => {
     assert.equal(html.match(/aria-label="JSON parsed from text"/g)?.length, 3);
     assert.match(html, /data-language="sql"/);
     assert.match(html, />Deep Value<\/div>/);
-    assert.match(html, />found<\/span><\/div><\/div><\/td>/);
+    assert.match(html, /<p>found<\/p>/);
     assert.equal(html.match(/data-slot="table"/g)?.length, 1);
   });
 
@@ -104,6 +110,37 @@ describe("RecordPreview", () => {
     assert.match(html, /<table/);
     assert.match(html, />business_week</);
     assert.match(html, /grid-cols-1 gap-1/);
+    assert.match(html, /data-streamdown=table-wrapper\]\]:!border-0/);
+    assert.match(html, /data-streamdown=table-wrapper\]\]:!bg-transparent/);
+    assert.match(html, /data-streamdown=table-wrapper\]\]:!p-0/);
+  });
+
+  it("autolinks bare URLs through Streamdown and honors link safety", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecordPreview, {
+        value: {
+          url: "https://raw.githubusercontent.com/example/project/main/file.ts",
+        },
+        linkSafety: { enabled: true },
+      }),
+    );
+
+    assert.match(html, /<button[^>]*data-streamdown="link"/);
+    assert.match(html, />https:\/\/raw\.githubusercontent\.com\/example\/project\/main\/file\.ts</);
+    assert.doesNotMatch(html, /<a[^>]*href="https:\/\/raw\.githubusercontent\.com/);
+  });
+
+  it("autolinks URLs inside primitive arrays", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecordPreview, {
+        value: {
+          sources: ["https://example.com/one", "https://example.com/two"],
+        },
+        linkSafety: { enabled: true },
+      }),
+    );
+
+    assert.equal(html.match(/data-streamdown="link"/g)?.length, 2);
   });
 });
 

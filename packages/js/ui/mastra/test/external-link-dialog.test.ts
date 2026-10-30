@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isSandboxLink, resolveLinkPresentation } from "../src/react/_external-link-dialog.tsx";
+import { isSameOriginLink, resolveLinkPresentation } from "../src/react/_external-link-dialog.tsx";
 
 const baseUrl = "https://local-demo.apps.dbx.tools/chat/thread-1";
 
@@ -38,17 +38,20 @@ describe("resolveLinkPresentation", () => {
   });
 });
 
-describe("isSandboxLink", () => {
-  test("allows same-origin Sandbox routes without confirmation", () => {
-    expect(isSandboxLink("/sandbox/machine-1/terminal", baseUrl)).toBe(true);
+describe("isSameOriginLink", () => {
+  test("allows relative and same-origin links without confirmation", () => {
+    expect(isSameOriginLink("/lakebox/3csci64/hextris/", baseUrl)).toBe(true);
+    expect(isSameOriginLink("/sandbox/machine-1/terminal", baseUrl)).toBe(true);
+    expect(isSameOriginLink("?tab=history", baseUrl)).toBe(true);
+    expect(isSameOriginLink("#details", baseUrl)).toBe(true);
     expect(
-      isSandboxLink("https://local-demo.apps.dbx.tools/sandbox/machine-1/terminal", baseUrl),
+      isSameOriginLink("https://local-demo.apps.dbx.tools/settings/profile", baseUrl),
     ).toBe(true);
   });
 
-  test("keeps confirmation for external and non-Sandbox routes", () => {
-    expect(isSandboxLink("https://example.com/sandbox/machine-1", baseUrl)).toBe(false);
-    expect(isSandboxLink("/settings/profile", baseUrl)).toBe(false);
-    expect(isSandboxLink("/sandboxed", baseUrl)).toBe(false);
+  test("keeps confirmation for external origins and non-web schemes", () => {
+    expect(isSameOriginLink("https://example.com/sandbox/machine-1", baseUrl)).toBe(false);
+    expect(isSameOriginLink("//example.com/settings", baseUrl)).toBe(false);
+    expect(isSameOriginLink("mailto:user@example.com", baseUrl)).toBe(false);
   });
 });

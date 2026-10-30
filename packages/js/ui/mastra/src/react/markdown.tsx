@@ -16,8 +16,8 @@ import {
 import { createShikiPlugin, highlightToHtml, useHighlightedHtml } from "@dbx-tools/ui/react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
-import { Streamdown } from "streamdown";
-import { ExternalLinkDialog, isSandboxLink } from "./_external-link-dialog.tsx";
+import { Streamdown, type LinkSafetyConfig } from "streamdown";
+import { ExternalLinkDialog, isSameOriginLink } from "./_external-link-dialog.tsx";
 import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid.tsx";
 import { copyText } from "../support/clipboard.ts";
 
@@ -135,18 +135,14 @@ const MARKDOWN_TABLE_PARTS = {
   },
 };
 
-/** Chat links use a dedicated high-contrast blue instead of the darker brand primary. */
-const MarkdownLink = ({ className, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-  <a
-    {...props}
-    className={cn(
-      "font-normal text-blue-700 underline decoration-blue-700/40 decoration-1 underline-offset-2",
-      "transition-colors hover:text-blue-800 hover:decoration-current",
-      "focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-      "visited:text-blue-800 dark:text-blue-300 dark:decoration-blue-300/40 dark:visited:text-blue-300 dark:hover:text-blue-200",
-      className,
-    )}
-  />
+/** Chat links keep Streamdown's safety behavior while using a higher-contrast blue. */
+const MARKDOWN_LINK_CLASSES = cn(
+  "[&_[data-streamdown=link]]:font-normal [&_[data-streamdown=link]]:text-blue-700",
+  "[&_[data-streamdown=link]]:decoration-blue-700/40 [&_[data-streamdown=link]]:decoration-1 [&_[data-streamdown=link]]:underline-offset-2",
+  "[&_[data-streamdown=link]]:transition-colors [&_[data-streamdown=link]]:hover:text-blue-800 [&_[data-streamdown=link]]:hover:decoration-current",
+  "[&_[data-streamdown=link]]:focus-visible:rounded-sm [&_[data-streamdown=link]]:focus-visible:outline-none",
+  "[&_[data-streamdown=link]]:focus-visible:ring-2 [&_[data-streamdown=link]]:focus-visible:ring-ring [&_[data-streamdown=link]]:focus-visible:ring-offset-2",
+  "dark:[&_[data-streamdown=link]]:text-blue-300 dark:[&_[data-streamdown=link]]:decoration-blue-300/40 dark:[&_[data-streamdown=link]]:hover:text-blue-200",
 );
 
 /**
@@ -158,7 +154,6 @@ const MarkdownLink = ({ className, ...props }: React.AnchorHTMLAttributes<HTMLAn
  */
 const MARKDOWN_COMPONENTS = {
   ...MARKDOWN_TABLE_PARTS,
-  a: MarkdownLink,
   table: ({
     node,
     children,
@@ -201,7 +196,6 @@ const STREAMING_MARKDOWN_COMPONENTS = {
  */
 const TOOL_MARKDOWN_COMPONENTS = {
   ...MARKDOWN_TABLE_PARTS,
-  a: MarkdownLink,
   table: plainMarkdownTable,
 };
 
@@ -214,13 +208,13 @@ const TOOL_MARKDOWN_COMPONENTS = {
 const SHIKI_PLUGIN = { code: createShikiPlugin() };
 
 /** Keep Streamdown's link confirmation while matching the chat's AppKit UI. */
-const LINK_SAFETY = {
+export const CHAT_LINK_SAFETY = {
   enabled: true,
-  onLinkCheck: isSandboxLink,
+  onLinkCheck: isSameOriginLink,
   renderModal: (props: React.ComponentProps<typeof ExternalLinkDialog>) => (
     <ExternalLinkDialog {...props} />
   ),
-};
+} satisfies LinkSafetyConfig;
 
 /**
  * Per-word fade-in applied while a reply is still streaming. Streamdown
@@ -274,7 +268,7 @@ export const AssistantMarkdown = ({
     components={animate ? STREAMING_MARKDOWN_COMPONENTS : MARKDOWN_COMPONENTS}
     plugins={SHIKI_PLUGIN}
     controls={false}
-    linkSafety={LINK_SAFETY}
+    linkSafety={CHAT_LINK_SAFETY}
     animated={animate ? ANIMATE_OPTIONS : false}
     isAnimating={animate}
     className={cn(
@@ -285,6 +279,7 @@ export const AssistantMarkdown = ({
       "prose-h1:text-lg prose-h1:mt-4 prose-h1:mb-2",
       "prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2",
       "prose-h3:text-sm prose-h3:mt-3 prose-h3:mb-1.5 prose-h3:text-muted-foreground prose-h3:uppercase prose-h3:tracking-wider",
+      MARKDOWN_LINK_CLASSES,
     )}
   >
     {children}
@@ -309,7 +304,7 @@ export const ToolMarkdown = ({ children, className }: { children: string; classN
     components={TOOL_MARKDOWN_COMPONENTS}
     plugins={SHIKI_PLUGIN}
     controls={false}
-    linkSafety={LINK_SAFETY}
+    linkSafety={CHAT_LINK_SAFETY}
     className={cn(
       "prose prose-sm dark:prose-invert min-w-0 max-w-full overflow-x-hidden break-words",
       "!text-xs leading-tight text-muted-foreground sm:leading-snug",
@@ -318,7 +313,8 @@ export const ToolMarkdown = ({ children, className }: { children: string; classN
       "prose-li:my-0 prose-li:leading-tight prose-li:marker:text-muted-foreground/60 [&_li]:!text-xs sm:prose-li:leading-snug",
       "prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold",
       "prose-strong:text-foreground/90 prose-strong:font-medium [&_strong]:!text-xs",
-      "prose-code:font-medium [&_code]:!text-xs [&_a]:!text-xs",
+      "prose-code:font-medium [&_code]:!text-xs [&_[data-streamdown=link]]:!text-xs",
+      MARKDOWN_LINK_CLASSES,
       className,
     )}
   >

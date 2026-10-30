@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import { createShikiPlugin, highlightToHtml } from "@dbx-tools/ui/react";
 import {
+  ToolSessionPill,
   formatRawToolPayload,
   humanizeToolName,
   structuredToolPayload,
@@ -12,6 +15,51 @@ import {
   webSearchQueryLabel,
   webSearchResultLabel,
 } from "../src/react/tool-pill.tsx";
+
+describe("tool session disclosure", () => {
+  it("stays flat while a request-less tool is only running", () => {
+    const html = renderToStaticMarkup(
+      createElement(ToolSessionPill, {
+        events: [{ id: "tool-1", toolName: "ask_genie", status: "running" }],
+      }),
+    );
+
+    assert.match(html, /Calling Ask Genie/);
+    assert.doesNotMatch(html, /aria-expanded/);
+    assert.doesNotMatch(html, /lucide-chevron-down/);
+  });
+
+  it("becomes expandable once Genie has a question to reveal", () => {
+    const html = renderToStaticMarkup(
+      createElement(ToolSessionPill, {
+        events: [
+          {
+            id: "tool-1",
+            toolName: "ask_genie",
+            status: "running",
+            input: { question: "What changed?" },
+            progress: [{ type: "started", spaceId: "space-1", content: "What changed?" }],
+          },
+        ],
+      }),
+    );
+
+    assert.match(html, /aria-expanded="false"/);
+    assert.match(html, /lucide-chevron-down/);
+  });
+
+  it("stays flat for a completed tool with no request, response, or detail", () => {
+    const html = renderToStaticMarkup(
+      createElement(ToolSessionPill, {
+        events: [{ id: "tool-1", toolName: "refresh_cache", status: "done" }],
+      }),
+    );
+
+    assert.match(html, /Called Refresh Cache/);
+    assert.doesNotMatch(html, /aria-expanded/);
+    assert.doesNotMatch(html, /lucide-chevron-down/);
+  });
+});
 
 describe("raw tool payload formatting", () => {
   it("preserves complete request and response values", () => {

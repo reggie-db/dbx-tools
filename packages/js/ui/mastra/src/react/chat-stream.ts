@@ -42,6 +42,7 @@ export const readThreadTitlePart = (chunk: UIMessageChunk): string | undefined =
 
 /** Map lifecycle-only chunks onto the UI's active-turn state. */
 export const chatStatusForChunk = (chunk: UIMessageChunk): ChatStatus | undefined => {
+  if (chunk.type === "error") return "error";
   if ((chunk as { type?: string }).type === RESPONSE_COMPLETE_PART_TYPE) return "finishing";
   if (chunk.type === "finish" || chunk.type === "abort") return "finishing";
   return undefined;
@@ -69,7 +70,7 @@ export function closeOnTerminalChunk(
           }
           onChunk?.(value);
           controller.enqueue(value);
-          if (value.type === "finish" || value.type === "abort") {
+          if (value.type === "finish" || value.type === "abort" || value.type === "error") {
             onTerminal?.();
             controller.close();
             await reader.cancel("terminal AI SDK chunk received").catch(() => undefined);
