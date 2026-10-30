@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/email";
-export const PACKAGE_VERSION = "0.9.189";
+export const PACKAGE_VERSION = "0.9.190";
 export * as config from "./src/config.ts";
 export * as defaults from "./src/defaults.ts";
 export * as emailHtml from "./src/email-html.ts";
