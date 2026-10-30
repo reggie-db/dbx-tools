@@ -17,7 +17,11 @@
 import { getExecutionContext, type BasePluginConfig, type ConfigSchema } from "@databricks/appkit";
 import { type ExecutionContextLike, type IdentityMode, IDENTITY_MODES } from "@dbx-tools/appkit";
 import type { BrandContext } from "@dbx-tools/shared-core";
-import type { FeedbackModeOption } from "@dbx-tools/shared-mastra";
+import {
+  type FeedbackModeOption,
+  type GenieVisualizationMode,
+  GenieVisualizationModeSchema,
+} from "@dbx-tools/shared-mastra";
 import type { AgentConfig } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
@@ -485,6 +489,13 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   genieAgentMode?: boolean;
   /**
+   * Direct Genie charts use AppKit inference by default. Set `"image"` to
+   * display Genie's original PNG in the Chart tab and keep the query's Table
+   * tab. Uses the same Agent Mode conversation and OBO identity; no chart
+   * planner, MCP, or image transformation is involved.
+   */
+  genieVisualization?: GenieVisualizationMode;
+  /**
    * TTL for the in-memory Genie space metadata cache, in
    * milliseconds. Defaults to 5 minutes. The Genie agent calls
    * `client.genie.getSpace(...)` on every cold-start to get the
@@ -803,6 +814,12 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: "boolean",
       description:
         "Use the streaming Genie Agent Mode API for agent-backed ask_genie. Defaults to true; false forces legacy polling. Feature-disabled or preview-toggle responses fall back automatically before streaming. Direct Genie chat always requires Agent Mode.",
+    },
+    genieVisualization: {
+      type: "string",
+      enum: [...GenieVisualizationModeSchema.options],
+      description:
+        "Direct Genie chart renderer. Defaults to appkit; image displays Genie's original PNG with the backing query in the Table tab, using the same Agent Mode conversation and OBO identity.",
     },
     genieSpaceCacheTtlMs: {
       type: "number",

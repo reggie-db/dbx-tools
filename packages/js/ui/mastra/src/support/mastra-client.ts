@@ -20,6 +20,8 @@ import {
   MastraSuggestionsResponseSchema,
   ChartSchema,
   StatementDataSchema,
+  type GenieVisualizationEmbed,
+  genieVisualizationImagePath,
 } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
 import {
@@ -563,6 +565,11 @@ export class MastraPluginClient extends MastraClient {
   /** Resolve AppKit UI visualization data for a direct Genie statement. */
   visualization(id: string, signal?: AbortSignal): Promise<StatementData | undefined> {
     return this.#embed("visualization", id, StatementDataSchema.parse, signal);
+  }
+
+  /** Same-origin image URL; the app's OBO route owns workspace authentication. */
+  genieVisualizationImageUrl(reference: GenieVisualizationEmbed): string {
+    return `${this.basePath}${genieVisualizationImagePath(reference)}`;
   }
 
   /**

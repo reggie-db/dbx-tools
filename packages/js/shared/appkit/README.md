@@ -41,3 +41,9 @@ const endpoint = debugCaptureRoute(config.basePath);
 
 The resulting endpoint is `/api/debug-capture/captures` for the default AppKit
 plugin configuration.
+
+## Validate debug requests
+
+Use `DebugCaptureRequestSchema` on route handlers or tests that accept browser
+debug payloads. The schema keeps the wire contract browser-safe while the node
+package owns persistence and any server-side processing.

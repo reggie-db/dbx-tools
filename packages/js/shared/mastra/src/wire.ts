@@ -39,6 +39,7 @@ import {
 import { ServingEndpointSummarySchema } from "@dbx-tools/shared-model";
 import { z } from "zod";
 import { FeedbackDestinationsSchema } from "./feedback.ts";
+import { GenieVisualizationModeSchema } from "./genie-visualization.ts";
 
 /* ---------------------------- client config ---------------------------- */
 
@@ -620,6 +621,9 @@ export const GenieChatRequestSchema = z
       .record(z.string(), z.json())
       .optional()
       .describe("Mastra application request context for this direct Genie turn."),
+    visualization: GenieVisualizationModeSchema.optional().describe(
+      "Direct Genie chart renderer for this turn.",
+    ),
   })
   .describe("One direct Genie chat turn.");
 

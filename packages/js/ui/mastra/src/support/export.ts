@@ -24,7 +24,14 @@
  */
 
 import { capitalize, toLabel, toSlugWithOptions, escapeHtml } from "@dbx-tools/shared-core";
-import { type Chart, type StatementData, parseMarkers, isUuid } from "@dbx-tools/shared-mastra";
+import {
+  type Chart,
+  type StatementData,
+  parseMarkers,
+  isUuid,
+  GENIE_VISUALIZATION_MARKER,
+  parseGenieVisualizationEmbed,
+} from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import type { EChartsCoreOption } from "echarts";
 import { normalizeChartOption } from "./chart-option.ts";
@@ -203,7 +210,10 @@ function splitSegments(text: string): Segment[] {
     if (marker.start > last) {
       segments.push({ kind: "text", text: text.slice(last, marker.start) });
     }
-    if (isUuid(marker.id) && marker.type === "chart") {
+    if (marker.type === GENIE_VISUALIZATION_MARKER) {
+      const reference = parseGenieVisualizationEmbed(marker.id);
+      if (reference) segments.push({ kind: "visualization", id: reference.statementId });
+    } else if (isUuid(marker.id) && marker.type === "chart") {
       segments.push({ kind: "chart", id: marker.id });
     } else if (isUuid(marker.id) && marker.type === "data") {
       segments.push({ kind: "data", id: marker.id });

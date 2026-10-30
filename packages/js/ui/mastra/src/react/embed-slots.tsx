@@ -4,9 +4,13 @@ import {
   isUuid,
   parseMarkers,
   stripIncompleteMarkerTail,
+  type GenieVisualizationEmbed,
+  GENIE_VISUALIZATION_MARKER,
+  parseGenieVisualizationEmbed,
 } from "@dbx-tools/shared-mastra";
 import { ClockIcon } from "lucide-react";
 import { lazy, Suspense, useMemo, useRef } from "react";
+import { GenieImageSlot } from "./_genie-image.tsx";
 import { DataGrid, humanizeLabel } from "./data-grid.tsx";
 import { AssistantMarkdown } from "./markdown.tsx";
 import { normalizeChartOption } from "../support/chart-option.ts";
@@ -199,6 +203,7 @@ type RenderSegment =
   | { kind: "text"; text: string }
   | { kind: "chart"; chartId: string }
   | { kind: "data"; statementId: string }
+  | { kind: "genie-image"; reference: GenieVisualizationEmbed }
   | { kind: "visualization"; statementId: string };
 
 /**
@@ -213,6 +218,10 @@ type RenderSegment =
  * known, renderable type resolves to a slot.
  */
 const markerSegment = (marker: ParsedMarker): RenderSegment => {
+  if (marker.type === GENIE_VISUALIZATION_MARKER) {
+    const reference = parseGenieVisualizationEmbed(marker.id);
+    return reference ? { kind: "genie-image", reference } : { kind: "text", text: "" };
+  }
   if (!isUuid(marker.id)) return { kind: "text", text: "" };
   switch (marker.type) {
     case "chart":
@@ -291,6 +300,9 @@ export const MarkdownWithEmbeds = ({
         }
         if (seg.kind === "chart") {
           return <ChartSlot key={`c-${i}-${seg.chartId}`} chartId={seg.chartId} />;
+        }
+        if (seg.kind === "genie-image") {
+          return <GenieImageSlot key={`g-${i}`} reference={seg.reference} />;
         }
         if (seg.kind === "visualization") {
           return (

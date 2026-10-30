@@ -69,7 +69,7 @@ import {
   requestUserId,
   useServicePrincipal,
 } from "@dbx-tools/appkit";
-import { sendGenieMessageFeedback } from "@dbx-tools/genie";
+import { downloadGenieVisualization, sendGenieMessageFeedback } from "@dbx-tools/genie";
 import { modelCatalog } from "@dbx-tools/model";
 import {
   combineAbortSignals,
@@ -91,6 +91,7 @@ import {
   MASTRA_ROUTES,
   genieRoutePath,
   GenieChatRequestSchema,
+  GenieVisualizationModeSchema,
 } from "@dbx-tools/shared-mastra";
 import { type ServingEndpointSummary, toModelDisplayName } from "@dbx-tools/shared-model";
 import { workflowRoute } from "@mastra/ai-sdk";
@@ -806,9 +807,21 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const spaceFor = (req: express.Request, res: express.Response): GenieChatSpace | undefined => {
       const alias = firstNonEmpty(req.params.alias) ?? "";
       const configured = resolveGenieSpaces(this.config, this.context)[alias];
-      if (configured) return { alias, spaceId: configured.spaceId };
+      if (configured) {
+        return {
+          alias,
+          spaceId: configured.spaceId,
+          visualization: this.config.genieVisualization,
+        };
+      }
       res.status(404).json({ error: `Unknown Genie space alias "${alias}"` });
       return undefined;
+    };
+    const requestVisualization = (req: express.Request): GenieChatSpace["visualization"] => {
+      const raw = typeof req.query.visualization === "string" ? req.query.visualization : undefined;
+      if (!raw) return undefined;
+      const parsed = GenieVisualizationModeSchema.safeParse(raw);
+      return parsed.success ? parsed.data : undefined;
     };
     /** Bridge the connection `close` event onto an abort signal. */
     const closeSignal = (res: express.Response): AbortSignal => {
@@ -831,7 +844,16 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
             .json({ error: "question is required", fields: invalidFields(parsed.error) });
           return;
         }
-        await this.asUser(req).streamGenieChat(res, space, parsed.data, closeSignal(res));
+        const request = parsed.data;
+        await this.asUser(req).streamGenieChat(
+          res,
+          {
+            ...space,
+            visualization: request.visualization ?? space.visualization,
+          },
+          request,
+          closeSignal(res),
+        );
       },
     });
     this.route(router, {
@@ -862,7 +884,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         const result = await this.asUser(req).genieConversationRead((client) =>
           listGenieThreadMessages({
             client,
-            space,
+            space: {
+              ...space,
+              visualization: requestVisualization(req) ?? space.visualization,
+            },
             conversationId: threadId,
           }),
         );
@@ -871,6 +896,48 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           return;
         }
         res.json({ messages: result.data });
+      },
+    });
+    this.route(router, {
+      name: "genieVisualization",
+      method: "get",
+      path: path(
+        threads,
+        ":threadId",
+        messages,
+        ":messageId",
+        MASTRA_ROUTES.attachments,
+        ":attachmentId",
+        MASTRA_ROUTES.visualization,
+      ),
+      handler: async (req, res) => {
+        const space = spaceFor(req, res);
+        if (!space) return;
+        const signal = closeSignal(res);
+        const result = await this.asUser(req).genieConversationRead((client) =>
+          downloadGenieVisualization(
+            {
+              space_id: space.spaceId,
+              conversation_id: firstNonEmpty(req.params.threadId) ?? "",
+              message_id: firstNonEmpty(req.params.messageId) ?? "",
+              attachment_id: firstNonEmpty(req.params.attachmentId) ?? "",
+            },
+            { workspaceClient: client, context: signal },
+          ),
+        );
+        if (signal.aborted) return;
+        res.setHeader("Cache-Control", "private, no-store");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        if (!result.ok) {
+          this.sendFailure(
+            res,
+            result,
+            "genie-visualization",
+            "Could not download the Genie visualization",
+          );
+          return;
+        }
+        res.type("image/png").send(Buffer.from(result.data));
       },
     });
     this.route(router, {

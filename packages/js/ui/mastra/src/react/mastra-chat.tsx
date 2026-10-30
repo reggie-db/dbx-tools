@@ -1,6 +1,6 @@
 import { getAuthStatus } from "@dbx-tools/shared-auth";
 import { hash, log, toError } from "@dbx-tools/shared-core";
-import { isStaleMastraResumeError } from "@dbx-tools/shared-mastra";
+import { isStaleMastraResumeError, type GenieVisualizationMode } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { useBrand } from "@dbx-tools/ui/branding/react";
 import type { RequestContext } from "@mastra/client-js";
@@ -177,6 +177,12 @@ export interface UseMastraChatOptions<
    */
   genieSpace?: string;
   /**
+   * Direct Genie visualization renderer. `"appkit"` keeps the current local
+   * Chart/Table rendering; `"image"` displays the PNG produced by Genie while
+   * retaining the backing Table tab.
+   */
+  genieVisualization?: GenieVisualizationMode;
+  /**
    * Surface the built-in model picker in the header, letting the user
    * override the serving endpoint per turn (via `X-Mastra-Model`).
    * Off by default so the drop-in renders a clean single-model chat;
@@ -271,10 +277,12 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const pluginClient = useMastraClient();
   const mastraConfig = useMastraConfig();
   const genieSpace = options.genieSpace?.trim() || undefined;
+  const genieVisualization = options.genieVisualization;
   const genieClient = useMemo(
-    () => (genieSpace ? new GenieChatClient(mastraConfig, genieSpace) : undefined),
+    () =>
+      genieSpace ? new GenieChatClient(mastraConfig, genieSpace, genieVisualization) : undefined,
     // Same scalars `useMastraClient` keys on; `mastraConfig` identity churns.
-    [genieSpace, mastraConfig.basePath, mastraConfig.defaultAgent],
+    [genieSpace, genieVisualization, mastraConfig.basePath, mastraConfig.defaultAgent],
   );
   const mastraClient = genieClient ?? pluginClient;
   // Genie chats key persisted state (active thread, sidebar) by space alias.

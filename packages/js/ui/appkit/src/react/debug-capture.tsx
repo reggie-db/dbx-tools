@@ -16,7 +16,7 @@ import {
   type DebugCaptureEvent,
   type DebugCaptureScalar,
 } from "@dbx-tools/shared-appkit/debug";
-import { BugIcon } from "lucide-react";
+import { BugIcon, CheckIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { copyText } from "./clipboard.ts";
@@ -456,8 +456,17 @@ export function BrowserDebugCaptureButton({
 }: BrowserDebugCaptureButtonProps) {
   const { available, captureId, error, phase, startCapture, stopCapture } =
     useBrowserDebugCapture(options);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
   const recording = phase === "recording";
   const busy = phase === "starting" || phase === "stopping";
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+    },
+    [],
+  );
 
   if (!available) return null;
 
@@ -465,16 +474,25 @@ export function BrowserDebugCaptureButton({
     ? error
     : recording
       ? "Stop browser capture and copy ID"
-      : "Start browser debug capture";
+      : copiedId
+        ? `Copied ${copiedId}`
+        : "Start browser debug capture";
 
   const toggle = (button: HTMLButtonElement) => {
     button.blur();
+
     if (!recording || !captureId) {
       void startCapture();
       return;
     }
     // Begin the clipboard write inside the original iOS tap gesture.
-    void copyText(captureId);
+    void copyText(captureId).then((copied) => {
+      if (!copied) return;
+      setCopiedId(captureId);
+      if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = window.setTimeout(() => setCopiedId(null), 5_000);
+    });
+
     void stopCapture();
   };
 
@@ -490,7 +508,7 @@ export function BrowserDebugCaptureButton({
               disabled={busy}
               aria-label={recording ? "Stop browser capture and copy ID" : "Start browser capture"}
               aria-pressed={recording}
-              data-capture-id={captureId ?? undefined}
+              data-capture-id={captureId ?? copiedId ?? undefined}
               data-capture-state={phase}
               className={cn(
                 "relative size-8",
@@ -500,7 +518,12 @@ export function BrowserDebugCaptureButton({
               )}
               onClick={(event) => toggle(event.currentTarget)}
             >
-              <BugIcon className="size-4" />
+              {copiedId && !recording ? (
+                <CheckIcon className="size-4" />
+              ) : (
+                <BugIcon className="size-4" />
+              )}
+
               {recording ? (
                 <span className="absolute right-1 top-1 size-1.5 rounded-full bg-destructive" />
               ) : null}
@@ -509,6 +532,14 @@ export function BrowserDebugCaptureButton({
           <TooltipContent>{tooltip}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      {copiedId && !recording ? (
+        <span
+          role="status"
+          className="absolute right-0 top-full z-50 mt-2 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
+        >
+          Copied {copiedId}
+        </span>
+      ) : null}
     </div>
   );
 }

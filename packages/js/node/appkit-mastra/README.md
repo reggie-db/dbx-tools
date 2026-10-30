@@ -794,6 +794,32 @@ AppKit UI's native Genie Chart/Table component. This path does not use a
 supervisor or Model Serving chart planner. Queries Genie does not mark for
 visualization remain sortable data tables.
 
+To display the chart Genie rendered rather than infer a chart locally, select
+the image renderer from the host UI:
+
+```tsx
+<MastraChat genieSpace="sales" genieVisualization="image" />;
+```
+
+or make it the server default:
+
+```ts
+mastra({
+  genieSpaces: { sales: spaceId },
+  genieVisualization: "image",
+});
+```
+
+The Chart tab shows the original PNG returned by Genie's
+`download-visualization` endpoint, without recoloring or redrawing it. The Table
+tab keeps the linked query result. This works with the existing Agent Mode
+stream and conversation IDs, including reloaded history; it does not use MCP
+or switch to classic Chat mode. Downloads run through the app under the
+viewer's OBO identity, and credentials never enter the image URL. If an image
+expires or cannot be downloaded, Chart reports that it is unavailable while
+Table remains accessible. Chat exports retain the backing table, not the PNG.
+The default `"appkit"` mode and agent chart tools remain unchanged.
+
 Operational limits:
 
 - The thread list contains the newest 100 Agent Mode conversations.
@@ -1214,24 +1240,25 @@ Mounted under the plugin base path, which is `/api/mastra` unless you override
 `name`. Product-specific routes use AppKit's `route()` helper. Chat and memory
 use Mastra's native route surfaces behind the same scoped request-context gate.
 
-| Method                     | Path                              | Purpose                                                                                                                  |
-| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `GET`                      | `/models`                         | Serving-endpoint catalogue for a model picker.                                                                           |
-| `GET`                      | `/default-model[/:agentId]`       | Configured default, or highest-ranked live GPT with a general chat fallback, for an unpinned agent. `404` on unknown id. |
-| `GET`                      | `/suggestions[/:agentId]`         | Starter questions from the configured Genie spaces. Degrades to `[]`.                                                    |
-| `GET`                      | `/embed/chart/:id`                | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.                                         |
-| `GET`                      | `/embed/data/:id`                 | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                                             |
-| `GET`                      | `/embed/visualization/:id`        | OBO-only statement payload for a `[visualization:<statement_id>]` AppKit UI embed.                                       |
-| `POST`                     | `/chat/:agentId`                  | Official Mastra AI SDK UI stream, including native `resumeData` continuations.                                           |
-| `POST`                     | `/genie/:alias/chat`              | Direct Genie turn projected onto the AI SDK UI stream.                                                                   |
-| `GET` / `DELETE`           | `/genie/:alias/threads[...]`      | OBO-only Genie conversation list, history, and deletion.                                                                 |
-| `GET`                      | `/genie/:alias/suggestions`       | Starter questions for one direct Genie space.                                                                            |
-| `GET` / `PATCH` / `DELETE` | `/memory/threads[...]`            | Native Mastra resource-scoped conversation history and thread management.                                                |
-| `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                                             |
-| `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                                                           |
-| `POST`                     | `/route/feedback`                 | Send feedback to the resolved Genie or MLflow destination. `404` when feedback mode is none.                             |
-| `GET`                      | `/route/mlflow-experiment`        | Return the experiment URL only when the active viewer has effective `CAN_MANAGE`. Otherwise, return `{ "url": null }`.   |
-| `POST` / `GET`             | `/mcp`, `/sse`, `/messages`       | MCP transports, when `mcp` is enabled.                                                                                   |
+| Method                     | Path                                                                                          | Purpose                                                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GET`                      | `/models`                                                                                     | Serving-endpoint catalogue for a model picker.                                                                           |
+| `GET`                      | `/default-model[/:agentId]`                                                                   | Configured default, or highest-ranked live GPT with a general chat fallback, for an unpinned agent. `404` on unknown id. |
+| `GET`                      | `/suggestions[/:agentId]`                                                                     | Starter questions from the configured Genie spaces. Degrades to `[]`.                                                    |
+| `GET`                      | `/embed/chart/:id`                                                                            | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.                                         |
+| `GET`                      | `/embed/data/:id`                                                                             | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                                             |
+| `GET`                      | `/embed/visualization/:id`                                                                    | OBO-only statement payload for a `[visualization:<statement_id>]` AppKit UI embed.                                       |
+| `POST`                     | `/chat/:agentId`                                                                              | Official Mastra AI SDK UI stream, including native `resumeData` continuations.                                           |
+| `POST`                     | `/genie/:alias/chat`                                                                          | Direct Genie turn projected onto the AI SDK UI stream.                                                                   |
+| `GET` / `DELETE`           | `/genie/:alias/threads[...]`                                                                  | OBO-only Genie conversation list, history, and deletion.                                                                 |
+| `GET`                      | `/genie/:alias/suggestions`                                                                   | Starter questions for one direct Genie space.                                                                            |
+| `GET`                      | `/genie/:alias/threads/:threadId/messages/:messageId/attachments/:attachmentId/visualization` | Original Genie PNG, downloaded under the viewer's OBO identity with private, no-store caching.                           |
+| `GET` / `PATCH` / `DELETE` | `/memory/threads[...]`                                                                        | Native Mastra resource-scoped conversation history and thread management.                                                |
+| `POST`                     | `/memory/messages/delete`                                                                     | Native message deletion used before regenerating a response.                                                             |
+| `GET`                      | `/agents/:agentId/suspended-runs`                                                             | Native persisted approval discovery after a reload or restart.                                                           |
+| `POST`                     | `/route/feedback`                                                                             | Send feedback to the resolved Genie or MLflow destination. `404` when feedback mode is none.                             |
+| `GET`                      | `/route/mlflow-experiment`                                                                    | Return the experiment URL only when the active viewer has effective `CAN_MANAGE`. Otherwise, return `{ "url": null }`.   |
+| `POST` / `GET`             | `/mcp`, `/sse`, `/messages`                                                                   | MCP transports, when `mcp` is enabled.                                                                                   |
 
 The UI consumes `/chat/:agentId` with the AI SDK's `DefaultChatTransport`.
 
