@@ -24,7 +24,11 @@
 
 import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
 import { tryGetExecutionContext } from "@dbx-tools/appkit";
-import { SmartRouterService, smartRouterCandidates } from "@dbx-tools/appkit-model-gateway";
+import {
+  AiDecideRouterService,
+  SmartRouterService,
+  smartRouterCandidates,
+} from "@dbx-tools/appkit-model-gateway";
 import {
   classes,
   endpointCapabilities,
@@ -39,8 +43,10 @@ import {
 import { log } from "@dbx-tools/shared-core";
 import { contracts, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import {
+  AI_DECIDE_MODEL_ID,
   SMART_ROUTER_MODEL_ID,
   SmartRouterObservationSchema,
+  isAiDecideModelId,
   isSmartRouterModelId,
 } from "@dbx-tools/shared-model-gateway";
 import { RequestContext } from "@mastra/core/request-context";
@@ -65,11 +71,13 @@ type ModelClass = contracts.ModelClass;
 type ModelOptimization = contracts.ModelOptimization;
 const { parseModelClass } = classes;
 const smartRouter = new SmartRouterService();
+const aiDecideRouter = new AiDecideRouterService();
 const MASTRA_SMART_ROUTER_RESOLUTION_KEY = "mastra__smart_router_resolution";
+const MASTRA_AI_DECIDE_RESOLUTION_KEY = "mastra__ai_decide_resolution";
 
 interface SmartRouterModelResolution {
   readonly modelId: string;
-  readonly source: MastraModelRoute["selection"] | typeof SMART_ROUTER_MODEL_ID;
+  readonly source: MastraModelRoute["selection"];
   readonly route?: MastraModelRoute;
 }
 
@@ -80,6 +88,17 @@ export const SMART_ROUTER_ENDPOINT: ServingEndpointSummary = {
   description: "Selects a Databricks system model with the task_v3 Smart Router.",
   task: "llm/v1/chat",
   status: { deprecated: false },
+  modelSource: "foundation",
+};
+
+/** Virtual endpoint shown when Databricks ai_decide is enabled for the active identity. */
+export const AI_DECIDE_ENDPOINT: ServingEndpointSummary = {
+  name: AI_DECIDE_MODEL_ID,
+  displayName: "AI Decide",
+  description: "Selects a sufficient foundation model using Databricks ai_decide.",
+  task: "llm/v1/chat",
+  status: { deprecated: false },
+  modelSource: "foundation",
 };
 
 /** Default Responses options: stateless replay plus visible reasoning summaries. */
@@ -253,11 +272,14 @@ export async function buildModel(
     (!internalClassOnly ? process.env.DATABRICKS_SERVING_ENDPOINT_NAME : undefined);
   const smartRouterInput = overrides.smartRouterInput ?? context.get(MASTRA_SMART_ROUTER_INPUT_KEY);
   const smartRouterRequested = isSmartRouterModelId(requested);
-  if (smartRouterRequested && smartRouterInput === undefined) {
-    throw new Error("Smart Router requires task input before it can resolve a concrete model");
+  const aiDecideRequested = isAiDecideModelId(requested);
+  if ((smartRouterRequested || aiDecideRequested) && smartRouterInput === undefined) {
+    throw new Error(
+      `${smartRouterRequested ? "Smart Router" : "ai_decide"} requires task input before selecting a concrete model`,
+    );
   }
   let modelId: string;
-  let source: MastraModelRoute["selection"] | typeof SMART_ROUTER_MODEL_ID;
+  let source: MastraModelRoute["selection"];
   let route: MastraModelRoute | undefined;
   let endpointsPromise: Promise<ServingEndpointSummary[]> | undefined;
   const loadEndpoints = () => {
@@ -268,7 +290,37 @@ export async function buildModel(
     });
     return endpointsPromise;
   };
-  if (
+  if (aiDecideRequested && overrides.modelClass === undefined && smartRouterInput !== undefined) {
+    let pending = context.get(MASTRA_AI_DECIDE_RESOLUTION_KEY) as
+      Promise<SmartRouterModelResolution> | undefined;
+    if (!pending) {
+      pending = (async () => {
+        const selected = await aiDecideRouter.select(
+          smartRouterInput,
+          await loadEndpoints(),
+          client,
+        );
+        return {
+          modelId: selected.endpoint.name,
+          source: "ai-decide" as const,
+          route: {
+            model: selected.endpoint.name,
+            selection: "ai-decide" as const,
+            aiDecide: selected.observation,
+          },
+        };
+      })();
+      context.set(MASTRA_AI_DECIDE_RESOLUTION_KEY, pending);
+    }
+    try {
+      ({ modelId, source, route } = await pending);
+    } catch (error) {
+      if (context.get(MASTRA_AI_DECIDE_RESOLUTION_KEY) === pending) {
+        context.set(MASTRA_AI_DECIDE_RESOLUTION_KEY, undefined);
+      }
+      throw error;
+    }
+  } else if (
     (requested === undefined || smartRouterRequested) &&
     overrides.modelClass === undefined &&
     smartRouterInput !== undefined
@@ -344,13 +396,13 @@ export async function buildModel(
       selection: source,
     };
   }
-  if (isSmartRouterModelId(modelId)) {
-    throw new Error("Smart Router did not resolve to a concrete serving endpoint");
+  if (isSmartRouterModelId(modelId) || isAiDecideModelId(modelId)) {
+    throw new Error("Virtual model routing did not resolve to a concrete serving endpoint");
   }
   logger.debug("model selected", { modelId, source, requested });
   if (!route) {
-    if (source === SMART_ROUTER_MODEL_ID) {
-      throw new Error("Smart Router selection metadata is unavailable");
+    if (source === SMART_ROUTER_MODEL_ID || source === AI_DECIDE_MODEL_ID) {
+      throw new Error("Virtual model selection metadata is unavailable");
     }
     route = {
       model: modelId,
@@ -370,8 +422,8 @@ export async function buildModel(
   });
 }
 
-/** Append the virtual Smart Router endpoint only after its memoized live probe succeeds. */
-export async function withSmartRouterEndpoint(
+/** Append virtual model routers only after their memoized live probes succeed. */
+export async function withModelRouterEndpoints(
   endpoints: readonly ServingEndpointSummary[],
   client: WorkspaceClient,
 ): Promise<ServingEndpointSummary[]> {
@@ -379,7 +431,13 @@ export async function withSmartRouterEndpoint(
     endpoints.filter((endpoint) => endpointCapabilities(endpoint).tools),
     "codex",
   );
-  return (await smartRouter.isEnabled(candidates, client))
-    ? [SMART_ROUTER_ENDPOINT, ...endpoints]
-    : [...endpoints];
+  const [smartRouterEnabled, aiDecideEnabled] = await Promise.all([
+    smartRouter.isEnabled(candidates, client),
+    aiDecideRouter.isEnabled(endpoints, client),
+  ]);
+  return [
+    ...(smartRouterEnabled ? [SMART_ROUTER_ENDPOINT] : []),
+    ...(aiDecideEnabled ? [AI_DECIDE_ENDPOINT] : []),
+    ...endpoints,
+  ];
 }

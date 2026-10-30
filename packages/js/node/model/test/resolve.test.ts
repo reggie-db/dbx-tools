@@ -23,12 +23,17 @@ const EMBEDDING_TASK = "llm/v1/embeddings";
  * in these tests doesn't depend on quality quantiles.
  */
 function chat(name: string): ServingEndpointSummary {
-  return { name, task: CHAT_TASK };
+  return { name, task: CHAT_TASK, modelSource: "foundation" };
 }
 
 /** An embedding endpoint - classified into ModelClass.Embedding by task. */
 function embedding(name: string, dimension?: number): ServingEndpointSummary {
-  return { name, task: EMBEDDING_TASK, ...(dimension ? { dimension } : {}) };
+  return {
+    name,
+    task: EMBEDDING_TASK,
+    modelSource: "foundation",
+    ...(dimension ? { dimension } : {}),
+  };
 }
 
 const OPUS_8 = "databricks-claude-opus-4-8";
@@ -108,6 +113,41 @@ describe("searchServingEndpoints / resolveModelId", () => {
 });
 
 describe("listServingEndpointsUncached model policy", () => {
+  it("derives foundation versus custom source from served-entity metadata", async () => {
+    const client = {
+      servingEndpoints: {
+        async *list() {
+          yield {
+            name: "john-doe-databricks-chat",
+            task: CHAT_TASK,
+            config: { served_entities: [{ entity_name: "catalog.schema.custom_model" }] },
+          };
+          yield {
+            name: "company-friendly-name",
+            task: CHAT_TASK,
+            config: {
+              served_entities: [
+                {
+                  entity_name: "system.ai.gpt-5-4",
+                  foundation_model: { name: "system.ai.gpt-5-4" },
+                },
+              ],
+            },
+          };
+        },
+      },
+    } as unknown as WorkspaceClientLike;
+
+    const endpoints = await listServingEndpointsUncached(client);
+    assert.deepEqual(
+      endpoints.map(({ name, modelSource }) => ({ name, modelSource })),
+      [
+        { name: "john-doe-databricks-chat", modelSource: "custom" },
+        { name: "company-friendly-name", modelSource: "foundation" },
+      ],
+    );
+  });
+
   it("exposes TypeScript-derived family, reasoning, and tool metadata", async () => {
     const client = {
       servingEndpoints: {
@@ -193,6 +233,7 @@ describe("listServingEndpointsUncached model policy", () => {
       family: "grok",
       task: CHAT_TASK,
       description: "xAI reasoning model",
+      modelSource: "foundation",
       supportsTools: true,
       supportsStructuredOutput: true,
       serviceNames: { xai: "grok-4.7" },
@@ -208,6 +249,7 @@ describe("listServingEndpointsUncached model policy", () => {
       supportsTools: false,
       supportsStructuredOutput: true,
       profile: { quality: 5, speed: 3, cost: 2 },
+      modelSource: "foundation",
       class: ModelClass.ChatThinking,
       serviceNames: { google: "gemini-2.5-pro" },
       modelServiceName: "system.ai.gemini-2-5-pro",
@@ -300,7 +342,11 @@ describe("model resolution", () => {
   const lookupModelsForContract = (...args: Parameters<typeof lookupModels>) =>
     lookupModels(...args).map(({ endpoint, ...ranked }) => ({
       ...ranked,
-      endpoint: { name: endpoint.name, task: endpoint.task },
+      endpoint: {
+        name: endpoint.name,
+        task: endpoint.task,
+        ...(endpoint.modelSource ? { modelSource: endpoint.modelSource } : {}),
+      },
     }));
 
   describe("model resolution contract", () => {
@@ -620,6 +666,15 @@ describe("lookupModels", () => {
       ranked.map((m) => m.modelClass),
       [ModelClass.ChatThinking, ModelClass.ChatBalanced, ModelClass.ChatFast],
     );
+  });
+
+  it("defaults automatic ranking to foundation models and allows explicit source filters", () => {
+    const foundation = { ...chat(SONNET), modelSource: "foundation" as const };
+    const custom = { ...chat(OPUS_8), modelSource: "custom" as const };
+
+    assert.deepEqual(names(lookupModels([custom, foundation])), [SONNET]);
+    assert.deepEqual(names(lookupModels([custom, foundation], { modelSource: "custom" })), [OPUS_8]);
+    assert.deepEqual(names(lookupModels([custom], { search: "opus" })), [OPUS_8]);
   });
 
   it("excludes embeddings from the default (chat-only) ranking", () => {

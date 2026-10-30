@@ -183,6 +183,13 @@ function embeddingTarget(): ModelTarget {
     id: "databricks-gte-large-en",
     aliases: ["gte large"],
     displayName: "GTE Large",
+    endpoint: {
+      name: "databricks-gte-large-en",
+      task: "llm/v1/embeddings",
+      class: "embedding",
+      modelSource: "foundation",
+      status: { deprecated: false },
+    },
     capabilities: {
       responses: false,
       openResponses: false,
@@ -213,6 +220,7 @@ function chatTarget(): ModelTarget {
       name: "databricks-gpt-oss-120b",
       task: "llm/v1/chat",
       class: "chat-balanced",
+      modelSource: "foundation",
       status: { deprecated: false },
     },
     capabilities: {

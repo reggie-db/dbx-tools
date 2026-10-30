@@ -4,6 +4,7 @@
  * @module
  */
 
+import { normalizeModelContext } from "@dbx-tools/appkit-model-gateway";
 import { log, combineAbortSignals, toError, toDescription } from "@dbx-tools/shared-core";
 import {
   FOLLOW_UP_SUGGESTIONS_PART_TYPE,
@@ -176,31 +177,6 @@ function boundedText(value: string, maxChars: number): string {
   return trimmed.length <= maxChars ? trimmed : trimmed.slice(0, maxChars).trimEnd();
 }
 
-function suggestionContextText(value: unknown): string {
-  if (typeof value === "string") return boundedText(value, MAX_TURN_CONTEXT_CHARS);
-  if (value === undefined || value === null) return "";
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-    return String(value);
-  }
-  const seen = new WeakSet<object>();
-  try {
-    const json = JSON.stringify(value, (_key, nested) => {
-      if (typeof nested === "bigint") return String(nested);
-      if (typeof nested === "function" || typeof nested === "symbol") return undefined;
-      if (typeof nested === "string") return boundedText(nested, MAX_USER_TEXT_CHARS);
-      if (nested && typeof nested === "object") {
-        if (seen.has(nested)) return "[Circular]";
-        seen.add(nested);
-      }
-      if (Array.isArray(nested) && nested.length > 20) return nested.slice(-20);
-      return nested;
-    });
-    return boundedText(json ?? String(value), MAX_TURN_CONTEXT_CHARS);
-  } catch {
-    return boundedText(String(value), MAX_TURN_CONTEXT_CHARS);
-  }
-}
-
 function acceptedQuestions(
   questions: readonly string[],
   excludedQuestions: readonly string[],
@@ -245,8 +221,11 @@ export async function suggestQuestions(
     Math.min(30_000, Math.max(1_000, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)),
   );
   const abortSignal = combineAbortSignals(options.abortSignal, timeout);
+  const normalizedContext = await normalizeModelContext(context, {
+    tokenLimit: Math.ceil(MAX_TURN_CONTEXT_CHARS / 4),
+  });
   const prompt = toDescription({
-    Context: suggestionContextText(context),
+    Context: normalizedContext.task,
     ...(options.existingSuggestions?.length
       ? {
           "Existing suggestions": JSON.stringify(

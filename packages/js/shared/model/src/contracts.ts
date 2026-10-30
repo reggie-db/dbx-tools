@@ -61,6 +61,12 @@ export const ModelProfileSchema = z
 
 export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 
+export const ModelSourceSchema = z
+  .enum(["foundation", "custom"])
+  .describe("Whether Databricks reports the endpoint as a hosted foundation model or a custom deployment.");
+
+export type ModelSource = z.infer<typeof ModelSourceSchema>;
+
 export const ModelStatusSchema = z
   .object({
     deprecated: z
@@ -92,6 +98,9 @@ export const ServingEndpointSummarySchema = z
       .optional()
       .describe("True when published metadata documents structured output support."),
     profile: ModelProfileSchema.optional().describe("Relative quality, speed, and cost scores."),
+    modelSource: ModelSourceSchema.optional().describe(
+      "API-derived model source; foundation requires served_entities.foundation_model metadata.",
+    ),
     class: ModelClassSchema.optional().describe("Intent-oriented class assigned to this endpoint."),
     serviceNames: z
       .record(z.string(), z.string())
@@ -135,6 +144,9 @@ export const ModelQuerySchema = z
       .describe("When true, only endpoints documented for structured output are returned."),
     optimizeFor: ModelOptimizationSchema.optional().describe(
       "Prefer endpoint quality, speed, or cost within the eligible model classes.",
+    ),
+    modelSource: ModelSourceSchema.optional().describe(
+      "Restrict results to Databricks foundation models or custom deployments.",
     ),
     task: z.string().optional().describe("Exact Databricks serving task to retain."),
     dimension: z
@@ -347,6 +359,9 @@ export const ResolveModelOptionsSchema = z
       .boolean()
       .optional()
       .describe("When true, only tool-capable endpoints may match."),
+    modelSource: ModelSourceSchema.optional().describe(
+      "Restrict fuzzy matches to Databricks foundation models or custom deployments.",
+    ),
   })
   .describe("Pure controls for fuzzy endpoint resolution.");
 
@@ -384,6 +399,9 @@ export const ResolveModelInputSchema = z
       .describe("When true, only structured-output-capable endpoints may be selected."),
     optimizeFor: ModelOptimizationSchema.optional().describe(
       "Prefer endpoint quality, speed, or cost within the eligible model classes.",
+    ),
+    modelSource: ModelSourceSchema.optional().describe(
+      "Restrict selection to Databricks foundation models or custom deployments.",
     ),
     modelClass: ModelClassSchema.optional().describe(
       "Preferred intent-oriented class when no explicit model matches.",

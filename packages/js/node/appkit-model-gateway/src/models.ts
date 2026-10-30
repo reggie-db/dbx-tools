@@ -15,7 +15,7 @@ import {
   versionTuple,
 } from "@dbx-tools/model";
 import { ModelClass, ReasoningEffort } from "@dbx-tools/shared-model";
-import { SMART_ROUTER_MODEL_ID } from "@dbx-tools/shared-model-gateway";
+import { AI_DECIDE_MODEL_ID, SMART_ROUTER_MODEL_ID } from "@dbx-tools/shared-model-gateway";
 import type {
   CodexModel,
   CodexModelListResponse,
@@ -29,6 +29,7 @@ import type {
 const CODEX_BASE_INSTRUCTIONS =
   "You are a coding agent. Follow the user's instructions and use the available tools to work in the current repository.";
 const CODEX_SMART_ROUTER_PRIORITY = 9_000;
+const CODEX_AI_DECIDE_PRIORITY = 9_001;
 const CODEX_MODEL_PRIORITY_BASE = 10_000;
 const CODEX_FAMILY_ORDER = [
   ModelFamily.Gpt,
@@ -52,6 +53,7 @@ export function listModelsPayload(
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
+  includeAiDecide?: boolean,
 ): CodexModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -59,6 +61,7 @@ export function listModelsPayload(
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
+  includeAiDecide?: boolean,
 ): OpenAIModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -66,6 +69,7 @@ export function listModelsPayload(
   preserveOrder?: boolean,
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
+  includeAiDecide?: boolean,
 ): ModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -73,6 +77,7 @@ export function listModelsPayload(
   preserveOrder = false,
   preferSystemModels = false,
   includeSmartRouter = false,
+  includeAiDecide = false,
 ): ModelListResponse {
   const available = targets
     .filter((target) => target.endpoint?.status?.deprecated !== true)
@@ -85,6 +90,9 @@ export function listModelsPayload(
     );
   }
   const smartRouterCandidates = available.filter((target) => target.capabilities.chat);
+  if (includeAiDecide && smartRouterCandidates.length > 0) {
+    available.unshift(aiDecideModelTarget(smartRouterCandidates));
+  }
   if (includeSmartRouter && smartRouterCandidates.length > 0) {
     available.unshift(smartRouterModelTarget(smartRouterCandidates));
   }
@@ -96,7 +104,9 @@ export function listModelsPayload(
           target,
           target.id === SMART_ROUTER_MODEL_ID
             ? CODEX_SMART_ROUTER_PRIORITY
-            : CODEX_MODEL_PRIORITY_BASE + modelIndex++,
+            : target.id === AI_DECIDE_MODEL_ID
+              ? CODEX_AI_DECIDE_PRIORITY
+              : CODEX_MODEL_PRIORITY_BASE + modelIndex++,
           preferSystemModels,
         ),
       ),
@@ -115,10 +125,12 @@ function openAiModel(target: ModelTarget): OpenAIModel {
     created: 0,
     owned_by: "databricks",
     name: target.displayName,
+    model_source: target.endpoint?.modelSource ?? "custom",
     task: target.endpoint?.task,
     status: target.endpoint?.status ?? { deprecated: false },
     capabilities: {
       smart_router: target.id === SMART_ROUTER_MODEL_ID,
+      ai_decide: target.id === AI_DECIDE_MODEL_ID,
       tools: target.capabilities.tools,
       reasoning: target.reasoningEfforts,
       responses: target.capabilities.responses,
@@ -131,6 +143,46 @@ function openAiModel(target: ModelTarget): OpenAIModel {
       image_input: target.capabilities.imageInput,
       apply_patch: target.capabilities.applyPatch,
     },
+  };
+}
+
+function aiDecideModelTarget(candidates: readonly ModelTarget[]): ModelTarget {
+  const has = (capability: keyof ModelCapabilities) =>
+    candidates.some((target) => target.capabilities[capability]);
+  const reasoningEfforts = Object.values(ReasoningEffort).filter((effort) =>
+    candidates.some((target) => target.reasoningEfforts.includes(effort)),
+  );
+  return {
+    id: AI_DECIDE_MODEL_ID,
+    aliases: [AI_DECIDE_MODEL_ID],
+    displayName: "AI Decide",
+    endpoint: {
+      name: AI_DECIDE_MODEL_ID,
+      displayName: "AI Decide",
+      description: "Uses Databricks ai_decide to choose a sufficient foundation model.",
+      task: "llm/v1/chat",
+      class: ModelClass.ChatBalanced,
+      modelSource: "foundation",
+      status: { deprecated: false },
+    },
+    capabilities: {
+      responses: true,
+      openResponses: true,
+      chat: true,
+      anthropic: true,
+      embeddings: false,
+      aiGatewayCodex: true,
+      tools: has("tools"),
+      reasoning: reasoningEfforts.length > 0,
+      streaming: true,
+      parallelTools: has("parallelTools"),
+      customTools: has("customTools"),
+      structuredOutput: has("structuredOutput"),
+      webSearch: has("webSearch"),
+      imageInput: has("imageInput"),
+      applyPatch: has("applyPatch"),
+    },
+    reasoningEfforts,
   };
 }
 
@@ -151,6 +203,7 @@ function smartRouterModelTarget(candidates: readonly ModelTarget[]): ModelTarget
         "Uses Databricks task_v3 Smart Router to select a compatible system model for each turn.",
       task: "llm/v1/chat",
       class: ModelClass.ChatBalanced,
+      modelSource: "foundation",
       status: { deprecated: false },
     },
     capabilities: {

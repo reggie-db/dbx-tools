@@ -44,6 +44,7 @@ export function modelRoutePartData(
     model: route.model,
     selection: route.selection,
     ...(route.smartRouter ? { smartRouter: route.smartRouter } : {}),
+    ...(route.aiDecide ? { aiDecide: route.aiDecide } : {}),
     ...(pricing ? { pricing } : {}),
   });
 }

@@ -4,12 +4,15 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-model-gateway";
 export const PACKAGE_VERSION = "0.9.190";
+export * as aIDecide from "./src/ai-decide.ts";
 export * as client from "./src/client.ts";
 export * as contracts from "./src/contracts.ts";
 export * as models from "./src/models.ts";
 export * as options from "./src/options.ts";
 export * as smartRouter from "./src/smart-router.ts";
 export * as upstream from "./src/upstream.ts";
+export { AI_DECIDE_MODEL_ID, AI_DECIDE_SELECTED_MODEL_HEADER, AI_DECIDE_STRATEGY_HEADER, AI_DECIDE_CONFIDENCE_HEADER, AiDecideStrategySchema, AiDecideModelFiltersSchema, AiDecideObservationSchema, isAiDecideModelId } from "./src/ai-decide.ts";
+export type { AiDecideStrategy, AiDecideModelFilters, ResolvedAiDecideModelFilters, AiDecideObservation } from "./src/ai-decide.ts";
 export { ModelGatewayClientError, createModelGatewayClient } from "./src/client.ts";
 export type { ModelGatewayClientOptions, ListModelsOptions, ModelGatewayClient } from "./src/client.ts";
 export { ClientProtocolSchema, UpstreamProtocolSchema, ModelCapabilitiesSchema, ModelTargetSchema, RequestedFeaturesSchema, GatewayRouteSchema, ModelCapabilityOverrideSchema, ResolveRouteInputSchema } from "./src/contracts.ts";

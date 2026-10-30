@@ -31,12 +31,21 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SMART_ROUTER_MODEL = "smart-router";
+const AI_DECIDE_MODEL = "ai-decide";
 const GENIE_VALUE = "__genie__";
 const FALLBACK_SUGGESTIONS = [
   "Explain idempotency in API retries in two concise sentences.",
   "Compare optimistic and pessimistic locking, including when you would choose each.",
   "Design a zero-downtime plan to extract authentication from a TypeScript monolith, including rollout, rollback, observability, and data migration.",
 ] as const;
+const SUGGESTION_INSTRUCTIONS = [
+  "Return exactly three prompts in this order.",
+  "First: a simple, focused request that a small fast model can answer well.",
+  "Second: a moderately complex comparison or tradeoff that benefits from a balanced model.",
+  "Third: a complex design, planning, or multi-constraint reasoning task that merits a highly capable model.",
+  "Make the progression obvious enough to demonstrate model routing without mentioning models, routing, difficulty, or complexity.",
+  "Write each item as a self-contained user message and do not add labels or numbering.",
+].join(" ");
 
 type PaneDescriptor = {
   id: string;
@@ -133,6 +142,7 @@ const SmartRouter = () => {
             maxSuggestions: 3,
             maxTokens: 192,
             existingSuggestions: recentPrompts.current,
+            instructions: SUGGESTION_INSTRUCTIONS,
           },
           controller.signal,
         )
@@ -225,8 +235,8 @@ const SmartRouter = () => {
     const status = statuses[pane.id];
     return status ? isActiveChatStatus(status) : false;
   });
-  const submit = () => {
-    const text = prompt.trim();
+  const submit = (suggestedPrompt?: string) => {
+    const text = (suggestedPrompt ?? prompt).trim();
     if (!text || panes.length === 0) return;
     setPrompt("");
     setClearArmed(false);
@@ -335,19 +345,18 @@ const SmartRouter = () => {
           ) : (
             <SuggestionPills
               questions={suggestions}
-              onSelect={setPrompt}
+              onSelect={submit}
               className="flex-nowrap overflow-x-auto md:flex-nowrap md:overflow-x-auto"
             />
           )}
         </div>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <label className="min-w-0 flex-1 space-y-1.5">
-            <span className="text-sm font-medium">Shared input</span>
+          <label className="min-w-0 flex-1">
             <Textarea
               value={prompt}
               rows={2}
               className="min-h-20 resize-none text-base"
-              placeholder="Enter one prompt to send to every chat"
+              placeholder="Send a message…"
               onChange={(event) => setPrompt(event.target.value)}
             />
           </label>
@@ -459,7 +468,9 @@ const ModelChatPane = ({
         assistantTextBaseline.current = assistantTextLength(messagesRef.current);
         startedAt.current = now;
         setRequestUsage(undefined);
-        if (pane.initialModel === SMART_ROUTER_MODEL) setRoute(undefined);
+        if (pane.initialModel === SMART_ROUTER_MODEL || pane.initialModel === AI_DECIDE_MODEL) {
+          setRoute(undefined);
+        }
         chat.sendMessage({ text });
       },
       clear: async () => {
@@ -562,6 +573,7 @@ const ModelChatPane = ({
   const knownInitialModel =
     pane.kind === "mastra" &&
     pane.initialModel !== SMART_ROUTER_MODEL &&
+    pane.initialModel !== AI_DECIDE_MODEL &&
     pane.initialModel !== "gpt" &&
     pane.initialModel !== "claude"
       ? pane.initialModel

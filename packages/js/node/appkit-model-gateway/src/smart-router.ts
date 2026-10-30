@@ -22,10 +22,9 @@ import {
   type SmartRouterObservation,
   type SmartRouterRequest,
 } from "@dbx-tools/shared-model-gateway";
-import { Tiktoken } from "js-tiktoken/lite";
-import o200kBase from "js-tiktoken/ranks/o200k_base";
 import { z } from "zod";
 
+import { normalizeModelContext, type NormalizedModelContext } from "./model-context.ts";
 import { resolveRoute } from "./router.ts";
 
 const logger = log.logger("appkit/model-gateway/smart-router");
@@ -35,7 +34,6 @@ const PROBE_CACHE_NAMESPACE = "model-gateway-smart-router-probe";
 const PROBE_CACHE_VERSION = 1;
 const PROBE_TASK = "Check whether Smart Router can select an available model.";
 const NEGATIVE_PROBE_TTL_MS = 30_000;
-const CONTEXT_ENCODING = new Tiktoken(o200kBase);
 
 /** Runtime settings for Smart Router. */
 export interface SmartRouterSettings {
@@ -109,11 +107,7 @@ export interface SmartRouterResult {
 }
 
 /** Bounded task context extracted from an arbitrary supported input shape. */
-export interface SmartRouterContext {
-  readonly continuation: boolean;
-  readonly logicalTurn: string;
-  readonly task: string;
-}
+export type SmartRouterContext = NormalizedModelContext;
 
 /** Error carrying an HTTP status for Smart Router validation or availability failures. */
 export class SmartRouterError extends Error {
@@ -210,7 +204,7 @@ export class SmartRouterService {
     candidates: readonly SmartRouterCandidate<T>[],
     options: SmartRouterSelectOptions = {},
   ): Promise<SmartRouterSelection<T>> {
-    const task = this.context.build(input);
+    const task = await this.context.build(input);
     if (!task) throw new SmartRouterError(400, "Smart Router input contains no routable text");
     const client = options.client ?? getExecutionContext().client;
     try {
@@ -450,18 +444,13 @@ export class SmartRouterContextBuilder {
   constructor(private readonly tokenBudget = 4_096) {}
 
   /** Return only the bounded task prompt required by routes:select. */
-  build(input: unknown): string {
-    return this.analyze(input).task;
+  async build(input: unknown): Promise<string> {
+    return (await this.analyze(input)).task;
   }
 
   /** Return bounded task text plus logical-turn metadata used for pinning. */
-  analyze(input: unknown): SmartRouterContext {
-    const normalized = parseJsonString(input);
-    const events = conversationEvents(normalized);
-    if (events.length > 0) return contextFromEvents(events, this.tokenBudget);
-    const values = collectTaskStrings(normalized);
-    const task = truncateText(values.join("\n"), this.tokenBudget, "start");
-    return { task, logicalTurn: task, continuation: false };
+  analyze(input: unknown): Promise<SmartRouterContext> {
+    return normalizeModelContext(input, { tokenLimit: this.tokenBudget });
   }
 }
 
@@ -520,7 +509,7 @@ export class SmartModelRouter {
       );
     }
 
-    const context = this.service.context.analyze(input.body);
+    const context = await this.service.context.analyze(input.body);
     if (!context.task) {
       throw new SmartRouterError(400, "Smart Router request contains no task text");
     }
@@ -668,174 +657,6 @@ function requestedReasoningEffort(
     throw new SmartRouterError(400, `Unsupported Smart Router reasoning effort: ${String(raw)}`);
   }
   return parsed.data;
-}
-
-interface ConversationEvent {
-  readonly role: "assistant" | "system" | "tool" | "user";
-  readonly text: string;
-}
-
-function contextFromEvents(
-  events: readonly ConversationEvent[],
-  tokenBudget: number,
-): SmartRouterContext {
-  const latestUserIndex = lastEventIndex(events, "user");
-  const taskEvent = latestUserIndex >= 0 ? events[latestUserIndex] : events.at(-1);
-  const task = truncateText(taskEvent?.text ?? "", tokenBudget, "start");
-  let remaining = Math.max(0, tokenBudget - countTokens(task));
-  const context: string[] = [];
-  for (
-    let index = (taskEvent ? events.indexOf(taskEvent) : events.length) - 1;
-    index >= 0;
-    index -= 1
-  ) {
-    const event = events[index];
-    if (!event || !event.text || event.role === "tool") continue;
-    const value = `${event.role}: ${event.text}`;
-    const retained = truncateText(value, remaining, "end");
-    if (!retained) break;
-    context.unshift(retained);
-    remaining -= countTokens(retained);
-  }
-  const combined = [...context, task].filter(Boolean).join("\n");
-  const logicalEvents = latestUserIndex >= 0 ? events.slice(0, latestUserIndex + 1) : events;
-  return {
-    task: combined,
-    logicalTurn: logicalEvents.map((event) => `${event.role}:${event.text}`).join("\n"),
-    continuation:
-      latestUserIndex >= 0 &&
-      events.slice(latestUserIndex + 1).some((event) => event.role !== "system"),
-  };
-}
-
-function conversationEvents(input: unknown): ConversationEvent[] {
-  if (typeof input === "string") return input.trim() ? [{ role: "user", text: input.trim() }] : [];
-  if (Array.isArray(input)) return input.flatMap(messageEvent);
-  if (!isRecord(input)) return [];
-  for (const key of ["messages", "input"] as const) {
-    const value = input[key];
-    if (typeof value === "string" && value.trim()) return [{ role: "user", text: value.trim() }];
-    if (Array.isArray(value)) {
-      const events = value.flatMap(messageEvent);
-      if (events.length > 0) return events;
-    }
-  }
-  return [];
-}
-
-function messageEvent(value: unknown): ConversationEvent[] {
-  if (typeof value === "string") return value.trim() ? [{ role: "user", text: value.trim() }] : [];
-  if (!isRecord(value)) return [];
-  const role = messageRole(value);
-  if (!role) return [];
-  const text = contentText(value.content ?? value.text ?? value.input_text ?? value.output_text);
-  return text ? [{ role, text }] : [];
-}
-
-function messageRole(
-  value: Readonly<Record<string, unknown>>,
-): ConversationEvent["role"] | undefined {
-  if (value.role === "user" || value.role === "assistant" || value.role === "system") {
-    return value.role;
-  }
-  if (
-    value.role === "tool" ||
-    value.type === "function_call_output" ||
-    value.type === "tool_result"
-  ) {
-    return "tool";
-  }
-  if (value.type === "function_call" || value.type === "reasoning") return "assistant";
-  if (value.type === "message" && value.role === undefined) return "user";
-  return undefined;
-}
-
-function contentText(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (Array.isArray(value)) return value.map(contentText).filter(Boolean).join("\n");
-  if (!isRecord(value)) return "";
-  for (const key of ["text", "input_text", "output_text", "content"] as const) {
-    const text = contentText(value[key]);
-    if (text) return text;
-  }
-  return "";
-}
-
-const TASK_KEYS = [
-  "prompt",
-  "task",
-  "query",
-  "question",
-  "request",
-  "description",
-  "message",
-  "text",
-  "input",
-] as const;
-const IGNORED_KEYS = new Set([
-  "api_key",
-  "authorization",
-  "arguments",
-  "credentials",
-  "headers",
-  "metadata",
-  "password",
-  "secret",
-  "token",
-  "tools",
-]);
-
-function collectTaskStrings(input: unknown): string[] {
-  if (typeof input === "string") return input.trim() ? [input.trim()] : [];
-  const preferred: string[] = [];
-  if (isRecord(input)) {
-    for (const key of TASK_KEYS) preferred.push(...stringLeaves(input[key], key, 0));
-  }
-  return preferred.length > 0 ? preferred.slice(0, 32) : stringLeaves(input, "", 0).slice(0, 32);
-}
-
-function stringLeaves(value: unknown, key: string, depth: number): string[] {
-  if (depth > 6 || IGNORED_KEYS.has(key.toLowerCase())) return [];
-  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
-  if (Array.isArray(value)) return value.flatMap((item) => stringLeaves(item, key, depth + 1));
-  if (!isRecord(value)) return [];
-  return Object.entries(value).flatMap(([childKey, child]) =>
-    stringLeaves(child, childKey, depth + 1),
-  );
-}
-
-function parseJsonString(input: unknown): unknown {
-  if (typeof input !== "string") return input;
-  const trimmed = input.trim();
-  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return input;
-  try {
-    return JSON.parse(trimmed) as unknown;
-  } catch {
-    return input;
-  }
-}
-
-function countTokens(text: string): number {
-  return CONTEXT_ENCODING.encode(text, [], []).length;
-}
-
-function truncateText(text: string, tokenBudget: number, edge: "start" | "end"): string {
-  if (tokenBudget <= 0 || !text) return "";
-  const tokens = CONTEXT_ENCODING.encode(text, [], []);
-  if (tokens.length <= tokenBudget) return text;
-  return CONTEXT_ENCODING.decode(
-    edge === "start" ? tokens.slice(0, tokenBudget) : tokens.slice(-tokenBudget),
-  );
-}
-
-function lastEventIndex(
-  events: readonly ConversationEvent[],
-  role: ConversationEvent["role"],
-): number {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    if (events[index]?.role === role) return index;
-  }
-  return -1;
 }
 
 function uniqueCandidates<T>(

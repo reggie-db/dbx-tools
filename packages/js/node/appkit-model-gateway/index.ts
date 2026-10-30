@@ -4,7 +4,9 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-model-gateway";
 export const PACKAGE_VERSION = "0.9.190";
+export * as aIDecide from "./src/ai-decide.ts";
 export * as gateway from "./src/gateway.ts";
+export * as modelContext from "./src/model-context.ts";
 export * as models from "./src/models.ts";
 export * as plugin from "./src/plugin.ts";
 export * as reasoningAdapt from "./src/reasoning-adapt.ts";
@@ -14,8 +16,12 @@ export * as routes from "./src/routes.ts";
 export * as smartRouter from "./src/smart-router.ts";
 export * as translation from "./src/translation.ts";
 export * as transport from "./src/transport.ts";
+export { AiDecideRouterService, AiDecideRouterError } from "./src/ai-decide.ts";
+export type { AiDecideSelectionOptions, AiDecideSelection } from "./src/ai-decide.ts";
 export { ModelGatewayError, ModelGateway, sanitizeInferenceBody, adaptInferenceTemperature, gatewayModelSelection } from "./src/gateway.ts";
 export type { ModelGatewayOptions } from "./src/gateway.ts";
+export { normalizeModelContext } from "./src/model-context.ts";
+export type { ModelContextEvent, NormalizeModelContextOptions, NormalizedModelContext } from "./src/model-context.ts";
 export { listModelsPayload, codexModelSlug } from "./src/models.ts";
 export { ModelGatewayPlugin, modelGateway } from "./src/plugin.ts";
 export type { ModelGatewayPluginConfig } from "./src/plugin.ts";

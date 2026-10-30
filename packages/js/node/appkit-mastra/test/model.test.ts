@@ -71,15 +71,28 @@ describe("Mastra serving API selection", () => {
     const previous = process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
     delete process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
     const endpoints: ServingEndpointSummary[] = [
-      { name: "databricks-claude-opus-4-7", task: "llm/v1/chat" },
-      { name: "databricks-claude-opus-4-8", task: "llm/v1/chat" },
+      {
+        name: "databricks-claude-opus-4-7",
+        task: "llm/v1/chat",
+        modelSource: "foundation",
+      },
+      {
+        name: "databricks-claude-opus-4-8",
+        task: "llm/v1/chat",
+        modelSource: "foundation",
+      },
       {
         name: "databricks-gpt-5-4",
         task: "llm/v1/chat",
+        modelSource: "foundation",
         profile: { quality: 57, speed: 76.9, cost: 5.63 },
       },
-      { name: "databricks-gpt-6-1-sol", task: "llm/v1/chat" },
-      { name: "databricks-gte-large-en", task: "llm/v1/embeddings" },
+      { name: "databricks-gpt-6-1-sol", task: "llm/v1/chat", modelSource: "foundation" },
+      {
+        name: "databricks-gte-large-en",
+        task: "llm/v1/embeddings",
+        modelSource: "foundation",
+      },
     ];
     try {
       assert.equal(resolveDefaultModelId({}, endpoints), "databricks-gpt-6-1-sol");
@@ -93,7 +106,11 @@ describe("Mastra serving API selection", () => {
     assert.equal(
       resolveDefaultModelId({}, [
         SMART_ROUTER_ENDPOINT,
-        { name: "databricks-gpt-6-1-sol", task: "llm/v1/chat" },
+        {
+          name: "databricks-gpt-6-1-sol",
+          task: "llm/v1/chat",
+          modelSource: "foundation",
+        },
       ]),
       "smart-router",
     );
@@ -184,10 +201,26 @@ describe("Mastra serving API selection", () => {
           yield {
             name: "databricks-gpt-6-1-sol",
             task: "llm/v1/chat",
+            config: {
+              served_entities: [
+                {
+                  entity_name: "system.ai.databricks-gpt-6-1-sol",
+                  foundation_model: { name: "system.ai.databricks-gpt-6-1-sol" },
+                },
+              ],
+            },
           };
           yield {
             name: "databricks-gpt-5-nano",
             task: "llm/v1/chat",
+            config: {
+              served_entities: [
+                {
+                  entity_name: "system.ai.databricks-gpt-5-nano",
+                  foundation_model: { name: "system.ai.databricks-gpt-5-nano" },
+                },
+              ],
+            },
           };
         },
       },
@@ -249,6 +282,14 @@ describe("Mastra serving API selection", () => {
           yield {
             name: "databricks-gpt-5-nano",
             task: "llm/v1/chat",
+            config: {
+              served_entities: [
+                {
+                  entity_name: "system.ai.databricks-gpt-5-nano",
+                  foundation_model: { name: "system.ai.databricks-gpt-5-nano" },
+                },
+              ],
+            },
           };
         },
       },

@@ -44,7 +44,14 @@ export function rankEndpoints(
   query: ModelQuery = {},
   options: NativeRankingOptions = {},
 ): RankedModel[] {
-  const filtered = endpoints.filter((endpoint) => matchesModelQuery(endpoint, query));
+  const defaultModelSource =
+    query.modelSource ?? (query.name === undefined && query.search === undefined ? "foundation" : undefined);
+  const filtered = endpoints.filter(
+    (endpoint) =>
+      (defaultModelSource === undefined ||
+        endpoint.modelSource === defaultModelSource) &&
+      matchesModelQuery(endpoint, query),
+  );
   const originalByName = new Map(filtered.map((endpoint) => [endpoint.name, endpoint]));
   const normalized = filtered.map((endpoint) => ({
     ...endpoint,
@@ -250,6 +257,9 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
       )
       .find(Boolean);
     const foundationModels = entities.map((entity) => record(entity.foundation_model));
+    const modelSource = foundationModels.some((model) => Object.keys(model).length > 0)
+      ? "foundation"
+      : "custom";
     const family =
       foundationModels.map((model) => trimToUndefined(model.model_class)).find(Boolean) ??
       identities.map(modelFamily).find(Boolean);
@@ -281,6 +291,7 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
         (identity) => modelCapabilitiesFor(identity).structuredOutput,
       ),
       ...(profile ? { profile } : {}),
+      modelSource,
       serviceNames: Object.assign({}, ...identities.map(modelServiceNames)),
       ...(modelServiceName ? { modelServiceName } : {}),
       ...(reasoningEfforts.length ? { reasoningEfforts } : {}),

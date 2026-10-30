@@ -4,12 +4,17 @@
  * @module
  */
 
-import { ReasoningEffortSchema, ModelStatusSchema } from "@dbx-tools/shared-model";
+import {
+  ReasoningEffortSchema,
+  ModelSourceSchema,
+  ModelStatusSchema,
+} from "@dbx-tools/shared-model";
 import { z } from "zod";
 
 /** Capabilities published with an OpenAI-compatible model entry. */
 export const OpenAIModelCapabilitiesSchema = z.object({
   smart_router: z.boolean().describe("True for the virtual Databricks Smart Router model."),
+  ai_decide: z.boolean().describe("True for the virtual Databricks ai_decide model router."),
   tools: z.boolean(),
   reasoning: z.array(ReasoningEffortSchema),
   responses: z.boolean(),
@@ -32,6 +37,7 @@ export const OpenAIModelSchema = z.object({
   created: z.number().int().nonnegative(),
   owned_by: z.string().min(1),
   name: z.string().min(1),
+  model_source: ModelSourceSchema.describe("API-derived foundation or custom model source."),
   task: z.string().optional(),
   status: ModelStatusSchema,
   capabilities: OpenAIModelCapabilitiesSchema,

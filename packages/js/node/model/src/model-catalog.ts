@@ -260,6 +260,7 @@ export function searchServingEndpoints(
     {
       search: input,
       ...(options.requiresTools !== undefined ? { requiresTools: options.requiresTools } : {}),
+      ...(options.modelSource !== undefined ? { modelSource: options.modelSource } : {}),
       threshold: options.threshold ?? DEFAULT_FUZZY_THRESHOLD,
     },
     {

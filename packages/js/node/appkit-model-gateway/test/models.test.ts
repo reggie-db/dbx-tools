@@ -56,6 +56,17 @@ describe("model gateway catalogue", () => {
     assert.equal(payload.data[0]?.capabilities.apply_patch, true);
   });
 
+  it("publishes ai-decide only when its live capability probe enables it", () => {
+    const openAi = listModelsPayload([target("gpt")], false, false, false, false, true);
+    const codex = listModelsPayload([target("gpt")], true, false, false, false, true);
+
+    assert.equal(openAi.data[0]?.id, "ai-decide");
+    assert.equal(openAi.data[0]?.model_source, "foundation");
+    assert.equal(openAi.data[0]?.capabilities.ai_decide, true);
+    assert.equal(codex.models[0]?.slug, "databricks/ai-decide");
+    assert.equal(codex.models[0]?.priority, 9001);
+  });
+
   it("derives Codex slugs from the model-service name when AI Gateway Codex is available", () => {
     const gpt = target("gpt", { responses: true, openResponses: false, customTools: true });
     const claude = target("claude", { anthropic: true, aiGatewayCodex: false });

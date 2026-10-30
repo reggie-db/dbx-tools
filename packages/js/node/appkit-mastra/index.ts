@@ -67,7 +67,7 @@ export { AgentTraceSpanProcessor, ucTracePrefixFromExperimentTags, resetUcTraceP
 export type { AppMlflowTraceInfo, LogFeedbackParams } from "./src/mlflow.ts";
 export { modelRoutePartData, modelUsagePartData, emitModelRoutePart, emitModelUsagePart } from "./src/model-usage.ts";
 export type { MastraTurnUsage, MastraFinishWriter } from "./src/model-usage.ts";
-export { SMART_ROUTER_ENDPOINT, RESPONSES_PROVIDER_OPTIONS, servingApi, resolveModelWorkspaceClient, resolveDefaultModelId, buildModel, withSmartRouterEndpoint } from "./src/model.ts";
+export { SMART_ROUTER_ENDPOINT, AI_DECIDE_ENDPOINT, RESPONSES_PROVIDER_OPTIONS, servingApi, resolveModelWorkspaceClient, resolveDefaultModelId, buildModel, withModelRouterEndpoints } from "./src/model.ts";
 export type { BuildModelOverrides } from "./src/model.ts";
 export { montyMaxProcesses, MontySandbox } from "./src/monty-sandbox.ts";
 export type { MontySandboxOptions } from "./src/monty-sandbox.ts";

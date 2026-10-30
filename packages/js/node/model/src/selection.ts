@@ -47,6 +47,7 @@ export function rankModelId(
       limit: 1,
       ...(options.threshold !== undefined ? { threshold: options.threshold } : {}),
       ...(options.requiresTools !== undefined ? { requiresTools: options.requiresTools } : {}),
+      ...(options.modelSource !== undefined ? { modelSource: options.modelSource } : {}),
     },
     policy,
   );
@@ -113,6 +114,7 @@ function buildQuery(input: ResolveModelInput, search: string | undefined): Model
       ? { requiresStructuredOutput: input.requiresStructuredOutput }
       : {}),
     ...(input.optimizeFor !== undefined ? { optimizeFor: input.optimizeFor } : {}),
+    ...(input.modelSource !== undefined ? { modelSource: input.modelSource } : {}),
     ...(input.threshold !== undefined ? { threshold: input.threshold } : {}),
     limit: 1,
   };

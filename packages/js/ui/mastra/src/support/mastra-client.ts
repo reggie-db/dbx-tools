@@ -25,7 +25,11 @@ import {
   type GenieVisualizationEmbed,
   genieVisualizationImagePath,
 } from "@dbx-tools/shared-mastra";
-import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
+import type {
+  ModelSource,
+  ReasoningEffort,
+  ServingEndpointSummary,
+} from "@dbx-tools/shared-model";
 import {
   MastraClient,
   type ListAgentSuspendedRunsResponse,
@@ -367,9 +371,13 @@ export class MastraPluginClient extends MastraClient {
    * publishes (server-cached for ~5 minutes); callers filter to
    * chat-capable models for a picker.
    */
-  async models(signal?: AbortSignal): Promise<ServingEndpointSummary[]> {
+  async models(
+    signal?: AbortSignal,
+    modelSource: ModelSource | "all" = "foundation",
+  ): Promise<ServingEndpointSummary[]> {
+    const query = new URLSearchParams({ modelSource });
     const payload = await this.getJson(
-      `${this.basePath}${MASTRA_ROUTES.models}`,
+      `${this.basePath}${MASTRA_ROUTES.models}?${query.toString()}`,
       ServingEndpointsResponseSchema,
       signal,
     );
@@ -380,8 +388,9 @@ export class MastraPluginClient extends MastraClient {
   async resolveModel(
     search: string,
     signal?: AbortSignal,
+    modelSource: ModelSource | "all" = "foundation",
   ): Promise<ServingEndpointSummary | undefined> {
-    const query = new URLSearchParams({ search, limit: "1" });
+    const query = new URLSearchParams({ search, limit: "1", modelSource });
     const payload = await this.getJson(
       `${this.basePath}${MASTRA_ROUTES.models}?${query.toString()}`,
       ServingEndpointsResponseSchema,

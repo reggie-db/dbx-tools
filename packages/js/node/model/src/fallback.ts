@@ -50,6 +50,7 @@ const FALLBACK_MODEL_NAMES: readonly string[] = [
 const FALLBACK_ENDPOINTS: readonly ServingEndpointSummary[] = FALLBACK_MODEL_NAMES.map((name) => ({
   name,
   task: "llm/v1/chat",
+  modelSource: "foundation",
 }));
 
 /**

@@ -18,7 +18,10 @@ import {
   MODEL_OVERRIDE_QUERY,
   MODEL_OVERRIDE_BODY_FIELDS,
 } from "@dbx-tools/shared-mastra";
-import type { SmartRouterObservation } from "@dbx-tools/shared-model-gateway";
+import type {
+  AiDecideObservation,
+  SmartRouterObservation,
+} from "@dbx-tools/shared-model-gateway";
 
 import type { MastraPluginConfig } from "./config.ts";
 
@@ -43,9 +46,11 @@ export interface MastraModelRoute {
   /** Concrete serving endpoint selected for the turn. */
   model: string;
   /** Policy branch that selected the concrete endpoint. */
-  selection: "smart-router" | "explicit" | "fuzzy-match" | "class" | "fallback";
+  selection: "smart-router" | "ai-decide" | "explicit" | "fuzzy-match" | "class" | "fallback";
   /** Full Smart Router decision when the virtual model selected the endpoint. */
   smartRouter?: SmartRouterObservation;
+  /** Full ai_decide decision when that virtual model selected the endpoint. */
+  aiDecide?: AiDecideObservation;
 }
 
 /**

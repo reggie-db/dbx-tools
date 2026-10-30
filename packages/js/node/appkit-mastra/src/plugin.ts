@@ -94,7 +94,11 @@ import {
   GenieChatRequestSchema,
   GenieVisualizationModeSchema,
 } from "@dbx-tools/shared-mastra";
-import { type ServingEndpointSummary, toModelDisplayName } from "@dbx-tools/shared-model";
+import {
+  type ModelSource,
+  type ServingEndpointSummary,
+  toModelDisplayName,
+} from "@dbx-tools/shared-model";
 import { workflowRoute } from "@mastra/ai-sdk";
 import type { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
@@ -151,7 +155,7 @@ import {
   mlflowExperimentViewerUrl,
   mlflowUcTracePrefix,
 } from "./mlflow.ts";
-import { resolveDefaultModelId, withSmartRouterEndpoint } from "./model.ts";
+import { resolveDefaultModelId, withModelRouterEndpoints } from "./model.ts";
 import { buildObservability, configureOtelPropagation } from "./observability.ts";
 import { provisionRemoteSkills } from "./remote-skills.ts";
 import {
@@ -573,15 +577,32 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       method: "get",
       path: MASTRA_ROUTES.models,
       handler: async (req, res) => {
+        const requestedSource = firstNonEmpty(req.query.modelSource);
+        if (
+          requestedSource !== null &&
+          requestedSource !== "all" &&
+          requestedSource !== "foundation" &&
+          requestedSource !== "custom"
+        ) {
+          res.status(400).json({ error: "modelSource must be foundation, custom, or all" });
+          return;
+        }
         const result = await this.scopedSelf(req).listModelsResult();
         if (!result.ok) {
           this.sendFailure(res, result, "models", MODEL_CATALOGUE_FAILED_MESSAGE);
           return;
         }
+        const source: ModelSource | undefined =
+          requestedSource === "all" ? undefined : (requestedSource ?? "foundation");
+        const endpoints = source
+          ? result.data.filter((endpoint) => endpoint.modelSource === source)
+          : result.data;
         const search = firstNonEmpty(req.query.search);
         const ranked = search
-          ? modelCatalog.searchServingEndpoints(search, result.data).map((match) => match.endpoint)
-          : result.data;
+          ? modelCatalog
+              .searchServingEndpoints(search, endpoints, source ? { modelSource: source } : {})
+              .map((match) => match.endpoint)
+          : endpoints;
         const limit = parseModelLimit(req.query.limit);
         res.json({ endpoints: limit === undefined ? ranked : ranked.slice(0, limit) });
       },
@@ -1314,6 +1335,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       maxSuggestions: request.maxSuggestions,
       maxTokens: request.maxTokens,
       existingSuggestions: request.existingSuggestions,
+      ...(request.instructions ? { instructions: request.instructions } : {}),
       requestContext,
       ...(signal ? { abortSignal: signal } : {}),
     });
@@ -1496,7 +1518,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         ttlMs: serving.ttlMs,
         cacheIdentity,
       });
-      return withSmartRouterEndpoint(endpoints, client);
+      return withModelRouterEndpoints(endpoints, client);
     }, modelCatalogueDefaults);
   }
 

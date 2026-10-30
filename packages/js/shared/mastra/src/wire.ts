@@ -37,7 +37,10 @@ import {
   GenieChatEventSchema,
 } from "@dbx-tools/shared-genie";
 import { ModelTokenPriceSchema, ServingEndpointSummarySchema } from "@dbx-tools/shared-model";
-import { SmartRouterObservationSchema } from "@dbx-tools/shared-model-gateway";
+import {
+  AiDecideObservationSchema,
+  SmartRouterObservationSchema,
+} from "@dbx-tools/shared-model-gateway";
 import { z } from "zod";
 import { FeedbackDestinationsSchema } from "./feedback.ts";
 import { GenieVisualizationModeSchema } from "./genie-visualization.ts";
@@ -198,6 +201,13 @@ export const MastraSuggestionGenerationRequestSchema = z
       .array(z.string().trim().min(1))
       .default([])
       .describe("Questions the generator should avoid repeating."),
+    instructions: z
+      .string()
+      .trim()
+      .min(1)
+      .max(20_000)
+      .optional()
+      .describe("Optional caller instructions that replace the default suggestion policy."),
   })
   .describe("Request for context-aware next-question generation.");
 /** Browser request for context-aware next-question generation. */
@@ -595,10 +605,13 @@ export const ModelRoutePartDataSchema = z
     runId: z.string().optional().describe("Mastra run id using this model route."),
     model: z.string().trim().min(1).describe("Concrete serving endpoint selected for the turn."),
     selection: z
-      .enum(["smart-router", "explicit", "fuzzy-match", "class", "fallback"])
+      .enum(["smart-router", "ai-decide", "explicit", "fuzzy-match", "class", "fallback"])
       .describe("Policy branch that selected the concrete model."),
     smartRouter: SmartRouterObservationSchema.optional().describe(
       "Smart Router decision details when the virtual model selected the endpoint.",
+    ),
+    aiDecide: AiDecideObservationSchema.optional().describe(
+      "Databricks ai_decide details when the virtual model selected the endpoint.",
     ),
     pricing: ModelTokenPriceSchema.optional().describe(
       "Databricks standard list-price row selected for live token-cost estimates.",

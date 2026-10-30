@@ -71,10 +71,10 @@ describe("Smart Router service", () => {
     service.dispose();
   });
 
-  it("extracts task context from Responses, messages JSON, generic objects, and text", () => {
+  it("extracts task context from Responses, messages JSON, generic objects, and text", async () => {
     const builder = new SmartRouterContextBuilder(1_024);
     assert.match(
-      builder.build({
+      await builder.build({
         input: [
           { role: "user", content: [{ type: "input_text", text: "Refactor the parser" }] },
           { type: "function_call", name: "shell", arguments: "do-not-include" },
@@ -86,13 +86,16 @@ describe("Smart Router service", () => {
     const messagesJson = JSON.stringify({
       messages: [{ role: "user", content: "Investigate the authorization failure" }],
     });
-    assert.match(builder.build(messagesJson), /authorization failure/);
+    assert.match(await builder.build(messagesJson), /authorization failure/);
     assert.equal(
-      builder.build({ request: { question: "Summarize the report" } }),
+      await builder.build({ request: { question: "Summarize the report" } }),
       "Summarize the report",
     );
-    assert.equal(builder.build("Plain text task"), "Plain text task");
-    assert.equal(builder.build({ prompt: "safe", token: "secret" }).includes("secret"), false);
+    assert.equal(await builder.build("Plain text task"), "Plain text task");
+    assert.equal(
+      (await builder.build({ prompt: "safe", token: "secret" })).includes("secret"),
+      false,
+    );
   });
 
   it("calls task_v3 and maps the selected route back to its candidate", async () => {
@@ -292,12 +295,12 @@ describe("Smart Router gateway orchestration", () => {
     const builder = new SmartRouterContextBuilder();
     assert.equal(
       smartRouterTurnKey(
-        builder.analyze(initial).logicalTurn,
+        (await builder.analyze(initial)).logicalTurn,
         smartRouterCandidates(targets(), "codex"),
         { protocol: "openai-chat" },
       ),
       smartRouterTurnKey(
-        builder.analyze(continuation).logicalTurn,
+        (await builder.analyze(continuation)).logicalTurn,
         smartRouterCandidates(targets(), "codex"),
         { protocol: "openai-chat" },
       ),
