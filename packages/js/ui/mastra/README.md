@@ -210,6 +210,10 @@ Configure the client with these options:
 - `threadId` and `onThreadIdChange` let a host bind the active conversation to
   URL state or another external selector. Unknown external IDs are replaced by
   a new thread and reported with the `missing` reason.
+- `conversationHistory="browser"` sends the complete browser-held transcript
+  with each turn for agents without Mastra memory. The default `"memory"`
+  sends only the newest message because the persisted Mastra thread is the
+  authoritative history.
 - `enableExport` adds whole-conversation and per-message export affordances.
 - Feedback defaults to auto: thumbs, dislike, and comment controls appear when
   the server reports MLflow feedback is available and a turn produced a trace

@@ -19,6 +19,9 @@ export type SessionRun = {
   requestContext?: RequestContext;
 };
 
+/** Source of prior messages supplied to Mastra for a new turn. */
+export type ConversationHistorySource = "memory" | "browser";
+
 /** Session-scoped transcript + stream state for one conversation thread. */
 export type ThreadSession = {
   messages: UIMessage[];
@@ -88,6 +91,24 @@ export function interruptedTurnMessages(
   const interrupted = lastUserMessage(messages);
   if (!interrupted || interrupted.id === nextMessage.id) return [nextMessage];
   return [interrupted, nextMessage];
+}
+
+/**
+ * Build the message payload Mastra recommends for the configured history source.
+ * Stored memory remains authoritative when enabled; otherwise the browser sends
+ * its full visible transcript and omits an interrupted partial assistant reply.
+ */
+export function conversationRequestMessages(
+  source: ConversationHistorySource,
+  messages: readonly UIMessage[],
+  latest: UIMessage,
+  activeAssistantId?: string | null,
+): UIMessage | UIMessage[] {
+  if (source === "memory") return latest;
+  const retained = activeAssistantId
+    ? messages.filter((message) => message.id !== activeAssistantId)
+    : [...messages];
+  return retained.some((message) => message.id === latest.id) ? retained : [...retained, latest];
 }
 
 /** Append a steer to the queue (oldest first). Returns a new array. */

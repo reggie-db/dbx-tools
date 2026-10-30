@@ -53,6 +53,8 @@ import {
 } from "../support/request-context.ts";
 import { threadStorageKey } from "../support/thread-persistence.ts";
 import {
+  conversationRequestMessages,
+  type ConversationHistorySource,
   DEFAULT_THREAD_SESSION_KEY,
   enqueueSteer,
   interruptedTurnMessages,
@@ -204,6 +206,13 @@ export interface UseMastraChatOptions<
   /** Optimization objective used when {@link model} is the `ai-decide` virtual model. */
   aiDecideStrategy?: AiDecideStrategy;
   /**
+   * Conversation context source. `"memory"` sends only the newest message and
+   * lets Mastra's stored thread remain authoritative. `"browser"` sends the
+   * full browser-held transcript, as Mastra recommends for agents without memory.
+   * Defaults to `"memory"` for backward compatibility.
+   */
+  conversationHistory?: ConversationHistorySource;
+  /**
    * Whether a message submitted during an active turn waits in the steer
    * queue. Defaults to true. Set false to interrupt the active turn and start
    * the replacement immediately.
@@ -316,6 +325,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const showModelPicker = Boolean(options.showModelPicker) && !genieSpace;
   const controlledModel = options.model?.trim() || undefined;
   const queueMessages = options.queueMessages !== false;
+  const conversationHistory = options.conversationHistory ?? "memory";
   const modelKey = modelStorageKey(mastraClient.basePath, agentId);
   const [model, setModel] = useState(() => (showModelPicker ? readStoredModel(modelKey) : ""));
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | undefined>();
@@ -1016,8 +1026,12 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       ...session,
       queuedSteers: removeSteerFromQueue(session.queuedSteers, head.id),
     }));
-    const { message } = appendUserMessage(threadId, head.text ?? "", head.files);
-    void runStream(threadId, message, head.requestContext);
+    const { message, next } = appendUserMessage(threadId, head.text ?? "", head.files);
+    void runStream(
+      threadId,
+      conversationRequestMessages(conversationHistory, next, message),
+      head.requestContext,
+    );
   };
 
   // Cancel a thread's in-flight run. Defaults to the active thread (the
@@ -1202,13 +1216,25 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           await interruptActiveRun(threadId);
           const replacementThreadId = resolveThreadId(threadId);
           const { message: replacement } = appendUserMessage(replacementThreadId, text, files);
-          const replacementMessages = interruptedTurnMessages(current.messages, replacement);
+          const replacementMessages =
+            conversationHistory === "browser"
+              ? conversationRequestMessages(
+                  conversationHistory,
+                  current.messages,
+                  replacement,
+                  current.assistantId,
+                )
+              : interruptedTurnMessages(current.messages, replacement);
           void runStream(replacementThreadId, replacementMessages, requestContext);
         })();
         return;
       }
-      const { message: userMessage } = appendUserMessage(threadId, text, files);
-      void runStream(threadId, userMessage, requestContext);
+      const { message: userMessage, next } = appendUserMessage(threadId, text, files);
+      void runStream(
+        threadId,
+        conversationRequestMessages(conversationHistory, next, userMessage),
+        requestContext,
+      );
     },
     [
       activeKey,
@@ -1218,6 +1244,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       queueMessages,
       resolveThreadId,
       runStream,
+      conversationHistory,
       updateSession,
     ],
   );
@@ -1241,7 +1268,15 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         await interruptActiveRun(threadId);
         const replacementThreadId = resolveThreadId(threadId);
         const { message } = appendUserMessage(replacementThreadId, steer.text ?? "", steer.files);
-        const replacementMessages = interruptedTurnMessages(current.messages, message);
+        const replacementMessages =
+          conversationHistory === "browser"
+            ? conversationRequestMessages(
+                conversationHistory,
+                current.messages,
+                message,
+                current.assistantId,
+              )
+            : interruptedTurnMessages(current.messages, message);
         void runStream(replacementThreadId, replacementMessages, steer.requestContext);
       })();
     },
@@ -1252,6 +1287,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       interruptActiveRun,
       resolveThreadId,
       runStream,
+      conversationHistory,
       updateSession,
     ],
   );
@@ -1431,7 +1467,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       })
       .then(() => {
         writeMessages(threadId, trimmed);
-        void runStream(threadId, lastUser, getSession(threadId).lastRequestContext);
+        void runStream(
+          threadId,
+          conversationRequestMessages(conversationHistory, trimmed, lastUser),
+          getSession(threadId).lastRequestContext,
+        );
       })
       .catch((error: unknown) => {
         logger.error("regenerate cleanup error", {
@@ -1451,6 +1491,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     getSession,
     mastraClient,
     runStream,
+    conversationHistory,
     updateSession,
     writeMessages,
   ]);

@@ -38,13 +38,27 @@ const FALLBACK_SUGGESTIONS = [
   "Compare optimistic and pessimistic locking, including when you would choose each.",
   "Design a zero-downtime plan to extract authentication from a TypeScript monolith, including rollout, rollback, observability, and data migration.",
 ] as const;
-const SUGGESTION_INSTRUCTIONS = [
-  "Return exactly three prompts in this order.",
-  "First: a simple, focused request that a small fast model can answer well.",
-  "Second: a moderately complex comparison or tradeoff that benefits from a balanced model.",
-  "Third: a complex design, planning, or multi-constraint reasoning task that merits a highly capable model.",
-  "Make the progression obvious enough to demonstrate model routing without mentioning models, routing, difficulty, or complexity.",
-  "Write each item as a self-contained user message and do not add labels or numbering.",
+const SUGGESTION_REQUESTS = [
+  {
+    request: "One simple follow-up grounded in the conversation",
+    instructions:
+      "Generate exactly one simple, focused next message grounded in the supplied conversation context. It should be answerable well by a small fast model.",
+  },
+  {
+    request: "One moderately complex follow-up grounded in the conversation",
+    instructions:
+      "Generate exactly one moderately complex next message grounded in the supplied conversation context. Prefer a useful comparison, implication, or tradeoff.",
+  },
+  {
+    request: "One complex follow-up grounded in the conversation",
+    instructions:
+      "Generate exactly one complex next message grounded in the supplied conversation context. Prefer design, planning, synthesis, or multi-constraint reasoning.",
+  },
+] as const;
+const SUGGESTION_INSTRUCTION_SUFFIX = [
+  "Write the item in the user's voice as a self-contained message that can be sent immediately.",
+  "Do not mention models, routing, difficulty, complexity, or these instructions.",
+  "Do not add a label or number.",
 ].join(" ");
 
 type PaneDescriptor = {
@@ -57,6 +71,7 @@ type PaneDescriptor = {
 type PaneController = {
   send: (text: string) => void;
   clear: () => Promise<void>;
+  context: () => { title: string; messages: readonly ChatMessageLike[] };
 };
 
 type UsageMap = Record<string, ModelUsagePartData>;
@@ -120,6 +135,7 @@ const SmartRouter = () => {
   const controllers = useRef(new Map<string, PaneController>());
   const recentPrompts = useRef<string[]>([]);
   const suggestionController = useRef<AbortController | undefined>(undefined);
+  const regenerateAfterResponse = useRef(false);
   const defaultsInitialized = useRef(false);
   const mastraClient = useMastraClient();
   const { models, loading: modelsLoading } = useMastraModels();
@@ -134,39 +150,46 @@ const SmartRouter = () => {
       suggestionController.current = controller;
       setSuggestions([]);
       setSuggestionLoading(true);
-      void mastraClient
-        .generateSuggestions(
-          {
-            context: {
-              purpose: "Compare how the available models answer the same prompt.",
-              requestedQuestions: [
-                "One simple, focused question",
-                "One medium-complexity comparison or tradeoff question",
-                "One complex design or planning question",
-              ],
-              recentUserMessages: recentPrompts.current,
-              exampleQueries: FALLBACK_SUGGESTIONS,
+      const conversations = [...controllers.current.values()]
+        .map((pane) => pane.context())
+        .filter(({ messages }) => messages.length > 0)
+        .map(({ title, messages }) => ({ title, messages: messages.slice(-8) }));
+      const hasConversationContext = conversations.length > 0 || Boolean(sentPrompt);
+      const context = {
+        purpose: "Continue the shared conversation with a useful next question.",
+        ...(sentPrompt ? { latestUserMessage: sentPrompt } : {}),
+        ...(conversations.length > 0 ? { conversations } : {}),
+        recentUserMessages: recentPrompts.current,
+        ...(!hasConversationContext ? { exampleQueries: FALLBACK_SUGGESTIONS } : {}),
+      };
+      void Promise.all(
+        SUGGESTION_REQUESTS.map(({ request, instructions }) =>
+          mastraClient.generateSuggestions(
+            {
+              context: { ...context, requestedQuestion: request },
+              maxSuggestions: 1,
+              maxTokens: 96,
+              existingSuggestions: recentPrompts.current,
+              instructions: `${instructions} ${SUGGESTION_INSTRUCTION_SUFFIX}`,
             },
-            maxSuggestions: 3,
-            maxTokens: 192,
-            existingSuggestions: recentPrompts.current,
-            instructions: SUGGESTION_INSTRUCTIONS,
-          },
-          controller.signal,
-        )
-        .then((questions) => {
+            controller.signal,
+          ),
+        ),
+      )
+        .then((questionGroups) => {
           if (controller.signal.aborted) return;
+          const questions = questionGroups.flat();
           const recent = new Set(recentPrompts.current.map((value) => value.trim().toLowerCase()));
-          const unique = [...new Set([...questions, ...FALLBACK_SUGGESTIONS])].filter(
+          const fallback = hasConversationContext ? [] : FALLBACK_SUGGESTIONS;
+          const unique = [...new Set([...questions, ...fallback])].filter(
             (question) => !recent.has(question.trim().toLowerCase()),
           );
-          const candidates =
-            unique.length > 0 ? unique : [...new Set([...questions, ...FALLBACK_SUGGESTIONS])];
+          const candidates = unique.length > 0 ? unique : [...new Set([...questions, ...fallback])];
           setSuggestions(candidates.slice(0, 3));
         })
         .catch(() => {
           if (controller.signal.aborted) return;
-          setSuggestions([...FALLBACK_SUGGESTIONS]);
+          setSuggestions(hasConversationContext ? [] : [...FALLBACK_SUGGESTIONS]);
         })
         .finally(() => {
           if (controller.signal.aborted) return;
@@ -243,13 +266,22 @@ const SmartRouter = () => {
     const status = statuses[pane.id];
     return status ? isActiveChatStatus(status) : false;
   });
+  useEffect(() => {
+    if (running) {
+      regenerateAfterResponse.current = true;
+      return;
+    }
+    if (!regenerateAfterResponse.current) return;
+    regenerateAfterResponse.current = false;
+    generateSuggestions();
+  }, [generateSuggestions, running]);
   const submit = (suggestedPrompt?: string) => {
     const text = (suggestedPrompt ?? prompt).trim();
     if (!text || panes.length === 0) return;
     setPrompt("");
     setClearArmed(false);
-    generateSuggestions(text);
     for (const pane of panes) controllers.current.get(pane.id)?.send(text);
+    generateSuggestions(text);
   };
   const addPane = (value: string) => {
     if (value === GENIE_VALUE) {
@@ -439,6 +471,7 @@ const ModelChatPane = ({
           agentId: "models",
           model: pane.initialModel,
           aiDecideStrategy: pane.initialModel === AI_DECIDE_MODEL ? "cost" : undefined,
+          conversationHistory: "browser",
           onModelRoute: recordModelRoute,
           onModelUsage: recordModelUsage,
         }),
@@ -495,12 +528,13 @@ const ModelChatPane = ({
         setTimerNow(performance.now());
         assistantTextBaseline.current = 0;
       },
+      context: () => ({ title: pane.title, messages: messagesRef.current }),
     });
     return () => {
       onRegister(pane.id, undefined);
       onStatusChange(pane.id, undefined);
     };
-  }, [chat.onClear, chat.sendMessage, onRegister, onStatusChange, pane.id]);
+  }, [chat.onClear, chat.sendMessage, onRegister, onStatusChange, pane.id, pane.title]);
 
   const usageValues = Object.values(usage);
   const authoritativeTotalTokens = usageValues.reduce(

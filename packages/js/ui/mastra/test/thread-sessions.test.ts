@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { UIMessage } from "ai";
 import type { QueuedSteer } from "../src/react/types.ts";
 import {
+  conversationRequestMessages,
   createThreadSession,
   enqueueSteer,
   interruptedTurnMessages,
@@ -10,6 +11,45 @@ import {
   removeSteer,
   reorderSteers,
 } from "../src/support/thread-sessions.ts";
+
+describe("conversation request history", () => {
+  const user: UIMessage = {
+    id: "user",
+    role: "user",
+    parts: [{ type: "text", text: "Explain idempotency." }],
+  };
+  const assistant: UIMessage = {
+    id: "assistant",
+    role: "assistant",
+    parts: [{ type: "text", text: "Idempotency makes retries safe." }],
+  };
+  const followUp: UIMessage = {
+    id: "follow-up",
+    role: "user",
+    parts: [{ type: "text", text: "Explain that more simply." }],
+  };
+
+  it("sends only the newest message when stored memory is authoritative", () => {
+    assert.equal(
+      conversationRequestMessages("memory", [user, assistant, followUp], followUp),
+      followUp,
+    );
+  });
+
+  it("sends the complete browser transcript when server memory is disabled", () => {
+    assert.deepEqual(
+      conversationRequestMessages("browser", [user, assistant, followUp], followUp),
+      [user, assistant, followUp],
+    );
+  });
+
+  it("drops only the interrupted partial assistant response", () => {
+    assert.deepEqual(
+      conversationRequestMessages("browser", [user, assistant], followUp, assistant.id),
+      [user, followUp],
+    );
+  });
+});
 
 describe("steer queue", () => {
   const steer = (id: string, text: string): QueuedSteer => ({ id, text });
