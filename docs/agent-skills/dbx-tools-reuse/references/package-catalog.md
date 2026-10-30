@@ -1,6 +1,6 @@
 # dbx-tools package catalog
 
-Generated from repository manifests and package READMEs for dbx-tools 0.9.185.
+Generated from repository manifests and package READMEs for dbx-tools 0.9.186.
 Inspect the installed manifest, README, exports, and source before relying on a capability.
 
 ## CLI tools
@@ -43,6 +43,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 
 ## Shared contracts
 
+- `@dbx-tools/shared-appkit` - Browser-safe schemas, route constants, and client configuration contracts for dbx-tools AppKit extensions. Source: `packages/js/shared/appkit`.
 - `@dbx-tools/shared-auth` - Validate passwordless sign-in, passkey, Databricks profile, and resolved-client data at browser and server boundaries. The package also provides browser helpers for the routes owned by @dbx-tools/auth-gate. Source: `packages/js/shared/auth`.
 - `@dbx-tools/shared-core` - Use browser-safe utilities shared by @dbx-tools/* packages in browsers, workers, Node, Bun, CLIs, and schema packages. The package includes logging, options, networking, JSON, hashing, predicates, and other dependency-light foundations. Source: `packages/js/shared/core`.
 - `@dbx-tools/shared-email` - Validate browser, route, and agent-tool payloads for @dbx-tools/email without importing Node-only code. Source: `packages/js/shared/email`.

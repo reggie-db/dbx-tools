@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-generator";
-export const PACKAGE_VERSION = "0.9.185";
+export const PACKAGE_VERSION = "0.9.186";
 export * as brand from "./src/brand.ts";
 export * as kpi from "./src/kpi.ts";
 export * as workflow from "./src/workflow.ts";
