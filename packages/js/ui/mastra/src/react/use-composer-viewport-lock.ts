@@ -23,10 +23,11 @@ export const useComposerViewportLock = (frameRef: RefObject<HTMLElement | null>)
     const dock = frame?.querySelector<HTMLElement>('[data-slot="aui_composer-dock"]');
     const transcript = frame?.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]');
     const transcriptContent = frame?.querySelector<HTMLElement>('[data-slot="aui_thread-content"]');
-    if (!dock || !transcript || !transcriptContent) return;
+    if (!frame || !dock || !transcript || !transcriptContent) return;
 
+    const iosWebKit = isIOSWebKit();
     const createTranscriptScroller = () =>
-      isIOSWebKit()
+      iosWebKit
         ? new ScrollBooster({
             viewport: transcript,
             content: transcriptContent,
@@ -55,11 +56,14 @@ export const useComposerViewportLock = (frameRef: RefObject<HTMLElement | null>)
         viewport !== null &&
         viewport !== undefined &&
         window.innerHeight - viewport.height > KEYBOARD_TRANSITION_THRESHOLD;
+      if (iosWebKit) {
+        frame.toggleAttribute("data-ios-keyboard-open", keyboardVisible);
+        transcript.toggleAttribute("data-keyboard-touch-scroller", keyboardVisible);
+      }
       if (!transcriptScroller) return;
       if (keyboardVisible === transcriptTouchRoutingEnabled) return;
       transcriptTouchRoutingEnabled = keyboardVisible;
       transcriptScroller.updateOptions({ pointerMode: keyboardVisible ? "touch" : "mouse" });
-      transcript.toggleAttribute("data-keyboard-touch-scroller", keyboardVisible);
     };
 
     const revealGuardedInput = () => {
@@ -185,6 +189,7 @@ export const useComposerViewportLock = (frameRef: RefObject<HTMLElement | null>)
       }
       revealGuardedInput();
       transcriptScroller?.destroy();
+      frame.removeAttribute("data-ios-keyboard-open");
       transcript.removeAttribute("data-keyboard-touch-scroller");
       dock.removeEventListener("touchstart", handleTouchStart);
       dock.removeEventListener("touchmove", handleTouchMove);

@@ -30,3 +30,8 @@
   width: 0;
   height: 0;
 }
+
+[data-slot="aui_thread-frame"][data-ios-keyboard-open] {
+  overscroll-behavior: none;
+  touch-action: none;
+}
