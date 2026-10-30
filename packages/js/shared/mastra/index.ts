@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-mastra";
-export const PACKAGE_VERSION = "0.9.188";
+export const PACKAGE_VERSION = "0.9.189";
 export * as feedback from "./src/feedback.ts";
 export * as genieVisualization from "./src/genie-visualization.ts";
 export * as markers from "./src/markers.ts";

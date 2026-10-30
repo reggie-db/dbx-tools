@@ -1,6 +1,6 @@
 # dbx-tools package catalog
 
-Generated from repository manifests and package READMEs for dbx-tools 0.9.188.
+Generated from repository manifests and package READMEs for dbx-tools 0.9.189.
 Inspect the installed manifest, README, exports, and source before relying on a capability.
 
 ## CLI tools
