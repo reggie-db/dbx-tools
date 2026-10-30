@@ -586,6 +586,20 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // `driveStream` (which invokes this) - the ref breaks that cycle without a
   // stale-closure hazard (assigned each render, same pattern as `loadMoreRef`).
   const drainQueueRef = useRef<(threadId: string) => void>(() => {});
+  const streamSettlementsRef = useRef(new Map<string, Promise<void>>());
+  const adoptedThreadIdsRef = useRef(new Map<string, string>());
+
+  const resolveThreadId = useCallback((threadId: string): string => {
+    let resolved = threadId;
+    const visited = new Set<string>();
+    while (!visited.has(resolved)) {
+      visited.add(resolved);
+      const next = adoptedThreadIdsRef.current.get(resolved);
+      if (!next) break;
+      resolved = next;
+    }
+    return resolved;
+  }, []);
 
   const activeThreadIdRef = useRef(activeThreadId);
   activeThreadIdRef.current = activeThreadId;
@@ -594,6 +608,12 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // switch to it when it is still the active thread.
   const adoptThreadId = useCallback(
     (localId: string, assignedId: string) => {
+      adoptedThreadIdsRef.current.set(localId, assignedId);
+      const settlement = streamSettlementsRef.current.get(localId);
+      if (settlement) {
+        streamSettlementsRef.current.delete(localId);
+        streamSettlementsRef.current.set(assignedId, settlement);
+      }
       moveSession(localId, assignedId);
       localThreadIdsRef.current.delete(localId);
       localThreadIdsRef.current.add(assignedId);
@@ -844,7 +864,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       const streamThreadId = threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
       const model = modelRef.current || undefined;
       const turnReasoningEffort = reasoningEffortRef.current;
-      return driveStream(threadId, assistantId, (signal) => {
+      const settlement = driveStream(threadId, assistantId, (signal) => {
         return mastraClient.streamAgent({
           agentId,
           messages: turnMessages,
@@ -856,6 +876,14 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           signal,
         });
       });
+      streamSettlementsRef.current.set(threadId, settlement);
+      const clearSettlement = () => {
+        for (const [settlementThreadId, current] of streamSettlementsRef.current) {
+          if (current === settlement) streamSettlementsRef.current.delete(settlementThreadId);
+        }
+      };
+      void settlement.then(clearSettlement, clearSettlement);
+      return settlement;
     },
     [activeRunsKey, driveStream, mastraClient, agentId, updateSession],
   );
@@ -995,9 +1023,14 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     async (threadId: string): Promise<void> => {
       const current = getSession(threadId);
       if (!isSessionRunning(current)) return;
+      const localSettlement = streamSettlementsRef.current.get(threadId);
       const streamThreadId = threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
       const runId = current.runId;
       const settlementSignal = AbortSignal.timeout(STEER_INTERRUPT_SETTLEMENT_TIMEOUT_MS);
+      const settlementTimeout = new Promise<void>((resolve) => {
+        if (settlementSignal.aborted) resolve();
+        else settlementSignal.addEventListener("abort", () => resolve(), { once: true });
+      });
       const settlement =
         mastraClient.backgroundTurns && runId
           ? mastraClient
@@ -1048,6 +1081,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       });
       await serverAbort;
       await settlement;
+      if (localSettlement) await Promise.race([localSettlement, settlementTimeout]);
     },
     [activeRunsKey, agentId, getSession, mastraClient, updateSession],
   );
@@ -1115,10 +1149,10 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     [appendUserMessage, runStream, activeKey, getSession, updateSession],
   );
 
-  // Fire a queued steer immediately, out of order: remove it from the queue
-  // and append it first so acceptance is visible while the prior durable run
-  // settles. `runStream`/`driveStream` then supersede the in-flight run (abort
-  // + runToken bump + settle running pills) and send the chosen steer.
+  // Fire a queued steer immediately, out of order. Wait for the interrupted
+  // stream to publish and adopt any server-assigned thread id before appending
+  // the replacement turn; otherwise a new direct Genie conversation can start
+  // under the stale local thread id.
   const sendSteerNow = useCallback(
     (steerId: string) => {
       const threadId = activeKey;
@@ -1130,14 +1164,23 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         queuedSteers: removeSteerFromQueue(session.queuedSteers, steerId),
       }));
       logger.info("steer:send-now", { threadId });
-      const { message } = appendUserMessage(threadId, steer.text ?? "", steer.files);
-      const replacementMessages = interruptedTurnMessages(current.messages, message);
       void (async () => {
         await interruptActiveRun(threadId);
-        void runStream(threadId, replacementMessages, steer.requestContext);
+        const replacementThreadId = resolveThreadId(threadId);
+        const { message } = appendUserMessage(replacementThreadId, steer.text ?? "", steer.files);
+        const replacementMessages = interruptedTurnMessages(current.messages, message);
+        void runStream(replacementThreadId, replacementMessages, steer.requestContext);
       })();
     },
-    [activeKey, appendUserMessage, getSession, interruptActiveRun, runStream, updateSession],
+    [
+      activeKey,
+      appendUserMessage,
+      getSession,
+      interruptActiveRun,
+      resolveThreadId,
+      runStream,
+      updateSession,
+    ],
   );
 
   // Drop a queued steer without sending it.

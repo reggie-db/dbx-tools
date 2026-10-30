@@ -87,6 +87,44 @@ describe("GenieChatClient", () => {
     expect(bodies[1]).toMatchObject({ question: "And last year?", conversationId: "conv-1" });
   });
 
+  test("continues an announced conversation before the local thread id is adopted", async () => {
+    const bodies: unknown[] = [];
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return sseResponse([
+        { type: "start" },
+        {
+          type: GENIE_CONVERSATION_PART_TYPE,
+          data: { conversationId: "conv-1", messageId: "msg-1" },
+          transient: true,
+        },
+        { type: "finish" },
+      ]);
+    }) as typeof fetch;
+    const client = new GenieChatClient(CONFIG, "default");
+    const first = await client.streamAgent({
+      agentId: "genie:default",
+      messages: [question("Top stores?")],
+      runId: "run-1",
+      threadId: "local-1",
+    });
+    const reader = first.stream.getReader();
+    await reader.read();
+    await reader.read();
+    expect(first.threadId?.()).toBe("conv-1");
+
+    const steer = await client.streamAgent({
+      agentId: "genie:default",
+      messages: [question("And last year?")],
+      runId: "run-2",
+      threadId: "local-1",
+    });
+    await drain(steer.stream);
+    await reader.cancel();
+
+    expect(bodies[1]).toMatchObject({ question: "And last year?", conversationId: "conv-1" });
+  });
+
   test("deletes only Genie messages it can map", async () => {
     const urls: string[] = [];
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

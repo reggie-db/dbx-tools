@@ -38,8 +38,8 @@ export class GenieChatClient extends MastraPluginClient {
   override readonly threadRename = false;
   override readonly attachments = false;
   override readonly followUpSuggestions: "none" | "genie";
-  /** Thread ids known to be Genie conversations (listed, loaded, or announced). */
-  readonly #conversations = new Set<string>();
+  /** Local and resolved thread ids mapped to their Genie conversation id. */
+  readonly #conversationIds = new Map<string, string>();
   /** Transcript message id to Genie message id, for regenerate cleanup. */
   readonly #genieMessageIds = new Map<string, string>();
 
@@ -55,6 +55,17 @@ export class GenieChatClient extends MastraPluginClient {
 
   #url(...parts: string[]): string {
     return `${this.basePath}${genieRoutePath(this.alias, ...parts)}`;
+  }
+
+  #rememberConversation(threadId: string | undefined, conversationId: string): void {
+    this.#conversationIds.set(conversationId, conversationId);
+    if (threadId) this.#conversationIds.set(threadId, conversationId);
+  }
+
+  #forgetConversation(conversationId: string): void {
+    for (const [threadId, resolvedId] of this.#conversationIds) {
+      if (resolvedId === conversationId) this.#conversationIds.delete(threadId);
+    }
   }
 
   async #delete(url: string, signal?: AbortSignal): Promise<void> {
@@ -79,8 +90,7 @@ export class GenieChatClient extends MastraPluginClient {
       .map((part) => (part.type === "text" ? part.text : ""))
       .join("")
       .trim();
-    const conversationId =
-      params.threadId && this.#conversations.has(params.threadId) ? params.threadId : undefined;
+    const conversationId = params.threadId ? this.#conversationIds.get(params.threadId) : undefined;
     const response = await this.uiStream({
       path: this.#url(MASTRA_ROUTES.chat),
       chatId: params.threadId ?? params.runId,
@@ -101,7 +111,7 @@ export class GenieChatClient extends MastraPluginClient {
             const data = GenieConversationPartDataSchema.safeParse(chunk.data);
             if (data.success) {
               resolved = data.data.conversationId;
-              this.#conversations.add(resolved);
+              this.#rememberConversation(params.threadId, resolved);
               if (userMessage && data.data.messageId) {
                 this.#genieMessageIds.set(userMessage.id, data.data.messageId);
               }
@@ -148,7 +158,7 @@ export class GenieChatClient extends MastraPluginClient {
       GenieThreadsResponseSchema,
       options.signal,
     );
-    for (const thread of payload.threads) this.#conversations.add(thread.id);
+    for (const thread of payload.threads) this.#rememberConversation(thread.id, thread.id);
     const threads = payload.threads.map((thread) => ({
       id: thread.id,
       ...(thread.title ? { title: thread.title } : {}),
@@ -184,7 +194,7 @@ export class GenieChatClient extends MastraPluginClient {
         options.signal,
       );
       messages = await validateUIMessages({ messages: payload.messages });
-      this.#conversations.add(options.threadId);
+      this.#rememberConversation(options.threadId, options.threadId);
       // History ids already address their Genie message; the delete route
       // resolves a question id to the message that owns it.
       for (const message of messages) this.#genieMessageIds.set(message.id, message.id);
@@ -204,9 +214,10 @@ export class GenieChatClient extends MastraPluginClient {
     threadId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    if (!this.#conversations.has(threadId)) return;
-    await this.#delete(this.#url(MASTRA_ROUTES.threads, threadId), options.signal);
-    this.#conversations.delete(threadId);
+    const conversationId = this.#conversationIds.get(threadId);
+    if (!conversationId) return;
+    await this.#delete(this.#url(MASTRA_ROUTES.threads, conversationId), options.signal);
+    this.#forgetConversation(conversationId);
   }
 
   /** Clearing a Genie thread deletes its conversation; the next turn starts a new one. */
@@ -225,7 +236,8 @@ export class GenieChatClient extends MastraPluginClient {
     messageIds: string[],
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    if (!this.#conversations.has(threadId)) return;
+    const conversationId = this.#conversationIds.get(threadId);
+    if (!conversationId) return;
     const genieIds = new Set(
       messageIds.flatMap((id) => {
         const genieId = this.#genieMessageIds.get(id);
@@ -234,7 +246,7 @@ export class GenieChatClient extends MastraPluginClient {
     );
     for (const genieId of genieIds) {
       await this.#delete(
-        this.#url(MASTRA_ROUTES.threads, threadId, MASTRA_ROUTES.messages, genieId),
+        this.#url(MASTRA_ROUTES.threads, conversationId, MASTRA_ROUTES.messages, genieId),
         options.signal,
       );
     }
