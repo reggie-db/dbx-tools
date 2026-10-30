@@ -1,6 +1,6 @@
 # Demo omits reasoning events and Smart Router can replay incompatible encrypted reasoning
 
-Status: Open
+Status: Fixed pending release
 
 ## Summary
 
@@ -125,56 +125,34 @@ previous and selected concrete model IDs for that request. Treat the
 cross-turn A-to-B sequence as inferred until a trace or request capture
 confirms those IDs.
 
-## Required remediation
+## Implemented remediation
 
-1. Make visible reasoning the AppKit-Mastra default for every supported
-   reasoning-capable model and protocol. AppKit-Mastra must apply the required
-   provider-native request options and normalize the result into AI SDK
-   reasoning events. The demo and consuming applications must not need
-   model-specific reasoning configuration.
-2. Set `reasoningSummary: "auto"` in AppKit-Mastra's default Responses provider
-   options whenever reasoning emission is enabled. Preserve native reasoning
-   output for supported non-Responses protocols.
-3. Keep `sendReasoning` as the AppKit-Mastra visibility control. Its default
-   remains enabled. `sendReasoning: false` must disable provider reasoning
-   output requests where applicable and suppress downstream reasoning events.
-4. Before replaying history to a newly selected concrete model, remove
-   model-bound Responses metadata such as `itemId`,
-   `reasoningEncryptedContent`, and incompatible reasoning items. Preserve
-   user-visible text and tool history.
-5. Track the concrete model that owns each reasoning artifact and replay its
-   encrypted content only when the next model matches.
-6. If model-bound metadata cannot be sanitized safely, pin one concrete model
-   for the thread. This option prevents the mismatch but reduces Smart Router's
-   ability to select a model independently for each turn.
-7. Continue to use stateless replay for Databricks Responses. Do not replace it
-   with `item_reference`, which the Databricks endpoint rejects.
+1. AppKit-Mastra adds a per-step provider-options processor after Mastra
+   resolves the concrete model. Responses models receive `store: false` and
+   `reasoningSummary: "auto"` under their actual provider namespace. Chat
+   models retain their native reasoning behavior.
+2. An explicit supported `reasoningSummary` value overrides the `auto` default.
+   `sendReasoning: false` removes the summary request and suppresses downstream
+   reasoning events.
+3. AppKit-Mastra extends Mastra's native `ProviderHistoryCompat` processor with
+   a Databricks Responses rule. The rule compares each persisted assistant
+   message's stamped `modelId` with the resolved target model.
+4. On a model change, the compatibility rule removes foreign encrypted
+   reasoning parts and model-bound `itemId` and `resultItemId` values from the
+   outbound prompt. It does not modify persisted memory or UI history.
+5. When Smart Router selects the same concrete model, compatible encrypted
+   reasoning remains available for stateless continuation.
+6. Databricks Responses remains stateless and sends no `item_reference`
+   inputs.
 
-## Acceptance tests
+## Validation coverage
 
-- A capability-based test matrix covers every model family and protocol that
-  AppKit-Mastra advertises as reasoning-capable.
-- AppKit-Mastra's default configuration emits normalized AI SDK reasoning
-  events for each model in that matrix without demo-specific or
-  consumer-specific options.
-- Responses requests send `reasoning.summary: "auto"` by default.
-- Supported non-Responses providers retain their native reasoning request and
-  stream behavior before AppKit-Mastra normalizes the events.
-- `sendReasoning: false` omits provider reasoning-output options where
-  applicable and emits no reasoning parts for any model in the matrix.
-- An explicit supported provider setting can override the AppKit-Mastra
-  default.
-- A supported Responses model's summary deltas become AI SDK reasoning parts
-  and render in the demo.
-- A model that does not return a summary still completes without an empty or
-  failed thought disclosure.
-- A same-model multi-step tool continuation retains and replays encrypted
-  reasoning.
-- Smart Router switching from model A to model B between user turns removes
-  model A's encrypted reasoning before calling model B.
-- Smart Router selecting model A again retains model A's compatible encrypted
-  reasoning.
-- A model switch preserves user-visible assistant text, user messages, tool
-  calls, and tool results.
-- Stateless Databricks Responses requests contain no `item_reference` inputs.
+- Responses defaults apply under the resolved provider namespace.
+- An explicit summary setting overrides `auto`, while `store` remains false.
+- `sendReasoning: false` removes the summary request.
+- Chat models receive no Responses-specific options.
+- A model A to model B switch removes model A's encrypted reasoning and item
+  ids while preserving text and tool calls.
+- A model A to model A continuation retains compatible encrypted reasoning.
+- Focused AppKit-Mastra tests and the package TypeScript build pass.
 

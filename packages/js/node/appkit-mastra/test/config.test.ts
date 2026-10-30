@@ -22,7 +22,7 @@ describe("mastra config schema", () => {
     assert.deepEqual(MASTRA_CONFIG_SCHEMA.properties?.sendReasoning, {
       type: "boolean",
       description:
-        "Include model reasoning parts in chat UI streams when the provider returns them. Defaults to true.",
+        "Request and include model reasoning parts for supported models. Defaults to true.",
     });
   });
 });

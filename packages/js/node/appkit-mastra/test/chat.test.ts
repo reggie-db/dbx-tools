@@ -318,7 +318,6 @@ describe("background chat routes", () => {
 
     assert.deepEqual(await built.agents.analyst.getDefaultOptions({ requestContext }), {
       maxSteps: 25,
-      providerOptions: { openai: { store: false } },
       memory: { thread: "thread-7", resource: "resource-7" },
     });
   });

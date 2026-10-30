@@ -42,6 +42,7 @@ describe("Mastra serving API selection", () => {
     assert.deepEqual(RESPONSES_PROVIDER_OPTIONS, {
       openai: {
         store: false,
+        reasoningSummary: "auto",
       },
     });
   });

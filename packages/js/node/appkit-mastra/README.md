@@ -949,15 +949,21 @@ Databricks-hosted GPT 5.6 Chat Completions with function tools receives
 Other Chat models receive no synthesized effort, while an explicit supported
 caller value is preserved. Responses-only models such as GPT Astra use the
 native Responses provider. Claude reasoning replay and Gemini/Claude structured
-response content continue through the same shared sanitizer. Chat routes emit
-provider reasoning parts to the AI SDK UI stream by default; set
-`sendReasoning: false` on `mastra(...)` only when the application should hide
-those parts.
+response content continue through the same shared sanitizer.
+
+Chat routes emit provider reasoning parts to the AI SDK UI stream by default.
+Responses models request `reasoning.summary: "auto"`; Chat models retain their
+native reasoning behavior. Set `sendReasoning: false` on `mastra(...)` to omit
+the Responses summary request and suppress reasoning parts from the UI stream.
 
 Responses turns set `store: false`. The OpenAI provider automatically includes
 encrypted reasoning state so a tool continuation sends the complete stateless
 conversation. Databricks does not store Responses and rejects
-`item_reference` inputs.
+`item_reference` inputs. Mastra stamps persisted assistant messages with the
+concrete model that produced them. When a later turn selects a different
+Responses model, the prompt compatibility processor removes the prior model's
+encrypted reasoning and item ids from the outbound prompt while retaining the
+persisted reasoning, answer text, and tool history.
 
 The plugin also serves `GET /default-model` (and `/default-model/:agentId`),
 returning `{ agentId, model, displayName }` - the static serving-endpoint an

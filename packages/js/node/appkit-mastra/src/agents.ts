@@ -69,8 +69,12 @@ import {
 } from "./follow-up-suggestions.ts";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "./memory.ts";
-import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
-import { stripStaleChartsProcessor } from "./processors.ts";
+import { buildModel } from "./model.ts";
+import {
+  buildResponsesProviderOptionsProcessor,
+  providerHistoryCompatProcessor,
+  stripStaleChartsProcessor,
+} from "./processors.ts";
 import { MASTRA_ORIGIN_KEY } from "./request-context.ts";
 import { MASTRA_RESOLVED_MODEL_KEY } from "./serving.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
@@ -935,11 +939,11 @@ export async function buildAgents(opts: {
     ...(config.tools ?? {}),
   };
   const style = resolveStyleInstructions(config);
-  // Default-on protection against the model copying turn-scoped
-  // chartIds from prior assistant tool results into the new
-  // turn's `[chart:<id>]` markers. Opt out per-plugin via
-  // `config.stripStaleCharts: false`.
+  // Apply provider-aware reasoning defaults and compatibility guards before
+  // filtering large or turn-scoped values from replayed history.
   const inputProcessors = [
+    buildResponsesProviderOptionsProcessor(config.sendReasoning !== false),
+    providerHistoryCompatProcessor,
     // `render_data` can carry hundreds of inline rows. Keep the complete call
     // in Memory and the UI transcript, but use Mastra's native prompt-stage
     // filter to omit prior calls/results from later model requests. Current
@@ -996,7 +1000,6 @@ export async function buildAgents(opts: {
         withRequestMemoryScope(
           {
             maxSteps: config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS,
-            providerOptions: RESPONSES_PROVIDER_OPTIONS,
             ...(def.requireToolApproval !== undefined
               ? { requireToolApproval: def.requireToolApproval }
               : {}),

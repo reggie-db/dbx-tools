@@ -77,10 +77,11 @@ export const SMART_ROUTER_ENDPOINT: ServingEndpointSummary = {
   status: { deprecated: false },
 };
 
-/** Keep Responses turns stateless so tool continuations replay encrypted reasoning inline. */
+/** Default Responses options: stateless replay plus visible reasoning summaries. */
 export const RESPONSES_PROVIDER_OPTIONS = {
   openai: {
     store: false,
+    reasoningSummary: "auto",
   },
 } as const;
 

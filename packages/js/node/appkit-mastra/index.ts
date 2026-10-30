@@ -71,7 +71,7 @@ export type { MontySandboxOptions } from "./src/monty-sandbox.ts";
 export { isOtlpTracingConfigured, configureOtelPropagation, buildObservability } from "./src/observability.ts";
 export type { BuildObservabilityOptions } from "./src/observability.ts";
 export { MastraPlugin, mastra } from "./src/plugin.ts";
-export { stripStaleChartsProcessor } from "./src/processors.ts";
+export { buildResponsesProviderOptionsProcessor, stripForeignResponsesState, providerHistoryCompatProcessor, stripStaleChartsProcessor } from "./src/processors.ts";
 export { AITOOLS_SKILLS_MOUNT, REMOTE_SKILLS_MOUNT, AITOOLS_REFRESH_TTL_MS, AITOOLS_SOURCE, normalizeRemoteSkillsOption, provisionRemoteSkills } from "./src/remote-skills.ts";
 export type { AiToolsSource, RemoteSkillSourceOptions, RemoteSkillSource, RemoteSkillsOption, LocalSkillDirectoryMount, MemorySkillMount, LocalSkillMount, ProvisionRemoteSkillsOptions, ProvisionedRemoteSkills, RemoteSkillCacheEntry, RemoteSkillsMetadata } from "./src/remote-skills.ts";
 export { MASTRA_ORIGIN_KEY } from "./src/request-context.ts";
