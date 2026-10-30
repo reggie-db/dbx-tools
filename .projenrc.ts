@@ -1259,6 +1259,7 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     "@dbx-tools/shared-mastra@workspace:*",
     "@dbx-tools/shared-genie@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/shared-model-gateway@workspace:*",
     "@dbx-tools/ui@workspace:*",
     "@mastra/client-js@catalog:",
     // Native persisted-message conversion used by browser history hydration.

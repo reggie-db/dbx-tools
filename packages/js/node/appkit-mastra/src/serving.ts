@@ -20,7 +20,12 @@ import {
 } from "@dbx-tools/shared-mastra";
 import type {
   AiDecideObservation,
+  AiDecideStrategy,
   SmartRouterObservation,
+} from "@dbx-tools/shared-model-gateway";
+import {
+  AI_DECIDE_STRATEGY_HEADER,
+  AiDecideStrategySchema,
 } from "@dbx-tools/shared-model-gateway";
 
 import type { MastraPluginConfig } from "./config.ts";
@@ -31,6 +36,9 @@ import type { MastraPluginConfig } from "./config.ts";
  * reads it before falling back to the agent / plugin default.
  */
 export const MASTRA_MODEL_OVERRIDE_KEY = "mastra__model_override";
+
+/** RequestContext key carrying the caller-selected ai_decide optimization objective. */
+export const MASTRA_AI_DECIDE_STRATEGY_KEY = "mastra__ai_decide_strategy";
 
 /** RequestContext key carrying the endpoint selected for the active agent step. */
 export const MASTRA_RESOLVED_MODEL_KEY = "mastra__resolved_model";
@@ -98,6 +106,17 @@ export function extractModelOverride(req: ModelOverrideRequest): string | null {
     }
   }
   return null;
+}
+
+/** Read and validate the optional ai_decide optimization objective from a request. */
+export function extractAiDecideStrategy(req: ModelOverrideRequest): AiDecideStrategy | undefined {
+  const value = firstNonEmpty(
+    req.headers?.[AI_DECIDE_STRATEGY_HEADER] ??
+      req.headers?.[AI_DECIDE_STRATEGY_HEADER.toLowerCase()],
+  );
+  if (!value) return undefined;
+  const parsed = AiDecideStrategySchema.safeParse(value.toLowerCase());
+  return parsed.success ? parsed.data : undefined;
 }
 
 /**

@@ -52,7 +52,9 @@ import {
 import { initializeRequestMlflowTraceInfo } from "./mlflow.ts";
 import { MASTRA_ORIGIN_KEY } from "./request-context.ts";
 import {
+  extractAiDecideStrategy,
   extractModelOverride,
+  MASTRA_AI_DECIDE_STRATEGY_KEY,
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
   MASTRA_SMART_ROUTER_INPUT_KEY,
@@ -431,6 +433,12 @@ export class MastraServer extends ExpressMastraServer {
         body: req.body,
       });
       if (override) requestContext.set(MASTRA_MODEL_OVERRIDE_KEY, override);
+    }
+    const aiDecideStrategy = extractAiDecideStrategy({
+      headers: req.headers as Record<string, string | string[] | undefined>,
+    });
+    if (aiDecideStrategy) {
+      requestContext.set(MASTRA_AI_DECIDE_STRATEGY_KEY, aiDecideStrategy);
     }
   }
 

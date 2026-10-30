@@ -82,7 +82,7 @@ export { databricksFetch, readResponseText, readResponseJson } from "./src/rest.
 export type { DatabricksFetchInit } from "./src/rest.ts";
 export { clearTrustedRequestContext, requestOrigin, stampRequestContextUser, createRequestContext, MastraServer, isMastraRequestAllowed, attachRoutePatchMiddleware, attachStaleResumeRecovery } from "./src/server.ts";
 export type { AttributedIdentity, MastraApiGateOptions } from "./src/server.ts";
-export { MASTRA_MODEL_OVERRIDE_KEY, MASTRA_RESOLVED_MODEL_KEY, MASTRA_SMART_ROUTER_INPUT_KEY, MASTRA_MODEL_ROUTE_KEY, extractModelOverride, resolveServingConfig } from "./src/serving.ts";
+export { MASTRA_MODEL_OVERRIDE_KEY, MASTRA_AI_DECIDE_STRATEGY_KEY, MASTRA_RESOLVED_MODEL_KEY, MASTRA_SMART_ROUTER_INPUT_KEY, MASTRA_MODEL_ROUTE_KEY, extractModelOverride, extractAiDecideStrategy, resolveServingConfig } from "./src/serving.ts";
 export type { MastraModelRoute, ModelOverrideRequest } from "./src/serving.ts";
 export { ORGANIZATION_ASSISTANT_PATH, ORGANIZATION_SKILLS_PATH, personalWorkspacePath, personalSkillsPath } from "./src/skill-paths.ts";
 export { STATEMENT_ROW_CAP, fetchStatementData, fetchStatementEmbedData } from "./src/statement.ts";

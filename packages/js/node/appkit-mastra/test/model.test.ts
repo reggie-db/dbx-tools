@@ -14,6 +14,8 @@ import {
   servingApi,
 } from "../src/model.ts";
 import {
+  extractAiDecideStrategy,
+  MASTRA_AI_DECIDE_STRATEGY_KEY,
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_MODEL_ROUTE_KEY,
   MASTRA_SMART_ROUTER_INPUT_KEY,
@@ -21,6 +23,17 @@ import {
 } from "../src/serving.ts";
 
 describe("Mastra serving API selection", () => {
+  it("reads the ai_decide strategy header", () => {
+    assert.equal(
+      extractAiDecideStrategy({ headers: { "x-dbx-tools-ai-decide-strategy": "cost" } }),
+      "cost",
+    );
+    assert.equal(
+      extractAiDecideStrategy({ headers: { "x-dbx-tools-ai-decide-strategy": "unknown" } }),
+      undefined,
+    );
+  });
+
   it("routes Responses-only models through the native Responses provider", () => {
     for (const modelId of [
       "databricks-gpt-6-astra",
@@ -185,6 +198,45 @@ describe("Mastra serving API selection", () => {
     }
   });
 
+  it("forwards the request ai_decide cost strategy", async () => {
+    const previousFetch = globalThis.fetch;
+    const client = workspaceClient(["databricks-gpt-5-nano", "databricks-gpt-6-1-sol"]);
+    let selectedModel = "";
+    globalThis.fetch = async (input, init) => {
+      const request = new Request(input, init);
+      assert.equal(
+        request.url,
+        "https://example.cloud.databricks.com/api/2.0/ai-functions/ai-decide",
+      );
+      const body = (await request.json()) as {
+        state: { strategy: string; candidates: Array<{ id: string }> };
+      };
+      assert.equal(body.state.strategy, "cost");
+      selectedModel = body.state.candidates[0]!.id;
+      return Response.json({
+        response: {
+          answers: { model: { type: "choice", choice: "model_1", confidence: 0.9 } },
+        },
+      });
+    };
+
+    try {
+      const requestContext = new RequestContext();
+      requestContext.set(MASTRA_AI_DECIDE_STRATEGY_KEY, "cost");
+      await buildModel({}, requestContext, {
+        modelId: "ai-decide",
+        smartRouterInput: { messages: [{ role: "user", content: "Summarize this sentence." }] },
+        workspaceClient: client,
+      });
+
+      const route = requestContext.get(MASTRA_MODEL_ROUTE_KEY) as MastraModelRoute;
+      assert.equal(route.model, selectedModel);
+      assert.equal(route.aiDecide?.strategy, "cost");
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  });
+
   it("keeps internal model classes independent from the request model override", async () => {
     const previousEndpoint = process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
     process.env.DATABRICKS_SERVING_ENDPOINT_NAME = "smart-router";
@@ -310,3 +362,34 @@ describe("Mastra serving API selection", () => {
     assert.equal(catalogueCalls, 1);
   });
 });
+
+function workspaceClient(names: readonly string[]): WorkspaceClient {
+  return {
+    config: {
+      getHost: () => Promise.resolve(new URL("https://example.cloud.databricks.com")),
+      authenticate: (headers: Headers) => {
+        headers.set("authorization", "Bearer test");
+        return Promise.resolve();
+      },
+    },
+    servingEndpoints: {
+      async *list() {
+        for (const name of names) {
+          yield {
+            name,
+            task: "llm/v1/chat",
+            capabilities: { function_calling: true },
+            config: {
+              served_entities: [
+                {
+                  entity_name: `system.ai.${name}`,
+                  foundation_model: { name: `system.ai.${name}` },
+                },
+              ],
+            },
+          };
+        }
+      },
+    },
+  } as unknown as WorkspaceClient;
+}

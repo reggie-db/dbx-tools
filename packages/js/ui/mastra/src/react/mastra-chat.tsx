@@ -7,6 +7,7 @@ import {
   type ModelUsagePartData,
 } from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
+import type { AiDecideStrategy } from "@dbx-tools/shared-model-gateway";
 import { useBrand } from "@dbx-tools/ui/branding/react";
 import type { RequestContext } from "@mastra/client-js";
 import type { FileUIPart, UIMessage } from "ai";
@@ -200,6 +201,8 @@ export interface UseMastraChatOptions<
    * route through a different model or family query.
    */
   model?: string;
+  /** Optimization objective used when {@link model} is the `ai-decide` virtual model. */
+  aiDecideStrategy?: AiDecideStrategy;
   /**
    * Whether a message submitted during an active turn waits in the steer
    * queue. Defaults to true. Set false to interrupt the active turn and start
@@ -335,6 +338,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   modelRef.current = controlledModel ?? model;
   const reasoningEffortRef = useRef(reasoningEffort);
   reasoningEffortRef.current = reasoningEffort;
+  const aiDecideStrategyRef = useRef(options.aiDecideStrategy);
+  aiDecideStrategyRef.current = options.aiDecideStrategy;
   const requestContextRef = useRef(options.requestContext);
   requestContextRef.current = options.requestContext;
   const modelRouteRef = useRef(options.onModelRoute);
@@ -919,6 +924,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           runId,
           threadId: streamThreadId,
           model,
+          aiDecideStrategy: aiDecideStrategyRef.current,
           reasoningEffort: turnReasoningEffort,
           requestContext,
           signal,

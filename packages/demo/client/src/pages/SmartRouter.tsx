@@ -75,6 +75,14 @@ function defaultPanes(
       initialModel: SMART_ROUTER_MODEL,
     });
   }
+  if (models.some((model) => model.name === AI_DECIDE_MODEL)) {
+    panes.push({
+      id: crypto.randomUUID(),
+      kind: "mastra",
+      title: "AI Decide",
+      initialModel: AI_DECIDE_MODEL,
+    });
+  }
   if (rankedModels.gpt) {
     panes.push({
       id: crypto.randomUUID(),
@@ -261,6 +269,8 @@ const SmartRouter = () => {
         title:
           initialModel === SMART_ROUTER_MODEL
             ? "Smart Router"
+            : initialModel === AI_DECIDE_MODEL
+              ? "AI Decide"
             : (model?.displayName ?? model?.name ?? "Mastra default"),
         initialModel,
       },
@@ -428,6 +438,7 @@ const ModelChatPane = ({
       : {
           agentId: "models",
           model: pane.initialModel,
+          aiDecideStrategy: pane.initialModel === AI_DECIDE_MODEL ? "cost" : undefined,
           onModelRoute: recordModelRoute,
           onModelUsage: recordModelUsage,
         }),

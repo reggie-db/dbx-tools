@@ -69,6 +69,7 @@ describe("MastraPluginClient AI SDK transport", () => {
       runId: "run-1",
       threadId: "thread-1",
       model: "model-1",
+      aiDecideStrategy: "cost",
       reasoningEffort: "high",
       requestContext: { storeId: "store-1" },
     });
@@ -77,6 +78,7 @@ describe("MastraPluginClient AI SDK transport", () => {
     assert.equal(received.url, "http://localhost/api/mastra/chat/support");
     assert.equal(received.headers.get("x-mastra-thread-id"), "thread-1");
     assert.equal(received.headers.get("x-mastra-model"), "model-1");
+    assert.equal(received.headers.get("x-dbx-tools-ai-decide-strategy"), "cost");
     const body = await received.json();
     assert.equal(body.runId, "run-1");
     assert.deepEqual(body.messages, [

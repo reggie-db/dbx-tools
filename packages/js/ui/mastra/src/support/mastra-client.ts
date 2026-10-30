@@ -31,6 +31,10 @@ import type {
   ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 import {
+  AI_DECIDE_STRATEGY_HEADER,
+  type AiDecideStrategy,
+} from "@dbx-tools/shared-model-gateway";
+import {
   MastraClient,
   type ListAgentSuspendedRunsResponse,
   type ListMemoryThreadMessagesResponse,
@@ -144,10 +148,17 @@ export class MastraPluginClient extends MastraClient {
    * cookie thread); `model` is a concrete endpoint name (fuzzy-matched
    * server-side) or a model-class slug (`"chat-fast"` / `"chat-thinking"`).
    */
-  #routingHeaders(routing: { threadId?: string; model?: string }): Record<string, string> {
+  #routingHeaders(routing: {
+    threadId?: string;
+    model?: string;
+    aiDecideStrategy?: AiDecideStrategy;
+  }): Record<string, string> {
     const headers: Record<string, string> = {};
     if (routing.threadId) headers[THREAD_ID_HEADER] = routing.threadId;
     if (routing.model) headers[MODEL_OVERRIDE_HEADER] = routing.model;
+    if (routing.aiDecideStrategy) {
+      headers[AI_DECIDE_STRATEGY_HEADER] = routing.aiDecideStrategy;
+    }
     return headers;
   }
 
@@ -156,7 +167,7 @@ export class MastraPluginClient extends MastraClient {
     chatId: string;
     messages: UIMessage[];
     body?: object;
-    routing: { threadId?: string; model?: string };
+    routing: { threadId?: string; model?: string; aiDecideStrategy?: AiDecideStrategy };
     signal?: AbortSignal;
   }): Promise<MastraStreamResponse> {
     let headers = new Headers();
@@ -242,6 +253,7 @@ export class MastraPluginClient extends MastraClient {
     runId: string;
     threadId?: string;
     model?: string;
+    aiDecideStrategy?: AiDecideStrategy;
     reasoningEffort?: ReasoningEffort;
     requestContext?: RequestContext;
     signal?: AbortSignal;

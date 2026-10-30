@@ -58,6 +58,7 @@ import {
   type User,
 } from "./config.ts";
 import {
+  MASTRA_AI_DECIDE_STRATEGY_KEY,
   MASTRA_MODEL_OVERRIDE_KEY,
   MASTRA_MODEL_ROUTE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
@@ -299,6 +300,7 @@ export async function buildModel(
           smartRouterInput,
           await loadEndpoints(),
           client,
+          { strategy: context.get(MASTRA_AI_DECIDE_STRATEGY_KEY) },
         );
         return {
           modelId: selected.endpoint.name,
