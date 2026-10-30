@@ -36,11 +36,13 @@ import {
 // publishes this subpath for exactly that type.
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
 import { resolveProfile } from "@dbx-tools/auth";
+import { DEBUG_CAPTURE_PLUGIN_NAME } from "@dbx-tools/shared-appkit/debug";
 import { log, tieAbortSignal } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
 import { loadBrandContext } from "./brand-context.ts";
 import { createAppKitCacheStorage } from "./cache-storage.ts";
+import { debugCapture } from "./debug/plugin.ts";
 import { installAsUserDevelopmentPatch } from "./identity.ts";
 import {
   createInterceptorContext,
@@ -85,6 +87,9 @@ type AppKitPlugins = NonNullable<AppKitCreateAppConfig["plugins"]>;
  */
 export type AutoConfigureMode = "env" | "provision";
 
+/** Automatic browser debug-capture registration policy. */
+export type DebugCaptureMode = "auto" | boolean;
+
 /** AppKit's `createApp` config plus the dbx-tools auto-configuration switch. */
 export type CreateAppConfig<T extends AppKitPlugins = AppKitPlugins> = Omit<
   AppKitCreateAppConfig,
@@ -94,6 +99,11 @@ export type CreateAppConfig<T extends AppKitPlugins = AppKitPlugins> = Omit<
   onPluginsReady?: (appkit: PluginMap<T>) => void | Promise<void>;
   /** Auto-configuration to run before AppKit boots. Defaults to `"provision"`. */
   autoConfigure?: AutoConfigureMode | false;
+  /**
+   * Register AppKit browser debug-capture routes. `"auto"` (the default)
+   * enables them only when `NODE_ENV` is `"development"`.
+   */
+  debug?: DebugCaptureMode;
   /**
    * One or many {@link Interceptor}s handed an {@link InterceptorContext} once
    * auto-configuration has computed the env. Each receives the resolved env, an
@@ -124,6 +134,16 @@ function usesPlugin<T extends AppKitPlugins>(
 /** Plugin names for boot logs (order preserved). */
 function pluginNames(config: CreateAppConfig | undefined): string[] {
   return (config?.plugins ?? []).map((entry) => entry.name);
+}
+
+/** Resolve the `createApp.debug` policy for one Node environment. */
+export function debugCaptureEnabled(
+  mode: DebugCaptureMode | undefined,
+  nodeEnvironment = process.env.NODE_ENV,
+): boolean {
+  if (mode === true) return true;
+  if (mode === false) return false;
+  return nodeEnvironment === "development";
 }
 
 /**
@@ -314,6 +334,7 @@ export async function createApp<T extends AppKitPlugins>(
 
   const appConfig = { ...config };
   delete appConfig.autoConfigure;
+  delete appConfig.debug;
   delete appConfig.interceptor;
   const onPluginsReady = appConfig.onPluginsReady;
   appConfig.onPluginsReady = async (app) => {
@@ -331,6 +352,14 @@ export async function createApp<T extends AppKitPlugins>(
     appConfig.cache = { ...config?.cache, storage };
     logger.debug("createApp: memory-first cache storage ready", {
       persistent: storage.isPersistent(),
+    });
+  }
+
+  if (debugCaptureEnabled(config?.debug) && !usesPlugin(config, DEBUG_CAPTURE_PLUGIN_NAME)) {
+    appConfig.plugins = [...(appConfig.plugins ?? []), debugCapture()] as unknown as T;
+    logger.debug("createApp: browser debug capture injected", {
+      mode: config?.debug ?? "auto",
+      nodeEnvironment: process.env.NODE_ENV,
     });
   }
 

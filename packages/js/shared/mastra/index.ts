@@ -5,6 +5,7 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-mastra";
 export const PACKAGE_VERSION = "0.9.185";
 export * as feedback from "./src/feedback.ts";
+export * as genieVisualization from "./src/genie-visualization.ts";
 export * as markers from "./src/markers.ts";
 export * as override from "./src/override.ts";
 export * as resume from "./src/resume.ts";
@@ -13,6 +14,8 @@ export * as thread from "./src/thread.ts";
 export * as wire from "./src/wire.ts";
 export { MLFLOW_TRACE_ID_HEADER, MLFLOW_TRACE_PART_TYPE, MlflowTracePartDataSchema, DEFAULT_FEEDBACK_NAME, DEFAULT_COMMENT_NAME, MastraFeedbackValueSchema, FeedbackDestinationSchema, FeedbackModeSchema, FeedbackDestinationsSchema, FeedbackModeOptionSchema, MlflowFeedbackRequestSchema, GenieFeedbackRequestSchema, MastraFeedbackRequestSchema, MastraFeedbackResponseSchema, MastraMlflowExperimentResponseSchema } from "./src/feedback.ts";
 export type { MlflowTracePartData, MastraFeedbackValue, FeedbackDestination, FeedbackMode, FeedbackDestinations, FeedbackModeOption, MlflowFeedbackRequest, GenieFeedbackRequest, MastraFeedbackRequest, MastraFeedbackResponse, MastraMlflowExperimentResponse } from "./src/feedback.ts";
+export { GenieVisualizationModeSchema, GenieVisualizationEmbedSchema, GENIE_VISUALIZATION_MARKER, encodeGenieVisualizationEmbed, parseGenieVisualizationEmbed, genieVisualizationImagePath } from "./src/genie-visualization.ts";
+export type { GenieVisualizationMode, GenieVisualizationEmbed } from "./src/genie-visualization.ts";
 export { isUuid, formatMarker, parseMarkers, stripIncompleteMarkerTail } from "./src/markers.ts";
 export type { MarkerType, ParsedMarker } from "./src/markers.ts";
 export { MODEL_OVERRIDE_HEADER, MODEL_OVERRIDE_QUERY, MODEL_OVERRIDE_BODY_FIELDS } from "./src/override.ts";

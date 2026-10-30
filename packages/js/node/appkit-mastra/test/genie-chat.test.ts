@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { WorkspaceClient } from "@databricks/appkit";
 import type { GenieMessage } from "@dbx-tools/shared-genie";
-import { GENIE_PROGRESS_PART_TYPE } from "@dbx-tools/shared-mastra";
+import {
+  GENIE_PROGRESS_PART_TYPE,
+  GENIE_VISUALIZATION_MARKER,
+  parseGenieVisualizationEmbed,
+  parseMarkers,
+} from "@dbx-tools/shared-mastra";
 import type { MastraMemory } from "@mastra/core/memory";
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 
@@ -46,6 +51,73 @@ function agentStream(events: object[]): ReadableStream<Uint8Array> {
 }
 
 describe("genieAnswerText", () => {
+  test("uses the exact image attachment and preserves inline order in image mode and history", () => {
+    const space = { ...SPACE, visualization: "image" as const };
+    const statementId = "01f1d46a-94ed-1d92-932d-f8b2d193bbef";
+    const message = genieMessage({
+      attachments: [
+        { attachment_id: "q1", query: { statement_id: statementId } },
+        { attachment_id: "v1", viz: { title: "Weekly trend", query_attachment_id: "q1" } },
+        { text: { content: "Before." } },
+        { text: { content: "", metadata: { viz: { attachment_id: "v1" } } } },
+        { text: { content: "After." } },
+      ],
+    });
+    const answer = genieAnswerText(message, space);
+    const markers = parseMarkers(answer);
+    expect(markers).toHaveLength(1);
+    expect(markers[0]?.type).toBe(GENIE_VISUALIZATION_MARKER);
+    expect(parseGenieVisualizationEmbed(markers[0]!.id)).toEqual({
+      alias: SPACE.alias,
+      conversation_id: message.conversation_id,
+      message_id: message.message_id,
+      attachment_id: "v1",
+      statementId,
+    });
+    expect(answer.startsWith("Before.\n\n")).toBe(true);
+    expect(answer.endsWith("\n\nAfter.")).toBe(true);
+    expect(answer).not.toContain("[chart:");
+    expect(answer).not.toContain("[data:");
+    expect(genieMessageToUiMessages(message, space)[1]?.parts.at(-1)).toMatchObject({
+      type: "text",
+      text: answer,
+    });
+  });
+
+  test("appends unplaced original images and leaves unvisualized queries as data", () => {
+    const statementId = "01f1d46a-94ed-1d92-932d-f8b2d193bbef";
+    const answer = genieAnswerText(
+      genieMessage({
+        attachments: [
+          { attachment_id: "q1", query: { statement_id: statementId } },
+          { attachment_id: "v1", viz: { query_attachment_id: "q1" } },
+          { attachment_id: "q2", query: { statement_id: "stmt-2" } },
+          { text: { content: "Answer." } },
+        ],
+      }),
+      { ...SPACE, visualization: "image" },
+    );
+    expect(parseMarkers(answer).map((marker) => marker.type)).toEqual([
+      GENIE_VISUALIZATION_MARKER,
+      "data",
+    ]);
+    expect(answer.endsWith("[data:stmt-2]")).toBe(true);
+  });
+
+  test("does not silently replot a malformed original image reference", () => {
+    const answer = genieAnswerText(
+      genieMessage({
+        conversation_id: "",
+        attachments: [
+          { attachment_id: "q1", query: { statement_id: "stmt-1" } },
+          { attachment_id: "v1", viz: { query_attachment_id: "q1" } },
+        ],
+      }),
+      { ...SPACE, visualization: "image" },
+    );
+    expect(answer).toBe("[data:stmt-1]");
+  });
+
   test("joins text attachments and embeds polled statements", () => {
     const text = genieAnswerText(
       genieMessage({

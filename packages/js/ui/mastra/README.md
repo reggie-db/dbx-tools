@@ -226,6 +226,13 @@ supervisor agent:
 <MastraChat genieSpace="sales" threadPlacement="auto" enableExport />
 ```
 
+Set `genieVisualization="image"` to show Genie's original rendered PNG in the
+Chart tab while keeping the linked query result in the Table tab:
+
+```tsx
+<MastraChat genieSpace="sales" genieVisualization="image" />
+```
+
 The alias comes from the server plugin's `genieSpaces`. The client still uses
 AI SDK `UIMessage` streams and the same `ChatView`. Genie conversations replace
 Mastra threads and Genie messages remain the visible history. When Mastra
@@ -236,8 +243,9 @@ Turns and history require the Genie Agent API and never fall back to classic
 Genie message polling. The sidebar filters the Genie conversation listing to
 Agent Mode conversations. Genie decides whether a query should be visualized.
 Visualization attachments render through AppKit UI's native
-`GenieQueryVisualization`, with Chart and Table tabs. This does not invoke a
-supervisor or the Mastra Model Serving chart planner. Queries without a
+`GenieQueryVisualization`, with Chart and Table tabs, unless image mode is
+selected. This does not invoke a supervisor or the Mastra Model Serving chart
+planner. Queries without a
 visualization attachment render through the existing sortable data table.
 
 Direct mode requires the signed-in user's Databricks OBO context. It supports

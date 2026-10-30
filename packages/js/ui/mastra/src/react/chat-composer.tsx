@@ -451,6 +451,11 @@ export const ChatComposer = ({
             ref={textareaRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onMouseDown={(event) => {
+              if (event.button !== 0 || document.activeElement === event.currentTarget) return;
+              event.currentTarget.focus({ preventScroll: true });
+              event.preventDefault();
+            }}
             onPaste={(event) => {
               if (!allowAttachments) return;
               const pastedImages = Array.from(event.clipboardData.files).filter((file) =>

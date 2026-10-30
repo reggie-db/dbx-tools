@@ -183,9 +183,9 @@ export const GenieTextAttachmentSchema = dashboards.textAttachmentSchema.extend(
 export type GenieTextAttachment = z.infer<typeof GenieTextAttachmentSchema>;
 
 /**
- * Visualization Genie requested for one of its query results. Genie stores only
- * the title and the query attachment it charts; the client draws the chart from
- * that query's statement rows.
+ * Visualization Genie generated for one query result. The attachment carries
+ * its title and query link; its rendered PNG is retrieved separately through
+ * the visualization download endpoint.
  */
 export const GenieVizAttachmentSchema = z
   .object({

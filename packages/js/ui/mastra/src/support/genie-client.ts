@@ -1,5 +1,6 @@
 import {
   type MastraClientConfig,
+  type GenieVisualizationMode,
   genieRoutePath,
   MASTRA_ROUTES,
   GENIE_CONVERSATION_PART_TYPE,
@@ -38,14 +39,17 @@ export class GenieChatClient extends MastraPluginClient {
   override readonly threadRename = false;
   override readonly attachments = false;
   override readonly followUpSuggestions: "none" | "genie";
+  /** Renderer requested for direct Genie visualization markers. */
+  readonly visualizationMode: GenieVisualizationMode | undefined;
   /** Local and resolved thread ids mapped to their Genie conversation id. */
   readonly #conversationIds = new Map<string, string>();
   /** Transcript message id to Genie message id, for regenerate cleanup. */
   readonly #genieMessageIds = new Map<string, string>();
 
-  constructor(config: MastraClientConfig, alias: string) {
+  constructor(config: MastraClientConfig, alias: string, visualization?: GenieVisualizationMode) {
     super(config);
     this.alias = alias;
+    this.visualizationMode = visualization;
     this.feedbackModes = config.feedbackModes?.includes("genie") ? ["genie"] : [];
     this.followUpSuggestions =
       config.followUpSuggestions === "genie" || config.followUpSuggestions === "auto"
@@ -99,6 +103,7 @@ export class GenieChatClient extends MastraPluginClient {
         question,
         ...(conversationId ? { conversationId } : {}),
         ...(params.requestContext ? { requestContext: params.requestContext } : {}),
+        ...(this.visualizationMode ? { visualization: this.visualizationMode } : {}),
       },
       routing: {},
       signal: params.signal,
@@ -188,8 +193,12 @@ export class GenieChatClient extends MastraPluginClient {
     const page = options.page ?? 0;
     let messages: UIMessage[] = [];
     if (page === 0) {
+      const url = this.#url(MASTRA_ROUTES.threads, options.threadId, MASTRA_ROUTES.messages);
+      const historyUrl = this.visualizationMode
+        ? `${url}?${new URLSearchParams({ visualization: this.visualizationMode })}`
+        : url;
       const payload = await this.getJson(
-        this.#url(MASTRA_ROUTES.threads, options.threadId, MASTRA_ROUTES.messages),
+        historyUrl,
         GenieThreadMessagesResponseSchema,
         options.signal,
       );

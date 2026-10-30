@@ -29,6 +29,7 @@ packages:
   - packages/js/node/postgres
   - packages/js/node/search
   - packages/js/node/tunnel
+  - packages/js/shared/appkit
   - packages/js/shared/auth
   - packages/js/shared/core
   - packages/js/shared/email

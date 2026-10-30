@@ -433,6 +433,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/lakebase@workspace:^",
     "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/shared-appkit@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-fs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
@@ -968,6 +969,15 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
 
 // Shared contracts
 
+// shared-appkit: browser-safe contracts for dbx-tools AppKit extensions.
+project.applyToProjects(root, { identifierName: "shared-appkit", tags: "shared" }, (p) => {
+  p.package.addField(
+    "description",
+    "Browser-safe contracts for dbx-tools AppKit plugins and development diagnostics",
+  );
+  p.addDeps("zod@catalog:");
+});
+
 // shared-auth: browser-safe passwordless and Databricks authentication schemas.
 project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" }, (p) => {
   p.package.addField(
@@ -1211,6 +1221,7 @@ project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
   p.addDeps(
     "@better-auth/passkey@catalog:",
     "@databricks/appkit-ui@catalog:",
+    "@dbx-tools/shared-appkit@workspace:^",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-email@workspace:^",

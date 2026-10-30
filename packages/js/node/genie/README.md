@@ -183,6 +183,35 @@ thrown.
 - `pollIntervalMs` - fallback polling cadence, default `500`.
 - `context` - SDK `Context` or `AbortSignal` for cancellation.
 
+## Download an original chart
+
+After requesting visualizations, select the message attachment with a `viz`
+field and download its PNG using the same conversation and message IDs:
+
+```ts
+import { downloadGenieVisualization } from "@dbx-tools/genie";
+
+const visualization = message.attachments?.find((attachment) => attachment.viz);
+if (visualization?.attachment_id) {
+  const png = await downloadGenieVisualization(
+    {
+      space_id: message.space_id,
+      conversation_id: message.conversation_id,
+      message_id: message.message_id,
+      attachment_id: visualization.attachment_id,
+    },
+    { workspaceClient },
+  );
+}
+```
+
+Use the visualization's attachment ID, not its linked query attachment ID.
+The SDK's `raw: true` transport returns the binary body and keeps normal SDK
+authentication and cancellation. The helper validates the PNG response and
+returns the original bytes; it does not replot data or convert images to SVG.
+This endpoint also accepts visualization attachments from Agent Mode
+conversations.
+
 ## Modules
 
 - `chat` - `genieChat()` raw snapshot stream and `genieEventChat()` typed event
@@ -190,6 +219,7 @@ thrown.
 - `agentMode` - `genieAgentModeChat()`, availability classification, and Agent
   Mode transport options plus Agent Mode conversation history.
 - `space` - `getGenieSpace()` and `genieSampleQuestions()`.
+- `visualization` - `downloadGenieVisualization()` for original PNG downloads.
 
 The AppKit-Mastra package builds its Genie tools on top of this driver. See
 [@dbx-tools/appkit-mastra](../appkit-mastra) for the agent-level

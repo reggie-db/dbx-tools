@@ -3,7 +3,8 @@ import { useLayoutEffect, type RefObject } from "react";
 const COMPOSER_INPUT_SELECTOR = ".aui-composer-input";
 const VISUAL_VIEWPORT_EVENTS = ["resize", "scroll", "scrollend"] as const;
 const KEYBOARD_INSET_THRESHOLD_PX = 80;
-const KEYBOARD_CLOSE_FALLBACK_MS = 700;
+const KEYBOARD_CLOSE_DURATION_MS = 460;
+const KEYBOARD_CLOSE_FALLBACK_MS = 650;
 
 const isKeyboardVisible = (viewport: VisualViewport | null): boolean =>
   Boolean(viewport && window.innerHeight - viewport.height > KEYBOARD_INSET_THRESHOLD_PX);
@@ -22,12 +23,11 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
     if (!frame) return;
 
     const viewport = window.visualViewport;
-    let keyboardClosing = false;
     let keyboardCloseTimer = 0;
 
     const clearKeyboardClosingState = () => {
-      keyboardClosing = false;
       window.clearTimeout(keyboardCloseTimer);
+      keyboardCloseTimer = 0;
       delete frame.dataset.keyboardClosing;
     };
 
@@ -37,19 +37,14 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
       const width = viewport?.width ?? window.innerWidth;
       const measuredHeight = viewport?.height ?? window.innerHeight;
       const viewportRestored = window.innerHeight - measuredHeight <= KEYBOARD_INSET_THRESHOLD_PX;
-      if (keyboardClosing && viewportRestored) clearKeyboardClosingState();
-
-      // WebKit can report intermediate keyboard-close heights after the textarea has blurred. Keep
-      // the larger layout height during that short interval so the composer does not jump upward,
-      // while CSS smooths the shell back to the restored viewport.
-      const height = keyboardClosing
-        ? Math.max(measuredHeight, window.innerHeight)
-        : measuredHeight;
+      if (frame.dataset.keyboardClosing === "true" && viewportRestored) {
+        clearKeyboardClosingState();
+      }
 
       frame.style.setProperty("--demo-viewport-top", `${top}px`);
       frame.style.setProperty("--demo-viewport-left", `${left}px`);
       frame.style.setProperty("--demo-viewport-width", `${width}px`);
-      frame.style.setProperty("--demo-viewport-height", `${height}px`);
+      frame.style.setProperty("--demo-viewport-height", `${measuredHeight}px`);
     };
 
     const handleFocusOut = (event: FocusEvent) => {
@@ -59,14 +54,13 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
         return;
       }
 
-      keyboardClosing = true;
       frame.dataset.keyboardClosing = "true";
+      frame.style.setProperty("--demo-keyboard-close-duration", `${KEYBOARD_CLOSE_DURATION_MS}ms`);
+      // Activate the transition before moving the shell to the restored layout height.
+      void frame.offsetHeight;
+      frame.style.setProperty("--demo-viewport-height", `${window.innerHeight}px`);
       window.clearTimeout(keyboardCloseTimer);
-      keyboardCloseTimer = window.setTimeout(() => {
-        clearKeyboardClosingState();
-        commit();
-      }, KEYBOARD_CLOSE_FALLBACK_MS);
-      commit();
+      keyboardCloseTimer = window.setTimeout(clearKeyboardClosingState, KEYBOARD_CLOSE_FALLBACK_MS);
     };
 
     for (const eventName of VISUAL_VIEWPORT_EVENTS) {

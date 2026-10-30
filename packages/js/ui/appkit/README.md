@@ -15,6 +15,12 @@ import "@dbx-tools/ui/styles.css";
 `./styles.css` provides Tailwind, Streamdown, code-block, and brand-token bridge
 styles for dbx-tools UI packages.
 
+The same entrypoint exports `BrowserDebugCaptureButton` and
+`useBrowserDebugCapture`. They appear only when the AppKit server publishes the
+debug-capture plugin configuration. Pass named CSS selectors through `targets`
+to include component rectangles, scroll metrics, dataset state, or inline CSS
+viewport variables in each browser event snapshot.
+
 ## Choose a UI package
 
 - Use `@dbx-tools/ui` for common AppKit components, branding, authentication,

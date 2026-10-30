@@ -25,6 +25,9 @@
  *   - `[visualization:<statementId>]` - the same statement rendered by
  *     AppKit UI's native Genie Chart/Table component after Genie requested a
  *     visualization.
+ *   - `[genie-visualization:<reference>]` - an encoded, schema-validated Genie
+ *     image reference with conversation, message, visualization attachment,
+ *     and backing statement IDs. It is not a UUID.
  *
  * The `<id>` of a real embed is UUID-shaped (`8-4-4-4-12` hex): both
  * id kinds above are UUIDs, just different versions (chart = v4,
@@ -37,7 +40,8 @@
  * lets the host UI consume and obscure the bogus marker instead of
  * leaking the literal `[chart:...]` text into the rendered prose.
  * Whether an id is a genuine embed is a separate {@link isUuid}
- * check the caller runs on {@link ParsedMarker.id}.
+ * check the caller runs on {@link ParsedMarker.id}. Original Genie image
+ * references instead use `parseGenieVisualizationEmbed`.
  *
  * Parse everything through {@link parseMarkers}, validate the id with
  * {@link isUuid}, and branch on the returned {@link ParsedMarker.type}.

@@ -1,7 +1,8 @@
 import { Button, Separator } from "@databricks/appkit-ui/react";
 import { browser, getAuthStatus } from "@dbx-tools/shared-auth";
-import { defaultBrandContext } from "@dbx-tools/shared-core";
+import { defaultBrandContext, PACKAGE_VERSION } from "@dbx-tools/shared-core";
 import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui/branding/react";
+import { BrowserDebugCaptureButton } from "@dbx-tools/ui/react";
 import { MastraAssistant, useMastraAssistant } from "@dbx-tools/ui-mastra/react";
 import { CircleHelpIcon, LoaderCircleIcon, LogOutIcon, PanelRightCloseIcon } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -13,6 +14,27 @@ const Bus = lazy(() => import("@/pages/Bus"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Search = lazy(() => import("@/pages/Search"));
 const Lakebox = lazy(() => import("@/pages/Lakebox"));
+
+const DEBUG_CAPTURE_TARGETS = {
+  shell: {
+    selector: ".demo-shell",
+    dataset: ["keyboardClosing"],
+    styleProperties: [
+      "--demo-viewport-top",
+      "--demo-viewport-left",
+      "--demo-viewport-width",
+      "--demo-viewport-height",
+    ],
+  },
+  header: ".demo-header",
+  transcript: {
+    selector: '[data-slot="aui_thread-viewport"]',
+    scroll: true,
+  },
+  composerDock: '[data-slot="aui_composer-dock"]',
+  composerInput: ".aui-composer-input",
+  scrollToBottom: '[aria-label="Jump to latest message"]',
+} as const;
 
 // Real browser routes keep deep links refreshable while lazy page modules ensure
 // each feature's dependencies load only when that route is selected. AppKit's
@@ -226,41 +248,44 @@ const Nav = ({
         <span className="hidden sm:inline">{context.shortName}</span>
       </Link>
       <NavRouteStrip routes={routes} pathname={pathname} />
-      {!guideOpen || logoutEnabled ? (
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          {!guideOpen ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="hidden size-8 xl:inline-flex"
-              aria-label="Show demo guide"
-              title="Show demo guide"
-              onClick={onShowGuide}
-            >
-              <CircleHelpIcon className="size-4" />
-            </Button>
-          ) : null}
-          {logoutEnabled ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="size-8"
-              aria-label={loggingOut ? "Logging out" : "Log out"}
-              aria-busy={loggingOut}
-              title="End the tunnel session"
-              onClick={logout}
-            >
-              {loggingOut ? (
-                <LoaderCircleIcon className="size-4 animate-spin" />
-              ) : (
-                <LogOutIcon className="size-4" />
-              )}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        {!guideOpen ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="hidden size-8 xl:inline-flex"
+            aria-label="Show demo guide"
+            title="Show demo guide"
+            onClick={onShowGuide}
+          >
+            <CircleHelpIcon className="size-4" />
+          </Button>
+        ) : null}
+        <BrowserDebugCaptureButton
+          appVersion={PACKAGE_VERSION}
+          metadata={{ application: "dbx-tools-demo" }}
+          targets={DEBUG_CAPTURE_TARGETS}
+        />
+        {logoutEnabled ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-8"
+            aria-label={loggingOut ? "Logging out" : "Log out"}
+            aria-busy={loggingOut}
+            title="End the tunnel session"
+            onClick={logout}
+          >
+            {loggingOut ? (
+              <LoaderCircleIcon className="size-4 animate-spin" />
+            ) : (
+              <LogOutIcon className="size-4" />
+            )}
+          </Button>
+        ) : null}
+      </div>
     </nav>
   );
 };

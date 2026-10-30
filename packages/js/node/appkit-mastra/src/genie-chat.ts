@@ -26,6 +26,10 @@ import {
   type GenieWriterEvent,
   type GenieConversationPartData,
   GENIE_CONVERSATION_PART_TYPE,
+  type GenieVisualizationMode,
+  GenieVisualizationEmbedSchema,
+  encodeGenieVisualizationEmbed,
+  GENIE_VISUALIZATION_MARKER,
 } from "@dbx-tools/shared-mastra";
 import type { MastraDBMessage } from "@mastra/core/agent";
 import type { MastraMemory } from "@mastra/core/memory";
@@ -57,6 +61,8 @@ export interface GenieChatSpace {
   alias: string;
   /** Genie `space_id`. */
   spaceId: string;
+  /** Chart renderer for direct turns and reloaded history. Defaults to AppKit. */
+  visualization?: GenieVisualizationMode;
 }
 
 /**
@@ -68,11 +74,11 @@ export interface GenieChatSpace {
  * Agent Mode's Markdown copy of a query result is dropped because either embed
  * renders the same rows.
  */
-export function genieAnswerText(message: GenieMessage): string {
+export function genieAnswerText(message: GenieMessage, space?: GenieChatSpace): string {
   const attachments = message.attachments ?? [];
   const statementsByQuery = new Map<string, string>();
   const queriesByVisualization = new Map<string, string>();
-  const visualizedQueries = new Set<string>();
+  const visualizationMarkers = new Map<string, string>();
   for (const attachment of attachments) {
     const statementId = attachment.query?.statement_id;
     if (statementId && attachment.attachment_id) {
@@ -80,7 +86,27 @@ export function genieAnswerText(message: GenieMessage): string {
     }
     if (attachment.attachment_id && attachment.viz?.query_attachment_id) {
       queriesByVisualization.set(attachment.attachment_id, attachment.viz.query_attachment_id);
-      visualizedQueries.add(attachment.viz.query_attachment_id);
+    }
+  }
+  for (const [visualizationId, queryId] of queriesByVisualization) {
+    const statementId = statementsByQuery.get(queryId);
+    if (!statementId) continue;
+    if (space?.visualization !== "image") {
+      visualizationMarkers.set(visualizationId, formatMarker("visualization", statementId));
+      continue;
+    }
+    const reference = GenieVisualizationEmbedSchema.safeParse({
+      alias: space.alias,
+      conversation_id: message.conversation_id,
+      message_id: message.message_id || message.id,
+      attachment_id: visualizationId,
+      statementId,
+    });
+    if (reference.success) {
+      visualizationMarkers.set(
+        visualizationId,
+        formatMarker(GENIE_VISUALIZATION_MARKER, encodeGenieVisualizationEmbed(reference.data)),
+      );
     }
   }
 
@@ -93,8 +119,9 @@ export function genieAnswerText(message: GenieMessage): string {
     if (visualizationId) {
       const queryId = queriesByVisualization.get(visualizationId);
       const statementId = queryId ? statementsByQuery.get(queryId) : undefined;
-      if (statementId) {
-        sections.push(formatMarker("visualization", statementId));
+      const marker = visualizationMarkers.get(visualizationId);
+      if (statementId && marker) {
+        sections.push(marker);
         inlineStatements.add(statementId);
       }
       continue;
@@ -108,10 +135,12 @@ export function genieAnswerText(message: GenieMessage): string {
     if (!statementId || inlineStatements.has(statementId)) continue;
     const description = attachment.query?.description?.trim();
     if (description) sections.push(description);
+    const visualizationId = [...queriesByVisualization].find(
+      ([, queryId]) => queryId === attachment.attachment_id,
+    )?.[0];
     sections.push(
-      attachment.attachment_id && visualizedQueries.has(attachment.attachment_id)
-        ? formatMarker("visualization", statementId)
-        : formatMarker("data", statementId),
+      (visualizationId ? visualizationMarkers.get(visualizationId) : undefined) ??
+        formatMarker("data", statementId),
     );
   }
   if (sections.length === 0 && message.error?.error) sections.push(message.error.error);
@@ -303,7 +332,7 @@ export function genieMessageToUiMessages(
         input,
         output: { message },
       };
-  const answer = genieAnswerText(message);
+  const answer = genieAnswerText(message, space);
   const assistantParts = [
     toolPart,
     ...progress,
@@ -510,7 +539,7 @@ export function genieChatStream(options: {
           : { type: "tool-output-available", toolCallId, output: { message: finalMessage } },
       );
       writer.write({ type: "finish-step" });
-      const answer = genieAnswerText(finalMessage);
+      const answer = genieAnswerText(finalMessage, space);
       if (answer) {
         const textId = id();
         writer.write({ type: "start-step" });

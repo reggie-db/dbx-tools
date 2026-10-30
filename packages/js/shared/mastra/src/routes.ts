@@ -39,6 +39,8 @@ export const MASTRA_ROUTES = {
   genie: "/genie",
   threads: "/threads",
   messages: "/messages",
+  attachments: "/attachments",
+  visualization: "/visualization",
 } as const;
 
 /**

@@ -142,6 +142,7 @@ reason.
 | Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                                      |
 | --------------- | ------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema. `"env"` resolves the connection only. `false` skips auto-configuration. Omit it to gate resolution on native `lakebase` or `database`. Implicit database-only resolution does not grant the cache schema. |
+| `debug`         | `"auto" \| boolean`             | `"auto"`      | Registers the browser debug-capture plugin. Auto mode enables it only when `NODE_ENV=development`; `true` and `false` force the choice.                                                                                                                                                                                                              |
 | `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env and AppKit lifecycle registration through `onLifecycle`.                                                                                                                                   |
 
 Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
@@ -166,6 +167,23 @@ const storage = await cacheStorage.createAppKitCacheStorage();
 AppKit closes injected storage during shutdown. Native composition should call
 `close()` when it owns the storage directly. That drains tracked write-behind
 work before disconnecting the persistent levels.
+
+## Browser debug capture
+
+Development `createApp()` calls automatically register a hidden browser capture
+route. `@dbx-tools/ui/react` exposes `BrowserDebugCaptureButton`, which records
+bounded browser, viewport, focus, input, pointer, touch, scroll, and resize
+diagnostics without recording input values or printable key content. Captures
+are JSONL files under `.tmp/debug-captures` in development.
+
+Register the plugin explicitly when native AppKit composition or a custom
+capture directory is required:
+
+```ts
+import { debugCapture } from "@dbx-tools/appkit/debug";
+
+debugCapture({ directory: ".tmp/browser-captures" });
+```
 
 ## Filesystem cache plugin
 

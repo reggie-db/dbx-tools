@@ -87,6 +87,60 @@ describe("GenieChatClient", () => {
     expect(bodies[1]).toMatchObject({ question: "And last year?", conversationId: "conv-1" });
   });
 
+  test("passes the selected visualization renderer through turns and history", async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(new URL(String(input), "http://localhost"), init);
+      requests.push(request);
+      if (request.method === "POST") {
+        return sseResponse([{ type: "start" }, { type: "finish" }]);
+      }
+      return Response.json({
+        messages: [
+          { id: "assistant-1", role: "assistant", parts: [{ type: "text", text: "Answer" }] },
+        ],
+      });
+    }) as typeof fetch;
+    const client = new GenieChatClient(CONFIG, "default", "image");
+
+    const turn = await client.streamAgent({
+      agentId: "genie:default",
+      messages: [question("Top stores?")],
+      runId: "run-1",
+      threadId: "conv-1",
+    });
+    await drain(turn.stream);
+    await client.history({ threadId: "conv-1" });
+
+    expect(await requests[0]?.json()).toMatchObject({
+      question: "Top stores?",
+      visualization: "image",
+    });
+    expect(requests[1]?.url).toBe(
+      "http://localhost/api/mastra/genie/default/threads/conv-1/messages?visualization=image",
+    );
+  });
+
+  test("keeps the default renderer implicit", async () => {
+    let body: unknown;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body));
+      return sseResponse([{ type: "start" }, { type: "finish" }]);
+    }) as typeof fetch;
+    const client = new GenieChatClient(CONFIG, "default");
+
+    const turn = await client.streamAgent({
+      agentId: "genie:default",
+      messages: [question("Top stores?")],
+      runId: "run-1",
+      threadId: "conv-1",
+    });
+    await drain(turn.stream);
+
+    expect(body).toMatchObject({ question: "Top stores?" });
+    expect(body).not.toHaveProperty("visualization");
+  });
+
   test("continues an announced conversation before the local thread id is adopted", async () => {
     const bodies: unknown[] = [];
     globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
