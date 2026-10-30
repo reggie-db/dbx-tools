@@ -23,6 +23,7 @@ import {
   mlflowAssessmentTraceId,
   mlflowEnabled,
   mlflowExperimentManagerUrl,
+  mlflowExperimentViewerUrl,
   persistAppMlflowTraceInfo,
   resetAppMlflowTraceInfo,
   resetUcTracePrefixCache,
@@ -34,6 +35,8 @@ import { APPKIT_AGENT_TRACE_ROOT_ATTR } from "../src/trace-attributes.ts";
 const originalExperimentId = process.env.MLFLOW_EXPERIMENT_ID;
 const originalExperimentName = process.env.MLFLOW_EXPERIMENT_NAME;
 const originalUcPrefix = process.env.MLFLOW_UC_TRACE_PREFIX;
+const originalMlflowWarehouseId = process.env.MLFLOW_TRACING_SQL_WAREHOUSE_ID;
+const originalDatabricksWarehouseId = process.env.DATABRICKS_WAREHOUSE_ID;
 const originalTrackingUri = process.env.MLFLOW_TRACKING_URI;
 const originalProfile = process.env.DATABRICKS_CONFIG_PROFILE;
 const originalAppOverride = process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
@@ -62,6 +65,8 @@ afterEach(() => {
   restoreEnvironment("MLFLOW_EXPERIMENT_ID", originalExperimentId);
   restoreEnvironment("MLFLOW_EXPERIMENT_NAME", originalExperimentName);
   restoreEnvironment("MLFLOW_UC_TRACE_PREFIX", originalUcPrefix);
+  restoreEnvironment("MLFLOW_TRACING_SQL_WAREHOUSE_ID", originalMlflowWarehouseId);
+  restoreEnvironment("DATABRICKS_WAREHOUSE_ID", originalDatabricksWarehouseId);
   restoreEnvironment("MLFLOW_TRACKING_URI", originalTrackingUri);
   restoreEnvironment("DATABRICKS_CONFIG_PROFILE", originalProfile);
   restoreEnvironment("DBX_TOOLS_DATABRICKS_APP_ENV", originalAppOverride);
@@ -379,7 +384,7 @@ describe("UC assessment trace ids", () => {
   it("builds the UC URI Databricks assessments expect", () => {
     assert.equal(
       mlflowAssessmentTraceId("tr-abc", "trace:/reggie.mlflow_traces.demo_otel/"),
-      "trace:/reggie.mlflow_traces.demo_otel/tr-abc",
+      "trace:/reggie.mlflow_traces.demo_otel/abc",
     );
   });
 });
@@ -412,6 +417,7 @@ describe("logFeedback", () => {
   it("posts assessments using the experiment's UC destination tag", async () => {
     delete process.env.MLFLOW_UC_TRACE_PREFIX;
     process.env.MLFLOW_EXPERIMENT_ID = "123";
+    process.env.DATABRICKS_WAREHOUSE_ID = "warehouse-1";
     const urls: string[] = [];
     const bodies: unknown[] = [];
     globalThis.fetch = async (input, init) => {
@@ -430,7 +436,7 @@ describe("logFeedback", () => {
         });
       }
       bodies.push(JSON.parse(String(init?.body ?? "{}")));
-      return Response.json({ assessment: { assessment_id: "a-1" } });
+      return Response.json({ assessment_id: "a-1" });
     };
 
     assert.equal(
@@ -443,20 +449,96 @@ describe("logFeedback", () => {
     );
     assert.equal(
       urls[1],
-      "https://workspace.example.com/api/3.0/mlflow/traces/trace%3A%2Fcat.schema.prefix%2Ftr-abc/assessments",
+      "https://workspace.example.com/api/4.0/mlflow/traces/cat.schema.prefix/abc/assessments?sql_warehouse_id=warehouse-1",
     );
-    assert.deepEqual(bodies[0], {
-      assessment: {
-        trace_id: "trace:/cat.schema.prefix/tr-abc",
+    const body = bodies[0] as Record<string, unknown>;
+    assert.deepEqual(
+      {
+        ...body,
+        create_time: "<timestamp>",
+        last_update_time: "<timestamp>",
+      },
+      {
+        trace_id: "abc",
         assessment_name: "user_feedback",
+        trace_location: {
+          type: "UC_TABLE_PREFIX",
+          uc_table_prefix: {
+            catalog_name: "cat",
+            schema_name: "schema",
+            table_prefix: "prefix",
+          },
+        },
         source: { source_type: "HUMAN", source_id: "ada@example.com" },
         feedback: { value: true },
+        create_time: "<timestamp>",
+        last_update_time: "<timestamp>",
+        valid: true,
       },
-    });
+    );
+    assert.match(String(body.create_time), /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(String(body.last_update_time), /^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("keeps the V3 assessment contract for non-UC traces", async () => {
+    process.env.MLFLOW_UC_TRACE_PREFIX = "";
+    delete process.env.MLFLOW_EXPERIMENT_ID;
+    const requests: Array<{ url: string; body: unknown }> = [];
+    globalThis.fetch = async (input, init) => {
+      requests.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? "{}")),
+      });
+      return Response.json({ assessment: { assessment_id: "a-2" } });
+    };
+
+    assert.equal(
+      await logFeedback(workspaceClient(), {
+        traceId: "tr-def",
+        value: false,
+        sourceId: "ada@example.com",
+      }),
+      "a-2",
+    );
+    assert.deepEqual(requests, [
+      {
+        url: "https://workspace.example.com/api/3.0/mlflow/traces/tr-def/assessments",
+        body: {
+          assessment: {
+            trace_id: "tr-def",
+            assessment_name: "user_feedback",
+            source: { source_type: "HUMAN", source_id: "ada@example.com" },
+            feedback: { value: false },
+          },
+        },
+      },
+    ]);
   });
 });
 
 describe("MLflow experiment manager link", () => {
+  it("returns the experiment URL when the OBO client can read it", async () => {
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    globalThis.fetch = async (input) => {
+      if (String(input).endsWith("/api/2.0/mlflow/experiments/get?experiment_id=123")) {
+        return Response.json({ experiment: { experiment_id: "123", name: "demo" } });
+      }
+      return new Response(null, { status: 404 });
+    };
+
+    assert.equal(
+      await mlflowExperimentViewerUrl(workspaceClient()),
+      "https://workspace.example.com/ml/experiments/123",
+    );
+  });
+
+  it("omits the experiment URL when the OBO client cannot read it", async () => {
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    globalThis.fetch = async () => new Response(null, { status: 403 });
+
+    assert.equal(await mlflowExperimentViewerUrl(workspaceClient()), undefined);
+  });
+
   it("returns the experiment URL for a manager through group permissions", async () => {
     process.env.MLFLOW_EXPERIMENT_ID = "123";
     globalThis.fetch = async (input) => {
@@ -486,7 +568,7 @@ describe("MLflow experiment manager link", () => {
     );
   });
 
-  it("omits the link when effective management cannot be established", async () => {
+  it("omits the link when effective view access cannot be established", async () => {
     process.env.MLFLOW_EXPERIMENT_ID = "123";
     globalThis.fetch = async (input) => {
       const url = String(input);
@@ -497,7 +579,7 @@ describe("MLflow experiment manager link", () => {
         access_control_list: [
           {
             user_name: "viewer@example.com",
-            all_permissions: [{ permission_level: "CAN_EDIT" }],
+            all_permissions: [],
           },
         ],
       });
@@ -506,12 +588,42 @@ describe("MLflow experiment manager link", () => {
     assert.equal(await mlflowExperimentManagerUrl(workspaceClient()), undefined);
   });
 
-  it("uses the forwarded viewer identity when the client is the app service principal", async () => {
+  it("uses the forwarded viewer identity when it has read access", async () => {
     process.env.MLFLOW_EXPERIMENT_ID = "123";
     globalThis.fetch = async (input) => {
       const url = String(input);
       if (url.endsWith("/api/2.0/preview/scim/v2/Me")) {
         return new Response(null, { status: 403 });
+      }
+      if (url.endsWith("/api/2.0/permissions/experiments/123")) {
+        return Response.json({
+          access_control_list: [
+            {
+              user_name: "viewer@example.com",
+              all_permissions: [{ permission_level: "CAN_READ" }],
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 404 });
+    };
+
+    assert.equal(
+      await mlflowExperimentManagerUrl(workspaceClient(), { userName: "viewer@example.com" }),
+      "https://workspace.example.com/ml/experiments/123",
+    );
+  });
+
+  it("resolves a forwarded viewer id before checking experiment permissions", async () => {
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/2.0/preview/scim/v2/Users/4739182178671968")) {
+        return Response.json({
+          id: "4739182178671968",
+          userName: "viewer@example.com",
+          groups: [{ display: "experiment-managers", value: "group-1" }],
+        });
       }
       if (url.endsWith("/api/2.0/permissions/experiments/123")) {
         return Response.json({
@@ -527,7 +639,91 @@ describe("MLflow experiment manager link", () => {
     };
 
     assert.equal(
-      await mlflowExperimentManagerUrl(workspaceClient(), "viewer@example.com"),
+      await mlflowExperimentManagerUrl(workspaceClient(), { userId: "4739182178671968" }),
+      "https://workspace.example.com/ml/experiments/123",
+    );
+  });
+
+  it("resolves a forwarded viewer's workspace groups through SCIM", async () => {
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("/api/2.0/preview/scim/v2/Users?filter=")) {
+        return Response.json({
+          Resources: [
+            {
+              userName: "viewer@example.com",
+              groups: [{ display: "users", value: "group-users" }],
+            },
+          ],
+        });
+      }
+      if (url.endsWith("/api/2.0/permissions/experiments/123")) {
+        return Response.json({
+          access_control_list: [
+            {
+              group_name: "users",
+              all_permissions: [{ permission_level: "CAN_MANAGE" }],
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 403 });
+    };
+
+    assert.equal(
+      await mlflowExperimentManagerUrl(workspaceClient(), { userName: "viewer@example.com" }),
+      "https://workspace.example.com/ml/experiments/123",
+    );
+  });
+
+  it("does not infer workspace users access for an unverified tunnel identity", async () => {
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/2.0/permissions/experiments/123")) {
+        return Response.json({
+          access_control_list: [
+            {
+              group_name: "users",
+              all_permissions: [{ permission_level: "CAN_MANAGE" }],
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 403 });
+    };
+
+    assert.equal(
+      await mlflowExperimentManagerUrl(workspaceClient(), {
+        userName: "reggie.pierce+test@databricks.com",
+      }),
+      undefined,
+    );
+  });
+
+  it("uses the built-in users group only for a platform-authenticated workspace user", async () => {
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/2.0/permissions/experiments/123")) {
+        return Response.json({
+          access_control_list: [
+            {
+              group_name: "users",
+              all_permissions: [{ permission_level: "CAN_READ" }],
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 403 });
+    };
+
+    assert.equal(
+      await mlflowExperimentManagerUrl(workspaceClient(), {
+        userName: "viewer@example.com",
+        workspaceUser: true,
+      }),
       "https://workspace.example.com/ml/experiments/123",
     );
   });

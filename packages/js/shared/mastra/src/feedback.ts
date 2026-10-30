@@ -152,9 +152,9 @@ export type MastraFeedbackResponse = z.infer<typeof MastraFeedbackResponseSchema
 /**
  * Per-viewer MLflow experiment link returned by the plugin.
  *
- * `url` is present only when the active user has effective `CAN_MANAGE`
- * permission on the configured experiment. A null value keeps permission
- * lookup failures and non-manager access from affecting chat startup.
+ * `url` is present only when the active user can view the configured
+ * experiment. A null value keeps permission lookup failures and users without
+ * experiment access from affecting chat startup.
  */
 export const MastraMlflowExperimentResponseSchema = z
   .object({
@@ -162,7 +162,11 @@ export const MastraMlflowExperimentResponseSchema = z
       .string()
       .url()
       .nullable()
-      .describe("Experiment URL when the active viewer can manage it, otherwise null."),
+      .describe("Experiment URL when the active viewer can read it, otherwise null."),
+    tracePrefix: z
+      .string()
+      .nullable()
+      .describe("Unity Catalog trace table prefix used to build direct trace links."),
   })
   .describe("Per-viewer link to the configured MLflow experiment.");
 

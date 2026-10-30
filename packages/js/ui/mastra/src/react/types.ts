@@ -390,9 +390,11 @@ export type ChatViewProps = {
   onFeedback?: (message: UIMessage, submission: FeedbackSubmission) => void | Promise<void>;
   /**
    * Configured MLflow experiment URL for viewers with effective
-   * `CAN_MANAGE`. When present, assistant action rows show a debug link.
+   * `CAN_READ`. When present, assistant action rows show a debug link.
    */
   mlflowExperimentUrl?: string;
+  /** Unity Catalog trace prefix used to open the exact trace in MLflow. */
+  mlflowTracePrefix?: string;
 };
 
 /** Payload {@link ChatViewProps.onResolveToolApproval} receives. */

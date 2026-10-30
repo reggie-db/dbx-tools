@@ -65,13 +65,30 @@ export function messageFeedbackDestination(
   return undefined;
 }
 
-/** Build the Databricks MLflow detail URL for one captured trace. */
-export function mlflowTraceUrl(experimentUrl: string, traceId?: string): string | undefined {
+/** Build the Databricks MLflow detail URL for one captured UC trace. */
+export function mlflowTraceUrl(
+  experimentUrl: string,
+  traceId?: string,
+  tracePrefix?: string,
+): string | undefined {
   const resolvedTraceId = traceId?.trim();
   if (!resolvedTraceId) return undefined;
   const url = new URL(experimentUrl);
-  url.pathname = `${url.pathname.replace(/\/+$/, "")}/traces/${encodeURIComponent(resolvedTraceId)}`;
+  const organizationId = url.searchParams.get("o");
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/traces`;
   url.search = "";
+  if (organizationId) url.searchParams.set("o", organizationId);
+  url.searchParams.set("selectedEvaluationId", resolvedTraceId);
+  const resolvedTracePrefix = tracePrefix
+    ?.trim()
+    .replace(/^trace:\/+/, "")
+    .replace(/^\/+|\/+$/g, "");
+  if (resolvedTracePrefix) {
+    url.searchParams.set(
+      "traceId",
+      `trace:/${resolvedTracePrefix}/${resolvedTraceId.replace(/^tr-/, "")}`,
+    );
+  }
   url.hash = "";
   return url.toString();
 }

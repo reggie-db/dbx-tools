@@ -6,52 +6,13 @@ import { MastraAssistant, useMastraAssistant } from "@dbx-tools/ui-mastra/react"
 import { CircleHelpIcon, LoaderCircleIcon, LogOutIcon, PanelRightCloseIcon } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { useVisualViewportFrame } from "./use-visual-viewport-frame.ts";
 
 const Brand = lazy(() => import("@/pages/Brand"));
 const Bus = lazy(() => import("@/pages/Bus"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Search = lazy(() => import("@/pages/Search"));
 const Lakebox = lazy(() => import("@/pages/Lakebox"));
-
-const useVisualViewportShell = () => {
-  useEffect(() => {
-    const root = document.getElementById("root");
-    const viewport = window.visualViewport;
-    if (!root || !viewport) return;
-
-    let animationFrame = 0;
-    let settleTimer = 0;
-    const commit = () => {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(() => {
-        root.style.setProperty("--demo-visual-viewport-height", `${viewport.height}px`);
-        root.style.setProperty("--demo-visual-viewport-top", `${viewport.offsetTop}px`);
-        root.style.setProperty("--demo-visual-viewport-width", `${viewport.width}px`);
-        root.style.setProperty("--demo-visual-viewport-left", `${viewport.offsetLeft}px`);
-      });
-    };
-    const schedule = () => {
-      window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(commit, 100);
-    };
-
-    commit();
-    viewport.addEventListener("resize", schedule);
-    viewport.addEventListener("scroll", schedule);
-    viewport.addEventListener("scrollend", commit);
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      window.clearTimeout(settleTimer);
-      viewport.removeEventListener("resize", schedule);
-      viewport.removeEventListener("scroll", schedule);
-      viewport.removeEventListener("scrollend", commit);
-      root.style.removeProperty("--demo-visual-viewport-height");
-      root.style.removeProperty("--demo-visual-viewport-top");
-      root.style.removeProperty("--demo-visual-viewport-width");
-      root.style.removeProperty("--demo-visual-viewport-left");
-    };
-  }, []);
-};
 
 // Real browser routes keep deep links refreshable while lazy page modules ensure
 // each feature's dependencies load only when that route is selected. AppKit's
@@ -444,7 +405,7 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
           <Separator />
         </header>
         <main className="flex min-h-0 flex-1">
-          <section className="flex min-w-0 flex-1 flex-col">
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <Suspense
               fallback={
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -540,7 +501,8 @@ const GuideList = ({ title, items }: { title: string; items: readonly string[] }
 );
 
 const App = () => {
-  useVisualViewportShell();
+  const frameRef = useRef<HTMLDivElement>(null);
+  useVisualViewportFrame(frameRef);
   const [brandContext, setBrandContext] = useState(defaultBrandContext);
   const routes: RouteDef[] = [
     ...BASE_ROUTES,
@@ -583,11 +545,13 @@ const App = () => {
     // `applyToDocument` writes the brand CSS vars + sets `data-brand` (which
     // activates the inert `:root[data-brand]` token bridge) and updates the
     // page title + favicon whenever the picker changes the context.
-    <BrandProvider context={brandContext} applyToDocument>
-      <BrowserRouter>
-        <AppShell routes={routes} />
-      </BrowserRouter>
-    </BrandProvider>
+    <div ref={frameRef} className="demo-shell">
+      <BrandProvider context={brandContext} applyToDocument>
+        <BrowserRouter>
+          <AppShell routes={routes} />
+        </BrowserRouter>
+      </BrandProvider>
+    </div>
   );
 };
 

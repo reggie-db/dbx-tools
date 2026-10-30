@@ -933,6 +933,7 @@
         "echarts-for-react": "catalog:",
         "lucide-react": "catalog:",
         "marked": "catalog:",
+        "scrollbooster": "catalog:",
         "sql-formatter": "catalog:",
         "streamdown": "catalog:",
         "zod": "catalog:",
@@ -997,6 +998,9 @@
     "bun",
     "@databricks/appkit-ui",
   ],
+  "patchedDependencies": {
+    "scrollbooster@4.0.0": "patches/scrollbooster@4.0.0.patch",
+  },
   "overrides": {
     "@ai-sdk/provider": "4.0.31",
     "@opentelemetry/api": "1.9.1",
@@ -1063,6 +1067,7 @@
     "react": "~19.2.4",
     "react-dom": "~19.2.4",
     "react-router-dom": "^7.6.2",
+    "scrollbooster": "4.0.0",
     "shiki": "^3.0.0",
     "socks": "^2.8.10",
     "sql-formatter": "^15.6.9",
@@ -3665,6 +3670,8 @@
     "sax": ["sax@1.6.1", "", {}, "sha512-42tBVwLWnaQvW5zc4HbZrTuWccECCZfBi92FDuwtqxasH+JbPB3/FOKb1m222K42R4WxuxzzMsTswfzgtSu64Q=="],
 
     "scheduler": ["scheduler@0.27.0", "", {}, "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q=="],
+
+    "scrollbooster": ["scrollbooster@4.0.0", "", {}, "sha512-6syXDqJ0hdK7kC6P/mVmRU+vRJKjitxGQt9vcd+OWEmjwHw2siHLC5+DYntDG/EAN0xNRNaAywy443gDVYbaKw=="],
 
     "section-matter": ["section-matter@1.0.0", "", { "dependencies": { "extend-shallow": "^2.0.1", "kind-of": "^6.0.0" } }, "sha512-vfD3pmTzGpufjScBh50YHKzEu2lxBWhVEHsNGoEXmCmn2hKGfeNLYMzCJpe8cD7gqX7TJluOVpBkAequ6dgMmA=="],
 

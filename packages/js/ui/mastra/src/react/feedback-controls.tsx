@@ -13,7 +13,7 @@ import {
   cn,
 } from "@databricks/appkit-ui/react";
 import { MessageSquareTextIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FeedbackSubmission, FeedbackValue } from "./types.ts";
 
 /** Render per-message rating controls and a dedicated written-feedback modal. */
@@ -34,6 +34,8 @@ export const FeedbackControls = ({
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
+  const commentTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreTriggerFocusRef = useRef(false);
   const genieRequest = request?.trim();
   const canComment = mode === "mlflow" || Boolean(value && genieRequest);
 
@@ -97,17 +99,29 @@ export const FeedbackControls = ({
         </TooltipTrigger>
         <TooltipContent>Bad response</TooltipContent>
       </Tooltip>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <DialogTrigger asChild disabled={!canComment}>
               <Button
+                ref={commentTriggerRef}
                 type="button"
                 size="icon"
                 variant="ghost"
                 className="size-7"
                 aria-label={canComment ? "Leave written feedback" : "Rate the response first"}
                 disabled={!canComment}
+                onPointerDown={() => {
+                  restoreTriggerFocusRef.current = false;
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    restoreTriggerFocusRef.current = true;
+                  }
+                }}
               >
                 <MessageSquareTextIcon className="size-3" />
               </Button>
@@ -119,7 +133,26 @@ export const FeedbackControls = ({
             </TooltipContent>
           )}
         </Tooltip>
-        <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-md">
+        <DialogContent
+          className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-md"
+          onPointerDownCapture={() => {
+            restoreTriggerFocusRef.current = false;
+          }}
+          onPointerDownOutside={() => {
+            restoreTriggerFocusRef.current = false;
+          }}
+          onKeyDownCapture={(event) => {
+            if (event.key === "Escape") restoreTriggerFocusRef.current = true;
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            requestAnimationFrame(() => {
+              if (restoreTriggerFocusRef.current) commentTriggerRef.current?.focus();
+              else commentTriggerRef.current?.blur();
+              restoreTriggerFocusRef.current = false;
+            });
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Share feedback</DialogTitle>
           </DialogHeader>

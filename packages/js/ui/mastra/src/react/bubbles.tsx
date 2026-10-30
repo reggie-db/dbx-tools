@@ -339,7 +339,7 @@ type AssistantBubbleProps = {
   feedbackRequest?: string;
   /** Last thumbs the user left on this message, for highlighting. */
   feedbackValue?: FeedbackValue;
-  /** MLflow trace link shown only to viewers with `CAN_MANAGE`. */
+  /** MLflow trace link shown only to viewers with `CAN_READ` or higher. */
   mlflowTraceUrl?: string;
 };
 
@@ -453,7 +453,7 @@ export const AssistantBubble = ({
           />
         ))}
         {showFooter && (
-          <div className="flex min-h-7 items-center gap-1">
+          <div className="flex min-h-7 flex-nowrap items-center gap-1">
             {hasText && isLast && regenerate && (
               <Tooltip>
                 <TooltipTrigger asChild>

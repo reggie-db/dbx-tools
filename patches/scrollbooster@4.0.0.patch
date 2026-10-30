@@ -1,0 +1,51 @@
+diff --git a/dist/index.js b/dist/index.js
+index 5d265c164178bce5e9aee0dd887d0811bba85ce8..c8551aa28e15c257891b9c1c4d4511091cf0b985 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -234,6 +234,8 @@ function bindDrag(viewport, signal, host) {
+ 	};
+ 	const endPress = (event, canClick) => {
+ 		preventClick = canClick && isPastThreshold();
++		if (event.type === "pointerup") setOffsets(event);
++		host.flush();
+ 		press.isActive = false;
+ 		host.release();
+ 		const state = host.getState();
+@@ -275,8 +277,13 @@ function bindDrag(viewport, signal, host) {
+ 	const onTouchMove = (event) => {
+ 		if (event.touches.length !== 1 || !event.cancelable) return;
+ 		const { direction } = host.props();
+-		const isHorizontal = Math.abs(press.offset.x) > Math.abs(press.offset.y);
+-		if ((direction === "all" || direction === "horizontal" === isHorizontal) && isPastThreshold()) event.preventDefault();
++		const touch = event.touches[0];
++		const touchOffset = {
++			x: touch.clientX - clientOrigin.x,
++			y: touch.clientY - clientOrigin.y
++		};
++		const isHorizontal = Math.abs(touchOffset.x) > Math.abs(touchOffset.y);
++		if ((direction === "all" || direction === "horizontal" === isHorizontal) && isPastClickThreshold(touchOffset, direction)) event.preventDefault();
+ 	};
+ 	const onSelectStart = (event) => {
+ 		if (!press.isActive || !lastPointerEvent) return;
+@@ -521,6 +528,13 @@ function createLoop(frame) {
+ 			cancelAnimationFrame(rafId);
+ 			rafId = requestAnimationFrame(tick);
+ 		},
++		flush() {
++			if (!isRunning) return;
++			const id = rafId;
++			cancelAnimationFrame(id);
++			frame(getElapsedFrames(performance.now()));
++			if (isRunning && rafId === id) rafId = requestAnimationFrame(tick);
++		},
+ 		stop() {
+ 			isRunning = false;
+ 			cancelAnimationFrame(rafId);
+@@ -1202,6 +1216,7 @@ var ScrollBooster = class {
+ 				this.#motion.startDrag();
+ 				this.#loop.start();
+ 			},
++			flush: () => this.#loop.flush(),
+ 			release: () => {
+ 				if (this.#isReducedMotion()) this.#motion.stop();
+ 				this.#snap();

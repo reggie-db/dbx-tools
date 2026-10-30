@@ -17,11 +17,48 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
 import { messageFeedbackDestination, mlflowTraceUrl } from "./chat-feedback.ts";
 import { SuggestionPills } from "./suggestion-pills.tsx";
-import { isRespondingChatStatus, type ChatViewProps } from "./types.ts";
+import { isActiveChatStatus, type ChatViewProps, type ToolEvent } from "./types.ts";
+import { CANCEL_TRANSCRIPT_KINETIC_SCROLL_EVENT } from "./use-composer-viewport-lock.ts";
 import { messageText } from "../support/export.ts";
 
 const BOTTOM_THRESHOLD_PX = 24;
+const FOCUS_RESIZE_BOTTOM_THRESHOLD_PX = 2;
+const FOCUS_RESIZE_SETTLE_MS = 650;
 const TOP_LOAD_MORE_THRESHOLD_PX = 120;
+
+const assistantMessageHasVisibleContent = (
+  message: ChatViewProps["messages"][number],
+  events: ToolEvent[] | undefined,
+): boolean =>
+  message.role === "assistant" &&
+  (message.parts.some(
+    (part) =>
+      ((part.type === "text" || part.type === "reasoning") &&
+        Boolean((part as { text?: string }).text)) ||
+      isToolUIPart(part) ||
+      part.type === "data-tool-call-approval",
+  ) ||
+    Boolean(events?.length));
+
+/** Find the visible assistant response that owns the current turn footer. */
+export const latestVisibleAssistantIndexInTurn = (
+  messages: ChatViewProps["messages"],
+  toolEventsByMessage: NonNullable<ChatViewProps["toolEventsByMessage"]>,
+): number => {
+  let lastUserIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role !== "user") continue;
+    lastUserIndex = index;
+    break;
+  }
+  for (let index = messages.length - 1; index > lastUserIndex; index -= 1) {
+    const message = messages[index];
+    if (message && assistantMessageHasVisibleContent(message, toolEventsByMessage[message.id])) {
+      return index;
+    }
+  }
+  return -1;
+};
 
 type ChatTranscriptControllerOptions = {
   messages: ChatViewProps["messages"];
@@ -38,7 +75,7 @@ export type ChatTranscriptController = {
   contentRef: React.RefObject<HTMLDivElement | null>;
   isAtBottom: boolean;
   handleScroll: React.UIEventHandler<HTMLDivElement>;
-  scrollToBottom: () => void;
+  scrollToBottomNow: () => void;
   resumeFollow: () => void;
 };
 
@@ -80,6 +117,78 @@ export const useChatTranscriptController = ({
     return () => observer.disconnect();
   }, [messages.length, isLoadingHistory]);
 
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    const frame = element?.closest<HTMLElement>('[data-slot="aui_thread-frame"]');
+    if (!element || !frame || typeof ResizeObserver === "undefined") return;
+
+    let focusResizeActive = false;
+    let focusPinnedToBottom = false;
+    let focusScrollTop = 0;
+    let focusResizeTimer = 0;
+
+    const finishFocusResize = () => {
+      focusResizeActive = false;
+      focusPinnedToBottom = false;
+      window.clearTimeout(focusResizeTimer);
+    };
+    const scheduleFocusResizeFinish = () => {
+      window.clearTimeout(focusResizeTimer);
+      focusResizeTimer = window.setTimeout(finishFocusResize, FOCUS_RESIZE_SETTLE_MS);
+    };
+    const restoreFocusPosition = () => {
+      if (!focusResizeActive) return;
+      programmaticScrollRef.current = true;
+      if (focusPinnedToBottom) {
+        element.scrollTop = element.scrollHeight;
+        setIsAtBottom(true);
+      } else {
+        element.scrollTop = focusScrollTop;
+      }
+    };
+    const beginFocusResize = () => {
+      const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+      focusPinnedToBottom = distanceFromBottom <= FOCUS_RESIZE_BOTTOM_THRESHOLD_PX;
+      focusScrollTop = element.scrollTop;
+      pinnedRef.current = focusPinnedToBottom;
+      focusResizeActive = true;
+      restoreFocusPosition();
+      scheduleFocusResizeFinish();
+    };
+    const handleFocusStart = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest(".aui-composer-input")) return;
+      beginFocusResize();
+    };
+    const handleReaderGesture = () => {
+      finishFocusResize();
+      pinnedRef.current = false;
+    };
+    const observer = new ResizeObserver(() => {
+      restoreFocusPosition();
+      if (focusResizeActive) scheduleFocusResizeFinish();
+    });
+
+    frame.addEventListener("touchstart", handleFocusStart, { passive: true, capture: true });
+    frame.addEventListener("focusin", handleFocusStart);
+    frame.addEventListener("focusout", finishFocusResize);
+    element.addEventListener("touchmove", handleReaderGesture, { passive: true });
+    element.addEventListener("pointermove", handleReaderGesture, { passive: true });
+    element.addEventListener("wheel", handleReaderGesture, { passive: true });
+    observer.observe(element);
+
+    return () => {
+      finishFocusResize();
+      frame.removeEventListener("touchstart", handleFocusStart, true);
+      frame.removeEventListener("focusin", handleFocusStart);
+      frame.removeEventListener("focusout", finishFocusResize);
+      element.removeEventListener("touchmove", handleReaderGesture);
+      element.removeEventListener("pointermove", handleReaderGesture);
+      element.removeEventListener("wheel", handleReaderGesture);
+      observer.disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     if (prependAnchorRef.current || !pinnedRef.current) return;
     pinToBottomNow();
@@ -116,14 +225,11 @@ export const useChatTranscriptController = ({
     }
   };
 
-  const scrollToBottom = useCallback(() => {
-    const element = scrollRef.current;
-    if (!element) return;
+  const scrollToBottomNow = useCallback(() => {
     pinnedRef.current = true;
     setIsAtBottom(true);
-    programmaticScrollRef.current = true;
-    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
-  }, []);
+    pinToBottomNow();
+  }, [pinToBottomNow]);
 
   const resumeFollow = useCallback(() => {
     pinnedRef.current = true;
@@ -139,7 +245,7 @@ export const useChatTranscriptController = ({
     contentRef,
     isAtBottom,
     handleScroll,
-    scrollToBottom,
+    scrollToBottomNow,
     resumeFollow,
   };
 };
@@ -151,7 +257,7 @@ type ChatTranscriptProps = {
   error: ChatViewProps["error"];
   suggestions: NonNullable<ChatViewProps["suggestions"]>;
   followUpQuestions: string[];
-  onSelectFollowUp: (question: string) => void;
+  onSelectSuggestion: (question: string) => void;
   toolEventsByMessage: NonNullable<ChatViewProps["toolEventsByMessage"]>;
   regenerate: ChatViewProps["regenerate"];
   isLoadingMore: NonNullable<ChatViewProps["isLoadingMore"]>;
@@ -163,6 +269,7 @@ type ChatTranscriptProps = {
   feedbackModes: NonNullable<ChatViewProps["feedbackModes"]>;
   onFeedback: ChatViewProps["onFeedback"];
   mlflowExperimentUrl: ChatViewProps["mlflowExperimentUrl"];
+  mlflowTracePrefix: ChatViewProps["mlflowTracePrefix"];
 };
 
 /** Internal transcript renderer with loading, error, approval, and feedback states. */
@@ -173,7 +280,7 @@ export const ChatTranscript = ({
   error,
   suggestions,
   followUpQuestions,
-  onSelectFollowUp,
+  onSelectSuggestion,
   toolEventsByMessage,
   regenerate,
   isLoadingMore,
@@ -185,155 +292,261 @@ export const ChatTranscript = ({
   feedbackModes,
   onFeedback,
   mlflowExperimentUrl,
+  mlflowTracePrefix,
 }: ChatTranscriptProps) => {
-  const isRunning = isRespondingChatStatus(status);
-  const lastMessage = messages.at(-1);
-  const lastEvents = lastMessage ? toolEventsByMessage[lastMessage.id] : undefined;
-  const lastAssistantParts = lastMessage?.role === "assistant" ? lastMessage.parts : [];
-  const lastAssistantHasContent =
-    lastAssistantParts.some(
-      (part) =>
-        ((part.type === "text" || part.type === "reasoning") &&
-          Boolean((part as { text?: string }).text)) ||
-        isToolUIPart(part) ||
-        part.type === "data-tool-call-approval",
-    ) || (lastEvents?.length ?? 0) > 0;
-  const showWaitingIndicator = status === "finishing" || (isRunning && !lastAssistantHasContent);
+  const activeAssistantIndex = latestVisibleAssistantIndexInTurn(messages, toolEventsByMessage);
+  const showWaitingIndicator = isActiveChatStatus(status) && activeAssistantIndex === -1;
+  const visibleSuggestions = messages.length === 0 ? suggestions : followUpQuestions;
+  const scrollToBottomButtonRef = useRef<HTMLButtonElement>(null);
+  const scrollToBottomFrameRef = useRef<number | null>(null);
+  const scrollIndicatorRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const transcript = controller.scrollRef.current;
+    const content = controller.contentRef.current;
+    const indicator = scrollIndicatorRef.current;
+    if (!transcript || !content || !indicator) return;
+
+    const syncScrollIndicator = () => {
+      const maxScrollTop = transcript.scrollHeight - transcript.clientHeight;
+      const keyboardScroller = transcript.hasAttribute("data-keyboard-touch-scroller");
+      indicator.hidden = !keyboardScroller || maxScrollTop <= 0;
+      if (indicator.hidden) return;
+
+      const height = Math.max(
+        28,
+        Math.round((transcript.clientHeight / transcript.scrollHeight) * transcript.clientHeight),
+      );
+      const top = Math.round((transcript.scrollTop / maxScrollTop) * (transcript.clientHeight - height));
+      indicator.style.height = `${height}px`;
+      indicator.style.transform = `translateY(${top}px)`;
+    };
+
+    const resizeObserver = new ResizeObserver(syncScrollIndicator);
+    const attributeObserver = new MutationObserver(syncScrollIndicator);
+    resizeObserver.observe(transcript);
+    resizeObserver.observe(content);
+    attributeObserver.observe(transcript, {
+      attributeFilter: ["data-keyboard-touch-scroller"],
+    });
+    transcript.addEventListener("scroll", syncScrollIndicator, { passive: true });
+    syncScrollIndicator();
+
+    return () => {
+      resizeObserver.disconnect();
+      attributeObserver.disconnect();
+      transcript.removeEventListener("scroll", syncScrollIndicator);
+    };
+  }, [controller.contentRef, controller.scrollRef]);
+
+  const activateScrollToBottomFromTouch = useCallback(() => {
+    const transcript = controller.scrollRef.current;
+    if (!transcript) {
+      controller.scrollToBottomNow();
+      return;
+    }
+
+    const previousOverflowY = transcript.style.overflowY;
+    transcript.dispatchEvent(new Event(CANCEL_TRANSCRIPT_KINETIC_SCROLL_EVENT));
+    transcript.style.overflowY = "hidden";
+    controller.scrollToBottomNow();
+    if (scrollToBottomFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollToBottomFrameRef.current);
+    }
+    scrollToBottomFrameRef.current = window.requestAnimationFrame(() => {
+      transcript.style.overflowY = previousOverflowY;
+      controller.scrollToBottomNow();
+      scrollToBottomFrameRef.current = null;
+    });
+  }, [controller.scrollRef, controller.scrollToBottomNow]);
+
+  useLayoutEffect(() => {
+    const button = scrollToBottomButtonRef.current;
+    if (!button) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      event.preventDefault();
+    };
+    const handleTouchStart = (event: TouchEvent) => {
+      event.preventDefault();
+      activateScrollToBottomFromTouch();
+    };
+    const handleTouchEnd = (event: TouchEvent) => {
+      event.preventDefault();
+    };
+
+    button.addEventListener("pointerdown", handlePointerDown);
+    button.addEventListener("touchstart", handleTouchStart, { passive: false });
+    button.addEventListener("touchend", handleTouchEnd, { passive: false });
+    return () => {
+      if (scrollToBottomFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollToBottomFrameRef.current);
+      }
+      button.removeEventListener("pointerdown", handlePointerDown);
+      button.removeEventListener("touchstart", handleTouchStart);
+      button.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [activateScrollToBottomFromTouch]);
 
   return (
     <div className="relative flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
       <div
         ref={controller.scrollRef}
+        data-slot="aui_thread-viewport"
         onScroll={controller.handleScroll}
-        className="min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-clip overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]"
+        className="min-h-0 min-w-0 max-w-full flex-1 touch-pan-y overflow-x-hidden overflow-y-scroll overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]"
       >
-        {messages.length === 0 && !isLoadingHistory ? (
-          <Empty className="mx-auto h-full w-full max-w-4xl px-4 md:px-6">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <MessageSquareIcon className="size-5" />
-              </EmptyMedia>
-              <EmptyTitle>Start a conversation</EmptyTitle>
-              <EmptyDescription>
-                {suggestions.length > 0
-                  ? "Ask anything, or pick a suggestion below."
-                  : "Ask anything to get started."}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div
-            ref={controller.contentRef}
-            className="mx-auto flex min-w-0 w-full max-w-4xl flex-col gap-3 overflow-x-clip px-4 py-3 md:px-6"
-          >
-            {(isLoadingMore || isLoadingHistory) && (
-              <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground">
-                <Spinner className="size-3" />
-                <span>{isLoadingHistory ? "Loading history..." : "Loading older messages..."}</span>
-              </div>
-            )}
-            {messages.map((message, index) => {
-              const isLast = index === messages.length - 1;
-              if (message.role === "assistant") {
-                const messageFeedback = feedbackByMessage[message.id];
-                const feedbackDestination = messageFeedbackDestination(
-                  message,
-                  feedbackModes,
-                  messageFeedback?.traceId,
-                );
-                const traceUrl = mlflowExperimentUrl
-                  ? mlflowTraceUrl(mlflowExperimentUrl, messageFeedback?.traceId)
-                  : undefined;
-                const requestMessage = [...messages.slice(0, index)]
-                  .reverse()
-                  .find((candidate) => candidate.role === "user");
-                const feedbackRequest = requestMessage ? messageText(requestMessage) : "";
-                return (
-                  <AssistantBubble
-                    key={message.id}
-                    message={message}
-                    isLast={isLast}
-                    status={status}
-                    events={toolEventsByMessage[message.id]}
-                    regenerate={regenerate}
-                    onResolveToolApproval={onResolveToolApproval}
-                    externalApprovals={pendingApprovalsByMessage[message.id]}
-                    {...(onExportMessage
-                      ? { onExport: (format) => onExportMessage(message, format) }
-                      : {})}
-                    {...(onFeedback && feedbackDestination
-                      ? {
-                          onFeedback: (submission) => onFeedback(message, submission),
-                          feedbackMode: feedbackDestination.mode,
-                          ...(feedbackRequest ? { feedbackRequest } : {}),
-                          ...(messageFeedback?.value
-                            ? { feedbackValue: messageFeedback.value }
-                            : {}),
-                        }
-                      : {})}
-                    {...(traceUrl ? { mlflowTraceUrl: traceUrl } : {})}
-                  />
-                );
-              }
-              return <UserBubble key={message.id} message={message} />;
-            })}
+        <div
+          ref={controller.contentRef}
+          data-slot="aui_thread-content"
+          className="mx-auto flex min-h-full min-w-0 w-full max-w-4xl flex-col gap-3 overflow-x-clip px-4 py-3 md:px-6"
+        >
+          {messages.length === 0 && !isLoadingHistory ? (
+            <Empty className="h-full flex-1 px-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <MessageSquareIcon className="size-5" />
+                </EmptyMedia>
+                <EmptyTitle>Start a conversation</EmptyTitle>
+                <EmptyDescription>
+                  {suggestions.length > 0
+                    ? "Ask anything, or pick a suggestion below."
+                    : "Ask anything to get started."}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <>
+              {(isLoadingMore || isLoadingHistory) && (
+                <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground">
+                  <Spinner className="size-3" />
+                  <span>
+                    {isLoadingHistory ? "Loading history..." : "Loading older messages..."}
+                  </span>
+                </div>
+              )}
+              {messages.map((message, index) => {
+                const isLast = index === activeAssistantIndex;
+                if (message.role === "assistant") {
+                  const messageFeedback = feedbackByMessage[message.id];
+                  const feedbackDestination = messageFeedbackDestination(
+                    message,
+                    feedbackModes,
+                    messageFeedback?.traceId,
+                  );
+                  const traceUrl = mlflowExperimentUrl
+                    ? mlflowTraceUrl(
+                        mlflowExperimentUrl,
+                        messageFeedback?.traceId,
+                        mlflowTracePrefix,
+                      )
+                    : undefined;
+                  const requestMessage = [...messages.slice(0, index)]
+                    .reverse()
+                    .find((candidate) => candidate.role === "user");
+                  const feedbackRequest = requestMessage ? messageText(requestMessage) : "";
+                  return (
+                    <AssistantBubble
+                      key={message.id}
+                      message={message}
+                      isLast={isLast}
+                      status={status}
+                      events={toolEventsByMessage[message.id]}
+                      regenerate={regenerate}
+                      onResolveToolApproval={onResolveToolApproval}
+                      externalApprovals={pendingApprovalsByMessage[message.id]}
+                      {...(onExportMessage
+                        ? { onExport: (format) => onExportMessage(message, format) }
+                        : {})}
+                      {...(onFeedback && feedbackDestination
+                        ? {
+                            onFeedback: (submission) => onFeedback(message, submission),
+                            feedbackMode: feedbackDestination.mode,
+                            ...(feedbackRequest ? { feedbackRequest } : {}),
+                            ...(messageFeedback?.value
+                              ? { feedbackValue: messageFeedback.value }
+                              : {}),
+                          }
+                        : {})}
+                      {...(traceUrl ? { mlflowTraceUrl: traceUrl } : {})}
+                    />
+                  );
+                }
+                return <UserBubble key={message.id} message={message} />;
+              })}
+              {showWaitingIndicator && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex h-7 items-center px-3 text-muted-foreground"
+                >
+                  <Spinner className="size-3" />
+                  <span className="sr-only">Response in progress</span>
+                </div>
+              )}
+              {status === "error" && (
+                <div className="flex flex-col items-start gap-2">
+                  <Alert variant="destructive">
+                    <TriangleAlertIcon className="size-4" />
+                    <AlertTitle>Something went wrong</AlertTitle>
+                    <AlertDescription>
+                      {error
+                        ? errorMessage(error)
+                        : "The assistant ran into an error. Please try again."}
+                    </AlertDescription>
+                  </Alert>
+                  {regenerate && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={regenerate}
+                      className="gap-1.5"
+                    >
+                      <RefreshCwIcon className="size-3" />
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          {!isLoadingHistory && visibleSuggestions.length > 0 && (
             <SuggestionPills
-              questions={followUpQuestions}
-              onSelect={onSelectFollowUp}
-              className="pb-2 pt-1"
+              questions={visibleSuggestions}
+              onSelect={onSelectSuggestion}
+              orientation="horizontal"
+              className="mt-auto pt-3"
             />
-            {showWaitingIndicator && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="flex h-7 items-center px-3 text-muted-foreground"
-              >
-                <Spinner className="size-3" />
-                <span className="sr-only">Response in progress</span>
-              </div>
-            )}
-            {status === "error" && (
-              <div className="flex flex-col items-start gap-2">
-                <Alert variant="destructive">
-                  <TriangleAlertIcon className="size-4" />
-                  <AlertTitle>Something went wrong</AlertTitle>
-                  <AlertDescription>
-                    {error
-                      ? errorMessage(error)
-                      : "The assistant ran into an error. Please try again."}
-                  </AlertDescription>
-                </Alert>
-                {regenerate && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={regenerate}
-                    className="gap-1.5"
-                  >
-                    <RefreshCwIcon className="size-3" />
-                    Retry
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      {!controller.isAtBottom && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto flex w-full max-w-4xl justify-end px-4 md:px-6">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={controller.scrollToBottom}
-            aria-label="Jump to latest message"
-            className="pointer-events-auto rounded-full shadow"
-          >
-            <ArrowDownIcon className="size-4" />
-          </Button>
+          )}
         </div>
-      )}
+      </div>
+      <div
+        ref={scrollIndicatorRef}
+        data-slot="aui_thread-scroll-indicator"
+        className="pointer-events-none absolute right-0.5 top-0 z-20 w-0.5 rounded-full bg-foreground/50"
+        hidden
+        aria-hidden="true"
+      />
+      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto flex w-full max-w-4xl justify-end px-4 md:px-6">
+        <Button
+          ref={scrollToBottomButtonRef}
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={controller.scrollToBottomNow}
+          aria-label="Jump to latest message"
+          aria-hidden={controller.isAtBottom}
+          tabIndex={controller.isAtBottom ? -1 : undefined}
+          className={
+            controller.isAtBottom
+              ? "pointer-events-none invisible rounded-full shadow"
+              : "pointer-events-auto rounded-full shadow"
+          }
+        >
+          <ArrowDownIcon className="size-4" />
+        </Button>
+      </div>
     </div>
   );
 };

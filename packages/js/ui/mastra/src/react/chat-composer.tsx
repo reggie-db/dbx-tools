@@ -33,7 +33,6 @@ import { autosizeComposerTextarea, observeComposerWidth } from "./_composer-auto
 import { imageFileToUIPart, MAX_COMPOSER_IMAGES } from "./_image-attachments.ts";
 import { ModelSelector } from "./_model-selector.tsx";
 import { ExportMenu } from "./export-menu.tsx";
-import { SuggestionPills } from "./suggestion-pills.tsx";
 import { isActiveChatStatus, isRespondingChatStatus, type ChatViewProps } from "./types.ts";
 
 type QueuedSteerListProps = {
@@ -236,7 +235,7 @@ const ClearConversationAction = ({ onClear, isLoadingHistory }: ClearConversatio
 };
 
 type ChatComposerProps = {
-  isEmpty: boolean;
+  focusRequest: number;
   status: ChatViewProps["status"];
   sendMessage: ChatViewProps["sendMessage"];
   queuedSteers: NonNullable<ChatViewProps["queuedSteers"]>;
@@ -244,7 +243,6 @@ type ChatComposerProps = {
   onRemoveSteer: ChatViewProps["onRemoveSteer"];
   onReorderSteers: ChatViewProps["onReorderSteers"];
   onStop: ChatViewProps["onStop"];
-  suggestions: NonNullable<ChatViewProps["suggestions"]>;
   models: ChatViewProps["models"];
   model: ChatViewProps["model"];
   onModelChange: ChatViewProps["onModelChange"];
@@ -265,7 +263,7 @@ type ChatComposerProps = {
 
 /** Internal message composer with queued steers and conversation actions. */
 export const ChatComposer = ({
-  isEmpty,
+  focusRequest,
   status,
   sendMessage,
   queuedSteers,
@@ -273,7 +271,6 @@ export const ChatComposer = ({
   onRemoveSteer,
   onReorderSteers,
   onStop,
-  suggestions,
   models,
   model,
   onModelChange,
@@ -315,6 +312,11 @@ export const ChatComposer = ({
     if (!group) return;
     return observeComposerWidth(group, resizeTextarea);
   }, [resizeTextarea]);
+
+  useLayoutEffect(() => {
+    if (focusRequest === 0 || isLoadingHistory) return;
+    textareaRef.current?.focus({ preventScroll: true });
+  }, [focusRequest, isLoadingHistory]);
 
   const isRunning = isActiveChatStatus(status);
   const canStop = isRespondingChatStatus(status);
@@ -364,20 +366,13 @@ export const ChatComposer = ({
 
   const modelChangeable = Boolean(models && models.length > 0);
   return (
-    <>
-      {isEmpty && !isLoadingHistory && (
-        <SuggestionPills
-          questions={suggestions}
-          onSelect={(text) => sendMessage({ text })}
-          className="mx-auto w-full max-w-4xl px-4 pb-2 md:px-6"
-        />
-      )}
+    <div data-slot="aui_composer-dock" className="shrink-0 bg-background">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
-        className="mx-auto w-full max-w-4xl px-3 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6"
+        className="mx-auto w-full max-w-4xl shrink-0 px-3 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6"
       >
         <QueuedSteerList
           queuedSteers={queuedSteers}
@@ -473,7 +468,7 @@ export const ChatComposer = ({
             }}
             placeholder="Send a message..."
             rows={1}
-            className="field-sizing-fixed min-h-10 max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-sm"
+            className="aui-composer-input field-sizing-fixed min-h-10 max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-base sm:text-sm"
           />
           {allowAttachments && fileError && (
             <div className="px-4 text-xs text-destructive" role="alert">
@@ -588,6 +583,6 @@ export const ChatComposer = ({
           </InputGroupAddon>
         </InputGroup>
       </form>
-    </>
+    </div>
   );
 };

@@ -17,32 +17,44 @@ export interface SuggestionPillsProps {
    * arrived yet.
    */
   disabled?: boolean;
+  /** Arrange suggestions in a horizontal row or vertical list. */
+  orientation?: "horizontal" | "vertical";
   /** Extra classes for the wrapping flex row (layout / spacing). */
   className?: string;
 }
 
-/**
- * Render a flex-wrapped row of suggestion pills. Pills grow vertically
- * for long questions (`h-auto` + `whitespace-normal`) and keep a
- * capsule shape that scales cleanly when text wraps to multiple lines.
- * Disabled when no `onSelect` is provided, or when `disabled` is set.
- */
+/** Render suggestion actions in the requested layout. */
 export const SuggestionPills = ({
   questions,
   onSelect,
   disabled = false,
+  orientation = "horizontal",
   className,
 }: SuggestionPillsProps) => {
   if (questions.length === 0) return null;
   return (
-    <div className={cn("flex flex-wrap gap-1.5", className)}>
+    <div
+      aria-label="Suggested questions"
+      className={cn(
+        "flex gap-1.5",
+        orientation === "horizontal"
+          ? "touch-pan-x flex-nowrap overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:flex-wrap md:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+          : "flex-col",
+        className,
+      )}
+    >
       {questions.map((q) => (
         <Button
           key={q}
           type="button"
           size="sm"
           variant="outline"
-          className="h-auto max-w-full whitespace-normal rounded-2xl px-3 py-1.5 text-left text-xs font-normal leading-snug"
+          className={cn(
+            "h-auto shrink-0 whitespace-normal rounded-2xl px-3 py-1.5 text-left text-xs font-normal leading-snug",
+            orientation === "horizontal"
+              ? "max-w-[min(20rem,85vw)] md:max-w-full"
+              : "w-full max-w-full justify-start",
+          )}
           onClick={() => onSelect?.(q)}
           disabled={disabled || !onSelect}
         >

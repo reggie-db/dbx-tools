@@ -8,6 +8,7 @@ import {
   shouldShowAssistantResponseStatus,
 } from "../src/react/_assistant-response-status.tsx";
 import { AssistantBubble } from "../src/react/bubbles.tsx";
+import { latestVisibleAssistantIndexInTurn } from "../src/react/chat-transcript.tsx";
 
 describe("AssistantResponseSpinner", () => {
   it("renders a compact accessible spinner without visible status text", () => {
@@ -24,7 +25,7 @@ describe("AssistantResponseSpinner", () => {
     assert.equal(shouldShowAssistantResponseStatus(true, "streaming", true), true);
     assert.equal(shouldShowAssistantResponseStatus(true, "streaming", false), false);
     assert.equal(shouldShowAssistantResponseStatus(false, "streaming", true), false);
-    assert.equal(shouldShowAssistantResponseStatus(true, "finishing", true), false);
+    assert.equal(shouldShowAssistantResponseStatus(true, "finishing", true), true);
     assert.equal(shouldShowAssistantResponseStatus(true, "ready", true), false);
     assert.equal(shouldShowAssistantResponseStatus(true, "error", true), false);
   });
@@ -52,11 +53,11 @@ describe("AssistantResponseSpinner", () => {
     assert.ok(exportIndex >= 0 && exportIndex < statusIndex);
     assert.ok(debugIndex >= 0 && debugIndex < statusIndex);
     assert.match(html, /Response in progress/);
-    assert.doesNotMatch(html, /ml-auto/);
+    assert.doesNotMatch(html, /ml-auto|left-1\/2|-translate-x-1\/2/);
     assert.doesNotMatch(html, /Thinking\.\.\.|animate-pulse/);
   });
 
-  it("keeps a tool-only spinner left until footer actions become available", () => {
+  it("keeps a tool-only spinner left in the same footer row", () => {
     const html = renderToStaticMarkup(
       createElement(AssistantBubble, {
         message: {
@@ -78,6 +79,20 @@ describe("AssistantResponseSpinner", () => {
     );
 
     assert.match(html, /Response in progress/);
-    assert.doesNotMatch(html, /ml-auto/);
+    assert.doesNotMatch(html, /ml-auto|left-1\/2|-translate-x-1\/2/);
+  });
+
+  it("keeps finishing status on the visible response before a trailing empty assistant", () => {
+    const messages = [
+      { id: "user-1", role: "user" as const, parts: [{ type: "text" as const, text: "Hi" }] },
+      {
+        id: "assistant-1",
+        role: "assistant" as const,
+        parts: [{ type: "text" as const, text: "Hello" }],
+      },
+      { id: "assistant-2", role: "assistant" as const, parts: [] },
+    ];
+
+    assert.equal(latestVisibleAssistantIndexInTurn(messages, {}), 1);
   });
 });

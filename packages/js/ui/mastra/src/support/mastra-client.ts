@@ -724,14 +724,16 @@ export const useMastraClient = (): MastraPluginClient => {
  */
 export const useMastraMlflowExperiment = (
   enabled = true,
-): { url: string | null; loading: boolean } => {
+): { url: string | null; tracePrefix: string | null; loading: boolean } => {
   const client = useMastraClient();
   const [url, setUrl] = useState<string | null>(null);
+  const [tracePrefix, setTracePrefix] = useState<string | null>(null);
   const [loading, setLoading] = useState(enabled);
 
   useEffect(() => {
     if (!enabled) {
       setUrl(null);
+      setTracePrefix(null);
       setLoading(false);
       return;
     }
@@ -740,10 +742,16 @@ export const useMastraMlflowExperiment = (
     client
       .mlflowExperiment(controller.signal)
       .then((result) => {
-        if (!controller.signal.aborted) setUrl(result.url);
+        if (!controller.signal.aborted) {
+          setUrl(result.url);
+          setTracePrefix(result.tracePrefix);
+        }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setUrl(null);
+        if (!controller.signal.aborted) {
+          setUrl(null);
+          setTracePrefix(null);
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -751,7 +759,7 @@ export const useMastraMlflowExperiment = (
     return () => controller.abort();
   }, [client, enabled]);
 
-  return { url, loading };
+  return { url, tracePrefix, loading };
 };
 
 /**

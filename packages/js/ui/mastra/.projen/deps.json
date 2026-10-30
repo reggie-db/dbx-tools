@@ -121,6 +121,11 @@
       "type": "runtime"
     },
     {
+      "name": "scrollbooster",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "sql-formatter",
       "version": "catalog:",
       "type": "runtime"

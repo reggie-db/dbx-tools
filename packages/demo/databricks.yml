@@ -227,16 +227,20 @@ resources:
         # rows live in `reggie_pierce_aws_catalog.mlflow_traces` (`demo_otel_*`)
         # with SELECT for `account users`.
         #
-        # This binding is what makes the experiment writable in the deployed
-        # app. CAN_EDIT is the lowest level that permits logging; CAN_READ
-        # only allows viewing runs and metrics.
+        # This binding makes the experiment writable and lets the service
+        # principal inspect its ACL for the optional Debug link. Feedback is
+        # not gated by viewer ACL; only the link requires the viewer's own
+        # effective CAN_READ-or-higher permission.
         #
         # `config.env` `value_from: mlflow-experiment` resolves to the experiment
         # id, so the id is declared once, here.
         - name: mlflow-experiment
           experiment:
             experiment_id: ${var.experiment_id}
-            permission: CAN_EDIT
+            # The service principal reads this experiment's ACL to decide
+            # whether the signed-in viewer gets the debug link. The link still
+            # requires the viewer's own effective CAN_READ-or-higher grant.
+            permission: CAN_MANAGE
         # SMTP + sender config for the approval-gated email tool, read from
         # the `dbx-tools-demo` secret scope and surfaced to the runtime by
         # the matching `value_from` entries in the app config above.

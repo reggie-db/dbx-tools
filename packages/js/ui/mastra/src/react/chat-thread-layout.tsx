@@ -11,6 +11,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ThreadSidebar, type ThreadSidebarProps } from "./thread-sidebar.tsx";
 import { ThreadTabs } from "./thread-tabs.tsx";
 import type { ChatViewProps } from "./types.ts";
+import { useComposerViewportLock } from "./use-composer-viewport-lock.ts";
 import { closeThreadTab, nextActiveThreadTab, syncThreadTabs } from "../support/thread-tabs.ts";
 
 const SIDE_PANEL_MIN_WIDTH_PX = 768;
@@ -111,6 +112,7 @@ export const ChatThreadLayout = ({
   onToggleSidebar,
 }: ChatThreadLayoutProps) => {
   const rootRef = useRef<HTMLDivElement>(null);
+  useComposerViewportLock(rootRef);
   const isNarrow = useIsNarrow(rootRef);
   const showThreads = Boolean(threads && onSelectThread) && threadPlacement !== "disabled";
   const placement = threadPlacement === "auto" ? (isNarrow ? "top" : "left") : threadPlacement;
@@ -187,6 +189,7 @@ export const ChatThreadLayout = ({
     <TooltipProvider delayDuration={200}>
       <div
         ref={rootRef}
+        data-slot="aui_thread-frame"
         className={cn(
           "flex h-full min-h-0",
           dockedThreads && dockedSide === "right" && "flex-row-reverse",
@@ -208,7 +211,7 @@ export const ChatThreadLayout = ({
             : inlineSidebarOpen && (
                 <ThreadSidebar {...threadListProps} onHide={toggleSidebar} side={dockedSide} />
               ))}
-        <div className="flex h-full min-w-0 flex-1 flex-col">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
           {tabbedThreads && (
             <ThreadTabs
               {...threadTabListProps}

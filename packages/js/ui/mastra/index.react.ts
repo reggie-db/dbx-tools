@@ -35,7 +35,7 @@ export { useChatSessions } from "./src/react/chat-sessions.ts";
 export type { ThreadSessionReader, ThreadSessionUpdater, ThreadMessageWriter } from "./src/react/chat-sessions.ts";
 export { readMlflowTracePart, readThreadTitlePart, chatStatusForChunk, closeOnTerminalChunk, waitForTerminalChunk, useChatStream } from "./src/react/chat-stream.ts";
 export { ChatThreadLayout } from "./src/react/chat-thread-layout.tsx";
-export { useChatTranscriptController, ChatTranscript } from "./src/react/chat-transcript.tsx";
+export { latestVisibleAssistantIndexInTurn, useChatTranscriptController, ChatTranscript } from "./src/react/chat-transcript.tsx";
 export type { ChatTranscriptController } from "./src/react/chat-transcript.tsx";
 export { ChatView } from "./src/react/chat-view.tsx";
 export { colorizeDelta, renderDataCell, humanizeLabel, TABLE_WRAPPER_CLASSES, DataGrid } from "./src/react/data-grid.tsx";
@@ -60,3 +60,4 @@ export type { ToolInputPresentation, WebSearchProgressGroup } from "./src/react/
 export { isActiveChatStatus, isRespondingChatStatus } from "./src/react/types.ts";
 export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, ChatInputMessage, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ThreadPlacement, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types.ts";
 export { useChatThreadQuery } from "./src/react/use-chat-thread-query.ts";
+export { useComposerViewportLock } from "./src/react/use-composer-viewport-lock.ts";

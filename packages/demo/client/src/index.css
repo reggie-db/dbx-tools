@@ -25,26 +25,46 @@ html,
 body {
   overflow: hidden;
   overscroll-behavior: none;
-  /*
-   * `manipulation` drops the legacy double-tap-to-zoom gesture (which iOS
-   * Safari honors even when the viewport meta's `user-scalable=no` is ignored
-   * for pinch), so a stray double-tap on the transcript / composer never zooms
-   * the fixed app shell out of alignment. Panning and normal scrolling still
-   * work.
-   */
-  touch-action: manipulation;
+}
+
+body {
+  position: fixed;
+  inset: 0;
 }
 
 #root {
-  position: fixed;
-  top: var(--demo-visual-viewport-top, 0px);
-  left: var(--demo-visual-viewport-left, 0px);
-  height: var(--demo-visual-viewport-height, 100dvh);
-  width: var(--demo-visual-viewport-width, 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.demo-shell {
+  position: absolute;
+  top: var(--demo-viewport-top, 0px);
+  left: var(--demo-viewport-left, 0px);
+  width: var(--demo-viewport-width, 100%);
+  height: var(--demo-viewport-height, 100%);
   min-width: 0;
-  max-width: var(--demo-visual-viewport-width, 100%);
+  max-width: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: pan-y;
+}
+
+.demo-shell[data-keyboard-closing="true"] {
+  transition: height 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-slot="aui_thread-viewport"] {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+[data-slot="aui_composer-dock"] {
+  overscroll-behavior: none;
+}
+
+.aui-composer-input {
+  overscroll-behavior-y: contain;
 }
 
 body {

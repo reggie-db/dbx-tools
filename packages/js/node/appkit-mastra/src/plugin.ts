@@ -64,6 +64,7 @@ import {
   configureNativeHttpTelemetry,
   excludeUnparentedOutgoingHttpTelemetry,
   deferredNativeTracerProvider,
+  requestAccessToken,
   requestUserEmail,
   requestUserId,
   useServicePrincipal,
@@ -142,6 +143,8 @@ import {
   logFeedback,
   mlflowEnabled,
   mlflowExperimentManagerUrl,
+  mlflowExperimentViewerUrl,
+  mlflowUcTracePrefix,
 } from "./mlflow.ts";
 import { resolveDefaultModelId, withSmartRouterEndpoint } from "./model.ts";
 import { buildObservability, configureOtelPropagation } from "./observability.ts";
@@ -1025,7 +1028,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           res.json({ ok: true });
           return;
         }
-        const result = await this.scopedSelf(req).logFeedback(parsed.data);
+        const sourceId = requestUserEmail(req) ?? requestUserId(req);
+        const result = await this.logFeedback(parsed.data, sourceId);
         if (!result.ok) {
           this.sendFailure(res, result, "feedback", "Feedback could not be recorded");
           return;
@@ -1047,11 +1051,33 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       path: MASTRA_ROUTES.mlflowExperiment,
       handler: async (req, res) => {
         if (!this.feedbackEnabled("mlflow")) {
-          res.json({ url: null });
+          res.json({ url: null, tracePrefix: null });
           return;
         }
-        const result = await this.scopedSelf(req).fetchMlflowExperimentUrl(requestUserEmail(req));
-        res.json({ url: result.ok ? (result.data ?? null) : null });
+        const hasOboToken = requestAccessToken(req) !== undefined;
+        const userName = requestUserEmail(req);
+        const userId = requestUserId(req);
+        const viewer = {
+          ...(userName ? { userName } : {}),
+          ...(userId ? { userId } : {}),
+          ...(hasOboToken ? { workspaceUser: true } : {}),
+        };
+        let result = hasOboToken
+          ? await this.asUser(req).fetchMlflowExperimentViewerUrl()
+          : undefined;
+        if (!result?.ok || !result.data) {
+          result = await this.fetchMlflowExperimentUrl(viewer);
+        }
+        const url = result.ok ? (result.data ?? null) : null;
+        if (!url) {
+          res.json({ url: null, tracePrefix: null });
+          return;
+        }
+        const tracePrefix = await this.fetchMlflowTracePrefix();
+        res.json({
+          url,
+          tracePrefix: tracePrefix.ok ? (tracePrefix.data ?? null) : null,
+        });
       },
     });
   }
@@ -1181,22 +1207,24 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
 
   /**
    * Implementation backing the `/route/feedback` route. Runs inside the
-   * AppKit user-context proxy so `getExecutionContext()` returns the
-   * OBO-scoped client and the assessment is attributed to the signed-in
-   * user (their email / id as the assessment source). Returns the
+   * AppKit request context. The workspace client writes the assessment and
+   * the trusted forwarded identity attributes it to the signed-in user.
+   * Returns the
    * created assessment id on success, or `undefined` on a soft failure
    * (see {@link logFeedback} in `./mlflow.js`).
    */
   private async logFeedback(
     feedback: MlflowFeedbackRequest,
+    attributedSourceId?: string,
   ): Promise<ExecutionResult<string | undefined>> {
     const ctx = getExecutionContext();
     const sourceId =
-      "userEmail" in ctx && ctx.userEmail
+      attributedSourceId ??
+      ("userEmail" in ctx && ctx.userEmail
         ? ctx.userEmail
         : "userId" in ctx
           ? ctx.userId
-          : ctx.serviceUserId;
+          : ctx.serviceUserId);
     return this.execute(
       () =>
         logFeedback(ctx.client, {
@@ -1231,16 +1259,27 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
 
   /**
    * Resolve an experiment link under the active request identity. The helper
-   * returns no URL unless the viewer has effective `CAN_MANAGE` permission.
+   * returns no URL unless the viewer has effective read access.
    */
   private async fetchMlflowExperimentUrl(
-    viewerUserName?: string,
+    viewer: { userName?: string; userId?: string; workspaceUser?: boolean } = {},
   ): Promise<ExecutionResult<string | undefined>> {
     const client = getExecutionContext().client;
-    return this.execute(
-      () => mlflowExperimentManagerUrl(client, viewerUserName),
-      feedbackWriteDefaults,
-    );
+    return this.execute(() => mlflowExperimentManagerUrl(client, viewer), feedbackWriteDefaults);
+  }
+
+  /** Verify experiment visibility through the active user's OBO client. */
+  private async fetchMlflowExperimentViewerUrl(): Promise<
+    ExecutionResult<string | undefined>
+  > {
+    const client = getExecutionContext().client;
+    return this.execute(() => mlflowExperimentViewerUrl(client), feedbackWriteDefaults);
+  }
+
+  /** Resolve the configured UC trace prefix for an authorized Debug link. */
+  private async fetchMlflowTracePrefix(): Promise<ExecutionResult<string | undefined>> {
+    const client = getExecutionContext().client;
+    return this.execute(() => mlflowUcTracePrefix(client), feedbackWriteDefaults);
   }
 
   /**

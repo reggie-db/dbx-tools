@@ -100,10 +100,11 @@ describe("Genie Agent feedback target", () => {
   it("links the debug action to the captured trace", () => {
     assert.equal(
       mlflowTraceUrl(
-        "https://workspace.example.com/ml/experiments/123?compareRunsMode=TRACES#history",
-        "tr-0123456789abcdef0123456789abcdef",
+        "https://fevm-reggie-pierce-aws.cloud.databricks.com/ml/experiments/3223948959631242?o=7474652124440999&compareRunsMode=TRACES#history",
+        "tr-8156ad2745bba108216846a69549cf7e",
+        "reggie_pierce_aws_catalog.mlflow_traces.demo",
       ),
-      "https://workspace.example.com/ml/experiments/123/traces/tr-0123456789abcdef0123456789abcdef",
+      "https://fevm-reggie-pierce-aws.cloud.databricks.com/ml/experiments/3223948959631242/traces?o=7474652124440999&selectedEvaluationId=tr-8156ad2745bba108216846a69549cf7e&traceId=trace%3A%2Freggie_pierce_aws_catalog.mlflow_traces.demo%2F8156ad2745bba108216846a69549cf7e",
     );
     assert.equal(mlflowTraceUrl("https://workspace.example.com/ml/experiments/123"), undefined);
   });

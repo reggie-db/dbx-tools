@@ -12,15 +12,15 @@
  * trace id on each turn's response and the client sends it back here.
  *
  * There is no MLflow JS SDK, so this posts to the assessments REST
- * endpoint directly using the OBO-scoped workspace client (the feedback
- * is thus attributed to the signed-in user). UC-backed Apps traces need
- * the experiment's table-prefix URI (`trace:/{catalog}.{schema}.{prefix}/{tr-hex}`)
- * rather than the experiment-store id the UI does not store. That prefix is
- * read from the experiment's `mlflow.experiment.databricksTraceDestinationPath`
- * tag (or the spans-table tag); `MLFLOW_UC_TRACE_PREFIX` remains an optional
- * override. Trace export is asynchronous, so the just-finished trace may not
- * exist in MLflow yet when the user reacts; the log call retries briefly on
- * "not found" before giving up softly.
+ * endpoint directly using a workspace client. The plugin uses the App service
+ * principal for the write and supplies the trusted forwarded user identity as
+ * the assessment source. UC-backed Apps traces use MLflow's location-scoped V4
+ * endpoint and assessment contract. The table prefix is read from the
+ * experiment's `mlflow.experiment.databricksTraceDestinationPath` tag (or the
+ * spans-table tag); `MLFLOW_UC_TRACE_PREFIX` remains an optional override.
+ * Trace export is asynchronous, so the just-finished trace may not exist in
+ * MLflow yet when the user reacts; the log call retries briefly on "not found"
+ * before giving up softly.
  *
  * @module
  */
@@ -200,12 +200,12 @@ export function resetUcTracePrefixCache(): void {
  *
  * Databricks Apps persist traces in Unity Catalog. The experiment UI lists
  * those rows, but `POST /api/3.0/mlflow/traces/{id}/assessments` looks up the
- * experiment store unless `{id}` is the UC URI `trace:/{catalog}.{schema}.{prefix}/{tr-hex}`.
+ * experiment store unless `{id}` is the UC URI `trace:/{catalog}.{schema}.{prefix}/{hex}`.
  * A bare `tr-<hex>` 404s and the assessment never appears.
  */
 export function mlflowAssessmentTraceId(traceId: string, prefix?: string): string {
   const resolved = normalizeUcPrefix(prefix);
-  return resolved ? `trace:/${resolved}/${traceId}` : traceId;
+  return resolved ? `trace:/${resolved}/${traceId.replace(/^tr-/, "")}` : traceId;
 }
 
 async function resolveUcTracePrefix(client: WorkspaceClient): Promise<string | undefined> {
@@ -230,9 +230,44 @@ async function resolveUcTracePrefix(client: WorkspaceClient): Promise<string | u
   return prefix;
 }
 
-/** Assessments REST path for a trace. `3.0` is the current MLflow API version. */
+/** Resolve the configured Unity Catalog trace prefix without failing chat startup. */
+export async function mlflowUcTracePrefix(
+  client: WorkspaceClient,
+): Promise<string | undefined> {
+  try {
+    return await resolveUcTracePrefix(client);
+  } catch {
+    return undefined;
+  }
+}
+
+/** V3 assessments REST path for an experiment-store trace. */
 const assessmentsPath = (traceId: string): string =>
   `/api/3.0/mlflow/traces/${encodeURIComponent(traceId)}/assessments`;
+
+interface UcTraceLocation {
+  catalog: string;
+  schema: string;
+  tablePrefix: string;
+  location: string;
+}
+
+function ucTraceLocation(prefix: string | undefined): UcTraceLocation | undefined {
+  const parts = normalizeUcPrefix(prefix)?.split(".");
+  if (!parts || parts.length < 3) return undefined;
+  const [catalog, schema, ...tablePrefixParts] = parts;
+  const tablePrefix = tablePrefixParts.join(".");
+  if (!catalog || !schema || !tablePrefix) return undefined;
+  return { catalog, schema, tablePrefix, location: parts.join(".") };
+}
+
+function ucAssessmentsPath(location: string, traceId: string): string {
+  const warehouseId =
+    process.env.MLFLOW_TRACING_SQL_WAREHOUSE_ID?.trim() ||
+    process.env.DATABRICKS_WAREHOUSE_ID?.trim();
+  const path = `/api/4.0/mlflow/traces/${encodeURIComponent(location)}/${encodeURIComponent(traceId)}/assessments`;
+  return warehouseId ? `${path}?sql_warehouse_id=${encodeURIComponent(warehouseId)}` : path;
+}
 
 /** Number of times to retry a "trace not found" response before giving up. */
 const NOT_FOUND_RETRIES = 3;
@@ -288,6 +323,16 @@ const CurrentUserResponseSchema = z
   })
   .passthrough()
   .describe("Databricks Current User API response.");
+
+const ScimUsersResponseSchema = z
+  .object({
+    Resources: z
+      .array(CurrentUserResponseSchema)
+      .optional()
+      .describe("Workspace users matching the SCIM filter."),
+  })
+  .passthrough()
+  .describe("Databricks SCIM user search response.");
 
 const ExperimentPermissionsResponseSchema = z
   .object({
@@ -625,16 +670,37 @@ export function mlflowEnabled(): boolean {
 
 /**
  * Return the configured experiment URL only when the active Databricks
- * principal has effective `CAN_MANAGE` permission. Permission lookup is
+ * viewer has effective read access. Permission lookup is
  * intentionally best-effort so Apps environments that do not expose the
  * required APIs simply omit the debug affordance.
  */
 export async function mlflowExperimentManagerUrl(
   client: WorkspaceClient,
-  viewerUserName?: string,
+  viewer: { userName?: string; userId?: string; workspaceUser?: boolean } = {},
 ): Promise<string | undefined> {
   try {
-    return await resolveMlflowExperimentManagerUrl(client, viewerUserName);
+    return await resolveMlflowExperimentManagerUrl(client, viewer);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Return the configured experiment URL only when this client can read the
+ * experiment itself. Use this with the active user's OBO client so the Debug
+ * affordance exactly matches whether that user can open the experiment.
+ */
+export async function mlflowExperimentViewerUrl(
+  client: WorkspaceClient,
+): Promise<string | undefined> {
+  try {
+    const experiment = await fetchExperiment(client);
+    if (!experiment) return undefined;
+    const host = (await client.config.getHost()).toString();
+    return new URL(
+      `/ml/experiments/${encodeURIComponent(experiment.experiment_id)}`,
+      host,
+    ).toString();
   } catch {
     return undefined;
   }
@@ -642,13 +708,23 @@ export async function mlflowExperimentManagerUrl(
 
 async function resolveMlflowExperimentManagerUrl(
   client: WorkspaceClient,
-  viewerUserName?: string,
+  viewer: { userName?: string; userId?: string; workspaceUser?: boolean },
 ): Promise<string | undefined> {
   const experimentId = await resolveExperimentId(client);
   if (!experimentId) return undefined;
 
+  const viewerUserName = viewer.userName?.trim();
+  const viewerUserId = viewer.userId?.trim();
+  const currentPrincipalPath = viewerUserName
+    ? `/api/2.0/preview/scim/v2/Users?filter=${encodeURIComponent(
+        `userName eq "${viewerUserName.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`,
+      )}`
+    : viewerUserId
+      ? `/api/2.0/preview/scim/v2/Users/${encodeURIComponent(viewerUserId)}`
+      : "/api/2.0/preview/scim/v2/Me";
+
   const [currentResponse, permissionsResponse] = await Promise.all([
-    databricksFetch(client, "/api/2.0/preview/scim/v2/Me", { method: "GET" }),
+    databricksFetch(client, currentPrincipalPath, { method: "GET" }),
     databricksFetch(
       client,
       `/api/2.0/permissions/experiments/${encodeURIComponent(experimentId)}`,
@@ -657,30 +733,44 @@ async function resolveMlflowExperimentManagerUrl(
   ]);
   if (!permissionsResponse.ok) return undefined;
 
-  const current = currentResponse.ok
-    ? CurrentUserResponseSchema.safeParse(await readResponseJson(currentResponse))
-    : undefined;
+  let currentUser: z.infer<typeof CurrentUserResponseSchema> | undefined;
+  if (currentResponse.ok) {
+    const currentRaw = await readResponseJson(currentResponse);
+    if (viewerUserName) {
+      const users = ScimUsersResponseSchema.safeParse(currentRaw);
+      currentUser = users.success
+        ? users.data.Resources?.find(
+            (candidate) => candidate.userName?.toLowerCase() === viewerUserName.toLowerCase(),
+          )
+        : undefined;
+    } else {
+      const current = CurrentUserResponseSchema.safeParse(currentRaw);
+      currentUser = current.success ? current.data : undefined;
+    }
+  }
   const permissions = ExperimentPermissionsResponseSchema.safeParse(
     await readResponseJson(permissionsResponse),
   );
-  if (!permissions.success || (!viewerUserName && !current?.success)) return undefined;
+  const hasForwardedViewer = Boolean(viewerUserName || viewerUserId);
+  if (!permissions.success || (!hasForwardedViewer && !currentUser)) return undefined;
 
   const userNames = new Set(
     [
       viewerUserName,
-      ...(current?.success
-        ? [current.data.userName, current.data.applicationId, current.data.displayName]
+      ...(currentUser
+        ? [currentUser.userName, currentUser.applicationId, currentUser.displayName]
         : []),
     ]
       .map((value) => value?.trim())
       .filter((value): value is string => Boolean(value)),
   );
   const groupNames = new Set(
-    (current?.success ? (current.data.groups ?? []) : []).flatMap(({ value, display }) =>
+    (currentUser?.groups ?? []).flatMap(({ value, display }) =>
       [value, display].filter((entry): entry is string => Boolean(entry)),
     ),
   );
-  const canManage = (permissions.data.access_control_list ?? []).some((entry) => {
+  if (viewer.workspaceUser) groupNames.add("users");
+  const canView = (permissions.data.access_control_list ?? []).some((entry) => {
     const matches =
       (entry.user_name !== undefined && userNames.has(entry.user_name)) ||
       (entry.service_principal_name !== undefined && userNames.has(entry.service_principal_name)) ||
@@ -688,11 +778,14 @@ async function resolveMlflowExperimentManagerUrl(
     return (
       matches &&
       (entry.all_permissions ?? []).some(
-        (permission) => permission.permission_level === "CAN_MANAGE",
+        (permission) =>
+          permission.permission_level === "CAN_READ" ||
+          permission.permission_level === "CAN_EDIT" ||
+          permission.permission_level === "CAN_MANAGE",
       )
     );
   });
-  if (!canManage) return undefined;
+  if (!canView) return undefined;
 
   const host = (await client.config.getHost()).toString();
   return new URL(`/ml/experiments/${encodeURIComponent(experimentId)}`, host).toString();
@@ -744,13 +837,27 @@ export async function logFeedback(
   const hasValue = params.value !== undefined;
   const name = params.name?.trim() || (hasValue ? DEFAULT_FEEDBACK_NAME : DEFAULT_COMMENT_NAME);
   const value = hasValue ? params.value : params.comment;
-  const assessmentTraceId = mlflowAssessmentTraceId(
-    params.traceId,
-    await resolveUcTracePrefix(client),
-  );
+  const prefix = await resolveUcTracePrefix(client);
+  const location = ucTraceLocation(prefix);
+  const rawTraceId = params.traceId.replace(/^tr-/, "");
+  const assessmentTraceId = location
+    ? mlflowAssessmentTraceId(rawTraceId, location.location)
+    : params.traceId;
   const assessment: Record<string, unknown> = {
-    trace_id: assessmentTraceId,
+    trace_id: location ? rawTraceId : assessmentTraceId,
     assessment_name: name,
+    ...(location
+      ? {
+          trace_location: {
+            type: "UC_TABLE_PREFIX",
+            uc_table_prefix: {
+              catalog_name: location.catalog,
+              schema_name: location.schema,
+              table_prefix: location.tablePrefix,
+            },
+          },
+        }
+      : {}),
     source: {
       source_type: "HUMAN",
       source_id: params.sourceId?.trim() || "user",
@@ -758,12 +865,22 @@ export async function logFeedback(
     feedback: { value },
     ...(hasValue && params.comment?.trim() ? { rationale: params.comment } : {}),
   };
-  const body = { assessment };
+  const body = location
+    ? {
+        ...assessment,
+        create_time: new Date().toISOString(),
+        last_update_time: new Date().toISOString(),
+        valid: true,
+      }
+    : { assessment };
+  const path = location
+    ? ucAssessmentsPath(location.location, rawTraceId)
+    : assessmentsPath(assessmentTraceId);
 
   for (let attempt = 0; attempt <= NOT_FOUND_RETRIES; attempt++) {
     let res: Response;
     try {
-      res = await databricksFetch(client, assessmentsPath(assessmentTraceId), {
+      res = await databricksFetch(client, path, {
         method: "POST",
         body,
       });

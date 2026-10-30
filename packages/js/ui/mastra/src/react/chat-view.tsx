@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ChatComposer } from "./chat-composer.tsx";
 import { ChatThreadLayout } from "./chat-thread-layout.tsx";
 import { ChatTranscript, useChatTranscriptController } from "./chat-transcript.tsx";
@@ -70,7 +71,9 @@ export const ChatView = ({
   feedbackModes = [],
   onFeedback,
   mlflowExperimentUrl,
+  mlflowTracePrefix,
 }: ChatViewProps) => {
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const transcript = useChatTranscriptController({
     messages,
     toolEventsByMessage,
@@ -91,6 +94,12 @@ export const ChatView = ({
           followUpSuggestionLimit,
         )
       : [];
+  const startNewThread = onNewThread
+    ? () => {
+        onNewThread();
+        setComposerFocusRequest((request) => request + 1);
+      }
+    : undefined;
 
   return (
     <ChatThreadLayout
@@ -107,7 +116,7 @@ export const ChatView = ({
       streamingThreadIds={streamingThreadIds}
       isLoadingThreads={isLoadingThreads}
       onSelectThread={onSelectThread}
-      onNewThread={onNewThread}
+      onNewThread={startNewThread}
       onDeleteThread={onDeleteThread}
       onRenameThread={onRenameThread}
       onCancelThread={onCancelThread}
@@ -121,7 +130,7 @@ export const ChatView = ({
         error={error}
         suggestions={suggestions}
         followUpQuestions={followUpQuestions}
-        onSelectFollowUp={(text) => sendMessage({ text })}
+        onSelectSuggestion={(text) => sendMessage({ text })}
         toolEventsByMessage={toolEventsByMessage}
         regenerate={regenerate}
         isLoadingMore={isLoadingMore}
@@ -133,9 +142,10 @@ export const ChatView = ({
         feedbackModes={feedbackModes}
         onFeedback={onFeedback}
         mlflowExperimentUrl={mlflowExperimentUrl}
+        mlflowTracePrefix={mlflowTracePrefix}
       />
       <ChatComposer
-        isEmpty={messages.length === 0}
+        focusRequest={composerFocusRequest}
         status={status}
         sendMessage={sendMessage}
         queuedSteers={queuedSteers}
@@ -143,7 +153,6 @@ export const ChatView = ({
         onRemoveSteer={onRemoveSteer}
         onReorderSteers={onReorderSteers}
         onStop={onStop}
-        suggestions={suggestions}
         models={models}
         model={model}
         onModelChange={onModelChange}
