@@ -6,17 +6,13 @@
  * @module
  */
 
-import {
-  createWorkspaceClient as _createWorkspaceClient,
-  type WorkspaceClient as AppKitWorkspaceClient,
-} from "@databricks/appkit";
-import { tryGetExecutionContext } from "@dbx-tools/appkit";
-import { type AuthClient, type DatabricksAuthOptions, createAuthClient } from "@dbx-tools/auth";
+import type { WorkspaceClient as AppKitWorkspaceClient } from "@databricks/appkit";
+import { databricks as appkitDatabricks, tryGetExecutionContext } from "@dbx-tools/appkit";
+import type { DatabricksAuthOptions } from "@dbx-tools/auth";
 import { memoize, type UrlBuilder, urlBuilder, trimToUndefined } from "@dbx-tools/shared-core";
 
 /** Databricks workspace ids are a 10-20 digit run embedded in the host. */
 const WORKSPACE_ID_REGEX = /\d{10,20}/;
-const workspaceAuth = new WeakMap<AppKitWorkspaceClient, AuthClient>();
 
 /** Legacy SDK client exposed by AppKit for APIs not yet on its facade. */
 export type WorkspaceClient = ReturnType<AppKitWorkspaceClient["toLegacyWorkspaceClient"]>;
@@ -34,20 +30,7 @@ type Config = WorkspaceClient["config"];
 export async function createWorkspaceClient(
   options: DatabricksAuthOptions = {},
 ): Promise<AppKitWorkspaceClient> {
-  const auth = await createAuthClient(options);
-  const client = _createWorkspaceClient({ host: auth.host });
-  client.config.credentials = {
-    name: "pat",
-    async configure() {
-      return async (headers) => {
-        for (const [name, value] of Object.entries(await auth.headers())) {
-          headers.set(name, value);
-        }
-      };
-    },
-  };
-  workspaceAuth.set(client, auth);
-  return client;
+  return appkitDatabricks.createWorkspaceClient(options);
 }
 
 /**
@@ -58,10 +41,7 @@ export async function createWorkspaceClient(
 export async function refreshWorkspaceClientAuthentication(
   client: AppKitWorkspaceClient,
 ): Promise<boolean> {
-  const auth = workspaceAuth.get(client);
-  if (!auth) return false;
-  await auth.headers({ login: false, refresh: true });
-  return true;
+  return appkitDatabricks.refreshWorkspaceClientAuthentication(client);
 }
 
 /** Resolve AppKit's facade or an existing legacy client to the legacy SDK surface. */

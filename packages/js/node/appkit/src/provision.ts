@@ -21,9 +21,11 @@
  * @module
  */
 
-import { createLakebasePool, getWorkspaceClient, ValidationError } from "@databricks/appkit";
+import { createLakebasePool, ValidationError } from "@databricks/appkit";
 import { postgresConnectionOptions, quotePostgresIdentifier } from "@dbx-tools/postgres";
 import { log, isDatabricksAppEnv, toError, type Logger } from "@dbx-tools/shared-core";
+
+import { createWorkspaceClient } from "./databricks.ts";
 
 const defaultLogger = log.logger("provision");
 
@@ -99,14 +101,14 @@ export async function provisionCacheSchema(
   }
   // Pass `user` explicitly: autopg resolves the connection target
   // (host/database/endpoint) but not the identity, so `createLakebasePool`'s
-  // synchronous username lookup would otherwise throw. `getWorkspaceClient({})`
-  // returns a fresh default-auth client - literally `new WorkspaceClient({})`,
-  // but built against the SDK version AppKit's `createLakebasePool` expects
-  // (importing the SDK class directly here pulls a newer, type-incompatible copy).
+  // synchronous username lookup would otherwise throw. The auth-backed AppKit
+  // client uses the SDK version `createLakebasePool` expects while retaining
+  // dbx-tools profile selection and interactive CLI recovery.
+  const workspaceClient = (await createWorkspaceClient()).toLegacyWorkspaceClient();
   const pool = createLakebasePool(
     postgresConnectionOptions({
       user: role,
-      workspaceClient: getWorkspaceClient({}),
+      workspaceClient,
       connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
       statement_timeout: STATEMENT_TIMEOUT_MS,
     }),

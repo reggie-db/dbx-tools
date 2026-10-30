@@ -1,10 +1,26 @@
-import { Spinner, Tabs, TabsContent, TabsList, TabsTrigger } from "@databricks/appkit-ui/react";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+  Spinner,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@databricks/appkit-ui/react";
 import type { GenieVisualizationEmbed, StatementData } from "@dbx-tools/shared-mastra";
 import { useEffect, useState } from "react";
 import { DataGrid } from "./data-grid.tsx";
 import { useMastraClient, useVisualizationFetch } from "../support/mastra-client.ts";
 
 const GENIE_IMAGE_LOADING_HEIGHT_PX = 320;
+const GENIE_IMAGE_MAX_SCALE = 2;
+
+interface ImageDimensions {
+  height: number;
+  width: number;
+}
 
 const GenieImageLoading = () => (
   <div
@@ -27,8 +43,10 @@ export function GenieImageTabs({
   tableLoading?: boolean;
 }) {
   const [imageState, setImageState] = useState<"loading" | "loaded" | "error">("loading");
+  const [imageDimensions, setImageDimensions] = useState<ImageDimensions>();
   useEffect(() => {
     setImageState("loading");
+    setImageDimensions(undefined);
   }, [src]);
   return (
     <Tabs defaultValue="chart" className="not-prose my-3 min-w-0 max-w-full">
@@ -44,14 +62,48 @@ export function GenieImageTabs({
         ) : (
           <>
             {imageState === "loading" ? <GenieImageLoading /> : null}
-            <img
-              src={src}
-              alt="Genie query visualization"
-              className="block h-auto max-w-full rounded border border-border"
-              style={imageState === "loaded" ? undefined : { display: "none" }}
-              onLoad={() => setImageState("loaded")}
-              onError={() => setImageState("error")}
-            />
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Open Genie visualization"
+                  className="block max-w-full cursor-zoom-in appearance-none rounded border border-border bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  style={imageState === "loaded" ? undefined : { display: "none" }}
+                >
+                  <img
+                    src={src}
+                    alt="Genie query visualization"
+                    className="block h-auto max-w-full rounded"
+                    onLoad={(event) => {
+                      setImageDimensions({
+                        height: event.currentTarget.naturalHeight,
+                        width: event.currentTarget.naturalWidth,
+                      });
+                      setImageState("loaded");
+                    }}
+                    onError={() => setImageState("error")}
+                  />
+                </button>
+              </DialogTrigger>
+              <DialogContent
+                className="max-h-[calc(100dvh-1rem)] w-fit max-w-[calc(100dvw-1rem)] gap-0 overflow-hidden p-2 sm:max-w-[calc(100dvw-1rem)]"
+              >
+                <DialogTitle className="sr-only">Genie query visualization</DialogTitle>
+                <img
+                  src={src}
+                  alt="Genie query visualization"
+                  className="block h-auto max-h-[calc(100dvh-2rem)] max-w-[calc(100dvw-2rem)] object-contain"
+                  style={
+                    imageDimensions
+                      ? {
+                          aspectRatio: `${imageDimensions.width} / ${imageDimensions.height}`,
+                          width: imageDimensions.width * GENIE_IMAGE_MAX_SCALE,
+                        }
+                      : undefined
+                  }
+                />
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </TabsContent>

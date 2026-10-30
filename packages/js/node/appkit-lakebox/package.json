@@ -19,7 +19,7 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@dbx-tools/auth": "workspace:^",
+    "@dbx-tools/auth": "workspace:*",
     "@types/express": "catalog:",
     "@types/json-schema": "^7",
     "@types/node": "catalog:",
@@ -29,14 +29,14 @@
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
-    "@dbx-tools/appkit": "workspace:^",
-    "@dbx-tools/appkit-mastra": "workspace:^",
-    "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/lakebox": "workspace:^",
-    "@dbx-tools/postgres": "workspace:^",
-    "@dbx-tools/shared-core": "workspace:^",
-    "@dbx-tools/shared-lakebox": "workspace:^",
-    "@dbx-tools/ui": "workspace:^",
+    "@dbx-tools/appkit": "workspace:*",
+    "@dbx-tools/appkit-mastra": "workspace:*",
+    "@dbx-tools/core": "workspace:*",
+    "@dbx-tools/lakebox": "workspace:*",
+    "@dbx-tools/postgres": "workspace:*",
+    "@dbx-tools/shared-core": "workspace:*",
+    "@dbx-tools/shared-lakebox": "workspace:*",
+    "@dbx-tools/ui": "workspace:*",
     "@mastra/core": "catalog:",
     "http-proxy-3": "catalog:",
     "zod": "catalog:"

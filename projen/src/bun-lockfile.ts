@@ -21,10 +21,23 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { npmRegistry } from "@dbx-tools/core";
+import { Component, type Task, javascript } from "projen";
 import { z } from "zod";
 
 /** Bun's text lockfile at a workspace root. */
 export const BUN_LOCKFILE = "bun.lock";
+
+/** Generated task that normalizes the root Bun lockfile. */
+export const BUN_LOCKFILE_TASK = "bun-lockfile";
+
+/** Published executable for repositories that do not use Projen. */
+export const BUN_LOCKFILE_BIN = "dbx-tools-bun-lockfile";
+
+/** Stable command for the lockfile task shipped by `@dbx-tools/projen`. */
+export const BUN_LOCKFILE_COMMAND = [
+  "bun",
+  "node_modules/@dbx-tools/projen/tasks/bun-lockfile.ts",
+] as const;
 
 /** Public npm registry used by the `npmjs` replacement. */
 const PUBLIC_NPM_REGISTRY = "https://registry.npmjs.org";
@@ -158,4 +171,32 @@ export function normalizeBunLockfileAt(
   const changed = result.content !== original;
   if (changed && !options.check) writeFileSync(path, result.content);
   return { ...result, path, exists: true, changed };
+}
+
+/**
+ * Commit `bun.lock` without leaking the installing machine's registry.
+ *
+ * The component adds a normalization task, runs it after mutable installs and
+ * through `postinstall`, keeps `bun.lock` tracked, and configures CI installs
+ * to use Bun's frozen lockfile command.
+ */
+export class BunLockfile extends Component {
+  /** Task that normalizes `bun.lock`. */
+  readonly task: Task;
+
+  constructor(project: javascript.NodeProject) {
+    super(project);
+
+    this.task = project.addTask(BUN_LOCKFILE_TASK, {
+      description: "Rewrite private npm registry tarball URLs in bun.lock",
+      execArgs: [...BUN_LOCKFILE_COMMAND],
+      receiveArgs: true,
+    });
+    project.package.installTask.reset("bun install");
+    project.package.installTask.spawn(this.task);
+    project.package.installCiTask.reset(project.package.installCommand);
+    project.package.setScript("postinstall", BUN_LOCKFILE_COMMAND.join(" "));
+    project.gitignore.include(`/${BUN_LOCKFILE}`);
+    project.annotateGenerated(`/${BUN_LOCKFILE}`);
+  }
 }

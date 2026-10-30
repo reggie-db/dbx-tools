@@ -34,6 +34,8 @@ describe("original Genie images", () => {
     assert.match(html, />Table</);
     assert.match(html, /src="\/original.png"/);
     assert.match(html, /alt="Genie query visualization"/);
+    assert.match(html, /aria-label="Open Genie visualization"/);
+    assert.match(html, /aria-haspopup="dialog"/);
     assert.match(html, /Loading Genie chart/);
     assert.match(html, /2026-10-04/);
     assert.match(html, /gallons/);

@@ -17,7 +17,7 @@
 import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { createLakebasePool, getWorkspaceClient, type CacheConfig } from "@databricks/appkit";
+import { createLakebasePool, type CacheConfig } from "@databricks/appkit";
 import {
   closeCache,
   createCache,
@@ -28,6 +28,7 @@ import {
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { log, toError, id } from "@dbx-tools/shared-core";
 import { handleOwnershipMigrationError } from "./migration.ts";
+import { createWorkspaceClient } from "./databricks.ts";
 
 const logger = log.logger("cache-storage");
 
@@ -315,8 +316,9 @@ async function createPersistentStorage(
 
   let pool: LakebasePool | undefined;
   try {
+    const workspaceClient = (await createWorkspaceClient()).toLegacyWorkspaceClient();
     const createdPool = createLakebasePool(
-      postgresConnectionOptions({ workspaceClient: getWorkspaceClient({}) }),
+      postgresConnectionOptions({ workspaceClient }),
     );
     pool = createdPool;
     const storage = new PersistentStorage(cache ?? {}, createdPool);

@@ -80,6 +80,7 @@ describe("npm release recovery", () => {
       {
         dependencies: {
           "@fixture/dependency": "workspace:^",
+          "@fixture/exact": "workspace:*",
           zod: "catalog:",
         },
         devDependencies: {
@@ -97,6 +98,7 @@ describe("npm release recovery", () => {
 
     assert.deepEqual(resolved.dependencies, {
       "@fixture/dependency": "^1.2.3",
+      "@fixture/exact": "1.2.3",
       zod: "4.3.6",
     });
     assert.deepEqual(resolved.devDependencies, {

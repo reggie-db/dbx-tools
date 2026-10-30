@@ -1,5 +1,6 @@
 /**
- * Generic Databricks SDK glue (no AppKit): adapt WHATWG cancellation
+ * Databricks SDK glue for AppKit: create workspace clients backed by the
+ * `@dbx-tools/auth` credential lifecycle and adapt WHATWG cancellation
  * (`AbortSignal` / `AbortController`) into the SDK's `Context` /
  * `CancellationToken` shapes so a single `AbortController` can drive every
  * in-flight SDK call.
@@ -10,9 +11,61 @@
  * @module
  */
 
+import {
+  createWorkspaceClient as createAppKitWorkspaceClient,
+  type WorkspaceClient,
+} from "@databricks/appkit";
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
+import {
+  type AuthClient,
+  type DatabricksAuthOptions,
+  createAuthClient,
+} from "@dbx-tools/auth";
 import { tieAbortSignal } from "@dbx-tools/shared-core";
+
+const workspaceAuth = new WeakMap<WorkspaceClient, AuthClient>();
+
+/**
+ * Create an AppKit workspace client whose SDK credential visitor delegates to
+ * `@dbx-tools/auth`.
+ *
+ * Auth resolves the selected profile, host, token lifecycle, interactive CLI
+ * login, and unified-workspace header. The AppKit/Databricks SDK client remains
+ * the owner of workspace APIs and request execution.
+ */
+export async function createWorkspaceClient(
+  options: DatabricksAuthOptions = {},
+): Promise<WorkspaceClient> {
+  const auth = await createAuthClient(options);
+  const client = createAppKitWorkspaceClient({ host: auth.host });
+  client.config.credentials = {
+    name: "pat",
+    async configure() {
+      return async (headers) => {
+        for (const [name, value] of Object.entries(await auth.headers())) {
+          headers.set(name, value);
+        }
+      };
+    },
+  };
+  workspaceAuth.set(client, auth);
+  return client;
+}
+
+/**
+ * Refresh the dbx-tools credential lifecycle attached by
+ * {@link createWorkspaceClient}. Returns `false` for clients whose credential
+ * owner is external.
+ */
+export async function refreshWorkspaceClientAuthentication(
+  client: WorkspaceClient,
+): Promise<boolean> {
+  const auth = workspaceAuth.get(client);
+  if (!auth) return false;
+  await auth.headers({ login: false, refresh: true });
+  return true;
+}
 
 /** Either an SDK `Context` or a WHATWG `AbortSignal`. */
 export type ContextLike = Context | AbortSignal;

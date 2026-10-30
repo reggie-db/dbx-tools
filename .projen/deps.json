@@ -2,37 +2,37 @@
   "dependencies": [
     {
       "name": "@dbx-tools/appkit",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "build"
     },
     {
       "name": "@dbx-tools/auth",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "build"
     },
     {
       "name": "@dbx-tools/cli-args",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "build"
     },
     {
       "name": "@dbx-tools/core",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "build"
     },
     {
       "name": "@dbx-tools/path",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "build"
     },
     {
       "name": "@dbx-tools/projen",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "build"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "build"
     },
     {

@@ -39,8 +39,8 @@ import {
   ConfigurationError,
   ExecutionError,
   getUsernameWithApiLookup,
-  getWorkspaceClient,
   type LakebasePool,
+  type WorkspaceClient as AppKitWorkspaceClient,
   ValidationError,
 } from "@databricks/appkit";
 import { projectUtils, resolveValue } from "@dbx-tools/core";
@@ -64,7 +64,7 @@ import {
 } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
-import { toContext } from "./databricks.ts";
+import { createWorkspaceClient, toContext } from "./databricks.ts";
 
 const logger = log.logger("lakebase-resolver");
 const API_BASE = "/api/2.0/postgres";
@@ -98,7 +98,7 @@ const DEFAULT_DATABASE = "databricks_postgres";
  * it has enough context (typically a `project`).
  */
 export interface LakebaseResolverInputs extends LakebaseConnectionInputs {
-  /** Auth-resolved profile used only for Databricks bundle validation. */
+  /** Auth-resolved profile used for bundle validation and workspace API calls. */
   bundleProfile?: string;
   /**
    * What to do when no project exists in the workspace at all.
@@ -350,6 +350,14 @@ export async function resolveLakebaseConnection(
   config?: LakebaseResolverInputs,
   signal?: AbortSignal,
 ): Promise<LakebaseConnection> {
+  return resolveLakebaseConnectionWithClient(config, signal, workspaceClientResolver(config));
+}
+
+async function resolveLakebaseConnectionWithClient(
+  config: LakebaseResolverInputs | undefined,
+  signal: AbortSignal | undefined,
+  getClient: WorkspaceClientResolver,
+): Promise<LakebaseConnection> {
   const inputs = await readLakebaseInputs(config);
   let { project, branch, endpoint, database, host } = inputs;
   const port = inputs.port ?? DEFAULT_PORT;
@@ -376,7 +384,7 @@ export async function resolveLakebaseConnection(
     return { project, branch, endpoint, database, host, port, sslMode };
   }
 
-  const ws = getWorkspaceClient({});
+  const ws = await getClient();
 
   // Host known but no resource path: scan the workspace to find which
   // endpoint owns this host so we can populate LAKEBASE_ENDPOINT.
@@ -472,14 +480,28 @@ export async function applyLakebaseEnv(
   config?: LakebaseResolverInputs,
   signal?: AbortSignal,
 ): Promise<{ resolved: LakebaseConnection; user?: string }> {
-  const resolved = await resolveLakebaseConnection(config, signal);
+  const getClient = workspaceClientResolver(config);
+  const resolved = await resolveLakebaseConnectionWithClient(config, signal, getClient);
   applyLakebaseToEnv(resolved);
-  const user = await getUsernameWithApiLookup({});
+  const configuredUser = process.env.PGUSER || process.env.DATABRICKS_CLIENT_ID;
+  const user =
+    configuredUser ??
+    (await getUsernameWithApiLookup({ workspaceClient: await getClient() }));
   if (user) process.env.PGUSER ??= user;
   return { resolved, ...(user ? { user } : {}) };
 }
 
-type WorkspaceClient = ReturnType<typeof getWorkspaceClient>;
+type WorkspaceClient = ReturnType<AppKitWorkspaceClient["toLegacyWorkspaceClient"]>;
+type WorkspaceClientResolver = () => Promise<WorkspaceClient>;
+
+/** Resolve one auth-backed SDK client lazily and reuse it across this operation. */
+function workspaceClientResolver(config?: LakebaseResolverInputs): WorkspaceClientResolver {
+  let pending: Promise<WorkspaceClient> | undefined;
+  return () =>
+    (pending ??= createWorkspaceClient({ profile: config?.bundleProfile }).then((client) =>
+      client.toLegacyWorkspaceClient(),
+    ));
+}
 
 /** The SDK `Context` accepted by the workspace client's own copy of the SDK. */
 type ApiRequestContext = NonNullable<Parameters<WorkspaceClient["apiClient"]["request"]>[1]>;

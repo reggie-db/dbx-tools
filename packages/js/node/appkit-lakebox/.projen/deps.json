@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "@dbx-tools/auth",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "build"
     },
     {
@@ -42,42 +42,42 @@
     },
     {
       "name": "@dbx-tools/appkit-mastra",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/appkit",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/core",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/lakebox",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/postgres",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-lakebox",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {

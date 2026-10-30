@@ -32,7 +32,7 @@ import {
 import { folderBarrelFile, generateBarrels } from "./barrels.ts";
 
 import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
-import { BUN_LOCKFILE } from "./bun-lockfile.ts";
+import { BUN_LOCKFILE, BunLockfile } from "./bun-lockfile.ts";
 import { BUN_VERSION, BUN_VERSION_CHECK_SCRIPT, MINIMUM_BUN_VERSION } from "./bun-workflow.ts";
 import { codegenModulePaths, generateCodegen } from "./codegen.ts";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
@@ -528,9 +528,6 @@ const DEV_DEPS_ROOT: string[] = [
   "@types/node@^24.6.0",
 ];
 
-/** Root task that clears registry tarball URLs from `bun.lock`. */
-export const BUN_LOCKFILE_TASK = "bun-lockfile";
-
 /**
  * Commit `bun.lock` without leaking the installing machine's registry.
  *
@@ -542,17 +539,7 @@ export const BUN_LOCKFILE_TASK = "bun-lockfile";
  * and `bun update` normalize too. CI installs with `--frozen-lockfile`.
  */
 function configureRootLockfile(project: DBXToolsJavaScriptProject): void {
-  const normalize = taskCommand(`${BUN_LOCKFILE_TASK}.ts`);
-  const task = project.addTask(BUN_LOCKFILE_TASK, {
-    description: "Rewrite private npm registry tarball URLs in bun.lock",
-    execArgs: normalize,
-    receiveArgs: true,
-  });
-  project.package.installTask.reset("bun install");
-  project.package.installTask.spawn(task);
-  project.package.installCiTask.reset(project.package.installCommand);
-  project.package.setScript("postinstall", normalize.join(" "));
-  project.annotateGenerated(`/${BUN_LOCKFILE}`);
+  new BunLockfile(project);
 }
 
 function configureRootBunRuntime(project: DBXToolsJavaScriptProject): void {
@@ -1393,8 +1380,8 @@ function initProject(
   project.gitignore.addPatterns(
     ...[...ignore.ignorePatterns({ test: false, dot: false, lock: true })],
   );
-  // The root Bun text lockfile is committed in registry-neutral form; see
-  // configureRootLockfile. Other lockfiles stay ignored.
+  // The custom ignore groups are attached after the component, so repeat the
+  // inclusion here to keep the root lockfile tracked.
   project.gitignore.include(`/${BUN_LOCKFILE}`);
   // The generic compiled-output pattern `**/lib/**` must not hide authored
   // modules beneath a package's `src/lib/`.

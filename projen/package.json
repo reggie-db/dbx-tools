@@ -5,6 +5,9 @@
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
     "directory": "projen"
   },
+  "bin": {
+    "dbx-tools-bun-lockfile": "./tasks/bun-lockfile.ts"
+  },
   "scripts": {
     "build": "projen build",
     "clobber": "projen clobber",
@@ -30,11 +33,11 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
-    "@dbx-tools/auth": "workspace:^",
-    "@dbx-tools/cli-args": "workspace:^",
-    "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/path": "workspace:^",
-    "@dbx-tools/shared-core": "workspace:^",
+    "@dbx-tools/auth": "workspace:*",
+    "@dbx-tools/cli-args": "workspace:*",
+    "@dbx-tools/core": "workspace:*",
+    "@dbx-tools/path": "workspace:*",
+    "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:",
     "concurrently": "^10.0.3",
     "constructs": "^10.6.0",

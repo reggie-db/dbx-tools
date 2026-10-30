@@ -4,8 +4,15 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
+import { javascript } from "projen";
 
-import { normalizeBunLockfile, normalizeBunLockfileAt } from "../src/bun-lockfile.ts";
+import {
+  BUN_LOCKFILE_COMMAND,
+  BUN_LOCKFILE_TASK,
+  BunLockfile,
+  normalizeBunLockfile,
+  normalizeBunLockfileAt,
+} from "../src/bun-lockfile.ts";
 
 const MIRROR = "https://mirror.example.test/npm";
 const LOCK = [
@@ -23,6 +30,7 @@ const LOCK = [
 
 const temps: string[] = [];
 after(() => {
+  delete process.env.PROJEN_DISABLE_POST;
   for (const dir of temps) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -72,5 +80,58 @@ describe("normalizeBunLockfileAt", () => {
     assert.equal(normalizeBunLockfileAt(dir, auto).changed, true);
     assert.doesNotMatch(readFileSync(join(dir, "bun.lock"), "utf8"), /mirror\.example\.test/);
     assert.equal(normalizeBunLockfileAt(dir, auto).changed, false);
+  });
+});
+
+describe("BunLockfile", () => {
+  it("adds registry-neutral lockfile ownership to a vanilla Projen project", () => {
+    process.env.PROJEN_DISABLE_POST = "1";
+    const outdir = mkdtempSync(join(tmpdir(), "bun-lockfile-component-"));
+    temps.push(outdir);
+    const project = new javascript.NodeProject({
+      defaultReleaseBranch: "main",
+      name: "fixture",
+      outdir,
+      packageManager: javascript.NodePackageManager.BUN,
+    });
+
+    new BunLockfile(project);
+    project.synth();
+
+    const manifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    assert.equal(manifest.scripts?.postinstall, BUN_LOCKFILE_COMMAND.join(" "));
+
+    const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
+      tasks: Record<
+        string,
+        {
+          steps?: Array<{
+            exec?: string;
+            execArgs?: string[];
+            receiveArgs?: boolean;
+            spawn?: string;
+          }>;
+        }
+      >;
+    };
+    assert.deepEqual(tasks.tasks[BUN_LOCKFILE_TASK]?.steps, [
+      { execArgs: [...BUN_LOCKFILE_COMMAND], receiveArgs: true },
+    ]);
+    assert.deepEqual(tasks.tasks.install?.steps, [
+      { exec: "bun install" },
+      { spawn: BUN_LOCKFILE_TASK },
+    ]);
+    assert.deepEqual(tasks.tasks["install:ci"]?.steps, [
+      { exec: "bun install --frozen-lockfile" },
+    ]);
+
+    const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8").split("\n");
+    assert.ok(gitignore.includes("!/bun.lock"));
+    assert.match(
+      readFileSync(join(outdir, ".gitattributes"), "utf8"),
+      /^\/bun\.lock linguist-generated$/m,
+    );
   });
 });

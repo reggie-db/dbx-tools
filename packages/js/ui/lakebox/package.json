@@ -30,8 +30,8 @@
   },
   "dependencies": {
     "@databricks/appkit-ui": "catalog:",
-    "@dbx-tools/shared-lakebox": "workspace:^",
-    "@dbx-tools/ui": "workspace:^",
+    "@dbx-tools/shared-lakebox": "workspace:*",
+    "@dbx-tools/ui": "workspace:*",
     "lucide-react": "catalog:"
   },
   "main": "index.ts",

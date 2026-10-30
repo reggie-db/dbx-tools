@@ -1,7 +1,32 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { AuthType } from "@dbx-tools/shared-auth";
 
-import { toContext } from "../src/databricks.ts";
+import {
+  createWorkspaceClient,
+  refreshWorkspaceClientAuthentication,
+  toContext,
+} from "../src/databricks.ts";
+
+describe("Databricks workspace client authentication", () => {
+  it("delegates SDK authentication to the selected dbx-tools auth client", async () => {
+    const client = await createWorkspaceClient({
+      profile: "SELECTED",
+      host: "https://example.cloud.databricks.com",
+      workspaceId: "1234567890123456",
+      authType: AuthType.PersonalAccessToken,
+      accessToken: "profile-token",
+    });
+    const headers = new Headers();
+
+    await client.config.authenticate(headers);
+
+    assert.equal(headers.get("authorization"), "Bearer profile-token");
+    assert.equal(headers.get("x-databricks-workspace-id"), "1234567890123456");
+    assert.equal(await refreshWorkspaceClientAuthentication(client), true);
+    assert.equal(client.toLegacyWorkspaceClient().config, client.config);
+  });
+});
 
 describe("Databricks SDK cancellation context", () => {
   it("returns an existing SDK context unchanged", () => {

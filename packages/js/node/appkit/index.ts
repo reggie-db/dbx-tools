@@ -26,7 +26,7 @@ export type { AutoConfigureMode, DebugCaptureMode, CreateAppConfig, ExecutionCon
 export { loadBrandContext, getBrandContext } from "./src/brand-context.ts";
 export { AppKitCacheStorage, loadPersistentStorage, softenInitialize, probeStorage, createAppKitCacheStorage } from "./src/cache-storage.ts";
 export type { AppKitCacheStorageOptions, PersistentStorageBase } from "./src/cache-storage.ts";
-export { toContext } from "./src/databricks.ts";
+export { createWorkspaceClient, refreshWorkspaceClientAuthentication, toContext } from "./src/databricks.ts";
 export type { ContextLike } from "./src/databricks.ts";
 export { FilesCacheManager, FilesCachePlugin, filesCache } from "./src/files-cache.ts";
 export type { FilesCachePluginConfig, FilesCacheScope, FilesCacheSourceIdentity, FilesCacheExports } from "./src/files-cache.ts";

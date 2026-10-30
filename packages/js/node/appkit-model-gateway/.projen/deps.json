@@ -32,37 +32,37 @@
     },
     {
       "name": "@dbx-tools/cache",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/databricks",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/model-protocol",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/model",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-model-gateway",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-model",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {

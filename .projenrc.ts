@@ -193,22 +193,22 @@ const root = new projectJs.DBXToolsNodeProject({
   releaseValidationTasks: ["test", "docs:check-source", "docs:check-readmes"],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
-  // so bun links it + its `workspace:^` sibling deps from local source.
+  // so bun links it + its `workspace:*` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
   // This root consumes the workspace-local engine source, so generator edits
   // must resynthesize the product tree just like root configuration changes.
   syncResynthPaths: ["branding/brand.yaml", "branding/assets", "projen/src"],
   // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
-  // workspace, so it links from source via `workspace:^`. `.projenrc.ts` imports it
+  // workspace, so it links from source via `workspace:*`. `.projenrc.ts` imports it
   // by source path either way.
   devDeps: [
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/path@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/projen@workspace:^",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/cli-args@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/path@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/projen@workspace:*",
     "commander@catalog:",
     "concurrently@^10.0.3",
     "marked@catalog:",
@@ -334,7 +334,7 @@ project.applyToProjects(root, { identifierName: "shared-generator", tags: "share
     "description",
     "Browser-safe contracts and clients for AppKit generator workflows",
   );
-  p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
+  p.addDeps("@dbx-tools/shared-core@workspace:*", "zod@catalog:");
 });
 
 // Node packages
@@ -356,7 +356,7 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
     "Node helpers for layered configuration, binary installation, process execution, locking, project discovery, and npm dependency resolution",
   );
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-core@workspace:*",
     "extract-zip@^2.0.1",
     "proper-lockfile@^4.1.2",
     "semver@^7.7.3",
@@ -375,8 +375,8 @@ project.applyToProjects(root, { identifierName: "cache", tags: "node" }, (p) => 
     "Memory-first Cacheable and Keyv storage with project-scoped persistence and tracked write-behind",
   );
   p.addDeps(
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
     "cacheable@catalog:",
     "env-paths@catalog:",
     "keyv@catalog:",
@@ -394,9 +394,9 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
     "Databricks profile resolution and token or authentication-header production for Node.js and Bun",
   );
   p.addDeps(
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
     "ini@^6.0.0",
     "oauth4webapi@^3.8.8",
     "zod@catalog:",
@@ -414,21 +414,21 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
 project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) => {
   p.package.addField("description", "Node-side helpers for Databricks AppKit applications");
   p.addDeps(
-    "@dbx-tools/cache@workspace:^",
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/lakebase@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
-    "@dbx-tools/shared-appkit@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-fs@workspace:^",
+    "@dbx-tools/cache@workspace:*",
+    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/lakebase@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
+    "@dbx-tools/shared-appkit@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-fs@workspace:*",
     "@databricks/sdk-experimental@catalog:",
     "@opentelemetry/api@catalog:",
     "@opentelemetry/sdk-trace-base@catalog:",
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
-  p.addDevDeps("@dbx-tools/projen@workspace:^", "@types/json-schema@^7", "vitest@catalog:");
+  p.addDevDeps("@dbx-tools/projen@workspace:*", "@types/json-schema@^7", "vitest@catalog:");
 });
 
 // AppKit durable-memory tools with Databricks-first routing and lazy Graphiti fallback.
@@ -439,16 +439,16 @@ project.applyToProjects(root, { identifierName: "appkit-memory", tags: "node" },
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/cache@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-graphiti@workspace:^",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/cache@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-graphiti@workspace:*",
     "semver@^7.7.3",
     "zod@catalog:",
   );
-  projectJs.addOptionalPeer(p, "@dbx-tools/appkit-mastra@workspace:^");
+  projectJs.addOptionalPeer(p, "@dbx-tools/appkit-mastra@workspace:*");
   p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
   projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
@@ -463,9 +463,9 @@ project.applyToProjects(root, { identifierName: "lakebox", tags: "node" }, (p) =
     "Databricks Lakebox REST, pooled SSH transport, and deterministic user routing",
   );
   p.addDeps(
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-lakebox@workspace:^",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-lakebox@workspace:*",
     "generic-pool@catalog:",
     "socks@catalog:",
     "ssh2@catalog:",
@@ -484,20 +484,20 @@ project.applyToProjects(root, { identifierName: "appkit-lakebox", tags: "node" }
   );
   p.addDeps(
     "@databricks/appkit@catalog:",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/appkit-mastra@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/lakebox@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-lakebox@workspace:^",
-    "@dbx-tools/ui@workspace:^",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/appkit-mastra@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/lakebox@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-lakebox@workspace:*",
+    "@dbx-tools/ui@workspace:*",
     "@mastra/core@catalog:",
     "http-proxy-3@catalog:",
     "zod@catalog:",
   );
   p.addDevDeps(
-    "@dbx-tools/auth@workspace:^",
+    "@dbx-tools/auth@workspace:*",
     "@types/express@catalog:",
     "@types/json-schema@^7",
     "express@catalog:",
@@ -513,9 +513,9 @@ project.applyToProjects(root, { identifierName: "appkit-lakebox", tags: "node" }
 project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => {
   p.package.addField("description", "Server-side Databricks Genie chat drivers");
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-genie@workspace:^",
-    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-genie@workspace:*",
+    "@dbx-tools/appkit@workspace:*",
     "@databricks/appkit@catalog:",
   );
 });
@@ -528,12 +528,12 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
   p.package.addField("description", "Workspace-aware Databricks Model Serving selection");
   projectJs.applyIncludes(p, "scripts/**/*.ts");
   p.addDeps(
-    "@dbx-tools/cache@workspace:^",
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/cache@workspace:*",
+    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/appkit@workspace:*",
     "@databricks/appkit@catalog:",
     "cheerio@^1.2.0",
     "fuse.js@^7.4.2",
@@ -558,10 +558,10 @@ project.applyToProjects(root, { identifierName: "model-protocol", tags: "node" }
     "@ai-sdk/anthropic@catalog:",
     "@ai-sdk/open-responses@catalog:",
     "@ai-sdk/openai-compatible@catalog:",
-    "@dbx-tools/model@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/shared-model-gateway@workspace:^",
+    "@dbx-tools/model@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/shared-model-gateway@workspace:*",
     "ai@catalog:",
   );
   p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
@@ -575,9 +575,9 @@ project.applyToProjects(root, { identifierName: "lakebase", tags: "node" }, (p) 
     "Node-native Lakebase address parsing, resource discovery, and database credentials",
   );
   p.addDeps(
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
     "zod@catalog:",
   );
 });
@@ -593,12 +593,12 @@ project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p
     "Databricks workspace, filesystem, cloud, and network utilities",
   );
   p.addDeps(
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/cli-service@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-fs@workspace:^",
+    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/cli-service@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-fs@workspace:*",
     "@databricks/appkit@catalog:",
   );
 });
@@ -611,7 +611,7 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
     "description",
     "Region-aware Zerobus ingest helpers for Databricks workspaces",
   );
-  p.addDeps("@dbx-tools/databricks@workspace:^", "@databricks/zerobus-ingest-sdk@^1.1.0");
+  p.addDeps("@dbx-tools/databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
 });
 
 
@@ -623,11 +623,11 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
 project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {
   p.package.addField("description", "Server-side email runtime, agent tools, and AppKit plugin");
   p.addDeps(
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-email@workspace:^",
-    "@dbx-tools/shared-email-template@workspace:^",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-email@workspace:*",
+    "@dbx-tools/shared-email-template@workspace:*",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "@react-email/render@catalog:",
@@ -653,12 +653,12 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
     "Server-side web search runtime, Mastra tools, and AppKit plugin",
   );
   p.addDeps(
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/path@workspace:^",
-    "@dbx-tools/model@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/path@workspace:*",
+    "@dbx-tools/model@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "cheerio@^1.2.0",
@@ -678,14 +678,14 @@ project.applyToProjects(root, { identifierName: "appkit-generator", tags: "node"
     "AppKit tools and Mastra workflows for researched Databricks demo assets",
   );
   p.addDeps(
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/appkit-mastra@workspace:^",
-    "@dbx-tools/appkit-web-search@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/genie@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-generator@workspace:^",
-    "@dbx-tools/shared-genie@workspace:^",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/appkit-mastra@workspace:*",
+    "@dbx-tools/appkit-web-search@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/genie@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-generator@workspace:*",
+    "@dbx-tools/shared-genie@workspace:*",
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
@@ -702,7 +702,7 @@ project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) 
     "description",
     "Connection-correct PostgreSQL advisory locks and LISTEN/NOTIFY topic bus for Node.js",
   );
-  p.addDeps("@dbx-tools/lakebase@workspace:^", "@dbx-tools/shared-core@workspace:^", "pg@^8.22.0");
+  p.addDeps("@dbx-tools/lakebase@workspace:*", "@dbx-tools/shared-core@workspace:*", "pg@^8.22.0");
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
   p.addDevDeps("@types/pg@^8");
 });
@@ -718,13 +718,13 @@ project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) =>
     "Agent tools, federated search, index lifecycle, and Lakebase full-text extensions for AppKit AI Search",
   );
   p.addDeps(
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-search@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/model@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-search@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/model@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
@@ -747,23 +747,23 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "AppKit plugin and server-side toolkit for hosting Mastra agents in Databricks Apps",
   );
   p.addDeps(
-    "@dbx-tools/cache@workspace:^",
-    "@dbx-tools/shared-mastra@workspace:^",
-    "@dbx-tools/shared-genie@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/shared-model-gateway@workspace:^",
-    "@dbx-tools/shared-fs@workspace:^",
-    "@dbx-tools/databricks@workspace:^",
-    "@dbx-tools/fs@workspace:^",
-    "@dbx-tools/genie@workspace:^",
-    "@dbx-tools/appkit-model-gateway@workspace:^",
-    "@dbx-tools/model@workspace:^",
-    "@dbx-tools/model-protocol@workspace:^",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/path@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/cache@workspace:*",
+    "@dbx-tools/shared-mastra@workspace:*",
+    "@dbx-tools/shared-genie@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/shared-model-gateway@workspace:*",
+    "@dbx-tools/shared-fs@workspace:*",
+    "@dbx-tools/databricks@workspace:*",
+    "@dbx-tools/fs@workspace:*",
+    "@dbx-tools/genie@workspace:*",
+    "@dbx-tools/appkit-model-gateway@workspace:*",
+    "@dbx-tools/model@workspace:*",
+    "@dbx-tools/model-protocol@workspace:*",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/path@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "@mastra/ai-sdk@catalog:",
@@ -830,13 +830,13 @@ project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "n
   projectJs.applyIncludes(p, "scripts/**/*.ts");
   p.addDeps(
     "@databricks/appkit@catalog:",
-    "@dbx-tools/cache@workspace:^",
-    "@dbx-tools/databricks@workspace:^",
-    "@dbx-tools/model@workspace:^",
-    "@dbx-tools/model-protocol@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model-gateway@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/cache@workspace:*",
+    "@dbx-tools/databricks@workspace:*",
+    "@dbx-tools/model@workspace:*",
+    "@dbx-tools/model-protocol@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-model-gateway@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
     "ai@catalog:",
     "js-tiktoken@^1.0.21",
     "zod@catalog:",
@@ -862,8 +862,8 @@ project.applyToProjects(root, { identifierName: "path", tags: "node" }, (p) => {
     "Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching",
   );
   p.addDeps(
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
     "glob@^13.0.6",
     "chokidar@^4.0.3",
     "ignore@^7.0.12",
@@ -879,9 +879,9 @@ project.applyToProjects(root, { identifierName: "fs", tags: "node" }, (p) => {
     "Node local-disk implementation of the dbx-tools browser-safe filesystem contract",
   );
   p.addDeps(
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-fs@workspace:^",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-fs@workspace:*",
   );
 });
 
@@ -894,10 +894,10 @@ project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p)
   );
   p.addDeps(
     "@better-auth/passkey@catalog:",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
     "better-auth@catalog:",
     "env-paths@catalog:",
     "zod@catalog:",
@@ -918,11 +918,11 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "In-process public Portr and FRP tunnels protected by the dbx-tools authentication gate",
   );
   p.addDeps(
-    "@dbx-tools/auth-gate@workspace:^",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
+    "@dbx-tools/auth-gate@workspace:*",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
     "@databricks/appkit@catalog:",
     "@types/express@catalog:",
     "better-call@catalog:",
@@ -950,7 +950,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
   // `--insecure` mode) needs no mail transport, so it is an optional peer rather
   // than a hard dep; the app that mounts `authGate` provides it. Kept as a devDep
   // so it resolves for this package's own tests.
-  projectJs.addOptionalPeer(p, "@dbx-tools/email@workspace:^");
+  projectJs.addOptionalPeer(p, "@dbx-tools/email@workspace:*");
 });
 
 // Shared contracts
@@ -972,7 +972,7 @@ project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" },
   );
   p.addDeps(
     "@better-auth/passkey@catalog:",
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-core@workspace:*",
     "@simplewebauthn/browser@catalog:",
     "better-auth@catalog:",
     "zod@catalog:",
@@ -990,7 +990,7 @@ project.applyToProjects(root, { identifierName: "shared-lakebox", tags: "shared"
 // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
 project.applyToProjects(root, { identifierName: "shared-model", tags: "shared" }, (p) => {
   p.package.addField("description", "Browser-safe model selection contract and classifier");
-  p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
+  p.addDeps("@dbx-tools/shared-core@workspace:*", "zod@catalog:");
 });
 
 project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "shared" }, (p) => {
@@ -999,8 +999,8 @@ project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "s
     "Browser-safe model-gateway schemas and model discovery client",
   );
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
     "zod@catalog:",
   );
 });
@@ -1011,9 +1011,9 @@ project.applyToProjects(root, { identifierName: "shared-genie-code", tags: "shar
     "Browser-safe managed Genie Code options and profile-scoped home contracts",
   );
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/shared-model-gateway@workspace:^",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/shared-model-gateway@workspace:*",
     "zod@catalog:",
   );
 });
@@ -1024,8 +1024,8 @@ project.applyToProjects(root, { identifierName: "shared-graphiti", tags: "shared
     "Browser-safe Graphiti options, defaults, and runtime configuration",
   );
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-model-gateway@workspace:^",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-model-gateway@workspace:*",
     "zod@catalog:",
   );
 });
@@ -1035,7 +1035,7 @@ project.applyToProjects(root, { identifierName: "shared-fs", tags: "shared" }, (
     "description",
     "Browser-safe filesystem contract and abstract base for rooted storage backends",
   );
-  p.addDeps("@dbx-tools/shared-core@workspace:^");
+  p.addDeps("@dbx-tools/shared-core@workspace:*");
 });
 
 // shared-email: browser-safe zod wire contract for the email add-on (message
@@ -1055,7 +1055,7 @@ project.applyToProjects(root, { identifierName: "shared-email-template", tags: "
     "Universal React Email presentation shared by dbx-tools server and browser surfaces",
   );
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-core@workspace:*",
     "@react-email/components@catalog:",
     "react@catalog:",
   );
@@ -1082,8 +1082,8 @@ project.applyToProjects(root, { identifierName: "shared-mastra", tags: "shared" 
   p.package.addField("description", "Browser-safe contracts for the AppKit Mastra plugin");
   p.addDeps(
     "zod@catalog:",
-    "@dbx-tools/shared-genie@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/shared-genie@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
   );
 });
 
@@ -1103,7 +1103,7 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
     "description",
     "Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers",
   );
-  p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
+  p.addDeps("@dbx-tools/shared-core@workspace:*", "zod@catalog:");
   p.addDevDeps("@databricks/sdk-experimental@catalog:");
   p.dbxToolsConfig.codegenInputs.push(
     "node_modules/@databricks/sdk-experimental/dist/apis/dashboards/model.d.ts",
@@ -1123,7 +1123,7 @@ project.applyToProjects(root, { identifierName: "cli-args", tags: "cli" }, (p) =
     "description",
     "Commander argument generation from Zod object schemas for dbx-tools CLIs",
   );
-  p.addDeps("@dbx-tools/core@workspace:^", "@dbx-tools/shared-core@workspace:^");
+  p.addDeps("@dbx-tools/core@workspace:*", "@dbx-tools/shared-core@workspace:*");
 });
 
 // cli-service: a product-agnostic systray host plus Commander lifecycle command.
@@ -1135,9 +1135,9 @@ project.applyToProjects(root, { identifierName: "cli-service", tags: "cli" }, (p
     "Cross-platform service lifecycle, uv Python runtimes, and system tray menus for CLIs",
   );
   p.addDeps(
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/cli-args@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
     `bun@${bunWorkflow.BUN_VERSION}`,
     "systray2@catalog:",
   );
@@ -1162,28 +1162,28 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
   p.addDeps(
     "@clack/prompts@catalog:",
     "@databricks/appkit@catalog:",
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/appkit-generator@workspace:^",
-    "@dbx-tools/appkit-model-gateway@workspace:^",
-    "@dbx-tools/appkit-web-search@workspace:^",
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/auth-gate@workspace:^",
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/cli-service@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/databricks@workspace:^",
-    "@dbx-tools/email@workspace:^",
-    "@dbx-tools/appkit-memory@workspace:^",
-    "@dbx-tools/lakebase@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-email@workspace:^",
-    "@dbx-tools/shared-generator@workspace:^",
-    "@dbx-tools/shared-genie-code@workspace:^",
-    "@dbx-tools/shared-graphiti@workspace:^",
-    "@dbx-tools/shared-model-gateway@workspace:^",
-    "@dbx-tools/tunnel@workspace:^",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/appkit-generator@workspace:*",
+    "@dbx-tools/appkit-model-gateway@workspace:*",
+    "@dbx-tools/appkit-web-search@workspace:*",
+    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/auth-gate@workspace:*",
+    "@dbx-tools/cli-args@workspace:*",
+    "@dbx-tools/cli-service@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/databricks@workspace:*",
+    "@dbx-tools/email@workspace:*",
+    "@dbx-tools/appkit-memory@workspace:*",
+    "@dbx-tools/lakebase@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-email@workspace:*",
+    "@dbx-tools/shared-generator@workspace:*",
+    "@dbx-tools/shared-genie-code@workspace:*",
+    "@dbx-tools/shared-graphiti@workspace:*",
+    "@dbx-tools/shared-model-gateway@workspace:*",
+    "@dbx-tools/tunnel@workspace:*",
     "concurrently@^10.0.3",
     "get-port@^7.1.0",
     "http-proxy-3@catalog:",
@@ -1207,12 +1207,12 @@ project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
   p.addDeps(
     "@better-auth/passkey@catalog:",
     "@databricks/appkit-ui@catalog:",
-    "@dbx-tools/shared-appkit@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-email@workspace:^",
-    "@dbx-tools/shared-email-template@workspace:^",
-    "@dbx-tools/shared-search@workspace:^",
+    "@dbx-tools/shared-appkit@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-email@workspace:*",
+    "@dbx-tools/shared-email-template@workspace:*",
+    "@dbx-tools/shared-search@workspace:*",
     "lucide-react@catalog:",
     "shiki@catalog:",
     "tailwindcss@catalog:",
@@ -1237,12 +1237,12 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
   p.package.addField("description", "React chat UI for the AppKit-Mastra plugin");
   p.addDeps(
     "@databricks/appkit-ui@catalog:",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-mastra@workspace:^",
-    "@dbx-tools/shared-genie@workspace:^",
-    "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/ui@workspace:^",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-mastra@workspace:*",
+    "@dbx-tools/shared-genie@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/ui@workspace:*",
     "@mastra/client-js@catalog:",
     // Native persisted-message conversion used by browser history hydration.
     "@mastra/core@catalog:",
@@ -1265,8 +1265,8 @@ project.applyToProjects(root, { identifierName: "ui-lakebox", tags: "ui" }, (p) 
   p.package.addField("description", "React controls for the app Lakebox, user services, and metrics");
   p.addDeps(
     "@databricks/appkit-ui@catalog:",
-    "@dbx-tools/shared-lakebox@workspace:^",
-    "@dbx-tools/ui@workspace:^",
+    "@dbx-tools/shared-lakebox@workspace:*",
+    "@dbx-tools/ui@workspace:*",
     "lucide-react@catalog:",
   );
 });
@@ -1277,26 +1277,26 @@ project.applyToProjects(root, { identifierName: "ui-lakebox", tags: "ui" }, (p) 
 // One Bun/AppKit application rooted at packages/demo with client/ and server/.
 project.applyToProjects(root, { path: "packages/demo" }, (p) => {
   p.addDeps(
-    "@dbx-tools/appkit@workspace:^",
-    "@dbx-tools/appkit-generator@workspace:^",
-    "@dbx-tools/appkit-lakebox@workspace:^",
-    "@dbx-tools/appkit-mastra@workspace:^",
-    "@dbx-tools/appkit-memory@workspace:^",
-    "@dbx-tools/appkit-web-search@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/databricks@workspace:^",
-    "@dbx-tools/email@workspace:^",
-    "@dbx-tools/postgres@workspace:^",
-    "@dbx-tools/search@workspace:^",
-    "@dbx-tools/shared-auth@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
-    "@dbx-tools/shared-email-template@workspace:^",
-    "@dbx-tools/shared-generator@workspace:^",
-    "@dbx-tools/shared-search@workspace:^",
-    "@dbx-tools/ui@workspace:^",
-    "@dbx-tools/ui-lakebox@workspace:^",
-    "@dbx-tools/ui-mastra@workspace:^",
-    "@dbx-tools/tunnel@workspace:^",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/appkit-generator@workspace:*",
+    "@dbx-tools/appkit-lakebox@workspace:*",
+    "@dbx-tools/appkit-mastra@workspace:*",
+    "@dbx-tools/appkit-memory@workspace:*",
+    "@dbx-tools/appkit-web-search@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/databricks@workspace:*",
+    "@dbx-tools/email@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
+    "@dbx-tools/search@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/shared-email-template@workspace:*",
+    "@dbx-tools/shared-generator@workspace:*",
+    "@dbx-tools/shared-search@workspace:*",
+    "@dbx-tools/ui@workspace:*",
+    "@dbx-tools/ui-lakebox@workspace:*",
+    "@dbx-tools/ui-mastra@workspace:*",
+    "@dbx-tools/tunnel@workspace:*",
     "@mastra/core@catalog:",
     "lucide-react@catalog:",
     "react-router-dom@catalog:",

@@ -10,11 +10,12 @@
  *
  * The engine imports three `@dbx-tools/*` utility packages at runtime
  * (`shared-core`, `node-core`, `node-path`). As workspace siblings they are
- * declared `workspace:^` and bun links them from local source.
+ * declared `workspace:*` and bun links them from local source.
  */
 import { fileURLToPath } from "node:url";
 import { DependencyType, javascript, typescript } from "projen";
 import { NodePackageManager } from "projen/lib/javascript";
+import { BUN_LOCKFILE_BIN } from "./src/bun-lockfile.ts";
 import { PROJEN_VERSION } from "./src/projen-version.ts";
 import { readWorkspaceVersion } from "./src/workspace-version.ts";
 
@@ -24,7 +25,7 @@ const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",
   defaultReleaseBranch: "main",
   // A member of the single bun workspace. No nested `pnpm-workspace.yaml` marker is
-  // needed - bun resolves the `workspace:^` sibling deps from the root install.
+  // needed - bun resolves the `workspace:*` sibling deps from the root install.
   packageManager: NodePackageManager.BUN,
   projenVersion: PROJEN_VERSION,
   // The projenrc runner is reset to `bun` below (bun runs `.ts` directly). This
@@ -65,15 +66,15 @@ const project = new typescript.TypeScriptProject({
   },
   deps: [
     "@clack/prompts@^1.7.0",
-    // `workspace:^` now that `projen/` is a MEMBER of the single bun workspace:
-    // bun links these three from local source and rewrites them to the real
-    // published range at publish time (root synthesis supplies that version),
+    // `workspace:*` now that `projen/` is a MEMBER of the single bun workspace:
+    // bun links these packages from local source and rewrites them to the exact
+    // published version at publish time (root synthesis supplies that version),
     // so the engine still cannot resolve an older sibling than it was built with.
-    "@dbx-tools/auth@workspace:^",
-    "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/core@workspace:^",
-    "@dbx-tools/path@workspace:^",
-    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/cli-args@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/path@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
     "commander@catalog:",
     // `tasks/sync.ts` imports this to fan the watchers out. It resolved here only
     // because the repo root happens to depend on it; a consumer install has no
@@ -104,6 +105,9 @@ project.package.addVersion(PACKAGE_VERSION);
 // This package is consumed as TS source; publish the source subpaths, not a
 // compiled `lib/`.
 project.package.addField("type", "module");
+project.package.addBin({
+  [BUN_LOCKFILE_BIN]: "./tasks/bun-lockfile.ts",
+});
 project.package.addField("exports", {
   ".": "./index.ts",
   "./pypi-trusted-publisher-instructions":

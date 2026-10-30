@@ -42,12 +42,12 @@
     },
     {
       "name": "@dbx-tools/shared-lakebox",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui",
-      "version": "workspace:^",
+      "version": "workspace:*",
       "type": "runtime"
     },
     {

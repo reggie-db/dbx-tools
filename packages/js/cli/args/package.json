@@ -23,8 +23,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/shared-core": "workspace:^",
+    "@dbx-tools/core": "workspace:*",
+    "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:",
     "zod": "catalog:"
   },

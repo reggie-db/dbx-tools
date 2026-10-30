@@ -687,6 +687,31 @@ Run `bun run bun-lockfile -- --check` to confirm a lockfile is clean without
 writing it. Options can also come from `PROJEN_BUN_LOCKFILE_*` environment
 variables or `.env`.
 
+Existing Projen projects can add the same ownership without adopting the
+dbx-tools project classes:
+
+```ts
+import { BunLockfile } from "@dbx-tools/projen";
+
+new BunLockfile(project);
+```
+
+Repositories that do not use Projen can invoke the packaged executable from
+their existing scripts:
+
+```json
+{
+  "scripts": {
+    "bun-lockfile": "dbx-tools-bun-lockfile",
+    "bun-lockfile:check": "dbx-tools-bun-lockfile --check",
+    "postinstall": "bun run bun-lockfile"
+  }
+}
+```
+
+Commit `bun.lock` and use `bun install --frozen-lockfile` in CI. The executable
+and component use the same normalizer as the generated dbx-tools workspace.
+
 ## Manage workspace versions
 
 `VERSION` is the language-neutral version seam. Real package manifests remain

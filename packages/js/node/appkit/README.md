@@ -99,7 +99,10 @@ Databricks Asset Bundle validation, and deployed Apps.
 
 During local startup, a missing `DATABRICKS_CONFIG_PROFILE` is populated from
 `@dbx-tools/auth`'s default-profile resolution before bundle validation runs.
-Deployed Apps retain native AppKit authentication and do not receive a profile.
+Workspace API calls and Lakebase pool credentials use the same auth lifecycle,
+so an expired CLI refresh token can invoke `databricks auth login` instead of
+falling through to the SDK's unrelated default-auth chain. Deployed Apps retain
+native AppKit authentication and do not receive a profile.
 
 Boot-time resolution runs as the service principal before any plugin exists, so
 it sits outside AppKit's interceptor chain. It carries its own timeout, and
