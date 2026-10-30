@@ -183,7 +183,7 @@ thrown.
 - `pollIntervalMs` - fallback polling cadence, default `500`.
 - `context` - SDK `Context` or `AbortSignal` for cancellation.
 
-## Download an original chart
+## Download a chart image
 
 After requesting visualizations, select the message attachment with a `viz`
 field and download its PNG using the same conversation and message IDs:
@@ -207,10 +207,17 @@ if (visualization?.attachment_id) {
 
 Use the visualization's attachment ID, not its linked query attachment ID.
 The SDK's `raw: true` transport returns the binary body and keeps normal SDK
-authentication and cancellation. The helper validates the PNG response and
-returns the original bytes; it does not replot data or convert images to SVG.
-This endpoint also accepts visualization attachments from Agent Mode
-conversations.
+authentication and cancellation. The helper validates the PNG response, then
+uses the optional `sharp` dependency to resize it to four times its original
+width and height with Lanczos3 and apply a mild unsharp mask. If `sharp` is not
+installed or cannot process the image, the helper returns the validated
+original bytes. Processing happens before the bytes return to callers, so a
+downstream cache stores the enhanced image when enhancement succeeds.
+
+This is a raster cleanup fallback. If the source ECharts instance is available,
+prefer `getDataURL({ pixelRatio: 3 })` or SVG so chart text is re-rendered rather
+than enlarged from a screenshot. The endpoint also accepts visualization
+attachments from Agent Mode conversations.
 
 ## Modules
 
@@ -219,7 +226,7 @@ conversations.
 - `agentMode` - `genieAgentModeChat()`, availability classification, and Agent
   Mode transport options plus Agent Mode conversation history.
 - `space` - `getGenieSpace()` and `genieSampleQuestions()`.
-- `visualization` - `downloadGenieVisualization()` for original PNG downloads.
+- `visualization` - `downloadGenieVisualization()` for validated and optionally enhanced PNG downloads.
 
 The AppKit-Mastra package builds its Genie tools on top of this driver. See
 [@dbx-tools/appkit-mastra](../appkit-mastra) for the agent-level

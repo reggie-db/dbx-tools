@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { genieVisualizationDownloadPath } from "@dbx-tools/shared-genie";
+import sharp from "sharp";
 import { downloadGenieVisualization } from "../src/visualization.ts";
 
 const input = {
@@ -10,10 +11,19 @@ const input = {
   message_id: "message-1",
   attachment_id: "viz-1",
 };
-const png = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3);
+const png = await sharp({
+  create: {
+    width: 3,
+    height: 2,
+    channels: 4,
+    background: { r: 35, g: 80, b: 160, alpha: 1 },
+  },
+})
+  .png()
+  .toBuffer();
 
 describe("downloadGenieVisualization", () => {
-  it("uses SDK raw mode and returns the exact upstream PNG bytes", async () => {
+  it("uses SDK raw mode and returns a four-times larger sharpened PNG", async () => {
     let received: Parameters<WorkspaceClient["apiClient"]["request"]>[0] | undefined;
     const client = {
       apiClient: {
@@ -24,7 +34,10 @@ describe("downloadGenieVisualization", () => {
       },
     } as unknown as WorkspaceClient;
     const bytes = await downloadGenieVisualization(input, { workspaceClient: client });
-    assert.deepEqual(bytes, png);
+    const metadata = await sharp(bytes).metadata();
+    assert.equal(metadata.width, 12);
+    assert.equal(metadata.height, 8);
+    assert.notDeepEqual(bytes, png);
     assert.equal(received?.path, genieVisualizationDownloadPath(input));
     assert.equal(received?.path.includes("space%2F1"), true);
     assert.equal(received?.method, "GET");

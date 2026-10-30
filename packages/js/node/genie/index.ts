@@ -17,5 +17,5 @@ export { sendGenieMessageFeedback } from "./src/feedback.ts";
 export type { SendGenieMessageFeedbackOptions } from "./src/feedback.ts";
 export { createGenieSpace, getGenieSpace, genieSampleQuestions } from "./src/space.ts";
 export type { GetGenieSpaceOptions, CreateGenieSpaceOptions } from "./src/space.ts";
-export { downloadGenieVisualization } from "./src/visualization.ts";
+export { upscaleGenieVisualizationPng, downloadGenieVisualization } from "./src/visualization.ts";
 export type { DownloadGenieVisualizationOptions } from "./src/visualization.ts";

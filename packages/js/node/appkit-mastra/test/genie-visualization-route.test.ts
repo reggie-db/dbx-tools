@@ -18,10 +18,18 @@ const reference = {
   attachment_id: "visualization-1",
   statementId: "01f1d46a-94ed-1d92-932d-f8b2d193bbef",
 };
-const png = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 10, 20);
+const png = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
+
+function pngDimensions(bytes: Uint8Array): { width: number; height: number } {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
 
 describe("Genie visualization image route", () => {
-  it("serves exact bytes under OBO, does not cache them, and preserves upstream access errors", async () => {
+  it("enhances bytes under OBO before serving, does not cache them, and preserves upstream access errors", async () => {
     const requests: string[] = [];
     let upstreamStatus: number | undefined;
     const userClient = {
@@ -81,7 +89,9 @@ describe("Genie visualization image route", () => {
           assert.equal(response.headers.get("content-type"), "image/png");
           assert.equal(response.headers.get("cache-control"), "private, no-store");
           assert.equal(response.headers.get("x-content-type-options"), "nosniff");
-          assert.deepEqual(new Uint8Array(await response.arrayBuffer()), png);
+          const output = new Uint8Array(await response.arrayBuffer());
+          assert.deepEqual(pngDimensions(output), { width: 4, height: 4 });
+          assert.notDeepEqual(output, png);
           assert.deepEqual(requests, [
             genieVisualizationDownloadPath({
               space_id: "space-1",

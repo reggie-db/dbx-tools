@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { GenieImageTabs } from "../src/react/_genie-image.tsx";
 import { MastraPluginClient } from "../src/support/mastra-client.ts";
 
-describe("original Genie images", () => {
+describe("Genie images", () => {
   it("keeps Chart and Table tabs without invoking a chart renderer", () => {
     const html = renderToStaticMarkup(
       createElement(GenieImageTabs, {

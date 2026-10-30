@@ -32,7 +32,7 @@ const GenieImageLoading = () => (
   </div>
 );
 
-/** Chart/Table presentation for Genie's original, unmodified PNG. */
+/** Chart/Table presentation for Genie's server-processed PNG. */
 export function GenieImageTabs({
   src,
   data,
@@ -85,9 +85,7 @@ export function GenieImageTabs({
                   />
                 </button>
               </DialogTrigger>
-              <DialogContent
-                className="max-h-[calc(100dvh-1rem)] w-fit max-w-[calc(100dvw-1rem)] gap-0 overflow-hidden p-2 sm:max-w-[calc(100dvw-1rem)]"
-              >
+              <DialogContent className="max-h-[calc(100dvh-1rem)] w-fit max-w-[calc(100dvw-1rem)] gap-0 overflow-hidden p-2 sm:max-w-[calc(100dvw-1rem)]">
                 <DialogTitle className="sr-only">Genie query visualization</DialogTitle>
                 <img
                   src={src}

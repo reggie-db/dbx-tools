@@ -24,6 +24,7 @@ import { Component, javascript, YamlFile } from "projen";
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
 const PYTHON_ROOT = "packages/py";
+const SHARP_VERSION = "^0.35.5";
 const GRAPHITI_UPSTREAM_RELEASE = {
   version: "0.30.2",
   tag: "v0.30.2",
@@ -518,6 +519,10 @@ project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => 
     "@dbx-tools/appkit@workspace:*",
     "@databricks/appkit@catalog:",
   );
+  // Sharp owns the native libvips resize and unsharp-mask pipeline. Keep it as
+  // an optional peer because its platform binaries are large; the runtime
+  // detects its absence and serves the validated upstream PNG unchanged.
+  projectJs.addOptionalPeer(p, `sharp@${SHARP_VERSION}`);
 });
 
 // node-model: the server-side model resolver (cached Model Serving listing +
