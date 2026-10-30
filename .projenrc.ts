@@ -113,7 +113,6 @@ const root = new projectJs.DBXToolsNodeProject({
   // workspace options. Late catalog mutation is reserved for package mixins.
   catalog: {
     marked: "^18.0.5",
-    scrollbooster: "4.0.0",
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.1.0",
     "@mastra/core": "1.71.0",
@@ -233,10 +232,6 @@ const root = new projectJs.DBXToolsNodeProject({
     // this projen definition evaluates through the workspace dependency.
     "zod@catalog:",
   ],
-});
-
-root.package.addField("patchedDependencies", {
-  "scrollbooster@4.0.0": "patches/scrollbooster@4.0.0.patch",
 });
 
 // OpenTelemetry's global tracer provider must be shared by AppKit and Mastra.
@@ -1260,7 +1255,6 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     "echarts-for-react@catalog:",
     "lucide-react@catalog:",
     "marked@catalog:",
-    "scrollbooster@catalog:",
     "sql-formatter@catalog:",
     "streamdown@catalog:",
     "zod@catalog:",

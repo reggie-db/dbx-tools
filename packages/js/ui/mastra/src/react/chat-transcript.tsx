@@ -14,11 +14,11 @@ import { errorMessage } from "@dbx-tools/shared-core";
 import { isToolUIPart } from "ai";
 import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
 import { messageFeedbackDestination, mlflowTraceUrl } from "./chat-feedback.ts";
 import { SuggestionPills } from "./suggestion-pills.tsx";
 import { isActiveChatStatus, type ChatViewProps, type ToolEvent } from "./types.ts";
-import { CANCEL_TRANSCRIPT_KINETIC_SCROLL_EVENT } from "./use-composer-viewport-lock.ts";
 import { messageText } from "../support/export.ts";
 
 const BOTTOM_THRESHOLD_PX = 24;
@@ -233,7 +233,9 @@ export const useChatTranscriptController = ({
 
   const scrollToBottomNow = useCallback(() => {
     pinnedRef.current = true;
-    setIsAtBottom(true);
+    // Native Mobile Safari touch listeners run outside React's delegated event path. Commit the
+    // hidden state before mutating scrollTop so the control disappears before the transcript jumps.
+    flushSync(() => setIsAtBottom(true));
     pinToBottomNow();
   }, [pinToBottomNow]);
 
@@ -317,10 +319,9 @@ export const ChatTranscript = ({
     if (scrollToBottomOverflowRef.current === null) {
       scrollToBottomOverflowRef.current = transcript.style.overflowY;
     }
-    transcript.dispatchEvent(new Event(CANCEL_TRANSCRIPT_KINETIC_SCROLL_EVENT));
 
-    // Hiding overflow cancels WebKit's native momentum immediately. The second assignment on the
-    // next frame keeps the transcript pinned after its normal scroll range has been restored.
+    // WebKit has no public API for stopping an overflow scroller's momentum. Briefly removing
+    // overflow terminates that momentum; restoring it one frame later keeps normal scrolling native.
     transcript.style.overflowY = "hidden";
     controller.scrollToBottomNow();
     if (scrollToBottomFrameRef.current !== null) {
@@ -338,9 +339,8 @@ export const ChatTranscript = ({
     const button = scrollToBottomButtonRef.current;
     if (!button) return;
 
-    // React delegates touch events through a passive document listener in Mobile Safari. Native
-    // non-passive listeners are required here so the button can scroll without transferring focus
-    // away from the composer and closing the keyboard.
+    // React's delegated touch listener may be passive in Mobile Safari. These button-local,
+    // non-passive listeners prevent focus transfer without changing transcript gesture handling.
     const handlePointerDown = (event: PointerEvent) => {
       event.preventDefault();
     };
@@ -369,7 +369,7 @@ export const ChatTranscript = ({
       button.removeEventListener("touchstart", handleTouchStart);
       button.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [activateScrollToBottomFromTouch]);
+  }, [activateScrollToBottomFromTouch, controller.scrollRef]);
 
   return (
     <div className="relative flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
@@ -505,13 +505,7 @@ export const ChatTranscript = ({
           )}
         </div>
       </div>
-      <div
-        data-slot="aui_thread-scroll-indicator"
-        className="pointer-events-none absolute right-0.5 top-0 z-20 w-0.5 rounded-full bg-foreground/50"
-        hidden
-        aria-hidden="true"
-      />
-      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto flex w-full max-w-4xl justify-end px-4 md:px-6">
+      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto flex w-full max-w-4xl justify-center px-4 md:px-6">
         <Button
           ref={scrollToBottomButtonRef}
           type="button"
