@@ -511,7 +511,7 @@ describe("MLflow experiment manager link", () => {
     globalThis.fetch = async (input) => {
       const url = String(input);
       if (url.endsWith("/api/2.0/preview/scim/v2/Me")) {
-        return Response.json({ applicationId: "app-service-principal", groups: [] });
+        return new Response(null, { status: 403 });
       }
       if (url.endsWith("/api/2.0/permissions/experiments/123")) {
         return Response.json({

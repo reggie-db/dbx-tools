@@ -655,21 +655,28 @@ async function resolveMlflowExperimentManagerUrl(
       { method: "GET" },
     ),
   ]);
-  if (!currentResponse.ok || !permissionsResponse.ok) return undefined;
+  if (!permissionsResponse.ok) return undefined;
 
-  const current = CurrentUserResponseSchema.safeParse(await readResponseJson(currentResponse));
+  const current = currentResponse.ok
+    ? CurrentUserResponseSchema.safeParse(await readResponseJson(currentResponse))
+    : undefined;
   const permissions = ExperimentPermissionsResponseSchema.safeParse(
     await readResponseJson(permissionsResponse),
   );
-  if (!current.success || !permissions.success) return undefined;
+  if (!permissions.success || (!viewerUserName && !current?.success)) return undefined;
 
   const userNames = new Set(
-    [viewerUserName, current.data.userName, current.data.applicationId, current.data.displayName]
+    [
+      viewerUserName,
+      ...(current?.success
+        ? [current.data.userName, current.data.applicationId, current.data.displayName]
+        : []),
+    ]
       .map((value) => value?.trim())
       .filter((value): value is string => Boolean(value)),
   );
   const groupNames = new Set(
-    (current.data.groups ?? []).flatMap(({ value, display }) =>
+    (current?.success ? (current.data.groups ?? []) : []).flatMap(({ value, display }) =>
       [value, display].filter((entry): entry is string => Boolean(entry)),
     ),
   );
