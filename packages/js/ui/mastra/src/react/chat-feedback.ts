@@ -1,6 +1,6 @@
 import { log, toError } from "@dbx-tools/shared-core";
 import { GenieMessageSchema } from "@dbx-tools/shared-genie";
-import type { FeedbackMode } from "@dbx-tools/shared-mastra";
+import type { FeedbackDestination } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import { useCallback, useRef } from "react";
 import type { ThreadSessionUpdater } from "./chat-sessions.ts";
@@ -13,7 +13,7 @@ const logger = log.logger("ui-mastra/chat");
 interface UseChatFeedbackOptions {
   activeKey: string;
   feedbackByMessage: Record<string, MessageFeedback>;
-  feedbackMode: FeedbackMode;
+  feedbackModes: readonly FeedbackDestination[];
   mastraClient: MastraPluginClient;
   updateSession: ThreadSessionUpdater;
 }
@@ -24,6 +24,11 @@ export interface GenieFeedbackTarget {
   conversationId: string;
   messageId: string;
 }
+
+/** Per-message feedback destination and optional Genie identity. */
+export type MessageFeedbackDestination =
+  | { mode: "mlflow"; traceId: string }
+  | ({ mode: "genie" } & GenieFeedbackTarget);
 
 /** Read the latest Genie target from an assistant message's tool results. */
 export function genieFeedbackTarget(message: UIMessage): GenieFeedbackTarget | undefined {
@@ -48,11 +53,23 @@ export function genieFeedbackTarget(message: UIMessage): GenieFeedbackTarget | u
   return undefined;
 }
 
-/** Submit feedback to the single destination selected by the server. */
+/** Select Genie for a Genie result, otherwise MLflow for a traced response. */
+export function messageFeedbackDestination(
+  message: UIMessage,
+  feedbackModes: readonly FeedbackDestination[],
+  traceId?: string,
+): MessageFeedbackDestination | undefined {
+  const genieTarget = feedbackModes.includes("genie") ? genieFeedbackTarget(message) : undefined;
+  if (genieTarget) return { mode: "genie", ...genieTarget };
+  if (traceId && feedbackModes.includes("mlflow")) return { mode: "mlflow", traceId };
+  return undefined;
+}
+
+/** Submit feedback to the destination selected for the assistant message. */
 export function useChatFeedback({
   activeKey,
   feedbackByMessage,
-  feedbackMode,
+  feedbackModes,
   mastraClient,
   updateSession,
 }: UseChatFeedbackOptions) {
@@ -62,8 +79,8 @@ export function useChatFeedback({
   return useCallback(
     async (message: UIMessage, submission: FeedbackSubmission) => {
       const traceId = feedbackByMessageRef.current[message.id]?.traceId;
-      const target = feedbackMode === "genie" ? genieFeedbackTarget(message) : undefined;
-      if (feedbackMode === "none") return;
+      const destination = messageFeedbackDestination(message, feedbackModes, traceId);
+      if (!destination) return;
 
       if (submission.value) {
         updateSession(activeKey, (session) => ({
@@ -79,38 +96,39 @@ export function useChatFeedback({
       }
       try {
         let result;
-        if (feedbackMode === "genie") {
-          if (!target || !submission.value || !submission.request) return;
+        if (destination.mode === "genie") {
+          if (!submission.value || !submission.request) return;
           result = await mastraClient.feedback({
             mode: "genie",
-            ...target,
+            spaceId: destination.spaceId,
+            conversationId: destination.conversationId,
+            messageId: destination.messageId,
             rating: submission.value === "up" ? "POSITIVE" : "NEGATIVE",
             request: submission.request,
             ...(submission.comment ? { comment: submission.comment } : {}),
           });
         } else {
-          if (!traceId) return;
           result = await mastraClient.feedback({
             mode: "mlflow",
-            traceId,
+            traceId: destination.traceId,
             ...(submission.value !== undefined ? { value: submission.value === "up" } : {}),
             ...(submission.comment ? { comment: submission.comment } : {}),
           });
         }
         if (!result.ok) {
           logger.warn("feedback not recorded", {
-            feedbackMode,
+            feedbackMode: destination.mode,
             ...(traceId ? { traceId } : {}),
           });
         }
       } catch (error) {
         logger.error("feedback error", {
-          feedbackMode,
+          feedbackMode: destination.mode,
           ...(traceId ? { traceId } : {}),
           error: toError(error),
         });
       }
     },
-    [activeKey, feedbackMode, mastraClient, updateSession],
+    [activeKey, feedbackModes, mastraClient, updateSession],
   );
 }

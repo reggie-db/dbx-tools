@@ -194,6 +194,7 @@ describe("listServingEndpointsUncached model policy", () => {
       task: CHAT_TASK,
       description: "xAI reasoning model",
       supportsTools: true,
+      supportsStructuredOutput: true,
       serviceNames: { xai: "grok-4.7" },
       modelServiceName: "system.ai.databricks-grok-4-7",
       reasoningEfforts: ["low", "medium", "high", "xhigh"],
@@ -205,6 +206,7 @@ describe("listServingEndpointsUncached model policy", () => {
       family: "gemini",
       task: CHAT_TASK,
       supportsTools: false,
+      supportsStructuredOutput: true,
       profile: { quality: 5, speed: 3, cost: 2 },
       class: ModelClass.ChatThinking,
       serviceNames: { google: "gemini-2.5-pro" },
@@ -262,6 +264,35 @@ describe("listServingEndpoints cache identity", () => {
     await listServingEndpoints(clientB, host, { cacheIdentity: "principal-b" });
     assert.equal(callsA.value, 4);
     assert.equal(callsB.value, 1);
+  });
+
+  it("keeps chat-only catalogues separate from embedding-dimension enrichment", async () => {
+    let queries = 0;
+    const client = {
+      servingEndpoints: {
+        async *list() {
+          yield { name: GTE, task: EMBEDDING_TASK };
+          yield { name: HAIKU_5, task: CHAT_TASK };
+        },
+        async query() {
+          queries += 1;
+          return { data: [{ embedding: [1, 2, 3] }] };
+        },
+      },
+    };
+    const host = "https://chat-only.example.com";
+
+    const chatOnly = await listServingEndpoints(client, host, {
+      cacheIdentity: "principal-a",
+      measureEmbeddingDimensions: false,
+    });
+    const enriched = await listServingEndpoints(client, host, {
+      cacheIdentity: "principal-a",
+    });
+
+    assert.equal(chatOnly.find((endpoint) => endpoint.name === GTE)?.dimension, undefined);
+    assert.equal(enriched.find((endpoint) => endpoint.name === GTE)?.dimension, 3);
+    assert.equal(queries, 1);
   });
 });
 
@@ -518,6 +549,67 @@ describe("lookupModels", () => {
     assert.equal(
       lookupModels(models, { modelClass: ModelClass.Embedding, limit: 1 })[0]?.endpoint.name,
       "databricks-gte-v3",
+    );
+  });
+
+  it("prefers a non-reasoning high-throughput model for speed-sensitive work", () => {
+    const models = [
+      {
+        ...chat("databricks-gemini-3-8-flash"),
+        profile: { quality: 35, speed: 167.1, cost: 1.13 },
+        reasoningEfforts: ["minimal", "low", "medium", "high"] as const,
+      },
+      {
+        ...chat("databricks-meta-llama-3-1-8b-instruct"),
+        profile: { quality: 12, speed: 156.4, cost: 0.1 },
+        supportsStructuredOutput: true,
+      },
+      {
+        ...chat("databricks-gemma-3-12b"),
+        profile: { quality: 9, speed: 29.2, cost: 0 },
+      },
+      ...[14, 24, 27, 31, 34, 35].map((quality, index) => ({
+        ...chat(`databricks-fixture-${index}`),
+        profile: { quality, speed: 1, cost: 1 },
+      })),
+    ];
+
+    assert.equal(
+      lookupModels(models, {
+        modelClass: ModelClass.ChatFast,
+        optimizeFor: "speed",
+        limit: 1,
+      })[0]?.endpoint.name,
+      "databricks-meta-llama-3-1-8b-instruct",
+    );
+  });
+
+  it("filters speed-sensitive work by structured-output capability", () => {
+    const models = [
+      {
+        ...chat("databricks-meta-llama-3-1-8b-instruct"),
+        profile: { quality: 12, speed: 156.4, cost: 0.1 },
+        supportsStructuredOutput: true,
+      },
+      {
+        ...chat("databricks-gemma-2-9b"),
+        profile: { quality: 9, speed: 200, cost: 0 },
+      },
+      ...[14, 24, 27, 31, 34, 35].map((quality, index) => ({
+        ...chat(`databricks-fixture-${index}`),
+        profile: { quality, speed: 1, cost: 1 },
+      })),
+    ];
+
+    assert.deepEqual(
+      names(
+        lookupModels(models, {
+          modelClass: ModelClass.ChatFast,
+          optimizeFor: "speed",
+          requiresStructuredOutput: true,
+        }),
+      ),
+      ["databricks-meta-llama-3-1-8b-instruct"],
     );
   });
 

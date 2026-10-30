@@ -5,7 +5,10 @@
  */
 
 import { ConfigurationError } from "@databricks/appkit";
-import type { FeedbackMode, FeedbackModeOption } from "@dbx-tools/shared-mastra";
+import type {
+  FeedbackDestination,
+  FeedbackModeOption,
+} from "@dbx-tools/shared-mastra";
 
 /** Runtime availability used by automatic feedback selection. */
 export interface FeedbackAvailability {
@@ -15,19 +18,20 @@ export interface FeedbackAvailability {
   mlflow: boolean;
 }
 
-/** Resolve auto feedback or fail an explicitly unavailable destination. */
-export function resolveFeedbackMode(
+/** Resolve available feedback destinations or fail an explicit unavailable choice. */
+export function resolveFeedbackModes(
   configured: FeedbackModeOption | undefined,
   availability: FeedbackAvailability,
-): FeedbackMode {
+): FeedbackDestination[] {
   const mode = configured ?? "auto";
-  if (mode === "none") return "none";
+  if (mode === "none") return [];
   if (mode === "auto") {
-    if (availability.genie) return "genie";
-    if (availability.mlflow) return "mlflow";
-    return "none";
+    return [
+      ...(availability.genie ? (["genie"] as const) : []),
+      ...(availability.mlflow ? (["mlflow"] as const) : []),
+    ];
   }
-  if (availability[mode]) return mode;
+  if (availability[mode]) return [mode];
   throw new ConfigurationError(
     `mastra: feedbackMode "${mode}" is unavailable in this configuration`,
     { context: { feedbackMode: mode } },

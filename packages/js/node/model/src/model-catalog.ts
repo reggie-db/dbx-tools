@@ -70,6 +70,8 @@ export interface ListServingEndpointsOptions {
    * catalogue.
    */
   cacheIdentity?: string;
+  /** Measure embedding vector dimensions during this catalogue load. Defaults to true. */
+  measureEmbeddingDimensions?: boolean;
 }
 
 /** Hash an opaque credential identity before handing it to the shared cache. */
@@ -95,11 +97,12 @@ export async function listServingEndpoints(
   host: string,
   options: ListServingEndpointsOptions = {},
 ): Promise<ServingEndpointSummary[]> {
-  if (!options.cacheIdentity) return fetchEndpoints(client);
+  const measureDimensions = options.measureEmbeddingDimensions !== false;
+  if (!options.cacheIdentity) return fetchEndpoints(client, measureDimensions);
   return (await getOrSet(
     catalogueCache,
-    catalogueCacheKey(host, options.cacheIdentity),
-    () => fetchEndpoints(client),
+    catalogueCacheKey(host, options.cacheIdentity, measureDimensions),
+    () => fetchEndpoints(client, measureDimensions),
     {
       ttl: options.ttlMs ?? DEFAULT_MODEL_CACHE_TTL_MS,
       returnCachedOnError: true,
@@ -129,10 +132,13 @@ export async function listServingEndpointsUncached(
   return normalizeEndpoints(endpoints);
 }
 
-async function fetchEndpoints(client: WorkspaceClientLike): Promise<ServingEndpointSummary[]> {
+async function fetchEndpoints(
+  client: WorkspaceClientLike,
+  measureDimensions: boolean,
+): Promise<ServingEndpointSummary[]> {
   const startedAt = Date.now();
   const classified = stampModelClasses(await listServingEndpointsUncached(client));
-  const out = await measureEmbeddingDimensions(client, classified);
+  const out = measureDimensions ? await measureEmbeddingDimensions(client, classified) : classified;
   logger.debug("listed", { count: out.length, elapsedMs: Date.now() - startedAt });
   return out;
 }
@@ -201,14 +207,26 @@ export async function clearServingEndpointsCache(
   cacheIdentity?: string,
 ): Promise<void> {
   if (host && cacheIdentity) {
-    await deleteCachedValue(catalogueCache, catalogueCacheKey(host, cacheIdentity));
+    await Promise.all([
+      deleteCachedValue(catalogueCache, catalogueCacheKey(host, cacheIdentity, true)),
+      deleteCachedValue(catalogueCache, catalogueCacheKey(host, cacheIdentity, false)),
+    ]);
   } else {
     await catalogueCache.clear();
   }
 }
 
-function catalogueCacheKey(host: string, cacheIdentity: string): string {
-  return JSON.stringify([CACHE_KEY_NAMESPACE, host, cacheUserKey(cacheIdentity)]);
+function catalogueCacheKey(
+  host: string,
+  cacheIdentity: string,
+  measureDimensions: boolean,
+): string {
+  return JSON.stringify([
+    CACHE_KEY_NAMESPACE,
+    host,
+    cacheUserKey(cacheIdentity),
+    measureDimensions ? "dimensions" : "chat-only",
+  ]);
 }
 
 /**

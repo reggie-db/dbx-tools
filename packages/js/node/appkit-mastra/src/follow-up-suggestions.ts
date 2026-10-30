@@ -4,7 +4,7 @@
  * @module
  */
 
-import { log, combineAbortSignals, isRecord, toError, toDescription } from "@dbx-tools/shared-core";
+import { log, combineAbortSignals, toError, toDescription } from "@dbx-tools/shared-core";
 import {
   FOLLOW_UP_SUGGESTIONS_PART_TYPE,
   type FollowUpSuggestionsPartData,
@@ -14,7 +14,7 @@ import { ModelClass } from "@dbx-tools/shared-model";
 import type { MessageList } from "@mastra/core/agent/message-list";
 import type { OutputProcessor } from "@mastra/core/processors";
 import type { RequestContext } from "@mastra/core/request-context";
-import type { DataChunkType, LLMStepResult, MastraStreamTransform } from "@mastra/core/stream";
+import type { DataChunkType, MastraStreamTransform } from "@mastra/core/stream";
 import { createTool } from "@mastra/core/tools";
 import { generateText, Output } from "ai";
 import { z } from "zod";
@@ -29,6 +29,9 @@ const DEFAULT_QUESTION_LIMIT = 3;
 const MAX_QUESTION_LIMIT = 10;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_TURN_CONTEXT_CHARS = 16_000;
+const MAX_USER_TEXT_CHARS = 4_000;
+const MAX_ANSWER_CHARS = 16_000;
+const MAX_OUTPUT_TOKENS = 256;
 const GENERIC_QUESTIONS = new Set([
   "anything else",
   "can you tell me more",
@@ -62,7 +65,7 @@ export interface ResolvedFollowUpSuggestionsConfig {
 export interface SuggestFollowUpsOptions {
   userText: string;
   answer: string;
-  /** Bounded serialized tool inputs and outputs that ground the next questions. */
+  /** Optional bounded tool context supplied only by the explicit suggestion tool. */
   turnContext?: string;
   nativeQuestions?: readonly string[];
   requestContext?: RequestContext;
@@ -106,7 +109,7 @@ const FOLLOW_UP_INSTRUCTIONS = [
   "Write every item in the user's voice as a message for the assistant to answer when clicked.",
   "Never address the user or ask what they would like, want, prefer, or how the response should be customized.",
   "Every question must be answerable from the same tools and data domain as the completed turn.",
-  "Ground questions in the answer and turn tool data, including displayed chart or table values.",
+  "Ground questions only in the user message and assistant answer.",
   "Prefer concrete analyses, comparisons, rankings, calculations, filters, or explanations of the result.",
   "For a chart or table, ask about the values and patterns before suggesting presentation changes.",
   "Good examples include 'Which category has the highest value?', 'How large is the gap between the highest and lowest categories?', and 'What pattern stands out in these values?'.",
@@ -141,6 +144,11 @@ function normalizedQuestion(value: string): string {
     .replace(/\s+/g, " ");
 }
 
+function boundedText(value: string, maxChars: number): string {
+  const trimmed = value.trim();
+  return trimmed.length <= maxChars ? trimmed : trimmed.slice(0, maxChars).trimEnd();
+}
+
 function acceptedQuestions(
   questions: readonly string[],
   options: SuggestFollowUpsOptions,
@@ -170,48 +178,6 @@ function acceptedQuestions(
   return accepted;
 }
 
-function toolActivityValue(value: unknown): Record<string, unknown> | undefined {
-  if (!isRecord(value)) return undefined;
-  return isRecord(value.payload) ? value.payload : value;
-}
-
-function toolActivityName(value: Record<string, unknown>): string | undefined {
-  if (typeof value.toolName === "string") return value.toolName;
-  return typeof value.name === "string" ? value.name : undefined;
-}
-
-function serializedTurnContext(steps: readonly LLMStepResult[]): string | undefined {
-  const activity = steps.flatMap((step) => [
-    ...(step.toolCalls ?? []).flatMap((call) => {
-      const value = toolActivityValue(call);
-      const tool = value ? toolActivityName(value) : undefined;
-      if (!value || !tool) return [];
-      return [{ tool, input: value.args ?? value.input }];
-    }),
-    ...(step.toolResults ?? []).flatMap((result) => {
-      const value = toolActivityValue(result);
-      const tool = value ? toolActivityName(value) : undefined;
-      if (!value || !tool) return [];
-      return [
-        {
-          tool,
-          output: value.result ?? value.output,
-          ...(value.isError || value.error ? { isError: true } : {}),
-        },
-      ];
-    }),
-  ]);
-  if (activity.length === 0) return undefined;
-  try {
-    const serialized = JSON.stringify(activity.slice(-12));
-    return serialized.length > MAX_TURN_CONTEXT_CHARS
-      ? serialized.slice(0, MAX_TURN_CONTEXT_CHARS)
-      : serialized;
-  } catch {
-    return undefined;
-  }
-}
-
 /** Generate grounded follow-ups through ChatFast, failing open to an empty list. */
 export async function suggestFollowUps(
   config: MastraPluginConfig,
@@ -222,23 +188,30 @@ export async function suggestFollowUps(
   const timeout = AbortSignal.timeout(settings.timeoutMs);
   const abortSignal = combineAbortSignals(options.abortSignal, timeout);
   const prompt = toDescription({
-    "User message": options.userText,
-    "Assistant answer": options.answer,
+    "User message": boundedText(options.userText, MAX_USER_TEXT_CHARS),
+    "Assistant answer": boundedText(options.answer, MAX_ANSWER_CHARS),
     ...(options.turnContext ? { "Turn tool data": options.turnContext } : {}),
     ...(options.nativeQuestions?.length
-      ? { "Existing suggestions": JSON.stringify(options.nativeQuestions) }
+      ? {
+          "Existing suggestions": JSON.stringify(
+            options.nativeQuestions.slice(0, MAX_QUESTION_LIMIT),
+          ),
+        }
       : {}),
     "Maximum questions": String(settings.limit),
   });
   try {
     const model = await buildModel(config, options.requestContext, {
       modelClass: FOLLOW_UP_MODEL_CLASS,
+      optimizeFor: "speed",
+      requiresStructuredOutput: true,
     });
     const result = await generateText({
       model,
       instructions: FOLLOW_UP_INSTRUCTIONS,
       prompt,
       output: Output.object({ schema: FollowUpOutputSchema }),
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal,
     });
     const parsed = FollowUpOutputSchema.parse(result.output);
@@ -325,11 +298,9 @@ export function buildFollowUpSuggestionsProcessor(
         settings.mode === "auto" && Array.isArray(nativeValue)
           ? nativeValue.filter((value): value is string => typeof value === "string")
           : [];
-      const turnContext = serializedTurnContext(result.steps);
       const suggestionOptions: SuggestFollowUpsOptions = {
         userText,
         answer,
-        ...(turnContext ? { turnContext } : {}),
         ...(nativeQuestions.length > 0 ? { nativeQuestions } : {}),
         requestContext,
         ...(abortSignal ? { abortSignal } : {}),

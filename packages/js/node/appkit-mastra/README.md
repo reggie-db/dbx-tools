@@ -748,11 +748,11 @@ Accepted shorthand values are `false`, `"genie"`, `"generated"`, and `true`.
 ChatFast generator so it avoids repeats. The default limit is three and the
 maximum is ten. Generation runs through Mastra's final output processor and
 stream transform outside the primary agent step budget, persists with the
-assistant message, and fails open without changing the answer. ChatFast receives
-a bounded view of the turn's tool inputs and outputs, so suggestions ask
-user-voiced questions about displayed values and results instead of asking the
-user for presentation preferences. Set `exposeTool: true` only when the primary
-agent should also be able to request suggestions explicitly.
+assistant message, and fails open without changing the answer. Automatic
+generation sends only bounded copies of the user request and final assistant
+response, with a small output-token cap; it never sends the primary agent's
+instructions or tools. Set `exposeTool: true` only when the primary agent should
+also be able to request suggestions explicitly with optional tool context.
 
 ### Direct Genie chat
 

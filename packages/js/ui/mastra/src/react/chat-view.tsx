@@ -67,7 +67,7 @@ export const ChatView = ({
   onExportConversation,
   onExportMessage,
   feedbackByMessage = {},
-  feedbackMode = "none",
+  feedbackModes = [],
   onFeedback,
   mlflowExperimentUrl,
 }: ChatViewProps) => {
@@ -130,7 +130,7 @@ export const ChatView = ({
         pendingApprovalsByMessage={pendingApprovalsByMessage}
         onExportMessage={onExportMessage}
         feedbackByMessage={feedbackByMessage}
-        feedbackMode={feedbackMode}
+        feedbackModes={feedbackModes}
         onFeedback={onFeedback}
         mlflowExperimentUrl={mlflowExperimentUrl}
       />

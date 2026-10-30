@@ -12,6 +12,7 @@ import type {
   ResolveModelOptions,
   ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
+import { ModelClass } from "@dbx-tools/shared-model";
 
 import {
   listServingEndpoints,
@@ -75,9 +76,19 @@ export async function selectModel(
 function catalogueOptions(input: {
   readonly ttlMs?: number;
   readonly cacheIdentity?: string;
+  readonly modelClass?: ResolveModelInput["modelClass"];
+  readonly dimension?: ModelQuery["dimension"];
+  readonly minDimension?: ModelQuery["minDimension"];
+  readonly maxDimension?: ModelQuery["maxDimension"];
 }): ListServingEndpointsOptions {
+  const measureEmbeddingDimensions =
+    input.modelClass === ModelClass.Embedding ||
+    input.dimension !== undefined ||
+    input.minDimension !== undefined ||
+    input.maxDimension !== undefined;
   return {
     ...(input.ttlMs !== undefined ? { ttlMs: input.ttlMs } : {}),
     ...(input.cacheIdentity !== undefined ? { cacheIdentity: input.cacheIdentity } : {}),
+    measureEmbeddingDimensions,
   };
 }

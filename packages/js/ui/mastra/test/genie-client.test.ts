@@ -34,6 +34,17 @@ afterEach(() => {
 });
 
 describe("GenieChatClient", () => {
+  test("preserves only the server-enabled Genie feedback destination", () => {
+    expect(
+      new GenieChatClient({ ...CONFIG, feedbackModes: ["genie", "mlflow"] }, "default")
+        .feedbackModes,
+    ).toEqual(["genie"]);
+    expect(
+      new GenieChatClient({ ...CONFIG, feedbackModes: ["mlflow"] }, "default").feedbackModes,
+    ).toEqual([]);
+    expect(new GenieChatClient(CONFIG, "default").feedbackModes).toEqual([]);
+  });
+
   test("adopts the announced conversation and continues it on the next turn", async () => {
     const bodies: unknown[] = [];
     globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {

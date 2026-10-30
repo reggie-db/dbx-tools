@@ -42,13 +42,13 @@ export { tool, createAgent, FALLBACK_AGENT_ID, DEFAULT_AGENT_MAX_STEPS, DEFAULT_
 export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolkitProvider, MastraPlugins, MastraToolsFn, MastraAgentWorkspaceResolver, MastraAgentDefinition, AnyMastraAgentDefinition, MastraStorageConfigOverride, MastraMemoryConfigOverride, AgentDefaultModel, BuiltAgents, MastraOutputProcessorFactory } from "./src/agents.ts";
 export { chartPlanSchema, chartPlannerRequestSchema, chartToolOutputSchema, prepareChart, fetchChart, planToEchartsOption, buildRenderDataTool } from "./src/chart.ts";
 export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
-export { CHAT_STREAM_KEEPALIVE_MS, CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS, buildResponseCompleteTransform, agentAbortSignal, agentChatRoutes } from "./src/chat.ts";
+export { CHAT_STREAM_KEEPALIVE_MS, CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS, buildResponseCompleteTransform, startThreadTitle, buildThreadTitleTransform, agentAbortSignal, agentChatRoutes } from "./src/chat.ts";
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_AUTH_MODE_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, executionContextUserId, attributedUserId, resolveUserKey, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
 export type { User, MastraMemoryConfig, MastraWorkspaceSkillsConfig, MastraCodeModeTransport, MastraCodeModeConfig, MastraMcpConfig, FollowUpSuggestionsConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, genieConversationReadDefaults, genieConversationWriteDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
 export { createMastraEvalDriver } from "./src/evaluation.ts";
 export type { MastraEvalDriverOptions } from "./src/evaluation.ts";
-export { resolveFeedbackMode } from "./src/feedback-mode.ts";
+export { resolveFeedbackModes } from "./src/feedback-mode.ts";
 export type { FeedbackAvailability } from "./src/feedback-mode.ts";
 export { filesystems, MastraFileSystemAdapter, MountedCompositeFilesystem, scratchFilesystem } from "./src/filesystems.ts";
 export type { MastraFileSystemAdapterOptions } from "./src/filesystems.ts";
@@ -86,7 +86,7 @@ export { STATEMENT_ROW_CAP, fetchStatementData, fetchStatementEmbedData } from "
 export type { StatementEmbedData } from "./src/statement.ts";
 export { agentStorageSchemaName } from "./src/storage-schema.ts";
 export { TYPOGRAPHY_RULE } from "./src/style.ts";
-export { TITLE_INSTRUCTIONS, summaryModel, summarizeText, buildSummarizeTool } from "./src/summarize.ts";
+export { TITLE_INSTRUCTIONS, summaryModel, titleModel, summarizeText, buildSummarizeTool } from "./src/summarize.ts";
 export type { SummarizeOptions } from "./src/summarize.ts";
 export { TRACE_IO_LIMIT, MLFLOW_SPAN_INPUTS_ATTR, MLFLOW_SPAN_OUTPUTS_ATTR, CHAT_MESSAGES_ATTR, CHAT_RESPONSE_ATTR, CHAT_IDENTITY_ATTR, CHAT_GENIE_USED_ATTR, MLFLOW_SPAN_TYPE_ATTR, GEN_AI_OPERATION_NAME_ATTR, MLFLOW_SESSION_ATTR, MLFLOW_SPAN_TYPE_AGENT, MLFLOW_SPAN_TYPE_GENIE, stampGenieToolSpan, activeChatTracingOptions, recordActiveTraceTag, recordActiveTraceTags, recordActiveTraceModel, recordActiveTraceUser, recordActiveTraceAuth, textOnlyChatInput, assistantTextFromSse, assistantTextFromJson, AppMlflowTraceInfoSpanProcessor, registerAppMlflowTraceInfoProcessor, chatTurnTelemetryMiddleware, attachChatTurnTelemetry } from "./src/telemetry.ts";
 export type { ChatTurnTelemetryOptions, ChatTraceTagValue } from "./src/telemetry.ts";

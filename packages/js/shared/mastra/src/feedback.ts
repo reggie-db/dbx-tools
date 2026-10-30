@@ -53,11 +53,23 @@ export const MastraFeedbackValueSchema = z.union([z.boolean(), z.number(), z.str
 /** Value recorded on the MLflow assessment for a Mastra turn. */
 export type MastraFeedbackValue = z.infer<typeof MastraFeedbackValueSchema>;
 
+/** One feedback destination available for an assistant message. */
+export const FeedbackDestinationSchema = z.enum(["mlflow", "genie"]);
+
+/** One feedback destination available for an assistant message. */
+export type FeedbackDestination = z.infer<typeof FeedbackDestinationSchema>;
+
 /** Feedback destination selected by AppKit-Mastra configuration. */
-export const FeedbackModeSchema = z.enum(["none", "mlflow", "genie"]);
+export const FeedbackModeSchema = z.enum(["none", ...FeedbackDestinationSchema.options]);
 
 /** Feedback destination selected by AppKit-Mastra configuration. */
 export type FeedbackMode = z.infer<typeof FeedbackModeSchema>;
+
+/** Feedback destinations available to the browser client. */
+export const FeedbackDestinationsSchema = z.array(FeedbackDestinationSchema);
+
+/** Feedback destinations available to the browser client. */
+export type FeedbackDestinations = z.infer<typeof FeedbackDestinationsSchema>;
 
 /** Configurable feedback mode with automatic destination selection. */
 export const FeedbackModeOptionSchema = z.enum(["auto", "none", "mlflow", "genie"]);

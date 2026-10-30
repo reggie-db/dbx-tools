@@ -48,14 +48,13 @@ import { Pool, type PoolConfig } from "pg";
 import type { AnyMastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
 import type { MastraPluginConfig } from "./config.ts";
 import { agentStorageSchemaName } from "./storage-schema.ts";
-import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 
 const logger = log.logger("mastra/memory");
 
 /** Resolve the trusted Mastra memory scope stamped by AppKit middleware. */
 export function requestMemoryScope(
   requestContext: Pick<RequestContext, "get"> | undefined,
-): AgentMemoryOption | undefined {
+): { thread: string; resource: string } | undefined {
   const threadId = requestContext?.get(MASTRA_THREAD_ID_KEY);
   const resourceId = requestContext?.get(MASTRA_RESOURCE_ID_KEY);
   if (typeof threadId !== "string" || typeof resourceId !== "string") return undefined;
@@ -256,18 +255,6 @@ export class MemoryBuilder {
         lastMessages: 10,
         ...(vector
           ? { semanticRecall: { topK: 3, messageRange: 2, scope: "resource" as const } }
-          : {}),
-        // Auto-name each thread from its opening turn using the fast chat tier.
-        // Title generation is awaited before Mastra settles the response stream,
-        // so reusing the primary agent model can keep the UI busy long after the
-        // answer text has finished streaming.
-        ...(storage
-          ? {
-              generateTitle: {
-                model: summaryModel(this.config),
-                instructions: TITLE_INSTRUCTIONS,
-              },
-            }
           : {}),
       },
     });

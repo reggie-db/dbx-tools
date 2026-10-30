@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { MLFLOW_TRACE_PART_TYPE, RESPONSE_COMPLETE_PART_TYPE } from "@dbx-tools/shared-mastra";
+import {
+  MLFLOW_TRACE_PART_TYPE,
+  RESPONSE_COMPLETE_PART_TYPE,
+  THREAD_TITLE_PART_TYPE,
+} from "@dbx-tools/shared-mastra";
 import type { UIMessageChunk } from "ai";
 
 import {
   closeOnTerminalChunk,
   chatStatusForChunk,
   readMlflowTracePart,
+  readThreadTitlePart,
   waitForTerminalChunk,
 } from "../src/react/chat-stream.ts";
 
@@ -90,9 +95,9 @@ describe("chat stream completion", () => {
     );
   });
 
-  it("settles to ready on the real terminal chunk", () => {
-    assert.equal(chatStatusForChunk({ type: "finish", finishReason: "stop" }), "ready");
-    assert.equal(chatStatusForChunk({ type: "abort", reason: "interrupted" }), "ready");
+  it("keeps finishing through the terminal chunk until synchronized state applies", () => {
+    assert.equal(chatStatusForChunk({ type: "finish", finishReason: "stop" }), "finishing");
+    assert.equal(chatStatusForChunk({ type: "abort", reason: "interrupted" }), "finishing");
   });
 
   it("rejects a stream that closes before finish or abort", async () => {
@@ -119,6 +124,17 @@ describe("chat stream completion", () => {
         transient: true,
       } as UIMessageChunk),
       traceId,
+    );
+  });
+
+  it("reads the synchronized thread title data part", () => {
+    assert.equal(
+      readThreadTitlePart({
+        type: THREAD_TITLE_PART_TYPE,
+        data: { title: "Synchronized Title" },
+        transient: true,
+      } as UIMessageChunk),
+      "Synchronized Title",
     );
   });
 

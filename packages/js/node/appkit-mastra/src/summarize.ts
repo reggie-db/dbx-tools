@@ -18,6 +18,7 @@ import { Agent } from "@mastra/core/agent";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
+import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 import { z } from "zod";
 
 import type { MastraPluginConfig } from "./config.ts";
@@ -26,6 +27,8 @@ import { TYPOGRAPHY_RULE } from "./style.ts";
 
 /** Fast / small chat tier used for both titling and summaries. */
 const SUMMARY_MODEL_CLASS = ModelClass.ChatFast;
+const TITLE_INPUT_CHAR_LIMIT = 4_000;
+const TITLE_OUTPUT_TOKEN_LIMIT = 32;
 
 /** System prompt for the summarizer agent (and the `summarize` tool). */
 const SUMMARIZER_INSTRUCTIONS = [
@@ -63,6 +66,43 @@ export function summaryModel(
 ): (args: { requestContext: RequestContext }) => Promise<MastraModelConfig> {
   return ({ requestContext }) =>
     buildModel(config, requestContext, { modelClass: SUMMARY_MODEL_CLASS });
+}
+
+const titleModelLimits: LanguageModelMiddleware = {
+  async transformParams({ params }) {
+    let remaining = TITLE_INPUT_CHAR_LIMIT;
+    const prompt = params.prompt.map((message) => {
+      if (message.role !== "user") return message;
+      return {
+        ...message,
+        content: message.content.map((part) => {
+          if (part.type !== "text") return part;
+          const text = remaining > 0 ? part.text.slice(0, remaining) : "";
+          remaining -= text.length;
+          return { ...part, text };
+        }),
+      };
+    });
+    return {
+      ...params,
+      prompt,
+      maxOutputTokens: TITLE_OUTPUT_TOKEN_LIMIT,
+    };
+  },
+};
+
+/** Resolve a bounded, tool-free ChatFast model for automatic thread titles. */
+export function titleModel(
+  config: MastraPluginConfig,
+): (args: { requestContext: RequestContext }) => Promise<MastraModelConfig> {
+  return async ({ requestContext }) =>
+    wrapLanguageModel({
+      model: await buildModel(config, requestContext, {
+        modelClass: SUMMARY_MODEL_CLASS,
+        optimizeFor: "speed",
+      }),
+      middleware: titleModelLimits,
+    });
 }
 
 /**

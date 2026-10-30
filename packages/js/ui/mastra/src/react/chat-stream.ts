@@ -4,6 +4,8 @@ import {
   MLFLOW_TRACE_PART_TYPE,
   MlflowTracePartDataSchema,
   RESPONSE_COMPLETE_PART_TYPE,
+  THREAD_TITLE_PART_TYPE,
+  ThreadTitlePartDataSchema,
   isStaleMastraResumeError,
 } from "@dbx-tools/shared-mastra";
 import { readUIMessageStream, type UIMessage, type UIMessageChunk } from "ai";
@@ -31,10 +33,17 @@ export const readMlflowTracePart = (chunk: UIMessageChunk): string | undefined =
   return parsed.success ? parsed.data.traceId : undefined;
 };
 
+/** Read a generated title synchronized onto the terminal chat stream. */
+export const readThreadTitlePart = (chunk: UIMessageChunk): string | undefined => {
+  if ((chunk as { type?: string }).type !== THREAD_TITLE_PART_TYPE) return undefined;
+  const parsed = ThreadTitlePartDataSchema.safeParse((chunk as { data?: unknown }).data);
+  return parsed.success ? parsed.data.title : undefined;
+};
+
 /** Map lifecycle-only chunks onto the UI's active-turn state. */
 export const chatStatusForChunk = (chunk: UIMessageChunk): ChatStatus | undefined => {
   if ((chunk as { type?: string }).type === RESPONSE_COMPLETE_PART_TYPE) return "finishing";
-  if (chunk.type === "finish" || chunk.type === "abort") return "ready";
+  if (chunk.type === "finish" || chunk.type === "abort") return "finishing";
   return undefined;
 };
 
@@ -139,6 +148,7 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
 
       try {
         let terminalReceived = false;
+        let threadTitle: string | undefined;
         const existing = getSession(threadId).messages.find(
           (message) => message.id === assistantId,
         );
@@ -151,6 +161,7 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
             },
             (chunk) => {
               recordTraceId(readMlflowTracePart(chunk));
+              threadTitle = readThreadTitlePart(chunk) ?? threadTitle;
               const status = chatStatusForChunk(chunk);
               if (!status) return;
               updateSession(threadId, (current) => ({
@@ -169,19 +180,18 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
             runId: runIdRef.current,
             status:
               terminalReceived || current.status === "finishing"
-                ? terminalReceived
-                  ? "ready"
-                  : "finishing"
+                ? "finishing"
                 : "streaming",
           }));
         }
+        return threadTitle;
       } catch (error) {
-        if (error instanceof StreamAborted || signal.aborted) return;
+        if (error instanceof StreamAborted || signal.aborted) return undefined;
         if (isStaleMastraResumeError(error)) {
           logger.warn("ignored stale mastra resume", {
             error: toError(error),
           });
-          return;
+          return undefined;
         }
         throw error;
       }

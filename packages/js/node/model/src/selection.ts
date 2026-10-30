@@ -109,6 +109,10 @@ function buildQuery(input: ResolveModelInput, search: string | undefined): Model
     ...(search !== undefined ? { search } : {}),
     ...(input.modelClass !== undefined ? { modelClass: input.modelClass } : {}),
     ...(input.requiresTools !== undefined ? { requiresTools: input.requiresTools } : {}),
+    ...(input.requiresStructuredOutput !== undefined
+      ? { requiresStructuredOutput: input.requiresStructuredOutput }
+      : {}),
+    ...(input.optimizeFor !== undefined ? { optimizeFor: input.optimizeFor } : {}),
     ...(input.threshold !== undefined ? { threshold: input.threshold } : {}),
     limit: 1,
   };

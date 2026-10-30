@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { logger } from "@dbx-tools/shared-core";
-import { RESPONSE_COMPLETE_PART_TYPE } from "@dbx-tools/shared-mastra";
+import { RESPONSE_COMPLETE_PART_TYPE, THREAD_TITLE_PART_TYPE } from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
@@ -14,7 +14,9 @@ import {
   agentAbortSignal,
   agentChatRoutes,
   buildResponseCompleteTransform,
+  buildThreadTitleTransform,
   CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS,
+  startThreadTitle,
 } from "../src/chat.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "../src/memory.ts";
 
@@ -87,6 +89,112 @@ describe("background chat routes", () => {
       transformed.map((chunk) => chunk.type),
       ["step-finish"],
     );
+  });
+
+  it("holds terminal finish until the title future settles", async () => {
+    let settleTitle!: () => void;
+    const titleSettled = new Promise<string>((resolve) => {
+      settleTitle = () => resolve("Synchronized Title");
+    });
+    const stream = new ReadableStream<ChunkType>({
+      start(controller) {
+        controller.enqueue({ type: "step-start" } as ChunkType);
+        controller.enqueue({ type: "finish" } as ChunkType);
+        controller.close();
+      },
+    }).pipeThrough(buildThreadTitleTransform(titleSettled)());
+    const reader = stream.getReader();
+
+    assert.equal((await reader.read()).value?.type, "step-start");
+    const finish = reader.read();
+    assert.equal(
+      await Promise.race([finish.then(() => "finished"), Promise.resolve("waiting")]),
+      "waiting",
+    );
+
+    settleTitle();
+    assert.deepEqual(await finish, {
+      done: false,
+      value: {
+        type: THREAD_TITLE_PART_TYPE,
+        data: { title: "Synchronized Title" },
+        transient: true,
+      },
+    });
+    assert.equal((await reader.read()).value?.type, "finish");
+  });
+
+  it("generates and persists one title for an untitled thread", async () => {
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_THREAD_ID_KEY, "thread-7");
+    requestContext.set(MASTRA_RESOURCE_ID_KEY, "resource-7");
+    const created: unknown[] = [];
+    let generated = 0;
+    const memory = {
+      getThreadById: async () => null,
+      updateThread: async () => {
+        throw new Error("unexpected update");
+      },
+      createThread: async (input: unknown) => {
+        created.push(input);
+        return input;
+      },
+    };
+    const agent = {
+      getMemory: async () => memory,
+      generateTitleFromUserMessage: async (input: { message?: unknown; model?: unknown }) => {
+        generated += 1;
+        assert.equal(input.message, "Explain fast model routing");
+        assert.equal(typeof input.model, "function");
+        return "Fast Model Routing";
+      },
+    };
+
+    const title = await startThreadTitle({
+      agent: agent as never,
+      config: {},
+      requestContext,
+      userText: "Explain fast model routing",
+    });
+
+    assert.equal(generated, 1);
+    assert.equal(title, "Fast Model Routing");
+    assert.deepEqual(created, [
+      {
+        threadId: "thread-7",
+        resourceId: "resource-7",
+        title: "Fast Model Routing",
+      },
+    ]);
+  });
+
+  it("does not regenerate or overwrite an existing thread title", async () => {
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_THREAD_ID_KEY, "thread-7");
+    requestContext.set(MASTRA_RESOURCE_ID_KEY, "resource-7");
+    let generated = 0;
+    const agent = {
+      getMemory: async () => ({
+        getThreadById: async () => ({
+          id: "thread-7",
+          resourceId: "resource-7",
+          title: "Existing title",
+        }),
+      }),
+      generateTitleFromUserMessage: async () => {
+        generated += 1;
+        return "Replacement title";
+      },
+    };
+
+    await startThreadTitle({
+      agent: agent as never,
+      config: {},
+      requestContext,
+      userText: "Another turn",
+    });
+
+    assert.equal(generated, 0);
   });
 
   it("registers chat, observe, and abort endpoints", () => {

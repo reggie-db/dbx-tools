@@ -38,7 +38,7 @@ import {
 } from "@dbx-tools/shared-genie";
 import { ServingEndpointSummarySchema } from "@dbx-tools/shared-model";
 import { z } from "zod";
-import { FeedbackModeSchema } from "./feedback.ts";
+import { FeedbackDestinationsSchema } from "./feedback.ts";
 
 /* ---------------------------- client config ---------------------------- */
 
@@ -61,8 +61,9 @@ import { FeedbackModeSchema } from "./feedback.ts";
  *   - `defaultAgent`: agent id the client converses with when it
  *     doesn't name one.
  *   - `agents`: every registered agent id in registration order.
- *   - `feedbackMode`: `"genie"` in Genie Agent Mode, `"mlflow"` for traced
- *     agent feedback, or `"none"`.
+ *   - `feedbackModes`: every destination available for per-message routing.
+ *     Genie-backed messages use Genie feedback; other traced responses use
+ *     MLflow assessments.
  *   - `chatAlwaysAvailable`: whether the agents' Databricks calls run as the
  *     app service principal rather than on-behalf-of the signed-in user. When
  *     `true` the chat works for any caller who can open the app, so a UI that
@@ -85,7 +86,9 @@ export const MastraClientConfigSchema = z
     basePath: z.string().describe("Mounted HTTP path for the Mastra plugin."),
     defaultAgent: z.string().describe("Agent selected when the client does not specify one."),
     agents: z.array(z.string()).describe("Registered agent identifiers."),
-    feedbackMode: FeedbackModeSchema.default("none").describe("Available feedback destination."),
+    feedbackModes: FeedbackDestinationsSchema.default([]).describe(
+      "Feedback destinations available for per-message routing.",
+    ),
     chatAlwaysAvailable: z
       .boolean()
       .default(false)
@@ -554,6 +557,20 @@ export type ToolProgressPartData = z.infer<typeof ToolProgressPartDataSchema>;
  * post-turn processors such as generated follow-up suggestions finish.
  */
 export const RESPONSE_COMPLETE_PART_TYPE = "data-response-complete" as const;
+
+/** Transient data-part type carrying the persisted title for a new thread. */
+export const THREAD_TITLE_PART_TYPE = "data-thread-title" as const;
+
+/** Data attached to {@link THREAD_TITLE_PART_TYPE}. */
+export const ThreadTitlePartDataSchema = z
+  .object({
+    title: z.string().trim().min(1).describe("Generated title persisted for the active thread."),
+  })
+  .strict()
+  .describe("Generated thread title synchronized with terminal stream completion.");
+
+/** Generated title synchronized with the active thread. */
+export type ThreadTitlePartData = z.infer<typeof ThreadTitlePartDataSchema>;
 
 /** Native AI SDK data-part type carrying post-turn follow-up questions. */
 export const FOLLOW_UP_SUGGESTIONS_PART_TYPE = "data-follow-up-suggestions" as const;

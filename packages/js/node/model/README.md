@@ -45,6 +45,9 @@ The package:
   accidentally escalating to a larger model.
 - Supports `requiresTools` filtering so callers select only
   endpoints verified for a complete function-call and result-replay round-trip.
+- Supports structured-output filtering and quality, speed, or cost optimization;
+  speed-sensitive selection prefers non-reasoning endpoints before comparing
+  live profile speed scores.
 - Caches enriched catalogues per workspace host through AppKit cache utilities,
   and re-lists once on a resolve miss so a newly deployed model still resolves.
 - Builds the invocations URL and mints per-request auth headers for callers that
@@ -56,6 +59,7 @@ The package:
   while committed fallbacks keep refreshes and runtime startup offline-safe.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
+
 ## Use with AppKit Model Serving
 
 Use native AppKit's Model Serving plugin when you already know the endpoint

@@ -1,21 +1,24 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveFeedbackMode } from "../src/feedback-mode.ts";
+import { resolveFeedbackModes } from "../src/feedback-mode.ts";
 
 describe("feedback mode", () => {
-  it("prefers Genie, then MLflow, then none in auto mode", () => {
-    assert.equal(resolveFeedbackMode("auto", { genie: true, mlflow: true }), "genie");
-    assert.equal(resolveFeedbackMode("auto", { genie: false, mlflow: true }), "mlflow");
-    assert.equal(resolveFeedbackMode(undefined, { genie: false, mlflow: false }), "none");
+  it("publishes every available destination in auto mode", () => {
+    assert.deepEqual(resolveFeedbackModes("auto", { genie: true, mlflow: true }), [
+      "genie",
+      "mlflow",
+    ]);
+    assert.deepEqual(resolveFeedbackModes("auto", { genie: false, mlflow: true }), ["mlflow"]);
+    assert.deepEqual(resolveFeedbackModes(undefined, { genie: false, mlflow: false }), []);
   });
 
   it("fails an explicitly unavailable destination", () => {
     assert.throws(
-      () => resolveFeedbackMode("genie", { genie: false, mlflow: true }),
+      () => resolveFeedbackModes("genie", { genie: false, mlflow: true }),
       /feedbackMode "genie" is unavailable/,
     );
     assert.throws(
-      () => resolveFeedbackMode("mlflow", { genie: true, mlflow: false }),
+      () => resolveFeedbackModes("mlflow", { genie: true, mlflow: false }),
       /feedbackMode "mlflow" is unavailable/,
     );
   });

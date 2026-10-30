@@ -324,9 +324,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // Feedback defaults to automatic server capability detection. An explicit
   // false hides it; true keeps it requested but cannot bypass the server gate.
   const enableFeedback = options.enableFeedback !== false;
-  const feedbackMode = enableFeedback ? mastraClient.feedbackMode : "none";
-  const feedbackAvailable = feedbackMode !== "none";
-  const { url: mlflowExperimentUrl } = useMastraMlflowExperiment(feedbackMode === "mlflow");
+  const feedbackModes = enableFeedback ? mastraClient.feedbackModes : [];
+  const feedbackAvailable = feedbackModes.length > 0;
+  const { url: mlflowExperimentUrl } = useMastraMlflowExperiment(
+    feedbackModes.includes("mlflow"),
+  );
   const [resourceScope, setResourceScope] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -402,6 +404,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     loading: isLoadingThreads,
     error: threadsError,
     refresh: refreshThreads,
+    sync: syncThreads,
   } = useMastraThreads(options.agentId, enableThreads, genieClient);
   // Persist the active thread id so a reload reopens the same
   // conversation. Best-effort; storage may be unavailable.
@@ -573,7 +576,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const submitFeedback = useChatFeedback({
     activeKey,
     feedbackByMessage: activeSession.feedbackByMessage,
-    feedbackMode,
+    feedbackModes,
     mastraClient,
     updateSession,
   });
@@ -636,6 +639,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       // The session's key; changes when the server assigns the thread its id.
       let sessionThreadId = threadId;
       let openedStream: MastraStreamResponse | undefined;
+      let streamedTitle: string | undefined;
       const adoptAssignedThreadId = () => {
         const assigned = openedStream?.threadId?.();
         if (!assigned || assigned === sessionThreadId) return;
@@ -645,7 +649,13 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       try {
         try {
           openedStream = await open(controller.signal);
-          await processStream(threadId, openedStream, assistantId, runIdRef, controller.signal);
+          streamedTitle = await processStream(
+            threadId,
+            openedStream,
+            assistantId,
+            runIdRef,
+            controller.signal,
+          );
           adoptAssignedThreadId();
         } catch (initialError) {
           const runId = runIdRef.current;
@@ -675,10 +685,54 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
               threadId: streamThreadId,
               signal: controller.signal,
             });
-            await processStream(threadId, stream, assistantId, runIdRef, controller.signal);
+            streamedTitle = await processStream(
+              threadId,
+              stream,
+              assistantId,
+              runIdRef,
+              controller.signal,
+            );
           } catch (reconnectError) {
             writeMessages(threadId, messagesBeforeReplay);
             throw reconnectError;
+          }
+        }
+        if (streamedTitle) {
+          const title = streamedTitle;
+          setProvisionalTitles((prev) => ({ ...prev, [sessionThreadId]: title }));
+          setOptimisticThreads((prev) =>
+            prev[sessionThreadId]
+              ? {
+                  ...prev,
+                  [sessionThreadId]: {
+                    ...prev[sessionThreadId],
+                    title,
+                  },
+                }
+              : prev,
+          );
+        }
+        if (enableThreads) {
+          const synchronized = await syncThreads();
+          const generatedTitle = synchronized
+            .find((thread) => thread.id === sessionThreadId)
+            ?.title?.trim();
+          if (generatedTitle) {
+            setProvisionalTitles((prev) => ({
+              ...prev,
+              [sessionThreadId]: generatedTitle,
+            }));
+            setOptimisticThreads((prev) =>
+              prev[sessionThreadId]
+                ? {
+                    ...prev,
+                    [sessionThreadId]: {
+                      ...prev[sessionThreadId],
+                      title: generatedTitle,
+                    },
+                  }
+                : prev,
+            );
           }
         }
         updateSession(sessionThreadId, (session) => {
@@ -694,7 +748,6 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         if (getSession(sessionThreadId).runToken === token) {
           const completedRunId = runIdRef.current;
           if (completedRunId) removeStoredActiveRun(activeRunsKey, completedRunId);
-          refreshThreadsSoon();
           // Turn finished on its own: start the oldest queued steer, if any.
           drainQueueRef.current(sessionThreadId);
         }
@@ -742,10 +795,12 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       adoptThreadId,
       agentId,
       activeRunsKey,
+      enableThreads,
       getSession,
       mastraClient,
       processStream,
       refreshThreadsSoon,
+      syncThreads,
       updateSession,
       writeMessages,
     ],
@@ -991,26 +1046,30 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       text: string,
       files: FileUIPart[] = [],
     ): { message: UIMessage; next: UIMessage[] } => {
+      const session = getSession(threadId);
+      const expectsTitle =
+        enableThreads &&
+        !threads.some((thread) => thread.id === threadId && Boolean(thread.title?.trim()));
+      let provisionalTitle: string | undefined;
       if (activeThreadId) {
         noteThreadActivity(activeThreadId);
-        if (getSession(threadId).messages.length === 0) {
-          const provisional = deriveThreadTitle(
+        if (expectsTitle) {
+          provisionalTitle = deriveThreadTitle(
             text || files.map((file) => file.filename || "Image").join(", "),
           );
-          if (provisional) {
+          if (provisionalTitle) {
             setProvisionalTitles((prev) =>
-              prev[activeThreadId] ? prev : { ...prev, [activeThreadId]: provisional },
+              prev[activeThreadId] ? prev : { ...prev, [activeThreadId]: provisionalTitle! },
             );
           }
         }
       }
-      const session = getSession(threadId);
       const message = makeUserMessage(text, files);
       const next = [...session.messages, message];
       writeMessages(threadId, next);
       return { message, next };
     },
-    [activeThreadId, getSession, noteThreadActivity, updateSession, writeMessages],
+    [activeThreadId, enableThreads, getSession, noteThreadActivity, threads, writeMessages],
   );
 
   // Send a message on the active thread. Submitting while a turn is already
@@ -1488,11 +1547,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           onExportMessage: exportMessage,
         }
       : {}),
-    // Feedback: expose one server-selected destination. MLflow messages still
-    // require trace state; Genie messages derive their target from ask_genie.
+    // Feedback: choose per message. Genie results use their message identity;
+    // other responses require an MLflow trace id.
     ...(feedbackAvailable
       ? {
-          feedbackMode,
+          feedbackModes: [...feedbackModes],
           feedbackByMessage: activeSession.feedbackByMessage,
           onFeedback: submitFeedback,
           ...(mlflowExperimentUrl ? { mlflowExperimentUrl } : {}),

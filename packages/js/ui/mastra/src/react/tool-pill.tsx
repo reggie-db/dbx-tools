@@ -404,8 +404,8 @@ const RawToolPayload = ({
 }) => {
   const structured = structuredToolPayload(value);
   return (
-    <Collapsible className="min-w-0 max-w-full overflow-hidden rounded border border-border/60 bg-background/40">
-      <CollapsibleTrigger className="group flex w-full min-w-0 items-center gap-1.5 px-2 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
+    <Collapsible className="min-w-0 max-w-full overflow-hidden">
+      <CollapsibleTrigger className="group flex w-full min-w-0 items-center gap-1.5 py-1 text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground">
         <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
         <span>{label}</span>
       </CollapsibleTrigger>
@@ -414,12 +414,12 @@ const RawToolPayload = ({
           {structured === undefined ? (
             <JsonBlock
               json={formatRawToolPayload(value)}
-              className="border-t border-border/50 px-2 py-2 leading-tight text-foreground sm:leading-relaxed"
+              className="py-2 leading-tight text-foreground sm:leading-relaxed"
             />
           ) : (
             <RecordPreview
               value={structured}
-              className="max-w-full border-t border-border/50 bg-transparent text-foreground"
+              className="max-w-full bg-transparent text-foreground [&_pre]:rounded-none [&_pre]:bg-transparent"
             />
           )}
         </div>

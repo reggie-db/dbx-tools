@@ -8,12 +8,15 @@ import { log, toError, errorMessage, isRecord, sleep } from "@dbx-tools/shared-c
 import {
   MASTRA_ROUTES,
   RESPONSE_COMPLETE_PART_TYPE,
+  THREAD_TITLE_PART_TYPE,
   isStaleMastraResumeError,
   STALE_MASTRA_RESUME_STREAM_TEXT,
 } from "@dbx-tools/shared-mastra";
 import { handleChatStream, toAISdkStream } from "@mastra/ai-sdk";
+import type { Agent } from "@mastra/core/agent";
 import { isEventedAgent } from "@mastra/core/agent/durable";
 import type { EventedAgent } from "@mastra/core/agent/durable";
+import type { RequestContext } from "@mastra/core/request-context";
 import { registerApiRoute } from "@mastra/core/server";
 import type { DataChunkType, MastraStreamTransform } from "@mastra/core/stream";
 import { createUIMessageStreamResponse } from "ai";
@@ -27,7 +30,8 @@ import {
   FOLLOW_UP_USER_TEXT_KEY,
   resolveFollowUpSuggestionsConfig,
 } from "./follow-up-suggestions.ts";
-import { withRequestMemoryScope } from "./memory.ts";
+import { requestMemoryScope, withRequestMemoryScope } from "./memory.ts";
+import { titleModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 import { activeChatTracingOptions } from "./telemetry.ts";
 
 const logger = log.logger("mastra/chat");
@@ -76,11 +80,83 @@ export function buildResponseCompleteTransform(): MastraStreamTransform {
 function chatStreamTransforms(
   runId: string,
   generatedFollowUps: boolean,
+  titleSettled?: Promise<string | undefined>,
 ): readonly MastraStreamTransform[] {
   return [
     buildResponseCompleteTransform(),
     ...(generatedFollowUps ? [buildFollowUpSuggestionsTransform(runId)] : []),
+    ...(titleSettled ? [buildThreadTitleTransform(titleSettled)] : []),
   ];
+}
+
+type ThreadTitleAgent = Pick<Agent, "generateTitleFromUserMessage" | "getMemory">;
+
+/** Start one title generation and persistence future for a new thread. */
+export function startThreadTitle(options: {
+  agent: ThreadTitleAgent;
+  config: MastraPluginConfig;
+  requestContext: RequestContext;
+  userText: string | undefined;
+}): Promise<string | undefined> {
+  const { agent, config, requestContext, userText } = options;
+  const scope = requestMemoryScope(requestContext);
+  if (!scope || !userText) return Promise.resolve(undefined);
+
+  return (async () => {
+    const memory = await agent.getMemory({ requestContext });
+    if (!memory) return undefined;
+    const existing = await memory.getThreadById({ threadId: scope.thread });
+    if (existing?.title?.trim()) return undefined;
+
+    const title = (
+      await agent.generateTitleFromUserMessage({
+        message: userText,
+        requestContext,
+        model: titleModel(config),
+        instructions: TITLE_INSTRUCTIONS,
+      })
+    )?.trim();
+    if (!title) return undefined;
+
+    const current = await memory.getThreadById({ threadId: scope.thread });
+    if (current?.title?.trim()) return undefined;
+    if (current) {
+      await memory.updateThread({ id: scope.thread, title });
+      return title;
+    }
+    await memory.createThread({
+      threadId: scope.thread,
+      resourceId: scope.resource,
+      title,
+    });
+    return title;
+  })().catch((error) => {
+    logger.warn("thread title generation failed", { error: toError(error) });
+    return undefined;
+  });
+}
+
+/** Hold the terminal finish until the shared title future has persisted. */
+export function buildThreadTitleTransform(
+  titleSettled: Promise<string | undefined>,
+): MastraStreamTransform {
+  return () =>
+    new TransformStream({
+      async transform(chunk, controller) {
+        if (chunk.type === "finish") {
+          const title = await titleSettled;
+          if (title) {
+            const part: DataChunkType = {
+              type: THREAD_TITLE_PART_TYPE,
+              data: { title },
+              transient: true,
+            };
+            controller.enqueue(part as never);
+          }
+        }
+        controller.enqueue(chunk);
+      },
+    });
 }
 
 function deferredChatStream(open: () => Promise<ReadableStream<UIMessageChunk>>): Response {
@@ -226,13 +302,15 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
           throw new Error('Query parameter "status" must be "draft" or "published"');
         }
         const status = rawStatus as "draft" | "published" | undefined;
-        const abortSignal = agentAbortSignal(mastra.getAgentById(agentId), context.req.raw.signal);
+        const agent = mastra.getAgentById(agentId);
+        const abortSignal = agentAbortSignal(agent, context.req.raw.signal);
         const runId =
           typeof params.runId === "string" && params.runId ? params.runId : crypto.randomUUID();
         const userText = latestUserText(params.messages);
         if (userText) requestContext.setRaw(FOLLOW_UP_USER_TEXT_KEY, userText);
         requestContext.setRaw(FOLLOW_UP_NATIVE_QUESTIONS_KEY, []);
         requestContext.setRaw(FOLLOW_UP_RUN_ID_KEY, runId);
+        const titleSettled = startThreadTitle({ agent, config, requestContext, userText });
         const tracingOptions = activeChatTracingOptions(undefined);
         return deferredChatStream(async () => {
           return handleChatStream({
@@ -256,6 +334,7 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
             experimentalTransform: chatStreamTransforms(
               runId,
               Boolean(followUps && followUps.mode !== "genie"),
+              titleSettled,
             ),
             version: "v7",
             sendReasoning,

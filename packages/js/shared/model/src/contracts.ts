@@ -24,6 +24,12 @@ export const ModelClass = {
   Embedding: "embedding",
 } as const satisfies Record<string, ModelClass>;
 
+export const ModelOptimizationSchema = z
+  .enum(["quality", "speed", "cost"])
+  .describe("Primary endpoint profile dimension used for automatic model ranking.");
+
+export type ModelOptimization = z.infer<typeof ModelOptimizationSchema>;
+
 export const ReasoningEffortSchema = z
   .enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"])
   .describe("Reasoning effort value accepted by compatible model endpoints.");
@@ -80,6 +86,10 @@ export const ServingEndpointSummarySchema = z
     state: z.string().optional().describe("Serving endpoint lifecycle state."),
     description: z.string().optional().describe("Workspace-provided endpoint description."),
     supportsTools: z.boolean().optional().describe("True when the endpoint accepts tool calls."),
+    supportsStructuredOutput: z
+      .boolean()
+      .optional()
+      .describe("True when published metadata documents structured output support."),
     profile: ModelProfileSchema.optional().describe("Relative quality, speed, and cost scores."),
     class: ModelClassSchema.optional().describe("Intent-oriented class assigned to this endpoint."),
     serviceNames: z
@@ -118,6 +128,13 @@ export const ModelQuerySchema = z
       .boolean()
       .optional()
       .describe("When true, only endpoints that accept tools are returned."),
+    requiresStructuredOutput: z
+      .boolean()
+      .optional()
+      .describe("When true, only endpoints documented for structured output are returned."),
+    optimizeFor: ModelOptimizationSchema.optional().describe(
+      "Prefer endpoint quality, speed, or cost within the eligible model classes.",
+    ),
     task: z.string().optional().describe("Exact Databricks serving task to retain."),
     dimension: z
       .number()
@@ -296,6 +313,13 @@ export const ResolveModelInputSchema = z
       .boolean()
       .optional()
       .describe("When true, only tool-capable endpoints may be selected."),
+    requiresStructuredOutput: z
+      .boolean()
+      .optional()
+      .describe("When true, only structured-output-capable endpoints may be selected."),
+    optimizeFor: ModelOptimizationSchema.optional().describe(
+      "Prefer endpoint quality, speed, or cost within the eligible model classes.",
+    ),
     modelClass: ModelClassSchema.optional().describe(
       "Preferred intent-oriented class when no explicit model matches.",
     ),

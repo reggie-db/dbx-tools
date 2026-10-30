@@ -57,6 +57,7 @@ import {
 import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
 
 type ModelClass = contracts.ModelClass;
+type ModelOptimization = contracts.ModelOptimization;
 const { parseModelClass } = classes;
 const { selectModel } = resolve;
 const smartRouter = new SmartRouterService();
@@ -105,6 +106,10 @@ export interface BuildModelOverrides {
    * static list when the workspace has none.
    */
   modelClass?: ModelClass;
+  /** Profile dimension used to rank eligible automatic model candidates. */
+  optimizeFor?: ModelOptimization;
+  /** Require documented structured-output support for the selected endpoint. */
+  requiresStructuredOutput?: boolean;
   /** Arbitrary request, messages, JSON, or text used to build Smart Router task context. */
   smartRouterInput?: unknown;
   /** Explicit workspace client for standalone callers such as CLIs. */
@@ -145,6 +150,7 @@ function selectionInput(
   defaultClass: ModelClass | undefined,
   cacheIdentity: string | undefined,
   serving = resolveServingConfig(config),
+  optimization?: Pick<BuildModelOverrides, "optimizeFor" | "requiresStructuredOutput">,
 ) {
   const requestedClass = requested !== undefined ? parseModelClass(requested) : null;
   const explicit = requestedClass === null ? requested : undefined;
@@ -154,6 +160,10 @@ function selectionInput(
     fuzzy: serving.fuzzy,
     threshold: serving.threshold,
     ...(modelClass !== undefined ? { modelClass } : {}),
+    ...(optimization?.optimizeFor !== undefined ? { optimizeFor: optimization.optimizeFor } : {}),
+    ...(optimization?.requiresStructuredOutput !== undefined
+      ? { requiresStructuredOutput: optimization.requiresStructuredOutput }
+      : {}),
     fallbacks: serving.fallbacks.slice(),
     liveOnly: requested === undefined,
     ttlMs: serving.ttlMs,
@@ -179,7 +189,7 @@ export function resolveDefaultModelId(
   const requested = overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
   return selection.resolveModel(
     endpoints,
-    selectionInput(config, requested, overrides.modelClass, undefined),
+    selectionInput(config, requested, overrides.modelClass, undefined, undefined, overrides),
   ).modelId;
 }
 
@@ -270,7 +280,14 @@ export async function buildModel(
         const fallback = await selectModel(
           client,
           host,
-          selectionInput(config, requested, overrides.modelClass, cacheIdentity, serving),
+          selectionInput(
+            config,
+            requested,
+            overrides.modelClass,
+            cacheIdentity,
+            serving,
+            overrides,
+          ),
         );
         return { modelId: fallback.modelId, source: fallback.source };
       })();
@@ -288,7 +305,7 @@ export async function buildModel(
     const resolved = await selectModel(
       client,
       host,
-      selectionInput(config, requested, overrides.modelClass, cacheIdentity, serving),
+      selectionInput(config, requested, overrides.modelClass, cacheIdentity, serving, overrides),
     );
     modelId = resolved.modelId;
     source = resolved.source;

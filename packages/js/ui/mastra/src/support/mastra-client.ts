@@ -8,7 +8,7 @@ import {
   type MastraFeedbackResponse,
   type MastraMlflowExperimentResponse,
   type StatementData,
-  type FeedbackMode,
+  type FeedbackDestination,
   MastraFeedbackResponseSchema,
   MastraMlflowExperimentResponseSchema,
   MODEL_OVERRIDE_HEADER,
@@ -86,8 +86,8 @@ export class MastraPluginClient extends MastraClient {
   readonly defaultAgent: string;
   /** Registered agent ids, surfaced for pickers. */
   readonly agents: readonly string[];
-  /** Resolved feedback destination published by the server. */
-  readonly feedbackMode: FeedbackMode;
+  /** Feedback destinations published by the server for per-message routing. */
+  readonly feedbackModes: readonly FeedbackDestination[];
   /**
    * Whether the agents run their Databricks calls as the app service principal
    * rather than on-behalf-of the signed-in user. When `true` the chat works for
@@ -117,7 +117,7 @@ export class MastraPluginClient extends MastraClient {
     this.basePath = config.basePath;
     this.defaultAgent = config.defaultAgent;
     this.agents = config.agents;
-    this.feedbackMode = config.feedbackMode ?? "none";
+    this.feedbackModes = config.feedbackModes ?? [];
     this.chatAlwaysAvailable = config.chatAlwaysAvailable ?? false;
     this.backgroundTurns = config.backgroundTurns ?? false;
     this.followUpSuggestions = config.followUpSuggestions ?? "none";
@@ -936,6 +936,7 @@ export const useMastraThreads = (
   loading: boolean;
   error: Error | null;
   refresh: () => void;
+  sync: () => Promise<MastraMemoryThread[]>;
 } => {
   const defaultClient = useMastraClient();
   const client = clientOverride ?? defaultClient;
@@ -948,6 +949,27 @@ export const useMastraThreads = (
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
   const hasLoadedRef = useRef(false);
 
+  const load = useCallback(
+    async (signal?: AbortSignal): Promise<MastraMemoryThread[]> => {
+      if (!enabled) return [];
+      try {
+        const res = await client.threads({ agentId, ...(signal ? { signal } : {}) });
+        if (signal?.aborted) return [];
+        hasLoadedRef.current = true;
+        setThreads(res.threads);
+        setError(null);
+        return res.threads;
+      } catch (caught) {
+        if (signal?.aborted || (caught as { name?: string }).name === "AbortError") return [];
+        setError(toError(caught));
+        setThreads([]);
+        return [];
+      }
+    },
+    [agentId, client, enabled],
+  );
+  const sync = useCallback(() => load(), [load]);
+
   useEffect(() => {
     if (!enabled) {
       hasLoadedRef.current = false;
@@ -957,26 +979,14 @@ export const useMastraThreads = (
     }
     const controller = new AbortController();
     if (!hasLoadedRef.current) setLoading(true);
-    client
-      .threads({ agentId, signal: controller.signal })
-      .then((res) => {
-        if (controller.signal.aborted) return;
-        hasLoadedRef.current = true;
-        setThreads(res.threads);
-        setError(null);
-      })
-      .catch((e: unknown) => {
-        if (controller.signal.aborted || (e as { name?: string }).name === "AbortError") return;
-        setError(toError(e));
-        setThreads([]);
-      })
+    void load(controller.signal)
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [client, agentId, enabled, nonce]);
+  }, [enabled, load, nonce]);
 
-  return { threads, loading, error, refresh };
+  return { threads, loading, error, refresh, sync };
 };
 
 /**

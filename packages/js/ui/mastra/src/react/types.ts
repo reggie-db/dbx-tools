@@ -1,4 +1,8 @@
-import type { FollowUpSuggestionMode, ToolProgressEvent } from "@dbx-tools/shared-mastra";
+import type {
+  FeedbackDestination,
+  FollowUpSuggestionMode,
+  ToolProgressEvent,
+} from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { FileUIPart, UIMessage } from "ai";
 import type { ReactNode } from "react";
@@ -375,8 +379,8 @@ export type ChatViewProps = {
    * response header when MLflow logging is enabled.
    */
   feedbackByMessage?: Record<string, MessageFeedback>;
-  /** Resolved feedback destination selected by the server. */
-  feedbackMode?: "none" | "mlflow" | "genie";
+  /** Feedback destinations the server can accept for per-message routing. */
+  feedbackModes?: readonly FeedbackDestination[];
   /**
    * Submit thumbs / comment feedback for an assistant message. When
    * provided (and the message has a {@link feedbackByMessage} entry),

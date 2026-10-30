@@ -34,7 +34,7 @@ export class GenieChatClient extends MastraPluginClient {
   /** Genie space alias every route is scoped to. */
   readonly alias: string;
   override readonly backgroundTurns = false;
-  override readonly feedbackMode = "none";
+  override readonly feedbackModes: readonly "genie"[];
   override readonly threadRename = false;
   override readonly attachments = false;
   override readonly followUpSuggestions: "none" | "genie";
@@ -46,6 +46,7 @@ export class GenieChatClient extends MastraPluginClient {
   constructor(config: MastraClientConfig, alias: string) {
     super(config);
     this.alias = alias;
+    this.feedbackModes = config.feedbackModes?.includes("genie") ? ["genie"] : [];
     this.followUpSuggestions =
       config.followUpSuggestions === "genie" || config.followUpSuggestions === "auto"
         ? "genie"

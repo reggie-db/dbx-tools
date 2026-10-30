@@ -16,9 +16,7 @@ type SoftStore = PostgresStore & {
 
 type MemoryThreadConfig = {
   threadConfig: {
-    generateTitle?: {
-      model?: unknown;
-    };
+    generateTitle?: unknown;
   };
 };
 
@@ -78,7 +76,7 @@ describe("soft storage initialization", () => {
 });
 
 describe("thread title generation", () => {
-  it("uses a dedicated model instead of the primary agent model", async () => {
+  it("leaves native memory title generation disabled", async () => {
     const pool = createMastraLakebasePool({
       database: "test",
       host: "127.0.0.1",
@@ -100,7 +98,7 @@ describe("thread title generation", () => {
       const memory = createMemoryBuilder(config).forAgent("title-test", definition);
       const generateTitle = (memory as unknown as MemoryThreadConfig).threadConfig.generateTitle;
 
-      assert.equal(typeof generateTitle?.model, "function");
+      assert.equal(generateTitle, false);
     } finally {
       await pool.end();
     }

@@ -15,7 +15,7 @@ import { isToolUIPart } from "ai";
 import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
-import { genieFeedbackTarget } from "./chat-feedback.ts";
+import { messageFeedbackDestination } from "./chat-feedback.ts";
 import { SuggestionPills } from "./suggestion-pills.tsx";
 import { isRespondingChatStatus, type ChatViewProps } from "./types.ts";
 import { messageText } from "../support/export.ts";
@@ -160,7 +160,7 @@ type ChatTranscriptProps = {
   pendingApprovalsByMessage: NonNullable<ChatViewProps["pendingApprovalsByMessage"]>;
   onExportMessage: ChatViewProps["onExportMessage"];
   feedbackByMessage: NonNullable<ChatViewProps["feedbackByMessage"]>;
-  feedbackMode: NonNullable<ChatViewProps["feedbackMode"]>;
+  feedbackModes: NonNullable<ChatViewProps["feedbackModes"]>;
   onFeedback: ChatViewProps["onFeedback"];
   mlflowExperimentUrl: ChatViewProps["mlflowExperimentUrl"];
 };
@@ -182,7 +182,7 @@ export const ChatTranscript = ({
   pendingApprovalsByMessage,
   onExportMessage,
   feedbackByMessage,
-  feedbackMode,
+  feedbackModes,
   onFeedback,
   mlflowExperimentUrl,
 }: ChatTranscriptProps) => {
@@ -198,7 +198,7 @@ export const ChatTranscript = ({
         isToolUIPart(part) ||
         part.type === "data-tool-call-approval",
     ) || (lastEvents?.length ?? 0) > 0;
-  const showWaitingIndicator = isRunning && !lastAssistantHasContent;
+  const showWaitingIndicator = status === "finishing" || (isRunning && !lastAssistantHasContent);
 
   return (
     <div className="relative flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
@@ -236,17 +236,15 @@ export const ChatTranscript = ({
               const isLast = index === messages.length - 1;
               if (message.role === "assistant") {
                 const messageFeedback = feedbackByMessage[message.id];
-                const genieTarget =
-                  feedbackMode === "genie" ? genieFeedbackTarget(message) : undefined;
-                const canSubmitFeedback =
-                  feedbackMode === "mlflow"
-                    ? Boolean(messageFeedback?.traceId)
-                    : Boolean(genieTarget);
+                const feedbackDestination = messageFeedbackDestination(
+                  message,
+                  feedbackModes,
+                  messageFeedback?.traceId,
+                );
                 const requestMessage = [...messages.slice(0, index)]
                   .reverse()
                   .find((candidate) => candidate.role === "user");
                 const feedbackRequest = requestMessage ? messageText(requestMessage) : "";
-                const bubbleFeedbackMode = feedbackMode === "genie" ? "genie" : "mlflow";
                 return (
                   <AssistantBubble
                     key={message.id}
@@ -260,10 +258,10 @@ export const ChatTranscript = ({
                     {...(onExportMessage
                       ? { onExport: (format) => onExportMessage(message, format) }
                       : {})}
-                    {...(onFeedback && canSubmitFeedback
+                    {...(onFeedback && feedbackDestination
                       ? {
                           onFeedback: (submission) => onFeedback(message, submission),
-                          feedbackMode: bubbleFeedbackMode,
+                          feedbackMode: feedbackDestination.mode,
                           ...(feedbackRequest ? { feedbackRequest } : {}),
                           ...(messageFeedback?.value
                             ? { feedbackValue: messageFeedback.value }

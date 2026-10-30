@@ -232,11 +232,12 @@ export class MastraServer extends ExpressMastraServer {
 
   constructor(
     private config: MastraPluginConfig,
+    feedback: { mlflowFeedback: boolean },
     ...args: ConstructorParameters<typeof ExpressMastraServer>
   ) {
     super(...args);
     this.log = log.logger(config);
-    this.mlflowFeedback = config.feedbackMode === "mlflow";
+    this.mlflowFeedback = feedback.mlflowFeedback;
   }
 
   override registerAuthMiddleware(): void {

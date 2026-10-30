@@ -72,6 +72,7 @@ export function rankEndpoints(
       if (!includeDeprecated && endpoint.status?.deprecated) continue;
       const capabilities = endpointCapabilities(endpoint);
       if (!capabilities.chat || (query.requiresTools && !capabilities.tools)) continue;
+      if (query.requiresStructuredOutput && !endpoint.supportsStructuredOutput) continue;
       candidates.push({
         endpoint,
         modelClass: classByName.get(endpoint.name) ?? ModelClass.ChatBalanced,
@@ -82,6 +83,7 @@ export function rankEndpoints(
       for (const endpoint of classified[modelClass]) {
         if (!includeDeprecated && endpoint.status?.deprecated) continue;
         if (query.requiresTools && !endpointCapabilities(endpoint).tools) continue;
+        if (query.requiresStructuredOutput && !endpoint.supportsStructuredOutput) continue;
         candidates.push({ endpoint, modelClass });
       }
     }
@@ -101,6 +103,9 @@ export function rankEndpoints(
       !search && requestedClass === undefined
         ? preferLatestWithinLeadingFamily(selectable, preferSystemModels)
         : selectable;
+    if (!search && query.optimizeFor !== undefined) {
+      ranked = [...ranked].sort((left, right) => compareOptimized(left, right, query.optimizeFor!));
+    }
     if (search) {
       const threshold = query.threshold ?? DEFAULT_FUZZY_THRESHOLD;
       const searchTokens = tokenize(search);
@@ -187,6 +192,27 @@ function matchesModelQuery(endpoint: ServingEndpointSummary, query: ModelQuery):
   return true;
 }
 
+function compareOptimized(
+  left: RankedModel,
+  right: RankedModel,
+  optimizeFor: NonNullable<ModelQuery["optimizeFor"]>,
+): number {
+  if (optimizeFor === "speed") {
+    const leftReasoning = Boolean(left.endpoint.reasoningEfforts?.length);
+    const rightReasoning = Boolean(right.endpoint.reasoningEfforts?.length);
+    if (leftReasoning !== rightReasoning) return leftReasoning ? 1 : -1;
+  }
+  const leftValue = left.endpoint.profile?.[optimizeFor];
+  const rightValue = right.endpoint.profile?.[optimizeFor];
+  if (leftValue !== undefined || rightValue !== undefined) {
+    if (leftValue === undefined) return 1;
+    if (rightValue === undefined) return -1;
+    const difference = optimizeFor === "cost" ? leftValue - rightValue : rightValue - leftValue;
+    if (difference !== 0) return difference;
+  }
+  return compareRanked(left, right, false);
+}
+
 /** Classify chat and embedding endpoints through the TypeScript-owned policy. */
 export function classifyEndpointClasses(
   endpoints: readonly ServingEndpointSummary[],
@@ -251,6 +277,9 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
       ...(description ? { description } : {}),
       supportsTools:
         booleanValue(capabilitiesRecord.function_calling) ?? identities.some(supportsToolsByFamily),
+      supportsStructuredOutput: identities.some(
+        (identity) => modelCapabilitiesFor(identity).structuredOutput,
+      ),
       ...(profile ? { profile } : {}),
       serviceNames: Object.assign({}, ...identities.map(modelServiceNames)),
       ...(modelServiceName ? { modelServiceName } : {}),
@@ -266,7 +295,9 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
   });
 }
 
-function reasoningEffort(level: ReturnType<typeof modelReasoningLevelsFor>[number]): ReasoningEffort {
+function reasoningEffort(
+  level: ReturnType<typeof modelReasoningLevelsFor>[number],
+): ReasoningEffort {
   return level === "extra-high" ? "xhigh" : level;
 }
 

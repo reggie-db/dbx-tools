@@ -67,8 +67,8 @@ describe("native Mastra output integration", () => {
 
     expect(received?.nativeQuestions).toBeUndefined();
     expect(
-      messageList
-        .get.response.db()
+      messageList.get.response
+        .db()
         .at(-1)
         ?.content.parts.find((part) => part.type === FOLLOW_UP_SUGGESTIONS_PART_TYPE),
     ).toMatchObject({
@@ -160,9 +160,7 @@ describe("native Mastra output integration", () => {
     for await (const chunk of stream) chunks.push(chunk);
 
     expect(received?.nativeQuestions).toEqual(["Show revenue by region"]);
-    expect(received?.turnContext).toContain('"tool":"render_data"');
-    expect(received?.turnContext).toContain('"category":"North"');
-    expect(received?.turnContext).toContain('"tool":"get_statement"');
+    expect(received?.turnContext).toBeUndefined();
     expect(
       persistedParts?.find((part) => part.type === FOLLOW_UP_SUGGESTIONS_PART_TYPE),
     ).toMatchObject({

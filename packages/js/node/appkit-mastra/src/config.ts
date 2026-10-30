@@ -542,9 +542,10 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   observability?: boolean;
   /**
-   * Feedback destination. `auto` prefers Genie when Genie Agent Mode is
-   * available, otherwise MLflow when tracing is configured, otherwise none.
-   * Explicit `genie` or `mlflow` fails startup when unavailable.
+   * Feedback destinations. `auto` enables Genie for Genie-backed messages and
+   * MLflow for other traced agent responses when each capability is available.
+   * Explicit `genie` or `mlflow` restricts feedback to that destination and
+   * fails startup when unavailable.
    */
   feedbackMode?: FeedbackModeOption;
   /**
@@ -836,7 +837,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: "string",
       enum: ["auto", "genie", "mlflow", "none"],
       description:
-        "Feedback destination. Auto prefers Genie in Genie Agent Mode, otherwise MLflow when configured, otherwise none. Explicit unavailable modes fail startup.",
+        "Feedback destinations. Auto routes Genie-backed messages to Genie and other traced responses to MLflow when available. Explicit unavailable modes fail startup.",
     },
     mcp: {
       type: ["boolean", "object"],

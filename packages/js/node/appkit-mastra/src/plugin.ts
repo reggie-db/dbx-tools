@@ -82,7 +82,7 @@ import {
   type GenieChatRequest,
   type MastraClientConfig,
   type StatementData,
-  type FeedbackMode,
+  type FeedbackDestination,
   MastraFeedbackRequestSchema,
   type MlflowFeedbackRequest,
   type GenieFeedbackRequest,
@@ -122,7 +122,7 @@ import {
   modelCatalogueDefaults,
   statementDataDefaults,
 } from "./defaults.ts";
-import { resolveFeedbackMode } from "./feedback-mode.ts";
+import { resolveFeedbackModes } from "./feedback-mode.ts";
 import { resolveFollowUpSuggestionsConfig } from "./follow-up-suggestions.ts";
 import {
   deleteGenieThread,
@@ -274,8 +274,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * {@link buildAgentAndServer} and registered on the Mastra instance.
    */
   private mcp: ResolvedMcp | null = null;
-  /** Resolved feedback destination published to server and browser clients. */
-  private resolvedFeedbackMode: FeedbackMode = "none";
+  /** Resolved feedback destinations published to server and browser clients. */
+  private resolvedFeedbackModes: FeedbackDestination[] = [];
   /**
    * Resolved AppKit identity mode: the identity the chat path's Databricks
    * calls run as. Read once at setup so an invalid `genieIdentity` fails the app
@@ -287,11 +287,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // app boot with a clear message rather than 500-ing the first chat request.
     this.identityMode = resolveIdentityMode(this.config.genieIdentity);
     const spaces = resolveGenieSpaces(this.config, this.context);
-    this.resolvedFeedbackMode = resolveFeedbackMode(this.config.feedbackMode, {
+    this.resolvedFeedbackModes = resolveFeedbackModes(this.config.feedbackMode, {
       genie: this.config.genieAgentMode !== false && Object.keys(spaces).length > 0,
       mlflow: mlflowEnabled(),
     });
-    this.config.feedbackMode = this.resolvedFeedbackMode;
     if (this.config.observability !== false) {
       await configureNativeHttpTelemetry({
         // A low-level request without an active semantic span becomes a noisy
@@ -497,7 +496,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       basePath: this.basePath,
       defaultAgent: this.built?.defaultAgentId ?? FALLBACK_AGENT_ID,
       agents: Object.keys(this.built?.agents ?? {}),
-      feedbackMode: this.feedbackMode(),
+      feedbackModes: this.feedbackModes(),
       backgroundTurns: this.config.backgroundTurns !== false,
       followUpSuggestions: followUps?.mode ?? "none",
       followUpSuggestionLimit: followUps?.limit ?? 3,
@@ -509,9 +508,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     return config as unknown as Record<string, unknown>;
   }
 
-  /** Resolve the only feedback destination exposed for this plugin mode. */
-  private feedbackMode(): FeedbackMode {
-    return this.resolvedFeedbackMode;
+  /** Resolve the feedback destinations exposed for per-message routing. */
+  private feedbackModes(): FeedbackDestination[] {
+    return this.resolvedFeedbackModes;
+  }
+
+  /** Whether one feedback destination is enabled. */
+  private feedbackEnabled(mode: FeedbackDestination): boolean {
+    return this.resolvedFeedbackModes.includes(mode);
   }
 
   override injectRoutes(router: IAppRouter): void {
@@ -984,15 +988,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     return this.execute(() => write(client), genieConversationWriteDefaults);
   }
 
-  /** Register the single feedback destination selected by plugin mode. */
+  /** Register every feedback destination enabled by plugin mode. */
   private registerFeedbackRoutes(router: IAppRouter): void {
     this.route(router, {
       name: "feedback",
       method: "post",
       path: MASTRA_ROUTES.feedback,
       handler: async (req, res) => {
-        const mode = this.feedbackMode();
-        if (mode === "none") {
+        if (this.resolvedFeedbackModes.length === 0) {
           res.status(404).json({ ok: false });
           return;
         }
@@ -1008,7 +1011,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           });
           return;
         }
-        if (parsed.data.mode !== mode) {
+        if (!this.feedbackEnabled(parsed.data.mode)) {
           res.status(400).json({ ok: false, error: INVALID_FEEDBACK_MESSAGE });
           return;
         }
@@ -1042,7 +1045,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       method: "get",
       path: MASTRA_ROUTES.mlflowExperiment,
       handler: async (req, res) => {
-        if (this.feedbackMode() !== "mlflow") {
+        if (!this.feedbackEnabled("mlflow")) {
           res.json({ url: null });
           return;
         }
@@ -1454,7 +1457,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       identity: (request) =>
         useServicePrincipal(this.identityMode, request) ? "service-principal" : "obo",
     });
-    this.mastraServer = new MastraServer(this.config, {
+    this.mastraServer = new MastraServer(
+      this.config,
+      { mlflowFeedback: this.feedbackEnabled("mlflow") },
+      {
       app: this.mastraApp,
       mastra: this.mastra,
       prefix: "",
@@ -1465,7 +1471,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           version: "v7",
         }),
       ],
-    });
+      },
+    );
     await this.mastraServer.init();
     attachStaleResumeRecovery(this.mastraApp);
     this.logger.info("ready", {
@@ -1476,7 +1483,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       apiAccess: this.config.apiAccess ?? "scoped",
       mcp: this.mcp ? `${this.basePath}${this.mcp.httpPath}` : "off",
       lakebase: memoryPool !== undefined,
-      feedback: this.feedbackMode(),
+      feedback: this.feedbackModes(),
       observability: observability !== undefined ? "mlflow" : "off",
     });
   }
