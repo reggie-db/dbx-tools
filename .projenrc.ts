@@ -15,10 +15,11 @@
  * `applyToProjects`es, synths.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { GitIgnore } from "@dbx-tools/path";
 import { bunWorkflow, project, projectJs, projectPy } from "@dbx-tools/projen";
-import { Component, javascript } from "projen";
+import { dedent } from "@dbx-tools/shared-core";
+import { Component, javascript, YamlFile } from "projen";
 
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
@@ -45,48 +46,32 @@ class BrandPackageAssets extends Component {
   }
 }
 
-/** Keep ai-slop-detector's exclusions synchronized with the generated .gitignore. */
-class SlopDetectorConfig extends Component {
-  /** Regenerate the scanner config after Projen writes the final .gitignore. */
-  public override postSynthesize(): void {
-    const gitignore = readFileSync(resolve(this.project.outdir, ".gitignore"), "utf8");
-    const patterns = [
-      ...new Set(
-        [
-          ...gitignore
-            .split("\n")
-            .map((line) => line.trim())
-            .filter((line) => line && !line.startsWith("#") && !line.startsWith("!"))
-            .map((line) => line.replace(/^\//, ""))
-            .map((line) => (line.endsWith("/") ? `${line}**` : line)),
-          "**/_generated/**",
-          "packages/py/graphiti/src/dbx_tools/graphiti/postgraph/**",
-        ],
-      ),
-    ];
-    const config = [
-      "# Generated from .gitignore by .projenrc.ts. Do not edit directly.",
-      'version: "2.0"',
-      "ignore:",
-      ...patterns.map((pattern) => `  - ${JSON.stringify(pattern)}`),
-      "phantom_import_allowlist:",
-      ...["dbx_tools", "pytest", "pythonmonkey", "starlette", "tomli"].map(
-        (module) => `  - ${JSON.stringify(module)}`,
-      ),
-      "patterns:",
-      "  disabled:",
-      '    - "function_clone_cluster"',
-      "  god_function:",
-      "    domain_overrides:",
-      '      - function_pattern: "add_memory_sync"',
-      "        complexity_threshold: 10",
-      "        lines_threshold: 80",
-      '        reason: "Public tool signature, field documentation, and typed forwarding"',
-      "",
-    ].join("\n");
-    writeFileSync(resolve(this.project.outdir, ".slopconfig.yaml"), config);
-  }
-}
+/** Indent a readable Python template to its source nesting level. */
+const pythonBlock = (indentation: number, source: string): string => {
+  const padding = " ".repeat(indentation);
+  return dedent(source)
+    .split("\n")
+    .map((line) => (line ? `${padding}${line}` : line))
+    .join("\n");
+};
+
+/** Read scanner exclusions from Projen's final generated .gitignore. */
+const slopDetectorIgnorePatterns = (outdir: string): string[] => {
+  const gitignore = new GitIgnore(outdir);
+  gitignore.refreshPathSync(".gitignore");
+  return [
+    ...new Set(
+      [
+        ...gitignore
+          .positivePatterns(".gitignore")
+          .map((line) => line.replace(/^\//, ""))
+          .map((line) => (line.endsWith("/") ? `${line}**` : line)),
+        "**/_generated/**",
+        "packages/py/graphiti/src/dbx_tools/graphiti/postgraph/**",
+      ],
+    ),
+  ];
+};
 
 // ---------------------------------------------------------------------------
 // Root construction
@@ -221,6 +206,7 @@ const root = new projectJs.DBXToolsNodeProject({
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/core@workspace:^",
+    "@dbx-tools/path@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/projen@workspace:^",
     "commander@catalog:",
@@ -1370,22 +1356,137 @@ const pythonPackages: projectPy.PythonPackageOptions[] = [
           "utils/**/*.py",
         ],
         replace: {
-          "        self._queue_workers: dict[str, bool] = {}\n        # Store the graphiti client after initialization":
-            "        self._queue_workers: dict[str, bool] = {}\n        self._worker_tasks: dict[str, asyncio.Task[None]] = {}\n        self._queue_errors: dict[str, list[Exception]] = {}\n        # Store the graphiti client after initialization",
+          [pythonBlock(
+            8,
+            /*python*/ `
+              self._queue_workers: dict[str, bool] = {}
+              # Store the graphiti client after initialization
+            `,
+          )]: pythonBlock(
+            8,
+            /*python*/ `
+              self._queue_workers: dict[str, bool] = {}
+              self._worker_tasks: dict[str, asyncio.Task[None]] = {}
+              self._queue_errors: dict[str, list[Exception]] = {}
+              # Store the graphiti client after initialization
+            `,
+          ),
           "            asyncio.create_task(self._process_episode_queue(group_id))":
             "            self._worker_tasks[group_id] = asyncio.create_task(self._process_episode_queue(group_id))",
-          "                    logger.error(\n                        f'Error processing queued episode for group_id {group_id}: {str(e)}'\n                    )":
-            "                    logger.exception(\n                        'Error processing queued episode for group_id %s', group_id\n                    )\n                    self._queue_errors.setdefault(group_id, []).append(e)",
+          [pythonBlock(
+            20,
+            /*python*/ `
+              logger.error(
+                  f'Error processing queued episode for group_id {group_id}: {str(e)}'
+              )
+            `,
+          )]: pythonBlock(
+            20,
+            /*python*/ `
+              logger.exception(
+                  'Error processing queued episode for group_id %s', group_id
+              )
+              self._queue_errors.setdefault(group_id, []).append(e)
+            `,
+          ),
           "            logger.error(f'Unexpected error in queue worker for group_id {group_id}: {str(e)}')":
-            "            logger.exception(\n                'Unexpected error in queue worker for group_id %s', group_id\n            )",
-          "            except Exception as e:\n                logger.error(f'Failed to process episode {uuid} for group {group_id}: {str(e)}')":
-            "            except Exception:\n                logger.exception(\n                    'Failed to process episode %s for group %s', uuid, group_id\n                )",
-          "    except Exception as e:\n        logger.error(f'Error initializing Graphiti MCP server: {str(e)}')":
-            "    except Exception:\n        logger.exception('Error initializing Graphiti MCP server')",
-          "            self._queue_workers[group_id] = False\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')":
-            "            self._queue_workers[group_id] = False\n            self._worker_tasks.pop(group_id, None)\n            logger.info(f'Stopped episode queue worker for group_id: {group_id}')",
-          "    def get_queue_size(self, group_id: str) -> int:\n":
-            "    async def wait_until_idle(self, group_id: str | None = None) -> None:\n        \"\"\"Wait until queued and in-flight episode work completes.\"\"\"\n        group_ids = (\n            [group_id]\n            if group_id is not None and group_id in self._episode_queues\n            else list(self._episode_queues)\n            if group_id is None\n            else []\n        )\n        await asyncio.gather(*(self._episode_queues[key].join() for key in group_ids))\n        errors = [\n            error\n            for key in group_ids\n            for error in self._queue_errors.pop(key, [])\n        ]\n        if errors:\n            raise RuntimeError(f'Queued episode processing failed: {errors[0]}') from errors[0]\n\n    async def close(self) -> None:\n        \"\"\"Drain episode work and stop idle queue workers.\"\"\"\n        error: Exception | None = None\n        try:\n            await self.wait_until_idle()\n        except Exception as caught:\n            error = caught\n        tasks = list(self._worker_tasks.values())\n        for task in tasks:\n            task.cancel()\n        if tasks:\n            await asyncio.gather(*tasks, return_exceptions=True)\n        self._worker_tasks.clear()\n        self._queue_workers.clear()\n        self._queue_errors.clear()\n        if error is not None:\n            raise error\n\n    def get_queue_size(self, group_id: str) -> int:\n",
+            pythonBlock(
+              12,
+              /*python*/ `
+                logger.exception(
+                    'Unexpected error in queue worker for group_id %s', group_id
+                )
+              `,
+            ),
+          [pythonBlock(
+            12,
+            /*python*/ `
+              except Exception as e:
+                  logger.error(f'Failed to process episode {uuid} for group {group_id}: {str(e)}')
+            `,
+          )]: pythonBlock(
+            12,
+            /*python*/ `
+              except Exception:
+                  logger.exception(
+                      'Failed to process episode %s for group %s', uuid, group_id
+                  )
+            `,
+          ),
+          [pythonBlock(
+            4,
+            /*python*/ `
+              except Exception as e:
+                  logger.error(f'Error initializing Graphiti MCP server: {str(e)}')
+            `,
+          )]: pythonBlock(
+            4,
+            /*python*/ `
+              except Exception:
+                  logger.exception('Error initializing Graphiti MCP server')
+            `,
+          ),
+          [pythonBlock(
+            12,
+            /*python*/ `
+              self._queue_workers[group_id] = False
+              logger.info(f'Stopped episode queue worker for group_id: {group_id}')
+            `,
+          )]: pythonBlock(
+            12,
+            /*python*/ `
+              self._queue_workers[group_id] = False
+              self._worker_tasks.pop(group_id, None)
+              logger.info(f'Stopped episode queue worker for group_id: {group_id}')
+            `,
+          ),
+          [`${pythonBlock(
+            4,
+            /*python*/ `
+              def get_queue_size(self, group_id: str) -> int:
+            `,
+          )}\n`]: `${pythonBlock(
+            4,
+            /*python*/ `
+              async def wait_until_idle(self, group_id: str | None = None) -> None:
+                  """Wait until queued and in-flight episode work completes."""
+                  group_ids = (
+                      [group_id]
+                      if group_id is not None and group_id in self._episode_queues
+                      else list(self._episode_queues)
+                      if group_id is None
+                      else []
+                  )
+                  await asyncio.gather(*(self._episode_queues[key].join() for key in group_ids))
+                  errors = [
+                      error
+                      for key in group_ids
+                      for error in self._queue_errors.pop(key, [])
+                  ]
+                  if errors:
+                      raise RuntimeError(f'Queued episode processing failed: {errors[0]}') from errors[0]
+
+              async def close(self) -> None:
+                  """Drain episode work and stop idle queue workers."""
+                  error: Exception | None = None
+                  try:
+                      await self.wait_until_idle()
+                  except Exception as caught:
+                      error = caught
+                  tasks = list(self._worker_tasks.values())
+                  for task in tasks:
+                      task.cancel()
+                  if tasks:
+                      await asyncio.gather(*tasks, return_exceptions=True)
+                  self._worker_tasks.clear()
+                  self._queue_workers.clear()
+                  self._queue_errors.clear()
+                  if error is not None:
+                      raise error
+
+              def get_queue_size(self, group_id: str) -> int:
+            `,
+          )}\n`,
           "uuid (str, optional): Optional UUID for the episode":
             "uuid (str, optional): UUID of an existing episode to update; omit it to create a new episode",
         },
@@ -1456,8 +1557,27 @@ root.addTask("graphiti:sync:verify-tag", {
   description: "Verify the Graphiti sync commit matches its release tag",
 });
 new BrandPackageAssets(root);
-new SlopDetectorConfig(root);
-root.annotateGenerated("/.slopconfig.yaml");
+new YamlFile(root, ".slopconfig.yaml", {
+  editGitignore: false,
+  obj: {
+    version: "2.0",
+    ignore: () => slopDetectorIgnorePatterns(root.outdir),
+    phantom_import_allowlist: ["dbx_tools", "pytest", "pythonmonkey", "starlette", "tomli"],
+    patterns: {
+      disabled: ["function_clone_cluster"],
+      god_function: {
+        domain_overrides: [
+          {
+            function_pattern: "add_memory_sync",
+            complexity_threshold: 10,
+            lines_threshold: 80,
+            reason: "Public tool signature, field documentation, and typed forwarding",
+          },
+        ],
+      },
+    },
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Root development commands

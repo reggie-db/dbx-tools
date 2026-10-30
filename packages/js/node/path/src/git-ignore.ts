@@ -105,6 +105,16 @@ export class GitIgnore {
     return relativePath ? this.files.get(relativePath)?.content : undefined;
   }
 
+  /** Return non-comment, non-negated patterns from a registered `.gitignore`. */
+  positivePatterns(path: string): string[] {
+    const content = this.get(path);
+    if (!content) return [];
+    return content
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#") && !line.startsWith("!"));
+  }
+
   /**
    * Synchronize the root and ancestor control files that can affect `path`.
    *

@@ -43,6 +43,7 @@ describe("GitIgnore", () => {
     assert.equal(matcher.ignores("src/example/keep.tmp"), false);
     assert.equal(matcher.ignores("build/output.js"), true);
     assert.equal(matcher.get(".gitignore"), "*.tmp\nbuild/\n");
+    assert.deepEqual(matcher.positivePatterns(".gitignore"), ["*.tmp", "build/"]);
 
     matcher.set("src/example/.gitignore", "*.ts\n");
     assert.equal(matcher.ignores("src/example/keep.tmp"), true);
@@ -59,6 +60,15 @@ describe("GitIgnore", () => {
     matcher.set("src/example/.gitignore", "!keep.ts\n");
 
     assert.equal(matcher.ignores("src/example/keep.ts"), true);
+  });
+
+  it("lists only positive patterns from retained rules", async () => {
+    const root = await fixture();
+    const matcher = new GitIgnore(root);
+    matcher.set(".gitignore", "\n# generated\n*.tmp\n!keep.tmp\n build/ \n");
+
+    assert.deepEqual(matcher.positivePatterns(".gitignore"), ["*.tmp", "build/"]);
+    assert.deepEqual(matcher.positivePatterns("missing/.gitignore"), []);
   });
 
   it("loads nested rules for asynchronous and synchronous scans", async () => {

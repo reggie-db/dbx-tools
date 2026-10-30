@@ -74,6 +74,7 @@
     "@dbx-tools/auth": "workspace:^",
     "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/path": "workspace:^",
     "@dbx-tools/projen": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@types/bun": "1.4.2",

@@ -21,6 +21,11 @@
       "type": "build"
     },
     {
+      "name": "@dbx-tools/path",
+      "version": "workspace:^",
+      "type": "build"
+    },
+    {
       "name": "@dbx-tools/projen",
       "version": "workspace:^",
       "type": "build"
