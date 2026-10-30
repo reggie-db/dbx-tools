@@ -86,6 +86,7 @@ import {
   type StatementData,
   type FeedbackDestination,
   MastraFeedbackRequestSchema,
+  MastraSuggestionGenerationRequestSchema,
   type MlflowFeedbackRequest,
   type GenieFeedbackRequest,
   MASTRA_ROUTES,
@@ -126,7 +127,10 @@ import {
   statementDataDefaults,
 } from "./defaults.ts";
 import { resolveFeedbackModes } from "./feedback-mode.ts";
-import { resolveFollowUpSuggestionsConfig } from "./follow-up-suggestions.ts";
+import {
+  resolveFollowUpSuggestionsConfig,
+  suggestQuestions,
+} from "./follow-up-suggestions.ts";
 import {
   deleteGenieThread,
   deleteGenieThreadMessage,
@@ -574,7 +578,12 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           this.sendFailure(res, result, "models", MODEL_CATALOGUE_FAILED_MESSAGE);
           return;
         }
-        res.json({ endpoints: result.data });
+        const search = firstNonEmpty(req.query.search);
+        const ranked = search
+          ? modelCatalog.searchServingEndpoints(search, result.data).map((match) => match.endpoint)
+          : result.data;
+        const limit = parseModelLimit(req.query.limit);
+        res.json({ endpoints: limit === undefined ? ranked : ranked.slice(0, limit) });
       },
     });
 
@@ -790,6 +799,29 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       method: "get",
       path: `${MASTRA_ROUTES.suggestions}/:agentId`,
       handler: handleSuggestions,
+    });
+    this.route(router, {
+      name: "suggestionGeneration",
+      method: "post",
+      path: MASTRA_ROUTES.suggestionGeneration,
+      handler: async (req, res) => {
+        const parsed = MastraSuggestionGenerationRequestSchema.safeParse(req.body);
+        if (!parsed.success) {
+          this.logger.warn("suggestions:generate-invalid", { error: parsed.error });
+          res.status(400).json({
+            error: "Suggestion context or options are invalid",
+            fields: invalidFields(parsed.error),
+          });
+          return;
+        }
+        const controller = new AbortController();
+        res.on("close", () => controller.abort());
+        const questions = await this.scopedSelf(req).generateSuggestions(
+          parsed.data,
+          controller.signal,
+        );
+        if (!controller.signal.aborted) res.json({ questions });
+      },
     });
   }
 
@@ -1272,6 +1304,21 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     }, genieSuggestionDefaults);
   }
 
+  /** Generate bounded next questions through the shared ChatFast suggestion service. */
+  private async generateSuggestions(
+    request: ReturnType<typeof MastraSuggestionGenerationRequestSchema.parse>,
+    signal?: AbortSignal,
+  ): Promise<string[]> {
+    const requestContext = await createRequestContext();
+    return suggestQuestions(this.config, request.context, {
+      maxSuggestions: request.maxSuggestions,
+      maxTokens: request.maxTokens,
+      existingSuggestions: request.existingSuggestions,
+      requestContext,
+      ...(signal ? { abortSignal: signal } : {}),
+    });
+  }
+
   /**
    * Implementation backing the `/route/feedback` route. Runs inside the
    * AppKit request context. The workspace client writes the assessment and
@@ -1641,6 +1688,15 @@ function parseStatementLimit(raw: unknown): number | undefined {
   const n = toNumber(v);
   if (n === undefined || n < 0) return undefined;
   return Math.floor(n);
+}
+
+/** Parse the optional positive `?limit=<n>` used by the model catalogue route. */
+function parseModelLimit(raw: unknown): number | undefined {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== "string") return undefined;
+  const parsed = toNumber(value);
+  if (parsed === undefined || parsed <= 0) return undefined;
+  return Math.floor(parsed);
 }
 
 /**

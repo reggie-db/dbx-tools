@@ -186,6 +186,9 @@ Configure the client with these options:
 - `agentId` selects a registered agent and defaults to the plugin default agent.
 - `genieSpace` selects a configured Genie alias and bypasses the agent.
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
+- `onModelUsage` receives each completed turn's resolved endpoint, cumulative
+  tokens, Smart Router observation when applicable, and estimated USD cost when
+  the model catalogue publishes a blended rate.
 - `composerActions` places host-owned per-turn controls beside the model
   selector without replacing the built-in composer.
 - `modelSelectorActions` places host-owned controls inside the model menu after
@@ -358,6 +361,8 @@ export function ReviewChat(props: ChatViewProps) {
 sidebar, transcript, tool progress, approval cards, suggestions, export controls,
 feedback controls, and composer from props. Use it when your app already has a
 transport or needs to combine Mastra messages with another state model.
+Set `showComposer={false}` when a parent surface owns one shared input, such as a
+side-by-side model comparison.
 
 `MastraChat` shows a spinner in the model control while its live default model
 is being resolved. The picker groups endpoints into

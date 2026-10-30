@@ -37,6 +37,7 @@ import {
   GenieChatEventSchema,
 } from "@dbx-tools/shared-genie";
 import { ServingEndpointSummarySchema } from "@dbx-tools/shared-model";
+import { SmartRouterObservationSchema } from "@dbx-tools/shared-model-gateway";
 import { z } from "zod";
 import { FeedbackDestinationsSchema } from "./feedback.ts";
 import { GenieVisualizationModeSchema } from "./genie-visualization.ts";
@@ -171,6 +172,38 @@ export const MastraSuggestionsResponseSchema = z.object({
 });
 /** Follow-up prompts suggested for the current agent and thread context. */
 export type MastraSuggestionsResponse = z.infer<typeof MastraSuggestionsResponseSchema>;
+
+export const MastraSuggestionGenerationRequestSchema = z
+  .object({
+    context: z
+      .unknown()
+      .describe(
+        "Conversation, prompt history, or other JSON-safe context used to generate next questions.",
+      ),
+    maxSuggestions: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .default(3)
+      .describe("Maximum number of generated questions to return."),
+    maxTokens: z.coerce
+      .number()
+      .int()
+      .min(16)
+      .max(2_048)
+      .default(256)
+      .describe("Maximum output-token budget for suggestion generation."),
+    existingSuggestions: z
+      .array(z.string().trim().min(1))
+      .default([])
+      .describe("Questions the generator should avoid repeating."),
+  })
+  .describe("Request for context-aware next-question generation.");
+/** Browser request for context-aware next-question generation. */
+export type MastraSuggestionGenerationRequest = z.input<
+  typeof MastraSuggestionGenerationRequestSchema
+>;
 
 /* --------------------------------- charts --------------------------------- */
 
@@ -552,6 +585,47 @@ export const ToolProgressPartDataSchema = z
 
 /** Validated payload carried by a native generic tool progress data part. */
 export type ToolProgressPartData = z.infer<typeof ToolProgressPartDataSchema>;
+
+/** Native AI SDK data-part type carrying the resolved model and token usage for one turn. */
+export const MODEL_USAGE_PART_TYPE = "data-model-usage" as const;
+
+/** Model selection and usage emitted after one Mastra agent turn completes. */
+export const ModelUsagePartDataSchema = z
+  .object({
+    runId: z.string().optional().describe("Mastra run id that produced this usage record."),
+    model: z.string().trim().min(1).describe("Concrete serving endpoint used for the turn."),
+    selection: z
+      .enum(["smart-router", "explicit", "fuzzy-match", "class", "fallback"])
+      .describe("Policy branch that selected the concrete model."),
+    smartRouter: SmartRouterObservationSchema.optional().describe(
+      "Smart Router decision details when the virtual model selected the endpoint.",
+    ),
+    usage: z
+      .object({
+        inputTokens: z.number().int().nonnegative(),
+        outputTokens: z.number().int().nonnegative(),
+        totalTokens: z.number().int().nonnegative(),
+        reasoningTokens: z.number().int().nonnegative().optional(),
+        cachedInputTokens: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .describe("Cumulative token usage across every model step in the turn."),
+    costPerMillionTokens: z
+      .number()
+      .nonnegative()
+      .optional()
+      .describe("Catalogue blended cost in USD per million tokens when published."),
+    estimatedCostUsd: z
+      .number()
+      .nonnegative()
+      .optional()
+      .describe("Estimated turn cost from total tokens and the published blended rate."),
+  })
+  .strict()
+  .describe("Caller-consumable model routing, usage, and estimated cost for one Mastra turn.");
+
+/** Model selection and usage emitted after one Mastra agent turn completes. */
+export type ModelUsagePartData = z.infer<typeof ModelUsagePartDataSchema>;
 
 /**
  * Transient stream marker emitted after the final model response step, before

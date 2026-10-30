@@ -185,7 +185,10 @@ export const ThreadTabs = ({
   return (
     // The divider spans the whole chat width while the strip's contents stay
     // in the same centered column as the transcript and composer.
-    <div className={cn("w-full border-b border-border text-xs", className)}>
+    <div
+      data-slot="aui_thread-tabs"
+      className={cn("w-full border-b border-border text-xs", className)}
+    >
       <div className="mx-auto flex w-full max-w-4xl items-center gap-1 px-2 py-1 md:px-4">
         <div ref={tabStripRef} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {openThreadIds.map((id) => {

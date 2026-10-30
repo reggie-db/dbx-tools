@@ -7,6 +7,7 @@ import {
   type MastraFeedbackRequest,
   type MastraFeedbackResponse,
   type MastraMlflowExperimentResponse,
+  type MastraSuggestionGenerationRequest,
   type StatementData,
   type FeedbackDestination,
   MastraFeedbackResponseSchema,
@@ -18,6 +19,7 @@ import {
   ServingEndpointsResponseSchema,
   DefaultModelResponseSchema,
   MastraSuggestionsResponseSchema,
+  MastraSuggestionGenerationRequestSchema,
   ChartSchema,
   StatementDataSchema,
   type GenieVisualizationEmbed,
@@ -374,6 +376,20 @@ export class MastraPluginClient extends MastraClient {
     return payload.endpoints;
   }
 
+  /** Resolve the highest-ranked live endpoint matching a model family or search term. */
+  async resolveModel(
+    search: string,
+    signal?: AbortSignal,
+  ): Promise<ServingEndpointSummary | undefined> {
+    const query = new URLSearchParams({ search, limit: "1" });
+    const payload = await this.getJson(
+      `${this.basePath}${MASTRA_ROUTES.models}?${query.toString()}`,
+      ServingEndpointsResponseSchema,
+      signal,
+    );
+    return payload.endpoints[0];
+  }
+
   /**
    * Fetch the humanized name of the static default model `agentId` falls back
    * to when no model is pinned, from `GET ${basePath}/default-model`. Returns
@@ -408,6 +424,21 @@ export class MastraPluginClient extends MastraClient {
       this.#agentScoped(MASTRA_ROUTES.suggestions, agentId),
       MastraSuggestionsResponseSchema,
       signal,
+    );
+    return payload.questions;
+  }
+
+  /** Generate context-aware next questions through the plugin's shared suggestion service. */
+  async generateSuggestions(
+    request: MastraSuggestionGenerationRequest,
+    signal?: AbortSignal,
+  ): Promise<string[]> {
+    const body = MastraSuggestionGenerationRequestSchema.parse(request);
+    const payload = await this.#mutateJson(
+      `${this.basePath}${MASTRA_ROUTES.suggestionGeneration}`,
+      "POST",
+      MastraSuggestionsResponseSchema,
+      { body, ...(signal ? { signal } : {}) },
     );
     return payload.questions;
   }

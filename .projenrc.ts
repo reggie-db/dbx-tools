@@ -1099,6 +1099,7 @@ project.applyToProjects(root, { identifierName: "shared-mastra", tags: "shared" 
     "zod@catalog:",
     "@dbx-tools/shared-genie@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/shared-model-gateway@workspace:*",
   );
 });
 

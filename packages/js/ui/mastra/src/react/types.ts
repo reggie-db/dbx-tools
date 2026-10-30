@@ -58,7 +58,7 @@ export type ToolProgress = ToolProgressEvent;
  */
 export type ChatModelOption = Pick<
   ServingEndpointSummary,
-  "name" | "displayName" | "family" | "reasoningEfforts"
+  "name" | "displayName" | "family" | "profile" | "reasoningEfforts"
 >;
 
 /**
@@ -174,6 +174,8 @@ export type ChatViewProps = {
   onStop?: (threadId?: string) => void;
   /** Extra classes merged onto the root layout container. */
   className?: string;
+  /** Render the built-in composer. Defaults to true for standalone chat surfaces. */
+  showComposer?: boolean;
   /**
    * Starter questions shown as one-tap buttons on the empty state.
    * Defaults to none - nothing renders when omitted or empty, so the

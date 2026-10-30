@@ -18,6 +18,7 @@ import {
   MODEL_OVERRIDE_QUERY,
   MODEL_OVERRIDE_BODY_FIELDS,
 } from "@dbx-tools/shared-mastra";
+import type { SmartRouterObservation } from "@dbx-tools/shared-model-gateway";
 
 import type { MastraPluginConfig } from "./config.ts";
 
@@ -33,6 +34,21 @@ export const MASTRA_RESOLVED_MODEL_KEY = "mastra__resolved_model";
 
 /** RequestContext key carrying the raw request body used to build Smart Router context. */
 export const MASTRA_SMART_ROUTER_INPUT_KEY = "mastra__smart_router_input";
+
+/** RequestContext key carrying model selection metadata for caller-facing usage events. */
+export const MASTRA_MODEL_ROUTE_KEY = "mastra__model_route";
+
+/** In-process model selection metadata retained until the Mastra turn finishes. */
+export interface MastraModelRoute {
+  /** Concrete serving endpoint selected for the turn. */
+  model: string;
+  /** Policy branch that selected the concrete endpoint. */
+  selection: "smart-router" | "explicit" | "fuzzy-match" | "class" | "fallback";
+  /** Catalogue blended USD rate per million tokens when the endpoint publishes one. */
+  costPerMillionTokens?: number;
+  /** Full Smart Router decision when the virtual model selected the endpoint. */
+  smartRouter?: SmartRouterObservation;
+}
 
 /**
  * Minimal Express-ish request shape used by {@link extractModelOverride}.

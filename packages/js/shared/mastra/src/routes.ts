@@ -24,6 +24,7 @@ export const MASTRA_ROUTES = {
   feedback: "/route/feedback",
   mlflowExperiment: "/route/mlflow-experiment",
   suggestions: "/suggestions",
+  suggestionGeneration: "/suggestions/generate",
   models: "/models",
   // The static serving-endpoint an agent falls back to when the client pins
   // no model. Agent-scoped like `history`/`threads`/`suggestions` via an

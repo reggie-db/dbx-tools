@@ -9,6 +9,9 @@ const KEYBOARD_CLOSE_FALLBACK_MS = 650;
 const isKeyboardVisible = (viewport: VisualViewport | null): boolean =>
   Boolean(viewport && window.innerHeight - viewport.height > KEYBOARD_INSET_THRESHOLD_PX);
 
+const isTouchComposerFocused = (): boolean =>
+  navigator.maxTouchPoints > 0 && document.activeElement?.matches(COMPOSER_INPUT_SELECTOR) === true;
+
 /**
  * Synchronize the absolute application shell with Mobile Safari's visual viewport.
  *
@@ -36,7 +39,15 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
       const left = viewport?.pageLeft ?? window.scrollX;
       const width = viewport?.width ?? window.innerWidth;
       const measuredHeight = viewport?.height ?? window.innerHeight;
-      const viewportRestored = window.innerHeight - measuredHeight <= KEYBOARD_INSET_THRESHOLD_PX;
+      const keyboardVisible =
+        isTouchComposerFocused() ||
+        window.innerHeight - measuredHeight > KEYBOARD_INSET_THRESHOLD_PX;
+      const viewportRestored = !keyboardVisible;
+      if (keyboardVisible) {
+        frame.dataset.keyboardOpen = "true";
+      } else {
+        delete frame.dataset.keyboardOpen;
+      }
       if (frame.dataset.keyboardClosing === "true" && viewportRestored) {
         clearKeyboardClosingState();
       }
@@ -63,12 +74,20 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
       keyboardCloseTimer = window.setTimeout(clearKeyboardClosingState, KEYBOARD_CLOSE_FALLBACK_MS);
     };
 
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (navigator.maxTouchPoints > 0 && target?.matches(COMPOSER_INPUT_SELECTOR)) {
+        frame.dataset.keyboardOpen = "true";
+      }
+      commit();
+    };
+
     for (const eventName of VISUAL_VIEWPORT_EVENTS) {
       viewport?.addEventListener(eventName, commit);
     }
     window.addEventListener("resize", commit);
     window.addEventListener("scroll", commit, { passive: true });
-    document.addEventListener("focusin", commit);
+    document.addEventListener("focusin", handleFocusIn);
     document.addEventListener("focusout", handleFocusOut);
     commit();
 
@@ -79,7 +98,7 @@ export const useVisualViewportFrame = (frameRef: RefObject<HTMLElement | null>) 
       clearKeyboardClosingState();
       window.removeEventListener("resize", commit);
       window.removeEventListener("scroll", commit);
-      document.removeEventListener("focusin", commit);
+      document.removeEventListener("focusin", handleFocusIn);
       document.removeEventListener("focusout", handleFocusOut);
     };
   }, [frameRef]);

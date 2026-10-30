@@ -409,7 +409,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * `/serving-endpoints` listing.
    *
    * When unset, resolution is driven by the live Foundation Model API
-   * `quality` / `speed` / `cost` scores: endpoints are classified into
+   * `quality` / `speed` scores and blended `cost` rate: endpoints are classified into
    * chat classes (`classifyEndpoints`) and walked best-first
    * (ChatThinking -> ChatBalanced -> ChatFast). The automatic default is
    * live-only and fails when no matching endpoint is currently available.

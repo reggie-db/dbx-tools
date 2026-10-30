@@ -13,7 +13,12 @@ import {
   SMART_ROUTER_ENDPOINT,
   servingApi,
 } from "../src/model.ts";
-import { MASTRA_MODEL_OVERRIDE_KEY, MASTRA_SMART_ROUTER_INPUT_KEY } from "../src/serving.ts";
+import {
+  MASTRA_MODEL_OVERRIDE_KEY,
+  MASTRA_MODEL_ROUTE_KEY,
+  MASTRA_SMART_ROUTER_INPUT_KEY,
+  type MastraModelRoute,
+} from "../src/serving.ts";
 
 describe("Mastra serving API selection", () => {
   it("routes Responses-only models through the native Responses provider", () => {
@@ -117,7 +122,10 @@ describe("Mastra serving API selection", () => {
               served_entities: [
                 {
                   entity_name: "system.ai.databricks-gpt-6-1-sol",
-                  foundation_model: { name: "system.ai.databricks-gpt-6-1-sol" },
+                  foundation_model: {
+                    name: "system.ai.databricks-gpt-6-1-sol",
+                    ai_gateway_model_profile: { cost: 3.5 },
+                  },
                 },
               ],
             },
@@ -151,6 +159,11 @@ describe("Mastra serving API selection", () => {
 
       assert.equal(routeCalls, 1);
       assert.equal(catalogueCalls, 1);
+      const route = requestContext.get(MASTRA_MODEL_ROUTE_KEY) as MastraModelRoute;
+      assert.equal(route.model, "databricks-gpt-6-1-sol");
+      assert.equal(route.selection, "smart-router");
+      assert.equal(route.costPerMillionTokens, 3.5);
+      assert.equal(route.smartRouter?.routeModel, "system.ai.databricks-gpt-6-1-sol");
     } finally {
       globalThis.fetch = previousFetch;
     }

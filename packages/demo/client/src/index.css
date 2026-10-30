@@ -89,6 +89,11 @@ body {
   will-change: transform;
 }
 
+.demo-shell[data-keyboard-open="true"] [data-slot="aui_thread-tabs"],
+.demo-shell[data-keyboard-open="true"] [data-slot="aui_suggestion-pills"] {
+  display: none;
+}
+
 .demo-nav > div {
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;

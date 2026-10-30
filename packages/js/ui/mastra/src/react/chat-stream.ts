@@ -2,6 +2,9 @@ import { log, toError, trimToUndefined } from "@dbx-tools/shared-core";
 import {
   MLFLOW_TRACE_ID_HEADER,
   MLFLOW_TRACE_PART_TYPE,
+  MODEL_USAGE_PART_TYPE,
+  ModelUsagePartDataSchema,
+  type ModelUsagePartData,
   MlflowTracePartDataSchema,
   RESPONSE_COMPLETE_PART_TYPE,
   THREAD_TITLE_PART_TYPE,
@@ -38,6 +41,13 @@ export const readThreadTitlePart = (chunk: UIMessageChunk): string | undefined =
   if ((chunk as { type?: string }).type !== THREAD_TITLE_PART_TYPE) return undefined;
   const parsed = ThreadTitlePartDataSchema.safeParse((chunk as { data?: unknown }).data);
   return parsed.success ? parsed.data.title : undefined;
+};
+
+/** Read the resolved model and cumulative usage emitted by Mastra on turn completion. */
+export const readModelUsagePart = (chunk: UIMessageChunk): ModelUsagePartData | undefined => {
+  if ((chunk as { type?: string }).type !== MODEL_USAGE_PART_TYPE) return undefined;
+  const parsed = ModelUsagePartDataSchema.safeParse((chunk as { data?: unknown }).data);
+  return parsed.success ? parsed.data : undefined;
 };
 
 /** Map lifecycle-only chunks onto the UI's active-turn state. */
@@ -114,12 +124,18 @@ function upsertAssistant(messages: UIMessage[], assistant: UIMessage): UIMessage
 
 interface UseChatStreamOptions {
   getSession: ThreadSessionReader;
+  onModelUsage?: (usage: ModelUsagePartData) => void;
   updateSession: ThreadSessionUpdater;
   writeMessages: ThreadMessageWriter;
 }
 
 /** Project one Mastra stream through the native AI SDK UI message converter. */
-export function useChatStream({ getSession, updateSession, writeMessages }: UseChatStreamOptions) {
+export function useChatStream({
+  getSession,
+  onModelUsage,
+  updateSession,
+  writeMessages,
+}: UseChatStreamOptions) {
   return useCallback(
     async (
       threadId: string,
@@ -162,6 +178,8 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
             },
             (chunk) => {
               recordTraceId(readMlflowTracePart(chunk));
+              const modelUsage = readModelUsagePart(chunk);
+              if (modelUsage) onModelUsage?.(modelUsage);
               threadTitle = readThreadTitlePart(chunk) ?? threadTitle;
               const status = chatStatusForChunk(chunk);
               if (!status) return;
@@ -194,6 +212,6 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
         throw error;
       }
     },
-    [getSession, updateSession, writeMessages],
+    [getSession, onModelUsage, updateSession, writeMessages],
   );
 }

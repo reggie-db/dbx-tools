@@ -24,6 +24,7 @@ export const ChatView = ({
   regenerate,
   onStop,
   className,
+  showComposer = true,
   suggestions = [],
   followUpSuggestions = "none",
   followUpSuggestionLimit = 3,
@@ -144,32 +145,34 @@ export const ChatView = ({
         mlflowExperimentUrl={mlflowExperimentUrl}
         mlflowTracePrefix={mlflowTracePrefix}
       />
-      <ChatComposer
-        focusRequest={composerFocusRequest}
-        status={status}
-        sendMessage={sendMessage}
-        queuedSteers={queuedSteers}
-        onSendSteerNow={onSendSteerNow}
-        onRemoveSteer={onRemoveSteer}
-        onReorderSteers={onReorderSteers}
-        onStop={onStop}
-        models={models}
-        model={model}
-        onModelChange={onModelChange}
-        reasoningEffort={reasoningEffort}
-        onReasoningEffortChange={onReasoningEffortChange}
-        defaultModelName={defaultModelName}
-        defaultModelId={defaultModelId}
-        defaultModelLoading={defaultModelLoading}
-        composerActions={composerActions}
-        modelSelectorActions={modelSelectorActions}
-        composerLeadingActions={composerLeadingActions}
-        allowAttachments={allowAttachments}
-        isLoadingHistory={isLoadingHistory}
-        onClear={onClear}
-        onExportConversation={onExportConversation}
-        onResumeFollow={transcript.resumeFollow}
-      />
+      {showComposer ? (
+        <ChatComposer
+          focusRequest={composerFocusRequest}
+          status={status}
+          sendMessage={sendMessage}
+          queuedSteers={queuedSteers}
+          onSendSteerNow={onSendSteerNow}
+          onRemoveSteer={onRemoveSteer}
+          onReorderSteers={onReorderSteers}
+          onStop={onStop}
+          models={models}
+          model={model}
+          onModelChange={onModelChange}
+          reasoningEffort={reasoningEffort}
+          onReasoningEffortChange={onReasoningEffortChange}
+          defaultModelName={defaultModelName}
+          defaultModelId={defaultModelId}
+          defaultModelLoading={defaultModelLoading}
+          composerActions={composerActions}
+          modelSelectorActions={modelSelectorActions}
+          composerLeadingActions={composerLeadingActions}
+          allowAttachments={allowAttachments}
+          isLoadingHistory={isLoadingHistory}
+          onClear={onClear}
+          onExportConversation={onExportConversation}
+          onResumeFollow={transcript.resumeFollow}
+        />
+      ) : null}
     </ChatThreadLayout>
   );
 };

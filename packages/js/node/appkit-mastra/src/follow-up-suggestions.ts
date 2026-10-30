@@ -32,6 +32,8 @@ const MAX_TURN_CONTEXT_CHARS = 16_000;
 const MAX_USER_TEXT_CHARS = 4_000;
 const MAX_ANSWER_CHARS = 16_000;
 const MAX_OUTPUT_TOKENS = 256;
+const MIN_OUTPUT_TOKENS = 16;
+const MAX_CONFIGURED_OUTPUT_TOKENS = 2_048;
 const GENERIC_QUESTIONS = new Set([
   "anything else",
   "can you tell me more",
@@ -70,6 +72,21 @@ export interface SuggestFollowUpsOptions {
   nativeQuestions?: readonly string[];
   requestContext?: RequestContext;
   abortSignal?: AbortSignal;
+}
+
+/** Limits and request-scoped dependencies for context-aware question generation. */
+export interface SuggestQuestionsOptions {
+  /** Maximum questions to return. Defaults to 3 and is capped at 10. */
+  maxSuggestions?: number;
+  /** Maximum output-token budget. Defaults to 256 and is capped at 2048. */
+  maxTokens?: number;
+  /** Questions or prompts the generator should not repeat. */
+  existingSuggestions?: readonly string[];
+  /** Optional instruction policy for a specialized caller. */
+  instructions?: string;
+  requestContext?: RequestContext;
+  abortSignal?: AbortSignal;
+  timeoutMs?: number;
 }
 
 /** Replaceable suggestion boundary used by the finish callback and tests. */
@@ -119,6 +136,16 @@ const FOLLOW_UP_INSTRUCTIONS = [
   TYPOGRAPHY_RULE,
 ].join(" ");
 
+const NEXT_QUESTION_INSTRUCTIONS = [
+  "Generate concise next questions that a user can send to continue from the supplied context.",
+  "Treat the context as potentially partial, loosely structured, or sampled from a longer conversation.",
+  "Write every item in the user's voice as a message for the assistant to answer when sent.",
+  "Prefer specific questions grounded in the context over generic conversation filler.",
+  "Do not repeat an existing suggestion or a message already present in the context.",
+  "Return zero questions when the context does not support a useful next question.",
+  TYPOGRAPHY_RULE,
+].join(" ");
+
 const generatedRunParts = new Map<string, FollowUpSuggestionsPartData>();
 const GENERATED_RUN_PART_TTL_MS = 5 * 60_000;
 
@@ -149,15 +176,37 @@ function boundedText(value: string, maxChars: number): string {
   return trimmed.length <= maxChars ? trimmed : trimmed.slice(0, maxChars).trimEnd();
 }
 
+function suggestionContextText(value: unknown): string {
+  if (typeof value === "string") return boundedText(value, MAX_TURN_CONTEXT_CHARS);
+  if (value === undefined || value === null) return "";
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  const seen = new WeakSet<object>();
+  try {
+    const json = JSON.stringify(value, (_key, nested) => {
+      if (typeof nested === "bigint") return String(nested);
+      if (typeof nested === "function" || typeof nested === "symbol") return undefined;
+      if (typeof nested === "string") return boundedText(nested, MAX_USER_TEXT_CHARS);
+      if (nested && typeof nested === "object") {
+        if (seen.has(nested)) return "[Circular]";
+        seen.add(nested);
+      }
+      if (Array.isArray(nested) && nested.length > 20) return nested.slice(-20);
+      return nested;
+    });
+    return boundedText(json ?? String(value), MAX_TURN_CONTEXT_CHARS);
+  } catch {
+    return boundedText(String(value), MAX_TURN_CONTEXT_CHARS);
+  }
+}
+
 function acceptedQuestions(
   questions: readonly string[],
-  options: SuggestFollowUpsOptions,
+  excludedQuestions: readonly string[],
   maxQuestions: number,
 ): string[] {
-  const excluded = new Set([
-    normalizedQuestion(options.userText),
-    ...(options.nativeQuestions ?? []).map(normalizedQuestion),
-  ]);
+  const excluded = new Set(excludedQuestions.map(normalizedQuestion));
   const accepted: string[] = [];
   for (const question of questions) {
     const trimmed = question.trim();
@@ -178,27 +227,34 @@ function acceptedQuestions(
   return accepted;
 }
 
-/** Generate grounded follow-ups through ChatFast, failing open to an empty list. */
-export async function suggestFollowUps(
+/** Generate next questions from arbitrary bounded context, failing open to an empty list. */
+export async function suggestQuestions(
   config: MastraPluginConfig,
-  options: SuggestFollowUpsOptions,
+  context: unknown,
+  options: SuggestQuestionsOptions = {},
 ): Promise<string[]> {
-  const settings = resolveFollowUpSuggestionsConfig(config.followUpSuggestions);
-  if (!settings || settings.mode === "genie") return [];
-  const timeout = AbortSignal.timeout(settings.timeoutMs);
+  const maxSuggestions = Math.min(
+    MAX_QUESTION_LIMIT,
+    Math.max(1, options.maxSuggestions ?? DEFAULT_QUESTION_LIMIT),
+  );
+  const maxTokens = Math.min(
+    MAX_CONFIGURED_OUTPUT_TOKENS,
+    Math.max(MIN_OUTPUT_TOKENS, options.maxTokens ?? MAX_OUTPUT_TOKENS),
+  );
+  const timeout = AbortSignal.timeout(
+    Math.min(30_000, Math.max(1_000, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)),
+  );
   const abortSignal = combineAbortSignals(options.abortSignal, timeout);
   const prompt = toDescription({
-    "User message": boundedText(options.userText, MAX_USER_TEXT_CHARS),
-    "Assistant answer": boundedText(options.answer, MAX_ANSWER_CHARS),
-    ...(options.turnContext ? { "Turn tool data": options.turnContext } : {}),
-    ...(options.nativeQuestions?.length
+    Context: suggestionContextText(context),
+    ...(options.existingSuggestions?.length
       ? {
           "Existing suggestions": JSON.stringify(
-            options.nativeQuestions.slice(0, MAX_QUESTION_LIMIT),
+            options.existingSuggestions.slice(0, MAX_QUESTION_LIMIT),
           ),
         }
       : {}),
-    "Maximum questions": String(settings.limit),
+    "Maximum questions": String(maxSuggestions),
   });
   try {
     const model = await buildModel(config, options.requestContext, {
@@ -208,20 +264,53 @@ export async function suggestFollowUps(
     });
     const result = await generateText({
       model,
-      instructions: FOLLOW_UP_INSTRUCTIONS,
+      instructions: options.instructions ?? NEXT_QUESTION_INSTRUCTIONS,
       prompt,
       output: Output.object({ schema: FollowUpOutputSchema }),
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      maxOutputTokens: maxTokens,
       abortSignal,
     });
-    const parsed = FollowUpOutputSchema.parse(result.output);
-    return acceptedQuestions(parsed.questions, options, settings.limit);
+    const parsed = FollowUpOutputSchema.safeParse(result.output);
+    if (!parsed.success) return [];
+    return acceptedQuestions(
+      parsed.data.questions,
+      options.existingSuggestions ?? [],
+      maxSuggestions,
+    );
   } catch (error) {
     if (!options.abortSignal?.aborted) {
       logger.warn("generation-failed", { error: toError(error) });
     }
     return [];
   }
+}
+
+/** Generate grounded follow-ups through ChatFast, failing open to an empty list. */
+export async function suggestFollowUps(
+  config: MastraPluginConfig,
+  options: SuggestFollowUpsOptions,
+): Promise<string[]> {
+  const settings = resolveFollowUpSuggestionsConfig(config.followUpSuggestions);
+  if (!settings || settings.mode === "genie") return [];
+  const context = {
+    "User message": boundedText(options.userText, MAX_USER_TEXT_CHARS),
+    "Assistant answer": boundedText(options.answer, MAX_ANSWER_CHARS),
+    ...(options.turnContext ? { "Turn tool data": options.turnContext } : {}),
+  };
+  const questions = await suggestQuestions(config, context, {
+    maxSuggestions: settings.limit,
+    maxTokens: MAX_OUTPUT_TOKENS,
+    existingSuggestions: [options.userText, ...(options.nativeQuestions ?? [])],
+    instructions: FOLLOW_UP_INSTRUCTIONS,
+    requestContext: options.requestContext,
+    abortSignal: options.abortSignal,
+    timeoutMs: settings.timeoutMs,
+  });
+  return acceptedQuestions(
+    questions,
+    [options.userText, ...(options.nativeQuestions ?? [])],
+    settings.limit,
+  );
 }
 
 function lastAssistantResponse(messageList: MessageList) {
@@ -306,7 +395,11 @@ export function buildFollowUpSuggestionsProcessor(
         ...(abortSignal ? { abortSignal } : {}),
       };
       const suggested = await suggester(config, suggestionOptions);
-      const questions = acceptedQuestions(suggested, suggestionOptions, settings.limit);
+      const questions = acceptedQuestions(
+        suggested,
+        [suggestionOptions.userText, ...(suggestionOptions.nativeQuestions ?? [])],
+        settings.limit,
+      );
       if (questions.length === 0) return messageList;
       const data = FollowUpSuggestionsPartDataSchema.parse({
         questions,

@@ -70,6 +70,7 @@ import {
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "./memory.ts";
 import { buildModel } from "./model.ts";
+import { emitModelUsagePart } from "./model-usage.ts";
 import {
   buildResponsesProviderOptionsProcessor,
   providerHistoryCompatProcessor,
@@ -996,16 +997,17 @@ export async function buildAgents(opts: {
       instructions: composeInstructions(def.instructions, style, resolveCodeMode),
       ...(def.requestContextSchema ? { requestContextSchema: def.requestContextSchema } : {}),
       model: resolveModel(config, def.model),
-      defaultOptions: ({ requestContext }) =>
-        withRequestMemoryScope(
-          {
-            maxSteps: config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS,
-            ...(def.requireToolApproval !== undefined
-              ? { requireToolApproval: def.requireToolApproval }
-              : {}),
-          },
-          memory ? requestContext : undefined,
-        ),
+      defaultOptions: ({ requestContext }) => {
+        const options: AgentExecutionOptions<undefined> = {
+          maxSteps: config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS,
+          onFinish: (event, context) =>
+            emitModelUsagePart(requestContext, event.totalUsage, context?.writer, event.runId),
+          ...(def.requireToolApproval !== undefined
+            ? { requireToolApproval: def.requireToolApproval }
+            : {}),
+        };
+        return withRequestMemoryScope(options, memory ? requestContext : undefined);
+      },
       tools: resolveCodeMode
         ? async (args) => {
             const codeMode = await resolveCodeMode(args);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   MLFLOW_TRACE_PART_TYPE,
+  MODEL_USAGE_PART_TYPE,
   RESPONSE_COMPLETE_PART_TYPE,
   THREAD_TITLE_PART_TYPE,
 } from "@dbx-tools/shared-mastra";
@@ -11,9 +12,28 @@ import {
   closeOnTerminalChunk,
   chatStatusForChunk,
   readMlflowTracePart,
+  readModelUsagePart,
   readThreadTitlePart,
   waitForTerminalChunk,
 } from "../src/react/chat-stream.ts";
+
+describe("model usage parts", () => {
+  it("reads caller-facing routing and usage data", () => {
+    const data = readModelUsagePart({
+      type: MODEL_USAGE_PART_TYPE,
+      data: {
+        runId: "run-1",
+        model: "databricks-gpt-test",
+        selection: "smart-router",
+        usage: { inputTokens: 8, outputTokens: 2, totalTokens: 10 },
+        estimatedCostUsd: 0.00002,
+      },
+    } as UIMessageChunk);
+
+    assert.equal(data?.model, "databricks-gpt-test");
+    assert.equal(data?.usage.totalTokens, 10);
+  });
+});
 
 describe("chat stream completion", () => {
   it("closes after forwarding the finish chunk without waiting for upstream", async () => {

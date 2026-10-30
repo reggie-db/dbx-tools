@@ -7,6 +7,7 @@
 import { log, toError, errorMessage, isRecord, sleep } from "@dbx-tools/shared-core";
 import {
   MASTRA_ROUTES,
+  MODEL_USAGE_PART_TYPE,
   RESPONSE_COMPLETE_PART_TYPE,
   THREAD_TITLE_PART_TYPE,
   isStaleMastraResumeError,
@@ -31,6 +32,7 @@ import {
   resolveFollowUpSuggestionsConfig,
 } from "./follow-up-suggestions.ts";
 import { requestMemoryScope, withRequestMemoryScope } from "./memory.ts";
+import { modelUsagePartData } from "./model-usage.ts";
 import { titleModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 import { activeChatTracingOptions } from "./telemetry.ts";
 
@@ -77,13 +79,47 @@ export function buildResponseCompleteTransform(): MastraStreamTransform {
   };
 }
 
+/** Emit the resolved route and cumulative usage on the terminal response step. */
+export function buildModelUsageTransform(
+  requestContext: RequestContext,
+  runId: string,
+): MastraStreamTransform {
+  return () => {
+    let emitted = false;
+    return new TransformStream({
+      transform(chunk, controller) {
+        controller.enqueue(chunk);
+        if (
+          emitted ||
+          chunk.type !== "step-finish" ||
+          chunk.payload.stepResult.isContinued === true ||
+          (chunk.payload.output.toolCalls?.length ?? 0) > 0
+        ) {
+          return;
+        }
+        const data = modelUsagePartData(
+          requestContext,
+          chunk.payload.totalUsage ?? chunk.payload.output.usage,
+          runId,
+        );
+        if (!data) return;
+        emitted = true;
+        const part: DataChunkType = { type: MODEL_USAGE_PART_TYPE, data };
+        controller.enqueue(part as never);
+      },
+    });
+  };
+}
+
 function chatStreamTransforms(
   runId: string,
   generatedFollowUps: boolean,
   titleSettled?: Promise<string | undefined>,
+  requestContext?: RequestContext,
 ): readonly MastraStreamTransform[] {
   return [
     buildResponseCompleteTransform(),
+    ...(requestContext ? [buildModelUsageTransform(requestContext, runId)] : []),
     ...(generatedFollowUps ? [buildFollowUpSuggestionsTransform(runId)] : []),
     ...(titleSettled ? [buildThreadTitleTransform(titleSettled)] : []),
   ];
@@ -335,6 +371,7 @@ export function agentChatRoutes(config: MastraPluginConfig = {}) {
               runId,
               Boolean(followUps && followUps.mode !== "genie"),
               titleSettled,
+              requestContext,
             ),
             version: "v7",
             sendReasoning,

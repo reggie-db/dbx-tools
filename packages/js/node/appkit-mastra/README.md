@@ -982,6 +982,16 @@ Responses models request `reasoning.summary: "auto"`; Chat models retain their
 native reasoning behavior. Set `sendReasoning: false` on `mastra(...)` to omit
 the Responses summary request and suppress reasoning parts from the UI stream.
 
+Every completed agent turn also emits a persisted `data-model-usage` part
+through Mastra's native `onFinish` writer. Its validated payload contains the
+concrete endpoint, selection policy, cumulative token usage, and an estimated
+USD cost when the selected catalogue entry publishes a blended cost rate. A
+Smart Router turn additionally includes the router observation: returned model
+service, harness, source, latency, rationale, and profiler metadata. The
+selection remains available to server-side tools through
+`MASTRA_RESOLVED_MODEL_KEY`; callers do not need a second inference route to
+observe it.
+
 Responses turns set `store: false`. The OpenAI provider automatically includes
 encrypted reasoning state so a tool continuation sends the complete stateless
 conversation. Databricks does not store Responses and rejects

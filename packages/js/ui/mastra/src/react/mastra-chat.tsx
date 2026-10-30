@@ -1,6 +1,10 @@
 import { getAuthStatus } from "@dbx-tools/shared-auth";
 import { hash, log, toError } from "@dbx-tools/shared-core";
-import { isStaleMastraResumeError, type GenieVisualizationMode } from "@dbx-tools/shared-mastra";
+import {
+  isStaleMastraResumeError,
+  type GenieVisualizationMode,
+  type ModelUsagePartData,
+} from "@dbx-tools/shared-mastra";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { useBrand } from "@dbx-tools/ui/branding/react";
 import type { RequestContext } from "@mastra/client-js";
@@ -190,6 +194,18 @@ export interface UseMastraChatOptions<
    */
   showModelPicker?: boolean;
   /**
+   * Fixed per-instance model override. Unlike the model picker selection, this
+   * is not persisted by agent id, so parallel views of the same agent can each
+   * route through a different model or family query.
+   */
+  model?: string;
+  /**
+   * Whether a message submitted during an active turn waits in the steer
+   * queue. Defaults to true. Set false to interrupt the active turn and start
+   * the replacement immediately.
+   */
+  queueMessages?: boolean;
+  /**
    * Starter questions shown as one-tap buttons on the empty state.
    * When omitted, the drop-in auto-sources them from the agent's
    * Genie space sample questions (via the plugin's `/suggestions`
@@ -255,6 +271,8 @@ export interface UseMastraChatOptions<
    * `requestContext` field. A resolver is read when each turn is submitted.
    */
   requestContext?: MastraRequestContextSource<TValues>;
+  /** Receives the resolved model, cumulative tokens, and estimated cost for each completed turn. */
+  onModelUsage?: (usage: ModelUsagePartData) => void;
 }
 
 /**
@@ -290,6 +308,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     ? `genie:${genieSpace}`
     : (options.agentId ?? mastraClient.defaultAgent);
   const showModelPicker = Boolean(options.showModelPicker) && !genieSpace;
+  const controlledModel = options.model?.trim() || undefined;
+  const queueMessages = options.queueMessages !== false;
   const modelKey = modelStorageKey(mastraClient.basePath, agentId);
   const [model, setModel] = useState(() => (showModelPicker ? readStoredModel(modelKey) : ""));
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | undefined>();
@@ -301,19 +321,24 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     [modelKey],
   );
   useEffect(() => {
-    setModel(showModelPicker ? readStoredModel(modelKey) : "");
-  }, [modelKey, showModelPicker]);
+    setModel(showModelPicker && !controlledModel ? readStoredModel(modelKey) : "");
+  }, [controlledModel, modelKey, showModelPicker]);
   // The selected model rides each turn as a per-call override (see
   // `runStream`), never stored on the shared client - so two threads can
   // stream under different models without clobbering each other. Mirror it
   // into a ref so the send path reads the latest selection without adding
   // `model` to its dependency list.
   const modelRef = useRef(model);
-  modelRef.current = model;
+  modelRef.current = controlledModel ?? model;
   const reasoningEffortRef = useRef(reasoningEffort);
   reasoningEffortRef.current = reasoningEffort;
   const requestContextRef = useRef(options.requestContext);
   requestContextRef.current = options.requestContext;
+  const modelUsageRef = useRef(options.onModelUsage);
+  modelUsageRef.current = options.onModelUsage;
+  const handleModelUsage = useCallback((usage: ModelUsagePartData) => {
+    modelUsageRef.current?.(usage);
+  }, []);
   // Built-in conversation management. When on, the chat always drives an
   // explicit client thread id (rather than leaning on the per-session
   // cookie) so it can reference, persist, and switch between the
@@ -495,7 +520,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     defaultModelId,
     loading: defaultModelLoading,
   } = useMastraDefaultModel(agentId, showModelPicker);
-  const activeModel = model || defaultModelId || undefined;
+  const selectedModel = controlledModel ?? model;
+  const activeModel = selectedModel || defaultModelId || undefined;
   const activeModelOption = models.find((option) => option.name === activeModel);
   const reasoningEfforts = activeModelOption?.reasoningEfforts ?? EMPTY_REASONING_EFFORTS;
   const reasoningDefault = defaultReasoningEffort(reasoningEfforts);
@@ -642,7 +668,12 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     [activateThread, moveSession],
   );
 
-  const processStream = useChatStream({ getSession, updateSession, writeMessages });
+  const processStream = useChatStream({
+    getSession,
+    onModelUsage: handleModelUsage,
+    updateSession,
+    writeMessages,
+  });
   const driveStream = useCallback(
     async (
       threadId: string,
@@ -1128,10 +1159,9 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     [activeThreadId, enableThreads, getSession, noteThreadActivity, threads, writeMessages],
   );
 
-  // Send a message on the active thread. Submitting while a turn is already
-  // streaming ENQUEUES the message as a steer (it waits, no interrupt) - the
-  // queue drains oldest-first when the turn ends, or the user fires one early
-  // with `sendSteerNow`. An idle submit starts a turn right away.
+  // Send a message on the active thread. The default queues submissions made
+  // during an active turn. Callers that disable queuing interrupt the active
+  // run and immediately start the replacement instead.
   const sendMessage = useCallback<ChatViewProps["sendMessage"]>(
     (message) => {
       const text = message.text ?? "";
@@ -1139,22 +1169,42 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       if (!text && files.length === 0) return;
       const threadId = activeKey;
       const requestContext = snapshotRequestContext(requestContextRef.current);
-      if (isSessionRunning(getSession(threadId))) {
-        updateSession(threadId, (session) => ({
-          ...session,
-          queuedSteers: enqueueSteer(session.queuedSteers, {
-            id: hash.id(),
-            text,
-            ...(files.length > 0 ? { files } : {}),
-            ...(requestContext ? { requestContext } : {}),
-          }),
-        }));
+      const current = getSession(threadId);
+      if (isSessionRunning(current)) {
+        if (queueMessages) {
+          updateSession(threadId, (session) => ({
+            ...session,
+            queuedSteers: enqueueSteer(session.queuedSteers, {
+              id: hash.id(),
+              text,
+              ...(files.length > 0 ? { files } : {}),
+              ...(requestContext ? { requestContext } : {}),
+            }),
+          }));
+          return;
+        }
+        void (async () => {
+          await interruptActiveRun(threadId);
+          const replacementThreadId = resolveThreadId(threadId);
+          const { message: replacement } = appendUserMessage(replacementThreadId, text, files);
+          const replacementMessages = interruptedTurnMessages(current.messages, replacement);
+          void runStream(replacementThreadId, replacementMessages, requestContext);
+        })();
         return;
       }
       const { message: userMessage } = appendUserMessage(threadId, text, files);
       void runStream(threadId, userMessage, requestContext);
     },
-    [appendUserMessage, runStream, activeKey, getSession, updateSession],
+    [
+      activeKey,
+      appendUserMessage,
+      getSession,
+      interruptActiveRun,
+      queueMessages,
+      resolveThreadId,
+      runStream,
+      updateSession,
+    ],
   );
 
   // Fire a queued steer immediately, out of order. Wait for the interrupted
@@ -1565,7 +1615,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     // handler when `showModelPicker` is on, otherwise the header hides
     // it (ChatView shows it only when both are present).
     models: showModelPicker ? models : undefined,
-    model,
+    model: selectedModel,
     onModelChange: showModelPicker ? handleModelChange : undefined,
     reasoningEffort,
     onReasoningEffortChange: showModelPicker ? setReasoningEffort : undefined,

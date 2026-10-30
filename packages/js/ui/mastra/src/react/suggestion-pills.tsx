@@ -34,6 +34,7 @@ export const SuggestionPills = ({
   if (questions.length === 0) return null;
   return (
     <div
+      data-slot="aui_suggestion-pills"
       aria-label="Suggested questions"
       className={cn(
         "flex gap-1.5",

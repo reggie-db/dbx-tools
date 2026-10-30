@@ -260,7 +260,9 @@ const DemoRequestContextSchema = z.object({
 });
 type DemoRequestContext = z.infer<typeof DemoRequestContextSchema>;
 
-function buildSupportDefinition(): MastraAgentDefinition<DemoRequestContext> {
+function buildSupportDefinition(
+  options: { name?: string; webSearch?: boolean } = {},
+): MastraAgentDefinition<DemoRequestContext> {
   const baseInstructions = [
     "You are a data analyst helping customers explore a Databricks",
     "Genie space. Default to driving the Genie tools (`ask_genie`,",
@@ -276,7 +278,7 @@ function buildSupportDefinition(): MastraAgentDefinition<DemoRequestContext> {
     GENIE_INSTRUCTIONS,
   ].join("\n");
   return {
-    name: "Support",
+    name: options.name ?? "Support",
     requestContextSchema: DemoRequestContextSchema,
     instructions: ({ requestContext }) => {
       const applicationContext = requestContext.all;
@@ -295,7 +297,9 @@ function buildSupportDefinition(): MastraAgentDefinition<DemoRequestContext> {
       const agentTools = Object.assign({}, (await plugins.genie?.toolkit()) ?? {}) as MastraTools;
       Object.assign(agentTools, await plugins.memory?.toolkit());
       Object.assign(agentTools, await plugins[AppKitLakeboxPlugin.manifest.name]?.toolkit());
-      Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
+      if (options.webSearch !== false) {
+        Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
+      }
       Object.assign(agentTools, await plugins.generator?.toolkit({ prefix: "" }));
       Object.assign(agentTools, await plugins.search?.toolkit({ prefix: "" }));
       Object.assign(agentTools, {
@@ -333,6 +337,9 @@ function buildSupportDefinition(): MastraAgentDefinition<DemoRequestContext> {
   };
 }
 const support = createAgent<DemoRequestContext>(buildSupportDefinition());
+const modelComparison = createAgent<DemoRequestContext>(
+  buildSupportDefinition({ name: "Models", webSearch: false }),
+);
 
 const host = process.env.HOST ?? "127.0.0.1";
 
@@ -444,7 +451,7 @@ await createApp({
       // Prefer native Genie questions when available. Agent Mode currently emits
       // none, so ChatFast generates grounded fallback questions after the answer.
       followUpSuggestions: true,
-      agents: { support },
+      agents: { support, models: modelComparison },
       defaultAgent: "support",
       genieAgentMode: true,
       workspaceFallbackToTmp: true,

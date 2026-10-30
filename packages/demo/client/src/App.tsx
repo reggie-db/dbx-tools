@@ -14,11 +14,12 @@ const Bus = lazy(() => import("@/pages/Bus"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Search = lazy(() => import("@/pages/Search"));
 const Lakebox = lazy(() => import("@/pages/Lakebox"));
+const SmartRouter = lazy(() => import("@/pages/SmartRouter"));
 
 const DEBUG_CAPTURE_TARGETS = {
   shell: {
     selector: ".demo-shell",
-    dataset: ["keyboardClosing"],
+    dataset: ["keyboardClosing", "keyboardOpen"],
     styleProperties: [
       "--demo-viewport-top",
       "--demo-viewport-left",
@@ -94,6 +95,36 @@ const BASE_ROUTES: RouteDef[] = [
       ],
     },
     element: <Chat />,
+  },
+  {
+    path: "/smart-router",
+    label: "Models",
+    description: "Compare Smart Router, Mastra, Genie, and serving endpoints",
+    guide: {
+      summary:
+        "Send one prompt to several model and Genie chats, then compare response speed, concrete model selection, token usage, and estimated average cost.",
+      unlocks: [
+        "Side-by-side Smart Router, Mastra default, direct model, and Genie output",
+        "Caller-visible routing, usage, speed, and estimated cost comparison",
+        "Model selection through removable and addable chat views",
+      ],
+      useCases: [
+        "Route short explanations to a fast model while reserving stronger models for complex work",
+        "Compare fixed endpoints, Mastra defaults, and Genie on the same task",
+        "Expose model selection and usage in a product UI without separate inference paths",
+      ],
+      docs: [
+        {
+          label: "Use Smart Router",
+          href: docsUrl("packages/appkit-model-gateway/#use-smart-router"),
+        },
+        {
+          label: "Render Mastra chat",
+          href: docsUrl("guides/agents-and-genie/#render-mastra-chat"),
+        },
+      ],
+    },
+    element: <SmartRouter />,
   },
   {
     path: "/lakebox",

@@ -10,7 +10,7 @@
  * This module only adds the Mastra-specific glue. The actual model
  * selection - listing the workspace catalogue and resolving an
  * explicit name / class / fallback chain to a real endpoint id - lives
- * in `@dbx-tools/model` ({@link selectModel}) so non-Mastra consumers
+ * in `@dbx-tools/model` ({@link selection.resolveModel}) so non-Mastra consumers
  * (e.g. a job that just needs a model name) can reuse it. Here we
  * assemble the explicit ask from Mastra's request context (the
  * per-request override under {@link MASTRA_MODEL_OVERRIDE_KEY}, the
@@ -30,7 +30,6 @@ import {
   endpointCapabilities,
   listServingEndpoints,
   policy,
-  resolve,
   selection,
 } from "@dbx-tools/model";
 import {
@@ -39,7 +38,11 @@ import {
 } from "@dbx-tools/model-protocol";
 import { log } from "@dbx-tools/shared-core";
 import { contracts, type ServingEndpointSummary } from "@dbx-tools/shared-model";
-import { SMART_ROUTER_MODEL_ID, isSmartRouterModelId } from "@dbx-tools/shared-model-gateway";
+import {
+  SMART_ROUTER_MODEL_ID,
+  SmartRouterObservationSchema,
+  isSmartRouterModelId,
+} from "@dbx-tools/shared-model-gateway";
 import { RequestContext } from "@mastra/core/request-context";
 
 import {
@@ -50,8 +53,10 @@ import {
 } from "./config.ts";
 import {
   MASTRA_MODEL_OVERRIDE_KEY,
+  MASTRA_MODEL_ROUTE_KEY,
   MASTRA_RESOLVED_MODEL_KEY,
   MASTRA_SMART_ROUTER_INPUT_KEY,
+  type MastraModelRoute,
   resolveServingConfig,
 } from "./serving.ts";
 import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
@@ -59,13 +64,13 @@ import { recordActiveTraceAuth, recordActiveTraceModel } from "./telemetry.ts";
 type ModelClass = contracts.ModelClass;
 type ModelOptimization = contracts.ModelOptimization;
 const { parseModelClass } = classes;
-const { selectModel } = resolve;
 const smartRouter = new SmartRouterService();
 const MASTRA_SMART_ROUTER_RESOLUTION_KEY = "mastra__smart_router_resolution";
 
 interface SmartRouterModelResolution {
   readonly modelId: string;
-  readonly source: string;
+  readonly source: MastraModelRoute["selection"] | typeof SMART_ROUTER_MODEL_ID;
+  readonly route?: MastraModelRoute;
 }
 
 /** Virtual endpoint shown when Smart Router is enabled for the active identity. */
@@ -252,7 +257,17 @@ export async function buildModel(
     throw new Error("Smart Router requires task input before it can resolve a concrete model");
   }
   let modelId: string;
-  let source: string;
+  let source: MastraModelRoute["selection"] | typeof SMART_ROUTER_MODEL_ID;
+  let route: MastraModelRoute | undefined;
+  let endpointsPromise: Promise<ServingEndpointSummary[]> | undefined;
+  const loadEndpoints = () => {
+    endpointsPromise ??= listServingEndpoints(client, host, {
+      ttlMs: serving.ttlMs,
+      ...(cacheIdentity !== undefined ? { cacheIdentity } : {}),
+      measureEmbeddingDimensions: overrides.modelClass === contracts.ModelClass.Embedding,
+    });
+    return endpointsPromise;
+  };
   if (
     (requested === undefined || smartRouterRequested) &&
     overrides.modelClass === undefined &&
@@ -262,10 +277,7 @@ export async function buildModel(
       Promise<SmartRouterModelResolution> | undefined;
     if (!pending) {
       pending = (async () => {
-        const endpoints = await listServingEndpoints(client, host, {
-          ttlMs: serving.ttlMs,
-          ...(cacheIdentity !== undefined ? { cacheIdentity } : {}),
-        });
+        const endpoints = await loadEndpoints();
         const candidates = smartRouterCandidates(
           endpoints.filter((endpoint) => endpointCapabilities(endpoint).tools),
           "codex",
@@ -276,11 +288,31 @@ export async function buildModel(
         const enabled = smartRouterRequested || (await smartRouter.isEnabled(candidates, client));
         if (enabled) {
           const selected = await smartRouter.select(smartRouterInput, candidates, { client });
-          return { modelId: selected.value.name, source: SMART_ROUTER_MODEL_ID };
+          const observation = SmartRouterObservationSchema.parse({
+            selectedModel: selected.value.name,
+            routeModel: selected.routeModel,
+            harness: selected.harness,
+            routerName: selected.routerName,
+            source: "router",
+            latencyMs: selected.latencyMs,
+            ...(selected.rationale ? { rationale: selected.rationale } : {}),
+            ...(selected.params ? { params: selected.params } : {}),
+          });
+          return {
+            modelId: selected.value.name,
+            source: SMART_ROUTER_MODEL_ID,
+            route: {
+              model: selected.value.name,
+              selection: "smart-router",
+              ...(selected.value.profile?.cost !== undefined
+                ? { costPerMillionTokens: selected.value.profile.cost }
+                : {}),
+              smartRouter: observation,
+            },
+          };
         }
-        const fallback = await selectModel(
-          client,
-          host,
+        const fallback = selection.resolveModel(
+          endpoints,
           selectionInput(
             config,
             requested,
@@ -295,7 +327,7 @@ export async function buildModel(
       context.set(MASTRA_SMART_ROUTER_RESOLUTION_KEY, pending);
     }
     try {
-      ({ modelId, source } = await pending);
+      ({ modelId, source, route } = await pending);
     } catch (error) {
       if (context.get(MASTRA_SMART_ROUTER_RESOLUTION_KEY) === pending) {
         context.set(MASTRA_SMART_ROUTER_RESOLUTION_KEY, undefined);
@@ -303,19 +335,42 @@ export async function buildModel(
       throw error;
     }
   } else {
-    const resolved = await selectModel(
-      client,
-      host,
+    const endpoints = await loadEndpoints();
+    const resolved = selection.resolveModel(
+      endpoints,
       selectionInput(config, requested, overrides.modelClass, cacheIdentity, serving, overrides),
     );
     modelId = resolved.modelId;
     source = resolved.source;
+    const endpoint = endpoints.find((candidate) => candidate.name === modelId);
+    route = {
+      model: modelId,
+      selection: source,
+      ...(endpoint?.profile?.cost !== undefined
+        ? { costPerMillionTokens: endpoint.profile.cost }
+        : {}),
+    };
   }
   if (isSmartRouterModelId(modelId)) {
     throw new Error("Smart Router did not resolve to a concrete serving endpoint");
   }
   logger.debug("model selected", { modelId, source, requested });
+  if (!route) {
+    if (source === SMART_ROUTER_MODEL_ID) {
+      throw new Error("Smart Router selection metadata is unavailable");
+    }
+    const endpoints = await loadEndpoints();
+    const endpoint = endpoints.find((candidate) => candidate.name === modelId);
+    route = {
+      model: modelId,
+      selection: source,
+      ...(endpoint?.profile?.cost !== undefined
+        ? { costPerMillionTokens: endpoint.profile.cost }
+        : {}),
+    };
+  }
   context.set(MASTRA_RESOLVED_MODEL_KEY, modelId);
+  context.set(MASTRA_MODEL_ROUTE_KEY, route);
   recordActiveTraceModel(modelId);
 
   return createDatabricksLanguageModel({

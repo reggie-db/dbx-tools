@@ -24,6 +24,7 @@
   "dependencies": {
     "@dbx-tools/shared-genie": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
+    "@dbx-tools/shared-model-gateway": "workspace:*",
     "zod": "catalog:"
   },
   "main": "index.ts",

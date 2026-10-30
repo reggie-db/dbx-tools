@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { logger } from "@dbx-tools/shared-core";
-import { RESPONSE_COMPLETE_PART_TYPE, THREAD_TITLE_PART_TYPE } from "@dbx-tools/shared-mastra";
+import {
+  MODEL_USAGE_PART_TYPE,
+  RESPONSE_COMPLETE_PART_TYPE,
+  THREAD_TITLE_PART_TYPE,
+} from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
@@ -13,12 +17,14 @@ import { buildAgents } from "../src/agents.ts";
 import {
   agentAbortSignal,
   agentChatRoutes,
+  buildModelUsageTransform,
   buildResponseCompleteTransform,
   buildThreadTitleTransform,
   CHAT_RUN_OBSERVE_IDLE_TIMEOUT_MS,
   startThreadTitle,
 } from "../src/chat.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "../src/memory.ts";
+import { MASTRA_MODEL_ROUTE_KEY } from "../src/serving.ts";
 
 async function transformResponseChunks(chunks: ChunkType[]): Promise<ChunkType[]> {
   const stream = new ReadableStream<ChunkType>({
@@ -33,6 +39,47 @@ async function transformResponseChunks(chunks: ChunkType[]): Promise<ChunkType[]
 }
 
 describe("background chat routes", () => {
+  it("emits caller-facing model routing and cumulative usage", async () => {
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_MODEL_ROUTE_KEY, {
+      model: "databricks-gpt-test",
+      selection: "smart-router",
+      costPerMillionTokens: 2,
+    });
+    const finalStep = {
+      type: "step-finish",
+      runId: "run-1",
+      from: "agent",
+      payload: {
+        totalUsage: { inputTokens: 400, outputTokens: 100, totalTokens: 500 },
+        stepResult: { reason: "stop" },
+        output: { usage: {}, toolCalls: [] },
+        metadata: {},
+      },
+    } as unknown as ChunkType;
+    const stream = new ReadableStream<ChunkType>({
+      start(controller) {
+        controller.enqueue(finalStep);
+        controller.close();
+      },
+    }).pipeThrough(buildModelUsageTransform(requestContext, "run-1")());
+    const transformed: ChunkType[] = [];
+    for await (const chunk of stream) transformed.push(chunk);
+
+    assert.equal(transformed[1]?.type, MODEL_USAGE_PART_TYPE);
+    assert.deepEqual(transformed[1], {
+      type: MODEL_USAGE_PART_TYPE,
+      data: {
+        runId: "run-1",
+        model: "databricks-gpt-test",
+        selection: "smart-router",
+        usage: { inputTokens: 400, outputTokens: 100, totalTokens: 500 },
+        costPerMillionTokens: 2,
+        estimatedCostUsd: 0.001,
+      },
+    });
+  });
+
   it("marks only the final non-tool response step complete", async () => {
     const toolStep = {
       type: "step-finish",
@@ -316,10 +363,10 @@ describe("background chat routes", () => {
       log: logger("test/chat"),
     });
 
-    assert.deepEqual(await built.agents.analyst.getDefaultOptions({ requestContext }), {
-      maxSteps: 25,
-      memory: { thread: "thread-7", resource: "resource-7" },
-    });
+    const options = await built.agents.analyst.getDefaultOptions({ requestContext });
+    assert.equal(options.maxSteps, 25);
+    assert.deepEqual(options.memory, { thread: "thread-7", resource: "resource-7" });
+    assert.equal(typeof options.onFinish, "function");
   });
 
   it("overrides request-body memory ids with trusted AppKit routing", () => {
