@@ -28,7 +28,7 @@ export * as types from "./src/react/types.ts";
 export { AssistantBubble, UserBubble } from "./src/react/bubbles.tsx";
 export { resolveApprovalContinuation, useChatApprovals } from "./src/react/chat-approvals.ts";
 export { ChatComposer } from "./src/react/chat-composer.tsx";
-export { genieFeedbackTarget, messageFeedbackDestination, useChatFeedback } from "./src/react/chat-feedback.ts";
+export { genieFeedbackTarget, messageFeedbackDestination, mlflowTraceUrl, useChatFeedback } from "./src/react/chat-feedback.ts";
 export type { GenieFeedbackTarget, MessageFeedbackDestination } from "./src/react/chat-feedback.ts";
 export { useChatHistory } from "./src/react/chat-history.ts";
 export { useChatSessions } from "./src/react/chat-sessions.ts";
