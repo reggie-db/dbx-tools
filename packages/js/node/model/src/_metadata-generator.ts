@@ -1,7 +1,9 @@
+import { CloudProvider } from "@dbx-tools/shared-core";
 import type {
   ModelTokenPrice,
   ModelTokenPriceCondition,
   ModelTokenPriceTier,
+  ModelTokenUsdPerDbu,
 } from "@dbx-tools/shared-model";
 import { load, type CheerioAPI } from "cheerio";
 import { z } from "zod";
@@ -66,6 +68,22 @@ const PRICING_CONDITIONS = new Map<string, ModelTokenPriceCondition>([
   ["image tokens", "image-tokens"],
   ["audio tokens", "audio-tokens"],
 ]);
+
+const GENAI_CALCULATOR_COMPONENT =
+  "component---src-pages-product-pricing-genai-pricing-calculator-tsx";
+
+const GatsbyChunkMappingSchema = z
+  .record(z.string(), z.array(z.string()))
+  .describe("Gatsby component chunk paths keyed by component identifier.");
+
+const DatabricksPricingRegionSchema = z
+  .object({
+    key: z.string().describe("Databricks pricing calculator region key."),
+    cloud: z.nativeEnum(CloudProvider).describe("Cloud provider for this price."),
+    rate: z.number().nonnegative().describe("Databricks list price in USD per DBU."),
+  })
+  .passthrough()
+  .describe("One Databricks pricing calculator cloud-region rate.");
 
 const ModelsDevModelSchema = z
   .object({
@@ -310,10 +328,14 @@ export function parseModelTokenPrices(
   foundationHtml: string,
   proprietaryHtml: string,
   generatedAt: number,
+  calculatorJavascript?: string,
 ): ModelTokenPricesSnapshot {
   const models: Record<string, ModelTokenPrice[]> = {};
   parseModelTokenPriceDocument(foundationHtml, models);
   parseModelTokenPriceDocument(proprietaryHtml, models);
+  const usdPerDbu = calculatorJavascript
+    ? parseDatabricksUsdPerDbu(calculatorJavascript)
+    : undefined;
   if (Object.keys(models).length === 0) {
     throw new Error("Databricks pricing documentation contained no token prices");
   }
@@ -322,11 +344,68 @@ export function parseModelTokenPrices(
     catalogue: {
       models: sortRecord(
         Object.fromEntries(
-          Object.entries(models).map(([key, prices]) => [key, sortModelTokenPrices(prices)]),
+          Object.entries(models).map(([key, prices]) => [
+            key,
+            sortModelTokenPrices(
+              prices.map((price) => (usdPerDbu ? { ...price, usdPerDbu } : price)),
+            ),
+          ]),
         ),
       ),
     },
   };
+}
+
+/** Resolve the current Databricks GenAI calculator component asset from Gatsby HTML. */
+export function databricksGenAiCalculatorAssetUrl(html: string, pageUrl: string): string {
+  const script = load(html)("#gatsby-chunk-mapping").text();
+  const assignment = script.match(/window\.___chunkMapping=("(?:\\.|[^"\\])*")/);
+  if (!assignment?.[1]) throw new Error("Databricks pricing calculator chunk mapping was missing");
+  const serialized = JSON.parse(assignment[1]) as unknown;
+  if (typeof serialized !== "string") {
+    throw new Error("Databricks pricing calculator chunk mapping was invalid");
+  }
+  const mapping = GatsbyChunkMappingSchema.parse(JSON.parse(serialized));
+  const path = mapping[GENAI_CALCULATOR_COMPONENT]?.[0];
+  if (!path) throw new Error("Databricks GenAI calculator component asset was missing");
+  return new URL(`/en-pricing-assets${path}`, pageUrl).toString();
+}
+
+/** Parse default-cloud USD-per-DBU rates from Databricks' GenAI calculator asset. */
+export function parseDatabricksUsdPerDbu(
+  calculatorJavascript: string,
+): ModelTokenUsdPerDbu | undefined {
+  const defaultRegions = calculatorJavascript.match(
+    /\{aws:"([^"]+)",gcp:"([^"]+)",azure:"([^"]+)"\}/,
+  );
+  if (!defaultRegions) return undefined;
+  const keys = {
+    [CloudProvider.Aws]: defaultRegions[1]!,
+    [CloudProvider.Gcp]: defaultRegions[2]!,
+    [CloudProvider.Azure]: defaultRegions[3]!,
+  } as const;
+  for (const match of calculatorJavascript.matchAll(/JSON\.parse\('(\[.*?\])'\)/gs)) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(match[1]!);
+    } catch {
+      continue;
+    }
+    const regions = z.array(DatabricksPricingRegionSchema).safeParse(parsed);
+    if (!regions.success) continue;
+    const byKey = new Map(regions.data.map((region) => [region.key, region]));
+    const selected = Object.entries(keys).map(([provider, key]) => ({
+      provider: provider as CloudProvider,
+      region: byKey.get(key),
+    }));
+    if (selected.some(({ provider, region }) => !region || region.cloud !== provider)) continue;
+    return {
+      [CloudProvider.Aws]: byKey.get(keys[CloudProvider.Aws])!.rate,
+      [CloudProvider.Azure]: byKey.get(keys[CloudProvider.Azure])!.rate,
+      [CloudProvider.Gcp]: byKey.get(keys[CloudProvider.Gcp])!.rate,
+    };
+  }
+  return undefined;
 }
 
 /** Parse reasoning-effort ladders from the Query reasoning models HTML table. */

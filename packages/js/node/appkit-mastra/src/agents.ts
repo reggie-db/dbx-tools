@@ -403,6 +403,12 @@ export interface MastraAgentDefinition<
    * result is cached for the agent's lifetime.
    */
   tools?: MastraTools | MastraToolsFn;
+  /** Inherit plugin-level built-in, skill, and ambient tools. Defaults to true. */
+  ambientTools?: boolean;
+  /** Per-agent Code Mode override. `false` disables inherited plugin Code Mode. */
+  codeMode?: MastraPluginConfig["codeMode"];
+  /** Per-agent durable background-turn override. Defaults to the plugin setting. */
+  backgroundTurns?: boolean;
   /**
    * Per-agent semantic recall (PgVector) override. Cascades from
    * `config.memory`; the agent value wins when set.
@@ -963,7 +969,7 @@ export async function buildAgents(opts: {
 
   for (const [id, def] of Object.entries(definitions)) {
     const userTools = await resolveUserTools(def.tools, plugins);
-    const tools = { ...ambientTools, ...userTools };
+    const tools = def.ambientTools === false ? userTools : { ...ambientTools, ...userTools };
     let workspace = resolveAgentWorkspace(def.workspace);
     if (
       (def.workspace === undefined && !workspace) ||
@@ -990,7 +996,9 @@ export async function buildAgents(opts: {
     const gated = approvalGatedToolIds(tools);
     if (gated.length > 0) approvalGatedByAgent.push({ agentId: id, toolIds: gated });
     const memory = memoryBuilder?.forAgent(id, def);
-    const resolveCodeMode = codeModeResolver(codeModeConfig, tools, workspace);
+    const agentCodeModeConfig =
+      def.codeMode === undefined ? codeModeConfig : await resolveCodeModeConfig(def.codeMode);
+    const resolveCodeMode = codeModeResolver(agentCodeModeConfig, tools, workspace);
     const agent = new Agent({
       id,
       name: def.name ?? id,
@@ -1032,7 +1040,7 @@ export async function buildAgents(opts: {
       ],
     });
     agents[id] =
-      config.backgroundTurns === false
+      (def.backgroundTurns ?? config.backgroundTurns) === false
         ? agent
         : createBackgroundAgent(agent, config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS);
     // Surface the effective default model per agent so operators can

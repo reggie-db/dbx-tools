@@ -21,6 +21,7 @@ import type {
 } from "@dbx-tools/shared-model";
 
 import {
+  databricksGenAiCalculatorAssetUrl,
   parseModelParams,
   parseModelCapabilities,
   parseModelRateLimits,
@@ -44,6 +45,7 @@ import {
 import {
   MODELPARAMS_DEV_MODELS_URL,
   MODELS_DEV_API_URL,
+  GENAI_PRICING_CALCULATOR_URL,
   MODEL_RATE_LIMITS_URL,
   FOUNDATION_MODEL_PRICING_URL,
   OPENAI_RESPONSES_MODELS_URL,
@@ -188,11 +190,20 @@ const tokenPricesCache = createMetadataCache<Readonly<Record<string, readonly Mo
   key: "model-token-prices",
   fallback: tokenPricesSnapshot.catalogue.models,
   load: async () => {
-    const [foundationHtml, proprietaryHtml] = await Promise.all([
+    const [foundationHtml, proprietaryHtml, calculatorHtml] = await Promise.all([
       loadPage(FOUNDATION_MODEL_PRICING_URL),
       loadPage(PROPRIETARY_MODEL_PRICING_URL),
+      loadPage(GENAI_PRICING_CALCULATOR_URL),
     ]);
-    return parseModelTokenPrices(foundationHtml, proprietaryHtml, nowSeconds()).catalogue.models;
+    const calculatorJavascript = await loadPage(
+      databricksGenAiCalculatorAssetUrl(calculatorHtml, GENAI_PRICING_CALCULATOR_URL),
+    );
+    return parseModelTokenPrices(
+      foundationHtml,
+      proprietaryHtml,
+      nowSeconds(),
+      calculatorJavascript,
+    ).catalogue.models;
   },
   merge: mergePreferFreshRecord,
 });

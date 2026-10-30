@@ -8,6 +8,7 @@
  * @module
  */
 
+import { CloudProvider } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 export const ModelClassSchema = z
@@ -260,6 +261,15 @@ export const ModelTokenPriceConditionSchema = z
 
 export type ModelTokenPriceCondition = z.infer<typeof ModelTokenPriceConditionSchema>;
 
+export const ModelTokenUsdPerDbuSchema = z
+  .record(
+    z.nativeEnum(CloudProvider),
+    z.number().min(0).describe("Databricks list price in USD for one DBU."),
+  )
+  .describe("Databricks USD-per-DBU list prices keyed by cloud provider.");
+
+export type ModelTokenUsdPerDbu = z.infer<typeof ModelTokenUsdPerDbuSchema>;
+
 export const ModelTokenPriceSchema = z
   .object({
     tier: ModelTokenPriceTierSchema.describe("Databricks pay-per-token service tier."),
@@ -291,8 +301,11 @@ export const ModelTokenPriceSchema = z
       .min(0)
       .nullable()
       .describe("One-hour cache-write DBUs per million tokens, or null when unavailable."),
+    usdPerDbu: ModelTokenUsdPerDbuSchema.optional().describe(
+      "Databricks USD-per-DBU list prices for the calculator's default region in each cloud.",
+    ),
   })
-  .describe("Databricks list-price DBU rates for one model, tier, and token condition.");
+  .describe("Databricks DBU token rates and cloud list prices for one token condition.");
 
 export type ModelTokenPrice = z.infer<typeof ModelTokenPriceSchema>;
 

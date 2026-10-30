@@ -86,6 +86,7 @@ describe("browser-safe model schemas", () => {
         cacheReadDbuPerMillionTokens: 2.857,
         cacheWriteDbuPerMillionTokens: 71.429,
         cacheWriteOneHourDbuPerMillionTokens: null,
+        usdPerDbu: { aws: 0.07, azure: 0.08, gcp: 0.09 },
       }),
     );
     assert.throws(() =>
@@ -97,6 +98,7 @@ describe("browser-safe model schemas", () => {
         cacheReadDbuPerMillionTokens: null,
         cacheWriteDbuPerMillionTokens: null,
         cacheWriteOneHourDbuPerMillionTokens: null,
+        usdPerDbu: { aws: -1, azure: 0.08, gcp: 0.09 },
       }),
     );
   });

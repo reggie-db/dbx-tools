@@ -46,7 +46,7 @@ export const readThreadTitlePart = (chunk: UIMessageChunk): string | undefined =
   return parsed.success ? parsed.data.title : undefined;
 };
 
-/** Read the resolved model and cumulative usage emitted by Mastra on turn completion. */
+/** Read the resolved model and latest cumulative usage emitted after a model step. */
 export const readModelUsagePart = (chunk: UIMessageChunk): ModelUsagePartData | undefined => {
   if ((chunk as { type?: string }).type !== MODEL_USAGE_PART_TYPE) return undefined;
   const parsed = ModelUsagePartDataSchema.safeParse((chunk as { data?: unknown }).data);

@@ -785,6 +785,22 @@ describe("agent workspace selection", () => {
     assert.equal(isEventedAgent(attached.agents.analyst), false);
   });
 
+  it("allows one agent to opt out of durable background turns", async () => {
+    const built = await buildAgents({
+      config: {
+        agents: {
+          durable: { instructions: "Answer directly." },
+          attached: { instructions: "Answer directly.", backgroundTurns: false },
+        },
+      },
+      context: undefined,
+      log: logger("test/agents"),
+    });
+
+    assert.equal(isEventedAgent(built.agents.durable), true);
+    assert.equal(isEventedAgent(built.agents.attached), false);
+  });
+
   it("tells agents to batch independent tool calls", async () => {
     const built = await buildAgents({
       config: {
@@ -1175,6 +1191,42 @@ describe("agent workspace selection", () => {
     assert.equal(typeof instructions, "string");
     assert.doesNotMatch(instructions, /external_read_url/);
     assert.ok(tools && !("execute_typescript" in tools));
+  });
+
+  it("isolates one agent from ambient tools, workspaces, and Code Mode", async () => {
+    const built = await buildAgents({
+      config: {
+        backgroundTurns: false,
+        codeMode: "quickjs",
+        tools: {
+          ambient_tool: createTool({
+            id: "ambient_tool",
+            description: "Ambient tool.",
+            inputSchema: z.object({}),
+            execute: async () => "ambient",
+          }),
+        },
+        agents: {
+          comparison: {
+            instructions: "Answer directly.",
+            ambientTools: false,
+            codeMode: false,
+            workspace: () => undefined,
+          },
+        },
+        styleInstructions: false,
+      },
+      context: undefined,
+      log: logger("test/agents"),
+    });
+
+    const agent = built.agents.comparison;
+    const tools = await agent?.listTools();
+    const instructions = await agent?.getInstructions();
+    assert.deepEqual(tools, {});
+    assert.equal(await agent?.getWorkspace(), undefined);
+    assert.equal(typeof instructions, "string");
+    assert.doesNotMatch(instructions, /Code Mode|ambient_tool|render_data|summarize/);
   });
 
   it("binds an explicit Databricks workspace to the AppKit plugin context", async () => {

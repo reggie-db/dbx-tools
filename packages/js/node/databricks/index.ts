@@ -9,7 +9,7 @@ export * as databricksFS from "./src/databricks-fs.ts";
 export * as databricksPath from "./src/databricks-path.ts";
 export * as net from "./src/net.ts";
 export * as workspaceClient from "./src/workspace-client.ts";
-export { RANGE_CACHE_TTL_MS, CloudProvider, resolveCloudLocation, loadProviderRanges } from "./src/cloud.ts";
+export { RANGE_CACHE_TTL_MS, resolveCloudLocation, loadProviderRanges } from "./src/cloud.ts";
 export type { CloudLocation } from "./src/cloud.ts";
 export { DatabricksFileSystem } from "./src/databricks-fs.ts";
 export type { DatabricksFileSystemClientResolver, DatabricksFileSystemOptions, DatabricksStreamWriteOptions } from "./src/databricks-fs.ts";

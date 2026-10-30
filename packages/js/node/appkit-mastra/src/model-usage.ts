@@ -13,7 +13,7 @@ import type { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_MODEL_ROUTE_KEY, type MastraModelRoute } from "./serving.ts";
 
-/** Minimal Mastra usage shape required to publish one completed turn. */
+/** Minimal Mastra usage shape required to publish one cumulative snapshot. */
 export interface MastraTurnUsage {
   inputTokens?: number;
   outputTokens?: number;
@@ -38,15 +38,17 @@ export function modelRoutePartData(
 ): ModelRoutePartData | undefined {
   const route = requestContext.get(MASTRA_MODEL_ROUTE_KEY) as MastraModelRoute | undefined;
   if (!route) return undefined;
+  const pricing = estimateModelTokenPrice(route.model, {})?.rate;
   return ModelRoutePartDataSchema.parse({
     ...(runId ? { runId } : {}),
     model: route.model,
     selection: route.selection,
     ...(route.smartRouter ? { smartRouter: route.smartRouter } : {}),
+    ...(pricing ? { pricing } : {}),
   });
 }
 
-/** Build the validated caller-facing event for one completed agent turn. */
+/** Build a validated caller-facing cumulative usage snapshot. */
 export function modelUsagePartData(
   requestContext: Pick<RequestContext, "get">,
   usage: MastraTurnUsage,

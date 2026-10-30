@@ -27,6 +27,10 @@ export const FOUNDATION_MODEL_PRICING_URL =
 export const PROPRIETARY_MODEL_PRICING_URL =
   "https://www.databricks.com/product/pricing/proprietary-foundation-model-serving";
 
+/** Databricks GenAI calculator used to publish cloud-specific USD-per-DBU prices. */
+export const GENAI_PRICING_CALCULATOR_URL =
+  "https://www.databricks.com/product/pricing/genai-pricing-calculator";
+
 /** Databricks documentation URL for reasoning-effort model policy. */
 export const QUERY_REASON_MODELS_URL =
   "https://docs.databricks.com/aws/en/machine-learning/model-serving/query-reason-models";

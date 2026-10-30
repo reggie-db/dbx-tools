@@ -9,8 +9,8 @@ import {
   getWorkspaceUrl,
   getWorkspaceId,
   resolveCloudLocation,
-  CloudProvider,
 } from "@dbx-tools/databricks";
+import { CloudProvider } from "@dbx-tools/shared-core";
 
 /** Create a Zerobus SDK client for the active Databricks workspace. */
 export async function createSdk(): Promise<ZerobusSdk> {

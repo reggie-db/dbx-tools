@@ -335,9 +335,19 @@ function buildSupportDefinition(
   };
 }
 const support = createAgent<DemoRequestContext>(buildSupportDefinition());
-const modelComparison = createAgent<DemoRequestContext>(
-  buildSupportDefinition({ name: "Models", webSearch: false }),
-);
+const modelComparison = createAgent<DemoRequestContext>({
+  name: "Models",
+  description: "Stateless direct-response agent for side-by-side model comparison.",
+  requestContextSchema: DemoRequestContextSchema,
+  instructions:
+    "Answer the user's prompt directly. Do not use tools, external data, saved memory, or prior conversations beyond the messages supplied in this request.",
+  ambientTools: false,
+  backgroundTurns: false,
+  codeMode: false,
+  memory: false,
+  storage: false,
+  workspace: () => undefined,
+});
 
 const host = process.env.HOST ?? "127.0.0.1";
 

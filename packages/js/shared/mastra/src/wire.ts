@@ -36,7 +36,7 @@ import {
   type MessageStatus,
   GenieChatEventSchema,
 } from "@dbx-tools/shared-genie";
-import { ServingEndpointSummarySchema } from "@dbx-tools/shared-model";
+import { ModelTokenPriceSchema, ServingEndpointSummarySchema } from "@dbx-tools/shared-model";
 import { SmartRouterObservationSchema } from "@dbx-tools/shared-model-gateway";
 import { z } from "zod";
 import { FeedbackDestinationsSchema } from "./feedback.ts";
@@ -600,6 +600,9 @@ export const ModelRoutePartDataSchema = z
     smartRouter: SmartRouterObservationSchema.optional().describe(
       "Smart Router decision details when the virtual model selected the endpoint.",
     ),
+    pricing: ModelTokenPriceSchema.optional().describe(
+      "Databricks standard list-price row selected for live token-cost estimates.",
+    ),
   })
   .strict()
   .describe("Caller-consumable model route emitted before response generation streams.");
@@ -607,10 +610,10 @@ export const ModelRoutePartDataSchema = z
 /** Model route selected for one Mastra agent turn. */
 export type ModelRoutePartData = z.infer<typeof ModelRoutePartDataSchema>;
 
-/** Native AI SDK data-part type carrying token usage and cost for one completed turn. */
+/** Native AI SDK data-part type carrying cumulative token usage and cost for one turn. */
 export const MODEL_USAGE_PART_TYPE = "data-model-usage" as const;
 
-/** Model selection and usage emitted after one Mastra agent turn completes. */
+/** Model selection and cumulative usage emitted as model steps complete. */
 export const ModelUsagePartDataSchema = ModelRoutePartDataSchema.extend({
   usage: z
     .object({
@@ -629,9 +632,9 @@ export const ModelUsagePartDataSchema = ModelRoutePartDataSchema.extend({
     .describe("Estimated turn cost in DBUs from documented Databricks token rates."),
 })
   .strict()
-  .describe("Caller-consumable model routing, usage, and estimated DBU cost for one turn.");
+  .describe("Caller-consumable model routing, usage, and estimated list-price cost for one turn.");
 
-/** Model selection and usage emitted after one Mastra agent turn completes. */
+/** Model selection and cumulative usage emitted as model steps complete. */
 export type ModelUsagePartData = z.infer<typeof ModelUsagePartDataSchema>;
 
 /**

@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1793394507,
+  "generatedAt": 1793397341,
   "catalogue": {
     "models": {
       "bge-large": [
@@ -10,7 +10,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-1-opus": [
@@ -21,7 +26,12 @@
           "outputDbuPerMillionTokens": 1071.43,
           "cacheReadDbuPerMillionTokens": 21.429,
           "cacheWriteDbuPerMillionTokens": 267.857,
-          "cacheWriteOneHourDbuPerMillionTokens": 428.571
+          "cacheWriteOneHourDbuPerMillionTokens": 428.571,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-5-haiku": [
@@ -32,7 +42,12 @@
           "outputDbuPerMillionTokens": 71.429,
           "cacheReadDbuPerMillionTokens": 1.429,
           "cacheWriteDbuPerMillionTokens": 17.857,
-          "cacheWriteOneHourDbuPerMillionTokens": 28.571
+          "cacheWriteOneHourDbuPerMillionTokens": 28.571,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-5-opus": [
@@ -43,7 +58,12 @@
           "outputDbuPerMillionTokens": 357.143,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": 89.286,
-          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-5-sonnet": [
@@ -54,7 +74,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": 4.286,
           "cacheWriteDbuPerMillionTokens": 53.571,
-          "cacheWriteOneHourDbuPerMillionTokens": 85.714
+          "cacheWriteOneHourDbuPerMillionTokens": 85.714,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-6-opus": [
@@ -65,7 +90,12 @@
           "outputDbuPerMillionTokens": 357.143,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": 89.286,
-          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-6-sonnet": [
@@ -76,7 +106,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": 4.286,
           "cacheWriteDbuPerMillionTokens": 53.571,
-          "cacheWriteOneHourDbuPerMillionTokens": 85.714
+          "cacheWriteOneHourDbuPerMillionTokens": 85.714,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-7-opus": [
@@ -87,7 +122,12 @@
           "outputDbuPerMillionTokens": 357.143,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": 89.286,
-          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-8-opus": [
@@ -98,7 +138,12 @@
           "outputDbuPerMillionTokens": 357.143,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": 89.286,
-          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-opus": [
@@ -109,7 +154,12 @@
           "outputDbuPerMillionTokens": 1071.43,
           "cacheReadDbuPerMillionTokens": 21.429,
           "cacheWriteDbuPerMillionTokens": 267.857,
-          "cacheWriteOneHourDbuPerMillionTokens": 428.571
+          "cacheWriteOneHourDbuPerMillionTokens": 428.571,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-4-sonnet": [
@@ -120,7 +170,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": 4.286,
           "cacheWriteDbuPerMillionTokens": 53.571,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-5-1-fable": [
@@ -131,7 +186,12 @@
           "outputDbuPerMillionTokens": 714.286,
           "cacheReadDbuPerMillionTokens": 3.571,
           "cacheWriteDbuPerMillionTokens": 178.571,
-          "cacheWriteOneHourDbuPerMillionTokens": 285.714
+          "cacheWriteOneHourDbuPerMillionTokens": 285.714,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-5-5-haiku": [
@@ -142,7 +202,12 @@
           "outputDbuPerMillionTokens": 7.143,
           "cacheReadDbuPerMillionTokens": 0.143,
           "cacheWriteDbuPerMillionTokens": 1.786,
-          "cacheWriteOneHourDbuPerMillionTokens": 2.857
+          "cacheWriteOneHourDbuPerMillionTokens": 2.857,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -151,7 +216,12 @@
           "outputDbuPerMillionTokens": 35.714,
           "cacheReadDbuPerMillionTokens": 0.714,
           "cacheWriteDbuPerMillionTokens": 8.929,
-          "cacheWriteOneHourDbuPerMillionTokens": 14.286
+          "cacheWriteOneHourDbuPerMillionTokens": 14.286,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-5-5-opus": [
@@ -162,7 +232,12 @@
           "outputDbuPerMillionTokens": 285.714,
           "cacheReadDbuPerMillionTokens": 2.857,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": 114.286
+          "cacheWriteOneHourDbuPerMillionTokens": 114.286,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-5-5-sonnet": [
@@ -173,7 +248,12 @@
           "outputDbuPerMillionTokens": 142.857,
           "cacheReadDbuPerMillionTokens": 1.429,
           "cacheWriteDbuPerMillionTokens": 35.714,
-          "cacheWriteOneHourDbuPerMillionTokens": 57.143
+          "cacheWriteOneHourDbuPerMillionTokens": 57.143,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-5-fable": [
@@ -184,7 +264,12 @@
           "outputDbuPerMillionTokens": 714.286,
           "cacheReadDbuPerMillionTokens": 14.286,
           "cacheWriteDbuPerMillionTokens": 178.571,
-          "cacheWriteOneHourDbuPerMillionTokens": 285.714
+          "cacheWriteOneHourDbuPerMillionTokens": 285.714,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-5-opus": [
@@ -195,7 +280,12 @@
           "outputDbuPerMillionTokens": 357.143,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": 89.286,
-          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "claude-5-sonnet": [
@@ -206,7 +296,12 @@
           "outputDbuPerMillionTokens": 142.857,
           "cacheReadDbuPerMillionTokens": 2.857,
           "cacheWriteDbuPerMillionTokens": 35.714,
-          "cacheWriteOneHourDbuPerMillionTokens": 57.143
+          "cacheWriteOneHourDbuPerMillionTokens": 57.143,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "deepseek-4-1-flash-0910": [
@@ -217,7 +312,12 @@
           "outputDbuPerMillionTokens": 17.143,
           "cacheReadDbuPerMillionTokens": 0.429,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -226,7 +326,12 @@
           "outputDbuPerMillionTokens": 30,
           "cacheReadDbuPerMillionTokens": 0.75,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "deepseek-4-1-flash-1017": [
@@ -237,7 +342,12 @@
           "outputDbuPerMillionTokens": 17.143,
           "cacheReadDbuPerMillionTokens": 0.1,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "deepseek-4-flash": [
@@ -248,7 +358,12 @@
           "outputDbuPerMillionTokens": 4,
           "cacheReadDbuPerMillionTokens": 0.4,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "deepseek-4-pro": [
@@ -259,7 +374,12 @@
           "outputDbuPerMillionTokens": 56.571,
           "cacheReadDbuPerMillionTokens": 1.886,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-2-5-flash-lite": [
@@ -270,7 +390,12 @@
           "outputDbuPerMillionTokens": 7.143,
           "cacheReadDbuPerMillionTokens": 0.179,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -279,7 +404,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 0.179,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -288,7 +418,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 0.536,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-0-flash": [
@@ -299,7 +434,12 @@
           "outputDbuPerMillionTokens": 53.571,
           "cacheReadDbuPerMillionTokens": 0.893,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -308,7 +448,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 0.893,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -317,7 +462,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 1.786,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -326,7 +476,12 @@
           "outputDbuPerMillionTokens": 96.429,
           "cacheReadDbuPerMillionTokens": 1.607,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -335,7 +490,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 1.607,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -344,7 +504,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 3.214,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-1-flash-image": [
@@ -355,7 +520,12 @@
           "outputDbuPerMillionTokens": 53.571,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -364,7 +534,12 @@
           "outputDbuPerMillionTokens": 1071.43,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-1-flash-lite": [
@@ -375,7 +550,12 @@
           "outputDbuPerMillionTokens": 26.786,
           "cacheReadDbuPerMillionTokens": 0.446,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -384,7 +564,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 0.446,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -393,7 +578,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 0.893,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -402,7 +592,12 @@
           "outputDbuPerMillionTokens": 48.214,
           "cacheReadDbuPerMillionTokens": 0.804,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -411,7 +606,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 0.804,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -420,7 +620,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 1.607,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-1-flash-lite-image": [
@@ -431,7 +636,12 @@
           "outputDbuPerMillionTokens": 26.786,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -440,7 +650,12 @@
           "outputDbuPerMillionTokens": 535.714,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-1-pro": [
@@ -451,7 +666,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": 3.571,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -460,7 +680,12 @@
           "outputDbuPerMillionTokens": 321.429,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -469,7 +694,12 @@
           "outputDbuPerMillionTokens": 385.714,
           "cacheReadDbuPerMillionTokens": 6.429,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -478,7 +708,12 @@
           "outputDbuPerMillionTokens": 578.571,
           "cacheReadDbuPerMillionTokens": 12.857,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-5-flash": [
@@ -489,7 +724,12 @@
           "outputDbuPerMillionTokens": 160.714,
           "cacheReadDbuPerMillionTokens": 2.679,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -498,7 +738,12 @@
           "outputDbuPerMillionTokens": 289.286,
           "cacheReadDbuPerMillionTokens": 4.821,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-5-flash-lite": [
@@ -509,7 +754,12 @@
           "outputDbuPerMillionTokens": 44.643,
           "cacheReadDbuPerMillionTokens": 0.536,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -518,7 +768,12 @@
           "outputDbuPerMillionTokens": 80.357,
           "cacheReadDbuPerMillionTokens": 0.964,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-6-flash": [
@@ -529,7 +784,12 @@
           "outputDbuPerMillionTokens": 53.571,
           "cacheReadDbuPerMillionTokens": 1.071,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -538,7 +798,12 @@
           "outputDbuPerMillionTokens": 96.429,
           "cacheReadDbuPerMillionTokens": 1.929,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-7-flash": [
@@ -549,7 +814,12 @@
           "outputDbuPerMillionTokens": 53.571,
           "cacheReadDbuPerMillionTokens": 1.071,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -558,7 +828,12 @@
           "outputDbuPerMillionTokens": 96.429,
           "cacheReadDbuPerMillionTokens": 1.929,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-8-flash": [
@@ -569,7 +844,12 @@
           "outputDbuPerMillionTokens": 53.571,
           "cacheReadDbuPerMillionTokens": 1.071,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -578,7 +858,12 @@
           "outputDbuPerMillionTokens": 96.429,
           "cacheReadDbuPerMillionTokens": 1.929,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-3-pro-image": [
@@ -589,7 +874,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -598,7 +888,12 @@
           "outputDbuPerMillionTokens": 2142.86,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemini-4-argon": [
@@ -609,7 +904,12 @@
           "outputDbuPerMillionTokens": 178.571,
           "cacheReadDbuPerMillionTokens": 1.786,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -618,7 +918,12 @@
           "outputDbuPerMillionTokens": 321.429,
           "cacheReadDbuPerMillionTokens": 3.214,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gemma-3-12b": [
@@ -629,7 +934,12 @@
           "outputDbuPerMillionTokens": 7.143,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "glm-5-2": [
@@ -640,7 +950,12 @@
           "outputDbuPerMillionTokens": 62.857,
           "cacheReadDbuPerMillionTokens": 3.714,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -649,7 +964,12 @@
           "outputDbuPerMillionTokens": 110,
           "cacheReadDbuPerMillionTokens": 6.5,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "glm-5-3": [
@@ -660,7 +980,12 @@
           "outputDbuPerMillionTokens": 62.857,
           "cacheReadDbuPerMillionTokens": 3.714,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -669,7 +994,12 @@
           "outputDbuPerMillionTokens": 110,
           "cacheReadDbuPerMillionTokens": 6.5,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "glm-5-3-flash": [
@@ -680,7 +1010,12 @@
           "outputDbuPerMillionTokens": 7.143,
           "cacheReadDbuPerMillionTokens": 0.429,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -689,7 +1024,12 @@
           "outputDbuPerMillionTokens": 12.5,
           "cacheReadDbuPerMillionTokens": 0.75,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-1-5-image": [
@@ -700,7 +1040,12 @@
           "outputDbuPerMillionTokens": 142.857,
           "cacheReadDbuPerMillionTokens": 17.857,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -709,7 +1054,12 @@
           "outputDbuPerMillionTokens": 457.143,
           "cacheReadDbuPerMillionTokens": 28.571,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-1-image": [
@@ -720,7 +1070,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 17.857,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -729,7 +1084,12 @@
           "outputDbuPerMillionTokens": 571.429,
           "cacheReadDbuPerMillionTokens": 35.714,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-1-image-mini": [
@@ -740,7 +1100,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 2.857,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -749,7 +1114,12 @@
           "outputDbuPerMillionTokens": 114.286,
           "cacheReadDbuPerMillionTokens": 3.571,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-2-image": [
@@ -760,7 +1130,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": 17.857,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -769,7 +1144,12 @@
           "outputDbuPerMillionTokens": 428.571,
           "cacheReadDbuPerMillionTokens": 28.571,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5": [
@@ -780,7 +1160,12 @@
           "outputDbuPerMillionTokens": 142.857,
           "cacheReadDbuPerMillionTokens": 1.786,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -789,7 +1174,12 @@
           "outputDbuPerMillionTokens": 285.714,
           "cacheReadDbuPerMillionTokens": 3.571,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-1": [
@@ -800,7 +1190,12 @@
           "outputDbuPerMillionTokens": 142.857,
           "cacheReadDbuPerMillionTokens": 1.786,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -809,7 +1204,12 @@
           "outputDbuPerMillionTokens": 285.714,
           "cacheReadDbuPerMillionTokens": 3.571,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-2": [
@@ -820,7 +1220,12 @@
           "outputDbuPerMillionTokens": 200,
           "cacheReadDbuPerMillionTokens": 2.5,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -829,7 +1234,12 @@
           "outputDbuPerMillionTokens": 400,
           "cacheReadDbuPerMillionTokens": 5,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-3-codex": [
@@ -840,7 +1250,12 @@
           "outputDbuPerMillionTokens": 200,
           "cacheReadDbuPerMillionTokens": 2.5,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -849,7 +1264,12 @@
           "outputDbuPerMillionTokens": 400,
           "cacheReadDbuPerMillionTokens": 5,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-4": [
@@ -860,7 +1280,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": 3.571,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -869,7 +1294,12 @@
           "outputDbuPerMillionTokens": 321.429,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -878,7 +1308,12 @@
           "outputDbuPerMillionTokens": 428.571,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-4-mini": [
@@ -889,7 +1324,12 @@
           "outputDbuPerMillionTokens": 64.286,
           "cacheReadDbuPerMillionTokens": 1.071,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -898,7 +1338,12 @@
           "outputDbuPerMillionTokens": 128.571,
           "cacheReadDbuPerMillionTokens": 2.143,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-4-nano": [
@@ -909,7 +1354,12 @@
           "outputDbuPerMillionTokens": 17.857,
           "cacheReadDbuPerMillionTokens": 0.286,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-4-pro": [
@@ -920,7 +1370,12 @@
           "outputDbuPerMillionTokens": 2571.43,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -929,7 +1384,12 @@
           "outputDbuPerMillionTokens": 3857.14,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-5": [
@@ -940,7 +1400,12 @@
           "outputDbuPerMillionTokens": 428.571,
           "cacheReadDbuPerMillionTokens": 7.143,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -949,7 +1414,12 @@
           "outputDbuPerMillionTokens": 642.857,
           "cacheReadDbuPerMillionTokens": 14.286,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -958,7 +1428,12 @@
           "outputDbuPerMillionTokens": 1071.43,
           "cacheReadDbuPerMillionTokens": 17.857,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-5-pro": [
@@ -969,7 +1444,12 @@
           "outputDbuPerMillionTokens": 2571.43,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -978,7 +1458,12 @@
           "outputDbuPerMillionTokens": 3857.14,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-6-luna": [
@@ -989,7 +1474,12 @@
           "outputDbuPerMillionTokens": 17.143,
           "cacheReadDbuPerMillionTokens": 0.286,
           "cacheWriteDbuPerMillionTokens": 3.571,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -998,7 +1488,12 @@
           "outputDbuPerMillionTokens": 25.714,
           "cacheReadDbuPerMillionTokens": 0.571,
           "cacheWriteDbuPerMillionTokens": 7.143,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1007,7 +1502,12 @@
           "outputDbuPerMillionTokens": 34.286,
           "cacheReadDbuPerMillionTokens": 0.571,
           "cacheWriteDbuPerMillionTokens": 7.143,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1016,7 +1516,12 @@
           "outputDbuPerMillionTokens": 51.429,
           "cacheReadDbuPerMillionTokens": 1.143,
           "cacheWriteDbuPerMillionTokens": 14.286,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-6-sol": [
@@ -1027,7 +1532,12 @@
           "outputDbuPerMillionTokens": 285.714,
           "cacheReadDbuPerMillionTokens": 5.714,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -1036,7 +1546,12 @@
           "outputDbuPerMillionTokens": 428.571,
           "cacheReadDbuPerMillionTokens": 11.429,
           "cacheWriteDbuPerMillionTokens": 142.857,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1045,7 +1560,12 @@
           "outputDbuPerMillionTokens": 571.429,
           "cacheReadDbuPerMillionTokens": 11.429,
           "cacheWriteDbuPerMillionTokens": 142.857,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1054,7 +1574,12 @@
           "outputDbuPerMillionTokens": 857.143,
           "cacheReadDbuPerMillionTokens": 22.857,
           "cacheWriteDbuPerMillionTokens": 285.714,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-6-terra": [
@@ -1065,7 +1590,12 @@
           "outputDbuPerMillionTokens": 171.429,
           "cacheReadDbuPerMillionTokens": 2.857,
           "cacheWriteDbuPerMillionTokens": 35.714,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -1074,7 +1604,12 @@
           "outputDbuPerMillionTokens": 257.143,
           "cacheReadDbuPerMillionTokens": 5.714,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1083,7 +1618,12 @@
           "outputDbuPerMillionTokens": 342.857,
           "cacheReadDbuPerMillionTokens": 5.714,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1092,7 +1632,12 @@
           "outputDbuPerMillionTokens": 514.286,
           "cacheReadDbuPerMillionTokens": 11.429,
           "cacheWriteDbuPerMillionTokens": 142.857,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-mini": [
@@ -1103,7 +1648,12 @@
           "outputDbuPerMillionTokens": 28.571,
           "cacheReadDbuPerMillionTokens": 0.357,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1112,7 +1662,12 @@
           "outputDbuPerMillionTokens": 51.429,
           "cacheReadDbuPerMillionTokens": 0.643,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-5-nano": [
@@ -1123,7 +1678,12 @@
           "outputDbuPerMillionTokens": 5.714,
           "cacheReadDbuPerMillionTokens": 0.071,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-6-1-sol": [
@@ -1134,7 +1694,12 @@
           "outputDbuPerMillionTokens": 142.857,
           "cacheReadDbuPerMillionTokens": 1.429,
           "cacheWriteDbuPerMillionTokens": 35.714,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -1143,7 +1708,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": 2.857,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1152,7 +1722,12 @@
           "outputDbuPerMillionTokens": 285.71,
           "cacheReadDbuPerMillionTokens": 2.857,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1161,7 +1736,12 @@
           "outputDbuPerMillionTokens": 428.57,
           "cacheReadDbuPerMillionTokens": 5.714,
           "cacheWriteDbuPerMillionTokens": 142.857,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-6-1-terra": [
@@ -1172,7 +1752,12 @@
           "outputDbuPerMillionTokens": 71.429,
           "cacheReadDbuPerMillionTokens": 0.714,
           "cacheWriteDbuPerMillionTokens": 17.857,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -1181,7 +1766,12 @@
           "outputDbuPerMillionTokens": 107.143,
           "cacheReadDbuPerMillionTokens": 1.429,
           "cacheWriteDbuPerMillionTokens": 35.714,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1190,7 +1780,12 @@
           "outputDbuPerMillionTokens": 142.857,
           "cacheReadDbuPerMillionTokens": 1.429,
           "cacheWriteDbuPerMillionTokens": 35.714,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1199,7 +1794,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": 2.857,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-6-astra": [
@@ -1210,7 +1810,12 @@
           "outputDbuPerMillionTokens": 714.286,
           "cacheReadDbuPerMillionTokens": 14.286,
           "cacheWriteDbuPerMillionTokens": 178.571,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -1219,7 +1824,12 @@
           "outputDbuPerMillionTokens": 1071.43,
           "cacheReadDbuPerMillionTokens": 28.571,
           "cacheWriteDbuPerMillionTokens": 357.143,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1228,7 +1838,12 @@
           "outputDbuPerMillionTokens": 1428.57,
           "cacheReadDbuPerMillionTokens": 28.571,
           "cacheWriteDbuPerMillionTokens": 357.143,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1237,7 +1852,12 @@
           "outputDbuPerMillionTokens": 2142.86,
           "cacheReadDbuPerMillionTokens": 57.143,
           "cacheWriteDbuPerMillionTokens": 714.286,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-6-luna": [
@@ -1248,7 +1868,12 @@
           "outputDbuPerMillionTokens": 7.143,
           "cacheReadDbuPerMillionTokens": 0.143,
           "cacheWriteDbuPerMillionTokens": 1.786,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -1257,7 +1882,12 @@
           "outputDbuPerMillionTokens": 10.71,
           "cacheReadDbuPerMillionTokens": 0.286,
           "cacheWriteDbuPerMillionTokens": 3.571,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1266,7 +1896,12 @@
           "outputDbuPerMillionTokens": 14.29,
           "cacheReadDbuPerMillionTokens": 0.286,
           "cacheWriteDbuPerMillionTokens": 3.571,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1275,7 +1910,12 @@
           "outputDbuPerMillionTokens": 21.43,
           "cacheReadDbuPerMillionTokens": 0.571,
           "cacheWriteDbuPerMillionTokens": 7.143,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-6-sol": [
@@ -1286,7 +1926,12 @@
           "outputDbuPerMillionTokens": 142.857,
           "cacheReadDbuPerMillionTokens": 2.857,
           "cacheWriteDbuPerMillionTokens": 35.714,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "standard",
@@ -1295,7 +1940,12 @@
           "outputDbuPerMillionTokens": 214.29,
           "cacheReadDbuPerMillionTokens": 5.714,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1304,7 +1954,12 @@
           "outputDbuPerMillionTokens": 285.71,
           "cacheReadDbuPerMillionTokens": 5.714,
           "cacheWriteDbuPerMillionTokens": 71.429,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1313,7 +1968,12 @@
           "outputDbuPerMillionTokens": 428.57,
           "cacheReadDbuPerMillionTokens": 11.429,
           "cacheWriteDbuPerMillionTokens": 142.857,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-oss-120b": [
@@ -1324,7 +1984,12 @@
           "outputDbuPerMillionTokens": 8.571,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gpt-oss-20b": [
@@ -1335,7 +2000,12 @@
           "outputDbuPerMillionTokens": 4.286,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "grok-4-6": [
@@ -1346,7 +2016,12 @@
           "outputDbuPerMillionTokens": 107.143,
           "cacheReadDbuPerMillionTokens": 8.929,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "grok-4-7": [
@@ -1357,7 +2032,12 @@
           "outputDbuPerMillionTokens": 107.143,
           "cacheReadDbuPerMillionTokens": 8.929,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "gte": [
@@ -1368,7 +2048,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "inkling": [
@@ -1379,7 +2064,12 @@
           "outputDbuPerMillionTokens": 57.857,
           "cacheReadDbuPerMillionTokens": 2.429,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "jev-1-14": [
@@ -1390,7 +2080,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "kimi-2-7": [
@@ -1401,7 +2096,12 @@
           "outputDbuPerMillionTokens": 57.143,
           "cacheReadDbuPerMillionTokens": 2.714,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "kimi-3": [
@@ -1412,7 +2112,12 @@
           "outputDbuPerMillionTokens": 214.286,
           "cacheReadDbuPerMillionTokens": 4.286,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1421,7 +2126,12 @@
           "outputDbuPerMillionTokens": 375,
           "cacheReadDbuPerMillionTokens": 7.5,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "llama-3-1-8b": [
@@ -1432,7 +2142,12 @@
           "outputDbuPerMillionTokens": 6.429,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "llama-3-3-70b": [
@@ -1443,7 +2158,12 @@
           "outputDbuPerMillionTokens": 21.429,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "llama-4-maverick": [
@@ -1454,7 +2174,12 @@
           "outputDbuPerMillionTokens": 21.429,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "qwen-3-0-6b-embedding": [
@@ -1465,7 +2190,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "qwen-3-5-122b": [
@@ -1476,7 +2206,12 @@
           "outputDbuPerMillionTokens": 31.429,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         },
         {
           "tier": "priority",
@@ -1485,7 +2220,12 @@
           "outputDbuPerMillionTokens": 55,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "qwen-3-5-4b": [
@@ -1496,7 +2236,12 @@
           "outputDbuPerMillionTokens": null,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ],
       "qwen-3-80b-instruct": [
@@ -1507,7 +2252,12 @@
           "outputDbuPerMillionTokens": 17.143,
           "cacheReadDbuPerMillionTokens": null,
           "cacheWriteDbuPerMillionTokens": null,
-          "cacheWriteOneHourDbuPerMillionTokens": null
+          "cacheWriteOneHourDbuPerMillionTokens": null,
+          "usdPerDbu": {
+            "aws": 0.07,
+            "azure": 0.07,
+            "gcp": 0.07
+          }
         }
       ]
     }

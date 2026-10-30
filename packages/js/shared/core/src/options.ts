@@ -12,6 +12,13 @@ import { parseList, toIdentifierWithOptions, toSlug } from "./string-utils.ts";
 const environmentName = <T extends string>(name: T, description: string) =>
   z.literal(name).default(name).describe(description);
 
+/** Cloud provider hosting a Databricks workspace or service. */
+export enum CloudProvider {
+  Aws = "aws",
+  Azure = "azure",
+  Gcp = "gcp",
+}
+
 export const DatabricksEnvironmentNamesSchema = z
   .object({
     profile: environmentName("DATABRICKS_CONFIG_PROFILE", "Databricks CLI profile environment."),

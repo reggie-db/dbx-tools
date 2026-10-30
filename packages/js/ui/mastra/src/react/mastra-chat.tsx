@@ -274,7 +274,7 @@ export interface UseMastraChatOptions<
   requestContext?: MastraRequestContextSource<TValues>;
   /** Receives the concrete model route before response generation begins. */
   onModelRoute?: (route: ModelRoutePartData) => void;
-  /** Receives the resolved model, cumulative tokens, and estimated cost for each completed turn. */
+  /** Receives the resolved model and latest cumulative usage as model steps complete. */
   onModelUsage?: (usage: ModelUsagePartData) => void;
 }
 

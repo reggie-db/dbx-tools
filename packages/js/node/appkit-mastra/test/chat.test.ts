@@ -6,6 +6,7 @@ import {
   MODEL_USAGE_PART_TYPE,
   RESPONSE_COMPLETE_PART_TYPE,
   THREAD_TITLE_PART_TYPE,
+  type ModelUsagePartData,
 } from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
@@ -27,6 +28,17 @@ import {
 } from "../src/chat.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "../src/memory.ts";
 import { MASTRA_MODEL_ROUTE_KEY } from "../src/serving.ts";
+
+const GPT_5_4_PRICE = {
+  tier: "standard",
+  condition: "short-context",
+  inputDbuPerMillionTokens: 35.714,
+  outputDbuPerMillionTokens: 214.286,
+  cacheReadDbuPerMillionTokens: 3.571,
+  cacheWriteDbuPerMillionTokens: null,
+  cacheWriteOneHourDbuPerMillionTokens: null,
+  usdPerDbu: { aws: 0.07, azure: 0.07, gcp: 0.07 },
+} as const;
 
 async function transformResponseChunks(chunks: ChunkType[]): Promise<ChunkType[]> {
   const stream = new ReadableStream<ChunkType>({
@@ -75,6 +87,7 @@ describe("background chat routes", () => {
         runId: "run-1",
         model: "databricks-gpt-5-4",
         selection: "smart-router",
+        pricing: GPT_5_4_PRICE,
       },
     });
     assert.equal(transformed[2]?.type, MODEL_USAGE_PART_TYPE);
@@ -84,10 +97,60 @@ describe("background chat routes", () => {
         runId: "run-1",
         model: "databricks-gpt-5-4",
         selection: "smart-router",
+        pricing: GPT_5_4_PRICE,
         usage: { inputTokens: 400, outputTokens: 100, totalTokens: 500 },
         estimatedCostDbu: 0.0357142,
       },
     });
+  });
+
+  it("emits updated cumulative usage after tool and response steps", async () => {
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_MODEL_ROUTE_KEY, {
+      model: "databricks-gpt-5-4",
+      selection: "explicit",
+    });
+    const toolStep = {
+      type: "step-finish",
+      runId: "run-1",
+      from: "agent",
+      payload: {
+        totalUsage: { inputTokens: 200, outputTokens: 50, totalTokens: 250 },
+        stepResult: { reason: "tool-calls" },
+        output: {
+          usage: {},
+          toolCalls: [{ toolCallId: "tool-1", toolName: "lookup", input: {} }],
+        },
+        metadata: {},
+      },
+    } as unknown as ChunkType;
+    const responseStep = {
+      type: "step-finish",
+      runId: "run-1",
+      from: "agent",
+      payload: {
+        totalUsage: { inputTokens: 500, outputTokens: 150, totalTokens: 650 },
+        stepResult: { reason: "stop" },
+        output: { usage: {}, toolCalls: [] },
+        metadata: {},
+      },
+    } as unknown as ChunkType;
+    const stream = new ReadableStream<ChunkType>({
+      start(controller) {
+        controller.enqueue(toolStep);
+        controller.enqueue(responseStep);
+        controller.close();
+      },
+    }).pipeThrough(buildModelUsageTransform(requestContext, "run-1")());
+    const transformed: ChunkType[] = [];
+    for await (const chunk of stream) transformed.push(chunk);
+
+    const usageParts = transformed.filter((chunk) => chunk.type === MODEL_USAGE_PART_TYPE);
+    assert.equal(usageParts.length, 2);
+    assert.deepEqual(
+      usageParts.map((chunk) => (chunk as { data: ModelUsagePartData }).data.usage.totalTokens),
+      [250, 650],
+    );
   });
 
   it("marks only the final non-tool response step complete", async () => {

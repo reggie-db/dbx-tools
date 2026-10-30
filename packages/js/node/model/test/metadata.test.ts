@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  databricksGenAiCalculatorAssetUrl,
+  parseDatabricksUsdPerDbu,
   parseModelCapabilities,
   parseModelParams,
   parseModelRateLimits,
@@ -123,6 +125,47 @@ describe("model metadata generation", () => {
     assert.equal(snapshot.catalogue.models["grok-4-6"]?.[0]?.tier, "priority");
     assert.deepEqual(snapshot.catalogue.models["grok-4-7"], snapshot.catalogue.models["grok-4-6"]);
     assert.equal(snapshot.catalogue.models["ignore-me"], undefined);
+  });
+
+  it("attaches Databricks default-region USD-per-DBU prices by cloud", () => {
+    const foundation = `<table>
+      <tr><th>Model</th><th>Pay Per Token (DBU Per 1M Tokens)</th></tr>
+      <tr><th>Input</th><th>Output</th><th>Cache read</th></tr>
+      <tr><td>GPT 5.4</td><td>35.714</td><td>214.286</td><td>3.571</td></tr>
+      <tr><td>GPT 5.4 Mini</td><td>10</td><td>20</td><td>2</td></tr>
+    </table>`;
+    const calculator = `const defaults={aws:"aws--east",gcp:"gcp--south",azure:"azure--east"};
+      const regions=JSON.parse('[{"key":"aws--east","cloud":"aws","rate":0.07},{"key":"azure--east","cloud":"azure","rate":0.08},{"key":"gcp--south","cloud":"gcp","rate":0.09}]');`;
+
+    const snapshot = parseModelTokenPrices(foundation, "", 42, calculator);
+    assert.deepEqual(snapshot.catalogue.models["gpt-5-4"]?.[0], {
+      tier: "standard",
+      condition: "default",
+      inputDbuPerMillionTokens: 35.714,
+      outputDbuPerMillionTokens: 214.286,
+      cacheReadDbuPerMillionTokens: 3.571,
+      cacheWriteDbuPerMillionTokens: null,
+      cacheWriteOneHourDbuPerMillionTokens: null,
+      usdPerDbu: { aws: 0.07, azure: 0.08, gcp: 0.09 },
+    });
+    assert.deepEqual(parseDatabricksUsdPerDbu(calculator), {
+      aws: 0.07,
+      azure: 0.08,
+      gcp: 0.09,
+    });
+  });
+
+  it("resolves the Databricks GenAI calculator Gatsby asset", () => {
+    const html = `<script id="gatsby-chunk-mapping">
+      window.___chunkMapping="{\\"component---src-pages-product-pricing-genai-pricing-calculator-tsx\\":[\\"/calculator.js\\"]}";
+    </script>`;
+    assert.equal(
+      databricksGenAiCalculatorAssetUrl(
+        html,
+        "https://www.databricks.com/product/pricing/genai-pricing-calculator",
+      ),
+      "https://www.databricks.com/en-pricing-assets/calculator.js",
+    );
   });
 
   it("normalizes models.dev capabilities and effort aliases", () => {

@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  databricksGenAiCalculatorAssetUrl,
   parseModelParams,
   parseModelCapabilities,
   parseModelRateLimits,
@@ -14,6 +15,7 @@ import {
 import {
   MODELPARAMS_DEV_MODELS_URL,
   MODELS_DEV_API_URL,
+  GENAI_PRICING_CALCULATOR_URL,
   MODEL_METADATA_TTL_MS,
   MODEL_RATE_LIMITS_URL,
   FOUNDATION_MODEL_PRICING_URL,
@@ -50,11 +52,15 @@ await Promise.all([
     parseModelRateLimits(await loadPage(MODEL_RATE_LIMITS_URL), now),
   ),
   refreshSnapshot<ModelTokenPricesSnapshot>("model-token-prices.json", async () => {
-    const [foundationHtml, proprietaryHtml] = await Promise.all([
+    const [foundationHtml, proprietaryHtml, calculatorHtml] = await Promise.all([
       loadPage(FOUNDATION_MODEL_PRICING_URL),
       loadPage(PROPRIETARY_MODEL_PRICING_URL),
+      loadPage(GENAI_PRICING_CALCULATOR_URL),
     ]);
-    return parseModelTokenPrices(foundationHtml, proprietaryHtml, now);
+    const calculatorJavascript = await loadPage(
+      databricksGenAiCalculatorAssetUrl(calculatorHtml, GENAI_PRICING_CALCULATOR_URL),
+    );
+    return parseModelTokenPrices(foundationHtml, proprietaryHtml, now, calculatorJavascript);
   }),
   refreshSnapshot<ReasoningModelsSnapshot>("model-reasoning.json", async () =>
     parseReasoningModels(await loadPage(QUERY_REASON_MODELS_URL), now),

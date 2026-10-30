@@ -30,6 +30,7 @@ import {
   memoize,
   fnvHash,
   id,
+  CloudProvider,
   createFetchError,
   parse,
   type Cidr,
@@ -58,13 +59,6 @@ const AZURE_DOWNLOAD_PAGE = "https://www.microsoft.com/en-us/download/details.as
 /** Regex that plucks the current `ServiceTags_Public_<date>.json` link off the Azure page. */
 const AZURE_JSON_LINK =
   /https:\/\/download\.microsoft\.com\/download\/[^"']*ServiceTags_Public_\d+\.json/;
-
-/** Cloud hyperscaler a host resolves into. */
-export enum CloudProvider {
-  Aws = "aws",
-  Azure = "azure",
-  Gcp = "gcp",
-}
 
 /**
  * Where a host lives: the {@link CloudProvider}, the provider-native

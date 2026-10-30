@@ -103,31 +103,22 @@ export function buildModelRouteTransform(
   };
 }
 
-/** Emit cumulative model usage on the terminal response step. */
+/** Emit authoritative cumulative model usage after every completed model step. */
 export function buildModelUsageTransform(
   requestContext: RequestContext,
   runId: string,
 ): MastraStreamTransform {
   return () => {
-    let emitted = false;
     return new TransformStream({
       transform(chunk, controller) {
         controller.enqueue(chunk);
-        if (
-          emitted ||
-          chunk.type !== "step-finish" ||
-          chunk.payload.stepResult.isContinued === true ||
-          (chunk.payload.output.toolCalls?.length ?? 0) > 0
-        ) {
-          return;
-        }
+        if (chunk.type !== "step-finish") return;
         const data = modelUsagePartData(
           requestContext,
           chunk.payload.totalUsage ?? chunk.payload.output.usage,
           runId,
         );
         if (!data) return;
-        emitted = true;
         const part: DataChunkType = { type: MODEL_USAGE_PART_TYPE, data };
         controller.enqueue(part as never);
       },
