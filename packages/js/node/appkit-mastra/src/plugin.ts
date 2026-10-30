@@ -64,6 +64,7 @@ import {
   configureNativeHttpTelemetry,
   excludeUnparentedOutgoingHttpTelemetry,
   deferredNativeTracerProvider,
+  requestUserEmail,
   requestUserId,
   useServicePrincipal,
 } from "@dbx-tools/appkit";
@@ -1049,7 +1050,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           res.json({ url: null });
           return;
         }
-        const result = await this.scopedSelf(req).fetchMlflowExperimentUrl();
+        const result = await this.scopedSelf(req).fetchMlflowExperimentUrl(requestUserEmail(req));
         res.json({ url: result.ok ? (result.data ?? null) : null });
       },
     });
@@ -1232,9 +1233,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * Resolve an experiment link under the active request identity. The helper
    * returns no URL unless the viewer has effective `CAN_MANAGE` permission.
    */
-  private async fetchMlflowExperimentUrl(): Promise<ExecutionResult<string | undefined>> {
+  private async fetchMlflowExperimentUrl(
+    viewerUserName?: string,
+  ): Promise<ExecutionResult<string | undefined>> {
     const client = getExecutionContext().client;
-    return this.execute(() => mlflowExperimentManagerUrl(client), feedbackWriteDefaults);
+    return this.execute(
+      () => mlflowExperimentManagerUrl(client, viewerUserName),
+      feedbackWriteDefaults,
+    );
   }
 
   /**

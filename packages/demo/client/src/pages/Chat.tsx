@@ -55,7 +55,10 @@ const Chat = () => {
           <SettingsIcon className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent
+        align="end"
+        className="max-h-[calc(100dvh-1rem)] w-48 max-w-[calc(100vw-1rem)] overflow-y-auto"
+      >
         <DropdownMenuCheckboxItem checked={genieOnly} onCheckedChange={setGenieOnly}>
           <SparklesIcon className="size-4 text-[#FF3621]" aria-hidden />
           Genie only
@@ -71,6 +74,7 @@ const Chat = () => {
       threadId={thread.threadId}
       onThreadIdChange={thread.onThreadIdChange}
       enableExport
+      threadHistoryLeadingActions={chatSettings}
       threadSidebarHeaderActions={chatSettings}
       className="min-h-0 flex-1"
     />

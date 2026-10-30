@@ -113,11 +113,13 @@ export const FeedbackControls = ({
               </Button>
             </DialogTrigger>
           </TooltipTrigger>
-          <TooltipContent>
-            {canComment ? "Leave written feedback" : "Rate the response first"}
-          </TooltipContent>
+          {!open && (
+            <TooltipContent>
+              {canComment ? "Leave written feedback" : "Rate the response first"}
+            </TooltipContent>
+          )}
         </Tooltip>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Share feedback</DialogTitle>
           </DialogHeader>

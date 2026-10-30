@@ -150,6 +150,17 @@ export const ChatThreadLayout = ({
     ...(onCancelThread ? { onCancel: onCancelThread } : {}),
     ...(threadSidebarHeaderActions ? { headerActions: threadSidebarHeaderActions } : {}),
   };
+  const threadTabListProps: Omit<ThreadSidebarProps, "onHide" | "side" | "className"> = {
+    threads: threadListProps.threads,
+    ...(threadListProps.activeThreadId ? { activeThreadId: threadListProps.activeThreadId } : {}),
+    streamingThreadIds: threadListProps.streamingThreadIds,
+    isLoading: threadListProps.isLoading,
+    onSelect: threadListProps.onSelect,
+    ...(threadListProps.onNew ? { onNew: threadListProps.onNew } : {}),
+    ...(threadListProps.onDelete ? { onDelete: threadListProps.onDelete } : {}),
+    ...(threadListProps.onRename ? { onRename: threadListProps.onRename } : {}),
+    ...(threadListProps.onCancel ? { onCancel: threadListProps.onCancel } : {}),
+  };
 
   const [openTabIds, setOpenTabIds] = useState<string[]>([]);
   const tabsSeededRef = useRef(false);
@@ -200,7 +211,7 @@ export const ChatThreadLayout = ({
         <div className="flex h-full min-w-0 flex-1 flex-col">
           {tabbedThreads && (
             <ThreadTabs
-              {...threadListProps}
+              {...threadTabListProps}
               openThreadIds={openTabIds}
               onCloseTab={closeTab}
               actions={threadBarActions}

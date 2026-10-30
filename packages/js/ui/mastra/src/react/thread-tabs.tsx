@@ -109,7 +109,7 @@ export const ThreadActions = ({
         <PopoverContent
           align="end"
           aria-label="Conversation history"
-          className="w-72 p-0"
+          className="max-h-[calc(100dvh-1rem)] w-72 max-w-[calc(100vw-1rem)] overflow-hidden p-0"
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onFocusOutside={(event) => event.preventDefault()}
@@ -137,7 +137,7 @@ export const ThreadActions = ({
                   },
                 }
               : {})}
-            className="h-96 w-full border-none"
+            className="h-96 max-h-[calc(100dvh-1rem)] w-full border-none"
           />
         </PopoverContent>
       </Popover>

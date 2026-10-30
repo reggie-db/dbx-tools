@@ -505,6 +505,32 @@ describe("MLflow experiment manager link", () => {
 
     assert.equal(await mlflowExperimentManagerUrl(workspaceClient()), undefined);
   });
+
+  it("uses the forwarded viewer identity when the client is the app service principal", async () => {
+    process.env.MLFLOW_EXPERIMENT_ID = "123";
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/2.0/preview/scim/v2/Me")) {
+        return Response.json({ applicationId: "app-service-principal", groups: [] });
+      }
+      if (url.endsWith("/api/2.0/permissions/experiments/123")) {
+        return Response.json({
+          access_control_list: [
+            {
+              user_name: "viewer@example.com",
+              all_permissions: [{ permission_level: "CAN_MANAGE" }],
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 404 });
+    };
+
+    assert.equal(
+      await mlflowExperimentManagerUrl(workspaceClient(), "viewer@example.com"),
+      "https://workspace.example.com/ml/experiments/123",
+    );
+  });
 });
 
 function workspaceClient(): WorkspaceClientLike {

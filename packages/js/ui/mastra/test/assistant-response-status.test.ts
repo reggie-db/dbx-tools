@@ -40,13 +40,13 @@ describe("AssistantResponseSpinner", () => {
         isLast: true,
         status: "streaming",
         onExport: () => undefined,
-        mlflowExperimentUrl: "https://example.com/mlflow",
+        mlflowTraceUrl: "https://example.com/mlflow/traces/tr-123",
       }),
     );
 
     const copyIndex = html.indexOf('aria-label="Copy"');
     const exportIndex = html.indexOf('aria-label="Export message"');
-    const debugIndex = html.indexOf('aria-label="Open MLflow experiment"');
+    const debugIndex = html.indexOf('aria-label="Open MLflow trace"');
     const statusIndex = html.indexOf("Response in progress");
     assert.ok(copyIndex >= 0 && copyIndex < statusIndex);
     assert.ok(exportIndex >= 0 && exportIndex < statusIndex);

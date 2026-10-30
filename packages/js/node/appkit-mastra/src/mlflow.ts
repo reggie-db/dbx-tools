@@ -631,9 +631,10 @@ export function mlflowEnabled(): boolean {
  */
 export async function mlflowExperimentManagerUrl(
   client: WorkspaceClient,
+  viewerUserName?: string,
 ): Promise<string | undefined> {
   try {
-    return await resolveMlflowExperimentManagerUrl(client);
+    return await resolveMlflowExperimentManagerUrl(client, viewerUserName);
   } catch {
     return undefined;
   }
@@ -641,6 +642,7 @@ export async function mlflowExperimentManagerUrl(
 
 async function resolveMlflowExperimentManagerUrl(
   client: WorkspaceClient,
+  viewerUserName?: string,
 ): Promise<string | undefined> {
   const experimentId = await resolveExperimentId(client);
   if (!experimentId) return undefined;
@@ -662,9 +664,9 @@ async function resolveMlflowExperimentManagerUrl(
   if (!current.success || !permissions.success) return undefined;
 
   const userNames = new Set(
-    [current.data.userName, current.data.applicationId, current.data.displayName].filter(
-      (value): value is string => Boolean(value),
-    ),
+    [viewerUserName, current.data.userName, current.data.applicationId, current.data.displayName]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value)),
   );
   const groupNames = new Set(
     (current.data.groups ?? []).flatMap(({ value, display }) =>
