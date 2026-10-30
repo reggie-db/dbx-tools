@@ -13,7 +13,7 @@ import {
   TooltipTrigger,
   cn,
 } from "@databricks/appkit-ui/react";
-import { RecordPreview } from "@dbx-tools/ui/react";
+import { RecordPreview, copyText } from "@dbx-tools/ui/react";
 import type { UIMessage } from "ai";
 import {
   BugIcon,
@@ -45,7 +45,6 @@ import {
   type PendingApproval,
   type ToolEvent,
 } from "./types.ts";
-import { copyText } from "../support/clipboard.ts";
 import type { ExportFormat } from "../support/export.ts";
 import { mergeToolEvents, toolEventsFromParts } from "../support/tool-events.ts";
 

@@ -9,10 +9,10 @@ import {
   AlertDialogTitle,
   Button,
 } from "@databricks/appkit-ui/react";
+import { copyText } from "@dbx-tools/ui/react";
 import { CheckIcon, CopyIcon, ExternalLinkIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LinkSafetyModalProps } from "streamdown";
-import { copyText } from "../support/clipboard.ts";
 
 /** Display and clipboard values for one confirmed chat link. */
 export interface LinkPresentation {

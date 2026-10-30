@@ -5,7 +5,6 @@
 export * as activeRuns from "./src/support/active-runs.ts";
 export * as chartOption from "./src/support/chart-option.ts";
 export * as chartTheme from "./src/support/chart-theme.ts";
-export * as clipboard from "./src/support/clipboard.ts";
 export * as download from "./src/support/download.ts";
 export * as exportModule from "./src/support/export.ts";
 export * as genieClient from "./src/support/genie-client.ts";
@@ -22,7 +21,6 @@ export type { StoredActiveRun } from "./src/support/active-runs.ts";
 export { normalizeChartOption } from "./src/support/chart-option.ts";
 export { LIGHT_CHART_CHROME, resolveChartChrome, useChartChrome } from "./src/support/chart-theme.ts";
 export type { ChartChrome } from "./src/support/chart-theme.ts";
-export { copyText } from "./src/support/clipboard.ts";
 export { downloadFile } from "./src/support/download.ts";
 export { exportChat, messageText } from "./src/support/export.ts";
 export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from "./src/support/export.ts";

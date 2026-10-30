@@ -22,8 +22,6 @@ import { isActiveChatStatus, type ChatViewProps, type ToolEvent } from "./types.
 import { messageText } from "../support/export.ts";
 
 const BOTTOM_THRESHOLD_PX = 24;
-const FOCUS_RESIZE_BOTTOM_THRESHOLD_PX = 2;
-const FOCUS_RESIZE_SETTLE_MS = 650;
 const TOP_LOAD_MORE_THRESHOLD_PX = 120;
 
 /** Gestures that indicate the user is intentionally navigating transcript history. */
@@ -117,81 +115,28 @@ export const useChatTranscriptController = ({
       element.scrollTop = element.scrollHeight;
     });
     observer.observe(content);
+    observer.observe(element);
     return () => observer.disconnect();
   }, [messages.length, isLoadingHistory]);
 
   useLayoutEffect(() => {
     const element = scrollRef.current;
-    const frame = element?.closest<HTMLElement>('[data-slot="aui_thread-frame"]');
-    if (!element || !frame || typeof ResizeObserver === "undefined") return;
+    if (!element) return;
 
-    let focusResizeActive = false;
-    let focusPinnedToBottom = false;
-    let focusScrollTop = 0;
-    let focusResizeTimer = 0;
-
-    const finishFocusResize = () => {
-      focusResizeActive = false;
-      focusPinnedToBottom = false;
-      window.clearTimeout(focusResizeTimer);
-    };
-    const scheduleFocusResizeFinish = () => {
-      window.clearTimeout(focusResizeTimer);
-      focusResizeTimer = window.setTimeout(finishFocusResize, FOCUS_RESIZE_SETTLE_MS);
-    };
-    const restoreFocusPosition = () => {
-      if (!focusResizeActive) return;
-      programmaticScrollRef.current = true;
-      if (focusPinnedToBottom) {
-        element.scrollTop = element.scrollHeight;
-        setIsAtBottom(true);
-      } else {
-        element.scrollTop = focusScrollTop;
-      }
-    };
-    const beginFocusResize = () => {
-      const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
-      focusPinnedToBottom = distanceFromBottom <= FOCUS_RESIZE_BOTTOM_THRESHOLD_PX;
-      focusScrollTop = element.scrollTop;
-      pinnedRef.current = focusPinnedToBottom;
-      focusResizeActive = true;
-      restoreFocusPosition();
-      scheduleFocusResizeFinish();
-    };
-    const handleFocusStart = (event: Event) => {
-      const target = event.target instanceof Element ? event.target : null;
-      if (!target?.closest(".aui-composer-input")) return;
-      beginFocusResize();
-    };
     const handleReaderGesture = () => {
-      finishFocusResize();
       // A wheel/touch gesture at the bottom may not move the viewport. Let the
       // ensuing scroll event decide whether follow mode should stop so inert
       // or downward gestures cannot detach desktop chat from new content.
       programmaticScrollRef.current = false;
     };
-    const observer = new ResizeObserver(() => {
-      restoreFocusPosition();
-      if (focusResizeActive) scheduleFocusResizeFinish();
-    });
-
-    frame.addEventListener("touchstart", handleFocusStart, { passive: true, capture: true });
-    frame.addEventListener("focusin", handleFocusStart);
-    frame.addEventListener("focusout", finishFocusResize);
     for (const eventName of TRANSCRIPT_FOLLOW_CANCEL_EVENTS) {
       element.addEventListener(eventName, handleReaderGesture, { passive: true });
     }
-    observer.observe(element);
 
     return () => {
-      finishFocusResize();
-      frame.removeEventListener("touchstart", handleFocusStart, true);
-      frame.removeEventListener("focusin", handleFocusStart);
-      frame.removeEventListener("focusout", finishFocusResize);
       for (const eventName of TRANSCRIPT_FOLLOW_CANCEL_EVENTS) {
         element.removeEventListener(eventName, handleReaderGesture);
       }
-      observer.disconnect();
     };
   }, []);
 

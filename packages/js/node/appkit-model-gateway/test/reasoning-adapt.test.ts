@@ -95,6 +95,87 @@ describe("reasoning adaptation", () => {
     });
   });
 
+  it("removes encrypted reasoning history and retries the request", async () => {
+    const retry = await learnAndAdaptReasoningRetry({
+      model: "databricks-gpt-5-6-sol",
+      body: {
+        model: "databricks-gpt-5-6-sol",
+        input: [
+          { role: "user", type: "message", content: "first request" },
+          {
+            type: "reasoning",
+            id: "reasoning-1",
+            summary: [],
+            encrypted_content: "model-bound-ciphertext",
+          },
+          { type: "function_call", call_id: "call-1", name: "search", arguments: "{}" },
+          { type: "function_call_output", call_id: "call-1", output: "result" },
+          { role: "user", type: "message", content: "continue" },
+        ],
+        reasoning: { effort: "high" },
+      },
+      response: new Response(
+        JSON.stringify({
+          error_code: "BAD_REQUEST",
+          message: JSON.stringify({
+            error: {
+              code: "validation_error",
+              message: "invalid encrypted reasoning",
+              param: null,
+              type: "invalid_request_error",
+            },
+          }),
+        }),
+        { status: 400 },
+      ),
+      previousWireEffort: "high",
+    });
+
+    assert.deepEqual(retry, {
+      model: "databricks-gpt-5-6-sol",
+      input: [
+        { role: "user", type: "message", content: "first request" },
+        { type: "function_call", call_id: "call-1", name: "search", arguments: "{}" },
+        { type: "function_call_output", call_id: "call-1", output: "result" },
+        { role: "user", type: "message", content: "continue" },
+      ],
+      reasoning: { effort: "high" },
+    });
+  });
+
+  it("recognizes the upstream invalid encrypted content error", async () => {
+    const retry = await learnAndAdaptReasoningRetry({
+      model: "databricks-gpt-5-6-sol",
+      body: {
+        model: "databricks-gpt-5-6-sol",
+        input: [
+          { type: "reasoning", id: "reasoning-1", encrypted_content: "invalid" },
+          { role: "user", type: "message", content: "continue" },
+        ],
+      },
+      response: new Response(
+        JSON.stringify({
+          error_code: "BAD_REQUEST",
+          message: JSON.stringify({
+            error: {
+              message:
+                "The encrypted content for item reasoning-1 could not be verified. Reason: Encrypted content could not be decrypted or parsed.",
+              type: "invalid_request_error",
+              param: null,
+              code: "invalid_encrypted_content",
+            },
+          }),
+        }),
+        { status: 400 },
+      ),
+    });
+
+    assert.deepEqual(retry, {
+      model: "databricks-gpt-5-6-sol",
+      input: [{ role: "user", type: "message", content: "continue" }],
+    });
+  });
+
   it("does not retry non-reasoning failures", async () => {
     const response = new Response(JSON.stringify({ message: "rate limited" }), { status: 429 });
     const retry = await learnAndAdaptReasoningRetry({

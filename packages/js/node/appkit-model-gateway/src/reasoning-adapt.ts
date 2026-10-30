@@ -17,6 +17,8 @@ import {
 import { log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("appkit/model-gateway/reasoning");
+const INVALID_ENCRYPTED_REASONING_PATTERN =
+  /invalid encrypted reasoning|invalid_encrypted_content|encrypted content .+ could not be verified/i;
 const REASONING_UNSUPPORTED_PATTERN = /does not support ['"]reasoning['"]/i;
 
 /** Result of the first proactive adaptation pass. */
@@ -46,9 +48,9 @@ export function adaptInferenceReasoning(
 }
 
 /**
- * On a reasoning-related 400, remove unsupported reasoning or resolve the
- * preferred ladder and produce a remapped retry body. Returns `undefined` when
- * no retry should occur.
+ * On a reasoning-related 400, remove invalid replay state, remove unsupported
+ * reasoning, or resolve the preferred ladder and produce a remapped retry body.
+ * Returns `undefined` when no retry should occur.
  */
 export async function learnAndAdaptReasoningRetry(input: {
   readonly model: string;
@@ -65,7 +67,15 @@ export async function learnAndAdaptReasoningRetry(input: {
     return undefined;
   }
 
-  if (REASONING_UNSUPPORTED_PATTERN.test(JSON.stringify(errorBody))) {
+  const serializedError = JSON.stringify(errorBody);
+  if (INVALID_ENCRYPTED_REASONING_PATTERN.test(serializedError)) {
+    const stripped = stripReasoningHistory(input.body);
+    if (!stripped) return undefined;
+    logger.info("retrying without invalid encrypted reasoning history", { model: input.model });
+    return stripped;
+  }
+
+  if (REASONING_UNSUPPORTED_PATTERN.test(serializedError)) {
     const stripped = stripRequestReasoning(input.body);
     if (!stripped) return undefined;
     logger.info("retrying without unsupported reasoning", { model: input.model });
@@ -93,6 +103,15 @@ export async function learnAndAdaptReasoningRetry(input: {
   return adapted.body;
 }
 
+function stripReasoningHistory(
+  body: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> | undefined {
+  if (!Array.isArray(body.input)) return undefined;
+  const input = body.input.filter((item) => !isRecord(item) || item.type !== "reasoning");
+  if (input.length === body.input.length) return undefined;
+  return { ...body, input };
+}
+
 function stripRequestReasoning(
   body: Readonly<Record<string, unknown>>,
 ): Readonly<Record<string, unknown>> | undefined {
@@ -103,4 +122,8 @@ function stripRequestReasoning(
   delete stripped.reasoning;
   delete stripped.reasoning_effort;
   return stripped;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

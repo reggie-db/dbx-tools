@@ -174,6 +174,7 @@
         "@dbx-tools/core": "workspace:^",
         "@dbx-tools/lakebase": "workspace:^",
         "@dbx-tools/postgres": "workspace:^",
+        "@dbx-tools/shared-appkit": "workspace:^",
         "@dbx-tools/shared-core": "workspace:^",
         "@dbx-tools/shared-fs": "workspace:^",
         "@opentelemetry/api": "catalog:",
@@ -705,6 +706,16 @@
         "@dbx-tools/email",
       ],
     },
+    "packages/js/shared/appkit": {
+      "name": "@dbx-tools/shared-appkit",
+      "version": "0.9.185",
+      "dependencies": {
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/js/shared/auth": {
       "name": "@dbx-tools/shared-auth",
       "version": "0.9.185",
@@ -871,6 +882,7 @@
       "dependencies": {
         "@better-auth/passkey": "catalog:",
         "@databricks/appkit-ui": "catalog:",
+        "@dbx-tools/shared-appkit": "workspace:^",
         "@dbx-tools/shared-auth": "workspace:^",
         "@dbx-tools/shared-core": "workspace:^",
         "@dbx-tools/shared-email": "workspace:^",
@@ -1285,6 +1297,8 @@
     "@dbx-tools/projen": ["@dbx-tools/projen@workspace:projen"],
 
     "@dbx-tools/search": ["@dbx-tools/search@workspace:packages/js/node/search"],
+
+    "@dbx-tools/shared-appkit": ["@dbx-tools/shared-appkit@workspace:packages/js/shared/appkit"],
 
     "@dbx-tools/shared-auth": ["@dbx-tools/shared-auth@workspace:packages/js/shared/auth"],
 

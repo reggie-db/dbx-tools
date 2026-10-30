@@ -317,6 +317,15 @@ packages/js/node/tunnel/LICENSE
 packages/js/node/tunnel/package.json
 packages/js/node/tunnel/test/tsconfig.json
 packages/js/node/tunnel/tsconfig.json
+packages/js/shared/appkit/.gitattributes
+packages/js/shared/appkit/.gitignore
+packages/js/shared/appkit/.projen/deps.json
+packages/js/shared/appkit/.projen/files.json
+packages/js/shared/appkit/.projen/tasks.json
+packages/js/shared/appkit/LICENSE
+packages/js/shared/appkit/package.json
+packages/js/shared/appkit/test/tsconfig.json
+packages/js/shared/appkit/tsconfig.json
 packages/js/shared/auth/.gitattributes
 packages/js/shared/auth/.gitignore
 packages/js/shared/auth/.projen/deps.json
@@ -509,6 +518,7 @@ packages/js/node/path/index*.ts
 packages/js/node/postgres/index*.ts
 packages/js/node/search/index*.ts
 packages/js/node/tunnel/index*.ts
+packages/js/shared/appkit/index*.ts
 packages/js/shared/auth/index*.ts
 packages/js/shared/core/index*.ts
 packages/js/shared/email/index*.ts

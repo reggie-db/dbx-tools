@@ -46,6 +46,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-appkit",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-auth",
       "version": "workspace:^",
       "type": "runtime"

@@ -13,13 +13,17 @@ import {
   TooltipTrigger,
   cn,
 } from "@databricks/appkit-ui/react";
-import { createShikiPlugin, highlightToHtml, useHighlightedHtml } from "@dbx-tools/ui/react";
+import {
+  copyText,
+  createShikiPlugin,
+  highlightToHtml,
+  useHighlightedHtml,
+} from "@dbx-tools/ui/react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { Streamdown, type LinkSafetyConfig } from "streamdown";
 import { ExternalLinkDialog, isSameOriginLink } from "./_external-link-dialog.tsx";
 import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid.tsx";
-import { copyText } from "../support/clipboard.ts";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
 // wired with shiki highlighting and AppKit table primitives, plus the

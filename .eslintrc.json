@@ -715,6 +715,27 @@
     },
     {
       "files": [
+        "packages/js/shared/appkit/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@dbx-tools/shared-appkit",
+                  "@dbx-tools/shared-appkit/**"
+                ],
+                "message": "Use relative imports within this package."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "packages/js/shared/auth/**/*.{ts,tsx}"
       ],
       "rules": {

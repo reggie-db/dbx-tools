@@ -57,8 +57,7 @@ body {
 }
 
 .demo-shell[data-keyboard-closing="true"] {
-  /* Smooth only the delayed height restoration after the composer loses focus. */
-  transition: height 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: height var(--demo-keyboard-close-duration, 460ms) cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 [data-slot="aui_thread-viewport"] {
