@@ -94,9 +94,7 @@ const ModelGatewayRuntimeOptionsShape = {
   smartRouterContextTokenBudget: SmartRouterContextTokenBudgetSchema.default(
     SMART_ROUTER_CONTEXT_TOKEN_BUDGET_DEFAULT,
   ),
-  smartRouterProbeTtlMs: SmartRouterProbeTtlMsSchema.default(
-    SMART_ROUTER_PROBE_TTL_MS_DEFAULT,
-  ),
+  smartRouterProbeTtlMs: SmartRouterProbeTtlMsSchema.default(SMART_ROUTER_PROBE_TTL_MS_DEFAULT),
   smartRouterProbeRefreshIntervalMs: SmartRouterProbeRefreshIntervalMsSchema.default(
     SMART_ROUTER_PROBE_REFRESH_INTERVAL_MS_DEFAULT,
   ),

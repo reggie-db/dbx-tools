@@ -233,15 +233,10 @@ export class SmartRouterService {
     const cache = this.probeCache(client);
     const key = probeKey(offered, this.settings.routerName);
     this.rememberProbeKey(client, key);
-    const probe = await getOrSet(
-      cache,
-      key,
-      () => this.loadProbe(key, offered, client),
-      {
-        ttl: this.probeCacheTtlMs(),
-        refreshAfterWrite: (value) => this.probeRefreshAfterWrite(value.enabled),
-      },
-    );
+    const probe = await getOrSet(cache, key, () => this.loadProbe(key, offered, client), {
+      ttl: this.probeCacheTtlMs(),
+      refreshAfterWrite: (value) => this.probeRefreshAfterWrite(value.enabled),
+    });
     return probe?.enabled ?? false;
   }
 

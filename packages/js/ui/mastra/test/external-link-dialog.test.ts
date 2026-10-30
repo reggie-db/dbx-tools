@@ -44,9 +44,9 @@ describe("isSameOriginLink", () => {
     expect(isSameOriginLink("/sandbox/machine-1/terminal", baseUrl)).toBe(true);
     expect(isSameOriginLink("?tab=history", baseUrl)).toBe(true);
     expect(isSameOriginLink("#details", baseUrl)).toBe(true);
-    expect(
-      isSameOriginLink("https://local-demo.apps.dbx.tools/settings/profile", baseUrl),
-    ).toBe(true);
+    expect(isSameOriginLink("https://local-demo.apps.dbx.tools/settings/profile", baseUrl)).toBe(
+      true,
+    );
   });
 
   test("keeps confirmation for external origins and non-web schemes", () => {

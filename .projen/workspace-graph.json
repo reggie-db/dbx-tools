@@ -70,6 +70,7 @@
       "path": "packages/js/node/appkit-mastra",
       "dependencies": [
         "@dbx-tools/appkit",
+        "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/cache",
         "@dbx-tools/core",
         "@dbx-tools/databricks",
@@ -83,7 +84,8 @@
         "@dbx-tools/shared-fs",
         "@dbx-tools/shared-genie",
         "@dbx-tools/shared-mastra",
-        "@dbx-tools/shared-model"
+        "@dbx-tools/shared-model",
+        "@dbx-tools/shared-model-gateway"
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit-generator",
@@ -113,6 +115,7 @@
       "name": "@dbx-tools/appkit-model-gateway",
       "path": "packages/js/node/appkit-model-gateway",
       "dependencies": [
+        "@dbx-tools/cache",
         "@dbx-tools/databricks",
         "@dbx-tools/model",
         "@dbx-tools/model-protocol",
@@ -121,6 +124,7 @@
         "@dbx-tools/shared-model-gateway"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
         "@dbx-tools/cli"
       ]
     },
@@ -185,6 +189,7 @@
         "@dbx-tools/appkit",
         "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-memory",
+        "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/model"
       ]
     },
@@ -685,6 +690,7 @@
         "@dbx-tools/shared-model"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit-mastra",
         "@dbx-tools/appkit-model-gateway",
         "@dbx-tools/cli",
         "@dbx-tools/model-protocol",

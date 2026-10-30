@@ -256,12 +256,7 @@ export class CliService implements CliServiceLifecycle {
     await this.stop();
     const installed = { ...installedDefinition, hostExecutable: host.path };
     await writeServiceDefinition(paths.configFile, installed);
-    await installStartup(
-      installed,
-      paths,
-      this.runtime,
-      this.launch(host.path, paths.configFile),
-    );
+    await installStartup(installed, paths, this.runtime, this.launch(host.path, paths.configFile));
     if (options.start ?? true) await this.start();
     await Promise.all([
       removeOtherArtifacts(dirname(artifactDirectory), artifactId),

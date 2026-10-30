@@ -67,12 +67,18 @@ describe("addArgs", () => {
 
   it("renders layered dotenv values as help defaults", () => {
     const cwd = mkdtempSync(join(tmpdir(), "cli-args-"));
+    const previousPort = process.env.PORT;
+    const previousDebug = process.env.DEBUG;
+    delete process.env.PORT;
+    delete process.env.DEBUG;
     try {
       writeFileSync(join(cwd, ".env"), "PORT=4123\nDEBUG=true\n");
       const help = addArgs(new Command("demo"), schema, { ...isolated, cwd }).helpInformation();
       assert.match(help, /default: "4123"/);
       assert.match(help, /default: true/);
     } finally {
+      restoreEnvironment("PORT", previousPort);
+      restoreEnvironment("DEBUG", previousDebug);
       rmSync(cwd, { recursive: true, force: true });
     }
   });

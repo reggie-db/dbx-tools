@@ -327,8 +327,9 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const enableFeedback = options.enableFeedback !== false;
   const feedbackModes = enableFeedback ? mastraClient.feedbackModes : [];
   const feedbackAvailable = feedbackModes.length > 0;
-  const { url: mlflowExperimentUrl, tracePrefix: mlflowTracePrefix } =
-    useMastraMlflowExperiment(feedbackModes.includes("mlflow"));
+  const { url: mlflowExperimentUrl, tracePrefix: mlflowTracePrefix } = useMastraMlflowExperiment(
+    feedbackModes.includes("mlflow"),
+  );
   const [resourceScope, setResourceScope] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;

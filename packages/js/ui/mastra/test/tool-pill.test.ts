@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { createShikiPlugin, highlightToHtml } from "@dbx-tools/ui/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { createShikiPlugin, highlightToHtml } from "@dbx-tools/ui/react";
 import {
   ToolSessionPill,
   formatRawToolPayload,

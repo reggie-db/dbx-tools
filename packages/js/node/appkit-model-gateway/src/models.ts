@@ -81,8 +81,7 @@ export function listModelsPayload(
     available.sort(
       includeCodex
         ? compareCodexCatalogueTargets
-        : (left, right) =>
-            compareCatalogueTargets(left, right, (target) => target.displayName),
+        : (left, right) => compareCatalogueTargets(left, right, (target) => target.displayName),
     );
   }
   const smartRouterCandidates = available.filter((target) => target.capabilities.chat);

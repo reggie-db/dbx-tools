@@ -184,7 +184,9 @@ describe("assistantActivityItems", () => {
     );
 
     assert.deepEqual(
-      items.map((item) => (item.type === "tool" ? `tool:${item.event.id}` : `thought:${item.text}`)),
+      items.map((item) =>
+        item.type === "tool" ? `tool:${item.event.id}` : `thought:${item.text}`,
+      ),
       ["tool:genie-1", "thought:I'm pulling the latest complete reporting week."],
     );
   });

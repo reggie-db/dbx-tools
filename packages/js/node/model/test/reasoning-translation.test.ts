@@ -210,8 +210,7 @@ describe("learnReasoningLevelsFromError", () => {
   it("prefers modelparams.dev levels over an error-derived ladder", async () => {
     const body = {
       error: {
-        message:
-          "Unsupported reasoning_effort. Supported values are: 'low' and 'high'.",
+        message: "Unsupported reasoning_effort. Supported values are: 'low' and 'high'.",
       },
     };
     const learned = await learnReasoningLevelsFromError("databricks-grok-4-7", body);

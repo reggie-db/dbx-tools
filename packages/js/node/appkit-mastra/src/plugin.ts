@@ -1269,9 +1269,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   }
 
   /** Verify experiment visibility through the active user's OBO client. */
-  private async fetchMlflowExperimentViewerUrl(): Promise<
-    ExecutionResult<string | undefined>
-  > {
+  private async fetchMlflowExperimentViewerUrl(): Promise<ExecutionResult<string | undefined>> {
     const client = getExecutionContext().client;
     return this.execute(() => mlflowExperimentViewerUrl(client), feedbackWriteDefaults);
   }
@@ -1506,16 +1504,16 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       this.config,
       { mlflowFeedback: this.feedbackEnabled("mlflow") },
       {
-      app: this.mastraApp,
-      mastra: this.mastra,
-      prefix: "",
-      customApiRoutes: [
-        ...agentChatRoutes(this.config),
-        workflowRoute({
-          path: "/route/workflows/:workflowId/stream",
-          version: "v7",
-        }),
-      ],
+        app: this.mastraApp,
+        mastra: this.mastra,
+        prefix: "",
+        customApiRoutes: [
+          ...agentChatRoutes(this.config),
+          workflowRoute({
+            path: "/route/workflows/:workflowId/stream",
+            version: "v7",
+          }),
+        ],
       },
     );
     await this.mastraServer.init();

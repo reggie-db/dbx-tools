@@ -28,10 +28,10 @@ import {
   parseRetiredModels,
 } from "./_metadata-generator.ts";
 import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
-import modelParamsSnapshotJson from "./generated/modelparams-reasoning.json" with { type: "json" };
-import modelsDevSnapshotJson from "./generated/models-dev-capabilities.json" with { type: "json" };
 import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
 import reasoningSnapshotJson from "./generated/model-reasoning.json" with { type: "json" };
+import modelParamsSnapshotJson from "./generated/modelparams-reasoning.json" with { type: "json" };
+import modelsDevSnapshotJson from "./generated/models-dev-capabilities.json" with { type: "json" };
 import {
   createMetadataCache,
   mergePreferFreshList,
@@ -230,16 +230,10 @@ function buildIndex(input: {
   return {
     capabilities: {
       responses: new Set(input.capabilities.responses),
-      imageInput: new Set([
-        ...input.capabilities.imageInput,
-        ...input.modelsDev.imageInput,
-      ]),
+      imageInput: new Set([...input.capabilities.imageInput, ...input.modelsDev.imageInput]),
       applyPatch: new Set(input.capabilities.applyPatch),
       webSearch: new Set(input.capabilities.webSearch),
-      reasoning: new Set([
-        ...input.modelsDev.reasoning,
-        ...input.modelParams.reasoning,
-      ]),
+      reasoning: new Set([...input.modelsDev.reasoning, ...input.modelParams.reasoning]),
       tools: new Set(input.modelsDev.tools),
       structuredOutput: new Set(input.modelsDev.structuredOutput),
       temperature: new Set(input.modelsDev.temperatureSupported),
@@ -438,8 +432,7 @@ export function modelCapabilitiesFor(model: string | ServingEndpointSummary): Mo
     reasoning:
       keys.some((key) => capabilities.reasoning.has(key)) ||
       identities.some((identity) => modelReasoningEfforts(identity).length > 0),
-    tools:
-      keys.some((key) => capabilities.tools.has(key)) || identities.some(modelSupportsTools),
+    tools: keys.some((key) => capabilities.tools.has(key)) || identities.some(modelSupportsTools),
     structuredOutput: keys.some((key) => capabilities.structuredOutput.has(key)),
     temperature: modelTemperatureSupportFor(model) === true,
   };

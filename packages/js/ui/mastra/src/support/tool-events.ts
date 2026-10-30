@@ -1,10 +1,10 @@
+import { GenieMessageSchema } from "@dbx-tools/shared-genie";
 import {
   GENIE_PROGRESS_PART_TYPE,
   GenieProgressPartDataSchema,
   TOOL_PROGRESS_PART_TYPE,
   ToolProgressPartDataSchema,
 } from "@dbx-tools/shared-mastra";
-import { GenieMessageSchema } from "@dbx-tools/shared-genie";
 import { getToolOrDynamicToolName, isToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 

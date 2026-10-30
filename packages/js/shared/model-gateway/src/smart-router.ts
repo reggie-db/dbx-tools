@@ -31,8 +31,7 @@ export const SMART_ROUTER_TASK_TIER_HEADER = "x-dbx-tools-smart-router-task-tier
 export const SMART_ROUTER_SERVED_TIER_HEADER = "x-dbx-tools-smart-router-served-tier";
 
 /** task_v3 profiler status when present. */
-export const SMART_ROUTER_PROFILER_STATUS_HEADER =
-  "x-dbx-tools-smart-router-profiler-status";
+export const SMART_ROUTER_PROFILER_STATUS_HEADER = "x-dbx-tools-smart-router-profiler-status";
 
 /** Harness vocabulary accepted by Databricks Smart Router. */
 export const SmartRouterHarnessSchema = z
@@ -44,7 +43,11 @@ export type SmartRouterHarness = z.infer<typeof SmartRouterHarnessSchema>;
 /** One concrete model offered to Databricks Smart Router. */
 export const SmartRouterRouteOptionSchema = z
   .object({
-    model: z.string().trim().min(1).describe("Databricks system model service offered to the router."),
+    model: z
+      .string()
+      .trim()
+      .min(1)
+      .describe("Databricks system model service offered to the router."),
     harness: SmartRouterHarnessSchema,
   })
   .strict()
@@ -61,7 +64,11 @@ export const SmartRouterRequestSchema = z
       .describe("Eligible concrete system-model routes."),
     task: z
       .object({
-        prompt: z.string().trim().min(1).describe("Bounded task context classified by Smart Router."),
+        prompt: z
+          .string()
+          .trim()
+          .min(1)
+          .describe("Bounded task context classified by Smart Router."),
       })
       .strict(),
     route_selector: z

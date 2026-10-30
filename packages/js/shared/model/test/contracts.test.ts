@@ -103,5 +103,4 @@ describe("browser-safe model schemas", () => {
       }),
     );
   });
-
 });

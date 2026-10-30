@@ -179,10 +179,7 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
           updateSession(threadId, (current) => ({
             ...current,
             runId: runIdRef.current,
-            status:
-              terminalReceived || current.status === "finishing"
-                ? "finishing"
-                : "streaming",
+            status: terminalReceived || current.status === "finishing" ? "finishing" : "streaming",
           }));
         }
         return threadTitle;

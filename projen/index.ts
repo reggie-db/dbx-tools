@@ -94,7 +94,7 @@ export type { ReleasePublishTarget, ReleaseInstallMode, ReleaseStepSelection, Re
 export { tryReleaseWorkflow, releaseTagPattern, releaseCondition, releaseBuildSteps, nodeReleaseSetupSteps, uvSetupStep, refreshReleaseDocsDependencies, refreshPublicationVerification, DBXToolsRelease } from "./src/release.ts";
 export type { ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
 export { runSynth } from "./src/scaffold.ts";
-export { SHARED_CORE_BINDING_EXPORTS, sharedCorePackageDir, sharedCoreExportUsage, duplicatedOwnedHelpers, formatSharedCoreUsage } from "./src/shared-core-usage.ts";
+export { SHARED_CORE_BINDING_EXPORTS, sharedCoreExportUsage, duplicatedOwnedHelpers, formatSharedCoreUsage } from "./src/shared-core-usage.ts";
 export type { SharedCoreUsageKind, SharedCoreExportUsage } from "./src/shared-core-usage.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";

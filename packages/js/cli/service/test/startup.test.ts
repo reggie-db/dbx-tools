@@ -112,10 +112,7 @@ describe("CLI service startup entries", () => {
     const launchctlLog = join(root, "launchctl.log");
     await mkdir(binDirectory);
     const launchctl = join(binDirectory, "launchctl");
-    await writeFile(
-      launchctl,
-      '#!/bin/sh\nprintf "%s\\n" "$*" >> "$LAUNCHCTL_LOG"\nexit 0\n',
-    );
+    await writeFile(launchctl, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$LAUNCHCTL_LOG"\nexit 0\n');
     await chmod(launchctl, 0o755);
     const runtime = {
       platform: "darwin" as const,

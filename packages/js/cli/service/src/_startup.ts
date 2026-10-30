@@ -51,7 +51,11 @@ export async function startStartup(
     if (await launchAgentLoaded(definition, runtime)) {
       await runLaunchctl(["kickstart", "-k", target], runtime, true);
     } else {
-      await runLaunchctl(["bootstrap", launchAgentDomain(runtime), paths.startupFile], runtime, true);
+      await runLaunchctl(
+        ["bootstrap", launchAgentDomain(runtime), paths.startupFile],
+        runtime,
+        true,
+      );
     }
     return undefined;
   }

@@ -94,7 +94,11 @@ describe("Responses provider options", () => {
 
     assert.ok(result.providerOptions);
     await assert.rejects(
-      generateText({ model, prompt: "Explain the result.", providerOptions: result.providerOptions }),
+      generateText({
+        model,
+        prompt: "Explain the result.",
+        providerOptions: result.providerOptions,
+      }),
     );
     assert.ok(received);
     const body = JSON.parse(await received.clone().text()) as Record<string, unknown>;

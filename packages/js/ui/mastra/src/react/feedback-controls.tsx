@@ -99,10 +99,7 @@ export const FeedbackControls = ({
         </TooltipTrigger>
         <TooltipContent>Bad response</TooltipContent>
       </Tooltip>
-      <Dialog
-        open={open}
-        onOpenChange={setOpen}
-      >
+      <Dialog open={open} onOpenChange={setOpen}>
         <Tooltip>
           <TooltipTrigger asChild>
             <DialogTrigger asChild disabled={!canComment}>

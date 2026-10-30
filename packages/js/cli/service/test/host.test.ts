@@ -77,17 +77,12 @@ describe("CLI service host", () => {
       () => {},
     );
     let trayCreated = false;
-    const host = new CliServiceHost(
-      { ...DEFINITION, command: { executable } },
-      paths,
-      () => {},
-      {
-        createTray: () => {
-          trayCreated = true;
-          throw new Error("tray must not be created");
-        },
+    const host = new CliServiceHost({ ...DEFINITION, command: { executable } }, paths, () => {}, {
+      createTray: () => {
+        trayCreated = true;
+        throw new Error("tray must not be created");
       },
-    );
+    });
 
     await assert.rejects(() => host.start(), /already active/);
     assert.equal(trayCreated, false);

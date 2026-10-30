@@ -82,6 +82,7 @@ ignore:
   - "**/*.py[cod]"
   - "packages/py/**/dist/**"
   - "**/_generated/**"
+  - "packages/py/graphiti/src/dbx_tools/graphiti/postgraph/**"
 phantom_import_allowlist:
   - "dbx_tools"
   - "pytest"

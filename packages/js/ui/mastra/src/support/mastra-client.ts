@@ -987,10 +987,9 @@ export const useMastraThreads = (
     }
     const controller = new AbortController();
     if (!hasLoadedRef.current) setLoading(true);
-    void load(controller.signal)
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+    void load(controller.signal).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
     return () => controller.abort();
   }, [enabled, load, nonce]);
 

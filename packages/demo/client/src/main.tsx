@@ -1,8 +1,8 @@
 import { AuthGate } from "@dbx-tools/ui/auth/react";
+import { ErrorBoundary } from "@dbx-tools/ui/react";
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import { ErrorBoundary } from "@dbx-tools/ui/react";
 
 const App = lazy(() => import("./App.tsx"));
 

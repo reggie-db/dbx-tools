@@ -27,8 +27,7 @@ export interface GenieFeedbackTarget {
 
 /** Per-message feedback destination and optional Genie identity. */
 export type MessageFeedbackDestination =
-  | { mode: "mlflow"; traceId: string }
-  | ({ mode: "genie" } & GenieFeedbackTarget);
+  { mode: "mlflow"; traceId: string } | ({ mode: "genie" } & GenieFeedbackTarget);
 
 /** Read the latest Genie target from an assistant message's tool results. */
 export function genieFeedbackTarget(message: UIMessage): GenieFeedbackTarget | undefined {

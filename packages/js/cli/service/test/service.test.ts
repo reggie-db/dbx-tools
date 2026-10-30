@@ -20,10 +20,7 @@ describe("CLI service lifecycle", () => {
     await chmod(trayExecutable, 0o755);
     await mkdir(join(globalHomeDirectory, "bin"), { recursive: true });
     await writeFile(join(globalHomeDirectory, "bin", "example-gateway"), "legacy host");
-    await writeFile(
-      join(globalHomeDirectory, "bin", "example-gateway-command"),
-      "legacy command",
-    );
+    await writeFile(join(globalHomeDirectory, "bin", "example-gateway-command"), "legacy command");
     const compiled: string[] = [];
     const pythonInstalls: unknown[] = [];
     const service = new CliService(

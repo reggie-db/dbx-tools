@@ -60,6 +60,7 @@ class SlopDetectorConfig extends Component {
             .map((line) => line.replace(/^\//, ""))
             .map((line) => (line.endsWith("/") ? `${line}**` : line)),
           "**/_generated/**",
+          "packages/py/graphiti/src/dbx_tools/graphiti/postgraph/**",
         ],
       ),
     ];

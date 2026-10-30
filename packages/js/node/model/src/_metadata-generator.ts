@@ -177,10 +177,7 @@ export function parseModelCapabilities(
 }
 
 /** Normalize portable model capabilities and effort ladders from models.dev JSON. */
-export function parseModelsDev(
-  input: unknown,
-  generatedAt: number,
-): ModelsDevSnapshot {
+export function parseModelsDev(input: unknown, generatedAt: number): ModelsDevSnapshot {
   const providers = ModelsDevApiSchema.parse(input);
   const imageInput = new Set<string>();
   const reasoning = new Set<string>();
@@ -222,10 +219,7 @@ export function parseModelsDev(
 }
 
 /** Normalize reasoning support and effort ladders from modelparams.dev JSON. */
-export function parseModelParams(
-  input: unknown,
-  generatedAt: number,
-): ModelParamsSnapshot {
+export function parseModelParams(input: unknown, generatedAt: number): ModelParamsSnapshot {
   const response = ModelParamsApiSchema.parse(input);
   const reasoning = new Set<string>();
   const models: Record<string, ReasoningLevel[]> = {};
@@ -237,8 +231,7 @@ export function parseModelParams(
     const levels = sortReasoningLevels(
       reasoningParameters
         .filter(
-          (parameter) =>
-            parameter.type === "enum" && EFFORT_PARAMETER_PATHS.has(parameter.path),
+          (parameter) => parameter.type === "enum" && EFFORT_PARAMETER_PATHS.has(parameter.path),
         )
         .flatMap((parameter) => parameter.values ?? [])
         .flatMap((value) => parseReasoning(value) ?? []),

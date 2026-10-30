@@ -50,7 +50,6 @@ import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:pa
 import { log, mapConcurrent, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
-import { publishNpmArchives } from "./publish-npm.ts";
 import {
   TaskConcurrencyOptionSchema,
   TaskDirectoriesOptionSchema,
@@ -58,6 +57,7 @@ import {
   TaskOutputOptionSchema,
   TaskRootOptionSchema,
 } from "./options.ts";
+import { publishNpmArchives } from "./publish-npm.ts";
 import { runTaskCommand } from "../src/_task-command.ts";
 import { applyPublishConfig, packNpmPackage } from "../src/npm-packaging.ts";
 import { readNpmArchiveIdentity } from "../src/npm-release.ts";

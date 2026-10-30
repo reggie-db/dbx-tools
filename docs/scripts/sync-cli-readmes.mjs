@@ -19,12 +19,13 @@ const CliReadmeSyncOptionsSchema = z.object({
 const { check } = parseArgv(CliReadmeSyncOptionsSchema);
 const references = [];
 for (const pkg of discoverJavaScriptPackages(root).filter((pkg) => pkg.group === "cli")) {
-  const entry = resolvePackageTypeScriptExports(pkg.manifest).find(
-    (entry) => entry.subpath === "./cli",
-  );
+  const manifest = JSON.parse(fs.readFileSync(pkg.manifest, "utf8"));
+  const entries = resolvePackageTypeScriptExports(pkg.manifest);
+  const entry =
+    entries.find((candidate) => candidate.subpath === "./cli") ??
+    entries.find((candidate) => candidate.subpath === ".");
   if (!entry) {
-    const manifest = JSON.parse(fs.readFileSync(pkg.manifest, "utf8"));
-    if (manifest.bin) throw new Error(`${pkg.name} must export its owning CLI module`);
+    if (manifest.bin) throw new Error(`${pkg.name} must export its CLI parser`);
     continue;
   }
   const owner = await import(pathToFileURL(entry.file).href);
@@ -33,6 +34,7 @@ for (const pkg of discoverJavaScriptPackages(root).filter((pkg) => pkg.group ===
     typeof owner.buildDocumentationProgram !== "function" &&
     typeof owner.buildServiceCommand !== "function"
   ) {
+    if (!manifest.bin) continue;
     throw new Error(`${pkg.name} must expose its parser builder for documentation`);
   }
   const reference =

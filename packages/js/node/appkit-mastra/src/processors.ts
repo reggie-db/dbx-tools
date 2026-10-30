@@ -120,10 +120,7 @@ function foreignResponsesState(
   return state;
 }
 
-function hasForeignReasoningState(
-  part: unknown,
-  state: ModelBoundResponsesState,
-): boolean {
+function hasForeignReasoningState(part: unknown, state: ModelBoundResponsesState): boolean {
   const record = asRecord(part);
   const values = providerState(record?.providerOptions ?? record?.providerMetadata);
   return (

@@ -231,9 +231,7 @@ async function resolveUcTracePrefix(client: WorkspaceClient): Promise<string | u
 }
 
 /** Resolve the configured Unity Catalog trace prefix without failing chat startup. */
-export async function mlflowUcTracePrefix(
-  client: WorkspaceClient,
-): Promise<string | undefined> {
+export async function mlflowUcTracePrefix(client: WorkspaceClient): Promise<string | undefined> {
   try {
     return await resolveUcTracePrefix(client);
   } catch {

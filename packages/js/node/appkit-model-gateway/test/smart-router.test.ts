@@ -58,9 +58,13 @@ describe("Smart Router service", () => {
       },
     );
 
-    const result = await service.select("Route this task", smartRouterCandidates(targets(), "codex"), {
-      client: fakeClient(),
-    });
+    const result = await service.select(
+      "Route this task",
+      smartRouterCandidates(targets(), "codex"),
+      {
+        client: fakeClient(),
+      },
+    );
 
     assert.equal(timeoutMs, 321);
     assert.equal(result.routerName, "task_v3");
@@ -177,8 +181,10 @@ describe("Smart Router service", () => {
     const candidates = smartRouterCandidates(targets(), "codex");
 
     assert.equal(await service.isEnabled(candidates, client), true);
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    assert.equal(await service.isEnabled(candidates, client), true);
+    await waitFor(async () => {
+      assert.equal(await service.isEnabled(candidates, client), true);
+      return calls === 2;
+    });
     assert.equal(calls, 2);
     finishRefresh?.({ route_selection: [{ route_option: { model: "system.ai.gpt-fast" } }] });
     service.dispose();

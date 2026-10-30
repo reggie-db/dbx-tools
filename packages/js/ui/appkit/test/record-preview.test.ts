@@ -35,10 +35,7 @@ describe("RecordPreview", () => {
     assert.doesNotMatch(html, /max-h-\[inherit\] min-w-0 overflow-auto/);
     assert.match(html, /overflow-clip/);
     assert.match(html, /pointer-events-none sticky top-1 z-20 flex h-0 justify-end pr-1/);
-    assert.match(
-      html,
-      /pointer-events-auto size-6 bg-background shadow-sm ring-1 ring-border\/40/,
-    );
+    assert.match(html, /pointer-events-auto size-6 bg-background shadow-sm ring-1 ring-border\/40/);
     assert.doesNotMatch(html, /relative min-w-0 max-w-full overflow-hidden/);
     assert.doesNotMatch(html, /border-l-2 border-border\/70/);
   });
