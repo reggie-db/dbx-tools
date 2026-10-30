@@ -6,6 +6,7 @@ import {
   parseModelParams,
   parseModelCapabilities,
   parseModelRateLimits,
+  parseModelTokenPrices,
   parseModelsDev,
   parseReasoningModels,
   parseRetiredModels,
@@ -15,13 +16,16 @@ import {
   MODELS_DEV_API_URL,
   MODEL_METADATA_TTL_MS,
   MODEL_RATE_LIMITS_URL,
+  FOUNDATION_MODEL_PRICING_URL,
   OPENAI_RESPONSES_MODELS_URL,
+  PROPRIETARY_MODEL_PRICING_URL,
   QUERY_REASON_MODELS_URL,
   RETIRED_MODELS_URL,
   WEB_SEARCH_MODELS_URL,
   type ModelParamsSnapshot,
   type ModelCapabilitiesSnapshot,
   type ModelRateLimitsSnapshot,
+  type ModelTokenPricesSnapshot,
   type ModelsDevSnapshot,
   type ReasoningModelsSnapshot,
   type RetiredModelsSnapshot,
@@ -45,6 +49,13 @@ await Promise.all([
   refreshSnapshot<ModelRateLimitsSnapshot>("model-rate-limits.json", async () =>
     parseModelRateLimits(await loadPage(MODEL_RATE_LIMITS_URL), now),
   ),
+  refreshSnapshot<ModelTokenPricesSnapshot>("model-token-prices.json", async () => {
+    const [foundationHtml, proprietaryHtml] = await Promise.all([
+      loadPage(FOUNDATION_MODEL_PRICING_URL),
+      loadPage(PROPRIETARY_MODEL_PRICING_URL),
+    ]);
+    return parseModelTokenPrices(foundationHtml, proprietaryHtml, now);
+  }),
   refreshSnapshot<ReasoningModelsSnapshot>("model-reasoning.json", async () =>
     parseReasoningModels(await loadPage(QUERY_REASON_MODELS_URL), now),
   ),

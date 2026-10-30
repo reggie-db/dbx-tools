@@ -16,6 +16,7 @@ import type {
   ModelCapabilities,
   ModelMetadata,
   ModelRateLimits,
+  ModelTokenPrice,
   ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
@@ -23,6 +24,7 @@ import {
   parseModelParams,
   parseModelCapabilities,
   parseModelRateLimits,
+  parseModelTokenPrices,
   parseModelsDev,
   parseReasoningModels,
   parseRetiredModels,
@@ -30,6 +32,7 @@ import {
 import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
 import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
 import reasoningSnapshotJson from "./generated/model-reasoning.json" with { type: "json" };
+import tokenPricesSnapshotJson from "./generated/model-token-prices.json" with { type: "json" };
 import modelParamsSnapshotJson from "./generated/modelparams-reasoning.json" with { type: "json" };
 import modelsDevSnapshotJson from "./generated/models-dev-capabilities.json" with { type: "json" };
 import {
@@ -42,7 +45,9 @@ import {
   MODELPARAMS_DEV_MODELS_URL,
   MODELS_DEV_API_URL,
   MODEL_RATE_LIMITS_URL,
+  FOUNDATION_MODEL_PRICING_URL,
   OPENAI_RESPONSES_MODELS_URL,
+  PROPRIETARY_MODEL_PRICING_URL,
   QUERY_REASON_MODELS_URL,
   RETIRED_MODELS_URL,
   WEB_SEARCH_MODELS_URL,
@@ -51,6 +56,7 @@ import {
   type ModelCapabilitiesSnapshot,
   type ModelCapabilityCatalogue,
   type ModelRateLimitsSnapshot,
+  type ModelTokenPricesSnapshot,
   type ModelsDevCapabilityCatalogue,
   type ModelsDevSnapshot,
   type ReasoningModelsSnapshot,
@@ -82,6 +88,7 @@ const capabilitiesSnapshot = capabilitiesSnapshotJson as ModelCapabilitiesSnapsh
 const modelParamsSnapshot = modelParamsSnapshotJson as ModelParamsSnapshot;
 const modelsDevSnapshot = modelsDevSnapshotJson as ModelsDevSnapshot;
 const rateLimitsSnapshot = rateLimitsSnapshotJson as ModelRateLimitsSnapshot;
+const tokenPricesSnapshot = tokenPricesSnapshotJson as ModelTokenPricesSnapshot;
 const reasoningSnapshot = reasoningSnapshotJson as ReasoningModelsSnapshot;
 
 interface MetadataIndex {
@@ -89,6 +96,7 @@ interface MetadataIndex {
     readonly [Key in keyof ModelCapabilities]: ReadonlySet<string>;
   };
   readonly rateLimits: ReadonlyMap<string, ModelRateLimits>;
+  readonly tokenPrices: ReadonlyMap<string, readonly ModelTokenPrice[]>;
   readonly reasoning: ReasoningModelCatalogue;
   readonly reasoningDocs: ReasoningModelCatalogue;
   readonly modelParamsReasoning: ReasoningModelCatalogue;
@@ -98,6 +106,32 @@ interface MetadataIndex {
 
 type CapabilitySets = ModelCapabilityCatalogue;
 type ModelsDevData = ModelsDevCapabilityCatalogue;
+
+/** Token counts used to estimate one Databricks model invocation. */
+export interface ModelTokenUsage {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
+  readonly cacheWriteOneHourTokens?: number;
+}
+
+/** Select one documented Databricks price row and optional currency conversion. */
+export interface EstimateModelTokenPriceOptions {
+  readonly tier?: ModelTokenPrice["tier"];
+  readonly condition?: ModelTokenPrice["condition"];
+  readonly usdPerDbu?: number;
+}
+
+/** Estimated DBU and optional USD price for one model invocation. */
+export interface ModelTokenPriceEstimate {
+  readonly model: string;
+  readonly rate: ModelTokenPrice;
+  readonly price: Readonly<{
+    dbu: number;
+    usd?: number;
+  }>;
+}
 
 const USER_AGENT = "dbx-tools-model-metadata/1";
 
@@ -147,6 +181,19 @@ const rateLimitsCache = createMetadataCache<Readonly<Record<string, ModelRateLim
   fallback: rateLimitsSnapshot.catalogue.models,
   load: async () =>
     parseModelRateLimits(await loadPage(MODEL_RATE_LIMITS_URL), nowSeconds()).catalogue.models,
+  merge: mergePreferFreshRecord,
+});
+
+const tokenPricesCache = createMetadataCache<Readonly<Record<string, readonly ModelTokenPrice[]>>>({
+  key: "model-token-prices",
+  fallback: tokenPricesSnapshot.catalogue.models,
+  load: async () => {
+    const [foundationHtml, proprietaryHtml] = await Promise.all([
+      loadPage(FOUNDATION_MODEL_PRICING_URL),
+      loadPage(PROPRIETARY_MODEL_PRICING_URL),
+    ]);
+    return parseModelTokenPrices(foundationHtml, proprietaryHtml, nowSeconds()).catalogue.models;
+  },
   merge: mergePreferFreshRecord,
 });
 
@@ -210,6 +257,7 @@ function buildIndexFromCommitted(): MetadataIndex {
     modelsDev: modelsDevSnapshot.capabilities,
     modelParams: modelParamsSnapshot.catalogue,
     rateLimits: rateLimitsSnapshot.catalogue.models,
+    tokenPrices: tokenPricesSnapshot.catalogue.models,
     reasoning: reasoningSnapshot.catalogue.models,
     learnedReasoning: {},
   });
@@ -221,6 +269,7 @@ function buildIndex(input: {
   readonly modelsDev: ModelsDevData;
   readonly modelParams: ModelParamsCatalogue;
   readonly rateLimits: Readonly<Record<string, ModelRateLimits>>;
+  readonly tokenPrices: Readonly<Record<string, readonly ModelTokenPrice[]>>;
   readonly reasoning: Readonly<Record<string, readonly string[]>>;
   readonly learnedReasoning: Readonly<Record<string, readonly ReasoningLevel[]>>;
 }): MetadataIndex {
@@ -239,6 +288,9 @@ function buildIndex(input: {
       temperature: new Set(input.modelsDev.temperatureSupported),
     },
     rateLimits: new Map(Object.entries(input.rateLimits)),
+    tokenPrices: new Map(
+      Object.entries(input.tokenPrices).map(([key, prices]) => [key, Object.freeze([...prices])]),
+    ),
     reasoning: Object.freeze({
       ...modelParamsReasoning,
       ...reasoningDocs,
@@ -294,6 +346,7 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
       modelsDev,
       modelParams,
       rateLimits,
+      tokenPrices,
       reasoning,
       learnedReasoning,
     ] = await Promise.all([
@@ -302,6 +355,7 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
       modelsDevCache.get(),
       modelParamsCache.get(),
       rateLimitsCache.get(),
+      tokenPricesCache.get(),
       reasoningDocsCache.get(),
       learnedReasoningCache.get(),
     ]);
@@ -311,6 +365,7 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
       modelsDev,
       modelParams,
       rateLimits,
+      tokenPrices,
       reasoning,
       learnedReasoning,
     });
@@ -329,6 +384,7 @@ export async function hydrateModelMetadata(): Promise<MetadataIndex> {
     modelsDev,
     modelParams,
     rateLimits,
+    tokenPrices,
     reasoning,
     learnedReasoning,
   ] = await Promise.all([
@@ -337,6 +393,7 @@ export async function hydrateModelMetadata(): Promise<MetadataIndex> {
     peekOrFallback(modelsDevCache, modelsDevSnapshot.capabilities),
     peekOrFallback(modelParamsCache, modelParamsSnapshot.catalogue),
     peekOrFallback(rateLimitsCache, rateLimitsSnapshot.catalogue.models),
+    peekOrFallback(tokenPricesCache, tokenPricesSnapshot.catalogue.models),
     peekOrFallback(reasoningDocsCache, reasoningSnapshot.catalogue.models),
     peekOrFallback(learnedReasoningCache, {}),
   ]);
@@ -346,6 +403,7 @@ export async function hydrateModelMetadata(): Promise<MetadataIndex> {
     modelsDev,
     modelParams,
     rateLimits,
+    tokenPrices,
     reasoning,
     learnedReasoning,
   });
@@ -463,6 +521,71 @@ export function modelRateLimitsFor(
   return undefined;
 }
 
+/** Resolve Databricks DBU rates per million tokens from a model identity. */
+export function modelTokenPricesFor(
+  model: string | ServingEndpointSummary,
+): readonly ModelTokenPrice[] | undefined {
+  const prices = metadataIndex().tokenPrices;
+  const keys = modelIdentities(model).flatMap(pricingLookupKeys);
+  for (const key of keys) {
+    const exact = prices.get(key);
+    if (exact) return exact;
+  }
+  for (const key of keys) {
+    const compatible = [...prices.entries()]
+      .filter(([candidate]) => compatiblePricingKeys(key, candidate))
+      .sort(([left], [right]) => right.length - left.length)[0];
+    if (compatible) return compatible[1];
+  }
+  return undefined;
+}
+
+/** Estimate invocation price from documented Databricks token rates. */
+export function estimateModelTokenPrice(
+  model: string | ServingEndpointSummary,
+  usage: ModelTokenUsage,
+  options: EstimateModelTokenPriceOptions = {},
+): ModelTokenPriceEstimate | undefined {
+  const rates = modelTokenPricesFor(model);
+  if (!rates) return undefined;
+  const tier = options.tier ?? "standard";
+  const tierRates = rates.filter((rate) => rate.tier === tier);
+  const rate = options.condition
+    ? tierRates.find((candidate) => candidate.condition === options.condition)
+    : (tierRates.find((candidate) => candidate.condition === "default") ??
+      tierRates.find((candidate) => candidate.condition === "short-context") ??
+      tierRates[0]);
+  if (!rate) return undefined;
+  const tokenCounts = {
+    inputDbuPerMillionTokens: tokenCount(usage.inputTokens, "inputTokens"),
+    outputDbuPerMillionTokens: tokenCount(usage.outputTokens, "outputTokens"),
+    cacheReadDbuPerMillionTokens: tokenCount(usage.cacheReadTokens, "cacheReadTokens"),
+    cacheWriteDbuPerMillionTokens: tokenCount(usage.cacheWriteTokens, "cacheWriteTokens"),
+    cacheWriteOneHourDbuPerMillionTokens: tokenCount(
+      usage.cacheWriteOneHourTokens,
+      "cacheWriteOneHourTokens",
+    ),
+  } as const;
+  let dbu = 0;
+  for (const [field, tokens] of Object.entries(tokenCounts) as Array<
+    [keyof typeof tokenCounts, number]
+  >) {
+    if (tokens === 0) continue;
+    const dbuPerMillionTokens = rate[field];
+    if (dbuPerMillionTokens === null) return undefined;
+    dbu += (tokens / 1_000_000) * dbuPerMillionTokens;
+  }
+  const usdPerDbu = optionalNonnegativeNumber(options.usdPerDbu, "usdPerDbu");
+  return {
+    model: typeof model === "string" ? model : (model.modelServiceName ?? model.name),
+    rate,
+    price: {
+      dbu,
+      ...(usdPerDbu === undefined ? {} : { usd: dbu * usdPerDbu }),
+    },
+  };
+}
+
 /**
  * Resolve reasoning levels: Databricks documentation, modelparams.dev,
  * learned errors, then family defaults.
@@ -501,10 +624,12 @@ function publishedReasoningLevelsFor(
 /** Resolve retirement, capability, and rate-limit metadata together. */
 export function modelMetadataFor(model: string | ServingEndpointSummary): ModelMetadata {
   const rateLimits = modelRateLimitsFor(model);
+  const tokenPrices = modelTokenPricesFor(model);
   return {
     status: modelStatusFor(model),
     capabilities: modelCapabilitiesFor(model),
     ...(rateLimits ? { rateLimits } : {}),
+    ...(tokenPrices ? { tokenPrices: [...tokenPrices] } : {}),
   };
 }
 
@@ -515,6 +640,7 @@ export function modelMetadataGeneratedAt(): Readonly<{
   modelsDev: number;
   modelParams: number;
   rateLimits: number;
+  tokenPrices: number;
   reasoning: number;
 }> {
   return {
@@ -523,6 +649,7 @@ export function modelMetadataGeneratedAt(): Readonly<{
     modelsDev: modelsDevSnapshot.generatedAt,
     modelParams: modelParamsSnapshot.generatedAt,
     rateLimits: rateLimitsSnapshot.generatedAt,
+    tokenPrices: tokenPricesSnapshot.generatedAt,
     reasoning: reasoningSnapshot.generatedAt,
   };
 }
@@ -538,6 +665,43 @@ function modelIdentities(
     model.modelServiceName,
     ...Object.values(model.serviceNames ?? {}),
   ].filter((value): value is string => Boolean(value));
+}
+
+function pricingLookupKeys(identity: string): string[] {
+  const keys = new Set<string>();
+  const normalized = modelKey(identity);
+  if (normalized) keys.add(normalized);
+  const literal = identity
+    .toLowerCase()
+    .replace(/^system\.ai[.-]/, "")
+    .replace(/^databricks-/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (literal) keys.add(literal);
+  return [...keys];
+}
+
+function compatiblePricingKeys(left: string, right: string): boolean {
+  if (left.startsWith(`${right}-`) || right.startsWith(`${left}-`)) return true;
+  const leftTokens = new Set(left.split("-"));
+  const rightTokens = new Set(right.split("-"));
+  const smaller = leftTokens.size <= rightTokens.size ? leftTokens : rightTokens;
+  const larger = smaller === leftTokens ? rightTokens : leftTokens;
+  return smaller.size >= 3 && [...smaller].every((token) => larger.has(token));
+}
+
+function tokenCount(value: number | undefined, field: string): number {
+  const count = optionalNonnegativeNumber(value, field) ?? 0;
+  if (!Number.isInteger(count)) throw new RangeError(`${field} must be an integer`);
+  return count;
+}
+
+function optionalNonnegativeNumber(value: number | undefined, field: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${field} must be a nonnegative finite number`);
+  }
+  return value;
 }
 
 function modelKey(value: string): string | undefined {

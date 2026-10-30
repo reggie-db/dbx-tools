@@ -5,14 +5,17 @@ import {
   parseModelCapabilities,
   parseModelParams,
   parseModelRateLimits,
+  parseModelTokenPrices,
   parseModelsDev,
   parseRetiredModels,
 } from "../src/_metadata-generator.ts";
 import {
+  estimateModelTokenPrice,
   modelCapabilitiesFor,
   modelMetadataFor,
   modelRateLimitsFor,
   modelReasoningLevelsFor,
+  modelTokenPricesFor,
   modelTemperatureSupportFor,
 } from "../src/metadata.ts";
 import { modelStatusFor, retiredModelNames } from "../src/retirement.ts";
@@ -63,6 +66,63 @@ describe("model metadata generation", () => {
       outputTokensPerMinute: 200,
       queriesPerHour: 3600,
     });
+  });
+
+  it("parses Databricks token prices, tiers, variants, and grouped models", () => {
+    const foundation = `<table>
+      <tr><th>Model</th><th>Pay Per Token (DBU Per 1M Tokens)</th></tr>
+      <tr><th>Input</th><th>Output</th><th>Cache read</th></tr>
+      <tr><td>GLM-5.2, 5.3</td><td>20.000</td><td>62.857</td><td>3.714</td></tr>
+    </table>`;
+    const proprietary = `<table>
+      <tr><th>Model</th><th></th><th>Standard Pay Per Token (DBU Per 1M Tokens)</th></tr>
+      <tr><th>Input</th><th>Output</th><th>Cache read</th><th>Cache write</th><th>Cache write (1hr)</th></tr>
+      <tr><td>Claude Haiku 5.5 ⌖</td><td>Short context</td><td>1.429</td><td>7.143</td><td>0.143</td><td>1.786</td><td>2.857</td></tr>
+      <tr><td>Long context</td><td>7.143</td><td>35.714</td><td>0.714</td><td>8.929</td><td>14.286</td></tr>
+    </table>
+    <table>
+      <tr><th>Model</th><th>Priority Pay Per Token (DBU Per 1M Tokens)</th></tr>
+      <tr><th>Input</th><th>Output</th><th>Cache read</th></tr>
+      <tr><td>Grok 4.6*, 4.7* ⌖</td><td>35.714</td><td>107.143</td><td>8.929</td></tr>
+    </table>
+    <table><tr><th>Model</th><th>Batch Inference (DBU Per Hour)</th></tr>
+      <tr><td>Ignore Me</td><td>100</td></tr></table>`;
+    const snapshot = parseModelTokenPrices(foundation, proprietary, 42);
+    assert.deepEqual(snapshot.catalogue.models["glm-5-2"], [
+      {
+        tier: "standard",
+        condition: "default",
+        inputDbuPerMillionTokens: 20,
+        outputDbuPerMillionTokens: 62.857,
+        cacheReadDbuPerMillionTokens: 3.714,
+        cacheWriteDbuPerMillionTokens: null,
+        cacheWriteOneHourDbuPerMillionTokens: null,
+      },
+    ]);
+    assert.deepEqual(snapshot.catalogue.models["glm-5-3"], snapshot.catalogue.models["glm-5-2"]);
+    assert.deepEqual(snapshot.catalogue.models["claude-5-5-haiku"], [
+      {
+        tier: "standard",
+        condition: "short-context",
+        inputDbuPerMillionTokens: 1.429,
+        outputDbuPerMillionTokens: 7.143,
+        cacheReadDbuPerMillionTokens: 0.143,
+        cacheWriteDbuPerMillionTokens: 1.786,
+        cacheWriteOneHourDbuPerMillionTokens: 2.857,
+      },
+      {
+        tier: "standard",
+        condition: "long-context",
+        inputDbuPerMillionTokens: 7.143,
+        outputDbuPerMillionTokens: 35.714,
+        cacheReadDbuPerMillionTokens: 0.714,
+        cacheWriteDbuPerMillionTokens: 8.929,
+        cacheWriteOneHourDbuPerMillionTokens: 14.286,
+      },
+    ]);
+    assert.equal(snapshot.catalogue.models["grok-4-6"]?.[0]?.tier, "priority");
+    assert.deepEqual(snapshot.catalogue.models["grok-4-7"], snapshot.catalogue.models["grok-4-6"]);
+    assert.equal(snapshot.catalogue.models["ignore-me"], undefined);
   });
 
   it("normalizes models.dev capabilities and effort aliases", () => {
@@ -204,6 +264,24 @@ describe("model metadata lookup", () => {
     assert.equal(modelTemperatureSupportFor("custom-temperature-model"), undefined);
     assert.equal(modelCapabilitiesFor("custom-temperature-model").temperature, false);
     assert.deepEqual(modelRateLimitsFor(endpoint), modelRateLimitsFor("gpt-5.4"));
+    assert.deepEqual(modelTokenPricesFor(endpoint), modelTokenPricesFor("gpt-5.4"));
+    assert.equal(modelTokenPricesFor("databricks-gpt-5-4")?.[0]?.tier, "standard");
+    assert.ok(
+      modelTokenPricesFor("system.ai.claude-sonnet-4-6")?.some(
+        (price) => price.cacheWriteDbuPerMillionTokens !== null,
+      ),
+    );
+    const estimate = estimateModelTokenPrice(
+      "databricks-gpt-5-4",
+      { inputTokens: 1_000_000, outputTokens: 500_000 },
+      { condition: "short-context", usdPerDbu: 0.07 },
+    );
+    assert.equal(estimate?.model, "databricks-gpt-5-4");
+    assert.equal(estimate?.rate.condition, "short-context");
+    assert.ok(Math.abs((estimate?.price.dbu ?? 0) - 142.857) < 0.000_001);
+    assert.ok(Math.abs((estimate?.price.usd ?? 0) - 9.999_99) < 0.000_001);
+    assert.throws(() => estimateModelTokenPrice("gpt-5.4", { inputTokens: -1 }), RangeError);
+    assert.throws(() => estimateModelTokenPrice("gpt-5.4", { inputTokens: 1.5 }), RangeError);
     assert.equal(modelRateLimitsFor("system.ai.bge-large-en")?.queriesPerHour, 2_160_000);
     assert.deepEqual(modelMetadataFor(endpoint).status, { deprecated: false });
     assert.deepEqual(modelReasoningLevelsFor("databricks-grok-4-6"), [

@@ -1,4 +1,4 @@
-import type { ModelRateLimits } from "@dbx-tools/shared-model";
+import type { ModelRateLimits, ModelTokenPrice } from "@dbx-tools/shared-model";
 
 /** One day, matching the refresh cadence of Databricks model documentation. */
 export const MODEL_METADATA_TTL_MS = 24 * 60 * 60 * 1000;
@@ -18,6 +18,14 @@ export const WEB_SEARCH_MODELS_URL =
 /** Databricks documentation URL for Foundation Model API limits. */
 export const MODEL_RATE_LIMITS_URL =
   "https://docs.databricks.com/aws/en/machine-learning/foundation-model-apis/limits";
+
+/** Databricks pricing URL for open foundation-model token rates. */
+export const FOUNDATION_MODEL_PRICING_URL =
+  "https://www.databricks.com/product/pricing/foundation-model-serving";
+
+/** Databricks pricing URL for proprietary foundation-model token rates. */
+export const PROPRIETARY_MODEL_PRICING_URL =
+  "https://www.databricks.com/product/pricing/proprietary-foundation-model-serving";
 
 /** Databricks documentation URL for reasoning-effort model policy. */
 export const QUERY_REASON_MODELS_URL =
@@ -58,6 +66,17 @@ export interface ModelRateLimitCatalogue {
 export interface ModelRateLimitsSnapshot {
   readonly generatedAt: number;
   readonly catalogue: ModelRateLimitCatalogue;
+}
+
+/** Databricks token prices keyed by normalized model identity. */
+export interface ModelTokenPriceCatalogue {
+  readonly models: Readonly<Record<string, readonly ModelTokenPrice[]>>;
+}
+
+/** Build-generated Databricks token-price snapshot. */
+export interface ModelTokenPricesSnapshot {
+  readonly generatedAt: number;
+  readonly catalogue: ModelTokenPriceCatalogue;
 }
 
 /** Documented generic reasoning levels keyed by normalized model identity. */

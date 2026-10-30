@@ -556,7 +556,8 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
   );
   p.addTask("metadata", {
     exec: "bun scripts/generate-metadata.ts",
-    description: "Refresh model retirement, capability, rate-limit, and reasoning snapshots",
+    description:
+      "Refresh model retirement, capability, rate-limit, token-price, and reasoning snapshots",
   });
 });
 

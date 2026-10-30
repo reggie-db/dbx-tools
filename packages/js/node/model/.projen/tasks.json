@@ -57,7 +57,7 @@
     },
     "metadata": {
       "name": "metadata",
-      "description": "Refresh model retirement, capability, rate-limit, and reasoning snapshots",
+      "description": "Refresh model retirement, capability, rate-limit, token-price, and reasoning snapshots",
       "steps": [
         {
           "exec": "bun scripts/generate-metadata.ts"

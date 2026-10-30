@@ -1,0 +1,1515 @@
+{
+  "generatedAt": 1793394507,
+  "catalogue": {
+    "models": {
+      "bge-large": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 1.429,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "claude-4-1-opus": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 214.286,
+          "outputDbuPerMillionTokens": 1071.43,
+          "cacheReadDbuPerMillionTokens": 21.429,
+          "cacheWriteDbuPerMillionTokens": 267.857,
+          "cacheWriteOneHourDbuPerMillionTokens": 428.571
+        }
+      ],
+      "claude-4-5-haiku": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 14.286,
+          "outputDbuPerMillionTokens": 71.429,
+          "cacheReadDbuPerMillionTokens": 1.429,
+          "cacheWriteDbuPerMillionTokens": 17.857,
+          "cacheWriteOneHourDbuPerMillionTokens": 28.571
+        }
+      ],
+      "claude-4-5-opus": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 357.143,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": 89.286,
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+        }
+      ],
+      "claude-4-5-sonnet": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 42.857,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": 4.286,
+          "cacheWriteDbuPerMillionTokens": 53.571,
+          "cacheWriteOneHourDbuPerMillionTokens": 85.714
+        }
+      ],
+      "claude-4-6-opus": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 357.143,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": 89.286,
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+        }
+      ],
+      "claude-4-6-sonnet": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 42.857,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": 4.286,
+          "cacheWriteDbuPerMillionTokens": 53.571,
+          "cacheWriteOneHourDbuPerMillionTokens": 85.714
+        }
+      ],
+      "claude-4-7-opus": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 357.143,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": 89.286,
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+        }
+      ],
+      "claude-4-8-opus": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 357.143,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": 89.286,
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+        }
+      ],
+      "claude-4-opus": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 214.286,
+          "outputDbuPerMillionTokens": 1071.43,
+          "cacheReadDbuPerMillionTokens": 21.429,
+          "cacheWriteDbuPerMillionTokens": 267.857,
+          "cacheWriteOneHourDbuPerMillionTokens": 428.571
+        }
+      ],
+      "claude-4-sonnet": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 42.857,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": 4.286,
+          "cacheWriteDbuPerMillionTokens": 53.571,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "claude-5-1-fable": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 142.857,
+          "outputDbuPerMillionTokens": 714.286,
+          "cacheReadDbuPerMillionTokens": 3.571,
+          "cacheWriteDbuPerMillionTokens": 178.571,
+          "cacheWriteOneHourDbuPerMillionTokens": 285.714
+        }
+      ],
+      "claude-5-5-haiku": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 1.429,
+          "outputDbuPerMillionTokens": 7.143,
+          "cacheReadDbuPerMillionTokens": 0.143,
+          "cacheWriteDbuPerMillionTokens": 1.786,
+          "cacheWriteOneHourDbuPerMillionTokens": 2.857
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 7.143,
+          "outputDbuPerMillionTokens": 35.714,
+          "cacheReadDbuPerMillionTokens": 0.714,
+          "cacheWriteDbuPerMillionTokens": 8.929,
+          "cacheWriteOneHourDbuPerMillionTokens": 14.286
+        }
+      ],
+      "claude-5-5-opus": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 285.714,
+          "cacheReadDbuPerMillionTokens": 2.857,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": 114.286
+        }
+      ],
+      "claude-5-5-sonnet": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 28.571,
+          "outputDbuPerMillionTokens": 142.857,
+          "cacheReadDbuPerMillionTokens": 1.429,
+          "cacheWriteDbuPerMillionTokens": 35.714,
+          "cacheWriteOneHourDbuPerMillionTokens": 57.143
+        }
+      ],
+      "claude-5-fable": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 142.857,
+          "outputDbuPerMillionTokens": 714.286,
+          "cacheReadDbuPerMillionTokens": 14.286,
+          "cacheWriteDbuPerMillionTokens": 178.571,
+          "cacheWriteOneHourDbuPerMillionTokens": 285.714
+        }
+      ],
+      "claude-5-opus": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 357.143,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": 89.286,
+          "cacheWriteOneHourDbuPerMillionTokens": 142.857
+        }
+      ],
+      "claude-5-sonnet": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 28.571,
+          "outputDbuPerMillionTokens": 142.857,
+          "cacheReadDbuPerMillionTokens": 2.857,
+          "cacheWriteDbuPerMillionTokens": 35.714,
+          "cacheWriteOneHourDbuPerMillionTokens": 57.143
+        }
+      ],
+      "deepseek-4-1-flash-0910": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 4.286,
+          "outputDbuPerMillionTokens": 17.143,
+          "cacheReadDbuPerMillionTokens": 0.429,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 7.5,
+          "outputDbuPerMillionTokens": 30,
+          "cacheReadDbuPerMillionTokens": 0.75,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "deepseek-4-1-flash-1017": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 4.286,
+          "outputDbuPerMillionTokens": 17.143,
+          "cacheReadDbuPerMillionTokens": 0.1,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "deepseek-4-flash": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 2,
+          "outputDbuPerMillionTokens": 4,
+          "cacheReadDbuPerMillionTokens": 0.4,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "deepseek-4-pro": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 18.857,
+          "outputDbuPerMillionTokens": 56.571,
+          "cacheReadDbuPerMillionTokens": 1.886,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-2-5-flash-lite": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 1.786,
+          "outputDbuPerMillionTokens": 7.143,
+          "cacheReadDbuPerMillionTokens": 0.179,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 1.786,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 0.179,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "audio-tokens",
+          "inputDbuPerMillionTokens": 5.357,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 0.536,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-0-flash": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 8.929,
+          "outputDbuPerMillionTokens": 53.571,
+          "cacheReadDbuPerMillionTokens": 0.893,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 8.929,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 0.893,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "audio-tokens",
+          "inputDbuPerMillionTokens": 17.857,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 1.786,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 16.071,
+          "outputDbuPerMillionTokens": 96.429,
+          "cacheReadDbuPerMillionTokens": 1.607,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 16.071,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 1.607,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "audio-tokens",
+          "inputDbuPerMillionTokens": 32.143,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 3.214,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-1-flash-image": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 8.929,
+          "outputDbuPerMillionTokens": 53.571,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 8.929,
+          "outputDbuPerMillionTokens": 1071.43,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-1-flash-lite": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 4.464,
+          "outputDbuPerMillionTokens": 26.786,
+          "cacheReadDbuPerMillionTokens": 0.446,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 4.464,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 0.446,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "audio-tokens",
+          "inputDbuPerMillionTokens": 8.929,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 0.893,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 8.036,
+          "outputDbuPerMillionTokens": 48.214,
+          "cacheReadDbuPerMillionTokens": 0.804,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 8.036,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 0.804,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "audio-tokens",
+          "inputDbuPerMillionTokens": 16.071,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 1.607,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-1-flash-lite-image": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 4.464,
+          "outputDbuPerMillionTokens": 26.786,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 4.464,
+          "outputDbuPerMillionTokens": 535.714,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-1-pro": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": 3.571,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 321.429,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 64.286,
+          "outputDbuPerMillionTokens": 385.714,
+          "cacheReadDbuPerMillionTokens": 6.429,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 128.571,
+          "outputDbuPerMillionTokens": 578.571,
+          "cacheReadDbuPerMillionTokens": 12.857,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-5-flash": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 26.786,
+          "outputDbuPerMillionTokens": 160.714,
+          "cacheReadDbuPerMillionTokens": 2.679,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 48.214,
+          "outputDbuPerMillionTokens": 289.286,
+          "cacheReadDbuPerMillionTokens": 4.821,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-5-flash-lite": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 5.357,
+          "outputDbuPerMillionTokens": 44.643,
+          "cacheReadDbuPerMillionTokens": 0.536,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 9.643,
+          "outputDbuPerMillionTokens": 80.357,
+          "cacheReadDbuPerMillionTokens": 0.964,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-6-flash": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 10.714,
+          "outputDbuPerMillionTokens": 53.571,
+          "cacheReadDbuPerMillionTokens": 1.071,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 19.286,
+          "outputDbuPerMillionTokens": 96.429,
+          "cacheReadDbuPerMillionTokens": 1.929,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-7-flash": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 10.714,
+          "outputDbuPerMillionTokens": 53.571,
+          "cacheReadDbuPerMillionTokens": 1.071,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 19.286,
+          "outputDbuPerMillionTokens": 96.429,
+          "cacheReadDbuPerMillionTokens": 1.929,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-8-flash": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 10.714,
+          "outputDbuPerMillionTokens": 53.571,
+          "cacheReadDbuPerMillionTokens": 1.071,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 19.286,
+          "outputDbuPerMillionTokens": 96.429,
+          "cacheReadDbuPerMillionTokens": 1.929,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-3-pro-image": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 2142.86,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemini-4-argon": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 178.571,
+          "cacheReadDbuPerMillionTokens": 1.786,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 64.286,
+          "outputDbuPerMillionTokens": 321.429,
+          "cacheReadDbuPerMillionTokens": 3.214,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gemma-3-12b": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 2.143,
+          "outputDbuPerMillionTokens": 7.143,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "glm-5-2": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 20,
+          "outputDbuPerMillionTokens": 62.857,
+          "cacheReadDbuPerMillionTokens": 3.714,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 35,
+          "outputDbuPerMillionTokens": 110,
+          "cacheReadDbuPerMillionTokens": 6.5,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "glm-5-3": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 20,
+          "outputDbuPerMillionTokens": 62.857,
+          "cacheReadDbuPerMillionTokens": 3.714,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 35,
+          "outputDbuPerMillionTokens": 110,
+          "cacheReadDbuPerMillionTokens": 6.5,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "glm-5-3-flash": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 2.143,
+          "outputDbuPerMillionTokens": 7.143,
+          "cacheReadDbuPerMillionTokens": 0.429,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 3.75,
+          "outputDbuPerMillionTokens": 12.5,
+          "cacheReadDbuPerMillionTokens": 0.75,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-1-5-image": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 142.857,
+          "cacheReadDbuPerMillionTokens": 17.857,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 114.286,
+          "outputDbuPerMillionTokens": 457.143,
+          "cacheReadDbuPerMillionTokens": 28.571,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-1-image": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 17.857,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 142.857,
+          "outputDbuPerMillionTokens": 571.429,
+          "cacheReadDbuPerMillionTokens": 35.714,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-1-image-mini": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 28.571,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 2.857,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 114.286,
+          "cacheReadDbuPerMillionTokens": 3.571,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-2-image": [
+        {
+          "tier": "standard",
+          "condition": "text-tokens",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": 17.857,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "image-tokens",
+          "inputDbuPerMillionTokens": 114.286,
+          "outputDbuPerMillionTokens": 428.571,
+          "cacheReadDbuPerMillionTokens": 28.571,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 17.857,
+          "outputDbuPerMillionTokens": 142.857,
+          "cacheReadDbuPerMillionTokens": 1.786,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 285.714,
+          "cacheReadDbuPerMillionTokens": 3.571,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-1": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 17.857,
+          "outputDbuPerMillionTokens": 142.857,
+          "cacheReadDbuPerMillionTokens": 1.786,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 285.714,
+          "cacheReadDbuPerMillionTokens": 3.571,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-2": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 25,
+          "outputDbuPerMillionTokens": 200,
+          "cacheReadDbuPerMillionTokens": 2.5,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 50,
+          "outputDbuPerMillionTokens": 400,
+          "cacheReadDbuPerMillionTokens": 5,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-3-codex": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 25,
+          "outputDbuPerMillionTokens": 200,
+          "cacheReadDbuPerMillionTokens": 2.5,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 50,
+          "outputDbuPerMillionTokens": 400,
+          "cacheReadDbuPerMillionTokens": 5,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-4": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": 3.571,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 321.429,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 428.571,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-4-mini": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 10.714,
+          "outputDbuPerMillionTokens": 64.286,
+          "cacheReadDbuPerMillionTokens": 1.071,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 21.429,
+          "outputDbuPerMillionTokens": 128.571,
+          "cacheReadDbuPerMillionTokens": 2.143,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-4-nano": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 2.857,
+          "outputDbuPerMillionTokens": 17.857,
+          "cacheReadDbuPerMillionTokens": 0.286,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-4-pro": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 428.571,
+          "outputDbuPerMillionTokens": 2571.43,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 857.143,
+          "outputDbuPerMillionTokens": 3857.14,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-5": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 71.429,
+          "outputDbuPerMillionTokens": 428.571,
+          "cacheReadDbuPerMillionTokens": 7.143,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 142.857,
+          "outputDbuPerMillionTokens": 642.857,
+          "cacheReadDbuPerMillionTokens": 14.286,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 178.571,
+          "outputDbuPerMillionTokens": 1071.43,
+          "cacheReadDbuPerMillionTokens": 17.857,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-5-pro": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 428.571,
+          "outputDbuPerMillionTokens": 2571.43,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 857.143,
+          "outputDbuPerMillionTokens": 3857.14,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-6-luna": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 2.857,
+          "outputDbuPerMillionTokens": 17.143,
+          "cacheReadDbuPerMillionTokens": 0.286,
+          "cacheWriteDbuPerMillionTokens": 3.571,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 5.714,
+          "outputDbuPerMillionTokens": 25.714,
+          "cacheReadDbuPerMillionTokens": 0.571,
+          "cacheWriteDbuPerMillionTokens": 7.143,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 5.714,
+          "outputDbuPerMillionTokens": 34.286,
+          "cacheReadDbuPerMillionTokens": 0.571,
+          "cacheWriteDbuPerMillionTokens": 7.143,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 11.429,
+          "outputDbuPerMillionTokens": 51.429,
+          "cacheReadDbuPerMillionTokens": 1.143,
+          "cacheWriteDbuPerMillionTokens": 14.286,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-6-sol": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 285.714,
+          "cacheReadDbuPerMillionTokens": 5.714,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 114.286,
+          "outputDbuPerMillionTokens": 428.571,
+          "cacheReadDbuPerMillionTokens": 11.429,
+          "cacheWriteDbuPerMillionTokens": 142.857,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 114.286,
+          "outputDbuPerMillionTokens": 571.429,
+          "cacheReadDbuPerMillionTokens": 11.429,
+          "cacheWriteDbuPerMillionTokens": 142.857,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 228.571,
+          "outputDbuPerMillionTokens": 857.143,
+          "cacheReadDbuPerMillionTokens": 22.857,
+          "cacheWriteDbuPerMillionTokens": 285.714,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-6-terra": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 28.571,
+          "outputDbuPerMillionTokens": 171.429,
+          "cacheReadDbuPerMillionTokens": 2.857,
+          "cacheWriteDbuPerMillionTokens": 35.714,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 257.143,
+          "cacheReadDbuPerMillionTokens": 5.714,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 342.857,
+          "cacheReadDbuPerMillionTokens": 5.714,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 114.286,
+          "outputDbuPerMillionTokens": 514.286,
+          "cacheReadDbuPerMillionTokens": 11.429,
+          "cacheWriteDbuPerMillionTokens": 142.857,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-mini": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 3.571,
+          "outputDbuPerMillionTokens": 28.571,
+          "cacheReadDbuPerMillionTokens": 0.357,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 6.429,
+          "outputDbuPerMillionTokens": 51.429,
+          "cacheReadDbuPerMillionTokens": 0.643,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-5-nano": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 0.714,
+          "outputDbuPerMillionTokens": 5.714,
+          "cacheReadDbuPerMillionTokens": 0.071,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-6-1-sol": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 28.571,
+          "outputDbuPerMillionTokens": 142.857,
+          "cacheReadDbuPerMillionTokens": 1.429,
+          "cacheWriteDbuPerMillionTokens": 35.714,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": 2.857,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 285.71,
+          "cacheReadDbuPerMillionTokens": 2.857,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 114.286,
+          "outputDbuPerMillionTokens": 428.57,
+          "cacheReadDbuPerMillionTokens": 5.714,
+          "cacheWriteDbuPerMillionTokens": 142.857,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-6-1-terra": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 14.286,
+          "outputDbuPerMillionTokens": 71.429,
+          "cacheReadDbuPerMillionTokens": 0.714,
+          "cacheWriteDbuPerMillionTokens": 17.857,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 28.571,
+          "outputDbuPerMillionTokens": 107.143,
+          "cacheReadDbuPerMillionTokens": 1.429,
+          "cacheWriteDbuPerMillionTokens": 35.714,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 28.571,
+          "outputDbuPerMillionTokens": 142.857,
+          "cacheReadDbuPerMillionTokens": 1.429,
+          "cacheWriteDbuPerMillionTokens": 35.714,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": 2.857,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-6-astra": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 142.857,
+          "outputDbuPerMillionTokens": 714.286,
+          "cacheReadDbuPerMillionTokens": 14.286,
+          "cacheWriteDbuPerMillionTokens": 178.571,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 285.714,
+          "outputDbuPerMillionTokens": 1071.43,
+          "cacheReadDbuPerMillionTokens": 28.571,
+          "cacheWriteDbuPerMillionTokens": 357.143,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 285.714,
+          "outputDbuPerMillionTokens": 1428.57,
+          "cacheReadDbuPerMillionTokens": 28.571,
+          "cacheWriteDbuPerMillionTokens": 357.143,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 571.429,
+          "outputDbuPerMillionTokens": 2142.86,
+          "cacheReadDbuPerMillionTokens": 57.143,
+          "cacheWriteDbuPerMillionTokens": 714.286,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-6-luna": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 1.429,
+          "outputDbuPerMillionTokens": 7.143,
+          "cacheReadDbuPerMillionTokens": 0.143,
+          "cacheWriteDbuPerMillionTokens": 1.786,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 2.857,
+          "outputDbuPerMillionTokens": 10.71,
+          "cacheReadDbuPerMillionTokens": 0.286,
+          "cacheWriteDbuPerMillionTokens": 3.571,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 2.857,
+          "outputDbuPerMillionTokens": 14.29,
+          "cacheReadDbuPerMillionTokens": 0.286,
+          "cacheWriteDbuPerMillionTokens": 3.571,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 5.714,
+          "outputDbuPerMillionTokens": 21.43,
+          "cacheReadDbuPerMillionTokens": 0.571,
+          "cacheWriteDbuPerMillionTokens": 7.143,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-6-sol": [
+        {
+          "tier": "standard",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 28.571,
+          "outputDbuPerMillionTokens": 142.857,
+          "cacheReadDbuPerMillionTokens": 2.857,
+          "cacheWriteDbuPerMillionTokens": 35.714,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "standard",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 214.29,
+          "cacheReadDbuPerMillionTokens": 5.714,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "short-context",
+          "inputDbuPerMillionTokens": 57.143,
+          "outputDbuPerMillionTokens": 285.71,
+          "cacheReadDbuPerMillionTokens": 5.714,
+          "cacheWriteDbuPerMillionTokens": 71.429,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "long-context",
+          "inputDbuPerMillionTokens": 114.286,
+          "outputDbuPerMillionTokens": 428.57,
+          "cacheReadDbuPerMillionTokens": 11.429,
+          "cacheWriteDbuPerMillionTokens": 142.857,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-oss-120b": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 2.143,
+          "outputDbuPerMillionTokens": 8.571,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gpt-oss-20b": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 1,
+          "outputDbuPerMillionTokens": 4.286,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "grok-4-6": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 107.143,
+          "cacheReadDbuPerMillionTokens": 8.929,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "grok-4-7": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 35.714,
+          "outputDbuPerMillionTokens": 107.143,
+          "cacheReadDbuPerMillionTokens": 8.929,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "gte": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 1.857,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "inkling": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 14.286,
+          "outputDbuPerMillionTokens": 57.857,
+          "cacheReadDbuPerMillionTokens": 2.429,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "jev-1-14": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 0.6,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "kimi-2-7": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 13.571,
+          "outputDbuPerMillionTokens": 57.143,
+          "cacheReadDbuPerMillionTokens": 2.714,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "kimi-3": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 42.857,
+          "outputDbuPerMillionTokens": 214.286,
+          "cacheReadDbuPerMillionTokens": 4.286,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 75,
+          "outputDbuPerMillionTokens": 375,
+          "cacheReadDbuPerMillionTokens": 7.5,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "llama-3-1-8b": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 2.143,
+          "outputDbuPerMillionTokens": 6.429,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "llama-3-3-70b": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 7.143,
+          "outputDbuPerMillionTokens": 21.429,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "llama-4-maverick": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 7.143,
+          "outputDbuPerMillionTokens": 21.429,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "qwen-3-0-6b-embedding": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 0.286,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "qwen-3-5-122b": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 3.143,
+          "outputDbuPerMillionTokens": 31.429,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        },
+        {
+          "tier": "priority",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 5.5,
+          "outputDbuPerMillionTokens": 55,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "qwen-3-5-4b": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 0.6,
+          "outputDbuPerMillionTokens": null,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ],
+      "qwen-3-80b-instruct": [
+        {
+          "tier": "standard",
+          "condition": "default",
+          "inputDbuPerMillionTokens": 2.143,
+          "outputDbuPerMillionTokens": 17.143,
+          "cacheReadDbuPerMillionTokens": null,
+          "cacheWriteDbuPerMillionTokens": null,
+          "cacheWriteOneHourDbuPerMillionTokens": null
+        }
+      ]
+    }
+  }
+}
