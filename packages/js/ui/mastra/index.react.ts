@@ -60,4 +60,4 @@ export type { ToolInputPresentation, WebSearchProgressGroup } from "./src/react/
 export { isActiveChatStatus, isRespondingChatStatus } from "./src/react/types.ts";
 export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, ChatInputMessage, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ThreadPlacement, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types.ts";
 export { useChatThreadQuery } from "./src/react/use-chat-thread-query.ts";
-export { useComposerViewportLock } from "./src/react/use-composer-viewport-lock.ts";
+export { CANCEL_TRANSCRIPT_KINETIC_SCROLL_EVENT, useComposerViewportLock } from "./src/react/use-composer-viewport-lock.ts";
