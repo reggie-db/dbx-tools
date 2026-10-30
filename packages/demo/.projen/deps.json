@@ -191,6 +191,11 @@
       "type": "runtime"
     },
     {
+      "name": "sharp",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "tailwindcss",
       "version": "catalog:",
       "type": "runtime"

@@ -7,7 +7,7 @@
     },
     {
       "name": "@types/json-schema",
-      "version": "^7",
+      "version": "catalog:",
       "type": "build"
     },
     {
@@ -67,7 +67,7 @@
     },
     {
       "name": "semver",
-      "version": "^7.7.3",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

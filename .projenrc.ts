@@ -24,7 +24,6 @@ import { Component, javascript, YamlFile } from "projen";
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
 const PYTHON_ROOT = "packages/py";
-const SHARP_VERSION = "^0.35.5";
 const GRAPHITI_UPSTREAM_RELEASE = {
   version: "0.30.2",
   tag: "v0.30.2",
@@ -95,10 +94,21 @@ const root = new projectJs.DBXToolsNodeProject({
     }
     return defaults;
   },
-  // Product runtime pins are known at construction and belong to the native
-  // workspace options. Late catalog mutation is reserved for package mixins.
+  // Shared dependency versions are known at construction and belong to the
+  // native workspace catalog.
   catalog: {
+    "@types/json-schema": "^7",
+    "@types/pg": "^8",
+    "@types/semver": "^7.7.1",
+    cheerio: "^1.2.0",
+    concurrently: "^10.0.3",
+    "fuse.js": "^7.4.2",
     marked: "^18.0.5",
+    pg: "^8.22.0",
+    semver: "^7.7.3",
+    sharp: "^0.35.5",
+    "smol-toml": "1.8.0",
+    yaml: "^2.9.0",
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.1.0",
     "@mastra/core": "1.71.0",
@@ -148,6 +158,18 @@ const root = new projectJs.DBXToolsNodeProject({
     "shiki": "^3.0.0",
     "sql-formatter": "^15.6.9",
     "systray2": "^2.1.4",
+  },
+  pnpmOptions: {
+    workspaceYamlOptions: {
+      overrides: {
+        // AppKit 0.81 pins api@1.9.0 while Mastra requires ^1.9.1. Without one
+        // physical API copy, Mastra sees AppKit's tracer provider as noop.
+        "@opentelemetry/api": "1.9.1",
+        // Mastra 1.79 bundles provider 4.0.29. Provider 4.0.32 widened the V4
+        // finish-reason union, so newer providers no longer satisfy its types.
+        "@ai-sdk/provider": "4.0.31",
+      },
+    },
   },
   github: true,
   githubOptions: { mergify: false, pullRequestLint: false },
@@ -211,27 +233,15 @@ const root = new projectJs.DBXToolsNodeProject({
     "@dbx-tools/shared-core@workspace:*",
     "@dbx-tools/projen@workspace:*",
     "commander@catalog:",
-    "concurrently@^10.0.3",
+    "concurrently@catalog:",
     "marked@catalog:",
     "whatwg-url@14.2.0",
-    "yaml@^2.9.0",
+    "yaml@catalog:",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
     "zod@catalog:",
   ],
 });
-
-// OpenTelemetry's global tracer provider must be shared by AppKit and Mastra.
-// AppKit 0.81 pins api@1.9.0 while Mastra requires ^1.9.1; without one override
-// Bun installs two physical API copies and Mastra sees AppKit's provider as noop.
-root.pnpmWorkspace?.addOverride("@opentelemetry/api", "1.9.1");
-
-// Mastra types AI SDK models against its own bundled @ai-sdk/provider copy
-// (4.0.29 as of Mastra 1.79). Provider 4.0.32 widened the V4 finish-reason
-// union with "interrupted", so newer AI SDK providers no longer satisfy
-// Mastra's LanguageModelV4. Keep one provider copy below that change until
-// Mastra bundles a compatible version.
-root.pnpmWorkspace?.addOverride("@ai-sdk/provider", "4.0.31");
 
 const eslintTask = javascript.Eslint.of(root)!.eslintTask;
 eslintTask.reset();
@@ -360,12 +370,12 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
     "@dbx-tools/shared-core@workspace:*",
     "extract-zip@^2.0.1",
     "proper-lockfile@^4.1.2",
-    "semver@^7.7.3",
+    "semver@catalog:",
     "tar@^7.5.22",
-    "yaml",
+    "yaml@catalog:",
     "zod@catalog:",
   );
-  p.addDevDeps("@types/proper-lockfile@^4.1.4", "@types/semver@^7.7.1");
+  p.addDevDeps("@types/proper-lockfile@^4.1.4", "@types/semver@catalog:");
 });
 
 // node-cache: AppKit-independent memory-first Cacheable/Keyv composition with
@@ -429,7 +439,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
-  p.addDevDeps("@dbx-tools/projen@workspace:*", "@types/json-schema@^7", "vitest@catalog:");
+  p.addDevDeps("@dbx-tools/projen@workspace:*", "@types/json-schema@catalog:", "vitest@catalog:");
 });
 
 // AppKit durable-memory tools with Databricks-first routing and lazy Graphiti fallback.
@@ -446,11 +456,11 @@ project.applyToProjects(root, { identifierName: "appkit-memory", tags: "node" },
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-core@workspace:*",
     "@dbx-tools/shared-graphiti@workspace:*",
-    "semver@^7.7.3",
+    "semver@catalog:",
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@dbx-tools/appkit-mastra@workspace:*");
-  p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
+  p.addDevDeps("@types/json-schema@catalog:", "vitest@catalog:");
   projectJs.applyIncludes(p, "smoke/**/*.ts");
 });
 
@@ -500,7 +510,7 @@ project.applyToProjects(root, { identifierName: "appkit-lakebox", tags: "node" }
   p.addDevDeps(
     "@dbx-tools/auth@workspace:*",
     "@types/express@catalog:",
-    "@types/json-schema@^7",
+    "@types/json-schema@catalog:",
     "express@catalog:",
     "vitest@catalog:",
   );
@@ -522,7 +532,7 @@ project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => 
   // Sharp owns the native libvips resize and unsharp-mask pipeline. Keep it as
   // an optional peer because its platform binaries are large; the runtime
   // detects its absence and serves the validated upstream PNG unchanged.
-  projectJs.addOptionalPeer(p, `sharp@${SHARP_VERSION}`);
+  projectJs.addOptionalPeer(p, "sharp@catalog:");
 });
 
 // node-model: the server-side model resolver (cached Model Serving listing +
@@ -540,8 +550,8 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/shared-model@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@databricks/appkit@catalog:",
-    "cheerio@^1.2.0",
-    "fuse.js@^7.4.2",
+    "cheerio@catalog:",
+    "fuse.js@catalog:",
     "zod@catalog:",
   );
   p.addTask("metadata", {
@@ -569,7 +579,7 @@ project.applyToProjects(root, { identifierName: "model-protocol", tags: "node" }
     "@dbx-tools/shared-model-gateway@workspace:*",
     "ai@catalog:",
   );
-  p.addDevDeps("@types/json-schema@^7", "vitest@catalog:");
+  p.addDevDeps("@types/json-schema@catalog:", "vitest@catalog:");
 });
 
 // node-lakebase: Node-native Lakebase address parsing, workspace discovery,
@@ -640,7 +650,7 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
     "react@catalog:",
     "react-dom@catalog:",
   );
-  p.addDevDeps("@types/nodemailer@^7", "@types/express@catalog:", "@types/json-schema@^7");
+  p.addDevDeps("@types/nodemailer@^7", "@types/express@catalog:", "@types/json-schema@catalog:");
 });
 
 // node-appkit-web-search: server-side web-search add-on. `web_search` runs on
@@ -666,13 +676,13 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
     "@dbx-tools/shared-core@workspace:*",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
-    "cheerio@^1.2.0",
+    "cheerio@catalog:",
     "entities@^4.5.0",
     "got-scraping@^4.2.1",
     "html-to-text@^9.0.5",
     "zod@catalog:",
   );
-  p.addDevDeps("@types/express@catalog:", "@types/html-to-text@^9", "@types/json-schema@^7");
+  p.addDevDeps("@types/express@catalog:", "@types/html-to-text@^9", "@types/json-schema@catalog:");
 });
 
 // node-appkit-generator: reusable brand, KPI, synthetic-data, dashboard, and
@@ -695,7 +705,7 @@ project.applyToProjects(root, { identifierName: "appkit-generator", tags: "node"
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
     "ai@catalog:",
-    "cheerio@^1.2.0",
+    "cheerio@catalog:",
     "zod@catalog:",
   );
 });
@@ -707,9 +717,9 @@ project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) 
     "description",
     "Connection-correct PostgreSQL advisory locks and LISTEN/NOTIFY topic bus for Node.js",
   );
-  p.addDeps("@dbx-tools/lakebase@workspace:*", "@dbx-tools/shared-core@workspace:*", "pg@^8.22.0");
+  p.addDeps("@dbx-tools/lakebase@workspace:*", "@dbx-tools/shared-core@workspace:*", "pg@catalog:");
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
-  p.addDevDeps("@types/pg@^8");
+  p.addDevDeps("@types/pg@catalog:");
 });
 
 // node-search: extensions around AppKit's beta `aiSearch` plugin. Native AppKit
@@ -735,10 +745,10 @@ project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) =>
     "@mastra/core@catalog:",
     // pg powers `lakebaseAiSearch`, the PostgreSQL full-text implementation of
     // AppKit's AI Search provider contract.
-    "pg@^8.22.0",
+    "pg@catalog:",
     "zod@catalog:",
   );
-  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "@types/pg@^8");
+  p.addDevDeps("@types/express@catalog:", "@types/json-schema@catalog:", "@types/pg@catalog:");
 });
 
 // node-appkit-mastra: the AppKit Mastra agent layer - agents, memory, MCP, observability,
@@ -802,14 +812,14 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@opentelemetry/sdk-trace-base@catalog:",
     "@opentelemetry/sdk-trace-node@catalog:",
     "zod@catalog:",
-    "fuse.js@^7.4.2",
-    "pg@^8.22.0",
-    "yaml@^2.9.0",
+    "fuse.js@catalog:",
+    "pg@catalog:",
+    "yaml@catalog:",
   );
   p.addDevDeps(
     "@types/express@catalog:",
-    "@types/json-schema@^7",
-    "@types/pg@^8",
+    "@types/json-schema@catalog:",
+    "@types/pg@catalog:",
     "vitest@catalog:",
   );
   projectJs.addOptionalPeer(p, "@mastra/isolated-vm@catalog:");
@@ -1189,14 +1199,14 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/shared-graphiti@workspace:*",
     "@dbx-tools/shared-model-gateway@workspace:*",
     "@dbx-tools/tunnel@workspace:*",
-    "concurrently@^10.0.3",
+    "concurrently@catalog:",
     "get-port@^7.1.0",
     "http-proxy-3@catalog:",
-    "pg@^8.22.0",
-    "smol-toml@1.8.0",
-    "yaml@^2.9.0",
+    "pg@catalog:",
+    "smol-toml@catalog:",
+    "yaml@catalog:",
   );
-  p.addDevDeps("@types/pg@^8");
+  p.addDevDeps("@types/pg@catalog:");
 });
 
 // UI packages
@@ -1305,6 +1315,7 @@ project.applyToProjects(root, { path: "packages/demo" }, (p) => {
     "@mastra/core@catalog:",
     "lucide-react@catalog:",
     "react-router-dom@catalog:",
+    "sharp@catalog:",
     "zod@catalog:",
   );
 });

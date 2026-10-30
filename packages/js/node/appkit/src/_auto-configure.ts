@@ -3,7 +3,7 @@ import type { AutoConfigureMode } from "./appkit.ts";
 const LAKEBASE_PLUGIN = "lakebase";
 const DATABASE_PLUGIN = "database";
 
-/** Resolved automatic database-environment and cache-provisioning decision. */
+/** Resolved automatic database-environment and grant-provisioning decision. */
 export interface AutoConfigurePolicy {
   mode: AutoConfigureMode | false;
   explicit: boolean;

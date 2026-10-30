@@ -20,11 +20,11 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "sharp": "^0.35.5",
+    "sharp": "catalog:",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "sharp": "^0.35.5"
+    "sharp": "catalog:"
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",

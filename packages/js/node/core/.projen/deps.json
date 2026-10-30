@@ -12,7 +12,7 @@
     },
     {
       "name": "@types/semver",
-      "version": "^7.7.1",
+      "version": "catalog:",
       "type": "build"
     },
     {
@@ -37,7 +37,7 @@
     },
     {
       "name": "semver",
-      "version": "^7.7.3",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
@@ -47,6 +47,7 @@
     },
     {
       "name": "yaml",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

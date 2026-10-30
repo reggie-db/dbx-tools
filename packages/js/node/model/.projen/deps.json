@@ -47,12 +47,12 @@
     },
     {
       "name": "cheerio",
-      "version": "^1.2.0",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
       "name": "fuse.js",
-      "version": "^7.4.2",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

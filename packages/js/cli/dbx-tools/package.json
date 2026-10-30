@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@types/pg": "^8",
+    "@types/pg": "catalog:",
     "typescript": "^5.9.3"
   },
   "dependencies": {
@@ -57,12 +57,12 @@
     "@dbx-tools/shared-model-gateway": "workspace:*",
     "@dbx-tools/tunnel": "workspace:*",
     "commander": "catalog:",
-    "concurrently": "^10.0.3",
+    "concurrently": "catalog:",
     "get-port": "^7.1.0",
     "http-proxy-3": "catalog:",
-    "pg": "^8.22.0",
-    "smol-toml": "1.8.0",
-    "yaml": "^2.9.0",
+    "pg": "catalog:",
+    "smol-toml": "catalog:",
+    "yaml": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",

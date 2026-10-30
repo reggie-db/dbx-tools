@@ -31,8 +31,8 @@
     "@dbx-tools/shared-auth": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
-    "cheerio": "^1.2.0",
-    "fuse.js": "^7.4.2",
+    "cheerio": "catalog:",
+    "fuse.js": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",

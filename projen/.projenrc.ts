@@ -79,20 +79,20 @@ const project = new typescript.TypeScriptProject({
     // `tasks/sync.ts` imports this to fan the watchers out. It resolved here only
     // because the repo root happens to depend on it; a consumer install has no
     // such luck and `sync --watch` dies on a missing module.
-    "concurrently@^10.0.3",
+    "concurrently@catalog:",
     "constructs@^10.6.0",
     "is-identifier@^1",
     "node-stdlib-browser@^1.3.1",
     "oxc-parser@^0.90.0",
-    "semver@^7.7.3",
-    "smol-toml@1.8.0",
+    "semver@catalog:",
+    "smol-toml@catalog:",
     "ts-to-zod@^5.1.0",
     "typescript@catalog:",
-    "yaml@^2.9.0",
+    "yaml@catalog:",
     "zod@catalog:",
   ],
   peerDeps: [`projen@${PROJEN_VERSION}`],
-  devDeps: ["@types/node@^24.6.0", "@types/semver@^7.7.1"],
+  devDeps: ["@types/node@^24.6.0", "@types/semver@catalog:"],
 });
 project.deps.removeDependency("constructs", DependencyType.BUILD);
 project.deps.removeDependency("typescript", DependencyType.BUILD);

@@ -17,7 +17,7 @@
     },
     {
       "name": "@types/json-schema",
-      "version": "^7",
+      "version": "catalog:",
       "type": "build"
     },
     {
@@ -27,7 +27,7 @@
     },
     {
       "name": "@types/pg",
-      "version": "^8",
+      "version": "catalog:",
       "type": "build"
     },
     {
@@ -242,17 +242,17 @@
     },
     {
       "name": "fuse.js",
-      "version": "^7.4.2",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
       "name": "pg",
-      "version": "^8.22.0",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
       "name": "yaml",
-      "version": "^2.9.0",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

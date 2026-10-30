@@ -7,7 +7,7 @@
     },
     {
       "name": "sharp",
-      "version": "^0.35.5",
+      "version": "catalog:",
       "type": "build"
     },
     {
@@ -17,7 +17,7 @@
     },
     {
       "name": "sharp",
-      "version": "^0.35.5",
+      "version": "catalog:",
       "type": "peer"
     },
     {

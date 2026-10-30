@@ -21,7 +21,7 @@
   "devDependencies": {
     "@dbx-tools/auth": "workspace:*",
     "@types/express": "catalog:",
-    "@types/json-schema": "^7",
+    "@types/json-schema": "catalog:",
     "@types/node": "catalog:",
     "express": "catalog:",
     "typescript": "^5.9.3",

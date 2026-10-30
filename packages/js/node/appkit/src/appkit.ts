@@ -52,7 +52,11 @@ import {
   type ResolvedAppEnv,
 } from "./interceptor.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
-import { provisionCacheSchema } from "./provision.ts";
+import {
+  provisionLakebaseAccess,
+  resolveLakebaseProvisionTargets,
+  type LakebaseProvisionTarget,
+} from "./provision.ts";
 import {
   bindNativeTelemetryProvider,
   configureNativeHttpTelemetry,
@@ -68,12 +72,13 @@ type AppKitPlugins = NonNullable<AppKitCreateAppConfig["plugins"]>;
  * What auto-configuration does before AppKit boots.
  *
  * - `"provision"`: resolve the Lakebase connection into `process.env`, then
- *   grant the AppKit cache schema to the connecting role.
+ *   grant the built-in and configured provisioning targets to the connecting
+ *   role.
  * - `"env"`: resolve the Lakebase connection into `process.env` only.
  *
  * Omit it to resolve database environment when a native `lakebase` or
- * `database` plugin is registered. Implicit cache-schema grants remain gated on
- * `lakebase`; `database` owns its own pool and does not broaden grants. Set the
+ * `database` plugin is registered. Implicit grants remain gated on `lakebase`;
+ * `database` owns its own pool and does not broaden grants. Set the
  * mode explicitly to run regardless of the plugin list, or pass `false` to skip
  * auto-configuration entirely.
  *
@@ -100,6 +105,12 @@ export type CreateAppConfig<T extends AppKitPlugins = AppKitPlugins> = Omit<
   /** Auto-configuration to run before AppKit boots. Defaults to `"provision"`. */
   autoConfigure?: AutoConfigureMode | false;
   /**
+   * Additional existing Lakebase schemas or schema.table targets to grant when
+   * auto-configuration provisions access. Additive to the built-in AppKit and
+   * Mastra schemas and to DBX_TOOLS_APPKIT_LAKEBASE_PROVISION_TARGETS.
+   */
+  lakebaseProvisionTargets?: readonly LakebaseProvisionTarget[];
+  /**
    * Register AppKit browser debug-capture routes. `"auto"` (the default)
    * enables them only when `NODE_ENV` is `"development"`.
    */
@@ -120,7 +131,7 @@ const LAKEBASE_PLUGIN = "lakebase";
  * before any plugin is constructed, so it sits outside AppKit's interceptor
  * chain and inherits no timeout, retry, or telemetry from it. The budget covers
  * the resolver's own worst case (create a project, then wait for its endpoint)
- * plus the cache-schema grants.
+ * plus the Lakebase grants.
  */
 const AUTO_CONFIGURE_TIMEOUT_MS = 11 * 60_000;
 
@@ -194,7 +205,10 @@ export async function autoConfigure<T extends AppKitPlugins>(
     provision: policy.provision,
     mode: policy.mode,
   });
-  const resolved = await autoConfigureLakebase(policy.provision, controller.signal, bundleProfile);
+  const provisionTargets = policy.provision
+    ? resolveLakebaseProvisionTargets(config?.lakebaseProvisionTargets)
+    : [];
+  const resolved = await autoConfigureLakebase(provisionTargets, controller.signal, bundleProfile);
   logger.debug("autoConfigure: done", {
     mode: policy.mode,
     lakebasePluginPresent: policy.lakebasePluginPresent,
@@ -218,7 +232,7 @@ export async function autoConfigure<T extends AppKitPlugins>(
  * `autoCreate` policy, or a caller that wants the env without booting AppKit).
  */
 async function autoConfigureLakebase(
-  provision: boolean,
+  provisionTargets: readonly LakebaseProvisionTarget[],
   signal: AbortSignal,
   bundleProfile?: string,
 ): Promise<LakebaseConnection> {
@@ -237,10 +251,13 @@ async function autoConfigureLakebase(
     },
   });
   logger.info("env updated", { ...redactLakebaseConnection(resolved), user });
-  if (provision) {
-    logger.debug("autoConfigureLakebase: provisionCacheSchema", { user });
-    await provisionCacheSchema(user, logger);
-    logger.debug("autoConfigureLakebase: provisionCacheSchema done");
+  if (provisionTargets.length > 0) {
+    logger.debug("autoConfigureLakebase: provisionLakebaseAccess", {
+      user,
+      targets: provisionTargets,
+    });
+    await provisionLakebaseAccess(user, provisionTargets, logger);
+    logger.debug("autoConfigureLakebase: provisionLakebaseAccess done");
   } else {
     logger.debug("autoConfigureLakebase: skip provision (mode=env)");
   }
@@ -334,6 +351,7 @@ export async function createApp<T extends AppKitPlugins>(
 
   const appConfig = { ...config };
   delete appConfig.autoConfigure;
+  delete appConfig.lakebaseProvisionTargets;
   delete appConfig.debug;
   delete appConfig.interceptor;
   const onPluginsReady = appConfig.onPluginsReady;

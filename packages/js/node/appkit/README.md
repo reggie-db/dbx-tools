@@ -28,8 +28,8 @@ Use these helpers for:
   including local env, bundle, and `app.yaml` sources.
 - SDK cancellation bridging from web `AbortSignal` values into Databricks SDK
   `Context` values.
-- Lakebase cache-schema provisioning for deployments where the app identity must
-  be granted access before persistent cache initialization.
+- Lakebase schema and table provisioning for deployments where the app identity
+  must be granted access before plugin initialization.
 - AppKit-global filesystem caching with user-isolated bounded L1 state,
   cross-user invalidation, and stable framework filesystem sources.
 - An interceptor context on `createApp` (`interceptor?: Interceptor | Interceptor[]`)
@@ -63,7 +63,7 @@ Choose the Lakebase path by caller:
 - Use native AppKit `lakebase()` when a Databricks App already has complete
   runtime connection configuration.
 - Use this package's `appkit.createApp()` when Lakebase environment values or
-  cache grants must be resolved before AppKit plugins initialize.
+  grants must be resolved before AppKit plugins initialize.
 - Use [@dbx-tools/lakebase](../lakebase) for profile-aware discovery and
   short-lived credentials in standalone Node or Bun code.
 - Use [dbx lakebase-proxy](../../cli/dbx-tools) when an external PostgreSQL
@@ -89,7 +89,7 @@ When native `lakebase()` or beta `database()` is present, auto-config resolves
 Lakebase Postgres connection settings and fills missing `PG*` /
 `LAKEBASE_*` variables. That avoids a startup race where a plugin reads env
 before another async setup step can discover it. A database-only app resolves
-env without implicitly broadening cache-schema grants. AppKit's database plugin
+env without implicitly broadening Lakebase grants. AppKit's database plugin
 owns its own pool.
 
 Auto-configuration is conservative: existing env vars win unless a caller passes
@@ -142,11 +142,12 @@ reason.
 
 `appkit.createApp()` accepts everything AppKit's `createApp` does, plus:
 
-| Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                                      |
-| --------------- | ------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema. `"env"` resolves the connection only. `false` skips auto-configuration. Omit it to gate resolution on native `lakebase` or `database`. Implicit database-only resolution does not grant the cache schema. |
-| `debug`         | `"auto" \| boolean`             | `"auto"`      | Registers the browser debug-capture plugin. Auto mode enables it only when `NODE_ENV=development`; `true` and `false` force the choice.                                                                                                                                                                                                              |
-| `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env and AppKit lifecycle registration through `onLifecycle`.                                                                                                                                   |
+| Option                     | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------- | ------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `autoConfigure`            | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the built-in AppKit and Mastra schemas. `"env"` resolves the connection only. `false` skips auto-configuration. Omit it to gate resolution on native `lakebase` or `database`. Implicit database-only resolution does not grant schemas. |
+| `lakebaseProvisionTargets` | `readonly string[]`             | `[]`          | Additional existing Lakebase schemas or `schema.table` targets. These are additive to the built-in targets and the CSV `DBX_TOOLS_APPKIT_LAKEBASE_PROVISION_TARGETS` setting.                                                                                                                                                                          |
+| `debug`                    | `"auto" \| boolean`             | `"auto"`      | Registers the browser debug-capture plugin. Auto mode enables it only when `NODE_ENV=development`; `true` and `false` force the choice.                                                                                                                                                                                                                |
+| `interceptor`              | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env and AppKit lifecycle registration through `onLifecycle`.                                                                                                                                         |
 
 Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
 still wants Lakebase-backed cache persistence. The injected AppKit storage is
@@ -345,21 +346,45 @@ hard-code registered names or casts at every call site. A missing required
 plugin throws AppKit's `ConfigurationError`, naming both the caller and the
 plugin to register.
 
-## Provision the Lakebase cache schema
+## Provision Lakebase access
 
-`provision.provisionCacheSchema()` grants the AppKit cache schema in Lakebase to
-the Postgres role that runs the app. Use it after Lakebase connection env has
-been resolved and before AppKit initializes its persistent cache.
+`createApp({ autoConfigure: "provision" })` includes the existing `appkit` and
+`mastra_instance` schemas. Add application schemas or individual tables with
+`lakebaseProvisionTargets`, or set the CSV
+`DBX_TOOLS_APPKIT_LAKEBASE_PROVISION_TARGETS` variable. Exact duplicates are
+removed.
+
+Schema-wide grants run first in their own transactions. When one succeeds,
+table targets under that schema are skipped. When it fails because the local
+identity can modify a table but not the whole schema, the failure is logged and
+the explicit table targets are attempted independently. Missing schemas and
+tables are debug-logged and skipped.
+
+```ts
+await appkit.createApp({
+  autoConfigure: "provision",
+  lakebaseProvisionTargets: ["reporting", "operations.events"],
+  plugins: [lakebase()],
+});
+```
+
+`provision.provisionLakebaseAccess()` exposes the same grant runner for callers
+that already resolved Lakebase connection environment values.
 
 ```ts
 import { provision } from "@dbx-tools/appkit";
 
-await provision.provisionCacheSchema("app-service-principal@databricks.com");
+await provision.provisionLakebaseAccess("app-service-principal@databricks.com", [
+  "appkit",
+  "mastra_instance",
+  "reporting",
+  "operations.events",
+]);
 ```
 
-Pass a second argument to report progress on your own logger. The grants are
-skipped inside a Databricks App, and any failure is logged rather than thrown so
-a degraded cache never blocks startup.
+Pass a third argument to report progress on your own logger. Provisioning is
+skipped inside a Databricks App, and target failures are logged rather than
+thrown so a degraded cache never blocks startup.
 
 ## Choose the request identity
 

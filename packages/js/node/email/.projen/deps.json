@@ -7,7 +7,7 @@
     },
     {
       "name": "@types/json-schema",
-      "version": "^7",
+      "version": "catalog:",
       "type": "build"
     },
     {

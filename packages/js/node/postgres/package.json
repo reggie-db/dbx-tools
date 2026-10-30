@@ -21,7 +21,7 @@
   "devDependencies": {
     "@databricks/appkit": "catalog:",
     "@types/node": "catalog:",
-    "@types/pg": "^8",
+    "@types/pg": "catalog:",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
@@ -30,7 +30,7 @@
   "dependencies": {
     "@dbx-tools/lakebase": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
-    "pg": "^8.22.0"
+    "pg": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

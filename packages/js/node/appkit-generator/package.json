@@ -35,7 +35,7 @@
     "@dbx-tools/shared-genie": "workspace:*",
     "@mastra/core": "catalog:",
     "ai": "catalog:",
-    "cheerio": "^1.2.0",
+    "cheerio": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",

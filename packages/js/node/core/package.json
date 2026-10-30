@@ -21,16 +21,16 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/proper-lockfile": "^4.1.4",
-    "@types/semver": "^7.7.1",
+    "@types/semver": "catalog:",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
     "extract-zip": "^2.0.1",
     "proper-lockfile": "^4.1.2",
-    "semver": "^7.7.3",
+    "semver": "catalog:",
     "tar": "^7.5.22",
-    "yaml": "^2.9.0",
+    "yaml": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",

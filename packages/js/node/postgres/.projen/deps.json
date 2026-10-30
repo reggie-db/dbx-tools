@@ -12,7 +12,7 @@
     },
     {
       "name": "@types/pg",
-      "version": "^8",
+      "version": "catalog:",
       "type": "build"
     },
     {
@@ -37,7 +37,7 @@
     },
     {
       "name": "pg",
-      "version": "^8.22.0",
+      "version": "catalog:",
       "type": "runtime"
     }
   ],

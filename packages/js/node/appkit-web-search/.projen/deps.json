@@ -12,7 +12,7 @@
     },
     {
       "name": "@types/json-schema",
-      "version": "^7",
+      "version": "catalog:",
       "type": "build"
     },
     {
@@ -67,7 +67,7 @@
     },
     {
       "name": "cheerio",
-      "version": "^1.2.0",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

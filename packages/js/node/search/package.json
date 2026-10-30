@@ -20,9 +20,9 @@
   },
   "devDependencies": {
     "@types/express": "catalog:",
-    "@types/json-schema": "^7",
+    "@types/json-schema": "catalog:",
     "@types/node": "catalog:",
-    "@types/pg": "^8",
+    "@types/pg": "catalog:",
     "typescript": "^5.9.3"
   },
   "dependencies": {
@@ -36,7 +36,7 @@
     "@dbx-tools/shared-model": "workspace:*",
     "@dbx-tools/shared-search": "workspace:*",
     "@mastra/core": "catalog:",
-    "pg": "^8.22.0",
+    "pg": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",
