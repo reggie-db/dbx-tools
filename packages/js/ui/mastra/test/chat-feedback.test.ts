@@ -4,6 +4,7 @@ import type { UIMessage } from "ai";
 import {
   genieFeedbackTarget,
   messageFeedbackDestination,
+  mlflowTraceUrl,
 } from "../src/react/chat-feedback.ts";
 
 describe("Genie Agent feedback target", () => {
@@ -94,5 +95,16 @@ describe("Genie Agent feedback target", () => {
       { mode: "mlflow", traceId: "tr-0123456789abcdef0123456789abcdef" },
     );
     assert.equal(messageFeedbackDestination(message, ["genie"]), undefined);
+  });
+
+  it("links the debug action to the captured trace", () => {
+    assert.equal(
+      mlflowTraceUrl(
+        "https://workspace.example.com/ml/experiments/123?compareRunsMode=TRACES#history",
+        "tr-0123456789abcdef0123456789abcdef",
+      ),
+      "https://workspace.example.com/ml/experiments/123/traces/tr-0123456789abcdef0123456789abcdef",
+    );
+    assert.equal(mlflowTraceUrl("https://workspace.example.com/ml/experiments/123"), undefined);
   });
 });

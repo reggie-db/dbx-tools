@@ -339,8 +339,8 @@ type AssistantBubbleProps = {
   feedbackRequest?: string;
   /** Last thumbs the user left on this message, for highlighting. */
   feedbackValue?: FeedbackValue;
-  /** MLflow experiment link shown only to viewers with `CAN_MANAGE`. */
-  mlflowExperimentUrl?: string;
+  /** MLflow trace link shown only to viewers with `CAN_MANAGE`. */
+  mlflowTraceUrl?: string;
 };
 
 /** Render one assistant message with tool progress, actions, and optional feedback. */
@@ -357,7 +357,7 @@ export const AssistantBubble = ({
   feedbackMode,
   feedbackRequest,
   feedbackValue,
-  mlflowExperimentUrl,
+  mlflowTraceUrl,
 }: AssistantBubbleProps) => {
   const pendingApprovals = mergePendingApprovals(
     collectPendingApprovals(message.parts),
@@ -398,7 +398,7 @@ export const AssistantBubble = ({
     hasText || activityItems.length > 0 || pendingApprovals.length > 0,
   );
   const hasFooterActions =
-    hasText && (isLast || Boolean(onExport) || Boolean(onFeedback) || Boolean(mlflowExperimentUrl));
+    hasText && (isLast || Boolean(onExport) || Boolean(onFeedback) || Boolean(mlflowTraceUrl));
   const showFooter = showResponseStatus || hasFooterActions;
   // Charts and tables are placed at inline marker positions in
   // the assistant's prose. `prepare_chart` / `render_data` mint
@@ -499,21 +499,21 @@ export const AssistantBubble = ({
                 {...(feedbackValue ? { value: feedbackValue } : {})}
               />
             )}
-            {hasText && mlflowExperimentUrl && (
+            {hasText && mlflowTraceUrl && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button asChild type="button" size="icon" variant="ghost" className="size-7">
                     <a
-                      href={mlflowExperimentUrl}
+                      href={mlflowTraceUrl}
                       target="_blank"
                       rel="noreferrer"
-                      aria-label="Open MLflow experiment"
+                      aria-label="Open MLflow trace"
                     >
                       <BugIcon className="size-3" />
                     </a>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Open MLflow experiment</TooltipContent>
+                <TooltipContent>Open MLflow trace</TooltipContent>
               </Tooltip>
             )}
             {showResponseStatus && (

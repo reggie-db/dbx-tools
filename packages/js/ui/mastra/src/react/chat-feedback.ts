@@ -65,6 +65,17 @@ export function messageFeedbackDestination(
   return undefined;
 }
 
+/** Build the Databricks MLflow detail URL for one captured trace. */
+export function mlflowTraceUrl(experimentUrl: string, traceId?: string): string | undefined {
+  const resolvedTraceId = traceId?.trim();
+  if (!resolvedTraceId) return undefined;
+  const url = new URL(experimentUrl);
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/traces/${encodeURIComponent(resolvedTraceId)}`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
 /** Submit feedback to the destination selected for the assistant message. */
 export function useChatFeedback({
   activeKey,

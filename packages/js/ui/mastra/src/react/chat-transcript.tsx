@@ -15,7 +15,7 @@ import { isToolUIPart } from "ai";
 import { ArrowDownIcon, MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
-import { messageFeedbackDestination } from "./chat-feedback.ts";
+import { messageFeedbackDestination, mlflowTraceUrl } from "./chat-feedback.ts";
 import { SuggestionPills } from "./suggestion-pills.tsx";
 import { isRespondingChatStatus, type ChatViewProps } from "./types.ts";
 import { messageText } from "../support/export.ts";
@@ -241,6 +241,9 @@ export const ChatTranscript = ({
                   feedbackModes,
                   messageFeedback?.traceId,
                 );
+                const traceUrl = mlflowExperimentUrl
+                  ? mlflowTraceUrl(mlflowExperimentUrl, messageFeedback?.traceId)
+                  : undefined;
                 const requestMessage = [...messages.slice(0, index)]
                   .reverse()
                   .find((candidate) => candidate.role === "user");
@@ -268,7 +271,7 @@ export const ChatTranscript = ({
                             : {}),
                         }
                       : {})}
-                    {...(mlflowExperimentUrl ? { mlflowExperimentUrl } : {})}
+                    {...(traceUrl ? { mlflowTraceUrl: traceUrl } : {})}
                   />
                 );
               }
