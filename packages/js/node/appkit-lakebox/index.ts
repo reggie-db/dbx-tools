@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-lakebox";
-export const PACKAGE_VERSION = "0.9.184";
+export const PACKAGE_VERSION = "0.9.185";
 export * as config from "./src/config.ts";
 export * as desktop from "./src/desktop.ts";
 export * as metrics from "./src/metrics.ts";
