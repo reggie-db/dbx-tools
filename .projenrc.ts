@@ -1310,6 +1310,7 @@ project.applyToProjects(root, { path: "packages/demo" }, (p) => {
     "@dbx-tools/shared-core@workspace:*",
     "@dbx-tools/shared-email-template@workspace:*",
     "@dbx-tools/shared-generator@workspace:*",
+    "@dbx-tools/shared-mastra@workspace:*",
     "@dbx-tools/shared-search@workspace:*",
     "@dbx-tools/ui@workspace:*",
     "@dbx-tools/ui-lakebox@workspace:*",

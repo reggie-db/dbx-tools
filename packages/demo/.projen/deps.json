@@ -126,6 +126,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-mastra",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-search",
       "version": "workspace:*",
       "type": "runtime"

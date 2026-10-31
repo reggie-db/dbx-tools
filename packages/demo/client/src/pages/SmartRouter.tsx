@@ -8,7 +8,12 @@ import {
   Textarea,
 } from "@databricks/appkit-ui/react";
 import { getAuthStatus } from "@dbx-tools/shared-auth";
-import type { ModelRoutePartData, ModelUsagePartData } from "@dbx-tools/shared-mastra";
+import {
+  ModelRoutePartDataSchema,
+  ModelUsagePartDataSchema,
+  type ModelRoutePartData,
+  type ModelUsagePartData,
+} from "@dbx-tools/shared-mastra";
 import {
   ChatView,
   isActiveChatStatus,
@@ -84,6 +89,34 @@ const StoredPanesSchema = z
   .describe("Browser-persisted Models demo layout.");
 
 const PANES_STORAGE_KEY = "dbx-demo-model-panes";
+const PANE_METRICS_STORAGE_PREFIX = "dbx-demo-model-metrics:";
+
+const StoredPaneMetricsSchema = z
+  .object({
+    version: z.literal(1).describe("Models demo metric storage format version."),
+    usage: z
+      .record(z.string(), ModelUsagePartDataSchema)
+      .describe("Final or latest cumulative model usage payload for each run."),
+    requestUsage: ModelUsagePartDataSchema.optional().describe(
+      "Latest request usage used by the Current metric scope.",
+    ),
+    route: ModelRoutePartDataSchema.optional().describe(
+      "Latest selected model route and pricing metadata.",
+    ),
+    latencyMs: z
+      .number()
+      .nonnegative()
+      .optional()
+      .describe("Completed duration of the latest request in milliseconds."),
+    totalTimeMs: z
+      .number()
+      .nonnegative()
+      .describe("Accumulated duration of completed requests in milliseconds."),
+  })
+  .strict()
+  .describe("Browser-persisted telemetry for one Models demo comparison pane.");
+
+type StoredPaneMetrics = z.infer<typeof StoredPaneMetricsSchema>;
 
 function createPane(descriptor: Omit<PaneDescriptor, "id" | "threadId">): PaneDescriptor {
   return { ...descriptor, id: crypto.randomUUID(), threadId: crypto.randomUUID() };
@@ -110,6 +143,51 @@ function storePanes(panes: readonly PaneDescriptor[]): void {
     );
   } catch {
     // Browser persistence is best-effort; the live comparison remains usable.
+  }
+}
+
+function paneMetricsStorageKey(id: string): string {
+  return `${PANE_METRICS_STORAGE_PREFIX}${id}`;
+}
+
+function readStoredPaneMetrics(id: string): StoredPaneMetrics | undefined {
+  const key = paneMetricsStorageKey(id);
+  try {
+    const serialized = window.localStorage.getItem(key);
+    if (!serialized) return undefined;
+    return StoredPaneMetricsSchema.parse(JSON.parse(serialized));
+  } catch {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {}
+    return undefined;
+  }
+}
+
+function storePaneMetrics(id: string, metrics: StoredPaneMetrics): void {
+  const key = paneMetricsStorageKey(id);
+  try {
+    if (
+      Object.keys(metrics.usage).length === 0 &&
+      metrics.requestUsage === undefined &&
+      metrics.route === undefined &&
+      metrics.latencyMs === undefined &&
+      metrics.totalTimeMs === 0
+    ) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(metrics));
+  } catch {
+    // Browser persistence is best-effort; live telemetry remains usable.
+  }
+}
+
+function removeStoredPaneMetrics(id: string): void {
+  try {
+    window.localStorage.removeItem(paneMetricsStorageKey(id));
+  } catch {
+    // Browser persistence is best-effort; closing the live pane still succeeds.
   }
 }
 
@@ -368,6 +446,7 @@ const SmartRouter = () => {
   };
   const closePane = (id: string) => {
     controllers.current.delete(id);
+    removeStoredPaneMetrics(id);
     setPanes((current) => current.filter((pane) => pane.id !== id));
     reportStatus(id, undefined);
   };
@@ -513,11 +592,14 @@ const ModelChatPane = ({
   onContextRestored: () => void;
 }) => {
   const [metricScope, setMetricScope] = useState<"current" | "total">("current");
-  const [usage, setUsage] = useState<UsageMap>({});
-  const [requestUsage, setRequestUsage] = useState<ModelUsagePartData>();
-  const [route, setRoute] = useState<ModelRoutePartData>();
-  const [latencyMs, setLatencyMs] = useState<number>();
-  const [totalTimeMs, setTotalTimeMs] = useState(0);
+  const [initialMetrics] = useState(() => readStoredPaneMetrics(pane.id));
+  const [usage, setUsage] = useState<UsageMap>(() => initialMetrics?.usage ?? {});
+  const [requestUsage, setRequestUsage] = useState<ModelUsagePartData | undefined>(
+    initialMetrics?.requestUsage,
+  );
+  const [route, setRoute] = useState<ModelRoutePartData | undefined>(initialMetrics?.route);
+  const [latencyMs, setLatencyMs] = useState<number | undefined>(initialMetrics?.latencyMs);
+  const [totalTimeMs, setTotalTimeMs] = useState(initialMetrics?.totalTimeMs ?? 0);
   const [timerNow, setTimerNow] = useState(() => performance.now());
   const startedAt = useRef<number | undefined>(undefined);
   const assistantTextBaseline = useRef(0);
@@ -558,6 +640,17 @@ const ModelChatPane = ({
   const messagesRef = useRef(chat.messages);
   messagesRef.current = chat.messages;
   const restoredContextReported = useRef(false);
+
+  useEffect(() => {
+    storePaneMetrics(pane.id, {
+      version: 1,
+      usage,
+      requestUsage,
+      route,
+      latencyMs,
+      totalTimeMs,
+    });
+  }, [latencyMs, pane.id, requestUsage, route, totalTimeMs, usage]);
 
   useEffect(() => {
     if (
