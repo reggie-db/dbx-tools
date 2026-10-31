@@ -190,8 +190,8 @@ export type ChatViewProps = {
   followUpSuggestionLimit?: number;
   /**
    * Show the concrete model selected for each assistant turn. Off by default.
-   * The compact disclosure appears as soon as the streamed model-route part
-   * arrives, shows a friendly model name, and reveals the endpoint id on open.
+   * The compact activity row appears as soon as the streamed model-route part
+   * arrives and shows both the friendly model name and endpoint id.
    */
   showSelectedModel?: boolean;
   toolEventsByMessage?: Record<string, ToolEvent[]>;

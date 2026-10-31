@@ -45,7 +45,7 @@ describe("selected model pill", () => {
     assert.equal(selectedModelRoute(message)?.model, "databricks-gpt-5-4");
   });
 
-  it("shows a friendly name while the disclosure is closed", () => {
+  it("shows the friendly name and endpoint without a disclosure", () => {
     const html = renderToStaticMarkup(
       createElement(SelectedModelPill, {
         route: {
@@ -56,5 +56,7 @@ describe("selected model pill", () => {
     );
 
     assert.match(html, /Claude Sonnet 4\.6/);
+    assert.match(html, /databricks-claude-sonnet-4-6/);
+    assert.doesNotMatch(html, /aria-expanded/);
   });
 });

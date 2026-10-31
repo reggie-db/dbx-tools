@@ -186,9 +186,9 @@ Configure the client with these options:
 - `agentId` selects a registered agent and defaults to the plugin default agent.
 - `genieSpace` selects a configured Genie alias and bypasses the agent.
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
-- `showSelectedModel` shows an expandable per-turn pill as soon as routing
-  completes. The closed pill uses the friendly model name; opening it reveals
-  the concrete serving endpoint. It is off by default.
+- `showSelectedModel` shows a per-turn activity row as soon as routing
+  completes, with the friendly model name followed by the concrete serving
+  endpoint. It is off by default.
 - `onModelRoute` receives the concrete endpoint as soon as routing completes.
 - `onModelUsage` receives the latest cumulative tokens after each completed
   model step, along with the resolved endpoint, Smart Router observation when

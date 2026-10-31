@@ -214,7 +214,7 @@ export interface UseMastraChatOptions<
    */
   showModelPicker?: boolean;
   /**
-   * Show an expandable per-turn pill for the concrete selected model.
+   * Show a per-turn activity row for the concrete selected model.
    * Off by default; useful for routing diagnostics and model comparisons.
    */
   showSelectedModel?: boolean;
