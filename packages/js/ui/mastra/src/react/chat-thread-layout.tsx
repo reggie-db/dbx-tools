@@ -189,7 +189,7 @@ export const ChatThreadLayout = ({
         ref={rootRef}
         data-slot="aui_thread-frame"
         className={cn(
-          "flex h-full min-h-0",
+          "flex h-full min-h-0 min-w-0",
           dockedThreads && dockedSide === "right" && "flex-row-reverse",
           className,
         )}
