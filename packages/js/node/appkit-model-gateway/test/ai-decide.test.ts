@@ -28,7 +28,7 @@ describe("AiDecideRouterService", () => {
       });
     });
     const endpoints: ServingEndpointSummary[] = [
-      endpoint("system.ai.fast", ModelClass.ChatFast, 9, 9, 3),
+      endpoint("databricks-gpt-5-4-mini", ModelClass.ChatFast, 9, 9, 3),
       endpoint("system.ai.thinking", ModelClass.ChatThinking, 10, 4, 2),
       { ...endpoint("custom-private", ModelClass.ChatBalanced, 8, 8, 8), modelSource: "custom" },
     ];
@@ -66,10 +66,19 @@ describe("AiDecideRouterService", () => {
     assert.equal(state.task.includes("do-not-send"), false);
     assert.equal(state.strategy, "quality");
     assert.equal(state.candidates.length, 2);
+    const benchmarks = state.candidates.find(
+      ({ id }) => id === "databricks-gpt-5-4-mini",
+    )?.benchmarks as Record<string, number | null>;
+    assert.equal(benchmarks.quality_percentile, 60.75);
+    assert.equal(benchmarks.normalized_response_time_ms, 3_840);
+    assert.equal(benchmarks.time_to_first_token_ms, 446.472);
+    assert.equal(benchmarks.output_tokens_per_second, 150.856);
+    assert.equal(benchmarks.successful_run_count, 5);
     const instructions = (captured?.questions as { model: { instructions: string } }).model
       .instructions;
     assert.match(instructions, /Judge current_request/);
     assert.match(instructions, /dependencies, configuration, APIs, and multiple code artifacts/);
+    assert.match(instructions, /Lower normalized_response_time_ms/);
     assert.ok(
       (captured?.questions as { task_complexity?: unknown }).task_complexity !== undefined,
     );
@@ -84,8 +93,8 @@ describe("AiDecideRouterService", () => {
         .sort((left, right) => String(left.id).localeCompare(String(right.id))),
       [
         {
-          id: "system.ai.fast",
-          rank: state.candidates.find(({ id }) => id === "system.ai.fast")?.rank,
+          id: "databricks-gpt-5-4-mini",
+          rank: state.candidates.find(({ id }) => id === "databricks-gpt-5-4-mini")?.rank,
           modelClass: ModelClass.ChatFast,
           profile: { quality: 9, speed: 9, cost: 3 },
         },

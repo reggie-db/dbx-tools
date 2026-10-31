@@ -7,7 +7,7 @@
 import { getExecutionContext, type WorkspaceClient } from "@databricks/appkit";
 import { closeCache, createCache, getOrSet } from "@dbx-tools/cache";
 import { refreshWorkspaceClientAuthentication } from "@dbx-tools/databricks";
-import { endpointCapabilities, selection, versionTuple } from "@dbx-tools/model";
+import { endpointCapabilities, modelMetadataFor, selection, versionTuple } from "@dbx-tools/model";
 import { isRecord, log, toError } from "@dbx-tools/shared-core";
 import { ModelClass, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import {
@@ -434,6 +434,7 @@ function candidateState(endpoint: ServingEndpointSummary, rank: number): Record<
     version: versionTuple(endpoint.name),
     class: endpoint.class,
     profile: endpoint.profile,
+    benchmarks: candidateBenchmarks(endpoint),
     capabilities: {
       chat: capabilities.chat,
       tools: capabilities.tools,
@@ -444,6 +445,7 @@ function candidateState(endpoint: ServingEndpointSummary, rank: number): Record<
 }
 
 function candidateDescription(endpoint: ServingEndpointSummary, rank: number): Record<string, unknown> {
+  const benchmarks = candidateBenchmarks(endpoint);
   return {
     model: endpoint.name,
     rank,
@@ -453,9 +455,24 @@ function candidateDescription(endpoint: ServingEndpointSummary, rank: number): R
     quality_score: endpoint.profile?.quality ?? null,
     speed_score: endpoint.profile?.speed ?? null,
     cost_score: endpoint.profile?.cost ?? null,
+    measured_quality_percentile: benchmarks.quality_percentile,
+    normalized_response_time_ms: benchmarks.normalized_response_time_ms,
+    time_to_first_token_ms: benchmarks.time_to_first_token_ms,
+    output_tokens_per_second: benchmarks.output_tokens_per_second,
     supports_tools: endpointCapabilities(endpoint).tools,
     supports_structured_output: endpoint.supportsStructuredOutput === true,
     reasoning_efforts: endpoint.reasoningEfforts ?? [],
+  };
+}
+
+function candidateBenchmarks(endpoint: ServingEndpointSummary): Record<string, number | null> {
+  const metadata = modelMetadataFor(endpoint);
+  return {
+    quality_percentile: metadata.rating?.score ?? null,
+    normalized_response_time_ms: metadata.latencyScore?.score ?? null,
+    time_to_first_token_ms: metadata.latencyScore?.measurements.timeToFirstTokenMs ?? null,
+    output_tokens_per_second: metadata.latencyScore?.measurements.outputTokensPerSecond ?? null,
+    successful_run_count: metadata.latencyScore?.measurements.successfulRunCount ?? null,
   };
 }
 
@@ -468,7 +485,7 @@ function strategyInstructions(strategy: AiDecideStrategy): string {
       "Choose the lowest-cost model that is still sufficient for the task. Keep premier and newer unscored models eligible when they are materially more likely to complete the request correctly. When candidates have similar expected answer quality and completeness, prefer lower cost over lower latency.",
     latency: "Choose the fastest model that is still sufficient for the task.",
   }[strategy];
-  return `${objective} Judge current_request as the work that must be completed now; use task only as conversation context, and do not let simpler earlier turns reduce the current request's difficulty. A model is sufficient only if it is likely to produce a complete, correct answer in one response. Treat partial or truncated output as insufficient. Software implementation that requires dependencies, configuration, APIs, and multiple code artifacts needs materially more quality than a short explanation, even when the request itself is concise. Optimize for the selected strategy only among sufficient candidates. Use the supplied rank, version, capability class, quality, speed, cost, tool, structured-output, family, and reasoning metadata. Treat a newer unscored model as potentially stronger than an older scored predecessor rather than penalizing missing profile scores. Prefer simpler models for genuinely simple requests and reserve stronger models for implementation, multi-constraint reasoning, architecture, and debugging.`;
+  return `${objective} Judge current_request as the work that must be completed now; use task only as conversation context, and do not let simpler earlier turns reduce the current request's difficulty. A model is sufficient only if it is likely to produce a complete, correct answer in one response. Treat partial or truncated output as insufficient. Software implementation that requires dependencies, configuration, APIs, and multiple code artifacts needs materially more quality than a short explanation, even when the request itself is concise. Optimize for the selected strategy only among sufficient candidates. Use the supplied rank, version, capability class, quality, measured latency, throughput, cost, tool, structured-output, family, and reasoning metadata. Lower normalized_response_time_ms and time_to_first_token_ms are faster; higher output_tokens_per_second and measured_quality_percentile are better. Treat a newer unscored model as potentially stronger than an older scored predecessor rather than penalizing missing profile scores. Prefer simpler models for genuinely simple requests and reserve stronger models for implementation, multi-constraint reasoning, architecture, and debugging.`;
 }
 
 async function invokeAiDecide(
