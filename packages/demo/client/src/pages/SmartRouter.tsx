@@ -5,7 +5,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Textarea,
 } from "@databricks/appkit-ui/react";
 import { getAuthStatus } from "@dbx-tools/shared-auth";
 import {
@@ -15,6 +14,7 @@ import {
   type ModelUsagePartData,
 } from "@dbx-tools/shared-mastra";
 import {
+  ChatComposer,
   ChatView,
   isActiveChatStatus,
   isRespondingChatStatus,
@@ -25,7 +25,6 @@ import {
 } from "@dbx-tools/ui-mastra/react";
 import { useMastraClient, useMastraModels } from "@dbx-tools/ui-mastra/support";
 import {
-  ArrowRightIcon,
   LoaderCircleIcon,
   PlusIcon,
   RouteIcon,
@@ -240,8 +239,6 @@ function defaultPanes(
 }
 
 const SmartRouter = () => {
-  const [prompt, setPrompt] = useState("");
-  const [promptFocused, setPromptFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionLoading, setSuggestionLoading] = useState(true);
   const [panes, setPanes] = useState<PaneDescriptor[]>([]);
@@ -412,10 +409,9 @@ const SmartRouter = () => {
     regenerateAfterResponse.current = false;
     generateSuggestions();
   }, [generateSuggestions, running]);
-  const submit = (suggestedPrompt?: string) => {
-    const text = (suggestedPrompt ?? prompt).trim();
+  const submit = (prompt: string) => {
+    const text = prompt.trim();
     if (!text || panes.length === 0) return;
-    setPrompt("");
     setClearArmed(false);
     for (const pane of panes) controllers.current.get(pane.id)?.send(text);
     generateSuggestions(text);
@@ -456,7 +452,6 @@ const SmartRouter = () => {
       return;
     }
     setClearArmed(false);
-    setPrompt("");
     recentPrompts.current = [];
     generateSuggestions();
     void Promise.all([...controllers.current.values()].map((controller) => controller.clear()));
@@ -472,9 +467,9 @@ const SmartRouter = () => {
   }, [generateSuggestions]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 md:p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 md:p-4">
       {panes.length > 0 ? (
-        <div className="flex min-h-0 flex-1 snap-x snap-proximity scroll-px-3 gap-3 overflow-x-auto overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
+        <div className="flex min-h-0 flex-1 snap-x snap-proximity scroll-px-2 gap-2 overflow-x-auto overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch] md:scroll-px-3 md:gap-3">
           {panes.map((pane) => (
             <ModelChatPane
               key={pane.id}
@@ -496,84 +491,81 @@ const SmartRouter = () => {
         </div>
       )}
 
-      <form
-        className="shrink-0 rounded-xl border border-border bg-card p-2 shadow-sm"
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-      >
-        {!promptFocused ? (
-          <div className="mb-2 min-h-8">
-            {suggestionLoading ? (
-              <div className="flex h-8 items-center gap-2 px-1 text-xs text-muted-foreground">
-                <LoaderCircleIcon className="size-3.5 animate-spin" aria-hidden />
-                <span>Generating suggestions...</span>
-              </div>
-            ) : (
-              <SuggestionPills
-                questions={suggestions}
-                onSelect={submit}
-                className="flex-nowrap overflow-x-auto md:flex-nowrap md:overflow-x-auto"
-              />
-            )}
-          </div>
-        ) : null}
-        <div className="flex flex-col gap-2">
-          <label className="min-w-0 flex-1">
-            <Textarea
-              value={prompt}
-              rows={1}
-              className={`field-sizing-content max-h-[min(10rem,30dvh)] resize-none text-base transition-[min-height] ${
-                promptFocused || prompt ? "min-h-20" : "min-h-10"
-              }`}
-              placeholder="Send a message…"
-              onChange={(event) => setPrompt(event.target.value)}
-              onFocus={() => setPromptFocused(true)}
-              onBlur={() => setPromptFocused(false)}
+      <div className="group/composer shrink-0 border-t border-border/70 bg-background">
+        <div className="mx-auto min-h-0 w-full max-w-4xl px-3 pt-2 group-focus-within/composer:hidden md:px-6">
+          {suggestionLoading ? (
+            <div className="flex h-7 items-center gap-2 px-1 text-xs text-muted-foreground">
+              <LoaderCircleIcon className="size-3 animate-spin" aria-hidden />
+              <span>Finding follow-ups...</span>
+            </div>
+          ) : (
+            <SuggestionPills
+              questions={suggestions}
+              onSelect={submit}
+              className="h-7 flex-nowrap overflow-x-auto md:flex-nowrap md:overflow-x-auto [&>button]:h-7 [&>button]:min-w-0 [&>button]:max-w-64 [&>button]:justify-start [&>button]:truncate [&>button]:border-border/70 [&>button]:bg-muted/30 [&>button]:px-2.5 [&>button]:py-0 [&>button]:text-[11px] [&>button]:leading-none"
             />
-          </label>
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              className="flex-1 gap-2 lg:flex-none"
-              disabled={!prompt.trim() || panes.length === 0}
-            >
-              Send to all
-              <ArrowRightIcon className="size-4" />
-            </Button>
-            <Select value="" onValueChange={addPane}>
-              <SelectTrigger
-                className="size-10 shrink-0 px-0"
-                aria-label="Add chat"
-                title="Add chat"
-              >
-                <PlusIcon className="size-4" aria-hidden />
-                <SelectValue placeholder="" />
-              </SelectTrigger>
-              <SelectContent>
-                {genieAvailable ? <SelectItem value={GENIE_VALUE}>Genie only</SelectItem> : null}
-                {models.map((model) => (
-                  <SelectItem key={model.name} value={model.name}>
-                    {model.displayName ?? model.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant={clearArmed ? "destructive" : "outline"}
-              size="icon"
-              aria-label={clearArmed ? "Confirm clear all chats" : "Clear all chats"}
-              title={clearArmed ? "Click again to clear all chats" : "Clear all chats"}
-              disabled={running || panes.length === 0}
-              onClick={clearAll}
-            >
-              <Trash2Icon className="size-4" />
-            </Button>
-          </div>
+          )}
         </div>
-      </form>
+        <ChatComposer
+          focusRequest={0}
+          status="ready"
+          sendMessage={(message) => submit(message.text ?? "")}
+          queuedSteers={[]}
+          onSendSteerNow={undefined}
+          onRemoveSteer={undefined}
+          onReorderSteers={undefined}
+          onStop={undefined}
+          models={undefined}
+          model={undefined}
+          onModelChange={undefined}
+          defaultModelName={undefined}
+          defaultModelId={undefined}
+          defaultModelLoading={false}
+          reasoningEffort={undefined}
+          onReasoningEffortChange={undefined}
+          composerActions={undefined}
+          modelSelectorActions={undefined}
+          composerLeadingActions={
+            <>
+              <Select value="" onValueChange={addPane}>
+                <SelectTrigger
+                  className="size-7 shrink-0 rounded-full p-0 [&>svg:last-child]:hidden"
+                  aria-label="Add model comparison"
+                  title="Add model comparison"
+                >
+                  <PlusIcon className="size-3" aria-hidden />
+                  <SelectValue placeholder="" />
+                </SelectTrigger>
+                <SelectContent>
+                  {genieAvailable ? <SelectItem value={GENIE_VALUE}>Genie only</SelectItem> : null}
+                  {models.map((model) => (
+                    <SelectItem key={model.name} value={model.name}>
+                      {model.displayName ?? model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant={clearArmed ? "destructive" : "outline"}
+                size="icon"
+                className="size-7 rounded-full [&_svg]:size-3"
+                aria-label={clearArmed ? "Confirm clear all chats" : "Clear all chats"}
+                title={clearArmed ? "Click again to clear all chats" : "Clear all chats"}
+                disabled={running || panes.length === 0}
+                onClick={clearAll}
+              >
+                <Trash2Icon />
+              </Button>
+            </>
+          }
+          allowAttachments={false}
+          isLoadingHistory={false}
+          onClear={undefined}
+          onExportConversation={undefined}
+          onResumeFollow={() => undefined}
+        />
+      </div>
     </div>
   );
 };
@@ -804,8 +796,8 @@ const ModelChatPane = ({
       : undefined;
   const model = route?.model ?? knownInitialModel;
   return (
-    <section className="flex min-h-0 w-full min-w-full shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-background sm:min-w-[21rem] sm:flex-1 sm:basis-0 xl:min-w-[23rem]">
-      <header className="shrink-0 border-b border-border px-3 py-2.5">
+    <section className="flex min-h-0 w-[calc(100dvw-1rem)] min-w-[calc(100dvw-1rem)] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-background sm:w-full sm:min-w-[21rem] sm:flex-1 sm:basis-0 xl:min-w-[23rem]">
+      <header className="shrink-0 border-b border-border/70 px-3 py-2">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             {pane.kind === "genie" ? (
@@ -815,87 +807,78 @@ const ModelChatPane = ({
             )}
             <h2 className="truncate text-sm font-semibold">{pane.title}</h2>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 rounded-full"
+            aria-label={`Close ${pane.title} chat`}
+            title="Close chat"
+            onClick={onClose}
+          >
+            <XIcon className="size-3.5" />
+          </Button>
+        </div>
+        <div className="mt-1 flex min-w-0 items-center gap-2 text-xs">
+          <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={model}>
+            {model ?? "Model pending"}
+          </span>
+          <div
+            className="flex shrink-0 rounded-full bg-muted/60 p-0.5"
+            role="group"
+            aria-label="Metric scope"
+          >
             <Button
               type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              aria-label={`Close ${pane.title} chat`}
-              title="Close chat"
-              onClick={onClose}
+              variant={metricScope === "current" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-5 rounded-full px-2 text-[10px]"
+              aria-pressed={metricScope === "current"}
+              onClick={() => setMetricScope("current")}
             >
-              <XIcon className="size-4" />
+              Current
+            </Button>
+            <Button
+              type="button"
+              variant={metricScope === "total" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-5 rounded-full px-2 text-[10px]"
+              aria-pressed={metricScope === "total"}
+              onClick={() => setMetricScope("total")}
+            >
+              Total
             </Button>
           </div>
         </div>
-        <div className="mt-2 text-xs">
-          <div className="flex min-w-0 items-center justify-between gap-2 rounded-md bg-muted/50 px-2 py-1.5">
-            <div className="flex min-w-0 items-baseline gap-2">
-              <span className="shrink-0 text-[11px] text-muted-foreground">Model</span>
-              <span className="truncate font-medium text-foreground" title={model}>
-                {model ?? "—"}
-              </span>
-            </div>
-            <div
-              className="flex shrink-0 rounded-md bg-background/80 p-0.5"
-              role="group"
-              aria-label="Metric scope"
-            >
-              <Button
-                type="button"
-                variant={metricScope === "current" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-6 px-2 text-[11px]"
-                aria-pressed={metricScope === "current"}
-                onClick={() => setMetricScope("current")}
-              >
-                Current
-              </Button>
-              <Button
-                type="button"
-                variant={metricScope === "total" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-6 px-2 text-[11px]"
-                aria-pressed={metricScope === "total"}
-                onClick={() => setMetricScope("total")}
-              >
-                Total
-              </Button>
-            </div>
-          </div>
-          <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-            <Metric
-              label="Tokens"
-              value={formatTokens(
-                metricScope === "current" ? displayedRequestTokens : displayedTotalTokens,
-              )}
-            />
-            <Metric
-              label="Time"
-              value={
-                metricScope === "current"
-                  ? requestTimeMs === undefined
-                    ? "—"
-                    : formatDuration(requestTimeMs)
-                  : displayedTotalTimeMs > 0
-                    ? formatDuration(displayedTotalTimeMs)
-                    : "—"
-              }
-            />
-            <Metric
-              label="DBU"
-              value={formatCost(
-                metricScope === "current" ? displayedRequestCost : displayedTotalCost,
-              )}
-            />
-            <Metric
-              label="USD"
-              value={formatUsd(
-                metricScope === "current" ? displayedRequestUsd : displayedTotalUsd,
-              )}
-            />
-          </div>
+        <div className="mt-1.5 grid grid-cols-4 divide-x divide-border/60 rounded-md bg-muted/35 py-1 text-xs">
+          <Metric
+            label="Tokens"
+            value={formatTokens(
+              metricScope === "current" ? displayedRequestTokens : displayedTotalTokens,
+            )}
+          />
+          <Metric
+            label="Time"
+            value={
+              metricScope === "current"
+                ? requestTimeMs === undefined
+                  ? "—"
+                  : formatDuration(requestTimeMs)
+                : displayedTotalTimeMs > 0
+                  ? formatDuration(displayedTotalTimeMs)
+                  : "—"
+            }
+          />
+          <Metric
+            label="DBU"
+            value={formatCost(
+              metricScope === "current" ? displayedRequestCost : displayedTotalCost,
+            )}
+          />
+          <Metric
+            label="USD"
+            value={formatUsd(metricScope === "current" ? displayedRequestUsd : displayedTotalUsd)}
+          />
         </div>
       </header>
       <div className="flex min-h-0 flex-1">
@@ -915,9 +898,12 @@ const ModelChatPane = ({
 };
 
 const Metric = ({ label, value, title }: { label: string; value: string; title?: string }) => (
-  <div className="min-w-0 rounded-md bg-muted/50 px-2 py-1.5">
-    <div className="text-[11px] text-muted-foreground">{label}</div>
-    <div className="truncate font-medium text-foreground" title={title}>
+  <div className="min-w-0 px-2 py-0.5 first:pl-1.5 last:pr-1.5">
+    <div className="truncate text-[10px] leading-3 text-muted-foreground">{label}</div>
+    <div
+      className="truncate text-[11px] font-medium leading-4 text-foreground tabular-nums"
+      title={title}
+    >
       {value}
     </div>
   </div>
