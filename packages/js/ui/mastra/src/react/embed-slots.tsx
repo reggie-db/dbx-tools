@@ -293,7 +293,10 @@ export const MarkdownWithEmbeds = ({
         if (seg.kind === "text") {
           if (seg.text.trim().length === 0) return null;
           return (
-            <AssistantMarkdown key={`t-${i}`} animate={streaming}>
+            <AssistantMarkdown
+              key={`${streaming ? "streaming" : "settled"}-t-${i}`}
+              animate={streaming}
+            >
               {seg.text}
             </AssistantMarkdown>
           );
