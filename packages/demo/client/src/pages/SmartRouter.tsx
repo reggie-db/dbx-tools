@@ -717,6 +717,19 @@ const ModelChatPane = ({
       ? pane.initialModel
       : undefined;
   const model = route?.model ?? knownInitialModel;
+  const currentMetrics: MetricValues = {
+    tokens: formatTokens(displayedRequestTokens),
+    time: requestTimeMs === undefined ? "—" : formatDuration(requestTimeMs),
+    dbu: formatCost(displayedRequestCost),
+    usd: formatUsd(displayedRequestUsd),
+  };
+  const totalMetrics: MetricValues = {
+    tokens: formatTokens(displayedTotalTokens),
+    time: displayedTotalTimeMs > 0 ? formatDuration(displayedTotalTimeMs) : "—",
+    dbu: formatCost(displayedTotalCost),
+    usd: formatUsd(displayedTotalUsd),
+  };
+  const mobileMetrics = metricScope === "current" ? currentMetrics : totalMetrics;
   return (
     <section className="flex min-h-0 w-[calc(100dvw-3rem)] min-w-[calc(100dvw-3rem)] shrink-0 snap-start snap-always flex-col overflow-hidden rounded-xl border border-border bg-background sm:w-full sm:min-w-[20rem] sm:flex-1 sm:basis-0 xl:min-w-[20rem]">
       <header className="shrink-0 border-b border-border/70 px-3 py-2">
@@ -746,7 +759,7 @@ const ModelChatPane = ({
             {model ?? "Model pending"}
           </span>
           <div
-            className="flex shrink-0 rounded-full bg-muted/60 p-0.5"
+            className="flex shrink-0 rounded-full bg-muted/60 p-0.5 sm:hidden"
             role="group"
             aria-label="Metric scope"
           >
@@ -772,36 +785,13 @@ const ModelChatPane = ({
             </Button>
           </div>
         </div>
-        <div className="mt-1.5 grid grid-cols-4 divide-x divide-border/60 rounded-md bg-muted/35 py-1 text-xs">
-          <Metric
-            label="Tokens"
-            value={formatTokens(
-              metricScope === "current" ? displayedRequestTokens : displayedTotalTokens,
-            )}
-          />
-          <Metric
-            label="Time"
-            value={
-              metricScope === "current"
-                ? requestTimeMs === undefined
-                  ? "—"
-                  : formatDuration(requestTimeMs)
-                : displayedTotalTimeMs > 0
-                  ? formatDuration(displayedTotalTimeMs)
-                  : "—"
-            }
-          />
-          <Metric
-            label="DBU"
-            value={formatCost(
-              metricScope === "current" ? displayedRequestCost : displayedTotalCost,
-            )}
-          />
-          <Metric
-            label="USD"
-            value={formatUsd(metricScope === "current" ? displayedRequestUsd : displayedTotalUsd)}
-          />
+        <div className="mt-1.5 grid grid-cols-4 divide-x divide-border/60 rounded-md bg-muted/35 py-1 text-xs sm:hidden">
+          <Metric label="Tokens" value={mobileMetrics.tokens} />
+          <Metric label="Time" value={mobileMetrics.time} />
+          <Metric label="DBU" value={mobileMetrics.dbu} />
+          <Metric label="USD" value={mobileMetrics.usd} />
         </div>
+        <MetricTable current={currentMetrics} total={totalMetrics} />
       </header>
       <div className="flex min-h-0 flex-1">
         <ChatView
@@ -818,6 +808,66 @@ const ModelChatPane = ({
     </section>
   );
 };
+
+type MetricValues = {
+  tokens: string;
+  time: string;
+  dbu: string;
+  usd: string;
+};
+
+const MetricTable = ({ current, total }: { current: MetricValues; total: MetricValues }) => (
+  <table className="mt-1.5 hidden w-full table-fixed overflow-hidden rounded-md bg-muted/35 text-[10px] sm:table">
+    <caption className="sr-only">Current request and total conversation metrics</caption>
+    <colgroup>
+      <col className="w-14" />
+      <col />
+      <col />
+      <col />
+      <col />
+    </colgroup>
+    <thead className="text-muted-foreground">
+      <tr className="border-b border-border/60">
+        <th scope="col" aria-label="Metric scope" />
+        <MetricHeading>Tokens</MetricHeading>
+        <MetricHeading>Time</MetricHeading>
+        <MetricHeading>DBU</MetricHeading>
+        <MetricHeading>USD</MetricHeading>
+      </tr>
+    </thead>
+    <tbody>
+      <MetricTableRow label="Current" values={current} />
+      <MetricTableRow label="Total" values={total} />
+    </tbody>
+  </table>
+);
+
+const MetricHeading = ({ children }: { children: React.ReactNode }) => (
+  <th scope="col" className="truncate px-1 py-0.5 text-left font-normal leading-3">
+    {children}
+  </th>
+);
+
+const MetricTableRow = ({ label, values }: { label: string; values: MetricValues }) => (
+  <tr className="border-b border-border/40 last:border-b-0">
+    <th
+      scope="row"
+      className="truncate px-1.5 py-0.5 text-left font-medium leading-4 text-muted-foreground"
+    >
+      {label}
+    </th>
+    <MetricTableValue value={values.tokens} />
+    <MetricTableValue value={values.time} />
+    <MetricTableValue value={values.dbu} />
+    <MetricTableValue value={values.usd} />
+  </tr>
+);
+
+const MetricTableValue = ({ value }: { value: string }) => (
+  <td className="px-1 py-0.5 leading-4 text-foreground tabular-nums" title={value}>
+    <span className="block truncate">{value}</span>
+  </td>
+);
 
 const Metric = ({ label, value, title }: { label: string; value: string; title?: string }) => (
   <div className="min-w-0 px-2 py-0.5 first:pl-1.5 last:pr-1.5">
@@ -849,7 +899,7 @@ function formatTokens(value: number | undefined): string {
 
 function formatCost(value: number | undefined): string {
   if (value === undefined) return "—";
-  return `${value < 0.001 ? value.toFixed(6) : value.toFixed(4)} DBU`;
+  return value < 0.001 ? value.toFixed(6) : value.toFixed(4);
 }
 
 function formatUsd(value: number | undefined): string {
