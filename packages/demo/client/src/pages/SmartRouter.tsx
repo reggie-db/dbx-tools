@@ -796,7 +796,7 @@ const ModelChatPane = ({
       : undefined;
   const model = route?.model ?? knownInitialModel;
   return (
-    <section className="flex min-h-0 w-[calc(100dvw-1rem)] min-w-[calc(100dvw-1rem)] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-background sm:w-full sm:min-w-[21rem] sm:flex-1 sm:basis-0 xl:min-w-[23rem]">
+    <section className="flex min-h-0 w-[calc(100dvw-3rem)] min-w-[calc(100dvw-3rem)] shrink-0 snap-start snap-always flex-col overflow-hidden rounded-xl border border-border bg-background sm:w-full sm:min-w-[20rem] sm:flex-1 sm:basis-0 xl:min-w-[20rem]">
       <header className="shrink-0 border-b border-border/70 px-3 py-2">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
