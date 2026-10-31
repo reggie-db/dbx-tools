@@ -19,6 +19,7 @@ export * as feedbackControls from "./src/react/feedback-controls.tsx";
 export * as markdown from "./src/react/markdown.tsx";
 export * as mastraAssistant from "./src/react/mastra-assistant.tsx";
 export * as mastraChat from "./src/react/mastra-chat.tsx";
+export * as selectedModelPill from "./src/react/selected-model-pill.tsx";
 export * as suggestionPills from "./src/react/suggestion-pills.tsx";
 export * as suggestions from "./src/react/suggestions.ts";
 export * as threadSidebar from "./src/react/thread-sidebar.tsx";
@@ -48,6 +49,7 @@ export { useMastraAssistant, MastraAssistant } from "./src/react/mastra-assistan
 export type { MastraAssistantMode, MastraAssistantSide, MastraAssistantLauncherPosition, MastraAssistantResizeOptions, MastraAssistantLauncherOptions, MastraAssistantController, MastraAssistantProps } from "./src/react/mastra-assistant.tsx";
 export { useMastraChat, MastraChat } from "./src/react/mastra-chat.tsx";
 export type { ThreadIdChangeReason, BrowserConversationPersistenceOptions, UseMastraChatOptions, UseMastraChatResult, MastraChatProps } from "./src/react/mastra-chat.tsx";
+export { selectedModelRoute, SelectedModelPill } from "./src/react/selected-model-pill.tsx";
 export { SuggestionPills } from "./src/react/suggestion-pills.tsx";
 export type { SuggestionPillsProps } from "./src/react/suggestion-pills.tsx";
 export { dedupeSuggestions, collectSuggestions } from "./src/react/suggestions.ts";

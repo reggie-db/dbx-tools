@@ -188,6 +188,12 @@ export type ChatViewProps = {
   followUpSuggestions?: FollowUpSuggestionMode;
   /** Maximum post-turn follow-up questions shown under one response. */
   followUpSuggestionLimit?: number;
+  /**
+   * Show the concrete model selected for each assistant turn. Off by default.
+   * The compact disclosure appears as soon as the streamed model-route part
+   * arrives, shows a friendly model name, and reveals the endpoint id on open.
+   */
+  showSelectedModel?: boolean;
   toolEventsByMessage?: Record<string, ToolEvent[]>;
   /** Available model endpoints. Pass an empty array (or omit) to hide the picker. */
   models?: ChatModelOption[];

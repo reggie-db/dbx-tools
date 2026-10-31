@@ -214,6 +214,11 @@ export interface UseMastraChatOptions<
    */
   showModelPicker?: boolean;
   /**
+   * Show an expandable per-turn pill for the concrete selected model.
+   * Off by default; useful for routing diagnostics and model comparisons.
+   */
+  showSelectedModel?: boolean;
+  /**
    * Fixed per-instance model override. Unlike the model picker selection, this
    * is not persisted by agent id, so parallel views of the same agent can each
    * route through a different model or family query.
@@ -1737,6 +1742,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     suggestions,
     followUpSuggestions: mastraClient.followUpSuggestions,
     followUpSuggestionLimit: mastraClient.followUpSuggestionLimit,
+    showSelectedModel: options.showSelectedModel ?? false,
     pendingApprovalsByMessage: activeSession.pendingApprovalsByMessage,
     onResolveToolApproval: handleApproval,
     // Picker is opt-in: only hand ChatView the catalogue + change

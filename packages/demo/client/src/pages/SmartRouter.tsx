@@ -550,6 +550,7 @@ const ModelChatPane = ({
           onModelRoute: recordModelRoute,
           onModelUsage: recordModelUsage,
         }),
+    showSelectedModel: true,
     enableClear: true,
     browserPersistence: true,
     queueMessages: false,
@@ -708,15 +709,6 @@ const ModelChatPane = ({
     startedAt.current === undefined ? 0 : Math.max(0, timerNow - startedAt.current);
   const requestTimeMs = startedAt.current === undefined ? latencyMs : activeElapsed;
   const displayedTotalTimeMs = totalTimeMs + activeElapsed;
-  const knownInitialModel =
-    pane.kind === "mastra" &&
-    pane.initialModel !== SMART_ROUTER_MODEL &&
-    pane.initialModel !== AI_DECIDE_MODEL &&
-    pane.initialModel !== "gpt" &&
-    pane.initialModel !== "claude"
-      ? pane.initialModel
-      : undefined;
-  const model = route?.model ?? knownInitialModel;
   const currentMetrics: MetricValues = {
     tokens: formatTokens(displayedRequestTokens),
     time: requestTimeMs === undefined ? "—" : formatDuration(requestTimeMs),
@@ -754,12 +746,9 @@ const ModelChatPane = ({
             <XIcon className="size-3.5" />
           </Button>
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-2 text-xs">
-          <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={model}>
-            {model ?? "Model pending"}
-          </span>
+        <div className="mt-1 flex justify-end sm:hidden">
           <div
-            className="flex shrink-0 rounded-full bg-muted/60 p-0.5 sm:hidden"
+            className="flex shrink-0 rounded-full bg-muted/60 p-0.5"
             role="group"
             aria-label="Metric scope"
           >
@@ -771,7 +760,7 @@ const ModelChatPane = ({
               aria-pressed={metricScope === "current"}
               onClick={() => setMetricScope("current")}
             >
-              Current
+              Turn
             </Button>
             <Button
               type="button"
@@ -818,9 +807,9 @@ type MetricValues = {
 
 const MetricTable = ({ current, total }: { current: MetricValues; total: MetricValues }) => (
   <table className="mt-1.5 hidden w-full table-fixed overflow-hidden rounded-md bg-muted/35 text-[10px] sm:table">
-    <caption className="sr-only">Current request and total conversation metrics</caption>
+    <caption className="sr-only">Turn and total conversation metrics</caption>
     <colgroup>
-      <col className="w-14" />
+      <col className="w-12" />
       <col />
       <col />
       <col />
@@ -836,7 +825,7 @@ const MetricTable = ({ current, total }: { current: MetricValues; total: MetricV
       </tr>
     </thead>
     <tbody>
-      <MetricTableRow label="Current" values={current} />
+      <MetricTableRow label="Turn" values={current} />
       <MetricTableRow label="Total" values={total} />
     </tbody>
   </table>
