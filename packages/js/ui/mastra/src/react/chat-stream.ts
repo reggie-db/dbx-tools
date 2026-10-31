@@ -22,6 +22,7 @@ import type {
   ThreadSessionUpdater,
 } from "./chat-sessions.ts";
 import type { ChatStatus } from "./types.ts";
+import { withBrowserMessageTimestamps } from "../support/browser-transcript.ts";
 import type { MastraStreamResponse } from "../support/mastra-client.ts";
 
 const logger = log.logger("ui-mastra/chat");
@@ -155,6 +156,7 @@ export function useChatStream({
       assistantId: string,
       runIdRef: { current: string | null },
       signal: AbortSignal,
+      turnStartedAt: string,
     ) => {
       const recordTraceId = (traceId: string | undefined): void => {
         if (!traceId) return;
@@ -206,13 +208,36 @@ export function useChatStream({
           terminateOnError: true,
         })) {
           if (signal.aborted) throw new StreamAborted();
-          const assistant = message.id === assistantId ? message : { ...message, id: assistantId };
+          const assistant = withBrowserMessageTimestamps(
+            message.id === assistantId ? message : { ...message, id: assistantId },
+            {
+              createdAt: turnStartedAt,
+              ...(terminalReceived ? { completedAt: new Date().toISOString() } : {}),
+            },
+          );
           writeMessages(threadId, upsertAssistant(getSession(threadId).messages, assistant));
           updateSession(threadId, (current) => ({
             ...current,
             runId: runIdRef.current,
             status: terminalReceived || current.status === "finishing" ? "finishing" : "streaming",
           }));
+        }
+        if (terminalReceived) {
+          const completedAt = new Date().toISOString();
+          const messages = getSession(threadId).messages;
+          const assistant = messages.find((message) => message.id === assistantId);
+          if (assistant) {
+            writeMessages(
+              threadId,
+              upsertAssistant(
+                messages,
+                withBrowserMessageTimestamps(assistant, {
+                  createdAt: turnStartedAt,
+                  completedAt,
+                }),
+              ),
+            );
+          }
         }
         return threadTitle;
       } catch (error) {

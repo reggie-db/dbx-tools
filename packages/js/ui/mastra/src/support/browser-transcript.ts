@@ -3,12 +3,29 @@ import { z } from "zod";
 
 const DEFAULT_MAX_MESSAGES = 100;
 
+/** Client-observed lifecycle timestamps stored with one browser-held message. */
+export const BrowserMessageTimestampsSchema = z
+  .object({
+    createdAt: z.iso.datetime().describe("ISO-8601 time when the message turn started."),
+    completedAt: z.iso
+      .datetime()
+      .optional()
+      .describe("ISO-8601 time when the assistant response completed."),
+  })
+  .passthrough()
+  .describe("Browser-persisted message lifecycle timestamps.");
+
+/** Client-observed lifecycle timestamps stored with one browser-held message. */
+export type BrowserMessageTimestamps = z.infer<typeof BrowserMessageTimestampsSchema>;
+
 const StoredBrowserMessageSchema = z
   .object({
     id: z.string().min(1).describe("AI SDK UI message identifier."),
-    role: z
-      .enum(["system", "user", "assistant"])
-      .describe("AI SDK UI message author role."),
+    role: z.enum(["system", "user", "assistant"]).describe("AI SDK UI message author role."),
+    metadata: z
+      .unknown()
+      .optional()
+      .describe("Message lifecycle timestamps plus any transport-owned metadata."),
     parts: z.array(z.unknown()).describe("AI SDK UI message content parts."),
   })
   .passthrough()
@@ -16,7 +33,9 @@ const StoredBrowserMessageSchema = z
 
 const StoredBrowserTranscriptSchema = z
   .object({
-    version: z.literal(1).describe("Browser transcript storage format version."),
+    version: z
+      .union([z.literal(1), z.literal(2)])
+      .describe("Browser transcript storage format version."),
     messages: z
       .array(StoredBrowserMessageSchema)
       .describe("Chronological AI SDK UI messages for one thread."),
@@ -64,6 +83,32 @@ export function readStoredBrowserTranscript(
   }
 }
 
+/** Read validated lifecycle timestamps from one UI message. */
+export function readBrowserMessageTimestamps(
+  message: Pick<UIMessage, "metadata">,
+): BrowserMessageTimestamps | undefined {
+  const parsed = BrowserMessageTimestampsSchema.safeParse(message.metadata);
+  return parsed.success ? parsed.data : undefined;
+}
+
+/** Add lifecycle timestamps without discarding transport-owned message metadata. */
+export function withBrowserMessageTimestamps(
+  message: UIMessage,
+  timestamps: BrowserMessageTimestamps,
+): UIMessage {
+  const existing =
+    message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
+      ? message.metadata
+      : {};
+  const current = readBrowserMessageTimestamps(message);
+  const next = BrowserMessageTimestampsSchema.parse({
+    ...existing,
+    ...timestamps,
+    createdAt: current?.createdAt ?? timestamps.createdAt,
+  });
+  return { ...message, metadata: next };
+}
+
 /** Persist the newest browser-held messages for one thread on a best-effort basis. */
 export function storeBrowserTranscript(
   key: string,
@@ -80,10 +125,7 @@ export function storeBrowserTranscript(
     const limit = Number.isFinite(maxMessages)
       ? Math.max(1, Math.floor(maxMessages))
       : DEFAULT_MAX_MESSAGES;
-    storage.setItem(
-      key,
-      JSON.stringify({ version: 1, messages: messages.slice(-limit) }),
-    );
+    storage.setItem(key, JSON.stringify({ version: 2, messages: messages.slice(-limit) }));
   } catch {
     // Storage can be blocked or full; the live in-memory transcript remains valid.
   }

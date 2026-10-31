@@ -31,6 +31,7 @@ import {
   browserTranscriptStorageKey,
   readStoredBrowserTranscript,
   storeBrowserTranscript,
+  withBrowserMessageTimestamps,
 } from "../support/browser-transcript.ts";
 import type { EmbedResolver, ExportFormat } from "../support/export.ts";
 import { GenieChatClient } from "../support/genie-client.ts";
@@ -102,11 +103,15 @@ export interface BrowserConversationPersistenceOptions {
 const logger = log.logger("ui-mastra/chat");
 const STEER_INTERRUPT_SETTLEMENT_TIMEOUT_MS = 2_000;
 
-const makeUserMessage = (text: string, files: FileUIPart[] = []): UIMessage => ({
-  id: hash.id(),
-  role: "user",
-  parts: [...files, ...(text ? [{ type: "text" as const, text }] : [])],
-});
+const makeUserMessage = (text: string, files: FileUIPart[] = []): UIMessage =>
+  withBrowserMessageTimestamps(
+    {
+      id: hash.id(),
+      role: "user",
+      parts: [...files, ...(text ? [{ type: "text" as const, text }] : [])],
+    },
+    { createdAt: new Date().toISOString() },
+  );
 
 /** Project a native Mastra memory thread down to the sidebar's view. */
 const toThreadSummary = (thread: MastraMemoryThread): ThreadSummary => ({
@@ -768,6 +773,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       assistantId: string,
       open: (signal: AbortSignal) => Promise<MastraStreamResponse>,
     ) => {
+      const turnStartedAt = new Date().toISOString();
       const controller = new AbortController();
       let token = 0;
       updateSession(threadId, (session) => {
@@ -803,6 +809,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
             assistantId,
             runIdRef,
             controller.signal,
+            turnStartedAt,
           );
           adoptAssignedThreadId();
         } catch (initialError) {
@@ -840,6 +847,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
               assistantId,
               runIdRef,
               controller.signal,
+              turnStartedAt,
             );
           } catch (reconnectError) {
             writeMessages(threadId, messagesBeforeReplay);
@@ -1748,11 +1756,14 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     isLoadingHistory:
       !persistenceReady ||
       isLoadingHistory ||
-      Boolean(
-        browserTranscriptKey && hydratedBrowserTranscriptKey !== browserTranscriptKey,
-      ),
+      Boolean(browserTranscriptKey && hydratedBrowserTranscriptKey !== browserTranscriptKey),
     browserPersistenceHydrated:
-      !browserTranscriptKey || hydratedBrowserTranscriptKey === browserTranscriptKey,
+      !browserPersistence ||
+      Boolean(
+        persistenceReady &&
+        browserTranscriptKey &&
+        hydratedBrowserTranscriptKey === browserTranscriptKey,
+      ),
     ...(mastraClient.attachments ? {} : { allowAttachments: false }),
     ...(enableClear ? { onClear: handleClear } : {}),
     threadPlacement,

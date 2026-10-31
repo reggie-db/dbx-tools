@@ -8,6 +8,8 @@ import {
 } from "@databricks/appkit-ui/react";
 import { getAuthStatus } from "@dbx-tools/shared-auth";
 import {
+  MODEL_ROUTE_PART_TYPE,
+  MODEL_USAGE_PART_TYPE,
   ModelRoutePartDataSchema,
   ModelUsagePartDataSchema,
   type ModelRoutePartData,
@@ -23,7 +25,11 @@ import {
   type ChatStatus,
   useMastraChat,
 } from "@dbx-tools/ui-mastra/react";
-import { useMastraClient, useMastraModels } from "@dbx-tools/ui-mastra/support";
+import {
+  readBrowserMessageTimestamps,
+  useMastraClient,
+  useMastraModels,
+} from "@dbx-tools/ui-mastra/support";
 import {
   LoaderCircleIcon,
   PlusIcon,
@@ -88,34 +94,6 @@ const StoredPanesSchema = z
   .describe("Browser-persisted Models demo layout.");
 
 const PANES_STORAGE_KEY = "dbx-demo-model-panes";
-const PANE_METRICS_STORAGE_PREFIX = "dbx-demo-model-metrics:";
-
-const StoredPaneMetricsSchema = z
-  .object({
-    version: z.literal(1).describe("Models demo metric storage format version."),
-    usage: z
-      .record(z.string(), ModelUsagePartDataSchema)
-      .describe("Final or latest cumulative model usage payload for each run."),
-    requestUsage: ModelUsagePartDataSchema.optional().describe(
-      "Latest request usage used by the Current metric scope.",
-    ),
-    route: ModelRoutePartDataSchema.optional().describe(
-      "Latest selected model route and pricing metadata.",
-    ),
-    latencyMs: z
-      .number()
-      .nonnegative()
-      .optional()
-      .describe("Completed duration of the latest request in milliseconds."),
-    totalTimeMs: z
-      .number()
-      .nonnegative()
-      .describe("Accumulated duration of completed requests in milliseconds."),
-  })
-  .strict()
-  .describe("Browser-persisted telemetry for one Models demo comparison pane.");
-
-type StoredPaneMetrics = z.infer<typeof StoredPaneMetricsSchema>;
 
 function createPane(descriptor: Omit<PaneDescriptor, "id" | "threadId">): PaneDescriptor {
   return { ...descriptor, id: crypto.randomUUID(), threadId: crypto.randomUUID() };
@@ -142,51 +120,6 @@ function storePanes(panes: readonly PaneDescriptor[]): void {
     );
   } catch {
     // Browser persistence is best-effort; the live comparison remains usable.
-  }
-}
-
-function paneMetricsStorageKey(id: string): string {
-  return `${PANE_METRICS_STORAGE_PREFIX}${id}`;
-}
-
-function readStoredPaneMetrics(id: string): StoredPaneMetrics | undefined {
-  const key = paneMetricsStorageKey(id);
-  try {
-    const serialized = window.localStorage.getItem(key);
-    if (!serialized) return undefined;
-    return StoredPaneMetricsSchema.parse(JSON.parse(serialized));
-  } catch {
-    try {
-      window.localStorage.removeItem(key);
-    } catch {}
-    return undefined;
-  }
-}
-
-function storePaneMetrics(id: string, metrics: StoredPaneMetrics): void {
-  const key = paneMetricsStorageKey(id);
-  try {
-    if (
-      Object.keys(metrics.usage).length === 0 &&
-      metrics.requestUsage === undefined &&
-      metrics.route === undefined &&
-      metrics.latencyMs === undefined &&
-      metrics.totalTimeMs === 0
-    ) {
-      window.localStorage.removeItem(key);
-      return;
-    }
-    window.localStorage.setItem(key, JSON.stringify(metrics));
-  } catch {
-    // Browser persistence is best-effort; live telemetry remains usable.
-  }
-}
-
-function removeStoredPaneMetrics(id: string): void {
-  try {
-    window.localStorage.removeItem(paneMetricsStorageKey(id));
-  } catch {
-    // Browser persistence is best-effort; closing the live pane still succeeds.
   }
 }
 
@@ -442,7 +375,6 @@ const SmartRouter = () => {
   };
   const closePane = (id: string) => {
     controllers.current.delete(id);
-    removeStoredPaneMetrics(id);
     setPanes((current) => current.filter((pane) => pane.id !== id));
     reportStatus(id, undefined);
   };
@@ -584,14 +516,11 @@ const ModelChatPane = ({
   onContextRestored: () => void;
 }) => {
   const [metricScope, setMetricScope] = useState<"current" | "total">("current");
-  const [initialMetrics] = useState(() => readStoredPaneMetrics(pane.id));
-  const [usage, setUsage] = useState<UsageMap>(() => initialMetrics?.usage ?? {});
-  const [requestUsage, setRequestUsage] = useState<ModelUsagePartData | undefined>(
-    initialMetrics?.requestUsage,
-  );
-  const [route, setRoute] = useState<ModelRoutePartData | undefined>(initialMetrics?.route);
-  const [latencyMs, setLatencyMs] = useState<number | undefined>(initialMetrics?.latencyMs);
-  const [totalTimeMs, setTotalTimeMs] = useState(initialMetrics?.totalTimeMs ?? 0);
+  const [usage, setUsage] = useState<UsageMap>({});
+  const [requestUsage, setRequestUsage] = useState<ModelUsagePartData | undefined>();
+  const [route, setRoute] = useState<ModelRoutePartData | undefined>();
+  const [latencyMs, setLatencyMs] = useState<number | undefined>();
+  const [totalTimeMs, setTotalTimeMs] = useState(0);
   const [timerNow, setTimerNow] = useState(() => performance.now());
   const startedAt = useRef<number | undefined>(undefined);
   const assistantTextBaseline = useRef(0);
@@ -632,29 +561,22 @@ const ModelChatPane = ({
   const messagesRef = useRef(chat.messages);
   messagesRef.current = chat.messages;
   const restoredContextReported = useRef(false);
+  const restoredMetricsApplied = useRef(false);
 
   useEffect(() => {
-    storePaneMetrics(pane.id, {
-      version: 1,
-      usage,
-      requestUsage,
-      route,
-      latencyMs,
-      totalTimeMs,
-    });
-  }, [latencyMs, pane.id, requestUsage, route, totalTimeMs, usage]);
-
-  useEffect(() => {
-    if (
-      restoredContextReported.current ||
-      !chat.browserPersistenceHydrated ||
-      chat.messages.length === 0
-    ) {
-      return;
+    if (!chat.browserPersistenceHydrated || restoredMetricsApplied.current) return;
+    restoredMetricsApplied.current = true;
+    const restored = conversationMetrics(chat.messages);
+    setUsage(restored.usage);
+    setRequestUsage(restored.requestUsage);
+    setRoute(restored.route);
+    setLatencyMs(restored.latencyMs);
+    setTotalTimeMs(restored.totalTimeMs);
+    if (!restoredContextReported.current && chat.messages.length > 0) {
+      restoredContextReported.current = true;
+      onContextRestored();
     }
-    restoredContextReported.current = true;
-    onContextRestored();
-  }, [chat.browserPersistenceHydrated, chat.messages.length, onContextRestored]);
+  }, [chat.browserPersistenceHydrated, chat.messages, onContextRestored]);
 
   useEffect(() => {
     if (!isRespondingChatStatus(chat.status)) return;
@@ -936,9 +858,53 @@ function formatUsd(value: number | undefined): string {
 }
 
 type ChatMessageLike = {
+  id: string;
   role: string;
-  parts: readonly { type: string; text?: string }[];
+  metadata?: unknown;
+  parts: readonly { type: string; text?: string; data?: unknown }[];
 };
+
+type ConversationMetrics = {
+  usage: UsageMap;
+  requestUsage?: ModelUsagePartData;
+  route?: ModelRoutePartData;
+  latencyMs?: number;
+  totalTimeMs: number;
+};
+
+function conversationMetrics(messages: readonly ChatMessageLike[]): ConversationMetrics {
+  const usage: UsageMap = {};
+  let requestUsage: ModelUsagePartData | undefined;
+  let route: ModelRoutePartData | undefined;
+  let latencyMs: number | undefined;
+  let totalTimeMs = 0;
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (part.type === MODEL_ROUTE_PART_TYPE) {
+        const parsed = ModelRoutePartDataSchema.safeParse(part.data);
+        if (parsed.success) route = parsed.data;
+      }
+      if (part.type === MODEL_USAGE_PART_TYPE) {
+        const parsed = ModelUsagePartDataSchema.safeParse(part.data);
+        if (!parsed.success) continue;
+        const item = parsed.data;
+        usage[item.runId ?? message.id] = item;
+        requestUsage = item;
+        route = item;
+      }
+    }
+    const timestamps = readBrowserMessageTimestamps({ metadata: message.metadata });
+    if (!timestamps?.completedAt) continue;
+    const createdAt = Date.parse(timestamps.createdAt);
+    const completedAt = Date.parse(timestamps.completedAt);
+    if (!Number.isFinite(createdAt) || !Number.isFinite(completedAt)) continue;
+    const elapsed = Math.max(0, completedAt - createdAt);
+    latencyMs = elapsed;
+    totalTimeMs += elapsed;
+  }
+  return { usage, requestUsage, route, latencyMs, totalTimeMs };
+}
 
 function assistantTextLength(messages: readonly ChatMessageLike[]): number {
   return messages.reduce((total, message) => {
