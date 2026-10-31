@@ -214,6 +214,9 @@ Configure the client with these options:
   with each turn for agents without Mastra memory. The default `"memory"`
   sends only the newest message because the persisted Mastra thread is the
   authoritative history.
+- `browserPersistence` stores that browser-held transcript in local storage,
+  scoped by plugin mount, agent, signed-in resource, and thread. Pass `true`
+  for the default 100-message limit or `{ maxMessages }` to set a bound.
 - `enableExport` adds whole-conversation and per-message export affordances.
 - Feedback defaults to auto: thumbs, dislike, and comment controls appear when
   the server reports MLflow feedback is available and a turn produced a trace

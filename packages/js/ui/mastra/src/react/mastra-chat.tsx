@@ -27,6 +27,11 @@ import {
   removeStoredActiveRun,
   storeActiveRun,
 } from "../support/active-runs.ts";
+import {
+  browserTranscriptStorageKey,
+  readStoredBrowserTranscript,
+  storeBrowserTranscript,
+} from "../support/browser-transcript.ts";
 import type { EmbedResolver, ExportFormat } from "../support/export.ts";
 import { GenieChatClient } from "../support/genie-client.ts";
 import {
@@ -69,6 +74,12 @@ const EMPTY_REASONING_EFFORTS: readonly ReasoningEffort[] = [];
 
 /** Why the active managed thread changed. */
 export type ThreadIdChangeReason = "hydrate" | "select" | "new" | "delete" | "missing" | "resolve";
+
+/** Browser transcript persistence limits for agents without durable Mastra memory. */
+export interface BrowserConversationPersistenceOptions {
+  /** Newest messages retained per thread. Defaults to 100. */
+  maxMessages?: number;
+}
 
 // Self-contained drop-in chat. `useMastraChat` consumes native AI SDK
 // `UIMessage` streams through one client contract: Mastra agents use the
@@ -213,6 +224,13 @@ export interface UseMastraChatOptions<
    */
   conversationHistory?: ConversationHistorySource;
   /**
+   * Persist the browser-held transcript in local storage so it survives page
+   * reloads and application restarts. Use with `conversationHistory="browser"`
+   * when Mastra memory is intentionally disabled. `true` uses the default
+   * 100-message limit.
+   */
+  browserPersistence?: boolean | BrowserConversationPersistenceOptions;
+  /**
    * Whether a message submitted during an active turn waits in the steer
    * queue. Defaults to true. Set false to interrupt the active turn and start
    * the replacement immediately.
@@ -290,6 +308,12 @@ export interface UseMastraChatOptions<
   onModelUsage?: (usage: ModelUsagePartData) => void;
 }
 
+/** Headless Mastra chat state and handlers consumed by {@link ChatView}. */
+export type UseMastraChatResult = Omit<ChatViewProps, "className"> & {
+  /** Whether the active browser transcript has finished restoring. */
+  browserPersistenceHydrated: boolean;
+};
+
 /**
  * Headless driver for the Mastra chat experience. Owns the full
  * conversation lifecycle (streaming, tool-event tracking, approvals,
@@ -300,7 +324,7 @@ export interface UseMastraChatOptions<
  */
 export const useMastraChat = <TValues extends Record<string, unknown> = Record<string, unknown>>(
   options: UseMastraChatOptions<TValues> = {},
-): Omit<ChatViewProps, "className"> => {
+): UseMastraChatResult => {
   // One client drives both the agent stream and the plugin's custom
   // routes (history / threads / models / suggestions / feedback /
   // embeds). Its identity is
@@ -326,6 +350,12 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const controlledModel = options.model?.trim() || undefined;
   const queueMessages = options.queueMessages !== false;
   const conversationHistory = options.conversationHistory ?? "memory";
+  const browserPersistence =
+    options.browserPersistence === true
+      ? {}
+      : options.browserPersistence === false
+        ? undefined
+        : options.browserPersistence;
   const modelKey = modelStorageKey(mastraClient.basePath, agentId);
   const [model, setModel] = useState(() => (showModelPicker ? readStoredModel(modelKey) : ""));
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | undefined>();
@@ -583,6 +613,40 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     updateSession,
     writeMessages,
   } = useChatSessions(activeThreadId);
+  const browserTranscriptKey =
+    browserPersistence && persistenceReady
+      ? browserTranscriptStorageKey(
+          mastraClient.basePath,
+          agentId,
+          activeKey,
+          resourceScope || undefined,
+        )
+      : undefined;
+  const [hydratedBrowserTranscriptKey, setHydratedBrowserTranscriptKey] = useState<string>();
+  useEffect(() => {
+    setHydratedBrowserTranscriptKey(undefined);
+    if (!browserTranscriptKey) return;
+    const stored = readStoredBrowserTranscript(browserTranscriptKey);
+    if (stored.length > 0 && getSession(activeKey).messages.length === 0) {
+      writeMessages(activeKey, stored);
+    }
+    setHydratedBrowserTranscriptKey(browserTranscriptKey);
+  }, [activeKey, browserTranscriptKey, getSession, writeMessages]);
+  useEffect(() => {
+    if (!browserTranscriptKey || hydratedBrowserTranscriptKey !== browserTranscriptKey) {
+      return;
+    }
+    storeBrowserTranscript(
+      browserTranscriptKey,
+      activeSession.messages,
+      browserPersistence?.maxMessages,
+    );
+  }, [
+    activeSession.messages,
+    browserPersistence?.maxMessages,
+    browserTranscriptKey,
+    hydratedBrowserTranscriptKey,
+  ]);
   useEffect(() => {
     if (
       !enableThreads ||
@@ -1681,7 +1745,14 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     onLoadMore: loadOlderHistory,
     isLoadingMore,
     hasMore: activeSession.hasMoreHistory,
-    isLoadingHistory: !persistenceReady || isLoadingHistory,
+    isLoadingHistory:
+      !persistenceReady ||
+      isLoadingHistory ||
+      Boolean(
+        browserTranscriptKey && hydratedBrowserTranscriptKey !== browserTranscriptKey,
+      ),
+    browserPersistenceHydrated:
+      !browserTranscriptKey || hydratedBrowserTranscriptKey === browserTranscriptKey,
     ...(mastraClient.attachments ? {} : { allowAttachments: false }),
     ...(enableClear ? { onClear: handleClear } : {}),
     threadPlacement,

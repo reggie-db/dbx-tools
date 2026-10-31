@@ -47,7 +47,7 @@ export { CHAT_LINK_SAFETY, AssistantMarkdown, ToolMarkdown, SqlBlock, SourceBloc
 export { useMastraAssistant, MastraAssistant } from "./src/react/mastra-assistant.tsx";
 export type { MastraAssistantMode, MastraAssistantSide, MastraAssistantLauncherPosition, MastraAssistantResizeOptions, MastraAssistantLauncherOptions, MastraAssistantController, MastraAssistantProps } from "./src/react/mastra-assistant.tsx";
 export { useMastraChat, MastraChat } from "./src/react/mastra-chat.tsx";
-export type { ThreadIdChangeReason, UseMastraChatOptions, MastraChatProps } from "./src/react/mastra-chat.tsx";
+export type { ThreadIdChangeReason, BrowserConversationPersistenceOptions, UseMastraChatOptions, UseMastraChatResult, MastraChatProps } from "./src/react/mastra-chat.tsx";
 export { SuggestionPills } from "./src/react/suggestion-pills.tsx";
 export type { SuggestionPillsProps } from "./src/react/suggestion-pills.tsx";
 export { dedupeSuggestions, collectSuggestions } from "./src/react/suggestions.ts";

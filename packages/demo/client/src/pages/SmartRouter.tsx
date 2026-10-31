@@ -29,6 +29,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { z } from "zod";
 
 const SMART_ROUTER_MODEL = "smart-router";
 const AI_DECIDE_MODEL = "ai-decide";
@@ -61,12 +62,56 @@ const SUGGESTION_INSTRUCTION_SUFFIX = [
   "Do not add a label or number.",
 ].join(" ");
 
-type PaneDescriptor = {
-  id: string;
-  kind: "mastra" | "genie";
-  title: string;
-  initialModel?: string;
-};
+const PaneDescriptorSchema = z
+  .object({
+    id: z.string().min(1).describe("Stable comparison-pane identifier."),
+    threadId: z.string().min(1).describe("Stable browser-persisted chat thread identifier."),
+    kind: z.enum(["mastra", "genie"]).describe("Comparison chat transport."),
+    title: z.string().min(1).describe("Visible comparison-pane title."),
+    initialModel: z.string().min(1).optional().describe("Initial Mastra model override."),
+  })
+  .strict()
+  .describe("Browser-persisted Models demo chat pane.");
+
+type PaneDescriptor = z.infer<typeof PaneDescriptorSchema>;
+
+const StoredPanesSchema = z
+  .object({
+    version: z.literal(1).describe("Models demo pane storage format version."),
+    panes: z.array(PaneDescriptorSchema).describe("Ordered model comparison panes."),
+  })
+  .strict()
+  .describe("Browser-persisted Models demo layout.");
+
+const PANES_STORAGE_KEY = "dbx-demo-model-panes";
+
+function createPane(descriptor: Omit<PaneDescriptor, "id" | "threadId">): PaneDescriptor {
+  return { ...descriptor, id: crypto.randomUUID(), threadId: crypto.randomUUID() };
+}
+
+function readStoredPanes(): PaneDescriptor[] | undefined {
+  try {
+    const serialized = window.localStorage.getItem(PANES_STORAGE_KEY);
+    if (!serialized) return undefined;
+    return StoredPanesSchema.parse(JSON.parse(serialized)).panes;
+  } catch {
+    try {
+      window.localStorage.removeItem(PANES_STORAGE_KEY);
+    } catch {}
+    return undefined;
+  }
+}
+
+function storePanes(panes: readonly PaneDescriptor[]): void {
+  try {
+    window.localStorage.setItem(
+      PANES_STORAGE_KEY,
+      JSON.stringify({ version: 1, panes }),
+    );
+  } catch {
+    // Browser persistence is best-effort; the live comparison remains usable.
+  }
+}
 
 type PaneController = {
   send: (text: string) => void;
@@ -83,48 +128,46 @@ function defaultPanes(
 ): PaneDescriptor[] {
   const panes: PaneDescriptor[] = [];
   if (models.some((model) => model.name === SMART_ROUTER_MODEL)) {
-    panes.push({
-      id: crypto.randomUUID(),
+    panes.push(createPane({
       kind: "mastra",
       title: "Smart Router",
       initialModel: SMART_ROUTER_MODEL,
-    });
+    }));
   }
   if (models.some((model) => model.name === AI_DECIDE_MODEL)) {
-    panes.push({
-      id: crypto.randomUUID(),
+    panes.push(createPane({
       kind: "mastra",
       title: "AI Decide",
       initialModel: AI_DECIDE_MODEL,
-    });
+    }));
   }
   if (rankedModels.gpt) {
-    panes.push({
-      id: crypto.randomUUID(),
+    panes.push(createPane({
       kind: "mastra",
       title: "OpenAI",
       initialModel: rankedModels.gpt.name,
-    });
+    }));
   }
   if (rankedModels.claude) {
-    panes.push({
-      id: crypto.randomUUID(),
+    panes.push(createPane({
       kind: "mastra",
       title: "Anthropic",
       initialModel: rankedModels.claude.name,
-    });
+    }));
   }
   if (genieAvailable) {
-    panes.push({ id: crypto.randomUUID(), kind: "genie", title: "Genie only" });
+    panes.push(createPane({ kind: "genie", title: "Genie only" }));
   }
   return panes;
 }
 
 const SmartRouter = () => {
   const [prompt, setPrompt] = useState("");
+  const [promptFocused, setPromptFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionLoading, setSuggestionLoading] = useState(true);
   const [panes, setPanes] = useState<PaneDescriptor[]>([]);
+  const [panesInitialized, setPanesInitialized] = useState(false);
   const [genieAvailable, setGenieAvailable] = useState<boolean>();
   const [rankedModels, setRankedModels] = useState<{
     gpt?: ChatModelOption;
@@ -135,6 +178,7 @@ const SmartRouter = () => {
   const controllers = useRef(new Map<string, PaneController>());
   const recentPrompts = useRef<string[]>([]);
   const suggestionController = useRef<AbortController | undefined>(undefined);
+  const restoredContextTimer = useRef<number | undefined>(undefined);
   const regenerateAfterResponse = useRef(false);
   const defaultsInitialized = useRef(false);
   const mastraClient = useMastraClient();
@@ -202,7 +246,12 @@ const SmartRouter = () => {
 
   useEffect(() => {
     generateSuggestions();
-    return () => suggestionController.current?.abort();
+    return () => {
+      suggestionController.current?.abort();
+      if (restoredContextTimer.current !== undefined) {
+        window.clearTimeout(restoredContextTimer.current);
+      }
+    };
   }, [generateSuggestions]);
 
   useEffect(() => {
@@ -243,8 +292,18 @@ const SmartRouter = () => {
       return;
     }
     defaultsInitialized.current = true;
-    setPanes(defaultPanes(models, genieAvailable, rankedModels));
+    const modelNames = new Set(models.map(({ name }) => name));
+    const stored = readStoredPanes()?.filter((pane) =>
+      pane.kind === "genie"
+        ? genieAvailable
+        : Boolean(pane.initialModel && modelNames.has(pane.initialModel)),
+    );
+    setPanes(stored ?? defaultPanes(models, genieAvailable, rankedModels));
+    setPanesInitialized(true);
   }, [genieAvailable, models, modelsLoading, rankedModels]);
+  useEffect(() => {
+    if (panesInitialized) storePanes(panes);
+  }, [panes, panesInitialized]);
 
   const registerPane = useCallback((id: string, controller?: PaneController) => {
     if (controller) controllers.current.set(id, controller);
@@ -287,7 +346,7 @@ const SmartRouter = () => {
     if (value === GENIE_VALUE) {
       setPanes((current) => [
         ...current,
-        { id: crypto.randomUUID(), kind: "genie", title: "Genie only" },
+        createPane({ kind: "genie", title: "Genie only" }),
       ]);
       return;
     }
@@ -295,17 +354,16 @@ const SmartRouter = () => {
     const model = models.find((candidate) => candidate.name === initialModel);
     setPanes((current) => [
       ...current,
-      {
-        id: crypto.randomUUID(),
+      createPane({
         kind: "mastra",
         title:
           initialModel === SMART_ROUTER_MODEL
             ? "Smart Router"
             : initialModel === AI_DECIDE_MODEL
               ? "AI Decide"
-            : (model?.displayName ?? model?.name ?? "Mastra default"),
+              : (model?.displayName ?? model?.name ?? "Mastra default"),
         initialModel,
-      },
+      }),
     ]);
   };
   const closePane = (id: string) => {
@@ -324,31 +382,18 @@ const SmartRouter = () => {
     generateSuggestions();
     void Promise.all([...controllers.current.values()].map((controller) => controller.clear()));
   };
+  const refreshRestoredSuggestions = useCallback(() => {
+    if (restoredContextTimer.current !== undefined) {
+      window.clearTimeout(restoredContextTimer.current);
+    }
+    restoredContextTimer.current = window.setTimeout(() => {
+      restoredContextTimer.current = undefined;
+      generateSuggestions();
+    }, 100);
+  }, [generateSuggestions]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 md:p-4">
-      <div className="flex shrink-0 items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          One prompt, {panes.length} {panes.length === 1 ? "chat" : "chats"}
-        </p>
-        <Select value="" onValueChange={addPane}>
-          <SelectTrigger className="h-9 w-44" aria-label="Add chat">
-            <span className="flex items-center gap-2">
-              <PlusIcon className="size-4" aria-hidden />
-              <SelectValue placeholder="Add chat" />
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            {genieAvailable ? <SelectItem value={GENIE_VALUE}>Genie only</SelectItem> : null}
-            {models.map((model) => (
-              <SelectItem key={model.name} value={model.name}>
-                {model.displayName ?? model.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 md:p-4">
       {panes.length > 0 ? (
         <div className="flex min-h-0 flex-1 snap-x snap-proximity scroll-px-3 gap-3 overflow-x-auto overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
           {panes.map((pane) => (
@@ -358,10 +403,11 @@ const SmartRouter = () => {
               onClose={() => closePane(pane.id)}
               onRegister={registerPane}
               onStatusChange={reportStatus}
+              onContextRestored={refreshRestoredSuggestions}
             />
           ))}
         </div>
-      ) : defaultsInitialized.current ? (
+      ) : panesInitialized ? (
         <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
           Add a model or Genie chat to start comparing.
         </div>
@@ -372,37 +418,43 @@ const SmartRouter = () => {
       )}
 
       <form
-        className="shrink-0 rounded-xl border border-border bg-card p-3 shadow-sm"
+        className="shrink-0 rounded-xl border border-border bg-card p-2 shadow-sm"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
       >
-        <div className="mb-2 min-h-8">
-          {suggestionLoading ? (
-            <div className="flex h-8 items-center gap-2 px-1 text-xs text-muted-foreground">
-              <LoaderCircleIcon className="size-3.5 animate-spin" aria-hidden />
-              <span>Generating suggestions...</span>
-            </div>
-          ) : (
-            <SuggestionPills
-              questions={suggestions}
-              onSelect={submit}
-              className="flex-nowrap overflow-x-auto md:flex-nowrap md:overflow-x-auto"
-            />
-          )}
-        </div>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        {!promptFocused ? (
+          <div className="mb-2 min-h-8">
+            {suggestionLoading ? (
+              <div className="flex h-8 items-center gap-2 px-1 text-xs text-muted-foreground">
+                <LoaderCircleIcon className="size-3.5 animate-spin" aria-hidden />
+                <span>Generating suggestions...</span>
+              </div>
+            ) : (
+              <SuggestionPills
+                questions={suggestions}
+                onSelect={submit}
+                className="flex-nowrap overflow-x-auto md:flex-nowrap md:overflow-x-auto"
+              />
+            )}
+          </div>
+        ) : null}
+        <div className="flex flex-col gap-2">
           <label className="min-w-0 flex-1">
             <Textarea
               value={prompt}
-              rows={2}
-              className="min-h-20 resize-none text-base"
+              rows={1}
+              className={`field-sizing-content max-h-[min(10rem,30dvh)] resize-none text-base transition-[min-height] ${
+                promptFocused || prompt ? "min-h-20" : "min-h-10"
+              }`}
               placeholder="Send a message…"
               onChange={(event) => setPrompt(event.target.value)}
+              onFocus={() => setPromptFocused(true)}
+              onBlur={() => setPromptFocused(false)}
             />
           </label>
-          <div className="flex gap-2 lg:mb-0.5">
+          <div className="flex gap-2">
             <Button
               type="submit"
               className="flex-1 gap-2 lg:flex-none"
@@ -411,6 +463,24 @@ const SmartRouter = () => {
               Send to all
               <ArrowRightIcon className="size-4" />
             </Button>
+            <Select value="" onValueChange={addPane}>
+              <SelectTrigger
+                className="size-10 shrink-0 px-0"
+                aria-label="Add chat"
+                title="Add chat"
+              >
+                <PlusIcon className="size-4" aria-hidden />
+                <SelectValue placeholder="" />
+              </SelectTrigger>
+              <SelectContent>
+                {genieAvailable ? <SelectItem value={GENIE_VALUE}>Genie only</SelectItem> : null}
+                {models.map((model) => (
+                  <SelectItem key={model.name} value={model.name}>
+                    {model.displayName ?? model.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               type="button"
               variant={clearArmed ? "destructive" : "outline"}
@@ -434,13 +504,15 @@ const ModelChatPane = ({
   onClose,
   onRegister,
   onStatusChange,
+  onContextRestored,
 }: {
   pane: PaneDescriptor;
   onClose: () => void;
   onRegister: (id: string, controller?: PaneController) => void;
   onStatusChange: (id: string, status?: ChatStatus) => void;
+  onContextRestored: () => void;
 }) => {
-  const [threadId] = useState(() => crypto.randomUUID());
+  const [metricScope, setMetricScope] = useState<"current" | "total">("current");
   const [usage, setUsage] = useState<UsageMap>({});
   const [requestUsage, setRequestUsage] = useState<ModelUsagePartData>();
   const [route, setRoute] = useState<ModelRoutePartData>();
@@ -476,14 +548,28 @@ const ModelChatPane = ({
           onModelUsage: recordModelUsage,
         }),
     enableClear: true,
+    browserPersistence: true,
     queueMessages: false,
     suggestions: [],
-    threadId,
+    threadId: pane.threadId,
     threadPlacement: "disabled",
     requestContext: { route: "/smart-router", surface: pane.title },
   });
   const messagesRef = useRef(chat.messages);
   messagesRef.current = chat.messages;
+  const restoredContextReported = useRef(false);
+
+  useEffect(() => {
+    if (
+      restoredContextReported.current ||
+      !chat.browserPersistenceHydrated ||
+      chat.messages.length === 0
+    ) {
+      return;
+    }
+    restoredContextReported.current = true;
+    onContextRestored();
+  }, [chat.browserPersistenceHydrated, chat.messages.length, onContextRestored]);
 
   useEffect(() => {
     if (!isRespondingChatStatus(chat.status)) return;
@@ -651,22 +737,71 @@ const ModelChatPane = ({
           </div>
         </div>
         <div className="mt-2 text-xs">
-          <Metric label="Model" value={model ?? "—"} title={model} />
+          <div className="flex min-w-0 items-center justify-between gap-2 rounded-md bg-muted/50 px-2 py-1.5">
+            <div className="flex min-w-0 items-baseline gap-2">
+              <span className="shrink-0 text-[11px] text-muted-foreground">Model</span>
+              <span className="truncate font-medium text-foreground" title={model}>
+                {model ?? "—"}
+              </span>
+            </div>
+            <div
+              className="flex shrink-0 rounded-md bg-background/80 p-0.5"
+              role="group"
+              aria-label="Metric scope"
+            >
+              <Button
+                type="button"
+                variant={metricScope === "current" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 px-2 text-[11px]"
+                aria-pressed={metricScope === "current"}
+                onClick={() => setMetricScope("current")}
+              >
+                Current
+              </Button>
+              <Button
+                type="button"
+                variant={metricScope === "total" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 px-2 text-[11px]"
+                aria-pressed={metricScope === "total"}
+                onClick={() => setMetricScope("total")}
+              >
+                Total
+              </Button>
+            </div>
+          </div>
           <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-            <Metric label="Request tokens" value={formatTokens(displayedRequestTokens)} />
             <Metric
-              label="Request time"
-              value={requestTimeMs === undefined ? "—" : formatDuration(requestTimeMs)}
+              label="Tokens"
+              value={formatTokens(
+                metricScope === "current" ? displayedRequestTokens : displayedTotalTokens,
+              )}
             />
-            <Metric label="Request DBU" value={formatCost(displayedRequestCost)} />
-            <Metric label="Request USD" value={formatUsd(displayedRequestUsd)} />
-            <Metric label="Total tokens" value={formatTokens(displayedTotalTokens)} />
             <Metric
-              label="Total time"
-              value={displayedTotalTimeMs > 0 ? formatDuration(displayedTotalTimeMs) : "—"}
+              label="Time"
+              value={
+                metricScope === "current"
+                  ? requestTimeMs === undefined
+                    ? "—"
+                    : formatDuration(requestTimeMs)
+                  : displayedTotalTimeMs > 0
+                    ? formatDuration(displayedTotalTimeMs)
+                    : "—"
+              }
             />
-            <Metric label="Total DBU" value={formatCost(displayedTotalCost)} />
-            <Metric label="Total USD" value={formatUsd(displayedTotalUsd)} />
+            <Metric
+              label="DBU"
+              value={formatCost(
+                metricScope === "current" ? displayedRequestCost : displayedTotalCost,
+              )}
+            />
+            <Metric
+              label="USD"
+              value={formatUsd(
+                metricScope === "current" ? displayedRequestUsd : displayedTotalUsd,
+              )}
+            />
           </div>
         </div>
       </header>

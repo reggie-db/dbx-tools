@@ -3,6 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as activeRuns from "./src/support/active-runs.ts";
+export * as browserTranscript from "./src/support/browser-transcript.ts";
 export * as chartOption from "./src/support/chart-option.ts";
 export * as chartTheme from "./src/support/chart-theme.ts";
 export * as download from "./src/support/download.ts";
@@ -18,6 +19,7 @@ export * as threadTabs from "./src/support/thread-tabs.ts";
 export * as toolEvents from "./src/support/tool-events.ts";
 export { StoredActiveRunSchema, activeRunStorageKey, readStoredActiveRuns, storeActiveRun, removeStoredActiveRun } from "./src/support/active-runs.ts";
 export type { StoredActiveRun } from "./src/support/active-runs.ts";
+export { browserTranscriptStorageKey, readStoredBrowserTranscript, storeBrowserTranscript } from "./src/support/browser-transcript.ts";
 export { normalizeChartOption } from "./src/support/chart-option.ts";
 export { LIGHT_CHART_CHROME, resolveChartChrome, useChartChrome } from "./src/support/chart-theme.ts";
 export type { ChartChrome } from "./src/support/chart-theme.ts";
