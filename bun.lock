@@ -596,8 +596,10 @@
         "@dbx-tools/shared-auth": "workspace:*",
         "@dbx-tools/shared-core": "workspace:*",
         "@dbx-tools/shared-model": "workspace:*",
+        "@huggingface/hub": "catalog:",
         "cheerio": "catalog:",
         "fuse.js": "catalog:",
+        "hyparquet": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -846,6 +848,7 @@
       "dependencies": {
         "@dbx-tools/shared-genie": "workspace:*",
         "@dbx-tools/shared-model": "workspace:*",
+        "@dbx-tools/shared-model-gateway": "workspace:*",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -945,6 +948,7 @@
         "@dbx-tools/shared-genie": "workspace:*",
         "@dbx-tools/shared-mastra": "workspace:*",
         "@dbx-tools/shared-model": "workspace:*",
+        "@dbx-tools/shared-model-gateway": "workspace:*",
         "@dbx-tools/ui": "workspace:*",
         "@mastra/client-js": "catalog:",
         "@mastra/core": "catalog:",
@@ -1039,6 +1043,7 @@
     "@databricks/appkit": "0.81.0",
     "@databricks/appkit-ui": "0.81.0",
     "@databricks/sdk-experimental": "^0.17.0",
+    "@huggingface/hub": "2.17.5",
     "@mastra/ai-sdk": "1.10.5",
     "@mastra/client-js": "1.50.0",
     "@mastra/core": "1.71.0",
@@ -1086,6 +1091,7 @@
     "fuse.js": "^7.4.2",
     "generic-pool": "^3.9.0",
     "http-proxy-3": "^1.23.1",
+    "hyparquet": "1.31.5",
     "keyv": "5.6.0",
     "keyv-file": "5.3.5",
     "lucide-react": "^0.554.0",
@@ -3026,6 +3032,8 @@
     "https-proxy-agent": ["https-proxy-agent@7.0.6", "", { "dependencies": { "agent-base": "^7.1.2", "debug": "4" } }, "sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw=="],
 
     "human-signals": ["human-signals@8.0.1", "", {}, "sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ=="],
+
+    "hyparquet": ["hyparquet@1.31.5", "", {}, "sha512-KPVfaxW8xOiO2/4fjeiBfFNEXhGVw9tfcb9ha2iNZdJ3J/yBjEwIeAnTyyuhllFFTb9YO9wg0DfRAOnm6KCvBg=="],
 
     "iconv-lite": ["iconv-lite@0.6.3", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3.0.0" } }, "sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw=="],
 

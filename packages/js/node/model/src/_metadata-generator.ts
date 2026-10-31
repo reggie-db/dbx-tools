@@ -1,20 +1,28 @@
 import { CloudProvider } from "@dbx-tools/shared-core";
-import type {
-  ModelTokenPrice,
-  ModelTokenPriceCondition,
-  ModelTokenPriceTier,
-  ModelTokenUsdPerDbu,
+import {
+  ModelLatencyMeasurementsSchema,
+  type ModelLatencyScore,
+  type ModelRanking,
+  type ModelRating,
+  ModelRankingSchema,
+  type ModelTokenPrice,
+  type ModelTokenPriceCondition,
+  type ModelTokenPriceTier,
+  type ModelTokenUsdPerDbu,
 } from "@dbx-tools/shared-model";
 import { load, type CheerioAPI } from "cheerio";
 import { z } from "zod";
 
+import { LM_ARENA_DATASET_URL, LM_ARENA_SPLIT, type LMArenaCatalogData } from "./lm-arena.ts";
 import type {
+  ModelLatencyScoreSnapshot,
   ModelParamsSnapshot,
   ModelCapabilitiesSnapshot,
   ModelRateLimitCatalogue,
   ModelRateLimitsSnapshot,
   ModelTokenPricesSnapshot,
   ModelsDevSnapshot,
+  ModelRatingsSnapshot,
   ReasoningModelsSnapshot,
   RetiredModelsSnapshot,
 } from "./metadata-contract.ts";
@@ -154,6 +162,62 @@ const ModelParamsApiSchema = z
   .passthrough()
   .describe("modelparams.dev model catalogue response.");
 
+const ModelLatencyBenchmarkResultSchema = z
+  .object({
+    model: z.string().describe("Provider model identifier."),
+    ok: z.boolean().describe("Whether the benchmark completed successfully."),
+    tokens_per_second: z.number().nonnegative().describe("Measured output tokens per second."),
+    ttft_millis: z.number().nonnegative().describe("Measured time to first token in milliseconds."),
+    successful_runs: z.number().int().nonnegative().describe("Successful measured runs."),
+  })
+  .passthrough()
+  .describe("One model result in the latency benchmark.");
+
+const ModelLatencyBenchmarkSchema = z
+  .object({
+    generated_at: ModelLatencyMeasurementsSchema.shape.measuredAt.describe(
+      "Benchmark publication timestamp normalized to UTC.",
+    ),
+    max_tokens: z.number().int().positive().describe("Requested completion length."),
+    results: z.array(ModelLatencyBenchmarkResultSchema).describe("Measured model results."),
+  })
+  .passthrough()
+  .describe("Public model latency and throughput benchmark snapshot.");
+
+const ArenaPreferenceRankingRowSchema = z
+  .object({
+    model_name: z.string().describe("Arena model display name."),
+    rating: z.number().finite().describe("Arena preference rating."),
+    rating_lower: z.number().finite().describe("Arena lower rating confidence bound."),
+    rating_upper: z.number().finite().describe("Arena upper rating confidence bound."),
+    variance: z.number().finite().nonnegative().describe("Arena rating variance."),
+    vote_count: z.coerce.number().int().nonnegative().describe("Arena preference vote count."),
+    rank: z.coerce.number().int().positive().describe("Arena category rank."),
+    category: z.string().describe("Arena leaderboard category."),
+    leaderboard_publish_date: ModelRankingSchema.shape.publishedAt.describe(
+      "Arena leaderboard publication date or timestamp normalized to UTC.",
+    ),
+  })
+  .passthrough()
+  .describe("One preference-based LMArena ranking row.");
+
+const ArenaAgentRankingRowSchema = z
+  .object({
+    model_name: z.string().describe("Arena model display name."),
+    score: z.number().finite().describe("Arena agent score."),
+    score_ci_lower: z.number().finite().describe("Arena agent score lower confidence bound."),
+    score_ci_upper: z.number().finite().describe("Arena agent score upper confidence bound."),
+    observation_count: z.coerce.number().int().nonnegative().describe("Agent observation count."),
+    session_count: z.coerce.number().int().nonnegative().describe("Agent session count."),
+    rank: z.coerce.number().int().positive().describe("Arena category rank."),
+    category: z.string().describe("Arena leaderboard category."),
+    leaderboard_publish_date: ModelRankingSchema.shape.publishedAt.describe(
+      "Arena leaderboard publication date or timestamp normalized to UTC.",
+    ),
+  })
+  .passthrough()
+  .describe("One agent-based LMArena ranking row.");
+
 /** Parse retired model names from Databricks retirement-policy HTML. */
 export function parseRetiredModels(html: string, generatedAt: number): RetiredModelsSnapshot {
   const $ = load(html);
@@ -284,6 +348,178 @@ export function parseModelParams(input: unknown, generatedAt: number): ModelPara
     catalogue: {
       reasoning: [...reasoning].sort(),
       models: sortRecord(models),
+    },
+  };
+}
+
+/** Normalize benchmark throughput and TTFT into a lower-is-faster response-time score. */
+export function parseModelLatencyBenchmark(
+  input: unknown,
+  generatedAt: number,
+): ModelLatencyScoreSnapshot {
+  const benchmark = ModelLatencyBenchmarkSchema.parse(input);
+  const groups = new Map<
+    string,
+    {
+      aliases: Set<string>;
+      responseTimes: number[];
+      timeToFirstTokens: number[];
+      outputTokensPerSecond: number[];
+      successfulRunCount: number;
+    }
+  >();
+
+  for (const result of benchmark.results) {
+    if (!result.ok || result.successful_runs === 0 || result.tokens_per_second <= 0) continue;
+    const aliases = externalModelKeys(result.model.split("/").at(-1));
+    const key = [...aliases].sort((left, right) => left.length - right.length)[0];
+    if (!key) continue;
+    const group = groups.get(key) ?? {
+      aliases: new Set<string>(),
+      responseTimes: [],
+      timeToFirstTokens: [],
+      outputTokensPerSecond: [],
+      successfulRunCount: 0,
+    };
+    for (const alias of aliases) group.aliases.add(alias);
+    group.responseTimes.push(
+      result.ttft_millis + (benchmark.max_tokens / result.tokens_per_second) * 1000,
+    );
+    group.timeToFirstTokens.push(result.ttft_millis);
+    group.outputTokensPerSecond.push(result.tokens_per_second);
+    group.successfulRunCount += result.successful_runs;
+    groups.set(key, group);
+  }
+
+  if (groups.size === 0) {
+    throw new Error("Model latency benchmark contained no successful models");
+  }
+
+  const models: Record<string, ModelLatencyScore> = {};
+  for (const group of groups.values()) {
+    const latencyScore: ModelLatencyScore = {
+      score: Math.round(median(group.responseTimes)!),
+      measurements: {
+        timeToFirstTokenMs: decimalPlaces(median(group.timeToFirstTokens)!, 3),
+        outputTokensPerSecond: decimalPlaces(median(group.outputTokensPerSecond)!, 3),
+        successfulRunCount: group.successfulRunCount,
+        completionTokenCount: benchmark.max_tokens,
+        measuredAt: benchmark.generated_at,
+      },
+    };
+    for (const alias of group.aliases) models[alias] = latencyScore;
+  }
+
+  return {
+    generatedAt,
+    source: {
+      name: "vicaroai/tokens-per-second",
+      url: "https://github.com/vicaroai/tokens-per-second",
+      license: "MIT",
+      measuredAt: benchmark.generated_at,
+      maxTokens: benchmark.max_tokens,
+    },
+    catalogue: { models: sortRecord(models) },
+  };
+}
+
+/** Parse the best published overall ranking per configuration and normalized model. */
+export function parseArenaModelRatings(
+  input: LMArenaCatalogData,
+  generatedAt: number,
+): ModelRatingsSnapshot {
+  const rankingsByModel: Record<string, Record<string, ModelRanking>> = {};
+  const maximumRanks = new Map<string, number>();
+  const configurations = new Set<string>();
+  for (const [configuration, data] of Object.entries(input.configurations)) {
+    for (const value of data.rows) {
+      const rating = arenaRanking(value);
+      if (!rating || rating.category !== "overall") continue;
+      maximumRanks.set(
+        configuration,
+        Math.max(maximumRanks.get(configuration) ?? 0, rating.ranking.rank),
+      );
+      const modelName = rating.modelName
+        .replace(/(?:\s*\([^)]*\)|[-_](?:minimal|low|medium|high|xhigh|max))\s*$/iu, "")
+        .trim();
+      configurations.add(configuration);
+      for (const alias of externalModelKeys(modelName)) {
+        const current = rankingsByModel[alias] ?? {};
+        const existing = current[configuration];
+        if (!existing || rating.ranking.score > existing.score) {
+          rankingsByModel[alias] = { ...current, [configuration]: rating.ranking };
+        }
+      }
+    }
+  }
+  if (Object.keys(rankingsByModel).length === 0) {
+    throw new Error("LMArena leaderboard contained no recognized overall model rankings");
+  }
+  const models = Object.fromEntries(
+    Object.entries(rankingsByModel).map(([model, rankings]) => {
+      const percentileScores = Object.entries(rankings).map(([configuration, ranking]) =>
+        rankPercentile(ranking.rank, maximumRanks.get(configuration) ?? ranking.rank),
+      );
+      const rating: ModelRating = {
+        score: decimalPlaces(
+          percentileScores.reduce((total, score) => total + score, 0) / percentileScores.length,
+          3,
+        ),
+        rankings: sortRecord(rankings),
+      };
+      return [model, rating];
+    }),
+  );
+  return {
+    generatedAt,
+    source: {
+      name: "LMArena leaderboard dataset",
+      url: LM_ARENA_DATASET_URL,
+      license: "CC-BY-4.0",
+      split: LM_ARENA_SPLIT,
+      configurations: [...configurations].sort(),
+      category: "overall",
+    },
+    catalogue: { models: sortRecord(models) },
+  };
+}
+
+function arenaRanking(
+  input: unknown,
+):
+  | { readonly modelName: string; readonly category: string; readonly ranking: ModelRanking }
+  | undefined {
+  const preference = ArenaPreferenceRankingRowSchema.safeParse(input);
+  if (preference.success) {
+    const row = preference.data;
+    return {
+      modelName: row.model_name,
+      category: row.category,
+      ranking: {
+        score: row.rating,
+        lowerBound: row.rating_lower,
+        upperBound: row.rating_upper,
+        variance: row.variance,
+        voteCount: row.vote_count,
+        rank: row.rank,
+        publishedAt: row.leaderboard_publish_date,
+      },
+    };
+  }
+  const agent = ArenaAgentRankingRowSchema.safeParse(input);
+  if (!agent.success) return undefined;
+  const row = agent.data;
+  return {
+    modelName: row.model_name,
+    category: row.category,
+    ranking: {
+      score: row.score,
+      lowerBound: row.score_ci_lower,
+      upperBound: row.score_ci_upper,
+      observationCount: row.observation_count,
+      sessionCount: row.session_count,
+      rank: row.rank,
+      publishedAt: row.leaderboard_publish_date,
     },
   };
 }
@@ -766,6 +1002,23 @@ function decimal(value: string | undefined): number | null {
   if (!value || value.trim() === "-") return null;
   const parsed = Number(value.replaceAll(",", "").trim());
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function median(values: readonly number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1]! + sorted[middle]!) / 2 : sorted[middle];
+}
+
+function decimalPlaces(value: number, places: number): number {
+  const multiplier = 10 ** places;
+  return Math.round(value * multiplier) / multiplier;
+}
+
+function rankPercentile(rank: number, maximumRank: number): number {
+  if (maximumRank <= 1) return 100;
+  return Math.max(0, Math.min(100, (1 - (rank - 1) / (maximumRank - 1)) * 100));
 }
 
 function sortRecord<T>(record: Readonly<Record<string, T>>): Record<string, T> {

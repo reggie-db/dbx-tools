@@ -100,9 +100,11 @@ const root = new projectJs.DBXToolsNodeProject({
     "@types/json-schema": "^7",
     "@types/pg": "^8",
     "@types/semver": "^7.7.1",
+    "@huggingface/hub": "2.17.5",
     cheerio: "^1.2.0",
     concurrently: "^10.0.3",
     "fuse.js": "^7.4.2",
+    hyparquet: "1.31.5",
     marked: "^18.0.5",
     pg: "^8.22.0",
     semver: "^7.7.3",
@@ -550,14 +552,16 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/shared-model@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@databricks/appkit@catalog:",
+    "@huggingface/hub@catalog:",
     "cheerio@catalog:",
     "fuse.js@catalog:",
+    "hyparquet@catalog:",
     "zod@catalog:",
   );
   p.addTask("metadata", {
     exec: "bun scripts/generate-metadata.ts",
     description:
-      "Refresh model retirement, capability, rate-limit, token-price, and reasoning snapshots",
+      "Refresh model retirement, capability, latency, rating, rate-limit, token-price, and reasoning snapshots",
   });
 });
 

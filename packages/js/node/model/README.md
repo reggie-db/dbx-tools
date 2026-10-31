@@ -54,10 +54,14 @@ The package:
   issue their own OpenAI-shaped HTTP requests.
 - Provides build-generated retirement, Responses, image-input, apply-patch,
   web-search, reasoning, tool-calling, structured-output, temperature-support,
-  ITPM, OTPM, QPH, and token-price metadata through cached in-process lookups. Databricks
-  documentation is enriched with models.dev and modelparams.dev snapshots,
-  while token prices come only from Databricks pricing pages and committed
-  fallbacks keep refreshes and runtime startup offline-safe.
+  latency, human-preference rating, ITPM, OTPM, QPH, and token-price metadata
+  through cached in-process lookups. Databricks documentation is enriched with
+  models.dev and modelparams.dev snapshots. Normalized latency metadata uses
+  the MIT-licensed `vicaroai/tokens-per-second` benchmark after Databricks and
+  those catalogues provide no per-model latency field. Ratings use every CC BY
+  4.0 LMArena `latest` parquet configuration published through Hugging Face.
+  Token prices come only from Databricks pricing pages, and committed fallbacks
+  keep refreshes and runtime startup offline-safe.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
@@ -282,6 +286,8 @@ threshold without loading a native library.
 import { metadata } from "@dbx-tools/model";
 
 const capabilities = metadata.modelCapabilitiesFor("databricks-gpt-5-4");
+const latencyScore = metadata.modelLatencyScoreFor("databricks-gpt-6-luna");
+const rating = metadata.modelRatingFor("databricks-gpt-6-sol");
 const limits = metadata.modelRateLimitsFor("gpt-5.4");
 const prices = metadata.modelTokenPricesFor("system.ai.gpt-5-4");
 const estimate = metadata.estimateModelTokenPrice(
@@ -290,16 +296,35 @@ const estimate = metadata.estimateModelTokenPrice(
   { condition: "short-context", usdPerDbu: 0.07 },
 );
 const status = metadata.modelStatusFor("system.ai.gemini-2-5-pro");
+
+latencyScore?.score;
+latencyScore?.measurements.outputTokensPerSecond;
+rating?.score;
+rating?.rankings.text_style_control?.lowerBound;
 ```
 
 The package ships committed snapshots generated from Databricks documentation
-by `bun run --filter '@dbx-tools/model' metadata`. Runtime calls normalize endpoint, display,
-foundation-model, and provider identities into memoized sets and maps. They do
-not fetch documentation. `modelMetadataFor()` returns status, capabilities,
-published limits, and Databricks DBU rates per million input, output,
-cache-read, and cache-write tokens together for a string or
-`ServingEndpointSummary`. Multiply those rates by the applicable Databricks SKU
-price per DBU to estimate currency cost.
+and public model catalogues by `bun run --filter '@dbx-tools/model' metadata`.
+Runtime calls normalize endpoint, display, foundation-model, and provider
+identities into memoized sets and maps. They do not fetch documentation or
+benchmarks. `modelMetadataFor()` returns status, capabilities, normalized
+latency metadata, Arena ratings, published limits, and Databricks DBU rates per
+million input, output, cache-read, and cache-write tokens together for a string
+or `ServingEndpointSummary`. `latencyScore.score` is the benchmark's median
+normalized response time in milliseconds, so lower values are faster.
+`latencyScore.measurements` retains median time to first token, median output
+throughput, successful run count, normalized completion length, and measurement
+time. `rating.score` is a 0-100 mean percentile across the model's available
+LMArena configurations, so higher values are better even when source scales
+differ. `rating.rankings` preserves each source score, lower and upper confidence
+bounds, rank, publication date, preference votes and variance, or agent
+observation and session counts. When Arena lists multiple reasoning-effort
+variants, each configuration keeps its highest-rated overall row. Lookups prefer
+an exact model match and otherwise inherit from the newest measured model in the
+same family and variant. Consumers can sort the root scores directly or apply
+their own confidence, freshness, and coverage policy to the nested values.
+Multiply token rates by the applicable Databricks SKU price per DBU to estimate
+currency cost.
 
 Native web-search capability starts with the documented model set. Later
 versions in the same hosted foundation-model family inherit the capability by
@@ -333,8 +358,8 @@ policy decisions. Use fallbacks only when live resolution is unavailable.
   search, and endpoint-id resolution.
 - `invoke` - serving-path constants, URL construction, and per-request auth
   headers for calling an endpoint over raw HTTP.
-- `metadata` - build-generated retirement, capability, rate-limit, and token-price snapshots
-  with cached normalized lookups.
+- `metadata` - build-generated retirement, capability, latency, rating,
+  rate-limit, and token-price snapshots with cached normalized lookups.
 - `modelClient` - portable authentication-aware discovery, selection, routing,
   profile, and metadata facade.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.

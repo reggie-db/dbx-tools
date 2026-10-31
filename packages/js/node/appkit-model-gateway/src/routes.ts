@@ -10,8 +10,8 @@ import { log, toError } from "@dbx-tools/shared-core";
 import type { ClientProtocol } from "@dbx-tools/shared-model-gateway";
 import type express from "express";
 
-import { ModelGateway, ModelGatewayError } from "./gateway.ts";
 import { AiDecideRouterError } from "./ai-decide.ts";
+import { ModelGateway, ModelGatewayError } from "./gateway.ts";
 import { UnsupportedGatewayFeatureError } from "./router.ts";
 import { SmartRouterError } from "./smart-router.ts";
 
@@ -35,6 +35,7 @@ export async function sendModels(
       request.header("originator"),
       optionalSearch(request.query.search),
       optionalModelSource(request.query.model_source ?? request.query.modelSource),
+      optionalBoolean(request.query.metadata, "metadata"),
     );
     response.json(payload);
     logger.debug("models response", {
@@ -182,6 +183,12 @@ function optionalModelSource(value: unknown): "foundation" | "custom" | "all" {
   if (value === undefined) return "foundation";
   if (value === "foundation" || value === "custom" || value === "all") return value;
   throw new ModelGatewayError(400, "model_source must be foundation, custom, or all");
+}
+
+function optionalBoolean(value: unknown, name: string): boolean {
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new ModelGatewayError(400, `${name} must be true or false`);
 }
 
 function requestContext(request: express.Request): Record<string, unknown> {

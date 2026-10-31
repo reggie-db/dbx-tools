@@ -8,7 +8,7 @@
  * @module
  */
 
-import { CloudProvider } from "@dbx-tools/shared-core";
+import { CloudProvider, toDate } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 export const ModelClassSchema = z
@@ -30,6 +30,112 @@ export const ModelOptimizationSchema = z
   .describe("Primary endpoint profile dimension used for automatic model ranking.");
 
 export type ModelOptimization = z.infer<typeof ModelOptimizationSchema>;
+
+const ModelMetadataTimestampSchema = z.preprocess(
+  (value) => toDate(value, { parseDuration: false })?.toISOString() ?? value,
+  z.iso.datetime(),
+);
+
+export const ModelLatencyMeasurementsSchema = z
+  .object({
+    timeToFirstTokenMs: z
+      .number()
+      .finite()
+      .nonnegative()
+      .describe("Median measured time to first output token in milliseconds."),
+    outputTokensPerSecond: z
+      .number()
+      .finite()
+      .positive()
+      .describe("Median measured output-token throughput per second."),
+    successfulRunCount: z
+      .number()
+      .int()
+      .positive()
+      .describe("Total successful benchmark runs represented by the measurements."),
+    completionTokenCount: z
+      .number()
+      .int()
+      .positive()
+      .describe("Completion-token count used to normalize the latency score."),
+    measuredAt: ModelMetadataTimestampSchema.describe(
+      "Benchmark measurement time normalized to an ISO 8601 UTC timestamp.",
+    ),
+  })
+  .describe("Sortable benchmark measurements underlying one normalized latency score.");
+
+export type ModelLatencyMeasurements = z.infer<typeof ModelLatencyMeasurementsSchema>;
+
+export const ModelLatencyScoreSchema = z
+  .object({
+    score: z
+      .number()
+      .finite()
+      .positive()
+      .describe("Normalized response time in milliseconds; lower values are faster."),
+    measurements: ModelLatencyMeasurementsSchema.describe(
+      "Benchmark components retained for consumer-defined sorting and filtering.",
+    ),
+  })
+  .describe("Normalized latency score and its underlying benchmark measurements.");
+
+export type ModelLatencyScore = z.infer<typeof ModelLatencyScoreSchema>;
+
+export const ModelRankingSchema = z
+  .object({
+    score: z.number().finite().describe("Published human-preference rating; higher is better."),
+    lowerBound: z.number().finite().describe("Published lower confidence bound for the rating."),
+    upperBound: z.number().finite().describe("Published upper confidence bound for the rating."),
+    variance: z
+      .number()
+      .finite()
+      .nonnegative()
+      .optional()
+      .describe("Published rating variance when the ranking uses preference votes."),
+    voteCount: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("Number of preference votes when published by the ranking."),
+    observationCount: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("Number of agent observations when published by the ranking."),
+    sessionCount: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("Number of agent sessions when published by the ranking."),
+    rank: z.number().int().positive().describe("Published leaderboard rank; lower is better."),
+    publishedAt: ModelMetadataTimestampSchema.describe(
+      "Leaderboard publication time normalized to an ISO 8601 UTC timestamp.",
+    ),
+  })
+  .describe("Sortable metrics for one LMArena leaderboard configuration.");
+
+export type ModelRanking = z.infer<typeof ModelRankingSchema>;
+
+export const ModelRatingSchema = z
+  .object({
+    score: z
+      .number()
+      .finite()
+      .min(0)
+      .max(100)
+      .describe(
+        "Mean percentile rank across available LMArena configurations; higher values are better.",
+      ),
+    rankings: z
+      .record(z.string().min(1), ModelRankingSchema)
+      .describe("Source rankings keyed by LMArena dataset configuration name."),
+  })
+  .describe("Aggregate quality score and source-specific LMArena rankings.");
+
+export type ModelRating = z.infer<typeof ModelRatingSchema>;
 
 export const ReasoningEffortSchema = z
   .enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"])
@@ -63,7 +169,9 @@ export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 
 export const ModelSourceSchema = z
   .enum(["foundation", "custom"])
-  .describe("Whether Databricks reports the endpoint as a hosted foundation model or a custom deployment.");
+  .describe(
+    "Whether Databricks reports the endpoint as a hosted foundation model or a custom deployment.",
+  );
 
 export type ModelSource = z.infer<typeof ModelSourceSchema>;
 
@@ -327,13 +435,21 @@ export const ModelMetadataSchema = z
     capabilities: ModelCapabilitiesSchema.describe(
       "Published capabilities for this model identity.",
     ),
+    latencyScore: ModelLatencyScoreSchema.optional().describe(
+      "Normalized latency score and benchmark measurements from the committed snapshot.",
+    ),
+    rating: ModelRatingSchema.optional().describe(
+      "Aggregate quality score and LMArena rankings when available.",
+    ),
     rateLimits: ModelRateLimitsSchema.optional().describe("Published rate limits when available."),
     tokenPrices: z
       .array(ModelTokenPriceSchema)
       .optional()
       .describe("Databricks list-price token rates when available."),
   })
-  .describe("Combined retirement, capability, rate-limit, and token-price metadata.");
+  .describe(
+    "Combined retirement, capability, latency-score, rating, rate-limit, and token-price metadata.",
+  );
 
 export type ModelMetadata = z.infer<typeof ModelMetadataSchema>;
 

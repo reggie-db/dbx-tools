@@ -12,6 +12,7 @@ import {
   ModelFamily,
   modelFamily,
   modelFamilyRank,
+  modelMetadataFor,
   versionTuple,
 } from "@dbx-tools/model";
 import { ModelClass, ReasoningEffort } from "@dbx-tools/shared-model";
@@ -54,6 +55,7 @@ export function listModelsPayload(
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
   includeAiDecide?: boolean,
+  includeMetadata?: boolean,
 ): CodexModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -62,6 +64,7 @@ export function listModelsPayload(
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
   includeAiDecide?: boolean,
+  includeMetadata?: boolean,
 ): OpenAIModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -70,6 +73,7 @@ export function listModelsPayload(
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
   includeAiDecide?: boolean,
+  includeMetadata?: boolean,
 ): ModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -78,6 +82,7 @@ export function listModelsPayload(
   preferSystemModels = false,
   includeSmartRouter = false,
   includeAiDecide = false,
+  includeMetadata = false,
 ): ModelListResponse {
   const available = targets
     .filter((target) => target.endpoint?.status?.deprecated !== true)
@@ -108,17 +113,18 @@ export function listModelsPayload(
               ? CODEX_AI_DECIDE_PRIORITY
               : CODEX_MODEL_PRIORITY_BASE + modelIndex++,
           preferSystemModels,
+          includeMetadata,
         ),
       ),
     };
   }
   return {
     object: "list",
-    data: available.map(openAiModel),
+    data: available.map((target) => openAiModel(target, includeMetadata)),
   };
 }
 
-function openAiModel(target: ModelTarget): OpenAIModel {
+function openAiModel(target: ModelTarget, includeMetadata: boolean): OpenAIModel {
   return {
     id: target.id,
     object: "model",
@@ -128,6 +134,7 @@ function openAiModel(target: ModelTarget): OpenAIModel {
     model_source: target.endpoint?.modelSource ?? "custom",
     task: target.endpoint?.task,
     status: target.endpoint?.status ?? { deprecated: false },
+    ...(includeMetadata ? { metadata: modelMetadataFor(target.endpoint ?? target.id) } : {}),
     capabilities: {
       smart_router: target.id === SMART_ROUTER_MODEL_ID,
       ai_decide: target.id === AI_DECIDE_MODEL_ID,
@@ -240,6 +247,7 @@ function codexModel(
   target: ModelTarget,
   priority: number,
   preferSystemModels: boolean,
+  includeMetadata: boolean,
 ): CodexModel {
   const efforts = target.reasoningEfforts;
   return {
@@ -248,6 +256,7 @@ function codexModel(
     description: target.endpoint?.description ?? "Databricks model service",
     base_instructions: CODEX_BASE_INSTRUCTIONS,
     status: target.endpoint?.status ?? { deprecated: false },
+    ...(includeMetadata ? { metadata: modelMetadataFor(target.endpoint ?? target.id) } : {}),
     supported_reasoning_levels: efforts.map((effort) => ({
       effort,
       description: REASONING_DESCRIPTIONS[effort] ?? `Use the ${effort} reasoning budget`,

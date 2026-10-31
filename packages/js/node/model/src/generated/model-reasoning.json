@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1793283170,
+  "generatedAt": 1793405867,
   "catalogue": {
     "models": {
       "claude-5-1-fable": [
@@ -34,11 +34,6 @@
         "max"
       ],
       "deepseek-4-flash-0731": [
-        "low",
-        "high",
-        "max"
-      ],
-      "deepseek-4-pro-0813": [
         "low",
         "high",
         "max"
@@ -152,13 +147,6 @@
         "medium",
         "high",
         "extra-high"
-      ],
-      "inkling": [
-        "low",
-        "medium",
-        "high",
-        "extra-high",
-        "max"
       ],
       "kimi-3": [
         "low",

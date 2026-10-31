@@ -140,6 +140,27 @@ describe("model gateway catalogue", () => {
     assert.equal(codexPayload.models[1]?.supports_search_tool, false);
   });
 
+  it("keeps model metadata opt-in for standard and Codex clients", () => {
+    const model = target("gpt");
+    const standard = listModelsPayload([model], false);
+    const standardWithMetadata = listModelsPayload(
+      [model],
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+    );
+    const codex = listModelsPayload([model], true);
+    const codexWithMetadata = listModelsPayload([model], true, false, false, false, false, true);
+
+    assert.equal(standard.data[0]?.metadata, undefined);
+    assert.equal(codex.models[0]?.metadata, undefined);
+    assert.equal(standardWithMetadata.data[0]?.metadata?.status.deprecated, false);
+    assert.equal(codexWithMetadata.models[0]?.metadata?.status.deprecated, false);
+  });
+
   it("sorts OpenAI models as major-provider families, other chat, then embeddings", () => {
     const payload = listModelsPayload(
       [

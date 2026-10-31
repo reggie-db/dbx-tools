@@ -40,6 +40,11 @@ reasoning controls:
 const response = await client.listModels({ codex: true });
 ```
 
+Set `metadata: true` for either catalogue shape when the caller needs sortable
+latency, aggregate LMArena quality, source rankings, limits, and pricing. The client sends
+`GET /v1/models?metadata=true`; requests that omit the option receive the
+unchanged compatibility payload.
+
 Pass an `AbortSignal` to cancel model discovery. HTTP failures throw
 `ModelGatewayClientError`, which includes the status code and a validated gateway
 error response when one was returned.

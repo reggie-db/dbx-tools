@@ -1,4 +1,10 @@
-import type { ModelRateLimits, ModelTokenPrice } from "@dbx-tools/shared-model";
+import {
+  ModelLatencyScoreSchema,
+  ModelRatingSchema,
+  type ModelRateLimits,
+  type ModelTokenPrice,
+} from "@dbx-tools/shared-model";
+import { z } from "zod";
 
 /** One day, matching the refresh cadence of Databricks model documentation. */
 export const MODEL_METADATA_TTL_MS = 24 * 60 * 60 * 1000;
@@ -40,6 +46,10 @@ export const MODELS_DEV_API_URL = "https://models.dev/api.json";
 
 /** modelparams.dev normalized model-parameter catalogue URL. */
 export const MODELPARAMS_DEV_MODELS_URL = "https://modelparams.dev/api/v1/models.json";
+
+/** Public weekly latency and throughput benchmark snapshot. */
+export const MODEL_LATENCY_BENCHMARK_URL =
+  "https://raw.githubusercontent.com/vicaroai/tokens-per-second/main/benchmarks/results/latest.json";
 
 /** Build-generated retired-model snapshot. */
 export interface RetiredModelsSnapshot {
@@ -120,3 +130,74 @@ export interface ModelParamsSnapshot {
   readonly generatedAt: number;
   readonly catalogue: ModelParamsCatalogue;
 }
+
+export const ModelLatencyScoreCatalogueSchema = z
+  .object({
+    models: z
+      .record(z.string(), ModelLatencyScoreSchema)
+      .describe("Normalized latency metadata keyed by normalized model identity."),
+  })
+  .describe("Model latency scores and measurements derived from one benchmark snapshot.");
+
+export type ModelLatencyScoreCatalogue = z.infer<typeof ModelLatencyScoreCatalogueSchema>;
+
+export const ModelLatencyScoreSnapshotSchema = z
+  .object({
+    generatedAt: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe("Unix timestamp when dbx-tools generated this snapshot."),
+    source: z
+      .object({
+        name: z.string().describe("Benchmark dataset name."),
+        url: z.url().describe("Benchmark snapshot URL."),
+        license: z.string().describe("Benchmark dataset license identifier."),
+        measuredAt: z.iso.datetime().describe("Timestamp published by the benchmark dataset."),
+        maxTokens: z
+          .number()
+          .int()
+          .positive()
+          .describe("Fixed completion length used to normalize response time."),
+      })
+      .describe("Benchmark source and normalization context."),
+    catalogue: ModelLatencyScoreCatalogueSchema,
+  })
+  .describe("Build-generated model latency score snapshot.");
+
+export type ModelLatencyScoreSnapshot = z.infer<typeof ModelLatencyScoreSnapshotSchema>;
+
+export const ModelRatingCatalogueSchema = z
+  .object({
+    models: z
+      .record(z.string(), ModelRatingSchema)
+      .describe("Aggregate Arena quality scores keyed by normalized model identity."),
+  })
+  .describe("Model ratings derived from one Arena leaderboard snapshot.");
+
+export type ModelRatingCatalogue = z.infer<typeof ModelRatingCatalogueSchema>;
+
+export const ModelRatingsSnapshotSchema = z
+  .object({
+    generatedAt: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe("Unix timestamp when dbx-tools generated this snapshot."),
+    source: z
+      .object({
+        name: z.string().describe("Benchmark dataset name."),
+        url: z.url().describe("Benchmark dataset page."),
+        license: z.string().describe("Benchmark dataset license identifier."),
+        split: z.string().describe("Dataset split used for the ratings."),
+        configurations: z
+          .array(z.string())
+          .describe("Dataset configurations retained in the snapshot."),
+        category: z.string().describe("Leaderboard category retained in the snapshot."),
+      })
+      .describe("Arena leaderboard source and selection context."),
+    catalogue: ModelRatingCatalogueSchema,
+  })
+  .describe("Build-generated Arena model ratings snapshot.");
+
+export type ModelRatingsSnapshot = z.infer<typeof ModelRatingsSnapshotSchema>;

@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1793283170,
+  "generatedAt": 1793405867,
   "catalogue": {
     "models": {
       "bge-large-en": {
@@ -96,11 +96,6 @@
         "inputTokensPerMinute": 200000,
         "outputTokensPerMinute": 10000,
         "queriesPerHour": null
-      },
-      "deepseek-4-pro-0813": {
-        "inputTokensPerMinute": 200000,
-        "outputTokensPerMinute": 4000,
-        "queriesPerHour": 7200
       },
       "gemini-3-1-flash-image": {
         "inputTokensPerMinute": 1000000,
@@ -296,11 +291,6 @@
         "inputTokensPerMinute": null,
         "outputTokensPerMinute": null,
         "queriesPerHour": 540000
-      },
-      "inkling": {
-        "inputTokensPerMinute": 200000,
-        "outputTokensPerMinute": 10000,
-        "queriesPerHour": 7200
       },
       "kimi-3": {
         "inputTokensPerMinute": 2000000,

@@ -142,14 +142,14 @@ export class ModelGateway {
     originator?: string,
     search?: string,
     modelSource: ModelSource | "all" = "foundation",
+    includeMetadata = false,
   ): Promise<ModelListResponse> {
     const codex = isCodexOriginator(originator);
     logger.debug("listing models", { codex, search });
     const query = search?.trim();
     const smartRouterSearch =
       query !== undefined && SMART_ROUTER_MODEL_ID.includes(query.toLowerCase());
-    const aiDecideSearch =
-      query !== undefined && AI_DECIDE_MODEL_ID.includes(query.toLowerCase());
+    const aiDecideSearch = query !== undefined && AI_DECIDE_MODEL_ID.includes(query.toLowerCase());
     const discovered =
       query && !smartRouterSearch && !aiDecideSearch
         ? await this.registry.search(query)
@@ -161,9 +161,7 @@ export class ModelGateway {
     const smartRouterTargets =
       this.smartRouterMode === "true" && query && !smartRouterSearch
         ? (await this.registry.list()).filter(
-            (target) =>
-              modelSource === "all" ||
-              target.endpoint?.modelSource === modelSource,
+            (target) => modelSource === "all" || target.endpoint?.modelSource === modelSource,
           )
         : targets;
     const shouldProbeSmartRouter =
@@ -191,6 +189,7 @@ export class ModelGateway {
       this.preferSystemModels,
       smartRouterEnabled && (!query || smartRouterSearch),
       aiDecideEnabled && (!query || aiDecideSearch),
+      includeMetadata,
     );
     return smartRouterSearch || aiDecideSearch
       ? onlyVirtualModel(payload, smartRouterSearch ? SMART_ROUTER_MODEL_ID : AI_DECIDE_MODEL_ID)
@@ -225,7 +224,10 @@ export class ModelGateway {
     });
     const features = requestedFeatures(sanitizedBody);
     if ((selection.smartRouter || selection.aiDecide) && protocol === "openai-embeddings") {
-      throw new ModelGatewayError(400, "Virtual model routers are available only for chat requests");
+      throw new ModelGatewayError(
+        400,
+        "Virtual model routers are available only for chat requests",
+      );
     }
     const smartRouter =
       selection.smartRouter && this.smartRouter
@@ -461,9 +463,7 @@ function stringParam(
 function onlyVirtualModel(payload: ModelListResponse, modelId: string): ModelListResponse {
   if ("models" in payload) {
     return {
-      models: payload.models.filter((model) =>
-        model.slug.toLowerCase().endsWith(`/${modelId}`),
-      ),
+      models: payload.models.filter((model) => model.slug.toLowerCase().endsWith(`/${modelId}`)),
     };
   }
   return {
